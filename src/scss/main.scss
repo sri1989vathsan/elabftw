@@ -984,9 +984,14 @@ tr:first-child td {
     margin: 0;
   }
 
+  .toc-entry {
+    min-width: 0;
+  }
+
   .toc-link {
     color: var(--chrome-fg);
     font-size: 0.9em;
+    min-width: 0;
     overflow: hidden;
     text-decoration: none;
     text-overflow: ellipsis;
@@ -1003,6 +1008,19 @@ tr:first-child td {
       background-color: var(--primary);
       color: var(--white);
       font-weight: bold;
+    }
+  }
+
+  .toc-entry-action {
+    color: var(--muted);
+    flex: 0 0 auto;
+    line-height: 1;
+    padding: 0.3rem;
+
+    &:focus,
+    &:hover {
+      color: var(--primary);
+      text-decoration: none;
     }
   }
 }

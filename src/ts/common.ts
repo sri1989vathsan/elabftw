@@ -620,6 +620,48 @@ on('destroy-favcategory', (el: HTMLElement) => {
   }
 });
 
+on('create-and-favorite-category', async () => {
+  const input = document.getElementById('favoriteNewCategoryName') as HTMLInputElement | null;
+  const color = document.getElementById('favoriteNewCategoryColor') as HTMLInputElement | null;
+  const name = input?.value.trim() ?? '';
+  if (!input || !name) {
+    input?.setCustomValidity('Enter a category name.');
+    input?.reportValidity();
+    return;
+  }
+  input.setCustomValidity('');
+
+  const categoryType = FavoriteFiltersC.getTarget();
+  const endpoint = categoryType === 'experiments' ? 'experiments_categories' : 'resources_categories';
+  const categoryId = await ApiC.post2location(`${Model.Team}/current/${endpoint}`, {
+    name,
+    color: color?.value,
+  });
+  await ApiC.post(Model.FavCategory, {
+    category_type: categoryType,
+    category_id: categoryId,
+  });
+  window.location.reload();
+});
+
+on('create-favfilter', () => {
+  const select = document.getElementById('favoriteFilterSelect') as HTMLSelectElement | null;
+  if (!select?.value) return;
+  const [filterType, targetType, targetId] = select.value.split(':');
+  if (!filterType || !targetType || !targetId) return;
+  ApiC.post(Model.FavFilter, {
+    filter_type: filterType,
+    target_type: targetType,
+    target_id: parseInt(targetId, 10),
+  }).then(() => window.location.reload());
+});
+
+on('destroy-favfilter', (el: HTMLElement) => {
+  if (confirm(i18next.t('generic-delete-warning'))) {
+    ApiC.delete(`${Model.FavFilter}/${el.dataset.id}`).then(() => window.location.reload());
+  }
+});
+
 on('apply-favorite-filters', () => FavoriteFiltersC.apply());
 on('clear-favorite-filters', () => FavoriteFiltersC.clear());
 

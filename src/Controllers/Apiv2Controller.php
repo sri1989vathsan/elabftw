@@ -41,6 +41,7 @@ use Elabftw\Models\Dspace;
 use Elabftw\Models\ExperimentsCategories;
 use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\ExtraFieldsKeys;
+use Elabftw\Models\FavFilters;
 use Elabftw\Models\FavTags;
 use Elabftw\Models\Idps;
 use Elabftw\Models\IdpsCerts;
@@ -329,6 +330,7 @@ final class Apiv2Controller extends AbstractApiController
             ),
             ApiEndpoint::ExperimentsFolders => new ExperimentsFolders($this->requester, $this->id),
             ApiEndpoint::FavCategories => new FavCategories($this->requester, $this->id),
+            ApiEndpoint::FavFilters => new FavFilters($this->requester, $this->id),
             ApiEndpoint::FavTags => new FavTags($this->requester, $this->id),
             ApiEndpoint::Reports => new ReportsHandler($this->requester),
             ApiEndpoint::StorageUnits => new StorageUnits($this->requester, Config::getConfig()->configArr['inventory_require_edit_rights'] === '1', $this->id),

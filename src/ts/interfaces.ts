@@ -127,6 +127,7 @@ enum Model {
   Compounds = 'compounds',
   Config = 'config',
   FavCategory = 'favcategories',
+  FavFilter = 'favfilters',
   FavTag = 'favtags',
   Idp = 'idps',
   IdpsSources = 'idps_sources',

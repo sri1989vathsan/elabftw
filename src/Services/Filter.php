@@ -204,7 +204,9 @@ final class Filter
         // create base config for html5
         $config = HTMLPurifier_HTML5Config::createDefault();
         // allow only certain elements
-        $config->set('HTML.Allowed', 'div[class|style],br,p[class|style],sub,img[src|class|style|width|height],sup,strong,b,em,u,a[href],s,span[style],ul[style],li[style],ol[style],dl,dt,dd,blockquote,h1[class|style],h2[class|style],h3[class|style],h4[class|style],h5[class|style],h6[class|style],hr,table[class|style|data-table-sort|data-spreadsheet|data-spreadsheet-style|data-well-plate|border],thead,tbody,tr[style],td[style|colspan|rowspan],th[class|style|colspan|rowspan],code,source[src|type],video[src|controls|style|width|height],audio[src|controls],pre[class],details,summary,caption,figure,figcaption');
+        $config->set('HTML.Allowed', 'div[class|style],br,p[class|style],sub,img[src|class|style|width|height],sup,strong,b,em,u,a[href],s,span[style],ul[style],li[style],ol[style],dl,dt,dd,blockquote,h1[id|class|style],h2[id|class|style],h3[id|class|style],h4[id|class|style],h5[id|class|style],h6[id|class|style],hr,table[class|style|data-table-sort|data-spreadsheet|data-spreadsheet-style|data-well-plate],thead,tbody,tr[style],td[style|colspan|rowspan],th[class|style|colspan|rowspan],code,source[src|type],video[src|controls|style|width|height],audio[src|controls],pre[class],details,summary,caption,figure,figcaption');
+        // keep stable anchors generated for linkable Table of Contents entries
+        $config->set('Attr.EnableID', true);
         $config->set('HTML.TargetBlank', true);
         // configure the cache for htmlpurifier
         $tmpDir = FsTools::getCacheFolder('purifier');
@@ -244,7 +246,27 @@ final class Filter
         $config->set('CSS.AllowedProperties', array(
             'background-color',
             'border',
+            'border-bottom',
+            'border-bottom-color',
+            'border-bottom-style',
+            'border-bottom-width',
+            'border-collapse',
             'border-color',
+            'border-left',
+            'border-left-color',
+            'border-left-style',
+            'border-left-width',
+            'border-right',
+            'border-right-color',
+            'border-right-style',
+            'border-right-width',
+            'border-spacing',
+            'border-style',
+            'border-top',
+            'border-top-color',
+            'border-top-style',
+            'border-top-width',
+            'border-width',
             'color',
             'display', // see #3368
             'font-family',
@@ -258,8 +280,14 @@ final class Filter
             'margin-left',
             'margin-right',
             'min-width',
+            'padding',
+            'padding-bottom',
+            'padding-left',
+            'padding-right',
+            'padding-top',
             'text-align',
             'text-decoration',
+            'vertical-align',
             'word-spacing',
             'width',
             'white-space',

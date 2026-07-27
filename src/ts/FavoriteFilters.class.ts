@@ -14,10 +14,10 @@ export default class FavoriteFilters extends SidePanel {
 
   updateTarget(): void {
     const target = this.getTarget();
-    document.querySelectorAll<HTMLElement>('[data-favorite-category-group]').forEach(group => {
-      const isActive = group.dataset.favoriteCategoryGroup === target;
+    document.querySelectorAll<HTMLElement>('[data-favorite-target-group]').forEach(group => {
+      const isActive = group.dataset.favoriteTargetGroup === target;
       group.toggleAttribute('hidden', !isActive);
-      group.querySelectorAll<HTMLInputElement>('[data-favorite-filter-category]').forEach(input => {
+      group.querySelectorAll<HTMLInputElement>('input').forEach(input => {
         input.disabled = !isActive;
       });
     });
@@ -26,11 +26,10 @@ export default class FavoriteFilters extends SidePanel {
   apply(): void {
     const target = this.getTarget();
     const targetPath = target === 'experiments' ? '/experiments.php' : '/database.php';
-    const currentPath = window.location.pathname;
-    const isCurrentListing = currentPath.endsWith(targetPath);
-    const url = isCurrentListing
-      ? new URL(window.location.href)
-      : new URL(targetPath, window.location.origin);
+    // Always start from the complete accessible listing. Reusing the current
+    // URL could unintentionally retain "My experiments", search, or pagination.
+    const url = new URL(targetPath, window.location.origin);
+    url.searchParams.set('scope', '3');
 
     const categories = Array.from(
       document.querySelectorAll<HTMLInputElement>(
@@ -40,29 +39,39 @@ export default class FavoriteFilters extends SidePanel {
     );
     if (categories.length > 0) {
       url.searchParams.set('category', categories.join(','));
-    } else {
-      url.searchParams.delete('category');
-      url.searchParams.delete('cat');
     }
 
-    url.searchParams.delete('tags[]');
+    const statuses = Array.from(
+      document.querySelectorAll<HTMLInputElement>(
+        `[data-favorite-filter-status][data-status-type="${target}"]:checked`,
+      ),
+      input => input.value,
+    );
+    if (statuses.length > 0) {
+      url.searchParams.set('status', statuses.join(','));
+    }
+
+    const owner = document.querySelector<HTMLInputElement>('[data-favorite-filter-owner]:checked');
+    if (owner) {
+      url.searchParams.set('owner', owner.value);
+    }
+
     document.querySelectorAll<HTMLInputElement>('[data-favorite-filter-tag]:checked').forEach(input => {
       url.searchParams.append('tags[]', input.value);
     });
-    url.searchParams.delete('offset');
     window.location.assign(url);
   }
 
   clear(): void {
     document.querySelectorAll<HTMLInputElement>(
-      '[data-favorite-filter-category], [data-favorite-filter-tag]',
+      '[data-favorite-filter-category], [data-favorite-filter-tag], [data-favorite-filter-status], [data-favorite-filter-owner]',
     ).forEach(input => {
       input.checked = false;
     });
     this.apply();
   }
 
-  private getTarget(): FavoriteFilterTarget {
+  getTarget(): FavoriteFilterTarget {
     const select = document.getElementById('favoriteFilterTarget') as HTMLSelectElement | null;
     return select?.value === 'resources' ? 'resources' : 'experiments';
   }

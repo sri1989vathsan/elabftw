@@ -29,6 +29,7 @@ enum ApiEndpoint: string
     case Event = 'event';
     case Events = 'events';
     case FavCategories = 'favcategories';
+    case FavFilters = 'favfilters';
     case FavTags = 'favtags';
     case Idps = 'idps';
     case IdpsSources = 'idps_sources';

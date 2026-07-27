@@ -19,9 +19,14 @@ Monthly lab logs with owner names and dashboard.
 **Files modified:**
 - Various log-related templates and TypeScript files (committed in early branch commits)
 
-## Feature 3: Table of Contents (View-Mode SidePanel)
+## Feature 3: Searchable, Linkable Table of Contents
 
-A SidePanel TOC that extracts headings from `#body_view` (view mode) or the TinyMCE editor (edit mode) and renders a navigable list with scroll-spy and smooth scrolling.
+A SidePanel TOC that extracts every header and subheader from `#body_view`
+(view mode) or the TinyMCE editor (edit mode). It provides heading search,
+scroll-spy, and smooth scrolling. Each entry has a link button that copies a
+stable view-mode URL to that exact section. Edit mode also shows an insert
+button that adds the internal section link at the current editor cursor.
+Generated heading IDs are saved with the body and retained by the sanitizer.
 
 **Files added:**
 - `src/ts/TocPanel.class.ts` — SidePanel subclass with heading extraction, scroll-spy via IntersectionObserver, smooth scrolling
@@ -34,7 +39,8 @@ A SidePanel TOC that extracts headings from `#body_view` (view mode) or the Tiny
 - `src/templates/head.html` — Added TOC opener button
 - `src/scss/main.scss` — TOC panel styles (`.toc-items-container`, `.toc-highlight`, `@keyframes toc-flash`)
 
-**Note:** The in-editor TinyMCE TOC sidebar was removed (it was not useful). Only the view-mode SidePanel TOC remains.
+**Note:** The TinyMCE plugin's built-in TOC sidebar was removed. The custom
+SidePanel works in both view and edit modes.
 
 ## Feature 4: Collapsible Folder Tree
 
@@ -151,18 +157,25 @@ create/rename/delete controls, and persisted expand/collapse state.
 
 ## Feature 12: Combined Favorite Filters
 
-Adds server-backed per-user favorites for both experiment and resource
-categories. Favorite categories and favorite tags are managed and selected in
-one left sidebar tab. The user can filter on any favorite category, all selected
-favorite tags, or both at once. When combined, the listing requires a matching
-category and all selected tags. The panel can target either experiments or
-resources and restores filter selections from the URL.
+Adds server-backed per-user favorites for experiment/resource categories,
+statuses, owners, and tags in one left sidebar tab. Category, tag, status, and
+owner filters can be combined; statuses support multiple choices and owner
+matches eLabFTW's single-owner filtering. The panel can target experiments or
+resources and restores selections from the URL. Applying filters always opens
+the complete accessible listing (`scope=3`) so results are not silently
+restricted by a previous "My experiments", search, or pagination selection.
+
+The Manage favorites section can create a new category for the currently
+selected target and immediately favorite it, or favorite existing categories,
+owners, statuses, and tags.
 
 **Files added:**
 - `src/Models/FavCategories.php`
+- `src/Models/FavFilters.php`
 - `src/templates/favorite-filters-panel.html`
 - `src/ts/FavoriteFilters.class.ts`
 - `src/sql/schema210.sql` and `src/sql/schema210-down.sql`
+- `src/sql/schema211.sql` and `src/sql/schema211-down.sql`
 
 ## Feature 13: Spreadsheet Presets and Table Formatting
 
@@ -179,12 +192,22 @@ Custom size, Benchling-style data table, and a Well plate submenu with every
 supported preset, so the layouts are visible before opening the spreadsheet
 editor.
 
+The main-text editor also enables focused Markdown-style list shortcuts without
+enabling TinyMCE's heading shortcuts: type `-` followed by Space for a bulleted
+list, or `1.` followed by Space for a numbered list.
+
+Spreadsheet updates preserve TinyMCE table formatting instead of rebuilding an
+unformatted grid. Table borders and layout, caption formatting, and per-cell
+border, background, text, alignment, padding, and sizing styles round-trip
+through the embedded spreadsheet data and are restored after formula edits.
+
 ## Schema Migration Notes
 
 - `schema207.sql` — Combined: experiment folders table + folder_id column (our additions) and booking cost columns (upstream). Uses `CREATE TABLE IF NOT EXISTS` and conditional `ALTER TABLE` for idempotent re-runs
 - `schema208.sql` — Upstream: adds `force_res_tpl` column to `teams` table
 - `schema209.sql` — Our addition (renumbered from 208 after upstream merge): adds `favorite_experiment_folder` column to `users` table with FK to `experiments_folders(id)` with `ON DELETE SET NULL`
 - `schema210.sql` — Adds server-backed favorite experiment/resource categories
+- `schema211.sql` — Adds server-backed favorite owner/status filters
 
 ## General Merge Notes
 

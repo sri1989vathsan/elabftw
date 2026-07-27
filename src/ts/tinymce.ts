@@ -250,8 +250,12 @@ export function getTinymceBaseConfig(page: string): object {
     toolbar1: toolbar1,
     // this addresses CVE-2024-29881, it defaults to true in 7.0, so can be removed in tiny 7.0 TODO
     convert_unsafe_embeds: true,
-    // disable automatic h1 when using #
-    text_patterns: false,
+    // Keep heading/format shortcuts disabled, but support the familiar
+    // Markdown-style list starters at the beginning of an empty paragraph.
+    text_patterns: [
+      { start: '-', cmd: 'InsertUnorderedList', trigger: 'space' },
+      { start: '1.', cmd: 'InsertOrderedList', trigger: 'space' },
+    ],
     removed_menuitems: removedMenuItems,
     image_caption: true,
     images_reuse_filename: false, // if set to true the src url gets a date appended

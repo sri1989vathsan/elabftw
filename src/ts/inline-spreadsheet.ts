@@ -14,6 +14,7 @@ import 'jsuites/dist/jsuites.css';
 type CellValue = string | number | boolean | null;
 type AOA = CellValue[][];
 type SpreadsheetKind = 'standard' | 'notebook' | 'well-plate';
+type CellStyles = Record<string, string>;
 
 // jspreadsheet-ce v5 types do not cover the runtime shape returned during setup.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -28,6 +29,12 @@ export interface SpreadsheetData {
   kind?: SpreadsheetKind;
   caption?: string;
   plateSize?: number;
+  /** Inline styles keyed by spreadsheet coordinates such as A1 or C4. */
+  cellStyles?: CellStyles;
+  /** Preserved TinyMCE formatting on the generated table and caption. */
+  tableStyle?: string;
+  captionStyle?: string;
+  tableBorder?: number;
 }
 
 interface WellPlatePreset {
@@ -48,6 +55,57 @@ export const WELL_PLATE_PRESETS: WellPlatePreset[] = [
 const DEFAULT_COLS = 6;
 const DEFAULT_ROWS = 5;
 const MAX_DIMENSION = 50;
+const MAX_TABLE_BORDER = 20;
+const DEFAULT_TABLE_STYLE = 'border-collapse:collapse;min-width:25%';
+const PRESERVED_STYLE_PROPERTIES = new Set([
+  'background-color',
+  'border',
+  'border-bottom',
+  'border-bottom-color',
+  'border-bottom-style',
+  'border-bottom-width',
+  'border-color',
+  'border-left',
+  'border-left-color',
+  'border-left-style',
+  'border-left-width',
+  'border-right',
+  'border-right-color',
+  'border-right-style',
+  'border-right-width',
+  'border-style',
+  'border-top',
+  'border-top-color',
+  'border-top-style',
+  'border-top-width',
+  'border-width',
+  'color',
+  'font-family',
+  'font-size',
+  'font-style',
+  'font-variant',
+  'font-weight',
+  'height',
+  'line-height',
+  'padding',
+  'padding-bottom',
+  'padding-left',
+  'padding-right',
+  'padding-top',
+  'text-align',
+  'text-decoration',
+  'vertical-align',
+  'white-space',
+  'width',
+]);
+const PRESERVED_TABLE_STYLE_PROPERTIES = new Set([
+  ...PRESERVED_STYLE_PROPERTIES,
+  'border-collapse',
+  'border-spacing',
+  'margin-left',
+  'margin-right',
+  'min-width',
+]);
 
 export function encodeSpreadsheetData(sd: SpreadsheetData): string {
   return btoa(unescape(encodeURIComponent(JSON.stringify(sd))));
@@ -115,6 +173,12 @@ function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): Spreadsh
     plateSize: kind === 'well-plate' && Number.isInteger(candidate.plateSize)
       ? candidate.plateSize
       : undefined,
+    cellStyles: normalizeCellStyles(candidate.cellStyles, rows, cols),
+    tableStyle: sanitizeStyle(candidate.tableStyle, PRESERVED_TABLE_STYLE_PROPERTIES),
+    captionStyle: sanitizeStyle(candidate.captionStyle, PRESERVED_STYLE_PROPERTIES),
+    tableBorder: Number.isInteger(candidate.tableBorder)
+      ? Math.max(0, Math.min(MAX_TABLE_BORDER, candidate.tableBorder))
+      : undefined,
   };
 }
 
@@ -131,6 +195,76 @@ function resizeData(data: AOA, rows: number, cols: number): AOA {
   return Array.from({ length: rows }, (_, rowIndex) => (
     Array.from({ length: cols }, (_, colIndex) => data[rowIndex]?.[colIndex] ?? '')
   ));
+}
+
+function sanitizeStyle(
+  candidate: string | undefined,
+  allowedProperties: Set<string>,
+): string | undefined {
+  if (!candidate) return undefined;
+  const element = document.createElement('span');
+  element.setAttribute('style', candidate);
+  const declarations: string[] = [];
+  for (let index = 0; index < element.style.length; index++) {
+    const property = element.style.item(index).toLowerCase();
+    const value = element.style.getPropertyValue(property).trim();
+    if (!allowedProperties.has(property) || !value || hasUnsafeCssValue(value)) continue;
+    declarations.push(`${property}:${value}`);
+  }
+  return declarations.length > 0 ? declarations.join(';') : undefined;
+}
+
+function hasUnsafeCssValue(value: string): boolean {
+  return /(?:expression\s*\(|javascript\s*:|url\s*\(|@import|behavior\s*:)/i.test(value);
+}
+
+function normalizeCellStyles(
+  candidate: CellStyles | undefined,
+  rows: number,
+  cols: number,
+): CellStyles | undefined {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return undefined;
+  const result: CellStyles = {};
+  Object.entries(candidate).forEach(([cellName, style]) => {
+    const coordinates = coordinatesFromCellName(cellName);
+    if (!coordinates || coordinates.col >= cols || coordinates.row >= rows) return;
+    const sanitized = sanitizeStyle(
+      typeof style === 'string' ? style : undefined,
+      PRESERVED_STYLE_PROPERTIES,
+    );
+    if (sanitized) result[cellName.toUpperCase()] = sanitized;
+  });
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function coordinatesFromCellName(cellName: string): { col: number; row: number } | null {
+  const match = /^([A-Z]+)([1-9]\d*)$/i.exec(cellName);
+  if (!match) return null;
+  let col = 0;
+  for (const character of match[1].toUpperCase()) {
+    col = (col * 26) + character.charCodeAt(0) - 64;
+  }
+  return { col: col - 1, row: parseInt(match[2], 10) - 1 };
+}
+
+function extractCellStyles(
+  tableElement: HTMLTableElement,
+  kind: SpreadsheetKind,
+  rows: number,
+  cols: number,
+): CellStyles | undefined {
+  const styles: CellStyles = {};
+  const tableRows = Array.from(tableElement.querySelectorAll('tr'));
+  const dataRows = kind === 'notebook' ? tableRows : tableRows.slice(1);
+  dataRows.slice(0, rows).forEach((row, rowIndex) => {
+    const rowCells = Array.from(row.querySelectorAll<HTMLElement>('th, td'));
+    const dataCells = kind === 'notebook' ? rowCells : rowCells.slice(1);
+    dataCells.slice(0, cols).forEach((cell, colIndex) => {
+      const style = sanitizeStyle(cell.getAttribute('style') ?? undefined, PRESERVED_STYLE_PROPERTIES);
+      if (style) styles[`${colLabel(colIndex)}${rowIndex + 1}`] = style;
+    });
+  });
+  return Object.keys(styles).length > 0 ? styles : undefined;
 }
 
 function getWorksheet(instance: JssInstance): JssInstance {
@@ -319,6 +453,15 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       return Array.isArray(data) ? data : working.data;
     };
 
+    const readCellStyles = (rows = working.rows, cols = working.cols): CellStyles | undefined => {
+      const styles = worksheet?.getStyle?.();
+      return normalizeCellStyles(
+        styles && typeof styles === 'object' ? styles as CellStyles : working.cellStyles,
+        rows,
+        cols,
+      );
+    };
+
     const mountSpreadsheet = (spreadsheet: SpreadsheetData): void => {
       if (sheetContainer) {
         const destroy = (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy;
@@ -332,6 +475,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         worksheets: [{
           data: working.data,
           minDimensions: [working.cols, working.rows],
+          style: working.cellStyles ?? {},
         }],
         tableOverflow: true,
         tableWidth: '100%',
@@ -354,6 +498,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const resized: SpreadsheetData = {
         ...working,
         data: resizeData(readRawData(), rows, cols),
+        cellStyles: readCellStyles(rows, cols),
         rows,
         cols,
         kind: ui.presetSelect.value === 'custom' ? 'standard' : working.kind,
@@ -436,6 +581,10 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         kind: working.kind,
         caption: ui.captionInput.value.trim(),
         plateSize: working.kind === 'well-plate' ? working.plateSize : undefined,
+        cellStyles: readCellStyles(rows, cols),
+        tableStyle: working.tableStyle,
+        captionStyle: working.captionStyle,
+        tableBorder: working.tableBorder,
       };
       const computed = sheetContainer
         ? resizeData(getComputedDataFromDOM(sheetContainer), rows, cols)
@@ -461,22 +610,30 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
   const plateAttribute = kind === 'well-plate' && raw.plateSize
     ? ` data-well-plate="${raw.plateSize}"`
     : '';
-  let html = `<table class="elabftw-spreadsheet" data-spreadsheet="${encoded}"${styleAttribute}${plateAttribute} border="1" style="border-collapse:collapse;min-width:25%">`;
+  let tableStyle = raw.tableStyle ?? DEFAULT_TABLE_STYLE;
+  const tableBorder = raw.tableBorder ?? 1;
+  if (!/(?:^|;)border(?!-(?:collapse|spacing)\b)(?:-[a-z-]+)?\s*:/i.test(tableStyle)) {
+    tableStyle = `${tableStyle};border:${tableBorder}px solid`;
+  }
+  let html = `<table class="elabftw-spreadsheet" data-spreadsheet="${encoded}"${styleAttribute}${plateAttribute} style="${escapeHTMLAttribute(tableStyle)}">`;
   if (raw.caption) {
-    html += `<caption>${escapeHTML(raw.caption)}</caption>`;
+    const captionStyle = raw.captionStyle
+      ? ` style="${escapeHTMLAttribute(raw.captionStyle)}"`
+      : '';
+    html += `<caption${captionStyle}>${escapeHTML(raw.caption)}</caption>`;
   }
 
   const displayData = resizeData(computed.length > 0 ? computed : raw.data, raw.rows, raw.cols);
   if (kind === 'notebook') {
     html += '<thead><tr>';
     for (let col = 0; col < raw.cols; col++) {
-      html += `<th>${escapeHTML(String(displayData[0]?.[col] ?? ''))}</th>`;
+      html += `<th${getCellStyleAttribute(raw.cellStyles, col, 0)}>${escapeHTML(String(displayData[0]?.[col] ?? ''))}</th>`;
     }
     html += '</tr></thead><tbody>';
     for (let row = 1; row < raw.rows; row++) {
       html += '<tr>';
       for (let col = 0; col < raw.cols; col++) {
-        html += `<td>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
+        html += `<td${getCellStyleAttribute(raw.cellStyles, col, row)}>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
       }
       html += '</tr>';
     }
@@ -492,7 +649,7 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
       const rowLabel = kind === 'well-plate' ? colLabel(row) : String(row + 1);
       html += `<tr><th class="spreadsheet-coordinate">${rowLabel}</th>`;
       for (let col = 0; col < raw.cols; col++) {
-        html += `<td>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
+        html += `<td${getCellStyleAttribute(raw.cellStyles, col, row)}>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
       }
       html += '</tr>';
     }
@@ -504,12 +661,27 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
 
 export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetData {
   const encoded = tableElement.dataset.spreadsheet;
-  if (encoded) return decodeSpreadsheetData(encoded);
-
   const spreadsheetStyle = tableElement.dataset.spreadsheetStyle;
   const kind: SpreadsheetKind = spreadsheetStyle === 'notebook' || spreadsheetStyle === 'well-plate'
     ? spreadsheetStyle
     : 'standard';
+  if (encoded) {
+    const decoded = decodeSpreadsheetData(encoded);
+    return normalizeSpreadsheetData({
+      ...decoded,
+      cellStyles: extractCellStyles(tableElement, decoded.kind ?? kind, decoded.rows, decoded.cols),
+      tableStyle: sanitizeStyle(
+        tableElement.getAttribute('style') ?? undefined,
+        PRESERVED_TABLE_STYLE_PROPERTIES,
+      ),
+      captionStyle: sanitizeStyle(
+        tableElement.querySelector('caption')?.getAttribute('style') ?? undefined,
+        PRESERVED_STYLE_PROPERTIES,
+      ),
+      tableBorder: parseTableBorder(tableElement),
+    });
+  }
+
   const data: AOA = [];
   tableElement.querySelectorAll('tr').forEach((row, rowIndex) => {
     if (kind !== 'notebook' && rowIndex === 0) return;
@@ -522,7 +694,7 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
   });
   const rows = Math.max(data.length, 1);
   const cols = Math.max(data.reduce((max, row) => Math.max(max, row.length), 0), 1);
-  return {
+  return normalizeSpreadsheetData({
     data: resizeData(data, rows, cols),
     rows,
     cols,
@@ -531,7 +703,27 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
     plateSize: kind === 'well-plate'
       ? parseInt(tableElement.dataset.wellPlate ?? '', 10) || undefined
       : undefined,
-  };
+    cellStyles: extractCellStyles(tableElement, kind, rows, cols),
+    tableStyle: sanitizeStyle(
+      tableElement.getAttribute('style') ?? undefined,
+      PRESERVED_TABLE_STYLE_PROPERTIES,
+    ),
+    captionStyle: sanitizeStyle(
+      tableElement.querySelector('caption')?.getAttribute('style') ?? undefined,
+      PRESERVED_STYLE_PROPERTIES,
+    ),
+    tableBorder: parseTableBorder(tableElement),
+  });
+}
+
+function parseTableBorder(tableElement: HTMLTableElement): number | undefined {
+  const border = parseInt(tableElement.getAttribute('border') ?? '', 10);
+  return Number.isInteger(border) ? Math.max(0, Math.min(MAX_TABLE_BORDER, border)) : undefined;
+}
+
+function getCellStyleAttribute(styles: CellStyles | undefined, col: number, row: number): string {
+  const style = styles?.[`${colLabel(col)}${row + 1}`];
+  return style ? ` style="${escapeHTMLAttribute(style)}"` : '';
 }
 
 /** Convert column index to letter label (0=A, 25=Z, 26=AA). */
@@ -549,4 +741,12 @@ function escapeHTML(value: string): string {
   const element = document.createElement('div');
   element.textContent = value;
   return element.innerHTML;
+}
+
+function escapeHTMLAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }

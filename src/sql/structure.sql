@@ -531,6 +531,22 @@ CREATE TABLE `favcategories2users` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `favfilters2users`
+--
+
+CREATE TABLE `favfilters2users` (
+  `id` int UNSIGNED NOT NULL AUTO_INCREMENT,
+  `users_id` int UNSIGNED NOT NULL,
+  `filter_type` enum('owner','status') NOT NULL,
+  `target_type` enum('all','experiments','resources') NOT NULL,
+  `target_id` int UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_favorite_filter` (`users_id`,`filter_type`,`target_type`,`target_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `favtags2users`
 --
 
@@ -1884,6 +1900,12 @@ ALTER TABLE `experiments_templates_request_actions`
 --
 ALTER TABLE `favcategories2users`
   ADD CONSTRAINT `fk_favcategories2users_users_id` FOREIGN KEY (`users_id`) REFERENCES `users` (`userid`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `favfilters2users`
+--
+ALTER TABLE `favfilters2users`
+  ADD CONSTRAINT `fk_favfilters2users_users_id` FOREIGN KEY (`users_id`) REFERENCES `users` (`userid`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `favtags2users`

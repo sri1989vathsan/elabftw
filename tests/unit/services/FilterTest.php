@@ -66,7 +66,7 @@ class FilterTest extends \PHPUnit\Framework\TestCase
 
     public function testBodyPreservesSpreadsheetAndNestedListMetadata(): void
     {
-        $spreadsheet = '<table class="elabftw-spreadsheet" data-spreadsheet="eyJkYXRhIjpbXX0=" data-spreadsheet-style="well-plate" data-well-plate="96"><caption>Plate results</caption><thead><tr><th class="spreadsheet-coordinate">1</th></tr></thead><tbody><tr><td>42</td></tr></tbody></table>';
+        $spreadsheet = '<table class="elabftw-spreadsheet" data-spreadsheet="eyJkYXRhIjpbXX0=" data-spreadsheet-style="well-plate" data-well-plate="96" style="border-collapse: collapse; border: 1px solid #000000;"><caption>Plate results</caption><thead><tr><th class="spreadsheet-coordinate">1</th></tr></thead><tbody><tr><td style="border: 3px solid #ff0000; background-color: #ffffff; padding: 4px; vertical-align: middle;">42</td></tr></tbody></table>';
         $result = Filter::body($spreadsheet);
         $this->assertStringContainsString('class="elabftw-spreadsheet"', $result);
         $this->assertStringContainsString('data-spreadsheet="eyJkYXRhIjpbXX0="', $result);
@@ -74,9 +74,18 @@ class FilterTest extends \PHPUnit\Framework\TestCase
         $this->assertStringContainsString('data-well-plate="96"', $result);
         $this->assertStringContainsString('<caption>Plate results</caption>', $result);
         $this->assertStringContainsString('<thead>', $result);
+        $this->assertStringContainsString('border-collapse:collapse', $result);
+        $this->assertStringContainsString('border:1px solid #000000', $result);
+        $this->assertStringContainsString('border:3px solid #ff0000', $result);
+        $this->assertStringContainsString('background-color:#ffffff', $result);
+        $this->assertStringContainsString('padding:4px', $result);
+        $this->assertStringContainsString('vertical-align:middle', $result);
 
         $list = Filter::body('<ul><li style="list-style-type: none;"><ul><li>Nested item</li></ul></li></ul>');
         $this->assertStringContainsString('list-style-type:none', $list);
+
+        $heading = Filter::body('<h2 id="section-results">Results</h2>');
+        $this->assertStringContainsString('<h2 id="section-results">Results</h2>', $heading);
     }
 
     public function testForFilesystem(): void

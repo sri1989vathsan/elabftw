@@ -18,6 +18,12 @@ interface TocEntry {
   id: string;
 }
 
+interface TinyMceEditor {
+  execCommand(command: string, ui: boolean, value: string): void;
+  focus(): void;
+  getBody(): HTMLElement;
+}
+
 export default class TocPanel extends SidePanel {
 
   initialLoad = true;
@@ -32,6 +38,7 @@ export default class TocPanel extends SidePanel {
    */
   private getHeadings(): TocEntry[] {
     const entries: TocEntry[] = [];
+    const usedIds = new Set<string>();
     let headings: NodeListOf<HTMLHeadingElement> | null = null;
 
     // View mode: headings live inside #body_view
@@ -42,17 +49,12 @@ export default class TocPanel extends SidePanel {
 
     // Edit mode: headings are inside the TinyMCE iframe body
     if (!headings || headings.length === 0) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const tinymce = (window as any).tinymce;
-        if (tinymce && tinymce.activeEditor) {
-          const editorBody = tinymce.activeEditor.getBody();
-          if (editorBody) {
-            headings = editorBody.querySelectorAll('h1, h2, h3, h4, h5, h6');
-          }
+      const editor = this.getEditor();
+      if (editor) {
+        const editorBody = editor.getBody();
+        if (editorBody) {
+          headings = editorBody.querySelectorAll('h1, h2, h3, h4, h5, h6');
         }
-      } catch {
-        // TinyMCE not available — that's fine
       }
     }
 
@@ -63,12 +65,16 @@ export default class TocPanel extends SidePanel {
       const text = heading.textContent?.trim() || '';
       if (text.length === 0) return;
 
-      // Ensure the heading has an id so we can scroll to it
-      if (!heading.id) {
-        heading.id = `toc-heading-${index}`;
+      // Keep existing anchors and generate deterministic, human-readable IDs for
+      // new headings. Duplicate IDs are replaced so every copied link is unique.
+      let id = heading.id.trim();
+      if (!id || usedIds.has(id)) {
+        id = this.createHeadingId(text, index, usedIds);
+        heading.id = id;
       }
+      usedIds.add(id);
 
-      entries.push({ level, text, id: heading.id });
+      entries.push({ level, text, id });
     });
 
     return entries;
@@ -84,6 +90,8 @@ export default class TocPanel extends SidePanel {
 
     if (entries.length === 0) {
       container.innerHTML = '<p class="text-muted px-2">No headings found in the document.</p>';
+      this.setupSearchControls();
+      this.filterEntries();
       return;
     }
 
@@ -95,8 +103,17 @@ export default class TocPanel extends SidePanel {
       const indent = (entry.level - minLevel) * 16;
       const fontClass = entry.level <= 2 ? 'font-weight-bold' : '';
       const fontSize = entry.level <= 2 ? '' : (entry.level === 3 ? 'style="font-size:0.95em"' : 'style="font-size:0.9em"');
-      html += `<li class="toc-item" style="padding-left:${indent}px">`;
-      html += `<a href="#${entry.id}" class="toc-link d-block py-1 px-2 rounded ${fontClass}" ${fontSize} data-toc-target="${entry.id}">${this.escapeHTML(entry.text)}</a>`;
+      const id = this.escapeAttribute(entry.id);
+      const text = this.escapeHTML(entry.text);
+      const label = this.escapeAttribute(entry.text);
+      html += `<li class="toc-item" style="padding-left:${indent}px" data-toc-search-text="${label.toLocaleLowerCase()}">`;
+      html += '<div class="toc-entry d-flex align-items-center">';
+      html += `<a href="#${encodeURIComponent(entry.id)}" class="toc-link flex-grow-1 py-1 px-2 rounded ${fontClass}" ${fontSize} data-toc-target="${id}">${text}</a>`;
+      html += `<button type="button" class="btn btn-sm toc-entry-action toc-copy-link" data-toc-target="${id}" title="Copy link to ${label}" aria-label="Copy link to ${label}"><i class="fas fa-link fa-fw" aria-hidden="true"></i></button>`;
+      if (this.getEditor()) {
+        html += `<button type="button" class="btn btn-sm toc-entry-action toc-insert-link" data-toc-target="${id}" data-toc-text="${label}" title="Insert link to ${label}" aria-label="Insert link to ${label}"><i class="fas fa-paste fa-fw" aria-hidden="true"></i></button>`;
+      }
+      html += '</div>';
       html += '</li>';
     }
     html += '</ul>';
@@ -111,8 +128,135 @@ export default class TocPanel extends SidePanel {
       });
     });
 
+    container.querySelectorAll<HTMLButtonElement>('.toc-copy-link').forEach(button => {
+      button.addEventListener('click', () => {
+        const targetId = button.dataset.tocTarget;
+        if (targetId) {
+          void this.copySectionLink(button, targetId);
+        }
+      });
+    });
+
+    container.querySelectorAll<HTMLButtonElement>('.toc-insert-link').forEach(button => {
+      button.addEventListener('click', () => {
+        const targetId = button.dataset.tocTarget;
+        const text = button.dataset.tocText;
+        if (targetId && text) {
+          this.insertSectionLink(targetId, text);
+        }
+      });
+    });
+
+    this.setupSearchControls();
+    this.filterEntries();
+
     // Set up scroll-spy for highlighting active heading
     this.setupScrollSpy(entries);
+  }
+
+  /**
+   * Add search and clear behavior once, then retain the query across refreshes.
+   */
+  private setupSearchControls(): void {
+    const input = document.getElementById('tocSearchInput') as HTMLInputElement | null;
+    const clear = document.getElementById('tocSearchClear') as HTMLButtonElement | null;
+    if (!input || !clear || input.dataset.tocSearchReady) return;
+
+    input.addEventListener('input', () => this.filterEntries());
+    clear.addEventListener('click', () => {
+      input.value = '';
+      input.focus();
+      this.filterEntries();
+    });
+    input.dataset.tocSearchReady = 'true';
+  }
+
+  private filterEntries(): void {
+    const input = document.getElementById('tocSearchInput') as HTMLInputElement | null;
+    const noResults = document.getElementById('tocNoResults');
+    const items = Array.from(document.querySelectorAll<HTMLElement>('#tocItems .toc-item'));
+    const query = input?.value.trim().toLocaleLowerCase() ?? '';
+    let matches = 0;
+
+    for (const item of items) {
+      const visible = !query || (item.dataset.tocSearchText ?? '').includes(query);
+      item.hidden = !visible;
+      if (visible) matches++;
+    }
+
+    if (noResults) {
+      noResults.hidden = items.length === 0 || matches > 0;
+    }
+  }
+
+  private async copySectionLink(button: HTMLButtonElement, targetId: string): Promise<void> {
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', 'view');
+    url.hash = targetId;
+
+    try {
+      await navigator.clipboard.writeText(url.toString());
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = url.toString();
+      textarea.style.left = '-9999px';
+      textarea.style.position = 'fixed';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+
+    const icon = button.querySelector('i');
+    if (!icon) return;
+    const originalClass = icon.className;
+    icon.className = 'fas fa-check fa-fw';
+    button.classList.add('text-success');
+    button.title = 'Link copied';
+    setTimeout(() => {
+      icon.className = originalClass;
+      button.classList.remove('text-success');
+      button.title = 'Copy section link';
+    }, 1500);
+  }
+
+  private insertSectionLink(targetId: string, text: string): void {
+    const editor = this.getEditor();
+    if (!editor) return;
+
+    editor.focus();
+    editor.execCommand(
+      'mceInsertContent',
+      false,
+      `<a href="#${encodeURIComponent(targetId)}">${this.escapeHTML(text)}</a>`,
+    );
+  }
+
+  private createHeadingId(text: string, index: number, usedIds: Set<string>): string {
+    const slug = text
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    const base = `section-${slug || index + 1}`;
+    let candidate = base;
+    let suffix = 2;
+
+    while (usedIds.has(candidate)) {
+      candidate = `${base}-${suffix}`;
+      suffix++;
+    }
+    return candidate;
+  }
+
+  private getEditor(): TinyMceEditor | null {
+    try {
+      const tinymce = (window as typeof window & { tinymce?: { activeEditor?: TinyMceEditor } }).tinymce;
+      return tinymce?.activeEditor ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -130,17 +274,12 @@ export default class TocPanel extends SidePanel {
     }
 
     // Edit mode: heading is inside TinyMCE iframe
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tinymce = (window as any).tinymce;
-      if (tinymce && tinymce.activeEditor) {
-        const editorEl = tinymce.activeEditor.getBody().querySelector(`#${CSS.escape(targetId)}`);
-        if (editorEl) {
-          editorEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+    const editor = this.getEditor();
+    if (editor) {
+      const editorEl = editor.getBody().querySelector(`#${CSS.escape(targetId)}`);
+      if (editorEl) {
+        editorEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-    } catch {
-      // ignore
     }
   }
 
@@ -158,7 +297,8 @@ export default class TocPanel extends SidePanel {
           // Remove active from all
           document.querySelectorAll('#tocItems .toc-link').forEach(l => l.classList.remove('active'));
           // Add active to matching
-          const activeLink = document.querySelector(`#tocItems .toc-link[data-toc-target="${id}"]`);
+          const activeLink = Array.from(document.querySelectorAll<HTMLElement>('#tocItems .toc-link'))
+            .find(link => link.dataset.tocTarget === id);
           if (activeLink) {
             activeLink.classList.add('active');
           }
@@ -200,5 +340,9 @@ export default class TocPanel extends SidePanel {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  private escapeAttribute(str: string): string {
+    return this.escapeHTML(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 }
