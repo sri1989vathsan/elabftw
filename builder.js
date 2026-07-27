@@ -17,6 +17,9 @@ const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
 const webpack = require('webpack');
 
+const terserParallel = process.env.TERSER_PARALLEL
+  ? Number(process.env.TERSER_PARALLEL)
+  : true;
 module.exports = (env) => {
   return {
     entry: {
@@ -102,7 +105,9 @@ module.exports = (env) => {
       minimize: true,
       minimizer: [
         new CssMinimizerPlugin(),
-        new TerserPlugin(),
+        new TerserPlugin({
+          parallel: terserParallel,
+        }),
       ],
     },
     plugins: [

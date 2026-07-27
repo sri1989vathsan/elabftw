@@ -266,6 +266,11 @@ ARG BUILD_ALL=1
 ENV CYPRESS_INSTALL_BINARY=0
 # avoid download prompt
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+# keep the production minifier within typical Docker Desktop memory limits
+ARG TERSER_PARALLEL=1
+ENV TERSER_PARALLEL=$TERSER_PARALLEL
+ARG NODE_MAX_OLD_SPACE_SIZE=4096
+ENV NODE_OPTIONS=--max-old-space-size=$NODE_MAX_OLD_SPACE_SIZE
 # enable new yarn
 RUN npm install --global corepack@0.34.6 && corepack enable
 # some ini settings are set on the command line to override the restrictive production ones already set
