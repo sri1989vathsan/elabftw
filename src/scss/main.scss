@@ -937,14 +937,36 @@ tr:first-child td {
   width: 0.75rem;
 }
 
-.favorite-filter-fieldset {
+.favorite-filter-section {
   border: 1px solid var(--secondary);
   border-radius: 0.25rem;
-  padding: 0.75rem;
 
-  legend {
-    padding: 0 0.25rem;
-    width: auto;
+  &[open] {
+    .favorite-filter-section-chevron {
+      transform: rotate(90deg);
+    }
+  }
+
+  .favorite-filter-section-summary {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    list-style: none;
+    padding: 0.75rem;
+    user-select: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  .favorite-filter-section-chevron {
+    margin-right: 0.35rem;
+    transition: transform 0.15s ease;
+  }
+
+  .favorite-filter-section-body {
+    padding: 0 0.75rem 0.75rem;
   }
 }
 

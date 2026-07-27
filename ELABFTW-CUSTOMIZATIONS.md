@@ -164,6 +164,8 @@ matches eLabFTW's single-owner filtering. The panel can target experiments or
 resources and restores selections from the URL. Applying filters always opens
 the complete accessible listing (`scope=3`) so results are not silently
 restricted by a previous "My experiments", search, or pagination selection.
+Each filter group is independently collapsible and keeps its current selections
+when closed.
 
 The Manage favorites section can create a new category for the currently
 selected target and immediately favorite it, or favorite existing categories,

@@ -22,8 +22,12 @@
       {{ 'Combine favorite categories, tags, statuses, and an owner. Apply filters searches all accessible entries.'|trans }}
     </p>
 
-    <fieldset class='favorite-filter-fieldset mb-3'>
-      <legend class='h5'>{{ 'Categories'|trans }}</legend>
+    <details class='favorite-filter-section mb-3' open>
+      <summary class='favorite-filter-section-summary h5 mb-0'>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'Categories'|trans }}
+      </summary>
+      <div class='favorite-filter-section-body'>
       {% for categoryType in ['experiments', 'resources'] %}
         <div data-favorite-target-group='{{ categoryType }}' {{ categoryType != favoriteFilterTarget ? 'hidden' }}>
           {% set favoriteCategoriesForType = App.favoriteCategoriesArr|filter(category => category.category_type == categoryType) %}
@@ -52,10 +56,15 @@
           {% endif %}
         </div>
       {% endfor %}
-    </fieldset>
+      </div>
+    </details>
 
-    <fieldset class='favorite-filter-fieldset mb-3'>
-      <legend class='h5'>{{ 'Tags'|trans }}</legend>
+    <details class='favorite-filter-section mb-3' open>
+      <summary class='favorite-filter-section-summary h5 mb-0'>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'Tags'|trans }}
+      </summary>
+      <div class='favorite-filter-section-body'>
       <div id='favtagsTagsDiv'>
         {% if App.favoriteTagsArr|length == 0 %}
           <p class='small color-medium mb-0'>{{ 'No favorite tags are present. Add an existing tag below.'|trans }}</p>
@@ -78,10 +87,15 @@
           {% endfor %}
         {% endif %}
       </div>
-    </fieldset>
+      </div>
+    </details>
 
-    <fieldset class='favorite-filter-fieldset mb-3'>
-      <legend class='h5'>{{ 'Status'|trans }}</legend>
+    <details class='favorite-filter-section mb-3' open>
+      <summary class='favorite-filter-section-summary h5 mb-0'>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'Status'|trans }}
+      </summary>
+      <div class='favorite-filter-section-body'>
       {% for statusType in ['experiments', 'resources'] %}
         <div data-favorite-target-group='{{ statusType }}' {{ statusType != favoriteFilterTarget ? 'hidden' }}>
           {% set favoriteStatusesForType = App.favoriteFiltersArr|filter(filter => filter.filter_type == 'status' and filter.target_type == statusType) %}
@@ -110,10 +124,15 @@
           {% endif %}
         </div>
       {% endfor %}
-    </fieldset>
+      </div>
+    </details>
 
-    <fieldset class='favorite-filter-fieldset mb-3'>
-      <legend class='h5'>{{ 'Owner'|trans }}</legend>
+    <details class='favorite-filter-section mb-3' open>
+      <summary class='favorite-filter-section-summary h5 mb-0'>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'Owner'|trans }}
+      </summary>
+      <div class='favorite-filter-section-body'>
       {% set favoriteOwners = App.favoriteFiltersArr|filter(filter => filter.filter_type == 'owner') %}
       {% for owner in favoriteOwners %}
         <div class='favorite-filter-option d-flex align-items-center'>
@@ -135,7 +154,8 @@
       {% if favoriteOwners|length == 0 %}
         <p class='small color-medium mb-0'>{{ 'No favorite owners are present.'|trans }}</p>
       {% endif %}
-    </fieldset>
+      </div>
+    </details>
 
     <div class='d-flex mb-3'>
       <button type='button' class='btn btn-primary flex-grow-1' data-action='apply-favorite-filters'>
