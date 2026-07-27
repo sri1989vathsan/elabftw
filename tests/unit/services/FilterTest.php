@@ -62,6 +62,17 @@ class FilterTest extends \PHPUnit\Framework\TestCase
         Filter::body(str_repeat('a', 4120001));
     }
 
+    public function testBodyAllowsSafeTableFormulaMetadata(): void
+    {
+        $input = '<table data-well-plate="96"><tr><td data-formula="=SUM(A1:A2)" data-formula-state="valid" onclick="alert(1)">3</td></tr></table>';
+        $result = Filter::body($input);
+
+        $this->assertStringContainsString('data-well-plate="96"', $result);
+        $this->assertStringContainsString('data-formula="=SUM(A1:A2)"', $result);
+        $this->assertStringContainsString('data-formula-state="valid"', $result);
+        $this->assertStringNotContainsString('onclick', $result);
+    }
+
     public function testForFilesystem(): void
     {
         $this->assertEquals('blah', Filter::forFilesystem('=blah/'));

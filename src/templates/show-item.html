@@ -44,7 +44,22 @@
       {% endif %}
     </div>
     {# end first line #}
+    {% if item.toc is defined and item.toc is not empty %}
+  <div class="experiment-toc">
+    <div class="experiment-toc__title">Contents</div>
+    <ul>
+      {% for tocItem in item.toc %}
+        <li class="lvl-{{ tocItem.level }}">
+          <a href="#{{ tocItem.id }}">{{ tocItem.title }}</a>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
 
+<div class="experiment-main-text">
+  {{ item.body_html|raw }}
+</div>
     {# second line: title #}
     <div class='d-flex title flex-nowrap my-2'>
       {% if item.custom_id %}

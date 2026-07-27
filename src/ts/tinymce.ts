@@ -68,6 +68,12 @@ import { EntityType, Model } from './interfaces';
 import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPostRequest } from './misc';
 import { ApiC } from './api';
 import { isSortable } from './TableSorting.class';
+import FormulaTableEditor from './FormulaTableEditor.class';
+import {
+  createFormulaTable,
+  createWellPlateTable,
+  WELL_PLATE_PRESETS,
+} from './FormulaTablePresets';
 import { MathJaxObject } from 'mathjax-full/js/components/startup';
 declare const MathJax: MathJaxObject;
 import { entity } from './getEntity';
@@ -198,7 +204,7 @@ const imagesUploadHandler = (blobInfo: TinyMCEBlobInfo) => new Promise((resolve,
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate | codesample | link | sort-table';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate | codesample | link | insert-formula-table table-formula sort-table';
   let removedMenuItems = 'newdocument, image, anchor';
   let fileMenuItems = 'preview | print';
   if (page === 'edit') {
@@ -227,6 +233,28 @@ export function getTinymceBaseConfig(page: string): object {
     skin_url: isDark ? '/assets/tinymce_skins_dark' : '/assets/tinymce_skins',
     skin: isDark ? 'oxide-dark' : 'oxide',
     content_css: isDark ? ['/assets/tinymce_skins/content/dark/content.min.css', '/assets/tinymce_content.min.css'] : ['/assets/tinymce_content.min.css'],
+    content_style: `
+      td[data-formula], th[data-formula] {
+        background-color: rgba(41, 128, 185, 0.08);
+        box-shadow: inset 3px 0 #2980b9;
+      }
+      td[data-formula-state="error"], th[data-formula-state="error"] {
+        background-color: rgba(192, 57, 43, 0.1);
+        box-shadow: inset 3px 0 #c0392b;
+        color: #c0392b;
+        font-weight: 700;
+      }
+      table[data-well-plate] {
+        font-size: 0.85rem;
+        table-layout: fixed;
+        width: 100%;
+      }
+      table[data-well-plate] td, table[data-well-plate] th {
+        min-width: 2.5rem;
+        padding: 0.25rem;
+        text-align: center;
+      }
+    `,
     emoticons_database_url: 'assets/tinymce_emojis.js',
     // remove the "Upgrade" button
     promotion: false,
@@ -336,6 +364,8 @@ export function getTinymceBaseConfig(page: string): object {
       file: { title: 'File', items: fileMenuItems },
     },
     setup: (editor: Editor): void => {
+      const formulaTableEditor = new FormulaTableEditor(editor);
+      formulaTableEditor.init();
       // holds the timer setTimeout function
       let typingTimer;
       // use event SkinLoaded instead of init so we're sure skinNode is present
@@ -416,6 +446,38 @@ export function getTinymceBaseConfig(page: string): object {
         tooltip: 'Save',
         onAction: function() {
           editor.execCommand('mceSave');
+        },
+      });
+      editor.ui.registry.addIcon('table-formula', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 7h7M8.5 4v12c0 2-1 3-3 3H4m9-7h7m-3.5-3v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="m14 18 5-5m-5 0 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'), // eslint-disable-line
+      editor.ui.registry.addIcon('insert-spreadsheet', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M9 9v11m6-11v11" stroke="currentColor" stroke-width="2"/><path d="M12 2v4m-2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>');
+      editor.ui.registry.addMenuButton('insert-formula-table', {
+        icon: 'insert-spreadsheet',
+        tooltip: 'Insert spreadsheet table',
+        fetch: callback => callback([
+          {
+            type: 'menuitem',
+            text: 'Blank formula grid (5 × 5)',
+            onAction: () => editor.insertContent(createFormulaTable()),
+          },
+          { type: 'separator' },
+          ...WELL_PLATE_PRESETS.map(preset => ({
+            type: 'menuitem' as const,
+            text: `${preset.wells}-well plate (${preset.rows} × ${preset.columns})`,
+            onAction: () => editor.insertContent(createWellPlateTable(preset)),
+          })),
+        ]),
+      });
+      editor.ui.registry.addButton('table-formula', {
+        icon: 'table-formula',
+        tooltip: 'Recalculate table formulas',
+        onAction: () => formulaTableEditor.recalculateSelectedTable(),
+        onSetup: api => {
+          api.setEnabled(false);
+          const callback = event => {
+            api.setEnabled(Boolean(event.element.closest('table')));
+          };
+          editor.on('NodeChange', callback);
+          return () => editor.off('NodeChange', callback);
         },
       });
       // save and go back button for toolbar, inside "File" menu.

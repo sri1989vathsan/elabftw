@@ -627,6 +627,33 @@ tr:first-child td {
   tr {
     border: 1px solid var(--secondary-muted);
   }
+
+  td[data-formula],
+  th[data-formula] {
+    background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+    box-shadow: inset 3px 0 var(--primary);
+  }
+
+  td[data-formula-state='error'],
+  th[data-formula-state='error'] {
+    background-color: color-mix(in srgb, var(--danger) 10%, transparent);
+    box-shadow: inset 3px 0 var(--danger);
+    color: var(--danger);
+    font-weight: 700;
+  }
+
+  table[data-well-plate] {
+    font-size: 0.85rem;
+    table-layout: fixed;
+    width: 100%;
+
+    td,
+    th {
+      min-width: 2.5rem;
+      padding: 0.25rem;
+      text-align: center;
+    }
+  }
 }
 
 /* required labels/input */
