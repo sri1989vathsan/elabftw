@@ -8,8 +8,6 @@
 import { Model, EntityType, UnfinishedEntities } from './interfaces';
 import SidePanel from './SidePanel.class';
 import { escapeHTML } from './misc';
-import FavTag from './FavTag.class';
-import TocPanel from './TocPanel.class';
 import { ApiC } from './api';
 import { mount } from 'svelte';
 import TodolistSv from './components/Todolist.svelte';
@@ -56,9 +54,6 @@ export default class Todolist extends SidePanel {
 
   // TOGGLE TODOLIST VISIBILITY
   toggle(): void {
-    // force other panels to close
-    (new FavTag()).hide();
-    (new TocPanel()).hide();
     super.toggle();
     const panel = document.getElementById(this.panelId);
     const isOpen = !!panel && !panel.hasAttribute('hidden');

@@ -1,0 +1,53 @@
+<div class='side-panel' id='favcategoriesPanel' hidden>
+  <button type='button' data-action='toggle-sidepanel' data-target='favcategories' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
+  <div class='p-3'>
+    <h3 class='mb-3'>{{ 'Favorite categories'|trans }}</h3>
+    {% include 'filter-input-snippet.html' with {'target': 'favoriteCategoriesList', 'targetType': 'li'} %}
+    <hr>
+    <ul id='favoriteCategoriesList' class='list-group d-flex flex-column'>
+      {% if App.favoriteCategoriesArr|length == 0 %}
+        <li class='list-group-item side-panel-item'>{{ 'No favorite categories are present. Choose one below.'|trans }}</li>
+      {% else %}
+        {% for category in App.favoriteCategoriesArr %}
+          {% set categoryPage = category.category_type == 'experiments' ? '/experiments.php' : '/database.php' %}
+          <li class='list-group-item side-panel-item d-flex align-items-center'>
+            <span class='category-color-dot mr-2' style='--category-color:#{{ category.color|e('html_attr') }}'></span>
+            <a class='flex-grow-1 color-medium' href='{{ categoryPage }}?category={{ category.category_id }}'>
+              <i class='fas {{ category.category_type == 'experiments' ? 'fa-flask' : 'fa-cubes-stacked' }} fa-fw mr-1'></i>
+              {{ category.title }}
+            </a>
+            <button type='button' class='btn btn-sm btn-ghost' data-id='{{ category.id }}' data-action='destroy-favcategory' title='{{ 'Remove from favorites'|trans }}' aria-label='{{ 'Remove from favorites'|trans }}'>
+              <i class='fas fa-trash-alt fa-fw'></i>
+            </button>
+          </li>
+        {% endfor %}
+      {% endif %}
+    </ul>
+    <hr>
+    <label for='favoriteCategorySelect'>{{ 'Add a category as favorite'|trans }}</label>
+    <div class='input-group'>
+      <select id='favoriteCategorySelect' class='form-control' aria-label='{{ 'Add a category as favorite'|trans }}'>
+        <option value=''>{{ 'Select a category'|trans }}</option>
+        <optgroup label='{{ 'Experiment categories'|trans }}'>
+          {% for category in App.experimentsCategoryArr %}
+            {% if category.is_current_team == 1 %}
+              <option value='experiments:{{ category.id }}'>{{ category.title }}</option>
+            {% endif %}
+          {% endfor %}
+        </optgroup>
+        <optgroup label='{{ 'Resource categories'|trans }}'>
+          {% for category in App.itemsCategoryArr %}
+            {% if category.is_current_team == 1 %}
+              <option value='resources:{{ category.id }}'>{{ category.title }}</option>
+            {% endif %}
+          {% endfor %}
+        </optgroup>
+      </select>
+      <div class='input-group-append'>
+        <button class='btn btn-primary' type='button' data-action='create-favcategory' title='{{ 'Add'|trans }}' aria-label='{{ 'Add'|trans }}'>
+          <i class='fas fa-plus fa-fw'></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

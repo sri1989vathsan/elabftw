@@ -137,11 +137,45 @@ Adds a UI widget on the experiment edit page for quickly linking to entities in 
 - "Insert in text" uses the existing `editor.setContent()` pattern to insert at cursor position
 - Page reloads after adding as field to re-render the metadata div (since the Metadata class instance isn't accessible from edit.ts)
 
+## Feature 11: Floating Sidebar Navigation Tabs
+
+Moves the experiment folder tree out of the listing body and into its own left
+sidebar tab alongside Table of Contents, Favorite Tags, Favorite Categories, and
+Todolist. The compact tab rail is fixed to the viewport, so it remains available
+while a long experiment or listing page scrolls. Opening a tab closes the
+previous panel and the last open tab is restored from localStorage.
+
+The folder tab retains the existing hierarchy, favorite-folder pinning,
+create/rename/delete controls, and persisted expand/collapse state.
+
+## Feature 12: Favorite Categories
+
+Adds server-backed per-user favorites for both experiment and resource
+categories. Favorites are managed from a dedicated left sidebar tab and link
+directly to the corresponding filtered experiment or resource listing.
+
+**Files added:**
+- `src/Models/FavCategories.php`
+- `src/templates/favcategories-panel.html`
+- `src/ts/FavCategory.class.ts`
+- `src/sql/schema210.sql` and `src/sql/schema210-down.sql`
+
+## Feature 13: Spreadsheet Presets and Table Formatting
+
+Extends inline spreadsheets with custom dimensions (up to 50 × 50),
+Benchling-style named data tables, 6/12/24/48/96/384-well plate presets, captions
+above tables, and a visual aggregate formula builder. Select a source range and
+click SUM, AVERAGE, COUNT, MIN, or MAX; the result formula is placed immediately
+below the selection. Tables can be indented/outdented in 2.5rem steps to align
+with nested bullets, and the sanitizer preserves TinyMCE's nested-list marker so
+Tab indentation does not render duplicate bullets.
+
 ## Schema Migration Notes
 
 - `schema207.sql` — Combined: experiment folders table + folder_id column (our additions) and booking cost columns (upstream). Uses `CREATE TABLE IF NOT EXISTS` and conditional `ALTER TABLE` for idempotent re-runs
 - `schema208.sql` — Upstream: adds `force_res_tpl` column to `teams` table
 - `schema209.sql` — Our addition (renumbered from 208 after upstream merge): adds `favorite_experiment_folder` column to `users` table with FK to `experiments_folders(id)` with `ON DELETE SET NULL`
+- `schema210.sql` — Adds server-backed favorite experiment/resource categories
 
 ## General Merge Notes
 

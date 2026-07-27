@@ -64,6 +64,21 @@ class FilterTest extends \PHPUnit\Framework\TestCase
         Filter::body(str_repeat('a', 4120001));
     }
 
+    public function testBodyPreservesSpreadsheetAndNestedListMetadata(): void
+    {
+        $spreadsheet = '<table class="elabftw-spreadsheet" data-spreadsheet="eyJkYXRhIjpbXX0=" data-spreadsheet-style="well-plate" data-well-plate="96"><caption>Plate results</caption><thead><tr><th class="spreadsheet-coordinate">1</th></tr></thead><tbody><tr><td>42</td></tr></tbody></table>';
+        $result = Filter::body($spreadsheet);
+        $this->assertStringContainsString('class="elabftw-spreadsheet"', $result);
+        $this->assertStringContainsString('data-spreadsheet="eyJkYXRhIjpbXX0="', $result);
+        $this->assertStringContainsString('data-spreadsheet-style="well-plate"', $result);
+        $this->assertStringContainsString('data-well-plate="96"', $result);
+        $this->assertStringContainsString('<caption>Plate results</caption>', $result);
+        $this->assertStringContainsString('<thead>', $result);
+
+        $list = Filter::body('<ul><li style="list-style-type: none;"><ul><li>Nested item</li></ul></li></ul>');
+        $this->assertStringContainsString('list-style-type:none', $list);
+    }
+
     public function testForFilesystem(): void
     {
         $this->assertEquals('blah', Filter::forFilesystem('=blah/'));

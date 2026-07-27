@@ -1,408 +1,552 @@
 /**
- * @author eLabFTW custom
+ * @author eLabFTW contributors
  * @license AGPL-3.0
  * @package elabftw
  *
- * Inline spreadsheet — embeds a small jspreadsheet grid inside the TinyMCE body.
- * Data (including formulas) is stored as base64-encoded JSON in a data-spreadsheet
- * attribute on the <table>. The table cells show computed values so the document
- * looks correct even without JavaScript.
+ * Inline spreadsheet — embeds a jspreadsheet grid inside the TinyMCE body.
+ * Raw values and formulas are stored as base64-encoded JSON on the table while
+ * computed cell values remain ordinary HTML for viewing and exporting.
  */
 import jspreadsheet from 'jspreadsheet-ce';
 import 'jspreadsheet-ce/dist/jspreadsheet.css';
 import 'jsuites/dist/jsuites.css';
 
-// Type for a single cell value (string | number | boolean | null)
 type CellValue = string | number | boolean | null;
-// Array-of-arrays data representation
 type AOA = CellValue[][];
-// jspreadsheet-ce v5 instance — types in the package are incomplete, use any
+type SpreadsheetKind = 'standard' | 'notebook' | 'well-plate';
+
+// jspreadsheet-ce v5 types do not cover the runtime shape returned during setup.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type JssInstance = any;
+type JssFactory = (element: HTMLDivElement, options: object) => JssInstance;
 
 export interface SpreadsheetData {
-  /** Array-of-arrays with raw values/formulas as entered by the user */
+  /** Array-of-arrays with raw values/formulas as entered by the user. */
   data: AOA;
-  /** Number of columns (minimum enforced) */
   cols: number;
-  /** Number of rows (minimum enforced) */
   rows: number;
+  kind?: SpreadsheetKind;
+  caption?: string;
+  plateSize?: number;
 }
+
+interface WellPlatePreset {
+  wells: number;
+  rows: number;
+  cols: number;
+}
+
+export const WELL_PLATE_PRESETS: WellPlatePreset[] = [
+  { wells: 6, rows: 2, cols: 3 },
+  { wells: 12, rows: 3, cols: 4 },
+  { wells: 24, rows: 4, cols: 6 },
+  { wells: 48, rows: 6, cols: 8 },
+  { wells: 96, rows: 8, cols: 12 },
+  { wells: 384, rows: 16, cols: 24 },
+];
 
 const DEFAULT_COLS = 6;
 const DEFAULT_ROWS = 5;
+const MAX_DIMENSION = 50;
 
-/**
- * Encode spreadsheet data to a base64 string for storage in an HTML attribute.
- */
 export function encodeSpreadsheetData(sd: SpreadsheetData): string {
   return btoa(unescape(encodeURIComponent(JSON.stringify(sd))));
 }
 
-/**
- * Decode spreadsheet data from a base64 string.
- */
 export function decodeSpreadsheetData(encoded: string): SpreadsheetData {
   try {
-    return JSON.parse(decodeURIComponent(escape(atob(encoded))));
+    const parsed = JSON.parse(decodeURIComponent(escape(atob(encoded)))) as Partial<SpreadsheetData>;
+    return normalizeSpreadsheetData(parsed);
   } catch {
-    return { data: [[]], cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
+    return emptySpreadsheetData();
   }
 }
 
-/**
- * Create an empty SpreadsheetData object.
- */
-export function emptySpreadsheetData(): SpreadsheetData {
-  const data: AOA = [];
-  for (let r = 0; r < DEFAULT_ROWS; r++) {
-    data.push(new Array(DEFAULT_COLS).fill(''));
-  }
-  return { data, cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
+export function emptySpreadsheetData(
+  cols = DEFAULT_COLS,
+  rows = DEFAULT_ROWS,
+  kind: SpreadsheetKind = 'standard',
+  caption = '',
+): SpreadsheetData {
+  const safeCols = clampDimension(cols, DEFAULT_COLS);
+  const safeRows = clampDimension(rows, DEFAULT_ROWS);
+  return {
+    data: createEmptyData(safeRows, safeCols),
+    cols: safeCols,
+    rows: safeRows,
+    kind,
+    caption,
+  };
 }
 
-/**
- * Helper: get the first worksheet from a jspreadsheet v5 instance.
- */
+export function createNotebookSpreadsheetData(): SpreadsheetData {
+  const data = createEmptyData(9, 5);
+  data[0] = ['Sample', 'Condition', 'Replicate', 'Result', 'Notes'];
+  return {
+    data,
+    cols: 5,
+    rows: 9,
+    kind: 'notebook',
+    caption: 'Untitled data table',
+  };
+}
+
+export function createWellPlateSpreadsheetData(wells: number): SpreadsheetData {
+  const preset = WELL_PLATE_PRESETS.find(candidate => candidate.wells === wells)
+    ?? WELL_PLATE_PRESETS.find(candidate => candidate.wells === 96);
+  return {
+    ...emptySpreadsheetData(preset.cols, preset.rows, 'well-plate', `${preset.wells}-well plate`),
+    plateSize: preset.wells,
+  };
+}
+
+function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): SpreadsheetData {
+  const rows = clampDimension(candidate.rows, DEFAULT_ROWS);
+  const cols = clampDimension(candidate.cols, DEFAULT_COLS);
+  const kind: SpreadsheetKind = candidate.kind === 'notebook' || candidate.kind === 'well-plate'
+    ? candidate.kind
+    : 'standard';
+  return {
+    data: resizeData(Array.isArray(candidate.data) ? candidate.data : [[]], rows, cols),
+    rows,
+    cols,
+    kind,
+    caption: typeof candidate.caption === 'string' ? candidate.caption : '',
+    plateSize: kind === 'well-plate' && Number.isInteger(candidate.plateSize)
+      ? candidate.plateSize
+      : undefined,
+  };
+}
+
+function clampDimension(value: number | undefined, fallback: number): number {
+  if (!Number.isInteger(value)) return fallback;
+  return Math.max(1, Math.min(MAX_DIMENSION, value));
+}
+
+function createEmptyData(rows: number, cols: number): AOA {
+  return Array.from({ length: rows }, () => new Array(cols).fill(''));
+}
+
+function resizeData(data: AOA, rows: number, cols: number): AOA {
+  return Array.from({ length: rows }, (_, rowIndex) => (
+    Array.from({ length: cols }, (_, colIndex) => data[rowIndex]?.[colIndex] ?? '')
+  ));
+}
+
 function getWorksheet(instance: JssInstance): JssInstance {
   return instance?.[0] ?? instance;
 }
 
-/**
- * Helper: read computed cell values from the rendered jspreadsheet DOM.
- * v5 uses class "jss_worksheet" on the table. Cell textContent always shows
- * evaluated formula results.
- */
 function getComputedDataFromDOM(container: HTMLElement): AOA {
   const result: AOA = [];
   const tbody = container.querySelector('.jss_worksheet tbody, table.jss tbody, table.jexcel tbody');
   if (!tbody) return result;
-  const trs = tbody.querySelectorAll('tr');
-  trs.forEach(tr => {
+  tbody.querySelectorAll('tr').forEach(tr => {
     const row: CellValue[] = [];
-    const tds = tr.querySelectorAll('td');
-    tds.forEach((td, idx) => {
-      if (idx === 0) return; // skip row-number column
-      row.push(td.textContent?.trim() ?? '');
+    tr.querySelectorAll('td').forEach((td, index) => {
+      if (index > 0) row.push(td.textContent?.trim() ?? '');
     });
     if (row.length > 0) result.push(row);
   });
   return result;
 }
 
-/**
- * Create the overlay + dialog elements (plain DIV, no Bootstrap modal).
- * This avoids Bootstrap's enforceFocus which breaks jspreadsheet formula
- * range selection.
- */
-function createOverlay(): {
+function createInput(type: string, value: string, label: string): HTMLInputElement {
+  const input = document.createElement('input');
+  input.type = type;
+  input.value = value;
+  input.className = 'form-control form-control-sm';
+  input.setAttribute('aria-label', label);
+  input.title = label;
+  return input;
+}
+
+function createOverlay(initial: SpreadsheetData): {
   overlay: HTMLDivElement;
-  dialog: HTMLDivElement;
-  sheetContainer: HTMLDivElement;
+  sheetHost: HTMLDivElement;
   insertBtn: HTMLButtonElement;
   cancelBtn: HTMLButtonElement;
   addRowBtn: HTMLButtonElement;
   addColBtn: HTMLButtonElement;
+  resizeBtn: HTMLButtonElement;
+  rowsInput: HTMLInputElement;
+  colsInput: HTMLInputElement;
+  captionInput: HTMLInputElement;
+  presetSelect: HTMLSelectElement;
+  formulaButtons: NodeListOf<HTMLButtonElement>;
+  formulaStatus: HTMLSpanElement;
 } {
-  // Backdrop
   const overlay = document.createElement('div');
-  Object.assign(overlay.style, {
-    position: 'fixed', top: '0', left: '0', width: '100%', height: '100%',
-    backgroundColor: 'rgba(0,0,0,0.5)', zIndex: '10050', display: 'flex',
-    alignItems: 'center', justifyContent: 'center',
-  });
+  overlay.className = 'inline-spreadsheet-overlay';
 
-  // Dialog box
   const dialog = document.createElement('div');
-  Object.assign(dialog.style, {
-    backgroundColor: '#fff', borderRadius: '8px', padding: '16px',
-    width: '80vw', maxWidth: '900px', maxHeight: '80vh', display: 'flex',
-    flexDirection: 'column', boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
-  });
+  dialog.className = 'inline-spreadsheet-dialog';
 
-  // Title
   const title = document.createElement('h5');
-  title.textContent = 'Edit Spreadsheet';
-  title.style.marginBottom = '8px';
+  title.textContent = 'Edit spreadsheet';
+  title.className = 'mb-2';
   dialog.appendChild(title);
 
-  // Formula helper bar
+  const settings = document.createElement('div');
+  settings.className = 'inline-spreadsheet-settings';
+
+  const presetSelect = document.createElement('select');
+  presetSelect.className = 'form-control form-control-sm';
+  presetSelect.setAttribute('aria-label', 'Spreadsheet layout');
+  presetSelect.innerHTML = `
+    <option value="custom">Custom spreadsheet</option>
+    <option value="notebook">Benchling-style data table</option>
+    ${WELL_PLATE_PRESETS.map(preset => `<option value="plate-${preset.wells}">${preset.wells}-well plate (${preset.rows} × ${preset.cols})</option>`).join('')}
+  `;
+  presetSelect.value = initial.kind === 'notebook'
+    ? 'notebook'
+    : (initial.kind === 'well-plate' ? `plate-${initial.plateSize ?? 96}` : 'custom');
+
+  const rowsInput = createInput('number', String(initial.rows), 'Rows');
+  rowsInput.min = '1';
+  rowsInput.max = String(MAX_DIMENSION);
+  const colsInput = createInput('number', String(initial.cols), 'Columns');
+  colsInput.min = '1';
+  colsInput.max = String(MAX_DIMENSION);
+  const captionInput = createInput('text', initial.caption ?? '', 'Caption shown above the table');
+  captionInput.placeholder = 'Caption (shown above the table)';
+  captionInput.classList.add('inline-spreadsheet-caption-input');
+
+  const resizeBtn = document.createElement('button');
+  resizeBtn.type = 'button';
+  resizeBtn.textContent = 'Apply size';
+  resizeBtn.className = 'btn btn-sm btn-outline-secondary';
+
+  settings.append(presetSelect, rowsInput, colsInput, resizeBtn, captionInput);
+  dialog.appendChild(settings);
+
   const formulaBar = document.createElement('div');
-  Object.assign(formulaBar.style, {
-    display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px',
-    flexWrap: 'wrap', fontSize: '0.85em',
-  });
-  const formulaLabel = document.createElement('span');
-  formulaLabel.textContent = 'Formulas:';
-  formulaLabel.style.fontWeight = 'bold';
-  formulaLabel.style.color = '#555';
+  formulaBar.className = 'inline-spreadsheet-formula-bar';
+  const formulaLabel = document.createElement('strong');
+  formulaLabel.textContent = 'ƒx';
+  formulaLabel.title = 'Formula builder';
   formulaBar.appendChild(formulaLabel);
-
-  const formulas: Array<{ name: string; example: string; desc: string }> = [
-    { name: 'SUM', example: '=SUM(A1:A10)', desc: 'Sum of values' },
-    { name: 'AVERAGE', example: '=AVERAGE(A1:A10)', desc: 'Mean of values' },
-    { name: 'COUNT', example: '=COUNT(A1:A10)', desc: 'Count of values' },
-    { name: 'MIN', example: '=MIN(A1:A10)', desc: 'Minimum value' },
-    { name: 'MAX', example: '=MAX(A1:A10)', desc: 'Maximum value' },
-    { name: 'IF', example: '=IF(A1>0,"yes","no")', desc: 'Conditional' },
-    { name: 'ROUND', example: '=ROUND(A1,2)', desc: 'Round to N decimals' },
-    { name: 'ABS', example: '=ABS(A1)', desc: 'Absolute value' },
-    { name: 'CONCATENATE', example: '=CONCATENATE(A1,B1)', desc: 'Join text' },
-  ];
-
-  formulas.forEach(f => {
-    const chip = document.createElement('span');
-    chip.textContent = f.name;
-    chip.title = `${f.desc}\nExample: ${f.example}`;
-    Object.assign(chip.style, {
-      display: 'inline-block', padding: '2px 8px', borderRadius: '12px',
-      backgroundColor: '#e9ecef', color: '#333', cursor: 'pointer',
-      border: '1px solid #ccc', fontSize: '0.85em', userSelect: 'none',
-    });
-    chip.addEventListener('mouseenter', () => { chip.style.backgroundColor = '#d0d4d8'; });
-    chip.addEventListener('mouseleave', () => { chip.style.backgroundColor = '#e9ecef'; });
-    chip.addEventListener('click', () => {
-      // Copy example to clipboard for easy pasting
-      navigator.clipboard?.writeText(f.example).then(() => {
-        chip.style.backgroundColor = '#c3e6cb';
-        setTimeout(() => { chip.style.backgroundColor = '#e9ecef'; }, 600);
-      });
-    });
-    formulaBar.appendChild(chip);
+  ['SUM', 'AVERAGE', 'COUNT', 'MIN', 'MAX'].forEach(formulaName => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-sm btn-outline-secondary';
+    button.dataset.formula = formulaName;
+    button.textContent = formulaName;
+    button.title = `Apply ${formulaName} to the selected cell range`;
+    formulaBar.appendChild(button);
   });
-
-  const helperNote = document.createElement('span');
-  helperNote.textContent = '(click to copy example, drag corner to fill)';
-  helperNote.style.color = '#999';
-  helperNote.style.fontSize = '0.8em';
-  helperNote.style.marginLeft = '4px';
-  formulaBar.appendChild(helperNote);
-
+  const formulaStatus = document.createElement('span');
+  formulaStatus.className = 'inline-spreadsheet-formula-status';
+  formulaStatus.textContent = 'Select source cells, then choose a formula. The result is placed below the selection.';
+  formulaBar.appendChild(formulaStatus);
   dialog.appendChild(formulaBar);
 
-  // Spreadsheet container
-  const sheetContainer = document.createElement('div');
-  Object.assign(sheetContainer.style, {
-    flex: '1', minHeight: '300px', overflow: 'auto', marginBottom: '12px',
-  });
-  dialog.appendChild(sheetContainer);
+  const sheetHost = document.createElement('div');
+  sheetHost.className = 'inline-spreadsheet-container';
+  dialog.appendChild(sheetHost);
 
-  // Button row
-  const btnRow = document.createElement('div');
-  Object.assign(btnRow.style, {
-    display: 'flex', justifyContent: 'space-between', gap: '8px',
-  });
-
-  const leftBtns = document.createElement('div');
-  leftBtns.style.display = 'flex';
-  leftBtns.style.gap = '6px';
-
+  const buttonRow = document.createElement('div');
+  buttonRow.className = 'inline-spreadsheet-actions';
+  const leftButtons = document.createElement('div');
+  leftButtons.className = 'd-flex';
   const addRowBtn = document.createElement('button');
+  addRowBtn.type = 'button';
   addRowBtn.textContent = '+ Row';
-  addRowBtn.className = 'btn btn-sm btn-outline-secondary';
-  leftBtns.appendChild(addRowBtn);
-
+  addRowBtn.className = 'btn btn-sm btn-outline-secondary mr-1';
   const addColBtn = document.createElement('button');
+  addColBtn.type = 'button';
   addColBtn.textContent = '+ Column';
   addColBtn.className = 'btn btn-sm btn-outline-secondary';
-  leftBtns.appendChild(addColBtn);
+  leftButtons.append(addRowBtn, addColBtn);
 
-  const rightBtns = document.createElement('div');
-  rightBtns.style.display = 'flex';
-  rightBtns.style.gap = '6px';
-
+  const rightButtons = document.createElement('div');
+  rightButtons.className = 'd-flex';
   const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
   cancelBtn.textContent = 'Cancel';
-  cancelBtn.className = 'btn btn-sm btn-secondary';
-  rightBtns.appendChild(cancelBtn);
-
+  cancelBtn.className = 'btn btn-sm btn-secondary mr-1';
   const insertBtn = document.createElement('button');
+  insertBtn.type = 'button';
   insertBtn.textContent = 'Insert / Update';
   insertBtn.className = 'btn btn-sm btn-primary';
-  rightBtns.appendChild(insertBtn);
-
-  btnRow.appendChild(leftBtns);
-  btnRow.appendChild(rightBtns);
-  dialog.appendChild(btnRow);
+  rightButtons.append(cancelBtn, insertBtn);
+  buttonRow.append(leftButtons, rightButtons);
+  dialog.appendChild(buttonRow);
 
   overlay.appendChild(dialog);
+  dialog.addEventListener('click', event => event.stopPropagation());
 
-  // Stop clicks on dialog from closing via overlay
-  dialog.addEventListener('click', e => e.stopPropagation());
+  return {
+    overlay,
+    sheetHost,
+    insertBtn,
+    cancelBtn,
+    addRowBtn,
+    addColBtn,
+    resizeBtn,
+    rowsInput,
+    colsInput,
+    captionInput,
+    presetSelect,
+    formulaButtons: formulaBar.querySelectorAll<HTMLButtonElement>('[data-formula]'),
+    formulaStatus,
+  };
+}
 
-  return { overlay, dialog, sheetContainer, insertBtn, cancelBtn, addRowBtn, addColBtn };
+function spreadsheetPresetFromValue(value: string): SpreadsheetData | null {
+  if (value === 'notebook') return createNotebookSpreadsheetData();
+  if (value.startsWith('plate-')) {
+    return createWellPlateSpreadsheetData(parseInt(value.slice('plate-'.length), 10));
+  }
+  return null;
 }
 
 /**
- * Open the spreadsheet editor as a plain overlay (not Bootstrap modal),
- * populate with data, and return a promise that resolves with updated data
- * when the user clicks "Insert/Update", or rejects on cancel.
+ * Open the spreadsheet overlay and return the raw formula data plus computed
+ * values when the user inserts or updates the table.
  */
-export function openSpreadsheetModal(initial: SpreadsheetData): Promise<{ raw: SpreadsheetData; computed: AOA }> {
+export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ raw: SpreadsheetData; computed: AOA }> {
   return new Promise((resolve, reject) => {
-    const { overlay, sheetContainer, insertBtn, cancelBtn, addRowBtn, addColBtn }
-      = createOverlay();
+    let working = normalizeSpreadsheetData(initialData);
+    const ui = createOverlay(working);
+    let sheetContainer: HTMLDivElement | null = null;
+    let worksheet: JssInstance = null;
 
-    document.body.appendChild(overlay);
+    document.body.appendChild(ui.overlay);
 
-    // Initialize jspreadsheet v5
-    const instance: JssInstance = (jspreadsheet as Function)(sheetContainer as HTMLDivElement, {
-      worksheets: [{
-        data: initial.data.length > 0 ? initial.data : [[]],
-        minDimensions: [Math.max(DEFAULT_COLS, initial.cols), Math.max(DEFAULT_ROWS, initial.rows)],
-      }],
-      tableOverflow: true,
-      tableWidth: '100%',
-      tableHeight: '400px',
-      allowInsertRow: true,
-      allowInsertColumn: true,
-      allowDeleteRow: true,
-      allowDeleteColumn: true,
-      columnSorting: false,
-      // Enable drag-to-fill corner handle for copying formulas/values to adjacent cells
-      selectionCopy: true,
-    });
-
-    const ws: JssInstance = getWorksheet(instance);
-
-    const cleanup = () => {
-      overlay.remove();
+    const readRawData = (): AOA => {
+      const data = worksheet?.getData?.();
+      return Array.isArray(data) ? data : working.data;
     };
 
-    addRowBtn.addEventListener('click', () => ws?.insertRow?.());
-    addColBtn.addEventListener('click', () => ws?.insertColumn?.());
+    const mountSpreadsheet = (spreadsheet: SpreadsheetData): void => {
+      if (sheetContainer) {
+        const destroy = (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy;
+        destroy?.(sheetContainer);
+      }
+      ui.sheetHost.replaceChildren();
+      sheetContainer = document.createElement('div');
+      ui.sheetHost.appendChild(sheetContainer);
+      working = normalizeSpreadsheetData(spreadsheet);
+      const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
+        worksheets: [{
+          data: working.data,
+          minDimensions: [working.cols, working.rows],
+        }],
+        tableOverflow: true,
+        tableWidth: '100%',
+        tableHeight: '400px',
+        allowInsertRow: true,
+        allowInsertColumn: true,
+        allowDeleteRow: true,
+        allowDeleteColumn: true,
+        columnSorting: false,
+        selectionCopy: true,
+      });
+      worksheet = getWorksheet(instance);
+      ui.rowsInput.value = String(working.rows);
+      ui.colsInput.value = String(working.cols);
+    };
 
-    insertBtn.addEventListener('click', () => {
-      // Read computed values from DOM BEFORE destroying the instance
-      const computed = getComputedDataFromDOM(sheetContainer);
-      // Get raw data (with formulas)
-      const rawData: AOA = ws?.getData?.() ?? [[]];
-      const trimmed = trimData(rawData);
-      const result: SpreadsheetData = {
-        data: trimmed,
-        cols: trimmed[0]?.length || DEFAULT_COLS,
-        rows: trimmed.length || DEFAULT_ROWS,
+    const applyDimensions = (): void => {
+      const rows = clampDimension(parseInt(ui.rowsInput.value, 10), working.rows);
+      const cols = clampDimension(parseInt(ui.colsInput.value, 10), working.cols);
+      const resized: SpreadsheetData = {
+        ...working,
+        data: resizeData(readRawData(), rows, cols),
+        rows,
+        cols,
+        kind: ui.presetSelect.value === 'custom' ? 'standard' : working.kind,
+        plateSize: ui.presetSelect.value === 'custom' ? undefined : working.plateSize,
       };
+      mountSpreadsheet(resized);
+    };
+
+    mountSpreadsheet(working);
+
+    ui.presetSelect.addEventListener('change', () => {
+      const preset = spreadsheetPresetFromValue(ui.presetSelect.value);
+      if (!preset) {
+        working.kind = 'standard';
+        working.plateSize = undefined;
+        return;
+      }
+      ui.captionInput.value = preset.caption ?? '';
+      mountSpreadsheet(preset);
+    });
+
+    ui.resizeBtn.addEventListener('click', applyDimensions);
+    ui.addRowBtn.addEventListener('click', () => {
+      worksheet?.insertRow?.();
+      ui.rowsInput.value = String(Math.min(MAX_DIMENSION, parseInt(ui.rowsInput.value, 10) + 1));
+    });
+    ui.addColBtn.addEventListener('click', () => {
+      worksheet?.insertColumn?.();
+      ui.colsInput.value = String(Math.min(MAX_DIMENSION, parseInt(ui.colsInput.value, 10) + 1));
+    });
+
+    ui.formulaButtons.forEach(button => button.addEventListener('click', () => {
+      const selection = worksheet?.getSelection?.() as [number, number, number, number] | undefined;
+      if (!selection || selection.some(value => !Number.isInteger(value))) {
+        ui.formulaStatus.textContent = 'Select one or more source cells first.';
+        return;
+      }
+      const startCol = Math.min(selection[0], selection[2]);
+      const startRow = Math.min(selection[1], selection[3]);
+      const endCol = Math.max(selection[0], selection[2]);
+      const endRow = Math.max(selection[1], selection[3]);
+      const formulaName = button.dataset.formula;
+      if (!formulaName) return;
+      const range = `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
+      const targetCol = startCol;
+      const targetRow = endRow + 1;
+      const rowCount = readRawData().length;
+      if (targetRow >= rowCount) {
+        worksheet?.insertRow?.(1, endRow, 0);
+        ui.rowsInput.value = String(Math.min(MAX_DIMENSION, rowCount + 1));
+      }
+      worksheet?.setValueFromCoords?.(targetCol, targetRow, `=${formulaName}(${range})`);
+      worksheet?.updateSelectionFromCoords?.(targetCol, targetRow, targetCol, targetRow);
+      ui.formulaStatus.textContent = `${formulaName}(${range}) → ${colLabel(targetCol)}${targetRow + 1}`;
+    }));
+
+    const cleanup = (): void => {
+      document.removeEventListener('keydown', onKey);
+      ui.overlay.remove();
+    };
+    const cancel = (): void => {
+      cleanup();
+      reject(new Error('cancelled'));
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') cancel();
+    };
+
+    ui.insertBtn.addEventListener('click', () => {
+      const rawData = readRawData();
+      const rows = clampDimension(rawData.length, working.rows);
+      const cols = clampDimension(
+        rawData.reduce((max, row) => Math.max(max, row.length), 0),
+        working.cols,
+      );
+      const result: SpreadsheetData = {
+        data: resizeData(rawData, rows, cols),
+        rows,
+        cols,
+        kind: working.kind,
+        caption: ui.captionInput.value.trim(),
+        plateSize: working.kind === 'well-plate' ? working.plateSize : undefined,
+      };
+      const computed = sheetContainer
+        ? resizeData(getComputedDataFromDOM(sheetContainer), rows, cols)
+        : result.data;
       cleanup();
       resolve({ raw: result, computed });
     });
 
-    const doCancel = () => {
-      cleanup();
-      reject(new Error('cancelled'));
-    };
-
-    cancelBtn.addEventListener('click', doCancel);
-    // Click on backdrop closes
-    overlay.addEventListener('click', doCancel);
-    // Escape key closes
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        document.removeEventListener('keydown', onKey);
-        doCancel();
-      }
-    };
+    ui.cancelBtn.addEventListener('click', cancel);
+    ui.overlay.addEventListener('click', cancel);
     document.addEventListener('keydown', onKey);
   });
 }
 
 /**
- * Convert SpreadsheetData into an HTML <table> string with computed values.
- * Includes column headers (A, B, C...) and row numbers for readability.
+ * Convert SpreadsheetData to an HTML table containing computed values.
  */
-export function spreadsheetToHTML(raw: SpreadsheetData, computed: AOA): string {
+export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): string {
+  const raw = normalizeSpreadsheetData(rawData);
   const encoded = encodeSpreadsheetData(raw);
-  const cols = raw.cols || computed[0]?.length || DEFAULT_COLS;
-
-  let html = `<table class="elabftw-spreadsheet" data-spreadsheet="${encoded}" border="1" style="border-collapse:collapse;min-width:25%">`;
-
-  // Column headers row (A, B, C, ...)
-  html += '<tr>';
-  html += '<th style="padding:2px 6px;background:#f0f0f0;color:#666;font-size:0.85em;text-align:center;min-width:30px"></th>';
-  for (let c = 0; c < cols; c++) {
-    html += `<th style="padding:2px 6px;background:#f0f0f0;color:#666;font-size:0.85em;text-align:center">${colLabel(c)}</th>`;
+  const kind = raw.kind ?? 'standard';
+  const styleAttribute = ` data-spreadsheet-style="${kind}"`;
+  const plateAttribute = kind === 'well-plate' && raw.plateSize
+    ? ` data-well-plate="${raw.plateSize}"`
+    : '';
+  let html = `<table class="elabftw-spreadsheet" data-spreadsheet="${encoded}"${styleAttribute}${plateAttribute} border="1" style="border-collapse:collapse;min-width:25%">`;
+  if (raw.caption) {
+    html += `<caption>${escapeHTML(raw.caption)}</caption>`;
   }
-  html += '</tr>';
 
-  // Data rows
-  const displayData = computed.length > 0 ? computed : raw.data;
-  for (let r = 0; r < displayData.length; r++) {
-    html += '<tr>';
-    html += `<td style="padding:2px 6px;background:#f0f0f0;color:#666;font-size:0.85em;text-align:center">${r + 1}</td>`;
-    const row = displayData[r] || [];
-    for (let c = 0; c < cols; c++) {
-      const val = c < row.length ? (row[c] ?? '') : '';
-      html += `<td style="padding:4px 8px">${escapeHTML(String(val))}</td>`;
+  const displayData = resizeData(computed.length > 0 ? computed : raw.data, raw.rows, raw.cols);
+  if (kind === 'notebook') {
+    html += '<thead><tr>';
+    for (let col = 0; col < raw.cols; col++) {
+      html += `<th>${escapeHTML(String(displayData[0]?.[col] ?? ''))}</th>`;
     }
-    html += '</tr>';
+    html += '</tr></thead><tbody>';
+    for (let row = 1; row < raw.rows; row++) {
+      html += '<tr>';
+      for (let col = 0; col < raw.cols; col++) {
+        html += `<td>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody>';
+  } else {
+    html += '<thead><tr><th class="spreadsheet-coordinate"></th>';
+    for (let col = 0; col < raw.cols; col++) {
+      const label = kind === 'well-plate' ? String(col + 1) : colLabel(col);
+      html += `<th class="spreadsheet-coordinate">${label}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+    for (let row = 0; row < raw.rows; row++) {
+      const rowLabel = kind === 'well-plate' ? colLabel(row) : String(row + 1);
+      html += `<tr><th class="spreadsheet-coordinate">${rowLabel}</th>`;
+      for (let col = 0; col < raw.cols; col++) {
+        html += `<td>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody>';
   }
   html += '</table>';
   return html;
 }
 
-/**
- * Extract SpreadsheetData from an existing HTML table element.
- */
-export function extractFromTable(tableEl: HTMLTableElement): SpreadsheetData {
-  const encoded = tableEl.dataset.spreadsheet;
-  if (encoded) {
-    return decodeSpreadsheetData(encoded);
-  }
-  // Fallback: extract cell text content (skip header row if present)
+export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetData {
+  const encoded = tableElement.dataset.spreadsheet;
+  if (encoded) return decodeSpreadsheetData(encoded);
+
+  const spreadsheetStyle = tableElement.dataset.spreadsheetStyle;
+  const kind: SpreadsheetKind = spreadsheetStyle === 'notebook' || spreadsheetStyle === 'well-plate'
+    ? spreadsheetStyle
+    : 'standard';
   const data: AOA = [];
-  const rows = tableEl.querySelectorAll('tr');
-  rows.forEach((tr, idx) => {
-    if (idx === 0 && tr.querySelector('th')) return;
+  tableElement.querySelectorAll('tr').forEach((row, rowIndex) => {
+    if (kind !== 'notebook' && rowIndex === 0) return;
     const rowData: CellValue[] = [];
-    const cells = tr.querySelectorAll('td');
-    cells.forEach((cell, cellIdx) => {
-      if (cellIdx === 0 && /^\d+$/.test(cell.textContent?.trim() || '')) return;
-      rowData.push(cell.textContent?.trim() || '');
+    row.querySelectorAll('th, td').forEach((cell, cellIndex) => {
+      if (kind !== 'notebook' && cellIndex === 0) return;
+      rowData.push(cell.textContent?.trim() ?? '');
     });
     if (rowData.length > 0) data.push(rowData);
   });
-  const cols = Math.max(...data.map(r => r.length), DEFAULT_COLS);
-  return { data, cols, rows: data.length || DEFAULT_ROWS };
+  const rows = Math.max(data.length, 1);
+  const cols = Math.max(data.reduce((max, row) => Math.max(max, row.length), 0), 1);
+  return {
+    data: resizeData(data, rows, cols),
+    rows,
+    cols,
+    kind,
+    caption: tableElement.querySelector('caption')?.textContent?.trim() ?? '',
+    plateSize: kind === 'well-plate'
+      ? parseInt(tableElement.dataset.wellPlate ?? '', 10) || undefined
+      : undefined,
+  };
 }
 
-// Helpers
-
-/** Convert column index to letter label (0=A, 1=B, ..., 25=Z, 26=AA) */
+/** Convert column index to letter label (0=A, 25=Z, 26=AA). */
 function colLabel(index: number): string {
   let label = '';
-  let n = index;
+  let current = index;
   do {
-    label = String.fromCharCode(65 + (n % 26)) + label;
-    n = Math.floor(n / 26) - 1;
-  } while (n >= 0);
+    label = String.fromCharCode(65 + (current % 26)) + label;
+    current = Math.floor(current / 26) - 1;
+  } while (current >= 0);
   return label;
 }
 
-function trimData(data: AOA): AOA {
-  let lastNonEmptyRow = -1;
-  for (let r = data.length - 1; r >= 0; r--) {
-    if (data[r].some(cell => cell !== '' && cell !== null && cell !== undefined)) {
-      lastNonEmptyRow = r;
-      break;
-    }
-  }
-  if (lastNonEmptyRow === -1) return [[]];
-  const trimmed = data.slice(0, lastNonEmptyRow + 1);
-
-  let lastNonEmptyCol = 0;
-  for (const row of trimmed) {
-    for (let c = row.length - 1; c >= 0; c--) {
-      if (row[c] !== '' && row[c] !== null && row[c] !== undefined) {
-        lastNonEmptyCol = Math.max(lastNonEmptyCol, c);
-        break;
-      }
-    }
-  }
-  return trimmed.map(row => row.slice(0, lastNonEmptyCol + 1));
-}
-
-function escapeHTML(str: string): string {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+function escapeHTML(value: string): string {
+  const element = document.createElement('div');
+  element.textContent = value;
+  return element.innerHTML;
 }

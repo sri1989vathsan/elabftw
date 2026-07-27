@@ -62,6 +62,12 @@ table {
   width: 100%;
 }
 
+caption {
+  caption-side: top;
+  font-weight: bold;
+  text-align: left;
+}
+
 table,
 th,
 td {
@@ -80,6 +86,17 @@ table th {
   text-align: left;
   text-transform: uppercase;
   width: 150px;
+}
+
+table[data-spreadsheet-style='notebook'] th {
+  text-transform: none;
+}
+
+table[data-spreadsheet-style='well-plate'] td,
+table[data-spreadsheet-style='well-plate'] th {
+  padding: 3px;
+  text-align: center;
+  width: auto;
 }
 
 /* color one row every other row */

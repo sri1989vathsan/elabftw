@@ -6,14 +6,11 @@
  * Table of Contents side panel — extracts headings from #body_view (view mode)
  * or from the active TinyMCE editor (edit mode) and renders a navigable list.
  */
-import $ from 'jquery';
 import SidePanel from './SidePanel.class';
-import FavTag from './FavTag.class';
-import Todolist from './Todolist.class';
 
 // We don't register this in the Model enum because TOC is purely client-side
 // and doesn't correspond to any API endpoint.
-const TOC_MODEL = 'toc' as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+const TOC_MODEL = 'toc';
 
 interface TocEntry {
   level: number;
@@ -191,9 +188,6 @@ export default class TocPanel extends SidePanel {
 
   // TOGGLE TOC PANEL VISIBILITY
   toggle(): void {
-    // Force other panels to close (mutual exclusion)
-    (new FavTag()).hide();
-    (new Todolist()).hide();
     super.toggle();
     // Lazy load content only once, then allow manual refresh
     if (!document.getElementById(this.panelId).hasAttribute('hidden')) {

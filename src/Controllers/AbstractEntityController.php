@@ -153,12 +153,14 @@ abstract class AbstractEntityController implements ControllerInterface
         $UserRequestActions = new UserRequestActions($this->App->Users);
 
         $ExperimentsFolders = new ExperimentsFolders($this->App->Users);
+        $experimentsFoldersTreeArr = $ExperimentsFolders->readAllRecursive();
 
         $renderArr = array(
             'DisplayParams' => $DisplayParams,
             'Entity' => $this->Entity,
             'categoryArr' => $this->categoryArr,
-            'experimentsFoldersArr' => $ExperimentsFolders->readAllRecursive(),
+            'experimentsFoldersArr' => $experimentsFoldersTreeArr,
+            'experimentsFoldersTreeArr' => $experimentsFoldersTreeArr,
             'favoriteFolderId' => $ExperimentsFolders->getFavoriteFolder(),
             'statusArr' => $this->statusArr,
             'favTagsArr' => $favTagsArr,
@@ -194,6 +196,7 @@ abstract class AbstractEntityController implements ControllerInterface
     protected function view(): Response
     {
         $RequestActions = new RequestActions($this->App->Users, $this->Entity);
+        $ExperimentsFoldersView = new ExperimentsFolders($this->App->Users);
         // the mode parameter is for the uploads tpl
         $renderArr = array(
             'categoryArr' => $this->categoryArr,
@@ -202,6 +205,9 @@ abstract class AbstractEntityController implements ControllerInterface
             'Entity' => $this->Entity,
             'entityProcurementRequestsArr' => $this->getEntityProcurementRequestsArr(),
             'entityRequestActionsArr' => $RequestActions->readAllFull(),
+            'experimentsFoldersArr' => $ExperimentsFoldersView->readHierarchyRows(),
+            'experimentsFoldersTreeArr' => $ExperimentsFoldersView->readAllRecursive(),
+            'favoriteFolderId' => $ExperimentsFoldersView->getFavoriteFolder(),
             'pageTitle' => $this->getPageTitle(),
             'mode' => 'view',
             'hideTitle' => true,
@@ -263,6 +269,7 @@ abstract class AbstractEntityController implements ControllerInterface
             'entityProcurementRequestsArr' => $this->getEntityProcurementRequestsArr(),
             'entityRequestActionsArr' => $RequestActions->readAllFull(),
             'experimentsFoldersArr' => $ExperimentsFoldersEdit->readHierarchyRows(),
+            'experimentsFoldersTreeArr' => $ExperimentsFoldersEdit->readAllRecursive(),
             'favoriteFolderId' => $ExperimentsFoldersEdit->getFavoriteFolder(),
             'hideTitle' => true,
             'metadataGroups' => $Metadata->getGroups(),

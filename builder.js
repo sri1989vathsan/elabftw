@@ -104,7 +104,10 @@ module.exports = (env) => {
       minimize: true,
       minimizer: [
         new CssMinimizerPlugin(),
-        new TerserPlugin(),
+        // Keep production builds within the memory available to typical Docker
+        // Desktop VMs. Worker threads have a smaller heap and fail on the
+        // scientific editor bundle, so minify in the main process.
+        new TerserPlugin({ parallel: false }),
       ],
     },
     plugins: [

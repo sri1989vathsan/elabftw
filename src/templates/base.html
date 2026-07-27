@@ -32,10 +32,14 @@
 <span id='content-start'></span>
 {% block body %}{% endblock %}
 
-{# TODOLIST / FAVTAGS side panels (only for logged in users) #}
+{# Navigation side panels (only for logged in users) #}
 {% if App.Session.get('is_auth') and not App.Session.get('is_anon') %}
+  {% if experimentsFoldersTreeArr is defined %}
+    {% include 'experiments-folders.html' %}
+  {% endif %}
   {% include 'todolist-panel.html' %}
   {% include 'favtags-panel.html' %}
+  {% include 'favcategories-panel.html' %}
   {% include 'toc-panel.html' %}
 {% endif %}
 

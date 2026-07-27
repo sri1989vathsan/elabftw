@@ -10,6 +10,8 @@ import { ApiC } from './api';
 import { Malle, InputType, SelectOptions } from '@deltablot/malle';
 import 'bootstrap/js/src/modal.js';
 import FavTag from './FavTag.class';
+import FavCategory from './FavCategory.class';
+import FoldersPanel from './FoldersPanel.class';
 import TocPanel from './TocPanel.class';
 import { clearLocalStorage, rememberLastSelected, selectLastSelected } from './localStorage';
 import {
@@ -108,6 +110,8 @@ if (core.isAuth) {
 }
 
 const FavTagC = new FavTag();
+const FavCategoryC = new FavCategory();
+const FoldersPanelC = new FoldersPanel();
 const TodolistC = new Todolist();
 const TocPanelC = new TocPanel();
 
@@ -144,6 +148,12 @@ if (userPrefs.scDisabled === '0') {
 const openedSidePanel = localStorage.getItem('opened-sidepanel');
 if (openedSidePanel === Model.FavTag) {
   FavTagC.toggle();
+}
+if (openedSidePanel === Model.FavCategory) {
+  FavCategoryC.toggle();
+}
+if (openedSidePanel === 'folders') {
+  FoldersPanelC.toggle();
 }
 if (openedSidePanel === Model.Todolist) {
   TodolistC.toggle();
@@ -595,6 +605,23 @@ on('destroy-favtags', (el: HTMLElement) => {
   }
 });
 
+on('create-favcategory', () => {
+  const select = document.getElementById('favoriteCategorySelect') as HTMLSelectElement | null;
+  if (!select?.value) return;
+  const [categoryType, categoryId] = select.value.split(':');
+  if (!categoryType || !categoryId) return;
+  ApiC.post(Model.FavCategory, {
+    category_type: categoryType,
+    category_id: parseInt(categoryId, 10),
+  }).then(() => window.location.reload());
+});
+
+on('destroy-favcategory', (el: HTMLElement) => {
+  if (confirm(i18next.t('generic-delete-warning'))) {
+    ApiC.delete(`${Model.FavCategory}/${el.dataset.id}`).then(() => window.location.reload());
+  }
+});
+
 on('insert-param-and-reload', async (el: HTMLElement) => {
   const params = new URLSearchParams(document.location.search.slice(1));
   const target = el.dataset.target;
@@ -637,6 +664,10 @@ on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
   let SidePanelC;
   if (el.dataset.target === 'toc') {
     SidePanelC = TocPanelC;
+  } else if (el.dataset.target === 'folders') {
+    SidePanelC = FoldersPanelC;
+  } else if (el.dataset.target === Model.FavCategory) {
+    SidePanelC = FavCategoryC;
   } else if (el.dataset.target === Model.FavTag) {
     SidePanelC = FavTagC;
   } else {

@@ -22,7 +22,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Read the server-provided favorite folder id
   const favoriteFolderIdAttr = sidebar.dataset.favoriteFolderId;
-  let favoriteFolderId: string | null = favoriteFolderIdAttr && favoriteFolderIdAttr !== '' ? favoriteFolderIdAttr : null;
+  const favoriteFolderId: string | null = favoriteFolderIdAttr && favoriteFolderIdAttr !== '' ? favoriteFolderIdAttr : null;
+  const currentFolderId = new URLSearchParams(window.location.search).get('folder')
+    || sidebar.dataset.currentFolderId
+    || null;
 
   /**
    * Get the set of collapsed folder IDs from localStorage.
@@ -141,7 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function applyDefaultCollapseForFavorite(): void {
     if (!favoriteFolderId) return;
 
-    const currentFolderId = new URLSearchParams(window.location.search).get('folder');
     // If a specific folder is selected, don't override collapse state
     if (currentFolderId && currentFolderId !== '0') return;
 
@@ -258,8 +260,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Restore collapsed state on load, but ensure the path to the active folder is expanded
   const collapsed = getCollapsedSet();
-  const currentFolderId = new URLSearchParams(window.location.search).get('folder');
-
   // If a folder is selected, ensure all its ancestors are expanded
   if (currentFolderId && currentFolderId !== '0') {
     let node = document.querySelector(`.folder-node[data-folder-id="${currentFolderId}"]`);
@@ -325,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Create folder
-  document.querySelector('[data-action="create-experiment-folder"]')?.addEventListener('click', () => {
+  on('create-experiment-folder', () => {
     const nameInput = document.getElementById('newFolderName') as HTMLInputElement;
     const parentSelect = document.getElementById('newFolderParent') as HTMLSelectElement;
     const name = nameInput.value.trim();
@@ -351,36 +351,30 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Rename folder
-  document.querySelectorAll('[data-action="rename-folder"]').forEach(el => {
-    el.addEventListener('click', (event) => {
-      event.stopPropagation();
-      event.preventDefault();
-      const target = event.currentTarget as HTMLElement;
-      const folderId = target.dataset.id;
-      const currentName = target.dataset.name;
-      const newName = prompt('Enter new folder name:', currentName);
-      if (newName && newName.trim() !== '' && newName !== currentName) {
-        ApiC.patch(`experiments_folders/${folderId}`, {
-          name: newName.trim(),
-        }).then(() => {
-          window.location.reload();
-        });
-      }
-    });
+  on('rename-folder', (el: HTMLElement, event: Event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    const folderId = el.dataset.id;
+    const currentName = el.dataset.name;
+    const newName = prompt('Enter new folder name:', currentName);
+    if (newName && newName.trim() !== '' && newName !== currentName) {
+      ApiC.patch(`experiments_folders/${folderId}`, {
+        name: newName.trim(),
+      }).then(() => {
+        window.location.reload();
+      });
+    }
   });
 
   // Delete folder
-  document.querySelectorAll('[data-action="delete-folder"]').forEach(el => {
-    el.addEventListener('click', (event) => {
-      event.stopPropagation();
-      event.preventDefault();
-      const target = event.currentTarget as HTMLElement;
-      const folderId = target.dataset.id;
-      if (confirm('Delete this folder? Experiments inside it will be moved to Unfiled.')) {
-        ApiC.delete(`experiments_folders/${folderId}`).then(() => {
-          window.location.reload();
-        });
-      }
-    });
+  on('delete-folder', (el: HTMLElement, event: Event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    const folderId = el.dataset.id;
+    if (confirm('Delete this folder? Experiments inside it will be moved to Unfiled.')) {
+      ApiC.delete(`experiments_folders/${folderId}`).then(() => {
+        window.location.reload();
+      });
+    }
   });
 });

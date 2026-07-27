@@ -826,8 +826,25 @@ tr:first-child td {
 }
 
 /* SIDE PANEL */
+#sidepanel-buttons {
+  gap: 0.5rem;
+  left: 0;
+  max-height: calc(100vh - 7rem);
+  overflow-y: auto;
+  position: fixed;
+  top: 5.5rem;
+  transition: left 0.2s ease;
+  z-index: 1041;
+
+  &.has-open-panel {
+    left: max(24%, 330px);
+  }
+}
+
 .sidepanel-btn {
   border-radius: 0 5px 5px 0;
+  flex: 0 0 auto;
+  margin-top: 0 !important;
   padding: 10px 5px;
 
   &.sidepanel-closed {
@@ -875,6 +892,7 @@ tr:first-child td {
   position: fixed;
   top: 0;
   width: max(24%, 330px);
+  z-index: 1040;
 
   .fas,
   .far,
@@ -908,6 +926,16 @@ tr:first-child td {
   }
 }
 
+.category-color-dot {
+  background-color: var(--category-color);
+  border: 1px solid var(--chrome-muted);
+  border-radius: 50%;
+  display: inline-block;
+  flex: 0 0 0.75rem;
+  height: 0.75rem;
+  width: 0.75rem;
+}
+
 /* TABLE OF CONTENTS panel */
 .toc-items-container {
   .toc-list {
@@ -921,12 +949,12 @@ tr:first-child td {
 
   .toc-link {
     color: var(--chrome-fg);
+    font-size: 0.9em;
+    overflow: hidden;
     text-decoration: none;
+    text-overflow: ellipsis;
     transition: background-color 0.15s ease;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 0.9em;
 
     &:hover {
       background-color: var(--disabled);
@@ -952,39 +980,166 @@ tr:first-child td {
   100% { background-color: transparent; }
 }
 
+table > caption {
+  caption-side: top;
+  display: table-caption;
+  margin: 0 0 0.25rem;
+}
+
 /* INLINE SPREADSHEET */
+.inline-spreadsheet-overlay {
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  left: 0;
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 10050;
+}
+
+.inline-spreadsheet-dialog {
+  background-color: var(--mainbackground);
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  color: var(--strongest);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  max-width: 1100px;
+  padding: 16px;
+  width: 90vw;
+}
+
+.inline-spreadsheet-settings {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(12rem, 1fr) 5rem 5rem auto minmax(14rem, 2fr);
+  margin-bottom: 0.5rem;
+}
+
+.inline-spreadsheet-formula-bar {
+  align-items: center;
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem;
+}
+
+.inline-spreadsheet-formula-status {
+  color: var(--medium);
+  flex: 1 1 16rem;
+  font-size: 0.82rem;
+  margin-left: 0.35rem;
+}
+
 .inline-spreadsheet-container {
-  min-height: 200px;
+  flex: 1;
+  margin-bottom: 0.75rem;
+  min-height: 300px;
   overflow: auto;
+}
+
+.inline-spreadsheet-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
 }
 
 /* Styling for spreadsheet tables embedded in the body */
 table.elabftw-spreadsheet {
   border-collapse: collapse;
-  margin: 8px 0;
   font-size: 0.9em;
+  margin: 8px 0;
 
-  td, th {
+  td,
+  th {
     border: 1px solid var(--secondary-muted, #dee2e6);
-    padding: 4px 8px;
     min-width: 60px;
+    padding: 4px 8px;
   }
 
   tr:nth-child(even) {
     background-color: var(--zebrarow, rgba(0, 0, 0, 0.03));
   }
 
-  /* Visual cue that this table is a spreadsheet (hover) */
   &:hover {
+    cursor: pointer;
     outline: 2px dashed var(--primary, #29aeb9);
     outline-offset: 2px;
-    cursor: pointer;
+  }
+
+  > caption {
+    caption-side: top;
+    display: table-caption;
+    font-weight: 700;
+    margin: 0 0 0.25rem;
+    text-align: left;
+  }
+
+  .spreadsheet-coordinate {
+    background-color: var(--firstlevel);
+    color: var(--medium);
+    font-size: 0.85em;
+    min-width: 2rem;
+    text-align: center;
+  }
+}
+
+table[data-spreadsheet-style='notebook'] {
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  width: 100%;
+
+  > caption {
+    background-color: var(--firstlevel);
+    border: 1px solid var(--secondary);
+    border-bottom: 0;
+    margin: 0;
+    padding: 0.65rem 0.75rem;
+  }
+
+  thead th {
+    background-color: var(--secondlevel);
+    font-weight: 700;
+    text-align: left;
+  }
+}
+
+table[data-spreadsheet-style='well-plate'] {
+  table-layout: fixed;
+  width: 100%;
+
+  td,
+  th {
+    min-width: 2.5rem;
+    padding: 0.3rem;
+    text-align: center;
   }
 }
 
 /* Ensure jspreadsheet dropdown menus inside the overlay render on top */
+/* stylelint-disable-next-line selector-class-pattern */
 .jss_container {
   z-index: 10051 !important;
+}
+
+@media (max-width: 767px) {
+  .inline-spreadsheet-settings {
+    grid-template-columns: 1fr 1fr;
+
+    select,
+    .inline-spreadsheet-caption-input {
+      grid-column: 1 / -1;
+    }
+  }
 }
 
 .item-info {

@@ -28,6 +28,7 @@ enum ApiEndpoint: string
     case ExtraFieldsKeys = 'extra_fields_keys';
     case Event = 'event';
     case Events = 'events';
+    case FavCategories = 'favcategories';
     case FavTags = 'favtags';
     case Idps = 'idps';
     case IdpsSources = 'idps_sources';

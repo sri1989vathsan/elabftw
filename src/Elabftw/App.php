@@ -21,6 +21,8 @@ use Elabftw\Models\Users\AnonymousUser;
 use Elabftw\Models\Users\AuthenticatedUser;
 use Elabftw\Models\Config;
 use Elabftw\Models\ExperimentsCategories;
+use Elabftw\Models\FavCategories;
+use Elabftw\Models\FavTags;
 use Elabftw\Models\ResourcesCategories;
 use Elabftw\Models\Notifications\UserNotifications;
 use Elabftw\Models\Teams;
@@ -59,6 +61,10 @@ final class App
     public array $notifsArr = array();
 
     public array $experimentsCategoryArr = array();
+
+    public array $favoriteCategoriesArr = array();
+
+    public array $favoriteTagsArr = array();
 
     public array $itemsCategoryArr = array();
 
@@ -132,6 +138,10 @@ final class App
             $this->experimentsCategoryArr = $ExperimentsCategory->readAll($ExperimentsCategory->getQueryParams(new InputBag(array('limit' => 9999))));
             $ResourcesCategory = new ResourcesCategories($this->Teams);
             $this->itemsCategoryArr = $ResourcesCategory->readAll($ResourcesCategory->getQueryParams(new InputBag(array('limit' => 9999))));
+            if ($this->Session->has('is_auth') && !$this->Session->get('is_anon')) {
+                $this->favoriteCategoriesArr = new FavCategories($this->Users)->readAll();
+                $this->favoriteTagsArr = new FavTags($this->Users)->readAll();
+            }
         }
         $this->initi18n();
     }

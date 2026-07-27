@@ -69,6 +69,7 @@ import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPost
 import { ApiC } from './api';
 import { isSortable } from './TableSorting.class';
 import { openSpreadsheetModal, spreadsheetToHTML, extractFromTable, emptySpreadsheetData, SpreadsheetData } from './inline-spreadsheet';
+import TableIndentation from './TableIndentation.class';
 import { MathJaxObject } from 'mathjax-full/js/components/startup';
 declare const MathJax: MathJaxObject;
 import { entity } from './getEntity';
@@ -199,7 +200,7 @@ const imagesUploadHandler = (blobInfo: TinyMCEBlobInfo) => new Promise((resolve,
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate | codesample | link | sort-table | inline-sheet';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate | codesample | link | inline-sheet table-outdent table-indent sort-table';
   let removedMenuItems = 'newdocument, image, anchor';
   let fileMenuItems = 'preview | print';
   if (page === 'edit') {
@@ -337,6 +338,7 @@ export function getTinymceBaseConfig(page: string): object {
       file: { title: 'File', items: fileMenuItems },
     },
     setup: (editor: Editor): void => {
+      const tableIndentation = new TableIndentation(editor);
       // holds the timer setTimeout function
       let typingTimer;
       // use event SkinLoaded instead of init so we're sure skinNode is present
@@ -427,6 +429,34 @@ export function getTinymceBaseConfig(page: string): object {
           const btn = document.querySelector('[data-action="update-entity-body"][data-redirect="view"]') as HTMLButtonElement;
           // eslint-disable-next-line @typescript-eslint/no-unused-expressions
           btn ? btn.click() : editor.execCommand('mceSave');
+        },
+      });
+      editor.ui.registry.addButton('table-outdent', {
+        icon: 'outdent',
+        tooltip: 'Outdent table',
+        onAction: () => tableIndentation.outdentSelectedTable(),
+        onSetup: api => {
+          const update = (event): void => {
+            const table = event.element?.closest?.('table') as HTMLTableElement | null;
+            api.setEnabled(tableIndentation.canOutdent(table));
+          };
+          api.setEnabled(tableIndentation.canOutdent());
+          editor.on('NodeChange', update);
+          return () => editor.off('NodeChange', update);
+        },
+      });
+      editor.ui.registry.addButton('table-indent', {
+        icon: 'indent',
+        tooltip: 'Indent table to align with nested bullets',
+        onAction: () => tableIndentation.indentSelectedTable(),
+        onSetup: api => {
+          const update = (event): void => {
+            const table = event.element?.closest?.('table') as HTMLTableElement | null;
+            api.setEnabled(tableIndentation.canIndent(table));
+          };
+          api.setEnabled(tableIndentation.canIndent());
+          editor.on('NodeChange', update);
+          return () => editor.off('NodeChange', update);
         },
       });
       // INLINE SPREADSHEET — insert or edit a spreadsheet table in the body

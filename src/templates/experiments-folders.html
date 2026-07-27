@@ -1,14 +1,15 @@
-{# EXPERIMENTS FOLDER TREE - Sidebar for hierarchical experiment organization #}
-{% if Entity.entityType.value == 'experiments' and experimentsFoldersArr is defined %}
-<div id='experimentsFoldersSidebar' class='mb-3' data-favorite-folder-id='{{ favoriteFolderId is defined and favoriteFolderId ? favoriteFolderId : '' }}'>
-  <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='experimentsFoldersContent'>
-    <i class='fas fa-caret-down mr-2 fa-fw'></i><i class='fas fa-folder-tree mr-1'></i> {{ 'Folders'|trans }}
-  </h3>
-  <div id='experimentsFoldersContent' data-save-hidden='experimentsFoldersContent'>
+{# EXPERIMENTS FOLDER TREE - dedicated tab in the left sidebar #}
+{% if Entity.entityType.value == 'experiments' and experimentsFoldersTreeArr is defined %}
+{% set currentFolderId = App.Request.query.has('folder') ? App.Request.query.get('folder') : Entity.entityData.folder_id|default('') %}
+<div class='side-panel' id='foldersPanel' hidden>
+  <button type='button' data-action='toggle-sidepanel' data-target='folders' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
+  <div id='experimentsFoldersSidebar' class='p-3' data-favorite-folder-id='{{ favoriteFolderId is defined and favoriteFolderId ? favoriteFolderId : '' }}' data-current-folder-id='{{ currentFolderId }}'>
+    <h3 class='mb-3'><i class='fas fa-folder-tree mr-2'></i>{{ 'Folders'|trans }}</h3>
+    <div id='experimentsFoldersContent'>
     <div class='mt-2'>
       {# "All experiments" link - no folder filter #}
       <div class='mb-1'>
-        <a href='experiments.php' class='text-decoration-none color-medium {{ not App.Request.query.get('folder') ? 'font-weight-bold' : '' }}'>
+        <a href='experiments.php' class='text-decoration-none color-medium {{ currentFolderId is empty ? 'font-weight-bold' : '' }}'>
           <i class='fas fa-flask fa-fw mr-1'></i>{{ 'All experiments'|trans }}
         </a>
       </div>
@@ -60,7 +61,7 @@
         {% endif %}
       {% endmacro %}
 
-      {{ _self.renderFolderTree(experimentsFoldersArr, '', 0, App.Request.query.get('folder'), favoriteFolderId is defined ? favoriteFolderId : null) }}
+      {{ _self.renderFolderTree(experimentsFoldersTreeArr, '', 0, currentFolderId, favoriteFolderId is defined ? favoriteFolderId : null) }}
     </div>
 
     {# Create new folder form #}
@@ -76,8 +77,8 @@
       {# Optional: select parent folder #}
       <select id='newFolderParent' class='form-control mt-1' aria-label='{{ 'Parent folder'|trans }}'>
         <option value=''>{{ 'Root (no parent)'|trans }}</option>
-        {% if experimentsFoldersArr is iterable %}
-          {% for parentId, folders in experimentsFoldersArr %}
+        {% if experimentsFoldersTreeArr is iterable %}
+          {% for parentId, folders in experimentsFoldersTreeArr %}
             {% for folder in folders %}
               <option value='{{ folder.id }}'>{{ folder.full_path }}</option>
             {% endfor %}
@@ -87,5 +88,5 @@
     </div>
   </div>
 </div>
-<hr>
+</div>
 {% endif %}
