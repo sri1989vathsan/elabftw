@@ -67,9 +67,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // AUTOCOMPLETE
   addAutocompleteToTagInputs();
-  if (document.getElementById('favtagsPanel')) {
+  if (document.getElementById('favoritesPanel')) {
     new MutationObserver(() => addAutocompleteToTagInputs())
-      .observe(document.getElementById('favtagsPanel'), {childList: true, subtree: true});
+      .observe(document.getElementById('favoritesPanel'), {childList: true, subtree: true});
   }
 
   // make the tag editable (on admin page)

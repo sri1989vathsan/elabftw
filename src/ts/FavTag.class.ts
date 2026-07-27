@@ -6,16 +6,9 @@
  * @package elabftw
  */
 import { Model } from './interfaces';
-import SidePanel from './SidePanel.class';
 import { ApiC } from './api';
 
-export default class FavTag extends SidePanel {
-
-  constructor() {
-    super(Model.FavTag);
-    this.panelId = 'favtagsPanel';
-  }
-
+export default class FavTag {
   // ADD A TAG AS FAVORITE
   create(content: string): Promise<Response> {
     return ApiC.post(Model.FavTag, {tag: content });

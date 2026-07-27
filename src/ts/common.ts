@@ -9,8 +9,7 @@ import $ from 'jquery';
 import { ApiC } from './api';
 import { Malle, InputType, SelectOptions } from '@deltablot/malle';
 import 'bootstrap/js/src/modal.js';
-import FavTag from './FavTag.class';
-import FavCategory from './FavCategory.class';
+import FavoriteFilters from './FavoriteFilters.class';
 import FoldersPanel from './FoldersPanel.class';
 import TocPanel from './TocPanel.class';
 import { clearLocalStorage, rememberLastSelected, selectLastSelected } from './localStorage';
@@ -109,8 +108,7 @@ if (core.isAuth) {
   }, heartRate);
 }
 
-const FavTagC = new FavTag();
-const FavCategoryC = new FavCategory();
+const FavoriteFiltersC = new FavoriteFilters();
 const FoldersPanelC = new FoldersPanel();
 const TodolistC = new Todolist();
 const TocPanelC = new TocPanel();
@@ -146,11 +144,11 @@ if (userPrefs.scDisabled === '0') {
 
 // SIDE PANEL STATE
 const openedSidePanel = localStorage.getItem('opened-sidepanel');
-if (openedSidePanel === Model.FavTag) {
-  FavTagC.toggle();
-}
-if (openedSidePanel === Model.FavCategory) {
-  FavCategoryC.toggle();
+if (openedSidePanel === 'favorites'
+  || openedSidePanel === Model.FavTag
+  || openedSidePanel === Model.FavCategory
+) {
+  FavoriteFiltersC.toggle();
 }
 if (openedSidePanel === 'folders') {
   FoldersPanelC.toggle();
@@ -622,6 +620,9 @@ on('destroy-favcategory', (el: HTMLElement) => {
   }
 });
 
+on('apply-favorite-filters', () => FavoriteFiltersC.apply());
+on('clear-favorite-filters', () => FavoriteFiltersC.clear());
+
 on('insert-param-and-reload', async (el: HTMLElement) => {
   const params = new URLSearchParams(document.location.search.slice(1));
   const target = el.dataset.target;
@@ -666,10 +667,8 @@ on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
     SidePanelC = TocPanelC;
   } else if (el.dataset.target === 'folders') {
     SidePanelC = FoldersPanelC;
-  } else if (el.dataset.target === Model.FavCategory) {
-    SidePanelC = FavCategoryC;
-  } else if (el.dataset.target === Model.FavTag) {
-    SidePanelC = FavTagC;
+  } else if (el.dataset.target === 'favorites') {
+    SidePanelC = FavoriteFiltersC;
   } else {
     SidePanelC = TodolistC;
   }
@@ -1451,6 +1450,9 @@ on('scope-change', async (el: HTMLElement) => {
  * MAIN click listener on container
  */
 const container = document.getElementById('container')!;
+document.getElementById('favoriteFilterTarget')?.addEventListener('change', () => {
+  FavoriteFiltersC.updateTarget();
+});
 container.addEventListener('click', (event: Event) => {
   const rawTarget = event.target as HTMLElement | null;
   const el = rawTarget?.closest('[data-action]') as HTMLElement | null;

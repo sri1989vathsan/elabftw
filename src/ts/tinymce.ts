@@ -68,7 +68,16 @@ import { EntityType, Model } from './interfaces';
 import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPostRequest } from './misc';
 import { ApiC } from './api';
 import { isSortable } from './TableSorting.class';
-import { openSpreadsheetModal, spreadsheetToHTML, extractFromTable, emptySpreadsheetData, SpreadsheetData } from './inline-spreadsheet';
+import {
+  createNotebookSpreadsheetData,
+  createWellPlateSpreadsheetData,
+  emptySpreadsheetData,
+  extractFromTable,
+  openSpreadsheetModal,
+  spreadsheetToHTML,
+  SpreadsheetData,
+  WELL_PLATE_PRESETS,
+} from './inline-spreadsheet';
 import TableIndentation from './TableIndentation.class';
 import { MathJaxObject } from 'mathjax-full/js/components/startup';
 declare const MathJax: MathJaxObject;
@@ -459,54 +468,75 @@ export function getTinymceBaseConfig(page: string): object {
           return () => editor.off('NodeChange', update);
         },
       });
-      // INLINE SPREADSHEET — insert or edit a spreadsheet table in the body
-      // table icon from TinyMCE's built-in icons
-      editor.ui.registry.addButton('inline-sheet', {
-        icon: 'table',
-        tooltip: 'Insert/Edit Spreadsheet',
-        onAction: () => {
-          // Check if the cursor is inside an existing spreadsheet table
-          const node = editor.selection.getNode();
-          const existingTable = node.closest('table.elabftw-spreadsheet') as HTMLTableElement;
-          let initial: SpreadsheetData;
+      const openInlineSpreadsheet = (
+        initial: SpreadsheetData,
+        existingTable: HTMLTableElement | null = null,
+      ): void => {
+        const bookmark = editor.selection.getBookmark(2, true);
+        openSpreadsheetModal(initial).then(({ raw, computed }) => {
+          const html = spreadsheetToHTML(raw, computed);
+          editor.focus();
+          editor.selection.moveToBookmark(bookmark);
           if (existingTable) {
-            initial = extractFromTable(existingTable);
-          } else {
-            initial = emptySpreadsheetData();
+            editor.selection.select(existingTable);
           }
-          // Bookmark selection before modal steals focus
-          const bookmark = editor.selection.getBookmark(2, true);
-          openSpreadsheetModal(initial).then(({ raw, computed }) => {
-            const html = spreadsheetToHTML(raw, computed);
-            // Restore TinyMCE focus and cursor position
-            editor.focus();
-            editor.selection.moveToBookmark(bookmark);
-            if (existingTable) {
-              editor.selection.select(existingTable);
-            }
-            editor.execCommand('mceInsertContent', false, html);
-            editor.undoManager.add();
-          }).catch(() => {
-            // User cancelled — do nothing
-          });
+          editor.execCommand('mceInsertContent', false, html);
+          editor.undoManager.add();
+        }).catch(() => {
+          // User cancelled — do nothing
+        });
+      };
+
+      // INLINE SPREADSHEET — expose every layout directly from the toolbar.
+      editor.ui.registry.addMenuButton('inline-sheet', {
+        icon: 'table',
+        text: 'Spreadsheet',
+        tooltip: 'Insert or edit a formula spreadsheet',
+        fetch: callback => {
+          const existingTable = editor.selection.getNode()
+            .closest('table.elabftw-spreadsheet') as HTMLTableElement | null;
+          const items = [];
+          if (existingTable) {
+            items.push({
+              type: 'menuitem' as const,
+              text: 'Edit selected spreadsheet',
+              onAction: () => openInlineSpreadsheet(extractFromTable(existingTable), existingTable),
+            });
+            items.push({ type: 'separator' as const });
+          }
+
+          items.push(
+            {
+              type: 'menuitem' as const,
+              text: 'Custom size…',
+              onAction: () => openInlineSpreadsheet(emptySpreadsheetData(), existingTable),
+            },
+            {
+              type: 'menuitem' as const,
+              text: 'Benchling-style data table',
+              onAction: () => openInlineSpreadsheet(createNotebookSpreadsheetData(), existingTable),
+            },
+            {
+              type: 'nestedmenuitem' as const,
+              text: 'Well plate',
+              getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
+                type: 'menuitem' as const,
+                text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
+                onAction: () => openInlineSpreadsheet(
+                  createWellPlateSpreadsheetData(preset.wells),
+                  existingTable,
+                ),
+              })),
+            },
+          );
+          callback(items);
         },
       });
       // Double-click on a spreadsheet table opens the editor
       editor.on('dblclick', (e) => {
         const target = (e.target as HTMLElement).closest('table.elabftw-spreadsheet') as HTMLTableElement;
         if (!target) return;
-        const data = extractFromTable(target);
-        const bookmark = editor.selection.getBookmark(2, true);
-        openSpreadsheetModal(data).then(({ raw, computed }) => {
-          const html = spreadsheetToHTML(raw, computed);
-          editor.focus();
-          editor.selection.moveToBookmark(bookmark);
-          editor.selection.select(target);
-          editor.execCommand('mceInsertContent', false, html);
-          editor.undoManager.add();
-        }).catch(() => {
-          // User cancelled
-        });
+        openInlineSpreadsheet(extractFromTable(target), target);
       });
 
       // some shortcuts

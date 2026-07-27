@@ -27,12 +27,9 @@ export default class SidePanel {
     localStorage.removeItem('opened-sidepanel');
     const opener = document.getElementById(`${this.panelId}Opener`);
     if (!opener) return;
-    opener.classList.add('bounce-right');
-    opener.classList.remove('bounce-left');
     opener.classList.remove('sidepanel-opened');
     opener.classList.add('sidepanel-closed');
     opener.setAttribute('aria-expanded', 'false');
-    document.getElementById('sidepanel-buttons')?.classList.remove('has-open-panel');
   }
 
   show(): void {
@@ -45,8 +42,8 @@ export default class SidePanel {
       if (otherPanel.id === this.panelId) return;
       otherPanel.toggleAttribute('hidden', true);
       const otherOpener = document.getElementById(`${otherPanel.id}Opener`);
-      otherOpener?.classList.add('bounce-right', 'sidepanel-closed');
-      otherOpener?.classList.remove('bounce-left', 'sidepanel-opened');
+      otherOpener?.classList.add('sidepanel-closed');
+      otherOpener?.classList.remove('sidepanel-opened');
       otherOpener?.setAttribute('aria-expanded', 'false');
     });
 
@@ -55,12 +52,9 @@ export default class SidePanel {
     panel.removeAttribute('hidden');
     // store the current state
     localStorage.setItem('opened-sidepanel', this.model);
-    opener.classList.remove('bounce-right');
-    opener.classList.add('bounce-left');
     opener.classList.add('sidepanel-opened');
     opener.classList.remove('sidepanel-closed');
     opener.setAttribute('aria-expanded', 'true');
-    document.getElementById('sidepanel-buttons')?.classList.add('has-open-panel');
   }
 
   // TOGGLE PANEL VISIBILITY

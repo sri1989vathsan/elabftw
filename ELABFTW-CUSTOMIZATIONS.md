@@ -140,24 +140,28 @@ Adds a UI widget on the experiment edit page for quickly linking to entities in 
 ## Feature 11: Floating Sidebar Navigation Tabs
 
 Moves the experiment folder tree out of the listing body and into its own left
-sidebar tab alongside Table of Contents, Favorite Tags, Favorite Categories, and
-Todolist. The compact tab rail is fixed to the viewport, so it remains available
-while a long experiment or listing page scrolls. Opening a tab closes the
-previous panel and the last open tab is restored from localStorage.
+sidebar tab alongside Table of Contents, Favorite Filters, and Todolist. The
+compact tab rail is fixed to the viewport, so it remains available while a long
+experiment or listing page scrolls. The rail itself stays in one position when a
+panel opens, avoiding horizontal jumps and bounce animations. Opening a tab
+closes the previous panel and the last open tab is restored from localStorage.
 
 The folder tab retains the existing hierarchy, favorite-folder pinning,
 create/rename/delete controls, and persisted expand/collapse state.
 
-## Feature 12: Favorite Categories
+## Feature 12: Combined Favorite Filters
 
 Adds server-backed per-user favorites for both experiment and resource
-categories. Favorites are managed from a dedicated left sidebar tab and link
-directly to the corresponding filtered experiment or resource listing.
+categories. Favorite categories and favorite tags are managed and selected in
+one left sidebar tab. The user can filter on any favorite category, all selected
+favorite tags, or both at once. When combined, the listing requires a matching
+category and all selected tags. The panel can target either experiments or
+resources and restores filter selections from the URL.
 
 **Files added:**
 - `src/Models/FavCategories.php`
-- `src/templates/favcategories-panel.html`
-- `src/ts/FavCategory.class.ts`
+- `src/templates/favorite-filters-panel.html`
+- `src/ts/FavoriteFilters.class.ts`
 - `src/sql/schema210.sql` and `src/sql/schema210-down.sql`
 
 ## Feature 13: Spreadsheet Presets and Table Formatting
@@ -169,6 +173,11 @@ click SUM, AVERAGE, COUNT, MIN, or MAX; the result formula is placed immediately
 below the selection. Tables can be indented/outdented in 2.5rem steps to align
 with nested bullets, and the sanitizer preserves TinyMCE's nested-list marker so
 Tab indentation does not render duplicate bullets.
+
+The TinyMCE toolbar now shows a labeled **Spreadsheet** menu. Its entries expose
+Custom size, Benchling-style data table, and a Well plate submenu with every
+supported preset, so the layouts are visible before opening the spreadsheet
+editor.
 
 ## Schema Migration Notes
 
