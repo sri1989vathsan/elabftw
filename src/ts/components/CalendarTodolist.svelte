@@ -59,6 +59,12 @@
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
   const reminderPresets = new Set([0, 15, 60, 1440, 10080]);
+  const timeOptions = Array.from({ length: 96 }, (_, index) => {
+    const hours = String(Math.floor(index / 4)).padStart(2, '0');
+    const minutes = String((index % 4) * 15).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  });
+  const initialDeadline = defaultDeadline();
   const highlightedTaskId = parseInt(
     new URLSearchParams(window.location.search).get('task') ?? '',
     10,
@@ -73,12 +79,14 @@
   let selectedDate = '';
   let draft = '';
   let notes = '';
-  let deadlineLocal = defaultDeadline();
+  let deadlineDate = initialDeadline.slice(0, 10);
+  let deadlineTime = initialDeadline.slice(11, 16);
   let reminderChoice = '60';
   let customReminder = 120;
   let editingId: number | null = null;
   let editNotes = '';
-  let editDeadlineLocal = '';
+  let editDeadlineDate = '';
+  let editDeadlineTime = '';
   let editReminderChoice = '60';
   let editCustomReminder = 120;
   let loading = true;
@@ -130,6 +138,12 @@
   function toLocalInput(date: Date): string {
     const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
     return localDate.toISOString().slice(0, 16);
+  }
+
+  function resetDeadline(): void {
+    const value = defaultDeadline();
+    deadlineDate = value.slice(0, 10);
+    deadlineTime = value.slice(11, 16);
   }
 
   function dateKey(date: Date): string {
@@ -255,8 +269,8 @@
 
   async function create(): Promise<void> {
     const content = draft.trim();
-    const deadline = new Date(deadlineLocal);
-    if (!content || Number.isNaN(deadline.getTime())) {
+    const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
+    if (!content || !deadlineDate || !deadlineTime || Number.isNaN(deadline.getTime())) {
       notify.error('Enter a task and a valid deadline date and time.');
       return;
     }
@@ -270,7 +284,7 @@
     ApiC.notifOnSaved = true;
     draft = '';
     notes = '';
-    deadlineLocal = defaultDeadline();
+    resetDeadline();
     setReminderControls(60);
     await signalChange();
   }
@@ -284,13 +298,15 @@
   function startEditing(entry: CalendarEntry): void {
     editingId = entry.id;
     editNotes = entry.notes ?? '';
-    editDeadlineLocal = toLocalInput(new Date(entry.deadline));
+    const deadline = toLocalInput(new Date(entry.deadline));
+    editDeadlineDate = deadline.slice(0, 10);
+    editDeadlineTime = deadline.slice(11, 16);
     setReminderControls(entry.reminderMinutes, true);
   }
 
   async function saveEditing(id: number): Promise<void> {
-    const deadline = new Date(editDeadlineLocal);
-    if (Number.isNaN(deadline.getTime())) {
+    const deadline = new Date(`${editDeadlineDate}T${editDeadlineTime}`);
+    if (!editDeadlineDate || !editDeadlineTime || Number.isNaN(deadline.getTime())) {
       notify.error('Enter a valid deadline date and time.');
       return;
     }
@@ -450,8 +466,16 @@
   />
   <div class='calendar-todo-form-grid'>
     <label>
-      <span>{t('Deadline')}</span>
-      <input class='form-control form-control-sm' type='datetime-local' bind:value={deadlineLocal} required />
+      <span>{t('Date')}</span>
+      <input class='form-control form-control-sm' type='date' bind:value={deadlineDate} required />
+    </label>
+    <label>
+      <span>{t('Time')}</span>
+      <select class='form-control form-control-sm' bind:value={deadlineTime} required>
+        {#each timeOptions as time}
+          <option value={time}>{time}</option>
+        {/each}
+      </select>
     </label>
     <label>
       <span>{t('Reminder')}</span>
@@ -708,7 +732,18 @@
           </div>
           {#if entry.source === 'todo' && editingId === entry.id}
             <div class='calendar-todo-edit mt-2'>
-              <input class='form-control form-control-sm' type='datetime-local' bind:value={editDeadlineLocal} />
+              <label class='mb-0'>
+                <span class='small'>{t('Date')}</span>
+                <input class='form-control form-control-sm' type='date' bind:value={editDeadlineDate} />
+              </label>
+              <label class='mb-0'>
+                <span class='small'>{t('Time')}</span>
+                <select class='form-control form-control-sm' bind:value={editDeadlineTime}>
+                  {#each timeOptions as time}
+                    <option value={time}>{time}</option>
+                  {/each}
+                </select>
+              </label>
               <select class='form-control form-control-sm' bind:value={editReminderChoice}>
                 <option value='none'>{t('No reminder')}</option>
                 <option value='0'>{t('At deadline')}</option>

@@ -54,6 +54,11 @@
 
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
+  const timeOptions = Array.from({ length: 96 }, (_, index) => {
+    const hours = String(Math.floor(index / 4)).padStart(2, '0');
+    const minutes = String((index % 4) * 15).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  });
   let locale = 'en-gb';
   let malleable: Malle | null = null;
   let items: Todo[] = [];
@@ -61,7 +66,8 @@
   let entries: SidebarEntry[] = [];
   let dueGroups: DueGroup[] = [];
   let draft = '';
-  let deadlineLocal = '';
+  let deadlineDate = '';
+  let deadlineTime = '';
   let reminderChoice = '60';
   let customReminder = 120;
   let loading = true;
@@ -201,7 +207,12 @@
   async function create(): Promise<void> {
     const content = draft.trim();
     if (!content) return;
-    const deadline = deadlineLocal ? new Date(deadlineLocal) : null;
+    const hasDeadline = Boolean(deadlineDate || deadlineTime);
+    if (hasDeadline && (!deadlineDate || !deadlineTime)) {
+      notify.error('Enter a valid deadline date and time.');
+      return;
+    }
+    const deadline = hasDeadline ? new Date(`${deadlineDate}T${deadlineTime}`) : null;
     if (deadline !== null && Number.isNaN(deadline.getTime())) {
       notify.error('Enter a valid deadline date and time.');
       return;
@@ -215,7 +226,8 @@
     });
     ApiC.notifOnSaved = true;
     draft = '';
-    deadlineLocal = '';
+    deadlineDate = '';
+    deadlineTime = '';
     reminderChoice = '60';
     customReminder = 120;
     await load();
@@ -293,14 +305,23 @@
   </div>
   <div class='todo-create-options'>
     <label class='mb-0'>
-      <span class='small'>{t('Deadline')}</span>
+      <span class='small'>{t('Date')}</span>
       <input
         class='form-control form-control-sm'
-        type='datetime-local'
-        bind:value={deadlineLocal}
+        type='date'
+        bind:value={deadlineDate}
       />
     </label>
-    {#if deadlineLocal}
+    <label class='mb-0'>
+      <span class='small'>{t('Time')}</span>
+      <select class='form-control form-control-sm' bind:value={deadlineTime}>
+        <option value=''>—</option>
+        {#each timeOptions as time}
+          <option value={time}>{time}</option>
+        {/each}
+      </select>
+    </label>
+    {#if deadlineDate && deadlineTime}
       <label class='mb-0'>
         <span class='small'>{t('Reminder')}</span>
         <select class='form-control form-control-sm' bind:value={reminderChoice}>
@@ -325,10 +346,15 @@
           />
         </label>
       {/if}
+    {/if}
+    {#if deadlineDate || deadlineTime}
       <button
         type='button'
         class='btn btn-sm btn-outline-secondary todo-clear-deadline'
-        on:click={() => deadlineLocal = ''}
+        on:click={() => {
+          deadlineDate = '';
+          deadlineTime = '';
+        }}
       >
         <i class='fas fa-xmark fa-fw mr-1' aria-hidden='true'></i>{t('Clear')}
       </button>
