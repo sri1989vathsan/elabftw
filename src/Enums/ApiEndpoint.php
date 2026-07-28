@@ -18,6 +18,7 @@ enum ApiEndpoint: string
 {
     case ApiKeys = 'apikeys';
     case Batch = 'batch';
+    case CalendarFeed = 'calendar_feed';
     case Compounds = 'compounds';
     case Config = 'config';
     case Dspace = 'dspace';

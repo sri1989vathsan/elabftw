@@ -40,6 +40,23 @@ CREATE TABLE `api_keys` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `calendar_feed_tokens`
+--
+
+CREATE TABLE `calendar_feed_tokens` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `users_id` INT UNSIGNED NOT NULL,
+  `token_hash` CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_calendar_feed_user` (`users_id`),
+  UNIQUE KEY `unique_calendar_feed_token_hash` (`token_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 --
 -- Table structure for table `audit_logs`
 --
@@ -248,7 +265,8 @@ CREATE TABLE `experiments_revisions` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `modified_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `userid` int(10) UNSIGNED NOT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `idx_todolist_user_deadline` (`userid`, `deadline`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
 CREATE TABLE `items_types_revisions` (
@@ -1428,6 +1446,7 @@ CREATE TABLE `users` (
   `can_manage_compounds` TINYINT UNSIGNED NOT NULL DEFAULT 0,
   `can_manage_inventory_locations` TINYINT UNSIGNED NOT NULL DEFAULT 0,
   `theme_variant` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `theme_palette` VARCHAR(16) NOT NULL DEFAULT 'classic',
   `favorite_experiment_folder` INT UNSIGNED NULL DEFAULT NULL,
   `spreadsheet_defaults` JSON NULL DEFAULT NULL,
   PRIMARY KEY (`userid`)
@@ -1798,6 +1817,13 @@ ALTER TABLE `api_keys`
   ADD CONSTRAINT `fk_api_keys_users_id` FOREIGN KEY (`userid`) REFERENCES `users` (`userid`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_api_keys_teams_id` FOREIGN KEY (`team`) REFERENCES `teams` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_api_keys_user_team` FOREIGN KEY (`userid`, `team`) REFERENCES `users2teams` (`users_id`, `teams_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+--
+-- Constraints for table `calendar_feed_tokens`
+--
+ALTER TABLE `calendar_feed_tokens`
+  ADD CONSTRAINT `fk_calendar_feed_tokens_users_id`
+    FOREIGN KEY (`users_id`) REFERENCES `users` (`userid`)
+    ON DELETE CASCADE ON UPDATE CASCADE;
 --
 -- Constraints for table `experiments`
 --

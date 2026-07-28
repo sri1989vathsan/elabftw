@@ -36,7 +36,11 @@ interface Todoitem {
 interface UnfinishedEntities {
   id: number;
   title: string;
-  steps: Array<string>;
+  steps: Array<{
+    id: number;
+    body: string;
+    deadline: string | null;
+  }>;
 }
 
 interface CheckableItem {
@@ -123,6 +127,7 @@ enum Action {
 
 enum Model {
   Apikey = 'apikeys',
+  CalendarFeed = 'calendar_feed',
   Comment = 'comments',
   Compounds = 'compounds',
   Config = 'config',

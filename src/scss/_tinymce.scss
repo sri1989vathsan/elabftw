@@ -22,13 +22,13 @@ table.elabftw-spreadsheet {
 
   td,
   th {
-    border: 1px solid #ccd2d8;
+    border: 1px solid var(--secondary-muted, #ccd2d8);
     min-width: 3.5rem;
     padding: 0.35rem 0.5rem;
   }
 
   .spreadsheet-coordinate {
-    background-color: #f0f2f4;
+    background-color: var(--superlight, #f0f2f4);
     color: var(--medium);
     font-size: 0.85em;
     min-width: 2rem;
@@ -43,15 +43,15 @@ table[data-spreadsheet-style='notebook'] {
   width: 100%;
 
   > caption {
-    background-color: #f0f2f4;
-    border: 1px solid #ccd2d8;
+    background-color: var(--superlight, #f0f2f4);
+    border: 1px solid var(--secondary-muted, #ccd2d8);
     border-bottom: 0;
     margin: 0;
     padding: 0.65rem 0.75rem;
   }
 
   thead th {
-    background-color: #e6eaed;
+    background-color: var(--firstlevel, #e6eaed);
     font-weight: 700;
     text-align: left;
   }

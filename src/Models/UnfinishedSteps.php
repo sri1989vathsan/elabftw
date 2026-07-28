@@ -62,12 +62,17 @@ final class UnfinishedSteps extends AbstractRest
 
     private function getSteps(EntityType $model): array
     {
-        $sql = 'SELECT entity.id, entity.title, stepst.finished, stepst.steps_body, stepst.steps_id
+        $sql = 'SELECT entity.id, entity.title, stepst.finished,
+                stepst.steps_body, stepst.steps_id, stepst.steps_deadline
             FROM ' . $model->value . " as entity
             CROSS JOIN (
                 SELECT item_id, finished,
                 GROUP_CONCAT(entity_steps.body ORDER BY entity_steps.ordering SEPARATOR '|') AS steps_body,
-                GROUP_CONCAT(entity_steps.id ORDER BY entity_steps.ordering SEPARATOR '|') AS steps_id
+                GROUP_CONCAT(entity_steps.id ORDER BY entity_steps.ordering SEPARATOR '|') AS steps_id,
+                GROUP_CONCAT(
+                    COALESCE(DATE_FORMAT(entity_steps.deadline, '%Y-%m-%dT%H:%i:%sZ'), '')
+                    ORDER BY entity_steps.ordering SEPARATOR '|'
+                ) AS steps_deadline
                 FROM " . $model->value . '_steps as entity_steps
                 WHERE finished = 0 GROUP BY item_id
             ) AS stepst ON (stepst.item_id = entity.id)';
@@ -134,13 +139,23 @@ final class UnfinishedSteps extends AbstractRest
         foreach ($res as &$entity) {
             $stepIDs = explode('|', $entity['steps_id']);
             $stepsBodies = explode('|', $entity['steps_body']);
+            $stepDeadlines = explode('|', $entity['steps_deadline']);
 
             $entitySteps = array();
             foreach ($stepIDs as $key => $stepID) {
-                $entitySteps[] = array($stepID, $stepsBodies[$key]);
+                $entitySteps[] = array(
+                    'id' => $stepID,
+                    'body' => $stepsBodies[$key],
+                    'deadline' => $stepDeadlines[$key] === '' ? null : $stepDeadlines[$key],
+                );
             }
             $entity['steps'] = $entitySteps;
-            unset($entity['steps_body'], $entity['steps_id'], $entity['finished']);
+            unset(
+                $entity['steps_body'],
+                $entity['steps_id'],
+                $entity['steps_deadline'],
+                $entity['finished'],
+            );
         }
 
         return $res;

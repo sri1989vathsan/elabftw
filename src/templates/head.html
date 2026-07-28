@@ -6,7 +6,7 @@
  * @license AGPL-3.0
  * @package elabftw
 -->
-<html lang='{{ App.getLang()|slice(0, 2) }}' class="{{ App.getThemeVariant().toCssClass() }}">
+<html lang='{{ App.getLang()|slice(0, 2) }}' class="{{ App.getThemeVariant().toCssClass() }} theme-palette-{{ App.Users.userData.theme_palette|default('classic') }}">
 
 <head>
   <meta http-equiv='Content-type' content='text/html;charset=UTF-8' />

@@ -4,36 +4,7 @@
   import i18next from '../i18n';
   import { Model } from '../interfaces';
   import { Malle } from '@deltablot/malle';
-  import { makeSortableGreatAgain, toRelative } from '../misc';
-
-  const t = i18next.t.bind(i18next);
-  let locale = 'en-gb';
-
-  let malleable: Malle | null = null;
-  const relative = (date: string): string => toRelative(date, locale);
-
-  function setupMalle(): void {
-    malleable = new Malle({
-      before: (original) => original.classList.contains('editable'),
-      inputClasses: ['form-control'],
-      fun: async (value, original) => {
-        const id = original.dataset.id;
-        if (!id) {
-          throw new Error('Missing todo id on editable element');
-        }
-
-        const resp = await ApiC.patch(`${Model.Todolist}/${id}`, { content: value });
-        const json = await resp.json();
-        window.dispatchEvent(new CustomEvent('todolist-changed'));
-        return json.body;
-      },
-      returnedValueIsTrustedHtml: false,
-      listenOn: '.todoItem',
-      tooltip: t('click-to-edit'),
-    });
-
-    malleable.listen();
-  }
+  import { toRelative } from '../misc';
 
   type Todo = {
     id: number;
@@ -44,8 +15,175 @@
     creation_time: string;
   };
 
+  type UnfinishedStep = {
+    id: number;
+    body: string;
+    deadline: string | null;
+  };
+
+  type UnfinishedEntity = {
+    id: number;
+    title: string;
+    steps: UnfinishedStep[];
+  };
+
+  type UnfinishedResponse = {
+    experiments: UnfinishedEntity[];
+    items: UnfinishedEntity[];
+  };
+
+  type SidebarEntry = {
+    key: string;
+    source: 'todo' | 'step';
+    id: number;
+    body: string;
+    deadline: string | null;
+    notes: string | null;
+    creationTime: string | null;
+    entityId?: number;
+    entityTitle?: string;
+    entityType?: 'experiments' | 'items';
+  };
+
+  type DueGroup = {
+    key: string;
+    label: string;
+    entries: SidebarEntry[];
+  };
+
+  const t = i18next.t.bind(i18next);
+  let locale = 'en-gb';
+  let malleable: Malle | null = null;
   let items: Todo[] = [];
+  let unfinished: UnfinishedResponse = { experiments: [], items: [] };
+  let entries: SidebarEntry[] = [];
+  let dueGroups: DueGroup[] = [];
   let draft = '';
+  let loading = true;
+
+  $: entries = [
+    ...items.map(item => ({
+      key: `todo-${item.id}`,
+      source: 'todo' as const,
+      id: Number(item.id),
+      body: item.body,
+      deadline: item.deadline,
+      notes: item.notes,
+      creationTime: item.creation_time,
+    })),
+    ...(['experiments', 'items'] as const).flatMap(entityType => (
+      unfinished[entityType].flatMap(entity => (
+        entity.steps.map(step => ({
+          key: `step-${entityType}-${step.id}`,
+          source: 'step' as const,
+          id: Number(step.id),
+          body: step.body,
+          deadline: step.deadline,
+          notes: null,
+          creationTime: null,
+          entityId: Number(entity.id),
+          entityTitle: entity.title,
+          entityType,
+        }))
+      ))
+    )),
+  ];
+  $: dueGroups = buildDueGroups(entries);
+
+  function setupMalle(): void {
+    malleable = new Malle({
+      before: original => original.classList.contains('editable'),
+      inputClasses: ['form-control'],
+      fun: async (value, original) => {
+        const id = original.dataset.id;
+        if (!id) {
+          throw new Error('Missing todo id on editable element');
+        }
+        const resp = await ApiC.patch(`${Model.Todolist}/${id}`, { content: value });
+        const json = await resp.json();
+        window.dispatchEvent(new CustomEvent('todolist-changed'));
+        return json.body;
+      },
+      returnedValueIsTrustedHtml: false,
+      listenOn: '.todoItem',
+      tooltip: t('click-to-edit'),
+    });
+    malleable.listen();
+  }
+
+  function dateKey(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function groupLabel(key: string, date?: Date): string {
+    if (key === 'overdue') return t('Overdue');
+    if (key === 'today') return t('Today');
+    if (key === 'tomorrow') return t('Tomorrow');
+    if (key === 'undated') return t('No due date');
+    return new Intl.DateTimeFormat(locale, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(date);
+  }
+
+  function buildDueGroups(allEntries: SidebarEntry[]): DueGroup[] {
+    const now = new Date();
+    const today = dateKey(now);
+    const tomorrowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const tomorrow = dateKey(tomorrowDate);
+    const grouped = new Map<string, { date?: Date; entries: SidebarEntry[] }>();
+
+    [...allEntries]
+      .sort((a, b) => {
+        if (a.deadline === null && b.deadline === null) {
+          return (a.creationTime ?? '').localeCompare(b.creationTime ?? '');
+        }
+        if (a.deadline === null) return 1;
+        if (b.deadline === null) return -1;
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      })
+      .forEach(entry => {
+        let key = 'undated';
+        let date: Date | undefined;
+        if (entry.deadline !== null) {
+          date = new Date(entry.deadline);
+          const entryDate = dateKey(date);
+          if (date.getTime() < now.getTime()) {
+            key = 'overdue';
+          } else if (entryDate === today) {
+            key = 'today';
+          } else if (entryDate === tomorrow) {
+            key = 'tomorrow';
+          } else {
+            key = entryDate;
+          }
+        }
+        const group = grouped.get(key) ?? { date, entries: [] };
+        group.entries.push(entry);
+        grouped.set(key, group);
+      });
+
+    const rank = (key: string): number => {
+      if (key === 'overdue') return 0;
+      if (key === 'today') return 1;
+      if (key === 'tomorrow') return 2;
+      if (key === 'undated') return Number.MAX_SAFE_INTEGER;
+      return new Date(`${key}T00:00:00`).getTime();
+    };
+
+    return Array.from(grouped.entries())
+      .sort(([left], [right]) => rank(left) - rank(right))
+      .map(([key, group]) => ({
+        key,
+        label: groupLabel(key, group.date),
+        entries: group.entries,
+      }));
+  }
 
   async function create(): Promise<void> {
     const content = draft.trim();
@@ -61,15 +199,41 @@
 
   async function destroy(id: number): Promise<void> {
     await ApiC.delete(`${Model.Todolist}/${id}`);
-    items = items.filter(item => item.id !== id);
+    items = items.filter(item => Number(item.id) !== id);
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
 
   async function load(): Promise<void> {
-    items = await ApiC.getJson(Model.Todolist) as Todo[];
-    await tick(); // wait until {#each} has rendered
+    loading = true;
+    const teamScope = localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
+    const [todoResponse, unfinishedResponse] = await Promise.all([
+      ApiC.getJson(Model.Todolist) as Promise<Todo[]>,
+      ApiC.getJson(`unfinished_steps?scope=${teamScope ? 'team' : 'user'}`) as Promise<UnfinishedResponse>,
+    ]);
+    items = todoResponse;
+    unfinished = unfinishedResponse;
+    loading = false;
+    await tick();
     setupMalle();
-    makeSortableGreatAgain();
+  }
+
+  function formatDeadline(value: string): string {
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(value));
+  }
+
+  function isOverdue(entry: SidebarEntry): boolean {
+    return entry.deadline !== null && new Date(entry.deadline).getTime() < Date.now();
+  }
+
+  function relative(date: string): string {
+    return toRelative(date, locale);
+  }
+
+  function entityPage(entry: SidebarEntry): string {
+    return entry.entityType === 'items' ? 'database.php' : 'experiments.php';
   }
 
   onMount(() => {
@@ -79,27 +243,20 @@
       void load();
     };
     window.addEventListener('todolist-changed', reload);
+    window.addEventListener('todolist-scope-changed', reload);
     void load();
-    return () => window.removeEventListener('todolist-changed', reload);
+    return () => {
+      window.removeEventListener('todolist-changed', reload);
+      window.removeEventListener('todolist-scope-changed', reload);
+    };
   });
-
-  function formatDeadline(value: string): string {
-    return new Intl.DateTimeFormat(locale, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(value));
-  }
-
-  function isOverdue(value: string): boolean {
-    return new Date(value).getTime() < Date.now();
-  }
 </script>
 
-<div class='input-group mb-2'>
+<div class='input-group mb-3'>
   <input
     class='form-control'
     bind:value={draft}
-    on:keydown={(e) => e.key === 'Enter' && create()}
+    on:keydown={(event) => event.key === 'Enter' && create()}
     placeholder={t('add-task')}
   />
   <div class='input-group-append'>
@@ -109,52 +266,116 @@
   </div>
 </div>
 
-{#if items.length === 0}
+{#if loading}
+  <p class='text-muted'>{t('Loading')}…</p>
+{:else if dueGroups.length === 0}
   <p class='mb-0'>{t('no-tasks-yet')}</p>
 {:else}
-  <ul class='list-group sortable' data-axis='y' data-table='todolist'>
-    {#each items as item (item.id)}
-      <li class='list-group-item d-flex justify-content-between align-items-center' id='todoItem_{item.id}'>
-        <div class='d-flex align-items-start flex-grow-1 mr-3'>
-          <span class='draggable sortableHandle mr-2'>
-            <i class='fas fa-grip-vertical fa-fw'></i>
-          </span>
-
-          <div class='d-flex flex-column flex-grow-1'>
-            <span class='editable todoItem' data-id={item.id}>{item.body}</span>
-            {#if item.deadline}
-              <div class:font-weight-bold={isOverdue(item.deadline)} class:is-overdue={isOverdue(item.deadline)} class='small todo-item-deadline'>
-                <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>
-                {formatDeadline(item.deadline)}
-                {#if isOverdue(item.deadline)} · {t('Overdue')}{/if}
+  <div class='todo-due-groups'>
+    {#each dueGroups as group (group.key)}
+      <section class='todo-due-group' aria-labelledby={`todo-due-${group.key}`}>
+        <h4 id={`todo-due-${group.key}`} class:overdue-heading={group.key === 'overdue'} class='todo-due-heading'>
+          <span>{group.label}</span>
+          <span class='badge badge-secondary'>{group.entries.length}</span>
+        </h4>
+        <ul class='list-group'>
+          {#each group.entries as entry (entry.key)}
+            <li class:todo-entry-overdue={isOverdue(entry)} class='list-group-item todo-group-entry'>
+              <div class='d-flex align-items-start'>
+                {#if entry.source === 'step'}
+                  <input
+                    type='checkbox'
+                    class='stepbox mr-2 mt-1'
+                    id={`todo_step_${entry.id}`}
+                    data-id={entry.entityId}
+                    data-type={entry.entityType}
+                    data-stepid={entry.id}
+                    aria-label={t('Mark experiment step complete')}
+                    on:change={() => window.setTimeout(load, 600)}
+                  />
+                {:else}
+                  <i class='fas fa-list-check color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>
+                {/if}
+                <div class='d-flex flex-column flex-grow-1 min-width-0'>
+                  {#if entry.source === 'todo'}
+                    <span class='editable todoItem' data-id={entry.id}>{entry.body}</span>
+                  {:else}
+                    <span>{entry.body}</span>
+                    <a class='small' href={`${entityPage(entry)}?mode=view&id=${entry.entityId}#step_view_${entry.id}`}>
+                      {entry.entityTitle}
+                    </a>
+                  {/if}
+                  {#if entry.deadline}
+                    <div class:font-weight-bold={isOverdue(entry)} class='small todo-item-deadline'>
+                      <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>
+                      {formatDeadline(entry.deadline)}
+                    </div>
+                  {/if}
+                  {#if entry.notes}
+                    <div class='small text-muted'>{entry.notes}</div>
+                  {/if}
+                  {#if entry.creationTime}
+                    <div class='relative-moment small text-muted' title={entry.creationTime}>
+                      {relative(entry.creationTime)}
+                    </div>
+                  {/if}
+                </div>
+                {#if entry.source === 'todo'}
+                  <button
+                    type='button'
+                    class='btn btn-sm btn-ghost ml-2'
+                    on:click={() => destroy(entry.id)}
+                  >
+                    {t('done')}
+                  </button>
+                {/if}
               </div>
-            {/if}
-            {#if item.notes}
-              <div class='small text-muted'>{item.notes}</div>
-            {/if}
-            <div class='relative-moment small text-muted' title={item.creation_time}>
-              {relative(item.creation_time)}
-            </div>
-          </div>
-        </div>
-        <button
-          type='button'
-          class='btn btn-sm btn-ghost'
-          on:click={() => destroy(item.id)}
-        >
-          {t('done')}
-        </button>
-      </li>
+            </li>
+          {/each}
+        </ul>
+      </section>
     {/each}
-  </ul>
+  </div>
 {/if}
 
 <style>
+  .todo-due-group + .todo-due-group {
+    margin-top: 1rem;
+  }
+
+  .todo-due-heading {
+    align-items: center;
+    border-bottom: 2px solid var(--primary);
+    display: flex;
+    font-size: 0.95rem;
+    justify-content: space-between;
+    margin: 0 0 0.35rem;
+    padding: 0.3rem 0.15rem;
+  }
+
+  .todo-due-heading.overdue-heading {
+    border-bottom-color: var(--danger);
+    color: var(--danger);
+  }
+
+  .todo-group-entry {
+    border-left: 3px solid var(--primary);
+    padding: 0.65rem;
+  }
+
+  .todo-group-entry.todo-entry-overdue {
+    border-left-color: var(--danger);
+  }
+
   .todo-item-deadline {
     color: var(--medium);
   }
 
-  .todo-item-deadline.is-overdue {
+  .todo-entry-overdue .todo-item-deadline {
     color: var(--danger);
+  }
+
+  .min-width-0 {
+    min-width: 0;
   }
 </style>

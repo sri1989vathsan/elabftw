@@ -223,29 +223,32 @@ empty paragraph, type `-` followed by Space for a bulleted list, or `1` (also
 `1.`) followed by Space for a numbered list. Tables, code blocks, and existing
 list items are excluded, and each conversion is a single undo step.
 
-Inside a list, Tab and Shift+Tab explicitly indent and outdent the current item
-instead of moving focus to the next editor control. The handler runs during the
-editor iframe's capture phase so TinyMCE and browser focus navigation cannot
-consume the key first. The entity action toolbar is sticky in both view and edit
-mode, keeping Back and Edit/View available while scrolling. In edit mode, the
-existing Save and Save-and-back actions live in that sticky toolbar, with
-TinyMCE's own sticky toolbar offset beneath it.
+In the editor, Tab and Shift+Tab explicitly indent and outdent the current list
+item, paragraph, heading, quote, or other editable block instead of moving focus
+to the next editor control. Table cells retain TinyMCE's native Tab navigation.
+The handler runs during the editor iframe's capture phase, with an editor-event
+fallback, so TinyMCE and browser focus navigation cannot consume the key first.
+The entity action toolbar is sticky in both view and edit mode, keeping Back and
+Edit/View available while scrolling. In edit mode, the existing Save and
+Save-and-back actions live in that sticky toolbar, with TinyMCE's own sticky
+toolbar offset beneath it.
 
 Spreadsheet updates preserve TinyMCE table formatting instead of rebuilding an
 unformatted grid. Table borders and layout, caption formatting, and per-cell
 border, background, text, alignment, padding, and sizing styles round-trip
 through the embedded spreadsheet data and are restored after formula edits.
 
-The spreadsheet editor also exposes appearance defaults for cell border width,
-border color, base cell color, and optional alternating row and column colors.
-The current table previews changes immediately. **Save as default** persists the
-appearance either on the user's account or on the current experiment/resource
-(including template entities); a notebook default takes precedence over the
-account default, while direct formatting on an individual cell takes precedence
-over both. A selected cell range can also be formatted directly with quick
-controls for background color, border color, border style, and border width, or
-returned to inherited defaults with **Clear format**. Schema 212 stores the
-scoped settings as validated JSON.
+The spreadsheet editor also exposes appearance defaults for table width,
+alignment, border width/style/color, background, cell spacing/padding, cell
+border width/color, base cell color, and optional alternating row and column
+colors. The current table previews changes immediately. **Save as default**
+persists the complete table-and-cell combination either on the user's account
+or on the current experiment/resource (including template entities); a notebook
+default takes precedence over the account default, while direct formatting on
+an individual table or cell takes precedence over both. A selected cell range
+can also be formatted directly with quick controls for background color, border
+color, border style, and border width, or returned to inherited defaults with
+**Clear format**. Schema 212 stores the scoped settings as validated JSON.
 
 Spreadsheet range selection is retained while the user interacts with color,
 border, and formula controls. The selected range is restored after a preview
@@ -254,21 +257,31 @@ multi-cell property changes consistently apply to the intended cells.
 The popup also applies font family, point size, bold, italic, underline, text
 color, horizontal alignment, and vertical alignment to that retained range.
 Only font controls changed by the user are applied, so unrelated cell styles
-remain intact.
+remain intact. Explicit **No fill** and **No text color** choices remove those
+inline styles from the selected cells and return them to inherited
+account/notebook defaults.
 
-The main editor toolbar also provides a visible **Cell style** shortcut whenever
-the cursor is inside a table cell. It opens TinyMCE's cell-properties dialog for
-background color, border color, border style, and border width; those direct
+The main editor toolbar also provides visible **Table style** and **Cell style**
+shortcuts whenever the cursor is inside a table. Table style opens TinyMCE's
+table-properties dialog for table dimensions, alignment, border, background,
+spacing, padding, and caption. Cell style provides background color, border
+color, border style, and border width for the selected cells. Those direct
 styles are retained when a formula spreadsheet is reopened and updated.
 
 ## Feature 14: Integrated Task and Deadline Calendar
 
 The existing To-do sidebar now contains two coordinated views without adding
-another floating sidebar button. **Tasks and steps** retains personal tasks and
-unfinished experiment/resource steps. **Calendar** adds scheduled personal tasks
-to a month grid and deadline agenda, alongside unfinished experiment/resource
-steps that already have deadlines. A scheduled personal task is therefore
-visible in both views and is completed from either one.
+another floating sidebar button. **Tasks and steps** combines personal tasks and
+unfinished experiment/resource steps into one hierarchy sorted by deadline:
+Overdue, Today, Tomorrow, each later calendar date, and No due date. Entries
+within a group are ordered by exact time, and the User/Team switch applies to
+the step entries without separating them from personal tasks. **Calendar** adds
+scheduled personal tasks to a month grid and deadline agenda, alongside
+unfinished experiment/resource steps that already have deadlines. A scheduled
+personal task is therefore visible in both views and is completed from either
+one. The calendar uses a compact planner layout with a prominent month header,
+theme-aware day cards, distinct Today/Selected/Overdue states, event-count
+pills, a small legend, and source-labeled agenda cards.
 
 Scheduled tasks support a title, notes, an exact local date and time, and reminder
 lead times at the deadline, 15 minutes, one hour, one day, one week, or a custom
@@ -284,6 +297,29 @@ steps, supports day and month navigation, and links each step back to its source
 entity. Completing a step in the calendar uses the same step workflow as the
 experiment page and existing To-do list.
 
+The same panel can create a private, account-specific iCalendar subscription
+URL. It includes that user's scheduled personal tasks and owned
+experiment/resource step deadlines, including reminder alarms. The URL can be
+subscribed to from Google Calendar or Apple Calendar, regenerated if it is
+exposed, and revoked at any time. Only a SHA-256 digest is stored by eLabFTW;
+the bearer token is returned once. A publicly reachable trusted HTTPS URL is
+required for Google or another cloud provider to fetch the feed; the localhost
+demo instead exposes a **Preview .ics** action. This is a read-only
+subscription, while Apple Reminders would require a separate native EventKit or
+Shortcuts integration.
+
+## Feature 15: Account-wide Colour Themes and Stable Action Layering
+
+Settings > General > Display provides coordinated Classic, Ocean, Forest, Plum,
+Sunset, Slate, Rose, and Amber combinations. The validated selection is saved
+on the user account and changes page and editor surfaces, panels, forms, tables,
+navigation, links, and action controls across eLabFTW. Every palette supplies
+both light and dark variants.
+
+The main navigation establishes a stacking layer above the sticky entity action
+toolbar. Dropdowns such as **Experiments** therefore open over the floating
+Back/Edit/Save bar instead of being obscured by it.
+
 ## Schema Migration Notes
 
 - `schema207.sql` — Combined: experiment folders table + folder_id column (our additions) and booking cost columns (upstream). Uses `CREATE TABLE IF NOT EXISTS` and conditional `ALTER TABLE` for idempotent re-runs
@@ -294,6 +330,8 @@ experiment page and existing To-do list.
 - `schema212.sql` — Adds account- and notebook-scoped spreadsheet appearance defaults
 - `schema213.sql` — Adds notes, exact deadlines, reminder lead times, and a
   deadline index to personal to-do items
+- `schema214.sql` — Adds one private external-calendar token per account and the
+  validated account-wide colour-theme setting
 
 ## General Merge Notes
 

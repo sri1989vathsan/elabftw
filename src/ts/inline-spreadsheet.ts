@@ -35,10 +35,19 @@ export interface SpreadsheetAppearance {
   borderWidth: number;
   borderColor: string;
   cellColor: string;
+  cellPadding: number;
   alternateRows: boolean;
   alternateRowColor: string;
   alternateColumns: boolean;
   alternateColumnColor: string;
+  tableWidth: number;
+  tableAlignment: 'left' | 'center' | 'right';
+  tableBorderWidth: number;
+  tableBorderStyle: 'solid' | 'dashed' | 'dotted' | 'double' | 'none';
+  tableBorderColor: string;
+  tableBackgroundColor: string;
+  tableNoBackground: boolean;
+  tableCellSpacing: number;
 }
 
 // jspreadsheet-ce v5 types do not cover the runtime shape returned during setup.
@@ -83,15 +92,24 @@ const DEFAULT_COLS = 6;
 const DEFAULT_ROWS = 5;
 const MAX_DIMENSION = 50;
 const MAX_TABLE_BORDER = 20;
-const DEFAULT_TABLE_STYLE = 'border-collapse:collapse;min-width:25%';
+const DEFAULT_TABLE_STYLE = 'min-width:25%';
 const DEFAULT_APPEARANCE: SpreadsheetAppearance = {
   borderWidth: 1,
   borderColor: '#ced4da',
   cellColor: '#ffffff',
+  cellPadding: 6,
   alternateRows: true,
   alternateRowColor: '#f6f7f8',
   alternateColumns: false,
   alternateColumnColor: '#eef6f7',
+  tableWidth: 0,
+  tableAlignment: 'left',
+  tableBorderWidth: 1,
+  tableBorderStyle: 'solid',
+  tableBorderColor: '#ced4da',
+  tableBackgroundColor: '#ffffff',
+  tableNoBackground: true,
+  tableCellSpacing: 0,
 };
 const PRESERVED_STYLE_PROPERTIES = new Set([
   'background-color',
@@ -149,17 +167,43 @@ function normalizeColor(value: unknown, fallback: string): string {
     : fallback;
 }
 
+function normalizeInteger(value: unknown, fallback: number, min: number, max: number): number {
+  return typeof value === 'number' && Number.isInteger(value)
+    ? Math.max(min, Math.min(max, value))
+    : fallback;
+}
+
 function normalizeAppearance(
   candidate?: Partial<SpreadsheetAppearance>,
 ): SpreadsheetAppearance {
-  const borderWidth = typeof candidate?.borderWidth === 'number'
-    && Number.isInteger(candidate.borderWidth)
-    ? Math.max(0, Math.min(MAX_TABLE_BORDER, candidate.borderWidth))
-    : DEFAULT_APPEARANCE.borderWidth;
+  const borderWidth = normalizeInteger(
+    candidate?.borderWidth,
+    DEFAULT_APPEARANCE.borderWidth,
+    0,
+    MAX_TABLE_BORDER,
+  );
+  const tableAlignments = new Set<SpreadsheetAppearance['tableAlignment']>([
+    'left',
+    'center',
+    'right',
+  ]);
+  const tableBorderStyles = new Set<SpreadsheetAppearance['tableBorderStyle']>([
+    'solid',
+    'dashed',
+    'dotted',
+    'double',
+    'none',
+  ]);
   return {
     borderWidth,
     borderColor: normalizeColor(candidate?.borderColor, DEFAULT_APPEARANCE.borderColor),
     cellColor: normalizeColor(candidate?.cellColor, DEFAULT_APPEARANCE.cellColor),
+    cellPadding: normalizeInteger(
+      candidate?.cellPadding,
+      DEFAULT_APPEARANCE.cellPadding,
+      0,
+      50,
+    ),
     alternateRows: typeof candidate?.alternateRows === 'boolean'
       ? candidate.alternateRows
       : DEFAULT_APPEARANCE.alternateRows,
@@ -173,6 +217,43 @@ function normalizeAppearance(
     alternateColumnColor: normalizeColor(
       candidate?.alternateColumnColor,
       DEFAULT_APPEARANCE.alternateColumnColor,
+    ),
+    tableWidth: normalizeInteger(
+      candidate?.tableWidth,
+      DEFAULT_APPEARANCE.tableWidth,
+      0,
+      100,
+    ),
+    tableAlignment: candidate?.tableAlignment
+      && tableAlignments.has(candidate.tableAlignment)
+      ? candidate.tableAlignment
+      : DEFAULT_APPEARANCE.tableAlignment,
+    tableBorderWidth: normalizeInteger(
+      candidate?.tableBorderWidth,
+      candidate?.borderWidth ?? DEFAULT_APPEARANCE.tableBorderWidth,
+      0,
+      MAX_TABLE_BORDER,
+    ),
+    tableBorderStyle: candidate?.tableBorderStyle
+      && tableBorderStyles.has(candidate.tableBorderStyle)
+      ? candidate.tableBorderStyle
+      : DEFAULT_APPEARANCE.tableBorderStyle,
+    tableBorderColor: normalizeColor(
+      candidate?.tableBorderColor,
+      candidate?.borderColor ?? DEFAULT_APPEARANCE.tableBorderColor,
+    ),
+    tableBackgroundColor: normalizeColor(
+      candidate?.tableBackgroundColor,
+      DEFAULT_APPEARANCE.tableBackgroundColor,
+    ),
+    tableNoBackground: typeof candidate?.tableNoBackground === 'boolean'
+      ? candidate.tableNoBackground
+      : DEFAULT_APPEARANCE.tableNoBackground,
+    tableCellSpacing: normalizeInteger(
+      candidate?.tableCellSpacing,
+      DEFAULT_APPEARANCE.tableCellSpacing,
+      0,
+      50,
     ),
   };
 }
@@ -353,9 +434,33 @@ function getAppearanceCellStyle(
 ): string {
   const declarations = [
     `border:${appearance.borderWidth}px solid ${appearance.borderColor}`,
+    `padding:${appearance.cellPadding}px`,
   ];
   if (includeBackground) {
     declarations.push(`background-color:${getAppearanceBackground(appearance, col, row)}`);
+  }
+  return declarations.join(';');
+}
+
+function getAppearanceTableStyle(appearance: SpreadsheetAppearance): string {
+  const declarations = [
+    appearance.tableBorderStyle === 'none' || appearance.tableBorderWidth === 0
+      ? 'border:none'
+      : `border:${appearance.tableBorderWidth}px ${appearance.tableBorderStyle} ${appearance.tableBorderColor}`,
+    appearance.tableCellSpacing === 0
+      ? 'border-collapse:collapse'
+      : `border-collapse:separate;border-spacing:${appearance.tableCellSpacing}px`,
+  ];
+  if (appearance.tableWidth > 0) declarations.push(`width:${appearance.tableWidth}%`);
+  if (!appearance.tableNoBackground) {
+    declarations.push(`background-color:${appearance.tableBackgroundColor}`);
+  }
+  if (appearance.tableAlignment === 'center') {
+    declarations.push('margin-left:auto', 'margin-right:auto');
+  } else if (appearance.tableAlignment === 'right') {
+    declarations.push('margin-left:auto', 'margin-right:0');
+  } else {
+    declarations.push('margin-left:0', 'margin-right:auto');
   }
   return declarations.join(';');
 }
@@ -426,7 +531,7 @@ function stripAppearanceTableStyle(
   const generated = document.createElement('span');
   generated.setAttribute(
     'style',
-    `border:${appearance.borderWidth}px solid ${appearance.borderColor}`,
+    getAppearanceTableStyle(appearance),
   );
   for (let index = 0; index < generated.style.length; index++) {
     const property = generated.style.item(index);
@@ -528,6 +633,15 @@ function createOverlay(initial: SpreadsheetData): {
   alternateRowColorInput: HTMLInputElement;
   alternateColumnsInput: HTMLInputElement;
   alternateColumnColorInput: HTMLInputElement;
+  tableWidthInput: HTMLInputElement;
+  tableAlignmentSelect: HTMLSelectElement;
+  tableBorderWidthInput: HTMLInputElement;
+  tableBorderStyleSelect: HTMLSelectElement;
+  tableBorderColorInput: HTMLInputElement;
+  tableBackgroundColorInput: HTMLInputElement;
+  tableNoBackgroundInput: HTMLInputElement;
+  tableCellSpacingInput: HTMLInputElement;
+  cellPaddingInput: HTMLInputElement;
   appearanceScopeSelect: HTMLSelectElement;
   saveAppearanceDefaultBtn: HTMLButtonElement;
   appearanceStatus: HTMLSpanElement;
@@ -547,6 +661,8 @@ function createOverlay(initial: SpreadsheetData): {
   applyFontFormatBtn: HTMLButtonElement;
   clearCellFormatBtn: HTMLButtonElement;
   cellFormatStatus: HTMLSpanElement;
+  cellFormatNoColorInput: HTMLInputElement;
+  cellFormatNoTextColorInput: HTMLInputElement;
 } {
   const overlay = document.createElement('div');
   overlay.className = 'inline-spreadsheet-overlay';
@@ -597,8 +713,91 @@ function createOverlay(initial: SpreadsheetData): {
   appearancePanel.className = 'inline-spreadsheet-appearance';
   appearancePanel.open = true;
   const appearanceSummary = document.createElement('summary');
-  appearanceSummary.textContent = 'Cell appearance';
+  appearanceSummary.textContent = 'Table and cell appearance';
   appearancePanel.appendChild(appearanceSummary);
+  const tableAppearanceLabel = document.createElement('strong');
+  tableAppearanceLabel.textContent = 'Table defaults';
+  const tableAppearanceGrid = document.createElement('div');
+  tableAppearanceGrid.className = 'inline-spreadsheet-appearance-grid';
+
+  const tableWidthInput = createInput(
+    'number',
+    String(appearance.tableWidth),
+    'Default table width in percent; zero uses automatic width',
+  );
+  tableWidthInput.min = '0';
+  tableWidthInput.max = '100';
+  const tableAlignmentSelect = document.createElement('select');
+  tableAlignmentSelect.className = 'form-control form-control-sm';
+  tableAlignmentSelect.setAttribute('aria-label', 'Default table alignment');
+  tableAlignmentSelect.innerHTML = `
+    <option value="left">Left</option>
+    <option value="center">Center</option>
+    <option value="right">Right</option>
+  `;
+  tableAlignmentSelect.value = appearance.tableAlignment;
+  const tableBorderWidthInput = createInput(
+    'number',
+    String(appearance.tableBorderWidth),
+    'Default table border width',
+  );
+  tableBorderWidthInput.min = '0';
+  tableBorderWidthInput.max = String(MAX_TABLE_BORDER);
+  const tableBorderStyleSelect = document.createElement('select');
+  tableBorderStyleSelect.className = 'form-control form-control-sm';
+  tableBorderStyleSelect.setAttribute('aria-label', 'Default table border style');
+  tableBorderStyleSelect.innerHTML = `
+    <option value="solid">Solid</option>
+    <option value="dashed">Dashed</option>
+    <option value="dotted">Dotted</option>
+    <option value="double">Double</option>
+    <option value="none">No border</option>
+  `;
+  tableBorderStyleSelect.value = appearance.tableBorderStyle;
+  const tableBorderColorInput = createInput(
+    'color',
+    appearance.tableBorderColor,
+    'Default table border color',
+  );
+  const tableBackgroundColorInput = createInput(
+    'color',
+    appearance.tableBackgroundColor,
+    'Default table background color',
+  );
+  const tableNoBackgroundInput = document.createElement('input');
+  tableNoBackgroundInput.type = 'checkbox';
+  tableNoBackgroundInput.checked = appearance.tableNoBackground;
+  tableNoBackgroundInput.setAttribute('aria-label', 'No default table background color');
+  tableBackgroundColorInput.disabled = tableNoBackgroundInput.checked;
+  const tableCellSpacingInput = createInput(
+    'number',
+    String(appearance.tableCellSpacing),
+    'Default table cell spacing',
+  );
+  tableCellSpacingInput.min = '0';
+  tableCellSpacingInput.max = '50';
+  const cellPaddingInput = createInput(
+    'number',
+    String(appearance.cellPadding),
+    'Default cell padding',
+  );
+  cellPaddingInput.min = '0';
+  cellPaddingInput.max = '50';
+  tableAppearanceGrid.append(
+    createLabeledControl('Width % (0 = auto)', tableWidthInput),
+    createLabeledControl('Alignment', tableAlignmentSelect),
+    createLabeledControl('Border width', tableBorderWidthInput),
+    createLabeledControl('Border style', tableBorderStyleSelect),
+    createLabeledControl('Border color', tableBorderColorInput),
+    createLabeledControl('Background', tableBackgroundColorInput),
+    createLabeledControl('No background', tableNoBackgroundInput),
+    createLabeledControl('Cell spacing', tableCellSpacingInput),
+    createLabeledControl('Cell padding', cellPaddingInput),
+  );
+  appearancePanel.append(tableAppearanceLabel, tableAppearanceGrid);
+
+  const cellAppearanceLabel = document.createElement('strong');
+  cellAppearanceLabel.textContent = 'Cell defaults';
   const appearanceGrid = document.createElement('div');
   appearanceGrid.className = 'inline-spreadsheet-appearance-grid';
 
@@ -639,7 +838,7 @@ function createOverlay(initial: SpreadsheetData): {
     createLabeledControl('Alternate columns', alternateColumnsInput),
     createLabeledControl('Column color', alternateColumnColorInput),
   );
-  appearancePanel.appendChild(appearanceGrid);
+  appearancePanel.append(cellAppearanceLabel, appearanceGrid);
 
   const appearanceDefaults = document.createElement('div');
   appearanceDefaults.className = 'inline-spreadsheet-appearance-defaults';
@@ -656,7 +855,7 @@ function createOverlay(initial: SpreadsheetData): {
   saveAppearanceDefaultBtn.textContent = 'Save as default';
   const appearanceStatus = document.createElement('span');
   appearanceStatus.className = 'inline-spreadsheet-appearance-status';
-  appearanceStatus.textContent = 'Notebook defaults override account defaults; direct cell formatting wins.';
+  appearanceStatus.textContent = 'Notebook defaults override account defaults; direct table and cell formatting wins.';
   appearanceDefaults.append(
     appearanceScopeSelect,
     saveAppearanceDefaultBtn,
@@ -676,6 +875,9 @@ function createOverlay(initial: SpreadsheetData): {
     appearance.cellColor,
     'Selected cell background color',
   );
+  const cellFormatNoColorInput = document.createElement('input');
+  cellFormatNoColorInput.type = 'checkbox';
+  cellFormatNoColorInput.setAttribute('aria-label', 'Remove selected cell background color');
   const cellFormatBorderColorInput = createInput(
     'color',
     appearance.borderColor,
@@ -705,6 +907,7 @@ function createOverlay(initial: SpreadsheetData): {
   cellStyleRow.append(
     cellFormatLabel,
     createLabeledControl('Fill', cellFormatColorInput),
+    createLabeledControl('No fill', cellFormatNoColorInput),
     createLabeledControl('Border color', cellFormatBorderColorInput),
     createLabeledControl('Border style', cellFormatBorderStyleSelect),
     createLabeledControl('Border width', cellFormatBorderWidthInput),
@@ -747,6 +950,9 @@ function createOverlay(initial: SpreadsheetData): {
     '#212529',
     'Selected cell text color',
   );
+  const cellFormatNoTextColorInput = document.createElement('input');
+  cellFormatNoTextColorInput.type = 'checkbox';
+  cellFormatNoTextColorInput.setAttribute('aria-label', 'Remove selected cell text color');
   const cellFormatTextAlignSelect = document.createElement('select');
   cellFormatTextAlignSelect.className = 'form-control form-control-sm';
   cellFormatTextAlignSelect.setAttribute('aria-label', 'Selected cell horizontal alignment');
@@ -778,6 +984,7 @@ function createOverlay(initial: SpreadsheetData): {
     createLabeledControl('Italic', cellFormatItalicInput),
     createLabeledControl('Underline', cellFormatUnderlineInput),
     createLabeledControl('Text color', cellFormatTextColorInput),
+    createLabeledControl('No text color', cellFormatNoTextColorInput),
     createLabeledControl('Horizontal', cellFormatTextAlignSelect),
     createLabeledControl('Vertical', cellFormatVerticalAlignSelect),
     applyFontFormatBtn,
@@ -875,6 +1082,15 @@ function createOverlay(initial: SpreadsheetData): {
     alternateRowColorInput,
     alternateColumnsInput,
     alternateColumnColorInput,
+    tableWidthInput,
+    tableAlignmentSelect,
+    tableBorderWidthInput,
+    tableBorderStyleSelect,
+    tableBorderColorInput,
+    tableBackgroundColorInput,
+    tableNoBackgroundInput,
+    tableCellSpacingInput,
+    cellPaddingInput,
     appearanceScopeSelect,
     saveAppearanceDefaultBtn,
     appearanceStatus,
@@ -894,6 +1110,8 @@ function createOverlay(initial: SpreadsheetData): {
     applyFontFormatBtn,
     clearCellFormatBtn,
     cellFormatStatus,
+    cellFormatNoColorInput,
+    cellFormatNoTextColorInput,
   };
 }
 
@@ -912,10 +1130,19 @@ function appearanceFromControls(
     borderWidth: parseInt(ui.borderWidthInput.value, 10),
     borderColor: ui.borderColorInput.value,
     cellColor: ui.cellColorInput.value,
+    cellPadding: parseInt(ui.cellPaddingInput.value, 10),
     alternateRows: ui.alternateRowsInput.checked,
     alternateRowColor: ui.alternateRowColorInput.value,
     alternateColumns: ui.alternateColumnsInput.checked,
     alternateColumnColor: ui.alternateColumnColorInput.value,
+    tableWidth: parseInt(ui.tableWidthInput.value, 10),
+    tableAlignment: ui.tableAlignmentSelect.value as SpreadsheetAppearance['tableAlignment'],
+    tableBorderWidth: parseInt(ui.tableBorderWidthInput.value, 10),
+    tableBorderStyle: ui.tableBorderStyleSelect.value as SpreadsheetAppearance['tableBorderStyle'],
+    tableBorderColor: ui.tableBorderColorInput.value,
+    tableBackgroundColor: ui.tableBackgroundColorInput.value,
+    tableNoBackground: ui.tableNoBackgroundInput.checked,
+    tableCellSpacing: parseInt(ui.tableCellSpacingInput.value, 10),
   });
 }
 
@@ -939,7 +1166,7 @@ async function saveAppearanceDefault(
 
 function updateQuickCellStyle(
   existingStyle: string | undefined,
-  backgroundColor: string,
+  backgroundColor: string | null,
   borderColor: string,
   borderStyle: string,
   borderWidth: number,
@@ -956,7 +1183,9 @@ function updateQuickCellStyle(
   element.style.removeProperty('background-color');
 
   if (!clear) {
-    element.style.setProperty('background-color', backgroundColor);
+    if (backgroundColor !== null) {
+      element.style.setProperty('background-color', backgroundColor);
+    }
     element.style.setProperty(
       'border',
       borderStyle === 'none'
@@ -1076,6 +1305,10 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       sheetContainer = document.createElement('div');
       ui.sheetHost.appendChild(sheetContainer);
       working = normalizeSpreadsheetData(spreadsheet);
+      ui.sheetHost.setAttribute(
+        'style',
+        `${getAppearanceTableStyle(normalizeAppearance(working.appearance))};max-width:100%`,
+      );
       const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
         worksheets: [{
           data: working.data,
@@ -1178,7 +1411,24 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       ui.alternateRowColorInput,
       ui.alternateColumnsInput,
       ui.alternateColumnColorInput,
+      ui.tableWidthInput,
+      ui.tableAlignmentSelect,
+      ui.tableBorderWidthInput,
+      ui.tableBorderStyleSelect,
+      ui.tableBorderColorInput,
+      ui.tableBackgroundColorInput,
+      ui.tableNoBackgroundInput,
+      ui.tableCellSpacingInput,
+      ui.cellPaddingInput,
     ].forEach(input => input.addEventListener('change', applyAppearance));
+    ui.tableBackgroundColorInput.addEventListener('change', () => {
+      ui.tableNoBackgroundInput.checked = false;
+      ui.tableBackgroundColorInput.disabled = false;
+      applyAppearance();
+    });
+    ui.tableNoBackgroundInput.addEventListener('change', () => {
+      ui.tableBackgroundColorInput.disabled = ui.tableNoBackgroundInput.checked;
+    });
     ui.saveAppearanceDefaultBtn.addEventListener('click', async () => {
       applyAppearance();
       const scope = ui.appearanceScopeSelect.value as AppearanceScope;
@@ -1252,7 +1502,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       updateSelectedCells(
         style => updateQuickCellStyle(
           style,
-          ui.cellFormatColorInput.value,
+          ui.cellFormatNoColorInput.checked ? null : ui.cellFormatColorInput.value,
           ui.cellFormatBorderColorInput.value,
           ui.cellFormatBorderStyleSelect.value,
           borderWidth,
@@ -1284,7 +1534,11 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       if (changedFontProperties.has('textDecoration')) {
         format.textDecoration = ui.cellFormatUnderlineInput.checked ? 'underline' : 'none';
       }
-      if (changedFontProperties.has('color')) format.color = ui.cellFormatTextColorInput.value;
+      if (changedFontProperties.has('color')) {
+        format.color = ui.cellFormatNoTextColorInput.checked
+          ? ''
+          : ui.cellFormatTextColorInput.value;
+      }
       if (changedFontProperties.has('textAlign')) {
         format.textAlign = ui.cellFormatTextAlignSelect.value;
       }
@@ -1303,11 +1557,24 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       [ui.cellFormatItalicInput, 'fontStyle'],
       [ui.cellFormatUnderlineInput, 'textDecoration'],
       [ui.cellFormatTextColorInput, 'color'],
+      [ui.cellFormatNoTextColorInput, 'color'],
       [ui.cellFormatTextAlignSelect, 'textAlign'],
       [ui.cellFormatVerticalAlignSelect, 'verticalAlign'],
     ];
     fontPropertyControls.forEach(([control, property]) => {
       control.addEventListener('change', () => changedFontProperties.add(property));
+    });
+    ui.cellFormatColorInput.addEventListener('change', () => {
+      ui.cellFormatNoColorInput.checked = false;
+    });
+    ui.cellFormatNoColorInput.addEventListener('change', () => {
+      ui.cellFormatColorInput.disabled = ui.cellFormatNoColorInput.checked;
+    });
+    ui.cellFormatTextColorInput.addEventListener('change', () => {
+      ui.cellFormatNoTextColorInput.checked = false;
+    });
+    ui.cellFormatNoTextColorInput.addEventListener('change', () => {
+      ui.cellFormatTextColorInput.disabled = ui.cellFormatNoTextColorInput.checked;
     });
     ui.applyCellFormatBtn.addEventListener('click', applyCellFormat);
     ui.applyFontFormatBtn.addEventListener('click', applyFontFormat);
@@ -1316,7 +1583,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         style => updateQuickFontStyle(
           updateQuickCellStyle(
             style,
-            ui.cellFormatColorInput.value,
+            null,
             ui.cellFormatBorderColorInput.value,
             ui.cellFormatBorderStyleSelect.value,
             0,
@@ -1420,10 +1687,11 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
   const plateAttribute = kind === 'well-plate' && raw.plateSize
     ? ` data-well-plate="${raw.plateSize}"`
     : '';
-  let tableStyle = raw.tableStyle ?? DEFAULT_TABLE_STYLE;
-  const tableBorder = raw.tableBorder ?? appearance.borderWidth;
-  if (!/(?:^|;)border(?!-(?:collapse|spacing)\b)(?:-[a-z-]+)?\s*:/i.test(tableStyle)) {
-    tableStyle = `${tableStyle};border:${tableBorder}px solid ${appearance.borderColor}`;
+  let tableStyle = `${getAppearanceTableStyle(appearance)};${raw.tableStyle ?? DEFAULT_TABLE_STYLE}`;
+  if (raw.tableBorder !== undefined
+    && !/(?:^|;)border(?!-(?:collapse|spacing)\b)(?:-[a-z-]+)?\s*:/i.test(raw.tableStyle ?? '')
+  ) {
+    tableStyle = `${tableStyle};border:${raw.tableBorder}px solid ${appearance.tableBorderColor}`;
   }
   let html = `<table class="elabftw-spreadsheet" data-spreadsheet="${encoded}"${styleAttribute}${plateAttribute} style="${escapeHTMLAttribute(tableStyle)}">`;
   if (raw.caption) {

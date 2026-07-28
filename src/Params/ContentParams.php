@@ -124,16 +124,57 @@ class ContentParams implements ContentParamsInterface
         } catch (\JsonException) {
             throw new ImproperActionException('Invalid spreadsheet appearance defaults.');
         }
+        if (is_array($defaults)) {
+            // Backward compatible defaults for accounts/notebooks saved before
+            // table-level appearance controls were introduced.
+            $defaults += array(
+                'cellPadding' => 6,
+                'tableWidth' => 0,
+                'tableAlignment' => 'left',
+                'tableBorderWidth' => $defaults['borderWidth'] ?? 1,
+                'tableBorderStyle' => 'solid',
+                'tableBorderColor' => $defaults['borderColor'] ?? '#ced4da',
+                'tableBackgroundColor' => '#ffffff',
+                'tableNoBackground' => true,
+                'tableCellSpacing' => 0,
+            );
+        }
         if (!is_array($defaults)
             || !is_int($defaults['borderWidth'] ?? null)
             || $defaults['borderWidth'] < 0
             || $defaults['borderWidth'] > 20
+            || !is_int($defaults['cellPadding'] ?? null)
+            || $defaults['cellPadding'] < 0
+            || $defaults['cellPadding'] > 50
             || !is_bool($defaults['alternateRows'] ?? null)
             || !is_bool($defaults['alternateColumns'] ?? null)
+            || !is_int($defaults['tableWidth'] ?? null)
+            || $defaults['tableWidth'] < 0
+            || $defaults['tableWidth'] > 100
+            || !in_array($defaults['tableAlignment'] ?? null, array('left', 'center', 'right'), true)
+            || !is_int($defaults['tableBorderWidth'] ?? null)
+            || $defaults['tableBorderWidth'] < 0
+            || $defaults['tableBorderWidth'] > 20
+            || !in_array(
+                $defaults['tableBorderStyle'] ?? null,
+                array('solid', 'dashed', 'dotted', 'double', 'none'),
+                true,
+            )
+            || !is_bool($defaults['tableNoBackground'] ?? null)
+            || !is_int($defaults['tableCellSpacing'] ?? null)
+            || $defaults['tableCellSpacing'] < 0
+            || $defaults['tableCellSpacing'] > 50
         ) {
             throw new ImproperActionException('Invalid spreadsheet appearance defaults.');
         }
-        foreach (array('borderColor', 'cellColor', 'alternateRowColor', 'alternateColumnColor') as $colorKey) {
+        foreach (array(
+            'borderColor',
+            'cellColor',
+            'alternateRowColor',
+            'alternateColumnColor',
+            'tableBorderColor',
+            'tableBackgroundColor',
+        ) as $colorKey) {
             if (!is_string($defaults[$colorKey] ?? null)
                 || preg_match('/^#[0-9a-f]{6}$/i', $defaults[$colorKey]) !== 1
             ) {
@@ -145,10 +186,19 @@ class ContentParams implements ContentParamsInterface
             'borderWidth' => $defaults['borderWidth'],
             'borderColor' => strtolower($defaults['borderColor']),
             'cellColor' => strtolower($defaults['cellColor']),
+            'cellPadding' => $defaults['cellPadding'],
             'alternateRows' => $defaults['alternateRows'],
             'alternateRowColor' => strtolower($defaults['alternateRowColor']),
             'alternateColumns' => $defaults['alternateColumns'],
             'alternateColumnColor' => strtolower($defaults['alternateColumnColor']),
+            'tableWidth' => $defaults['tableWidth'],
+            'tableAlignment' => $defaults['tableAlignment'],
+            'tableBorderWidth' => $defaults['tableBorderWidth'],
+            'tableBorderStyle' => $defaults['tableBorderStyle'],
+            'tableBorderColor' => strtolower($defaults['tableBorderColor']),
+            'tableBackgroundColor' => strtolower($defaults['tableBackgroundColor']),
+            'tableNoBackground' => $defaults['tableNoBackground'],
+            'tableCellSpacing' => $defaults['tableCellSpacing'],
         ), JSON_THROW_ON_ERROR);
     }
 

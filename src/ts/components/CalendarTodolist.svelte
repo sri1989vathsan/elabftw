@@ -49,6 +49,12 @@
     overdue: boolean;
   };
 
+  type CalendarFeedStatus = {
+    enabled: boolean;
+    created_at: string | null;
+    updated_at: string | null;
+  };
+
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
   const reminderPresets = new Set([0, 15, 60, 1440, 10080]);
@@ -76,6 +82,9 @@
   let editCustomReminder = 120;
   let loading = true;
   let reminderTimer: number | undefined;
+  let calendarFeedEnabled = false;
+  let calendarFeedLoading = true;
+  let calendarFeedUrl = '';
 
   $: entries = [
     ...tasks
@@ -297,6 +306,63 @@
     window.setTimeout(checkReminders, 0);
   }
 
+  async function loadCalendarFeedStatus(): Promise<void> {
+    calendarFeedLoading = true;
+    const status = await ApiC.getJson(Model.CalendarFeed) as CalendarFeedStatus;
+    calendarFeedEnabled = status.enabled;
+    calendarFeedLoading = false;
+  }
+
+  async function createCalendarFeed(): Promise<void> {
+    calendarFeedLoading = true;
+    try {
+      const response = await ApiC.post(Model.CalendarFeed);
+      calendarFeedUrl = (response.headers.get('Location') ?? '')
+        .replace(/&feed=\d+$/, '');
+      calendarFeedEnabled = true;
+      if (!calendarFeedUrl) {
+        notify.error('The calendar subscription URL could not be read.');
+      }
+    } finally {
+      calendarFeedLoading = false;
+    }
+  }
+
+  async function revokeCalendarFeed(): Promise<void> {
+    if (!window.confirm(t('Revoke this private calendar link? Existing subscriptions will stop updating.'))) {
+      return;
+    }
+    calendarFeedLoading = true;
+    try {
+      await ApiC.delete(Model.CalendarFeed);
+      calendarFeedEnabled = false;
+      calendarFeedUrl = '';
+    } finally {
+      calendarFeedLoading = false;
+    }
+  }
+
+  async function copyCalendarFeed(): Promise<void> {
+    await navigator.clipboard.writeText(calendarFeedUrl);
+    notify.success(t('Calendar subscription link copied.'));
+  }
+
+  function googleCalendarUrl(): string {
+    return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calendarFeedUrl)}`;
+  }
+
+  function appleCalendarUrl(): string {
+    return calendarFeedUrl.replace(/^https?:\/\//, 'webcal://');
+  }
+
+  function isLocalCalendarFeed(): boolean {
+    return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+  }
+
+  function canCloudCalendarFetch(): boolean {
+    return window.location.protocol === 'https:' && !isLocalCalendarFeed();
+  }
+
   function checkReminders(): void {
     const now = Date.now();
     entries.forEach(entry => {
@@ -343,6 +409,7 @@
     document.addEventListener('visibilitychange', checkReminders);
     reminderTimer = window.setInterval(checkReminders, 30000);
     void load();
+    void loadCalendarFeedStatus();
     return () => {
       window.removeEventListener('todolist-changed', reload);
       window.removeEventListener('todolist-scope-changed', reload);
@@ -397,13 +464,101 @@
   </button>
 </section>
 
+<section class='calendar-feed mt-3' aria-labelledby='calendarFeedHeading'>
+  <div class='d-flex align-items-center justify-content-between'>
+    <h4 id='calendarFeedHeading' class='h5 mb-1'>{t('External calendar')}</h4>
+    {#if calendarFeedEnabled}
+      <span class='badge badge-success'>{t('Account feed active')}</span>
+    {/if}
+  </div>
+  <p class='small text-muted mb-2'>
+    {t('Subscribe to this account’s personal to-dos and owned experiment or resource step deadlines in Google Calendar or Apple Calendar.')}
+  </p>
+  {#if calendarFeedUrl}
+    <label class='sr-only' for='calendarFeedUrl'>{t('Private calendar subscription URL')}</label>
+    <input id='calendarFeedUrl' class='form-control form-control-sm mb-2' readonly value={calendarFeedUrl} />
+    <div class='d-flex flex-wrap calendar-feed-actions'>
+      <button type='button' class='btn btn-sm btn-outline-primary' on:click={copyCalendarFeed}>
+        <i class='fas fa-copy fa-fw mr-1' aria-hidden='true'></i>{t('Copy link')}
+      </button>
+      <a class='btn btn-sm btn-outline-primary' href={calendarFeedUrl} target='_blank' rel='noopener noreferrer'>
+        <i class='fas fa-file-arrow-down fa-fw mr-1' aria-hidden='true'></i>{t('Preview .ics')}
+      </a>
+      {#if canCloudCalendarFetch()}
+        <a class='btn btn-sm btn-outline-primary' href={googleCalendarUrl()} target='_blank' rel='noopener noreferrer'>
+          <i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{t('Google Calendar')}
+        </a>
+      {:else}
+        <button
+          type='button'
+          class='btn btn-sm btn-outline-primary'
+          disabled
+          title={t('Google Calendar cannot fetch a feed from localhost. Deploy eLabFTW at a public trusted HTTPS address first.')}
+        >
+          <i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{t('Google Calendar')}
+        </button>
+      {/if}
+      <a class='btn btn-sm btn-outline-primary' href={appleCalendarUrl()}>
+        <i class='fab fa-apple fa-fw mr-1' aria-hidden='true'></i>{t('Apple Calendar')}
+      </a>
+    </div>
+    <p class='small text-warning mt-2 mb-0'>
+      <i class='fas fa-key fa-fw mr-1' aria-hidden='true'></i>
+      {t('Keep this link private. Anyone with it can read your task titles and deadlines.')}
+    </p>
+  {:else if calendarFeedEnabled}
+    <p class='small mb-2'>
+      {t('Your private account feed is active. Regenerate it to reveal and copy a new link; the old link will stop working.')}
+    </p>
+  {/if}
+  {#if isLocalCalendarFeed()}
+    <p class='small text-warning mb-2'>
+      {t('Google Calendar will show nothing from this localhost demo because Google’s servers cannot reach it. Use Preview .ics to verify the feed; cloud subscription works after eLabFTW is available at a public HTTPS address with a trusted certificate.')}
+    </p>
+  {:else if window.location.protocol !== 'https:'}
+    <p class='small text-warning mb-2'>
+      {t('Cloud calendars require this feed to be served from a public trusted HTTPS address.')}
+    </p>
+  {/if}
+  <p class='small text-muted mb-2'>
+    {t('If Google does not add the feed automatically, copy the private link and use Other calendars → From URL in Google Calendar on a desktop browser.')}
+  </p>
+  <p class='small text-muted mb-2'>
+    {t('Apple subscriptions appear in Apple Calendar. Apple Reminders requires a separate native app or Shortcut integration.')}
+  </p>
+  <div class='d-flex calendar-feed-actions'>
+    <button
+      type='button'
+      class='btn btn-sm btn-primary'
+      disabled={calendarFeedLoading}
+      on:click={createCalendarFeed}
+    >
+      <i class='fas fa-rotate fa-fw mr-1' aria-hidden='true'></i>
+      {calendarFeedEnabled ? t('Regenerate private link') : t('Create private link')}
+    </button>
+    {#if calendarFeedEnabled}
+      <button
+        type='button'
+        class='btn btn-sm btn-outline-danger'
+        disabled={calendarFeedLoading}
+        on:click={revokeCalendarFeed}
+      >
+        {t('Revoke')}
+      </button>
+    {/if}
+  </div>
+</section>
+
 <section class='calendar-todo-month mt-3' aria-label={t('Task calendar')}>
-  <div class='d-flex align-items-center justify-content-between mb-2'>
-    <button type='button' class='btn btn-sm btn-ghost' on:click={() => changeMonth(-1)} aria-label={t('Previous month')}>
+  <div class='calendar-month-header'>
+    <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(-1)} aria-label={t('Previous month')}>
       <i class='fas fa-chevron-left' aria-hidden='true'></i>
     </button>
-    <strong>{monthLabel()}</strong>
-    <button type='button' class='btn btn-sm btn-ghost' on:click={() => changeMonth(1)} aria-label={t('Next month')}>
+    <div class='calendar-month-title'>
+      <i class='fas fa-calendar-days' aria-hidden='true'></i>
+      <strong>{monthLabel()}</strong>
+    </div>
+    <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(1)} aria-label={t('Next month')}>
       <i class='fas fa-chevron-right' aria-hidden='true'></i>
     </button>
   </div>
@@ -425,19 +580,34 @@
         aria-label={`${cell.key}, ${cell.count} ${t('tasks')}`}
         aria-pressed={selectedDate === cell.key}
       >
-        <span>{cell.day}</span>
-        {#if cell.count > 0}<small>{cell.count}</small>{/if}
+        <span class='calendar-day-number'>{cell.day}</span>
+        {#if cell.count > 0}
+          <small class='calendar-day-count' aria-label={`${cell.count} ${t('tasks')}`}>{cell.count}</small>
+        {/if}
       </button>
     {/each}
   </div>
-  <div class='d-flex mt-2'>
-    <button type='button' class='btn btn-sm btn-outline-secondary mr-2' on:click={selectToday}>{t('Today')}</button>
+  <div class='calendar-legend'>
+    <span><i class='calendar-legend-dot today-dot'></i>{t('Today')}</span>
+    <span><i class='calendar-legend-dot selected-dot'></i>{t('Selected')}</span>
+    <span><i class='calendar-legend-dot overdue-dot'></i>{t('Overdue')}</span>
+  </div>
+  <div class='d-flex calendar-month-actions'>
+    <button type='button' class='btn btn-sm btn-outline-primary mr-2' on:click={selectToday}>
+      <i class='fas fa-location-crosshairs fa-fw mr-1' aria-hidden='true'></i>{t('Today')}
+    </button>
     <button type='button' class='btn btn-sm btn-outline-secondary' on:click={() => selectedDate = ''}>{t('All deadlines')}</button>
   </div>
 </section>
 
 <section class='calendar-todo-agenda mt-3' aria-labelledby='calendarTodoAgendaHeading'>
-  <h4 id='calendarTodoAgendaHeading' class='h5 mb-2'>{agendaLabel()}</h4>
+  <div class='calendar-agenda-header'>
+    <div>
+      <span class='calendar-agenda-eyebrow'>{t('Agenda')}</span>
+      <h4 id='calendarTodoAgendaHeading' class='h5 mb-0'>{agendaLabel()}</h4>
+    </div>
+    <span class='badge badge-primary'>{agendaEntries.length}</span>
+  </div>
   {#if loading}
     <p class='text-muted'>{t('Loading')}…</p>
   {:else if agendaEntries.length === 0}
@@ -467,6 +637,11 @@
               <i class='fas fa-circle-check color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>
             {/if}
             <div class='flex-grow-1 min-width-0'>
+              <span class='calendar-entry-source'>
+                {entry.source === 'todo'
+                  ? t('Task')
+                  : (entry.entityType === 'items' ? t('Resource step') : t('Experiment step'))}
+              </span>
               <strong>{entry.body}</strong>
               {#if entry.source === 'step'}
                 <div class='small'>
@@ -536,6 +711,71 @@
     padding: 0.65rem;
   }
 
+  .calendar-feed {
+    background: var(--firstlevel);
+    border: 1px solid var(--secondary);
+    border-radius: 0.35rem;
+    padding: 0.65rem;
+  }
+
+  .calendar-feed-actions {
+    gap: 0.35rem;
+  }
+
+  .calendar-todo-month,
+  .calendar-todo-agenda {
+    background: var(--white);
+    border: 1px solid var(--secondary-muted);
+    border-radius: 0.65rem;
+    box-shadow: 0 0.2rem 0.65rem color-mix(in srgb, var(--strongest) 10%, transparent);
+    overflow: hidden;
+    padding: 0.75rem;
+  }
+
+  .calendar-month-header {
+    align-items: center;
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--primary) 16%, var(--white)),
+      color-mix(in srgb, var(--primary) 5%, var(--white))
+    );
+    border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--secondary-muted));
+    border-radius: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.65rem;
+    padding: 0.45rem;
+  }
+
+  .calendar-month-title {
+    align-items: center;
+    color: var(--strongest);
+    display: flex;
+    gap: 0.45rem;
+  }
+
+  .calendar-month-title i {
+    color: var(--primary);
+  }
+
+  .calendar-month-nav {
+    align-items: center;
+    background: var(--white);
+    border: 1px solid var(--secondary-muted);
+    border-radius: 50%;
+    color: var(--primary);
+    display: inline-flex;
+    height: 2rem;
+    justify-content: center;
+    padding: 0;
+    width: 2rem;
+  }
+
+  .calendar-month-nav:hover {
+    background: var(--primary);
+    color: var(--chrome-fg);
+  }
+
   .calendar-todo-form-grid,
   .calendar-todo-edit {
     display: grid;
@@ -557,61 +797,172 @@
 
   .calendar-todo-weekdays span {
     color: var(--medium);
-    font-size: 0.72rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 0.2rem 0;
     text-align: center;
+    text-transform: uppercase;
   }
 
   .calendar-todo-day {
-    align-items: center;
-    aspect-ratio: 1;
-    background: var(--mainbackground);
-    border: 1px solid var(--secondary);
-    border-radius: 0.3rem;
+    align-items: flex-start;
+    aspect-ratio: 1 / 0.92;
+    background: color-mix(in srgb, var(--white) 82%, var(--mainbackground));
+    border: 1px solid var(--secondary-muted);
+    border-radius: 0.42rem;
     color: var(--strongest);
     display: flex;
-    flex-direction: column;
     font-size: 0.78rem;
-    justify-content: center;
+    justify-content: flex-start;
     min-width: 0;
-    padding: 0.1rem;
+    padding: 0.28rem;
     position: relative;
+    transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
   }
 
-  .calendar-todo-day:hover,
+  .calendar-todo-day:hover {
+    border-color: var(--primary);
+    transform: translateY(-1px);
+  }
+
   .calendar-todo-day.selected {
+    background: color-mix(in srgb, var(--primary) 18%, var(--white));
     border-color: var(--primary);
     box-shadow: inset 0 0 0 1px var(--primary);
   }
 
   .calendar-todo-day.today {
-    background: color-mix(in srgb, var(--primary) 14%, var(--mainbackground));
+    background: color-mix(in srgb, var(--primary) 11%, var(--white));
     font-weight: 700;
   }
 
-  .calendar-todo-day.outside {
-    opacity: 0.45;
+  .calendar-todo-day.today .calendar-day-number {
+    align-items: center;
+    background: var(--primary);
+    border-radius: 50%;
+    color: var(--chrome-fg);
+    display: inline-flex;
+    height: 1.35rem;
+    justify-content: center;
+    width: 1.35rem;
   }
 
-  .calendar-todo-day small {
+  .calendar-todo-day.outside {
+    background: var(--mainbackground);
+    opacity: 0.4;
+  }
+
+  .calendar-day-number {
+    line-height: 1.35rem;
+  }
+
+  .calendar-day-count {
+    align-items: center;
     background: var(--primary);
     border-radius: 1rem;
-    color: white;
+    bottom: 0.25rem;
+    color: var(--chrome-fg);
+    display: inline-flex;
     font-size: 0.62rem;
+    font-weight: 700;
+    height: 1.05rem;
+    justify-content: center;
     line-height: 1;
     min-width: 1rem;
     padding: 0.15rem;
+    position: absolute;
+    right: 0.25rem;
   }
 
-  .calendar-todo-day.has-overdue small {
+  .calendar-todo-day.has-overdue .calendar-day-count {
     background: var(--danger);
   }
 
+  .calendar-legend {
+    align-items: center;
+    color: var(--medium);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.67rem;
+    gap: 0.7rem;
+    margin-top: 0.6rem;
+  }
+
+  .calendar-legend span {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.25rem;
+  }
+
+  .calendar-legend-dot {
+    background: var(--mainbackground);
+    border: 1px solid var(--secondary-muted);
+    border-radius: 50%;
+    display: inline-block;
+    height: 0.55rem;
+    width: 0.55rem;
+  }
+
+  .calendar-legend-dot.today-dot {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+
+  .calendar-legend-dot.selected-dot {
+    background: color-mix(in srgb, var(--primary) 24%, var(--white));
+    border-color: var(--primary);
+  }
+
+  .calendar-legend-dot.overdue-dot {
+    background: var(--danger);
+    border-color: var(--danger);
+  }
+
+  .calendar-month-actions {
+    border-top: 1px solid var(--secondary-muted);
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+  }
+
+  .calendar-agenda-header {
+    align-items: center;
+    border-bottom: 1px solid var(--secondary-muted);
+    display: flex;
+    justify-content: space-between;
+    margin: -0.1rem 0 0.7rem;
+    padding-bottom: 0.6rem;
+  }
+
+  .calendar-agenda-eyebrow {
+    color: var(--primary);
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
   .calendar-todo-entry {
+    background: color-mix(in srgb, var(--white) 92%, var(--primary));
     border-left: 3px solid var(--primary);
+    border-radius: 0.35rem !important;
+    margin-bottom: 0.45rem;
   }
 
   .calendar-todo-entry.calendar-todo-overdue {
+    background: color-mix(in srgb, var(--white) 92%, var(--danger));
     border-left-color: var(--danger);
+  }
+
+  .calendar-entry-source {
+    color: var(--primary);
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.1rem;
+    text-transform: uppercase;
   }
 
   .calendar-todo-highlight {

@@ -151,24 +151,33 @@ function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
 }
 
 /**
- * Keep keyboard focus inside the editor when indenting list items.
+ * Use Tab/Shift+Tab for structural indentation without allowing keyboard focus
+ * to escape the editor. Table cells keep TinyMCE's native Tab navigation.
  */
-function handleListIndentShortcut(editor: Editor, event: KeyboardEvent): boolean {
+function handleBlockIndentShortcut(editor: Editor, event: KeyboardEvent): boolean {
   if (event.key !== 'Tab'
     || event.ctrlKey
     || event.metaKey
     || event.altKey
+    || event.defaultPrevented
     || event.isComposing) {
     return false;
   }
 
   const selectionNode = editor.selection.getNode() as HTMLElement;
+  if (selectionNode.closest('td,th,[contenteditable="false"]')) return false;
+
   const listItem = selectionNode.matches('li')
     ? selectionNode
     : selectionNode.closest('li');
-  if (!listItem) return false;
+  const block = editor.dom.getParent(
+    selectionNode,
+    'p,h1,h2,h3,h4,h5,h6,blockquote,div,pre',
+  );
+  if (!listItem && (!block || block === editor.getBody())) return false;
 
   event.preventDefault();
+  event.stopPropagation();
   event.stopImmediatePropagation();
   editor.undoManager.transact(() => {
     editor.execCommand(event.shiftKey ? 'Outdent' : 'Indent');
@@ -276,10 +285,41 @@ const imagesUploadHandler = (blobInfo: TinyMCEBlobInfo) => new Promise((resolve,
   }
 });
 
+/**
+ * TinyMCE renders editable content in an iframe, so account palette variables
+ * do not inherit from the eLabFTW page. Copy the resolved application palette
+ * into the editor document to keep the writing surface coordinated too.
+ */
+function getEditorPaletteStyle(): string {
+  const rootStyle = getComputedStyle(document.documentElement);
+  const variableNames = [
+    '--white',
+    '--mainbackground',
+    '--highlighted',
+    '--superlight',
+    '--firstlevel',
+    '--secondlevel',
+    '--thirdlevel',
+    '--medium',
+    '--mediumstrong',
+    '--strongest',
+    '--primary',
+    '--secondary',
+    '--secondary-muted',
+    '--elabblue',
+    '--lightblue',
+    '--darkblue',
+  ];
+  const variables = variableNames
+    .map(name => `${name}:${rootStyle.getPropertyValue(name).trim()}`)
+    .join(';');
+  return `:root{${variables}}html,body{background-color:var(--white);color:var(--strongest)}a{color:var(--primary)}`;
+}
+
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate | codesample | link | inline-sheet cell-properties table-outdent table-indent sort-table';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate | codesample | link | inline-sheet table-properties cell-properties table-outdent table-indent sort-table';
   let removedMenuItems = 'newdocument, image, anchor';
   let fileMenuItems = 'preview | print';
   if (page === 'edit') {
@@ -308,6 +348,7 @@ export function getTinymceBaseConfig(page: string): object {
     skin_url: isDark ? '/assets/tinymce_skins_dark' : '/assets/tinymce_skins',
     skin: isDark ? 'oxide-dark' : 'oxide',
     content_css: isDark ? ['/assets/tinymce_skins/content/dark/content.min.css', '/assets/tinymce_content.min.css'] : ['/assets/tinymce_content.min.css'],
+    content_style: getEditorPaletteStyle(),
     emoticons_database_url: 'assets/tinymce_emojis.js',
     // remove the "Upgrade" button
     promotion: false,
@@ -315,6 +356,9 @@ export function getTinymceBaseConfig(page: string): object {
     // autoresize plugin will disallow manually resizing, but setting resize to true will make the scrollbar disappear
     //resize: true,
     plugins: plugins,
+    // A custom handler below also supports paragraphs/headings and keeps focus
+    // inside the editor, so disable the lists plugin's overlapping Tab handler.
+    lists_indent_on_tab: false,
     pagebreak_split_block: true,
     pagebreak_separator: '<div class="page-break"></div>',
     toolbar1: toolbar1,
@@ -552,6 +596,19 @@ export function getTinymceBaseConfig(page: string): object {
           return () => editor.off('NodeChange', update);
         },
       });
+      editor.ui.registry.addButton('table-properties', {
+        text: 'Table style',
+        tooltip: 'Table size, alignment, border, background, spacing and caption',
+        onAction: () => editor.execCommand('mceTableProps'),
+        onSetup: api => {
+          const update = (event): void => {
+            api.setEnabled(Boolean(event.element?.closest?.('table')));
+          };
+          api.setEnabled(Boolean(editor.selection.getNode().closest?.('table')));
+          editor.on('NodeChange', update);
+          return () => editor.off('NodeChange', update);
+        },
+      });
       const openInlineSpreadsheet = (
         initial: SpreadsheetData,
         existingTable: HTMLTableElement | null = null,
@@ -630,15 +687,16 @@ export function getTinymceBaseConfig(page: string): object {
       editor.on('init', () => {
         // Capture Tab before TinyMCE or the browser can move focus to the next control.
         const editorDocument = editor.getDoc();
-        const listIndentHandler = (event: KeyboardEvent): void => {
-          handleListIndentShortcut(editor, event);
+        const blockIndentHandler = (event: KeyboardEvent): void => {
+          handleBlockIndentShortcut(editor, event);
         };
-        editorDocument.addEventListener('keydown', listIndentHandler, true);
+        editorDocument.addEventListener('keydown', blockIndentHandler, true);
         editor.on('remove', () => {
-          editorDocument.removeEventListener('keydown', listIndentHandler, true);
+          editorDocument.removeEventListener('keydown', blockIndentHandler, true);
         });
       });
       editor.on('keydown', event => {
+        if (handleBlockIndentShortcut(editor, event)) return;
         handleListShortcut(editor, event);
       });
 
