@@ -36,6 +36,15 @@ adds the section link; without a selection it inserts the heading title as the
 linked label. Generated heading IDs are saved with the body and retained by the
 sanitizer.
 
+The TOC also exposes a searchable hierarchical section picker. Heading options
+show their complete parent path, so an H3 is found when a search term matches
+its H1, H2, or its own label. Parent checkboxes select their whole subtree, and
+partially selected parents use the native indeterminate state. The tree is
+expandable, duplicate heading names remain distinguishable by path, and compact
+chips represent selected branches. Multiple section selections are combined as
+a union; text filters refine that union while retained parent headings provide
+document context.
+
 **Files added:**
 - `src/ts/TocPanel.class.ts` — SidePanel subclass with heading extraction, scroll-spy via IntersectionObserver, smooth scrolling
 - `src/templates/toc-panel.html` — Panel HTML template
@@ -215,10 +224,12 @@ empty paragraph, type `-` followed by Space for a bulleted list, or `1` (also
 list items are excluded, and each conversion is a single undo step.
 
 Inside a list, Tab and Shift+Tab explicitly indent and outdent the current item
-instead of moving focus to the next editor control. The entity action toolbar is
-sticky in both view and edit mode, keeping Back and Edit/View available while
-scrolling. In edit mode, the existing Save and Save-and-back actions live in
-that sticky toolbar, with TinyMCE's own sticky toolbar offset beneath it.
+instead of moving focus to the next editor control. The handler runs during the
+editor iframe's capture phase so TinyMCE and browser focus navigation cannot
+consume the key first. The entity action toolbar is sticky in both view and edit
+mode, keeping Back and Edit/View available while scrolling. In edit mode, the
+existing Save and Save-and-back actions live in that sticky toolbar, with
+TinyMCE's own sticky toolbar offset beneath it.
 
 Spreadsheet updates preserve TinyMCE table formatting instead of rebuilding an
 unformatted grid. Table borders and layout, caption formatting, and per-cell
@@ -235,6 +246,20 @@ over both. A selected cell range can also be formatted directly with quick
 controls for background color, border color, border style, and border width, or
 returned to inherited defaults with **Clear format**. Schema 212 stores the
 scoped settings as validated JSON.
+
+Spreadsheet range selection is retained while the user interacts with color,
+border, and formula controls. The selected range is restored after a preview
+remount and the status line names the exact A1-style range and cell count, so
+multi-cell property changes consistently apply to the intended cells.
+The popup also applies font family, point size, bold, italic, underline, text
+color, horizontal alignment, and vertical alignment to that retained range.
+Only font controls changed by the user are applied, so unrelated cell styles
+remain intact.
+
+The main editor toolbar also provides a visible **Cell style** shortcut whenever
+the cursor is inside a table cell. It opens TinyMCE's cell-properties dialog for
+background color, border color, border style, and border width; those direct
+styles are retained when a formula spreadsheet is reopened and updated.
 
 ## Schema Migration Notes
 

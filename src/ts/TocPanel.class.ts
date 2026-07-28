@@ -18,6 +18,9 @@ interface TocEntry {
   level: number;
   text: string;
   id: string;
+  path: string;
+  parentId?: string;
+  ancestorIds: string[];
 }
 
 interface TinyMceEditor {
@@ -32,7 +35,10 @@ interface TinyMceEditor {
 export default class TocPanel extends SidePanel {
 
   initialLoad = true;
+  private entries: TocEntry[] = [];
   private searchFilters: string[] = [];
+  private selectedSectionIds = new Set<string>();
+  private collapsedSectionIds = new Set<string>();
 
   constructor() {
     super(TOC_MODEL);
@@ -44,6 +50,7 @@ export default class TocPanel extends SidePanel {
    */
   private getHeadings(): TocEntry[] {
     const entries: TocEntry[] = [];
+    const ancestors: TocEntry[] = [];
     const usedIds = new Set<string>();
     let headings: NodeListOf<HTMLHeadingElement> | null = null;
 
@@ -80,7 +87,19 @@ export default class TocPanel extends SidePanel {
       }
       usedIds.add(id);
 
-      entries.push({ level, text, id });
+      while (ancestors.length > 0 && ancestors[ancestors.length - 1].level >= level) {
+        ancestors.pop();
+      }
+      const entry: TocEntry = {
+        level,
+        text,
+        id,
+        path: [...ancestors.map(ancestor => ancestor.text), text].join(' › '),
+        parentId: ancestors[ancestors.length - 1]?.id,
+        ancestorIds: ancestors.map(ancestor => ancestor.id),
+      };
+      entries.push(entry);
+      ancestors.push(entry);
     });
 
     return entries;
@@ -91,11 +110,21 @@ export default class TocPanel extends SidePanel {
    */
   display(): void {
     const entries = this.getHeadings();
+    this.entries = entries;
+    const availableIds = new Set(entries.map(entry => entry.id));
+    this.selectedSectionIds = new Set(
+      [...this.selectedSectionIds].filter(id => availableIds.has(id)),
+    );
+    this.collapsedSectionIds = new Set(
+      [...this.collapsedSectionIds].filter(id => availableIds.has(id)),
+    );
     const container = document.getElementById('tocItems');
     if (!container) return;
 
     if (entries.length === 0) {
       container.innerHTML = '<p class="text-muted px-2">No headings found in the document.</p>';
+      this.renderSectionFilterTree();
+      this.renderSectionFilters();
       this.setupSearchControls();
       this.filterEntries();
       return;
@@ -112,7 +141,8 @@ export default class TocPanel extends SidePanel {
       const id = this.escapeAttribute(entry.id);
       const text = this.escapeHTML(entry.text);
       const label = this.escapeAttribute(entry.text);
-      html += `<li class="toc-item" style="padding-left:${indent}px" data-toc-search-text="${label.toLocaleLowerCase()}" data-toc-target="${id}">`;
+      const searchText = this.escapeAttribute(entry.path.toLocaleLowerCase());
+      html += `<li class="toc-item" style="padding-left:${indent}px" data-toc-search-text="${searchText}" data-toc-target="${id}">`;
       html += '<div class="toc-entry d-flex align-items-center">';
       html += `<a href="#${encodeURIComponent(entry.id)}" class="toc-link flex-grow-1 py-1 px-2 rounded ${fontClass}" ${fontSize} data-toc-target="${id}">${text}</a>`;
       html += `<button type="button" class="btn btn-sm toc-entry-action toc-copy-link" data-toc-target="${id}" title="Copy link to ${label}" aria-label="Copy link to ${label}"><i class="fas fa-link fa-fw" aria-hidden="true"></i></button>`;
@@ -153,6 +183,8 @@ export default class TocPanel extends SidePanel {
       });
     });
 
+    this.renderSectionFilterTree();
+    this.renderSectionFilters();
     this.setupSearchControls();
     this.filterEntries();
 
@@ -181,7 +213,10 @@ export default class TocPanel extends SidePanel {
     clear.addEventListener('click', () => {
       input.value = '';
       this.searchFilters = [];
+      this.selectedSectionIds.clear();
       this.renderSearchFilters();
+      this.renderSectionFilters();
+      this.updateSectionFilterTree();
       input.focus();
       this.filterEntries();
     });
@@ -227,6 +262,209 @@ export default class TocPanel extends SidePanel {
     });
   }
 
+  private renderSectionFilterTree(): void {
+    const container = document.getElementById('tocSectionFilterTree');
+    const empty = document.getElementById('tocSectionFilterEmpty');
+    if (!container || !empty) return;
+
+    container.replaceChildren();
+    empty.hidden = this.entries.length > 0;
+    this.entries.forEach((entry, index) => {
+      const row = document.createElement('div');
+      row.className = 'toc-section-filter-option';
+      row.dataset.tocSectionId = entry.id;
+      row.setAttribute('role', 'treeitem');
+      row.setAttribute('aria-level', String(entry.ancestorIds.length + 1));
+      row.style.setProperty('--toc-section-indent', `${entry.ancestorIds.length * 0.8}rem`);
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'toc-section-filter-toggle';
+      toggle.dataset.tocSectionToggle = entry.id;
+      if (this.hasSectionChildren(entry.id)) {
+        toggle.setAttribute('aria-expanded', 'true');
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-caret-down fa-fw';
+        icon.setAttribute('aria-hidden', 'true');
+        toggle.appendChild(icon);
+        toggle.addEventListener('click', () => {
+          if (this.collapsedSectionIds.has(entry.id)) {
+            this.collapsedSectionIds.delete(entry.id);
+          } else {
+            this.collapsedSectionIds.add(entry.id);
+          }
+          this.updateSectionFilterTree();
+        });
+      } else {
+        toggle.disabled = true;
+        toggle.setAttribute('aria-hidden', 'true');
+      }
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = `tocSectionFilter-${index}`;
+      checkbox.dataset.tocSectionCheckbox = entry.id;
+      checkbox.setAttribute('aria-label', `Filter by ${entry.path}`);
+      checkbox.addEventListener('change', () => {
+        this.toggleSectionSelection(entry.id, checkbox.checked);
+      });
+
+      const label = document.createElement('label');
+      label.htmlFor = checkbox.id;
+      label.className = 'toc-section-filter-label';
+      label.textContent = entry.path;
+      label.title = entry.path;
+
+      row.append(toggle, checkbox, label);
+      container.appendChild(row);
+    });
+    this.updateSectionFilterTree();
+  }
+
+  private toggleSectionSelection(entryId: string, selected: boolean): void {
+    this.getSectionIds(entryId).forEach(id => {
+      if (selected) {
+        this.selectedSectionIds.add(id);
+      } else {
+        this.selectedSectionIds.delete(id);
+      }
+    });
+    this.renderSectionFilters();
+    this.updateSectionFilterTree();
+    this.filterEntries();
+  }
+
+  private renderSectionFilters(): void {
+    const container = document.getElementById('tocSectionFilters');
+    const count = document.getElementById('tocSectionFilterCount');
+    if (!container || !count) return;
+
+    container.replaceChildren();
+    this.getSectionSelectionGroups().forEach(group => {
+      const chip = document.createElement('span');
+      chip.className = 'toc-search-filter toc-section-filter-chip badge badge-primary';
+      chip.title = group.entry.path;
+      const label = document.createElement('span');
+      label.textContent = group.directOnly && this.hasSectionChildren(group.entry.id)
+        ? `${group.entry.path} (section only)`
+        : group.entry.path;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'toc-search-filter-remove';
+      remove.title = `Remove section filter ${group.entry.path}`;
+      remove.setAttribute('aria-label', `Remove section filter ${group.entry.path}`);
+      remove.textContent = '×';
+      remove.addEventListener('click', () => {
+        const ids = group.directOnly ? [group.entry.id] : this.getSectionIds(group.entry.id);
+        ids.forEach(id => this.selectedSectionIds.delete(id));
+        this.renderSectionFilters();
+        this.updateSectionFilterTree();
+        this.filterEntries();
+      });
+      chip.append(label, remove);
+      container.appendChild(chip);
+    });
+
+    const selectedCount = this.selectedSectionIds.size;
+    count.textContent = selectedCount.toString();
+    count.toggleAttribute('hidden', selectedCount === 0);
+  }
+
+  private getSectionSelectionGroups(): Array<{
+    entry: TocEntry;
+    directOnly: boolean;
+  }> {
+    const fullBranchIds = new Set(
+      this.entries
+        .filter(entry => (
+          this.getSectionIds(entry.id)
+            .every(id => this.selectedSectionIds.has(id))
+        ))
+        .map(entry => entry.id),
+    );
+    const groups: Array<{ entry: TocEntry; directOnly: boolean }> = [];
+    this.entries.forEach(entry => {
+      if (!this.selectedSectionIds.has(entry.id)) return;
+      if (fullBranchIds.has(entry.id)) {
+        if (!entry.parentId || !fullBranchIds.has(entry.parentId)) {
+          groups.push({ entry, directOnly: false });
+        }
+        return;
+      }
+      groups.push({ entry, directOnly: true });
+    });
+    return groups;
+  }
+
+  private updateSectionFilterTree(): void {
+    const input = document.getElementById('tocSearchInput') as HTMLInputElement | null;
+    const mode = document.getElementById('tocSearchMode') as HTMLSelectElement | null;
+    const filters = [
+      ...this.searchFilters,
+      ...(input?.value.trim() ? [input.value.trim()] : []),
+    ].map(filter => filter.toLocaleLowerCase());
+    const matchAll = mode?.value !== 'any';
+    const matchingIds = new Set<string>();
+
+    this.entries.forEach(entry => {
+      const matches = filters.length === 0
+        || (matchAll
+          ? filters.every(filter => entry.path.toLocaleLowerCase().includes(filter))
+          : filters.some(filter => entry.path.toLocaleLowerCase().includes(filter)));
+      if (matches || this.selectedSectionIds.has(entry.id)) {
+        matchingIds.add(entry.id);
+        entry.ancestorIds.forEach(id => matchingIds.add(id));
+      }
+    });
+
+    let visibleOptions = 0;
+    document.querySelectorAll<HTMLElement>('[data-toc-section-id]').forEach(row => {
+      const entryId = row.dataset.tocSectionId;
+      const entry = this.entries.find(candidate => candidate.id === entryId);
+      if (!entry) return;
+      const hiddenByCollapsedParent = filters.length === 0
+        && entry.ancestorIds.some(id => this.collapsedSectionIds.has(id));
+      const visible = matchingIds.has(entry.id) && !hiddenByCollapsedParent;
+      row.hidden = !visible;
+      if (visible) visibleOptions++;
+
+      const branchIds = this.getSectionIds(entry.id);
+      const selectedCount = branchIds.filter(id => this.selectedSectionIds.has(id)).length;
+      const checkbox = row.querySelector<HTMLInputElement>('[data-toc-section-checkbox]');
+      if (checkbox) {
+        checkbox.checked = selectedCount === branchIds.length;
+        checkbox.indeterminate = selectedCount > 0 && selectedCount < branchIds.length;
+      }
+      row.classList.toggle('selected', selectedCount > 0);
+
+      const toggle = row.querySelector<HTMLButtonElement>('[data-toc-section-toggle]');
+      if (toggle && !toggle.disabled) {
+        const collapsed = this.collapsedSectionIds.has(entry.id);
+        toggle.setAttribute('aria-expanded', String(!collapsed));
+        toggle.setAttribute(
+          'aria-label',
+          `${collapsed ? 'Expand' : 'Collapse'} ${entry.path}`,
+        );
+        const icon = toggle.querySelector('i');
+        icon?.classList.toggle('fa-caret-right', collapsed);
+        icon?.classList.toggle('fa-caret-down', !collapsed);
+      }
+    });
+
+    const empty = document.getElementById('tocSectionFilterEmpty');
+    if (empty) empty.hidden = visibleOptions > 0;
+  }
+
+  private getSectionIds(entryId: string): string[] {
+    return this.entries
+      .filter(entry => entry.id === entryId || entry.ancestorIds.includes(entryId))
+      .map(entry => entry.id);
+  }
+
+  private hasSectionChildren(entryId: string): boolean {
+    return this.entries.some(entry => entry.parentId === entryId);
+  }
+
   private filterEntries(): void {
     const input = document.getElementById('tocSearchInput') as HTMLInputElement | null;
     const mode = document.getElementById('tocSearchMode') as HTMLSelectElement | null;
@@ -238,74 +476,67 @@ export default class TocPanel extends SidePanel {
       ...(pendingFilter ? [pendingFilter] : []),
     ].map(filter => filter.toLocaleLowerCase());
     const matchAll = mode?.value !== 'any';
-    const matchingHeadingIds = new Set<string>();
+    const hasSectionSelection = this.selectedSectionIds.size > 0;
+    const matchingRoots = this.entries.filter(entry => {
+      if (hasSectionSelection && !this.selectedSectionIds.has(entry.id)) return false;
+      if (filters.length === 0) return hasSectionSelection;
+      const path = entry.path.toLocaleLowerCase();
+      return matchAll
+        ? filters.every(filter => path.includes(filter))
+        : filters.some(filter => path.includes(filter));
+    });
+    const sectionIds = new Set<string>();
+    matchingRoots.forEach(entry => {
+      this.getSectionIds(entry.id).forEach(id => {
+        if (!hasSectionSelection || this.selectedSectionIds.has(id)) {
+          sectionIds.add(id);
+        }
+      });
+    });
+    const filterActive = filters.length > 0 || hasSectionSelection;
+    const visibleTocIds = new Set(sectionIds);
+    this.entries.forEach(entry => {
+      if (sectionIds.has(entry.id)) {
+        entry.ancestorIds.forEach(id => visibleTocIds.add(id));
+      }
+    });
     let matches = 0;
 
     for (const item of items) {
-      const text = item.dataset.tocSearchText ?? '';
-      const visible = filters.length === 0
-        || (matchAll
-          ? filters.every(filter => text.includes(filter))
-          : filters.some(filter => text.includes(filter)));
+      const targetId = item.dataset.tocTarget ?? '';
+      const visible = !filterActive || visibleTocIds.has(targetId);
       item.hidden = !visible;
-      if (visible) {
-        matches++;
-        if (item.dataset.tocTarget) {
-          matchingHeadingIds.add(item.dataset.tocTarget);
-        }
-      }
+      if (sectionIds.has(targetId)) matches++;
     }
 
     if (noResults) {
       noResults.hidden = items.length === 0 || matches > 0;
     }
 
-    this.filterMainText(filters, matchingHeadingIds);
+    this.updateSectionFilterTree();
+    this.filterMainText(filterActive, sectionIds);
   }
 
   /**
    * In view mode, show only sections selected by the TOC heading search.
    * The filter only adds transient CSS classes and never changes saved body HTML.
    */
-  private filterMainText(filters: string[], matchingHeadingIds: Set<string>): void {
+  private filterMainText(filterActive: boolean, sectionIds: Set<string>): void {
     const bodyView = document.getElementById('body_view');
     if (!bodyView) return;
 
     this.clearMainTextFilter();
-    if (filters.length === 0) return;
+    if (!filterActive) return;
 
     const headings = Array.from(bodyView.querySelectorAll<HTMLHeadingElement>(HEADING_SELECTOR));
     if (headings.length === 0) return;
 
-    // A matching heading includes its content and all nested subsections up to
-    // the next heading at the same or a higher level.
-    const sectionHeadingIds = new Set<string>();
-    const visibleHeadingIds = new Set<string>();
-    const activeMatchLevels: number[] = [];
-    const ancestorHeadings: HTMLHeadingElement[] = [];
-
-    for (const heading of headings) {
-      const level = parseInt(heading.tagName.charAt(1), 10);
-
-      while (activeMatchLevels.length > 0 && activeMatchLevels.at(-1) >= level) {
-        activeMatchLevels.pop();
+    const visibleHeadingIds = new Set(sectionIds);
+    this.entries.forEach(entry => {
+      if (sectionIds.has(entry.id)) {
+        entry.ancestorIds.forEach(id => visibleHeadingIds.add(id));
       }
-      while (ancestorHeadings.length > 0
-        && parseInt(ancestorHeadings.at(-1).tagName.charAt(1), 10) >= level) {
-        ancestorHeadings.pop();
-      }
-
-      if (matchingHeadingIds.has(heading.id)) {
-        activeMatchLevels.push(level);
-        ancestorHeadings.forEach(ancestor => visibleHeadingIds.add(ancestor.id));
-      }
-
-      if (activeMatchLevels.length > 0) {
-        sectionHeadingIds.add(heading.id);
-        visibleHeadingIds.add(heading.id);
-      }
-      ancestorHeadings.push(heading);
-    }
+    });
 
     // Walk in document order so ordinary content inherits the visibility of
     // its nearest preceding heading. Containers holding headings remain in the
@@ -315,7 +546,7 @@ export default class TocPanel extends SidePanel {
       Array.from(parent.children).forEach((element: HTMLElement) => {
         if (element.matches(HEADING_SELECTOR)) {
           element.classList.toggle(FILTER_HIDDEN_CLASS, !visibleHeadingIds.has(element.id));
-          showSectionContent = sectionHeadingIds.has(element.id);
+          showSectionContent = sectionIds.has(element.id);
           return;
         }
 

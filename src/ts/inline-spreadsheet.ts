@@ -18,6 +18,18 @@ type AOA = CellValue[][];
 type SpreadsheetKind = 'standard' | 'notebook' | 'well-plate';
 type CellStyles = Record<string, string>;
 type AppearanceScope = 'user' | 'notebook';
+type CellRange = [number, number, number, number];
+
+interface CellFontFormat {
+  color?: string;
+  fontFamily?: string;
+  fontSize?: string;
+  fontStyle?: string;
+  fontWeight?: string;
+  textAlign?: string;
+  textDecoration?: string;
+  verticalAlign?: string;
+}
 
 export interface SpreadsheetAppearance {
   borderWidth: number;
@@ -523,7 +535,16 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatBorderColorInput: HTMLInputElement;
   cellFormatBorderStyleSelect: HTMLSelectElement;
   cellFormatBorderWidthInput: HTMLInputElement;
+  cellFormatFontFamilySelect: HTMLSelectElement;
+  cellFormatFontSizeInput: HTMLInputElement;
+  cellFormatBoldInput: HTMLInputElement;
+  cellFormatItalicInput: HTMLInputElement;
+  cellFormatUnderlineInput: HTMLInputElement;
+  cellFormatTextColorInput: HTMLInputElement;
+  cellFormatTextAlignSelect: HTMLSelectElement;
+  cellFormatVerticalAlignSelect: HTMLSelectElement;
   applyCellFormatBtn: HTMLButtonElement;
+  applyFontFormatBtn: HTMLButtonElement;
   clearCellFormatBtn: HTMLButtonElement;
   cellFormatStatus: HTMLSpanElement;
 } {
@@ -646,8 +667,10 @@ function createOverlay(initial: SpreadsheetData): {
 
   const cellFormatBar = document.createElement('div');
   cellFormatBar.className = 'inline-spreadsheet-cell-format';
+  const cellStyleRow = document.createElement('div');
+  cellStyleRow.className = 'inline-spreadsheet-cell-format-row';
   const cellFormatLabel = document.createElement('strong');
-  cellFormatLabel.textContent = 'Cell format';
+  cellFormatLabel.textContent = 'Cell';
   const cellFormatColorInput = createInput(
     'color',
     appearance.cellColor,
@@ -678,21 +701,98 @@ function createOverlay(initial: SpreadsheetData): {
   const applyCellFormatBtn = document.createElement('button');
   applyCellFormatBtn.type = 'button';
   applyCellFormatBtn.className = 'btn btn-sm btn-outline-primary';
-  applyCellFormatBtn.textContent = 'Apply to selection';
-  const clearCellFormatBtn = document.createElement('button');
-  clearCellFormatBtn.type = 'button';
-  clearCellFormatBtn.className = 'btn btn-sm btn-outline-secondary';
-  clearCellFormatBtn.textContent = 'Clear format';
-  const cellFormatStatus = document.createElement('span');
-  cellFormatStatus.className = 'inline-spreadsheet-cell-format-status';
-  cellFormatStatus.textContent = 'Select cells, then apply a quick format.';
-  cellFormatBar.append(
+  applyCellFormatBtn.textContent = 'Apply cell style';
+  cellStyleRow.append(
     cellFormatLabel,
     createLabeledControl('Fill', cellFormatColorInput),
     createLabeledControl('Border color', cellFormatBorderColorInput),
     createLabeledControl('Border style', cellFormatBorderStyleSelect),
     createLabeledControl('Border width', cellFormatBorderWidthInput),
     applyCellFormatBtn,
+  );
+
+  const fontStyleRow = document.createElement('div');
+  fontStyleRow.className = 'inline-spreadsheet-cell-format-row';
+  const fontFormatLabel = document.createElement('strong');
+  fontFormatLabel.textContent = 'Font';
+  const cellFormatFontFamilySelect = document.createElement('select');
+  cellFormatFontFamilySelect.className = 'form-control form-control-sm';
+  cellFormatFontFamilySelect.setAttribute('aria-label', 'Selected cell font family');
+  cellFormatFontFamilySelect.innerHTML = `
+    <option value="">Default font</option>
+    <option value="Arial, sans-serif">Arial</option>
+    <option value="Verdana, sans-serif">Verdana</option>
+    <option value="Georgia, serif">Georgia</option>
+    <option value="'Times New Roman', serif">Times New Roman</option>
+    <option value="'Courier New', monospace">Courier New</option>
+  `;
+  const cellFormatFontSizeInput = createInput(
+    'number',
+    '12',
+    'Selected cell font size in points',
+  );
+  cellFormatFontSizeInput.min = '6';
+  cellFormatFontSizeInput.max = '72';
+  const cellFormatBoldInput = document.createElement('input');
+  cellFormatBoldInput.type = 'checkbox';
+  cellFormatBoldInput.setAttribute('aria-label', 'Bold selected cells');
+  const cellFormatItalicInput = document.createElement('input');
+  cellFormatItalicInput.type = 'checkbox';
+  cellFormatItalicInput.setAttribute('aria-label', 'Italicize selected cells');
+  const cellFormatUnderlineInput = document.createElement('input');
+  cellFormatUnderlineInput.type = 'checkbox';
+  cellFormatUnderlineInput.setAttribute('aria-label', 'Underline selected cells');
+  const cellFormatTextColorInput = createInput(
+    'color',
+    '#212529',
+    'Selected cell text color',
+  );
+  const cellFormatTextAlignSelect = document.createElement('select');
+  cellFormatTextAlignSelect.className = 'form-control form-control-sm';
+  cellFormatTextAlignSelect.setAttribute('aria-label', 'Selected cell horizontal alignment');
+  cellFormatTextAlignSelect.innerHTML = `
+    <option value="">Default</option>
+    <option value="left">Left</option>
+    <option value="center">Center</option>
+    <option value="right">Right</option>
+    <option value="justify">Justify</option>
+  `;
+  const cellFormatVerticalAlignSelect = document.createElement('select');
+  cellFormatVerticalAlignSelect.className = 'form-control form-control-sm';
+  cellFormatVerticalAlignSelect.setAttribute('aria-label', 'Selected cell vertical alignment');
+  cellFormatVerticalAlignSelect.innerHTML = `
+    <option value="">Default</option>
+    <option value="top">Top</option>
+    <option value="middle">Middle</option>
+    <option value="bottom">Bottom</option>
+  `;
+  const applyFontFormatBtn = document.createElement('button');
+  applyFontFormatBtn.type = 'button';
+  applyFontFormatBtn.className = 'btn btn-sm btn-outline-primary';
+  applyFontFormatBtn.textContent = 'Apply font';
+  fontStyleRow.append(
+    fontFormatLabel,
+    createLabeledControl('Family', cellFormatFontFamilySelect),
+    createLabeledControl('Size (pt)', cellFormatFontSizeInput),
+    createLabeledControl('Bold', cellFormatBoldInput),
+    createLabeledControl('Italic', cellFormatItalicInput),
+    createLabeledControl('Underline', cellFormatUnderlineInput),
+    createLabeledControl('Text color', cellFormatTextColorInput),
+    createLabeledControl('Horizontal', cellFormatTextAlignSelect),
+    createLabeledControl('Vertical', cellFormatVerticalAlignSelect),
+    applyFontFormatBtn,
+  );
+
+  const clearCellFormatBtn = document.createElement('button');
+  clearCellFormatBtn.type = 'button';
+  clearCellFormatBtn.className = 'btn btn-sm btn-outline-secondary';
+  clearCellFormatBtn.textContent = 'Clear all cell formatting';
+  const cellFormatStatus = document.createElement('span');
+  cellFormatStatus.className = 'inline-spreadsheet-cell-format-status';
+  cellFormatStatus.textContent = 'Select one or more cells, then apply cell or font properties.';
+  cellFormatBar.append(
+    cellStyleRow,
+    fontStyleRow,
     clearCellFormatBtn,
     cellFormatStatus,
   );
@@ -782,7 +882,16 @@ function createOverlay(initial: SpreadsheetData): {
     cellFormatBorderColorInput,
     cellFormatBorderStyleSelect,
     cellFormatBorderWidthInput,
+    cellFormatFontFamilySelect,
+    cellFormatFontSizeInput,
+    cellFormatBoldInput,
+    cellFormatItalicInput,
+    cellFormatUnderlineInput,
+    cellFormatTextColorInput,
+    cellFormatTextAlignSelect,
+    cellFormatVerticalAlignSelect,
     applyCellFormatBtn,
+    applyFontFormatBtn,
     clearCellFormatBtn,
     cellFormatStatus,
   };
@@ -862,6 +971,43 @@ function updateQuickCellStyle(
   );
 }
 
+function updateQuickFontStyle(
+  existingStyle: string | undefined,
+  format: CellFontFormat,
+  clear: boolean,
+): string | undefined {
+  const element = document.createElement('span');
+  if (existingStyle) element.setAttribute('style', existingStyle);
+
+  const properties = [
+    'color',
+    'font-family',
+    'font-size',
+    'font-style',
+    'font-weight',
+    'text-align',
+    'text-decoration',
+    'vertical-align',
+  ];
+  if (clear) {
+    properties.forEach(property => element.style.removeProperty(property));
+  } else {
+    Object.entries(format).forEach(([property, value]) => {
+      const cssProperty = property.replace(/[A-Z]/g, character => `-${character.toLowerCase()}`);
+      if (value) {
+        element.style.setProperty(cssProperty, value);
+      } else {
+        element.style.removeProperty(cssProperty);
+      }
+    });
+  }
+
+  return sanitizeStyle(
+    element.getAttribute('style') ?? undefined,
+    PRESERVED_STYLE_PROPERTIES,
+  );
+}
+
 /**
  * Open the spreadsheet overlay and return the raw formula data plus computed
  * values when the user inserts or updates the table.
@@ -875,6 +1021,8 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     const ui = createOverlay(working);
     let sheetContainer: HTMLDivElement | null = null;
     let worksheet: JssInstance = null;
+    let selectedRange: CellRange | null = null;
+    const changedFontProperties = new Set<keyof CellFontFormat>();
 
     document.body.appendChild(ui.overlay);
 
@@ -896,6 +1044,27 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         rows,
         cols,
       );
+    };
+
+    const getSelectedRange = (): CellRange | null => {
+      const current = worksheet?.getSelection?.();
+      if (Array.isArray(current)
+        && current.length >= 4
+        && current.slice(0, 4).every(value => Number.isInteger(value))
+      ) {
+        selectedRange = current.slice(0, 4) as CellRange;
+      }
+      return selectedRange;
+    };
+
+    const updateSelectionStatus = (range: CellRange): void => {
+      const startCol = Math.min(range[0], range[2]);
+      const startRow = Math.min(range[1], range[3]);
+      const endCol = Math.max(range[0], range[2]);
+      const endRow = Math.max(range[1], range[3]);
+      const cellCount = (endCol - startCol + 1) * (endRow - startRow + 1);
+      const rangeLabel = `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
+      ui.cellFormatStatus.textContent = `${rangeLabel} selected (${cellCount} cell${cellCount === 1 ? '' : 's'}).`;
     };
 
     const mountSpreadsheet = (spreadsheet: SpreadsheetData): void => {
@@ -927,10 +1096,35 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         allowDeleteColumn: true,
         columnSorting: false,
         selectionCopy: true,
+        onselection: (
+          _worksheet: unknown,
+          startCol: number,
+          startRow: number,
+          endCol: number,
+          endRow: number,
+        ): void => {
+          const range: CellRange = [startCol, startRow, endCol, endRow];
+          if (range.every(value => Number.isInteger(value))) {
+            selectedRange = range;
+            updateSelectionStatus(range);
+          }
+        },
       });
       worksheet = getWorksheet(instance);
       ui.rowsInput.value = String(working.rows);
       ui.colsInput.value = String(working.cols);
+      if (selectedRange) {
+        const maxCol = working.cols - 1;
+        const maxRow = working.rows - 1;
+        selectedRange = [
+          Math.max(0, Math.min(maxCol, selectedRange[0])),
+          Math.max(0, Math.min(maxRow, selectedRange[1])),
+          Math.max(0, Math.min(maxCol, selectedRange[2])),
+          Math.max(0, Math.min(maxRow, selectedRange[3])),
+        ];
+        worksheet?.updateSelectionFromCoords?.(...selectedRange);
+        updateSelectionStatus(selectedRange);
+      }
     };
 
     const applyAppearance = (): void => {
@@ -1007,9 +1201,12 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         ui.saveAppearanceDefaultBtn.disabled = false;
       }
     });
-    const applyCellFormat = (clear: boolean): void => {
-      const selection = worksheet?.getSelection?.() as [number, number, number, number] | undefined;
-      if (!selection || selection.some(value => !Number.isInteger(value))) {
+    const updateSelectedCells = (
+      updateStyle: (style: string | undefined) => string | undefined,
+      successMessage: string,
+    ): void => {
+      const selection = getSelectedRange();
+      if (!selection) {
         ui.cellFormatStatus.textContent = 'Select one or more cells first.';
         return;
       }
@@ -1024,22 +1221,11 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         working.cols,
       );
       const cellStyles = readCellStyles(rows, cols) ?? {};
-      const borderWidth = Math.max(
-        0,
-        Math.min(MAX_TABLE_BORDER, parseInt(ui.cellFormatBorderWidthInput.value, 10) || 0),
-      );
 
       for (let row = startRow; row <= endRow; row++) {
         for (let col = startCol; col <= endCol; col++) {
           const cellName = `${colLabel(col)}${row + 1}`;
-          const style = updateQuickCellStyle(
-            cellStyles[cellName],
-            ui.cellFormatColorInput.value,
-            ui.cellFormatBorderColorInput.value,
-            ui.cellFormatBorderStyleSelect.value,
-            borderWidth,
-            clear,
-          );
+          const style = updateStyle(cellStyles[cellName]);
           if (style) {
             cellStyles[cellName] = style;
           } else {
@@ -1055,14 +1241,93 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         cols,
         cellStyles: Object.keys(cellStyles).length > 0 ? cellStyles : undefined,
       });
-      worksheet?.updateSelectionFromCoords?.(startCol, startRow, endCol, endRow);
       const cellCount = (endCol - startCol + 1) * (endRow - startRow + 1);
-      ui.cellFormatStatus.textContent = clear
-        ? `Cleared quick formatting from ${cellCount} cell${cellCount === 1 ? '' : 's'}.`
-        : `Applied quick formatting to ${cellCount} cell${cellCount === 1 ? '' : 's'}.`;
+      ui.cellFormatStatus.textContent = `${successMessage} ${cellCount} cell${cellCount === 1 ? '' : 's'}.`;
     };
-    ui.applyCellFormatBtn.addEventListener('click', () => applyCellFormat(false));
-    ui.clearCellFormatBtn.addEventListener('click', () => applyCellFormat(true));
+    const applyCellFormat = (): void => {
+      const borderWidth = Math.max(
+        0,
+        Math.min(MAX_TABLE_BORDER, parseInt(ui.cellFormatBorderWidthInput.value, 10) || 0),
+      );
+      updateSelectedCells(
+        style => updateQuickCellStyle(
+          style,
+          ui.cellFormatColorInput.value,
+          ui.cellFormatBorderColorInput.value,
+          ui.cellFormatBorderStyleSelect.value,
+          borderWidth,
+          false,
+        ),
+        'Applied cell style to',
+      );
+    };
+    const applyFontFormat = (): void => {
+      if (changedFontProperties.size === 0) {
+        ui.cellFormatStatus.textContent = 'Choose at least one font property first.';
+        return;
+      }
+      const fontSize = Math.max(
+        6,
+        Math.min(72, parseInt(ui.cellFormatFontSizeInput.value, 10) || 12),
+      );
+      const format: CellFontFormat = {};
+      if (changedFontProperties.has('fontFamily')) {
+        format.fontFamily = ui.cellFormatFontFamilySelect.value;
+      }
+      if (changedFontProperties.has('fontSize')) format.fontSize = `${fontSize}pt`;
+      if (changedFontProperties.has('fontWeight')) {
+        format.fontWeight = ui.cellFormatBoldInput.checked ? 'bold' : 'normal';
+      }
+      if (changedFontProperties.has('fontStyle')) {
+        format.fontStyle = ui.cellFormatItalicInput.checked ? 'italic' : 'normal';
+      }
+      if (changedFontProperties.has('textDecoration')) {
+        format.textDecoration = ui.cellFormatUnderlineInput.checked ? 'underline' : 'none';
+      }
+      if (changedFontProperties.has('color')) format.color = ui.cellFormatTextColorInput.value;
+      if (changedFontProperties.has('textAlign')) {
+        format.textAlign = ui.cellFormatTextAlignSelect.value;
+      }
+      if (changedFontProperties.has('verticalAlign')) {
+        format.verticalAlign = ui.cellFormatVerticalAlignSelect.value;
+      }
+      updateSelectedCells(
+        style => updateQuickFontStyle(style, format, false),
+        'Applied font properties to',
+      );
+    };
+    const fontPropertyControls: Array<[HTMLElement, keyof CellFontFormat]> = [
+      [ui.cellFormatFontFamilySelect, 'fontFamily'],
+      [ui.cellFormatFontSizeInput, 'fontSize'],
+      [ui.cellFormatBoldInput, 'fontWeight'],
+      [ui.cellFormatItalicInput, 'fontStyle'],
+      [ui.cellFormatUnderlineInput, 'textDecoration'],
+      [ui.cellFormatTextColorInput, 'color'],
+      [ui.cellFormatTextAlignSelect, 'textAlign'],
+      [ui.cellFormatVerticalAlignSelect, 'verticalAlign'],
+    ];
+    fontPropertyControls.forEach(([control, property]) => {
+      control.addEventListener('change', () => changedFontProperties.add(property));
+    });
+    ui.applyCellFormatBtn.addEventListener('click', applyCellFormat);
+    ui.applyFontFormatBtn.addEventListener('click', applyFontFormat);
+    ui.clearCellFormatBtn.addEventListener('click', () => {
+      updateSelectedCells(
+        style => updateQuickFontStyle(
+          updateQuickCellStyle(
+            style,
+            ui.cellFormatColorInput.value,
+            ui.cellFormatBorderColorInput.value,
+            ui.cellFormatBorderStyleSelect.value,
+            0,
+            true,
+          ),
+          {},
+          true,
+        ),
+        'Cleared formatting from',
+      );
+    });
     ui.addRowBtn.addEventListener('click', () => {
       worksheet?.insertRow?.();
       ui.rowsInput.value = String(Math.min(MAX_DIMENSION, parseInt(ui.rowsInput.value, 10) + 1));
@@ -1073,8 +1338,8 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     });
 
     ui.formulaButtons.forEach(button => button.addEventListener('click', () => {
-      const selection = worksheet?.getSelection?.() as [number, number, number, number] | undefined;
-      if (!selection || selection.some(value => !Number.isInteger(value))) {
+      const selection = getSelectedRange();
+      if (!selection) {
         ui.formulaStatus.textContent = 'Select one or more source cells first.';
         return;
       }

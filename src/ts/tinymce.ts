@@ -153,20 +153,28 @@ function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
 /**
  * Keep keyboard focus inside the editor when indenting list items.
  */
-function handleListIndentShortcut(editor: Editor, event: KeyboardEvent): void {
+function handleListIndentShortcut(editor: Editor, event: KeyboardEvent): boolean {
   if (event.key !== 'Tab'
     || event.ctrlKey
     || event.metaKey
     || event.altKey
     || event.isComposing) {
-    return;
+    return false;
   }
 
-  const listItem = editor.dom.getParent(editor.selection.getNode(), 'li');
-  if (!listItem) return;
+  const selectionNode = editor.selection.getNode() as HTMLElement;
+  const listItem = selectionNode.matches('li')
+    ? selectionNode
+    : selectionNode.closest('li');
+  if (!listItem) return false;
 
   event.preventDefault();
-  editor.execCommand(event.shiftKey ? 'Outdent' : 'Indent');
+  event.stopImmediatePropagation();
+  editor.undoManager.transact(() => {
+    editor.execCommand(event.shiftKey ? 'Outdent' : 'Indent');
+  });
+  editor.nodeChanged();
+  return true;
 }
 
 function isOverCharLimit(): boolean {
@@ -271,7 +279,7 @@ const imagesUploadHandler = (blobInfo: TinyMCEBlobInfo) => new Promise((resolve,
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate | codesample | link | inline-sheet table-outdent table-indent sort-table';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate | codesample | link | inline-sheet cell-properties table-outdent table-indent sort-table';
   let removedMenuItems = 'newdocument, image, anchor';
   let fileMenuItems = 'preview | print';
   if (page === 'edit') {
@@ -531,6 +539,19 @@ export function getTinymceBaseConfig(page: string): object {
           return () => editor.off('NodeChange', update);
         },
       });
+      editor.ui.registry.addButton('cell-properties', {
+        text: 'Cell style',
+        tooltip: 'Cell background, border style, color and width',
+        onAction: () => editor.execCommand('mceTableCellProps'),
+        onSetup: api => {
+          const update = (event): void => {
+            api.setEnabled(Boolean(event.element?.closest?.('td,th')));
+          };
+          api.setEnabled(Boolean(editor.selection.getNode().closest?.('td,th')));
+          editor.on('NodeChange', update);
+          return () => editor.off('NodeChange', update);
+        },
+      });
       const openInlineSpreadsheet = (
         initial: SpreadsheetData,
         existingTable: HTMLTableElement | null = null,
@@ -606,8 +627,18 @@ export function getTinymceBaseConfig(page: string): object {
       editor.addShortcut('ctrl+shift+d', 'add date/time at cursor', addDatetimeOnCursor);
       editor.addShortcut('ctrl+=', 'subscript', () => editor.execCommand('subscript'));
       editor.addShortcut('ctrl+shift+=', 'superscript', () => editor.execCommand('superscript'));
+      editor.on('init', () => {
+        // Capture Tab before TinyMCE or the browser can move focus to the next control.
+        const editorDocument = editor.getDoc();
+        const listIndentHandler = (event: KeyboardEvent): void => {
+          handleListIndentShortcut(editor, event);
+        };
+        editorDocument.addEventListener('keydown', listIndentHandler, true);
+        editor.on('remove', () => {
+          editorDocument.removeEventListener('keydown', listIndentHandler, true);
+        });
+      });
       editor.on('keydown', event => {
-        handleListIndentShortcut(editor, event);
         handleListShortcut(editor, event);
       });
 
