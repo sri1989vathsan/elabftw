@@ -1783,8 +1783,59 @@ the form-control fails to do that so we do the border ourselves */
   background-color: var(--firstlevel);
 }
 
+#tocPrintSelectionDocument {
+  display: none;
+}
+
 /* print only the main div */
 @media print {
+  body.toc-print-selection-active {
+    background: #fff !important;
+  }
+
+  body.toc-print-selection-active > :not(#tocPrintSelectionDocument) {
+    display: none !important;
+  }
+
+  body.toc-print-selection-active #tocPrintSelectionDocument {
+    background: #fff;
+    color: #111;
+    display: block !important;
+    font-size: 11pt;
+    line-height: 1.45;
+    margin: 0 auto;
+    max-width: 100%;
+  }
+
+  #tocPrintSelectionDocument .toc-print-title {
+    border-bottom: 2px solid #333;
+    color: #111;
+    font-size: 22pt;
+    margin: 0 0 0.3rem;
+    padding-bottom: 0.3rem;
+  }
+
+  #tocPrintSelectionDocument .toc-print-context {
+    color: #555;
+    font-size: 9pt;
+    margin: 0 0 1.5rem;
+    text-transform: uppercase;
+  }
+
+  #tocPrintSelectionDocument img,
+  #tocPrintSelectionDocument table {
+    max-width: 100% !important;
+  }
+
+  #tocPrintSelectionDocument table {
+    break-inside: auto;
+  }
+
+  #tocPrintSelectionDocument tr,
+  #tocPrintSelectionDocument img {
+    break-inside: avoid;
+  }
+
   /* overwrite bootstrap defaults
      * https://stackoverflow.com/a/53232790
      */

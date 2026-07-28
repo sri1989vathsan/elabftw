@@ -33,11 +33,11 @@
     <div id='tocSearchFilters' class='toc-search-filters mb-2' aria-live='polite'></div>
     <details class='toc-section-filter-picker mb-2' open>
       <summary class='toc-section-filter-summary'>
-        <span>{{ 'Filter by section'|trans }}</span>
+        <span>{{ 'Select headings to filter or print'|trans }}</span>
         <span id='tocSectionFilterCount' class='badge badge-primary ml-1' hidden>0</span>
       </summary>
       <p class='small color-medium mb-1'>
-        {{ 'Select a heading to include its complete subsection. The search above also narrows these options.'|trans }}
+        {{ 'Select a heading to include it and its complete subsection in the filtered text and printout. The search above also narrows these options.'|trans }}
       </p>
       <div id='tocSectionFilterTree' class='toc-section-filter-tree' role='tree' aria-label='{{ 'Document sections'|trans }}'></div>
       <p id='tocSectionFilterEmpty' class='small text-muted mb-0' hidden>{{ 'No matching sections.'|trans }}</p>
@@ -45,6 +45,12 @@
     <div id='tocSectionFilters' class='toc-search-filters mb-2' aria-live='polite'></div>
     <p class='small color-medium px-2'>
       {{ 'Press Enter or + to add text filters. Section and text filters also subset the main text.'|trans }}
+    </p>
+    <button type='button' id='tocPrintSelection' class='btn btn-outline-primary btn-sm btn-block mb-3'>
+      <i class='fas fa-print fa-fw mr-1' aria-hidden='true'></i>{{ 'Print selection'|trans }}
+    </button>
+    <p class='small color-medium px-2'>
+      {{ 'Prints the selected or filtered sections with the notebook title. With no filter, the full main text is printed.'|trans }}
     </p>
     {# this will be filled with the TOC entries by TocPanel.class.ts #}
     <div id='tocItems' class='toc-items-container'></div>

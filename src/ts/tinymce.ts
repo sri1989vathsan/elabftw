@@ -695,6 +695,17 @@ export function getTinymceBaseConfig(page: string): object {
           editorDocument.removeEventListener('keydown', blockIndentHandler, true);
         });
       });
+      let tocHeadingSignature = '';
+      const notifyTocHeadingChanges = (): void => {
+        const signature = Array.from(editor.getBody().querySelectorAll('h1, h2, h3, h4, h5, h6'))
+          .map(heading => `${heading.tagName}:${heading.textContent?.trim() ?? ''}`)
+          .join('|');
+        if (signature === tocHeadingSignature) return;
+        tocHeadingSignature = signature;
+        window.dispatchEvent(new CustomEvent('editor-headings-changed'));
+      };
+      editor.on('init', notifyTocHeadingChanges);
+      editor.on('NodeChange', notifyTocHeadingChanges);
       editor.on('keydown', event => {
         if (handleBlockIndentShortcut(editor, event)) return;
         handleListShortcut(editor, event);

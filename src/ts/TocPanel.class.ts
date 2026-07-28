@@ -39,10 +39,48 @@ export default class TocPanel extends SidePanel {
   private searchFilters: string[] = [];
   private selectedSectionIds = new Set<string>();
   private collapsedSectionIds = new Set<string>();
+  private currentFilterActive = false;
+  private currentSectionIds = new Set<string>();
 
   constructor() {
     super(TOC_MODEL);
     this.panelId = 'tocPanel';
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', () => this.updateAvailability(), { once: true });
+    } else {
+      this.updateAvailability();
+    }
+    window.addEventListener('editor-headings-changed', () => this.updateAvailability());
+  }
+
+  /**
+   * Hide the TOC tab entirely when the current document has no headings.
+   * Editor events call this again, so the tab returns as soon as one is added.
+   */
+  private updateAvailability(hasHeadings = this.hasHeadings()): boolean {
+    const opener = document.getElementById(`${this.panelId}Opener`);
+    const panel = document.getElementById(this.panelId);
+    if (!opener || !panel) return false;
+
+    opener.toggleAttribute('hidden', !hasHeadings);
+    opener.setAttribute('aria-hidden', String(!hasHeadings));
+    if (!hasHeadings) {
+      if (!panel.hasAttribute('hidden')) {
+        super.hide();
+      }
+      if (localStorage.getItem('opened-sidepanel') === TOC_MODEL) {
+        localStorage.removeItem('opened-sidepanel');
+      }
+    }
+    return hasHeadings;
+  }
+
+  private hasHeadings(): boolean {
+    const bodyView = document.getElementById('body_view');
+    if (bodyView?.querySelector(HEADING_SELECTOR)) return true;
+
+    const editor = this.getEditor();
+    return Boolean(editor?.getBody()?.querySelector(HEADING_SELECTOR));
   }
 
   /**
@@ -111,6 +149,7 @@ export default class TocPanel extends SidePanel {
   display(): void {
     const entries = this.getHeadings();
     this.entries = entries;
+    this.updateAvailability(entries.length > 0);
     const availableIds = new Set(entries.map(entry => entry.id));
     this.selectedSectionIds = new Set(
       [...this.selectedSectionIds].filter(id => availableIds.has(id)),
@@ -200,8 +239,10 @@ export default class TocPanel extends SidePanel {
     const add = document.getElementById('tocSearchAdd') as HTMLButtonElement | null;
     const clear = document.getElementById('tocSearchClear') as HTMLButtonElement | null;
     const mode = document.getElementById('tocSearchMode') as HTMLSelectElement | null;
+    const print = document.getElementById('tocPrintSelection') as HTMLButtonElement | null;
     if (!input || !add || !clear || !mode || input.dataset.tocSearchReady) return;
 
+    print?.addEventListener('click', () => this.printSelection());
     input.addEventListener('input', () => this.filterEntries());
     input.addEventListener('keydown', event => {
       if (event.key !== 'Enter') return;
@@ -513,8 +554,101 @@ export default class TocPanel extends SidePanel {
       noResults.hidden = items.length === 0 || matches > 0;
     }
 
+    this.currentFilterActive = filterActive;
+    this.currentSectionIds = new Set(sectionIds);
+    const print = document.getElementById('tocPrintSelection') as HTMLButtonElement | null;
+    if (print) {
+      print.disabled = filterActive && sectionIds.size === 0;
+      print.title = print.disabled
+        ? 'No sections match the current selection'
+        : 'Print the selected or filtered notebook sections';
+    }
     this.updateSectionFilterTree();
     this.filterMainText(filterActive, sectionIds);
+  }
+
+  /**
+   * Print an isolated copy of the main text so unrelated notebook metadata and
+   * sidebar controls never leak into a section printout.
+   */
+  private printSelection(): void {
+    const source = document.getElementById('body_view') ?? this.getEditor()?.getBody();
+    if (!source) return;
+
+    const printContainer = document.createElement('main');
+    printContainer.id = 'tocPrintSelectionDocument';
+    printContainer.setAttribute('aria-label', 'Selected notebook content');
+
+    const title = document.createElement('h1');
+    title.className = 'toc-print-title';
+    title.textContent = document.getElementById('documentTitle')?.textContent?.trim()
+      || document.title;
+
+    const context = document.createElement('p');
+    context.className = 'toc-print-context';
+    context.textContent = this.currentFilterActive
+      ? 'Selected notebook sections'
+      : 'Notebook main text';
+
+    const content = source.cloneNode(true) as HTMLElement;
+    content.id = 'tocPrintSelectionBody';
+    content.removeAttribute('contenteditable');
+    content.querySelectorAll('script, style, .toc-section-filter-hidden').forEach(element => {
+      if (element.matches('.toc-section-filter-hidden')) {
+        element.classList.remove(FILTER_HIDDEN_CLASS);
+      } else {
+        element.remove();
+      }
+    });
+
+    if (this.currentFilterActive) {
+      this.filterPrintContent(content, this.currentSectionIds);
+    }
+
+    printContainer.append(title, context, content);
+    document.body.appendChild(printContainer);
+    document.body.classList.add('toc-print-selection-active');
+
+    window.requestAnimationFrame(() => {
+      try {
+        window.print();
+      } finally {
+        document.body.classList.remove('toc-print-selection-active');
+        printContainer.remove();
+      }
+    });
+  }
+
+  private filterPrintContent(content: HTMLElement, sectionIds: Set<string>): void {
+    const visibleHeadingIds = new Set(sectionIds);
+    this.entries.forEach(entry => {
+      if (sectionIds.has(entry.id)) {
+        entry.ancestorIds.forEach(id => visibleHeadingIds.add(id));
+      }
+    });
+
+    let showSectionContent = false;
+    const filterChildren = (parent: Element): void => {
+      Array.from(parent.children).forEach((element: HTMLElement) => {
+        if (element.matches(HEADING_SELECTOR)) {
+          const isVisibleHeading = visibleHeadingIds.has(element.id);
+          showSectionContent = sectionIds.has(element.id);
+          if (!isVisibleHeading) element.remove();
+          return;
+        }
+
+        if (element.querySelector(HEADING_SELECTOR)) {
+          filterChildren(element);
+          if (element.childElementCount === 0 && !(element.textContent ?? '').trim()) {
+            element.remove();
+          }
+          return;
+        }
+        if (!showSectionContent) element.remove();
+      });
+    };
+
+    filterChildren(content);
   }
 
   /**
@@ -713,13 +847,15 @@ export default class TocPanel extends SidePanel {
    * Refresh the TOC — useful after content changes in the editor.
    */
   refresh(): void {
-    if (!document.getElementById(this.panelId).hasAttribute('hidden')) {
+    if (this.updateAvailability()
+      && !document.getElementById(this.panelId).hasAttribute('hidden')) {
       this.display();
     }
   }
 
   // TOGGLE TOC PANEL VISIBILITY
   toggle(): void {
+    if (!this.updateAvailability()) return;
     super.toggle();
     // Lazy load content only once, then allow manual refresh
     if (!document.getElementById(this.panelId).hasAttribute('hidden')) {

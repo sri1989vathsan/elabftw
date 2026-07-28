@@ -345,26 +345,52 @@
 
   .todo-due-heading {
     align-items: center;
-    border-bottom: 2px solid var(--primary);
+    background: color-mix(in srgb, var(--white) 86%, var(--primary));
+    border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--secondary));
+    border-left: 4px solid var(--primary);
+    border-radius: 0.55rem;
+    color: var(--strongest);
     display: flex;
     font-size: 0.95rem;
     justify-content: space-between;
-    margin: 0 0 0.35rem;
-    padding: 0.3rem 0.15rem;
+    margin: 0 0 0.45rem;
+    padding: 0.48rem 0.6rem;
   }
 
   .todo-due-heading.overdue-heading {
-    border-bottom-color: var(--danger);
-    color: var(--danger);
+    background: color-mix(in srgb, var(--white) 86%, var(--danger));
+    border-color: color-mix(in srgb, var(--danger) 25%, var(--secondary));
+    border-left-color: var(--danger);
+    color: var(--strongest);
   }
 
   .todo-group-entry {
+    background: color-mix(in srgb, var(--white) 88%, var(--primary));
+    border-color: color-mix(in srgb, var(--primary) 22%, var(--secondary));
     border-left: 3px solid var(--primary);
+    border-radius: 0.55rem !important;
+    color: var(--strongest);
+    margin-bottom: 0.4rem;
     padding: 0.65rem;
   }
 
   .todo-group-entry.todo-entry-overdue {
+    background: color-mix(in srgb, var(--white) 88%, var(--danger));
+    border-color: color-mix(in srgb, var(--danger) 22%, var(--secondary));
     border-left-color: var(--danger);
+  }
+
+  .todo-group-entry .todoItem,
+  .todo-group-entry .btn-ghost {
+    color: var(--strongest);
+  }
+
+  .todo-group-entry .fas {
+    color: var(--primary);
+  }
+
+  .todo-group-entry.todo-entry-overdue .fas {
+    color: var(--danger);
   }
 
   .todo-item-deadline {
