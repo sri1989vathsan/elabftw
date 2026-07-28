@@ -24,7 +24,9 @@ class UnfinishedStepsTest extends \PHPUnit\Framework\TestCase
 
     public function testReadStepsUser(): void
     {
-        $this->assertIsArray((new UnfinishedSteps($this->Users))->readAll());
+        $result = (new UnfinishedSteps($this->Users))->readAll();
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('calendar', $result);
     }
 
     public function testReadStepsTeam(): void

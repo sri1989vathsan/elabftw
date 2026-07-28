@@ -8,6 +8,7 @@
 import Todolistc from './Todolist.class';
 import { Model } from './interfaces';
 import { core } from './core';
+import { on } from './handlers';
 
 if (document.getElementById('todolistPanel') && !core.isAnon) {
 
@@ -32,6 +33,11 @@ if (document.getElementById('todolistPanel') && !core.isAnon) {
 
   const TodolistC = new Todolistc();
   TodolistC.unfinishedStepsScope = unfinishedStepsScope;
+  TodolistC.initialize();
+
+  on('todo-panel-view', (el: HTMLElement) => {
+    TodolistC.showView(el.dataset.view === 'calendar' ? 'calendar' : 'tasks');
+  });
 
   scopeSwitch = document.getElementById(TodolistC.model + 'StepsShowTeam') as HTMLInputElement;
   scopeSwitch.addEventListener('change', () => {
@@ -39,4 +45,12 @@ if (document.getElementById('todolistPanel') && !core.isAnon) {
       TodolistC.toggleUnfinishedStepsScope();
     }
   });
+
+  const requestedView = new URLSearchParams(window.location.search).get('todo');
+  if (requestedView === 'calendar') {
+    TodolistC.showView('calendar');
+    if (document.getElementById(TodolistC.panelId).hasAttribute('hidden')) {
+      TodolistC.toggle();
+    }
+  }
 }

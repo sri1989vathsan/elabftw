@@ -261,6 +261,29 @@ the cursor is inside a table cell. It opens TinyMCE's cell-properties dialog for
 background color, border color, border style, and border width; those direct
 styles are retained when a formula spreadsheet is reopened and updated.
 
+## Feature 14: Integrated Task and Deadline Calendar
+
+The existing To-do sidebar now contains two coordinated views without adding
+another floating sidebar button. **Tasks and steps** retains personal tasks and
+unfinished experiment/resource steps. **Calendar** adds scheduled personal tasks
+to a month grid and deadline agenda, alongside unfinished experiment/resource
+steps that already have deadlines. A scheduled personal task is therefore
+visible in both views and is completed from either one.
+
+Scheduled tasks support a title, notes, an exact local date and time, and reminder
+lead times at the deadline, 15 minutes, one hour, one day, one week, or a custom
+number of minutes. Deadlines are normalized to UTC in storage and rendered in
+the user's local browser timezone. Approaching and overdue work is shown on the
+floating To-do badge, in the agenda, and as an in-page reminder. The existing
+eLabFTW notification/email preference for step deadlines also controls scheduled
+task reminders, so reminders are delivered through the normal header and email
+notification paths without a separate preference.
+
+The calendar respects the existing User/Team scope for experiment and resource
+steps, supports day and month navigation, and links each step back to its source
+entity. Completing a step in the calendar uses the same step workflow as the
+experiment page and existing To-do list.
+
 ## Schema Migration Notes
 
 - `schema207.sql` — Combined: experiment folders table + folder_id column (our additions) and booking cost columns (upstream). Uses `CREATE TABLE IF NOT EXISTS` and conditional `ALTER TABLE` for idempotent re-runs
@@ -269,6 +292,8 @@ styles are retained when a formula spreadsheet is reopened and updated.
 - `schema210.sql` — Adds server-backed favorite experiment/resource categories
 - `schema211.sql` — Adds server-backed favorite owner/status filters
 - `schema212.sql` — Adds account- and notebook-scoped spreadsheet appearance defaults
+- `schema213.sql` — Adds notes, exact deadlines, reminder lead times, and a
+  deadline index to personal to-do items
 
 ## General Merge Notes
 

@@ -851,6 +851,7 @@ tr:first-child td {
   flex: 0 0 auto;
   margin-top: 0 !important;
   padding: 10px 5px;
+  position: relative;
 
   &.sidepanel-closed {
     background-color: var(--firstlevel);
@@ -878,6 +879,22 @@ tr:first-child td {
       background-color: var(--medium);
     }
   }
+}
+
+.sidepanel-reminder-badge {
+  font-size: 0.6rem;
+  min-width: 1rem;
+  padding: 0.15rem 0.25rem;
+  position: absolute;
+  right: -0.25rem;
+  top: -0.35rem;
+}
+
+.todo-panel-view-tabs {
+  background: var(--chrome-bg);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .list-group-item {

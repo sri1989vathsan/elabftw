@@ -22,6 +22,7 @@ use Override;
 use PDO;
 
 use function json_decode;
+use function in_array;
 use function sprintf;
 
 /**
@@ -46,13 +47,29 @@ final class UserNotifications extends AbstractRest
         $sql = 'SELECT id, category, body, is_ack, created_at, userid
             FROM notifications
             WHERE userid = :userid
-                AND ((category != :step_deadline AND category NOT IN (:need_validation, :is_validated, :onboarding_email))
-                     OR (category = :step_deadline AND DATE_ADD(NOW(), INTERVAL :notif_lead_time MINUTE) >= body->>"$.deadline"))
+                AND (
+                    (category NOT IN (
+                        :step_deadline,
+                        :todo_deadline,
+                        :need_validation,
+                        :is_validated,
+                        :onboarding_email
+                    ))
+                    OR (
+                        category = :step_deadline
+                        AND DATE_ADD(NOW(), INTERVAL :notif_lead_time MINUTE) >= body->>"$.deadline"
+                    )
+                    OR (
+                        category = :todo_deadline
+                        AND NOW() >= CAST(body->>"$.remind_at" AS DATETIME)
+                    )
+                )
             ORDER BY created_at DESC
             LIMIT 10';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindValue(':step_deadline', Notifications::StepDeadline->value, PDO::PARAM_INT);
+        $req->bindValue(':todo_deadline', Notifications::TodoDeadline->value, PDO::PARAM_INT);
         $req->bindValue(':need_validation', Notifications::SelfNeedValidation->value, PDO::PARAM_INT);
         $req->bindValue(':is_validated', Notifications::SelfIsValidated->value, PDO::PARAM_INT);
         $req->bindValue(':onboarding_email', Notifications::OnboardingEmail->value, PDO::PARAM_INT);
@@ -63,7 +80,13 @@ final class UserNotifications extends AbstractRest
         foreach ($notifs as $key => &$notif) {
             $notif['body'] = json_decode($notif['body'], true, 512, JSON_THROW_ON_ERROR);
             // remove the step deadline web notif if user doesn't want it shown
-            if ($this->users->userData['notif_step_deadline'] === 0 && ($notif['category']) === Notifications::StepDeadline->value) {
+            if ($this->users->userData['notif_step_deadline'] === 0
+                && in_array(
+                    $notif['category'],
+                    array(Notifications::StepDeadline->value, Notifications::TodoDeadline->value),
+                    true,
+                )
+            ) {
                 unset($notifs[$key]);
             }
         }

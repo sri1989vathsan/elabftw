@@ -24,6 +24,7 @@
 
         const resp = await ApiC.patch(`${Model.Todolist}/${id}`, { content: value });
         const json = await resp.json();
+        window.dispatchEvent(new CustomEvent('todolist-changed'));
         return json.body;
       },
       returnedValueIsTrustedHtml: false,
@@ -37,6 +38,9 @@
   type Todo = {
     id: number;
     body: string;
+    notes: string | null;
+    deadline: string | null;
+    reminder_minutes: number | null;
     creation_time: string;
   };
 
@@ -52,11 +56,13 @@
     ApiC.notifOnSaved = true;
     draft = '';
     await load();
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
 
   async function destroy(id: number): Promise<void> {
     await ApiC.delete(`${Model.Todolist}/${id}`);
     items = items.filter(item => item.id !== id);
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
 
   async function load(): Promise<void> {
@@ -69,8 +75,24 @@
   onMount(() => {
     const prefs = document.getElementById('user-prefs');
     locale = prefs?.dataset?.jslang || 'en-gb';
+    const reload = (): void => {
+      void load();
+    };
+    window.addEventListener('todolist-changed', reload);
     void load();
+    return () => window.removeEventListener('todolist-changed', reload);
   });
+
+  function formatDeadline(value: string): string {
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(value));
+  }
+
+  function isOverdue(value: string): boolean {
+    return new Date(value).getTime() < Date.now();
+  }
 </script>
 
 <div class='input-group mb-2'>
@@ -100,6 +122,16 @@
 
           <div class='d-flex flex-column flex-grow-1'>
             <span class='editable todoItem' data-id={item.id}>{item.body}</span>
+            {#if item.deadline}
+              <div class:font-weight-bold={isOverdue(item.deadline)} class:is-overdue={isOverdue(item.deadline)} class='small todo-item-deadline'>
+                <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>
+                {formatDeadline(item.deadline)}
+                {#if isOverdue(item.deadline)} · {t('Overdue')}{/if}
+              </div>
+            {/if}
+            {#if item.notes}
+              <div class='small text-muted'>{item.notes}</div>
+            {/if}
             <div class='relative-moment small text-muted' title={item.creation_time}>
               {relative(item.creation_time)}
             </div>
@@ -116,3 +148,13 @@
     {/each}
   </ul>
 {/if}
+
+<style>
+  .todo-item-deadline {
+    color: var(--medium);
+  }
+
+  .todo-item-deadline.is-overdue {
+    color: var(--danger);
+  }
+</style>
