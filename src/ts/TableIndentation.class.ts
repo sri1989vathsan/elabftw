@@ -10,11 +10,42 @@ import type { Editor } from 'tinymce/tinymce';
 
 // Match the browser/TinyMCE list indentation step so tables line up with bullets.
 const INDENT_STEP_REM = 2.5;
-const MAX_INDENT_REM = 20;
-const WIDTH_STEP_PERCENT = 5;
+const MAX_INDENT_LEVEL = 8;
+const INDENT_WRAPPER_CLASS = 'elabftw-table-indent';
 
-function selectedTable(editor: Editor): HTMLTableElement | null {
-  return editor.selection.getNode().closest?.('table') as HTMLTableElement | null;
+function closestTable(node: Node | null | undefined): HTMLTableElement | null {
+  // TinyMCE's editable body can live in an iframe, so avoid instanceof checks
+  // against the parent window's Element constructor.
+  const element = node?.nodeType === 1 ? node as Element : node?.parentElement;
+  return element?.closest('table') as HTMLTableElement | null;
+}
+
+function tableFromSelection(editor: Editor): HTMLTableElement | null {
+  const range = editor.selection.getRng();
+  const candidates = [
+    editor.selection.getNode(),
+    editor.selection.getStart(),
+    editor.selection.getEnd(),
+    range.commonAncestorContainer,
+  ];
+  for (const candidate of candidates) {
+    const table = closestTable(candidate);
+    if (table) return table;
+  }
+
+  // TinyMCE marks cells during a multi-cell selection. In that state the
+  // selection's common ancestor can be tbody/table/body rather than a cell.
+  const selectedCell = editor.getBody().querySelector(
+    'td[data-mce-selected],th[data-mce-selected]',
+  );
+  return closestTable(selectedCell);
+}
+
+function indentWrapper(table: HTMLTableElement): HTMLDivElement | null {
+  const wrapper = table.parentElement;
+  return wrapper?.classList.contains(INDENT_WRAPPER_CLASS)
+    ? wrapper as HTMLDivElement
+    : null;
 }
 
 function rootFontSize(table: HTMLTableElement): number {
@@ -23,19 +54,41 @@ function rootFontSize(table: HTMLTableElement): number {
   return Number.parseFloat(view?.getComputedStyle(root).fontSize ?? '16') || 16;
 }
 
-function currentIndent(table: HTMLTableElement): number {
+function legacyIndentLevel(table: HTMLTableElement): number {
   const margin = table.style.marginLeft.trim();
+  let indent = 0;
   if (margin.endsWith('rem')) {
-    return Number.parseFloat(margin) || 0;
+    indent = Number.parseFloat(margin) || 0;
+  } else if (margin.endsWith('px')) {
+    indent = (Number.parseFloat(margin) || 0) / rootFontSize(table);
   }
-  if (margin.endsWith('px')) {
-    return (Number.parseFloat(margin) || 0) / rootFontSize(table);
+  return Math.max(0, Math.min(MAX_INDENT_LEVEL, Math.round(indent / INDENT_STEP_REM)));
+}
+
+function currentIndentLevel(table: HTMLTableElement): number {
+  const wrapper = indentWrapper(table);
+  if (!wrapper) return legacyIndentLevel(table);
+  const storedLevel = Number.parseInt(wrapper.dataset.indentLevel ?? '', 10);
+  if (Number.isInteger(storedLevel)) {
+    return Math.max(0, Math.min(MAX_INDENT_LEVEL, storedLevel));
   }
-  return 0;
+  return legacyIndentLevel(wrapper.querySelector('table') ?? table);
 }
 
 export default class TableIndentation {
+  private lastSelectedTable: HTMLTableElement | null = null;
+
   constructor(private readonly editor: Editor) {}
+
+  /**
+   * Track NodeChange while the editor has focus so toolbar clicks can safely
+   * act on the table that contained the selection immediately beforehand.
+   */
+  trackSelectedTable(node?: Node | null): HTMLTableElement | null {
+    const table = node === undefined ? tableFromSelection(this.editor) : closestTable(node);
+    this.lastSelectedTable = table;
+    return table;
+  }
 
   indentSelectedTable(): void {
     this.adjustSelectedTable(INDENT_STEP_REM);
@@ -45,49 +98,67 @@ export default class TableIndentation {
     this.adjustSelectedTable(-INDENT_STEP_REM);
   }
 
-  canOutdent(table: HTMLTableElement | null = selectedTable(this.editor)): boolean {
-    return Boolean(table && currentIndent(table) > 0);
+  canOutdent(table: HTMLTableElement | null = this.getSelectedTable()): boolean {
+    return Boolean(table && currentIndentLevel(table) > 0);
   }
 
-  canIndent(table: HTMLTableElement | null = selectedTable(this.editor)): boolean {
-    return Boolean(table && currentIndent(table) < MAX_INDENT_REM);
+  canIndent(table: HTMLTableElement | null = this.getSelectedTable()): boolean {
+    return Boolean(table && currentIndentLevel(table) < MAX_INDENT_LEVEL);
   }
 
   private adjustSelectedTable(change: number): void {
-    const table = selectedTable(this.editor);
+    const table = this.getSelectedTable();
     if (!table) {
       return;
     }
-    const previousIndent = currentIndent(table);
-    const indent = Math.min(MAX_INDENT_REM, Math.max(0, previousIndent + change));
-    const actualChange = indent - previousIndent;
-    if (actualChange === 0) {
+    const direction = change > 0 ? 1 : -1;
+    const previousLevel = currentIndentLevel(table);
+    const level = Math.min(MAX_INDENT_LEVEL, Math.max(0, previousLevel + direction));
+    if (level === previousLevel) {
       return;
     }
 
+    const bookmark = this.editor.selection.getBookmark(2, true);
     this.editor.undoManager.transact(() => {
-      if (indent === 0) {
-        table.style.removeProperty('margin-left');
-      } else {
-        table.style.marginLeft = `${indent}rem`;
-        if (table.style.marginRight === 'auto') {
-          table.style.removeProperty('margin-right');
+      let wrapper = indentWrapper(table);
+
+      // Migrate tables indented by the previous implementation. The wrapper
+      // owns layout from this point on, leaving table width/alignment untouched.
+      if (!wrapper && level > 0) {
+        wrapper = table.ownerDocument.createElement('div');
+        wrapper.className = INDENT_WRAPPER_CLASS;
+        table.parentNode?.insertBefore(wrapper, table);
+        wrapper.append(table);
+        if (legacyIndentLevel(table) > 0) {
+          table.style.removeProperty('margin-left');
+          if (!table.getAttribute('style')?.trim()) table.removeAttribute('style');
         }
       }
 
-      const width = table.style.width.trim();
-      if (width.endsWith('%')) {
-        const widthPercent = Number.parseFloat(width);
-        if (Number.isFinite(widthPercent)) {
-          const widthChange = -(actualChange / INDENT_STEP_REM) * WIDTH_STEP_PERCENT;
-          table.style.width = `${Math.min(100, Math.max(10, widthPercent + widthChange))}%`;
-        }
-      }
-      if (!table.getAttribute('style')?.trim()) {
-        table.removeAttribute('style');
+      if (level === 0 && wrapper) {
+        wrapper.parentNode?.insertBefore(table, wrapper);
+        wrapper.remove();
+      } else if (wrapper) {
+        wrapper.dataset.indentLevel = String(level);
+        wrapper.style.marginLeft = `${level * INDENT_STEP_REM}rem`;
       }
     });
+    this.editor.selection.moveToBookmark(bookmark);
+    this.lastSelectedTable = table;
     this.editor.nodeChanged();
     this.editor.focus();
+  }
+
+  private getSelectedTable(): HTMLTableElement | null {
+    const selected = tableFromSelection(this.editor);
+    if (selected) {
+      this.lastSelectedTable = selected;
+      return selected;
+    }
+    if (this.lastSelectedTable && this.editor.getBody().contains(this.lastSelectedTable)) {
+      return this.lastSelectedTable;
+    }
+    this.lastSelectedTable = null;
+    return null;
   }
 }

@@ -387,7 +387,6 @@
                     data-type={entry.entityType}
                     data-stepid={entry.id}
                     aria-label={t('Mark experiment step complete')}
-                    on:change={() => window.setTimeout(load, 600)}
                   />
                 {:else}
                   <i class='fas fa-list-check color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>

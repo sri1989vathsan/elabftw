@@ -561,10 +561,10 @@ export function getTinymceBaseConfig(page: string): object {
         onAction: () => tableIndentation.outdentSelectedTable(),
         onSetup: api => {
           const update = (event): void => {
-            const table = event.element?.closest?.('table') as HTMLTableElement | null;
+            const table = tableIndentation.trackSelectedTable(event.element);
             api.setEnabled(tableIndentation.canOutdent(table));
           };
-          api.setEnabled(tableIndentation.canOutdent());
+          api.setEnabled(tableIndentation.canOutdent(tableIndentation.trackSelectedTable()));
           editor.on('NodeChange', update);
           return () => editor.off('NodeChange', update);
         },
@@ -575,10 +575,10 @@ export function getTinymceBaseConfig(page: string): object {
         onAction: () => tableIndentation.indentSelectedTable(),
         onSetup: api => {
           const update = (event): void => {
-            const table = event.element?.closest?.('table') as HTMLTableElement | null;
+            const table = tableIndentation.trackSelectedTable(event.element);
             api.setEnabled(tableIndentation.canIndent(table));
           };
-          api.setEnabled(tableIndentation.canIndent());
+          api.setEnabled(tableIndentation.canIndent(tableIndentation.trackSelectedTable()));
           editor.on('NodeChange', update);
           return () => editor.off('NodeChange', update);
         },

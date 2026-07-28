@@ -9,6 +9,7 @@ import Todolistc from './Todolist.class';
 import { Model } from './interfaces';
 import { core } from './core';
 import { on } from './handlers';
+import { reloadElements } from './misc';
 
 if (document.getElementById('todolistPanel') && !core.isAnon) {
 
@@ -34,6 +35,12 @@ if (document.getElementById('todolistPanel') && !core.isAnon) {
   const TodolistC = new Todolistc();
   TodolistC.unfinishedStepsScope = unfinishedStepsScope;
   TodolistC.initialize();
+
+  window.addEventListener('todolist-changed', () => {
+    // A completed task/step removes its deadline notification server-side.
+    // Refresh the rendered header bell so it does not stay highlighted.
+    void reloadElements(['navbarNotifDiv']);
+  });
 
   on('todo-panel-view', (el: HTMLElement) => {
     TodolistC.showView(el.dataset.view === 'calendar' ? 'calendar' : 'tasks');

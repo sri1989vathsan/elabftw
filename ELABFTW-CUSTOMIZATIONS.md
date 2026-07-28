@@ -209,8 +209,11 @@ Benchling-style named data tables, 6/12/24/48/96/384-well plate presets, caption
 above tables, and a visual aggregate formula builder. Select a source range and
 click SUM, AVERAGE, COUNT, MIN, or MAX; the result formula is placed immediately
 below the selection. Tables can be indented/outdented in 2.5rem steps to align
-with nested bullets, and the sanitizer preserves TinyMCE's nested-list marker so
-Tab indentation does not render duplicate bullets.
+with nested bullets. Indentation is applied to a structural wrapper rather than
+rewriting the table's width or alignment, so full-width, centered, well-plate,
+and formula tables remain stable. Multi-cell selections and toolbar focus retain
+the active table correctly. The sanitizer also preserves TinyMCE's nested-list
+marker so Tab indentation does not render duplicate bullets.
 
 The TinyMCE toolbar now shows a labeled **Spreadsheet** menu. Its entries expose
 Custom size, Benchling-style data table, and a Well plate submenu with every
