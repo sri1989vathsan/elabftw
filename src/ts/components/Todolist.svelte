@@ -267,7 +267,7 @@
 </div>
 
 {#if loading}
-  <p class='text-muted'>{t('Loading')}…</p>
+  <p class='todo-secondary-text'>{t('Loading')}…</p>
 {:else if dueGroups.length === 0}
   <p class='mb-0'>{t('no-tasks-yet')}</p>
 {:else}
@@ -312,10 +312,10 @@
                     </div>
                   {/if}
                   {#if entry.notes}
-                    <div class='small text-muted'>{entry.notes}</div>
+                    <div class='small todo-secondary-text'>{entry.notes}</div>
                   {/if}
                   {#if entry.creationTime}
-                    <div class='relative-moment small text-muted' title={entry.creationTime}>
+                    <div class='relative-moment small todo-secondary-text' title={entry.creationTime}>
                       {relative(entry.creationTime)}
                     </div>
                   {/if}
@@ -345,11 +345,11 @@
 
   .todo-due-heading {
     align-items: center;
-    background: color-mix(in srgb, var(--white) 86%, var(--primary));
-    border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--secondary));
+    background: var(--chrome-bg);
+    border: 1px solid var(--secondary);
     border-left: 4px solid var(--primary);
-    border-radius: 0.55rem;
-    color: var(--strongest);
+    border-radius: 0.25rem;
+    color: var(--chrome-fg);
     display: flex;
     font-size: 0.95rem;
     justify-content: space-between;
@@ -357,32 +357,42 @@
     padding: 0.48rem 0.6rem;
   }
 
+  .todo-due-heading .badge {
+    background: var(--primary);
+    color: var(--chrome-fg);
+  }
+
   .todo-due-heading.overdue-heading {
-    background: color-mix(in srgb, var(--white) 86%, var(--danger));
-    border-color: color-mix(in srgb, var(--danger) 25%, var(--secondary));
-    border-left-color: var(--danger);
-    color: var(--strongest);
+    background: var(--chrome-bg);
+    border-color: var(--secondary);
+    border-left-color: var(--side-panel-danger, #ff8a7a);
+    color: var(--chrome-fg);
+  }
+
+  .todo-due-heading.overdue-heading .badge {
+    background: var(--side-panel-danger, #ff8a7a);
+    color: var(--chrome-bg);
   }
 
   .todo-group-entry {
-    background: color-mix(in srgb, var(--white) 88%, var(--primary));
-    border-color: color-mix(in srgb, var(--primary) 22%, var(--secondary));
+    background: var(--chrome-bg);
+    border-color: var(--secondary);
     border-left: 3px solid var(--primary);
-    border-radius: 0.55rem !important;
-    color: var(--strongest);
+    border-radius: 0.25rem !important;
+    color: var(--chrome-fg);
     margin-bottom: 0.4rem;
     padding: 0.65rem;
   }
 
   .todo-group-entry.todo-entry-overdue {
-    background: color-mix(in srgb, var(--white) 88%, var(--danger));
-    border-color: color-mix(in srgb, var(--danger) 22%, var(--secondary));
-    border-left-color: var(--danger);
+    background: var(--chrome-bg);
+    border-color: var(--secondary);
+    border-left-color: var(--side-panel-danger, #ff8a7a);
   }
 
   .todo-group-entry .todoItem,
   .todo-group-entry .btn-ghost {
-    color: var(--strongest);
+    color: var(--chrome-fg);
   }
 
   .todo-group-entry .fas {
@@ -390,15 +400,19 @@
   }
 
   .todo-group-entry.todo-entry-overdue .fas {
-    color: var(--danger);
+    color: var(--side-panel-danger, #ff8a7a);
   }
 
   .todo-item-deadline {
-    color: var(--medium);
+    color: var(--chrome-muted);
   }
 
   .todo-entry-overdue .todo-item-deadline {
-    color: var(--danger);
+    color: var(--side-panel-danger, #ff8a7a);
+  }
+
+  .todo-secondary-text {
+    color: var(--chrome-muted);
   }
 
   .min-width-0 {

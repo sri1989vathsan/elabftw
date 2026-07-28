@@ -736,19 +736,18 @@
 
 <style>
   .calendar-todo-create {
-    background: var(--firstlevel);
+    background: var(--chrome-bg);
     border: 1px solid var(--secondary);
-    border-radius: 0.35rem;
-    color: var(--strongest);
+    border-radius: 0.25rem;
+    color: var(--chrome-fg);
     padding: 0.65rem;
   }
 
   .calendar-feed {
-    background: color-mix(in srgb, var(--white) 88%, var(--primary));
-    border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--secondary-muted));
-    border-radius: 0.8rem;
-    box-shadow: 0 0.3rem 0.8rem color-mix(in srgb, var(--strongest) 8%, transparent);
-    color: var(--strongest);
+    background: var(--chrome-bg);
+    border: 1px solid var(--secondary);
+    border-radius: 0.25rem;
+    color: var(--chrome-fg);
     padding: 0.8rem;
   }
 
@@ -791,7 +790,7 @@
   }
 
   .calendar-feed-eyebrow {
-    color: var(--primary);
+    color: var(--chrome-muted);
     display: block;
     font-size: 0.6rem;
     font-weight: 800;
@@ -804,13 +803,10 @@
     --calendar-count-overdue: #b91c1c;
     --calendar-count-today: #b45309;
     --calendar-count-upcoming: #6d28d9;
-    background: var(--white);
-    border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--secondary-muted));
-    border-radius: 1rem;
-    box-shadow:
-      0 0.75rem 1.8rem color-mix(in srgb, var(--strongest) 10%, transparent),
-      0 0.12rem 0.35rem color-mix(in srgb, var(--strongest) 8%, transparent);
-    color: var(--strongest);
+    background: var(--chrome-bg);
+    border: 1px solid var(--secondary);
+    border-radius: 0.25rem;
+    color: var(--chrome-fg);
     overflow: hidden;
     padding: 0.85rem;
   }
@@ -914,14 +910,14 @@
   }
 
   .calendar-todo-weekdays {
-    background: color-mix(in srgb, var(--primary) 5%, var(--white));
+    background: color-mix(in srgb, var(--chrome-bg) 82%, var(--primary));
     border-radius: 0.65rem;
     margin-bottom: 0.35rem;
     padding: 0.2rem 0.12rem;
   }
 
   .calendar-todo-weekdays span {
-    color: var(--medium);
+    color: var(--chrome-fg);
     font-size: 0.64rem;
     font-weight: 800;
     letter-spacing: 0.08em;
@@ -933,10 +929,10 @@
   .calendar-todo-day {
     align-items: flex-start;
     aspect-ratio: 1 / 1.04;
-    background: color-mix(in srgb, var(--white) 94%, var(--primary));
-    border: 1px solid transparent;
-    border-radius: 0.7rem;
-    color: var(--strongest);
+    background: var(--chrome-bg);
+    border: 1px solid var(--chrome-muted);
+    border-radius: 0.35rem;
+    color: var(--chrome-fg);
     display: flex;
     font-size: 0.76rem;
     justify-content: flex-start;
@@ -947,19 +943,19 @@
   }
 
   .calendar-todo-day:hover {
-    background: color-mix(in srgb, var(--primary) 10%, var(--white));
-    box-shadow: 0 0.3rem 0.65rem color-mix(in srgb, var(--strongest) 13%, transparent);
+    background: color-mix(in srgb, var(--chrome-bg) 72%, var(--primary));
+    box-shadow: 0 0.3rem 0.65rem rgba(0, 0, 0, 0.28);
     transform: translateY(-2px);
   }
 
   .calendar-todo-day.selected {
-    background: color-mix(in srgb, var(--primary) 19%, var(--white));
-    border-color: color-mix(in srgb, var(--primary) 72%, var(--white));
+    background: color-mix(in srgb, var(--chrome-bg) 62%, var(--primary));
+    border-color: var(--primary);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
   }
 
   .calendar-todo-day.today {
-    background: var(--white);
+    background: var(--chrome-bg);
     box-shadow: inset 0 0 0 2px var(--primary);
     font-weight: 700;
   }
@@ -987,7 +983,7 @@
 
   .calendar-day-count {
     align-items: center;
-    border: 2px solid var(--white);
+    border: 2px solid var(--chrome-bg);
     border-radius: 50%;
     bottom: 0.22rem;
     box-shadow: 0 0.2rem 0.45rem rgba(31, 41, 55, 0.24);
@@ -1018,7 +1014,7 @@
 
   .calendar-legend {
     align-items: center;
-    color: var(--medium);
+    color: var(--chrome-muted);
     display: flex;
     flex-wrap: wrap;
     font-size: 0.66rem;
@@ -1034,7 +1030,7 @@
   }
 
   .calendar-legend-dot {
-    border: 2px solid var(--white);
+    border: 2px solid var(--chrome-bg);
     border-radius: 50%;
     box-shadow: 0 0.1rem 0.3rem rgba(31, 41, 55, 0.22);
     display: inline-block;
@@ -1055,8 +1051,9 @@
   }
 
   .calendar-month-actions {
-    background: color-mix(in srgb, var(--primary) 4%, var(--white));
-    border-radius: 0.65rem;
+    background: var(--chrome-bg);
+    border-top: 1px solid var(--secondary);
+    border-radius: 0.25rem;
     justify-content: center;
     margin-top: 0.7rem;
     padding: 0.45rem;
@@ -1064,7 +1061,7 @@
 
   .calendar-agenda-header {
     align-items: center;
-    border-bottom: 1px solid var(--secondary-muted);
+    border-bottom: 1px solid var(--secondary);
     display: flex;
     justify-content: space-between;
     margin: -0.1rem 0 0.7rem;
@@ -1072,7 +1069,7 @@
   }
 
   .calendar-agenda-eyebrow {
-    color: var(--primary);
+    color: var(--chrome-muted);
     display: block;
     font-size: 0.65rem;
     font-weight: 700;
@@ -1081,22 +1078,22 @@
   }
 
   .calendar-todo-entry {
-    background: color-mix(in srgb, var(--white) 88%, var(--primary));
-    border-color: color-mix(in srgb, var(--primary) 22%, var(--secondary));
+    background: var(--chrome-bg);
+    border-color: var(--secondary);
     border-left: 3px solid var(--primary);
-    border-radius: 0.55rem !important;
-    color: var(--strongest);
+    border-radius: 0.25rem !important;
+    color: var(--chrome-fg);
     margin-bottom: 0.45rem;
   }
 
   .calendar-todo-entry.calendar-todo-overdue {
-    background: color-mix(in srgb, var(--white) 88%, var(--danger));
-    border-color: color-mix(in srgb, var(--danger) 22%, var(--secondary));
-    border-left-color: var(--danger);
+    background: var(--chrome-bg);
+    border-color: var(--secondary);
+    border-left-color: var(--side-panel-danger, #ff8a7a);
   }
 
   .calendar-todo-entry .btn-ghost {
-    color: var(--strongest);
+    color: var(--chrome-fg);
   }
 
   .calendar-todo-entry .fas {
@@ -1104,11 +1101,11 @@
   }
 
   .calendar-todo-entry.calendar-todo-overdue .fas {
-    color: var(--danger);
+    color: var(--side-panel-danger, #ff8a7a);
   }
 
   .calendar-entry-source {
-    color: var(--primary);
+    color: var(--chrome-muted);
     display: block;
     font-size: 0.65rem;
     font-weight: 700;
@@ -1122,15 +1119,16 @@
   }
 
   .calendar-todo-deadline {
-    color: var(--medium);
+    color: var(--chrome-muted);
   }
 
   .calendar-todo-overdue .calendar-todo-deadline {
-    color: var(--danger);
+    color: var(--side-panel-danger, #ff8a7a);
   }
 
   .calendar-todo-edit {
-    background: var(--firstlevel);
+    background: color-mix(in srgb, var(--chrome-bg) 82%, var(--primary));
+    border: 1px solid var(--secondary);
     border-radius: 0.25rem;
     padding: 0.5rem;
   }
@@ -1138,6 +1136,27 @@
   .calendar-todo-edit textarea,
   .calendar-todo-edit .d-flex {
     grid-column: 1 / -1;
+  }
+
+  .calendar-feed .text-muted,
+  .calendar-todo-agenda .text-muted {
+    color: var(--chrome-muted) !important;
+  }
+
+  .calendar-feed .text-warning {
+    color: var(--side-panel-warning, #ffd166) !important;
+  }
+
+  .calendar-feed .btn-outline-primary,
+  .calendar-month-actions .btn-outline-primary,
+  .calendar-month-actions .btn-outline-secondary {
+    border-color: var(--chrome-muted);
+    color: var(--chrome-fg);
+  }
+
+  .calendar-feed .btn-outline-danger {
+    border-color: var(--side-panel-danger, #ff8a7a);
+    color: var(--side-panel-danger, #ff8a7a);
   }
 
   .min-width-0 {
