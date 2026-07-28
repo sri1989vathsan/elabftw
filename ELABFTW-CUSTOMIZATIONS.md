@@ -22,15 +22,19 @@ Monthly lab logs with owner names and dashboard.
 ## Feature 3: Searchable, Linkable Table of Contents
 
 A SidePanel TOC that extracts every header and subheader from `#body_view`
-(view mode) or the TinyMCE editor (edit mode). It provides heading search,
-scroll-spy, and smooth scrolling. In view mode, a TOC search also filters the
-main text to the matching heading sections and keeps parent headings visible for
-context; clearing the query restores the complete text. The filtering uses
-transient display classes and never changes the saved body. Each entry has a
+(view mode) or the TinyMCE editor (edit mode). It provides multi-filter heading
+search, scroll-spy, and smooth scrolling. Search terms can be committed as
+removable chips and combined using **All filters** or **Any filter**. In view
+mode, the same filters subset the main text to matching heading sections and
+keep parent headings visible for context; clearing the filters restores the
+complete text. Filtering uses transient display classes and never changes the
+saved body. Each entry has a
 link button that copies a stable view-mode URL to that exact section. Edit mode
 also shows an insert button that adds the internal section link at the current
-editor cursor. Generated heading IDs are saved with the body and retained by
-the sanitizer.
+editor cursor. If text is selected, the button preserves that label and only
+adds the section link; without a selection it inserts the heading title as the
+linked label. Generated heading IDs are saved with the body and retained by the
+sanitizer.
 
 **Files added:**
 - `src/ts/TocPanel.class.ts` — SidePanel subclass with heading extraction, scroll-spy via IntersectionObserver, smooth scrolling
@@ -175,6 +179,12 @@ The Manage favorites section can create a new category for the currently
 selected target and immediately favorite it, or favorite existing categories,
 owners, statuses, and tags.
 
+All left sidebar tabs share an adjustable width. Drag the narrow separator on
+the panel's right edge, or focus it and use the Left/Right arrow keys, to resize
+Folders, Table of Contents, Filters, and the todo panel together. The chosen
+width is stored in the browser and restored on the next visit, with viewport
+limits that keep the main document usable.
+
 **Files added:**
 - `src/Models/FavCategories.php`
 - `src/Models/FavFilters.php`
@@ -198,14 +208,33 @@ Custom size, Benchling-style data table, and a Well plate submenu with every
 supported preset, so the layouts are visible before opening the spreadsheet
 editor.
 
-The main-text editor also enables focused Markdown-style list shortcuts without
-enabling TinyMCE's heading shortcuts: type `-` followed by Space for a bulleted
-list, or `1.` followed by Space for a numbered list.
+The main-text editor also enables explicit list shortcuts without enabling
+TinyMCE's other heading/format text patterns: at the beginning of an otherwise
+empty paragraph, type `-` followed by Space for a bulleted list, or `1` (also
+`1.`) followed by Space for a numbered list. Tables, code blocks, and existing
+list items are excluded, and each conversion is a single undo step.
+
+Inside a list, Tab and Shift+Tab explicitly indent and outdent the current item
+instead of moving focus to the next editor control. The entity action toolbar is
+sticky in both view and edit mode, keeping Back and Edit/View available while
+scrolling. In edit mode, the existing Save and Save-and-back actions live in
+that sticky toolbar, with TinyMCE's own sticky toolbar offset beneath it.
 
 Spreadsheet updates preserve TinyMCE table formatting instead of rebuilding an
 unformatted grid. Table borders and layout, caption formatting, and per-cell
 border, background, text, alignment, padding, and sizing styles round-trip
 through the embedded spreadsheet data and are restored after formula edits.
+
+The spreadsheet editor also exposes appearance defaults for cell border width,
+border color, base cell color, and optional alternating row and column colors.
+The current table previews changes immediately. **Save as default** persists the
+appearance either on the user's account or on the current experiment/resource
+(including template entities); a notebook default takes precedence over the
+account default, while direct formatting on an individual cell takes precedence
+over both. A selected cell range can also be formatted directly with quick
+controls for background color, border color, border style, and border width, or
+returned to inherited defaults with **Clear format**. Schema 212 stores the
+scoped settings as validated JSON.
 
 ## Schema Migration Notes
 
@@ -214,6 +243,7 @@ through the embedded spreadsheet data and are restored after formula edits.
 - `schema209.sql` — Our addition (renumbered from 208 after upstream merge): adds `favorite_experiment_folder` column to `users` table with FK to `experiments_folders(id)` with `ON DELETE SET NULL`
 - `schema210.sql` — Adds server-backed favorite experiment/resource categories
 - `schema211.sql` — Adds server-backed favorite owner/status filters
+- `schema212.sql` — Adds account- and notebook-scoped spreadsheet appearance defaults
 
 ## General Merge Notes
 

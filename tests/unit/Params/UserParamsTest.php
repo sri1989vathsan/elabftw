@@ -65,4 +65,24 @@ class UserParamsTest extends \PHPUnit\Framework\TestCase
         $params = new UserParams('entrypoint', $entrypoint);
         $this->assertEquals(Entrypoint::Dashboard->value, $params->getContent());
     }
+
+    public function testSpreadsheetDefaults(): void
+    {
+        $input = '{"borderWidth":2,"borderColor":"#AABBCC","cellColor":"#FFFFFF","alternateRows":true,"alternateRowColor":"#F6F7F8","alternateColumns":false,"alternateColumnColor":"#EEF6F7"}';
+        $params = new UserParams('spreadsheet_defaults', $input);
+        $this->assertSame(
+            '{"borderWidth":2,"borderColor":"#aabbcc","cellColor":"#ffffff","alternateRows":true,"alternateRowColor":"#f6f7f8","alternateColumns":false,"alternateColumnColor":"#eef6f7"}',
+            $params->getContent(),
+        );
+    }
+
+    public function testInvalidSpreadsheetDefaults(): void
+    {
+        $params = new UserParams(
+            'spreadsheet_defaults',
+            '{"borderWidth":50,"borderColor":"red"}',
+        );
+        $this->expectException(ImproperActionException::class);
+        $params->getContent();
+    }
 }

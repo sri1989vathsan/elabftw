@@ -9,16 +9,125 @@ import $ from 'jquery';
 import { Model } from './interfaces';
 
 export default class SidePanel {
+  private static readonly WIDTH_KEY = 'sidepanel-width';
+  private static readonly WIDTH_PROPERTY = '--side-panel-width';
+  private static readonly MIN_WIDTH = 280;
+  private static readonly MAX_WIDTH = 720;
+  private static currentWidth = 0;
+  private static widthInitialized = false;
+
   panelId: string;
   model: Model | string;
 
   constructor(model: Model | string) {
     this.model = model;
+    SidePanel.initializeWidth();
+  }
+
+  private static getWidthBounds(): { min: number; max: number } {
+    // Always leave enough room to see and interact with the main document.
+    const max = Math.max(160, Math.min(SidePanel.MAX_WIDTH, window.innerWidth - 240));
+    return {
+      min: Math.min(SidePanel.MIN_WIDTH, max),
+      max,
+    };
+  }
+
+  private static clampWidth(width: number): number {
+    const bounds = SidePanel.getWidthBounds();
+    return Math.round(Math.min(Math.max(width, bounds.min), bounds.max));
+  }
+
+  private static setWidth(width: number, persist = false): void {
+    SidePanel.currentWidth = SidePanel.clampWidth(width);
+    document.documentElement.style.setProperty(
+      SidePanel.WIDTH_PROPERTY,
+      `${SidePanel.currentWidth}px`,
+    );
+
+    const bounds = SidePanel.getWidthBounds();
+    document.querySelectorAll<HTMLElement>('.side-panel-resizer').forEach(resizer => {
+      resizer.setAttribute('aria-valuemin', bounds.min.toString());
+      resizer.setAttribute('aria-valuemax', bounds.max.toString());
+      resizer.setAttribute('aria-valuenow', SidePanel.currentWidth.toString());
+    });
+
+    if (persist) {
+      localStorage.setItem(SidePanel.WIDTH_KEY, SidePanel.currentWidth.toString());
+    }
+  }
+
+  private static initializeWidth(): void {
+    if (SidePanel.widthInitialized) return;
+    SidePanel.widthInitialized = true;
+
+    const storedWidth = Number.parseFloat(localStorage.getItem(SidePanel.WIDTH_KEY) ?? '');
+    const defaultWidth = Math.max(window.innerWidth * 0.24, 330);
+    SidePanel.setWidth(Number.isFinite(storedWidth) ? storedWidth : defaultWidth);
+    window.addEventListener('resize', () => {
+      SidePanel.setWidth(SidePanel.currentWidth);
+    });
+  }
+
+  private static setContainerOpen(isOpen: boolean): void {
+    if (isOpen) {
+      $('#container')
+        .css('width', `calc(100% - var(${SidePanel.WIDTH_PROPERTY}))`)
+        .css('margin-left', `var(${SidePanel.WIDTH_PROPERTY})`);
+      return;
+    }
+    $('#container').css('width', '100%').css('margin-left', 'auto');
+  }
+
+  private addResizer(panel: HTMLElement): void {
+    if (panel.querySelector('.side-panel-resizer')) return;
+
+    const resizer = document.createElement('div');
+    resizer.className = 'side-panel-resizer';
+    resizer.tabIndex = 0;
+    resizer.setAttribute('role', 'separator');
+    resizer.setAttribute('aria-label', 'Resize sidebar');
+    resizer.setAttribute('aria-orientation', 'vertical');
+    resizer.title = 'Drag to resize sidebar. Use Left and Right arrow keys for precise adjustment.';
+
+    resizer.addEventListener('pointerdown', (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      document.body.classList.add('side-panel-resizing');
+      resizer.setPointerCapture(event.pointerId);
+
+      const resize = (moveEvent: PointerEvent): void => {
+        if (moveEvent.pointerId !== event.pointerId) return;
+        SidePanel.setWidth(moveEvent.clientX);
+      };
+      const finish = (endEvent: PointerEvent): void => {
+        if (endEvent.pointerId !== event.pointerId) return;
+        resizer.removeEventListener('pointermove', resize);
+        resizer.removeEventListener('pointerup', finish);
+        resizer.removeEventListener('pointercancel', finish);
+        document.body.classList.remove('side-panel-resizing');
+        SidePanel.setWidth(SidePanel.currentWidth, true);
+      };
+
+      resizer.addEventListener('pointermove', resize);
+      resizer.addEventListener('pointerup', finish);
+      resizer.addEventListener('pointercancel', finish);
+    });
+
+    resizer.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      const direction = event.key === 'ArrowLeft' ? -1 : 1;
+      SidePanel.setWidth(SidePanel.currentWidth + (direction * 16), true);
+    });
+
+    panel.append(resizer);
+    SidePanel.setWidth(SidePanel.currentWidth);
   }
 
   hide(): void {
     // make container great again
-    $('#container').css('width', '100%').css('margin-left', 'auto');
+    SidePanel.setContainerOpen(false);
     // hide panel
     const panel = document.getElementById(this.panelId);
     if (!panel) return;
@@ -47,7 +156,8 @@ export default class SidePanel {
       otherOpener?.setAttribute('aria-expanded', 'false');
     });
 
-    $('#container').css('width', '76%').css('margin-left', 'max(24%, 330px)');
+    this.addResizer(panel);
+    SidePanel.setContainerOpen(true);
     // show panel
     panel.removeAttribute('hidden');
     // store the current state

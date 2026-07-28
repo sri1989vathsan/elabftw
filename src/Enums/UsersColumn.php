@@ -69,6 +69,7 @@ enum UsersColumn: string
     case ScTodo = 'sc_todo';
     case ShowWeekends = 'show_weekends';
     case Sort = 'sort';
+    case SpreadsheetDefaults = 'spreadsheet_defaults';
     case UseIsodate = 'use_isodate';
     case UploadsLayout = 'uploads_layout';
     case UseMarkdown = 'use_markdown';

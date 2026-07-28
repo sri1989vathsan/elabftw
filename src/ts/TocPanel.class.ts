@@ -21,14 +21,18 @@ interface TocEntry {
 }
 
 interface TinyMceEditor {
-  execCommand(command: string, ui: boolean, value: string): void;
+  execCommand(command: string, ui: boolean, value: string | Record<string, string>): void;
   focus(): void;
   getBody(): HTMLElement;
+  selection: {
+    getRng(): Range;
+  };
 }
 
 export default class TocPanel extends SidePanel {
 
   initialLoad = true;
+  private searchFilters: string[] = [];
 
   constructor() {
     super(TOC_MODEL);
@@ -161,28 +165,88 @@ export default class TocPanel extends SidePanel {
    */
   private setupSearchControls(): void {
     const input = document.getElementById('tocSearchInput') as HTMLInputElement | null;
+    const add = document.getElementById('tocSearchAdd') as HTMLButtonElement | null;
     const clear = document.getElementById('tocSearchClear') as HTMLButtonElement | null;
-    if (!input || !clear || input.dataset.tocSearchReady) return;
+    const mode = document.getElementById('tocSearchMode') as HTMLSelectElement | null;
+    if (!input || !add || !clear || !mode || input.dataset.tocSearchReady) return;
 
     input.addEventListener('input', () => this.filterEntries());
+    input.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      this.addSearchFilter(input);
+    });
+    add.addEventListener('click', () => this.addSearchFilter(input));
+    mode.addEventListener('change', () => this.filterEntries());
     clear.addEventListener('click', () => {
       input.value = '';
+      this.searchFilters = [];
+      this.renderSearchFilters();
       input.focus();
       this.filterEntries();
     });
     input.dataset.tocSearchReady = 'true';
+    this.renderSearchFilters();
+  }
+
+  private addSearchFilter(input: HTMLInputElement): void {
+    const filter = input.value.trim();
+    if (!filter) return;
+    if (!this.searchFilters.some(value => value.toLocaleLowerCase() === filter.toLocaleLowerCase())) {
+      this.searchFilters.push(filter);
+    }
+    input.value = '';
+    this.renderSearchFilters();
+    this.filterEntries();
+    input.focus();
+  }
+
+  private renderSearchFilters(): void {
+    const container = document.getElementById('tocSearchFilters');
+    if (!container) return;
+
+    container.replaceChildren();
+    this.searchFilters.forEach((filter, index) => {
+      const chip = document.createElement('span');
+      chip.className = 'toc-search-filter badge badge-secondary';
+      const label = document.createElement('span');
+      label.textContent = filter;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'toc-search-filter-remove';
+      remove.title = `Remove filter ${filter}`;
+      remove.setAttribute('aria-label', `Remove filter ${filter}`);
+      remove.textContent = '×';
+      remove.addEventListener('click', () => {
+        this.searchFilters.splice(index, 1);
+        this.renderSearchFilters();
+        this.filterEntries();
+      });
+      chip.append(label, remove);
+      container.appendChild(chip);
+    });
   }
 
   private filterEntries(): void {
     const input = document.getElementById('tocSearchInput') as HTMLInputElement | null;
+    const mode = document.getElementById('tocSearchMode') as HTMLSelectElement | null;
     const noResults = document.getElementById('tocNoResults');
     const items = Array.from(document.querySelectorAll<HTMLElement>('#tocItems .toc-item'));
-    const query = input?.value.trim().toLocaleLowerCase() ?? '';
+    const pendingFilter = input?.value.trim() ?? '';
+    const filters = [
+      ...this.searchFilters,
+      ...(pendingFilter ? [pendingFilter] : []),
+    ].map(filter => filter.toLocaleLowerCase());
+    const matchAll = mode?.value !== 'any';
     const matchingHeadingIds = new Set<string>();
     let matches = 0;
 
     for (const item of items) {
-      const visible = !query || (item.dataset.tocSearchText ?? '').includes(query);
+      const text = item.dataset.tocSearchText ?? '';
+      const visible = filters.length === 0
+        || (matchAll
+          ? filters.every(filter => text.includes(filter))
+          : filters.some(filter => text.includes(filter)));
       item.hidden = !visible;
       if (visible) {
         matches++;
@@ -196,19 +260,19 @@ export default class TocPanel extends SidePanel {
       noResults.hidden = items.length === 0 || matches > 0;
     }
 
-    this.filterMainText(query, matchingHeadingIds);
+    this.filterMainText(filters, matchingHeadingIds);
   }
 
   /**
    * In view mode, show only sections selected by the TOC heading search.
    * The filter only adds transient CSS classes and never changes saved body HTML.
    */
-  private filterMainText(query: string, matchingHeadingIds: Set<string>): void {
+  private filterMainText(filters: string[], matchingHeadingIds: Set<string>): void {
     const bodyView = document.getElementById('body_view');
     if (!bodyView) return;
 
     this.clearMainTextFilter();
-    if (!query) return;
+    if (filters.length === 0) return;
 
     const headings = Array.from(bodyView.querySelectorAll<HTMLHeadingElement>(HEADING_SELECTOR));
     if (headings.length === 0) return;
@@ -312,7 +376,16 @@ export default class TocPanel extends SidePanel {
     const editor = this.getEditor();
     if (!editor) return;
 
+    const hasSelection = !editor.selection.getRng().collapsed;
     editor.focus();
+    if (hasSelection) {
+      // Preserve the selected label and inline formatting; only add the link.
+      editor.execCommand('mceInsertLink', false, {
+        href: `#${encodeURIComponent(targetId)}`,
+      });
+      return;
+    }
+
     editor.execCommand(
       'mceInsertContent',
       false,

@@ -28,6 +28,7 @@ final class EntityParams extends ContentParams implements ContentParamsInterface
             'title' => Filter::title($this->asString()),
             // MySQL with throw an error if this param is incorrect
             'date', 'metadata', 'proc_price_notax', 'proc_price_tax', 'booking_hourly_rate_notax', 'booking_hourly_rate_tax' => $this->getUnfilteredContent(),
+            'spreadsheet_defaults' => $this->getSpreadsheetDefaults(),
             'proc_currency', 'booking_hourly_rate_currency' => Currency::from($this->asInt())->value,
             'body', 'bodyappend' => $this->getBody(),
             'canread', 'canwrite', 'canbook', 'canread_target', 'canwrite_target' => $this->getCanJson(),

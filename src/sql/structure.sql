@@ -131,6 +131,7 @@ CREATE TABLE `experiments` (
   `state` int(10) UNSIGNED NOT NULL DEFAULT 1,
   `access_key` varchar(36) NULL DEFAULT NULL,
   `folder_id` INT UNSIGNED NULL DEFAULT NULL,
+  `spreadsheet_defaults` JSON NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -359,6 +360,7 @@ CREATE TABLE `experiments_templates` (
   `timestamped_at` timestamp NULL DEFAULT NULL,
   `access_key` varchar(36) NULL DEFAULT NULL,
   `rating` tinyint UNSIGNED NOT NULL DEFAULT 0,
+  `spreadsheet_defaults` JSON NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -699,6 +701,7 @@ CREATE TABLE `items` (
   `proc_price_notax` DECIMAL(10, 2) UNSIGNED NOT NULL DEFAULT 0.00,
   `proc_price_tax` DECIMAL(10,2) UNSIGNED NOT NULL DEFAULT 0.00,
   `proc_currency` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `spreadsheet_defaults` JSON NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -889,6 +892,7 @@ CREATE TABLE `items_types` (
   `timestamped_at` timestamp NULL DEFAULT NULL,
   `access_key` varchar(36) NULL DEFAULT NULL,
   `rating` tinyint UNSIGNED NOT NULL DEFAULT 0,
+  `spreadsheet_defaults` JSON NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -1422,6 +1426,7 @@ CREATE TABLE `users` (
   `can_manage_inventory_locations` TINYINT UNSIGNED NOT NULL DEFAULT 0,
   `theme_variant` TINYINT UNSIGNED NOT NULL DEFAULT 0,
   `favorite_experiment_folder` INT UNSIGNED NULL DEFAULT NULL,
+  `spreadsheet_defaults` JSON NULL DEFAULT NULL,
   PRIMARY KEY (`userid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 

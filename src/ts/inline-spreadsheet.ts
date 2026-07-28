@@ -10,11 +10,24 @@
 import jspreadsheet from 'jspreadsheet-ce';
 import 'jspreadsheet-ce/dist/jspreadsheet.css';
 import 'jsuites/dist/jsuites.css';
+import { ApiC } from './api';
+import { entity } from './getEntity';
 
 type CellValue = string | number | boolean | null;
 type AOA = CellValue[][];
 type SpreadsheetKind = 'standard' | 'notebook' | 'well-plate';
 type CellStyles = Record<string, string>;
+type AppearanceScope = 'user' | 'notebook';
+
+export interface SpreadsheetAppearance {
+  borderWidth: number;
+  borderColor: string;
+  cellColor: string;
+  alternateRows: boolean;
+  alternateRowColor: string;
+  alternateColumns: boolean;
+  alternateColumnColor: string;
+}
 
 // jspreadsheet-ce v5 types do not cover the runtime shape returned during setup.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,6 +48,8 @@ export interface SpreadsheetData {
   tableStyle?: string;
   captionStyle?: string;
   tableBorder?: number;
+  /** Appearance used by this table; explicit cellStyles always take precedence. */
+  appearance?: SpreadsheetAppearance;
 }
 
 interface WellPlatePreset {
@@ -57,6 +72,15 @@ const DEFAULT_ROWS = 5;
 const MAX_DIMENSION = 50;
 const MAX_TABLE_BORDER = 20;
 const DEFAULT_TABLE_STYLE = 'border-collapse:collapse;min-width:25%';
+const DEFAULT_APPEARANCE: SpreadsheetAppearance = {
+  borderWidth: 1,
+  borderColor: '#ced4da',
+  cellColor: '#ffffff',
+  alternateRows: true,
+  alternateRowColor: '#f6f7f8',
+  alternateColumns: false,
+  alternateColumnColor: '#eef6f7',
+};
 const PRESERVED_STYLE_PROPERTIES = new Set([
   'background-color',
   'border',
@@ -106,6 +130,59 @@ const PRESERVED_TABLE_STYLE_PROPERTIES = new Set([
   'margin-right',
   'min-width',
 ]);
+
+function normalizeColor(value: unknown, fallback: string): string {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+    ? value.toLowerCase()
+    : fallback;
+}
+
+function normalizeAppearance(
+  candidate?: Partial<SpreadsheetAppearance>,
+): SpreadsheetAppearance {
+  const borderWidth = typeof candidate?.borderWidth === 'number'
+    && Number.isInteger(candidate.borderWidth)
+    ? Math.max(0, Math.min(MAX_TABLE_BORDER, candidate.borderWidth))
+    : DEFAULT_APPEARANCE.borderWidth;
+  return {
+    borderWidth,
+    borderColor: normalizeColor(candidate?.borderColor, DEFAULT_APPEARANCE.borderColor),
+    cellColor: normalizeColor(candidate?.cellColor, DEFAULT_APPEARANCE.cellColor),
+    alternateRows: typeof candidate?.alternateRows === 'boolean'
+      ? candidate.alternateRows
+      : DEFAULT_APPEARANCE.alternateRows,
+    alternateRowColor: normalizeColor(
+      candidate?.alternateRowColor,
+      DEFAULT_APPEARANCE.alternateRowColor,
+    ),
+    alternateColumns: typeof candidate?.alternateColumns === 'boolean'
+      ? candidate.alternateColumns
+      : DEFAULT_APPEARANCE.alternateColumns,
+    alternateColumnColor: normalizeColor(
+      candidate?.alternateColumnColor,
+      DEFAULT_APPEARANCE.alternateColumnColor,
+    ),
+  };
+}
+
+function parseStoredAppearance(value?: string): SpreadsheetAppearance | null {
+  if (!value) return null;
+  try {
+    const candidate = JSON.parse(value) as Partial<SpreadsheetAppearance>;
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
+    return normalizeAppearance(candidate);
+  } catch {
+    return null;
+  }
+}
+
+function getEffectiveAppearanceDefaults(): SpreadsheetAppearance {
+  const defaultsElement = document.getElementById('spreadsheet-appearance-defaults');
+  const notebookDefaults = parseStoredAppearance(defaultsElement?.dataset.notebook);
+  if (notebookDefaults) return notebookDefaults;
+  return parseStoredAppearance(defaultsElement?.dataset.user)
+    ?? { ...DEFAULT_APPEARANCE };
+}
 
 export function encodeSpreadsheetData(sd: SpreadsheetData): string {
   return btoa(unescape(encodeURIComponent(JSON.stringify(sd))));
@@ -179,6 +256,9 @@ function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): Spreadsh
     tableBorder: Number.isInteger(candidate.tableBorder)
       ? Math.max(0, Math.min(MAX_TABLE_BORDER, candidate.tableBorder))
       : undefined,
+    appearance: candidate.appearance
+      ? normalizeAppearance(candidate.appearance)
+      : undefined,
   };
 }
 
@@ -235,6 +315,117 @@ function normalizeCellStyles(
     if (sanitized) result[cellName.toUpperCase()] = sanitized;
   });
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function getAppearanceBackground(
+  appearance: SpreadsheetAppearance,
+  col: number,
+  row: number,
+): string {
+  let color = appearance.cellColor;
+  if (appearance.alternateRows && row % 2 === 1) {
+    color = appearance.alternateRowColor;
+  }
+  // Column striping intentionally wins at row/column intersections.
+  if (appearance.alternateColumns && col % 2 === 1) {
+    color = appearance.alternateColumnColor;
+  }
+  return color;
+}
+
+function getAppearanceCellStyle(
+  appearance: SpreadsheetAppearance,
+  col: number,
+  row: number,
+  includeBackground = true,
+): string {
+  const declarations = [
+    `border:${appearance.borderWidth}px solid ${appearance.borderColor}`,
+  ];
+  if (includeBackground) {
+    declarations.push(`background-color:${getAppearanceBackground(appearance, col, row)}`);
+  }
+  return declarations.join(';');
+}
+
+function mergeCellStyles(
+  explicitStyles: CellStyles | undefined,
+  appearance: SpreadsheetAppearance,
+  rows: number,
+  cols: number,
+): CellStyles {
+  const result: CellStyles = {};
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const cellName = `${colLabel(col)}${row + 1}`;
+      const explicit = explicitStyles?.[cellName];
+      result[cellName] = explicit
+        ? `${getAppearanceCellStyle(appearance, col, row)};${explicit}`
+        : getAppearanceCellStyle(appearance, col, row);
+    }
+  }
+  return result;
+}
+
+/**
+ * Remove declarations generated from appearance defaults while retaining
+ * TinyMCE/jspreadsheet formatting that differs from those defaults.
+ */
+function stripAppearanceCellStyles(
+  styles: CellStyles | undefined,
+  appearance: SpreadsheetAppearance,
+  rows: number,
+  cols: number,
+): CellStyles | undefined {
+  if (!styles) return undefined;
+  const result: CellStyles = {};
+  Object.entries(styles).forEach(([cellName, style]) => {
+    const coordinates = coordinatesFromCellName(cellName);
+    if (!coordinates || coordinates.col >= cols || coordinates.row >= rows) return;
+    const actual = document.createElement('span');
+    actual.setAttribute('style', style);
+    const generated = document.createElement('span');
+    generated.setAttribute(
+      'style',
+      getAppearanceCellStyle(appearance, coordinates.col, coordinates.row),
+    );
+    for (let index = 0; index < generated.style.length; index++) {
+      const property = generated.style.item(index);
+      if (actual.style.getPropertyValue(property) === generated.style.getPropertyValue(property)) {
+        actual.style.removeProperty(property);
+      }
+    }
+    const remaining = sanitizeStyle(
+      actual.getAttribute('style') ?? undefined,
+      PRESERVED_STYLE_PROPERTIES,
+    );
+    if (remaining) result[cellName.toUpperCase()] = remaining;
+  });
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function stripAppearanceTableStyle(
+  style: string | undefined,
+  appearance: SpreadsheetAppearance,
+): string | undefined {
+  if (!style) return undefined;
+  const actual = document.createElement('span');
+  actual.setAttribute('style', style);
+  const generated = document.createElement('span');
+  generated.setAttribute(
+    'style',
+    `border:${appearance.borderWidth}px solid ${appearance.borderColor}`,
+  );
+  for (let index = 0; index < generated.style.length; index++) {
+    const property = generated.style.item(index);
+    if (actual.style.getPropertyValue(property) === generated.style.getPropertyValue(property)) {
+      actual.style.removeProperty(property);
+    }
+  }
+  return sanitizeStyle(
+    actual.getAttribute('style') ?? undefined,
+    PRESERVED_TABLE_STYLE_PROPERTIES,
+  );
 }
 
 function coordinatesFromCellName(cellName: string): { col: number; row: number } | null {
@@ -295,6 +486,15 @@ function createInput(type: string, value: string, label: string): HTMLInputEleme
   return input;
 }
 
+function createLabeledControl(labelText: string, control: HTMLElement): HTMLLabelElement {
+  const label = document.createElement('label');
+  label.className = 'inline-spreadsheet-appearance-control';
+  const text = document.createElement('span');
+  text.textContent = labelText;
+  label.append(text, control);
+  return label;
+}
+
 function createOverlay(initial: SpreadsheetData): {
   overlay: HTMLDivElement;
   sheetHost: HTMLDivElement;
@@ -309,6 +509,23 @@ function createOverlay(initial: SpreadsheetData): {
   presetSelect: HTMLSelectElement;
   formulaButtons: NodeListOf<HTMLButtonElement>;
   formulaStatus: HTMLSpanElement;
+  borderWidthInput: HTMLInputElement;
+  borderColorInput: HTMLInputElement;
+  cellColorInput: HTMLInputElement;
+  alternateRowsInput: HTMLInputElement;
+  alternateRowColorInput: HTMLInputElement;
+  alternateColumnsInput: HTMLInputElement;
+  alternateColumnColorInput: HTMLInputElement;
+  appearanceScopeSelect: HTMLSelectElement;
+  saveAppearanceDefaultBtn: HTMLButtonElement;
+  appearanceStatus: HTMLSpanElement;
+  cellFormatColorInput: HTMLInputElement;
+  cellFormatBorderColorInput: HTMLInputElement;
+  cellFormatBorderStyleSelect: HTMLSelectElement;
+  cellFormatBorderWidthInput: HTMLInputElement;
+  applyCellFormatBtn: HTMLButtonElement;
+  clearCellFormatBtn: HTMLButtonElement;
+  cellFormatStatus: HTMLSpanElement;
 } {
   const overlay = document.createElement('div');
   overlay.className = 'inline-spreadsheet-overlay';
@@ -353,6 +570,133 @@ function createOverlay(initial: SpreadsheetData): {
 
   settings.append(presetSelect, rowsInput, colsInput, resizeBtn, captionInput);
   dialog.appendChild(settings);
+
+  const appearance = normalizeAppearance(initial.appearance);
+  const appearancePanel = document.createElement('details');
+  appearancePanel.className = 'inline-spreadsheet-appearance';
+  appearancePanel.open = true;
+  const appearanceSummary = document.createElement('summary');
+  appearanceSummary.textContent = 'Cell appearance';
+  appearancePanel.appendChild(appearanceSummary);
+  const appearanceGrid = document.createElement('div');
+  appearanceGrid.className = 'inline-spreadsheet-appearance-grid';
+
+  const borderWidthInput = createInput(
+    'number',
+    String(appearance.borderWidth),
+    'Default cell border width',
+  );
+  borderWidthInput.min = '0';
+  borderWidthInput.max = String(MAX_TABLE_BORDER);
+  const borderColorInput = createInput('color', appearance.borderColor, 'Default border color');
+  const cellColorInput = createInput('color', appearance.cellColor, 'Default cell color');
+  const alternateRowColorInput = createInput(
+    'color',
+    appearance.alternateRowColor,
+    'Alternating row color',
+  );
+  const alternateColumnColorInput = createInput(
+    'color',
+    appearance.alternateColumnColor,
+    'Alternating column color',
+  );
+  const alternateRowsInput = document.createElement('input');
+  alternateRowsInput.type = 'checkbox';
+  alternateRowsInput.checked = appearance.alternateRows;
+  alternateRowsInput.setAttribute('aria-label', 'Use alternating row color');
+  const alternateColumnsInput = document.createElement('input');
+  alternateColumnsInput.type = 'checkbox';
+  alternateColumnsInput.checked = appearance.alternateColumns;
+  alternateColumnsInput.setAttribute('aria-label', 'Use alternating column color');
+
+  appearanceGrid.append(
+    createLabeledControl('Border size', borderWidthInput),
+    createLabeledControl('Border color', borderColorInput),
+    createLabeledControl('Cell color', cellColorInput),
+    createLabeledControl('Alternate rows', alternateRowsInput),
+    createLabeledControl('Row color', alternateRowColorInput),
+    createLabeledControl('Alternate columns', alternateColumnsInput),
+    createLabeledControl('Column color', alternateColumnColorInput),
+  );
+  appearancePanel.appendChild(appearanceGrid);
+
+  const appearanceDefaults = document.createElement('div');
+  appearanceDefaults.className = 'inline-spreadsheet-appearance-defaults';
+  const appearanceScopeSelect = document.createElement('select');
+  appearanceScopeSelect.className = 'form-control form-control-sm';
+  appearanceScopeSelect.setAttribute('aria-label', 'Save appearance default for');
+  appearanceScopeSelect.innerHTML = `
+    <option value="notebook">This notebook</option>
+    <option value="user">My account</option>
+  `;
+  const saveAppearanceDefaultBtn = document.createElement('button');
+  saveAppearanceDefaultBtn.type = 'button';
+  saveAppearanceDefaultBtn.className = 'btn btn-sm btn-outline-primary';
+  saveAppearanceDefaultBtn.textContent = 'Save as default';
+  const appearanceStatus = document.createElement('span');
+  appearanceStatus.className = 'inline-spreadsheet-appearance-status';
+  appearanceStatus.textContent = 'Notebook defaults override account defaults; direct cell formatting wins.';
+  appearanceDefaults.append(
+    appearanceScopeSelect,
+    saveAppearanceDefaultBtn,
+    appearanceStatus,
+  );
+  appearancePanel.appendChild(appearanceDefaults);
+  dialog.appendChild(appearancePanel);
+
+  const cellFormatBar = document.createElement('div');
+  cellFormatBar.className = 'inline-spreadsheet-cell-format';
+  const cellFormatLabel = document.createElement('strong');
+  cellFormatLabel.textContent = 'Cell format';
+  const cellFormatColorInput = createInput(
+    'color',
+    appearance.cellColor,
+    'Selected cell background color',
+  );
+  const cellFormatBorderColorInput = createInput(
+    'color',
+    appearance.borderColor,
+    'Selected cell border color',
+  );
+  const cellFormatBorderStyleSelect = document.createElement('select');
+  cellFormatBorderStyleSelect.className = 'form-control form-control-sm';
+  cellFormatBorderStyleSelect.setAttribute('aria-label', 'Selected cell border style');
+  cellFormatBorderStyleSelect.innerHTML = `
+    <option value="solid">Solid border</option>
+    <option value="dashed">Dashed border</option>
+    <option value="dotted">Dotted border</option>
+    <option value="double">Double border</option>
+    <option value="none">No border</option>
+  `;
+  const cellFormatBorderWidthInput = createInput(
+    'number',
+    String(appearance.borderWidth),
+    'Selected cell border width',
+  );
+  cellFormatBorderWidthInput.min = '0';
+  cellFormatBorderWidthInput.max = String(MAX_TABLE_BORDER);
+  const applyCellFormatBtn = document.createElement('button');
+  applyCellFormatBtn.type = 'button';
+  applyCellFormatBtn.className = 'btn btn-sm btn-outline-primary';
+  applyCellFormatBtn.textContent = 'Apply to selection';
+  const clearCellFormatBtn = document.createElement('button');
+  clearCellFormatBtn.type = 'button';
+  clearCellFormatBtn.className = 'btn btn-sm btn-outline-secondary';
+  clearCellFormatBtn.textContent = 'Clear format';
+  const cellFormatStatus = document.createElement('span');
+  cellFormatStatus.className = 'inline-spreadsheet-cell-format-status';
+  cellFormatStatus.textContent = 'Select cells, then apply a quick format.';
+  cellFormatBar.append(
+    cellFormatLabel,
+    createLabeledControl('Fill', cellFormatColorInput),
+    createLabeledControl('Border color', cellFormatBorderColorInput),
+    createLabeledControl('Border style', cellFormatBorderStyleSelect),
+    createLabeledControl('Border width', cellFormatBorderWidthInput),
+    applyCellFormatBtn,
+    clearCellFormatBtn,
+    cellFormatStatus,
+  );
+  dialog.appendChild(cellFormatBar);
 
   const formulaBar = document.createElement('div');
   formulaBar.className = 'inline-spreadsheet-formula-bar';
@@ -424,6 +768,23 @@ function createOverlay(initial: SpreadsheetData): {
     presetSelect,
     formulaButtons: formulaBar.querySelectorAll<HTMLButtonElement>('[data-formula]'),
     formulaStatus,
+    borderWidthInput,
+    borderColorInput,
+    cellColorInput,
+    alternateRowsInput,
+    alternateRowColorInput,
+    alternateColumnsInput,
+    alternateColumnColorInput,
+    appearanceScopeSelect,
+    saveAppearanceDefaultBtn,
+    appearanceStatus,
+    cellFormatColorInput,
+    cellFormatBorderColorInput,
+    cellFormatBorderStyleSelect,
+    cellFormatBorderWidthInput,
+    applyCellFormatBtn,
+    clearCellFormatBtn,
+    cellFormatStatus,
   };
 }
 
@@ -435,13 +796,82 @@ function spreadsheetPresetFromValue(value: string): SpreadsheetData | null {
   return null;
 }
 
+function appearanceFromControls(
+  ui: ReturnType<typeof createOverlay>,
+): SpreadsheetAppearance {
+  return normalizeAppearance({
+    borderWidth: parseInt(ui.borderWidthInput.value, 10),
+    borderColor: ui.borderColorInput.value,
+    cellColor: ui.cellColorInput.value,
+    alternateRows: ui.alternateRowsInput.checked,
+    alternateRowColor: ui.alternateRowColorInput.value,
+    alternateColumns: ui.alternateColumnsInput.checked,
+    alternateColumnColor: ui.alternateColumnColorInput.value,
+  });
+}
+
+async function saveAppearanceDefault(
+  scope: AppearanceScope,
+  appearance: SpreadsheetAppearance,
+): Promise<void> {
+  const json = JSON.stringify(appearance);
+  const defaultsElement = document.getElementById('spreadsheet-appearance-defaults');
+  if (scope === 'user') {
+    await ApiC.patch('users/me', { spreadsheet_defaults: json });
+    if (defaultsElement) defaultsElement.dataset.user = json;
+    return;
+  }
+  if (entity.id === null) {
+    throw new Error('A notebook must be saved before it can have spreadsheet defaults.');
+  }
+  await ApiC.patch(`${entity.type}/${entity.id}`, { spreadsheet_defaults: json });
+  if (defaultsElement) defaultsElement.dataset.notebook = json;
+}
+
+function updateQuickCellStyle(
+  existingStyle: string | undefined,
+  backgroundColor: string,
+  borderColor: string,
+  borderStyle: string,
+  borderWidth: number,
+  clear: boolean,
+): string | undefined {
+  const element = document.createElement('span');
+  if (existingStyle) element.setAttribute('style', existingStyle);
+
+  const borderProperties = Array.from(
+    { length: element.style.length },
+    (_, index) => element.style.item(index),
+  ).filter(property => property.startsWith('border'));
+  borderProperties.forEach(property => element.style.removeProperty(property));
+  element.style.removeProperty('background-color');
+
+  if (!clear) {
+    element.style.setProperty('background-color', backgroundColor);
+    element.style.setProperty(
+      'border',
+      borderStyle === 'none'
+        ? 'none'
+        : `${borderWidth}px ${borderStyle} ${borderColor}`,
+    );
+  }
+
+  return sanitizeStyle(
+    element.getAttribute('style') ?? undefined,
+    PRESERVED_STYLE_PROPERTIES,
+  );
+}
+
 /**
  * Open the spreadsheet overlay and return the raw formula data plus computed
  * values when the user inserts or updates the table.
  */
 export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ raw: SpreadsheetData; computed: AOA }> {
   return new Promise((resolve, reject) => {
-    let working = normalizeSpreadsheetData(initialData);
+    let working = normalizeSpreadsheetData({
+      ...initialData,
+      appearance: initialData.appearance ?? getEffectiveAppearanceDefaults(),
+    });
     const ui = createOverlay(working);
     let sheetContainer: HTMLDivElement | null = null;
     let worksheet: JssInstance = null;
@@ -455,8 +885,14 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
 
     const readCellStyles = (rows = working.rows, cols = working.cols): CellStyles | undefined => {
       const styles = worksheet?.getStyle?.();
-      return normalizeCellStyles(
+      const normalized = normalizeCellStyles(
         styles && typeof styles === 'object' ? styles as CellStyles : working.cellStyles,
+        rows,
+        cols,
+      );
+      return stripAppearanceCellStyles(
+        normalized,
+        normalizeAppearance(working.appearance),
         rows,
         cols,
       );
@@ -475,7 +911,12 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         worksheets: [{
           data: working.data,
           minDimensions: [working.cols, working.rows],
-          style: working.cellStyles ?? {},
+          style: mergeCellStyles(
+            working.cellStyles,
+            normalizeAppearance(working.appearance),
+            working.rows,
+            working.cols,
+          ),
         }],
         tableOverflow: true,
         tableWidth: '100%',
@@ -490,6 +931,17 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       worksheet = getWorksheet(instance);
       ui.rowsInput.value = String(working.rows);
       ui.colsInput.value = String(working.cols);
+    };
+
+    const applyAppearance = (): void => {
+      const appearance = appearanceFromControls(ui);
+      const updated: SpreadsheetData = {
+        ...working,
+        data: resizeData(readRawData(), working.rows, working.cols),
+        cellStyles: readCellStyles(),
+        appearance,
+      };
+      mountSpreadsheet(updated);
     };
 
     const applyDimensions = (): void => {
@@ -517,10 +969,100 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         return;
       }
       ui.captionInput.value = preset.caption ?? '';
-      mountSpreadsheet(preset);
+      mountSpreadsheet({
+        ...preset,
+        appearance: appearanceFromControls(ui),
+      });
     });
 
     ui.resizeBtn.addEventListener('click', applyDimensions);
+    [
+      ui.borderWidthInput,
+      ui.borderColorInput,
+      ui.cellColorInput,
+      ui.alternateRowsInput,
+      ui.alternateRowColorInput,
+      ui.alternateColumnsInput,
+      ui.alternateColumnColorInput,
+    ].forEach(input => input.addEventListener('change', applyAppearance));
+    ui.saveAppearanceDefaultBtn.addEventListener('click', async () => {
+      applyAppearance();
+      const scope = ui.appearanceScopeSelect.value as AppearanceScope;
+      ui.saveAppearanceDefaultBtn.disabled = true;
+      ui.appearanceStatus.textContent = 'Saving…';
+      try {
+        await saveAppearanceDefault(scope, normalizeAppearance(working.appearance));
+        const notebookOverridesAccount = scope === 'user'
+          && Boolean(document.getElementById('spreadsheet-appearance-defaults')?.dataset.notebook);
+        ui.appearanceStatus.textContent = notebookOverridesAccount
+          ? 'Account default saved. This notebook still uses its notebook override.'
+          : (scope === 'user'
+            ? 'Saved as your account default.'
+            : 'Saved as the default for this notebook.');
+      } catch (error) {
+        ui.appearanceStatus.textContent = error instanceof Error
+          ? error.message
+          : 'Could not save the appearance default.';
+      } finally {
+        ui.saveAppearanceDefaultBtn.disabled = false;
+      }
+    });
+    const applyCellFormat = (clear: boolean): void => {
+      const selection = worksheet?.getSelection?.() as [number, number, number, number] | undefined;
+      if (!selection || selection.some(value => !Number.isInteger(value))) {
+        ui.cellFormatStatus.textContent = 'Select one or more cells first.';
+        return;
+      }
+      const startCol = Math.min(selection[0], selection[2]);
+      const startRow = Math.min(selection[1], selection[3]);
+      const endCol = Math.max(selection[0], selection[2]);
+      const endRow = Math.max(selection[1], selection[3]);
+      const rawData = readRawData();
+      const rows = clampDimension(rawData.length, working.rows);
+      const cols = clampDimension(
+        rawData.reduce((max, row) => Math.max(max, row.length), 0),
+        working.cols,
+      );
+      const cellStyles = readCellStyles(rows, cols) ?? {};
+      const borderWidth = Math.max(
+        0,
+        Math.min(MAX_TABLE_BORDER, parseInt(ui.cellFormatBorderWidthInput.value, 10) || 0),
+      );
+
+      for (let row = startRow; row <= endRow; row++) {
+        for (let col = startCol; col <= endCol; col++) {
+          const cellName = `${colLabel(col)}${row + 1}`;
+          const style = updateQuickCellStyle(
+            cellStyles[cellName],
+            ui.cellFormatColorInput.value,
+            ui.cellFormatBorderColorInput.value,
+            ui.cellFormatBorderStyleSelect.value,
+            borderWidth,
+            clear,
+          );
+          if (style) {
+            cellStyles[cellName] = style;
+          } else {
+            delete cellStyles[cellName];
+          }
+        }
+      }
+
+      mountSpreadsheet({
+        ...working,
+        data: resizeData(rawData, rows, cols),
+        rows,
+        cols,
+        cellStyles: Object.keys(cellStyles).length > 0 ? cellStyles : undefined,
+      });
+      worksheet?.updateSelectionFromCoords?.(startCol, startRow, endCol, endRow);
+      const cellCount = (endCol - startCol + 1) * (endRow - startRow + 1);
+      ui.cellFormatStatus.textContent = clear
+        ? `Cleared quick formatting from ${cellCount} cell${cellCount === 1 ? '' : 's'}.`
+        : `Applied quick formatting to ${cellCount} cell${cellCount === 1 ? '' : 's'}.`;
+    };
+    ui.applyCellFormatBtn.addEventListener('click', () => applyCellFormat(false));
+    ui.clearCellFormatBtn.addEventListener('click', () => applyCellFormat(true));
     ui.addRowBtn.addEventListener('click', () => {
       worksheet?.insertRow?.();
       ui.rowsInput.value = String(Math.min(MAX_DIMENSION, parseInt(ui.rowsInput.value, 10) + 1));
@@ -585,6 +1127,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         tableStyle: working.tableStyle,
         captionStyle: working.captionStyle,
         tableBorder: working.tableBorder,
+        appearance: normalizeAppearance(working.appearance),
       };
       const computed = sheetContainer
         ? resizeData(getComputedDataFromDOM(sheetContainer), rows, cols)
@@ -604,6 +1147,8 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
  */
 export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): string {
   const raw = normalizeSpreadsheetData(rawData);
+  const appearance = normalizeAppearance(raw.appearance);
+  raw.appearance = appearance;
   const encoded = encodeSpreadsheetData(raw);
   const kind = raw.kind ?? 'standard';
   const styleAttribute = ` data-spreadsheet-style="${kind}"`;
@@ -611,9 +1156,9 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
     ? ` data-well-plate="${raw.plateSize}"`
     : '';
   let tableStyle = raw.tableStyle ?? DEFAULT_TABLE_STYLE;
-  const tableBorder = raw.tableBorder ?? 1;
+  const tableBorder = raw.tableBorder ?? appearance.borderWidth;
   if (!/(?:^|;)border(?!-(?:collapse|spacing)\b)(?:-[a-z-]+)?\s*:/i.test(tableStyle)) {
-    tableStyle = `${tableStyle};border:${tableBorder}px solid`;
+    tableStyle = `${tableStyle};border:${tableBorder}px solid ${appearance.borderColor}`;
   }
   let html = `<table class="elabftw-spreadsheet" data-spreadsheet="${encoded}"${styleAttribute}${plateAttribute} style="${escapeHTMLAttribute(tableStyle)}">`;
   if (raw.caption) {
@@ -627,29 +1172,29 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
   if (kind === 'notebook') {
     html += '<thead><tr>';
     for (let col = 0; col < raw.cols; col++) {
-      html += `<th${getCellStyleAttribute(raw.cellStyles, col, 0)}>${escapeHTML(String(displayData[0]?.[col] ?? ''))}</th>`;
+      html += `<th${getCellStyleAttribute(raw.cellStyles, appearance, col, 0)}>${escapeHTML(String(displayData[0]?.[col] ?? ''))}</th>`;
     }
     html += '</tr></thead><tbody>';
     for (let row = 1; row < raw.rows; row++) {
       html += '<tr>';
       for (let col = 0; col < raw.cols; col++) {
-        html += `<td${getCellStyleAttribute(raw.cellStyles, col, row)}>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
+        html += `<td${getCellStyleAttribute(raw.cellStyles, appearance, col, row)}>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
       }
       html += '</tr>';
     }
     html += '</tbody>';
   } else {
-    html += '<thead><tr><th class="spreadsheet-coordinate"></th>';
+    html += `<thead><tr><th class="spreadsheet-coordinate"${getCoordinateStyleAttribute(appearance)}></th>`;
     for (let col = 0; col < raw.cols; col++) {
       const label = kind === 'well-plate' ? String(col + 1) : colLabel(col);
-      html += `<th class="spreadsheet-coordinate">${label}</th>`;
+      html += `<th class="spreadsheet-coordinate"${getCoordinateStyleAttribute(appearance)}>${label}</th>`;
     }
     html += '</tr></thead><tbody>';
     for (let row = 0; row < raw.rows; row++) {
       const rowLabel = kind === 'well-plate' ? colLabel(row) : String(row + 1);
-      html += `<tr><th class="spreadsheet-coordinate">${rowLabel}</th>`;
+      html += `<tr><th class="spreadsheet-coordinate"${getCoordinateStyleAttribute(appearance)}>${rowLabel}</th>`;
       for (let col = 0; col < raw.cols; col++) {
-        html += `<td${getCellStyleAttribute(raw.cellStyles, col, row)}>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
+        html += `<td${getCellStyleAttribute(raw.cellStyles, appearance, col, row)}>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
       }
       html += '</tr>';
     }
@@ -667,13 +1212,33 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
     : 'standard';
   if (encoded) {
     const decoded = decodeSpreadsheetData(encoded);
+    const appearance = decoded.appearance
+      ? normalizeAppearance(decoded.appearance)
+      : undefined;
+    const extractedCellStyles = extractCellStyles(
+      tableElement,
+      decoded.kind ?? kind,
+      decoded.rows,
+      decoded.cols,
+    );
+    const extractedTableStyle = sanitizeStyle(
+      tableElement.getAttribute('style') ?? undefined,
+      PRESERVED_TABLE_STYLE_PROPERTIES,
+    );
     return normalizeSpreadsheetData({
       ...decoded,
-      cellStyles: extractCellStyles(tableElement, decoded.kind ?? kind, decoded.rows, decoded.cols),
-      tableStyle: sanitizeStyle(
-        tableElement.getAttribute('style') ?? undefined,
-        PRESERVED_TABLE_STYLE_PROPERTIES,
-      ),
+      appearance,
+      cellStyles: appearance
+        ? stripAppearanceCellStyles(
+          extractedCellStyles,
+          appearance,
+          decoded.rows,
+          decoded.cols,
+        )
+        : extractedCellStyles,
+      tableStyle: appearance
+        ? stripAppearanceTableStyle(extractedTableStyle, appearance)
+        : extractedTableStyle,
       captionStyle: sanitizeStyle(
         tableElement.querySelector('caption')?.getAttribute('style') ?? undefined,
         PRESERVED_STYLE_PROPERTIES,
@@ -721,9 +1286,22 @@ function parseTableBorder(tableElement: HTMLTableElement): number | undefined {
   return Number.isInteger(border) ? Math.max(0, Math.min(MAX_TABLE_BORDER, border)) : undefined;
 }
 
-function getCellStyleAttribute(styles: CellStyles | undefined, col: number, row: number): string {
-  const style = styles?.[`${colLabel(col)}${row + 1}`];
-  return style ? ` style="${escapeHTMLAttribute(style)}"` : '';
+function getCellStyleAttribute(
+  styles: CellStyles | undefined,
+  appearance: SpreadsheetAppearance,
+  col: number,
+  row: number,
+): string {
+  const explicitStyle = styles?.[`${colLabel(col)}${row + 1}`];
+  const style = explicitStyle
+    ? `${getAppearanceCellStyle(appearance, col, row)};${explicitStyle}`
+    : getAppearanceCellStyle(appearance, col, row);
+  return ` style="${escapeHTMLAttribute(style)}"`;
+}
+
+function getCoordinateStyleAttribute(appearance: SpreadsheetAppearance): string {
+  const style = getAppearanceCellStyle(appearance, 0, 0, false);
+  return ` style="${escapeHTMLAttribute(style)}"`;
 }
 
 /** Convert column index to letter label (0=A, 25=Z, 26=AA). */

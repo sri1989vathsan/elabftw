@@ -94,6 +94,7 @@ final class UserParams extends ContentParams
             'use_markdown',
             'validated' => (string) Filter::toBinary($this->content),
             'theme_variant' => (ThemeVariant::tryFrom($this->asInt()) ?? ThemeVariant::Auto)->value,
+            'spreadsheet_defaults' => $this->getSpreadsheetDefaults(),
             'mfa_secret' => $this->getNullableString(),
             'lang' => (Language::tryFrom($this->content) ?? Language::EnglishGB)->value,
             'entrypoint' => (Entrypoint::tryFrom($this->asInt()) ?? Entrypoint::Dashboard)->value,

@@ -107,6 +107,68 @@ function addDatetimeOnCursor(): void {
   tinymce.activeEditor.execCommand('mceInsertContent', false, `${getDatetime()} `);
 }
 
+/**
+ * Convert a list marker followed by Space at the start of an otherwise empty
+ * paragraph. This is explicit because TinyMCE text patterns are not reliable
+ * across every editor configuration used by eLabFTW.
+ */
+function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
+  if ((event.key !== ' ' && event.code !== 'Space')
+    || event.ctrlKey
+    || event.metaKey
+    || event.altKey
+    || event.isComposing) {
+    return;
+  }
+
+  const range = editor.selection.getRng();
+  if (!range.collapsed) return;
+
+  const block = editor.dom.getParent(range.startContainer, 'p,div') as HTMLElement | null;
+  if (!block || block.closest('li,pre,code,table')) return;
+
+  const marker = block.textContent ?? '';
+  let command: 'InsertUnorderedList' | 'InsertOrderedList' | null = null;
+  if (marker === '-') {
+    command = 'InsertUnorderedList';
+  } else if (marker === '1' || marker === '1.') {
+    command = 'InsertOrderedList';
+  }
+  if (!command) return;
+
+  // Confirm the cursor is immediately after the marker, not before it.
+  const beforeCursor = range.cloneRange();
+  beforeCursor.selectNodeContents(block);
+  beforeCursor.setEnd(range.startContainer, range.startOffset);
+  if (beforeCursor.toString() !== marker) return;
+
+  event.preventDefault();
+  editor.undoManager.transact(() => {
+    editor.dom.setHTML(block, '<br data-mce-bogus="1">');
+    editor.selection.setCursorLocation(block, 0);
+    editor.execCommand(command);
+  });
+}
+
+/**
+ * Keep keyboard focus inside the editor when indenting list items.
+ */
+function handleListIndentShortcut(editor: Editor, event: KeyboardEvent): void {
+  if (event.key !== 'Tab'
+    || event.ctrlKey
+    || event.metaKey
+    || event.altKey
+    || event.isComposing) {
+    return;
+  }
+
+  const listItem = editor.dom.getParent(editor.selection.getNode(), 'li');
+  if (!listItem) return;
+
+  event.preventDefault();
+  editor.execCommand(event.shiftKey ? 'Outdent' : 'Indent');
+}
+
 function isOverCharLimit(): boolean {
   const body = tinymce.get(0).getBody();
   const text = tinymce.trim(body.innerText || body.textContent);
@@ -250,12 +312,9 @@ export function getTinymceBaseConfig(page: string): object {
     toolbar1: toolbar1,
     // this addresses CVE-2024-29881, it defaults to true in 7.0, so can be removed in tiny 7.0 TODO
     convert_unsafe_embeds: true,
-    // Keep heading/format shortcuts disabled, but support the familiar
-    // Markdown-style list starters at the beginning of an empty paragraph.
-    text_patterns: [
-      { start: '-', cmd: 'InsertUnorderedList', trigger: 'space' },
-      { start: '1.', cmd: 'InsertOrderedList', trigger: 'space' },
-    ],
+    // Keep TinyMCE's general heading/format text patterns disabled. Focused
+    // list shortcuts are implemented in setup() below.
+    text_patterns: false,
     removed_menuitems: removedMenuItems,
     image_caption: true,
     images_reuse_filename: false, // if set to true the src url gets a date appended
@@ -547,6 +606,10 @@ export function getTinymceBaseConfig(page: string): object {
       editor.addShortcut('ctrl+shift+d', 'add date/time at cursor', addDatetimeOnCursor);
       editor.addShortcut('ctrl+=', 'subscript', () => editor.execCommand('subscript'));
       editor.addShortcut('ctrl+shift+=', 'superscript', () => editor.execCommand('superscript'));
+      editor.on('keydown', event => {
+        handleListIndentShortcut(editor, event);
+        handleListShortcut(editor, event);
+      });
 
       // on edit page there is an autosave triggered
       if (page === 'edit') {
@@ -635,6 +698,8 @@ export function getTinymceBaseConfig(page: string): object {
       },
     ],
     toolbar_sticky: true,
+    // Keep TinyMCE's sticky formatting toolbar below the entity action bar.
+    toolbar_sticky_offset: document.getElementById('topToolbar')?.offsetHeight ?? 0,
     // render MathJax for TinyMCE preview
     init_instance_callback: (editor) => {
       editor.on('ExecCommand', (e) => {

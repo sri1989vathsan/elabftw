@@ -110,6 +110,48 @@ class ContentParams implements ContentParamsInterface
         return $this->asString();
     }
 
+    /**
+     * Validate and normalize the JSON used for inline spreadsheet appearance defaults.
+     */
+    protected function getSpreadsheetDefaults(): ?string
+    {
+        if ($this->content === null || $this->asString() === '') {
+            return null;
+        }
+
+        try {
+            $defaults = json_decode($this->asString(), true, 8, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw new ImproperActionException('Invalid spreadsheet appearance defaults.');
+        }
+        if (!is_array($defaults)
+            || !is_int($defaults['borderWidth'] ?? null)
+            || $defaults['borderWidth'] < 0
+            || $defaults['borderWidth'] > 20
+            || !is_bool($defaults['alternateRows'] ?? null)
+            || !is_bool($defaults['alternateColumns'] ?? null)
+        ) {
+            throw new ImproperActionException('Invalid spreadsheet appearance defaults.');
+        }
+        foreach (array('borderColor', 'cellColor', 'alternateRowColor', 'alternateColumnColor') as $colorKey) {
+            if (!is_string($defaults[$colorKey] ?? null)
+                || preg_match('/^#[0-9a-f]{6}$/i', $defaults[$colorKey]) !== 1
+            ) {
+                throw new ImproperActionException('Invalid spreadsheet appearance defaults.');
+            }
+        }
+
+        return json_encode(array(
+            'borderWidth' => $defaults['borderWidth'],
+            'borderColor' => strtolower($defaults['borderColor']),
+            'cellColor' => strtolower($defaults['cellColor']),
+            'alternateRows' => $defaults['alternateRows'],
+            'alternateRowColor' => strtolower($defaults['alternateRowColor']),
+            'alternateColumns' => $defaults['alternateColumns'],
+            'alternateColumnColor' => strtolower($defaults['alternateColumnColor']),
+        ), JSON_THROW_ON_ERROR);
+    }
+
     protected function getUrl(): string
     {
         if (filter_var($this->content, FILTER_VALIDATE_URL) === false) {
