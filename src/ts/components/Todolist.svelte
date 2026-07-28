@@ -4,6 +4,7 @@
   import i18next from '../i18n';
   import { Model } from '../interfaces';
   import { Malle } from '@deltablot/malle';
+  import { Notification as AppNotification } from '../Notifications.class';
   import { toRelative } from '../misc';
 
   type Todo = {
@@ -52,6 +53,7 @@
   };
 
   const t = i18next.t.bind(i18next);
+  const notify = new AppNotification();
   let locale = 'en-gb';
   let malleable: Malle | null = null;
   let items: Todo[] = [];
@@ -59,6 +61,9 @@
   let entries: SidebarEntry[] = [];
   let dueGroups: DueGroup[] = [];
   let draft = '';
+  let deadlineLocal = '';
+  let reminderChoice = '60';
+  let customReminder = 120;
   let loading = true;
 
   $: entries = [
@@ -185,14 +190,34 @@
       }));
   }
 
+  function getReminderMinutes(): number | null {
+    if (reminderChoice === 'none') return null;
+    if (reminderChoice === 'custom') {
+      return Math.max(0, Math.min(10080, Math.round(customReminder)));
+    }
+    return parseInt(reminderChoice, 10);
+  }
+
   async function create(): Promise<void> {
     const content = draft.trim();
     if (!content) return;
+    const deadline = deadlineLocal ? new Date(deadlineLocal) : null;
+    if (deadline !== null && Number.isNaN(deadline.getTime())) {
+      notify.error('Enter a valid deadline date and time.');
+      return;
+    }
 
     ApiC.notifOnSaved = false;
-    await ApiC.post(Model.Todolist, { content });
+    await ApiC.post(Model.Todolist, {
+      content,
+      deadline: deadline?.toISOString() ?? null,
+      reminder_minutes: deadline === null ? null : getReminderMinutes(),
+    });
     ApiC.notifOnSaved = true;
     draft = '';
+    deadlineLocal = '';
+    reminderChoice = '60';
+    customReminder = 120;
     await load();
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
@@ -252,19 +277,64 @@
   });
 </script>
 
-<div class='input-group mb-3'>
-  <input
-    class='form-control'
-    bind:value={draft}
-    on:keydown={(event) => event.key === 'Enter' && create()}
-    placeholder={t('add-task')}
-  />
-  <div class='input-group-append'>
-    <button type='button' class='btn btn-primary' on:click={create} aria-label={t('add')}>
-      <i class='fas fa-plus fa-fw' title={t('add')}></i>
-    </button>
+<section class='todo-create mb-3' aria-label={t('add-task')}>
+  <div class='input-group mb-2'>
+    <input
+      class='form-control'
+      bind:value={draft}
+      on:keydown={(event) => event.key === 'Enter' && create()}
+      placeholder={t('add-task')}
+    />
+    <div class='input-group-append'>
+      <button type='button' class='btn btn-primary' on:click={create} aria-label={t('add')}>
+        <i class='fas fa-plus fa-fw' title={t('add')}></i>
+      </button>
+    </div>
   </div>
-</div>
+  <div class='todo-create-options'>
+    <label class='mb-0'>
+      <span class='small'>{t('Deadline')}</span>
+      <input
+        class='form-control form-control-sm'
+        type='datetime-local'
+        bind:value={deadlineLocal}
+      />
+    </label>
+    {#if deadlineLocal}
+      <label class='mb-0'>
+        <span class='small'>{t('Reminder')}</span>
+        <select class='form-control form-control-sm' bind:value={reminderChoice}>
+          <option value='none'>{t('No reminder')}</option>
+          <option value='0'>{t('At deadline')}</option>
+          <option value='15'>{t('15 minutes before')}</option>
+          <option value='60'>{t('1 hour before')}</option>
+          <option value='1440'>{t('1 day before')}</option>
+          <option value='10080'>{t('1 week before')}</option>
+          <option value='custom'>{t('Custom minutes')}</option>
+        </select>
+      </label>
+      {#if reminderChoice === 'custom'}
+        <label class='mb-0'>
+          <span class='small'>{t('Minutes before')}</span>
+          <input
+            class='form-control form-control-sm'
+            type='number'
+            min='0'
+            max='10080'
+            bind:value={customReminder}
+          />
+        </label>
+      {/if}
+      <button
+        type='button'
+        class='btn btn-sm btn-outline-secondary todo-clear-deadline'
+        on:click={() => deadlineLocal = ''}
+      >
+        <i class='fas fa-xmark fa-fw mr-1' aria-hidden='true'></i>{t('Clear')}
+      </button>
+    {/if}
+  </div>
+</section>
 
 {#if loading}
   <p class='todo-secondary-text'>{t('Loading')}…</p>
@@ -339,6 +409,25 @@
 {/if}
 
 <style>
+  .todo-create {
+    background: var(--chrome-bg);
+    border: 1px solid var(--secondary);
+    border-radius: 0.25rem;
+    color: var(--chrome-fg);
+    padding: 0.65rem;
+  }
+
+  .todo-create-options {
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .todo-clear-deadline {
+    border-color: var(--chrome-muted);
+    color: var(--chrome-fg);
+    justify-self: start;
+  }
+
   .todo-due-group + .todo-due-group {
     margin-top: 1rem;
   }
