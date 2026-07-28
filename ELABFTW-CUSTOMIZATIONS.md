@@ -23,10 +23,14 @@ Monthly lab logs with owner names and dashboard.
 
 A SidePanel TOC that extracts every header and subheader from `#body_view`
 (view mode) or the TinyMCE editor (edit mode). It provides heading search,
-scroll-spy, and smooth scrolling. Each entry has a link button that copies a
-stable view-mode URL to that exact section. Edit mode also shows an insert
-button that adds the internal section link at the current editor cursor.
-Generated heading IDs are saved with the body and retained by the sanitizer.
+scroll-spy, and smooth scrolling. In view mode, a TOC search also filters the
+main text to the matching heading sections and keeps parent headings visible for
+context; clearing the query restores the complete text. The filtering uses
+transient display classes and never changes the saved body. Each entry has a
+link button that copies a stable view-mode URL to that exact section. Edit mode
+also shows an insert button that adds the internal section link at the current
+editor cursor. Generated heading IDs are saved with the body and retained by
+the sanitizer.
 
 **Files added:**
 - `src/ts/TocPanel.class.ts` — SidePanel subclass with heading extraction, scroll-spy via IntersectionObserver, smooth scrolling

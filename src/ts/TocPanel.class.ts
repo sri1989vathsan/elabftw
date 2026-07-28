@@ -11,6 +11,8 @@ import SidePanel from './SidePanel.class';
 // We don't register this in the Model enum because TOC is purely client-side
 // and doesn't correspond to any API endpoint.
 const TOC_MODEL = 'toc';
+const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6';
+const FILTER_HIDDEN_CLASS = 'toc-section-filter-hidden';
 
 interface TocEntry {
   level: number;
@@ -44,7 +46,7 @@ export default class TocPanel extends SidePanel {
     // View mode: headings live inside #body_view
     const bodyView = document.getElementById('body_view');
     if (bodyView) {
-      headings = bodyView.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      headings = bodyView.querySelectorAll(HEADING_SELECTOR);
     }
 
     // Edit mode: headings are inside the TinyMCE iframe body
@@ -53,7 +55,7 @@ export default class TocPanel extends SidePanel {
       if (editor) {
         const editorBody = editor.getBody();
         if (editorBody) {
-          headings = editorBody.querySelectorAll('h1, h2, h3, h4, h5, h6');
+          headings = editorBody.querySelectorAll(HEADING_SELECTOR);
         }
       }
     }
@@ -106,7 +108,7 @@ export default class TocPanel extends SidePanel {
       const id = this.escapeAttribute(entry.id);
       const text = this.escapeHTML(entry.text);
       const label = this.escapeAttribute(entry.text);
-      html += `<li class="toc-item" style="padding-left:${indent}px" data-toc-search-text="${label.toLocaleLowerCase()}">`;
+      html += `<li class="toc-item" style="padding-left:${indent}px" data-toc-search-text="${label.toLocaleLowerCase()}" data-toc-target="${id}">`;
       html += '<div class="toc-entry d-flex align-items-center">';
       html += `<a href="#${encodeURIComponent(entry.id)}" class="toc-link flex-grow-1 py-1 px-2 rounded ${fontClass}" ${fontSize} data-toc-target="${id}">${text}</a>`;
       html += `<button type="button" class="btn btn-sm toc-entry-action toc-copy-link" data-toc-target="${id}" title="Copy link to ${label}" aria-label="Copy link to ${label}"><i class="fas fa-link fa-fw" aria-hidden="true"></i></button>`;
@@ -176,17 +178,103 @@ export default class TocPanel extends SidePanel {
     const noResults = document.getElementById('tocNoResults');
     const items = Array.from(document.querySelectorAll<HTMLElement>('#tocItems .toc-item'));
     const query = input?.value.trim().toLocaleLowerCase() ?? '';
+    const matchingHeadingIds = new Set<string>();
     let matches = 0;
 
     for (const item of items) {
       const visible = !query || (item.dataset.tocSearchText ?? '').includes(query);
       item.hidden = !visible;
-      if (visible) matches++;
+      if (visible) {
+        matches++;
+        if (item.dataset.tocTarget) {
+          matchingHeadingIds.add(item.dataset.tocTarget);
+        }
+      }
     }
 
     if (noResults) {
       noResults.hidden = items.length === 0 || matches > 0;
     }
+
+    this.filterMainText(query, matchingHeadingIds);
+  }
+
+  /**
+   * In view mode, show only sections selected by the TOC heading search.
+   * The filter only adds transient CSS classes and never changes saved body HTML.
+   */
+  private filterMainText(query: string, matchingHeadingIds: Set<string>): void {
+    const bodyView = document.getElementById('body_view');
+    if (!bodyView) return;
+
+    this.clearMainTextFilter();
+    if (!query) return;
+
+    const headings = Array.from(bodyView.querySelectorAll<HTMLHeadingElement>(HEADING_SELECTOR));
+    if (headings.length === 0) return;
+
+    // A matching heading includes its content and all nested subsections up to
+    // the next heading at the same or a higher level.
+    const sectionHeadingIds = new Set<string>();
+    const visibleHeadingIds = new Set<string>();
+    const activeMatchLevels: number[] = [];
+    const ancestorHeadings: HTMLHeadingElement[] = [];
+
+    for (const heading of headings) {
+      const level = parseInt(heading.tagName.charAt(1), 10);
+
+      while (activeMatchLevels.length > 0 && activeMatchLevels.at(-1) >= level) {
+        activeMatchLevels.pop();
+      }
+      while (ancestorHeadings.length > 0
+        && parseInt(ancestorHeadings.at(-1).tagName.charAt(1), 10) >= level) {
+        ancestorHeadings.pop();
+      }
+
+      if (matchingHeadingIds.has(heading.id)) {
+        activeMatchLevels.push(level);
+        ancestorHeadings.forEach(ancestor => visibleHeadingIds.add(ancestor.id));
+      }
+
+      if (activeMatchLevels.length > 0) {
+        sectionHeadingIds.add(heading.id);
+        visibleHeadingIds.add(heading.id);
+      }
+      ancestorHeadings.push(heading);
+    }
+
+    // Walk in document order so ordinary content inherits the visibility of
+    // its nearest preceding heading. Containers holding headings remain in the
+    // layout, while their individual sections are filtered recursively.
+    let showSectionContent = false;
+    const filterChildren = (parent: Element): void => {
+      Array.from(parent.children).forEach((element: HTMLElement) => {
+        if (element.matches(HEADING_SELECTOR)) {
+          element.classList.toggle(FILTER_HIDDEN_CLASS, !visibleHeadingIds.has(element.id));
+          showSectionContent = sectionHeadingIds.has(element.id);
+          return;
+        }
+
+        if (element.querySelector(HEADING_SELECTOR)) {
+          filterChildren(element);
+          return;
+        }
+        element.classList.toggle(FILTER_HIDDEN_CLASS, !showSectionContent);
+      });
+    };
+
+    filterChildren(bodyView);
+    bodyView.classList.add('toc-main-text-filtered');
+  }
+
+  private clearMainTextFilter(): void {
+    const bodyView = document.getElementById('body_view');
+    if (!bodyView) return;
+
+    bodyView.classList.remove('toc-main-text-filtered');
+    bodyView.querySelectorAll(`.${FILTER_HIDDEN_CLASS}`).forEach(element => {
+      element.classList.remove(FILTER_HIDDEN_CLASS);
+    });
   }
 
   private async copySectionLink(button: HTMLButtonElement, targetId: string): Promise<void> {

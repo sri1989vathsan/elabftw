@@ -1052,6 +1052,10 @@ tr:first-child td {
   animation: toc-flash 1.5s ease-out;
 }
 
+.toc-section-filter-hidden {
+  display: none !important;
+}
+
 @keyframes toc-flash {
   0% { background-color: rgba(var(--primary-rgb, 0, 123, 255), 0.3); }
   100% { background-color: transparent; }
