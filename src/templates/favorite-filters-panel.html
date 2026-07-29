@@ -22,16 +22,10 @@
       {{ 'Combine favorite categories, tags, statuses, and an owner. Apply filters searches all accessible entries.'|trans }}
     </p>
 
-    <details class='favorite-filter-section mb-3' data-favorite-filter-section='categories' open>
+    <details class='favorite-filter-section mb-3' open>
       <summary class='favorite-filter-section-summary h5 mb-0'>
-        <span class='favorite-filter-section-icon' aria-hidden='true'>
-          <i class='fas fa-layer-group fa-fw'></i>
-        </span>
-        <span class='favorite-filter-section-title'>{{ 'Categories'|trans }}</span>
-        <span class='favorite-filter-section-count' aria-label='{{ 'Selected filters'|trans }}' hidden>0</span>
-        <span class='favorite-filter-section-chevron' aria-hidden='true'>
-          <i class='fas fa-chevron-right fa-fw'></i>
-        </span>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'Categories'|trans }}
       </summary>
       <div class='favorite-filter-section-body'>
       {% for categoryType in ['experiments', 'resources'] %}
@@ -65,18 +59,16 @@
       </div>
     </details>
 
-    <details class='favorite-filter-section mb-3' data-favorite-filter-section='tags' open>
+    <details class='favorite-filter-section mb-3' open>
       <summary class='favorite-filter-section-summary h5 mb-0'>
-        <span class='favorite-filter-section-icon' aria-hidden='true'>
-          <i class='fas fa-tags fa-fw'></i>
-        </span>
-        <span class='favorite-filter-section-title'>{{ 'Tags'|trans }}</span>
-        <span class='favorite-filter-section-count' aria-label='{{ 'Selected filters'|trans }}' hidden>0</span>
-        <span class='favorite-filter-section-chevron' aria-hidden='true'>
-          <i class='fas fa-chevron-right fa-fw'></i>
-        </span>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'My favorite tags'|trans }}
       </summary>
       <div class='favorite-filter-section-body'>
+      <p class='small color-medium mb-2'>
+        <i class='fas fa-user-lock fa-fw' aria-hidden='true'></i>
+        {{ 'These favorites are saved only for your account.'|trans }}
+      </p>
       <div id='favtagsTagsDiv'>
         {% if App.favoriteTagsArr|length == 0 %}
           <p class='small color-medium mb-0'>{{ 'No favorite tags are present. Add an existing tag below.'|trans }}</p>
@@ -102,16 +94,10 @@
       </div>
     </details>
 
-    <details class='favorite-filter-section mb-3' data-favorite-filter-section='status' open>
+    <details class='favorite-filter-section mb-3' open>
       <summary class='favorite-filter-section-summary h5 mb-0'>
-        <span class='favorite-filter-section-icon' aria-hidden='true'>
-          <i class='fas fa-circle-check fa-fw'></i>
-        </span>
-        <span class='favorite-filter-section-title'>{{ 'Status'|trans }}</span>
-        <span class='favorite-filter-section-count' aria-label='{{ 'Selected filters'|trans }}' hidden>0</span>
-        <span class='favorite-filter-section-chevron' aria-hidden='true'>
-          <i class='fas fa-chevron-right fa-fw'></i>
-        </span>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'Status'|trans }}
       </summary>
       <div class='favorite-filter-section-body'>
       {% for statusType in ['experiments', 'resources'] %}
@@ -145,16 +131,10 @@
       </div>
     </details>
 
-    <details class='favorite-filter-section mb-3' data-favorite-filter-section='owner' open>
+    <details class='favorite-filter-section mb-3' open>
       <summary class='favorite-filter-section-summary h5 mb-0'>
-        <span class='favorite-filter-section-icon' aria-hidden='true'>
-          <i class='fas fa-user-group fa-fw'></i>
-        </span>
-        <span class='favorite-filter-section-title'>{{ 'Owner'|trans }}</span>
-        <span class='favorite-filter-section-count' aria-label='{{ 'Selected filters'|trans }}' hidden>0</span>
-        <span class='favorite-filter-section-chevron' aria-hidden='true'>
-          <i class='fas fa-chevron-right fa-fw'></i>
-        </span>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'Owner'|trans }}
       </summary>
       <div class='favorite-filter-section-body'>
       {% set favoriteOwners = App.favoriteFiltersArr|filter(filter => filter.filter_type == 'owner') %}
@@ -263,10 +243,13 @@
       </div>
 
       <label for='createFavTagInput'>{{ 'Add a tag as favorite'|trans }}</label>
+      <p id='favoriteTagSuggestionHelp' class='small color-medium mb-2'>
+        {{ 'Start typing to search existing team tags. Your favorites are saved only for your account.'|trans }}
+      </p>
       <div class='input-group mb-3'>
-        <input id='createFavTagInput' data-autocomplete='tags' type='text' class='form-control form-inline' aria-label='{{ 'Add a tag as favorite'|trans }}' placeholder='{{ 'Add a tag as favorite'|trans }}'>
+        <input id='createFavTagInput' data-autocomplete='tags' type='text' class='form-control form-inline' aria-label='{{ 'Add a tag as favorite'|trans }}' aria-describedby='favoriteTagSuggestionHelp' autocomplete='off' placeholder='{{ 'Add a tag as favorite'|trans }}'>
         <div class='input-group-append'>
-          <button class='btn btn-primary' type='button' title='{{ 'Add'|trans }}' aria-label='{{ 'Add'|trans }}'>
+          <button id='createFavTagButton' class='btn btn-primary' type='button' title='{{ 'Add'|trans }}' aria-label='{{ 'Add'|trans }}'>
             <i class='fas fa-plus fa-fw'></i>
           </button>
         </div>

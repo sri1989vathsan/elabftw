@@ -182,14 +182,15 @@ resources and restores selections from the URL. Applying filters always opens
 the complete accessible listing (`scope=3`) so results are not silently
 restricted by a previous "My experiments", search, or pagination selection.
 Each filter group is independently collapsible and keeps its current selections
-when closed. The accordion uses compact icon cards, animated chevrons,
-theme-aware open and hover states, keyboard focus outlines, and highlighted
-selected rows. Collapsed sections show their selected-filter count and remember
-their open/closed state; reduced-motion preferences disable animations.
+when closed.
 
 The Manage favorites section can create a new category for the currently
 selected target and immediately favorite it, or favorite existing categories,
-owners, statuses, and tags.
+owners, statuses, and tags. The favorite-tag field searches existing team tags
+as the user types, keeps its suggestion menu above the sidebar, excludes tags
+that are already favorites, and supports mouse or keyboard selection. Favorite
+tag choices are stored per account through eLabFTW's `favtags2users` mapping;
+the underlying experiment tags remain team-shared.
 
 All left sidebar tabs share an adjustable width. Drag the narrow separator on
 the panel's right edge, or focus it and use the Left/Right arrow keys, to resize
