@@ -80,9 +80,22 @@ document.addEventListener('DOMContentLoaded', () => {
       createTagFavorite(favoriteTagInput);
     });
   }
-  if (document.getElementById('favoritesPanel')) {
-    new MutationObserver(() => addAutocompleteToTagInputs())
-      .observe(document.getElementById('favoritesPanel'), {childList: true, subtree: true});
+  const favoritesPanel = document.getElementById('favoritesPanel');
+  if (favoritesPanel) {
+    new MutationObserver(mutations => {
+      const hasNewTagInput = mutations.some(mutation => (
+        Array.from(mutation.addedNodes).some(node => (
+          node instanceof Element
+          && (
+            node.matches('[data-autocomplete="tags"]')
+            || node.querySelector('[data-autocomplete="tags"]') !== null
+          )
+        ))
+      ));
+      if (hasNewTagInput) {
+        addAutocompleteToTagInputs();
+      }
+    }).observe(favoritesPanel, {childList: true, subtree: true});
   }
 
   // make the tag editable (on admin page)

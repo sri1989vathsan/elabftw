@@ -540,6 +540,9 @@ export function addAutocompleteToLinkInputs(): void {
 export function addAutocompleteToTagInputs(): void {
   $('[data-autocomplete="tags"]').each(function(): void {
     const input = this as HTMLInputElement;
+    if (input.classList.contains('ui-autocomplete-input')) {
+      return;
+    }
     const isFavoriteTagInput = input.id === 'createFavTagInput';
     $(input).autocomplete({
       appendTo: isFavoriteTagInput ? '#favoritesPanel' : undefined,
