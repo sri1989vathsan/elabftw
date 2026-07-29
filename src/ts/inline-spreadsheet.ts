@@ -770,6 +770,100 @@ function coordinatesFromCellName(cellName: string): { col: number; row: number }
   return { col: col - 1, row: parseInt(match[2], 10) - 1 };
 }
 
+/**
+ * Evaluate the aggregate formulas exposed by the inline spreadsheet toolbar.
+ * jspreadsheet remains the primary formula engine; this deterministic fallback
+ * guarantees that formula results are visible when its renderer does not
+ * update the cell text after an edit.
+ */
+function evaluateAggregateFormula(
+  formulaValue: string,
+  data: AOA,
+  formulaCol: number,
+  formulaRow: number,
+  resolving = new Set<string>(),
+): number | undefined {
+  const match = /^=\s*(SUM|AVERAGE|COUNT|MIN|MAX)\s*\((.*)\)\s*$/i.exec(formulaValue);
+  if (!match) return undefined;
+  const formulaKey = `${formulaCol}:${formulaRow}`;
+  if (resolving.has(formulaKey)) return undefined;
+  resolving.add(formulaKey);
+
+  const numericValues: number[] = [];
+  let invalidReference = false;
+  const collectCell = (col: number, row: number): void => {
+    if (col < 0 || row < 0 || row >= data.length || col >= (data[row]?.length ?? 0)) return;
+    const value = data[row]?.[col];
+    let resolvedValue: CellValue | undefined = value;
+    if (typeof value === 'string' && value.trimStart().startsWith('=')) {
+      resolvedValue = evaluateAggregateFormula(value, data, col, row, resolving);
+      if (resolvedValue === undefined) {
+        invalidReference = true;
+        return;
+      }
+    }
+    if (typeof resolvedValue === 'number' && Number.isFinite(resolvedValue)) {
+      numericValues.push(resolvedValue);
+      return;
+    }
+    if (typeof resolvedValue === 'string' && resolvedValue.trim() !== '') {
+      const numericValue = Number(resolvedValue);
+      if (Number.isFinite(numericValue)) numericValues.push(numericValue);
+    }
+  };
+
+  const argumentsList = match[2].trim() === '' ? [] : match[2].split(/[;,]/);
+  for (const argument of argumentsList) {
+    const token = argument.trim().replaceAll('$', '');
+    const [startToken, endToken] = token.split(':');
+    const start = coordinatesFromCellName(startToken);
+    const end = endToken ? coordinatesFromCellName(endToken) : null;
+    if (start && end) {
+      const startCol = Math.min(start.col, end.col);
+      const endCol = Math.max(start.col, end.col);
+      const startRow = Math.min(start.row, end.row);
+      const endRow = Math.max(start.row, end.row);
+      for (let row = startRow; row <= endRow; row++) {
+        for (let col = startCol; col <= endCol; col++) collectCell(col, row);
+      }
+    } else if (start) {
+      collectCell(start.col, start.row);
+    } else if (token !== '') {
+      const numericValue = Number(token);
+      if (Number.isFinite(numericValue)) numericValues.push(numericValue);
+    }
+  }
+  resolving.delete(formulaKey);
+  if (invalidReference) return undefined;
+
+  const functionName = match[1].toUpperCase();
+  if (functionName === 'COUNT') return numericValues.length;
+  if (functionName === 'SUM') {
+    return numericValues.reduce((sum, value) => sum + value, 0);
+  }
+  if (numericValues.length === 0) return 0;
+  if (functionName === 'AVERAGE') {
+    return numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
+  }
+  if (functionName === 'MIN') return Math.min(...numericValues);
+  if (functionName === 'MAX') return Math.max(...numericValues);
+  return undefined;
+}
+
+function renderAggregateFormulaResults(container: HTMLElement, data: AOA): void {
+  data.forEach((row, rowIndex) => {
+    row.forEach((value, colIndex) => {
+      if (typeof value !== 'string' || !value.trimStart().startsWith('=')) return;
+      const result = evaluateAggregateFormula(value, data, colIndex, rowIndex);
+      if (result === undefined) return;
+      const cell = container.querySelector<HTMLElement>(
+        `td[data-x="${colIndex}"][data-y="${rowIndex}"]`,
+      );
+      if (cell && !cell.classList.contains('editor')) cell.textContent = String(result);
+    });
+  });
+}
+
 function extractCellStyles(
   tableElement: HTMLTableElement,
   kind: SpreadsheetKind,
@@ -1655,6 +1749,18 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       return Array.isArray(data) ? data : working.data;
     };
 
+    const scheduleFormulaResultRender = (data?: AOA): void => {
+      const render = (): void => {
+        if (sheetContainer) renderAggregateFormulaResults(sheetContainer, data ?? readRawData());
+      };
+      // jspreadsheet paints the non-editing cell after closeEditor/onchange.
+      // Repaint on the next frame and once more after its queued DOM update.
+      window.requestAnimationFrame(() => {
+        render();
+        window.setTimeout(render, 0);
+      });
+    };
+
     const readCellStyles = (rows = working.rows, cols = working.cols): CellStyles | undefined => {
       const styles = worksheet?.getStyle?.();
       const normalized = normalizeCellStyles(
@@ -1866,11 +1972,17 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const formulaRow = Number.parseInt(formulaCell.dataset.y ?? '', 10);
       event.preventDefault();
       event.stopImmediatePropagation();
+      const formulaValue = event.target.value;
       worksheet.closeEditor(formulaCell, true);
+      const rawData = readRawData();
+      const result = evaluateAggregateFormula(formulaValue, rawData, formulaCol, formulaRow);
+      scheduleFormulaResultRender(rawData);
       if (Number.isInteger(formulaCol) && Number.isInteger(formulaRow)) {
         selectedRange = [formulaCol, formulaRow, formulaCol, formulaRow];
         worksheet.updateSelectionFromCoords?.(...selectedRange);
-        ui.formulaStatus.textContent = `Formula applied in ${colLabel(formulaCol)}${formulaRow + 1}.`;
+        ui.formulaStatus.textContent = result === undefined
+          ? `Formula applied in ${colLabel(formulaCol)}${formulaRow + 1}.`
+          : `Formula applied in ${colLabel(formulaCol)}${formulaRow + 1}: ${result}.`;
       }
     };
 
@@ -1914,6 +2026,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           mountedWorksheet.setData?.(mountedData);
           mountedWorksheet.setStyle?.(mountedStyles);
         }
+        renderAggregateFormulaResults(mountedContainer, mountedData);
         if (selectedRange) {
           worksheet?.updateSelectionFromCoords?.(...selectedRange);
           updateSelectionStatus(selectedRange);
@@ -1937,6 +2050,13 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         parseFormulas: true,
         onload: (spreadsheet: JssInstance): void => {
           bindAndHydrateWorksheet(spreadsheet?.worksheets ?? spreadsheet);
+        },
+        onchange: (changedWorksheet: JssInstance): void => {
+          worksheet = changedWorksheet;
+          const changedData = changedWorksheet?.getData?.();
+          if (Array.isArray(changedData)) {
+            scheduleFormulaResultRender(changedData);
+          }
         },
         onselection: (
           selectedWorksheet: JssInstance,
@@ -2263,9 +2383,15 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         worksheet?.insertRow?.(1, endRow, 0);
         ui.rowsInput.value = String(Math.min(MAX_DIMENSION, rowCount + 1));
       }
-      worksheet?.setValueFromCoords?.(targetCol, targetRow, `=${formulaName}(${range})`);
+      const formulaValue = `=${formulaName}(${range})`;
+      worksheet?.setValueFromCoords?.(targetCol, targetRow, formulaValue);
+      const rawData = readRawData();
+      const result = evaluateAggregateFormula(formulaValue, rawData, targetCol, targetRow);
+      scheduleFormulaResultRender(rawData);
       worksheet?.updateSelectionFromCoords?.(targetCol, targetRow, targetCol, targetRow);
-      ui.formulaStatus.textContent = `${formulaName}(${range}) → ${colLabel(targetCol)}${targetRow + 1}`;
+      ui.formulaStatus.textContent = result === undefined
+        ? `${formulaName}(${range}) → ${colLabel(targetCol)}${targetRow + 1}`
+        : `${formulaName}(${range}) → ${colLabel(targetCol)}${targetRow + 1} = ${result}`;
     }));
 
     const cleanup = (): void => {

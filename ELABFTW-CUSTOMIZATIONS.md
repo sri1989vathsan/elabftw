@@ -281,6 +281,11 @@ formula prefix such as `=SUM(`, then drag across cells, whole columns, or whole
 rows. The A1 range is inserted without closing the cell editor, and Enter
 automatically closes missing parentheses, explicitly commits the formula to the
 worksheet, and recalculates the cell.
+The five aggregate functions exposed in the formula bar (`SUM`, `AVERAGE`,
+`COUNT`, `MIN`, and `MAX`) also have a deterministic display fallback. Raw
+formulas remain stored in spreadsheet metadata, while their results are
+rendered after Enter, formula-button insertion, and spreadsheet reopening even
+if jspreadsheet does not refresh the visible cell text.
 When a whole row or column selection would contain the result cell, the picker
 uses the adjacent source cells instead of creating a circular reference and
 showing `#ERROR`.
