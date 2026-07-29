@@ -366,11 +366,12 @@ sanitizer across save and reopen.
 
 The adjacent split **Title** control inserts the current experiment title as an
 H1-H6 heading with a stable anchor, so it immediately participates in the Table
-of Contents and its per-heading link action. The control's menu opens font
-options for family, point size, theme/custom colour, bold, italic, underline,
-and alignment. **Save as default** retains those choices in the browser, while
-the main control and **Ctrl+Alt+T** insert the latest experiment title using the
-saved settings.
+of Contents and its per-heading link action. The control's menu opens an
+editable heading-text field plus font options for family, point size,
+theme/custom colour, bold, italic, underline, and alignment. **Save as default**
+retains the formatting choices—but not document-specific heading text—in the
+browser, while the main control and **Ctrl+Alt+T** insert the latest experiment
+title using the saved settings.
 
 The adjacent **Line** toolbar menu inserts single or double horizontal rules in
 either solid or dashed form. The solid actions are also available as

@@ -129,7 +129,7 @@ export default class ExperimentTitleEditor {
   constructor(private editor: Editor) {}
 
   public insertUsingDefaults(): void {
-    this.insert(getDefaults());
+    this.insert(getDefaults(), this.getCurrentTitle());
   }
 
   public openDialog(): void {
@@ -150,7 +150,14 @@ export default class ExperimentTitleEditor {
 
     const explanation = document.createElement('p');
     explanation.className = 'date-reference-help';
-    explanation.textContent = 'Insert the current experiment name as a linkable heading for the document and Table of Contents.';
+    explanation.textContent = 'Insert the experiment name or your own text as a linkable heading for the document and Table of Contents.';
+
+    const headingTextInput = document.createElement('input');
+    headingTextInput.type = 'text';
+    headingTextInput.className = 'form-control';
+    headingTextInput.value = this.getCurrentTitle();
+    headingTextInput.placeholder = 'Heading text';
+    headingTextInput.maxLength = 255;
 
     const headingLevelSelect = document.createElement('select');
     headingLevelSelect.className = 'form-control';
@@ -234,6 +241,7 @@ export default class ExperimentTitleEditor {
     dialog.append(
       title,
       explanation,
+      createField('Heading text', headingTextInput),
       createField('Heading level', headingLevelSelect),
       createField('Font family', fontFamilySelect),
       createField('Font size (pt)', fontSizeInput),
@@ -260,6 +268,7 @@ export default class ExperimentTitleEditor {
     });
     const updatePreview = (): void => {
       preview.style.cssText = getHeadingStyle(readControls());
+      preview.textContent = headingTextInput.value.trim() || 'Heading preview';
       textColorInput.disabled = themeColor.input.checked;
     };
     const close = (): void => {
@@ -286,12 +295,13 @@ export default class ExperimentTitleEditor {
       }
     });
     insertButton.addEventListener('click', () => {
-      this.insert(readControls());
+      this.insert(readControls(), headingTextInput.value);
       close();
     });
     document.addEventListener('keydown', handleKeydown);
     updatePreview();
-    headingLevelSelect.focus();
+    headingTextInput.focus();
+    headingTextInput.select();
   }
 
   private getCurrentTitle(): string {
@@ -309,12 +319,13 @@ export default class ExperimentTitleEditor {
     return candidate;
   }
 
-  private insert(defaults: ExperimentTitleDefaults): void {
+  private insert(defaults: ExperimentTitleDefaults, headingText: string): void {
     const headingLevel = defaults.headingLevel;
     const headingId = this.getUniqueHeadingId();
+    const title = headingText.trim() || this.getCurrentTitle();
     const html = [
       `<h${headingLevel} id="${headingId}" style="${escapeHTML(getHeadingStyle(defaults))}">`,
-      `${escapeHTML(this.getCurrentTitle())}</h${headingLevel}>`,
+      `${escapeHTML(title)}</h${headingLevel}>`,
       '<p><br data-mce-bogus="1"></p>',
     ].join('');
     this.editor.execCommand('mceInsertContent', false, html);
