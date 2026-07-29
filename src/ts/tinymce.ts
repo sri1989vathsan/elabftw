@@ -550,15 +550,15 @@ export function getTinymceBaseConfig(page: string): object {
           const items = [
             {
               type: 'menuitem' as const,
-              text: 'Insert today (linked)',
-              icon: 'insert-time',
-              onAction: () => dateReferenceEditor.insertToday(),
+              text: 'Choose date, format, heading or experiment…',
+              icon: 'calendar',
+              onAction: () => dateReferenceEditor.openCalendar(),
             },
             {
               type: 'menuitem' as const,
-              text: 'Choose date or experiment…',
-              icon: 'calendar',
-              onAction: () => dateReferenceEditor.openCalendar(),
+              text: 'Quick insert today (linked)',
+              icon: 'insert-time',
+              onAction: () => dateReferenceEditor.insertToday(),
             },
             {
               type: 'menuitem' as const,

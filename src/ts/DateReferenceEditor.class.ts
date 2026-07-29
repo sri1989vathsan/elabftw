@@ -544,6 +544,9 @@ export default class DateReferenceEditor {
     const anchorId = existingAnchorId || generateAnchorId(date);
     const href = target ? getExperimentHref(target.id) : getEntityViewHref(anchorId);
     const label = formatDate(date, format, customLabel);
+    const parsedDate = DateTime.fromISO(date).setLocale(getLocale());
+    const iconMonth = parsedDate.isValid ? parsedDate.toFormat('LLL').toLocaleUpperCase() : '';
+    const iconDay = parsedDate.isValid ? parsedDate.toFormat('d') : '';
     const title = target
       ? `${label} — open ${target.title}`
       : `${label} — permanent link to this passage`;
@@ -551,6 +554,10 @@ export default class DateReferenceEditor {
       `<a${asHeading ? '' : ` id="${escapeHTML(anchorId)}"`}`,
       ' class="elabftw-date-reference"',
       ` href="${escapeHTML(href)}" title="${escapeHTML(title)}">`,
+      '<span class="elabftw-date-icon">',
+      `<span class="elabftw-date-icon-month">${escapeHTML(iconMonth)}</span>`,
+      `<span class="elabftw-date-icon-day">${escapeHTML(iconDay)}</span>`,
+      '</span>',
       `<time datetime="${escapeHTML(date)}">${escapeHTML(label)}</time></a>`,
     ].join('');
     const safeHeadingLevel = Math.min(6, Math.max(1, Math.round(headingLevel)));

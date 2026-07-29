@@ -87,10 +87,11 @@ class FilterTest extends \PHPUnit\Framework\TestCase
         $heading = Filter::body('<h2 id="section-results">Results</h2>');
         $this->assertStringContainsString('<h2 id="section-results">Results</h2>', $heading);
 
-        $date = Filter::body('<a id="date-2026-07-29-abcd1234" class="elabftw-date-reference" href="experiments.php?mode=view&amp;id=42" title="Linked date"><time datetime="2026-07-29">20260729</time></a>');
+        $date = Filter::body('<a id="date-2026-07-29-abcd1234" class="elabftw-date-reference" href="experiments.php?mode=view&amp;id=42" title="Linked date"><span class="elabftw-date-icon"><span class="elabftw-date-icon-month">JUL</span><span class="elabftw-date-icon-day">29</span></span><time datetime="2026-07-29">20260729</time></a>');
         $this->assertStringContainsString('id="date-2026-07-29-abcd1234"', $date);
         $this->assertStringContainsString('class="elabftw-date-reference"', $date);
         $this->assertStringContainsString('href="experiments.php?mode=view&amp;id=42"', $date);
+        $this->assertStringContainsString('<span class="elabftw-date-icon-day">29</span>', $date);
         $this->assertStringContainsString('<time datetime="2026-07-29">20260729</time>', $date);
 
         $headingDate = Filter::body('<h2 id="date-2026-07-29-heading"><a class="elabftw-date-reference" href="experiments.php?mode=view&amp;id=42"><time datetime="2026-07-29">29 July 2026</time></a></h2>');

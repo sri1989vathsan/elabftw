@@ -1263,26 +1263,53 @@ table > caption {
 
 /* LINKABLE EDITOR DATES */
 a.elabftw-date-reference {
+  align-items: center;
   background-color: var(--firstlevel);
   border: 1px solid var(--secondary-muted);
   border-radius: 0.3rem;
   color: var(--primary);
-  display: inline-block;
+  display: inline-flex;
+  gap: 0.3rem;
   padding: 0.08rem 0.35rem;
   text-decoration: none;
   white-space: nowrap;
-
-  &::before {
-    content: '📅';
-    font-size: 0.85em;
-    margin-right: 0.25rem;
-  }
 
   &:hover {
     background-color: var(--secondlevel);
     color: var(--primary);
     text-decoration: underline;
   }
+}
+
+.elabftw-date-icon {
+  background-color: var(--white);
+  border: 1px solid var(--secondary-muted);
+  border-radius: 0.16rem;
+  display: inline-grid;
+  flex: 0 0 auto;
+  font-family: sans-serif;
+  grid-template-rows: 0.55rem 0.9rem;
+  height: 1.55rem;
+  line-height: 1;
+  overflow: hidden;
+  text-align: center;
+  width: 1.6rem;
+}
+
+.elabftw-date-icon-month {
+  background-color: var(--primary);
+  color: var(--white);
+  font-size: 0.42rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding-top: 0.08rem;
+}
+
+.elabftw-date-icon-day {
+  color: var(--strongest);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding-top: 0.1rem;
 }
 
 .date-reference-overlay {
@@ -1434,7 +1461,16 @@ hr.elabftw-single-rule {
 }
 
 hr.elabftw-double-rule {
-  border-top: 4px double var(--strongest);
+  background: linear-gradient(
+    to bottom,
+    var(--strongest) 0,
+    var(--strongest) 1px,
+    transparent 1px,
+    transparent 5px,
+    var(--strongest) 5px,
+    var(--strongest) 6px
+  );
+  height: 6px;
 }
 
 /* INLINE SPREADSHEET */

@@ -18,25 +18,52 @@ table > caption {
 }
 
 a.elabftw-date-reference {
+  align-items: center;
   background-color: var(--firstlevel, #eef2f5);
   border: 1px solid var(--secondary-muted, #ccd2d8);
   border-radius: 0.3rem;
   color: var(--primary, #167b85);
-  display: inline-block;
+  display: inline-flex;
+  gap: 0.3rem;
   padding: 0.08rem 0.35rem;
   text-decoration: none;
   white-space: nowrap;
-
-  &::before {
-    content: '📅';
-    font-size: 0.85em;
-    margin-right: 0.25rem;
-  }
 
   &:hover {
     background-color: var(--secondlevel, #e1e8ec);
     text-decoration: underline;
   }
+}
+
+.elabftw-date-icon {
+  background-color: var(--white, #fff);
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  border-radius: 0.16rem;
+  display: inline-grid;
+  flex: 0 0 auto;
+  font-family: sans-serif;
+  grid-template-rows: 0.55rem 0.9rem;
+  height: 1.55rem;
+  line-height: 1;
+  overflow: hidden;
+  text-align: center;
+  width: 1.6rem;
+}
+
+.elabftw-date-icon-month {
+  background-color: var(--primary, #167b85);
+  color: var(--white, #fff);
+  font-size: 0.42rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding-top: 0.08rem;
+}
+
+.elabftw-date-icon-day {
+  color: var(--strongest, #343a40);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding-top: 0.1rem;
 }
 
 hr.elabftw-single-rule,
@@ -51,7 +78,16 @@ hr.elabftw-single-rule {
 }
 
 hr.elabftw-double-rule {
-  border-top: 4px double var(--strongest, #343a40);
+  background: linear-gradient(
+    to bottom,
+    var(--strongest, #343a40) 0,
+    var(--strongest, #343a40) 1px,
+    transparent 1px,
+    transparent 5px,
+    var(--strongest, #343a40) 5px,
+    var(--strongest, #343a40) 6px
+  );
+  height: 6px;
 }
 
 table.elabftw-spreadsheet {

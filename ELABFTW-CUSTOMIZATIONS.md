@@ -329,6 +329,9 @@ The editor's **Date** toolbar menu retains plain timestamp insertion and adds
 two semantic date actions: insert today's date immediately, or choose a date
 from a native calendar picker. Calendar dates are saved as accessible `<time>`
 elements with stable anchor IDs and a clearly styled date link.
+The calendar badge is generated from the selected date itself (localized month
+plus day number), so it never shows a hard-coded day that disagrees with the
+date label.
 
 The calendar dialog includes a live display-format selector. It covers the
 account's localized format, ISO `2026-07-29`, compact `20260729`, day-first and
@@ -354,7 +357,8 @@ sanitizer across save and reopen.
 The adjacent **Line** toolbar menu inserts either a single or double horizontal
 rule. The same actions are available as Ctrl+Shift+H and
 Ctrl+Alt+Shift+H while the editor has focus. Both rule styles are retained
-through sanitization, view mode, and later edits.
+through sanitization, view mode, and later edits. The double rule is rendered
+as two distinct one-pixel strokes with a small gap.
 
 ## Schema Migration Notes
 
