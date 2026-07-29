@@ -13,6 +13,8 @@ interface ExperimentTitleDefaults {
   fontSize: number;
   useThemeColor: boolean;
   textColor: string;
+  useBackgroundColor: boolean;
+  backgroundColor: string;
   bold: boolean;
   italic: boolean;
   underline: boolean;
@@ -38,6 +40,8 @@ function getFallbackDefaults(): ExperimentTitleDefaults {
     fontSize: 24,
     useThemeColor: true,
     textColor: '#343a40',
+    useBackgroundColor: false,
+    backgroundColor: '#e9ecef',
     bold: true,
     italic: false,
     underline: false,
@@ -65,6 +69,11 @@ function normalizeDefaults(candidate?: Partial<ExperimentTitleDefaults>): Experi
       && COLOR_PATTERN.test(candidate.textColor)
       ? candidate.textColor.toLowerCase()
       : fallback.textColor,
+    useBackgroundColor: candidate?.useBackgroundColor === true,
+    backgroundColor: typeof candidate?.backgroundColor === 'string'
+      && COLOR_PATTERN.test(candidate.backgroundColor)
+      ? candidate.backgroundColor.toLowerCase()
+      : fallback.backgroundColor,
     bold: candidate?.bold !== false,
     italic: candidate?.italic === true,
     underline: candidate?.underline === true,
@@ -98,6 +107,9 @@ function getHeadingStyle(defaults: ExperimentTitleDefaults): string {
   ];
   if (defaults.fontFamily) declarations.push(`font-family:${defaults.fontFamily}`);
   if (!defaults.useThemeColor) declarations.push(`color:${defaults.textColor}`);
+  if (defaults.useBackgroundColor) {
+    declarations.push(`background-color:${defaults.backgroundColor}`);
+  }
   return declarations.join(';');
 }
 
@@ -196,6 +208,19 @@ export default class ExperimentTitleEditor {
     textColorInput.disabled = themeColor.input.checked;
     colorRow.append(themeColor.label, textColorInput);
 
+    const backgroundRow = document.createElement('div');
+    backgroundRow.className = 'date-reference-heading-row';
+    const backgroundColorInput = document.createElement('input');
+    backgroundColorInput.type = 'color';
+    backgroundColorInput.className = 'form-control';
+    backgroundColorInput.value = defaults.backgroundColor;
+    const noBackground = createCheckbox(
+      'No background colour',
+      !defaults.useBackgroundColor,
+    );
+    backgroundColorInput.disabled = noBackground.input.checked;
+    backgroundRow.append(noBackground.label, backgroundColorInput);
+
     const emphasisRow = document.createElement('div');
     emphasisRow.className = 'date-reference-heading-row';
     const bold = createCheckbox('Bold', defaults.bold);
@@ -246,6 +271,7 @@ export default class ExperimentTitleEditor {
       createField('Font family', fontFamilySelect),
       createField('Font size (pt)', fontSizeInput),
       colorRow,
+      backgroundRow,
       emphasisRow,
       createField('Alignment', alignmentSelect),
       preview,
@@ -261,6 +287,8 @@ export default class ExperimentTitleEditor {
       fontSize: Number(fontSizeInput.value),
       useThemeColor: themeColor.input.checked,
       textColor: textColorInput.value,
+      useBackgroundColor: !noBackground.input.checked,
+      backgroundColor: backgroundColorInput.value,
       bold: bold.input.checked,
       italic: italic.input.checked,
       underline: underline.input.checked,
@@ -270,6 +298,7 @@ export default class ExperimentTitleEditor {
       preview.style.cssText = getHeadingStyle(readControls());
       preview.textContent = headingTextInput.value.trim() || 'Heading preview';
       textColorInput.disabled = themeColor.input.checked;
+      backgroundColorInput.disabled = noBackground.input.checked;
     };
     const close = (): void => {
       document.removeEventListener('keydown', handleKeydown);
