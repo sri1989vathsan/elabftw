@@ -323,6 +323,39 @@ The main navigation establishes a stacking layer above the sticky entity action
 toolbar. Dropdowns such as **Experiments** therefore open over the floating
 Back/Edit/Save bar instead of being obscured by it.
 
+## Feature 16: Calendar Dates and Experiment References
+
+The editor's **Date** toolbar menu retains plain timestamp insertion and adds
+two semantic date actions: insert today's date immediately, or choose a date
+from a native calendar picker. Calendar dates are saved as accessible `<time>`
+elements with stable anchor IDs and a clearly styled date link.
+
+The calendar dialog includes a live display-format selector. It covers the
+account's localized format, ISO `2026-07-29`, compact `20260729`, day-first and
+month-first numeric forms with dashes or slashes, abbreviated and full month
+names in both orders, weekday variants, month/year, and a free custom label.
+The underlying semantic `datetime` remains ISO even when the visible label is
+custom, and the chosen format is remembered for later insertions in that
+browser.
+
+The same dialog can make the date a Heading 1 through Heading 6 instead of
+inline text. Heading dates use the same stable anchor and experiment target,
+appear in the hierarchy-aware Table of Contents, and can later be edited back
+to an inline date or a different heading level.
+
+By default, a date links back to its exact passage in the current entry. The
+calendar dialog can instead search experiments and make the visible date open
+the selected experiment. Placing the cursor on an inserted date exposes actions
+to edit its date/experiment target or copy its permanent inbound link, allowing
+another experiment to reference that exact dated passage. The semantic element,
+anchor, link metadata, and date-reference class are retained by the server HTML
+sanitizer across save and reopen.
+
+The adjacent **Line** toolbar menu inserts either a single or double horizontal
+rule. The same actions are available as Ctrl+Shift+H and
+Ctrl+Alt+Shift+H while the editor has focus. Both rule styles are retained
+through sanitization, view mode, and later edits.
+
 ## Schema Migration Notes
 
 - `schema207.sql` — Combined: experiment folders table + folder_id column (our additions) and booking cost columns (upstream). Uses `CREATE TABLE IF NOT EXISTS` and conditional `ALTER TABLE` for idempotent re-runs

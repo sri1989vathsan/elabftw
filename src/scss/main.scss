@@ -1261,6 +1261,182 @@ table > caption {
   margin: 0 0 0.25rem;
 }
 
+/* LINKABLE EDITOR DATES */
+a.elabftw-date-reference {
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary-muted);
+  border-radius: 0.3rem;
+  color: var(--primary);
+  display: inline-block;
+  padding: 0.08rem 0.35rem;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &::before {
+    content: '📅';
+    font-size: 0.85em;
+    margin-right: 0.25rem;
+  }
+
+  &:hover {
+    background-color: var(--secondlevel);
+    color: var(--primary);
+    text-decoration: underline;
+  }
+}
+
+.date-reference-overlay {
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.55);
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  left: 0;
+  padding: 1rem;
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 10060;
+}
+
+.date-reference-dialog {
+  background-color: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.65rem;
+  box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.35);
+  color: var(--strongest);
+  max-height: 90vh;
+  max-width: 38rem;
+  overflow: auto;
+  padding: 1.25rem;
+  width: 100%;
+}
+
+.date-reference-help {
+  color: var(--medium);
+  font-size: 0.9rem;
+}
+
+.date-reference-format-preview {
+  color: var(--medium);
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+.date-reference-heading-row {
+  align-items: center;
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 0.35rem;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, 12rem);
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.date-reference-heading-toggle {
+  align-items: center;
+  display: flex;
+  font-weight: 600;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.date-reference-field {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.date-reference-search-row {
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.date-reference-target-status {
+  color: var(--medium);
+  font-size: 0.82rem;
+  font-weight: 400;
+
+  &.is-selected {
+    color: var(--primary);
+    font-weight: 600;
+  }
+}
+
+.date-reference-search-results {
+  background-color: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.25rem;
+  max-height: 14rem;
+  overflow-y: auto;
+
+  &:empty {
+    border: 0;
+    margin: 0;
+  }
+}
+
+.date-reference-search-result {
+  background: var(--mainbackground);
+  border: 0;
+  border-bottom: 1px solid var(--secondary);
+  color: var(--strongest);
+  display: flex;
+  flex-direction: column;
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &:focus,
+  &:hover {
+    background-color: var(--firstlevel);
+    color: var(--strongest);
+  }
+
+  span {
+    color: var(--medium);
+    font-size: 0.78rem;
+  }
+}
+
+.date-reference-search-message {
+  color: var(--medium);
+  font-size: 0.85rem;
+  padding: 0.6rem 0.7rem;
+}
+
+.date-reference-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+hr.elabftw-single-rule,
+hr.elabftw-double-rule {
+  border: 0;
+  height: 0;
+  margin: 1rem 0;
+}
+
+hr.elabftw-single-rule {
+  border-top: 1px solid var(--strongest);
+}
+
+hr.elabftw-double-rule {
+  border-top: 4px double var(--strongest);
+}
+
 /* INLINE SPREADSHEET */
 .inline-spreadsheet-overlay {
   align-items: center;

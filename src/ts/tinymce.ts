@@ -79,6 +79,7 @@ import {
   WELL_PLATE_PRESETS,
 } from './inline-spreadsheet';
 import TableIndentation from './TableIndentation.class';
+import DateReferenceEditor from './DateReferenceEditor.class';
 import { MathJaxObject } from 'mathjax-full/js/components/startup';
 declare const MathJax: MathJaxObject;
 import { entity } from './getEntity';
@@ -105,6 +106,14 @@ function getDatetime(): string {
 // ctrl-shift-D will add the date in the tinymce editor
 function addDatetimeOnCursor(): void {
   tinymce.activeEditor.execCommand('mceInsertContent', false, `${getDatetime()} `);
+}
+
+function insertHorizontalRule(editor: Editor, style: 'single' | 'double'): void {
+  editor.execCommand(
+    'mceInsertContent',
+    false,
+    `<hr class="elabftw-${style}-rule"><p><br data-mce-bogus="1"></p>`,
+  );
 }
 
 /**
@@ -319,7 +328,7 @@ function getEditorPaletteStyle(): string {
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate | codesample | link | inline-sheet table-properties cell-properties table-outdent table-indent sort-table';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate horizontal-rule | codesample | link | inline-sheet table-properties cell-properties table-outdent table-indent sort-table';
   let removedMenuItems = 'newdocument, image, anchor';
   let fileMenuItems = 'preview | print';
   if (page === 'edit') {
@@ -463,6 +472,7 @@ export function getTinymceBaseConfig(page: string): object {
     },
     setup: (editor: Editor): void => {
       const tableIndentation = new TableIndentation(editor);
+      const dateReferenceEditor = new DateReferenceEditor(editor);
       // holds the timer setTimeout function
       let typingTimer;
       // use event SkinLoaded instead of init so we're sure skinNode is present
@@ -530,13 +540,66 @@ export function getTinymceBaseConfig(page: string): object {
       // floppy disk icon from COLLECTION: Zest Interface Icons LICENSE: MIT License AUTHOR: zest
       editor.ui.registry.addIcon('customSave', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M4 5a1 1 0 0 1 1-1h2v3a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V4h.172a1 1 0 0 1 .707.293l2.828 2.828a1 1 0 0 1 .293.707V19a1 1 0 0 1-1 1h-1v-7a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v7H5a1 1 0 0 1-1-1V5Zm4 15h8v-6H8v6Zm6-16H9v2h5V4ZM5 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7.828a3 3 0 0 0-.879-2.12l-2.828-2.83A3 3 0 0 0 16.172 2H5Z" /></svg>'), // eslint-disable-line
 
-      // add date+time button
-      editor.ui.registry.addButton('adddate', {
+      // Semantic dates retain a stable anchor and can link to another
+      // experiment. Keep the original timestamp action in the same menu.
+      editor.ui.registry.addMenuButton('adddate', {
         icon: 'insert-time',
-        tooltip: 'Insert timestamp',
-        onAction: function() {
-          editor.insertContent(`${getDatetime()} `);
+        text: 'Date',
+        tooltip: 'Insert a date from the calendar or a timestamp',
+        fetch: callback => {
+          const items = [
+            {
+              type: 'menuitem' as const,
+              text: 'Insert today (linked)',
+              icon: 'insert-time',
+              onAction: () => dateReferenceEditor.insertToday(),
+            },
+            {
+              type: 'menuitem' as const,
+              text: 'Choose date or experiment…',
+              icon: 'calendar',
+              onAction: () => dateReferenceEditor.openCalendar(),
+            },
+            {
+              type: 'menuitem' as const,
+              text: 'Insert timestamp',
+              onAction: () => editor.insertContent(`${getDatetime()} `),
+            },
+          ];
+          const selectedReference = dateReferenceEditor.getSelectedReference();
+          if (selectedReference) {
+            items.push({ type: 'separator' as const } as typeof items[number]);
+            items.push({
+              type: 'menuitem' as const,
+              text: 'Edit selected date…',
+              icon: 'edit-block',
+              onAction: () => dateReferenceEditor.openCalendar(selectedReference),
+            });
+            items.push({
+              type: 'menuitem' as const,
+              text: 'Copy permanent link to date',
+              icon: 'copy',
+              onAction: () => dateReferenceEditor.copySelectedReferenceLink(),
+            });
+          }
+          callback(items);
         },
+      });
+      editor.ui.registry.addMenuButton('horizontal-rule', {
+        text: 'Line',
+        tooltip: 'Insert a single or double horizontal line',
+        fetch: callback => callback([
+          {
+            type: 'menuitem',
+            text: 'Single horizontal line (Ctrl+Shift+H)',
+            onAction: () => insertHorizontalRule(editor, 'single'),
+          },
+          {
+            type: 'menuitem',
+            text: 'Double horizontal line (Ctrl+Alt+Shift+H)',
+            onAction: () => insertHorizontalRule(editor, 'double'),
+          },
+        ]),
       });
       editor.ui.registry.addButton('custom-save', {
         icon: 'customSave',
@@ -682,6 +745,16 @@ export function getTinymceBaseConfig(page: string): object {
 
       // some shortcuts
       editor.addShortcut('ctrl+shift+d', 'add date/time at cursor', addDatetimeOnCursor);
+      editor.addShortcut(
+        'ctrl+shift+h',
+        'insert single horizontal line',
+        () => insertHorizontalRule(editor, 'single'),
+      );
+      editor.addShortcut(
+        'ctrl+alt+shift+h',
+        'insert double horizontal line',
+        () => insertHorizontalRule(editor, 'double'),
+      );
       editor.addShortcut('ctrl+=', 'subscript', () => editor.execCommand('subscript'));
       editor.addShortcut('ctrl+shift+=', 'superscript', () => editor.execCommand('superscript'));
       editor.on('init', () => {

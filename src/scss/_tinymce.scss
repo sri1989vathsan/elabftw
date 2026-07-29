@@ -17,6 +17,43 @@ table > caption {
   text-align: left;
 }
 
+a.elabftw-date-reference {
+  background-color: var(--firstlevel, #eef2f5);
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  border-radius: 0.3rem;
+  color: var(--primary, #167b85);
+  display: inline-block;
+  padding: 0.08rem 0.35rem;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &::before {
+    content: '📅';
+    font-size: 0.85em;
+    margin-right: 0.25rem;
+  }
+
+  &:hover {
+    background-color: var(--secondlevel, #e1e8ec);
+    text-decoration: underline;
+  }
+}
+
+hr.elabftw-single-rule,
+hr.elabftw-double-rule {
+  border: 0;
+  height: 0;
+  margin: 1rem 0;
+}
+
+hr.elabftw-single-rule {
+  border-top: 1px solid var(--strongest, #343a40);
+}
+
+hr.elabftw-double-rule {
+  border-top: 4px double var(--strongest, #343a40);
+}
+
 table.elabftw-spreadsheet {
   border-collapse: collapse;
 
