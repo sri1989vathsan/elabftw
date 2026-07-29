@@ -325,10 +325,11 @@ Back/Edit/Save bar instead of being obscured by it.
 
 ## Feature 16: Calendar Dates and Experiment References
 
-The editor's **Date** toolbar menu retains plain timestamp insertion and adds
-two semantic date actions: insert today's date immediately, or choose a date
-from a native calendar picker. Calendar dates are saved as accessible `<time>`
-elements with stable anchor IDs and a clearly styled date link.
+The editor's split **Date** toolbar control retains plain timestamp insertion.
+Clicking its main section inserts today's date immediately using saved defaults;
+its arrow opens the full menu and native calendar picker. Calendar dates are
+saved as accessible `<time>` elements with stable anchor IDs and a clearly
+styled date link.
 The calendar badge is generated from the selected date itself (localized month
 plus day number), so it never shows a hard-coded day that disagrees with the
 date label.
@@ -338,8 +339,8 @@ account's localized format, ISO `2026-07-29`, compact `20260729`, day-first and
 month-first numeric forms with dashes or slashes, abbreviated and full month
 names in both orders, weekday variants, month/year, and a free custom label.
 The underlying semantic `datetime` remains ISO even when the visible label is
-custom, and the chosen format is remembered for later insertions in that
-browser.
+custom. **Save as default** stores the chosen format, custom label, heading
+toggle, and H1-H6 level for later one-click insertions in that browser.
 
 The same dialog can make the date a Heading 1 through Heading 6 instead of
 inline text. Heading dates use the same stable anchor and experiment target,

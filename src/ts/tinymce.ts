@@ -542,44 +542,66 @@ export function getTinymceBaseConfig(page: string): object {
 
       // Semantic dates retain a stable anchor and can link to another
       // experiment. Keep the original timestamp action in the same menu.
-      editor.ui.registry.addMenuButton('adddate', {
+      editor.ui.registry.addSplitButton('adddate', {
         icon: 'insert-time',
         text: 'Date',
-        tooltip: 'Insert a date from the calendar or a timestamp',
+        tooltip: 'Insert today using saved defaults; open the menu for date options',
+        onAction: () => dateReferenceEditor.insertToday(),
+        onItemAction: (_api, value) => {
+          switch (value) {
+          case 'today':
+            dateReferenceEditor.insertToday();
+            break;
+          case 'options':
+            dateReferenceEditor.openCalendar();
+            break;
+          case 'timestamp':
+            editor.insertContent(`${getDatetime()} `);
+            break;
+          case 'edit': {
+            const selectedReference = dateReferenceEditor.getSelectedReference();
+            if (selectedReference) dateReferenceEditor.openCalendar(selectedReference);
+            break;
+          }
+          case 'copy':
+            dateReferenceEditor.copySelectedReferenceLink();
+            break;
+          }
+        },
         fetch: callback => {
           const items = [
             {
-              type: 'menuitem' as const,
-              text: 'Choose date, format, heading or experiment…',
-              icon: 'calendar',
-              onAction: () => dateReferenceEditor.openCalendar(),
-            },
-            {
-              type: 'menuitem' as const,
-              text: 'Quick insert today (linked)',
+              type: 'choiceitem' as const,
+              text: 'Insert today using saved defaults',
+              value: 'today',
               icon: 'insert-time',
-              onAction: () => dateReferenceEditor.insertToday(),
             },
             {
-              type: 'menuitem' as const,
+              type: 'choiceitem' as const,
+              text: 'Choose date, format, heading or experiment…',
+              value: 'options',
+              icon: 'calendar',
+            },
+            {
+              type: 'choiceitem' as const,
               text: 'Insert timestamp',
-              onAction: () => editor.insertContent(`${getDatetime()} `),
+              value: 'timestamp',
             },
           ];
           const selectedReference = dateReferenceEditor.getSelectedReference();
           if (selectedReference) {
             items.push({ type: 'separator' as const } as typeof items[number]);
             items.push({
-              type: 'menuitem' as const,
+              type: 'choiceitem' as const,
               text: 'Edit selected date…',
+              value: 'edit',
               icon: 'edit-block',
-              onAction: () => dateReferenceEditor.openCalendar(selectedReference),
             });
             items.push({
-              type: 'menuitem' as const,
+              type: 'choiceitem' as const,
               text: 'Copy permanent link to date',
+              value: 'copy',
               icon: 'copy',
-              onAction: () => dateReferenceEditor.copySelectedReferenceLink(),
             });
           }
           callback(items);

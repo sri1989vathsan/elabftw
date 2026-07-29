@@ -47,8 +47,16 @@ interface DateFormatChoice {
   label: string;
 }
 
+interface DateInsertDefaults {
+  format: DateDisplayFormat;
+  customLabel: string;
+  asHeading: boolean;
+  headingLevel: number;
+}
+
 const DATE_REFERENCE_SELECTOR = 'a.elabftw-date-reference';
 const DATE_FORMAT_STORAGE_KEY = 'elabftw-date-display-format';
+const DATE_DEFAULTS_STORAGE_KEY = 'elabftw-date-insert-defaults-v1';
 const DATE_FORMAT_CHOICES: DateFormatChoice[] = [
   { value: 'localized', label: 'Localized date' },
   { value: 'iso', label: 'ISO (year-month-day)' },
@@ -85,6 +93,44 @@ function getDefaultDateFormat(): DateDisplayFormat {
   return document.getElementById('user-prefs')?.dataset.isodate === '1'
     ? 'iso'
     : 'localized';
+}
+
+function getDateInsertDefaults(): DateInsertDefaults {
+  const fallback: DateInsertDefaults = {
+    format: getDefaultDateFormat(),
+    customLabel: '',
+    asHeading: false,
+    headingLevel: 2,
+  };
+  try {
+    const stored = localStorage.getItem(DATE_DEFAULTS_STORAGE_KEY);
+    if (!stored) return fallback;
+    const parsed = JSON.parse(stored) as Partial<DateInsertDefaults>;
+    const format = typeof parsed.format === 'string' && isDateDisplayFormat(parsed.format)
+      ? parsed.format
+      : fallback.format;
+    const headingLevel = Number(parsed.headingLevel);
+    return {
+      format,
+      customLabel: format === 'custom' && typeof parsed.customLabel === 'string'
+        ? parsed.customLabel
+        : '',
+      asHeading: parsed.asHeading === true,
+      headingLevel: Number.isInteger(headingLevel) && headingLevel >= 1 && headingLevel <= 6
+        ? headingLevel
+        : fallback.headingLevel,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function saveDateInsertDefaults(defaults: DateInsertDefaults): void {
+  localStorage.setItem(DATE_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
+  // Keep the earlier format preference in sync for existing installations.
+  if (defaults.format !== 'custom') {
+    localStorage.setItem(DATE_FORMAT_STORAGE_KEY, defaults.format);
+  }
 }
 
 function formatDate(
@@ -188,16 +234,26 @@ export default class DateReferenceEditor {
   }
 
   public insertToday(): void {
-    this.insertReference(getToday(), null, undefined, getDefaultDateFormat());
+    const defaults = getDateInsertDefaults();
+    this.insertReference(
+      getToday(),
+      null,
+      undefined,
+      defaults.format,
+      defaults.customLabel,
+      defaults.asHeading,
+      defaults.headingLevel,
+    );
   }
 
   public openCalendar(reference: HTMLAnchorElement | null = null): void {
     const bookmark = this.editor.selection.getBookmark(2, true);
+    const savedDefaults = getDateInsertDefaults();
     const existingTime = reference?.querySelector('time');
     const existingDate = existingTime?.getAttribute('datetime') ?? getToday();
     const inferredFormat = existingTime
       ? inferDateDisplayFormat(existingDate, existingTime.textContent?.trim() ?? existingDate)
-      : { format: getDefaultDateFormat(), customLabel: '' };
+      : { format: savedDefaults.format, customLabel: savedDefaults.customLabel };
     let selectedFormat = inferredFormat.format;
     let customLabel = inferredFormat.customLabel;
     const existingHeading = reference?.closest(
@@ -282,7 +338,7 @@ export default class DateReferenceEditor {
     headingCheckboxLabel.className = 'date-reference-heading-toggle';
     const headingCheckbox = document.createElement('input');
     headingCheckbox.type = 'checkbox';
-    headingCheckbox.checked = Boolean(existingHeading);
+    headingCheckbox.checked = reference ? Boolean(existingHeading) : savedDefaults.asHeading;
     const headingText = document.createElement('span');
     headingText.textContent = 'Use this date as a heading';
     headingCheckboxLabel.append(headingCheckbox, headingText);
@@ -295,7 +351,8 @@ export default class DateReferenceEditor {
       option.textContent = `Heading ${level}`;
       headingLevelSelect.appendChild(option);
     }
-    headingLevelSelect.value = existingHeading?.tagName.slice(1) ?? '2';
+    headingLevelSelect.value = existingHeading?.tagName.slice(1)
+      ?? String(savedDefaults.headingLevel);
     headingLevelSelect.hidden = !headingCheckbox.checked;
     headingCheckbox.addEventListener('change', () => {
       headingLevelSelect.hidden = !headingCheckbox.checked;
@@ -347,11 +404,16 @@ export default class DateReferenceEditor {
     cancelButton.type = 'button';
     cancelButton.className = 'btn btn-secondary';
     cancelButton.textContent = 'Cancel';
+    const saveDefaultButton = document.createElement('button');
+    saveDefaultButton.type = 'button';
+    saveDefaultButton.className = 'btn btn-outline-primary';
+    saveDefaultButton.textContent = 'Save as default';
+    saveDefaultButton.title = 'Use this format and heading choice for one-click date insertion';
     const insertButton = document.createElement('button');
     insertButton.type = 'button';
     insertButton.className = 'btn btn-primary';
     insertButton.textContent = reference ? 'Update date' : 'Insert date';
-    actions.append(cancelButton, insertButton);
+    actions.append(cancelButton, saveDefaultButton, insertButton);
 
     dialog.append(
       title,
@@ -449,21 +511,40 @@ export default class DateReferenceEditor {
       searchInput.focus();
     });
 
+    const validateCustomLabel = (): boolean => {
+      if (selectedFormat !== 'custom' || customLabelInput.value.trim()) {
+        customLabelInput.setCustomValidity('');
+        return true;
+      }
+      customLabelInput.hidden = false;
+      customLabelInput.focus();
+      customLabelInput.setCustomValidity('Enter a custom date label.');
+      customLabelInput.reportValidity();
+      return false;
+    };
+
+    saveDefaultButton.addEventListener('click', () => {
+      if (!validateCustomLabel()) return;
+      saveDateInsertDefaults({
+        format: selectedFormat,
+        customLabel: customLabelInput.value.trim(),
+        asHeading: headingCheckbox.checked,
+        headingLevel: Number(headingLevelSelect.value),
+      });
+      this.editor.notificationManager.open({
+        text: 'Date defaults saved for one-click insertion',
+        type: 'success',
+        timeout: 2500,
+      });
+    });
+
     insertButton.addEventListener('click', () => {
       if (!dateInput.value) {
         dateInput.focus();
         dateInput.reportValidity();
         return;
       }
-      if (selectedFormat === 'custom' && !customLabelInput.value.trim()) {
-        customLabelInput.hidden = false;
-        customLabelInput.focus();
-        customLabelInput.setCustomValidity('Enter a custom date label.');
-        customLabelInput.reportValidity();
-        return;
-      }
-      customLabelInput.setCustomValidity('');
-      localStorage.setItem(DATE_FORMAT_STORAGE_KEY, selectedFormat);
+      if (!validateCustomLabel()) return;
       close();
       this.editor.focus();
       const referenceHost = existingHeading ?? reference;
