@@ -6,6 +6,7 @@ import { entity } from './getEntity';
 import { escapeHTML } from './misc';
 
 type HeadingAlignment = 'left' | 'center' | 'right' | 'justify';
+type BackgroundCoverage = 'title' | 'text';
 
 interface ExperimentTitleDefaults {
   headingLevel: number;
@@ -15,13 +16,21 @@ interface ExperimentTitleDefaults {
   textColor: string;
   useBackgroundColor: boolean;
   backgroundColor: string;
+  backgroundCoverage: BackgroundCoverage;
   bold: boolean;
   italic: boolean;
   underline: boolean;
   alignment: HeadingAlignment;
 }
 
+interface ExperimentTitlePreset {
+  name: string;
+  defaults: ExperimentTitleDefaults;
+}
+
 const TITLE_DEFAULTS_STORAGE_KEY = 'elabftw-experiment-title-heading-defaults-v1';
+const TITLE_PRESETS_STORAGE_KEY = 'elabftw-experiment-title-heading-presets-v1';
+const MAX_TITLE_PRESETS = 20;
 const FONT_FAMILIES = new Map<string, string>([
   ['', 'Theme default'],
   ['Arial, sans-serif', 'Arial'],
@@ -31,6 +40,7 @@ const FONT_FAMILIES = new Map<string, string>([
   ["'Courier New', monospace", 'Courier New'],
 ]);
 const ALIGNMENTS = new Set<HeadingAlignment>(['left', 'center', 'right', 'justify']);
+const BACKGROUND_COVERAGES = new Set<BackgroundCoverage>(['title', 'text']);
 const COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
 function getFallbackDefaults(): ExperimentTitleDefaults {
@@ -42,6 +52,7 @@ function getFallbackDefaults(): ExperimentTitleDefaults {
     textColor: '#343a40',
     useBackgroundColor: false,
     backgroundColor: '#e9ecef',
+    backgroundCoverage: 'title',
     bold: true,
     italic: false,
     underline: false,
@@ -74,6 +85,10 @@ function normalizeDefaults(candidate?: Partial<ExperimentTitleDefaults>): Experi
       && COLOR_PATTERN.test(candidate.backgroundColor)
       ? candidate.backgroundColor.toLowerCase()
       : fallback.backgroundColor,
+    backgroundCoverage: candidate?.backgroundCoverage
+      && BACKGROUND_COVERAGES.has(candidate.backgroundCoverage)
+      ? candidate.backgroundCoverage
+      : fallback.backgroundCoverage,
     bold: candidate?.bold !== false,
     italic: candidate?.italic === true,
     underline: candidate?.underline === true,
@@ -97,6 +112,28 @@ function saveDefaults(defaults: ExperimentTitleDefaults): void {
   localStorage.setItem(TITLE_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
 }
 
+function getPresets(): ExperimentTitlePreset[] {
+  try {
+    const stored = localStorage.getItem(TITLE_PRESETS_STORAGE_KEY);
+    if (!stored) return [];
+    const candidates = JSON.parse(stored) as Array<Partial<ExperimentTitlePreset>>;
+    if (!Array.isArray(candidates)) return [];
+    return candidates
+      .filter(candidate => typeof candidate?.name === 'string' && candidate.name.trim())
+      .slice(0, MAX_TITLE_PRESETS)
+      .map(candidate => ({
+        name: candidate.name?.trim().slice(0, 50) ?? '',
+        defaults: normalizeDefaults(candidate.defaults),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function savePresets(presets: ExperimentTitlePreset[]): void {
+  localStorage.setItem(TITLE_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+}
+
 function getHeadingStyle(defaults: ExperimentTitleDefaults): string {
   const declarations = [
     `font-size:${defaults.fontSize}pt`,
@@ -107,14 +144,30 @@ function getHeadingStyle(defaults: ExperimentTitleDefaults): string {
   ];
   if (defaults.fontFamily) declarations.push(`font-family:${defaults.fontFamily}`);
   if (!defaults.useThemeColor) declarations.push(`color:${defaults.textColor}`);
-  if (defaults.useBackgroundColor) {
+  if (defaults.useBackgroundColor && defaults.backgroundCoverage === 'title') {
     declarations.push(`background-color:${defaults.backgroundColor}`);
   }
   return declarations.join(';');
 }
 
+function getTitleTextStyle(defaults: ExperimentTitleDefaults): string {
+  if (defaults.useBackgroundColor && defaults.backgroundCoverage === 'text') {
+    return `background-color:${defaults.backgroundColor}`;
+  }
+  return '';
+}
+
 function createField(labelText: string, control: HTMLElement): HTMLLabelElement {
   const field = document.createElement('label');
+  field.className = 'date-reference-field';
+  const label = document.createElement('span');
+  label.textContent = labelText;
+  field.append(label, control);
+  return field;
+}
+
+function createControlGroup(labelText: string, control: HTMLElement): HTMLDivElement {
+  const field = document.createElement('div');
   field.className = 'date-reference-field';
   const label = document.createElement('span');
   label.textContent = labelText;
@@ -181,6 +234,32 @@ export default class ExperimentTitleEditor {
     }
     headingLevelSelect.value = String(defaults.headingLevel);
 
+    let presets = getPresets();
+    const presetRow = document.createElement('div');
+    presetRow.className = 'experiment-title-preset-row';
+    const presetSelect = document.createElement('select');
+    presetSelect.className = 'form-control';
+    presetSelect.setAttribute('aria-label', 'Saved title style');
+    const presetNameInput = document.createElement('input');
+    presetNameInput.type = 'text';
+    presetNameInput.className = 'form-control';
+    presetNameInput.placeholder = 'Style name';
+    presetNameInput.maxLength = 50;
+    const savePresetButton = document.createElement('button');
+    savePresetButton.type = 'button';
+    savePresetButton.className = 'btn btn-outline-primary';
+    savePresetButton.textContent = 'Save style';
+    const deletePresetButton = document.createElement('button');
+    deletePresetButton.type = 'button';
+    deletePresetButton.className = 'btn btn-outline-danger';
+    deletePresetButton.textContent = 'Remove';
+    presetRow.append(
+      presetSelect,
+      presetNameInput,
+      savePresetButton,
+      deletePresetButton,
+    );
+
     const fontFamilySelect = document.createElement('select');
     fontFamilySelect.className = 'form-control';
     FONT_FAMILIES.forEach((label, value) => {
@@ -209,7 +288,7 @@ export default class ExperimentTitleEditor {
     colorRow.append(themeColor.label, textColorInput);
 
     const backgroundRow = document.createElement('div');
-    backgroundRow.className = 'date-reference-heading-row';
+    backgroundRow.className = 'date-reference-heading-row experiment-title-background-row';
     const backgroundColorInput = document.createElement('input');
     backgroundColorInput.type = 'color';
     backgroundColorInput.className = 'form-control';
@@ -218,8 +297,20 @@ export default class ExperimentTitleEditor {
       'No background colour',
       !defaults.useBackgroundColor,
     );
+    const backgroundCoverageSelect = document.createElement('select');
+    backgroundCoverageSelect.className = 'form-control';
+    backgroundCoverageSelect.innerHTML = `
+      <option value="title">Full title width</option>
+      <option value="text">Text only</option>
+    `;
+    backgroundCoverageSelect.value = defaults.backgroundCoverage;
     backgroundColorInput.disabled = noBackground.input.checked;
-    backgroundRow.append(noBackground.label, backgroundColorInput);
+    backgroundCoverageSelect.disabled = noBackground.input.checked;
+    backgroundRow.append(
+      noBackground.label,
+      backgroundColorInput,
+      backgroundCoverageSelect,
+    );
 
     const emphasisRow = document.createElement('div');
     emphasisRow.className = 'date-reference-heading-row';
@@ -240,7 +331,9 @@ export default class ExperimentTitleEditor {
 
     const preview = document.createElement('div');
     preview.className = 'experiment-title-heading-preview';
-    preview.textContent = this.getCurrentTitle();
+    const previewText = document.createElement('span');
+    previewText.textContent = this.getCurrentTitle();
+    preview.appendChild(previewText);
 
     const status = document.createElement('span');
     status.className = 'date-reference-target-status';
@@ -267,6 +360,7 @@ export default class ExperimentTitleEditor {
       title,
       explanation,
       createField('Heading text', headingTextInput),
+      createControlGroup('Saved title styles', presetRow),
       createField('Heading level', headingLevelSelect),
       createField('Font family', fontFamilySelect),
       createField('Font size (pt)', fontSizeInput),
@@ -289,16 +383,49 @@ export default class ExperimentTitleEditor {
       textColor: textColorInput.value,
       useBackgroundColor: !noBackground.input.checked,
       backgroundColor: backgroundColorInput.value,
+      backgroundCoverage: backgroundCoverageSelect.value as BackgroundCoverage,
       bold: bold.input.checked,
       italic: italic.input.checked,
       underline: underline.input.checked,
       alignment: alignmentSelect.value as HeadingAlignment,
     });
     const updatePreview = (): void => {
-      preview.style.cssText = getHeadingStyle(readControls());
-      preview.textContent = headingTextInput.value.trim() || 'Heading preview';
+      const controls = readControls();
+      preview.style.cssText = getHeadingStyle(controls);
+      previewText.style.cssText = getTitleTextStyle(controls);
+      previewText.textContent = headingTextInput.value.trim() || 'Heading preview';
       textColorInput.disabled = themeColor.input.checked;
       backgroundColorInput.disabled = noBackground.input.checked;
+      backgroundCoverageSelect.disabled = noBackground.input.checked;
+    };
+    const applyControls = (values: ExperimentTitleDefaults): void => {
+      headingLevelSelect.value = String(values.headingLevel);
+      fontFamilySelect.value = values.fontFamily;
+      fontSizeInput.value = String(values.fontSize);
+      themeColor.input.checked = values.useThemeColor;
+      textColorInput.value = values.textColor;
+      noBackground.input.checked = !values.useBackgroundColor;
+      backgroundColorInput.value = values.backgroundColor;
+      backgroundCoverageSelect.value = values.backgroundCoverage;
+      bold.input.checked = values.bold;
+      italic.input.checked = values.italic;
+      underline.input.checked = values.underline;
+      alignmentSelect.value = values.alignment;
+      updatePreview();
+    };
+    const renderPresets = (selectedName = ''): void => {
+      const customOption = document.createElement('option');
+      customOption.value = '';
+      customOption.textContent = 'Custom / saved default';
+      presetSelect.replaceChildren(customOption);
+      presets.forEach(preset => {
+        const option = document.createElement('option');
+        option.value = preset.name;
+        option.textContent = preset.name;
+        presetSelect.appendChild(option);
+      });
+      presetSelect.value = selectedName;
+      deletePresetButton.disabled = !presetSelect.value;
     };
     const close = (): void => {
       document.removeEventListener('keydown', handleKeydown);
@@ -309,8 +436,73 @@ export default class ExperimentTitleEditor {
       if (event.key === 'Escape') close();
     };
 
-    dialog.addEventListener('input', updatePreview);
-    dialog.addEventListener('change', updatePreview);
+    dialog.addEventListener('input', event => {
+      updatePreview();
+      if (!presetRow.contains(event.target as Node)) {
+        presetSelect.value = '';
+        deletePresetButton.disabled = true;
+      }
+    });
+    dialog.addEventListener('change', event => {
+      updatePreview();
+      if (!presetRow.contains(event.target as Node)) {
+        presetSelect.value = '';
+        deletePresetButton.disabled = true;
+      }
+    });
+    presetSelect.addEventListener('change', () => {
+      const preset = presets.find(candidate => candidate.name === presetSelect.value);
+      deletePresetButton.disabled = !preset;
+      if (!preset) {
+        presetNameInput.value = '';
+        return;
+      }
+      presetNameInput.value = preset.name;
+      applyControls(preset.defaults);
+      status.textContent = `Loaded title style “${preset.name}”.`;
+    });
+    savePresetButton.addEventListener('click', () => {
+      const name = presetNameInput.value.trim();
+      if (!name) {
+        status.textContent = 'Enter a name before saving this title style.';
+        presetNameInput.focus();
+        return;
+      }
+      const existingIndex = presets.findIndex(
+        preset => preset.name.localeCompare(name, undefined, { sensitivity: 'accent' }) === 0,
+      );
+      const preset = { name, defaults: readControls() };
+      if (existingIndex >= 0) {
+        presets[existingIndex] = preset;
+      } else if (presets.length < MAX_TITLE_PRESETS) {
+        presets.push(preset);
+      } else {
+        status.textContent = `You can save up to ${MAX_TITLE_PRESETS} title styles.`;
+        return;
+      }
+      try {
+        savePresets(presets);
+        renderPresets(name);
+        status.textContent = existingIndex >= 0
+          ? `Updated title style “${name}”.`
+          : `Saved title style “${name}”.`;
+      } catch {
+        status.textContent = 'The browser could not save this title style.';
+      }
+    });
+    deletePresetButton.addEventListener('click', () => {
+      const name = presetSelect.value;
+      if (!name) return;
+      presets = presets.filter(preset => preset.name !== name);
+      try {
+        savePresets(presets);
+        renderPresets();
+        presetNameInput.value = '';
+        status.textContent = `Removed title style “${name}”.`;
+      } catch {
+        status.textContent = 'The browser could not remove this title style.';
+      }
+    });
     overlay.addEventListener('click', event => {
       if (event.target === overlay) close();
     });
@@ -328,6 +520,7 @@ export default class ExperimentTitleEditor {
       close();
     });
     document.addEventListener('keydown', handleKeydown);
+    renderPresets();
     updatePreview();
     headingTextInput.focus();
     headingTextInput.select();
@@ -352,9 +545,13 @@ export default class ExperimentTitleEditor {
     const headingLevel = defaults.headingLevel;
     const headingId = this.getUniqueHeadingId();
     const title = headingText.trim() || this.getCurrentTitle();
+    const titleTextStyle = getTitleTextStyle(defaults);
+    const titleHtml = titleTextStyle
+      ? `<span style="${escapeHTML(titleTextStyle)}">${escapeHTML(title)}</span>`
+      : escapeHTML(title);
     const html = [
       `<h${headingLevel} id="${headingId}" style="${escapeHTML(getHeadingStyle(defaults))}">`,
-      `${escapeHTML(title)}</h${headingLevel}>`,
+      `${titleHtml}</h${headingLevel}>`,
       '<p><br data-mce-bogus="1"></p>',
     ].join('');
     this.editor.execCommand('mceInsertContent', false, html);

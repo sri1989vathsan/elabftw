@@ -182,7 +182,10 @@ resources and restores selections from the URL. Applying filters always opens
 the complete accessible listing (`scope=3`) so results are not silently
 restricted by a previous "My experiments", search, or pagination selection.
 Each filter group is independently collapsible and keeps its current selections
-when closed.
+when closed. The accordion uses compact icon cards, animated chevrons,
+theme-aware open and hover states, keyboard focus outlines, and highlighted
+selected rows. Collapsed sections show their selected-filter count and remember
+their open/closed state; reduced-motion preferences disable animations.
 
 The Manage favorites section can create a new category for the currently
 selected target and immediately favorite it, or favorite existing categories,
@@ -369,10 +372,12 @@ H1-H6 heading with a stable anchor, so it immediately participates in the Table
 of Contents and its per-heading link action. The control's menu opens an
 editable heading-text field plus font options for family, point size,
 theme/custom text colour, optional background colour (including no background),
-bold, italic, underline, and alignment. **Save as default** retains the
-formatting choices—but not document-specific heading text—in the browser, while
-the main control and **Ctrl+Alt+T** insert the latest experiment title using the
-saved settings.
+background coverage across the full title width or behind the text only, bold,
+italic, underline, and alignment. **Save as default** retains the formatting
+choices—but not document-specific heading text—in the browser, while the main
+control and **Ctrl+Alt+T** insert the latest experiment title using the saved
+settings. The same dialog can store up to 20 named title styles, load them into
+the controls, update an existing style by reusing its name, or remove styles.
 
 The adjacent **Line** toolbar menu inserts single or double horizontal rules in
 either solid or dashed form. The solid actions are also available as
