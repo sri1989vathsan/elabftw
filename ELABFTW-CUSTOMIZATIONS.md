@@ -258,7 +258,9 @@ colors. The current table previews changes immediately. **Save as default**
 persists the complete table-and-cell combination either on the user's account
 or on the current experiment/resource (including template entities); a notebook
 default takes precedence over the account default, while direct formatting on
-an individual table or cell takes precedence over both. A selected cell range
+an individual table or cell takes precedence over both. The combined
+**Table and cell appearance** section starts collapsed so the editor opens with
+more space for the spreadsheet grid. A selected cell range
 can also be formatted directly with quick controls for background color, border
 color, border style, and border width, or returned to inherited defaults with
 **Clear format**. Schema 212 stores the scoped settings as validated JSON.

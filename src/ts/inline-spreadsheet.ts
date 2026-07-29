@@ -818,7 +818,6 @@ function createOverlay(initial: SpreadsheetData): {
   const appearance = normalizeAppearance(initial.appearance);
   const appearancePanel = document.createElement('details');
   appearancePanel.className = 'inline-spreadsheet-appearance';
-  appearancePanel.open = true;
   const appearanceSummary = document.createElement('summary');
   appearanceSummary.textContent = 'Table and cell appearance';
   appearancePanel.appendChild(appearanceSummary);
