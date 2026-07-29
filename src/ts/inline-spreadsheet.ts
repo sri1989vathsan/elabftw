@@ -31,6 +31,21 @@ interface CellFontFormat {
   verticalAlign?: string;
 }
 
+export interface SpreadsheetCellDefaults {
+  backgroundColor: string | null;
+  borderColor: string;
+  borderStyle: 'solid' | 'dashed' | 'dotted' | 'double' | 'none';
+  borderWidth: number;
+  fontFamily: string;
+  fontSize: number;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  textColor: string | null;
+  textAlign: '' | 'left' | 'center' | 'right' | 'justify';
+  verticalAlign: '' | 'top' | 'middle' | 'bottom';
+}
+
 export interface SpreadsheetAppearance {
   borderWidth: number;
   borderColor: string;
@@ -48,6 +63,8 @@ export interface SpreadsheetAppearance {
   tableBackgroundColor: string;
   tableNoBackground: boolean;
   tableCellSpacing: number;
+  /** Optional account/notebook defaults taken from the cell-style toolbar. */
+  cellStyle?: SpreadsheetCellDefaults;
 }
 
 // jspreadsheet-ce v5 types do not cover the runtime shape returned during setup.
@@ -173,6 +190,73 @@ function normalizeInteger(value: unknown, fallback: number, min: number, max: nu
     : fallback;
 }
 
+function normalizeCellDefaults(
+  candidate?: Partial<SpreadsheetCellDefaults>,
+): SpreadsheetCellDefaults | undefined {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return undefined;
+  const borderStyles = new Set<SpreadsheetCellDefaults['borderStyle']>([
+    'solid',
+    'dashed',
+    'dotted',
+    'double',
+    'none',
+  ]);
+  const fontFamilies = new Set([
+    '',
+    'Arial, sans-serif',
+    'Verdana, sans-serif',
+    'Georgia, serif',
+    "'Times New Roman', serif",
+    "'Courier New', monospace",
+  ]);
+  const textAlignments = new Set<SpreadsheetCellDefaults['textAlign']>([
+    '',
+    'left',
+    'center',
+    'right',
+    'justify',
+  ]);
+  const verticalAlignments = new Set<SpreadsheetCellDefaults['verticalAlign']>([
+    '',
+    'top',
+    'middle',
+    'bottom',
+  ]);
+  return {
+    backgroundColor: candidate.backgroundColor === null
+      ? null
+      : normalizeColor(candidate.backgroundColor, DEFAULT_APPEARANCE.cellColor),
+    borderColor: normalizeColor(candidate.borderColor, DEFAULT_APPEARANCE.borderColor),
+    borderStyle: candidate.borderStyle && borderStyles.has(candidate.borderStyle)
+      ? candidate.borderStyle
+      : 'solid',
+    borderWidth: normalizeInteger(
+      candidate.borderWidth,
+      DEFAULT_APPEARANCE.borderWidth,
+      0,
+      MAX_TABLE_BORDER,
+    ),
+    fontFamily: typeof candidate.fontFamily === 'string'
+      && fontFamilies.has(candidate.fontFamily)
+      ? candidate.fontFamily
+      : '',
+    fontSize: normalizeInteger(candidate.fontSize, 12, 6, 72),
+    bold: candidate.bold === true,
+    italic: candidate.italic === true,
+    underline: candidate.underline === true,
+    textColor: candidate.textColor === null
+      ? null
+      : normalizeColor(candidate.textColor, '#212529'),
+    textAlign: candidate.textAlign && textAlignments.has(candidate.textAlign)
+      ? candidate.textAlign
+      : '',
+    verticalAlign: candidate.verticalAlign
+      && verticalAlignments.has(candidate.verticalAlign)
+      ? candidate.verticalAlign
+      : '',
+  };
+}
+
 function normalizeAppearance(
   candidate?: Partial<SpreadsheetAppearance>,
 ): SpreadsheetAppearance {
@@ -255,6 +339,7 @@ function normalizeAppearance(
       0,
       50,
     ),
+    cellStyle: normalizeCellDefaults(candidate?.cellStyle),
   };
 }
 
@@ -432,12 +517,31 @@ function getAppearanceCellStyle(
   row: number,
   includeBackground = true,
 ): string {
+  const cellStyle = appearance.cellStyle;
   const declarations = [
-    `border:${appearance.borderWidth}px solid ${appearance.borderColor}`,
+    cellStyle
+      ? (cellStyle.borderStyle === 'none' || cellStyle.borderWidth === 0
+        ? 'border:none'
+        : `border:${cellStyle.borderWidth}px ${cellStyle.borderStyle} ${cellStyle.borderColor}`)
+      : `border:${appearance.borderWidth}px solid ${appearance.borderColor}`,
     `padding:${appearance.cellPadding}px`,
   ];
-  if (includeBackground) {
+  if (includeBackground && cellStyle?.backgroundColor) {
+    declarations.push(`background-color:${cellStyle.backgroundColor}`);
+  } else if (includeBackground && !cellStyle) {
     declarations.push(`background-color:${getAppearanceBackground(appearance, col, row)}`);
+  }
+  if (cellStyle) {
+    if (cellStyle.fontFamily) declarations.push(`font-family:${cellStyle.fontFamily}`);
+    declarations.push(
+      `font-size:${cellStyle.fontSize}pt`,
+      `font-weight:${cellStyle.bold ? 'bold' : 'normal'}`,
+      `font-style:${cellStyle.italic ? 'italic' : 'normal'}`,
+      `text-decoration:${cellStyle.underline ? 'underline' : 'none'}`,
+    );
+    if (cellStyle.textColor) declarations.push(`color:${cellStyle.textColor}`);
+    if (cellStyle.textAlign) declarations.push(`text-align:${cellStyle.textAlign}`);
+    if (cellStyle.verticalAlign) declarations.push(`vertical-align:${cellStyle.verticalAlign}`);
   }
   return declarations.join(';');
 }
@@ -645,6 +749,9 @@ function createOverlay(initial: SpreadsheetData): {
   appearanceScopeSelect: HTMLSelectElement;
   saveAppearanceDefaultBtn: HTMLButtonElement;
   appearanceStatus: HTMLSpanElement;
+  cellDefaultScopeSelect: HTMLSelectElement;
+  saveCellDefaultBtn: HTMLButtonElement;
+  cellDefaultStatus: HTMLSpanElement;
   cellFormatColorInput: HTMLInputElement;
   cellFormatBorderColorInput: HTMLInputElement;
   cellFormatBorderStyleSelect: HTMLSelectElement;
@@ -864,6 +971,7 @@ function createOverlay(initial: SpreadsheetData): {
   appearancePanel.appendChild(appearanceDefaults);
   dialog.appendChild(appearancePanel);
 
+  const savedCellDefaults = appearance.cellStyle;
   const cellFormatBar = document.createElement('div');
   cellFormatBar.className = 'inline-spreadsheet-cell-format';
   const cellStyleRow = document.createElement('div');
@@ -872,15 +980,17 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatLabel.textContent = 'Cell';
   const cellFormatColorInput = createInput(
     'color',
-    appearance.cellColor,
+    savedCellDefaults?.backgroundColor ?? appearance.cellColor,
     'Selected cell background color',
   );
   const cellFormatNoColorInput = document.createElement('input');
   cellFormatNoColorInput.type = 'checkbox';
   cellFormatNoColorInput.setAttribute('aria-label', 'Remove selected cell background color');
+  cellFormatNoColorInput.checked = savedCellDefaults?.backgroundColor === null;
+  cellFormatColorInput.disabled = cellFormatNoColorInput.checked;
   const cellFormatBorderColorInput = createInput(
     'color',
-    appearance.borderColor,
+    savedCellDefaults?.borderColor ?? appearance.borderColor,
     'Selected cell border color',
   );
   const cellFormatBorderStyleSelect = document.createElement('select');
@@ -893,9 +1003,10 @@ function createOverlay(initial: SpreadsheetData): {
     <option value="double">Double border</option>
     <option value="none">No border</option>
   `;
+  cellFormatBorderStyleSelect.value = savedCellDefaults?.borderStyle ?? 'solid';
   const cellFormatBorderWidthInput = createInput(
     'number',
-    String(appearance.borderWidth),
+    String(savedCellDefaults?.borderWidth ?? appearance.borderWidth),
     'Selected cell border width',
   );
   cellFormatBorderWidthInput.min = '0';
@@ -929,9 +1040,10 @@ function createOverlay(initial: SpreadsheetData): {
     <option value="'Times New Roman', serif">Times New Roman</option>
     <option value="'Courier New', monospace">Courier New</option>
   `;
+  cellFormatFontFamilySelect.value = savedCellDefaults?.fontFamily ?? '';
   const cellFormatFontSizeInput = createInput(
     'number',
-    '12',
+    String(savedCellDefaults?.fontSize ?? 12),
     'Selected cell font size in points',
   );
   cellFormatFontSizeInput.min = '6';
@@ -939,20 +1051,25 @@ function createOverlay(initial: SpreadsheetData): {
   const cellFormatBoldInput = document.createElement('input');
   cellFormatBoldInput.type = 'checkbox';
   cellFormatBoldInput.setAttribute('aria-label', 'Bold selected cells');
+  cellFormatBoldInput.checked = savedCellDefaults?.bold ?? false;
   const cellFormatItalicInput = document.createElement('input');
   cellFormatItalicInput.type = 'checkbox';
   cellFormatItalicInput.setAttribute('aria-label', 'Italicize selected cells');
+  cellFormatItalicInput.checked = savedCellDefaults?.italic ?? false;
   const cellFormatUnderlineInput = document.createElement('input');
   cellFormatUnderlineInput.type = 'checkbox';
   cellFormatUnderlineInput.setAttribute('aria-label', 'Underline selected cells');
+  cellFormatUnderlineInput.checked = savedCellDefaults?.underline ?? false;
   const cellFormatTextColorInput = createInput(
     'color',
-    '#212529',
+    savedCellDefaults?.textColor ?? '#212529',
     'Selected cell text color',
   );
   const cellFormatNoTextColorInput = document.createElement('input');
   cellFormatNoTextColorInput.type = 'checkbox';
   cellFormatNoTextColorInput.setAttribute('aria-label', 'Remove selected cell text color');
+  cellFormatNoTextColorInput.checked = savedCellDefaults?.textColor === null;
+  cellFormatTextColorInput.disabled = cellFormatNoTextColorInput.checked;
   const cellFormatTextAlignSelect = document.createElement('select');
   cellFormatTextAlignSelect.className = 'form-control form-control-sm';
   cellFormatTextAlignSelect.setAttribute('aria-label', 'Selected cell horizontal alignment');
@@ -963,6 +1080,7 @@ function createOverlay(initial: SpreadsheetData): {
     <option value="right">Right</option>
     <option value="justify">Justify</option>
   `;
+  cellFormatTextAlignSelect.value = savedCellDefaults?.textAlign ?? '';
   const cellFormatVerticalAlignSelect = document.createElement('select');
   cellFormatVerticalAlignSelect.className = 'form-control form-control-sm';
   cellFormatVerticalAlignSelect.setAttribute('aria-label', 'Selected cell vertical alignment');
@@ -972,6 +1090,7 @@ function createOverlay(initial: SpreadsheetData): {
     <option value="middle">Middle</option>
     <option value="bottom">Bottom</option>
   `;
+  cellFormatVerticalAlignSelect.value = savedCellDefaults?.verticalAlign ?? '';
   const applyFontFormatBtn = document.createElement('button');
   applyFontFormatBtn.type = 'button';
   applyFontFormatBtn.className = 'btn btn-sm btn-outline-primary';
@@ -994,6 +1113,23 @@ function createOverlay(initial: SpreadsheetData): {
   clearCellFormatBtn.type = 'button';
   clearCellFormatBtn.className = 'btn btn-sm btn-outline-secondary';
   clearCellFormatBtn.textContent = 'Clear all cell formatting';
+  const cellDefaults = document.createElement('div');
+  cellDefaults.className = 'inline-spreadsheet-appearance-defaults inline-spreadsheet-cell-defaults';
+  const cellDefaultScopeSelect = document.createElement('select');
+  cellDefaultScopeSelect.className = 'form-control form-control-sm';
+  cellDefaultScopeSelect.setAttribute('aria-label', 'Save cell style default for');
+  cellDefaultScopeSelect.innerHTML = `
+    <option value="notebook">This notebook</option>
+    <option value="user">My account</option>
+  `;
+  const saveCellDefaultBtn = document.createElement('button');
+  saveCellDefaultBtn.type = 'button';
+  saveCellDefaultBtn.className = 'btn btn-sm btn-outline-primary';
+  saveCellDefaultBtn.textContent = 'Save cell style as default';
+  const cellDefaultStatus = document.createElement('span');
+  cellDefaultStatus.className = 'inline-spreadsheet-appearance-status';
+  cellDefaultStatus.textContent = 'Saves fill, border, font and alignment; notebook overrides account.';
+  cellDefaults.append(cellDefaultScopeSelect, saveCellDefaultBtn, cellDefaultStatus);
   const cellFormatStatus = document.createElement('span');
   cellFormatStatus.className = 'inline-spreadsheet-cell-format-status';
   cellFormatStatus.textContent = 'Select one or more cells, then apply cell or font properties.';
@@ -1001,6 +1137,7 @@ function createOverlay(initial: SpreadsheetData): {
     cellStyleRow,
     fontStyleRow,
     clearCellFormatBtn,
+    cellDefaults,
     cellFormatStatus,
   );
   dialog.appendChild(cellFormatBar);
@@ -1094,6 +1231,9 @@ function createOverlay(initial: SpreadsheetData): {
     appearanceScopeSelect,
     saveAppearanceDefaultBtn,
     appearanceStatus,
+    cellDefaultScopeSelect,
+    saveCellDefaultBtn,
+    cellDefaultStatus,
     cellFormatColorInput,
     cellFormatBorderColorInput,
     cellFormatBorderStyleSelect,
@@ -1125,6 +1265,7 @@ function spreadsheetPresetFromValue(value: string): SpreadsheetData | null {
 
 function appearanceFromControls(
   ui: ReturnType<typeof createOverlay>,
+  cellStyle?: SpreadsheetCellDefaults,
 ): SpreadsheetAppearance {
   return normalizeAppearance({
     borderWidth: parseInt(ui.borderWidthInput.value, 10),
@@ -1143,7 +1284,31 @@ function appearanceFromControls(
     tableBackgroundColor: ui.tableBackgroundColorInput.value,
     tableNoBackground: ui.tableNoBackgroundInput.checked,
     tableCellSpacing: parseInt(ui.tableCellSpacingInput.value, 10),
+    cellStyle,
   });
+}
+
+function cellDefaultsFromControls(
+  ui: ReturnType<typeof createOverlay>,
+): SpreadsheetCellDefaults {
+  return normalizeCellDefaults({
+    backgroundColor: ui.cellFormatNoColorInput.checked
+      ? null
+      : ui.cellFormatColorInput.value,
+    borderColor: ui.cellFormatBorderColorInput.value,
+    borderStyle: ui.cellFormatBorderStyleSelect.value as SpreadsheetCellDefaults['borderStyle'],
+    borderWidth: parseInt(ui.cellFormatBorderWidthInput.value, 10),
+    fontFamily: ui.cellFormatFontFamilySelect.value,
+    fontSize: parseInt(ui.cellFormatFontSizeInput.value, 10),
+    bold: ui.cellFormatBoldInput.checked,
+    italic: ui.cellFormatItalicInput.checked,
+    underline: ui.cellFormatUnderlineInput.checked,
+    textColor: ui.cellFormatNoTextColorInput.checked
+      ? null
+      : ui.cellFormatTextColorInput.value,
+    textAlign: ui.cellFormatTextAlignSelect.value as SpreadsheetCellDefaults['textAlign'],
+    verticalAlign: ui.cellFormatVerticalAlignSelect.value as SpreadsheetCellDefaults['verticalAlign'],
+  })!;
 }
 
 async function saveAppearanceDefault(
@@ -1361,7 +1526,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     };
 
     const applyAppearance = (): void => {
-      const appearance = appearanceFromControls(ui);
+      const appearance = appearanceFromControls(ui, working.appearance?.cellStyle);
       const updated: SpreadsheetData = {
         ...working,
         data: resizeData(readRawData(), working.rows, working.cols),
@@ -1398,7 +1563,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       ui.captionInput.value = preset.caption ?? '';
       mountSpreadsheet({
         ...preset,
-        appearance: appearanceFromControls(ui),
+        appearance: appearanceFromControls(ui, working.appearance?.cellStyle),
       });
     });
 
@@ -1449,6 +1614,38 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           : 'Could not save the appearance default.';
       } finally {
         ui.saveAppearanceDefaultBtn.disabled = false;
+      }
+    });
+    ui.saveCellDefaultBtn.addEventListener('click', async () => {
+      const appearance = normalizeAppearance({
+        ...appearanceFromControls(ui, working.appearance?.cellStyle),
+        cellStyle: cellDefaultsFromControls(ui),
+      });
+      const updated: SpreadsheetData = {
+        ...working,
+        data: resizeData(readRawData(), working.rows, working.cols),
+        cellStyles: readCellStyles(),
+        appearance,
+      };
+      mountSpreadsheet(updated);
+      const scope = ui.cellDefaultScopeSelect.value as AppearanceScope;
+      ui.saveCellDefaultBtn.disabled = true;
+      ui.cellDefaultStatus.textContent = 'Saving…';
+      try {
+        await saveAppearanceDefault(scope, appearance);
+        const notebookOverridesAccount = scope === 'user'
+          && Boolean(document.getElementById('spreadsheet-appearance-defaults')?.dataset.notebook);
+        ui.cellDefaultStatus.textContent = notebookOverridesAccount
+          ? 'Account cell style saved. This notebook still uses its notebook override.'
+          : (scope === 'user'
+            ? 'Cell style saved as your account default.'
+            : 'Cell style saved as the default for this notebook.');
+      } catch (error) {
+        ui.cellDefaultStatus.textContent = error instanceof Error
+          ? error.message
+          : 'Could not save the cell style default.';
+      } finally {
+        ui.saveCellDefaultBtn.disabled = false;
       }
     });
     const updateSelectedCells = (

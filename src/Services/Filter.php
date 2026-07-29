@@ -204,7 +204,7 @@ final class Filter
         // create base config for html5
         $config = HTMLPurifier_HTML5Config::createDefault();
         // allow only certain elements
-        $config->set('HTML.Allowed', 'div[class|style],br,p[class|style],sub,img[src|class|style|width|height],sup,strong,b,em,u,a[href|id|class|title],time[datetime],s,span[id|class|style],ul[style],li[style],ol[style],dl,dt,dd,blockquote,h1[id|class|style],h2[id|class|style],h3[id|class|style],h4[id|class|style],h5[id|class|style],h6[id|class|style],hr[class],table[class|style|data-table-sort|data-spreadsheet|data-spreadsheet-style|data-well-plate],thead,tbody,tr[style],td[style|colspan|rowspan],th[class|style|colspan|rowspan],code,source[src|type],video[src|controls|style|width|height],audio[src|controls],pre[class],details,summary,caption,figure,figcaption');
+        $config->set('HTML.Allowed', 'div[class|style],br,p[class|style],sub,img[src|class|style|width|height],sup,strong,b,em,u,a[href|id|class|title],time[datetime],s,span[id|class|style|title],ul[style],li[style],ol[style],dl,dt,dd,blockquote,h1[id|class|style],h2[id|class|style],h3[id|class|style],h4[id|class|style],h5[id|class|style],h6[id|class|style],hr[class],table[class|style|data-table-sort|data-spreadsheet|data-spreadsheet-style|data-well-plate],thead,tbody,tr[style],td[style|colspan|rowspan],th[class|style|colspan|rowspan],code,source[src|type],video[src|controls|style|width|height],audio[src|controls],pre[class],details,summary,caption,figure,figcaption');
         // keep stable anchors generated for linkable Table of Contents entries
         $config->set('Attr.EnableID', true);
         $config->set('HTML.TargetBlank', true);
@@ -244,6 +244,8 @@ final class Filter
             'elabftw-date-icon',
             'elabftw-date-icon-day',
             'elabftw-date-icon-month',
+            'elabftw-dashed-rule',
+            'elabftw-double-dashed-rule',
             'elabftw-double-rule',
             'elabftw-single-rule',
             'spreadsheet-coordinate',

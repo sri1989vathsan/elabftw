@@ -137,6 +137,7 @@ class ContentParams implements ContentParamsInterface
                 'tableBackgroundColor' => '#ffffff',
                 'tableNoBackground' => true,
                 'tableCellSpacing' => 0,
+                'cellStyle' => null,
             );
         }
         if (!is_array($defaults)
@@ -182,7 +183,61 @@ class ContentParams implements ContentParamsInterface
             }
         }
 
-        return json_encode(array(
+        $cellStyle = $defaults['cellStyle'] ?? null;
+        if ($cellStyle !== null
+            && (!is_array($cellStyle)
+                || !array_key_exists('backgroundColor', $cellStyle)
+                || !array_key_exists('textColor', $cellStyle)
+                || !is_int($cellStyle['borderWidth'] ?? null)
+                || $cellStyle['borderWidth'] < 0
+                || $cellStyle['borderWidth'] > 20
+                || !in_array(
+                    $cellStyle['borderStyle'] ?? null,
+                    array('solid', 'dashed', 'dotted', 'double', 'none'),
+                    true,
+                )
+                || !is_int($cellStyle['fontSize'] ?? null)
+                || $cellStyle['fontSize'] < 6
+                || $cellStyle['fontSize'] > 72
+                || !is_bool($cellStyle['bold'] ?? null)
+                || !is_bool($cellStyle['italic'] ?? null)
+                || !is_bool($cellStyle['underline'] ?? null)
+                || !in_array(
+                    $cellStyle['fontFamily'] ?? null,
+                    array(
+                        '',
+                        'Arial, sans-serif',
+                        'Verdana, sans-serif',
+                        'Georgia, serif',
+                        "'Times New Roman', serif",
+                        "'Courier New', monospace",
+                    ),
+                    true,
+                )
+                || !in_array(
+                    $cellStyle['textAlign'] ?? null,
+                    array('', 'left', 'center', 'right', 'justify'),
+                    true,
+                )
+                || !in_array(
+                    $cellStyle['verticalAlign'] ?? null,
+                    array('', 'top', 'middle', 'bottom'),
+                    true,
+                )
+                || (($cellStyle['backgroundColor'] ?? null) !== null
+                    && (!is_string($cellStyle['backgroundColor'])
+                        || preg_match('/^#[0-9a-f]{6}$/i', $cellStyle['backgroundColor']) !== 1))
+                || !is_string($cellStyle['borderColor'] ?? null)
+                || preg_match('/^#[0-9a-f]{6}$/i', $cellStyle['borderColor']) !== 1
+                || (($cellStyle['textColor'] ?? null) !== null
+                    && (!is_string($cellStyle['textColor'])
+                        || preg_match('/^#[0-9a-f]{6}$/i', $cellStyle['textColor']) !== 1))
+            )
+        ) {
+            throw new ImproperActionException('Invalid spreadsheet cell style defaults.');
+        }
+
+        $normalized = array(
             'borderWidth' => $defaults['borderWidth'],
             'borderColor' => strtolower($defaults['borderColor']),
             'cellColor' => strtolower($defaults['cellColor']),
@@ -199,7 +254,29 @@ class ContentParams implements ContentParamsInterface
             'tableBackgroundColor' => strtolower($defaults['tableBackgroundColor']),
             'tableNoBackground' => $defaults['tableNoBackground'],
             'tableCellSpacing' => $defaults['tableCellSpacing'],
-        ), JSON_THROW_ON_ERROR);
+        );
+        if ($cellStyle !== null) {
+            $normalized['cellStyle'] = array(
+                'backgroundColor' => $cellStyle['backgroundColor'] === null
+                    ? null
+                    : strtolower($cellStyle['backgroundColor']),
+                'borderColor' => strtolower($cellStyle['borderColor']),
+                'borderStyle' => $cellStyle['borderStyle'],
+                'borderWidth' => $cellStyle['borderWidth'],
+                'fontFamily' => $cellStyle['fontFamily'],
+                'fontSize' => $cellStyle['fontSize'],
+                'bold' => $cellStyle['bold'],
+                'italic' => $cellStyle['italic'],
+                'underline' => $cellStyle['underline'],
+                'textColor' => $cellStyle['textColor'] === null
+                    ? null
+                    : strtolower($cellStyle['textColor']),
+                'textAlign' => $cellStyle['textAlign'],
+                'verticalAlign' => $cellStyle['verticalAlign'],
+            );
+        }
+
+        return json_encode($normalized, JSON_THROW_ON_ERROR);
     }
 
     protected function getUrl(): string

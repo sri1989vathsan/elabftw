@@ -485,6 +485,44 @@ button:disabled {
   /* we cannot apply strict here */
   contain: content;
 
+  // Match the hierarchy shown while editing: Tab changes ordered-list markers
+  // from decimal to letters to Roman numerals, then repeats for deeper levels.
+  ol {
+    list-style-type: decimal;
+  }
+
+  ol ol {
+    list-style-type: lower-alpha;
+  }
+
+  ol ol ol {
+    list-style-type: lower-roman;
+  }
+
+  ol ol ol ol {
+    list-style-type: decimal;
+  }
+
+  ol ol ol ol ol {
+    list-style-type: lower-alpha;
+  }
+
+  ol ol ol ol ol ol {
+    list-style-type: lower-roman;
+  }
+
+  ol ol ol ol ol ol ol {
+    list-style-type: decimal;
+  }
+
+  ol ol ol ol ol ol ol ol {
+    list-style-type: lower-alpha;
+  }
+
+  ol ol ol ol ol ol ol ol ol {
+    list-style-type: lower-roman;
+  }
+
   img {
     max-height: 100%;
     max-width: 100%;
@@ -1303,6 +1341,10 @@ a.elabftw-date-reference {
   font-weight: 700;
   letter-spacing: 0.02em;
   padding-top: 0.08rem;
+
+  &::before {
+    content: attr(title);
+  }
 }
 
 .elabftw-date-icon-day {
@@ -1310,6 +1352,10 @@ a.elabftw-date-reference {
   font-size: 0.72rem;
   font-weight: 700;
   padding-top: 0.1rem;
+
+  &::before {
+    content: attr(title);
+  }
 }
 
 .date-reference-overlay {
@@ -1450,7 +1496,9 @@ a.elabftw-date-reference {
 }
 
 hr.elabftw-single-rule,
-hr.elabftw-double-rule {
+hr.elabftw-double-rule,
+hr.elabftw-dashed-rule,
+hr.elabftw-double-dashed-rule {
   border: 0;
   height: 0;
   margin: 1rem 0;
@@ -1458,6 +1506,10 @@ hr.elabftw-double-rule {
 
 hr.elabftw-single-rule {
   border-top: 1px solid var(--strongest);
+}
+
+hr.elabftw-dashed-rule {
+  border-top: 1px dashed var(--strongest);
 }
 
 hr.elabftw-double-rule {
@@ -1470,6 +1522,28 @@ hr.elabftw-double-rule {
     var(--strongest) 5px,
     var(--strongest) 6px
   );
+  height: 6px;
+}
+
+hr.elabftw-double-dashed-rule {
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      var(--strongest) 0,
+      var(--strongest) 6px,
+      transparent 6px,
+      transparent 10px
+    ),
+    repeating-linear-gradient(
+      to right,
+      var(--strongest) 0,
+      var(--strongest) 6px,
+      transparent 6px,
+      transparent 10px
+    );
+  background-position: left top, left bottom;
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
   height: 6px;
 }
 
@@ -1564,6 +1638,11 @@ hr.elabftw-double-rule {
   color: var(--medium);
   flex: 1;
   font-size: 0.78rem;
+}
+
+.inline-spreadsheet-cell-defaults {
+  flex: 1 0 100%;
+  margin-top: 0;
 }
 
 .inline-spreadsheet-cell-format {

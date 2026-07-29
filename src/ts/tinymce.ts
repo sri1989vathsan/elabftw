@@ -108,7 +108,10 @@ function addDatetimeOnCursor(): void {
   tinymce.activeEditor.execCommand('mceInsertContent', false, `${getDatetime()} `);
 }
 
-function insertHorizontalRule(editor: Editor, style: 'single' | 'double'): void {
+function insertHorizontalRule(
+  editor: Editor,
+  style: 'single' | 'double' | 'dashed' | 'double-dashed',
+): void {
   editor.execCommand(
     'mceInsertContent',
     false,
@@ -473,6 +476,7 @@ export function getTinymceBaseConfig(page: string): object {
     setup: (editor: Editor): void => {
       const tableIndentation = new TableIndentation(editor);
       const dateReferenceEditor = new DateReferenceEditor(editor);
+      editor.on('init', () => dateReferenceEditor.normalizeReferences());
       // holds the timer setTimeout function
       let typingTimer;
       // use event SkinLoaded instead of init so we're sure skinNode is present
@@ -609,17 +613,28 @@ export function getTinymceBaseConfig(page: string): object {
       });
       editor.ui.registry.addMenuButton('horizontal-rule', {
         text: 'Line',
-        tooltip: 'Insert a single or double horizontal line',
+        tooltip: 'Insert solid or dashed horizontal lines',
         fetch: callback => callback([
           {
             type: 'menuitem',
-            text: 'Single horizontal line (Ctrl+Shift+H)',
+            text: 'Single solid line (Ctrl+Shift+H)',
             onAction: () => insertHorizontalRule(editor, 'single'),
           },
           {
             type: 'menuitem',
-            text: 'Double horizontal line (Ctrl+Alt+Shift+H)',
+            text: 'Double solid line (Ctrl+Alt+Shift+H)',
             onAction: () => insertHorizontalRule(editor, 'double'),
+          },
+          { type: 'separator' },
+          {
+            type: 'menuitem',
+            text: 'Single dashed line',
+            onAction: () => insertHorizontalRule(editor, 'dashed'),
+          },
+          {
+            type: 'menuitem',
+            text: 'Double dashed line',
+            onAction: () => insertHorizontalRule(editor, 'double-dashed'),
           },
         ]),
       });

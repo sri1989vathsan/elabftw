@@ -231,6 +231,10 @@ item, paragraph, heading, quote, or other editable block instead of moving focus
 to the next editor control. Table cells retain TinyMCE's native Tab navigation.
 The handler runs during the editor iframe's capture phase, with an editor-event
 fallback, so TinyMCE and browser focus navigation cannot consume the key first.
+Numbered lists change markers with the hierarchy: decimal numbers at the first
+level, lower-case letters after one Tab, and lower-case Roman numerals after a
+second Tab. Deeper levels repeat that cycle, while Shift+Tab restores the
+corresponding outer marker.
 The entity action toolbar is sticky in both view and edit mode, keeping Back and
 Edit/View available while scrolling. In edit mode, the existing Save and
 Save-and-back actions live in that sticky toolbar, with TinyMCE's own sticky
@@ -262,7 +266,10 @@ color, horizontal alignment, and vertical alignment to that retained range.
 Only font controls changed by the user are applied, so unrelated cell styles
 remain intact. Explicit **No fill** and **No text color** choices remove those
 inline styles from the selected cells and return them to inherited
-account/notebook defaults.
+account/notebook defaults. A separate **Save cell style as default** control
+stores the quick fill, border, font, text-color, and alignment settings for
+either **This notebook** or **My account**. Notebook cell defaults override
+account cell defaults, and direct selected-cell formatting continues to win.
 
 The main editor toolbar also provides visible **Table style** and **Cell style**
 shortcuts whenever the cursor is inside a table. Table style opens TinyMCE's
@@ -332,7 +339,9 @@ saved as accessible `<time>` elements with stable anchor IDs and a clearly
 styled date link.
 The calendar badge is generated from the selected date itself (localized month
 plus day number), so it never shows a hard-coded day that disagrees with the
-date label.
+date label. Its month/day are visual-only icon content rather than selectable
+text, so copying the link or selecting it includes only the chosen date label.
+Opening an older linked date in the editor upgrades its badge to this format.
 
 The calendar dialog includes a live display-format selector. It covers the
 account's localized format, ISO `2026-07-29`, compact `20260729`, day-first and
@@ -355,11 +364,12 @@ another experiment to reference that exact dated passage. The semantic element,
 anchor, link metadata, and date-reference class are retained by the server HTML
 sanitizer across save and reopen.
 
-The adjacent **Line** toolbar menu inserts either a single or double horizontal
-rule. The same actions are available as Ctrl+Shift+H and
-Ctrl+Alt+Shift+H while the editor has focus. Both rule styles are retained
-through sanitization, view mode, and later edits. The double rule is rendered
-as two distinct one-pixel strokes with a small gap.
+The adjacent **Line** toolbar menu inserts single or double horizontal rules in
+either solid or dashed form. The solid actions are also available as
+Ctrl+Shift+H and Ctrl+Alt+Shift+H while the editor has focus. All four rule
+styles are retained through sanitization, view mode, and later edits. Both
+double variants are rendered as two distinct one-pixel strokes with a small
+gap.
 
 ## Schema Migration Notes
 

@@ -229,6 +229,29 @@ function getTargetFromAnchor(anchor: HTMLAnchorElement): ExperimentTarget | null
 export default class DateReferenceEditor {
   constructor(private editor: Editor) {}
 
+  /**
+   * Upgrade earlier date badges whose month/day were stored as selectable text.
+   * Empty icon spans render their title attributes through CSS, keeping copying
+   * and selection limited to the actual date label.
+   */
+  public normalizeReferences(): void {
+    this.editor.getBody().querySelectorAll<HTMLAnchorElement>(DATE_REFERENCE_SELECTOR)
+      .forEach(reference => {
+        const icon = reference.querySelector<HTMLElement>('.elabftw-date-icon');
+        const date = reference.querySelector('time')?.getAttribute('datetime');
+        if (!icon || !date) return;
+        const parsedDate = DateTime.fromISO(date).setLocale(getLocale());
+        if (!parsedDate.isValid) return;
+        const month = document.createElement('span');
+        month.className = 'elabftw-date-icon-month';
+        month.title = parsedDate.toFormat('LLL').toLocaleUpperCase();
+        const day = document.createElement('span');
+        day.className = 'elabftw-date-icon-day';
+        day.title = parsedDate.toFormat('d');
+        icon.replaceChildren(month, day);
+      });
+  }
+
   public getSelectedReference(): HTMLAnchorElement | null {
     return this.editor.selection.getNode().closest(DATE_REFERENCE_SELECTOR) as HTMLAnchorElement | null;
   }
@@ -636,8 +659,8 @@ export default class DateReferenceEditor {
       ' class="elabftw-date-reference"',
       ` href="${escapeHTML(href)}" title="${escapeHTML(title)}">`,
       '<span class="elabftw-date-icon">',
-      `<span class="elabftw-date-icon-month">${escapeHTML(iconMonth)}</span>`,
-      `<span class="elabftw-date-icon-day">${escapeHTML(iconDay)}</span>`,
+      `<span class="elabftw-date-icon-month" title="${escapeHTML(iconMonth)}"></span>`,
+      `<span class="elabftw-date-icon-day" title="${escapeHTML(iconDay)}"></span>`,
       '</span>',
       `<time datetime="${escapeHTML(date)}">${escapeHTML(label)}</time></a>`,
     ].join('');

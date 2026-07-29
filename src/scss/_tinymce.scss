@@ -9,6 +9,45 @@ figure {
   text-align: center;
 }
 
+// Make ordered-list nesting visually explicit when Tab/Shift+Tab changes the
+// list structure. Repeat the familiar decimal → letter → Roman cycle for
+// deeper experimental protocols.
+ol {
+  list-style-type: decimal;
+}
+
+ol ol {
+  list-style-type: lower-alpha;
+}
+
+ol ol ol {
+  list-style-type: lower-roman;
+}
+
+ol ol ol ol {
+  list-style-type: decimal;
+}
+
+ol ol ol ol ol {
+  list-style-type: lower-alpha;
+}
+
+ol ol ol ol ol ol {
+  list-style-type: lower-roman;
+}
+
+ol ol ol ol ol ol ol {
+  list-style-type: decimal;
+}
+
+ol ol ol ol ol ol ol ol {
+  list-style-type: lower-alpha;
+}
+
+ol ol ol ol ol ol ol ol ol {
+  list-style-type: lower-roman;
+}
+
 table > caption {
   caption-side: top;
   display: table-caption;
@@ -57,6 +96,10 @@ a.elabftw-date-reference {
   font-weight: 700;
   letter-spacing: 0.02em;
   padding-top: 0.08rem;
+
+  &::before {
+    content: attr(title);
+  }
 }
 
 .elabftw-date-icon-day {
@@ -64,10 +107,16 @@ a.elabftw-date-reference {
   font-size: 0.72rem;
   font-weight: 700;
   padding-top: 0.1rem;
+
+  &::before {
+    content: attr(title);
+  }
 }
 
 hr.elabftw-single-rule,
-hr.elabftw-double-rule {
+hr.elabftw-double-rule,
+hr.elabftw-dashed-rule,
+hr.elabftw-double-dashed-rule {
   border: 0;
   height: 0;
   margin: 1rem 0;
@@ -75,6 +124,10 @@ hr.elabftw-double-rule {
 
 hr.elabftw-single-rule {
   border-top: 1px solid var(--strongest, #343a40);
+}
+
+hr.elabftw-dashed-rule {
+  border-top: 1px dashed var(--strongest, #343a40);
 }
 
 hr.elabftw-double-rule {
@@ -87,6 +140,28 @@ hr.elabftw-double-rule {
     var(--strongest, #343a40) 5px,
     var(--strongest, #343a40) 6px
   );
+  height: 6px;
+}
+
+hr.elabftw-double-dashed-rule {
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      var(--strongest, #343a40) 0,
+      var(--strongest, #343a40) 6px,
+      transparent 6px,
+      transparent 10px
+    ),
+    repeating-linear-gradient(
+      to right,
+      var(--strongest, #343a40) 0,
+      var(--strongest, #343a40) 6px,
+      transparent 6px,
+      transparent 10px
+    );
+  background-position: left top, left bottom;
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
   height: 6px;
 }
 
