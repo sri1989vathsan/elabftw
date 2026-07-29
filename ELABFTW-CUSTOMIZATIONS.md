@@ -254,13 +254,15 @@ through the embedded spreadsheet data and are restored after formula edits.
 The spreadsheet editor also exposes appearance defaults for table width,
 alignment, border width/style/color, background, cell spacing/padding, cell
 border width/color, base cell color, and optional alternating row and column
-colors. The current table previews changes immediately. **Save as default**
-persists the complete table-and-cell combination either on the user's account
+colors. The current table previews changes immediately. Font settings are
+available in the same collapsed appearance panel, and **Save everything as
+default** persists the complete table, cell, and font combination either on the user's account
 or on the current experiment/resource (including template entities); a notebook
 default takes precedence over the account default, while direct formatting on
 an individual table or cell takes precedence over both. The combined
 **Table and cell appearance** section starts collapsed so the editor opens with
-more space for the spreadsheet grid. A selected cell range
+more space for the spreadsheet grid. The lower cell/font toolbar only formats
+the current selection and uses a compact, always-visible layout. A selected cell range
 can also be formatted directly with quick controls for background color, border
 color, border style, and border width, or returned to inherited defaults with
 **Clear format**. Schema 212 stores the scoped settings as validated JSON.
@@ -271,10 +273,17 @@ remount and the status line names the exact A1-style range and cell count, so
 multi-cell property changes consistently apply to the intended cells.
 The jspreadsheet v5 worksheet is captured after its asynchronous load finishes,
 which keeps range formulas and formatting connected to the active grid.
+The popup also rechecks the mounted worksheet after initialization and
+rehydrates its saved data if jspreadsheet has rendered only the column header;
+worksheet-only options are passed at the v5 worksheet level.
 Excel-style formula picking is also supported: select a result cell, type a
 formula prefix such as `=SUM(`, then drag across cells, whole columns, or whole
 rows. The A1 range is inserted without closing the cell editor, and Enter
-automatically closes missing parentheses before applying the formula.
+automatically closes missing parentheses, explicitly commits the formula to the
+worksheet, and recalculates the cell.
+When a whole row or column selection would contain the result cell, the picker
+uses the adjacent source cells instead of creating a circular reference and
+showing `#ERROR`.
 Multi-cell clipboard data copied from Excel-compatible spreadsheets can also
 be pasted directly into the main editor and is inserted as an editable,
 formula-enabled spreadsheet with column letters and row numbers. Native paste

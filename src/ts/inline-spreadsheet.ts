@@ -791,7 +791,24 @@ function extractCellStyles(
 }
 
 function getWorksheet(instance: JssInstance): JssInstance {
-  return instance?.[0] ?? instance;
+  if (Array.isArray(instance)) return instance[0] ?? null;
+  return instance ?? null;
+}
+
+function getMountedWorksheet(
+  container: HTMLDivElement,
+  instance?: JssInstance,
+): JssInstance {
+  const mountedContainer = container as HTMLDivElement & {
+    jspreadsheet?: JssInstance;
+    jssWorksheet?: JssInstance;
+    spreadsheet?: { worksheets?: JssInstance[] };
+  };
+  return getWorksheet(instance)
+    ?? getWorksheet(mountedContainer.spreadsheet?.worksheets)
+    ?? mountedContainer.jspreadsheet
+    ?? mountedContainer.jssWorksheet
+    ?? null;
 }
 
 function getComputedDataFromDOM(container: HTMLElement): AOA {
@@ -860,9 +877,17 @@ function createOverlay(initial: SpreadsheetData): {
   appearanceScopeSelect: HTMLSelectElement;
   saveAppearanceDefaultBtn: HTMLButtonElement;
   appearanceStatus: HTMLSpanElement;
-  cellDefaultScopeSelect: HTMLSelectElement;
-  saveCellDefaultBtn: HTMLButtonElement;
-  cellDefaultStatus: HTMLSpanElement;
+  defaultCellNoColorInput: HTMLInputElement;
+  defaultCellBorderStyleSelect: HTMLSelectElement;
+  defaultFontFamilySelect: HTMLSelectElement;
+  defaultFontSizeInput: HTMLInputElement;
+  defaultFontBoldInput: HTMLInputElement;
+  defaultFontItalicInput: HTMLInputElement;
+  defaultFontUnderlineInput: HTMLInputElement;
+  defaultFontTextColorInput: HTMLInputElement;
+  defaultFontNoTextColorInput: HTMLInputElement;
+  defaultFontTextAlignSelect: HTMLSelectElement;
+  defaultFontVerticalAlignSelect: HTMLSelectElement;
   cellFormatColorInput: HTMLInputElement;
   cellFormatBorderColorInput: HTMLInputElement;
   cellFormatBorderStyleSelect: HTMLSelectElement;
@@ -1013,6 +1038,7 @@ function createOverlay(initial: SpreadsheetData): {
   );
   appearancePanel.append(tableAppearanceLabel, tableAppearanceGrid);
 
+  const savedCellDefaults = appearance.cellStyle;
   const cellAppearanceLabel = document.createElement('strong');
   cellAppearanceLabel.textContent = 'Cell defaults';
   const appearanceGrid = document.createElement('div');
@@ -1027,6 +1053,22 @@ function createOverlay(initial: SpreadsheetData): {
   borderWidthInput.max = String(MAX_TABLE_BORDER);
   const borderColorInput = createInput('color', appearance.borderColor, 'Default border color');
   const cellColorInput = createInput('color', appearance.cellColor, 'Default cell color');
+  const defaultCellNoColorInput = document.createElement('input');
+  defaultCellNoColorInput.type = 'checkbox';
+  defaultCellNoColorInput.checked = savedCellDefaults?.backgroundColor === null;
+  defaultCellNoColorInput.setAttribute('aria-label', 'No default cell background color');
+  cellColorInput.disabled = defaultCellNoColorInput.checked;
+  const defaultCellBorderStyleSelect = document.createElement('select');
+  defaultCellBorderStyleSelect.className = 'form-control form-control-sm';
+  defaultCellBorderStyleSelect.setAttribute('aria-label', 'Default cell border style');
+  defaultCellBorderStyleSelect.innerHTML = `
+    <option value="solid">Solid</option>
+    <option value="dashed">Dashed</option>
+    <option value="dotted">Dotted</option>
+    <option value="double">Double</option>
+    <option value="none">No border</option>
+  `;
+  defaultCellBorderStyleSelect.value = savedCellDefaults?.borderStyle ?? 'solid';
   const alternateRowColorInput = createInput(
     'color',
     appearance.alternateRowColor,
@@ -1049,13 +1091,94 @@ function createOverlay(initial: SpreadsheetData): {
   appearanceGrid.append(
     createLabeledControl('Border size', borderWidthInput),
     createLabeledControl('Border color', borderColorInput),
+    createLabeledControl('Border style', defaultCellBorderStyleSelect),
     createLabeledControl('Cell color', cellColorInput),
+    createLabeledControl('No cell color', defaultCellNoColorInput),
     createLabeledControl('Alternate rows', alternateRowsInput),
     createLabeledControl('Row color', alternateRowColorInput),
     createLabeledControl('Alternate columns', alternateColumnsInput),
     createLabeledControl('Column color', alternateColumnColorInput),
   );
   appearancePanel.append(cellAppearanceLabel, appearanceGrid);
+
+  const fontAppearanceLabel = document.createElement('strong');
+  fontAppearanceLabel.textContent = 'Font defaults';
+  const fontAppearanceGrid = document.createElement('div');
+  fontAppearanceGrid.className = 'inline-spreadsheet-appearance-grid';
+  const defaultFontFamilySelect = document.createElement('select');
+  defaultFontFamilySelect.className = 'form-control form-control-sm';
+  defaultFontFamilySelect.setAttribute('aria-label', 'Default cell font family');
+  defaultFontFamilySelect.innerHTML = `
+    <option value="">Default font</option>
+    <option value="Arial, sans-serif">Arial</option>
+    <option value="Verdana, sans-serif">Verdana</option>
+    <option value="Georgia, serif">Georgia</option>
+    <option value="'Times New Roman', serif">Times New Roman</option>
+    <option value="'Courier New', monospace">Courier New</option>
+  `;
+  defaultFontFamilySelect.value = savedCellDefaults?.fontFamily ?? '';
+  const defaultFontSizeInput = createInput(
+    'number',
+    String(savedCellDefaults?.fontSize ?? 12),
+    'Default cell font size in points',
+  );
+  defaultFontSizeInput.min = '6';
+  defaultFontSizeInput.max = '72';
+  const defaultFontBoldInput = document.createElement('input');
+  defaultFontBoldInput.type = 'checkbox';
+  defaultFontBoldInput.checked = savedCellDefaults?.bold ?? false;
+  defaultFontBoldInput.setAttribute('aria-label', 'Bold cells by default');
+  const defaultFontItalicInput = document.createElement('input');
+  defaultFontItalicInput.type = 'checkbox';
+  defaultFontItalicInput.checked = savedCellDefaults?.italic ?? false;
+  defaultFontItalicInput.setAttribute('aria-label', 'Italicize cells by default');
+  const defaultFontUnderlineInput = document.createElement('input');
+  defaultFontUnderlineInput.type = 'checkbox';
+  defaultFontUnderlineInput.checked = savedCellDefaults?.underline ?? false;
+  defaultFontUnderlineInput.setAttribute('aria-label', 'Underline cells by default');
+  const defaultFontTextColorInput = createInput(
+    'color',
+    savedCellDefaults?.textColor ?? '#212529',
+    'Default cell text color',
+  );
+  const defaultFontNoTextColorInput = document.createElement('input');
+  defaultFontNoTextColorInput.type = 'checkbox';
+  defaultFontNoTextColorInput.checked = savedCellDefaults?.textColor === null;
+  defaultFontNoTextColorInput.setAttribute('aria-label', 'No default cell text color');
+  defaultFontTextColorInput.disabled = defaultFontNoTextColorInput.checked;
+  const defaultFontTextAlignSelect = document.createElement('select');
+  defaultFontTextAlignSelect.className = 'form-control form-control-sm';
+  defaultFontTextAlignSelect.setAttribute('aria-label', 'Default cell horizontal alignment');
+  defaultFontTextAlignSelect.innerHTML = `
+    <option value="">Default</option>
+    <option value="left">Left</option>
+    <option value="center">Center</option>
+    <option value="right">Right</option>
+    <option value="justify">Justify</option>
+  `;
+  defaultFontTextAlignSelect.value = savedCellDefaults?.textAlign ?? '';
+  const defaultFontVerticalAlignSelect = document.createElement('select');
+  defaultFontVerticalAlignSelect.className = 'form-control form-control-sm';
+  defaultFontVerticalAlignSelect.setAttribute('aria-label', 'Default cell vertical alignment');
+  defaultFontVerticalAlignSelect.innerHTML = `
+    <option value="">Default</option>
+    <option value="top">Top</option>
+    <option value="middle">Middle</option>
+    <option value="bottom">Bottom</option>
+  `;
+  defaultFontVerticalAlignSelect.value = savedCellDefaults?.verticalAlign ?? '';
+  fontAppearanceGrid.append(
+    createLabeledControl('Family', defaultFontFamilySelect),
+    createLabeledControl('Size (pt)', defaultFontSizeInput),
+    createLabeledControl('Bold', defaultFontBoldInput),
+    createLabeledControl('Italic', defaultFontItalicInput),
+    createLabeledControl('Underline', defaultFontUnderlineInput),
+    createLabeledControl('Text color', defaultFontTextColorInput),
+    createLabeledControl('No text color', defaultFontNoTextColorInput),
+    createLabeledControl('Horizontal', defaultFontTextAlignSelect),
+    createLabeledControl('Vertical', defaultFontVerticalAlignSelect),
+  );
+  appearancePanel.append(fontAppearanceLabel, fontAppearanceGrid);
 
   const appearanceDefaults = document.createElement('div');
   appearanceDefaults.className = 'inline-spreadsheet-appearance-defaults';
@@ -1069,10 +1192,10 @@ function createOverlay(initial: SpreadsheetData): {
   const saveAppearanceDefaultBtn = document.createElement('button');
   saveAppearanceDefaultBtn.type = 'button';
   saveAppearanceDefaultBtn.className = 'btn btn-sm btn-outline-primary';
-  saveAppearanceDefaultBtn.textContent = 'Save as default';
+  saveAppearanceDefaultBtn.textContent = 'Save everything as default';
   const appearanceStatus = document.createElement('span');
   appearanceStatus.className = 'inline-spreadsheet-appearance-status';
-  appearanceStatus.textContent = 'Notebook defaults override account defaults; direct table and cell formatting wins.';
+  appearanceStatus.textContent = 'Saves table, cell and font settings; notebook defaults override account defaults.';
   appearanceDefaults.append(
     appearanceScopeSelect,
     saveAppearanceDefaultBtn,
@@ -1081,7 +1204,6 @@ function createOverlay(initial: SpreadsheetData): {
   appearancePanel.appendChild(appearanceDefaults);
   dialog.appendChild(appearancePanel);
 
-  const savedCellDefaults = appearance.cellStyle;
   const cellFormatBar = document.createElement('div');
   cellFormatBar.className = 'inline-spreadsheet-cell-format';
   const cellStyleRow = document.createElement('div');
@@ -1223,23 +1345,6 @@ function createOverlay(initial: SpreadsheetData): {
   clearCellFormatBtn.type = 'button';
   clearCellFormatBtn.className = 'btn btn-sm btn-outline-secondary';
   clearCellFormatBtn.textContent = 'Clear all cell formatting';
-  const cellDefaults = document.createElement('div');
-  cellDefaults.className = 'inline-spreadsheet-appearance-defaults inline-spreadsheet-cell-defaults';
-  const cellDefaultScopeSelect = document.createElement('select');
-  cellDefaultScopeSelect.className = 'form-control form-control-sm';
-  cellDefaultScopeSelect.setAttribute('aria-label', 'Save cell style default for');
-  cellDefaultScopeSelect.innerHTML = `
-    <option value="notebook">This notebook</option>
-    <option value="user">My account</option>
-  `;
-  const saveCellDefaultBtn = document.createElement('button');
-  saveCellDefaultBtn.type = 'button';
-  saveCellDefaultBtn.className = 'btn btn-sm btn-outline-primary';
-  saveCellDefaultBtn.textContent = 'Save cell style as default';
-  const cellDefaultStatus = document.createElement('span');
-  cellDefaultStatus.className = 'inline-spreadsheet-appearance-status';
-  cellDefaultStatus.textContent = 'Saves fill, border, font and alignment; notebook overrides account.';
-  cellDefaults.append(cellDefaultScopeSelect, saveCellDefaultBtn, cellDefaultStatus);
   const cellFormatStatus = document.createElement('span');
   cellFormatStatus.className = 'inline-spreadsheet-cell-format-status';
   cellFormatStatus.textContent = 'Select one or more cells, then apply cell or font properties.';
@@ -1247,7 +1352,6 @@ function createOverlay(initial: SpreadsheetData): {
     cellStyleRow,
     fontStyleRow,
     clearCellFormatBtn,
-    cellDefaults,
     cellFormatStatus,
   );
   dialog.appendChild(cellFormatBar);
@@ -1341,9 +1445,17 @@ function createOverlay(initial: SpreadsheetData): {
     appearanceScopeSelect,
     saveAppearanceDefaultBtn,
     appearanceStatus,
-    cellDefaultScopeSelect,
-    saveCellDefaultBtn,
-    cellDefaultStatus,
+    defaultCellNoColorInput,
+    defaultCellBorderStyleSelect,
+    defaultFontFamilySelect,
+    defaultFontSizeInput,
+    defaultFontBoldInput,
+    defaultFontItalicInput,
+    defaultFontUnderlineInput,
+    defaultFontTextColorInput,
+    defaultFontNoTextColorInput,
+    defaultFontTextAlignSelect,
+    defaultFontVerticalAlignSelect,
     cellFormatColorInput,
     cellFormatBorderColorInput,
     cellFormatBorderStyleSelect,
@@ -1398,26 +1510,26 @@ function appearanceFromControls(
   });
 }
 
-function cellDefaultsFromControls(
+function defaultCellStyleFromControls(
   ui: ReturnType<typeof createOverlay>,
 ): SpreadsheetCellDefaults {
   return normalizeCellDefaults({
-    backgroundColor: ui.cellFormatNoColorInput.checked
+    backgroundColor: ui.defaultCellNoColorInput.checked
       ? null
-      : ui.cellFormatColorInput.value,
-    borderColor: ui.cellFormatBorderColorInput.value,
-    borderStyle: ui.cellFormatBorderStyleSelect.value as SpreadsheetCellDefaults['borderStyle'],
-    borderWidth: parseInt(ui.cellFormatBorderWidthInput.value, 10),
-    fontFamily: ui.cellFormatFontFamilySelect.value,
-    fontSize: parseInt(ui.cellFormatFontSizeInput.value, 10),
-    bold: ui.cellFormatBoldInput.checked,
-    italic: ui.cellFormatItalicInput.checked,
-    underline: ui.cellFormatUnderlineInput.checked,
-    textColor: ui.cellFormatNoTextColorInput.checked
+      : ui.cellColorInput.value,
+    borderColor: ui.borderColorInput.value,
+    borderStyle: ui.defaultCellBorderStyleSelect.value as SpreadsheetCellDefaults['borderStyle'],
+    borderWidth: parseInt(ui.borderWidthInput.value, 10),
+    fontFamily: ui.defaultFontFamilySelect.value,
+    fontSize: parseInt(ui.defaultFontSizeInput.value, 10),
+    bold: ui.defaultFontBoldInput.checked,
+    italic: ui.defaultFontItalicInput.checked,
+    underline: ui.defaultFontUnderlineInput.checked,
+    textColor: ui.defaultFontNoTextColorInput.checked
       ? null
-      : ui.cellFormatTextColorInput.value,
-    textAlign: ui.cellFormatTextAlignSelect.value as SpreadsheetCellDefaults['textAlign'],
-    verticalAlign: ui.cellFormatVerticalAlignSelect.value as SpreadsheetCellDefaults['verticalAlign'],
+      : ui.defaultFontTextColorInput.value,
+    textAlign: ui.defaultFontTextAlignSelect.value as SpreadsheetCellDefaults['textAlign'],
+    verticalAlign: ui.defaultFontVerticalAlignSelect.value as SpreadsheetCellDefaults['verticalAlign'],
   })!;
 }
 
@@ -1531,6 +1643,8 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       startRange: CellRange;
       insertionStart: number;
       insertionEnd: number;
+      formulaCol: number;
+      formulaRow: number;
     } | null = null;
     const changedFontProperties = new Set<keyof CellFontFormat>();
 
@@ -1610,9 +1724,51 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       return start === end ? start : `${start}:${end}`;
     };
 
+    const withoutFormulaCell = (
+      range: CellRange,
+      formulaCol: number,
+      formulaRow: number,
+    ): CellRange | null => {
+      const startCol = Math.min(range[0], range[2]);
+      const startRow = Math.min(range[1], range[3]);
+      const endCol = Math.max(range[0], range[2]);
+      const endRow = Math.max(range[1], range[3]);
+      const containsFormulaCell = formulaCol >= startCol
+        && formulaCol <= endCol
+        && formulaRow >= startRow
+        && formulaRow <= endRow;
+      if (!containsFormulaCell) return range;
+
+      // Selecting a whole column while writing its result immediately below
+      // the source values is a common Excel workflow. Use the cells above the
+      // formula instead of producing a circular reference and #ERROR.
+      if (startRow === 0 && endRow === working.rows - 1) {
+        if (formulaRow > 0) return [startCol, 0, endCol, formulaRow - 1];
+        if (formulaRow < working.rows - 1) {
+          return [startCol, formulaRow + 1, endCol, working.rows - 1];
+        }
+      }
+      if (startCol === 0 && endCol === working.cols - 1) {
+        if (formulaCol > 0) return [0, startRow, formulaCol - 1, endRow];
+        if (formulaCol < working.cols - 1) {
+          return [formulaCol + 1, startRow, working.cols - 1, endRow];
+        }
+      }
+      return null;
+    };
+
     const updateFormulaSelection = (range: CellRange): void => {
       if (!formulaSelectionDrag) return;
-      const label = rangeLabel(range);
+      const safeRange = withoutFormulaCell(
+        range,
+        formulaSelectionDrag.formulaCol,
+        formulaSelectionDrag.formulaRow,
+      );
+      if (!safeRange) {
+        ui.formulaStatus.textContent = 'The source range cannot include the formula result cell.';
+        return;
+      }
+      const label = rangeLabel(safeRange);
       formulaSelectionDrag.input.setRangeText(
         label,
         formulaSelectionDrag.insertionStart,
@@ -1620,7 +1776,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         'end',
       );
       formulaSelectionDrag.insertionEnd = formulaSelectionDrag.insertionStart + label.length;
-      worksheet?.updateSelectionFromCoords?.(...range);
+      worksheet?.updateSelectionFromCoords?.(...safeRange);
       ui.formulaStatus.textContent = `${label} added to the formula. Press Enter to apply it.`;
     };
 
@@ -1663,6 +1819,10 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         'td.editor[data-x][data-y] > input, td.editor[data-x][data-y] > textarea',
       );
       if (!input || event.target === input) return;
+      const formulaCell = input.closest<HTMLElement>('td.editor[data-x][data-y]');
+      const formulaCol = Number.parseInt(formulaCell?.dataset.x ?? '', 10);
+      const formulaRow = Number.parseInt(formulaCell?.dataset.y ?? '', 10);
+      if (!Number.isInteger(formulaCol) || !Number.isInteger(formulaRow)) return;
       const startRange = getGridRangeFromTarget(event.target);
       if (!startRange) return;
       const selectionStart = input.selectionStart ?? input.value.length;
@@ -1681,6 +1841,8 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         startRange,
         insertionStart: selectionStart,
         insertionEnd: selectionEnd,
+        formulaCol,
+        formulaRow,
       };
       updateFormulaSelection(startRange);
       document.addEventListener('mousemove', onFormulaSelectionMove, true);
@@ -1690,14 +1852,25 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     const onFormulaEditorKeydown = (event: KeyboardEvent): void => {
       if (event.key !== 'Enter'
         || !(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
-        || !event.target.closest('td.editor[data-x][data-y]')
         || !event.target.value.trimStart().startsWith('=')
       ) {
         return;
       }
+      const formulaCell = event.target.closest<HTMLElement>('td.editor[data-x][data-y]');
+      if (!formulaCell || typeof worksheet?.closeEditor !== 'function') return;
       const missingParentheses = formulaParenthesisBalance(event.target.value);
       if (missingParentheses > 0) {
         event.target.value += ')'.repeat(missingParentheses);
+      }
+      const formulaCol = Number.parseInt(formulaCell.dataset.x ?? '', 10);
+      const formulaRow = Number.parseInt(formulaCell.dataset.y ?? '', 10);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      worksheet.closeEditor(formulaCell, true);
+      if (Number.isInteger(formulaCol) && Number.isInteger(formulaRow)) {
+        selectedRange = [formulaCol, formulaRow, formulaCol, formulaRow];
+        worksheet.updateSelectionFromCoords?.(...selectedRange);
+        ui.formulaStatus.textContent = `Formula applied in ${colLabel(formulaCol)}${formulaRow + 1}.`;
       }
     };
 
@@ -1718,34 +1891,52 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         `${getAppearanceTableStyle(normalizeAppearance(working.appearance))};max-width:100%`,
       );
       const mountedContainer = sheetContainer;
+      const mountedRows = working.rows;
+      const mountedCols = working.cols;
+      const mountedData = resizeData(working.data, mountedRows, mountedCols);
+      const mountedStyles = mergeCellStyles(
+        working.cellStyles,
+        normalizeAppearance(working.appearance),
+        mountedRows,
+        mountedCols,
+      );
+      const bindAndHydrateWorksheet = (candidate?: JssInstance): void => {
+        if (sheetContainer !== mountedContainer) return;
+        const mountedWorksheet = getMountedWorksheet(mountedContainer, candidate);
+        if (!mountedWorksheet) return;
+        worksheet = mountedWorksheet;
+
+        // jspreadsheet v5 can expose the header before its asynchronous body
+        // initialization has completed. If that race leaves an empty tbody,
+        // explicitly hydrate the already-mounted worksheet with the saved data.
+        const bodyRows = mountedContainer.querySelectorAll('.jss_worksheet tbody tr').length;
+        if (bodyRows < mountedRows) {
+          mountedWorksheet.setData?.(mountedData);
+          mountedWorksheet.setStyle?.(mountedStyles);
+        }
+        if (selectedRange) {
+          worksheet?.updateSelectionFromCoords?.(...selectedRange);
+          updateSelectionStatus(selectedRange);
+        }
+      };
       const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
         worksheets: [{
-          data: working.data,
-          minDimensions: [working.cols, working.rows],
-          style: mergeCellStyles(
-            working.cellStyles,
-            normalizeAppearance(working.appearance),
-            working.rows,
-            working.cols,
-          ),
+          data: mountedData,
+          minDimensions: [mountedCols, mountedRows],
+          style: mountedStyles,
+          tableOverflow: true,
+          tableWidth: '100%',
+          tableHeight: '400px',
+          allowInsertRow: true,
+          allowInsertColumn: true,
+          allowDeleteRow: true,
+          allowDeleteColumn: true,
+          columnSorting: false,
+          selectionCopy: true,
         }],
-        tableOverflow: true,
-        tableWidth: '100%',
-        tableHeight: '400px',
-        allowInsertRow: true,
-        allowInsertColumn: true,
-        allowDeleteRow: true,
-        allowDeleteColumn: true,
-        columnSorting: false,
-        selectionCopy: true,
         parseFormulas: true,
         onload: (spreadsheet: JssInstance): void => {
-          if (sheetContainer !== mountedContainer) return;
-          worksheet = getWorksheet(spreadsheet?.worksheets ?? spreadsheet);
-          if (selectedRange) {
-            worksheet?.updateSelectionFromCoords?.(...selectedRange);
-            updateSelectionStatus(selectedRange);
-          }
+          bindAndHydrateWorksheet(spreadsheet?.worksheets ?? spreadsheet);
         },
         onselection: (
           selectedWorksheet: JssInstance,
@@ -1767,6 +1958,10 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       worksheet = Array.isArray(instance) && instance.length === 0
         ? null
         : getWorksheet(instance);
+      // The factory returns before its promise-backed initialization is
+      // guaranteed to finish. Re-check after the current task even when its
+      // onload callback was delayed or skipped by an earlier render error.
+      window.setTimeout(() => bindAndHydrateWorksheet(instance), 0);
       ui.rowsInput.value = String(working.rows);
       ui.colsInput.value = String(working.cols);
       if (selectedRange) {
@@ -1852,33 +2047,22 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     ui.tableNoBackgroundInput.addEventListener('change', () => {
       ui.tableBackgroundColorInput.disabled = ui.tableNoBackgroundInput.checked;
     });
-    ui.saveAppearanceDefaultBtn.addEventListener('click', async () => {
-      applyAppearance();
-      const scope = ui.appearanceScopeSelect.value as AppearanceScope;
-      ui.saveAppearanceDefaultBtn.disabled = true;
-      ui.appearanceStatus.textContent = 'Saving…';
-      try {
-        await saveAppearanceDefault(scope, normalizeAppearance(working.appearance));
-        const notebookOverridesAccount = scope === 'user'
-          && Boolean(document.getElementById('spreadsheet-appearance-defaults')?.dataset.notebook);
-        ui.appearanceStatus.textContent = notebookOverridesAccount
-          ? 'Account default saved. This notebook still uses its notebook override.'
-          : (scope === 'user'
-            ? 'Saved as your account default.'
-            : 'Saved as the default for this notebook.');
-      } catch (error) {
-        ui.appearanceStatus.textContent = error instanceof Error
-          ? error.message
-          : 'Could not save the appearance default.';
-      } finally {
-        ui.saveAppearanceDefaultBtn.disabled = false;
-      }
+    ui.defaultCellNoColorInput.addEventListener('change', () => {
+      ui.cellColorInput.disabled = ui.defaultCellNoColorInput.checked;
     });
-    ui.saveCellDefaultBtn.addEventListener('click', async () => {
-      const appearance = normalizeAppearance({
-        ...appearanceFromControls(ui, working.appearance?.cellStyle),
-        cellStyle: cellDefaultsFromControls(ui),
-      });
+    ui.cellColorInput.addEventListener('change', () => {
+      ui.defaultCellNoColorInput.checked = false;
+      ui.cellColorInput.disabled = false;
+    });
+    ui.defaultFontNoTextColorInput.addEventListener('change', () => {
+      ui.defaultFontTextColorInput.disabled = ui.defaultFontNoTextColorInput.checked;
+    });
+    ui.defaultFontTextColorInput.addEventListener('change', () => {
+      ui.defaultFontNoTextColorInput.checked = false;
+      ui.defaultFontTextColorInput.disabled = false;
+    });
+    ui.saveAppearanceDefaultBtn.addEventListener('click', async () => {
+      const appearance = appearanceFromControls(ui, defaultCellStyleFromControls(ui));
       const updated: SpreadsheetData = {
         ...working,
         data: resizeData(readRawData(), working.rows, working.cols),
@@ -1886,24 +2070,24 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         appearance,
       };
       mountSpreadsheet(updated);
-      const scope = ui.cellDefaultScopeSelect.value as AppearanceScope;
-      ui.saveCellDefaultBtn.disabled = true;
-      ui.cellDefaultStatus.textContent = 'Saving…';
+      const scope = ui.appearanceScopeSelect.value as AppearanceScope;
+      ui.saveAppearanceDefaultBtn.disabled = true;
+      ui.appearanceStatus.textContent = 'Saving…';
       try {
         await saveAppearanceDefault(scope, appearance);
         const notebookOverridesAccount = scope === 'user'
           && Boolean(document.getElementById('spreadsheet-appearance-defaults')?.dataset.notebook);
-        ui.cellDefaultStatus.textContent = notebookOverridesAccount
-          ? 'Account cell style saved. This notebook still uses its notebook override.'
+        ui.appearanceStatus.textContent = notebookOverridesAccount
+          ? 'Account default saved. This notebook still uses its notebook override.'
           : (scope === 'user'
-            ? 'Cell style saved as your account default.'
-            : 'Cell style saved as the default for this notebook.');
+            ? 'Table, cell and font defaults saved for your account.'
+            : 'Table, cell and font defaults saved for this notebook.');
       } catch (error) {
-        ui.cellDefaultStatus.textContent = error instanceof Error
+        ui.appearanceStatus.textContent = error instanceof Error
           ? error.message
-          : 'Could not save the cell style default.';
+          : 'Could not save the table, cell and font defaults.';
       } finally {
-        ui.saveCellDefaultBtn.disabled = false;
+        ui.saveAppearanceDefaultBtn.disabled = false;
       }
     });
     const updateSelectedCells = (
