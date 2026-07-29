@@ -74,6 +74,7 @@ import {
   emptySpreadsheetData,
   extractFromTable,
   openSpreadsheetModal,
+  spreadsheetFromClipboard,
   spreadsheetToHTML,
   SpreadsheetData,
   WELL_PLATE_PRESETS,
@@ -834,9 +835,26 @@ export function getTinymceBaseConfig(page: string): object {
         const blockIndentHandler = (event: KeyboardEvent): void => {
           handleBlockIndentShortcut(editor, event);
         };
+        const excelPasteHandler = (event: ClipboardEvent): void => {
+          const clipboard = event.clipboardData;
+          if (!clipboard) return;
+          const spreadsheet = spreadsheetFromClipboard(
+            clipboard.getData('text/html'),
+            clipboard.getData('text/plain'),
+          );
+          if (!spreadsheet) return;
+
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          editor.undoManager.transact(() => {
+            editor.insertContent(spreadsheetToHTML(spreadsheet, spreadsheet.data));
+          });
+        };
         editorDocument.addEventListener('keydown', blockIndentHandler, true);
+        editorDocument.addEventListener('paste', excelPasteHandler, true);
         editor.on('remove', () => {
           editorDocument.removeEventListener('keydown', blockIndentHandler, true);
+          editorDocument.removeEventListener('paste', excelPasteHandler, true);
         });
       });
       let tocHeadingSignature = '';

@@ -269,6 +269,23 @@ Spreadsheet range selection is retained while the user interacts with color,
 border, and formula controls. The selected range is restored after a preview
 remount and the status line names the exact A1-style range and cell count, so
 multi-cell property changes consistently apply to the intended cells.
+The jspreadsheet v5 worksheet is captured after its asynchronous load finishes,
+which keeps range formulas and formatting connected to the active grid.
+Excel-style formula picking is also supported: select a result cell, type a
+formula prefix such as `=SUM(`, then drag across cells, whole columns, or whole
+rows. The A1 range is inserted without closing the cell editor, and Enter
+automatically closes missing parentheses before applying the formula.
+Multi-cell clipboard data copied from Excel-compatible spreadsheets can also
+be pasted directly into the main editor and is inserted as an editable,
+formula-enabled spreadsheet with column letters and row numbers. Native paste
+inside the spreadsheet popup remains available for filling the currently
+selected cell range.
+Each generated table stores the values last rendered in the main editor. When
+a cell or caption is typed into directly outside the popup, reopening the
+spreadsheet merges that visible edit back into its raw grid while preserving
+unchanged formulas rather than replacing them with their displayed results.
+Older embedded spreadsheets without this snapshot still synchronize ordinary
+cells and retain their saved formulas.
 The popup also applies font family, point size, bold, italic, underline, text
 color, horizontal alignment, and vertical alignment to that retained range.
 Only font controls changed by the user are applied, so unrelated cell styles

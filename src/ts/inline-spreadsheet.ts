@@ -75,6 +75,11 @@ type JssFactory = (element: HTMLDivElement, options: object) => JssInstance;
 export interface SpreadsheetData {
   /** Array-of-arrays with raw values/formulas as entered by the user. */
   data: AOA;
+  /**
+   * Values last rendered into the main editor. This lets us distinguish a
+   * computed formula result from a cell that was edited directly in TinyMCE.
+   */
+  displayData?: AOA;
   cols: number;
   rows: number;
   kind?: SpreadsheetKind;
@@ -421,6 +426,9 @@ function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): Spreadsh
     : 'standard';
   return {
     data: resizeData(Array.isArray(candidate.data) ? candidate.data : [[]], rows, cols),
+    displayData: Array.isArray(candidate.displayData)
+      ? resizeData(candidate.displayData, rows, cols)
+      : undefined,
     rows,
     cols,
     kind,
@@ -453,6 +461,109 @@ function resizeData(data: AOA, rows: number, cols: number): AOA {
   return Array.from({ length: rows }, (_, rowIndex) => (
     Array.from({ length: cols }, (_, colIndex) => data[rowIndex]?.[colIndex] ?? '')
   ));
+}
+
+function parseTabDelimitedClipboard(text: string): AOA {
+  const rows: AOA = [];
+  let row: CellValue[] = [];
+  let value = '';
+  let quoted = false;
+
+  const pushValue = (): void => {
+    row.push(value);
+    value = '';
+  };
+  const pushRow = (): void => {
+    pushValue();
+    rows.push(row);
+    row = [];
+  };
+
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index];
+    if (character === '"') {
+      if (quoted && text[index + 1] === '"') {
+        value += '"';
+        index++;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === '\t' && !quoted) {
+      pushValue();
+    } else if ((character === '\n' || character === '\r') && !quoted) {
+      if (character === '\r' && text[index + 1] === '\n') index++;
+      pushRow();
+    } else {
+      value += character;
+    }
+  }
+  pushRow();
+
+  while (rows.length > 1 && rows.at(-1)?.every(cell => cell === '')) rows.pop();
+  return rows;
+}
+
+function parseClipboardHtmlTable(html: string): AOA {
+  if (!html.trim()) return [];
+  const clipboardDocument = new DOMParser().parseFromString(html, 'text/html');
+  const table = clipboardDocument.querySelector('table');
+  if (!table) return [];
+
+  const rows: AOA = [];
+  Array.from(table.rows).forEach((tableRow, rowIndex) => {
+    rows[rowIndex] ??= [];
+    let colIndex = 0;
+    Array.from(tableRow.cells).forEach(cell => {
+      while (rows[rowIndex][colIndex] !== undefined) colIndex++;
+      const colSpan = Math.max(1, cell.colSpan || 1);
+      const rowSpan = Math.max(1, cell.rowSpan || 1);
+      const cellValue = (cell.textContent ?? '').replace(/\u00a0/g, ' ').trim();
+      for (let rowOffset = 0; rowOffset < rowSpan; rowOffset++) {
+        const targetRow = rowIndex + rowOffset;
+        rows[targetRow] ??= [];
+        for (let colOffset = 0; colOffset < colSpan; colOffset++) {
+          rows[targetRow][colIndex + colOffset] = rowOffset === 0 && colOffset === 0
+            ? cellValue
+            : '';
+        }
+      }
+      colIndex += colSpan;
+    });
+  });
+  return rows;
+}
+
+/**
+ * Convert an Excel-compatible clipboard payload to a formula-enabled data
+ * table. Excel supplies tab-delimited text alongside its HTML table; the HTML
+ * fallback also covers a copied single-column range and merged cells.
+ */
+export function spreadsheetFromClipboard(html: string, plainText: string): SpreadsheetData | null {
+  const containsTable = /<table[\s>]/i.test(html);
+  const hasSpreadsheetHtmlMarker = /(?:mso-|Microsoft Excel|urn:schemas-microsoft-com:office:excel|class=["'][^"']*\bxl\d|class=["'][^"']*\bwaffle\b)/i.test(html);
+  const looksLikeSpreadsheet = plainText.includes('\t')
+    || (containsTable && hasSpreadsheetHtmlMarker);
+  if (!looksLikeSpreadsheet) return null;
+
+  const parsed = containsTable
+    ? parseClipboardHtmlTable(html)
+    : parseTabDelimitedClipboard(plainText);
+  if (parsed.length === 0) return null;
+  const rows = Math.min(MAX_DIMENSION, parsed.length);
+  const cols = Math.min(
+    MAX_DIMENSION,
+    parsed.reduce((maximum, row) => Math.max(maximum, row.length), 0),
+  );
+  if (cols === 0) return null;
+
+  return {
+    data: resizeData(parsed, rows, cols),
+    rows,
+    cols,
+    kind: 'standard',
+    caption: '',
+    appearance: getEffectiveAppearanceDefaults(),
+  };
 }
 
 function sanitizeStyle(
@@ -1158,7 +1269,7 @@ function createOverlay(initial: SpreadsheetData): {
   });
   const formulaStatus = document.createElement('span');
   formulaStatus.className = 'inline-spreadsheet-formula-status';
-  formulaStatus.textContent = 'Select source cells, then choose a formula. The result is placed below the selection.';
+  formulaStatus.textContent = 'Select source cells, then choose a formula; or type =SUM( in a result cell and drag-select a range.';
   formulaBar.appendChild(formulaStatus);
   dialog.appendChild(formulaBar);
 
@@ -1415,6 +1526,12 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     let sheetContainer: HTMLDivElement | null = null;
     let worksheet: JssInstance = null;
     let selectedRange: CellRange | null = null;
+    let formulaSelectionDrag: {
+      input: HTMLInputElement | HTMLTextAreaElement;
+      startRange: CellRange;
+      insertionStart: number;
+      insertionEnd: number;
+    } | null = null;
     const changedFontProperties = new Set<keyof CellFontFormat>();
 
     document.body.appendChild(ui.overlay);
@@ -1460,6 +1577,133 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       ui.cellFormatStatus.textContent = `${rangeLabel} selected (${cellCount} cell${cellCount === 1 ? '' : 's'}).`;
     };
 
+    const formulaParenthesisBalance = (value: string): number => {
+      let balance = 0;
+      for (const character of value) {
+        if (character === '(') balance++;
+        if (character === ')') balance = Math.max(0, balance - 1);
+      }
+      return balance;
+    };
+
+    const getGridRangeFromTarget = (target: EventTarget | null): CellRange | null => {
+      if (!(target instanceof Element) || !sheetContainer?.contains(target)) return null;
+      const coordinateElement = target.closest<HTMLElement>('td[data-x], td[data-y]');
+      if (!coordinateElement || !sheetContainer.contains(coordinateElement)) return null;
+      const col = Number.parseInt(coordinateElement.dataset.x ?? '', 10);
+      const row = Number.parseInt(coordinateElement.dataset.y ?? '', 10);
+      const hasCol = Number.isInteger(col) && col >= 0 && col < working.cols;
+      const hasRow = Number.isInteger(row) && row >= 0 && row < working.rows;
+      if (hasCol && hasRow) return [col, row, col, row];
+      if (hasCol) return [col, 0, col, working.rows - 1];
+      if (hasRow) return [0, row, working.cols - 1, row];
+      return null;
+    };
+
+    const rangeLabel = (range: CellRange): string => {
+      const startCol = Math.min(range[0], range[2]);
+      const startRow = Math.min(range[1], range[3]);
+      const endCol = Math.max(range[0], range[2]);
+      const endRow = Math.max(range[1], range[3]);
+      const start = `${colLabel(startCol)}${startRow + 1}`;
+      const end = `${colLabel(endCol)}${endRow + 1}`;
+      return start === end ? start : `${start}:${end}`;
+    };
+
+    const updateFormulaSelection = (range: CellRange): void => {
+      if (!formulaSelectionDrag) return;
+      const label = rangeLabel(range);
+      formulaSelectionDrag.input.setRangeText(
+        label,
+        formulaSelectionDrag.insertionStart,
+        formulaSelectionDrag.insertionEnd,
+        'end',
+      );
+      formulaSelectionDrag.insertionEnd = formulaSelectionDrag.insertionStart + label.length;
+      worksheet?.updateSelectionFromCoords?.(...range);
+      ui.formulaStatus.textContent = `${label} added to the formula. Press Enter to apply it.`;
+    };
+
+    const finishFormulaSelection = (): void => {
+      if (!formulaSelectionDrag) return;
+      const { input, insertionEnd } = formulaSelectionDrag;
+      formulaSelectionDrag = null;
+      document.removeEventListener('mousemove', onFormulaSelectionMove, true);
+      document.removeEventListener('mouseup', onFormulaSelectionEnd, true);
+      window.setTimeout(() => {
+        input.focus();
+        input.setSelectionRange(insertionEnd, insertionEnd);
+      }, 0);
+    };
+
+    const onFormulaSelectionMove = (event: MouseEvent): void => {
+      if (!formulaSelectionDrag) return;
+      const endRange = getGridRangeFromTarget(event.target);
+      if (!endRange) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      updateFormulaSelection([
+        formulaSelectionDrag.startRange[0],
+        formulaSelectionDrag.startRange[1],
+        endRange[2],
+        endRange[3],
+      ]);
+    };
+
+    const onFormulaSelectionEnd = (event: MouseEvent): void => {
+      if (!formulaSelectionDrag) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      finishFormulaSelection();
+    };
+
+    const onFormulaSelectionStart = (event: MouseEvent): void => {
+      if (event.button !== 0) return;
+      const input = sheetContainer?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        'td.editor[data-x][data-y] > input, td.editor[data-x][data-y] > textarea',
+      );
+      if (!input || event.target === input) return;
+      const startRange = getGridRangeFromTarget(event.target);
+      if (!startRange) return;
+      const selectionStart = input.selectionStart ?? input.value.length;
+      const selectionEnd = input.selectionEnd ?? selectionStart;
+      const formulaBeforeCaret = input.value.slice(0, selectionStart).trimStart();
+      if (!formulaBeforeCaret.startsWith('=')
+        || formulaParenthesisBalance(formulaBeforeCaret) === 0
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      formulaSelectionDrag = {
+        input,
+        startRange,
+        insertionStart: selectionStart,
+        insertionEnd: selectionEnd,
+      };
+      updateFormulaSelection(startRange);
+      document.addEventListener('mousemove', onFormulaSelectionMove, true);
+      document.addEventListener('mouseup', onFormulaSelectionEnd, true);
+    };
+
+    const onFormulaEditorKeydown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Enter'
+        || !(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
+        || !event.target.closest('td.editor[data-x][data-y]')
+        || !event.target.value.trimStart().startsWith('=')
+      ) {
+        return;
+      }
+      const missingParentheses = formulaParenthesisBalance(event.target.value);
+      if (missingParentheses > 0) {
+        event.target.value += ')'.repeat(missingParentheses);
+      }
+    };
+
+    ui.sheetHost.addEventListener('mousedown', onFormulaSelectionStart, true);
+    ui.sheetHost.addEventListener('keydown', onFormulaEditorKeydown, true);
+
     const mountSpreadsheet = (spreadsheet: SpreadsheetData): void => {
       if (sheetContainer) {
         const destroy = (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy;
@@ -1473,6 +1717,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         'style',
         `${getAppearanceTableStyle(normalizeAppearance(working.appearance))};max-width:100%`,
       );
+      const mountedContainer = sheetContainer;
       const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
         worksheets: [{
           data: working.data,
@@ -1493,8 +1738,17 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         allowDeleteColumn: true,
         columnSorting: false,
         selectionCopy: true,
+        parseFormulas: true,
+        onload: (spreadsheet: JssInstance): void => {
+          if (sheetContainer !== mountedContainer) return;
+          worksheet = getWorksheet(spreadsheet?.worksheets ?? spreadsheet);
+          if (selectedRange) {
+            worksheet?.updateSelectionFromCoords?.(...selectedRange);
+            updateSelectionStatus(selectedRange);
+          }
+        },
         onselection: (
-          _worksheet: unknown,
+          selectedWorksheet: JssInstance,
           startCol: number,
           startRow: number,
           endCol: number,
@@ -1502,12 +1756,17 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         ): void => {
           const range: CellRange = [startCol, startRow, endCol, endRow];
           if (range.every(value => Number.isInteger(value))) {
+            worksheet = selectedWorksheet;
             selectedRange = range;
             updateSelectionStatus(range);
           }
         },
       });
-      worksheet = getWorksheet(instance);
+      // jspreadsheet-ce v5 returns an initially empty array and populates it
+      // asynchronously. Do not retain that array as the worksheet instance.
+      worksheet = Array.isArray(instance) && instance.length === 0
+        ? null
+        : getWorksheet(instance);
       ui.rowsInput.value = String(working.rows);
       ui.colsInput.value = String(working.cols);
       if (selectedRange) {
@@ -1826,6 +2085,9 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     }));
 
     const cleanup = (): void => {
+      finishFormulaSelection();
+      ui.sheetHost.removeEventListener('mousedown', onFormulaSelectionStart, true);
+      ui.sheetHost.removeEventListener('keydown', onFormulaEditorKeydown, true);
       document.removeEventListener('keydown', onKey);
       ui.overlay.remove();
     };
@@ -1877,8 +2139,13 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
   const raw = normalizeSpreadsheetData(rawData);
   const appearance = normalizeAppearance(raw.appearance);
   raw.appearance = appearance;
-  const encoded = encodeSpreadsheetData(raw);
   const kind = raw.kind ?? 'standard';
+  const displayData = resizeData(computed.length > 0 ? computed : raw.data, raw.rows, raw.cols);
+  // Keep a snapshot of what the user sees in TinyMCE. If a visible cell is
+  // changed outside the spreadsheet dialog, extractFromTable can merge that
+  // edit without replacing unchanged formulas with their computed results.
+  raw.displayData = displayData;
+  const encoded = encodeSpreadsheetData(raw);
   const styleAttribute = ` data-spreadsheet-style="${kind}"`;
   const plateAttribute = kind === 'well-plate' && raw.plateSize
     ? ` data-well-plate="${raw.plateSize}"`
@@ -1897,7 +2164,6 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
     html += `<caption${captionStyle}>${escapeHTML(raw.caption)}</caption>`;
   }
 
-  const displayData = resizeData(computed.length > 0 ? computed : raw.data, raw.rows, raw.cols);
   if (kind === 'notebook') {
     html += '<thead><tr>';
     for (let col = 0; col < raw.cols; col++) {
@@ -1939,16 +2205,41 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
   const kind: SpreadsheetKind = spreadsheetStyle === 'notebook' || spreadsheetStyle === 'well-plate'
     ? spreadsheetStyle
     : 'standard';
+  const visibleData = extractVisibleTableData(tableElement, kind);
   if (encoded) {
     const decoded = decodeSpreadsheetData(encoded);
+    const rows = clampDimension(visibleData.length || decoded.rows, decoded.rows);
+    const cols = clampDimension(
+      visibleData.reduce((max, row) => Math.max(max, row.length), 0) || decoded.cols,
+      decoded.cols,
+    );
+    const savedData = resizeData(decoded.data, rows, cols);
+    const previousDisplay = decoded.displayData
+      ? resizeData(decoded.displayData, rows, cols)
+      : undefined;
+    const currentDisplay = resizeData(visibleData, rows, cols);
+    const mergedData = currentDisplay.map((row, rowIndex) => row.map((visibleValue, colIndex) => {
+      const savedValue = savedData[rowIndex][colIndex];
+      if (previousDisplay) {
+        return String(visibleValue) === String(previousDisplay[rowIndex][colIndex])
+          ? savedValue
+          : visibleValue;
+      }
+      // Older spreadsheets do not have a display snapshot. Their ordinary
+      // cells can still be synchronized safely. Preserve formulas because the
+      // visible HTML contains their result rather than the formula itself.
+      return typeof savedValue === 'string' && savedValue.trimStart().startsWith('=')
+        ? savedValue
+        : visibleValue;
+    }));
     const appearance = decoded.appearance
       ? normalizeAppearance(decoded.appearance)
       : undefined;
     const extractedCellStyles = extractCellStyles(
       tableElement,
       decoded.kind ?? kind,
-      decoded.rows,
-      decoded.cols,
+      rows,
+      cols,
     );
     const extractedTableStyle = sanitizeStyle(
       tableElement.getAttribute('style') ?? undefined,
@@ -1956,13 +2247,18 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
     );
     return normalizeSpreadsheetData({
       ...decoded,
+      data: mergedData,
+      displayData: currentDisplay,
+      rows,
+      cols,
+      caption: tableElement.querySelector('caption')?.textContent?.trim() ?? decoded.caption,
       appearance,
       cellStyles: appearance
         ? stripAppearanceCellStyles(
           extractedCellStyles,
           appearance,
-          decoded.rows,
-          decoded.cols,
+          rows,
+          cols,
         )
         : extractedCellStyles,
       tableStyle: appearance
@@ -1976,16 +2272,7 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
     });
   }
 
-  const data: AOA = [];
-  tableElement.querySelectorAll('tr').forEach((row, rowIndex) => {
-    if (kind !== 'notebook' && rowIndex === 0) return;
-    const rowData: CellValue[] = [];
-    row.querySelectorAll('th, td').forEach((cell, cellIndex) => {
-      if (kind !== 'notebook' && cellIndex === 0) return;
-      rowData.push(cell.textContent?.trim() ?? '');
-    });
-    if (rowData.length > 0) data.push(rowData);
-  });
+  const data = visibleData;
   const rows = Math.max(data.length, 1);
   const cols = Math.max(data.reduce((max, row) => Math.max(max, row.length), 0), 1);
   return normalizeSpreadsheetData({
@@ -2008,6 +2295,23 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
     ),
     tableBorder: parseTableBorder(tableElement),
   });
+}
+
+function extractVisibleTableData(
+  tableElement: HTMLTableElement,
+  kind: SpreadsheetKind,
+): AOA {
+  const data: AOA = [];
+  tableElement.querySelectorAll('tr').forEach((row, rowIndex) => {
+    if (kind !== 'notebook' && rowIndex === 0) return;
+    const rowData: CellValue[] = [];
+    row.querySelectorAll(':scope > th, :scope > td').forEach((cell, cellIndex) => {
+      if (kind !== 'notebook' && cellIndex === 0) return;
+      rowData.push(cell.textContent?.trim() ?? '');
+    });
+    if (rowData.length > 0) data.push(rowData);
+  });
+  return data;
 }
 
 function parseTableBorder(tableElement: HTMLTableElement): number | undefined {
