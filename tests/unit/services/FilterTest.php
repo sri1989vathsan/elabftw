@@ -87,12 +87,19 @@ class FilterTest extends \PHPUnit\Framework\TestCase
         $heading = Filter::body('<h2 id="section-results">Results</h2>');
         $this->assertStringContainsString('<h2 id="section-results">Results</h2>', $heading);
 
-        $date = Filter::body('<a id="date-2026-07-29-abcd1234" class="elabftw-date-reference" href="experiments.php?mode=view&amp;id=42" title="Linked date"><span class="elabftw-date-icon"><span class="elabftw-date-icon-month" title="JUL"></span><span class="elabftw-date-icon-day" title="29"></span></span><time datetime="2026-07-29">20260729</time></a>');
+        $titleHeading = Filter::body('<h1 id="experiment-title-42" style="font-size:24pt;font-family:Arial, sans-serif;color:#123456;font-weight:bold;font-style:italic;text-decoration:underline;text-align:center">Experiment title</h1>');
+        $this->assertStringContainsString('id="experiment-title-42"', $titleHeading);
+        $this->assertStringContainsString('font-size:24pt', $titleHeading);
+        $this->assertStringContainsString('font-family:Arial, sans-serif', $titleHeading);
+        $this->assertStringContainsString('color:#123456', $titleHeading);
+        $this->assertStringContainsString('text-align:center', $titleHeading);
+
+        $date = Filter::body('<a id="date-2026-07-29-abcd1234" class="elabftw-date-reference" href="experiments.php?mode=view&amp;id=42" title="Linked date"><span class="elabftw-date-icon"><span class="elabftw-date-icon-month" title="JUL">&#8203;</span><span class="elabftw-date-icon-day" title="29">&#8203;</span></span><time datetime="2026-07-29">20260729</time></a>');
         $this->assertStringContainsString('id="date-2026-07-29-abcd1234"', $date);
         $this->assertStringContainsString('class="elabftw-date-reference"', $date);
         $this->assertStringContainsString('href="experiments.php?mode=view&amp;id=42"', $date);
-        $this->assertStringContainsString('<span class="elabftw-date-icon-month" title="JUL"></span>', $date);
-        $this->assertStringContainsString('<span class="elabftw-date-icon-day" title="29"></span>', $date);
+        $this->assertStringContainsString('<span class="elabftw-date-icon-month" title="JUL">', $date);
+        $this->assertStringContainsString('<span class="elabftw-date-icon-day" title="29">', $date);
         $this->assertStringNotContainsString('>JUL<', $date);
         $this->assertStringContainsString('<time datetime="2026-07-29">20260729</time>', $date);
 

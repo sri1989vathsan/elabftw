@@ -80,6 +80,7 @@ import {
 } from './inline-spreadsheet';
 import TableIndentation from './TableIndentation.class';
 import DateReferenceEditor from './DateReferenceEditor.class';
+import ExperimentTitleEditor from './ExperimentTitleEditor.class';
 import { MathJaxObject } from 'mathjax-full/js/components/startup';
 declare const MathJax: MathJaxObject;
 import { entity } from './getEntity';
@@ -332,6 +333,9 @@ function getEditorPaletteStyle(): string {
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
   let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate horizontal-rule | codesample | link | inline-sheet table-properties cell-properties table-outdent table-indent sort-table';
+  if (document.getElementById('documentTitle')) {
+    toolbar1 = toolbar1.replace('adddate', 'experiment-title adddate');
+  }
   let removedMenuItems = 'newdocument, image, anchor';
   let fileMenuItems = 'preview | print';
   if (page === 'edit') {
@@ -476,6 +480,7 @@ export function getTinymceBaseConfig(page: string): object {
     setup: (editor: Editor): void => {
       const tableIndentation = new TableIndentation(editor);
       const dateReferenceEditor = new DateReferenceEditor(editor);
+      const experimentTitleEditor = new ExperimentTitleEditor(editor);
       editor.on('init', () => dateReferenceEditor.normalizeReferences());
       // holds the timer setTimeout function
       let typingTimer;
@@ -610,6 +615,30 @@ export function getTinymceBaseConfig(page: string): object {
           }
           callback(items);
         },
+      });
+      editor.ui.registry.addSplitButton('experiment-title', {
+        text: 'Title',
+        tooltip: 'Insert experiment title as a heading (Ctrl+Alt+T)',
+        onAction: () => experimentTitleEditor.insertUsingDefaults(),
+        onItemAction: (_api, value) => {
+          if (value === 'insert') {
+            experimentTitleEditor.insertUsingDefaults();
+          } else if (value === 'options') {
+            experimentTitleEditor.openDialog();
+          }
+        },
+        fetch: callback => callback([
+          {
+            type: 'choiceitem',
+            text: 'Insert title using saved defaults',
+            value: 'insert',
+          },
+          {
+            type: 'choiceitem',
+            text: 'Title heading and font options…',
+            value: 'options',
+          },
+        ]),
       });
       editor.ui.registry.addMenuButton('horizontal-rule', {
         text: 'Line',
@@ -782,6 +811,11 @@ export function getTinymceBaseConfig(page: string): object {
 
       // some shortcuts
       editor.addShortcut('ctrl+shift+d', 'add date/time at cursor', addDatetimeOnCursor);
+      editor.addShortcut(
+        'ctrl+alt+t',
+        'insert experiment title as a heading',
+        () => experimentTitleEditor.insertUsingDefaults(),
+      );
       editor.addShortcut(
         'ctrl+shift+h',
         'insert single horizontal line',

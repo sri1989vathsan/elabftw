@@ -67,11 +67,11 @@ a.elabftw-date-reference {
   padding: 0.08rem 0.35rem;
   text-decoration: none;
   white-space: nowrap;
+}
 
-  &:hover {
-    background-color: var(--secondlevel, #e1e8ec);
-    text-decoration: underline;
-  }
+a.elabftw-date-reference:hover {
+  background-color: var(--secondlevel, #e1e8ec);
+  text-decoration: underline;
 }
 
 .elabftw-date-icon {
@@ -96,10 +96,10 @@ a.elabftw-date-reference {
   font-weight: 700;
   letter-spacing: 0.02em;
   padding-top: 0.08rem;
+}
 
-  &::before {
-    content: attr(title);
-  }
+.elabftw-date-icon-month::before {
+  content: attr(title);
 }
 
 .elabftw-date-icon-day {
@@ -107,10 +107,10 @@ a.elabftw-date-reference {
   font-size: 0.72rem;
   font-weight: 700;
   padding-top: 0.1rem;
+}
 
-  &::before {
-    content: attr(title);
-  }
+.elabftw-date-icon-day::before {
+  content: attr(title);
 }
 
 hr.elabftw-single-rule,

@@ -245,9 +245,14 @@ export default class DateReferenceEditor {
         const month = document.createElement('span');
         month.className = 'elabftw-date-icon-month';
         month.title = parsedDate.toFormat('LLL').toLocaleUpperCase();
+        // TinyMCE can discard completely empty inline elements. A zero-width
+        // space keeps the two visual rows in the DOM without adding selectable
+        // month/day text.
+        month.textContent = '\u200b';
         const day = document.createElement('span');
         day.className = 'elabftw-date-icon-day';
         day.title = parsedDate.toFormat('d');
+        day.textContent = '\u200b';
         icon.replaceChildren(month, day);
       });
   }
@@ -659,8 +664,8 @@ export default class DateReferenceEditor {
       ' class="elabftw-date-reference"',
       ` href="${escapeHTML(href)}" title="${escapeHTML(title)}">`,
       '<span class="elabftw-date-icon">',
-      `<span class="elabftw-date-icon-month" title="${escapeHTML(iconMonth)}"></span>`,
-      `<span class="elabftw-date-icon-day" title="${escapeHTML(iconDay)}"></span>`,
+      `<span class="elabftw-date-icon-month" title="${escapeHTML(iconMonth)}">&#8203;</span>`,
+      `<span class="elabftw-date-icon-day" title="${escapeHTML(iconDay)}">&#8203;</span>`,
       '</span>',
       `<time datetime="${escapeHTML(date)}">${escapeHTML(label)}</time></a>`,
     ].join('');

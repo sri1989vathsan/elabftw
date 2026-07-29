@@ -1495,6 +1495,16 @@ a.elabftw-date-reference {
   justify-content: flex-end;
 }
 
+.experiment-title-heading-preview {
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 0.35rem;
+  margin-bottom: 1rem;
+  min-height: 3rem;
+  overflow-wrap: anywhere;
+  padding: 0.65rem 0.75rem;
+}
+
 hr.elabftw-single-rule,
 hr.elabftw-double-rule,
 hr.elabftw-dashed-rule,
