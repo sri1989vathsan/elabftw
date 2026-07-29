@@ -58,6 +58,7 @@
 
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
+  const urgentWindowMs = 60 * 60 * 1000;
   const reminderPresets = new Set([0, 15, 60, 1440, 10080]);
   const timeOptions = Array.from({ length: 96 }, (_, index) => {
     const hours = String(Math.floor(index / 4)).padStart(2, '0');
@@ -409,13 +410,18 @@
       notify.warning(`${prefix}: ${entry.body} — ${formatDeadline(entry.deadline)}`);
       sessionStorage.setItem(storageKey, '1');
     });
+    updateUrgentBadges(entries, now);
   }
 
-  function updateUrgentBadges(calendarEntries: CalendarEntry[]): void {
-    const now = Date.now();
-    const urgent = calendarEntries.filter(entry => (
-      new Date(entry.deadline).getTime() <= now + 24 * 60 * 60 * 1000
-    )).length;
+  function updateUrgentBadges(
+    calendarEntries: CalendarEntry[],
+    now = Date.now(),
+  ): void {
+    const urgentDeadline = now + urgentWindowMs;
+    const urgent = calendarEntries.filter(entry => {
+      const deadline = new Date(entry.deadline).getTime();
+      return Number.isFinite(deadline) && deadline <= urgentDeadline;
+    }).length;
     ['todolistReminderBadge', 'todoCalendarUrgentCount'].forEach(id => {
       const badge = document.getElementById(id);
       if (!badge) return;

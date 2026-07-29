@@ -304,7 +304,9 @@ the user's local browser timezone. Approaching and overdue work is shown on the
 floating To-do badge, in the agenda, and as an in-page reminder. The existing
 eLabFTW notification/email preference for step deadlines also controls scheduled
 task reminders, so reminders are delivered through the normal header and email
-notification paths without a separate preference.
+notification paths without a separate preference. The floating To-do badge and
+Calendar-tab badge count only incomplete entries that are overdue or due within
+the next hour; configured reminder lead times remain independent.
 
 The calendar respects the existing User/Team scope for experiment and resource
 steps, supports day and month navigation, and links each step back to its source
