@@ -175,6 +175,23 @@ export default class FavoriteFilters extends SidePanel {
         void this.insertResultLink(result, target, insert);
       });
       heading.append(insert);
+
+      const insertInText = document.createElement('button');
+      insertInText.type = 'button';
+      insertInText.className = 'btn btn-sm btn-outline-primary favorite-filter-result-insert ml-1';
+      insertInText.title = 'Insert a link to this entry in the main text only';
+      insertInText.setAttribute('aria-label', insertInText.title);
+      const textIcon = document.createElement('i');
+      textIcon.className = 'fas fa-paragraph fa-fw';
+      textIcon.setAttribute('aria-hidden', 'true');
+      const textLabel = document.createElement('span');
+      textLabel.className = 'ml-1';
+      textLabel.textContent = 'Text';
+      insertInText.append(textIcon, textLabel);
+      insertInText.addEventListener('click', () => {
+        this.insertResultInMainText(result, target, insertInText);
+      });
+      heading.append(insertInText);
     }
     item.append(heading);
 
@@ -192,6 +209,35 @@ export default class FavoriteFilters extends SidePanel {
     return item;
   }
 
+  private getMainTextLink(
+    result: FavoriteFilterResult,
+    target: FavoriteFilterTarget,
+    editorType: string,
+  ): string {
+    const resultUrl = this.getResultUrl(target, result.id);
+    const label = result.category_title
+      ? `${result.category_title} – ${result.title}`
+      : result.title;
+    return editorType === 'md'
+      ? `[${label.replace(/([\\[\]])/g, '\\$1')}](${resultUrl.toString()})`
+      : `<a href="${escapeHTML(resultUrl.toString())}">${escapeHTML(label)}</a>`;
+  }
+
+  private insertResultInMainText(
+    result: FavoriteFilterResult,
+    target: FavoriteFilterTarget,
+    button: HTMLButtonElement,
+  ): void {
+    const editor = getEditor();
+    editor.setContent(this.getMainTextLink(result, target, editor.type));
+    button.disabled = true;
+    button.title = 'Inserted in the main text';
+    button.setAttribute('aria-label', button.title);
+    button.querySelector('i')?.classList.replace('fa-paragraph', 'fa-check');
+    const buttonLabel = button.querySelector<HTMLSpanElement>('span');
+    if (buttonLabel) buttonLabel.textContent = 'Added';
+  }
+
   private async insertResultLink(
     result: FavoriteFilterResult,
     target: FavoriteFilterTarget,
@@ -200,19 +246,12 @@ export default class FavoriteFilters extends SidePanel {
     const submodel = target === 'experiments'
       ? LinkSubModel.ExperimentsLinks
       : LinkSubModel.ItemsLinks;
-    const resultUrl = this.getResultUrl(target, result.id);
-    const label = result.category_title
-      ? `${result.category_title} – ${result.title}`
-      : result.title;
 
     button.disabled = true;
     try {
       await ApiC.post(`${entity.type}/${entity.id}/${submodel}/${result.id}`);
       const editor = getEditor();
-      const content = editor.type === 'md'
-        ? `[${label.replace(/([\\[\]])/g, '\\$1')}](${resultUrl.toString()})`
-        : `<a href="${escapeHTML(resultUrl.toString())}">${escapeHTML(label)}</a>`;
-      editor.setContent(content);
+      editor.setContent(this.getMainTextLink(result, target, editor.type));
       await reloadElements(['linksDiv']);
       button.title = 'Linked and inserted';
       button.setAttribute('aria-label', button.title);
