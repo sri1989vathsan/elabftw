@@ -294,6 +294,10 @@ cell, or `#ERROR`. Edition-end and delayed repaint hooks render the deterministi
 aggregate result even when jspreadsheet leaves its `editor` class on a closed
 cell. The same fallback is applied while generating the main-text table, so
 reopening, calculating, and saving no longer overwrite one another.
+Jspreadsheet's own formula execution is disabled for the popup. The grid keeps
+the raw formula as ordinary cell data and the inline spreadsheet evaluator is
+the single calculation path; this prevents a saved formula from aborting the
+v5 worksheet hydration while its rows are being restored.
 When a whole row or column selection would contain the result cell, the picker
 uses the adjacent source cells instead of creating a circular reference and
 showing `#ERROR`.

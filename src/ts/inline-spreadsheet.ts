@@ -2150,7 +2150,11 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           columnSorting: false,
           selectionCopy: true,
         }],
-        parseFormulas: true,
+        // Aggregate formulas are evaluated and painted by this module. Let
+        // jspreadsheet retain the raw `=SUM(...)` text without executing its
+        // formula engine: in v5 that parser can abort worksheet hydration when
+        // a saved grid containing a formula is reopened.
+        parseFormulas: false,
         onload: (spreadsheet: JssInstance): void => {
           bindAndHydrateWorksheet(spreadsheet?.worksheets ?? spreadsheet);
         },
