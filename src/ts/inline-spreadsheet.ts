@@ -2012,25 +2012,52 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         mountedRows,
         mountedCols,
       );
-      const bindAndHydrateWorksheet = (candidate?: JssInstance): void => {
-        if (sheetContainer !== mountedContainer) return;
+      let hydrationComplete = false;
+      const firstSavedCell = mountedData
+        .flatMap((row, rowIndex) => row.map((value, colIndex) => ({ value, colIndex, rowIndex })))
+        .find(cell => cell.value !== '' && cell.value !== null && cell.value !== undefined);
+      const worksheetContainsSavedData = (candidate: JssInstance): boolean => {
+        const bodyRows = mountedContainer.querySelectorAll('.jss_worksheet tbody tr').length;
+        if (bodyRows < mountedRows) return false;
+        if (!firstSavedCell) return true;
+        const candidateData = candidate?.getData?.();
+        if (!Array.isArray(candidateData)) return false;
+        return String(candidateData[firstSavedCell.rowIndex]?.[firstSavedCell.colIndex] ?? '')
+          === String(firstSavedCell.value);
+      };
+      const bindAndHydrateWorksheet = (candidate?: JssInstance): boolean => {
+        if (sheetContainer !== mountedContainer) return true;
         const mountedWorksheet = getMountedWorksheet(mountedContainer, candidate);
-        if (!mountedWorksheet) return;
+        if (!mountedWorksheet) return false;
         worksheet = mountedWorksheet;
 
-        // jspreadsheet v5 can expose the header before its asynchronous body
-        // initialization has completed. If that race leaves an empty tbody,
-        // explicitly hydrate the already-mounted worksheet with the saved data.
-        const bodyRows = mountedContainer.querySelectorAll('.jss_worksheet tbody tr').length;
-        if (bodyRows < mountedRows) {
-          mountedWorksheet.setData?.(mountedData);
-          mountedWorksheet.setStyle?.(mountedStyles);
+        // jspreadsheet v5 creates worksheets asynchronously. A worksheet can
+        // therefore exist with its headers/minDimensions but without the data
+        // supplied in the original configuration. Reapply the saved raw data
+        // until both its rows and a representative value are observable.
+        if (!hydrationComplete && !worksheetContainsSavedData(mountedWorksheet)) {
+          try {
+            mountedWorksheet.setData?.(mountedData);
+            mountedWorksheet.setStyle?.(mountedStyles);
+          } catch {
+            return false;
+          }
         }
+        hydrationComplete = worksheetContainsSavedData(mountedWorksheet);
         renderAggregateFormulaResults(mountedContainer, mountedData);
         if (selectedRange) {
           worksheet?.updateSelectionFromCoords?.(...selectedRange);
           updateSelectionStatus(selectedRange);
         }
+        return hydrationComplete;
+      };
+      const hydrateWorksheetUntilReady = (attempt = 0): void => {
+        if (sheetContainer !== mountedContainer) return;
+        if (bindAndHydrateWorksheet(instance) || attempt >= 30) return;
+        window.setTimeout(
+          () => hydrateWorksheetUntilReady(attempt + 1),
+          Math.min(250, 15 + (attempt * 10)),
+        );
       };
       const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
         worksheets: [{
@@ -2079,9 +2106,9 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         ? null
         : getWorksheet(instance);
       // The factory returns before its promise-backed initialization is
-      // guaranteed to finish. Re-check after the current task even when its
-      // onload callback was delayed or skipped by an earlier render error.
-      window.setTimeout(() => bindAndHydrateWorksheet(instance), 0);
+      // guaranteed to finish. Keep checking for a bounded interval even when
+      // onload was delayed or skipped by an earlier render error.
+      window.setTimeout(() => hydrateWorksheetUntilReady(), 0);
       ui.rowsInput.value = String(working.rows);
       ui.colsInput.value = String(working.cols);
       if (selectedRange) {

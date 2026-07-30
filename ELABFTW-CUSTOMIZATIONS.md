@@ -273,8 +273,10 @@ remount and the status line names the exact A1-style range and cell count, so
 multi-cell property changes consistently apply to the intended cells.
 The jspreadsheet v5 worksheet is captured after its asynchronous load finishes,
 which keeps range formulas and formatting connected to the active grid.
-The popup also rechecks the mounted worksheet after initialization and
-rehydrates its saved data if jspreadsheet has rendered only the column header;
+The popup also rechecks the mounted worksheet after initialization and uses a
+bounded hydration retry until both the expected rows and a representative saved
+value are observable. This restores raw values and formulas when jspreadsheet
+temporarily renders only its headers or blank minimum-dimension rows;
 worksheet-only options are passed at the v5 worksheet level.
 Excel-style formula picking is also supported: select a result cell, type a
 formula prefix such as `=SUM(`, then drag across cells, whole columns, or whole
