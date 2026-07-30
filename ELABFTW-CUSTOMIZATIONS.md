@@ -193,9 +193,10 @@ entry heading. Results use the filter panel's theme colours and a compact row
 layout. While an experiment is being edited, the clearly labelled **Link**
 button beside a result both creates the appropriate experiment/resource
 relationship and inserts a link at the current editor cursor. A separate
-**Text** action inserts the same permanent entry link in the main text without
-creating a notebook relationship. Opening a different result from edit mode
-first warns about potentially unsaved changes.
+**Add to text** action inserts the same permanent entry link in the main text
+without creating a notebook relationship. It remains available after insertion,
+so the link can be added at multiple cursor positions. Opening a different
+result from edit mode first warns about potentially unsaved changes.
 
 The favorite-tag field searches existing team tags
 as the user types, keeps its suggestion menu above the sidebar, excludes tags

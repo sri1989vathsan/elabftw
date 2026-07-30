@@ -179,17 +179,17 @@ export default class FavoriteFilters extends SidePanel {
       const insertInText = document.createElement('button');
       insertInText.type = 'button';
       insertInText.className = 'btn btn-sm btn-outline-primary favorite-filter-result-insert ml-1';
-      insertInText.title = 'Insert a link to this entry in the main text only';
+      insertInText.title = 'Add a link to this entry at the current main-text cursor';
       insertInText.setAttribute('aria-label', insertInText.title);
       const textIcon = document.createElement('i');
       textIcon.className = 'fas fa-paragraph fa-fw';
       textIcon.setAttribute('aria-hidden', 'true');
       const textLabel = document.createElement('span');
       textLabel.className = 'ml-1';
-      textLabel.textContent = 'Text';
+      textLabel.textContent = 'Add to text';
       insertInText.append(textIcon, textLabel);
       insertInText.addEventListener('click', () => {
-        this.insertResultInMainText(result, target, insertInText);
+        this.insertResultInMainText(result, target);
       });
       heading.append(insertInText);
     }
@@ -226,16 +226,9 @@ export default class FavoriteFilters extends SidePanel {
   private insertResultInMainText(
     result: FavoriteFilterResult,
     target: FavoriteFilterTarget,
-    button: HTMLButtonElement,
   ): void {
     const editor = getEditor();
     editor.setContent(this.getMainTextLink(result, target, editor.type));
-    button.disabled = true;
-    button.title = 'Inserted in the main text';
-    button.setAttribute('aria-label', button.title);
-    button.querySelector('i')?.classList.replace('fa-paragraph', 'fa-check');
-    const buttonLabel = button.querySelector<HTMLSpanElement>('span');
-    if (buttonLabel) buttonLabel.textContent = 'Added';
   }
 
   private async insertResultLink(
