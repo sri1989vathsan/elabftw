@@ -960,8 +960,11 @@ export function getTinymceBaseConfig(page: string): object {
       },
     ],
     toolbar_sticky: true,
-    // Keep TinyMCE's sticky formatting toolbar below the entity action bar.
-    toolbar_sticky_offset: document.getElementById('topToolbar')?.offsetHeight ?? 0,
+    // Keep TinyMCE's sticky formatting toolbar below the main navigation and
+    // the entity action bar.
+    toolbar_sticky_offset:
+      (document.querySelector<HTMLElement>('#container > nav.navbar')?.offsetHeight ?? 0)
+      + (document.getElementById('topToolbar')?.offsetHeight ?? 0),
     // render MathJax for TinyMCE preview
     init_instance_callback: (editor) => {
       editor.on('ExecCommand', (e) => {

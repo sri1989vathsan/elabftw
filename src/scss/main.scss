@@ -697,7 +697,7 @@ tr:first-child td {
   box-shadow: 0 0.2rem 0.4rem rgba(0, 0, 0, 0.08);
   padding: 0.35rem 0.25rem;
   position: sticky;
-  top: 0;
+  top: var(--sticky-navbar-height, 0);
   z-index: 1010;
 }
 

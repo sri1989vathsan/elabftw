@@ -113,6 +113,21 @@ const FoldersPanelC = new FoldersPanel();
 const TodolistC = new Todolist();
 const TocPanelC = new TocPanel();
 
+// Keep the entity Back/Edit/Save toolbar immediately below the sticky main
+// navigation. ResizeObserver also tracks the expanded mobile navigation and
+// late logo/font sizing without relying on a hard-coded navbar height.
+const mainNavbar = document.querySelector<HTMLElement>('#container > nav.navbar');
+if (mainNavbar) {
+  const syncStickyNavbarHeight = (): void => {
+    document.documentElement.style.setProperty(
+      '--sticky-navbar-height',
+      `${mainNavbar.offsetHeight}px`,
+    );
+  };
+  syncStickyNavbarHeight();
+  new ResizeObserver(syncStickyNavbarHeight).observe(mainNavbar);
+}
+
 const TableSortingC = new TableSorting();
 // for searching inputs, allow specific triggers for East & South East Asian characters
 const hasEastSEAsian = (s: string): boolean => (

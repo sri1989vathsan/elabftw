@@ -382,6 +382,10 @@ both light and dark variants.
 The main navigation establishes a stacking layer above the sticky entity action
 toolbar. Dropdowns such as **Experiments** therefore open over the floating
 Back/Edit/Save bar instead of being obscured by it.
+The navigation itself remains at the top of the viewport while scrolling.
+Its live height is exposed as a CSS offset, including when the mobile menu is
+expanded, so the sticky entity action toolbar remains directly underneath
+rather than overlapping Experiments, Resources, or their dropdown menus.
 
 ## Feature 16: Calendar Dates and Experiment References
 
