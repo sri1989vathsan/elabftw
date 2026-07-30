@@ -386,6 +386,10 @@ The navigation itself remains at the top of the viewport while scrolling.
 Its live height is exposed as a CSS offset, including when the mobile menu is
 expanded, so the sticky entity action toolbar remains directly underneath
 rather than overlapping Experiments, Resources, or their dropdown menus.
+The Create experiment/resource modal is rendered outside the sticky navigation
+stacking context. Floating sidebar panels, tabs, and their resize handle remain
+below Bootstrap's modal backdrop, so opening Create correctly moves focus into
+the dialog and prevents the sidebar icons from intercepting clicks.
 
 ## Feature 16: Calendar Dates and Experiment References
 

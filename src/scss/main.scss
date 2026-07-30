@@ -881,7 +881,8 @@ tr:first-child td {
   overflow-y: auto;
   position: fixed;
   top: 5.5rem;
-  z-index: 1041;
+  // Stay below Bootstrap's modal backdrop (1040).
+  z-index: 1031;
 }
 
 .sidepanel-btn {
@@ -974,7 +975,8 @@ tr:first-child td {
   position: fixed;
   top: 0;
   width: var(--side-panel-width, max(24%, 330px));
-  z-index: 1040;
+  // Stay below Bootstrap's modal backdrop (1040).
+  z-index: 1030;
 
   > .p-3,
   > div > .p-3,
@@ -1031,7 +1033,8 @@ tr:first-child td {
   top: 0;
   touch-action: none;
   width: 8px;
-  z-index: 1042;
+  // Stay below Bootstrap's modal backdrop (1040).
+  z-index: 1032;
 
   &::after {
     background: var(--chrome-muted);

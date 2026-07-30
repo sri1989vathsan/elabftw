@@ -254,7 +254,6 @@
         </div>
      </div>
     </div>
-    {% include 'create-new-modal.html' %}
   {% else %} {# not auth #}
     <div class='nav-item ml-auto'>
       <a href='#' class='btn btn-ghost-chrome-inverted' data-action='toggle-modal' data-target='selectLanguageModal'>
@@ -263,6 +262,12 @@
     </div>
   {% endif %}
 </nav>
+
+{# Keep the create dialog outside the sticky navbar's stacking context so its
+   modal and focus trap remain above the Bootstrap backdrop. #}
+{% if App.Session.has('is_auth') %}
+  {% include 'create-new-modal.html' %}
+{% endif %}
 
 {# FLOATING SIDEBAR TAB RAIL #}
 {% if App.Session.has('is_auth') and not App.Session.has('is_anon') %}
