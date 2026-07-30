@@ -288,6 +288,12 @@ The five aggregate functions exposed in the formula bar (`SUM`, `AVERAGE`,
 formulas remain stored in spreadsheet metadata, while their results are
 rendered after Enter, formula-button insertion, and spreadsheet reopening even
 if jspreadsheet does not refresh the visible cell text.
+The popup keeps those raw formulas in an independent data mirror because
+jspreadsheet v5 can replace them in `getData()` with a computed value, an empty
+cell, or `#ERROR`. Edition-end and delayed repaint hooks render the deterministic
+aggregate result even when jspreadsheet leaves its `editor` class on a closed
+cell. The same fallback is applied while generating the main-text table, so
+reopening, calculating, and saving no longer overwrite one another.
 When a whole row or column selection would contain the result cell, the picker
 uses the adjacent source cells instead of creating a circular reference and
 showing `#ERROR`.

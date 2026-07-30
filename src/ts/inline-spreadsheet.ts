@@ -859,9 +859,30 @@ function renderAggregateFormulaResults(container: HTMLElement, data: AOA): void 
       const cell = container.querySelector<HTMLElement>(
         `td[data-x="${colIndex}"][data-y="${rowIndex}"]`,
       );
-      if (cell && !cell.classList.contains('editor')) cell.textContent = String(result);
+      // jspreadsheet v5 can leave the `editor` class on a cell after Enter,
+      // even though its input has already closed. The formula repaint only
+      // runs after data/edition events, so updating the cell here does not
+      // interfere with the active input and guarantees a visible result.
+      if (cell) cell.textContent = String(result);
     });
   });
+}
+
+function applyAggregateFormulaResults(rawData: AOA, computedData: AOA): AOA {
+  const rows = Math.max(rawData.length, computedData.length);
+  const cols = Math.max(
+    rawData.reduce((max, row) => Math.max(max, row.length), 0),
+    computedData.reduce((max, row) => Math.max(max, row.length), 0),
+  );
+  const displayData = resizeData(computedData, rows, cols);
+  rawData.forEach((row, rowIndex) => {
+    row.forEach((value, colIndex) => {
+      if (typeof value !== 'string' || !value.trimStart().startsWith('=')) return;
+      const result = evaluateAggregateFormula(value, rawData, colIndex, rowIndex);
+      if (result !== undefined) displayData[rowIndex][colIndex] = result;
+    });
+  });
+  return displayData;
 }
 
 function extractCellStyles(
@@ -1731,6 +1752,10 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     const ui = createOverlay(working);
     let sheetContainer: HTMLDivElement | null = null;
     let worksheet: JssInstance = null;
+    // jspreadsheet's formula engine can replace a raw formula with its
+    // calculated value (or #ERROR) in getData(). Keep a separate source of
+    // truth so rendering never destroys what the user entered.
+    let rawDataMirror = resizeData(working.data, working.rows, working.cols);
     let selectedRange: CellRange | null = null;
     let formulaSelectionDrag: {
       input: HTMLInputElement | HTMLTextAreaElement;
@@ -1745,19 +1770,65 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     document.body.appendChild(ui.overlay);
 
     const readRawData = (): AOA => {
-      const data = worksheet?.getData?.();
-      return Array.isArray(data) ? data : working.data;
+      const worksheetData = worksheet?.getData?.();
+      if (!Array.isArray(worksheetData)) {
+        return resizeData(rawDataMirror, working.rows, working.cols);
+      }
+      const rows = Math.max(working.rows, worksheetData.length, rawDataMirror.length);
+      const cols = Math.max(
+        working.cols,
+        worksheetData.reduce((max, row) => Math.max(max, row?.length ?? 0), 0),
+        rawDataMirror.reduce((max, row) => Math.max(max, row.length), 0),
+      );
+      const currentData = resizeData(worksheetData, rows, cols);
+      const mirroredData = resizeData(rawDataMirror, rows, cols);
+      const mergedData = currentData.map((row, rowIndex) => row.map((value, colIndex) => {
+        const mirroredValue = mirroredData[rowIndex][colIndex];
+        return typeof mirroredValue === 'string' && mirroredValue.trimStart().startsWith('=')
+          ? mirroredValue
+          : value;
+      }));
+      rawDataMirror = mergedData;
+      return resizeData(mergedData, rows, cols);
     };
 
-    const scheduleFormulaResultRender = (data?: AOA): void => {
+    const updateRawDataMirrorCell = (
+      col: number,
+      row: number,
+      value: CellValue,
+      preserveRenderedFormula = true,
+    ): void => {
+      if (!Number.isInteger(col) || !Number.isInteger(row) || col < 0 || row < 0) return;
+      const rows = Math.max(working.rows, rawDataMirror.length, row + 1);
+      const cols = Math.max(
+        working.cols,
+        rawDataMirror.reduce((max, currentRow) => Math.max(max, currentRow.length), 0),
+        col + 1,
+      );
+      rawDataMirror = resizeData(rawDataMirror, rows, cols);
+      const currentValue = rawDataMirror[row][col];
+      if (preserveRenderedFormula
+        && typeof currentValue === 'string'
+        && currentValue.trimStart().startsWith('=')
+        && !(typeof value === 'string' && value.trimStart().startsWith('='))
+      ) {
+        const result = evaluateAggregateFormula(currentValue, rawDataMirror, col, row);
+        if (value === '#ERROR' || (result !== undefined && String(value) === String(result))) return;
+      }
+      rawDataMirror[row][col] = value;
+    };
+
+    const scheduleFormulaResultRender = (): void => {
       const render = (): void => {
-        if (sheetContainer) renderAggregateFormulaResults(sheetContainer, data ?? readRawData());
+        if (sheetContainer) renderAggregateFormulaResults(sheetContainer, readRawData());
       };
       // jspreadsheet paints the non-editing cell after closeEditor/onchange.
-      // Repaint on the next frame and once more after its queued DOM update.
+      // Repaint after each of its immediate and delayed formula updates.
       window.requestAnimationFrame(() => {
         render();
         window.setTimeout(render, 0);
+        window.setTimeout(render, 120);
+        window.setTimeout(render, 400);
       });
     };
 
@@ -1973,10 +2044,11 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       event.preventDefault();
       event.stopImmediatePropagation();
       const formulaValue = event.target.value;
+      updateRawDataMirrorCell(formulaCol, formulaRow, formulaValue, false);
       worksheet.closeEditor(formulaCell, true);
       const rawData = readRawData();
       const result = evaluateAggregateFormula(formulaValue, rawData, formulaCol, formulaRow);
-      scheduleFormulaResultRender(rawData);
+      scheduleFormulaResultRender();
       if (Number.isInteger(formulaCol) && Number.isInteger(formulaRow)) {
         selectedRange = [formulaCol, formulaRow, formulaCol, formulaRow];
         worksheet.updateSelectionFromCoords?.(...selectedRange);
@@ -2006,6 +2078,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const mountedRows = working.rows;
       const mountedCols = working.cols;
       const mountedData = resizeData(working.data, mountedRows, mountedCols);
+      rawDataMirror = resizeData(mountedData, mountedRows, mountedCols);
       const mountedStyles = mergeCellStyles(
         working.cellStyles,
         normalizeAppearance(working.appearance),
@@ -2013,9 +2086,12 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         mountedCols,
       );
       let hydrationComplete = false;
-      const firstSavedCell = mountedData
+      const savedCells = mountedData
         .flatMap((row, rowIndex) => row.map((value, colIndex) => ({ value, colIndex, rowIndex })))
-        .find(cell => cell.value !== '' && cell.value !== null && cell.value !== undefined);
+        .filter(cell => cell.value !== '' && cell.value !== null && cell.value !== undefined);
+      const firstSavedCell = savedCells.find(cell => (
+        typeof cell.value !== 'string' || !cell.value.trimStart().startsWith('=')
+      )) ?? savedCells[0];
       const worksheetContainsSavedData = (candidate: JssInstance): boolean => {
         const bodyRows = mountedContainer.querySelectorAll('.jss_worksheet tbody tr').length;
         if (bodyRows < mountedRows) return false;
@@ -2037,14 +2113,14 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         // until both its rows and a representative value are observable.
         if (!hydrationComplete && !worksheetContainsSavedData(mountedWorksheet)) {
           try {
-            mountedWorksheet.setData?.(mountedData);
+            mountedWorksheet.setData?.(resizeData(mountedData, mountedRows, mountedCols));
             mountedWorksheet.setStyle?.(mountedStyles);
           } catch {
             return false;
           }
         }
         hydrationComplete = worksheetContainsSavedData(mountedWorksheet);
-        renderAggregateFormulaResults(mountedContainer, mountedData);
+        scheduleFormulaResultRender();
         if (selectedRange) {
           worksheet?.updateSelectionFromCoords?.(...selectedRange);
           updateSelectionStatus(selectedRange);
@@ -2078,12 +2154,42 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         onload: (spreadsheet: JssInstance): void => {
           bindAndHydrateWorksheet(spreadsheet?.worksheets ?? spreadsheet);
         },
-        onchange: (changedWorksheet: JssInstance): void => {
+        onbeforechange: (
+          _changedWorksheet: JssInstance,
+          cell: HTMLElement,
+          changedCol: number,
+          changedRow: number,
+          value: CellValue,
+        ): CellValue => {
+          updateRawDataMirrorCell(
+            changedCol,
+            changedRow,
+            value,
+            !cell?.classList?.contains('editor'),
+          );
+          return value;
+        },
+        onchange: (
+          changedWorksheet: JssInstance,
+          _cell: HTMLElement,
+          changedCol: number,
+          changedRow: number,
+          newValue: CellValue,
+        ): void => {
           worksheet = changedWorksheet;
-          const changedData = changedWorksheet?.getData?.();
-          if (Array.isArray(changedData)) {
-            scheduleFormulaResultRender(changedData);
-          }
+          updateRawDataMirrorCell(changedCol, changedRow, newValue);
+          scheduleFormulaResultRender();
+        },
+        oneditionend: (
+          changedWorksheet: JssInstance,
+          _cell: HTMLElement,
+          changedCol: number,
+          changedRow: number,
+          value: CellValue,
+        ): void => {
+          worksheet = changedWorksheet;
+          updateRawDataMirrorCell(changedCol, changedRow, value);
+          scheduleFormulaResultRender();
         },
         onselection: (
           selectedWorksheet: JssInstance,
@@ -2411,10 +2517,11 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         ui.rowsInput.value = String(Math.min(MAX_DIMENSION, rowCount + 1));
       }
       const formulaValue = `=${formulaName}(${range})`;
+      updateRawDataMirrorCell(targetCol, targetRow, formulaValue, false);
       worksheet?.setValueFromCoords?.(targetCol, targetRow, formulaValue);
       const rawData = readRawData();
       const result = evaluateAggregateFormula(formulaValue, rawData, targetCol, targetRow);
-      scheduleFormulaResultRender(rawData);
+      scheduleFormulaResultRender();
       worksheet?.updateSelectionFromCoords?.(targetCol, targetRow, targetCol, targetRow);
       ui.formulaStatus.textContent = result === undefined
         ? `${formulaName}(${range}) → ${colLabel(targetCol)}${targetRow + 1}`
@@ -2477,7 +2584,12 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
   const appearance = normalizeAppearance(raw.appearance);
   raw.appearance = appearance;
   const kind = raw.kind ?? 'standard';
-  const displayData = resizeData(computed.length > 0 ? computed : raw.data, raw.rows, raw.cols);
+  const computedData = resizeData(computed.length > 0 ? computed : raw.data, raw.rows, raw.cols);
+  const displayData = resizeData(
+    applyAggregateFormulaResults(raw.data, computedData),
+    raw.rows,
+    raw.cols,
+  );
   // Keep a snapshot of what the user sees in TinyMCE. If a visible cell is
   // changed outside the spreadsheet dialog, extractFromTable can merge that
   // edit without replacing unchanged formulas with their computed results.
