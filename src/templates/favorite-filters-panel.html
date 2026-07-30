@@ -170,6 +170,22 @@
       </button>
     </div>
 
+    <section class='favorite-filter-results-section mb-3' aria-labelledby='favoriteFilterResultsHeading'>
+      <div class='d-flex align-items-center justify-content-between mb-2'>
+        <h4 class='h5 mb-0' id='favoriteFilterResultsHeading'>
+          {{ 'Results'|trans }}
+          <span id='favoriteFilterResultsCount' class='badge badge-primary ml-1' hidden>0</span>
+        </h4>
+        <a id='favoriteFilterFullResults' class='btn btn-sm btn-outline-secondary' href='#'>
+          <i class='fas fa-list fa-fw mr-1' aria-hidden='true'></i>{{ 'Full list'|trans }}
+        </a>
+      </div>
+      <p id='favoriteFilterResultsStatus' class='small color-medium mb-2'>
+        {{ 'Open this panel or apply filters to load matching entries.'|trans }}
+      </p>
+      <div id='favoriteFilterResults' class='favorite-filter-results' aria-live='polite'></div>
+    </section>
+
     <details class='favorite-filter-manage'>
       <summary class='font-weight-bold mb-2'>{{ 'Manage favorites'|trans }}</summary>
 

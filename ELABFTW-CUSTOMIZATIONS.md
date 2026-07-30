@@ -186,7 +186,16 @@ when closed.
 
 The Manage favorites section can create a new category for the currently
 selected target and immediately favorite it, or favorite existing categories,
-owners, statuses, and tags. The favorite-tag field searches existing team tags
+owners, statuses, and tags. Applying or clearing the filters refreshes matching
+experiments or resources directly inside the sidebar, while **Full list** opens
+the same combination in the normal listing. Each result title links to the
+entry heading. Results use the filter panel's theme colours and a compact row
+layout. While an experiment is being edited, the clearly labelled **Link**
+button beside a result both creates the appropriate experiment/resource
+relationship and inserts a link at the current editor cursor. Opening a
+different result from edit mode first warns about potentially unsaved changes.
+
+The favorite-tag field searches existing team tags
 as the user types, keeps its suggestion menu above the sidebar, excludes tags
 that are already favorites, and supports mouse or keyboard selection. Favorite
 tag choices are stored per account through eLabFTW's `favtags2users` mapping;

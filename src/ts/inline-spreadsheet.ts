@@ -622,6 +622,15 @@ function getAppearanceBackground(
   return color;
 }
 
+function hasAlternateBackground(
+  appearance: SpreadsheetAppearance,
+  col: number,
+  row: number,
+): boolean {
+  return (appearance.alternateRows && row % 2 === 1)
+    || (appearance.alternateColumns && col % 2 === 1);
+}
+
 function getAppearanceCellStyle(
   appearance: SpreadsheetAppearance,
   col: number,
@@ -637,12 +646,7 @@ function getAppearanceCellStyle(
       : `border:${appearance.borderWidth}px solid ${appearance.borderColor}`,
     `padding:${appearance.cellPadding}px`,
   ];
-  const hasAlternateBackground = (
-    appearance.alternateRows && row % 2 === 1
-  ) || (
-    appearance.alternateColumns && col % 2 === 1
-  );
-  if (includeBackground && hasAlternateBackground) {
+  if (includeBackground && hasAlternateBackground(appearance, col, row)) {
     declarations.push(`background-color:${getAppearanceBackground(appearance, col, row)}`);
   } else if (includeBackground && cellStyle?.backgroundColor) {
     declarations.push(`background-color:${cellStyle.backgroundColor}`);
@@ -728,9 +732,21 @@ function stripAppearanceCellStyles(
       'style',
       getAppearanceCellStyle(appearance, coordinates.col, coordinates.row),
     );
+    const legacyBackground = document.createElement('span');
+    if (hasAlternateBackground(appearance, coordinates.col, coordinates.row)
+      && appearance.cellStyle?.backgroundColor
+    ) {
+      // Older spreadsheet renders applied the default cell fill to striped
+      // rows. Treat that exact fill as generated rather than as an explicit
+      // per-cell override when reopening those tables.
+      legacyBackground.style.backgroundColor = appearance.cellStyle.backgroundColor;
+    }
     for (let index = 0; index < generated.style.length; index++) {
       const property = generated.style.item(index);
-      if (actual.style.getPropertyValue(property) === generated.style.getPropertyValue(property)) {
+      const actualValue = actual.style.getPropertyValue(property);
+      const isLegacyStripedFill = property === 'background-color'
+        && actualValue === legacyBackground.style.getPropertyValue(property);
+      if (actualValue === generated.style.getPropertyValue(property) || isLegacyStripedFill) {
         actual.style.removeProperty(property);
       }
     }

@@ -1131,6 +1131,67 @@ body.side-panel-resizing * {
   }
 }
 
+.favorite-filter-results-section {
+  border-top: 1px solid var(--secondary);
+  padding-top: 0.75rem;
+}
+
+.favorite-filter-results {
+  display: flex;
+  flex-direction: column;
+}
+
+.favorite-filter-result {
+  background-color: transparent;
+  border-bottom: 1px solid var(--secondary);
+  color: var(--chrome-fg);
+  padding: 0.35rem 0;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.favorite-filter-result-link {
+  color: var(--chrome-fg);
+  font-size: 0.93rem;
+  font-weight: 700;
+  line-height: 1.2;
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  &:hover,
+  &:focus {
+    color: var(--primary);
+  }
+}
+
+.favorite-filter-result-meta {
+  color: var(--chrome-muted);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  margin-top: 0.1rem;
+}
+
+.favorite-filter-result-insert {
+  background-color: transparent;
+  border-color: var(--chrome-muted);
+  color: var(--chrome-fg);
+  flex: 0 0 auto;
+  padding: 0.15rem 0.35rem;
+
+  &:hover,
+  &:focus {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: var(--chrome-fg);
+  }
+
+  .fas {
+    color: inherit;
+  }
+}
+
 #favoritesPanel {
   .ui-autocomplete {
     background-color: var(--mainbackground);
