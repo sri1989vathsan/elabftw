@@ -637,7 +637,14 @@ function getAppearanceCellStyle(
       : `border:${appearance.borderWidth}px solid ${appearance.borderColor}`,
     `padding:${appearance.cellPadding}px`,
   ];
-  if (includeBackground && cellStyle?.backgroundColor) {
+  const hasAlternateBackground = (
+    appearance.alternateRows && row % 2 === 1
+  ) || (
+    appearance.alternateColumns && col % 2 === 1
+  );
+  if (includeBackground && hasAlternateBackground) {
+    declarations.push(`background-color:${getAppearanceBackground(appearance, col, row)}`);
+  } else if (includeBackground && cellStyle?.backgroundColor) {
     declarations.push(`background-color:${cellStyle.backgroundColor}`);
   } else if (includeBackground && !cellStyle) {
     declarations.push(`background-color:${getAppearanceBackground(appearance, col, row)}`);
