@@ -793,24 +793,127 @@ function coordinatesFromCellName(cellName: string): { col: number; row: number }
   return { col: col - 1, row: parseInt(match[2], 10) - 1 };
 }
 
+function evaluateArithmeticExpression(
+  expression: string,
+  resolveCell: (cellName: string) => number | undefined,
+): number | undefined {
+  const tokens: string[] = [];
+  const trimmed = expression.trim();
+  const tokenPattern = /\s*([()+*/-]|(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|\$?[a-z]+\$?[1-9]\d*)/iy;
+  let position = 0;
+  while (position < trimmed.length) {
+    tokenPattern.lastIndex = position;
+    const match = tokenPattern.exec(trimmed);
+    if (!match) return undefined;
+    tokens.push(match[1]);
+    position = tokenPattern.lastIndex;
+  }
+  if (tokens.length === 0) return undefined;
+
+  let index = 0;
+  const parsePrimary = (): number | undefined => {
+    const token = tokens[index];
+    if (!token) return undefined;
+    if (token === '(') {
+      index++;
+      const value = parseExpression();
+      if (value === undefined || tokens[index] !== ')') return undefined;
+      index++;
+      return value;
+    }
+    if (/^\$?[a-z]+\$?[1-9]\d*$/i.test(token)) {
+      index++;
+      return resolveCell(token.replaceAll('$', ''));
+    }
+    const value = Number(token);
+    if (!Number.isFinite(value)) return undefined;
+    index++;
+    return value;
+  };
+  const parseUnary = (): number | undefined => {
+    const operator = tokens[index];
+    if (operator !== '+' && operator !== '-') return parsePrimary();
+    index++;
+    const value = parseUnary();
+    if (value === undefined) return undefined;
+    return operator === '-' ? -value : value;
+  };
+  const parseTerm = (): number | undefined => {
+    let value = parseUnary();
+    if (value === undefined) return undefined;
+    while (tokens[index] === '*' || tokens[index] === '/') {
+      const operator = tokens[index++];
+      const right = parseUnary();
+      if (right === undefined || (operator === '/' && right === 0)) return undefined;
+      value = operator === '*' ? value * right : value / right;
+    }
+    return Number.isFinite(value) ? value : undefined;
+  };
+  const parseExpression = (): number | undefined => {
+    let value = parseTerm();
+    if (value === undefined) return undefined;
+    while (tokens[index] === '+' || tokens[index] === '-') {
+      const operator = tokens[index++];
+      const right = parseTerm();
+      if (right === undefined) return undefined;
+      value = operator === '+' ? value + right : value - right;
+    }
+    return Number.isFinite(value) ? value : undefined;
+  };
+
+  const result = parseExpression();
+  return index === tokens.length ? result : undefined;
+}
+
 /**
- * Evaluate the aggregate formulas exposed by the inline spreadsheet toolbar.
- * jspreadsheet remains the primary formula engine; this deterministic fallback
- * guarantees that formula results are visible when its renderer does not
- * update the cell text after an edit.
+ * Evaluate aggregate functions and ordinary arithmetic without using eval().
+ * jspreadsheet formula parsing stays disabled because it can abort hydration
+ * for a saved grid. This deterministic evaluator keeps both raw formulas and
+ * their visible results stable through edit/save/reopen cycles.
  */
-function evaluateAggregateFormula(
+function evaluateFormula(
   formulaValue: string,
   data: AOA,
   formulaCol: number,
   formulaRow: number,
   resolving = new Set<string>(),
 ): number | undefined {
-  const match = /^=\s*(SUM|AVERAGE|COUNT|MIN|MAX)\s*\((.*)\)\s*$/i.exec(formulaValue);
-  if (!match) return undefined;
+  if (!formulaValue.trimStart().startsWith('=')) return undefined;
   const formulaKey = `${formulaCol}:${formulaRow}`;
   if (resolving.has(formulaKey)) return undefined;
   resolving.add(formulaKey);
+  const match = /^=\s*(SUM|AVERAGE|COUNT|MIN|MAX)\s*\((.*)\)\s*$/i.exec(formulaValue);
+
+  if (!match) {
+    const result = evaluateArithmeticExpression(
+      formulaValue.trim().slice(1),
+      cellName => {
+        const coordinates = coordinatesFromCellName(cellName);
+        if (!coordinates
+          || coordinates.row >= data.length
+          || coordinates.col >= (data[coordinates.row]?.length ?? 0)
+        ) {
+          return undefined;
+        }
+        const value = data[coordinates.row]?.[coordinates.col];
+        if (typeof value === 'string' && value.trimStart().startsWith('=')) {
+          return evaluateFormula(
+            value,
+            data,
+            coordinates.col,
+            coordinates.row,
+            resolving,
+          );
+        }
+        if (value === null || value === '' || value === false) return 0;
+        if (value === true) return 1;
+        const numericValue = Number(value);
+        return Number.isFinite(numericValue) ? numericValue : undefined;
+      },
+    );
+    resolving.delete(formulaKey);
+    return result;
+  }
 
   const numericValues: number[] = [];
   let invalidReference = false;
@@ -819,7 +922,7 @@ function evaluateAggregateFormula(
     const value = data[row]?.[col];
     let resolvedValue: CellValue | undefined = value;
     if (typeof value === 'string' && value.trimStart().startsWith('=')) {
-      resolvedValue = evaluateAggregateFormula(value, data, col, row, resolving);
+      resolvedValue = evaluateFormula(value, data, col, row, resolving);
       if (resolvedValue === undefined) {
         invalidReference = true;
         return;
@@ -873,11 +976,11 @@ function evaluateAggregateFormula(
   return undefined;
 }
 
-function renderAggregateFormulaResults(container: HTMLElement, data: AOA): void {
+function renderFormulaResults(container: HTMLElement, data: AOA): void {
   data.forEach((row, rowIndex) => {
     row.forEach((value, colIndex) => {
       if (typeof value !== 'string' || !value.trimStart().startsWith('=')) return;
-      const result = evaluateAggregateFormula(value, data, colIndex, rowIndex);
+      const result = evaluateFormula(value, data, colIndex, rowIndex);
       if (result === undefined) return;
       const cell = container.querySelector<HTMLElement>(
         `td[data-x="${colIndex}"][data-y="${rowIndex}"]`,
@@ -891,7 +994,7 @@ function renderAggregateFormulaResults(container: HTMLElement, data: AOA): void 
   });
 }
 
-function applyAggregateFormulaResults(rawData: AOA, computedData: AOA): AOA {
+function applyFormulaResults(rawData: AOA, computedData: AOA): AOA {
   const rows = Math.max(rawData.length, computedData.length);
   const cols = Math.max(
     rawData.reduce((max, row) => Math.max(max, row.length), 0),
@@ -901,7 +1004,7 @@ function applyAggregateFormulaResults(rawData: AOA, computedData: AOA): AOA {
   rawData.forEach((row, rowIndex) => {
     row.forEach((value, colIndex) => {
       if (typeof value !== 'string' || !value.trimStart().startsWith('=')) return;
-      const result = evaluateAggregateFormula(value, rawData, colIndex, rowIndex);
+      const result = evaluateFormula(value, rawData, colIndex, rowIndex);
       if (result !== undefined) displayData[rowIndex][colIndex] = result;
     });
   });
@@ -1500,18 +1603,30 @@ function createOverlay(initial: SpreadsheetData): {
   formulaLabel.textContent = 'ƒx';
   formulaLabel.title = 'Formula builder';
   formulaBar.appendChild(formulaLabel);
-  ['SUM', 'AVERAGE', 'COUNT', 'MIN', 'MAX'].forEach(formulaName => {
+  const formulaActions = [
+    { value: 'SUM', label: 'SUM', title: 'Sum the selected cells' },
+    { value: 'AVERAGE', label: 'AVERAGE', title: 'Average the selected cells' },
+    { value: 'COUNT', label: 'COUNT', title: 'Count the selected numeric cells' },
+    { value: 'MIN', label: 'MIN', title: 'Find the minimum selected value' },
+    { value: 'MAX', label: 'MAX', title: 'Find the maximum selected value' },
+    { value: '+', label: '+', title: 'Add the selected cells in reading order' },
+    { value: '-', label: '−', title: 'Subtract each selected cell from the first' },
+    { value: '*', label: '×', title: 'Multiply the selected cells' },
+    { value: '/', label: '÷', title: 'Divide the first selected cell by each remaining cell' },
+  ];
+  formulaActions.forEach(action => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'btn btn-sm btn-outline-secondary';
-    button.dataset.formula = formulaName;
-    button.textContent = formulaName;
-    button.title = `Apply ${formulaName} to the selected cell range`;
+    button.dataset.formula = action.value;
+    button.textContent = action.label;
+    button.title = action.title;
+    button.setAttribute('aria-label', action.title);
     formulaBar.appendChild(button);
   });
   const formulaStatus = document.createElement('span');
   formulaStatus.className = 'inline-spreadsheet-formula-status';
-  formulaStatus.textContent = 'Select source cells, then choose a formula; or type =SUM( in a result cell and drag-select a range.';
+  formulaStatus.textContent = 'Select cells, then choose a function or arithmetic operation. You can also type formulas such as =A1*B1.';
   formulaBar.appendChild(formulaStatus);
   dialog.appendChild(formulaBar);
 
@@ -1787,6 +1902,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       insertionEnd: number;
       formulaCol: number;
       formulaRow: number;
+      allowRange: boolean;
     } | null = null;
     const changedFontProperties = new Set<keyof CellFontFormat>();
 
@@ -1835,7 +1951,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         && currentValue.trimStart().startsWith('=')
         && !(typeof value === 'string' && value.trimStart().startsWith('='))
       ) {
-        const result = evaluateAggregateFormula(currentValue, rawDataMirror, col, row);
+        const result = evaluateFormula(currentValue, rawDataMirror, col, row);
         if (value === '#ERROR' || (result !== undefined && String(value) === String(result))) return;
       }
       rawDataMirror[row][col] = value;
@@ -1843,7 +1959,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
 
     const scheduleFormulaResultRender = (): void => {
       const render = (): void => {
-        if (sheetContainer) renderAggregateFormulaResults(sheetContainer, readRawData());
+        if (sheetContainer) renderFormulaResults(sheetContainer, readRawData());
       };
       // jspreadsheet paints the non-editing cell after closeEditor/onchange.
       // Repaint after each of its immediate and delayed formula updates.
@@ -1998,12 +2114,14 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       if (!endRange) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      updateFormulaSelection([
-        formulaSelectionDrag.startRange[0],
-        formulaSelectionDrag.startRange[1],
-        endRange[2],
-        endRange[3],
-      ]);
+      updateFormulaSelection(formulaSelectionDrag.allowRange
+        ? [
+          formulaSelectionDrag.startRange[0],
+          formulaSelectionDrag.startRange[1],
+          endRange[2],
+          endRange[3],
+        ]
+        : endRange);
     };
 
     const onFormulaSelectionEnd = (event: MouseEvent): void => {
@@ -2028,11 +2146,12 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const selectionStart = input.selectionStart ?? input.value.length;
       const selectionEnd = input.selectionEnd ?? selectionStart;
       const formulaBeforeCaret = input.value.slice(0, selectionStart).trimStart();
-      if (!formulaBeforeCaret.startsWith('=')
-        || formulaParenthesisBalance(formulaBeforeCaret) === 0
-      ) {
-        return;
-      }
+      const expectsCellReference = /^=\s*$/.test(formulaBeforeCaret)
+        || /[+\-*/(,;]\s*$/.test(formulaBeforeCaret);
+      if (!expectsCellReference) return;
+      const allowRange = /^=\s*(SUM|AVERAGE|COUNT|MIN|MAX)\s*\([^)]*$/i.test(
+        formulaBeforeCaret,
+      );
 
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -2043,6 +2162,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         insertionEnd: selectionEnd,
         formulaCol,
         formulaRow,
+        allowRange,
       };
       updateFormulaSelection(startRange);
       document.addEventListener('mousemove', onFormulaSelectionMove, true);
@@ -2070,7 +2190,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       updateRawDataMirrorCell(formulaCol, formulaRow, formulaValue, false);
       worksheet.closeEditor(formulaCell, true);
       const rawData = readRawData();
-      const result = evaluateAggregateFormula(formulaValue, rawData, formulaCol, formulaRow);
+      const result = evaluateFormula(formulaValue, rawData, formulaCol, formulaRow);
       scheduleFormulaResultRender();
       if (Number.isInteger(formulaCol) && Number.isInteger(formulaRow)) {
         selectedRange = [formulaCol, formulaRow, formulaCol, formulaRow];
@@ -2536,6 +2656,17 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const formulaName = button.dataset.formula;
       if (!formulaName) return;
       const range = `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
+      const selectedCells: string[] = [];
+      for (let row = startRow; row <= endRow; row++) {
+        for (let col = startCol; col <= endCol; col++) {
+          selectedCells.push(`${colLabel(col)}${row + 1}`);
+        }
+      }
+      const isArithmetic = ['+', '-', '*', '/'].includes(formulaName);
+      if (isArithmetic && selectedCells.length < 2) {
+        ui.formulaStatus.textContent = 'Select at least two source cells for arithmetic.';
+        return;
+      }
       const targetCol = startCol;
       const targetRow = endRow + 1;
       const rowCount = readRawData().length;
@@ -2543,16 +2674,19 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         worksheet?.insertRow?.(1, endRow, 0);
         ui.rowsInput.value = String(Math.min(MAX_DIMENSION, rowCount + 1));
       }
-      const formulaValue = `=${formulaName}(${range})`;
+      const formulaValue = isArithmetic
+        ? `=${selectedCells.join(formulaName)}`
+        : `=${formulaName}(${range})`;
+      const formulaDescription = formulaValue.slice(1);
       updateRawDataMirrorCell(targetCol, targetRow, formulaValue, false);
       worksheet?.setValueFromCoords?.(targetCol, targetRow, formulaValue);
       const rawData = readRawData();
-      const result = evaluateAggregateFormula(formulaValue, rawData, targetCol, targetRow);
+      const result = evaluateFormula(formulaValue, rawData, targetCol, targetRow);
       scheduleFormulaResultRender();
       worksheet?.updateSelectionFromCoords?.(targetCol, targetRow, targetCol, targetRow);
       ui.formulaStatus.textContent = result === undefined
-        ? `${formulaName}(${range}) → ${colLabel(targetCol)}${targetRow + 1}`
-        : `${formulaName}(${range}) → ${colLabel(targetCol)}${targetRow + 1} = ${result}`;
+        ? `${formulaDescription} → ${colLabel(targetCol)}${targetRow + 1}`
+        : `${formulaDescription} → ${colLabel(targetCol)}${targetRow + 1} = ${result}`;
     }));
 
     const cleanup = (): void => {
@@ -2613,7 +2747,7 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
   const kind = raw.kind ?? 'standard';
   const computedData = resizeData(computed.length > 0 ? computed : raw.data, raw.rows, raw.cols);
   const displayData = resizeData(
-    applyAggregateFormulaResults(raw.data, computedData),
+    applyFormulaResults(raw.data, computedData),
     raw.rows,
     raw.cols,
   );

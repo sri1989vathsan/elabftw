@@ -221,9 +221,11 @@ limits that keep the main document usable.
 
 Extends inline spreadsheets with custom dimensions (up to 50 × 50),
 Benchling-style named data tables, 6/12/24/48/96/384-well plate presets, captions
-above tables, and a visual aggregate formula builder. Select a source range and
-click SUM, AVERAGE, COUNT, MIN, or MAX; the result formula is placed immediately
-below the selection. Tables can be indented/outdented in 2.5rem steps to align
+above tables, and a visual formula builder. Select a source range and click SUM,
+AVERAGE, COUNT, MIN, MAX, addition, subtraction, multiplication, or division; the
+result formula is placed immediately below the selection. Standard arithmetic
+formulas such as `=A1+B1`, `=A1-B1`, `=A1*B1`, `=A1/B1`, and expressions with
+parentheses can also be typed directly. Tables can be indented/outdented in 2.5rem steps to align
 with nested bullets. Indentation is applied to a structural wrapper rather than
 rewriting the table's width or alignment, so full-width, centered, well-plate,
 and formula tables remain stable. Multi-cell selections and toolbar focus retain
@@ -292,8 +294,11 @@ formula prefix such as `=SUM(`, then drag across cells, whole columns, or whole
 rows. The A1 range is inserted without closing the cell editor, and Enter
 automatically closes missing parentheses, explicitly commits the formula to the
 worksheet, and recalculates the cell.
-The five aggregate functions exposed in the formula bar (`SUM`, `AVERAGE`,
-`COUNT`, `MIN`, and `MAX`) also have a deterministic display fallback. Raw
+Typing `=` by itself also enables cell picking for arithmetic formulas. Click a
+cell to insert its A1 reference, type `+`, `-`, `*`, or `/`, and click the next
+cell; the editor remains active until Enter applies the completed formula.
+The aggregate functions and arithmetic operations exposed in the formula bar
+also have a deterministic display fallback. Raw
 formulas remain stored in spreadsheet metadata, while their results are
 rendered after Enter, formula-button insertion, and spreadsheet reopening even
 if jspreadsheet does not refresh the visible cell text.
