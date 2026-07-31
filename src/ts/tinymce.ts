@@ -121,6 +121,101 @@ function insertHorizontalRule(
   );
 }
 
+const CHECKLIST_CLASS = 'elabftw-checklist';
+const CHECKLIST_ITEM_CLASS = 'elabftw-checklist-item';
+
+function checklistFromSelection(editor: Editor): HTMLUListElement | null {
+  const node = editor.selection.getNode() as HTMLElement;
+  return node.closest(`ul.${CHECKLIST_CLASS}`) as HTMLUListElement | null;
+}
+
+function normalizeChecklist(list: HTMLUListElement): void {
+  list.classList.add(CHECKLIST_CLASS);
+  list.querySelectorAll<HTMLUListElement>('ul').forEach(nestedList => {
+    nestedList.classList.add(CHECKLIST_CLASS);
+  });
+  list.querySelectorAll<HTMLLIElement>('li').forEach(item => {
+    if (!item.parentElement?.matches(`ul.${CHECKLIST_CLASS}`)) return;
+    item.classList.add(CHECKLIST_ITEM_CLASS);
+    const checked = item.dataset.checked === 'true';
+    item.dataset.checked = checked ? 'true' : 'false';
+  });
+}
+
+function normalizeChecklists(editor: Editor): void {
+  editor.getBody().querySelectorAll<HTMLUListElement>(`ul.${CHECKLIST_CLASS}`)
+    .forEach(normalizeChecklist);
+}
+
+function applyChecklist(editor: Editor, checked = false): void {
+  let list = checklistFromSelection(editor);
+  if (!list) {
+    const currentList = (editor.selection.getNode() as HTMLElement)
+      .closest('ul,ol') as HTMLOListElement | HTMLUListElement | null;
+    if (!currentList || currentList.tagName === 'OL') {
+      editor.execCommand('InsertUnorderedList');
+    }
+    list = (editor.selection.getNode() as HTMLElement)
+      .closest('ul') as HTMLUListElement | null;
+  }
+  if (!list) return;
+
+  normalizeChecklist(list);
+  const selectedItem = (editor.selection.getNode() as HTMLElement)
+    .closest(`li.${CHECKLIST_ITEM_CLASS}`) as HTMLLIElement | null;
+  if (checked && selectedItem) {
+    selectedItem.dataset.checked = 'true';
+  }
+}
+
+function removeChecklist(editor: Editor): void {
+  const list = checklistFromSelection(editor);
+  if (!list) return;
+  list.querySelectorAll<HTMLLIElement>(`li.${CHECKLIST_ITEM_CLASS}`).forEach(item => {
+    item.classList.remove(CHECKLIST_ITEM_CLASS);
+    delete item.dataset.checked;
+  });
+  list.querySelectorAll<HTMLUListElement>(`ul.${CHECKLIST_CLASS}`).forEach(nestedList => {
+    nestedList.classList.remove(CHECKLIST_CLASS);
+  });
+  list.classList.remove(CHECKLIST_CLASS);
+  editor.execCommand('RemoveList');
+}
+
+function toggleChecklist(editor: Editor): void {
+  editor.undoManager.transact(() => {
+    if (checklistFromSelection(editor)) {
+      removeChecklist(editor);
+    } else {
+      applyChecklist(editor);
+    }
+  });
+  editor.setDirty(true);
+  editor.nodeChanged();
+  editor.focus();
+}
+
+function handleChecklistClick(editor: Editor, event: MouseEvent): void {
+  const target = event.target as HTMLElement | null;
+  const item = target?.closest(`li.${CHECKLIST_ITEM_CLASS}`) as HTMLLIElement | null;
+  if (!item || !item.closest(`ul.${CHECKLIST_CLASS}`)) return;
+
+  // The checkbox is a CSS marker occupying the first 1.4rem of the list item.
+  // Only clicks in that marker area toggle state; clicks on the text still edit.
+  const markerWidth = 24;
+  const offset = event.clientX - item.getBoundingClientRect().left;
+  if (offset < -2 || offset > markerWidth) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  editor.undoManager.transact(() => {
+    const checked = item.dataset.checked !== 'true';
+    item.dataset.checked = checked ? 'true' : 'false';
+  });
+  editor.setDirty(true);
+  editor.nodeChanged();
+}
+
 /**
  * Convert a list marker followed by Space at the start of an otherwise empty
  * paragraph. This is explicit because TinyMCE text patterns are not reliable
@@ -142,11 +237,17 @@ function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
   if (!block || block.closest('li,pre,code,table')) return;
 
   const marker = block.textContent ?? '';
-  let command: 'InsertUnorderedList' | 'InsertOrderedList' | null = null;
+  let command: 'InsertUnorderedList' | 'InsertOrderedList' | 'Checklist' | null = null;
+  let checklistChecked = false;
   if (marker === '-') {
     command = 'InsertUnorderedList';
   } else if (marker === '1' || marker === '1.') {
     command = 'InsertOrderedList';
+  } else if (marker === '[]' || marker === '[ ]' || marker === '- [ ]') {
+    command = 'Checklist';
+  } else if (/^(?:- )?\[[xX]\]$/.test(marker)) {
+    command = 'Checklist';
+    checklistChecked = true;
   }
   if (!command) return;
 
@@ -160,7 +261,11 @@ function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
   editor.undoManager.transact(() => {
     editor.dom.setHTML(block, '<br data-mce-bogus="1">');
     editor.selection.setCursorLocation(block, 0);
-    editor.execCommand(command);
+    if (command === 'Checklist') {
+      applyChecklist(editor, checklistChecked);
+    } else {
+      editor.execCommand(command);
+    }
   });
 }
 
@@ -333,7 +438,7 @@ function getEditorPaletteStyle(): string {
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate horizontal-rule | codesample | link | inline-sheet table-properties cell-properties table-outdent table-indent sort-table';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist checklist outdent indent | forecolor backcolor | charmap emoticons adddate horizontal-rule | codesample | link | inline-sheet table-properties cell-properties table-outdent table-indent sort-table';
   if (document.getElementById('documentTitle')) {
     toolbar1 = toolbar1.replace('adddate', 'experiment-title adddate');
   }
@@ -483,6 +588,7 @@ export function getTinymceBaseConfig(page: string): object {
       const dateReferenceEditor = new DateReferenceEditor(editor);
       const experimentTitleEditor = new ExperimentTitleEditor(editor);
       editor.on('init', () => dateReferenceEditor.normalizeReferences());
+      editor.on('init', () => normalizeChecklists(editor));
       // holds the timer setTimeout function
       let typingTimer;
       // use event SkinLoaded instead of init so we're sure skinNode is present
@@ -600,7 +706,7 @@ export function getTinymceBaseConfig(page: string): object {
           ];
           const selectedReference = dateReferenceEditor.getSelectedReference();
           if (selectedReference) {
-            items.push({ type: 'separator' as const } as typeof items[number]);
+            items.push({ type: 'separator' as const } as unknown as typeof items[number]);
             items.push({
               type: 'choiceitem' as const,
               text: 'Edit selected date…',
@@ -673,6 +779,23 @@ export function getTinymceBaseConfig(page: string): object {
         tooltip: 'Save',
         onAction: function() {
           editor.execCommand('mceSave');
+        },
+      });
+      editor.ui.registry.addIcon(
+        'elabftwChecklist',
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2"/><path d="m4.5 7 1.5 1.5L8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7h9M12 17h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="3" y="14" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2"/></svg>',
+      );
+      editor.ui.registry.addToggleButton('checklist', {
+        icon: 'elabftwChecklist',
+        tooltip: 'Checklist ([ ] then Space)',
+        onAction: () => toggleChecklist(editor),
+        onSetup: api => {
+          const update = (): void => {
+            api.setActive(Boolean(checklistFromSelection(editor)));
+          };
+          editor.on('NodeChange', update);
+          update();
+          return () => editor.off('NodeChange', update);
         },
       });
       // save and go back button for toolbar, inside "File" menu.
@@ -809,6 +932,7 @@ export function getTinymceBaseConfig(page: string): object {
         if (!target) return;
         openInlineSpreadsheet(extractFromTable(target), target);
       });
+      editor.on('click', event => handleChecklistClick(editor, event));
 
       // some shortcuts
       editor.addShortcut('ctrl+shift+d', 'add date/time at cursor', addDatetimeOnCursor);
@@ -868,6 +992,7 @@ export function getTinymceBaseConfig(page: string): object {
       };
       editor.on('init', notifyTocHeadingChanges);
       editor.on('NodeChange', notifyTocHeadingChanges);
+      editor.on('NodeChange', () => normalizeChecklists(editor));
       editor.on('keydown', event => {
         if (handleBlockIndentShortcut(editor, event)) return;
         handleListShortcut(editor, event);

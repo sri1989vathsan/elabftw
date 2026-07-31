@@ -84,6 +84,12 @@ class FilterTest extends \PHPUnit\Framework\TestCase
         $list = Filter::body('<ul><li style="list-style-type: none;"><ul><li>Nested item</li></ul></li></ul>');
         $this->assertStringContainsString('list-style-type:none', $list);
 
+        $checklist = Filter::body('<ul class="elabftw-checklist"><li class="elabftw-checklist-item" data-checked="true">Completed item</li><li class="elabftw-checklist-item" data-checked="false">Open item</li></ul>');
+        $this->assertStringContainsString('class="elabftw-checklist"', $checklist);
+        $this->assertStringContainsString('class="elabftw-checklist-item"', $checklist);
+        $this->assertStringContainsString('data-checked="true"', $checklist);
+        $this->assertStringContainsString('data-checked="false"', $checklist);
+
         $heading = Filter::body('<h2 id="section-results">Results</h2>');
         $this->assertStringContainsString('<h2 id="section-results">Results</h2>', $heading);
 

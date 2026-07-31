@@ -243,8 +243,13 @@ editor.
 The main-text editor also enables explicit list shortcuts without enabling
 TinyMCE's other heading/format text patterns: at the beginning of an otherwise
 empty paragraph, type `-` followed by Space for a bulleted list, or `1` (also
-`1.`) followed by Space for a numbered list. Tables, code blocks, and existing
-list items are excluded, and each conversion is a single undo step.
+`1.`) followed by Space for a numbered list. A dedicated **Checklist** toolbar
+button creates checkable protocol/task lists; `[ ]` followed by Space starts an
+unchecked list and `[x]` followed by Space starts one with the first item
+checked. Clicking the square marker while editing toggles an item, and the
+checked state survives save, view mode, printing, and reopening. Tables, code
+blocks, and existing list items are excluded from the typing shortcuts, and
+each conversion is a single undo step.
 
 In the editor, Tab and Shift+Tab explicitly indent and outdent the current list
 item, paragraph, heading, quote, or other editable block instead of moving focus

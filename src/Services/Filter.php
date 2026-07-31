@@ -204,7 +204,7 @@ final class Filter
         // create base config for html5
         $config = HTMLPurifier_HTML5Config::createDefault();
         // allow only certain elements
-        $config->set('HTML.Allowed', 'div[class|style],br,p[class|style],sub,img[src|class|style|width|height],sup,strong,b,em,u,a[href|id|class|title],time[datetime],s,span[id|class|style|title],ul[style],li[style],ol[style],dl,dt,dd,blockquote,h1[id|class|style],h2[id|class|style],h3[id|class|style],h4[id|class|style],h5[id|class|style],h6[id|class|style],hr[class],table[class|style|data-table-sort|data-spreadsheet|data-spreadsheet-style|data-well-plate],thead,tbody,tr[style],td[style|colspan|rowspan],th[class|style|colspan|rowspan],code,source[src|type],video[src|controls|style|width|height],audio[src|controls],pre[class],details,summary,caption,figure,figcaption');
+        $config->set('HTML.Allowed', 'div[class|style],br,p[class|style],sub,img[src|class|style|width|height],sup,strong,b,em,u,a[href|id|class|title],time[datetime],s,span[id|class|style|title],ul[class|style],li[class|style|data-checked],ol[style],dl,dt,dd,blockquote,h1[id|class|style],h2[id|class|style],h3[id|class|style],h4[id|class|style],h5[id|class|style],h6[id|class|style],hr[class],table[class|style|data-table-sort|data-spreadsheet|data-spreadsheet-style|data-well-plate],thead,tbody,tr[style],td[style|colspan|rowspan],th[class|style|colspan|rowspan],code,source[src|type],video[src|controls|style|width|height],audio[src|controls],pre[class],details,summary,caption,figure,figcaption');
         // keep stable anchors generated for linkable Table of Contents entries
         $config->set('Attr.EnableID', true);
         $config->set('HTML.TargetBlank', true);
@@ -248,6 +248,8 @@ final class Filter
             'elabftw-double-dashed-rule',
             'elabftw-double-rule',
             'elabftw-single-rule',
+            'elabftw-checklist',
+            'elabftw-checklist-item',
             'spreadsheet-coordinate',
         ));
         // note: hyphens and word-break are not supported
@@ -310,6 +312,7 @@ final class Filter
             $def->addAttribute('table', 'data-spreadsheet', 'Text');
             $def->addAttribute('table', 'data-spreadsheet-style', 'Enum#standard,notebook,well-plate');
             $def->addAttribute('table', 'data-well-plate', 'Enum#6,12,24,48,96,384');
+            $def->addAttribute('li', 'data-checked', 'Enum#true,false');
         }
 
         $purifier = new HTMLPurifier($config);

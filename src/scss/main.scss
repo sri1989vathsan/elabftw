@@ -523,6 +523,42 @@ button:disabled {
     list-style-type: lower-roman;
   }
 
+  ul.elabftw-checklist {
+    list-style: none;
+    padding-left: 1.25rem;
+  }
+
+  ul.elabftw-checklist > li.elabftw-checklist-item {
+    list-style: none;
+    min-height: 1.4em;
+    padding-left: 1.55rem;
+    position: relative;
+  }
+
+  ul.elabftw-checklist > li.elabftw-checklist-item::before {
+    align-items: center;
+    background: var(--white);
+    border: 2px solid var(--primary);
+    border-radius: 0.22rem;
+    color: var(--white);
+    content: '';
+    display: inline-flex;
+    font-size: 0.78rem;
+    font-weight: 700;
+    height: 1.05rem;
+    justify-content: center;
+    left: 0;
+    line-height: 1;
+    position: absolute;
+    top: 0.12em;
+    width: 1.05rem;
+  }
+
+  ul.elabftw-checklist > li.elabftw-checklist-item[data-checked='true']::before {
+    background: var(--primary);
+    content: '✓';
+  }
+
   img {
     max-height: 100%;
     max-width: 100%;
