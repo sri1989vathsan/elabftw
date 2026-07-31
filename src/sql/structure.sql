@@ -265,8 +265,7 @@ CREATE TABLE `experiments_revisions` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `modified_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `userid` int(10) UNSIGNED NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `idx_todolist_user_deadline` (`userid`, `deadline`)
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
 CREATE TABLE `items_types_revisions` (
