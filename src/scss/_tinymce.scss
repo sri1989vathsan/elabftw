@@ -61,28 +61,21 @@ ul.elabftw-checklist > li.elabftw-checklist-item {
 }
 
 ul.elabftw-checklist > li.elabftw-checklist-item::before {
-  align-items: center;
-  background: var(--white, #fff);
-  border: 2px solid var(--primary, #167b85);
-  border-radius: 0.22rem;
-  color: var(--white, #fff);
-  content: '';
+  color: var(--primary, #167b85);
+  content: '☐';
   cursor: pointer;
-  display: inline-flex;
-  font-size: 0.78rem;
-  font-weight: 700;
-  height: 1.05rem;
-  justify-content: center;
+  font-family: Arial, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 400;
   left: 0;
   line-height: 1;
   position: absolute;
-  top: 0.12em;
-  width: 1.05rem;
+  top: 0;
+  width: 1.2rem;
 }
 
 ul.elabftw-checklist > li.elabftw-checklist-item[data-checked='true']::before {
-  background: var(--primary, #167b85);
-  content: '✓';
+  content: '☑';
 }
 
 table > caption {

@@ -435,6 +435,12 @@ function getEditorPaletteStyle(): string {
   return `:root{${variables}}html,body{background-color:var(--white);color:var(--strongest)}a{color:var(--primary)}`;
 }
 
+function getAssetVersionQuery(): string {
+  const mainBundle = document.querySelector<HTMLScriptElement>('script[src*="/assets/main.bundle.js"]');
+  if (!mainBundle?.src) return '';
+  return new URL(mainBundle.src).search;
+}
+
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
@@ -454,6 +460,7 @@ export function getTinymceBaseConfig(page: string): object {
   }
 
   const isDark = document.documentElement.classList.contains('dark-mode');
+  const tinymceContentCss = `/assets/tinymce_content.min.css${getAssetVersionQuery()}`;
   const templateEndpoint = (entity.type === EntityType.Experiment || entity.type === EntityType.Template)
     ? EntityType.Template
     : EntityType.ItemType;
@@ -469,7 +476,9 @@ export function getTinymceBaseConfig(page: string): object {
     // location of the skin directory
     skin_url: isDark ? '/assets/tinymce_skins_dark' : '/assets/tinymce_skins',
     skin: isDark ? 'oxide-dark' : 'oxide',
-    content_css: isDark ? ['/assets/tinymce_skins/content/dark/content.min.css', '/assets/tinymce_content.min.css'] : ['/assets/tinymce_content.min.css'],
+    // TinyMCE loads content CSS inside its iframe, so carry over the main
+    // bundle's cache-buster to avoid stale custom editor styles.
+    content_css: isDark ? ['/assets/tinymce_skins/content/dark/content.min.css', tinymceContentCss] : [tinymceContentCss],
     content_style: getEditorPaletteStyle(),
     emoticons_database_url: 'assets/tinymce_emojis.js',
     // remove the "Upgrade" button
