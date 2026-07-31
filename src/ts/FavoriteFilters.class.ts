@@ -162,7 +162,7 @@ export default class FavoriteFilters extends SidePanel {
       const insert = document.createElement('button');
       insert.type = 'button';
       insert.className = 'btn btn-sm btn-outline-primary favorite-filter-result-insert ml-2';
-      insert.title = 'Link this entry to the current experiment and insert it at the cursor';
+      insert.title = 'Attach this entry to the current experiment';
       insert.setAttribute('aria-label', insert.title);
       const icon = document.createElement('i');
       icon.className = 'fas fa-link fa-fw';
@@ -243,14 +243,12 @@ export default class FavoriteFilters extends SidePanel {
     button.disabled = true;
     try {
       await ApiC.post(`${entity.type}/${entity.id}/${submodel}/${result.id}`);
-      const editor = getEditor();
-      editor.setContent(this.getMainTextLink(result, target, editor.type));
       await reloadElements(['linksDiv']);
-      button.title = 'Linked and inserted';
+      button.title = 'Attached to the current experiment';
       button.setAttribute('aria-label', button.title);
       button.querySelector('i')?.classList.replace('fa-link', 'fa-check');
       const buttonLabel = button.querySelector<HTMLSpanElement>('span');
-      if (buttonLabel) buttonLabel.textContent = 'Linked';
+      if (buttonLabel) buttonLabel.textContent = 'Attached';
     } finally {
       button.disabled = false;
     }

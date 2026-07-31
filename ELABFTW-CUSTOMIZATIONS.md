@@ -191,12 +191,12 @@ experiments or resources directly inside the sidebar, while **Full list** opens
 the same combination in the normal listing. Each result title links to the
 entry heading. Results use the filter panel's theme colours and a compact row
 layout. While an experiment is being edited, the clearly labelled **Link**
-button beside a result both creates the appropriate experiment/resource
-relationship and inserts a link at the current editor cursor. A separate
-**Add to text** action inserts the same permanent entry link in the main text
-without creating a notebook relationship. It remains available after insertion,
-so the link can be added at multiple cursor positions. Opening a different
-result from edit mode first warns about potentially unsaved changes.
+button beside a result only creates the appropriate experiment/resource
+relationship in the notebook Links section. A separate **Add to text** action
+only inserts the permanent entry link in the main text, without creating a
+notebook relationship. It remains available after insertion, so the link can be
+added at multiple cursor positions. Opening a different result from edit mode
+first warns about potentially unsaved changes.
 
 The favorite-tag field searches existing team tags
 as the user types, keeps its suggestion menu above the sidebar, excludes tags
