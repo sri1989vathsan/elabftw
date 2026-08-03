@@ -626,12 +626,13 @@ on('create-favcategory', () => {
   ApiC.post(Model.FavCategory, {
     category_type: categoryType,
     category_id: parseInt(categoryId, 10),
-  }).then(() => window.location.reload());
+  }).then(() => FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']));
 });
 
 on('destroy-favcategory', (el: HTMLElement) => {
   if (confirm(i18next.t('generic-delete-warning'))) {
-    ApiC.delete(`${Model.FavCategory}/${el.dataset.id}`).then(() => window.location.reload());
+    ApiC.delete(`${Model.FavCategory}/${el.dataset.id}`)
+      .then(() => FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']));
   }
 });
 
@@ -656,7 +657,8 @@ on('create-and-favorite-category', async () => {
     category_type: categoryType,
     category_id: categoryId,
   });
-  window.location.reload();
+  input.value = '';
+  await FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']);
 });
 
 on('create-favfilter', () => {
@@ -668,12 +670,13 @@ on('create-favfilter', () => {
     filter_type: filterType,
     target_type: targetType,
     target_id: parseInt(targetId, 10),
-  }).then(() => window.location.reload());
+  }).then(() => FavoriteFiltersC.reloadSections(['favoriteStatusesDiv', 'favoriteOwnersDiv']));
 });
 
 on('destroy-favfilter', (el: HTMLElement) => {
   if (confirm(i18next.t('generic-delete-warning'))) {
-    ApiC.delete(`${Model.FavFilter}/${el.dataset.id}`).then(() => window.location.reload());
+    ApiC.delete(`${Model.FavFilter}/${el.dataset.id}`)
+      .then(() => FavoriteFiltersC.reloadSections(['favoriteStatusesDiv', 'favoriteOwnersDiv']));
   }
 });
 

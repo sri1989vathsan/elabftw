@@ -147,6 +147,12 @@ Wraps non-favorite root-level folders into a collapsible "Other folders" group i
 
 Adds a UI widget on the experiment edit page for quickly linking to entities in LabCollector LIMS. Supports two modes: adding as a URL-type extra field, or inserting a clickable link directly into the editor body.
 
+TinyMCE's **Link** toolbar control also exposes **LabCollector link…** beside
+the normal web/file link dialog. It reuses the helper's type and ID choices,
+restores the editor selection after the dialog closes, and applies the generated
+LabCollector URL directly to selected text. With no selection it inserts the
+usual descriptive LabCollector label.
+
 **URL pattern:** `http://bs-labcollect01.ethz.ch/moor/{type}.php?search=1&strict=on&by_id={id}`
 
 **Entity types:** Plasmid, Strain, Chemical, Sample, Antibody, Storage
@@ -154,6 +160,8 @@ Adds a UI widget on the experiment edit page for quickly linking to entities in 
 **Files modified:**
 - `src/templates/edit.html` — Added LabCollector helper section (experiments only) with entity type dropdown, ID input, "Add as field" and "Insert in text" buttons
 - `src/ts/edit.ts` — Added `add-labcollector-link` handler (reads metadata, adds URL extra field, patches back) and `insert-labcollector-link` handler (inserts hyperlink at cursor via `editor.setContent()`, supports both TinyMCE and markdown)
+- `src/ts/labcollector-link.ts` — Validates supported entity types/positive IDs and builds the shared URL used by both entry points
+- `src/ts/tinymce.ts` — Adds the combined Link menu and selection-preserving LabCollector dialog
 
 **Key technical decisions:**
 - "Add as field" stores the link as a `url`-type extra field in experiment metadata JSON — no schema migration needed, works with existing search/filtering, renders as clickable link in view mode
@@ -197,6 +205,11 @@ only inserts the permanent entry link in the main text, without creating a
 notebook relationship. It remains available after insertion, so the link can be
 added at multiple cursor positions. Opening a different result from edit mode
 first warns about potentially unsaved changes.
+
+Adding or removing a category, owner, or status favorite refreshes only that
+part of the open panel instead of reloading the page. The active sidebar tab,
+scroll position, target type, and checked filter choices therefore remain in
+place while favorites are managed.
 
 The favorite-tag field searches existing team tags
 as the user types, keeps its suggestion menu above the sidebar, excludes tags
@@ -323,11 +336,15 @@ v5 worksheet hydration while its rows are being restored.
 When a whole row or column selection would contain the result cell, the picker
 uses the adjacent source cells instead of creating a circular reference and
 showing `#ERROR`.
-Multi-cell clipboard data copied from Excel-compatible spreadsheets can also
-be pasted directly into the main editor and is inserted as an editable,
-formula-enabled spreadsheet with column letters and row numbers. Native paste
-inside the spreadsheet popup remains available for filling the currently
-selected cell range.
+Structured clipboard data can be pasted directly into the main editor and is
+inserted as an editable, formula-enabled spreadsheet with column letters and
+row numbers. Excel and LibreOffice HTML retains sanitized cell backgrounds,
+text colors, fonts, emphasis, alignment, borders, dimensions, and padding.
+Plain-text detection supports CSV, TSV, semicolon- and pipe-delimited tables,
+Markdown tables, and PDF-extracted columns separated by tabs or repeated
+spaces. Detection requires a consistent multi-column structure so ordinary
+prose continues through TinyMCE's normal paste path. Native paste inside the
+spreadsheet popup remains available for filling the currently selected range.
 Each generated table stores the values last rendered in the main editor. When
 a cell or caption is typed into directly outside the popup, reopening the
 spreadsheet merges that visible edit back into its raw grid while preserving
@@ -350,6 +367,13 @@ table-properties dialog for table dimensions, alignment, border, background,
 spacing, padding, and caption. Cell style provides background color, border
 color, border style, and border width for the selected cells. Those direct
 styles are retained when a formula spreadsheet is reopened and updated.
+
+Visible **Paint** and **Clear format** shortcuts are also included beside the
+text color controls. Paint captures the source text's font, size, emphasis,
+foreground/background colors, decoration, spacing, and vertical alignment;
+after selecting target text, clicking Paint again applies the captured style
+as one undoable edit. Escape cancels a pending paint operation. Clear format
+uses TinyMCE's remove-format command on the current selection.
 
 ## Feature 14: Integrated Task and Deadline Calendar
 

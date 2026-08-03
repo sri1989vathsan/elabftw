@@ -20,6 +20,16 @@ type CellStyles = Record<string, string>;
 type AppearanceScope = 'user' | 'notebook';
 type CellRange = [number, number, number, number];
 
+interface ClipboardTable {
+  data: AOA;
+  cellStyles?: CellStyles;
+}
+
+interface ClipboardStyleRule {
+  selectors: string[];
+  declarations: string;
+}
+
 interface CellFontFormat {
   color?: string;
   fontFamily?: string;
@@ -471,7 +481,7 @@ function resizeData(data: AOA, rows: number, cols: number): AOA {
   ));
 }
 
-function parseTabDelimitedClipboard(text: string): AOA {
+function parseDelimitedClipboard(text: string, delimiter: string): AOA {
   const rows: AOA = [];
   let row: CellValue[] = [];
   let value = '';
@@ -493,10 +503,14 @@ function parseTabDelimitedClipboard(text: string): AOA {
       if (quoted && text[index + 1] === '"') {
         value += '"';
         index++;
-      } else {
+      } else if (quoted) {
+        quoted = false;
+      } else if (value === '') {
         quoted = !quoted;
+      } else {
+        value += character;
       }
-    } else if (character === '\t' && !quoted) {
+    } else if (character === delimiter && !quoted) {
       pushValue();
     } else if ((character === '\n' || character === '\r') && !quoted) {
       if (character === '\r' && text[index + 1] === '\n') index++;
@@ -511,13 +525,132 @@ function parseTabDelimitedClipboard(text: string): AOA {
   return rows;
 }
 
-function parseClipboardHtmlTable(html: string): AOA {
-  if (!html.trim()) return [];
+function removeMarkdownSeparatorRow(rows: AOA): AOA {
+  if (rows.length < 2) return rows;
+  const isSeparator = rows[1].every(value => /^:?-{3,}:?$/.test(String(value).trim()));
+  return isSeparator ? [rows[0], ...rows.slice(2)] : rows;
+}
+
+function normalizePipeDelimitedRows(rows: AOA): AOA {
+  return rows.map(row => {
+    const normalized = [...row];
+    if (normalized[0] === '') normalized.shift();
+    if (normalized.at(-1) === '') normalized.pop();
+    return normalized;
+  });
+}
+
+function isStructuredTable(rows: AOA, minimumRows = 2): boolean {
+  const populatedRows = rows.filter(row => row.some(value => String(value).trim() !== ''));
+  if (populatedRows.length < minimumRows) return false;
+  const columnCounts = populatedRows.map(row => row.length);
+  const firstCount = columnCounts[0];
+  return firstCount >= 2 && columnCounts.every(count => count === firstCount);
+}
+
+function parseStructuredPlainText(plainText: string): AOA | null {
+  const text = plainText.replace(/^\uFEFF/, '');
+  if (!text.trim()) return null;
+
+  // Tabs are an explicit table signal used by Excel, LibreOffice and many PDF readers.
+  if (text.includes('\t')) return parseDelimitedClipboard(text, '\t');
+
+  const candidates = [',', ';', '|']
+    .filter(delimiter => text.includes(delimiter))
+    .map(delimiter => {
+      let rows = parseDelimitedClipboard(text, delimiter);
+      if (delimiter === '|') rows = removeMarkdownSeparatorRow(normalizePipeDelimitedRows(rows));
+      return rows;
+    })
+    .filter(rows => isStructuredTable(rows));
+  if (candidates.length > 0) {
+    return candidates.reduce((best, candidate) => (
+      candidate[0].length > best[0].length ? candidate : best
+    ));
+  }
+
+  // PDF text extraction commonly represents column boundaries as repeated spaces.
+  const lines = text
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+  const spacedRows = lines.map(line => line.split(/\s{2,}/));
+  return isStructuredTable(spacedRows) ? spacedRows : null;
+}
+
+function getClipboardStyleRules(clipboardDocument: Document): ClipboardStyleRule[] {
+  const rules: ClipboardStyleRule[] = [];
+  clipboardDocument.querySelectorAll('style').forEach(styleElement => {
+    const css = (styleElement.textContent ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rulePattern = /([^{}]+)\{([^{}]*)\}/g;
+    let match: RegExpExecArray | null;
+    while ((match = rulePattern.exec(css)) !== null) {
+      const selectors = match[1]
+        .split(',')
+        .map(selector => selector.trim())
+        .filter(selector => selector !== '' && !selector.startsWith('@'));
+      if (selectors.length > 0) {
+        rules.push({ selectors, declarations: match[2] });
+      }
+    }
+  });
+  return rules;
+}
+
+function getClipboardCellStyle(
+  cell: HTMLTableCellElement,
+  rules: ClipboardStyleRule[],
+): string | undefined {
+  const style = document.createElement('span').style;
+  rules.forEach(rule => {
+    const matches = rule.selectors.some(selector => {
+      try {
+        return cell.matches(selector);
+      } catch {
+        return false;
+      }
+    });
+    if (matches) style.cssText += `;${rule.declarations}`;
+  });
+  style.cssText += `;${cell.getAttribute('style') ?? ''}`;
+
+  const declarations: string[] = [];
+  const add = (property: string, value: string): void => {
+    if (value) declarations.push(`${property}:${value}`);
+  };
+  add('background-color', style.backgroundColor);
+  add('color', style.color);
+  add('font-family', style.fontFamily);
+  add('font-size', style.fontSize);
+  add('font-style', style.fontStyle);
+  add('font-weight', style.fontWeight);
+  add('text-decoration', style.textDecoration);
+  add('text-align', style.textAlign);
+  add('vertical-align', style.verticalAlign);
+  add('white-space', style.whiteSpace);
+  add('width', style.width);
+  add('height', style.height);
+  add('padding', style.padding);
+  ['top', 'right', 'bottom', 'left'].forEach(side => {
+    const borderStyle = style.getPropertyValue(`border-${side}-style`);
+    const borderWidth = style.getPropertyValue(`border-${side}-width`);
+    const borderColor = style.getPropertyValue(`border-${side}-color`);
+    if (borderStyle && borderStyle !== 'none' && borderWidth) {
+      add(`border-${side}`, `${borderWidth} ${borderStyle} ${borderColor}`.trim());
+    }
+  });
+  return sanitizeStyle(declarations.join(';'), PRESERVED_STYLE_PROPERTIES);
+}
+
+function parseClipboardHtmlTable(html: string): ClipboardTable | null {
+  if (!html.trim()) return null;
   const clipboardDocument = new DOMParser().parseFromString(html, 'text/html');
   const table = clipboardDocument.querySelector('table');
-  if (!table) return [];
+  if (!table) return null;
 
   const rows: AOA = [];
+  const cellStyles: CellStyles = {};
+  const styleRules = getClipboardStyleRules(clipboardDocument);
   Array.from(table.rows).forEach((tableRow, rowIndex) => {
     rows[rowIndex] ??= [];
     let colIndex = 0;
@@ -526,37 +659,39 @@ function parseClipboardHtmlTable(html: string): AOA {
       const colSpan = Math.max(1, cell.colSpan || 1);
       const rowSpan = Math.max(1, cell.rowSpan || 1);
       const cellValue = (cell.textContent ?? '').replace(/\u00a0/g, ' ').trim();
+      const cellStyle = getClipboardCellStyle(cell, styleRules);
       for (let rowOffset = 0; rowOffset < rowSpan; rowOffset++) {
         const targetRow = rowIndex + rowOffset;
         rows[targetRow] ??= [];
         for (let colOffset = 0; colOffset < colSpan; colOffset++) {
-          rows[targetRow][colIndex + colOffset] = rowOffset === 0 && colOffset === 0
+          const targetCol = colIndex + colOffset;
+          rows[targetRow][targetCol] = rowOffset === 0 && colOffset === 0
             ? cellValue
             : '';
+          if (cellStyle) cellStyles[`${colLabel(targetCol)}${targetRow + 1}`] = cellStyle;
         }
       }
       colIndex += colSpan;
     });
   });
-  return rows;
+  return {
+    data: rows,
+    cellStyles: Object.keys(cellStyles).length > 0 ? cellStyles : undefined,
+  };
 }
 
 /**
- * Convert an Excel-compatible clipboard payload to a formula-enabled data
- * table. Excel supplies tab-delimited text alongside its HTML table; the HTML
- * fallback also covers a copied single-column range and merged cells.
+ * Convert structured clipboard content to a formula-enabled data table.
+ * Excel/LibreOffice HTML retains safe cell formatting; plain-text fallbacks
+ * cover CSV, TSV, semicolon/pipe tables and PDF-style repeated-space columns.
  */
 export function spreadsheetFromClipboard(html: string, plainText: string): SpreadsheetData | null {
   const containsTable = /<table[\s>]/i.test(html);
-  const hasSpreadsheetHtmlMarker = /(?:mso-|Microsoft Excel|urn:schemas-microsoft-com:office:excel|class=["'][^"']*\bxl\d|class=["'][^"']*\bwaffle\b)/i.test(html);
-  const looksLikeSpreadsheet = plainText.includes('\t')
-    || (containsTable && hasSpreadsheetHtmlMarker);
-  if (!looksLikeSpreadsheet) return null;
-
-  const parsed = containsTable
+  const clipboardTable = containsTable
     ? parseClipboardHtmlTable(html)
-    : parseTabDelimitedClipboard(plainText);
-  if (parsed.length === 0) return null;
+    : null;
+  const parsed = clipboardTable?.data ?? parseStructuredPlainText(plainText);
+  if (!parsed || parsed.length === 0) return null;
   const rows = Math.min(MAX_DIMENSION, parsed.length);
   const cols = Math.min(
     MAX_DIMENSION,
@@ -570,6 +705,7 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
     cols,
     kind: 'standard',
     caption: '',
+    cellStyles: normalizeCellStyles(clipboardTable?.cellStyles, rows, cols),
     appearance: getEffectiveAppearanceDefaults(),
   };
 }

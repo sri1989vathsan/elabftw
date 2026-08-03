@@ -20,6 +20,7 @@ import { Uploader } from './uploader';
 import { clearLocalStorage } from './localStorage';
 import { entity } from './getEntity';
 import { on } from './handlers';
+import { buildLabCollectorUrl } from './labcollector-link';
 
 const mode = new URLSearchParams(window.location.search).get('mode');
 if (mode === 'edit') {
@@ -179,7 +180,7 @@ if (mode === 'edit') {
       return;
     }
     idInput.classList.remove('is-invalid');
-    const url = `http://bs-labcollect01.ethz.ch/moor/${lcType}.php?search=1&strict=on&by_id=${lcId}`;
+    const url = buildLabCollectorUrl(lcType, lcId);
     const label = typeSelect.selectedOptions[0].textContent;
     const fieldName = `LabCollector ${label} #${lcId}`;
 
@@ -217,7 +218,7 @@ if (mode === 'edit') {
       return;
     }
     idInput.classList.remove('is-invalid');
-    const url = `http://bs-labcollect01.ethz.ch/moor/${lcType}.php?search=1&strict=on&by_id=${lcId}`;
+    const url = buildLabCollectorUrl(lcType, lcId);
     const label = typeSelect.selectedOptions[0].textContent;
     const linkText = `LabCollector ${label} #${lcId}`;
     let content: string;

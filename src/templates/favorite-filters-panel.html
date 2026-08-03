@@ -27,7 +27,7 @@
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
         {{ 'Categories'|trans }}
       </summary>
-      <div class='favorite-filter-section-body'>
+      <div class='favorite-filter-section-body' id='favoriteCategoriesDiv'>
       {% for categoryType in ['experiments', 'resources'] %}
         <div data-favorite-target-group='{{ categoryType }}' {{ categoryType != favoriteFilterTarget ? 'hidden' }}>
           {% set favoriteCategoriesForType = App.favoriteCategoriesArr|filter(category => category.category_type == categoryType) %}
@@ -99,7 +99,7 @@
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
         {{ 'Status'|trans }}
       </summary>
-      <div class='favorite-filter-section-body'>
+      <div class='favorite-filter-section-body' id='favoriteStatusesDiv'>
       {% for statusType in ['experiments', 'resources'] %}
         <div data-favorite-target-group='{{ statusType }}' {{ statusType != favoriteFilterTarget ? 'hidden' }}>
           {% set favoriteStatusesForType = App.favoriteFiltersArr|filter(filter => filter.filter_type == 'status' and filter.target_type == statusType) %}
@@ -136,7 +136,7 @@
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
         {{ 'Owner'|trans }}
       </summary>
-      <div class='favorite-filter-section-body'>
+      <div class='favorite-filter-section-body' id='favoriteOwnersDiv'>
       {% set favoriteOwners = App.favoriteFiltersArr|filter(filter => filter.filter_type == 'owner') %}
       {% for owner in favoriteOwners %}
         <div class='favorite-filter-option d-flex align-items-center'>

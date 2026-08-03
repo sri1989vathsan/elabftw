@@ -65,7 +65,7 @@ import '../js/tinymce-langs/zh_CN.js';
 import '../js/tinymce-langs/zh_TW.js';
 import '../js/tinymce-plugins/mention/plugin.js';
 import { EntityType, Model } from './interfaces';
-import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPostRequest } from './misc';
+import { reloadElements, escapeExtendedQuery, escapeHTML, updateEntityBody, getNewIdFromPostRequest } from './misc';
 import { ApiC } from './api';
 import { isSortable } from './TableSorting.class';
 import {
@@ -85,6 +85,7 @@ import ExperimentTitleEditor from './ExperimentTitleEditor.class';
 import { MathJaxObject } from 'mathjax-full/js/components/startup';
 declare const MathJax: MathJaxObject;
 import { entity } from './getEntity';
+import { buildLabCollectorUrl } from './labcollector-link';
 
 // AUTOSAVE
 const doneTypingInterval = 7000;  // time in ms between end of typing and save
@@ -441,10 +442,60 @@ function getAssetVersionQuery(): string {
   return new URL(mainBundle.src).search;
 }
 
+interface PaintedTextFormat {
+  styles: Record<string, string>;
+}
+
+interface LabCollectorDialogData {
+  labcollectorType: string;
+  labcollectorId: string;
+}
+
+function capturePaintedTextFormat(editor: Editor): PaintedTextFormat | null {
+  const node = editor.selection.getNode() as HTMLElement;
+  const body = editor.getBody();
+  if (!node || node === body || !body.contains(node)) return null;
+  const editorWindow = editor.getWin();
+  const computed = editorWindow.getComputedStyle(node);
+  const baseline = editorWindow.getComputedStyle(body);
+  const styles: Record<string, string> = {};
+  [
+    'color',
+    'font-family',
+    'font-size',
+    'font-style',
+    'font-weight',
+    'letter-spacing',
+    'line-height',
+    'text-decoration',
+    'text-transform',
+    'vertical-align',
+  ].forEach(property => {
+    const value = computed.getPropertyValue(property);
+    if (value && value !== baseline.getPropertyValue(property)) styles[property] = value;
+  });
+
+  // Background color is not inherited, so look through the selected node's
+  // ancestors until the editor body for the first visible highlight.
+  let current: HTMLElement | null = node;
+  while (current && current !== body) {
+    const backgroundColor = editorWindow.getComputedStyle(current).backgroundColor;
+    if (backgroundColor
+      && backgroundColor !== 'transparent'
+      && backgroundColor !== 'rgba(0, 0, 0, 0)'
+    ) {
+      styles['background-color'] = backgroundColor;
+      break;
+    }
+    current = current.parentElement;
+  }
+  return Object.keys(styles).length > 0 ? { styles } : null;
+}
+
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist checklist outdent indent | forecolor backcolor | charmap emoticons adddate horizontal-rule | codesample | link | inline-sheet table-properties cell-properties table-outdent table-indent sort-table';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist checklist outdent indent | forecolor backcolor format-painter remove-formatting | charmap emoticons adddate horizontal-rule | codesample | insert-link | inline-sheet table-properties cell-properties table-outdent table-indent sort-table';
   if (document.getElementById('documentTitle')) {
     toolbar1 = toolbar1.replace('adddate', 'experiment-title adddate');
   }
@@ -454,7 +505,7 @@ export function getTinymceBaseConfig(page: string): object {
     fileMenuItems = 'restoredraft | saveAndGoBack ' + fileMenuItems;
     plugins += ' autosave';
     // add Image button in toolbar
-    toolbar1 = toolbar1.replace('link |', 'link image |');
+    toolbar1 = toolbar1.replace('insert-link |', 'insert-link image |');
     // let Image in menu
     removedMenuItems = 'newdocument, anchor';
   }
@@ -596,6 +647,13 @@ export function getTinymceBaseConfig(page: string): object {
       const tableIndentation = new TableIndentation(editor);
       const dateReferenceEditor = new DateReferenceEditor(editor);
       const experimentTitleEditor = new ExperimentTitleEditor(editor);
+      let paintedTextFormat: PaintedTextFormat | null = null;
+      let painterSequence = 0;
+      let painterButtonApi: { setActive: (active: boolean) => void } | null = null;
+      const resetFormatPainter = (): void => {
+        paintedTextFormat = null;
+        painterButtonApi?.setActive(false);
+      };
       editor.on('init', () => dateReferenceEditor.normalizeReferences());
       editor.on('init', () => normalizeChecklists(editor));
       // holds the timer setTimeout function
@@ -789,6 +847,161 @@ export function getTinymceBaseConfig(page: string): object {
         onAction: function() {
           editor.execCommand('mceSave');
         },
+      });
+      const openLabCollectorLinkDialog = (): void => {
+        const helperType = document.getElementById('labcollectorType') as HTMLSelectElement | null;
+        const helperId = document.getElementById('labcollectorId') as HTMLInputElement | null;
+        if (!helperType || !helperId) return;
+        const bookmark = editor.selection.getBookmark(2, true);
+        const hasSelection = !editor.selection.getRng().collapsed;
+        const typeItems = Array.from(helperType.options, option => ({
+          text: option.textContent ?? option.value,
+          value: option.value,
+        }));
+
+        editor.windowManager.open({
+          title: 'Insert LabCollector link',
+          size: 'normal',
+          body: {
+            type: 'panel',
+            items: [
+              {
+                type: 'selectbox',
+                name: 'labcollectorType',
+                label: 'LabCollector type',
+                items: typeItems,
+              },
+              {
+                type: 'input',
+                name: 'labcollectorId',
+                label: 'LabCollector ID',
+              },
+            ],
+          },
+          initialData: {
+            labcollectorType: helperType.value,
+            labcollectorId: helperId.value,
+          },
+          buttons: [
+            { type: 'cancel', text: 'Cancel' },
+            { type: 'submit', text: 'Insert link', primary: true },
+          ],
+          onSubmit: api => {
+            const data = api.getData() as LabCollectorDialogData;
+            const id = data.labcollectorId.trim();
+            let url: string;
+            try {
+              url = buildLabCollectorUrl(data.labcollectorType, id);
+            } catch {
+              editor.notificationManager.open({
+                text: 'Enter a valid positive LabCollector ID.',
+                type: 'error',
+                timeout: 2500,
+              });
+              return;
+            }
+
+            const selectedType = Array.from(helperType.options)
+              .find(option => option.value === data.labcollectorType);
+            const label = `LabCollector ${selectedType?.textContent ?? data.labcollectorType} #${id}`;
+            helperType.value = data.labcollectorType;
+            helperId.value = id;
+            editor.focus();
+            editor.selection.moveToBookmark(bookmark);
+            editor.undoManager.transact(() => {
+              if (hasSelection) {
+                editor.execCommand('mceInsertLink', false, { href: url, target: '_blank' });
+                return;
+              }
+              editor.execCommand(
+                'mceInsertContent',
+                false,
+                `<a href="${escapeHTML(url)}" target="_blank">${escapeHTML(label)}</a>`,
+              );
+            });
+            api.close();
+          },
+        });
+      };
+      editor.ui.registry.addMenuButton('insert-link', {
+        icon: 'link',
+        text: 'Link',
+        tooltip: 'Insert a web, file, or LabCollector link',
+        fetch: callback => {
+          const items = [{
+            type: 'menuitem' as const,
+            text: 'Web or file link…',
+            onAction: () => editor.execCommand('mceLink'),
+          }];
+          if (document.getElementById('labcollectorHelper')) {
+            items.push({
+              type: 'menuitem' as const,
+              text: 'LabCollector link…',
+              onAction: openLabCollectorLinkDialog,
+            });
+          }
+          callback(items);
+        },
+      });
+      editor.ui.registry.addToggleButton('format-painter', {
+        text: 'Paint',
+        tooltip: 'Copy text formatting, then select target text and click Paint again',
+        onAction: api => {
+          if (!paintedTextFormat) {
+            paintedTextFormat = capturePaintedTextFormat(editor);
+            if (!paintedTextFormat) {
+              editor.notificationManager.open({
+                text: 'Place the cursor in formatted text first.',
+                type: 'info',
+                timeout: 2500,
+              });
+              return;
+            }
+            api.setActive(true);
+            editor.notificationManager.open({
+              text: 'Formatting copied. Select target text and click Paint again.',
+              type: 'info',
+              timeout: 3000,
+            });
+            return;
+          }
+          if (editor.selection.isCollapsed()) {
+            editor.notificationManager.open({
+              text: 'Select the target text before applying the copied formatting.',
+              type: 'info',
+              timeout: 2500,
+            });
+            return;
+          }
+          editor.undoManager.transact(() => {
+            const formatName = `elabftw-format-painter-${painterSequence++}`;
+            editor.formatter.register(formatName, {
+              inline: 'span',
+              styles: paintedTextFormat.styles,
+            });
+            editor.formatter.apply(formatName);
+          });
+          resetFormatPainter();
+          editor.nodeChanged();
+        },
+        onSetup: api => {
+          painterButtonApi = api;
+          return () => {
+            if (painterButtonApi === api) painterButtonApi = null;
+          };
+        },
+      });
+      editor.ui.registry.addButton('remove-formatting', {
+        text: 'Clear format',
+        tooltip: 'Remove formatting from the selected text',
+        onAction: () => {
+          resetFormatPainter();
+          editor.undoManager.transact(() => editor.execCommand('RemoveFormat'));
+          editor.nodeChanged();
+        },
+      });
+      editor.on('keydown', event => {
+        if (event.key === 'Escape' && paintedTextFormat) resetFormatPainter();
       });
       editor.ui.registry.addIcon(
         'elabftwChecklist',

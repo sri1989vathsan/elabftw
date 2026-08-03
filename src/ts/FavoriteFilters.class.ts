@@ -60,6 +60,25 @@ export default class FavoriteFilters extends SidePanel {
     this.apply();
   }
 
+  async reloadSections(elementIds: string[]): Promise<void> {
+    const panel = document.getElementById(this.panelId);
+    const scrollTop = panel?.scrollTop ?? 0;
+    const checkedInputIds = new Set(Array.from(
+      document.querySelectorAll<HTMLInputElement>(
+        '[data-favorite-filter-category]:checked, [data-favorite-filter-tag]:checked, [data-favorite-filter-status]:checked, [data-favorite-filter-owner]:checked',
+      ),
+      input => input.id,
+    ));
+
+    await reloadElements(elementIds);
+    checkedInputIds.forEach(id => {
+      const input = document.getElementById(id) as HTMLInputElement | null;
+      if (input) input.checked = true;
+    });
+    this.updateTarget();
+    if (panel) panel.scrollTop = scrollTop;
+  }
+
   getTarget(): FavoriteFilterTarget {
     const select = document.getElementById('favoriteFilterTarget') as HTMLSelectElement | null;
     return select?.value === 'resources' ? 'resources' : 'experiments';
