@@ -368,12 +368,13 @@ spacing, padding, and caption. Cell style provides background color, border
 color, border style, and border width for the selected cells. Those direct
 styles are retained when a formula spreadsheet is reopened and updated.
 
-Visible **Paint** and **Clear format** shortcuts are also included beside the
-text color controls. Paint captures the source text's font, size, emphasis,
+Visible brush and crossed-brush shortcuts for **Format painter** and **Clear
+formatting** are also included beside the text color controls. Format painter
+captures the source text's font, size, emphasis,
 foreground/background colors, decoration, spacing, and vertical alignment;
-after selecting target text, clicking Paint again applies the captured style
-as one undoable edit. Escape cancels a pending paint operation. Clear format
-uses TinyMCE's remove-format command on the current selection.
+after selecting target text, clicking the brush again applies the captured
+style as one undoable edit. Escape cancels a pending paint operation. Clear
+formatting uses TinyMCE's remove-format command on the current selection.
 
 ## Feature 14: Integrated Task and Deadline Calendar
 

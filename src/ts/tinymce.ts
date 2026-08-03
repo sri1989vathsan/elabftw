@@ -943,9 +943,17 @@ export function getTinymceBaseConfig(page: string): object {
           callback(items);
         },
       });
+      editor.ui.registry.addIcon(
+        'elabftwFormatPainter',
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m14.5 3.5 6 6-8.75 8.75-6-6L14.5 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m5.75 12.25-1.7 1.7c-1.8 1.8-.2 3-1.55 5.55 2.55-1.35 3.75.25 5.55-1.55l1.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.5 5.5 6 6" stroke="currentColor" stroke-width="1.8"/></svg>',
+      );
+      editor.ui.registry.addIcon(
+        'elabftwClearFormatting',
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m14.5 3.5 6 6-8.75 8.75-6-6L14.5 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m5.75 12.25-1.7 1.7c-1.8 1.8-.2 3-1.55 5.55 2.55-1.35 3.75.25 5.55-1.55l1.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4 20 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+      );
       editor.ui.registry.addToggleButton('format-painter', {
-        text: 'Paint',
-        tooltip: 'Copy text formatting, then select target text and click Paint again',
+        icon: 'elabftwFormatPainter',
+        tooltip: 'Format painter: copy formatting, then select target text and click again',
         onAction: api => {
           if (!paintedTextFormat) {
             paintedTextFormat = capturePaintedTextFormat(editor);
@@ -959,7 +967,7 @@ export function getTinymceBaseConfig(page: string): object {
             }
             api.setActive(true);
             editor.notificationManager.open({
-              text: 'Formatting copied. Select target text and click Paint again.',
+              text: 'Formatting copied. Select target text and click the brush again.',
               type: 'info',
               timeout: 3000,
             });
@@ -992,8 +1000,8 @@ export function getTinymceBaseConfig(page: string): object {
         },
       });
       editor.ui.registry.addButton('remove-formatting', {
-        text: 'Clear format',
-        tooltip: 'Remove formatting from the selected text',
+        icon: 'elabftwClearFormatting',
+        tooltip: 'Clear formatting from the selected text',
         onAction: () => {
           resetFormatPainter();
           editor.undoManager.transact(() => editor.execCommand('RemoveFormat'));
