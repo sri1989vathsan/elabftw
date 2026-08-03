@@ -1734,10 +1734,24 @@ hr.elabftw-double-dashed-rule {
 }
 
 .inline-spreadsheet-settings {
+  align-items: end;
   display: grid;
   gap: 0.5rem;
   grid-template-columns: minmax(12rem, 1fr) 5rem 5rem auto minmax(14rem, 2fr);
   margin-bottom: 0.5rem;
+}
+
+.inline-spreadsheet-size-control {
+  align-items: stretch;
+  color: var(--medium);
+  font-size: 0.75rem;
+  gap: 0.15rem;
+}
+
+.inline-spreadsheet-size-actions {
+  display: flex;
+  gap: 0.35rem;
+  white-space: nowrap;
 }
 
 .inline-spreadsheet-appearance {
@@ -1983,8 +1997,13 @@ table[data-spreadsheet-style='well-plate'] {
     grid-template-columns: 1fr 1fr;
 
     select,
-    .inline-spreadsheet-caption-input {
+    .inline-spreadsheet-caption-input,
+    .inline-spreadsheet-size-actions {
       grid-column: 1 / -1;
+    }
+
+    .inline-spreadsheet-size-actions {
+      flex-wrap: wrap;
     }
   }
 

@@ -419,13 +419,21 @@ export function createWellPlateSpreadsheetData(wells: number): SpreadsheetData {
 }
 
 function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): SpreadsheetData {
-  const rows = clampDimension(candidate.rows, DEFAULT_ROWS);
-  const cols = clampDimension(candidate.cols, DEFAULT_COLS);
+  const candidateData = Array.isArray(candidate.data) ? candidate.data : [[]];
+  const dataRows = candidateData.length;
+  const dataCols = candidateData.reduce(
+    (maximum, row) => Math.max(maximum, Array.isArray(row) ? row.length : 0),
+    0,
+  );
+  // Prefer the actual grid dimensions when they are larger than stale stored
+  // metadata. This can happen after jspreadsheet inserts rows or columns.
+  const rows = clampDimension(Math.max(candidate.rows ?? 0, dataRows), DEFAULT_ROWS);
+  const cols = clampDimension(Math.max(candidate.cols ?? 0, dataCols), DEFAULT_COLS);
   const kind: SpreadsheetKind = candidate.kind === 'notebook' || candidate.kind === 'well-plate'
     ? candidate.kind
     : 'standard';
   return {
-    data: resizeData(Array.isArray(candidate.data) ? candidate.data : [[]], rows, cols),
+    data: resizeData(candidateData, rows, cols),
     displayData: Array.isArray(candidate.displayData)
       ? resizeData(candidate.displayData, rows, cols)
       : undefined,
@@ -1189,7 +1197,26 @@ function createOverlay(initial: SpreadsheetData): {
   resizeBtn.textContent = 'Apply size';
   resizeBtn.className = 'btn btn-sm btn-outline-secondary';
 
-  settings.append(presetSelect, rowsInput, colsInput, resizeBtn, captionInput);
+  const rowsControl = createLabeledControl('Rows', rowsInput);
+  rowsControl.classList.add('inline-spreadsheet-size-control');
+  const colsControl = createLabeledControl('Columns', colsInput);
+  colsControl.classList.add('inline-spreadsheet-size-control');
+
+  const sizeButtons = document.createElement('div');
+  sizeButtons.className = 'inline-spreadsheet-size-actions';
+  const addRowBtn = document.createElement('button');
+  addRowBtn.type = 'button';
+  addRowBtn.textContent = 'Add row';
+  addRowBtn.title = 'Add one row at the bottom';
+  addRowBtn.className = 'btn btn-sm btn-outline-secondary';
+  const addColBtn = document.createElement('button');
+  addColBtn.type = 'button';
+  addColBtn.textContent = 'Add column';
+  addColBtn.title = 'Add one column on the right';
+  addColBtn.className = 'btn btn-sm btn-outline-secondary';
+  sizeButtons.append(resizeBtn, addRowBtn, addColBtn);
+
+  settings.append(presetSelect, rowsControl, colsControl, sizeButtons, captionInput);
   dialog.appendChild(settings);
 
   const appearance = normalizeAppearance(initial.appearance);
@@ -1636,20 +1663,8 @@ function createOverlay(initial: SpreadsheetData): {
 
   const buttonRow = document.createElement('div');
   buttonRow.className = 'inline-spreadsheet-actions';
-  const leftButtons = document.createElement('div');
-  leftButtons.className = 'd-flex';
-  const addRowBtn = document.createElement('button');
-  addRowBtn.type = 'button';
-  addRowBtn.textContent = '+ Row';
-  addRowBtn.className = 'btn btn-sm btn-outline-secondary mr-1';
-  const addColBtn = document.createElement('button');
-  addColBtn.type = 'button';
-  addColBtn.textContent = '+ Column';
-  addColBtn.className = 'btn btn-sm btn-outline-secondary';
-  leftButtons.append(addRowBtn, addColBtn);
-
   const rightButtons = document.createElement('div');
-  rightButtons.className = 'd-flex';
+  rightButtons.className = 'd-flex ml-auto';
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
   cancelBtn.textContent = 'Cancel';
@@ -1659,7 +1674,7 @@ function createOverlay(initial: SpreadsheetData): {
   insertBtn.textContent = 'Insert / Update';
   insertBtn.className = 'btn btn-sm btn-primary';
   rightButtons.append(cancelBtn, insertBtn);
-  buttonRow.append(leftButtons, rightButtons);
+  buttonRow.appendChild(rightButtons);
   dialog.appendChild(buttonRow);
 
   overlay.appendChild(dialog);
@@ -2204,6 +2219,15 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     ui.sheetHost.addEventListener('mousedown', onFormulaSelectionStart, true);
     ui.sheetHost.addEventListener('keydown', onFormulaEditorKeydown, true);
 
+    const updateSizeControls = (rows: number, cols: number): void => {
+      ui.rowsInput.value = String(rows);
+      ui.colsInput.value = String(cols);
+      const customOption = ui.presetSelect.querySelector<HTMLOptionElement>(
+        'option[value="custom"]',
+      );
+      if (customOption) customOption.textContent = `Custom spreadsheet (${rows} × ${cols})`;
+    };
+
     const mountSpreadsheet = (spreadsheet: SpreadsheetData): void => {
       if (sheetContainer) {
         const destroy = (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy;
@@ -2278,6 +2302,35 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           Math.min(250, 15 + (attempt * 10)),
         );
       };
+      const syncMountedDimensions = (changedWorksheet?: JssInstance): void => {
+        window.setTimeout(() => {
+          if (sheetContainer !== mountedContainer) return;
+          const currentWorksheet = getMountedWorksheet(mountedContainer, changedWorksheet);
+          const currentData = currentWorksheet?.getData?.();
+          if (!Array.isArray(currentData) || currentData.length === 0) return;
+          const rows = clampDimension(currentData.length, mountedRows);
+          const cols = clampDimension(
+            currentData.reduce((maximum, row) => Math.max(maximum, row?.length ?? 0), 0),
+            mountedCols,
+          );
+          worksheet = currentWorksheet;
+          rawDataMirror = resizeData(currentData, rows, cols);
+          const changedPlateSize = working.kind === 'well-plate'
+            && (rows !== mountedRows || cols !== mountedCols);
+          working = normalizeSpreadsheetData({
+            ...working,
+            data: rawDataMirror,
+            rows,
+            cols,
+            kind: changedPlateSize ? 'standard' : working.kind,
+            plateSize: changedPlateSize ? undefined : working.plateSize,
+            cellStyles: readCellStyles(rows, cols),
+          });
+          if (changedPlateSize) ui.presetSelect.value = 'custom';
+          updateSizeControls(rows, cols);
+          scheduleFormulaResultRender();
+        }, 0);
+      };
       const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
         worksheets: [{
           data: mountedData,
@@ -2338,6 +2391,21 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           updateRawDataMirrorCell(changedCol, changedRow, value);
           scheduleFormulaResultRender();
         },
+        oninsertrow: (changedWorksheet: JssInstance): void => {
+          syncMountedDimensions(changedWorksheet);
+        },
+        oninsertcolumn: (changedWorksheet: JssInstance): void => {
+          syncMountedDimensions(changedWorksheet);
+        },
+        ondeleterow: (changedWorksheet: JssInstance): void => {
+          syncMountedDimensions(changedWorksheet);
+        },
+        ondeletecolumn: (changedWorksheet: JssInstance): void => {
+          syncMountedDimensions(changedWorksheet);
+        },
+        onpaste: (changedWorksheet: JssInstance): void => {
+          syncMountedDimensions(changedWorksheet);
+        },
         onselection: (
           selectedWorksheet: JssInstance,
           startCol: number,
@@ -2362,8 +2430,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       // guaranteed to finish. Keep checking for a bounded interval even when
       // onload was delayed or skipped by an earlier render error.
       window.setTimeout(() => hydrateWorksheetUntilReady(), 0);
-      ui.rowsInput.value = String(working.rows);
-      ui.colsInput.value = String(working.cols);
+      updateSizeControls(working.rows, working.cols);
       if (selectedRange) {
         const maxCol = working.cols - 1;
         const maxRow = working.rows - 1;
@@ -2389,19 +2456,30 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       mountSpreadsheet(updated);
     };
 
-    const applyDimensions = (): void => {
-      const rows = clampDimension(parseInt(ui.rowsInput.value, 10), working.rows);
-      const cols = clampDimension(parseInt(ui.colsInput.value, 10), working.cols);
+    const resizeSpreadsheet = (rows: number, cols: number): void => {
+      const changedPlateSize = working.kind === 'well-plate'
+        && (rows !== working.rows || cols !== working.cols);
       const resized: SpreadsheetData = {
         ...working,
         data: resizeData(readRawData(), rows, cols),
         cellStyles: readCellStyles(rows, cols),
         rows,
         cols,
-        kind: ui.presetSelect.value === 'custom' ? 'standard' : working.kind,
-        plateSize: ui.presetSelect.value === 'custom' ? undefined : working.plateSize,
+        kind: ui.presetSelect.value === 'custom' || changedPlateSize
+          ? 'standard'
+          : working.kind,
+        plateSize: ui.presetSelect.value === 'custom' || changedPlateSize
+          ? undefined
+          : working.plateSize,
       };
+      if (changedPlateSize) ui.presetSelect.value = 'custom';
       mountSpreadsheet(resized);
+    };
+
+    const applyDimensions = (): void => {
+      const rows = clampDimension(parseInt(ui.rowsInput.value, 10), working.rows);
+      const cols = clampDimension(parseInt(ui.colsInput.value, 10), working.cols);
+      resizeSpreadsheet(rows, cols);
     };
 
     mountSpreadsheet(working);
@@ -2635,12 +2713,10 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       );
     });
     ui.addRowBtn.addEventListener('click', () => {
-      worksheet?.insertRow?.();
-      ui.rowsInput.value = String(Math.min(MAX_DIMENSION, parseInt(ui.rowsInput.value, 10) + 1));
+      resizeSpreadsheet(Math.min(MAX_DIMENSION, working.rows + 1), working.cols);
     });
     ui.addColBtn.addEventListener('click', () => {
-      worksheet?.insertColumn?.();
-      ui.colsInput.value = String(Math.min(MAX_DIMENSION, parseInt(ui.colsInput.value, 10) + 1));
+      resizeSpreadsheet(working.rows, Math.min(MAX_DIMENSION, working.cols + 1));
     });
 
     ui.formulaButtons.forEach(button => button.addEventListener('click', () => {
