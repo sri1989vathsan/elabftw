@@ -7,7 +7,7 @@ networks:
 
 services:
   web:
-    image: elabftw/elabimg:stable
+    image: elabftw/elabimg:aemoor-v2
     container_name: elabftw
     restart: unless-stopped
     depends_on:
@@ -40,7 +40,7 @@ services:
       - '3148:443'
     volumes:
       # Mount local source code into the container
-      - .:/elabftw
+      #- .:/elabftw
       # Use a named volume for uploads persistence
       - elabftw-uploads:/elabftw/uploads
     tmpfs:
