@@ -29,6 +29,8 @@ use function dirname;
 use function putenv;
 use function setlocale;
 use function textdomain;
+use function array_key_exists;
+use function sprintf;
 
 /**
  * Email notification system
@@ -104,10 +106,20 @@ class EmailNotifications
             FROM notifications
             WHERE send_email = 1
                 AND email_sent = 0
-                AND (category <> :step_deadline
-                    OR (category = :step_deadline AND DATE_ADD(NOW(), INTERVAL :notif_lead_time MINUTE) >= body->>"$.deadline"))';
+                AND (
+                    category NOT IN (:step_deadline, :todo_deadline)
+                    OR (
+                        category = :step_deadline
+                        AND DATE_ADD(NOW(), INTERVAL :notif_lead_time MINUTE) >= body->>"$.deadline"
+                    )
+                    OR (
+                        category = :todo_deadline
+                        AND NOW() >= CAST(body->>"$.remind_at" AS DATETIME)
+                    )
+                )';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':step_deadline', Notifications::StepDeadline->value, PDO::PARAM_INT);
+        $req->bindValue(':todo_deadline', Notifications::TodoDeadline->value, PDO::PARAM_INT);
         $req->bindValue(':notif_lead_time', StepDeadline::NOTIFLEADTIME, PDO::PARAM_INT);
         $this->Db->execute($req);
 

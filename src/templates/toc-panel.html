@@ -1,0 +1,59 @@
+{# Table of Contents side panel — mirrors structure of todolist-panel.html #}
+<div class='side-panel' id='tocPanel' hidden>
+  <button type='button' data-action='toggle-sidepanel' data-target='toc' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
+  <div class='p-3'>
+    <h3 class='mb-3 d-flex align-items-center justify-content-between'>
+      <span>{{ 'Table of Contents'|trans }}</span>
+      <button type='button' class='btn btn-sm btn-outline-secondary' data-action='refresh-toc' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'>
+        <i class='fas fa-sync-alt fa-fw'></i>
+      </button>
+    </h3>
+    <div class='input-group input-group-sm mb-2'>
+      <label class='sr-only' for='tocSearchInput'>{{ 'Search'|trans }} {{ 'Table of Contents'|trans }}</label>
+      <div class='input-group-prepend'>
+        <span class='input-group-text'><i class='fas fa-search fa-fw' aria-hidden='true'></i></span>
+      </div>
+      <input type='search' id='tocSearchInput' class='form-control' placeholder='{{ 'Add heading filter'|trans }}' autocomplete='off'>
+      <div class='input-group-append'>
+        <button type='button' id='tocSearchAdd' class='btn btn-outline-primary' title='{{ 'Add filter'|trans }}' aria-label='{{ 'Add filter'|trans }}'>
+          <i class='fas fa-plus fa-fw' aria-hidden='true'></i>
+        </button>
+        <button type='button' id='tocSearchClear' class='btn btn-outline-secondary' title='{{ 'Clear'|trans }}' aria-label='{{ 'Clear'|trans }}'>
+          <i class='fas fa-xmark fa-fw' aria-hidden='true'></i>
+        </button>
+      </div>
+    </div>
+    <div class='d-flex align-items-center mb-2'>
+      <label for='tocSearchMode' class='small mb-0 mr-2'>{{ 'Match'|trans }}</label>
+      <select id='tocSearchMode' class='form-control form-control-sm'>
+        <option value='all'>{{ 'All filters'|trans }}</option>
+        <option value='any'>{{ 'Any filter'|trans }}</option>
+      </select>
+    </div>
+    <div id='tocSearchFilters' class='toc-search-filters mb-2' aria-live='polite'></div>
+    <details class='toc-section-filter-picker mb-2' open>
+      <summary class='toc-section-filter-summary'>
+        <span>{{ 'Select headings to filter or print'|trans }}</span>
+        <span id='tocSectionFilterCount' class='badge badge-primary ml-1' hidden>0</span>
+      </summary>
+      <p class='small color-medium mb-1'>
+        {{ 'Select a heading to include it and its complete subsection in the filtered text and printout. The search above also narrows these options.'|trans }}
+      </p>
+      <div id='tocSectionFilterTree' class='toc-section-filter-tree' role='tree' aria-label='{{ 'Document sections'|trans }}'></div>
+      <p id='tocSectionFilterEmpty' class='small text-muted mb-0' hidden>{{ 'No matching sections.'|trans }}</p>
+    </details>
+    <div id='tocSectionFilters' class='toc-search-filters mb-2' aria-live='polite'></div>
+    <p class='small color-medium px-2'>
+      {{ 'Press Enter or + to add text filters. Section and text filters also subset the main text.'|trans }}
+    </p>
+    <button type='button' id='tocPrintSelection' class='btn btn-outline-primary btn-sm btn-block mb-3'>
+      <i class='fas fa-print fa-fw mr-1' aria-hidden='true'></i>{{ 'Print selection'|trans }}
+    </button>
+    <p class='small color-medium px-2'>
+      {{ 'Prints the selected or filtered sections with the notebook title. With no filter, the full main text is printed.'|trans }}
+    </p>
+    {# this will be filled with the TOC entries by TocPanel.class.ts #}
+    <div id='tocItems' class='toc-items-container'></div>
+    <p id='tocNoResults' class='text-muted px-2' hidden>No matching headings.</p>
+  </div>
+</div>

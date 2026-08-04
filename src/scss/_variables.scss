@@ -19,16 +19,15 @@
   --strongest: #000;
 
   /* COLORS */
-  --primary: #29aeb9;
+  --primary: #0c58ab;
   --secondary: #4d4c4c;
   --secondary-muted: #d9d9d9;
-  --elabblue: #29aeb9;
+  --elabblue: #0c58ab;
   --lightblue: #c4f9ff;
-  --darkblue: #1f8591;
+  --darkblue: #0d5861;
   --lightred: #ffc1b7;
-  --dangerred: #e6614c;
-  --darkred: #dd1e00;
-  --warningbg: #fff3cd;
+  --dangerred: #82352b;
+  --darkred: #7b1100;
   --green: #54aa08;
   --lessbrightorange: #ffe6b8;
   --brightorange: #ffa500;
@@ -37,7 +36,7 @@
 
   --lightgold: #eddec6;
   --gold: #d4ae75;
-  --darkgold: #856404;
+  --darkgold: #594303;
 
   /* Colors that stay the same in both modes (like navbar) */
   --chrome-bg: #2b2b2b;
@@ -55,21 +54,20 @@
   --secondlevel: #bdbdbd;
   --thirdlevel: #666;
   --medium: #d8dae0;
-  --mediumstrong: #ccc;
+  --mediumstrong: #d3d3d3;
   --strongest: #f0f6fc;
 
-  --primary: #2196f3;
+  --primary: #0f94fd;
+  --secondary: #afafaf;
   // secondary with opacity for borders of inputs
   --secondary-muted: rgba(146, 146, 146, 0.34);
-  --elabblue: #29aeb9;
+  --elabblue: #0f94fd;
   --lightblue: #003769;
-  --darkblue: #1f8591;
+  --darkblue: #7cddff;
 
-  --lightred: #ff7b72;
-  --dangerred: #f85149;
-  --darkred: #da3633;
-
-  --warningbg: #d29922;
+  --darkred: #ffc1b7;
+  --lightred: #7b1100;
+  --dangerred: #e6614c;
 
   --green: #81c784;
   --lessbrightorange: #e3b341;
@@ -77,9 +75,275 @@
   --orange: #f0883e;
   --mediumyellow: #f2cc60;
 
-  --lightgold: #e3b341;
-  --gold: #c69026;
-  --darkgold: #7e5f00;
+  --lightgold: #594303;
+  --darkgold: #ecdeab;
+}
+
+/*
+ * Account colour palettes. Each palette supplies a coordinated combination for
+ * the complete application: page and editor surfaces, panels, forms, tables,
+ * navigation, links, and action controls. Light/dark contrast remains an
+ * independent account preference.
+ */
+.theme-palette-ocean {
+  --white: #f8fdfe;
+  --mainbackground: #e8f4f6;
+  --highlighted: #d4eef2;
+  --superlight: #dcecee;
+  --firstlevel: #c6dfe3;
+  --secondlevel: #87a8ae;
+  --thirdlevel: #55757b;
+  --medium: #334f55;
+  --mediumstrong: #203c42;
+  --strongest: #102b31;
+  --primary: #00788c;
+  --secondary: #47676d;
+  --secondary-muted: #c7dcdf;
+  --elabblue: #00788c;
+  --lightblue: #c5eef3;
+  --darkblue: #075d6d;
+  --chrome-bg: #153e47;
+  --chrome-muted: #a9c5ca;
+}
+
+.theme-palette-forest {
+  --white: #fbfdf9;
+  --mainbackground: #eef5eb;
+  --highlighted: #ddf0d7;
+  --superlight: #e0eadc;
+  --firstlevel: #cedfc9;
+  --secondlevel: #91a68b;
+  --thirdlevel: #60735b;
+  --medium: #3e533a;
+  --mediumstrong: #2c442f;
+  --strongest: #18321d;
+  --primary: #397545;
+  --secondary: #536b51;
+  --secondary-muted: #d0ddcc;
+  --elabblue: #397545;
+  --lightblue: #d2edd2;
+  --darkblue: #285630;
+  --chrome-bg: #263d2b;
+  --chrome-muted: #b1c5b2;
+}
+
+.theme-palette-plum {
+  --white: #fffaff;
+  --mainbackground: #f5eef7;
+  --highlighted: #eedff3;
+  --superlight: #eadfed;
+  --firstlevel: #ddcde2;
+  --secondlevel: #a18da8;
+  --thirdlevel: #735f79;
+  --medium: #514057;
+  --mediumstrong: #3d2d44;
+  --strongest: #2b1832;
+  --primary: #75488d;
+  --secondary: #6b566f;
+  --secondary-muted: #ddd0e0;
+  --elabblue: #75488d;
+  --lightblue: #ead5f2;
+  --darkblue: #58336a;
+  --chrome-bg: #3f2d48;
+  --chrome-muted: #c7b1cf;
+}
+
+.theme-palette-sunset {
+  --white: #fffbf8;
+  --mainbackground: #faf0e8;
+  --highlighted: #fbe2d0;
+  --superlight: #f1e0d4;
+  --firstlevel: #e7d2c2;
+  --secondlevel: #ad9281;
+  --thirdlevel: #775f52;
+  --medium: #59443a;
+  --mediumstrong: #463229;
+  --strongest: #321f17;
+  --primary: #a84f27;
+  --secondary: #75584a;
+  --secondary-muted: #e3d2c6;
+  --elabblue: #a84f27;
+  --lightblue: #f7d8c4;
+  --darkblue: #7e381b;
+  --chrome-bg: #4e3025;
+  --chrome-muted: #d3b6a7;
+}
+
+.theme-palette-slate {
+  --white: #fbfcfd;
+  --mainbackground: #edf2f5;
+  --highlighted: #dde9ef;
+  --superlight: #dfe5e9;
+  --firstlevel: #ced8de;
+  --secondlevel: #899ba5;
+  --thirdlevel: #596c77;
+  --medium: #3d505b;
+  --mediumstrong: #2c414c;
+  --strongest: #182e39;
+  --primary: #416a80;
+  --secondary: #526873;
+  --secondary-muted: #ced9de;
+  --elabblue: #416a80;
+  --lightblue: #d4e6ee;
+  --darkblue: #2c4d5e;
+  --chrome-bg: #293942;
+  --chrome-muted: #acbcc4;
+}
+
+.theme-palette-rose {
+  --white: #fffafd;
+  --mainbackground: #f8edf3;
+  --highlighted: #f7ddea;
+  --superlight: #eee0e7;
+  --firstlevel: #e5ceda;
+  --secondlevel: #ad8b9d;
+  --thirdlevel: #7c5c6c;
+  --medium: #5b3d4c;
+  --mediumstrong: #472d3a;
+  --strongest: #321a26;
+  --primary: #9c3e69;
+  --secondary: #745464;
+  --secondary-muted: #e2d0d9;
+  --elabblue: #9c3e69;
+  --lightblue: #f3d3e2;
+  --darkblue: #762a4d;
+  --chrome-bg: #4a2838;
+  --chrome-muted: #d2afbf;
+}
+
+.theme-palette-amber {
+  --white: #fffcf5;
+  --mainbackground: #f8f1df;
+  --highlighted: #f8e8be;
+  --superlight: #eee3ca;
+  --firstlevel: #e3d4b5;
+  --secondlevel: #a99770;
+  --thirdlevel: #746441;
+  --medium: #554725;
+  --mediumstrong: #413719;
+  --strongest: #2d240b;
+  --primary: #8d5b00;
+  --secondary: #6e5c36;
+  --secondary-muted: #dfd3b8;
+  --elabblue: #8d5b00;
+  --lightblue: #f5dfac;
+  --darkblue: #694200;
+  --chrome-bg: #44351d;
+  --chrome-muted: #cdbb92;
+}
+
+.dark-mode.theme-palette-ocean,
+.dark-mode.theme-palette-forest,
+.dark-mode.theme-palette-plum,
+.dark-mode.theme-palette-sunset,
+.dark-mode.theme-palette-slate,
+.dark-mode.theme-palette-rose,
+.dark-mode.theme-palette-amber {
+  --white: #15191b;
+  --mainbackground: #1c2225;
+  --highlighted: #283237;
+  --superlight: #2b3235;
+  --firstlevel: #12181b;
+  --secondlevel: #afbbc0;
+  --thirdlevel: #748188;
+  --medium: #d6dcdf;
+  --mediumstrong: #e0e5e7;
+  --strongest: #f2f5f6;
+  --secondary: #b9c2c6;
+  --secondary-muted: rgba(156, 174, 182, 0.34);
+}
+
+.dark-mode.theme-palette-ocean {
+  --primary: #38c5d8;
+  --elabblue: #38c5d8;
+  --lightblue: #123f46;
+  --darkblue: #8eeaf2;
+  --chrome-bg: #102f35;
+  --chrome-muted: #8bc1c8;
+}
+
+.dark-mode.theme-palette-forest {
+  --white: #151a16;
+  --mainbackground: #1c231e;
+  --highlighted: #29352c;
+  --superlight: #29312b;
+  --firstlevel: #121914;
+  --primary: #78c98b;
+  --elabblue: #78c98b;
+  --lightblue: #233f29;
+  --darkblue: #a9e4b5;
+  --chrome-bg: #1a2f1f;
+  --chrome-muted: #9dc3a4;
+}
+
+.dark-mode.theme-palette-plum {
+  --white: #1a161c;
+  --mainbackground: #231e26;
+  --highlighted: #352b3a;
+  --superlight: #312a34;
+  --firstlevel: #19131b;
+  --primary: #c591de;
+  --elabblue: #c591de;
+  --lightblue: #3d2946;
+  --darkblue: #e1b8f2;
+  --chrome-bg: #302138;
+  --chrome-muted: #c0a5cc;
+}
+
+.dark-mode.theme-palette-sunset {
+  --white: #1c1714;
+  --mainbackground: #261f1b;
+  --highlighted: #3b2d26;
+  --superlight: #352c27;
+  --firstlevel: #1b1411;
+  --primary: #f39a70;
+  --elabblue: #f39a70;
+  --lightblue: #4a2d22;
+  --darkblue: #ffc5a8;
+  --chrome-bg: #3b251e;
+  --chrome-muted: #cca795;
+}
+
+.dark-mode.theme-palette-slate {
+  --white: #15191c;
+  --mainbackground: #1b2226;
+  --highlighted: #27343b;
+  --superlight: #293136;
+  --firstlevel: #12181c;
+  --primary: #8abbd3;
+  --elabblue: #8abbd3;
+  --lightblue: #273c48;
+  --darkblue: #b8d9e8;
+  --chrome-bg: #202d34;
+  --chrome-muted: #9fb5c0;
+}
+
+.dark-mode.theme-palette-rose {
+  --white: #1c1619;
+  --mainbackground: #251d21;
+  --highlighted: #382932;
+  --superlight: #33292e;
+  --firstlevel: #1a1216;
+  --primary: #e78bb5;
+  --elabblue: #e78bb5;
+  --lightblue: #482637;
+  --darkblue: #f5b9d3;
+  --chrome-bg: #38202b;
+  --chrome-muted: #cba4b6;
+}
+
+.dark-mode.theme-palette-amber {
+  --white: #1b1812;
+  --mainbackground: #242017;
+  --highlighted: #372f20;
+  --superlight: #322d23;
+  --firstlevel: #19150e;
+  --primary: #e8b653;
+  --elabblue: #e8b653;
+  --lightblue: #443618;
+  --darkblue: #f5d28e;
+  --chrome-bg: #342a18;
+  --chrome-muted: #c7b58e;
 }
 
 /* COLORS for specific cases like pdf export (var(--) does not apply) */
@@ -87,7 +351,7 @@ $white: #fff;
 $mainbackground: #f2f2f2;
 $strongest: #000;
 /* override bootstrap theme */
-$elabblue: #29aeb9;
+$elabblue: #0c58ab;
 $medium: #4d4c4c;
 $dangerred: #e6614c;
 $firstlevel: #dbdbdb;

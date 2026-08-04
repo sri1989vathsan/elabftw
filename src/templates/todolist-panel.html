@@ -1,51 +1,37 @@
 <div class='side-panel' id='todolistPanel' hidden>
   <button type='button' data-action='toggle-sidepanel' data-target='todolist' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
   <div class='p-3'>
-    <h3 title='{{ 'Toggle visibility'|trans }}' tabindex='0' role='button' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='mb-3 py-2'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Todolist'|trans }}</h3>
+    <h3 class='mb-3 py-2'>{{ 'To-do'|trans }}</h3>
+    <div class='btn-group btn-group-sm d-flex mb-3 todo-panel-view-tabs' role='tablist' aria-label='{{ 'To-do views'|trans }}'>
+      <button type='button' id='todoTasksTab' class='btn btn-primary flex-fill' role='tab' aria-selected='true' aria-controls='todolistTasksView' data-action='todo-panel-view' data-view='tasks'>
+        <i class='fas fa-list-check fa-fw mr-1' aria-hidden='true'></i>{{ 'Tasks and steps'|trans }}
+      </button>
+      <button type='button' id='todoCalendarTab' class='btn btn-outline-primary flex-fill' role='tab' aria-selected='false' aria-controls='todolistCalendarView' data-action='todo-panel-view' data-view='calendar'>
+        <i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{{ 'Calendar'|trans }}
+        <span id='todoCalendarUrgentCount' class='badge badge-danger ml-1' hidden>0</span>
+      </button>
+    </div>
 
-    <div data-save-hidden='todolistMainDiv'>
-      <div class='input-group mt-2 mb-3'>
-        <input id='todo' type='text' class='form-control form-inline' aria-label='{{ 'Add'|trans }}' placeholder='{{ 'Add a new task'|trans }}'>
-        <div class='input-group-append'>
-          <button class='btn btn-primary' type='button' title='{{ 'Add'|trans }}' data-action='create-todoitem' aria-label='{{ 'Add'|trans }}'>
-            <i class='fas fa-plus fa-fw' title='{{ 'Add'|trans }}'></i>
-          </button>
+    <div id='todolistTasksView' role='tabpanel' aria-labelledby='todoTasksTab'>
+      <div class='d-flex align-items-center justify-content-between mb-2'>
+        <h3 class='h5 mb-0'>{{ 'Due tasks and steps'|trans }}</h3>
+        <div class='d-inline-flex rounded border-white p-1 align-items-center'>
+          <span class='mb-0'>{{ 'User'|trans }}</span>
+          <label class='mb-0 switch mx-1'>
+            <span class='sr-only'>{{ 'Show steps for team'|trans }}</span>
+            <input type='checkbox' id='todolistStepsShowTeam' autocomplete='off' aria-label='{{ 'Show steps for team'|trans }}'>
+            <span class='slider'></span>
+          </label>
+          <span class='mb-0'>{{ 'Team'|trans }}</span>
         </div>
       </div>
-
-      {# this will be filled with the to-do items by js #}
-      <div id='todoItems' class='sortable d-flex flex-column' data-axis='y' data-table='todolist'></div>
-    </div>
-
-    <div class='clear'><hr></div>
-    <div class='d-flex mx-2 mb-1'>
-      <div class='mr-auto'>
-        <h3 class='mr-auto'>{{ 'Unfinished steps'|trans }}</h3>
-      </div>
-
-      <div class='d-inline-flex rounded border-white p-1 align-items-center'>
-        <span class='mb-0'>{{ 'User'|trans }}</span>
-        <label class='mb-0 switch mx-1 mb-0'>
-          <span class='sr-only'>{{ 'Show steps for team'|trans }}</span>
-          <input type='checkbox' id='todolistStepsShowTeam' autocomplete='off' aria-label='{{ 'Show steps for team'|trans }}'>
-          <span class='slider'></span>
-        </label>
-        <span class='mb-0'>{{ 'Team'|trans }}</span>
+      <div data-save-hidden='todolistMainDiv'>
+        <div id='todolist'></div>
       </div>
     </div>
 
-    {# EXPERIMENT STEPS #}
-    <h3 title='{{ 'Toggle visibility'|trans }}' tabindex='0' role='button' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='py-2'><i class='fas fa-caret-down fa-fw mr-2'></i>{% trans %}Experiment{% plural 2 %}Experiments{% endtrans %}</h3>
-    <div data-save-hidden='todoStepsExperiments'>{# this div is here as a target of the toggle-next, because for some reason 'hidden' doesn't work on a flex container #}
-      {# id is needed to fill it from Todolist.class.ts #}
-      <div id='todoStepsExperiments' class='d-flex flex-column'></div>
-    </div>
-
-    {# ITEMS STEPS #}
-    <h3 title='{{ 'Toggle visibility'|trans }}' tabindex='0' role='button' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='py-2'><i class='fas fa-caret-down fa-fw mr-2'></i>{% trans %}Resource{% plural 2 %}Resources{% endtrans %}</h3>
-    <div data-save-hidden='todoStepsItem'>{# this div is here as a target of the toggle-next, because for some reason 'hidden' doesn't work on a flex container #}
-      {# id is needed to fill it from Todolist.class.ts #}
-      <div id='todoStepsItems' class='d-flex flex-column'></div>
+    <div id='todolistCalendarView' role='tabpanel' aria-labelledby='todoCalendarTab' hidden>
+      <div id='calendarTodolist'></div>
     </div>
   </div>
 </div>

@@ -22,7 +22,6 @@ use Elabftw\Elabftw\EntitySqlBuilder;
 use Elabftw\Elabftw\Env;
 use Elabftw\Elabftw\FsTools;
 use Elabftw\Elabftw\Permissions;
-use Elabftw\Elabftw\TimestampResponse;
 use Elabftw\Elabftw\Tools;
 use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Action;
@@ -32,17 +31,14 @@ use Elabftw\Enums\BodyContentType;
 use Elabftw\Enums\EntityType;
 use Elabftw\Enums\ExportFormat;
 use Elabftw\Enums\Meaning;
-use Elabftw\Enums\Messages;
 use Elabftw\Enums\Metadata as MetadataEnum;
 use Elabftw\Enums\RequestableAction;
 use Elabftw\Enums\State;
-use Elabftw\Exceptions\AppException;
 use Elabftw\Exceptions\DatabaseErrorException;
 use Elabftw\Exceptions\ForbiddenException;
 use Elabftw\Exceptions\IllegalActionException;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
-use Elabftw\Exceptions\UnauthorizedException;
 use Elabftw\Exceptions\UnprocessableContentException;
 use Elabftw\Factories\LinksFactory;
 use Elabftw\Interfaces\ContentParamsInterface;
@@ -54,6 +50,8 @@ use Elabftw\Make\MakeCustomTimestamp;
 use Elabftw\Make\MakeDfnTimestamp;
 use Elabftw\Make\MakeDgnTimestamp;
 use Elabftw\Make\MakeDigicertTimestamp;
+use Elabftw\Make\MakeEvidencyTimestamp;
+use Elabftw\Make\MakeEvidencyTimestampDev;
 use Elabftw\Make\MakeFullJson;
 use Elabftw\Make\MakeGlobalSignTimestamp;
 use Elabftw\Make\MakeSectigoTimestamp;
@@ -66,6 +64,7 @@ use Elabftw\Params\ContentParams;
 use Elabftw\Params\DisplayParams;
 use Elabftw\Params\EntityParams;
 use Elabftw\Params\ExtraFieldsOrderingParams;
+use Elabftw\Params\Guard;
 use Elabftw\Services\AccessKeyHelper;
 use Elabftw\Services\AdvancedSearchQuery;
 use Elabftw\Services\AdvancedSearchQuery\Visitors\VisitorParameters;
@@ -73,7 +72,6 @@ use Elabftw\Services\Filter;
 use Elabftw\Services\HttpGetter;
 use Elabftw\Services\SignatureHelper;
 use Elabftw\Services\TeamsHelper;
-use Elabftw\Services\TimestampUtils;
 use Elabftw\Traits\EntityTrait;
 use GuzzleHttp\Client;
 use PDO;
@@ -93,6 +91,16 @@ use function ksort;
 use function mb_substr;
 use function sprintf;
 use function str_contains;
+use function _;
+use function array_key_exists;
+use function explode;
+use function intval;
+use function is_array;
+use function is_string;
+use function json_decode;
+use function str_ends_with;
+use function str_replace;
+use function ucfirst;
 
 use const JSON_HEX_APOS;
 use const JSON_THROW_ON_ERROR;
@@ -105,6 +113,8 @@ abstract class AbstractEntity extends AbstractRest
     use EntityTrait;
 
     public const string EMPTY_CAN_JSON = '{"teams": [], "teamgroups": [], "users": []}';
+
+    protected const string FORCE_TEMPLATE_KEY = '';
 
     public Comments $Comments;
 
@@ -140,6 +150,8 @@ abstract class AbstractEntity extends AbstractRest
 
     // inserted in sql
     private string $extendedFilter = '';
+
+    private bool $readAfterPatch = true;
 
     public function __construct(public Users $Users, public ?int $id = null, public ?bool $bypassReadPermission = false, public ?bool $bypassWritePermission = false)
     {
@@ -231,11 +243,9 @@ abstract class AbstractEntity extends AbstractRest
                     if (isset($reqBody['template']) && ((int) $reqBody['template']) !== -1) {
                         return $this->createFromTemplate((int) $reqBody['template'], $reqBody['title'] ?? null);
                     }
-                    // check if use of template is enforced at team level for experiments
-                    $teamConfigArr = new Teams($this->Users, $this->Users->team)->readOne();
-                    if ($teamConfigArr['force_exp_tpl'] === 1 && $this instanceof Experiments) {
-                        throw new ImproperActionException(_('Experiments must use a template!'));
-                    }
+                    // check if use of template is enforced at team level for this entity
+                    $teamConfigArr = new Teams($this->Users, $this->Users->team)->selectOne();
+                    $this->enforceTemplate($teamConfigArr);
                     if (!isset($reqBody['category']) || $reqBody['category'] === -1) {
                         $reqBody['category'] = null;
                     }
@@ -266,7 +276,7 @@ abstract class AbstractEntity extends AbstractRest
                     $contentType = isset($reqBody['content_type'])
                         ? BodyContentType::from($reqBody['content_type'])
                         : ($useMarkdown ? BodyContentType::Markdown : BodyContentType::Html);
-                    return $this->create(
+                    $newId = $this->create(
                         title: $reqBody['title'] ?? null,
                         body: $reqBody['body'] ?? null,
                         canreadBase: $canreadBase,
@@ -281,6 +291,12 @@ abstract class AbstractEntity extends AbstractRest
                         metadata: $metadata,
                         contentType: $contentType,
                     );
+                    // Assign to folder if provided (experiments only)
+                    if ($this instanceof Experiments && !empty($reqBody['folder_id'])) {
+                        $Folders = new ExperimentsFolders($this->Users);
+                        $Folders->assignExperiment($newId, (int) $reqBody['folder_id']);
+                    }
+                    return $newId;
                 }
             )(),
             Action::Duplicate => $this->duplicate((bool) ($reqBody['copyFiles'] ?? false), (bool) ($reqBody['linkToOriginal'] ?? false)),
@@ -514,8 +530,8 @@ abstract class AbstractEntity extends AbstractRest
             Action::Pin => $this->Pins->togglePin(),
             Action::Restore => $this->restore(),
             Action::RemoveExclusiveEditMode => $this->ExclusiveEditMode->destroy(),
-            Action::SetCanread => $this->update(new EntityParams('canread', $params['can'])),
-            Action::SetCanwrite => $this->update(new EntityParams('canwrite', $params['can'])),
+            Action::SetCanRead  => $this->handleCanUpdate($params, AccessType::Read),
+            Action::SetCanWrite => $this->handleCanUpdate($params, AccessType::Write),
             Action::SetNextCustomId => $this->update(new EntityParams('custom_id', $this->getNextIdempotentCustomId())),
             Action::Sign => $this->sign($params['passphrase'], Meaning::from((int) $params['meaning'])),
             Action::Timestamp => $this->timestamp(),
@@ -530,7 +546,10 @@ abstract class AbstractEntity extends AbstractRest
                     }
                 }
             )(),
-            Action::UpdateOwner => $this->updateOwnership((int) $params['userid'], (int) $params['team']),
+            Action::UpdateOwner => $this->updateOwnership(
+                Guard::getNonZeroPositiveIntValueOfRequiredParam('userid', $params),
+                Guard::getNonZeroPositiveIntValueOfRequiredParam('team', $params),
+            ),
             Action::Update => (
                 function () use ($params) {
                     foreach ($params as $key => $value) {
@@ -540,7 +559,10 @@ abstract class AbstractEntity extends AbstractRest
             )(),
             default => throw new ImproperActionException('Invalid action parameter.'),
         };
-        return $this->readOne();
+        if ($this->readAfterPatch) {
+            return $this->readOne();
+        }
+        return array();
     }
 
     #[Override]
@@ -900,12 +922,7 @@ abstract class AbstractEntity extends AbstractRest
 
         // select the timestamp service and do the timestamp request to TSA
         $Maker = $this->getTimestampMaker($Config->configArr, $dataFormat);
-        $TimestampUtils = new TimestampUtils(
-            new Client(),
-            $Maker->generateData(),
-            $Maker->getTimestampParameters(),
-            new TimestampResponse(),
-        );
+        $TimestampUtils = $Maker->getTimestampUtils();
 
         // save the token and data in a zip archive
         $zipName = $Maker->getFileName();
@@ -1039,6 +1056,7 @@ abstract class AbstractEntity extends AbstractRest
             'digicert' => new MakeDigicertTimestamp($this->Users, $this, $config, $dataFormat),
             'sectigo' => new MakeSectigoTimestamp($this->Users, $this, $config, $dataFormat),
             'globalsign' => new MakeGlobalSignTimestamp($this->Users, $this, $config, $dataFormat),
+            'evidency' => Env::asBool('DEV_MODE') ? new MakeEvidencyTimestampDev($this->Users, $this, $config, $dataFormat) : new MakeEvidencyTimestamp($this->Users, $this, $config, $dataFormat),
             'custom' => new MakeCustomTimestamp($this->Users, $this, $config, $dataFormat),
             default => throw new ImproperActionException('Incorrect timestamp authority configuration.'),
         };
@@ -1124,6 +1142,16 @@ abstract class AbstractEntity extends AbstractRest
         return $default;
     }
 
+    protected function enforceTemplate(array $teamConfigArr): void {}
+
+    private function handleCanUpdate(array $params, AccessType $type): void
+    {
+        Guard::ensureRequiredKeysPresent(array('can', 'can_base'), $params);
+        $key = $type->value;
+        $this->update(new EntityParams($key, (string) $params['can']));
+        $this->update(new EntityParams($key . '_base', (int) $params['can_base']));
+    }
+
     // Archive a normal entity, Unarchive an archived entity.
     private function handleArchivedState(State $from, State $to, callable $toggleLock): void
     {
@@ -1135,20 +1163,22 @@ abstract class AbstractEntity extends AbstractRest
         $this->update(new EntityParams('state', (string) $targetState->value));
     }
 
-    private function updateOwnership(int $userid, int $team): void
+    private function updateOwnership(int $userid, int $destinationTeam): void
     {
-        // if there's no team provided, assign the current user's team
-        if ($team === 0) {
-            $team = $this->Users->team ?? throw new AppException(Messages::GenericError->toHuman());
+        // non-admins cannot transfer outside their own team
+        if (!$this->Users->isAdmin && $destinationTeam !== $this->Users->getTeam()) {
+            throw new IllegalActionException(_('You cannot change the team parameter for ownership. Only an administrator can perform cross-team transfers.'));
         }
-        $TeamsHelper = new TeamsHelper($team);
-        if (!$TeamsHelper->isUserInTeam($userid)) {
-            throw new UnauthorizedException(_('The selected user cannot be assigned ownership in the current team context.'));
+        $teamsHelper = new TeamsHelper($destinationTeam);
+        // target user must belong to destination team
+        if (!$teamsHelper->isUserInTeam($userid)) {
+            throw new UnprocessableContentException(_('The selected user is not a member of your team or the specified target team.'));
         }
+        // we might lose read access after the transfer, so don't readOne() after patch()
+        $this->readAfterPatch = false;
         $this->update(new EntityParams('userid', $userid));
-        $this->update(new EntityParams('team', $team));
-        // transfer entity's uploads as well
-        $this->bypassWritePermission = true;
+        $this->update(new EntityParams('team', $destinationTeam));
+        // transfer uploads, too
         $this->Uploads->transferOwnership($userid);
     }
 

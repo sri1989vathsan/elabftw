@@ -21,6 +21,7 @@ use Elabftw\Enums\PdfFormat;
 use Elabftw\Enums\Scope;
 use Elabftw\Enums\Sort;
 use Elabftw\Enums\ThemeVariant;
+use Elabftw\Enums\ThemePalette;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Models\Config;
 use Elabftw\Services\Check;
@@ -29,6 +30,10 @@ use Elabftw\Services\PasswordValidator;
 use Override;
 
 use function mb_substr;
+use function password_hash;
+use function preg_match;
+use function str_replace;
+use function strlen;
 
 final class UserParams extends ContentParams
 {
@@ -90,6 +95,8 @@ final class UserParams extends ContentParams
             'use_markdown',
             'validated' => (string) Filter::toBinary($this->content),
             'theme_variant' => (ThemeVariant::tryFrom($this->asInt()) ?? ThemeVariant::Auto)->value,
+            'theme_palette' => (ThemePalette::tryFrom($this->asString()) ?? ThemePalette::Classic)->value,
+            'spreadsheet_defaults' => $this->getSpreadsheetDefaults(),
             'mfa_secret' => $this->getNullableString(),
             'lang' => (Language::tryFrom($this->content) ?? Language::EnglishGB)->value,
             'entrypoint' => (Entrypoint::tryFrom($this->asInt()) ?? Entrypoint::Dashboard)->value,

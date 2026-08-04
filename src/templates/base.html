@@ -32,10 +32,14 @@
 <span id='content-start'></span>
 {% block body %}{% endblock %}
 
-{# TODOLIST / FAVTAGS side panels (only for logged in users) #}
+{# Navigation side panels (only for logged in users) #}
 {% if App.Session.get('is_auth') and not App.Session.get('is_anon') %}
+  {% if experimentsFoldersTreeArr is defined %}
+    {% include 'experiments-folders.html' %}
+  {% endif %}
   {% include 'todolist-panel.html' %}
-  {% include 'favtags-panel.html' %}
+  {% include 'favorite-filters-panel.html' %}
+  {% include 'toc-panel.html' %}
 {% endif %}
 
 {# FOOTER #}
@@ -66,6 +70,8 @@
   </div>
 </div>
 {# end policies policy modal #}
+
+{# Inline spreadsheet editor now uses a JS-created overlay instead of a Bootstrap modal #}
 {# some 3rd party tools append content to the end but we don't want to see those errors #}
 {% if App.devMode and mode == 'edit' -%}
   <!-- [html-validate-disable input-missing-label, heading-level, no-dup-id, prefer-native-element, wcag/h37, no-redundant-role: suppress errors from 3rd party tools] -->

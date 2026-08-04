@@ -1,0 +1,16 @@
+{# FOLDER SELECTOR for experiment edit page #}
+{% if Entity.entityType.value == 'experiments' and experimentsFoldersArr is defined %}
+<div class='d-flex mb-2 align-items-center'>
+  <label for='folderSelect' class='col-form-label mr-3 edit-mode-label justify-content-start d-sm-block d-none'>
+    <i class='fas fa-folder fa-fw mr-1'></i>{{ 'Folder'|trans }}
+  </label>
+  <select id='folderSelect' class='form-control' data-trigger='change' data-model='{{ Entity.entityType.value }}/{{ Entity.entityData.id }}' data-target='folder_id' aria-label='{{ 'Folder'|trans }}'>
+    <option value=''>{{ 'No folder (Unfiled)'|trans }}</option>
+    {% for folder in experimentsFoldersArr %}
+      <option value='{{ folder.id }}' {{ Entity.entityData.folder_id == folder.id ? 'selected' : '' }}>
+        {{ folder.full_path }}
+      </option>
+    {% endfor %}
+  </select>
+</div>
+{% endif %}

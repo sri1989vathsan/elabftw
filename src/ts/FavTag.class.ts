@@ -6,25 +6,11 @@
  * @package elabftw
  */
 import { Model } from './interfaces';
-import SidePanel from './SidePanel.class';
-import TodoList from './Todolist.class';
 import { ApiC } from './api';
 
-export default class FavTag extends SidePanel {
-
-  constructor() {
-    super(Model.FavTag);
-    this.panelId = 'favtagsPanel';
-  }
-
+export default class FavTag {
   // ADD A TAG AS FAVORITE
   create(content: string): Promise<Response> {
     return ApiC.post(Model.FavTag, {tag: content });
-  }
-
-  toggle(): void {
-    // force todolist to close if it's open
-    (new TodoList).hide();
-    super.toggle();
   }
 }

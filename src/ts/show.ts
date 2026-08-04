@@ -359,24 +359,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // background color for selected entities
   const bgColor = 'var(--lightblue)';
 
-  if (document.getElementById('favtagsPanel')) {
-    document.getElementById('favtagsPanel').addEventListener('keyup', event => {
-      const el = (event.target as HTMLInputElement);
-      const query = el.value;
-      if (el.matches('[data-action="favtags-search"]')) {
-        // find all links that are endpoints
-        document.querySelectorAll('[data-action="add-tag-filter"]').forEach((el: HTMLElement) => {
-          // begin by showing all so they don't stay hidden
-          el.removeAttribute('hidden');
-          // now simply hide the ones that don't match the query
-          if (!el.innerText.toLowerCase().includes(query)) {
-            el.hidden = true;
-          }
-        });
-      }
-    });
-  }
-
   /////////////////////////////////////////
   // CHANGE LISTENER FOR SELECT ELEMENTS //
   // The select elements don't use a click event because on firefox the click is triggered on the option
@@ -498,18 +480,6 @@ document.addEventListener('DOMContentLoaded', () => {
           reloadEntitiesShow();
         });
       });
-
-    // a tag has been clicked/selected, add it in url and load the page
-    } else if (el.matches('[data-action="add-tag-filter"]')) {
-      params.set('tags[]', el.dataset.tag);
-      // clear out any offset from a previous query
-      params.delete('offset');
-      history.replaceState(null, '', `?${params.toString()}`);
-      document.querySelectorAll('[data-action="add-tag-filter"]').forEach(el => {
-        el.classList.remove('selected');
-      });
-      el.classList.add('selected');
-      reloadEntitiesShow(el.dataset.tag);
 
     // SORT COLUMN IN TABULAR MODE
     } else if (el.matches('[data-action="reorder-entities"]')) {

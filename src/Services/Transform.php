@@ -18,6 +18,8 @@ use Elabftw\Enums\Notifications;
 use Elabftw\Exceptions\ImproperActionException;
 
 use function sprintf;
+use function _;
+use function htmlspecialchars;
 
 /**
  * When values need to be transformed before display
@@ -49,7 +51,7 @@ final class Transform
                 ),
             Notifications::EventDeleted =>
                 sprintf(
-                    '<span data-action="ack-notif" data-id="%d" data-href="scheduler.php?item=%d">%s (%s)</span>' . $relativeMoment,
+                    '<span data-action="ack-notif" data-id="%d" data-href="scheduler.php?items[]=%d">%s (%s)</span>' . $relativeMoment,
                     (int) $notif['id'],
                     (int) $notif['body']['event']['item'],
                     _('A booked slot was deleted from the scheduler.'),
@@ -105,6 +107,17 @@ final class Transform
                     (int) $notif['body']['step_id'],
                     (int) $notif['body']['step_id'],
                     _('A step deadline is approaching.'),
+                    $notif['created_at'],
+                ),
+            Notifications::TodoDeadline =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="dashboard.php?todo=calendar&amp;task=%d">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    (int) $notif['body']['task_id'],
+                    sprintf(
+                        _('To-do deadline approaching: %s'),
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
                     $notif['created_at'],
                 ),
             Notifications::NewVersionInstalled =>

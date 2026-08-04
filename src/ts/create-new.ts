@@ -48,6 +48,15 @@ function setTypeRadio(type: EntityType, scope: string = '') {
       toggleCategoryList(type);
     });
   }
+  // Show folder selection only for experiments
+  const folderSection = document.getElementById('createNewFolderSection');
+  if (folderSection) {
+    if (type === EntityType.Experiment) {
+      folderSection.removeAttribute('hidden');
+    } else {
+      folderSection.setAttribute('hidden', 'hidden');
+    }
+  }
 }
 
 function toggleCategoryList(type: EntityType) {
@@ -251,3 +260,50 @@ const scopeBtns = document.querySelectorAll<HTMLButtonElement>(
 scopeBtns.forEach(btn => {
   btn.addEventListener('click', onScopeChange);
 });
+
+// Inline folder creation in the create-new modal
+const createNewFolderBtn = document.getElementById('createNewFolderBtn');
+const createNewFolderInputDiv = document.getElementById('createNewFolderInputDiv');
+const createNewFolderInput = document.getElementById('createNewFolderInput') as HTMLInputElement;
+const createNewFolderSaveBtn = document.getElementById('createNewFolderSaveBtn');
+const createNewFolderCancelBtn = document.getElementById('createNewFolderCancelBtn');
+const createNewFolderSelect = document.getElementById('createNewFolderSelect') as HTMLSelectElement;
+
+if (createNewFolderBtn && createNewFolderInputDiv) {
+  createNewFolderBtn.addEventListener('click', () => {
+    createNewFolderInputDiv.removeAttribute('hidden');
+    createNewFolderInput.value = '';
+    createNewFolderInput.focus();
+  });
+
+  createNewFolderCancelBtn?.addEventListener('click', () => {
+    createNewFolderInputDiv.setAttribute('hidden', 'hidden');
+  });
+
+  createNewFolderSaveBtn?.addEventListener('click', () => {
+    const name = createNewFolderInput.value.trim();
+    if (!name) return;
+    ApiC.post('experiments_folders', { name: name, parent_id: null }).then(resp => {
+      // Extract new folder id from Location header
+      const location = resp.headers.get('Location') || '';
+      const match = location.match(/\/(\d+)$/);
+      if (match) {
+        const newId = match[1];
+        // Add and select the new folder in the dropdown
+        const option = document.createElement('option');
+        option.value = newId;
+        option.textContent = name;
+        option.selected = true;
+        createNewFolderSelect.appendChild(option);
+      }
+      createNewFolderInputDiv.setAttribute('hidden', 'hidden');
+    });
+  });
+
+  createNewFolderInput?.addEventListener('keypress', (event: KeyboardEvent) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      createNewFolderSaveBtn?.click();
+    }
+  });
+}

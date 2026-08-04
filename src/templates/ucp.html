@@ -1,16 +1,13 @@
 {% extends 'base.html' %}
 {% block body %}
 <ul class='tabbed-menu'>
-  <li><button type='button' class='btn' data-action='switch-tab' data-tabtarget='1'>{{ 'General'|trans }}</button></li>
-  <li><button type='button' class='btn' data-action='switch-tab' data-tabtarget='2'>{{ 'Account'|trans }}</button></li>
-  <li><button type='button' class='btn' data-action='switch-tab' data-tabtarget='3'>{{ 'API keys'|trans }}</button></li>
-  <li><button type='button' class='btn' data-action='switch-tab' data-tabtarget='4'>{{ 'Notifications'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='1'>{{ 'General'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='2'>{{ 'Account'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='3'>{{ 'API keys'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='4'>{{ 'Notifications'|trans }}</button></li>
 </ul>
 
-{# loading spinner #}
-<div class='d-flex justify-content-center' id='loading-spinner'>
-  <div class='lds-dual-ring'></div>
-</div>
+{% include 'loading-spinner.html' %}
 
 {# Modal for regenerating sigkeys #}
 <div class='modal fade' id='regenerateSigkeysModal' tabindex='-1' role='dialog' aria-labelledby='regenerateSigkeysModalLabel'>
@@ -63,6 +60,31 @@
   {# DISPLAY #}
   <h2 class='p-2 pl-3 section-title'>{{ 'Display'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5'>
+
+    <div class='d-flex justify-content-between'>
+      <div>
+        <label for='theme_palette' class='col-form-label'>{{ 'eLabFTW colour theme'|trans }}</label>
+        <p class='smallgray mb-0'>{{ 'Choose a coordinated colour combination for the complete eLabFTW interface. Saved to your account.'|trans }}</p>
+      </div>
+      <select
+        id='theme_palette'
+        class='form-control col-md-3'
+        data-trigger='change'
+        data-model='users/me'
+        data-target='theme_palette'
+        data-reload='page'
+      >
+        <option value='classic' {{ App.Users.userData.theme_palette == 'classic' ? ' selected' }}>{{ 'Classic blue'|trans }}</option>
+        <option value='ocean' {{ App.Users.userData.theme_palette == 'ocean' ? ' selected' }}>{{ 'Ocean — teal and aqua'|trans }}</option>
+        <option value='forest' {{ App.Users.userData.theme_palette == 'forest' ? ' selected' }}>{{ 'Forest — green and sage'|trans }}</option>
+        <option value='plum' {{ App.Users.userData.theme_palette == 'plum' ? ' selected' }}>{{ 'Plum — purple and lilac'|trans }}</option>
+        <option value='sunset' {{ App.Users.userData.theme_palette == 'sunset' ? ' selected' }}>{{ 'Sunset — terracotta and peach'|trans }}</option>
+        <option value='slate' {{ App.Users.userData.theme_palette == 'slate' ? ' selected' }}>{{ 'Slate — blue-grey and steel'|trans }}</option>
+        <option value='rose' {{ App.Users.userData.theme_palette == 'rose' ? ' selected' }}>{{ 'Rose — berry and blush'|trans }}</option>
+        <option value='amber' {{ App.Users.userData.theme_palette == 'amber' ? ' selected' }}>{{ 'Amber — ochre and sand'|trans }}</option>
+      </select>
+    </div>
+    <hr>
 
     <div class='d-flex justify-content-between'>
       <label for='limit' class='col-form-label'>{{ 'Items per page'|trans }}</label>
@@ -424,7 +446,7 @@
   <h2 class='p-2 pl-3 section-title mt-4'>{{ 'Signature keys'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5' id='ucp-sigkeys'>
     <div class='dropdown float-right'>
-      <button class='btn p-2 hl-hover-gray' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false' title='{{ 'More options'|trans }}' aria-label='{{ 'More options'|trans }}' type='button'>
+      <button class='btn btn-ghost' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false' title='{{ 'More options'|trans }}' aria-label='{{ 'More options'|trans }}' type='button'>
         <i class='fas fa-ellipsis-v fa-fw'></i>
       </button>
       <div class='dropdown-menu dropdown-menu-right'>
@@ -526,7 +548,7 @@
           <td data-label='{{ 'Permissions'|trans }}'>{{ key.can_write ? 'Read/Write'|trans : 'Read Only'|trans }}</td>
           <td data-label='{{ 'Creation date'|trans }}'><span class='relative-moment' title='{{ key.created_at }}'></span></td>
           <td data-label='{{ 'Last used'|trans }}'><span class='relative-moment' title='{{ key.last_used_at|default('never'|trans) }}'></span></td>
-          <td><span class='sr-only'>{{ 'Action'|trans }}</span><button type='button' class='btn hl-hover-gray lh-normal border-0 p-2 m-0 my-n2' data-action='destroy-apikey' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}' data-apikeyid='{{ key.id }}'><i class='fas fa-trash-alt fa-fw'></i></button></td>
+          <td><span class='sr-only'>{{ 'Action'|trans }}</span><button type='button' class='btn btn-danger-ghost' data-action='destroy-apikey' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}' data-apikeyid='{{ key.id }}'><i class='fas fa-trash-alt fa-fw'></i></button></td>
         </tr>
       {% endfor %}
     </tbody>

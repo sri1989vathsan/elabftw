@@ -25,6 +25,7 @@ enum UsersColumn: string
     case CanManageUsers2teams = 'can_manage_users2teams';
     case CjkFonts = 'cjk_fonts';
     case ThemeVariant = 'theme_variant';
+    case ThemePalette = 'theme_palette';
     case DefaultRead = 'default_read';
     case DefaultWrite = 'default_write';
     case DefaultReadBase = 'default_read_base';
@@ -69,6 +70,7 @@ enum UsersColumn: string
     case ScTodo = 'sc_todo';
     case ShowWeekends = 'show_weekends';
     case Sort = 'sort';
+    case SpreadsheetDefaults = 'spreadsheet_defaults';
     case UseIsodate = 'use_isodate';
     case UploadsLayout = 'uploads_layout';
     case UseMarkdown = 'use_markdown';

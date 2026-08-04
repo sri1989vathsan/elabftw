@@ -65,4 +65,39 @@ class UserParamsTest extends \PHPUnit\Framework\TestCase
         $params = new UserParams('entrypoint', $entrypoint);
         $this->assertEquals(Entrypoint::Dashboard->value, $params->getContent());
     }
+
+    public function testSpreadsheetDefaults(): void
+    {
+        $input = '{"borderWidth":2,"borderColor":"#AABBCC","cellColor":"#FFFFFF","alternateRows":true,"alternateRowColor":"#F6F7F8","alternateColumns":false,"alternateColumnColor":"#EEF6F7"}';
+        $params = new UserParams('spreadsheet_defaults', $input);
+        $result = json_decode($params->getContent(), true, 8, JSON_THROW_ON_ERROR);
+        $this->assertSame(2, $result['borderWidth']);
+        $this->assertSame('#aabbcc', $result['borderColor']);
+        $this->assertSame('#ffffff', $result['cellColor']);
+    }
+
+    public function testSpreadsheetCellStyleDefaults(): void
+    {
+        $input = '{"borderWidth":2,"borderColor":"#AABBCC","cellColor":"#FFFFFF","alternateRows":true,"alternateRowColor":"#F6F7F8","alternateColumns":false,"alternateColumnColor":"#EEF6F7","cellStyle":{"backgroundColor":null,"borderColor":"#112233","borderStyle":"dashed","borderWidth":3,"fontFamily":"Arial, sans-serif","fontSize":14,"bold":true,"italic":false,"underline":true,"textColor":"#445566","textAlign":"center","verticalAlign":"middle"}}';
+        $params = new UserParams('spreadsheet_defaults', $input);
+        $result = json_decode($params->getContent(), true, 8, JSON_THROW_ON_ERROR);
+        $this->assertNull($result['cellStyle']['backgroundColor']);
+        $this->assertSame('#112233', $result['cellStyle']['borderColor']);
+        $this->assertSame('dashed', $result['cellStyle']['borderStyle']);
+        $this->assertSame(3, $result['cellStyle']['borderWidth']);
+        $this->assertSame('Arial, sans-serif', $result['cellStyle']['fontFamily']);
+        $this->assertSame('#445566', $result['cellStyle']['textColor']);
+        $this->assertSame('center', $result['cellStyle']['textAlign']);
+        $this->assertSame('middle', $result['cellStyle']['verticalAlign']);
+    }
+
+    public function testInvalidSpreadsheetDefaults(): void
+    {
+        $params = new UserParams(
+            'spreadsheet_defaults',
+            '{"borderWidth":50,"borderColor":"red"}',
+        );
+        $this->expectException(ImproperActionException::class);
+        $params->getContent();
+    }
 }

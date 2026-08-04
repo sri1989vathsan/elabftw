@@ -2,6 +2,13 @@
 
 {% block body %}
 
+<div
+  id='spreadsheet-appearance-defaults'
+  data-user='{{ App.Users.userData.spreadsheet_defaults|default('') }}'
+  data-notebook='{{ Entity.entityData.spreadsheet_defaults|default('') }}'
+  hidden
+></div>
+
 {% embed 'view-edit.html' %}
   {% block createnew %}
   {% include 'catstat-view-edit.html' %}
@@ -9,12 +16,12 @@
       <div class='align-self-center flex-grow-1 mr-2'>
         {# CUSTOM ID #}
         {# TITLE #}
-        <h1 class='text-dark' >
+        <h1>
           {% if Entity.entityData.custom_id %}
-            <span title='{{ 'Custom ID'|trans }}' class='color-medium'>{{ Entity.entityData.custom_id }}</span>
+            <span title='{{ 'Custom ID'|trans }}'>{{ Entity.entityData.custom_id }}</span>
           {% endif %}
            <!-- [html-validate-disable-block prefer-native-element: suppress error from malle] -->
-          <span id='documentTitle' class='breakable malleable-title hl-hover-gray rounded py-1' data-target='title' data-endpoint='{{ Entity.entityType.value }}' data-id='{{ Entity.id }}'>{{ Entity.entityData.title }}</span>
+          <span id='documentTitle' class='breakable malleable-title malleable rounded py-1' data-target='title' data-endpoint='{{ Entity.entityType.value }}' data-id='{{ Entity.id }}'>{{ Entity.entityData.title }}</span>
         </h1>
       </div>
     </div>
@@ -23,6 +30,8 @@
     {% include 'show-view-edit.html' %}
   {% endblock %}
 {% endembed %}
+
+{% include 'experiments-folder-select.html' %}
 
 {% include('view-edit-toolbar.html') %}
 
@@ -69,7 +78,7 @@
         <h3 data-action='toggle-next' data-toggle-target-extra='mainTextEllipsis' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' data-toggle-target='mainTextDiv' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true'><i class='fas fa-caret-right fa-fw mr-2'></i>{{ 'Main text'|trans }}</h3>
       </div>
       <div class='dropdown' id='mainTextEllipsis'>
-        <button class='btn p-2 hl-hover-gray' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false' title='{{ 'Main text options'|trans }}' aria-label='{{ 'Main text options'|trans }}' type='button'>
+        <button class='btn btn-ghost' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false' title='{{ 'Main text options'|trans }}' aria-label='{{ 'Main text options'|trans }}' type='button'>
           <i class='fas fa-ellipsis-v fa-fw'></i>
         </button>
         <div class='dropdown-menu dropdown-menu-right'>
@@ -102,10 +111,13 @@
         </div>
       </div>
 
-      <div class='mt-1 text-center'>
-        <button type='button' data-action='update-entity-body' class='btn btn-primary'>{{ 'Save'|trans }}</button>
-        <button type='button' data-action='update-entity-body' data-redirect='view' class='btn btn-secondary'>{{ 'Save and go back'|trans }}</button>
-      </div>
+      {% if Entity.entityType.value == 'items' %}
+        <div class='mt-1 text-center'>
+          <button type='button' data-action='append-log-entry' class='btn btn-outline-info ml-2' title='Insert a timestamped log entry at the end'>
+            <i class='fas fa-clock mr-1'></i>{{ 'Add Log Entry'|trans }}
+          </button>
+        </div>
+      {% endif %}
   </div>
   {% endif %}
 </section>
@@ -113,14 +125,37 @@
 <hr>
 {# EXTRA FIELDS #}
 {% include('field-builder-modal.html') %}
-<h3 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Extra fields'|trans }}</h3>
+<h3 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Custom fields'|trans }}</h3>
 <div data-save-hidden='metadataDiv' class='col-md-8 mt-4'>
   {# this div is filled in JS by Metadata.class.ts edit() #}
   <div id='metadataDiv'></div>
   <div class='mt-3 row'>
     <button type='button' data-action='toggle-modal' data-target='fieldBuilderModal' class='btn btn-secondary' data-cy='addMetadataField'>{{ 'Add field'|trans }}</button>
-    <button type='button' data-action='toggle-modal' data-target='fieldLoaderModal' class='ml-3 btn btn-ghost hl-hover-gray' data-cy='loadMetadataFields'>{{ 'Load fields'|trans }}</button>
+    <button type='button' data-action='toggle-modal' data-target='fieldLoaderModal' class='ml-3 btn btn-ghost' data-cy='loadMetadataFields'>{{ 'Load fields'|trans }}</button>
   </div>
+  {% if Entity.entityType.value == 'experiments' %}
+  {# LabCollector quick-link helper #}
+  <div class='mt-4 p-3 border rounded' id='labcollectorHelper'>
+    <h6 class='mb-2'><i class='fas fa-link mr-1'></i>LabCollector Link</h6>
+    <div class='d-flex align-items-center flex-wrap'>
+      <select id='labcollectorType' class='form-control mr-2' style='max-width:160px' aria-label='Entity type'>
+        <option value='plasmids'>Plasmid</option>
+        <option value='strains'>Strain</option>
+        <option value='chemicals'>Chemical</option>
+        <option value='samples'>Sample</option>
+        <option value='antibodies'>Antibody</option>
+        <option value='storage'>Storage</option>
+      </select>
+      <input type='number' id='labcollectorId' class='form-control mr-2' style='max-width:100px' placeholder='ID' min='1' aria-label='LabCollector ID' />
+      <button type='button' class='btn btn-outline-secondary mr-1' data-action='add-labcollector-link'>
+        <i class='fas fa-plus mr-1'></i>Add as field
+      </button>
+      <button type='button' class='btn btn-outline-secondary' data-action='insert-labcollector-link'>
+        <i class='fas fa-pen mr-1'></i>Insert in text
+      </button>
+    </div>
+  </div>
+  {% endif %}
 </div>
 <hr>
 

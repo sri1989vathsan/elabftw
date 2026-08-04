@@ -20,6 +20,7 @@ import { Uploader } from './uploader';
 import { clearLocalStorage } from './localStorage';
 import { entity } from './getEntity';
 import { on } from './handlers';
+import { buildLabCollectorUrl } from './labcollector-link';
 
 const mode = new URLSearchParams(window.location.search).get('mode');
 if (mode === 'edit') {
@@ -130,6 +131,8 @@ if (mode === 'edit') {
       content = '<img src="' + url + '" />';
     }
     editor.setContent(content);
+    // save to prevent destroy/archive actions on the uploads before they're considered part of the body
+    updateEntityBody();
   });
   on('insert-video-in-body', (el: HTMLElement) => {
     // link to the video file
@@ -166,6 +169,68 @@ if (mode === 'edit') {
     });
   });
 
+  // LABCOLLECTOR LINK HELPER
+  on('add-labcollector-link', () => {
+    const typeSelect = document.getElementById('labcollectorType') as HTMLSelectElement;
+    const idInput = document.getElementById('labcollectorId') as HTMLInputElement;
+    const lcType = typeSelect.value;
+    const lcId = idInput.value.trim();
+    if (!lcId) {
+      idInput.classList.add('is-invalid');
+      return;
+    }
+    idInput.classList.remove('is-invalid');
+    const url = buildLabCollectorUrl(lcType, lcId);
+    const label = typeSelect.selectedOptions[0].textContent;
+    const fieldName = `LabCollector ${label} #${lcId}`;
+
+    // Get current metadata, add new url field, patch back
+    ApiC.getJson(`${entity.type}/${entity.id}`).then(json => {
+      let metadata = json.metadata ? JSON.parse(json.metadata) : {};
+      if (!metadata.extra_fields) {
+        metadata.extra_fields = {};
+      }
+      // determine next position
+      const positions = Object.values(metadata.extra_fields).map((f: {position?: number}) => f.position ?? 0);
+      const nextPos = positions.length > 0 ? Math.max(...positions) + 1 : 0;
+      metadata.extra_fields[fieldName] = {
+        type: 'url',
+        value: url,
+        description: '',
+        position: nextPos,
+        group_id: null,
+      };
+      return ApiC.patch(`${entity.type}/${entity.id}`, {metadata: JSON.stringify(metadata)});
+    }).then(() => {
+      // reload the page to show the new extra field
+      window.location.reload();
+    });
+  });
+
+  // LABCOLLECTOR INSERT IN TEXT
+  on('insert-labcollector-link', () => {
+    const typeSelect = document.getElementById('labcollectorType') as HTMLSelectElement;
+    const idInput = document.getElementById('labcollectorId') as HTMLInputElement;
+    const lcType = typeSelect.value;
+    const lcId = idInput.value.trim();
+    if (!lcId) {
+      idInput.classList.add('is-invalid');
+      return;
+    }
+    idInput.classList.remove('is-invalid');
+    const url = buildLabCollectorUrl(lcType, lcId);
+    const label = typeSelect.selectedOptions[0].textContent;
+    const linkText = `LabCollector ${label} #${lcId}`;
+    let content: string;
+    if (editor.type === 'md') {
+      content = `[${linkText}](${url})`;
+    } else {
+      content = `<a href="${url}" target="_blank">${linkText}</a>`;
+    }
+    editor.setContent(content);
+    idInput.value = '';
+  });
+
   // REPLACE UPLOADED FILE
   // this should be in uploads but there is no good way so far to interact with the two editors there
   document.getElementById('filesDiv').addEventListener('submit', event => {
@@ -181,6 +246,7 @@ if (mode === 'edit') {
       const formData = new FormData(formElement);
       // prevent the browser from redirecting us
       formData.set('extraParam', 'noRedirect');
+      formData.append('action', Action.Replace);
       fetch(`api/v2/${entity.type}/${entity.id}/${Model.Upload}/${el.dataset.uploadid}`, {
         method: 'POST',
         body: formData,

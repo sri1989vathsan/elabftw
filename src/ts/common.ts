@@ -9,7 +9,9 @@ import $ from 'jquery';
 import { ApiC } from './api';
 import { Malle, InputType, SelectOptions } from '@deltablot/malle';
 import 'bootstrap/js/src/modal.js';
-import FavTag from './FavTag.class';
+import FavoriteFilters from './FavoriteFilters.class';
+import FoldersPanel from './FoldersPanel.class';
+import TocPanel from './TocPanel.class';
 import { clearLocalStorage, rememberLastSelected, selectLastSelected } from './localStorage';
 import {
   adjustHiddenState,
@@ -34,7 +36,7 @@ import {
   TomSelect,
   updateEntityBody,
   updateCatStat,
-  makeMalleableColumnsGreatAgain,
+  makeMalleableColumnsGreatAgain, rebuildTomSelectOptions,
 } from './misc';
 import i18next from './i18n';
 import { Metadata } from './Metadata.class';
@@ -106,8 +108,25 @@ if (core.isAuth) {
   }, heartRate);
 }
 
-const FavTagC = new FavTag();
+const FavoriteFiltersC = new FavoriteFilters();
+const FoldersPanelC = new FoldersPanel();
 const TodolistC = new Todolist();
+const TocPanelC = new TocPanel();
+
+// Keep the entity Back/Edit/Save toolbar immediately below the sticky main
+// navigation. ResizeObserver also tracks the expanded mobile navigation and
+// late logo/font sizing without relying on a hard-coded navbar height.
+const mainNavbar = document.querySelector<HTMLElement>('#container > nav.navbar');
+if (mainNavbar) {
+  const syncStickyNavbarHeight = (): void => {
+    document.documentElement.style.setProperty(
+      '--sticky-navbar-height',
+      `${mainNavbar.offsetHeight}px`,
+    );
+  };
+  syncStickyNavbarHeight();
+  new ResizeObserver(syncStickyNavbarHeight).observe(mainNavbar);
+}
 
 const TableSortingC = new TableSorting();
 // for searching inputs, allow specific triggers for East & South East Asian characters
@@ -140,11 +159,20 @@ if (userPrefs.scDisabled === '0') {
 
 // SIDE PANEL STATE
 const openedSidePanel = localStorage.getItem('opened-sidepanel');
-if (openedSidePanel === Model.FavTag) {
-  FavTagC.toggle();
+if (openedSidePanel === 'favorites'
+  || openedSidePanel === Model.FavTag
+  || openedSidePanel === Model.FavCategory
+) {
+  FavoriteFiltersC.toggle();
+}
+if (openedSidePanel === 'folders') {
+  FoldersPanelC.toggle();
 }
 if (openedSidePanel === Model.Todolist) {
   TodolistC.toggle();
+}
+if (openedSidePanel === 'toc') {
+  TocPanelC.toggle();
 }
 
 // ACTIVATE REACTIVE COUNT OF .COUNTABLE ITEMS
@@ -246,6 +274,108 @@ document.querySelectorAll('[data-dismiss-key]').forEach((msg: HTMLElement) => {
 });
 
 makeMalleableColumnsGreatAgain();
+
+// selector for all {permission}_select (canread, canwrite, canbook)
+const permissionSelects = document.querySelectorAll<HTMLSelectElement>(
+  '[id$="_select_teamgroups"], [id$="_select_teams"], [id$="_select_users"]',
+);
+
+function initPermissionsTomSelects() {
+  if (permissionSelects.length === 0) return;
+  permissionSelects.forEach((select) => {
+    const tsSelect = select as HTMLSelectElement & { tomselect?: TomSelect };
+    // avoid re-init of tomselect if already exists
+    if (tsSelect.tomselect) return;
+    const config = {
+      plugins: {
+        no_backspace_delete: {},
+        remove_button: {},
+      },
+      // display many things or users will be confused what they search is not displayed right away
+      maxOptions: 2222,
+      onInitialize() { setSelectedItemsDivVisibility(this); },
+      onItemAdd() {
+        this.setTextboxValue('');
+        setSelectedItemsDivVisibility(this);
+      },
+      onItemRemove() { setSelectedItemsDivVisibility(this); },
+    };
+    const wrapper = select.closest('.ts-wrapper');
+    config['dropdownParent'] = wrapper;
+    config['controlInput'] = wrapper?.querySelector('input');
+    // for users, we return a formatted response with id - user (email)
+    if (select.id.endsWith('_select_users')) {
+      config['load'] = (query: string, callback) => {
+        if (!query.length) return callback();
+        fetchUsers(query).then(callback).catch(() => callback());
+      };
+    }
+    new TomSelect(select, config);
+  });
+}
+
+initPermissionsTomSelects();
+
+// make the div holding selected items disappear when empty and vice versa.
+function setSelectedItemsDivVisibility(instance) {
+  instance.control.style.display = instance.items.length ? 'flex' : 'none';
+}
+
+// fetch users and return in an id - username (email) format
+async function fetchUsers(query: string) {
+  const users = await ApiC.getJson(`/users/search?q=${encodeURIComponent(query)}`);
+  return users.map((u) => ({
+    value: `user:${u.userid}`,
+    text: `${u.fullname} (${u.email})`,
+  }));
+}
+
+on('team-scope-change', async (el: HTMLElement) => {
+  const scope = Number(el.dataset.value);
+  const identifier = el.dataset.identifier;
+  if (!identifier) return;
+  // custom scope button for team select
+  const menu = el.parentElement;
+  if (menu) {
+    menu.querySelectorAll('.dropdown-item').forEach((item) => {
+      item.classList.remove('active');
+      item.querySelector('i')?.classList.remove('color-white');
+    });
+  }
+  el.classList.add('active');
+  el.querySelector('i')?.classList.add('color-white');
+
+  const btn = el.closest('.btn-group')?.querySelector('button.dropdown-toggle');
+  if (btn) {
+    // clear existing content
+    btn.replaceChildren();
+    const icon = document.createElement('i');
+    icon.classList.add('fas', 'fa-fw', scope === 1 ? 'fa-user' : 'fa-globe', 'mx-1');
+    const text = document.createTextNode(scope === 1 ? i18next.t('my-teams') : i18next.t('all-teams'));
+    btn.append(text, icon);
+  }
+  let teams = [];
+
+  if (scope === 1) {
+    const user = await ApiC.getJson(`${Model.User}/me`);
+    teams = user.teams;
+  } else {
+    const allTeams = await ApiC.getJson('teams');
+    teams = allTeams.filter((t) => t.visible !== 0);
+  }
+  const select = document.querySelector(`#${identifier}_select_teams`) as HTMLSelectElement;
+  if (!select) return;
+  rebuildTomSelectOptions(select, {
+    options: teams.map(team => ({
+      value: `team:${team.id}`,
+      text: team.name,
+    })),
+  });
+});
+
+document.addEventListener('scope-changed', () => {
+  permissionSelects.forEach(select => rebuildTomSelectOptions(select));
+});
 
 // tom-select for team selection on login and register page, and idp selection
 ['init_team_select', 'team', 'team_selection_select', 'idp_login_select'].forEach(id =>{
@@ -488,7 +618,72 @@ on('destroy-favtags', (el: HTMLElement) => {
   }
 });
 
-on('insert-param-and-reload', (el: HTMLElement) => {
+on('create-favcategory', () => {
+  const select = document.getElementById('favoriteCategorySelect') as HTMLSelectElement | null;
+  if (!select?.value) return;
+  const [categoryType, categoryId] = select.value.split(':');
+  if (!categoryType || !categoryId) return;
+  ApiC.post(Model.FavCategory, {
+    category_type: categoryType,
+    category_id: parseInt(categoryId, 10),
+  }).then(() => FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']));
+});
+
+on('destroy-favcategory', (el: HTMLElement) => {
+  if (confirm(i18next.t('generic-delete-warning'))) {
+    ApiC.delete(`${Model.FavCategory}/${el.dataset.id}`)
+      .then(() => FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']));
+  }
+});
+
+on('create-and-favorite-category', async () => {
+  const input = document.getElementById('favoriteNewCategoryName') as HTMLInputElement | null;
+  const color = document.getElementById('favoriteNewCategoryColor') as HTMLInputElement | null;
+  const name = input?.value.trim() ?? '';
+  if (!input || !name) {
+    input?.setCustomValidity('Enter a category name.');
+    input?.reportValidity();
+    return;
+  }
+  input.setCustomValidity('');
+
+  const categoryType = FavoriteFiltersC.getTarget();
+  const endpoint = categoryType === 'experiments' ? 'experiments_categories' : 'resources_categories';
+  const categoryId = await ApiC.post2location(`${Model.Team}/current/${endpoint}`, {
+    name,
+    color: color?.value,
+  });
+  await ApiC.post(Model.FavCategory, {
+    category_type: categoryType,
+    category_id: categoryId,
+  });
+  input.value = '';
+  await FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']);
+});
+
+on('create-favfilter', () => {
+  const select = document.getElementById('favoriteFilterSelect') as HTMLSelectElement | null;
+  if (!select?.value) return;
+  const [filterType, targetType, targetId] = select.value.split(':');
+  if (!filterType || !targetType || !targetId) return;
+  ApiC.post(Model.FavFilter, {
+    filter_type: filterType,
+    target_type: targetType,
+    target_id: parseInt(targetId, 10),
+  }).then(() => FavoriteFiltersC.reloadSections(['favoriteStatusesDiv', 'favoriteOwnersDiv']));
+});
+
+on('destroy-favfilter', (el: HTMLElement) => {
+  if (confirm(i18next.t('generic-delete-warning'))) {
+    ApiC.delete(`${Model.FavFilter}/${el.dataset.id}`)
+      .then(() => FavoriteFiltersC.reloadSections(['favoriteStatusesDiv', 'favoriteOwnersDiv']));
+  }
+});
+
+on('apply-favorite-filters', () => FavoriteFiltersC.apply());
+on('clear-favorite-filters', () => FavoriteFiltersC.clear());
+
+on('insert-param-and-reload', async (el: HTMLElement) => {
   const params = new URLSearchParams(document.location.search.slice(1));
   const target = el.dataset.target;
   const value = (el as HTMLInputElement).value;
@@ -499,7 +694,7 @@ on('insert-param-and-reload', (el: HTMLElement) => {
     params.delete(target);
   }
   window.history.replaceState({}, '', `?${params.toString()}`);
-  handleReloads(el.dataset.reload);
+  await handleReloads(el.dataset.reload);
 });
 
 // used on displayMessage divs: we save the fact that it was closed
@@ -527,11 +722,25 @@ on('scroll-top', () => {
 on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
   // this action might exist on a link: prevent jump to top
   event.preventDefault();
-  const SidePanelC = el.dataset.target === Model.FavTag ? FavTagC : TodolistC;
+  let SidePanelC;
+  if (el.dataset.target === 'toc') {
+    SidePanelC = TocPanelC;
+  } else if (el.dataset.target === 'folders') {
+    SidePanelC = FoldersPanelC;
+  } else if (el.dataset.target === 'favorites') {
+    SidePanelC = FavoriteFiltersC;
+  } else {
+    SidePanelC = TodolistC;
+  }
   if (el.dataset.purpose === 'hide') {
     return SidePanelC.hide();
   }
   SidePanelC.toggle();
+});
+
+// Refresh the TOC panel contents
+on('refresh-toc', () => {
+  TocPanelC.refresh();
 });
 
 on('toggle-pin', (el: HTMLElement) => {
@@ -563,10 +772,6 @@ on('toggle-dependent', (el: HTMLInputElement) => {
     .querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea')
     .forEach(input => {
       input.disabled = disabled;
-      // reset numeric fields when disabling
-      if (disabled && input.type === 'number') {
-        input.value = '0';
-      }
     });
 });
 
@@ -579,60 +784,30 @@ on('save-booking-settings', async (_, e:Event): Promise<void | Response> => {
   $('#bookingParamsModal').modal('hide');
 });
 
-on('transfer-ownership', async () => {
+on('transfer-ownership', async (_, e:Event) => {
+  e.preventDefault();
   const params = collectForm(document.getElementById('ownershipTransferForm'));
-  const userid = parseInt(params['targetUserId'].split(' ')[0] ?? '', 10);
+  if (!params['targetUserId'] || !params['targetTeamId']) {
+    return;
+  }
+  const userid = Number.parseInt(String(params['targetUserId']).split(' ')[0], 10);
+  const team = Number.parseInt(String(params['targetTeamId']), 10);
   ApiC.notifOnSaved = false;
-  await ApiC.patch(`${entity.type}/${entity.id}`, { action: Action.UpdateOwner, userid });
+  await ApiC.patch(`${entity.type}/${entity.id}`, { action: Action.UpdateOwner, userid, team });
   sessionStorage.setItem('flash_ownershipTransfer', i18next.t('ownership-transfer'));
-  window.location.reload();
+  const path = window.location.pathname.toLowerCase();
+  if (path.includes('experiment')) {
+    window.location.href = 'experiments.php';
+  } else if (path.includes('database') || path.includes('resource')) {
+    window.location.href = 'database.php';
+  } else {
+    window.location.href = 'dashboard.php';
+  }
 });
 
 on(Action.Restore, () => {
   ApiC.patch(`${entity.type}/${entity.id}`, { action: Action.Restore })
     .then(() => window.location.href = `?mode=view&id=${entity.id}`);
-});
-
-on('add-user-to-permissions', (el: HTMLElement) => {
-  // collect userid + name + email from input
-  const addUserPermissionsInput = (document.getElementById(`${el.dataset.identifier}_select_users`) as HTMLInputElement);
-  const userid = parseInt(addUserPermissionsInput.value, 10);
-  if (isNaN(userid)) {
-    notify.error('add-user-error');
-    return;
-  }
-  const userName = addUserPermissionsInput.value.split(' - ')[1];
-
-  // create a new li element in the list of existing users, so it is collected at Save action
-  const li = document.createElement('li');
-  li.classList.add('list-group-item');
-  li.dataset.id = String(userid);
-
-  // eye or pencil icon
-  const rwIcon = document.createElement('i');
-  rwIcon.classList.add('fas');
-  const iconClass = el.dataset.rw === 'canread' ? 'eye' : 'pencil-alt';
-  rwIcon.classList.add(`fa-${iconClass}`);
-
-  // delete icon
-  const deleteSpan = document.createElement('span');
-  deleteSpan.dataset.action = 'remove-parent';
-  deleteSpan.classList.add('hover-danger');
-  const xIcon = document.createElement('i');
-  xIcon.classList.add('fas');
-  xIcon.classList.add('fa-xmark');
-  deleteSpan.insertAdjacentElement('afterbegin', xIcon);
-
-  // construct the li element with all its content
-  li.insertAdjacentElement('afterbegin', rwIcon);
-  li.insertAdjacentText('beforeend', ' ' + userName + ' ');
-  li.insertAdjacentElement('beforeend', deleteSpan);
-
-  // and insert it into the list
-  document.getElementById(`${el.dataset.identifier}_list_users`).appendChild(li);
-
-  // clear input
-  addUserPermissionsInput.value = '';
 });
 
 on('reload-page', () => location.reload());
@@ -646,14 +821,11 @@ on('clear-form', (el: HTMLElement) => {
 
 on('save-permissions', (el: HTMLElement) => {
   const params = {};
-  // collect existing users listed in ul->li, and store them in a string[] with user:<userid>
-  const existingUsers = Array.from(document.getElementById(`${el.dataset.identifier}_list_users`).children)
-    .map(u => `user:${(u as HTMLElement).dataset.id}`);
 
   params[el.dataset.rw] = permissionsToJson(
     ($('#' + el.dataset.identifier + '_select_teams').val() as string[])
       .concat($('#' + el.dataset.identifier + '_select_teamgroups').val() as string[])
-      .concat(existingUsers),
+      .concat($('#' + el.dataset.identifier + '_select_users').val() as string[]),
   );
   const baseSelect = getSafeElementById(`${el.dataset.identifier}_select_base`) as HTMLSelectElement;
   params[baseSelect.name] = baseSelect.value;
@@ -804,6 +976,29 @@ on('update-entity-body', (el: HTMLElement) => {
       window.location.replace('?mode=view&id=' + entity.id);
     }
   });
+});
+
+// APPEND LOG ENTRY: insert a timestamped heading at the end of the body and auto-save
+on('append-log-entry', () => {
+  const editor = getEditor();
+  const now = DateTime.now();
+  const timestamp = now.toFormat('yyyy-MM-dd HH:mm');
+
+  if (editor.type === 'tiny') {
+    // TinyMCE: get current content, append log entry, replace all
+    const currentContent = editor.getContent();
+    const logHtml = `<hr><h3>${timestamp}</h3><p>&nbsp;</p>`;
+    editor.replaceContent(currentContent + logHtml);
+  } else {
+    // Markdown: append timestamped heading
+    const textarea = document.getElementById('body_area') as HTMLTextAreaElement;
+    const logMd = `\n\n---\n### ${timestamp}\n\n`;
+    textarea.value += logMd;
+    textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+    textarea.focus();
+  }
+  // Auto-save after inserting
+  updateEntityBody();
 });
 
 on('search-pubchem', (el: HTMLElement) => {
@@ -1049,6 +1244,28 @@ on('create-entity', async (el: HTMLElement, event: Event) => {
   window.location.href = `${page}?mode=edit&id=${id}`;
 });
 
+// CREATE MONTHLY LOG: create a new resource item titled "YYYYMM-log-owner" or open existing one
+on('create-monthly-log', async () => {
+  const now = DateTime.now();
+  const user = await ApiC.getJson('users/me');
+  const owner = user.fullname.replace(/\s+/g, '-').toLowerCase();
+  const title = now.toFormat('yyyyMM') + '-log-' + owner;
+  // Check if a log for this month already exists
+  const existing = await ApiC.getJson(`items/?q="${title}"&scope=1`);
+  const match = existing.find(item => item.title === title);
+  if (match) {
+    window.location.href = `database.php?mode=edit&id=${match.id}`;
+    return;
+  }
+  // Create a new resource (items) with the monthly log title
+  const id = await ApiC.post2location('items', {title: title});
+  // Set initial body with a welcome entry
+  const timestamp = now.toFormat('yyyy-MM-dd HH:mm');
+  const body = `<h2>${title}</h2><hr><h3>${timestamp}</h3><p>&nbsp;</p>`;
+  await ApiC.patch(`items/${id}`, {body: body});
+  window.location.href = `database.php?mode=edit&id=${id}`;
+});
+
 on('report-bug', (el: HTMLElement, event: Event) => {
   event.preventDefault();
   el.querySelector('i').classList.add('moving-bug');
@@ -1064,10 +1281,6 @@ on('toggle-anonymous-access', () => {
 });
 
 on('reload-color', (el: HTMLElement) => {
-  el.classList.add('flash');
-  setTimeout(() => {
-    el.classList.remove('flash');
-  }, 100);
   (el.nextElementSibling as HTMLInputElement).value = getRandomColor();
 });
 
@@ -1279,7 +1492,7 @@ on('delete-compounds', (el: HTMLElement) => {
   document.dispatchEvent(new CustomEvent('dataReload'));
 });
 
-on('scope-change', (el: HTMLElement) => {
+on('scope-change', async (el: HTMLElement) => {
   // only set it in query if we want to, which prevents an issue on dashboard where value was taken from query param "scope"
   if (el.dataset.setQueryParam === '1') {
     const params = new URLSearchParams(document.location.search);
@@ -1288,15 +1501,18 @@ on('scope-change', (el: HTMLElement) => {
   }
   const userParams = {};
   userParams[el.dataset.target] = el.dataset.value;
-  ApiC.patch('users/me', userParams).then(() => {
-    handleReloads(el.dataset.reload);
-  });
+  await ApiC.patch('users/me', userParams);
+  await handleReloads(el.dataset.reload);
+  document.dispatchEvent(new Event('scope-changed'));
 });
 
 /**
  * MAIN click listener on container
  */
 const container = document.getElementById('container')!;
+document.getElementById('favoriteFilterTarget')?.addEventListener('change', () => {
+  FavoriteFiltersC.updateTarget();
+});
 container.addEventListener('click', (event: Event) => {
   const rawTarget = event.target as HTMLElement | null;
   const el = rawTarget?.closest('[data-action]') as HTMLElement | null;

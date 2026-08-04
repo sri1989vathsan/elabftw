@@ -40,6 +40,23 @@ CREATE TABLE `api_keys` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `calendar_feed_tokens`
+--
+
+CREATE TABLE `calendar_feed_tokens` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `users_id` INT UNSIGNED NOT NULL,
+  `token_hash` CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_calendar_feed_user` (`users_id`),
+  UNIQUE KEY `unique_calendar_feed_token_hash` (`token_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 --
 -- Table structure for table `audit_logs`
 --
@@ -130,6 +147,8 @@ CREATE TABLE `experiments` (
   `hide_main_text` TINYINT UNSIGNED NOT NULL DEFAULT 0,
   `state` int(10) UNSIGNED NOT NULL DEFAULT 1,
   `access_key` varchar(36) NULL DEFAULT NULL,
+  `folder_id` INT UNSIGNED NULL DEFAULT NULL,
+  `spreadsheet_defaults` JSON NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -358,6 +377,7 @@ CREATE TABLE `experiments_templates` (
   `timestamped_at` timestamp NULL DEFAULT NULL,
   `access_key` varchar(36) NULL DEFAULT NULL,
   `rating` tinyint UNSIGNED NOT NULL DEFAULT 0,
+  `spreadsheet_defaults` JSON NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -515,6 +535,37 @@ CREATE TABLE IF NOT EXISTS `experiments_templates_request_actions` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `favcategories2users`
+--
+
+CREATE TABLE `favcategories2users` (
+  `id` int UNSIGNED NOT NULL AUTO_INCREMENT,
+  `users_id` int UNSIGNED NOT NULL,
+  `category_type` enum('experiments','resources') NOT NULL,
+  `category_id` int UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_favorite_category` (`users_id`, `category_type`, `category_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `favfilters2users`
+--
+
+CREATE TABLE `favfilters2users` (
+  `id` int UNSIGNED NOT NULL AUTO_INCREMENT,
+  `users_id` int UNSIGNED NOT NULL,
+  `filter_type` enum('owner','status') NOT NULL,
+  `target_type` enum('all','experiments','resources') NOT NULL,
+  `target_id` int UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_favorite_filter` (`users_id`,`filter_type`,`target_type`,`target_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `favtags2users`
 --
 
@@ -659,11 +710,15 @@ CREATE TABLE `items` (
   `book_is_cancellable` TINYINT UNSIGNED NOT NULL DEFAULT 1,
   `book_cancel_minutes` INT UNSIGNED NOT NULL DEFAULT 0,
   `booking_window_days` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `booking_hourly_rate_notax` DECIMAL(10, 2) UNSIGNED NOT NULL DEFAULT 0.00,
+  `booking_hourly_rate_tax` DECIMAL(10, 2) UNSIGNED NOT NULL DEFAULT 0.00,
+  `booking_hourly_rate_currency` TINYINT UNSIGNED NOT NULL DEFAULT 0,
   `is_procurable` TINYINT UNSIGNED NOT NULL DEFAULT 0,
   `proc_pack_qty` MEDIUMINT UNSIGNED NOT NULL DEFAULT 0,
   `proc_price_notax` DECIMAL(10, 2) UNSIGNED NOT NULL DEFAULT 0.00,
   `proc_price_tax` DECIMAL(10,2) UNSIGNED NOT NULL DEFAULT 0.00,
   `proc_currency` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `spreadsheet_defaults` JSON NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -854,6 +909,7 @@ CREATE TABLE `items_types` (
   `timestamped_at` timestamp NULL DEFAULT NULL,
   `access_key` varchar(36) NULL DEFAULT NULL,
   `rating` tinyint UNSIGNED NOT NULL DEFAULT 0,
+  `spreadsheet_defaults` JSON NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -1179,6 +1235,7 @@ CREATE TABLE `teams` (
   `name` varchar(255) NOT NULL,
   `user_create_tag` tinyint UNSIGNED NOT NULL DEFAULT 1,
   `force_exp_tpl` tinyint UNSIGNED NOT NULL DEFAULT 0,
+  `force_res_tpl` tinyint UNSIGNED NOT NULL DEFAULT 0,
   `users_canwrite_experiments` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
   `users_canwrite_experiments_categories` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
   `users_canwrite_experiments_status` TINYINT(1) UNSIGNED NOT NULL DEFAULT 1,
@@ -1269,6 +1326,10 @@ CREATE TABLE `team_groups` (
 CREATE TABLE `todolist` (
   `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT,
   `body` text NOT NULL,
+  `notes` text DEFAULT NULL,
+  `deadline` datetime DEFAULT NULL,
+  `reminder_minutes` smallint UNSIGNED DEFAULT 60,
+  `completed_at` datetime DEFAULT NULL,
   `creation_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `ordering` int(10) UNSIGNED DEFAULT NULL,
   `userid` int(10) UNSIGNED NOT NULL,
@@ -1385,6 +1446,9 @@ CREATE TABLE `users` (
   `can_manage_compounds` TINYINT UNSIGNED NOT NULL DEFAULT 0,
   `can_manage_inventory_locations` TINYINT UNSIGNED NOT NULL DEFAULT 0,
   `theme_variant` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `theme_palette` VARCHAR(16) NOT NULL DEFAULT 'classic',
+  `favorite_experiment_folder` INT UNSIGNED NULL DEFAULT NULL,
+  `spreadsheet_defaults` JSON NULL DEFAULT NULL,
   PRIMARY KEY (`userid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -1428,6 +1492,27 @@ CREATE TABLE `users2teams` (
 --   `users_id`
 --       `users` -> `userid`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `experiments_folders`
+--
+
+CREATE TABLE `experiments_folders` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `team` INT UNSIGNED NOT NULL,
+  `name` VARCHAR(255) NOT NULL,
+  `parent_id` INT UNSIGNED NULL DEFAULT NULL,
+  `userid` INT UNSIGNED NOT NULL,
+  `ordering` INT UNSIGNED DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `modified_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  FOREIGN KEY (`parent_id`) REFERENCES `experiments_folders`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`team`) REFERENCES `teams`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`userid`) REFERENCES `users`(`userid`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -1520,6 +1605,7 @@ ALTER TABLE `experiments`
   ADD KEY `fk_experiments_users_userid` (`userid`),
   ADD KEY `idx_experiments_state` (`state`),
   ADD KEY `fk_experiments_status_id` (`status`),
+  ADD KEY `fk_experiments_folder_id` (`folder_id`),
   ADD UNIQUE `unique_experiments_custom_id` (`category`, `custom_id`);
 
 --
@@ -1694,7 +1780,9 @@ ALTER TABLE `team_groups`
 -- Indexes for table `todolist`
 --
 ALTER TABLE `todolist`
-  ADD KEY `fk_todolist_users_userid` (`userid`);
+  ADD KEY `fk_todolist_users_userid` (`userid`),
+  ADD KEY `idx_todolist_user_deadline` (`userid`, `deadline`),
+  ADD KEY `idx_todolist_user_completed` (`userid`, `completed_at`);
 
 --
 -- Indexes for table `experiments2experiments`
@@ -1731,11 +1819,19 @@ ALTER TABLE `api_keys`
   ADD CONSTRAINT `fk_api_keys_teams_id` FOREIGN KEY (`team`) REFERENCES `teams` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_api_keys_user_team` FOREIGN KEY (`userid`, `team`) REFERENCES `users2teams` (`users_id`, `teams_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 --
+-- Constraints for table `calendar_feed_tokens`
+--
+ALTER TABLE `calendar_feed_tokens`
+  ADD CONSTRAINT `fk_calendar_feed_tokens_users_id`
+    FOREIGN KEY (`users_id`) REFERENCES `users` (`userid`)
+    ON DELETE CASCADE ON UPDATE CASCADE;
+--
 -- Constraints for table `experiments`
 --
 ALTER TABLE `experiments`
   ADD CONSTRAINT `fk_experiments_users_userid` FOREIGN KEY (`userid`) REFERENCES `users` (`userid`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `fk_experiments_status_id` FOREIGN KEY (`status`) REFERENCES `experiments_status` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+  ADD CONSTRAINT `fk_experiments_status_id` FOREIGN KEY (`status`) REFERENCES `experiments_status` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_experiments_folder_id` FOREIGN KEY (`folder_id`) REFERENCES `experiments_folders` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `experiments_changelog`
@@ -1834,6 +1930,18 @@ ALTER TABLE `experiments_templates_request_actions`
   ADD CONSTRAINT `fk_experiments_templates_request_actions_target_users_userid`
     FOREIGN KEY (`target_userid`) REFERENCES `users` (`userid`)
     ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `favcategories2users`
+--
+ALTER TABLE `favcategories2users`
+  ADD CONSTRAINT `fk_favcategories2users_users_id` FOREIGN KEY (`users_id`) REFERENCES `users` (`userid`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `favfilters2users`
+--
+ALTER TABLE `favfilters2users`
+  ADD CONSTRAINT `fk_favfilters2users_users_id` FOREIGN KEY (`users_id`) REFERENCES `users` (`userid`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `favtags2users`

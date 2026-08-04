@@ -57,8 +57,16 @@ export function relativeMoment(): void {
     if (span.innerText) {
       return;
     }
-    span.innerText = DateTime.fromFormat(span.title, 'yyyy-MM-dd HH:mm:ss', {'locale': locale}).toRelative();
+    span.innerText = toRelative(span.title, locale);
   });
+}
+
+export function toRelative(title: string, locale: string): string {
+  return (
+    DateTime
+      .fromFormat(title, 'yyyy-MM-dd HH:mm:ss', {'locale': locale})
+      .toRelative() ?? ''
+  );
 }
 
 // Add a listener for all elements triggered by an event
@@ -131,7 +139,7 @@ async function triggerHandler(event: Event, el: HTMLInputElement): Promise<void>
 
 // data-reload can be "page" for full page, "reloadEntitiesShow" for entities in show mode,
 // or a comma separated list of ids of elements to reload
-export function handleReloads(reloadAttributes: string | undefined): void {
+export async function handleReloads(reloadAttributes: string | undefined): Promise<void> {
   if (!reloadAttributes) return;
 
   if (reloadAttributes === 'page') {
@@ -140,13 +148,48 @@ export function handleReloads(reloadAttributes: string | undefined): void {
   }
 
   const reloadTargets = reloadAttributes.split(',');
-  reloadTargets.forEach((toReload) => {
+  for (const toReload of reloadTargets) {
     if (toReload === 'reloadEntitiesShow') {
-      reloadEntitiesShow();
+      await reloadEntitiesShow();
     } else {
-      reloadElements([toReload]);
+      await reloadElements([toReload]);
     }
-  });
+  }
+}
+
+type TomSelectOption = {
+  value: string;
+  text: string;
+};
+
+type RebuildSource =
+  | { filter?: (option: HTMLOptionElement) => boolean }
+  | { options: TomSelectOption[] };
+
+export function rebuildTomSelectOptions(
+  selectEl: HTMLSelectElement & { tomselect?: TomSelect },
+  source: RebuildSource = {},
+): void {
+  const ts = selectEl.tomselect;
+  if (!ts) return;
+
+  let nextOptions: TomSelectOption[] = [];
+
+  if ('options' in source) {
+    nextOptions = source.options;
+  } else {
+    const filter = source.filter;
+    nextOptions = Array.from(selectEl.options)
+      .filter((option) => !filter || filter(option))
+      .map((option) => ({
+        value: option.value,
+        text: option.textContent ?? '',
+      }));
+  }
+
+  ts.clearOptions();
+  ts.addOptions(nextOptions);
+  ts.refreshOptions(false);
 }
 
 export function listenTrigger(elementId: string = ''): void {
@@ -188,7 +231,9 @@ export function collectForm(form: HTMLElement): object {
       el.classList.add('border-danger');
       el.focus();
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      throw new Error('Invalid input found! Aborting.');
+      // TODO maybe have "Input validation failed" or something more user friendly. That Invalid syntax error is weird.
+      notify.error('invalid-info');
+      throw new Error(i18next.t('invalid-info'));
     }
     let value = el.value;
     if (el.type === 'checkbox') {
@@ -493,16 +538,33 @@ export function addAutocompleteToLinkInputs(): void {
 }
 
 export function addAutocompleteToTagInputs(): void {
-  $('[data-autocomplete="tags"]').autocomplete({
-    source: function(request: Record<string, string>, response: (data) => void): void {
-      ApiC.getJson(`${Model.Team}/current/${Model.Tag}?q=${request.term}`).then(json => {
-        const res = [];
-        json.forEach(tag => {
-          res.push(tag.tag);
+  $('[data-autocomplete="tags"]').each(function(): void {
+    const input = this as HTMLInputElement;
+    if (input.classList.contains('ui-autocomplete-input')) {
+      return;
+    }
+    const isFavoriteTagInput = input.id === 'createFavTagInput';
+    $(input).autocomplete({
+      appendTo: isFavoriteTagInput ? '#favoritesPanel' : undefined,
+      autoFocus: isFavoriteTagInput,
+      delay: isFavoriteTagInput ? 100 : 300,
+      minLength: 1,
+      source: function(request: Record<string, string>, response: (data) => void): void {
+        ApiC.getJson(`${Model.Team}/current/${Model.Tag}?q=${request.term}`).then(json => {
+          const favoriteTags = new Set(
+            Array.from(
+              document.querySelectorAll<HTMLInputElement>('[data-favorite-filter-tag]'),
+              favorite => favorite.value.toLocaleLowerCase(),
+            ),
+          );
+          const res = json
+            .map(tag => tag.tag)
+            .filter(tag => !isFavoriteTagInput || !favoriteTags.has(tag.toLocaleLowerCase()))
+            .slice(0, isFavoriteTagInput ? 12 : undefined);
+          response(res);
         });
-        response(res);
-      });
-    },
+      },
+    });
   });
 }
 
@@ -757,7 +819,7 @@ export { TomSelect };
 
 // toggle appearance of button
 export function toggleGrayClasses(classList: DOMTokenList): void {
-  ['bgnd-gray', 'hl-hover-gray'].forEach(btnClass => classList.toggle(btnClass, !classList.contains(btnClass)));
+  ['btn-secondary', 'btn-ghost'].forEach(btnClass => classList.toggle(btnClass, !classList.contains(btnClass)));
 }
 
 export function getNewIdFromPostRequest(response: Response): number {
@@ -885,12 +947,12 @@ export async function populateUserModal(user: Record<string, string|number>) {
     // prevent deleting association of the team we are currently logged in, allow it for other users
     if (team.id !== requester.team || user.userid !== requester.userid) {
       const removeTeamBtn = document.createElement('span');
-      removeTeamBtn.classList.add('hl-hover-gray', 'p-1', 'rounded', 'clickable', 'm-1');
+      removeTeamBtn.classList.add('btn', 'btn-danger-ghost', 'btn-sm', 'ml-2');
       removeTeamBtn.title = i18next.t('delete');
       removeTeamBtn.dataset.action = 'destroy-user2team';
       removeTeamBtn.dataset.teamid = team.id;
       const removeTeamIcon = document.createElement('i');
-      removeTeamIcon.classList.add('fas', 'fa-xmark', 'color-blue');
+      removeTeamIcon.classList.add('fas', 'fa-xmark');
       removeTeamBtn.appendChild(removeTeamIcon);
       teamBadge.appendChild(removeTeamBtn);
     }
