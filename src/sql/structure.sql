@@ -1329,6 +1329,7 @@ CREATE TABLE `todolist` (
   `notes` text DEFAULT NULL,
   `deadline` datetime DEFAULT NULL,
   `reminder_minutes` smallint UNSIGNED DEFAULT 60,
+  `completed_at` datetime DEFAULT NULL,
   `creation_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `ordering` int(10) UNSIGNED DEFAULT NULL,
   `userid` int(10) UNSIGNED NOT NULL,
@@ -1780,7 +1781,8 @@ ALTER TABLE `team_groups`
 --
 ALTER TABLE `todolist`
   ADD KEY `fk_todolist_users_userid` (`userid`),
-  ADD KEY `idx_todolist_user_deadline` (`userid`, `deadline`);
+  ADD KEY `idx_todolist_user_deadline` (`userid`, `deadline`),
+  ADD KEY `idx_todolist_user_completed` (`userid`, `completed_at`);
 
 --
 -- Indexes for table `experiments2experiments`

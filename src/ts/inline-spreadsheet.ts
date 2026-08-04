@@ -25,6 +25,12 @@ interface ClipboardTable {
   cellStyles?: CellStyles;
 }
 
+export interface FlattenedClipboardSuggestion {
+  cells: number;
+  columns: number;
+  rows: number;
+}
+
 interface ClipboardStyleRule {
   selectors: string[];
   declarations: string;
@@ -221,8 +227,8 @@ function normalizeCellDefaults(
     'Arial, sans-serif',
     'Verdana, sans-serif',
     'Georgia, serif',
-    "'Times New Roman', serif",
-    "'Courier New', monospace",
+    '\'Times New Roman\', serif',
+    '\'Courier New\', monospace',
   ]);
   const textAlignments = new Set<SpreadsheetCellDefaults['textAlign']>([
     '',
@@ -548,6 +554,168 @@ function isStructuredTable(rows: AOA, minimumRows = 2): boolean {
   return firstCount >= 2 && columnCounts.every(count => count === firstCount);
 }
 
+function isPdfNumericValue(value: string): boolean {
+  return /^[-+]?[$€£¥]?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:[%a-zµμ]+)?$/i.test(value);
+}
+
+/**
+ * PDF viewers sometimes collapse every visual gap to one space. In that case
+ * a multiword first column makes rows look ragged, but numeric result columns
+ * at the right still provide a reliable boundary. Preserve the label as one
+ * cell and split only the consistent numeric suffix.
+ */
+function parsePdfNumericSuffixTable(lines: string[]): AOA | null {
+  if (lines.length < 3) return null;
+  const tokenRows = lines.map(line => line.split(/\s+/).filter(Boolean));
+  const suffixCounts = tokenRows.slice(1).map(row => {
+    let count = 0;
+    for (let index = row.length - 1; index >= 0; index--) {
+      if (!isPdfNumericValue(row[index])) break;
+      count++;
+    }
+    return count;
+  });
+  const frequencies = new Map<number, number>();
+  suffixCounts.forEach(count => {
+    if (count > 0) frequencies.set(count, (frequencies.get(count) ?? 0) + 1);
+  });
+  const suffixWidth = Array.from(frequencies.entries())
+    .sort(([leftWidth, leftCount], [rightWidth, rightCount]) => (
+      rightCount - leftCount || rightWidth - leftWidth
+    ))[0]?.[0] ?? 0;
+  const matchingDataRows = suffixCounts.filter(count => count >= suffixWidth).length;
+  if (suffixWidth === 0 || matchingDataRows < 2
+    || matchingDataRows / suffixCounts.length < 0.75
+  ) {
+    return null;
+  }
+
+  const normalized = tokenRows.map(row => {
+    if (row.length < suffixWidth) return null;
+    const splitAt = row.length - suffixWidth;
+    return [row.slice(0, splitAt).join(' '), ...row.slice(splitAt)];
+  });
+  if (normalized.some(row => row === null)) return null;
+  return normalized as AOA;
+}
+
+function getFlattenedClipboardValues(plainText: string): string[] | null {
+  const values = plainText
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .map(value => value.replace(/\u00a0/g, ' ').trim())
+    .filter(Boolean);
+  if (values.length < 4 || values.some(value => value.length > 200)) return null;
+
+  const cellLikeValues = values.filter(value => value.split(/\s+/).length <= 6);
+  const numericValues = values.filter(value => isPdfNumericValue(value));
+  const listItems = values.filter(value => /^(?:[-*•]|\d+[.)])\s+/.test(value));
+  if (cellLikeValues.length / values.length < 0.8
+    || listItems.length / values.length >= 0.5
+    || (numericValues.length < 2 && values.length < 8)
+  ) {
+    return null;
+  }
+  return values;
+}
+
+function clipboardValueType(value: string): 'date' | 'number' | 'text' {
+  if (isPdfNumericValue(value)) return 'number';
+  if (/^(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})$/.test(value)) {
+    return 'date';
+  }
+  return 'text';
+}
+
+function suggestFlattenedClipboardColumns(values: string[]): number {
+  const maximum = Math.min(12, Math.floor(values.length / 2));
+  const candidates: Array<{ columns: number; score: number }> = [];
+  for (let columns = 2; columns <= maximum; columns++) {
+    const rows: string[][] = [];
+    for (let index = 0; index < values.length; index += columns) {
+      rows.push(values.slice(index, index + columns));
+    }
+    if (rows.length < 2) continue;
+    const complete = values.length % columns === 0;
+    const dataRows = rows.length >= 3 ? rows.slice(1) : rows;
+    const fullDataRows = dataRows.filter(row => row.length === columns);
+    if (fullDataRows.length === 0) continue;
+
+    let columnConsistency = 0;
+    for (let column = 0; column < columns; column++) {
+      const counts = new Map<string, number>();
+      fullDataRows.forEach(row => {
+        const type = clipboardValueType(row[column]);
+        counts.set(type, (counts.get(type) ?? 0) + 1);
+      });
+      columnConsistency += Math.max(...counts.values()) / fullDataRows.length;
+    }
+    columnConsistency /= columns;
+
+    const signatures = fullDataRows.map(row => row.map(clipboardValueType).join('|'));
+    const signatureCounts = new Map<string, number>();
+    signatures.forEach(signature => {
+      signatureCounts.set(signature, (signatureCounts.get(signature) ?? 0) + 1);
+    });
+    const signatureConsistency = Math.max(...signatureCounts.values()) / signatures.length;
+    const header = rows[0];
+    const headerTextRatio = header.filter(value => clipboardValueType(value) === 'text').length
+      / header.length;
+    const dataValues = fullDataRows.flat();
+    const dataNumericRatio = dataValues.filter(value => clipboardValueType(value) !== 'text').length
+      / dataValues.length;
+    const balance = Math.abs(Math.log(rows.length / columns));
+    const score = (complete ? 2 : 0)
+      + columnConsistency
+      + (signatureConsistency * 1.5)
+      + (headerTextRatio * dataNumericRatio * 1.5)
+      - (balance * 0.1)
+      - (columns > 8 ? (columns - 8) * 0.15 : 0);
+    candidates.push({ columns, score });
+  }
+  candidates.sort((left, right) => right.score - left.score || left.columns - right.columns);
+  return candidates[0]?.columns ?? 2;
+}
+
+/**
+ * Detect PDF clipboard data where every cell was flattened onto its own line.
+ * Because such clipboard text has no row delimiters, callers should let the
+ * user confirm the suggested number of columns before inserting it.
+ */
+export function getFlattenedClipboardSuggestion(
+  plainText: string,
+): FlattenedClipboardSuggestion | null {
+  const values = getFlattenedClipboardValues(plainText);
+  if (!values) return null;
+  const columns = suggestFlattenedClipboardColumns(values);
+  return {
+    cells: values.length,
+    columns,
+    rows: Math.ceil(values.length / columns),
+  };
+}
+
+export function spreadsheetFromFlattenedClipboard(
+  plainText: string,
+  requestedColumns: number,
+): SpreadsheetData | null {
+  const values = getFlattenedClipboardValues(plainText);
+  if (!values) return null;
+  const columns = Math.min(MAX_DIMENSION, Math.max(2, Math.round(requestedColumns)));
+  const rows = Math.min(MAX_DIMENSION, Math.ceil(values.length / columns));
+  const data: AOA = Array.from({ length: rows }, (_, row) => (
+    Array.from({ length: columns }, (_, column) => values[(row * columns) + column] ?? '')
+  ));
+  return {
+    data,
+    rows,
+    cols: columns,
+    kind: 'standard',
+    caption: '',
+    appearance: getEffectiveAppearanceDefaults(),
+  };
+}
+
 function parseStructuredPlainText(plainText: string): AOA | null {
   const text = plainText.replace(/^\uFEFF/, '');
   if (!text.trim()) return null;
@@ -575,7 +743,26 @@ function parseStructuredPlainText(plainText: string): AOA | null {
     .map(line => line.trim())
     .filter(Boolean);
   const spacedRows = lines.map(line => line.split(/\s{2,}/));
-  return isStructuredTable(spacedRows) ? spacedRows : null;
+  if (isStructuredTable(spacedRows)) return spacedRows;
+
+  // Blank cells and wrapped labels can make PDF rows slightly ragged even
+  // when most rows retain repeated-space column separators. The spreadsheet
+  // normalizer pads the shorter rows after this explicit whitespace signal.
+  const spacedDataRows = spacedRows.filter(row => row.length >= 2);
+  if (spacedDataRows.length >= 2 && spacedDataRows.length / spacedRows.length >= 0.75) {
+    return spacedRows;
+  }
+
+  // Some PDF viewers collapse visual column gaps to a single space. Treat
+  // consistently shaped, data-heavy lines as a table while avoiding ordinary
+  // prose, which rarely has the same number of tokens on three or more lines.
+  const singleSpaceRows = lines.map(line => line.split(/\s+/));
+  if (isStructuredTable(singleSpaceRows, 3)) {
+    const values = singleSpaceRows.flat();
+    const numericValues = values.filter(value => isPdfNumericValue(value));
+    if (numericValues.length / values.length >= 0.25) return singleSpaceRows;
+  }
+  return parsePdfNumericSuffixTable(lines);
 }
 
 function getClipboardStyleRules(clipboardDocument: Document): ClipboardStyleRule[] {
@@ -602,17 +789,83 @@ function getClipboardCellStyle(
   rules: ClipboardStyleRule[],
 ): string | undefined {
   const style = document.createElement('span').style;
-  rules.forEach(rule => {
-    const matches = rule.selectors.some(selector => {
-      try {
-        return cell.matches(selector);
-      } catch {
-        return false;
-      }
+  const inheritedProperties = [
+    'color',
+    'font-family',
+    'font-size',
+    'font-style',
+    'font-weight',
+    'text-align',
+    'text-decoration',
+    'vertical-align',
+    'white-space',
+  ];
+  const applyElementStyle = (element: Element | null, inheritedOnly = false): void => {
+    if (!element) return;
+    const candidate = document.createElement('span').style;
+    rules.forEach(rule => {
+      const matches = rule.selectors.some(selector => {
+        try {
+          return element.matches(selector);
+        } catch {
+          return false;
+        }
+      });
+      if (matches) candidate.cssText += `;${rule.declarations}`;
     });
-    if (matches) style.cssText += `;${rule.declarations}`;
+    candidate.cssText += `;${element.getAttribute('style') ?? ''}`;
+    if (element.tagName === 'FONT') {
+      const color = element.getAttribute('color');
+      const family = element.getAttribute('face');
+      const size = element.getAttribute('size');
+      if (color) candidate.color = color;
+      if (family) candidate.fontFamily = family;
+      if (size && /^\d+(?:\.\d+)?(?:pt|px|em|rem|%)$/i.test(size)) candidate.fontSize = size;
+    }
+    if (element.matches('b, strong')) candidate.fontWeight = 'bold';
+    if (element.matches('i, em')) candidate.fontStyle = 'italic';
+    if (element.matches('u')) candidate.textDecoration = 'underline';
+
+    if (inheritedOnly) {
+      inheritedProperties.forEach(property => {
+        const value = candidate.getPropertyValue(property);
+        if (value) style.setProperty(property, value);
+      });
+      return;
+    }
+    style.cssText += `;${candidate.cssText}`;
+  };
+
+  // Excel commonly declares its base font on body or a wrapper and overrides
+  // only selected cells. Walk the complete cascade so cells without a local
+  // font do not fall back to the notebook font and look inconsistent.
+  const table = cell.closest('table');
+  const ancestors: Element[] = [];
+  let ancestor: Element | null = cell;
+  while (ancestor) {
+    ancestors.unshift(ancestor);
+    ancestor = ancestor.parentElement;
+  }
+  ancestors.forEach(element => {
+    const belongsToTable = Boolean(table && (element === table || table.contains(element)));
+    applyElementStyle(element, !belongsToTable);
   });
-  style.cssText += `;${cell.getAttribute('style') ?? ''}`;
+
+  // A cell can contain several nested wrappers. Follow the first visible text
+  // run from the cell towards the leaf so its effective font wins in the same
+  // order as the browser's CSS cascade.
+  const walker = cell.ownerDocument.createTreeWalker(cell, 4);
+  let textNode = walker.nextNode();
+  while (textNode && !textNode.textContent?.trim()) textNode = walker.nextNode();
+  const nestedElements: Element[] = [];
+  let nested = textNode?.parentElement ?? null;
+  while (nested && nested !== cell) {
+    nestedElements.unshift(nested);
+    nested = nested.parentElement;
+  }
+  nestedElements.forEach(element => applyElementStyle(element));
+  const backgroundAttribute = cell.getAttribute('bgcolor');
+  if (backgroundAttribute) style.backgroundColor = backgroundAttribute;
 
   const declarations: string[] = [];
   const add = (property: string, value: string): void => {
@@ -674,6 +927,29 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
       colIndex += colSpan;
     });
   });
+  const fontFamilies = new Map<string, { count: number; value: string }>();
+  Object.values(cellStyles).forEach(cellStyle => {
+    const parsedStyle = document.createElement('span').style;
+    parsedStyle.cssText = cellStyle;
+    const family = parsedStyle.fontFamily.trim();
+    if (!family) return;
+    const key = family.toLowerCase();
+    const existing = fontFamilies.get(key);
+    fontFamilies.set(key, { count: (existing?.count ?? 0) + 1, value: existing?.value ?? family });
+  });
+  const dominantFontFamily = Array.from(fontFamilies.values())
+    .sort((left, right) => right.count - left.count)[0]?.value;
+  if (dominantFontFamily) {
+    rows.forEach((row, rowIndex) => row.forEach((_value, colIndex) => {
+      const cellName = `${colLabel(colIndex)}${rowIndex + 1}`;
+      const parsedStyle = document.createElement('span').style;
+      parsedStyle.cssText = cellStyles[cellName] ?? '';
+      parsedStyle.fontFamily = dominantFontFamily;
+      const normalized = sanitizeStyle(parsedStyle.cssText, PRESERVED_STYLE_PROPERTIES);
+      if (normalized) cellStyles[cellName] = normalized;
+    }));
+  }
+
   return {
     data: rows,
     cellStyles: Object.keys(cellStyles).length > 0 ? cellStyles : undefined,
@@ -1285,8 +1561,6 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatTextColorInput: HTMLInputElement;
   cellFormatTextAlignSelect: HTMLSelectElement;
   cellFormatVerticalAlignSelect: HTMLSelectElement;
-  applyCellFormatBtn: HTMLButtonElement;
-  applyFontFormatBtn: HTMLButtonElement;
   clearCellFormatBtn: HTMLButtonElement;
   cellFormatStatus: HTMLSpanElement;
   cellFormatNoColorInput: HTMLInputElement;
@@ -1350,7 +1624,7 @@ function createOverlay(initial: SpreadsheetData): {
   addColBtn.textContent = 'Add column';
   addColBtn.title = 'Add one column on the right';
   addColBtn.className = 'btn btn-sm btn-outline-secondary';
-  sizeButtons.append(resizeBtn, addRowBtn, addColBtn);
+  sizeButtons.appendChild(resizeBtn);
 
   settings.append(presetSelect, rowsControl, colsControl, sizeButtons, captionInput);
   dialog.appendChild(settings);
@@ -1647,10 +1921,6 @@ function createOverlay(initial: SpreadsheetData): {
   );
   cellFormatBorderWidthInput.min = '0';
   cellFormatBorderWidthInput.max = String(MAX_TABLE_BORDER);
-  const applyCellFormatBtn = document.createElement('button');
-  applyCellFormatBtn.type = 'button';
-  applyCellFormatBtn.className = 'btn btn-sm btn-outline-primary';
-  applyCellFormatBtn.textContent = 'Apply cell style';
   cellStyleRow.append(
     cellFormatLabel,
     createLabeledControl('Fill', cellFormatColorInput),
@@ -1658,7 +1928,6 @@ function createOverlay(initial: SpreadsheetData): {
     createLabeledControl('Border color', cellFormatBorderColorInput),
     createLabeledControl('Border style', cellFormatBorderStyleSelect),
     createLabeledControl('Border width', cellFormatBorderWidthInput),
-    applyCellFormatBtn,
   );
 
   const fontStyleRow = document.createElement('div');
@@ -1727,10 +1996,6 @@ function createOverlay(initial: SpreadsheetData): {
     <option value="bottom">Bottom</option>
   `;
   cellFormatVerticalAlignSelect.value = savedCellDefaults?.verticalAlign ?? '';
-  const applyFontFormatBtn = document.createElement('button');
-  applyFontFormatBtn.type = 'button';
-  applyFontFormatBtn.className = 'btn btn-sm btn-outline-primary';
-  applyFontFormatBtn.textContent = 'Apply font';
   fontStyleRow.append(
     fontFormatLabel,
     createLabeledControl('Family', cellFormatFontFamilySelect),
@@ -1742,7 +2007,6 @@ function createOverlay(initial: SpreadsheetData): {
     createLabeledControl('No text color', cellFormatNoTextColorInput),
     createLabeledControl('Horizontal', cellFormatTextAlignSelect),
     createLabeledControl('Vertical', cellFormatVerticalAlignSelect),
-    applyFontFormatBtn,
   );
 
   const clearCellFormatBtn = document.createElement('button');
@@ -1751,7 +2015,7 @@ function createOverlay(initial: SpreadsheetData): {
   clearCellFormatBtn.textContent = 'Clear all cell formatting';
   const cellFormatStatus = document.createElement('span');
   cellFormatStatus.className = 'inline-spreadsheet-cell-format-status';
-  cellFormatStatus.textContent = 'Select one or more cells, then apply cell or font properties.';
+  cellFormatStatus.textContent = 'Select cells, then change a property to apply it immediately.';
   cellFormatBar.append(
     cellStyleRow,
     fontStyleRow,
@@ -1799,6 +2063,9 @@ function createOverlay(initial: SpreadsheetData): {
 
   const buttonRow = document.createElement('div');
   buttonRow.className = 'inline-spreadsheet-actions';
+  const gridButtons = document.createElement('div');
+  gridButtons.className = 'inline-spreadsheet-grid-actions';
+  gridButtons.append(addRowBtn, addColBtn);
   const rightButtons = document.createElement('div');
   rightButtons.className = 'd-flex ml-auto';
   const cancelBtn = document.createElement('button');
@@ -1810,7 +2077,7 @@ function createOverlay(initial: SpreadsheetData): {
   insertBtn.textContent = 'Insert / Update';
   insertBtn.className = 'btn btn-sm btn-primary';
   rightButtons.append(cancelBtn, insertBtn);
-  buttonRow.appendChild(rightButtons);
+  buttonRow.append(gridButtons, rightButtons);
   dialog.appendChild(buttonRow);
 
   overlay.appendChild(dialog);
@@ -1872,8 +2139,6 @@ function createOverlay(initial: SpreadsheetData): {
     cellFormatTextColorInput,
     cellFormatTextAlignSelect,
     cellFormatVerticalAlignSelect,
-    applyCellFormatBtn,
-    applyFontFormatBtn,
     clearCellFormatBtn,
     cellFormatStatus,
     cellFormatNoColorInput,
@@ -1991,6 +2256,26 @@ function updateQuickCellStyle(
   );
 }
 
+function updateQuickStyleProperty(
+  existingStyle: string | undefined,
+  property: string,
+  value: string,
+): string | undefined {
+  const element = document.createElement('span');
+  if (existingStyle) element.setAttribute('style', existingStyle);
+
+  if (value) {
+    element.style.setProperty(property, value);
+  } else {
+    element.style.removeProperty(property);
+  }
+
+  return sanitizeStyle(
+    element.getAttribute('style') ?? undefined,
+    PRESERVED_STYLE_PROPERTIES,
+  );
+}
+
 function updateQuickFontStyle(
   existingStyle: string | undefined,
   format: CellFontFormat,
@@ -2055,8 +2340,6 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       formulaRow: number;
       allowRange: boolean;
     } | null = null;
-    const changedFontProperties = new Set<keyof CellFontFormat>();
-
     document.body.appendChild(ui.overlay);
 
     const readRawData = (): AOA => {
@@ -2581,6 +2864,135 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       }
     };
 
+    const onSpreadsheetCopy = (event: ClipboardEvent): void => {
+      if (!event.clipboardData
+        || event.target instanceof HTMLInputElement
+        || event.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+      const selection = getSelectedRange();
+      if (!selection) return;
+      const startCol = Math.min(selection[0], selection[2]);
+      const startRow = Math.min(selection[1], selection[3]);
+      const endCol = Math.max(selection[0], selection[2]);
+      const endRow = Math.max(selection[1], selection[3]);
+      const rawData = readRawData();
+      const appearance = normalizeAppearance(working.appearance);
+      const copiedStyles = mergeCellStyles(
+        readCellStyles(working.rows, working.cols),
+        appearance,
+        working.rows,
+        working.cols,
+      );
+      const textRows: string[] = [];
+      const htmlRows: string[] = [];
+      const escapeTsv = (value: CellValue): string => {
+        const text = String(value ?? '');
+        return /[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+      };
+      for (let row = startRow; row <= endRow; row++) {
+        const textCells: string[] = [];
+        const htmlCells: string[] = [];
+        for (let col = startCol; col <= endCol; col++) {
+          const value = rawData[row]?.[col] ?? '';
+          const style = copiedStyles[`${colLabel(col)}${row + 1}`];
+          textCells.push(escapeTsv(value));
+          htmlCells.push(
+            `<td${style ? ` style="${escapeHTMLAttribute(style)}"` : ''}>${escapeHTML(String(value ?? ''))}</td>`,
+          );
+        }
+        textRows.push(textCells.join('\t'));
+        htmlRows.push(`<tr>${htmlCells.join('')}</tr>`);
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      event.clipboardData.setData('text/plain', textRows.join('\n'));
+      event.clipboardData.setData('text/html', `<table><tbody>${htmlRows.join('')}</tbody></table>`);
+    };
+
+    const onSpreadsheetPaste = (event: ClipboardEvent): void => {
+      const clipboard = event.clipboardData;
+      if (!clipboard
+        || event.target instanceof HTMLInputElement
+        || event.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+      const plainText = clipboard.getData('text/plain');
+      let pasted = spreadsheetFromClipboard(
+        clipboard.getData('text/html'),
+        plainText,
+      );
+      if (!pasted) {
+        const flattened = getFlattenedClipboardSuggestion(plainText);
+        if (!flattened) return;
+        const selected = getSelectedRange();
+        const selectedWidth = selected
+          ? Math.abs(selected[2] - selected[0]) + 1
+          : flattened.columns;
+        const response = window.prompt(
+          `The PDF clipboard contains ${flattened.cells} cells without column boundaries. How many columns should the table have?`,
+          String(selectedWidth > 1 ? selectedWidth : flattened.columns),
+        );
+        if (response === null) return;
+        const columns = parseInt(response, 10);
+        if (!Number.isInteger(columns) || columns < 2 || columns > MAX_DIMENSION) {
+          ui.cellFormatStatus.textContent = `Enter a column count between 2 and ${MAX_DIMENSION}.`;
+          event.preventDefault();
+          return;
+        }
+        pasted = spreadsheetFromFlattenedClipboard(plainText, columns);
+      }
+      if (!pasted) return;
+
+      const selection = getSelectedRange();
+      const startCol = selection ? Math.min(selection[0], selection[2]) : 0;
+      const startRow = selection ? Math.min(selection[1], selection[3]) : 0;
+      const rows = Math.min(MAX_DIMENSION, Math.max(working.rows, startRow + pasted.rows));
+      const cols = Math.min(MAX_DIMENSION, Math.max(working.cols, startCol + pasted.cols));
+      const nextData = resizeData(readRawData(), rows, cols);
+      for (let row = 0; row < pasted.rows && startRow + row < rows; row++) {
+        for (let col = 0; col < pasted.cols && startCol + col < cols; col++) {
+          nextData[startRow + row][startCol + col] = pasted.data[row]?.[col] ?? '';
+        }
+      }
+
+      const nextStyles = readCellStyles(rows, cols) ?? {};
+      Object.entries(pasted.cellStyles ?? {}).forEach(([cellName, style]) => {
+        const coordinates = coordinatesFromCellName(cellName);
+        if (!coordinates) return;
+        const targetCol = startCol + coordinates.col;
+        const targetRow = startRow + coordinates.row;
+        if (targetCol >= cols || targetRow >= rows) return;
+        nextStyles[`${colLabel(targetCol)}${targetRow + 1}`] = style;
+      });
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const changedPlateSize = working.kind === 'well-plate'
+        && (rows !== working.rows || cols !== working.cols);
+      if (changedPlateSize) ui.presetSelect.value = 'custom';
+      selectedRange = [
+        startCol,
+        startRow,
+        Math.min(cols - 1, startCol + pasted.cols - 1),
+        Math.min(rows - 1, startRow + pasted.rows - 1),
+      ];
+      mountSpreadsheet({
+        ...working,
+        data: nextData,
+        rows,
+        cols,
+        kind: changedPlateSize ? 'standard' : working.kind,
+        plateSize: changedPlateSize ? undefined : working.plateSize,
+        cellStyles: Object.keys(nextStyles).length > 0 ? nextStyles : undefined,
+      });
+      ui.cellFormatStatus.textContent = pasted.cellStyles
+        ? 'Pasted values and cell formatting.'
+        : 'Pasted table values.';
+    };
+
     const applyAppearance = (): void => {
       const appearance = appearanceFromControls(ui, working.appearance?.cellStyle);
       const updated: SpreadsheetData = {
@@ -2619,6 +3031,8 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     };
 
     mountSpreadsheet(working);
+    ui.sheetHost.addEventListener('copy', onSpreadsheetCopy, true);
+    ui.sheetHost.addEventListener('paste', onSpreadsheetPaste, true);
 
     ui.presetSelect.addEventListener('change', () => {
       const preset = spreadsheetPresetFromValue(ui.presetSelect.value);
@@ -2747,90 +3161,120 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const cellCount = (endCol - startCol + 1) * (endRow - startRow + 1);
       ui.cellFormatStatus.textContent = `${successMessage} ${cellCount} cell${cellCount === 1 ? '' : 's'}.`;
     };
-    const applyCellFormat = (): void => {
+    const applySelectedStyleProperty = (
+      property: string,
+      value: string,
+      successMessage: string,
+    ): void => {
+      updateSelectedCells(
+        style => updateQuickStyleProperty(style, property, value),
+        successMessage,
+      );
+    };
+    ui.cellFormatColorInput.addEventListener('change', () => {
+      ui.cellFormatNoColorInput.checked = false;
+      ui.cellFormatColorInput.disabled = false;
+      applySelectedStyleProperty(
+        'background-color',
+        ui.cellFormatColorInput.value,
+        'Applied fill to',
+      );
+    });
+    ui.cellFormatNoColorInput.addEventListener('change', () => {
+      ui.cellFormatColorInput.disabled = ui.cellFormatNoColorInput.checked;
+      applySelectedStyleProperty(
+        'background-color',
+        ui.cellFormatNoColorInput.checked ? '' : ui.cellFormatColorInput.value,
+        ui.cellFormatNoColorInput.checked ? 'Removed fill from' : 'Applied fill to',
+      );
+    });
+    ui.cellFormatBorderColorInput.addEventListener('change', () => {
+      applySelectedStyleProperty(
+        'border-color',
+        ui.cellFormatBorderColorInput.value,
+        'Applied border color to',
+      );
+    });
+    ui.cellFormatBorderStyleSelect.addEventListener('change', () => {
+      applySelectedStyleProperty(
+        'border-style',
+        ui.cellFormatBorderStyleSelect.value,
+        'Applied border style to',
+      );
+    });
+    ui.cellFormatBorderWidthInput.addEventListener('change', () => {
       const borderWidth = Math.max(
         0,
         Math.min(MAX_TABLE_BORDER, parseInt(ui.cellFormatBorderWidthInput.value, 10) || 0),
       );
-      updateSelectedCells(
-        style => updateQuickCellStyle(
-          style,
-          ui.cellFormatNoColorInput.checked ? null : ui.cellFormatColorInput.value,
-          ui.cellFormatBorderColorInput.value,
-          ui.cellFormatBorderStyleSelect.value,
-          borderWidth,
-          false,
-        ),
-        'Applied cell style to',
+      ui.cellFormatBorderWidthInput.value = String(borderWidth);
+      applySelectedStyleProperty('border-width', `${borderWidth}px`, 'Applied border width to');
+    });
+    ui.cellFormatFontFamilySelect.addEventListener('change', () => {
+      applySelectedStyleProperty(
+        'font-family',
+        ui.cellFormatFontFamilySelect.value,
+        'Applied font family to',
       );
-    };
-    const applyFontFormat = (): void => {
-      if (changedFontProperties.size === 0) {
-        ui.cellFormatStatus.textContent = 'Choose at least one font property first.';
-        return;
-      }
+    });
+    ui.cellFormatFontSizeInput.addEventListener('change', () => {
       const fontSize = Math.max(
         6,
         Math.min(72, parseInt(ui.cellFormatFontSizeInput.value, 10) || 12),
       );
-      const format: CellFontFormat = {};
-      if (changedFontProperties.has('fontFamily')) {
-        format.fontFamily = ui.cellFormatFontFamilySelect.value;
-      }
-      if (changedFontProperties.has('fontSize')) format.fontSize = `${fontSize}pt`;
-      if (changedFontProperties.has('fontWeight')) {
-        format.fontWeight = ui.cellFormatBoldInput.checked ? 'bold' : 'normal';
-      }
-      if (changedFontProperties.has('fontStyle')) {
-        format.fontStyle = ui.cellFormatItalicInput.checked ? 'italic' : 'normal';
-      }
-      if (changedFontProperties.has('textDecoration')) {
-        format.textDecoration = ui.cellFormatUnderlineInput.checked ? 'underline' : 'none';
-      }
-      if (changedFontProperties.has('color')) {
-        format.color = ui.cellFormatNoTextColorInput.checked
-          ? ''
-          : ui.cellFormatTextColorInput.value;
-      }
-      if (changedFontProperties.has('textAlign')) {
-        format.textAlign = ui.cellFormatTextAlignSelect.value;
-      }
-      if (changedFontProperties.has('verticalAlign')) {
-        format.verticalAlign = ui.cellFormatVerticalAlignSelect.value;
-      }
-      updateSelectedCells(
-        style => updateQuickFontStyle(style, format, false),
-        'Applied font properties to',
+      ui.cellFormatFontSizeInput.value = String(fontSize);
+      applySelectedStyleProperty('font-size', `${fontSize}pt`, 'Applied font size to');
+    });
+    ui.cellFormatBoldInput.addEventListener('change', () => {
+      applySelectedStyleProperty(
+        'font-weight',
+        ui.cellFormatBoldInput.checked ? 'bold' : 'normal',
+        'Applied bold setting to',
       );
-    };
-    const fontPropertyControls: Array<[HTMLElement, keyof CellFontFormat]> = [
-      [ui.cellFormatFontFamilySelect, 'fontFamily'],
-      [ui.cellFormatFontSizeInput, 'fontSize'],
-      [ui.cellFormatBoldInput, 'fontWeight'],
-      [ui.cellFormatItalicInput, 'fontStyle'],
-      [ui.cellFormatUnderlineInput, 'textDecoration'],
-      [ui.cellFormatTextColorInput, 'color'],
-      [ui.cellFormatNoTextColorInput, 'color'],
-      [ui.cellFormatTextAlignSelect, 'textAlign'],
-      [ui.cellFormatVerticalAlignSelect, 'verticalAlign'],
-    ];
-    fontPropertyControls.forEach(([control, property]) => {
-      control.addEventListener('change', () => changedFontProperties.add(property));
     });
-    ui.cellFormatColorInput.addEventListener('change', () => {
-      ui.cellFormatNoColorInput.checked = false;
+    ui.cellFormatItalicInput.addEventListener('change', () => {
+      applySelectedStyleProperty(
+        'font-style',
+        ui.cellFormatItalicInput.checked ? 'italic' : 'normal',
+        'Applied italic setting to',
+      );
     });
-    ui.cellFormatNoColorInput.addEventListener('change', () => {
-      ui.cellFormatColorInput.disabled = ui.cellFormatNoColorInput.checked;
+    ui.cellFormatUnderlineInput.addEventListener('change', () => {
+      applySelectedStyleProperty(
+        'text-decoration',
+        ui.cellFormatUnderlineInput.checked ? 'underline' : 'none',
+        'Applied underline setting to',
+      );
     });
     ui.cellFormatTextColorInput.addEventListener('change', () => {
       ui.cellFormatNoTextColorInput.checked = false;
+      ui.cellFormatTextColorInput.disabled = false;
+      applySelectedStyleProperty('color', ui.cellFormatTextColorInput.value, 'Applied text color to');
     });
     ui.cellFormatNoTextColorInput.addEventListener('change', () => {
       ui.cellFormatTextColorInput.disabled = ui.cellFormatNoTextColorInput.checked;
+      applySelectedStyleProperty(
+        'color',
+        ui.cellFormatNoTextColorInput.checked ? '' : ui.cellFormatTextColorInput.value,
+        ui.cellFormatNoTextColorInput.checked
+          ? 'Removed text color from'
+          : 'Applied text color to',
+      );
     });
-    ui.applyCellFormatBtn.addEventListener('click', applyCellFormat);
-    ui.applyFontFormatBtn.addEventListener('click', applyFontFormat);
+    ui.cellFormatTextAlignSelect.addEventListener('change', () => {
+      applySelectedStyleProperty(
+        'text-align',
+        ui.cellFormatTextAlignSelect.value,
+        'Applied horizontal alignment to',
+      );
+    });
+    ui.cellFormatVerticalAlignSelect.addEventListener('change', () => {
+      applySelectedStyleProperty(
+        'vertical-align',
+        ui.cellFormatVerticalAlignSelect.value,
+        'Applied vertical alignment to',
+      );
+    });
     ui.clearCellFormatBtn.addEventListener('click', () => {
       updateSelectedCells(
         style => updateQuickFontStyle(
@@ -2905,6 +3349,8 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       finishFormulaSelection();
       ui.sheetHost.removeEventListener('mousedown', onFormulaSelectionStart, true);
       ui.sheetHost.removeEventListener('keydown', onFormulaEditorKeydown, true);
+      ui.sheetHost.removeEventListener('copy', onSpreadsheetCopy, true);
+      ui.sheetHost.removeEventListener('paste', onSpreadsheetPaste, true);
       document.removeEventListener('keydown', onKey);
       ui.overlay.remove();
     };

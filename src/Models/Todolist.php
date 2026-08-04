@@ -86,14 +86,31 @@ final class Todolist extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
+        $queryParams ??= $this->getQueryParams();
+        $query = $queryParams->getQuery();
+        $completed = $query->getBoolean('completed');
+        $completedFilter = $completed ? 'IS NOT NULL' : 'IS NULL';
+        $order = $completed ? 'completed_at DESC' : 'ordering ASC, creation_time DESC';
+        $completedSince = $completed && $query->has('completed_since')
+            ? $this->getDeadline($query->getString('completed_since'))
+            : null;
+        $completedSinceFilter = $completedSince === null ? '' : ' AND completed_at >= :completed_since';
+        $limit = $completed ? ($queryParams->getLimit() ?: 100) : 0;
+        $offset = $completed ? max(0, $query->getInt('offset')) : 0;
+        $limitSql = $limit > 0 ? sprintf(' LIMIT %d OFFSET %d', $limit, $offset) : '';
         $sql = "SELECT id, body, notes,
                 DATE_FORMAT(deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
-                reminder_minutes, creation_time, ordering, userid
+                reminder_minutes,
+                DATE_FORMAT(completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
+                creation_time, ordering, userid
             FROM todolist
-            WHERE userid = :userid
-            ORDER BY ordering ASC, creation_time DESC";
+            WHERE userid = :userid AND completed_at {$completedFilter}{$completedSinceFilter}
+            ORDER BY {$order}{$limitSql}";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
+        if ($completedSince !== null) {
+            $req->bindValue(':completed_since', $completedSince, PDO::PARAM_STR);
+        }
         $this->Db->execute($req);
 
         return $req->fetchAll();
@@ -104,7 +121,9 @@ final class Todolist extends AbstractRest
     {
         $sql = "SELECT id, body, notes,
                 DATE_FORMAT(deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
-                reminder_minutes, creation_time, ordering, userid
+                reminder_minutes,
+                DATE_FORMAT(completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
+                creation_time, ordering, userid
             FROM todolist
             WHERE id = :id AND userid = :userid";
         $req = $this->Db->prepare($sql);
@@ -167,6 +186,7 @@ final class Todolist extends AbstractRest
                 $this->getReminderMinutes($value),
                 PDO::PARAM_INT,
             ),
+            'completed' => array('completed_at', $this->getCompletedAt($value), PDO::PARAM_STR),
             default => throw new ImproperActionException(_('Invalid to-do property.')),
         };
         $sql = sprintf(
@@ -228,11 +248,22 @@ final class Todolist extends AbstractRest
         return $minutes;
     }
 
+    private function getCompletedAt(mixed $value): ?string
+    {
+        if (!filter_var($value, FILTER_VALIDATE_BOOLEAN)) {
+            return null;
+        }
+        return (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d H:i:s');
+    }
+
     private function syncDeadlineNotification(): void
     {
         $task = $this->readOne();
         $this->destroyDeadlineNotification();
-        if (empty($task['deadline']) || $task['reminder_minutes'] === null) {
+        if (!empty($task['completed_at'])
+            || empty($task['deadline'])
+            || $task['reminder_minutes'] === null
+        ) {
             return;
         }
         (new TodoDeadline(

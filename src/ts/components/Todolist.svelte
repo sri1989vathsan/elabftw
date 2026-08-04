@@ -14,6 +14,7 @@
     deadline: string | null;
     reminder_minutes: number | null;
     creation_time: string;
+    completed_at: string | null;
   };
 
   type UnfinishedStep = {
@@ -52,6 +53,12 @@
     entries: SidebarEntry[];
   };
 
+  type CompletedGroup = {
+    key: string;
+    label: string;
+    items: Todo[];
+  };
+
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
   const timeOptions = Array.from({ length: 96 }, (_, index) => {
@@ -62,9 +69,14 @@
   let locale = 'en-gb';
   let malleable: Malle | null = null;
   let items: Todo[] = [];
+  let completedItems: Todo[] = [];
   let unfinished: UnfinishedResponse = { experiments: [], items: [] };
   let entries: SidebarEntry[] = [];
   let dueGroups: DueGroup[] = [];
+  let completedGroups: CompletedGroup[] = [];
+  let completedWindow = '7';
+  let completedLoaded = false;
+  let loadingCompleted = false;
   let draft = '';
   let deadlineDate = '';
   let deadlineTime = '';
@@ -100,6 +112,7 @@
     )),
   ];
   $: dueGroups = buildDueGroups(entries);
+  $: completedGroups = buildCompletedGroups(completedItems);
 
   function setupMalle(): void {
     malleable = new Malle({
@@ -196,6 +209,128 @@
       }));
   }
 
+  function completedDateLabel(value: string): string {
+    return new Intl.DateTimeFormat(locale, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(new Date(value));
+  }
+
+  function buildCompletedGroups(completed: Todo[]): CompletedGroup[] {
+    const groups = new Map<string, CompletedGroup>();
+    completed.forEach(item => {
+      if (!item.completed_at) return;
+      const completedDate = new Date(item.completed_at);
+      const key = dateKey(completedDate);
+      const group = groups.get(key) ?? {
+        key,
+        label: completedDateLabel(item.completed_at),
+        items: [],
+      };
+      group.items.push(item);
+      groups.set(key, group);
+    });
+    return Array.from(groups.values()).sort((left, right) => right.key.localeCompare(left.key));
+  }
+
+  async function loadCompleted(): Promise<void> {
+    loadingCompleted = true;
+    const since = new Date();
+    since.setDate(since.getDate() - parseInt(completedWindow, 10));
+    completedItems = await ApiC.getJson(
+      `${Model.Todolist}?completed=1&completed_since=${encodeURIComponent(since.toISOString())}&limit=100`,
+    ) as Todo[];
+    completedLoaded = true;
+    loadingCompleted = false;
+  }
+
+  function toggleCompletedHistory(event: Event): void {
+    if ((event.currentTarget as HTMLDetailsElement).open && !completedLoaded) {
+      void loadCompleted();
+    }
+  }
+
+  async function openFullHistory(event: MouseEvent): Promise<void> {
+    event.preventDefault();
+    const historyWindow = window.open('', 'elabftw-completed-tasks', 'width=840,height=760,resizable=yes,scrollbars=yes');
+    if (!historyWindow) {
+      notify.error('Allow pop-up windows to view the full completed-task history.');
+      return;
+    }
+
+    const doc = historyWindow.document;
+    doc.title = 'Completed tasks';
+    doc.body.replaceChildren();
+    const style = doc.createElement('style');
+    style.textContent = `
+      body { background:#f7f9fa; color:#263238; font:15px/1.45 system-ui,sans-serif; margin:0; padding:2rem; }
+      main { margin:auto; max-width:760px; }
+      h1 { font-size:1.6rem; margin:0 0 .35rem; }
+      h2 { border-bottom:1px solid #ccd5da; font-size:1rem; margin:1.5rem 0 .5rem; padding-bottom:.35rem; }
+      article { background:#fff; border:1px solid #d7dfe3; border-radius:6px; margin:.45rem 0; padding:.7rem .8rem; }
+      .meta { color:#5f6f76; font-size:.82rem; margin-top:.25rem; }
+      button { background:#167d8d; border:0; border-radius:5px; color:#fff; cursor:pointer; margin-top:1rem; padding:.55rem .8rem; }
+      button:disabled { cursor:wait; opacity:.65; }
+      .status { color:#5f6f76; }
+    `;
+    doc.head.appendChild(style);
+    const main = doc.createElement('main');
+    const heading = doc.createElement('h1');
+    heading.textContent = 'Completed tasks';
+    const intro = doc.createElement('p');
+    intro.className = 'status';
+    intro.textContent = 'All completed tasks, newest first. Older entries load in pages.';
+    const list = doc.createElement('div');
+    const loadMore = doc.createElement('button');
+    loadMore.type = 'button';
+    loadMore.textContent = 'Load older tasks';
+    main.append(heading, intro, list, loadMore);
+    doc.body.appendChild(main);
+
+    let offset = 0;
+    let lastDate = '';
+    const pageSize = 100;
+    const loadPage = async (): Promise<void> => {
+      loadMore.disabled = true;
+      loadMore.textContent = 'Loading…';
+      try {
+        const page = await ApiC.getJson(
+          `${Model.Todolist}?completed=1&limit=${pageSize}&offset=${offset}`,
+        ) as Todo[];
+        page.forEach(item => {
+          if (!item.completed_at) return;
+          const key = dateKey(new Date(item.completed_at));
+          if (key !== lastDate) {
+            const dateHeading = doc.createElement('h2');
+            dateHeading.textContent = completedDateLabel(item.completed_at);
+            list.appendChild(dateHeading);
+            lastDate = key;
+          }
+          const task = doc.createElement('article');
+          const title = doc.createElement('div');
+          title.textContent = item.body;
+          const meta = doc.createElement('div');
+          meta.className = 'meta';
+          meta.textContent = `Finished ${formatDeadline(item.completed_at)}`;
+          task.append(title, meta);
+          list.appendChild(task);
+        });
+        offset += page.length;
+        loadMore.hidden = page.length < pageSize;
+        if (offset === 0) intro.textContent = 'No completed tasks yet.';
+      } catch {
+        intro.textContent = 'The completed-task history could not be loaded.';
+      } finally {
+        loadMore.disabled = false;
+        loadMore.textContent = 'Load older tasks';
+      }
+    };
+    loadMore.addEventListener('click', () => void loadPage());
+    await loadPage();
+  }
+
   function getReminderMinutes(): number | null {
     if (reminderChoice === 'none') return null;
     if (reminderChoice === 'custom') {
@@ -234,9 +369,22 @@
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
 
-  async function destroy(id: number): Promise<void> {
-    await ApiC.delete(`${Model.Todolist}/${id}`);
+  async function complete(id: number): Promise<void> {
+    await ApiC.patch(`${Model.Todolist}/${id}`, { completed: true });
     items = items.filter(item => Number(item.id) !== id);
+    if (completedLoaded) await loadCompleted();
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
+  }
+
+  async function restore(id: number): Promise<void> {
+    await ApiC.patch(`${Model.Todolist}/${id}`, { completed: false });
+    completedItems = completedItems.filter(item => Number(item.id) !== id);
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
+  }
+
+  async function destroyCompleted(id: number): Promise<void> {
+    await ApiC.delete(`${Model.Todolist}/${id}`);
+    completedItems = completedItems.filter(item => Number(item.id) !== id);
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
 
@@ -364,73 +512,133 @@
 
 {#if loading}
   <p class='todo-secondary-text'>{t('Loading')}…</p>
-{:else if dueGroups.length === 0}
-  <p class='mb-0'>{t('no-tasks-yet')}</p>
 {:else}
-  <div class='todo-due-groups'>
-    {#each dueGroups as group (group.key)}
-      <section class='todo-due-group' aria-labelledby={`todo-due-${group.key}`}>
-        <h4 id={`todo-due-${group.key}`} class:overdue-heading={group.key === 'overdue'} class='todo-due-heading'>
-          <span>{group.label}</span>
-          <span class='badge badge-secondary'>{group.entries.length}</span>
-        </h4>
-        <ul class='list-group'>
-          {#each group.entries as entry (entry.key)}
-            <li class:todo-entry-overdue={isOverdue(entry)} class='list-group-item todo-group-entry'>
-              <div class='d-flex align-items-start'>
-                {#if entry.source === 'step'}
-                  <input
-                    type='checkbox'
-                    class='stepbox mr-2 mt-1'
-                    id={`todo_step_${entry.id}`}
-                    data-id={entry.entityId}
-                    data-type={entry.entityType}
-                    data-stepid={entry.id}
-                    aria-label={t('Mark experiment step complete')}
-                  />
-                {:else}
-                  <i class='fas fa-list-check color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>
-                {/if}
-                <div class='d-flex flex-column flex-grow-1 min-width-0'>
-                  {#if entry.source === 'todo'}
-                    <span class='editable todoItem' data-id={entry.id}>{entry.body}</span>
+  {#if dueGroups.length === 0}
+    <p class='mb-0'>{t('no-tasks-yet')}</p>
+  {:else}
+    <div class='todo-due-groups'>
+      {#each dueGroups as group (group.key)}
+        <section class='todo-due-group' aria-labelledby={`todo-due-${group.key}`}>
+          <h4 id={`todo-due-${group.key}`} class:overdue-heading={group.key === 'overdue'} class='todo-due-heading'>
+            <span>{group.label}</span>
+            <span class='badge badge-secondary'>{group.entries.length}</span>
+          </h4>
+          <ul class='list-group'>
+            {#each group.entries as entry (entry.key)}
+              <li class:todo-entry-overdue={isOverdue(entry)} class='list-group-item todo-group-entry'>
+                <div class='d-flex align-items-start'>
+                  {#if entry.source === 'step'}
+                    <input
+                      type='checkbox'
+                      class='stepbox mr-2 mt-1'
+                      id={`todo_step_${entry.id}`}
+                      data-id={entry.entityId}
+                      data-type={entry.entityType}
+                      data-stepid={entry.id}
+                      aria-label={t('Mark experiment step complete')}
+                    />
                   {:else}
-                    <span>{entry.body}</span>
-                    <a class='small' href={`${entityPage(entry)}?mode=view&id=${entry.entityId}#step_view_${entry.id}`}>
-                      {entry.entityTitle}
-                    </a>
+                    <i class='fas fa-list-check color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>
                   {/if}
-                  {#if entry.deadline}
-                    <div class:font-weight-bold={isOverdue(entry)} class='small todo-item-deadline'>
-                      <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>
-                      {formatDeadline(entry.deadline)}
-                    </div>
-                  {/if}
-                  {#if entry.notes}
-                    <div class='small todo-secondary-text'>{entry.notes}</div>
-                  {/if}
-                  {#if entry.creationTime}
-                    <div class='relative-moment small todo-secondary-text' title={entry.creationTime}>
-                      {relative(entry.creationTime)}
-                    </div>
+                  <div class='d-flex flex-column flex-grow-1 min-width-0'>
+                    {#if entry.source === 'todo'}
+                      <span class='editable todoItem' data-id={entry.id}>{entry.body}</span>
+                    {:else}
+                      <span>{entry.body}</span>
+                      <a class='small' href={`${entityPage(entry)}?mode=view&id=${entry.entityId}#step_view_${entry.id}`}>
+                        {entry.entityTitle}
+                      </a>
+                    {/if}
+                    {#if entry.deadline}
+                      <div class:font-weight-bold={isOverdue(entry)} class='small todo-item-deadline'>
+                        <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>
+                        {formatDeadline(entry.deadline)}
+                      </div>
+                    {/if}
+                    {#if entry.notes}
+                      <div class='small todo-secondary-text'>{entry.notes}</div>
+                    {/if}
+                    {#if entry.creationTime}
+                      <div class='relative-moment small todo-secondary-text' title={entry.creationTime}>
+                        {relative(entry.creationTime)}
+                      </div>
+                    {/if}
+                  </div>
+                  {#if entry.source === 'todo'}
+                    <button
+                      type='button'
+                      class='btn btn-sm btn-ghost ml-2'
+                      on:click={() => complete(entry.id)}
+                    >
+                      {t('done')}
+                    </button>
                   {/if}
                 </div>
-                {#if entry.source === 'todo'}
-                  <button
-                    type='button'
-                    class='btn btn-sm btn-ghost ml-2'
-                    on:click={() => destroy(entry.id)}
-                  >
-                    {t('done')}
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/each}
+    </div>
+  {/if}
+
+  <details class='todo-completed-history mt-3' on:toggle={toggleCompletedHistory}>
+    <summary>
+      <span>{t('Completed tasks')}</span>
+      {#if completedLoaded}<span class='badge badge-secondary'>{completedItems.length}</span>{/if}
+    </summary>
+    <div class='todo-completed-toolbar'>
+      <label class='mb-0'>
+        <span class='small'>{t('Show')}</span>
+        <select
+          class='form-control form-control-sm'
+          bind:value={completedWindow}
+          on:change={() => loadCompleted()}
+        >
+          <option value='1'>{t('Past day')}</option>
+          <option value='2'>{t('Past 2 days')}</option>
+          <option value='3'>{t('Past 3 days')}</option>
+          <option value='7'>{t('Past week')}</option>
+          <option value='14'>{t('Past 2 weeks')}</option>
+          <option value='30'>{t('Past month')}</option>
+        </select>
+      </label>
+      <button type='button' class='btn btn-link p-0' on:click={openFullHistory}>
+        {t('All')} <i class='fas fa-up-right-from-square fa-fw' aria-hidden='true'></i>
+      </button>
+    </div>
+    {#if loadingCompleted}
+      <p class='todo-secondary-text mb-0'>{t('Loading')}…</p>
+    {:else if completedGroups.length === 0}
+      <p class='todo-secondary-text mb-0'>{t('No completed tasks in this time window.')}</p>
+    {:else}
+      {#each completedGroups as group (group.key)}
+        <section class='todo-completed-group'>
+          <h4>{group.label}</h4>
+          <ul class='list-group'>
+            {#each group.items as item (item.id)}
+              <li class='list-group-item todo-completed-entry'>
+                <div class='flex-grow-1 min-width-0'>
+                  <div>{item.body}</div>
+                  {#if item.completed_at}
+                    <div class='small todo-secondary-text'>{formatDeadline(item.completed_at)}</div>
+                  {/if}
+                </div>
+                <div class='btn-group btn-group-sm ml-2'>
+                  <button type='button' class='btn btn-ghost' on:click={() => restore(item.id)} title={t('Restore')} aria-label={t('Restore')}>
+                    <i class='fas fa-rotate-left' aria-hidden='true'></i>
                   </button>
-                {/if}
-              </div>
-            </li>
-          {/each}
-        </ul>
-      </section>
-    {/each}
-  </div>
+                  <button type='button' class='btn btn-ghost' on:click={() => destroyCompleted(item.id)} title={t('Delete')} aria-label={t('Delete')}>
+                    <i class='fas fa-trash' aria-hidden='true'></i>
+                  </button>
+                </div>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/each}
+    {/if}
+  </details>
 {/if}
 
 <style>
@@ -527,6 +735,56 @@
 
   .todo-secondary-text {
     color: var(--chrome-muted);
+  }
+
+  .todo-completed-history {
+    background: var(--chrome-bg);
+    border: 1px solid var(--secondary);
+    border-radius: 0.25rem;
+    color: var(--chrome-fg);
+    padding: 0.55rem 0.65rem;
+  }
+
+  .todo-completed-history summary {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    font-weight: 600;
+    justify-content: space-between;
+  }
+
+  .todo-completed-toolbar {
+    align-items: end;
+    display: flex;
+    justify-content: space-between;
+    margin: 0.75rem 0;
+  }
+
+  .todo-completed-toolbar select {
+    min-width: 9rem;
+  }
+
+  .todo-completed-group + .todo-completed-group {
+    margin-top: 0.8rem;
+  }
+
+  .todo-completed-group h4 {
+    color: var(--chrome-muted);
+    font-size: 0.82rem;
+    margin: 0 0 0.35rem;
+  }
+
+  .todo-completed-entry {
+    align-items: center;
+    background: var(--chrome-bg);
+    border-color: var(--secondary);
+    color: var(--chrome-fg);
+    display: flex;
+    padding: 0.55rem 0.6rem;
+  }
+
+  .todo-completed-entry .btn-ghost {
+    color: var(--chrome-fg);
   }
 
   .min-width-0 {

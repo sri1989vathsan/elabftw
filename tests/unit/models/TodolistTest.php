@@ -13,7 +13,9 @@ namespace Elabftw\Models;
 
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
+use Elabftw\Params\BaseQueryParams;
 use Elabftw\Params\OrderingParams;
+use Symfony\Component\HttpFoundation\InputBag;
 
 class TodolistTest extends \PHPUnit\Framework\TestCase
 {
@@ -71,6 +73,23 @@ class TodolistTest extends \PHPUnit\Framework\TestCase
             'deadline' => '2030-05-10T15:00:00Z',
             'reminder_minutes' => 10081,
         ));
+    }
+
+    public function testCompleteAndRestore(): void
+    {
+        $id = $this->Todolist->postAction(Action::Create, array('content' => 'completed history'));
+        $this->Todolist->setId($id);
+        $completed = $this->Todolist->patch(Action::Update, array('completed' => true));
+        $this->assertNotNull($completed['completed_at']);
+
+        $completedItems = $this->Todolist->readAll(new BaseQueryParams(
+            new InputBag(array('completed' => '1', 'limit' => 100)),
+        ));
+        $this->assertContains($id, array_map('intval', array_column($completedItems, 'id')));
+
+        $restored = $this->Todolist->patch(Action::Update, array('completed' => false));
+        $this->assertNull($restored['completed_at']);
+        $this->assertTrue($this->Todolist->destroy());
     }
 
     public function testUpdateOrdering(): void

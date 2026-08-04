@@ -73,8 +73,10 @@ import {
   createWellPlateSpreadsheetData,
   emptySpreadsheetData,
   extractFromTable,
+  getFlattenedClipboardSuggestion,
   openSpreadsheetModal,
   spreadsheetFromClipboard,
+  spreadsheetFromFlattenedClipboard,
   spreadsheetToHTML,
   SpreadsheetData,
   WELL_PLATE_PRESETS,
@@ -449,6 +451,10 @@ interface PaintedTextFormat {
 interface LabCollectorDialogData {
   labcollectorType: string;
   labcollectorId: string;
+}
+
+interface PdfTableDialogData {
+  columns: string;
 }
 
 function capturePaintedTextFormat(editor: Editor): PaintedTextFormat | null {
@@ -931,7 +937,9 @@ export function getTinymceBaseConfig(page: string): object {
           const items = [{
             type: 'menuitem' as const,
             text: 'Web or file link…',
-            onAction: () => editor.execCommand('mceLink'),
+            onAction: () => {
+              editor.execCommand('mceLink');
+            },
           }];
           if (document.getElementById('labcollectorHelper')) {
             items.push({
@@ -1192,16 +1200,61 @@ export function getTinymceBaseConfig(page: string): object {
         const excelPasteHandler = (event: ClipboardEvent): void => {
           const clipboard = event.clipboardData;
           if (!clipboard) return;
+          const plainText = clipboard.getData('text/plain');
           const spreadsheet = spreadsheetFromClipboard(
             clipboard.getData('text/html'),
-            clipboard.getData('text/plain'),
+            plainText,
           );
-          if (!spreadsheet) return;
+          if (spreadsheet) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            editor.undoManager.transact(() => {
+              editor.insertContent(spreadsheetToHTML(spreadsheet, spreadsheet.data));
+            });
+            return;
+          }
 
+          const flattened = getFlattenedClipboardSuggestion(plainText);
+          if (!flattened) return;
           event.preventDefault();
           event.stopImmediatePropagation();
-          editor.undoManager.transact(() => {
-            editor.insertContent(spreadsheetToHTML(spreadsheet, spreadsheet.data));
+          const bookmark = editor.selection.getBookmark(2, true);
+          editor.windowManager.open({
+            title: 'Paste PDF table',
+            size: 'normal',
+            body: {
+              type: 'panel',
+              items: [{
+                type: 'input',
+                name: 'columns',
+                label: `${flattened.cells} clipboard cells — number of columns`,
+              }],
+            },
+            initialData: { columns: String(flattened.columns) },
+            buttons: [
+              { type: 'cancel', text: 'Cancel' },
+              { type: 'submit', text: 'Paste table', primary: true },
+            ],
+            onSubmit: api => {
+              const data = api.getData() as PdfTableDialogData;
+              const columns = parseInt(data.columns, 10);
+              if (!Number.isInteger(columns) || columns < 2 || columns > 100) {
+                editor.notificationManager.open({
+                  text: 'Enter a column count between 2 and 100.',
+                  type: 'error',
+                  timeout: 2500,
+                });
+                return;
+              }
+              const recovered = spreadsheetFromFlattenedClipboard(plainText, columns);
+              if (!recovered) return;
+              editor.focus();
+              editor.selection.moveToBookmark(bookmark);
+              editor.undoManager.transact(() => {
+                editor.insertContent(spreadsheetToHTML(recovered, recovered.data));
+              });
+              api.close();
+            },
           });
         };
         editorDocument.addEventListener('keydown', blockIndentHandler, true);

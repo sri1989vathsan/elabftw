@@ -1908,9 +1908,15 @@ hr.elabftw-double-dashed-rule {
 }
 
 .inline-spreadsheet-actions {
+  align-items: center;
   display: flex;
   gap: 0.5rem;
   justify-content: space-between;
+}
+
+.inline-spreadsheet-grid-actions {
+  display: flex;
+  gap: 0.35rem;
 }
 
 /* Styling for spreadsheet tables embedded in the body */

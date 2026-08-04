@@ -290,8 +290,8 @@
     await signalChange();
   }
 
-  async function destroyTask(id: number): Promise<void> {
-    await ApiC.delete(`${Model.Todolist}/${id}`);
+  async function completeTask(id: number): Promise<void> {
+    await ApiC.patch(`${Model.Todolist}/${id}`, { completed: true });
     editingId = null;
     await signalChange();
   }
@@ -729,7 +729,7 @@
                 <button type='button' class='btn btn-ghost' on:click={() => startEditing(entry)} title={t('Edit')} aria-label={t('Edit')}>
                   <i class='fas fa-pen' aria-hidden='true'></i>
                 </button>
-                <button type='button' class='btn btn-ghost' on:click={() => destroyTask(entry.id)} title={t('done')} aria-label={t('done')}>
+                <button type='button' class='btn btn-ghost' on:click={() => completeTask(entry.id)} title={t('done')} aria-label={t('done')}>
                   <i class='fas fa-check' aria-hidden='true'></i>
                 </button>
               </div>
