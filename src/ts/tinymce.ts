@@ -74,6 +74,7 @@ import {
   emptySpreadsheetData,
   extractFromTable,
   getFlattenedClipboardSuggestion,
+  normalizePdfPrivateUseText,
   openSpreadsheetModal,
   spreadsheetFromClipboard,
   spreadsheetFromFlattenedClipboard,
@@ -1201,9 +1202,10 @@ export function getTinymceBaseConfig(page: string): object {
           const clipboard = event.clipboardData;
           if (!clipboard) return;
           const plainText = clipboard.getData('text/plain');
+          const normalizedPlainText = normalizePdfPrivateUseText(plainText);
           const spreadsheet = spreadsheetFromClipboard(
             clipboard.getData('text/html'),
-            plainText,
+            normalizedPlainText,
           );
           if (spreadsheet) {
             event.preventDefault();
@@ -1214,8 +1216,16 @@ export function getTinymceBaseConfig(page: string): object {
             return;
           }
 
-          const flattened = getFlattenedClipboardSuggestion(plainText);
-          if (!flattened) return;
+          const flattened = getFlattenedClipboardSuggestion(normalizedPlainText);
+          if (!flattened) {
+            if (normalizedPlainText === plainText) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            editor.undoManager.transact(() => {
+              editor.insertContent(escapeHTML(normalizedPlainText).replace(/\r?\n/g, '<br>'));
+            });
+            return;
+          }
           event.preventDefault();
           event.stopImmediatePropagation();
           const bookmark = editor.selection.getBookmark(2, true);
@@ -1246,7 +1256,7 @@ export function getTinymceBaseConfig(page: string): object {
                 });
                 return;
               }
-              const recovered = spreadsheetFromFlattenedClipboard(plainText, columns);
+              const recovered = spreadsheetFromFlattenedClipboard(normalizedPlainText, columns);
               if (!recovered) return;
               editor.focus();
               editor.selection.moveToBookmark(bookmark);

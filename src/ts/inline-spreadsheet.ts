@@ -599,8 +599,45 @@ function parsePdfNumericSuffixTable(lines: string[]): AOA | null {
   return normalized as AOA;
 }
 
+/**
+ * Some PDF generators omit a usable ToUnicode font map and put copied ASCII
+ * characters in Unicode's supplementary private-use area instead. One common
+ * encoding maps printable ASCII to U+100003..U+100061 using a fixed offset.
+ *
+ * Decode only when the clipboard is clearly dominated by that exact pattern;
+ * this keeps legitimate private-use icons and all ordinary Unicode untouched.
+ */
+export function normalizePdfPrivateUseText(plainText: string): string {
+  const privateUseAsciiOffset = 0xFFFE3;
+  let encodedCharacters = 0;
+  let visibleCharacters = 0;
+
+  for (const character of plainText) {
+    if (!/\s/u.test(character)) visibleCharacters++;
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined) continue;
+    const decodedCodePoint = codePoint - privateUseAsciiOffset;
+    if (decodedCodePoint >= 0x20 && decodedCodePoint <= 0x7E) encodedCharacters++;
+  }
+
+  if (encodedCharacters < 4
+    || encodedCharacters / Math.max(1, visibleCharacters) < 0.6
+  ) {
+    return plainText;
+  }
+
+  return Array.from(plainText, character => {
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined) return character;
+    const decodedCodePoint = codePoint - privateUseAsciiOffset;
+    return decodedCodePoint >= 0x20 && decodedCodePoint <= 0x7E
+      ? String.fromCodePoint(decodedCodePoint)
+      : character;
+  }).join('');
+}
+
 function getFlattenedClipboardValues(plainText: string): string[] | null {
-  const values = plainText
+  const values = normalizePdfPrivateUseText(plainText)
     .replace(/^\uFEFF/, '')
     .split(/\r?\n/)
     .map(value => value.replace(/\u00a0/g, ' ').trim())
@@ -966,7 +1003,8 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
   const clipboardTable = containsTable
     ? parseClipboardHtmlTable(html)
     : null;
-  const parsed = clipboardTable?.data ?? parseStructuredPlainText(plainText);
+  const parsed = clipboardTable?.data
+    ?? parseStructuredPlainText(normalizePdfPrivateUseText(plainText));
   if (!parsed || parsed.length === 0) return null;
   const rows = Math.min(MAX_DIMENSION, parsed.length);
   const cols = Math.min(
@@ -2920,12 +2958,13 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         return;
       }
       const plainText = clipboard.getData('text/plain');
+      const normalizedPlainText = normalizePdfPrivateUseText(plainText);
       let pasted = spreadsheetFromClipboard(
         clipboard.getData('text/html'),
-        plainText,
+        normalizedPlainText,
       );
       if (!pasted) {
-        const flattened = getFlattenedClipboardSuggestion(plainText);
+        const flattened = getFlattenedClipboardSuggestion(normalizedPlainText);
         if (!flattened) return;
         const selected = getSelectedRange();
         const selectedWidth = selected
@@ -2942,7 +2981,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           event.preventDefault();
           return;
         }
-        pasted = spreadsheetFromFlattenedClipboard(plainText, columns);
+        pasted = spreadsheetFromFlattenedClipboard(normalizedPlainText, columns);
       }
       if (!pasted) return;
 
