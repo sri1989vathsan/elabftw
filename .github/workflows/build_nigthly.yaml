@@ -3,18 +3,20 @@ name: Build nightly elabimg
 on:
   schedule:
     - cron: "42 01 * * *"
+  workflow_dispatch:
 
 ## GITHUB_TOKEN authentication
 permissions:
-  contents: write
+  contents: read
   id-token: write
   attestations: write
   artifact-metadata: write
+  packages: write
 
 jobs:
   buildandpush:
     runs-on: ubuntu-latest
-    name: Build images and push to Docker Hub
+    name: Build images and push to GitHub Container Registry
     steps:
       # https://github.com/CycodeLabs/cimon-action
       - name: Cimon supply chain attack protection
@@ -52,19 +54,21 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
-      # https://github.com/docker/login-action#docker-hub
-      - name: Login to Docker Hub
+      # Use the repository-scoped token so forks do not depend on upstream
+      # Docker Hub credentials or permission to publish elabftw/elabimg.
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set version string
         id: version
         run: echo "value=$(date -u +'%y%m%d')-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       # https://github.com/docker/build-push-action#multi-platform-image
-      - name: Build nightly and push to docker
+      - name: Build nightly and push to GitHub Container Registry
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
         id: push
         with:
@@ -79,7 +83,7 @@ jobs:
           build-args: |
               ELABFTW_VERSION=${{ steps.version.outputs.value }}
           tags: |
-              elabftw/elabimg:nightly
+              ghcr.io/${{ github.repository }}:nightly
 
 
       # TRIVY scans disabled because of https://socket.dev/blog/trivy-under-attack-again-github-actions-compromise
@@ -110,6 +114,6 @@ jobs:
       - name: Create build provenance attestation
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
-          subject-name: docker.io/elabftw/elabimg
+          subject-name: ghcr.io/${{ github.repository }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
