@@ -60,6 +60,175 @@ interface Endpoint {
   modified_at: string;
 }
 
+interface AdminHtmlTool {
+  id: number;
+  name: string;
+  description: string;
+  version: string;
+  enabled: number;
+  updated_at: string;
+  uploaded_by_name?: string | null;
+  launch_url: string;
+}
+
+async function uploadHtmlTool(formData: FormData, toolId?: number): Promise<void> {
+  const response = await fetch(`api/v2/html_tools${toolId ? `/${toolId}` : ''}`, {
+    method: 'POST',
+    headers: {
+      'X-CSRF-Token': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: formData,
+  });
+  if (response.status !== 201) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || error.description || 'Could not install the HTML tool.');
+  }
+}
+
+async function loadHtmlToolsAdmin(): Promise<void> {
+  const tableBody = document.getElementById('htmlToolsAdminList');
+  if (!tableBody) return;
+  try {
+    const tools = await ApiC.getJson<AdminHtmlTool[]>('html_tools');
+    tableBody.replaceChildren(...tools.map(tool => createHtmlToolAdminRow(tool)));
+    if (tools.length === 0) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 5;
+      cell.className = 'text-center color-medium';
+      cell.textContent = 'No HTML tools are installed yet.';
+      row.append(cell);
+      tableBody.append(row);
+    }
+  } catch (error) {
+    tableBody.replaceChildren();
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 5;
+    cell.className = 'text-center color-danger';
+    cell.textContent = error instanceof Error ? error.message : 'Could not load HTML tools.';
+    row.append(cell);
+    tableBody.append(row);
+  }
+}
+
+function createHtmlToolAdminRow(tool: AdminHtmlTool): HTMLTableRowElement {
+  const row = document.createElement('tr');
+
+  const enabledCell = document.createElement('td');
+  const enabled = document.createElement('input');
+  enabled.type = 'checkbox';
+  enabled.checked = tool.enabled === 1;
+  enabled.setAttribute('aria-label', `Enable ${tool.name}`);
+  enabled.addEventListener('change', async () => {
+    enabled.disabled = true;
+    try {
+      await ApiC.patch(`html_tools/${tool.id}`, { enabled: enabled.checked });
+      window.dispatchEvent(new CustomEvent('html-tools-changed'));
+    } catch {
+      enabled.checked = !enabled.checked;
+    } finally {
+      enabled.disabled = false;
+    }
+  });
+  enabledCell.append(enabled);
+
+  const nameCell = document.createElement('td');
+  const name = document.createElement('strong');
+  name.textContent = tool.name;
+  nameCell.append(name);
+  if (tool.description) {
+    const description = document.createElement('div');
+    description.className = 'small color-medium html-tool-admin-description';
+    description.textContent = tool.description;
+    nameCell.append(description);
+  }
+  if (tool.uploaded_by_name) {
+    const uploader = document.createElement('div');
+    uploader.className = 'small color-medium';
+    uploader.textContent = `Installed by ${tool.uploaded_by_name}`;
+    nameCell.append(uploader);
+  }
+
+  const versionCell = document.createElement('td');
+  versionCell.textContent = tool.version || '—';
+  const updatedCell = document.createElement('td');
+  updatedCell.textContent = tool.updated_at;
+
+  const actionsCell = document.createElement('td');
+  const actionGroup = document.createElement('div');
+  actionGroup.className = 'btn-group btn-group-sm';
+  const open = document.createElement('a');
+  open.className = 'btn btn-outline-primary';
+  open.href = tool.launch_url;
+  open.target = '_blank';
+  open.rel = 'noopener noreferrer';
+  open.title = 'Open tool';
+  open.innerHTML = '<i class="fas fa-up-right-from-square fa-fw"></i>';
+
+  const edit = document.createElement('button');
+  edit.type = 'button';
+  edit.className = 'btn btn-outline-secondary';
+  edit.title = 'Edit name and description';
+  edit.innerHTML = '<i class="fas fa-pen fa-fw"></i>';
+  edit.addEventListener('click', async () => {
+    const nextName = window.prompt('Tool name', tool.name);
+    if (nextName === null || nextName.trim() === '') return;
+    const nextDescription = window.prompt('Description', tool.description) ?? tool.description;
+    await ApiC.patch(`html_tools/${tool.id}`, { name: nextName, description: nextDescription });
+    window.dispatchEvent(new CustomEvent('html-tools-changed'));
+    void loadHtmlToolsAdmin();
+  });
+
+  const replace = document.createElement('button');
+  replace.type = 'button';
+  replace.className = 'btn btn-outline-secondary';
+  replace.title = 'Replace package';
+  replace.innerHTML = '<i class="fas fa-file-arrow-up fa-fw"></i>';
+  replace.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.html,.htm,.zip,text/html,application/zip';
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const data = new FormData();
+      data.set('file', file);
+      data.set('name', tool.name);
+      data.set('description', tool.description);
+      replace.disabled = true;
+      try {
+        await uploadHtmlTool(data, tool.id);
+        notify.success();
+        window.dispatchEvent(new CustomEvent('html-tools-changed'));
+        await loadHtmlToolsAdmin();
+      } catch (error) {
+        notify.error(error instanceof Error ? error.message : 'Could not replace the HTML tool.');
+      } finally {
+        replace.disabled = false;
+      }
+    }, { once: true });
+    input.click();
+  });
+
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'btn btn-outline-danger';
+  remove.title = 'Delete tool';
+  remove.innerHTML = '<i class="fas fa-trash fa-fw"></i>';
+  remove.addEventListener('click', async () => {
+    if (!window.confirm(`Delete “${tool.name}” and its stored files?`)) return;
+    await ApiC.delete(`html_tools/${tool.id}`);
+    window.dispatchEvent(new CustomEvent('html-tools-changed'));
+    await loadHtmlToolsAdmin();
+  });
+  actionGroup.append(open, edit, replace, remove);
+  actionsCell.append(actionGroup);
+  row.append(enabledCell, nameCell, versionCell, updatedCell, actionsCell);
+  return row;
+}
+
 const endpointCols: (keyof Endpoint)[] = [
   'id',
   'binding_urn',
@@ -224,6 +393,28 @@ function checkForUpdate() {
 if (window.location.pathname === '/sysconfig.php') {
 
   checkForUpdate();
+
+  const htmlToolUploadForm = document.getElementById('htmlToolUploadForm') as HTMLFormElement | null;
+  htmlToolUploadForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = document.getElementById('htmlToolUploadButton') as HTMLButtonElement | null;
+    if (button) button.disabled = true;
+    try {
+      await uploadHtmlTool(new FormData(htmlToolUploadForm));
+      htmlToolUploadForm.reset();
+      notify.success();
+      window.dispatchEvent(new CustomEvent('html-tools-changed'));
+      await loadHtmlToolsAdmin();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not install the HTML tool.');
+    } finally {
+      if (button) button.disabled = false;
+    }
+  });
+  document.getElementById('refreshHtmlTools')?.addEventListener('click', () => {
+    void loadHtmlToolsAdmin();
+  });
+  void loadHtmlToolsAdmin();
 
   on('edit-logo', async (el: HTMLElement) => {
     const picked = await pickSvgText();
