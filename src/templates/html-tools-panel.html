@@ -1,0 +1,54 @@
+<div class='side-panel' id='htmlToolsPanel' hidden>
+  <button type='button' data-action='toggle-sidepanel' data-target='html-tools' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'>
+    <i class='fas fa-xmark fa-2x'></i>
+  </button>
+  <div class='p-3'>
+    <h3 class='mb-2'><i class='fas fa-toolbox mr-2' aria-hidden='true'></i>{{ 'HTML tools'|trans }}</h3>
+    <p class='small color-medium mb-3'>{{ 'Interactive tools installed for this eLabFTW instance.'|trans }}</p>
+    <div class='input-group input-group-sm mb-2'>
+      <div class='input-group-prepend'>
+        <span class='input-group-text'><i class='fas fa-search fa-fw' aria-hidden='true'></i></span>
+      </div>
+      <label class='sr-only' for='htmlToolsSearch'>{{ 'Search'|trans }} {{ 'HTML tools'|trans }}</label>
+      <input type='search' id='htmlToolsSearch' class='form-control' placeholder='{{ 'Search tools'|trans }}' autocomplete='off'>
+    </div>
+    <p id='htmlToolsStatus' class='small color-medium mb-2' aria-live='polite'>{{ 'Open this tab to load available tools.'|trans }}</p>
+    <div id='htmlToolsList' class='html-tools-list'></div>
+  </div>
+</div>
+
+<aside class='html-tool-workspace' id='htmlToolWorkspace' aria-labelledby='htmlToolWorkspaceTitle' hidden>
+  <div
+    class='html-tool-workspace-resizer'
+    id='htmlToolWorkspaceResizer'
+    role='separator'
+    aria-label='{{ 'Resize HTML tool sidebar'|trans }}'
+    aria-orientation='vertical'
+    aria-valuemin='360'
+    tabindex='0'
+    title='{{ 'Drag to resize'|trans }}'
+  ></div>
+  <header class='html-tool-workspace-header'>
+    <h4 class='text-truncate mb-0' id='htmlToolWorkspaceTitle'>{{ 'HTML tool'|trans }}</h4>
+    <div class='d-flex align-items-center ml-auto'>
+      <a id='htmlToolNewWindow' class='btn btn-outline-secondary btn-sm mr-2' target='_blank' rel='noopener noreferrer' title='{{ 'Open in a new window'|trans }}' aria-label='{{ 'Open in a new window'|trans }}'>
+        <i class='fas fa-up-right-from-square fa-fw'></i>
+      </a>
+      <button type='button' id='htmlToolMaximize' class='btn btn-outline-secondary btn-sm mr-2' title='{{ 'Maximize'|trans }}' aria-label='{{ 'Maximize'|trans }}'>
+        <i class='fas fa-expand fa-fw'></i>
+      </button>
+      <button type='button' id='htmlToolClose' class='btn btn-outline-secondary btn-sm' title='{{ 'Close'|trans }}' aria-label='{{ 'Close'|trans }}'>
+        <i class='fas fa-xmark fa-fw'></i>
+      </button>
+    </div>
+  </header>
+  <div class='html-tool-workspace-body'>
+    <iframe
+      id='htmlToolIframe'
+      title='{{ 'HTML tool'|trans }}'
+      sandbox='allow-scripts allow-modals allow-downloads'
+      allow='clipboard-read; clipboard-write; fullscreen'
+      referrerpolicy='no-referrer'
+    ></iframe>
+  </div>
+</aside>

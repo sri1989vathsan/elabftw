@@ -1203,8 +1203,9 @@ export function getTinymceBaseConfig(page: string): object {
           if (!clipboard) return;
           const plainText = clipboard.getData('text/plain');
           const normalizedPlainText = normalizePdfPrivateUseText(plainText);
+          const richClipboardHtml = clipboard.getData('text/html');
           const spreadsheet = spreadsheetFromClipboard(
-            clipboard.getData('text/html'),
+            richClipboardHtml,
             normalizedPlainText,
           );
           if (spreadsheet) {
@@ -1256,7 +1257,11 @@ export function getTinymceBaseConfig(page: string): object {
                 });
                 return;
               }
-              const recovered = spreadsheetFromFlattenedClipboard(normalizedPlainText, columns);
+              const recovered = spreadsheetFromFlattenedClipboard(
+                normalizedPlainText,
+                columns,
+                richClipboardHtml,
+              );
               if (!recovered) return;
               editor.focus();
               editor.selection.moveToBookmark(bookmark);

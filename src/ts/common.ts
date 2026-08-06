@@ -12,6 +12,7 @@ import 'bootstrap/js/src/modal.js';
 import FavoriteFilters from './FavoriteFilters.class';
 import FoldersPanel from './FoldersPanel.class';
 import TocPanel from './TocPanel.class';
+import HtmlToolsPanel from './HtmlToolsPanel.class';
 import { clearLocalStorage, rememberLastSelected, selectLastSelected } from './localStorage';
 import {
   adjustHiddenState,
@@ -112,6 +113,7 @@ const FavoriteFiltersC = new FavoriteFilters();
 const FoldersPanelC = new FoldersPanel();
 const TodolistC = new Todolist();
 const TocPanelC = new TocPanel();
+const HtmlToolsPanelC = new HtmlToolsPanel();
 
 // Keep the entity Back/Edit/Save toolbar immediately below the sticky main
 // navigation. ResizeObserver also tracks the expanded mobile navigation and
@@ -173,6 +175,9 @@ if (openedSidePanel === Model.Todolist) {
 }
 if (openedSidePanel === 'toc') {
   TocPanelC.toggle();
+}
+if (openedSidePanel === 'html-tools') {
+  HtmlToolsPanelC.toggle();
 }
 
 // ACTIVATE REACTIVE COUNT OF .COUNTABLE ITEMS
@@ -725,6 +730,8 @@ on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
   let SidePanelC;
   if (el.dataset.target === 'toc') {
     SidePanelC = TocPanelC;
+  } else if (el.dataset.target === 'html-tools') {
+    SidePanelC = HtmlToolsPanelC;
   } else if (el.dataset.target === 'folders') {
     SidePanelC = FoldersPanelC;
   } else if (el.dataset.target === 'favorites') {

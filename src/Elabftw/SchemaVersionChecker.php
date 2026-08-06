@@ -21,7 +21,7 @@ final class SchemaVersionChecker
 {
     /** @var int REQUIRED_SCHEMA the current version of the database structure */
 
-    public const int REQUIRED_SCHEMA = 215;
+    public const int REQUIRED_SCHEMA = 216;
 
     public function __construct(public int $currentSchema) {}
 

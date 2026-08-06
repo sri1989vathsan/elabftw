@@ -34,6 +34,7 @@ enum ApiEndpoint: string
     case FavTags = 'favtags';
     case Idps = 'idps';
     case IdpsSources = 'idps_sources';
+    case HtmlTools = 'html_tools';
     case Import = 'import';
     case Info = 'info';
     case Instance = 'instance';

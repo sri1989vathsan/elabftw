@@ -49,6 +49,7 @@ use Elabftw\Models\IdpsCerts;
 use Elabftw\Models\IdpsEndpoints;
 use Elabftw\Models\IdpsSources;
 use Elabftw\Models\Info;
+use Elabftw\Models\HtmlTools;
 use Elabftw\Models\Instance;
 use Elabftw\Models\Items;
 use Elabftw\Models\ItemsStatus;
@@ -204,7 +205,7 @@ final class Apiv2Controller extends AbstractApiController
     private function handlePost(): Response
     {
         // special case for POST/uploads where we get the information from the "files" attribute
-        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler) && $this->action === Action::Create) {
+        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools) && $this->action === Action::Create) {
             $file = $this->Request->files->get('file');
             // this was added to prevent: Uncaught Error: Call to a member function getClientOriginalName() on null
             // not sure what triggers it though
@@ -215,6 +216,16 @@ final class Apiv2Controller extends AbstractApiController
             $this->reqBody['file'] = $file;
             $this->reqBody['target'] = $this->Request->request->getString('target');
             $this->reqBody['filePath'] = $file->getPathname();
+            if ($this->Model instanceof HtmlTools) {
+                $this->reqBody['name'] = $this->Request->request->getString('name');
+                $this->reqBody['description'] = $this->Request->request->getString('description');
+                return new Response('', Response::HTTP_CREATED, array('Location' => sprintf(
+                    '%s/%s%d',
+                    Env::asUrl('SITE_URL'),
+                    $this->Model->getApiPath(),
+                    $this->Model->postAction($this->action, $this->reqBody),
+                )));
+            }
             $this->reqBody['comment'] = $this->Request->request->get('comment');
             $this->reqBody['entity_type'] = $this->Request->request->get('entity_type'); // can be null
             $this->reqBody['category'] = $this->Request->request->get('category'); // can be null
@@ -308,6 +319,7 @@ final class Apiv2Controller extends AbstractApiController
             )(),
             ApiEndpoint::Idps => new Idps($this->requester, $this->id),
             ApiEndpoint::IdpsSources => new IdpsSources($this->requester, $this->id),
+            ApiEndpoint::HtmlTools => new HtmlTools($this->requester, $this->id),
             ApiEndpoint::Import => new ImportHandler($this->requester, App::getDefaultLogger()),
             ApiEndpoint::Info => new Info(),
             ApiEndpoint::Instance => new Instance($this->requester, $this->getEmail(), (bool) Config::getConfig()->configArr['email_send_grouped']),
@@ -430,10 +442,16 @@ final class Apiv2Controller extends AbstractApiController
             throw new IllegalActionException('Non sysadmin user tried to use a restricted api endpoint.');
         }
 
+        if (($this->Model instanceof HtmlTools)
+            && $this->Request->getMethod() !== Request::METHOD_GET
+            && !$this->requester->isSysadmin()) {
+            throw new IllegalActionException('Only a sysadmin can manage HTML tools.');
+        }
+
         // allow multipart/form-data for the POST/uploads and POST/import endpoints only,
         // use str_starts_with because the actual header will also contain the boundary
         if (str_starts_with($this->Request->headers->get('content-type') ?? '', 'multipart/form-data') &&
-            ($this->Model instanceof Uploads || $this->Model instanceof ImportHandler) &&
+            ($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools) &&
             $this->Request->getMethod() === Request::METHOD_POST) {
             return;
         }

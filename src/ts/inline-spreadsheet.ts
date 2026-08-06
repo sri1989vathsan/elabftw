@@ -36,6 +36,11 @@ interface ClipboardStyleRule {
   declarations: string;
 }
 
+interface ClipboardTextStream {
+  text: string;
+  styles: Array<string | undefined>;
+}
+
 interface CellFontFormat {
   color?: string;
   fontFamily?: string;
@@ -130,6 +135,7 @@ const DEFAULT_COLS = 6;
 const DEFAULT_ROWS = 5;
 const MAX_DIMENSION = 50;
 const MAX_TABLE_BORDER = 20;
+const PDF_PRIVATE_USE_ASCII_OFFSET = 0xFFFE3;
 const DEFAULT_TABLE_STYLE = 'min-width:25%';
 const DEFAULT_APPEARANCE: SpreadsheetAppearance = {
   borderWidth: 1,
@@ -197,6 +203,39 @@ const PRESERVED_TABLE_STYLE_PROPERTIES = new Set([
   'margin-left',
   'margin-right',
   'min-width',
+]);
+const PRESERVED_PDF_TEXT_STYLE_PROPERTIES = new Set([
+  'background-color',
+  'border',
+  'border-bottom',
+  'border-bottom-color',
+  'border-bottom-style',
+  'border-bottom-width',
+  'border-color',
+  'border-left',
+  'border-left-color',
+  'border-left-style',
+  'border-left-width',
+  'border-right',
+  'border-right-color',
+  'border-right-style',
+  'border-right-width',
+  'border-style',
+  'border-top',
+  'border-top-color',
+  'border-top-style',
+  'border-top-width',
+  'border-width',
+  'color',
+  'font-family',
+  'font-size',
+  'font-style',
+  'font-variant',
+  'font-weight',
+  'line-height',
+  'text-align',
+  'text-decoration',
+  'vertical-align',
 ]);
 
 function normalizeColor(value: unknown, fallback: string): string {
@@ -608,7 +647,6 @@ function parsePdfNumericSuffixTable(lines: string[]): AOA | null {
  * this keeps legitimate private-use icons and all ordinary Unicode untouched.
  */
 export function normalizePdfPrivateUseText(plainText: string): string {
-  const privateUseAsciiOffset = 0xFFFE3;
   let encodedCharacters = 0;
   let visibleCharacters = 0;
 
@@ -616,7 +654,7 @@ export function normalizePdfPrivateUseText(plainText: string): string {
     if (!/\s/u.test(character)) visibleCharacters++;
     const codePoint = character.codePointAt(0);
     if (codePoint === undefined) continue;
-    const decodedCodePoint = codePoint - privateUseAsciiOffset;
+    const decodedCodePoint = codePoint - PDF_PRIVATE_USE_ASCII_OFFSET;
     if (decodedCodePoint >= 0x20 && decodedCodePoint <= 0x7E) encodedCharacters++;
   }
 
@@ -626,10 +664,14 @@ export function normalizePdfPrivateUseText(plainText: string): string {
     return plainText;
   }
 
-  return Array.from(plainText, character => {
+  return decodePdfPrivateUseCharacters(plainText);
+}
+
+function decodePdfPrivateUseCharacters(text: string): string {
+  return Array.from(text, character => {
     const codePoint = character.codePointAt(0);
     if (codePoint === undefined) return character;
-    const decodedCodePoint = codePoint - privateUseAsciiOffset;
+    const decodedCodePoint = codePoint - PDF_PRIVATE_USE_ASCII_OFFSET;
     return decodedCodePoint >= 0x20 && decodedCodePoint <= 0x7E
       ? String.fromCodePoint(decodedCodePoint)
       : character;
@@ -735,6 +777,7 @@ export function getFlattenedClipboardSuggestion(
 export function spreadsheetFromFlattenedClipboard(
   plainText: string,
   requestedColumns: number,
+  html = '',
 ): SpreadsheetData | null {
   const values = getFlattenedClipboardValues(plainText);
   if (!values) return null;
@@ -749,6 +792,7 @@ export function spreadsheetFromFlattenedClipboard(
     cols: columns,
     kind: 'standard',
     caption: '',
+    cellStyles: getClipboardRichTextStyles(html, data),
     appearance: getEffectiveAppearanceDefaults(),
   };
 }
@@ -821,6 +865,42 @@ function getClipboardStyleRules(clipboardDocument: Document): ClipboardStyleRule
   return rules;
 }
 
+function getClipboardElementCandidateStyle(
+  element: Element,
+  rules: ClipboardStyleRule[],
+): CSSStyleDeclaration {
+  const candidate = document.createElement('span').style;
+  rules.forEach(rule => {
+    const matches = rule.selectors.some(selector => {
+      try {
+        return element.matches(selector);
+      } catch {
+        return false;
+      }
+    });
+    if (matches) candidate.cssText += `;${rule.declarations}`;
+  });
+  candidate.cssText += `;${element.getAttribute('style') ?? ''}`;
+  if (element.tagName === 'FONT') {
+    const color = element.getAttribute('color');
+    const family = element.getAttribute('face');
+    const size = element.getAttribute('size');
+    if (color) candidate.color = color;
+    if (family) candidate.fontFamily = family;
+    if (size && /^\d+(?:\.\d+)?(?:pt|px|em|rem|%)$/i.test(size)) candidate.fontSize = size;
+  }
+  if (element.matches('b, strong')) candidate.fontWeight = 'bold';
+  if (element.matches('i, em')) candidate.fontStyle = 'italic';
+  if (element.matches('u')) candidate.textDecoration = 'underline';
+  const backgroundAttribute = element.getAttribute('bgcolor');
+  if (backgroundAttribute) candidate.backgroundColor = backgroundAttribute;
+  const alignAttribute = element.getAttribute('align');
+  if (alignAttribute && /^(?:left|center|right|justify)$/i.test(alignAttribute)) {
+    candidate.textAlign = alignAttribute;
+  }
+  return candidate;
+}
+
 function getClipboardCellStyle(
   cell: HTMLTableCellElement,
   rules: ClipboardStyleRule[],
@@ -839,29 +919,7 @@ function getClipboardCellStyle(
   ];
   const applyElementStyle = (element: Element | null, inheritedOnly = false): void => {
     if (!element) return;
-    const candidate = document.createElement('span').style;
-    rules.forEach(rule => {
-      const matches = rule.selectors.some(selector => {
-        try {
-          return element.matches(selector);
-        } catch {
-          return false;
-        }
-      });
-      if (matches) candidate.cssText += `;${rule.declarations}`;
-    });
-    candidate.cssText += `;${element.getAttribute('style') ?? ''}`;
-    if (element.tagName === 'FONT') {
-      const color = element.getAttribute('color');
-      const family = element.getAttribute('face');
-      const size = element.getAttribute('size');
-      if (color) candidate.color = color;
-      if (family) candidate.fontFamily = family;
-      if (size && /^\d+(?:\.\d+)?(?:pt|px|em|rem|%)$/i.test(size)) candidate.fontSize = size;
-    }
-    if (element.matches('b, strong')) candidate.fontWeight = 'bold';
-    if (element.matches('i, em')) candidate.fontStyle = 'italic';
-    if (element.matches('u')) candidate.textDecoration = 'underline';
+    const candidate = getClipboardElementCandidateStyle(element, rules);
 
     if (inheritedOnly) {
       inheritedProperties.forEach(property => {
@@ -901,9 +959,6 @@ function getClipboardCellStyle(
     nested = nested.parentElement;
   }
   nestedElements.forEach(element => applyElementStyle(element));
-  const backgroundAttribute = cell.getAttribute('bgcolor');
-  if (backgroundAttribute) style.backgroundColor = backgroundAttribute;
-
   const declarations: string[] = [];
   const add = (property: string, value: string): void => {
     if (value) declarations.push(`${property}:${value}`);
@@ -930,6 +985,131 @@ function getClipboardCellStyle(
     }
   });
   return sanitizeStyle(declarations.join(';'), PRESERVED_STYLE_PROPERTIES);
+}
+
+function getClipboardTextElementStyle(
+  element: Element,
+  rules: ClipboardStyleRule[],
+): string | undefined {
+  const style = document.createElement('span').style;
+  const ancestors: Element[] = [];
+  let ancestor: Element | null = element;
+  while (ancestor) {
+    ancestors.unshift(ancestor);
+    ancestor = ancestor.parentElement;
+  }
+  ancestors.forEach(current => {
+    const candidate = getClipboardElementCandidateStyle(current, rules);
+    style.cssText += `;${candidate.cssText}`;
+  });
+  return sanitizeStyle(style.cssText, PRESERVED_PDF_TEXT_STYLE_PROPERTIES);
+}
+
+function getClipboardRichTextStream(html: string): ClipboardTextStream | null {
+  if (!html.trim()) return null;
+  const clipboardDocument = new DOMParser().parseFromString(html, 'text/html');
+  const body = clipboardDocument.body;
+  if (!body.textContent?.trim()) return null;
+  const rules = getClipboardStyleRules(clipboardDocument);
+  const decodePrivateUse = normalizePdfPrivateUseText(body.textContent) !== body.textContent;
+  const characters: string[] = [];
+  const styles: Array<string | undefined> = [];
+  const blockElements = new Set([
+    'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'DIV', 'DL', 'DT', 'DD',
+    'FIGCAPTION', 'FIGURE', 'FOOTER', 'HEADER', 'H1', 'H2', 'H3', 'H4',
+    'H5', 'H6', 'LI', 'MAIN', 'NAV', 'OL', 'P', 'PRE', 'SECTION', 'TABLE',
+    'TBODY', 'TD', 'TFOOT', 'TH', 'THEAD', 'TR', 'UL',
+  ]);
+  const appendSeparator = (): void => {
+    if (characters.length > 0 && characters[characters.length - 1] !== ' ') {
+      characters.push(' ');
+      styles.push(undefined);
+    }
+  };
+  const appendText = (value: string, style: string | undefined): void => {
+    const decoded = decodePrivateUse ? decodePdfPrivateUseCharacters(value) : value;
+    for (const character of decoded.replace(/\u00a0/g, ' ')) {
+      if (/\s/u.test(character)) {
+        appendSeparator();
+      } else {
+        characters.push(character);
+        styles.push(style);
+      }
+    }
+  };
+  const visit = (node: Node): void => {
+    if (node.nodeType === 3) {
+      const parent = node.parentElement;
+      if (parent && !parent.matches('script, style, noscript')) {
+        appendText(node.textContent ?? '', getClipboardTextElementStyle(parent, rules));
+      }
+      return;
+    }
+    if (!(node instanceof Element) || node.matches('script, style, noscript')) return;
+    if (node.tagName === 'BR') {
+      appendSeparator();
+      return;
+    }
+    const isBlock = blockElements.has(node.tagName);
+    if (isBlock) appendSeparator();
+    node.childNodes.forEach(visit);
+    if (isBlock) appendSeparator();
+  };
+  body.childNodes.forEach(visit);
+
+  while (characters[characters.length - 1] === ' ') {
+    characters.pop();
+    styles.pop();
+  }
+  return characters.length > 0 ? { text: characters.join(''), styles } : null;
+}
+
+function getClipboardRichTextStyles(html: string, data: AOA): CellStyles | undefined {
+  // Real HTML tables are handled by parseClipboardHtmlTable, which also
+  // preserves blank-cell backgrounds, spans, borders and merged cells.
+  if (!html.trim() || /<table[\s>]/i.test(html)) return undefined;
+  const stream = getClipboardRichTextStream(html);
+  if (!stream) return undefined;
+
+  const cellStyles: CellStyles = {};
+  let searchFrom = 0;
+  const findCellText = (needle: string): number => {
+    let candidate = stream.text.indexOf(needle, searchFrom);
+    const needsLeadingBoundary = /^\w/u.test(needle);
+    const needsTrailingBoundary = /\w$/u.test(needle);
+    while (candidate >= 0) {
+      const before = candidate > 0 ? stream.text[candidate - 1] : '';
+      const after = stream.text[candidate + needle.length] ?? '';
+      if ((!needsLeadingBoundary || !/\w/u.test(before))
+        && (!needsTrailingBoundary || !/\w/u.test(after))
+      ) {
+        return candidate;
+      }
+      candidate = stream.text.indexOf(needle, candidate + 1);
+    }
+    return -1;
+  };
+  data.forEach((row, rowIndex) => row.forEach((value, colIndex) => {
+    const needle = normalizePdfPrivateUseText(String(value ?? ''))
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!needle) return;
+    const start = findCellText(needle);
+    if (start < 0) return;
+    const end = start + needle.length;
+    const styleCounts = new Map<string, number>();
+    for (let index = start; index < end; index++) {
+      const style = stream.styles[index];
+      if (!style || stream.text[index] === ' ') continue;
+      styleCounts.set(style, (styleCounts.get(style) ?? 0) + 1);
+    }
+    const dominantStyle = Array.from(styleCounts.entries())
+      .sort((left, right) => right[1] - left[1])[0]?.[0];
+    if (dominantStyle) cellStyles[`${colLabel(colIndex)}${rowIndex + 1}`] = dominantStyle;
+    searchFrom = end;
+  }));
+  return Object.keys(cellStyles).length > 0 ? cellStyles : undefined;
 }
 
 function parseClipboardHtmlTable(html: string): ClipboardTable | null {
@@ -1012,6 +1192,8 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
     parsed.reduce((maximum, row) => Math.max(maximum, row.length), 0),
   );
   if (cols === 0) return null;
+  const richTextStyles = clipboardTable?.cellStyles
+    ?? getClipboardRichTextStyles(html, parsed);
 
   return {
     data: resizeData(parsed, rows, cols),
@@ -1019,7 +1201,7 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
     cols,
     kind: 'standard',
     caption: '',
-    cellStyles: normalizeCellStyles(clipboardTable?.cellStyles, rows, cols),
+    cellStyles: normalizeCellStyles(richTextStyles, rows, cols),
     appearance: getEffectiveAppearanceDefaults(),
   };
 }
@@ -2959,8 +3141,9 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       }
       const plainText = clipboard.getData('text/plain');
       const normalizedPlainText = normalizePdfPrivateUseText(plainText);
+      const richClipboardHtml = clipboard.getData('text/html');
       let pasted = spreadsheetFromClipboard(
-        clipboard.getData('text/html'),
+        richClipboardHtml,
         normalizedPlainText,
       );
       if (!pasted) {
@@ -2981,7 +3164,11 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           event.preventDefault();
           return;
         }
-        pasted = spreadsheetFromFlattenedClipboard(normalizedPlainText, columns);
+        pasted = spreadsheetFromFlattenedClipboard(
+          normalizedPlainText,
+          columns,
+          richClipboardHtml,
+        );
       }
       if (!pasted) return;
 
