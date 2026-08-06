@@ -1,13 +1,13 @@
 # Local development docker-compose for eLabFTW
 # Usage: docker compose -f docker-compose.dev.yml up -d
-name: elabftw-dev
+name: elabftw-test-dev
 
 networks:
   elabftw-net:
 
 services:
   web:
-    image: elabftw/elabimg:aemoor-v2
+    image: elabftw/elabimg:test
     container_name: elabftw
     restart: unless-stopped
     depends_on:
@@ -31,13 +31,13 @@ services:
       - SERVER_NAME=localhost
       - DISABLE_HTTPS=false
       - ENABLE_LETSENCRYPT=false
-      - SITE_URL=https://localhost:3148
+      - SITE_URL=https://localhost:3147
       - PHP_TIMEZONE=America/New_York
       - TZ=America/New_York
       - MAX_PHP_MEMORY=512M
       - DEV_MODE=true
     ports:
-      - '3148:443'
+      - '3147:443'
     volumes:
       # Mount local source code into the container
       #- .:/elabftw
