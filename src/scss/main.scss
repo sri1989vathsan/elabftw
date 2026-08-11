@@ -1482,6 +1482,25 @@ body.html-tool-workspace-resizing * {
 }
 
 #favoritesPanel {
+  .favorite-filter-text-group {
+    .input-group-text,
+    .form-control {
+      background-color: transparent;
+      border-color: var(--chrome-muted);
+      color: var(--chrome-fg);
+    }
+
+    .form-control::placeholder {
+      color: var(--chrome-muted);
+      opacity: 1;
+    }
+
+    .form-control:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--primary) 25%, transparent);
+    }
+  }
+
   .ui-autocomplete {
     background-color: var(--mainbackground);
     border: 1px solid var(--secondary);
