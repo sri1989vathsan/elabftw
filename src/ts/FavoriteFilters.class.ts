@@ -26,6 +26,15 @@ export default class FavoriteFilters extends SidePanel {
   constructor() {
     super('favorites');
     this.panelId = 'favoritesPanel';
+    const textFilter = document.querySelector<HTMLInputElement>('[data-favorite-filter-text]');
+    if (textFilter && !textFilter.dataset.favoriteFilterReady) {
+      textFilter.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        this.apply();
+      });
+      textFilter.dataset.favoriteFilterReady = 'true';
+    }
   }
 
   show(): void {
@@ -52,6 +61,8 @@ export default class FavoriteFilters extends SidePanel {
   }
 
   clear(): void {
+    const textFilter = document.querySelector<HTMLInputElement>('[data-favorite-filter-text]');
+    if (textFilter) textFilter.value = '';
     document.querySelectorAll<HTMLInputElement>(
       '[data-favorite-filter-category], [data-favorite-filter-tag], [data-favorite-filter-status], [data-favorite-filter-owner]',
     ).forEach(input => {
@@ -90,6 +101,11 @@ export default class FavoriteFilters extends SidePanel {
     // Always search the complete accessible listing. Reusing the current page
     // could unintentionally retain "My experiments", a query, or pagination.
     params.set('scope', '3');
+
+    const textFilter = document.querySelector<HTMLInputElement>('[data-favorite-filter-text]')?.value.trim();
+    if (textFilter) {
+      params.set('q', textFilter);
+    }
 
     const categories = Array.from(
       document.querySelectorAll<HTMLInputElement>(

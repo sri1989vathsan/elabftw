@@ -1,14 +1,14 @@
 # Local development docker-compose for eLabFTW
 # Usage: docker compose -f docker-compose.dev.yml up -d
-name: elabftw-dev
+name: elabftw-formula-dev
 
 networks:
   elabftw-net:
 
 services:
   web:
-    image: elabftw/elabimg:stable
-    container_name: elabftw
+    image: elabftw/elabimg:test
+    container_name: elabftw-test
     restart: unless-stopped
     depends_on:
       mysql:
