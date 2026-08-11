@@ -75,6 +75,62 @@ class FilterTest extends \PHPUnit\Framework\TestCase
         );
     }
 
+    public function testBodyPreservesSpreadsheetAndNestedListMetadata(): void
+    {
+        $spreadsheet = '<table class="elabftw-spreadsheet" data-spreadsheet="eyJkYXRhIjpbXX0=" data-spreadsheet-style="well-plate" data-well-plate="96" style="border-collapse: collapse; border: 1px solid #000000;"><caption>Plate results</caption><thead><tr><th class="spreadsheet-coordinate">1</th></tr></thead><tbody><tr><td style="border: 3px solid #ff0000; background-color: #ffffff; padding: 4px; vertical-align: middle;">42</td></tr></tbody></table>';
+        $result = Filter::body($spreadsheet);
+        $this->assertStringContainsString('class="elabftw-spreadsheet"', $result);
+        $this->assertStringContainsString('data-spreadsheet="eyJkYXRhIjpbXX0="', $result);
+        $this->assertStringContainsString('data-spreadsheet-style="well-plate"', $result);
+        $this->assertStringContainsString('data-well-plate="96"', $result);
+        $this->assertStringContainsString('<caption>Plate results</caption>', $result);
+        $this->assertStringContainsString('<thead>', $result);
+        $this->assertStringContainsString('border-collapse:collapse', $result);
+        $this->assertStringContainsString('border:1px solid #000000', $result);
+        $this->assertStringContainsString('border:3px solid #ff0000', $result);
+        $this->assertStringContainsString('background-color:#ffffff', $result);
+        $this->assertStringContainsString('padding:4px', $result);
+        $this->assertStringContainsString('vertical-align:middle', $result);
+
+        $list = Filter::body('<ul><li style="list-style-type: none;"><ul><li>Nested item</li></ul></li></ul>');
+        $this->assertStringContainsString('list-style-type:none', $list);
+
+        $checklist = Filter::body('<ul class="elabftw-checklist"><li class="elabftw-checklist-item" data-checked="true">Completed item</li><li class="elabftw-checklist-item" data-checked="false">Open item</li></ul>');
+        $this->assertStringContainsString('class="elabftw-checklist"', $checklist);
+        $this->assertStringContainsString('class="elabftw-checklist-item"', $checklist);
+        $this->assertStringContainsString('data-checked="true"', $checklist);
+        $this->assertStringContainsString('data-checked="false"', $checklist);
+
+        $heading = Filter::body('<h2 id="section-results">Results</h2>');
+        $this->assertStringContainsString('<h2 id="section-results">Results</h2>', $heading);
+
+        $titleHeading = Filter::body('<h1 id="experiment-title-42" style="font-size:24pt;font-family:Arial, sans-serif;color:#123456;font-weight:bold;font-style:italic;text-decoration:underline;text-align:center">Experiment title</h1>');
+        $this->assertStringContainsString('id="experiment-title-42"', $titleHeading);
+        $this->assertStringContainsString('font-size:24pt', $titleHeading);
+        $this->assertStringContainsString('font-family:Arial, sans-serif', $titleHeading);
+        $this->assertStringContainsString('color:#123456', $titleHeading);
+        $this->assertStringContainsString('text-align:center', $titleHeading);
+
+        $date = Filter::body('<a id="date-2026-07-29-abcd1234" class="elabftw-date-reference" href="experiments.php?mode=view&amp;id=42" title="Linked date"><span class="elabftw-date-icon"><span class="elabftw-date-icon-month" title="JUL">&#8203;</span><span class="elabftw-date-icon-day" title="29">&#8203;</span></span><time datetime="2026-07-29">20260729</time></a>');
+        $this->assertStringContainsString('id="date-2026-07-29-abcd1234"', $date);
+        $this->assertStringContainsString('class="elabftw-date-reference"', $date);
+        $this->assertStringContainsString('href="experiments.php?mode=view&amp;id=42"', $date);
+        $this->assertStringContainsString('<span class="elabftw-date-icon-month" title="JUL">', $date);
+        $this->assertStringContainsString('<span class="elabftw-date-icon-day" title="29">', $date);
+        $this->assertStringNotContainsString('>JUL<', $date);
+        $this->assertStringContainsString('<time datetime="2026-07-29">20260729</time>', $date);
+
+        $headingDate = Filter::body('<h2 id="date-2026-07-29-heading"><a class="elabftw-date-reference" href="experiments.php?mode=view&amp;id=42"><time datetime="2026-07-29">29 July 2026</time></a></h2>');
+        $this->assertStringContainsString('<h2 id="date-2026-07-29-heading">', $headingDate);
+        $this->assertStringContainsString('<time datetime="2026-07-29">29 July 2026</time>', $headingDate);
+
+        $rules = Filter::body('<hr class="elabftw-single-rule"><hr class="elabftw-double-rule"><hr class="elabftw-dashed-rule"><hr class="elabftw-double-dashed-rule">');
+        $this->assertStringContainsString('class="elabftw-single-rule"', $rules);
+        $this->assertStringContainsString('class="elabftw-double-rule"', $rules);
+        $this->assertStringContainsString('class="elabftw-dashed-rule"', $rules);
+        $this->assertStringContainsString('class="elabftw-double-dashed-rule"', $rules);
+    }
+
     public function testForFilesystem(): void
     {
         $this->assertEquals('blah', Filter::forFilesystem('=blah/'));

@@ -5,34 +5,49 @@
  * @license AGPL-3.0
  * @package elabftw
  */
-import Todolistc from './Todolist.class';
+import Todolist from './Todolist.class';
 import { Model } from './interfaces';
+import { on } from './handlers';
+import { reloadElements } from './misc';
 
 let unfinishedStepsScope = 'user';
-// unfinished steps scopeSwitch i.e. user (0) or team (1)
 let scopeSwitch = document.getElementById(Model.Todolist + 'StepsShowTeam') as HTMLInputElement;
 const storageScopeSwitch = localStorage.getItem(Model.Todolist + 'StepsShowTeam');
-// adjust scope from localStorage
+
 if (scopeSwitch.checked && storageScopeSwitch === '0') {
   scopeSwitch.checked = false;
-
-// set storage value if default setting is team
 } else if (scopeSwitch.checked) {
   localStorage.setItem(Model.Todolist + 'StepsShowTeam', '1');
   unfinishedStepsScope = 'team';
-
-// check box if it was checked before
 } else if (storageScopeSwitch === '1') {
   scopeSwitch.checked = true;
   unfinishedStepsScope = 'team';
 }
 
-const TodolistC = new Todolistc();
-TodolistC.unfinishedStepsScope = unfinishedStepsScope;
+const todolist = new Todolist();
+todolist.unfinishedStepsScope = unfinishedStepsScope;
+todolist.initialize();
 
-scopeSwitch = document.getElementById(TodolistC.model + 'StepsShowTeam') as HTMLInputElement;
+window.addEventListener('todolist-changed', () => {
+  // Completed tasks and steps remove their deadline notification server-side.
+  void reloadElements(['navbarNotifDiv']);
+});
+
+on('todo-panel-view', (el: HTMLElement) => {
+  todolist.showView(el.dataset.view === 'calendar' ? 'calendar' : 'tasks');
+});
+
+scopeSwitch = document.getElementById(todolist.model + 'StepsShowTeam') as HTMLInputElement;
 scopeSwitch.addEventListener('change', () => {
-  if (!document.getElementById(TodolistC.panelId).hasAttribute('hidden')){
-    TodolistC.toggleUnfinishedStepsScope();
+  if (!document.getElementById(todolist.panelId).hasAttribute('hidden')) {
+    todolist.toggleUnfinishedStepsScope();
   }
 });
+
+const requestedView = new URLSearchParams(window.location.search).get('todo');
+if (requestedView === 'calendar') {
+  todolist.showView('calendar');
+  if (document.getElementById(todolist.panelId).hasAttribute('hidden')) {
+    todolist.toggle();
+  }
+}

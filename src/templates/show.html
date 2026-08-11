@@ -3,7 +3,8 @@
 {% block title %}
 <div class='d-flex align-content-center'>
   <h1 id='pageTitle' {% if hideTitle %}hidden{% endif %}>{{ pageTitle }}</h1>
-  <div class='ml-auto'>
+  <div class='ml-auto d-flex'>
+    {% include 'log-monthly-button.html' %}
     {% include 'create-new.html' %}
   </div>
 </div>

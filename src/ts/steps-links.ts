@@ -53,6 +53,8 @@ $(document).on('click', 'input[type=checkbox].stepbox', function(e) {
       // keep to do list in sync
       $('#todo_step_' + stepId).prop('checked', $('.stepbox[data-stepid="' + stepId + '"]').prop('checked'));
     });
+    // Refresh both integrated to-do views and their notification badges.
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
   });
 });
 

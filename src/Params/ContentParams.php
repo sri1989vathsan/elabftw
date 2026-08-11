@@ -110,6 +110,175 @@ class ContentParams implements ContentParamsInterface
         return $this->asString();
     }
 
+    /**
+     * Validate and normalize the JSON used for inline spreadsheet appearance defaults.
+     */
+    protected function getSpreadsheetDefaults(): ?string
+    {
+        if ($this->content === null || $this->asString() === '') {
+            return null;
+        }
+
+        try {
+            $defaults = json_decode($this->asString(), true, 8, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw new ImproperActionException('Invalid spreadsheet appearance defaults.');
+        }
+        if (is_array($defaults)) {
+            // Backward compatible defaults for accounts/notebooks saved before
+            // table-level appearance controls were introduced.
+            $defaults += array(
+                'cellPadding' => 6,
+                'tableWidth' => 0,
+                'tableAlignment' => 'left',
+                'tableBorderWidth' => $defaults['borderWidth'] ?? 1,
+                'tableBorderStyle' => 'solid',
+                'tableBorderColor' => $defaults['borderColor'] ?? '#ced4da',
+                'tableBackgroundColor' => '#ffffff',
+                'tableNoBackground' => true,
+                'tableCellSpacing' => 0,
+                'cellStyle' => null,
+            );
+        }
+        if (!is_array($defaults)
+            || !is_int($defaults['borderWidth'] ?? null)
+            || $defaults['borderWidth'] < 0
+            || $defaults['borderWidth'] > 20
+            || !is_int($defaults['cellPadding'] ?? null)
+            || $defaults['cellPadding'] < 0
+            || $defaults['cellPadding'] > 50
+            || !is_bool($defaults['alternateRows'] ?? null)
+            || !is_bool($defaults['alternateColumns'] ?? null)
+            || !is_int($defaults['tableWidth'] ?? null)
+            || $defaults['tableWidth'] < 0
+            || $defaults['tableWidth'] > 100
+            || !in_array($defaults['tableAlignment'] ?? null, array('left', 'center', 'right'), true)
+            || !is_int($defaults['tableBorderWidth'] ?? null)
+            || $defaults['tableBorderWidth'] < 0
+            || $defaults['tableBorderWidth'] > 20
+            || !in_array(
+                $defaults['tableBorderStyle'] ?? null,
+                array('solid', 'dashed', 'dotted', 'double', 'none'),
+                true,
+            )
+            || !is_bool($defaults['tableNoBackground'] ?? null)
+            || !is_int($defaults['tableCellSpacing'] ?? null)
+            || $defaults['tableCellSpacing'] < 0
+            || $defaults['tableCellSpacing'] > 50
+        ) {
+            throw new ImproperActionException('Invalid spreadsheet appearance defaults.');
+        }
+        foreach (array(
+            'borderColor',
+            'cellColor',
+            'alternateRowColor',
+            'alternateColumnColor',
+            'tableBorderColor',
+            'tableBackgroundColor',
+        ) as $colorKey) {
+            if (!is_string($defaults[$colorKey] ?? null)
+                || preg_match('/^#[0-9a-f]{6}$/i', $defaults[$colorKey]) !== 1
+            ) {
+                throw new ImproperActionException('Invalid spreadsheet appearance defaults.');
+            }
+        }
+
+        $cellStyle = $defaults['cellStyle'] ?? null;
+        if ($cellStyle !== null
+            && (!is_array($cellStyle)
+                || !array_key_exists('backgroundColor', $cellStyle)
+                || !array_key_exists('textColor', $cellStyle)
+                || !is_int($cellStyle['borderWidth'] ?? null)
+                || $cellStyle['borderWidth'] < 0
+                || $cellStyle['borderWidth'] > 20
+                || !in_array(
+                    $cellStyle['borderStyle'] ?? null,
+                    array('solid', 'dashed', 'dotted', 'double', 'none'),
+                    true,
+                )
+                || !is_int($cellStyle['fontSize'] ?? null)
+                || $cellStyle['fontSize'] < 6
+                || $cellStyle['fontSize'] > 72
+                || !is_bool($cellStyle['bold'] ?? null)
+                || !is_bool($cellStyle['italic'] ?? null)
+                || !is_bool($cellStyle['underline'] ?? null)
+                || !in_array(
+                    $cellStyle['fontFamily'] ?? null,
+                    array(
+                        '',
+                        'Arial, sans-serif',
+                        'Verdana, sans-serif',
+                        'Georgia, serif',
+                        "'Times New Roman', serif",
+                        "'Courier New', monospace",
+                    ),
+                    true,
+                )
+                || !in_array(
+                    $cellStyle['textAlign'] ?? null,
+                    array('', 'left', 'center', 'right', 'justify'),
+                    true,
+                )
+                || !in_array(
+                    $cellStyle['verticalAlign'] ?? null,
+                    array('', 'top', 'middle', 'bottom'),
+                    true,
+                )
+                || (($cellStyle['backgroundColor'] ?? null) !== null
+                    && (!is_string($cellStyle['backgroundColor'])
+                        || preg_match('/^#[0-9a-f]{6}$/i', $cellStyle['backgroundColor']) !== 1))
+                || !is_string($cellStyle['borderColor'] ?? null)
+                || preg_match('/^#[0-9a-f]{6}$/i', $cellStyle['borderColor']) !== 1
+                || (($cellStyle['textColor'] ?? null) !== null
+                    && (!is_string($cellStyle['textColor'])
+                        || preg_match('/^#[0-9a-f]{6}$/i', $cellStyle['textColor']) !== 1))
+            )
+        ) {
+            throw new ImproperActionException('Invalid spreadsheet cell style defaults.');
+        }
+
+        $normalized = array(
+            'borderWidth' => $defaults['borderWidth'],
+            'borderColor' => strtolower($defaults['borderColor']),
+            'cellColor' => strtolower($defaults['cellColor']),
+            'cellPadding' => $defaults['cellPadding'],
+            'alternateRows' => $defaults['alternateRows'],
+            'alternateRowColor' => strtolower($defaults['alternateRowColor']),
+            'alternateColumns' => $defaults['alternateColumns'],
+            'alternateColumnColor' => strtolower($defaults['alternateColumnColor']),
+            'tableWidth' => $defaults['tableWidth'],
+            'tableAlignment' => $defaults['tableAlignment'],
+            'tableBorderWidth' => $defaults['tableBorderWidth'],
+            'tableBorderStyle' => $defaults['tableBorderStyle'],
+            'tableBorderColor' => strtolower($defaults['tableBorderColor']),
+            'tableBackgroundColor' => strtolower($defaults['tableBackgroundColor']),
+            'tableNoBackground' => $defaults['tableNoBackground'],
+            'tableCellSpacing' => $defaults['tableCellSpacing'],
+        );
+        if ($cellStyle !== null) {
+            $normalized['cellStyle'] = array(
+                'backgroundColor' => $cellStyle['backgroundColor'] === null
+                    ? null
+                    : strtolower($cellStyle['backgroundColor']),
+                'borderColor' => strtolower($cellStyle['borderColor']),
+                'borderStyle' => $cellStyle['borderStyle'],
+                'borderWidth' => $cellStyle['borderWidth'],
+                'fontFamily' => $cellStyle['fontFamily'],
+                'fontSize' => $cellStyle['fontSize'],
+                'bold' => $cellStyle['bold'],
+                'italic' => $cellStyle['italic'],
+                'underline' => $cellStyle['underline'],
+                'textColor' => $cellStyle['textColor'] === null
+                    ? null
+                    : strtolower($cellStyle['textColor']),
+                'textAlign' => $cellStyle['textAlign'],
+                'verticalAlign' => $cellStyle['verticalAlign'],
+            );
+        }
+
+        return json_encode($normalized, JSON_THROW_ON_ERROR);
+    }
+
     protected function getUrl(): string
     {
         if (filter_var($this->content, FILTER_VALIDATE_URL) === false) {

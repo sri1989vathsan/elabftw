@@ -1,0 +1,21 @@
+-- Fork migration 004: calendar-aware tasks.
+SET @custom_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'todolist' AND COLUMN_NAME = 'notes');
+SET @custom_sql = IF(@custom_exists = 0, 'ALTER TABLE `todolist` ADD COLUMN `notes` TEXT NULL AFTER `body`', 'SELECT 1');
+PREPARE custom_stmt FROM @custom_sql;
+EXECUTE custom_stmt;
+DEALLOCATE PREPARE custom_stmt;
+SET @custom_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'todolist' AND COLUMN_NAME = 'deadline');
+SET @custom_sql = IF(@custom_exists = 0, 'ALTER TABLE `todolist` ADD COLUMN `deadline` DATETIME NULL AFTER `notes`', 'SELECT 1');
+PREPARE custom_stmt FROM @custom_sql;
+EXECUTE custom_stmt;
+DEALLOCATE PREPARE custom_stmt;
+SET @custom_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'todolist' AND COLUMN_NAME = 'reminder_minutes');
+SET @custom_sql = IF(@custom_exists = 0, 'ALTER TABLE `todolist` ADD COLUMN `reminder_minutes` SMALLINT UNSIGNED NULL DEFAULT 60 AFTER `deadline`', 'SELECT 1');
+PREPARE custom_stmt FROM @custom_sql;
+EXECUTE custom_stmt;
+DEALLOCATE PREPARE custom_stmt;
+SET @custom_exists = (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'todolist' AND INDEX_NAME = 'idx_todolist_user_deadline');
+SET @custom_sql = IF(@custom_exists = 0, 'ALTER TABLE `todolist` ADD INDEX `idx_todolist_user_deadline` (`userid`, `deadline`)', 'SELECT 1');
+PREPARE custom_stmt FROM @custom_sql;
+EXECUTE custom_stmt;
+DEALLOCATE PREPARE custom_stmt;

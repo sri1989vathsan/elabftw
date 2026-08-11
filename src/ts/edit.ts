@@ -20,6 +20,7 @@ import { Uploader } from './uploader';
 import { clearLocalStorage } from './localStorage';
 import { entity } from './getEntity';
 import { on } from './handlers';
+import { buildLabCollectorUrl } from './labcollector-link';
 
 // remove exclusive edit mode when leaving the page
 window.onbeforeunload = function() {
@@ -80,6 +81,7 @@ if ((localStorage.getItem('id') == String(entity.id)) && (localStorage.getItem('
   );
 
   document.querySelector('#main_section').before(bodyRecovery);
+
 }
 
 // RECOVER YES
@@ -216,6 +218,49 @@ on('insert-in-body', (el: HTMLElement) => {
   insertHandlers.get(el.dataset.ext.replace(/^\./, '').toLowerCase())?.(url);
 });
 // END INSERT IN BODY
+
+function getLabCollectorSelection(): { id: string; label: string; url: string } | null {
+  const typeSelect = document.getElementById('labcollectorType') as HTMLSelectElement | null;
+  const idInput = document.getElementById('labcollectorId') as HTMLInputElement | null;
+  if (!typeSelect || !idInput) return null;
+  const id = idInput.value.trim();
+  idInput.classList.toggle('is-invalid', !id);
+  if (!id) return null;
+  return {
+    id,
+    label: typeSelect.selectedOptions[0]?.textContent ?? typeSelect.value,
+    url: buildLabCollectorUrl(typeSelect.value, id),
+  };
+}
+
+on('add-labcollector-link', async () => {
+  const selection = getLabCollectorSelection();
+  if (!selection) return;
+  const json = await ApiC.getJson(`${entity.type}/${entity.id}`);
+  const metadata = json.metadata ? JSON.parse(json.metadata) : {};
+  metadata.extra_fields ??= {};
+  const positions = Object.values(metadata.extra_fields)
+    .map((field: { position?: number }) => field.position ?? 0);
+  metadata.extra_fields[`LabCollector ${selection.label} #${selection.id}`] = {
+    type: 'url',
+    value: selection.url,
+    description: '',
+    position: positions.length > 0 ? Math.max(...positions) + 1 : 0,
+    group_id: null,
+  };
+  await ApiC.patch(`${entity.type}/${entity.id}`, { metadata: JSON.stringify(metadata) });
+  window.location.reload();
+});
+
+on('insert-labcollector-link', () => {
+  const selection = getLabCollectorSelection();
+  if (!selection) return;
+  const linkText = `LabCollector ${selection.label} #${selection.id}`;
+  editor.setContent(editor.type === 'md'
+    ? `[${linkText}](${selection.url})`
+    : `<a href="${selection.url}" target="_blank" rel="noreferrer noopener">${linkText}</a>`);
+  (document.getElementById('labcollectorId') as HTMLInputElement).value = '';
+});
 
 
 // REPLACE UPLOADED FILE

@@ -36,6 +36,36 @@
             <label for='createNewFormTitle'>{{ 'Enter a title'|trans }}</label>
             <input name='title' placeholder='{{ 'Type a descriptive title...'|trans }}' class='form-control' type='text' id='createNewFormTitle' />
           </div>
+          {# Folder selection — only shown when creating experiments #}
+          {% if experimentsFoldersArr is defined %}
+          <div class='my-2' id='createNewFolderSection' hidden>
+            <label for='createNewFolderSelect'>{{ 'Folder'|trans }}</label>
+            <div class='d-flex align-items-center'>
+              <select name='folder_id' class='form-control mr-2' id='createNewFolderSelect' aria-label='{{ 'Folder'|trans }}'>
+                <option value=''>{{ 'No folder'|trans }}</option>
+                {% if experimentsFoldersArr is iterable %}
+                  {% for parentId, folders in experimentsFoldersArr %}
+                    {% for folder in folders %}
+                      <option value='{{ folder.id }}'>{{ folder.full_path }}</option>
+                    {% endfor %}
+                  {% endfor %}
+                {% endif %}
+              </select>
+              <button type='button' class='btn btn-outline-secondary btn-sm text-nowrap' id='createNewFolderBtn' title='{{ 'New folder'|trans }}'>
+                <i class='fas fa-plus mr-1'></i>{{ 'New folder'|trans }}
+              </button>
+            </div>
+            <div class='mt-1' id='createNewFolderInputDiv' hidden>
+              <div class='input-group'>
+                <input type='text' class='form-control' id='createNewFolderInput' placeholder='{{ 'New folder name'|trans }}' aria-label='{{ 'New folder name'|trans }}' />
+                <div class='input-group-append'>
+                  <button type='button' class='btn btn-outline-secondary' id='createNewFolderSaveBtn'><i class='fas fa-check'></i></button>
+                  <button type='button' class='btn btn-outline-secondary' id='createNewFolderCancelBtn'><i class='fas fa-times'></i></button>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endif %}
           <hr>
           <div class='d-lg-flex'>
             <div>

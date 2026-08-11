@@ -25,6 +25,7 @@ use Elabftw\Models\Notifications\OnboardingEmail;
 use Elabftw\Models\Notifications\SelfIsValidated;
 use Elabftw\Models\Notifications\SelfNeedValidation;
 use Elabftw\Models\Notifications\StepDeadline;
+use Elabftw\Models\Notifications\TodoDeadline;
 use Elabftw\Models\Notifications\UserCreated;
 use Elabftw\Models\Notifications\UserNeedValidation;
 use Elabftw\Models\Users\Users;
@@ -51,6 +52,13 @@ final class NotificationsFactory
             Notifications::UserCreated => new UserCreated($this->targetUser, $this->body['userid'], $this->body['team']),
             Notifications::UserNeedValidation => new UserNeedValidation($this->targetUser, $this->body['userid'], $this->body['team']),
             Notifications::StepDeadline => new StepDeadline($this->targetUser, $this->body['step_id'], $this->body['entity_id'], $this->body['entity_page'], $this->body['deadline']),
+            Notifications::TodoDeadline => new TodoDeadline(
+                $this->targetUser,
+                (int) $this->body['task_id'],
+                (string) $this->body['title'],
+                (string) $this->body['deadline'],
+                (int) $this->body['reminder_minutes'],
+            ),
             Notifications::EventDeleted => new EventDeleted($this->targetUser, $this->body['event'], $this->body['actor'], $this->body['msg'], EmailTarget::from($this->body['target'])),
             Notifications::SelfNeedValidation => new SelfNeedValidation($this->targetUser),
             Notifications::SelfIsValidated => new SelfIsValidated($this->targetUser),

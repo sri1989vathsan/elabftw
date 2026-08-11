@@ -10,9 +10,12 @@ import { ApiC } from './api';
 import { Malle, InputType } from '@deltablot/malle';
 import type { SelectOptions } from '@deltablot/malle';
 import 'bootstrap/js/src/modal.js';
-import FavTag from './FavTag.class';
 import Heartbeat from './Heartbeat.class';
 import ScrollButtons from './ScrollButtons.class';
+import FavoriteFilters from './FavoriteFilters.class';
+import FoldersPanel from './FoldersPanel.class';
+import TocPanel from './TocPanel.class';
+import HtmlToolsPanel from './HtmlToolsPanel.class';
 import { clearLocalStorage, rememberLastSelected, selectLastSelected } from './localStorage';
 import {
   adjustHiddenState,
@@ -240,8 +243,26 @@ if (core.isAuth) {
 // END HEARTBEAT
 
 
-const FavTagC = new FavTag();
+const FavoriteFiltersC = new FavoriteFilters();
+const FoldersPanelC = new FoldersPanel();
 const TodolistC = new Todolist();
+const TocPanelC = new TocPanel();
+const HtmlToolsPanelC = new HtmlToolsPanel();
+
+// Keep the entity Back/Edit/Save toolbar immediately below the sticky main
+// navigation. ResizeObserver also tracks the expanded mobile navigation and
+// late logo/font sizing without relying on a hard-coded navbar height.
+const mainNavbar = document.querySelector<HTMLElement>('#container > nav.navbar');
+if (mainNavbar) {
+  const syncStickyNavbarHeight = (): void => {
+    document.documentElement.style.setProperty(
+      '--sticky-navbar-height',
+      `${mainNavbar.offsetHeight}px`,
+    );
+  };
+  syncStickyNavbarHeight();
+  new ResizeObserver(syncStickyNavbarHeight).observe(mainNavbar);
+}
 
 const TableSortingC = new TableSorting();
 // for searching inputs, allow specific triggers for East & South East Asian characters
@@ -276,11 +297,23 @@ if (userPrefs.scDisabled === '0') {
 
 // SIDE PANEL STATE
 const openedSidePanel = localStorage.getItem('opened-sidepanel');
-if (openedSidePanel === Model.FavTag) {
-  FavTagC.toggle();
+if (openedSidePanel === 'favorites'
+  || openedSidePanel === Model.FavTag
+  || openedSidePanel === Model.FavCategory
+) {
+  FavoriteFiltersC.toggle();
+}
+if (openedSidePanel === 'folders') {
+  FoldersPanelC.toggle();
 }
 if (openedSidePanel === Model.Todolist) {
   TodolistC.toggle();
+}
+if (openedSidePanel === 'toc') {
+  TocPanelC.toggle();
+}
+if (openedSidePanel === 'html-tools') {
+  HtmlToolsPanelC.toggle();
 }
 
 // ACTIVATE REACTIVE COUNT OF .COUNTABLE ITEMS
@@ -645,6 +678,71 @@ on('destroy-favtags', (el: HTMLElement) => {
   }
 });
 
+on('create-favcategory', () => {
+  const select = document.getElementById('favoriteCategorySelect') as HTMLSelectElement | null;
+  if (!select?.value) return;
+  const [categoryType, categoryId] = select.value.split(':');
+  if (!categoryType || !categoryId) return;
+  ApiC.post(Model.FavCategory, {
+    category_type: categoryType,
+    category_id: parseInt(categoryId, 10),
+  }).then(() => FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']));
+});
+
+on('destroy-favcategory', (el: HTMLElement) => {
+  if (confirm(i18next.t('generic-delete-warning'))) {
+    ApiC.delete(`${Model.FavCategory}/${el.dataset.id}`)
+      .then(() => FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']));
+  }
+});
+
+on('create-and-favorite-category', async () => {
+  const input = document.getElementById('favoriteNewCategoryName') as HTMLInputElement | null;
+  const color = document.getElementById('favoriteNewCategoryColor') as HTMLInputElement | null;
+  const name = input?.value.trim() ?? '';
+  if (!input || !name) {
+    input?.setCustomValidity('Enter a category name.');
+    input?.reportValidity();
+    return;
+  }
+  input.setCustomValidity('');
+
+  const categoryType = FavoriteFiltersC.getTarget();
+  const endpoint = categoryType === 'experiments' ? 'experiments_categories' : 'resources_categories';
+  const categoryId = await ApiC.post2location(`${Model.Team}/current/${endpoint}`, {
+    name,
+    color: color?.value,
+  });
+  await ApiC.post(Model.FavCategory, {
+    category_type: categoryType,
+    category_id: categoryId,
+  });
+  input.value = '';
+  await FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']);
+});
+
+on('create-favfilter', () => {
+  const select = document.getElementById('favoriteFilterSelect') as HTMLSelectElement | null;
+  if (!select?.value) return;
+  const [filterType, targetType, targetId] = select.value.split(':');
+  if (!filterType || !targetType || !targetId) return;
+  ApiC.post(Model.FavFilter, {
+    filter_type: filterType,
+    target_type: targetType,
+    target_id: parseInt(targetId, 10),
+  }).then(() => FavoriteFiltersC.reloadSections(['favoriteStatusesDiv', 'favoriteOwnersDiv']));
+});
+
+on('destroy-favfilter', (el: HTMLElement) => {
+  if (confirm(i18next.t('generic-delete-warning'))) {
+    ApiC.delete(`${Model.FavFilter}/${el.dataset.id}`)
+      .then(() => FavoriteFiltersC.reloadSections(['favoriteStatusesDiv', 'favoriteOwnersDiv']));
+  }
+});
+
+on('apply-favorite-filters', () => FavoriteFiltersC.apply());
+on('clear-favorite-filters', () => FavoriteFiltersC.clear());
+
 on('insert-param-and-reload', async (el: HTMLElement) => {
   const params = new URLSearchParams(document.location.search.slice(1));
   const target = el.dataset.target;
@@ -684,11 +782,27 @@ on('scroll-top', () => {
 on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
   // this action might exist on a link: prevent jump to top
   event.preventDefault();
-  const SidePanelC = el.dataset.target === Model.FavTag ? FavTagC : TodolistC;
+  let SidePanelC;
+  if (el.dataset.target === 'toc') {
+    SidePanelC = TocPanelC;
+  } else if (el.dataset.target === 'html-tools') {
+    SidePanelC = HtmlToolsPanelC;
+  } else if (el.dataset.target === 'folders') {
+    SidePanelC = FoldersPanelC;
+  } else if (el.dataset.target === 'favorites') {
+    SidePanelC = FavoriteFiltersC;
+  } else {
+    SidePanelC = TodolistC;
+  }
   if (el.dataset.purpose === 'hide') {
     return SidePanelC.hide();
   }
   SidePanelC.toggle();
+});
+
+// Refresh the TOC panel contents
+on('refresh-toc', () => {
+  TocPanelC.refresh();
 });
 
 on('toggle-pin', (el: HTMLElement) => {
@@ -1158,6 +1272,29 @@ on('update-entity-body', async (el: HTMLElement) => {
   }
 });
 
+// APPEND LOG ENTRY: insert a timestamped heading at the end of the body and auto-save
+on('append-log-entry', () => {
+  const editor = getEditor();
+  const now = DateTime.now();
+  const timestamp = now.toFormat('yyyy-MM-dd HH:mm');
+
+  if (editor.type === 'tiny') {
+    // TinyMCE: get current content, append log entry, replace all
+    const currentContent = editor.getContent();
+    const logHtml = `<hr><h3>${timestamp}</h3><p>&nbsp;</p>`;
+    editor.replaceContent(currentContent + logHtml);
+  } else {
+    // Markdown: append timestamped heading
+    const textarea = document.getElementById('body_area') as HTMLTextAreaElement;
+    const logMd = `\n\n---\n### ${timestamp}\n\n`;
+    textarea.value += logMd;
+    textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+    textarea.focus();
+  }
+  // Auto-save after inserting
+  updateEntityBody();
+});
+
 on('search-pubchem', (el: HTMLElement) => {
   const inputEl = el.parentElement.parentElement.querySelector('input') as HTMLInputElement;
   if (!inputEl.checkValidity()) {
@@ -1399,6 +1536,28 @@ on('create-entity', async (el: HTMLElement, event: Event) => {
     await ApiC.post(`${el.dataset.type}/${id}/compounds_links/${params['compound']}`, {});
   }
   window.location.href = `${page}?mode=edit&id=${id}`;
+});
+
+// CREATE MONTHLY LOG: create a new resource item titled "YYYYMM-log-owner" or open existing one
+on('create-monthly-log', async () => {
+  const now = DateTime.now();
+  const user = await ApiC.getJson('users/me');
+  const owner = user.fullname.replace(/\s+/g, '-').toLowerCase();
+  const title = now.toFormat('yyyyMM') + '-log-' + owner;
+  // Check if a log for this month already exists
+  const existing = await ApiC.getJson(`items/?q="${title}"&scope=1`);
+  const match = existing.find(item => item.title === title);
+  if (match) {
+    window.location.href = `database.php?mode=edit&id=${match.id}`;
+    return;
+  }
+  // Create a new resource (items) with the monthly log title
+  const id = await ApiC.post2location('items', {title: title});
+  // Set initial body with a welcome entry
+  const timestamp = now.toFormat('yyyy-MM-dd HH:mm');
+  const body = `<h2>${title}</h2><hr><h3>${timestamp}</h3><p>&nbsp;</p>`;
+  await ApiC.patch(`items/${id}`, {body: body});
+  window.location.href = `database.php?mode=edit&id=${id}`;
 });
 
 on('report-bug', (el: HTMLElement, event: Event) => {
@@ -1645,6 +1804,9 @@ on('scope-change', async (el: HTMLElement) => {
 /**
  * MAIN click listener on container
  */
+document.getElementById('favoriteFilterTarget')?.addEventListener('change', () => {
+  FavoriteFiltersC.updateTarget();
+});
 container.addEventListener('click', (event: Event) => {
   const rawTarget = event.target as HTMLElement | null;
   const el = rawTarget?.closest('[data-action]') as HTMLElement | null;

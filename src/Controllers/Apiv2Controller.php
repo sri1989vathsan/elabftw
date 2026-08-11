@@ -35,6 +35,7 @@ use Elabftw\Models\AbstractEntity;
 use Elabftw\Models\ApiKeys;
 use Elabftw\Models\Batch;
 use Elabftw\Models\Branding;
+use Elabftw\Models\CalendarFeed;
 use Elabftw\Models\Comments;
 use Elabftw\Models\Compounds;
 use Elabftw\Models\Config;
@@ -42,12 +43,14 @@ use Elabftw\Models\Dspace;
 use Elabftw\Models\ExperimentsCategories;
 use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\ExtraFieldsKeys;
+use Elabftw\Models\FavFilters;
 use Elabftw\Models\FavTags;
 use Elabftw\Models\Idps;
 use Elabftw\Models\IdpsCerts;
 use Elabftw\Models\IdpsEndpoints;
 use Elabftw\Models\IdpsSources;
 use Elabftw\Models\Info;
+use Elabftw\Models\HtmlTools;
 use Elabftw\Models\Instance;
 use Elabftw\Models\Instance2Rors;
 use Elabftw\Models\Items;
@@ -58,6 +61,8 @@ use Elabftw\Models\ProcurementRequests;
 use Elabftw\Models\RequestActions;
 use Elabftw\Models\ResourcesCategories;
 use Elabftw\Models\Revisions;
+use Elabftw\Models\ExperimentsFolders;
+use Elabftw\Models\FavCategories;
 use Elabftw\Models\Scheduler;
 use Elabftw\Models\SigKeys;
 use Elabftw\Models\Steps;
@@ -216,7 +221,7 @@ final class Apiv2Controller extends AbstractApiController
     private function handlePost(): Response
     {
         // special case for POST/uploads where we get the information from the "files" attribute
-        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler) && $this->action === Action::Create) {
+        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools) && $this->action === Action::Create) {
             $file = $this->Request->files->get('file');
             // this was added to prevent: Uncaught Error: Call to a member function getClientOriginalName() on null
             // not sure what triggers it though
@@ -227,6 +232,16 @@ final class Apiv2Controller extends AbstractApiController
             $this->reqBody['file'] = $file;
             $this->reqBody['target'] = $this->Request->request->getString('target');
             $this->reqBody['filePath'] = $file->getPathname();
+            if ($this->Model instanceof HtmlTools) {
+                $this->reqBody['name'] = $this->Request->request->getString('name');
+                $this->reqBody['description'] = $this->Request->request->getString('description');
+                return new Response('', Response::HTTP_CREATED, array('Location' => sprintf(
+                    '%s/%s%d',
+                    Env::asUrl('SITE_URL'),
+                    $this->Model->getApiPath(),
+                    $this->Model->postAction($this->action, $this->reqBody),
+                )));
+            }
             $this->reqBody['comment'] = $this->Request->request->get('comment');
             $this->reqBody['entity_type'] = $this->Request->request->get('entity_type'); // can be null
             $this->reqBody['category'] = $this->Request->request->get('category'); // can be null
@@ -305,6 +320,7 @@ final class Apiv2Controller extends AbstractApiController
         return match ($this->endpoint) {
             ApiEndpoint::ApiKeys => new ApiKeys($this->requester, $this->id),
             ApiEndpoint::Batch => new Batch($this->requester),
+            ApiEndpoint::CalendarFeed => new CalendarFeed($this->requester),
             ApiEndpoint::Compounds => (
                 function () {
                     $Config = Config::getConfig();
@@ -332,6 +348,7 @@ final class Apiv2Controller extends AbstractApiController
             )(),
             ApiEndpoint::Idps => new Idps($this->requester, $this->id),
             ApiEndpoint::IdpsSources => new IdpsSources($this->requester, $this->id),
+            ApiEndpoint::HtmlTools => new HtmlTools($this->requester, $this->id),
             ApiEndpoint::Import => new ImportHandler($this->requester, App::getDefaultLogger()),
             ApiEndpoint::Info => new Info(),
             ApiEndpoint::Instance => new Instance($this->requester, $this->getEmail(), (bool) Config::getConfig()->configArr['email_send_grouped']),
@@ -354,6 +371,9 @@ final class Apiv2Controller extends AbstractApiController
                 trim($this->Request->query->getString('q')),
                 $this->Request->query->getInt('limit'),
             ),
+            ApiEndpoint::ExperimentsFolders => new ExperimentsFolders($this->requester, $this->id),
+            ApiEndpoint::FavCategories => new FavCategories($this->requester, $this->id),
+            ApiEndpoint::FavFilters => new FavFilters($this->requester, $this->id),
             ApiEndpoint::FavTags => new FavTags($this->requester, $this->id),
             ApiEndpoint::Reports => new ReportsHandler($this->requester),
             ApiEndpoint::StorageUnits => new StorageUnits($this->requester, Config::getConfig()->configArr['inventory_require_edit_rights'] === '1', $this->id),
@@ -463,6 +483,12 @@ final class Apiv2Controller extends AbstractApiController
             throw new IllegalActionException('Non sysadmin user tried to use a restricted api endpoint.');
         }
 
+        if (($this->Model instanceof HtmlTools)
+            && $this->Request->getMethod() !== Request::METHOD_GET
+            && !$this->requester->isSysadmin()) {
+            throw new IllegalActionException('Only a sysadmin can manage HTML tools.');
+        }
+
         $contentType = $this->Request->headers->get('content-type') ?? '';
 
         // allow multipart/form-data for:
@@ -474,7 +500,8 @@ final class Apiv2Controller extends AbstractApiController
             (
                 $this->Model instanceof Uploads ||
                 $this->Model instanceof ImportHandler ||
-                $this->Model instanceof Branding
+                $this->Model instanceof Branding ||
+                $this->Model instanceof HtmlTools
             )) {
             return;
         }

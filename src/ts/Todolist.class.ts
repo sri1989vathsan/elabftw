@@ -5,18 +5,17 @@
  * @license AGPL-3.0
  * @package elabftw
  */
-import { Model, EntityType } from './interfaces';
-import type { UnfinishedEntities } from './interfaces';
+import { Model } from './interfaces';
 import SidePanel from './SidePanel.class';
-import FavTag from './FavTag.class';
-import { ApiC } from './api';
 import { mount } from 'svelte';
 import TodolistSv from './components/Todolist.svelte';
+import CalendarTodolistSv from './components/CalendarTodolist.svelte';
 
 export default class Todolist extends SidePanel {
 
   unfinishedStepsScope: string;
   private static mounted = false;
+  private static calendarMounted = false;
 
 
   constructor() {
@@ -32,66 +31,53 @@ export default class Todolist extends SidePanel {
   }
 
   loadUnfinishedStep(): void {
-    this.getUnfinishedStep(EntityType.Experiment);
-    this.getUnfinishedStep(EntityType.Item);
+    window.dispatchEvent(new CustomEvent('todolist-scope-changed'));
   }
 
-  getUnfinishedStep(type: EntityType): Promise<void> {
-    return ApiC.getJson(`unfinished_steps?scope=${this.unfinishedStepsScope}`).then(json => {
-      // lightweight temporary container to create the side panel's <a> element
-      const fragment = document.createDocumentFragment();
-      for (const entity of json[type] as Array<UnfinishedEntities>) {
-        const item = document.createElement('div');
-        item.classList.add('side-panel-item');
-        const p = document.createElement('p');
-        const link = document.createElement('a');
-        link.href = `${type === EntityType.Item ? 'database' : 'experiments'}.php?mode=view&id=${entity.id}`;
-        link.textContent = entity.title;
-        p.append(link);
-        item.append(p);
+  initialize(): void {
+    const host = document.getElementById('todolist');
+    if (host && !Todolist.mounted && host.childElementCount === 0) {
+      mount(TodolistSv, {
+        target: host,
+      });
+      Todolist.mounted = true;
+    }
+    const calendarHost = document.getElementById('calendarTodolist');
+    if (calendarHost && !Todolist.calendarMounted && calendarHost.childElementCount === 0) {
+      mount(CalendarTodolistSv, {
+        target: calendarHost,
+      });
+      Todolist.calendarMounted = true;
+    }
+  }
 
-        for (const stepsData of Object.entries(entity.steps)) {
-          const stepId = stepsData[1][0];
-          const stepBody = stepsData[1][1];
-          // create checkbox input
-          const div = document.createElement('div');
-          const input = document.createElement('input');
-          input.type = 'checkbox';
-          input.classList.add('stepbox', 'mr-2');
-          input.id = `todo_step_${stepId}`;
-          input.dataset.id = String(entity.id);
-          input.dataset.type = type;
-          input.dataset.stepid = String(stepId);
-          div.append(input, stepBody);
-          item.append(div);
-        }
-        fragment.append(item);
-      }
-      const typeIdName = 'todoSteps' + type.charAt(0).toUpperCase() + type.slice(1);
-      const target = document.getElementById(typeIdName);
-      target?.replaceChildren(fragment);
-    });
+  showView(view: 'tasks' | 'calendar'): void {
+    const tasksView = document.getElementById('todolistTasksView');
+    const calendarView = document.getElementById('todolistCalendarView');
+    const tasksTab = document.getElementById('todoTasksTab');
+    const calendarTab = document.getElementById('todoCalendarTab');
+    const showCalendar = view === 'calendar';
+    tasksView?.toggleAttribute('hidden', showCalendar);
+    calendarView?.toggleAttribute('hidden', !showCalendar);
+    tasksTab?.classList.toggle('btn-primary', !showCalendar);
+    tasksTab?.classList.toggle('btn-outline-primary', showCalendar);
+    calendarTab?.classList.toggle('btn-primary', showCalendar);
+    calendarTab?.classList.toggle('btn-outline-primary', !showCalendar);
+    tasksTab?.setAttribute('aria-selected', String(!showCalendar));
+    calendarTab?.setAttribute('aria-selected', String(showCalendar));
+    localStorage.setItem('todolistView', view);
+    if (!showCalendar) this.loadUnfinishedStep();
   }
 
   // TOGGLE TODOLIST VISIBILITY
   toggle(): void {
-    // force favtags to close if it's open
-    (new FavTag()).hide();
     super.toggle();
+    this.initialize();
     const panel = document.getElementById(this.panelId);
     const isOpen = !!panel && !panel.hasAttribute('hidden');
     if (isOpen) {
-      const host = document.getElementById('todolist');
-      // Prevent mounting the Svelte component multiple times
-      // (can happen when toggling via both click and keyboard shortcut)
-      if (host && !Todolist.mounted && host.childElementCount === 0) {
-        mount(TodolistSv, {
-          target: host,
-        });
-        Todolist.mounted = true;
-      }
-
-      this.loadUnfinishedStep();
+      const view = localStorage.getItem('todolistView') === 'calendar' ? 'calendar' : 'tasks';
+      this.showView(view);
     }
   }
 }

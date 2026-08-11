@@ -55,11 +55,39 @@ code {
   list-style-type: none;
 }
 
+ul.elabftw-checklist {
+  list-style: none;
+  padding-left: 1.4em;
+}
+
+ul.elabftw-checklist > li.elabftw-checklist-item {
+  list-style: none;
+}
+
+ul.elabftw-checklist > li.elabftw-checklist-item::before {
+  color: variables.$elabblue;
+  content: '☐';
+  display: inline-block;
+  font-weight: bold;
+  margin-left: -1.4em;
+  width: 1.4em;
+}
+
+ul.elabftw-checklist > li.elabftw-checklist-item[data-checked='true']::before {
+  content: '☑';
+}
+
 /* fix table being collapsed on export */
 table {
   border-collapse: collapse;
   table-layout: fixed;
   width: 100%;
+}
+
+caption {
+  caption-side: top;
+  font-weight: bold;
+  text-align: left;
 }
 
 table,
@@ -80,6 +108,17 @@ table th {
   text-align: left;
   text-transform: uppercase;
   width: 150px;
+}
+
+table[data-spreadsheet-style='notebook'] th {
+  text-transform: none;
+}
+
+table[data-spreadsheet-style='well-plate'] td,
+table[data-spreadsheet-style='well-plate'] th {
+  padding: 3px;
+  text-align: center;
+  width: auto;
 }
 
 /* color one row every other row */

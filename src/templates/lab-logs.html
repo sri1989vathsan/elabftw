@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<h1><i class='fas fa-book mr-2'></i>{{ 'Lab Logs'|trans }}</h1>
+<p class='text-muted'>{{ 'All team member logs (YYYYMM-log resources), visible to admins only.'|trans }}</p>
+<hr>
+
+{% if logsByUser is empty %}
+  <div class='alert alert-info'>
+    <i class='fas fa-info-circle mr-1'></i>{{ 'No logs found. Team members can create monthly logs from the Resources page using the "New Monthly Log" button.'|trans }}
+  </div>
+{% else %}
+  {% for fullname, logs in logsByUser %}
+    <div class='card mb-4'>
+      <div class='card-header'>
+        <h3 class='mb-0'><i class='fas fa-user mr-2'></i>{{ fullname }}</h3>
+      </div>
+      <div class='card-body p-0'>
+        <table class='table table-hover mb-0'>
+          <thead>
+            <tr>
+              <th scope='col'>{{ 'Log'|trans }}</th>
+              <th scope='col'>{{ 'Last modified'|trans }}</th>
+              <th scope='col'>{{ 'Created'|trans }}</th>
+              <th scope='col'>{{ 'Actions'|trans }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in logs %}
+              <tr>
+                <td><i class='fas fa-file-alt mr-1'></i>{{ log.title }}</td>
+                <td><span class='relative-moment' title='{{ log.modified_at }}'>{{ log.modified_at }}</span></td>
+                <td>{{ log.created_at|date('Y-m-d') }}</td>
+                <td>
+                  <a href='database.php?mode=view&id={{ log.id }}' class='btn btn-sm btn-outline-secondary' title='{{ 'View'|trans }}'>
+                    <i class='fas fa-eye'></i>
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}

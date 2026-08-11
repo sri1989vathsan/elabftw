@@ -203,8 +203,10 @@ final class Filter
         // create base config for html5
         $config = HTMLPurifier_HTML5Config::createDefault();
         // allow only certain elements
-        $config->set('HTML.Allowed', 'div[class|style],br,p[class|style],sub,img[src|class|style|width|height],sup,strong,b,em,u,a[href|target],s,span[style],ul[style],li[style],ol[style],dl,dt,dd,blockquote,h1[class|style],h2[class|style],h3[class|style],h4[class|style],h5[class|style],h6[class|style],hr,table[style|data-table-sort|border],tr[style],td[style|colspan|rowspan],th[style|colspan|rowspan],code,source[src|type],video[src|controls|style|width|height],audio[src|controls],pre[class],details,summary,caption,figure,figcaption');
+        $config->set('HTML.Allowed', 'div[class|style],br,p[class|style],sub,img[src|class|style|width|height],sup,strong,b,em,u,a[href|id|class|title|target],time[datetime],s,span[id|class|style|title],ul[class|style],li[class|style|data-checked],ol[style],dl,dt,dd,blockquote,h1[id|class|style],h2[id|class|style],h3[id|class|style],h4[id|class|style],h5[id|class|style],h6[id|class|style],hr[class],table[class|style|data-table-sort|data-spreadsheet|data-spreadsheet-style|data-well-plate|border],thead,tbody,tr[style],td[style|colspan|rowspan],th[class|style|colspan|rowspan],code,source[src|type],video[src|controls|style|width|height],audio[src|controls],pre[class],details,summary,caption,figure,figcaption');
         $config->set('Attr.AllowedFrameTargets', array('_blank'));
+        // keep stable anchors generated for linkable Table of Contents entries
+        $config->set('Attr.EnableID', true);
         $config->set('HTML.TargetBlank', true);
         // configure the cache for htmlpurifier
         $tmpDir = FsTools::getCacheFolder('purifier');
@@ -238,12 +240,44 @@ final class Filter
             'language-tcl',
             'language-vhdl',
             'language-yaml',
+            'elabftw-spreadsheet',
+            'elabftw-date-reference',
+            'elabftw-date-icon',
+            'elabftw-date-icon-day',
+            'elabftw-date-icon-month',
+            'elabftw-dashed-rule',
+            'elabftw-double-dashed-rule',
+            'elabftw-double-rule',
+            'elabftw-single-rule',
+            'elabftw-checklist',
+            'elabftw-checklist-item',
+            'spreadsheet-coordinate',
         ));
         // note: hyphens and word-break are not supported
         $config->set('CSS.AllowedProperties', array(
             'background-color',
             'border',
+            'border-bottom',
+            'border-bottom-color',
+            'border-bottom-style',
+            'border-bottom-width',
+            'border-collapse',
             'border-color',
+            'border-left',
+            'border-left-color',
+            'border-left-style',
+            'border-left-width',
+            'border-right',
+            'border-right-color',
+            'border-right-style',
+            'border-right-width',
+            'border-spacing',
+            'border-style',
+            'border-top',
+            'border-top-color',
+            'border-top-style',
+            'border-top-width',
+            'border-width',
             'color',
             'display', // see #3368
             'font-family',
@@ -257,8 +291,14 @@ final class Filter
             'margin-left',
             'margin-right',
             'min-width',
+            'padding',
+            'padding-bottom',
+            'padding-left',
+            'padding-right',
+            'padding-top',
             'text-align',
             'text-decoration',
+            'vertical-align',
             'word-spacing',
             'width',
             'white-space',
@@ -267,8 +307,13 @@ final class Filter
         $config->set('CSS.MaxImgLength', null);
         $config->set('HTML.MaxImgLength', null);
         // allow 'data-table-sort' attribute to indicate that a table shall be sortable by js
+        // allow 'data-spreadsheet' attribute to store inline spreadsheet data (base64-encoded JSON)
         if ($def = $config->maybeGetRawHTMLDefinition()) {
             $def->addAttribute('table', 'data-table-sort', 'Enum#true');
+            $def->addAttribute('table', 'data-spreadsheet', 'Text');
+            $def->addAttribute('table', 'data-spreadsheet-style', 'Enum#standard,notebook,well-plate');
+            $def->addAttribute('table', 'data-well-plate', 'Enum#6,12,24,48,96,384');
+            $def->addAttribute('li', 'data-checked', 'Enum#true,false');
         }
 
         $purifier = new HTMLPurifier($config);

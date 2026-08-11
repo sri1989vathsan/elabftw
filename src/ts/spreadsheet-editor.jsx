@@ -18,7 +18,7 @@ import { Spreadsheet, Worksheet } from "@jspreadsheet-ce/react";
 import "jsuites/dist/jsuites.css";
 import "jspreadsheet-ce/dist/jspreadsheet.css";
 import i18next from './i18n';
-import { fileToAOA, replaceAttachment, saveAsAttachment} from './spreadsheet-utils';
+import { fileToAOA, replaceAttachment, saveAsAttachment, getHtmlClipboardTable, extractHtmlCellStyles, columnIndexToLetters } from './spreadsheet-utils';
 import { getEntity } from './misc';
 import { assignKey } from './keymaster';
 import { notify } from './notify';
@@ -67,6 +67,66 @@ function SpreadsheetEditor() {
       window.parent.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
+
+  // PASTE FORMATTING
+  // jspreadsheet-ce's built-in paste only ever carries values (styles are a
+  // Pro-only feature upstream). We capture the clipboard's raw HTML table
+  // ourselves (Excel/LibreOffice always include one alongside plain text) in
+  // the capture phase of the native paste event, before jspreadsheet-ce's own
+  // paste handler consumes it, then re-apply the extracted per-cell styles
+  // via setStyle() once jspreadsheet-ce's onpaste event tells us where the
+  // pasted values actually landed.
+  const pendingPasteStylesRef = useRef(null);
+  useEffect(() => {
+    const onNativePaste = (event) => {
+      try {
+        const html = getHtmlClipboardTable(event);
+        // eslint-disable-next-line no-console
+        console.debug('[paste-debug] native paste event fired. html length:', html?.length ?? 0);
+        pendingPasteStylesRef.current = html ? extractHtmlCellStyles(html) : null;
+        // eslint-disable-next-line no-console
+        console.debug('[paste-debug] extracted style grid:', pendingPasteStylesRef.current);
+      } catch (e) {
+        // best-effort only: if parsing fails, just fall back to values-only paste
+        // eslint-disable-next-line no-console
+        console.debug('[paste-debug] extraction threw:', e);
+        pendingPasteStylesRef.current = null;
+      }
+    };
+    // capture phase so this runs before jspreadsheet-ce's own paste listener
+    document.addEventListener('paste', onNativePaste, true);
+    return () => document.removeEventListener('paste', onNativePaste, true);
+  }, []);
+
+  // called by jspreadsheet-ce after it has applied a paste, with the actual
+  // (x, y) coordinates each pasted cell landed on
+  const onPasteStyles = (_instance, pastedInfo) => {
+    // eslint-disable-next-line no-console
+    console.debug('[paste-debug] onpaste fired. pastedInfo:', pastedInfo);
+    const styles = pendingPasteStylesRef.current;
+    pendingPasteStylesRef.current = null;
+    if (!styles || !pastedInfo?.length) {
+      // eslint-disable-next-line no-console
+      console.debug('[paste-debug] bailing out. styles present?', !!styles, 'pastedInfo present?', !!pastedInfo?.length);
+      return;
+    }
+    const cellStyles = {};
+    for (let r = 0; r < pastedInfo.length; r++) {
+      const styleRow = styles[r];
+      if (!styleRow) continue;
+      for (let c = 0; c < pastedInfo[r].length; c++) {
+        const style = styleRow[c];
+        if (!style) continue;
+        const { x, y } = pastedInfo[r][c];
+        cellStyles[`${columnIndexToLetters(x)}${y + 1}`] = style;
+      }
+    }
+    // eslint-disable-next-line no-console
+    console.debug('[paste-debug] computed cellStyles:', cellStyles, 'instance available?', !!spreadsheetRef.current?.[0]);
+    if (Object.keys(cellStyles).length) {
+      spreadsheetRef.current?.[0]?.setStyle?.(cellStyles);
+    }
+  };
 
   const getAOA = () => spreadsheetRef.current?.[0]?.getData?.() ?? data;
   const entity = getEntity(true);
@@ -199,14 +259,13 @@ function SpreadsheetEditor() {
     <>
       <input hidden type='file' accept='.xlsx,.csv,.ods' onChange={handleImportFile} id='importFileInput' name='file' />
       {/* move Spreadsheet into a child component to safely re-init on file uploads */}
-      <SpreadsheetInner key={spreadsheetKey} data={data} buildToolbar={buildToolbar} onSpreadsheetChange={markUnsaved}/>
+      <SpreadsheetInner key={spreadsheetKey} data={data} buildToolbar={buildToolbar} onSpreadsheetChange={markUnsaved} onPasteStyles={onPasteStyles} spreadsheetRef={spreadsheetRef} />
     </>
   );
 }
-function SpreadsheetInner({ data, buildToolbar, onSpreadsheetChange }) {
-  const spreadsheetRef = useRef(null);
+function SpreadsheetInner({ data, buildToolbar, onSpreadsheetChange, onPasteStyles, spreadsheetRef }) {
   return (
-    <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange}>
+    <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange} onpaste={onPasteStyles}>
       <Worksheet data={data} minDimensions={[
           Math.max(12, data[0]?.length || 0),
           Math.max(12, data.length)

@@ -65,12 +65,30 @@ import '../js/tinymce-langs/zh_CN.js';
 import '../js/tinymce-langs/zh_TW.js';
 import '../js/tinymce-plugins/mention/plugin.js';
 import { EntityType, Model } from './interfaces';
-import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPostRequest } from './misc';
+import { reloadElements, escapeExtendedQuery, escapeHTML, updateEntityBody, getNewIdFromPostRequest } from './misc';
 import { ApiC } from './api';
 import { isSortable } from './TableSorting.class';
 import type { MathJaxObject } from '@mathjax/src/js/components/startup.js';
 declare const MathJax: MathJaxObject;
+import {
+  createNotebookSpreadsheetData,
+  createWellPlateSpreadsheetData,
+  emptySpreadsheetData,
+  extractFromTable,
+  getFlattenedClipboardSuggestion,
+  normalizePdfPrivateUseText,
+  openSpreadsheetModal,
+  spreadsheetFromClipboard,
+  spreadsheetFromFlattenedClipboard,
+  spreadsheetToHTML,
+  SpreadsheetData,
+  WELL_PLATE_PRESETS,
+} from './inline-spreadsheet';
+import TableIndentation from './TableIndentation.class';
+import DateReferenceEditor from './DateReferenceEditor.class';
+import ExperimentTitleEditor from './ExperimentTitleEditor.class';
 import { entity } from './getEntity';
+import { buildLabCollectorUrl } from './labcollector-link';
 import { isDarkTheme } from './theme';
 
 // AUTOSAVE
@@ -95,6 +113,201 @@ function getDatetime(): string {
 // ctrl-shift-D will add the date in the tinymce editor
 function addDatetimeOnCursor(): void {
   tinymce.activeEditor.execCommand('mceInsertContent', false, `${getDatetime()} `);
+}
+
+function insertHorizontalRule(
+  editor: Editor,
+  style: 'single' | 'double' | 'dashed' | 'double-dashed',
+): void {
+  editor.execCommand(
+    'mceInsertContent',
+    false,
+    `<hr class="elabftw-${style}-rule"><p><br data-mce-bogus="1"></p>`,
+  );
+}
+
+const CHECKLIST_CLASS = 'elabftw-checklist';
+const CHECKLIST_ITEM_CLASS = 'elabftw-checklist-item';
+
+function checklistFromSelection(editor: Editor): HTMLUListElement | null {
+  const node = editor.selection.getNode() as HTMLElement;
+  return node.closest(`ul.${CHECKLIST_CLASS}`) as HTMLUListElement | null;
+}
+
+function normalizeChecklist(list: HTMLUListElement): void {
+  list.classList.add(CHECKLIST_CLASS);
+  list.querySelectorAll<HTMLUListElement>('ul').forEach(nestedList => {
+    nestedList.classList.add(CHECKLIST_CLASS);
+  });
+  list.querySelectorAll<HTMLLIElement>('li').forEach(item => {
+    if (!item.parentElement?.matches(`ul.${CHECKLIST_CLASS}`)) return;
+    item.classList.add(CHECKLIST_ITEM_CLASS);
+    const checked = item.dataset.checked === 'true';
+    item.dataset.checked = checked ? 'true' : 'false';
+  });
+}
+
+function normalizeChecklists(editor: Editor): void {
+  editor.getBody().querySelectorAll<HTMLUListElement>(`ul.${CHECKLIST_CLASS}`)
+    .forEach(normalizeChecklist);
+}
+
+function applyChecklist(editor: Editor, checked = false): void {
+  let list = checklistFromSelection(editor);
+  if (!list) {
+    const currentList = (editor.selection.getNode() as HTMLElement)
+      .closest('ul,ol') as HTMLOListElement | HTMLUListElement | null;
+    if (!currentList || currentList.tagName === 'OL') {
+      editor.execCommand('InsertUnorderedList');
+    }
+    list = (editor.selection.getNode() as HTMLElement)
+      .closest('ul') as HTMLUListElement | null;
+  }
+  if (!list) return;
+
+  normalizeChecklist(list);
+  const selectedItem = (editor.selection.getNode() as HTMLElement)
+    .closest(`li.${CHECKLIST_ITEM_CLASS}`) as HTMLLIElement | null;
+  if (checked && selectedItem) {
+    selectedItem.dataset.checked = 'true';
+  }
+}
+
+function removeChecklist(editor: Editor): void {
+  const list = checklistFromSelection(editor);
+  if (!list) return;
+  list.querySelectorAll<HTMLLIElement>(`li.${CHECKLIST_ITEM_CLASS}`).forEach(item => {
+    item.classList.remove(CHECKLIST_ITEM_CLASS);
+    delete item.dataset.checked;
+  });
+  list.querySelectorAll<HTMLUListElement>(`ul.${CHECKLIST_CLASS}`).forEach(nestedList => {
+    nestedList.classList.remove(CHECKLIST_CLASS);
+  });
+  list.classList.remove(CHECKLIST_CLASS);
+  editor.execCommand('RemoveList');
+}
+
+function toggleChecklist(editor: Editor): void {
+  editor.undoManager.transact(() => {
+    if (checklistFromSelection(editor)) {
+      removeChecklist(editor);
+    } else {
+      applyChecklist(editor);
+    }
+  });
+  editor.setDirty(true);
+  editor.nodeChanged();
+  editor.focus();
+}
+
+function handleChecklistClick(editor: Editor, event: MouseEvent): void {
+  const target = event.target as HTMLElement | null;
+  const item = target?.closest(`li.${CHECKLIST_ITEM_CLASS}`) as HTMLLIElement | null;
+  if (!item || !item.closest(`ul.${CHECKLIST_CLASS}`)) return;
+
+  // The checkbox is a CSS marker occupying the first 1.4rem of the list item.
+  // Only clicks in that marker area toggle state; clicks on the text still edit.
+  const markerWidth = 24;
+  const offset = event.clientX - item.getBoundingClientRect().left;
+  if (offset < -2 || offset > markerWidth) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  editor.undoManager.transact(() => {
+    const checked = item.dataset.checked !== 'true';
+    item.dataset.checked = checked ? 'true' : 'false';
+  });
+  editor.setDirty(true);
+  editor.nodeChanged();
+}
+
+/**
+ * Convert a list marker followed by Space at the start of an otherwise empty
+ * paragraph. This is explicit because TinyMCE text patterns are not reliable
+ * across every editor configuration used by eLabFTW.
+ */
+function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
+  if ((event.key !== ' ' && event.code !== 'Space')
+    || event.ctrlKey
+    || event.metaKey
+    || event.altKey
+    || event.isComposing) {
+    return;
+  }
+
+  const range = editor.selection.getRng();
+  if (!range.collapsed) return;
+
+  const block = editor.dom.getParent(range.startContainer, 'p,div') as HTMLElement | null;
+  if (!block || block.closest('li,pre,code,table')) return;
+
+  const marker = block.textContent ?? '';
+  let command: 'InsertUnorderedList' | 'InsertOrderedList' | 'Checklist' | null = null;
+  let checklistChecked = false;
+  if (marker === '-') {
+    command = 'InsertUnorderedList';
+  } else if (marker === '1' || marker === '1.') {
+    command = 'InsertOrderedList';
+  } else if (marker === '[]' || marker === '[ ]' || marker === '- [ ]') {
+    command = 'Checklist';
+  } else if (/^(?:- )?\[[xX]\]$/.test(marker)) {
+    command = 'Checklist';
+    checklistChecked = true;
+  }
+  if (!command) return;
+
+  // Confirm the cursor is immediately after the marker, not before it.
+  const beforeCursor = range.cloneRange();
+  beforeCursor.selectNodeContents(block);
+  beforeCursor.setEnd(range.startContainer, range.startOffset);
+  if (beforeCursor.toString() !== marker) return;
+
+  event.preventDefault();
+  editor.undoManager.transact(() => {
+    editor.dom.setHTML(block, '<br data-mce-bogus="1">');
+    editor.selection.setCursorLocation(block, 0);
+    if (command === 'Checklist') {
+      applyChecklist(editor, checklistChecked);
+    } else {
+      editor.execCommand(command);
+    }
+  });
+}
+
+/**
+ * Use Tab/Shift+Tab for structural indentation without allowing keyboard focus
+ * to escape the editor. Table cells keep TinyMCE's native Tab navigation.
+ */
+function handleBlockIndentShortcut(editor: Editor, event: KeyboardEvent): boolean {
+  if (event.key !== 'Tab'
+    || event.ctrlKey
+    || event.metaKey
+    || event.altKey
+    || event.defaultPrevented
+    || event.isComposing) {
+    return false;
+  }
+
+  const selectionNode = editor.selection.getNode() as HTMLElement;
+  if (selectionNode.closest('td,th,[contenteditable="false"]')) return false;
+
+  const listItem = selectionNode.matches('li')
+    ? selectionNode
+    : selectionNode.closest('li');
+  const block = editor.dom.getParent(
+    selectionNode,
+    'p,h1,h2,h3,h4,h5,h6,blockquote,div,pre',
+  );
+  if (!listItem && (!block || block === editor.getBody())) return false;
+
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  editor.undoManager.transact(() => {
+    editor.execCommand(event.shiftKey ? 'Outdent' : 'Indent');
+  });
+  editor.nodeChanged();
+  return true;
 }
 
 function isOverCharLimit(): boolean {
@@ -196,22 +409,117 @@ const imagesUploadHandler = (blobInfo: TinyMCEBlobInfo) => new Promise((resolve,
   }
 });
 
+/**
+ * TinyMCE renders editable content in an iframe, so account palette variables
+ * do not inherit from the eLabFTW page. Copy the resolved application palette
+ * into the editor document to keep the writing surface coordinated too.
+ */
+function getEditorPaletteStyle(): string {
+  const rootStyle = getComputedStyle(document.documentElement);
+  const variableNames = [
+    '--white',
+    '--mainbackground',
+    '--highlighted',
+    '--superlight',
+    '--firstlevel',
+    '--secondlevel',
+    '--thirdlevel',
+    '--medium',
+    '--mediumstrong',
+    '--strongest',
+    '--primary',
+    '--secondary',
+    '--secondary-muted',
+    '--elabblue',
+    '--lightblue',
+    '--darkblue',
+  ];
+  const variables = variableNames
+    .map(name => `${name}:${rootStyle.getPropertyValue(name).trim()}`)
+    .join(';');
+  return `:root{${variables}}html,body{background-color:var(--white);color:var(--strongest)}a{color:var(--primary)}`;
+}
+
+function getAssetVersionQuery(): string {
+  const mainBundle = document.querySelector<HTMLScriptElement>('script[src*="/assets/main.bundle.js"]');
+  if (!mainBundle?.src) return '';
+  return new URL(mainBundle.src).search;
+}
+
+interface PaintedTextFormat {
+  styles: Record<string, string>;
+}
+
+interface LabCollectorDialogData {
+  labcollectorType: string;
+  labcollectorId: string;
+}
+
+interface PdfTableDialogData {
+  columns: string;
+}
+
+function capturePaintedTextFormat(editor: Editor): PaintedTextFormat | null {
+  const node = editor.selection.getNode() as HTMLElement;
+  const body = editor.getBody();
+  if (!node || node === body || !body.contains(node)) return null;
+  const editorWindow = editor.getWin();
+  const computed = editorWindow.getComputedStyle(node);
+  const baseline = editorWindow.getComputedStyle(body);
+  const styles: Record<string, string> = {};
+  [
+    'color',
+    'font-family',
+    'font-size',
+    'font-style',
+    'font-weight',
+    'letter-spacing',
+    'line-height',
+    'text-decoration',
+    'text-transform',
+    'vertical-align',
+  ].forEach(property => {
+    const value = computed.getPropertyValue(property);
+    if (value && value !== baseline.getPropertyValue(property)) styles[property] = value;
+  });
+
+  // Background color is not inherited, so look through the selected node's
+  // ancestors until the editor body for the first visible highlight.
+  let current: HTMLElement | null = node;
+  while (current && current !== body) {
+    const backgroundColor = editorWindow.getComputedStyle(current).backgroundColor;
+    if (backgroundColor
+      && backgroundColor !== 'transparent'
+      && backgroundColor !== 'rgba(0, 0, 0, 0)'
+    ) {
+      styles['background-color'] = backgroundColor;
+      break;
+    }
+    current = current.parentElement;
+  }
+  return Object.keys(styles).length > 0 ? { styles } : null;
+}
+
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate | codesample | link | sort-table';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist checklist outdent indent | forecolor backcolor format-painter remove-formatting | charmap emoticons adddate horizontal-rule | codesample | insert-link | inline-sheet table-properties cell-properties table-outdent table-indent sort-table';
+  if (document.getElementById('documentTitle')) {
+    toolbar1 = toolbar1.replace('adddate', 'experiment-title adddate');
+  }
   let removedMenuItems = 'newdocument, image, anchor';
   let fileMenuItems = 'preview | print';
   if (page === 'edit') {
     fileMenuItems = 'restoredraft | saveAndGoBack ' + fileMenuItems;
     plugins += ' autosave';
     // add Image button in toolbar
-    toolbar1 = toolbar1.replace('link |', 'link image |');
+    toolbar1 = toolbar1.replace('insert-link |', 'insert-link image |');
     // let Image in menu
     removedMenuItems = 'newdocument, anchor';
   }
 
   const isDark = isDarkTheme();
+  const tinymceContentCss = `/assets/tinymce_content.min.css${getAssetVersionQuery()}`;
   const templateEndpoint = (entity.type === EntityType.Experiment || entity.type === EntityType.Template)
     ? EntityType.Template
     : EntityType.ItemType;
@@ -233,9 +541,10 @@ export function getTinymceBaseConfig(page: string): object {
     // location of the skin directory
     skin_url: isDark ? '/assets/tinymce_skins_dark' : '/assets/tinymce_skins',
     skin: isDark ? 'oxide-dark' : 'oxide',
-    content_css: isDark ? ['/assets/tinymce_content_dark.min.css', '/assets/tinymce_content.min.css'] : ['/assets/tinymce_content.min.css'],
-    // Prevent inserted images from overflowing the editor. See #5050.
-    content_style: 'img { max-width: 100%; height: auto; }',
+    // TinyMCE loads content CSS inside its iframe, so carry over the main
+    // bundle's cache-buster to avoid stale custom editor styles.
+    content_css: isDark ? [`/assets/tinymce_content_dark.min.css${getAssetVersionQuery()}`, tinymceContentCss] : [tinymceContentCss],
+    content_style: `${getEditorPaletteStyle()}img{max-width:100%;height:auto}`,
     emoticons_database_url: 'assets/tinymce_emojis.js',
     // remove the "Upgrade" button
     promotion: false,
@@ -243,12 +552,16 @@ export function getTinymceBaseConfig(page: string): object {
     // autoresize plugin will disallow manually resizing, but setting resize to true will make the scrollbar disappear
     //resize: true,
     plugins: plugins,
+    // A custom handler below also supports paragraphs/headings and keeps focus
+    // inside the editor, so disable the lists plugin's overlapping Tab handler.
+    lists_indent_on_tab: false,
     pagebreak_split_block: true,
     pagebreak_separator: '<div class="page-break"></div>',
     toolbar1: toolbar1,
     // this addresses CVE-2024-29881, it defaults to true in 7.0, so can be removed in tiny 7.0 TODO
     convert_unsafe_embeds: true,
-    // disable automatic h1 when using #
+    // Keep TinyMCE's general heading/format text patterns disabled. Focused
+    // list shortcuts are implemented in setup() below.
     text_patterns: false,
     removed_menuitems: removedMenuItems,
     image_caption: true,
@@ -347,6 +660,18 @@ export function getTinymceBaseConfig(page: string): object {
       file: { title: 'File', items: fileMenuItems },
     },
     setup: (editor: Editor): void => {
+      const tableIndentation = new TableIndentation(editor);
+      const dateReferenceEditor = new DateReferenceEditor(editor);
+      const experimentTitleEditor = new ExperimentTitleEditor(editor);
+      let paintedTextFormat: PaintedTextFormat | null = null;
+      let painterSequence = 0;
+      let painterButtonApi: { setActive: (active: boolean) => void } | null = null;
+      const resetFormatPainter = (): void => {
+        paintedTextFormat = null;
+        painterButtonApi?.setActive(false);
+      };
+      editor.on('init', () => dateReferenceEditor.normalizeReferences());
+      editor.on('init', () => normalizeChecklists(editor));
       // holds the timer setTimeout function
       let typingTimer;
       // use event SkinLoaded instead of init so we're sure skinNode is present
@@ -414,19 +739,311 @@ export function getTinymceBaseConfig(page: string): object {
       // floppy disk icon from COLLECTION: Zest Interface Icons LICENSE: MIT License AUTHOR: zest
       editor.ui.registry.addIcon('customSave', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M4 5a1 1 0 0 1 1-1h2v3a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V4h.172a1 1 0 0 1 .707.293l2.828 2.828a1 1 0 0 1 .293.707V19a1 1 0 0 1-1 1h-1v-7a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v7H5a1 1 0 0 1-1-1V5Zm4 15h8v-6H8v6Zm6-16H9v2h5V4ZM5 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7.828a3 3 0 0 0-.879-2.12l-2.828-2.83A3 3 0 0 0 16.172 2H5Z" /></svg>'), // eslint-disable-line
 
-      // add date+time button
-      editor.ui.registry.addButton('adddate', {
+      // Semantic dates retain a stable anchor and can link to another
+      // experiment. Keep the original timestamp action in the same menu.
+      editor.ui.registry.addSplitButton('adddate', {
         icon: 'insert-time',
-        tooltip: 'Insert timestamp',
-        onAction: function() {
-          editor.insertContent(`${getDatetime()} `);
+        text: 'Date',
+        tooltip: 'Insert today using saved defaults; open the menu for date options',
+        onAction: () => dateReferenceEditor.insertToday(),
+        onItemAction: (_api, value) => {
+          switch (value) {
+          case 'today':
+            dateReferenceEditor.insertToday();
+            break;
+          case 'options':
+            dateReferenceEditor.openCalendar();
+            break;
+          case 'timestamp':
+            editor.insertContent(`${getDatetime()} `);
+            break;
+          case 'edit': {
+            const selectedReference = dateReferenceEditor.getSelectedReference();
+            if (selectedReference) dateReferenceEditor.openCalendar(selectedReference);
+            break;
+          }
+          case 'copy':
+            dateReferenceEditor.copySelectedReferenceLink();
+            break;
+          }
         },
+        fetch: callback => {
+          const items = [
+            {
+              type: 'choiceitem' as const,
+              text: 'Insert today using saved defaults',
+              value: 'today',
+              icon: 'insert-time',
+            },
+            {
+              type: 'choiceitem' as const,
+              text: 'Choose date, format, heading or experiment…',
+              value: 'options',
+              icon: 'calendar',
+            },
+            {
+              type: 'choiceitem' as const,
+              text: 'Insert timestamp',
+              value: 'timestamp',
+            },
+          ];
+          const selectedReference = dateReferenceEditor.getSelectedReference();
+          if (selectedReference) {
+            items.push({ type: 'separator' as const } as unknown as typeof items[number]);
+            items.push({
+              type: 'choiceitem' as const,
+              text: 'Edit selected date…',
+              value: 'edit',
+              icon: 'edit-block',
+            });
+            items.push({
+              type: 'choiceitem' as const,
+              text: 'Copy permanent link to date',
+              value: 'copy',
+              icon: 'copy',
+            });
+          }
+          callback(items);
+        },
+      });
+      editor.ui.registry.addSplitButton('experiment-title', {
+        text: 'Title',
+        tooltip: 'Insert experiment title as a heading (Ctrl+Alt+T)',
+        onAction: () => experimentTitleEditor.insertUsingDefaults(),
+        onItemAction: (_api, value) => {
+          if (value === 'insert') {
+            experimentTitleEditor.insertUsingDefaults();
+          } else if (value === 'options') {
+            experimentTitleEditor.openDialog();
+          }
+        },
+        fetch: callback => callback([
+          {
+            type: 'choiceitem',
+            text: 'Insert title using saved defaults',
+            value: 'insert',
+          },
+          {
+            type: 'choiceitem',
+            text: 'Title heading and font options…',
+            value: 'options',
+          },
+        ]),
+      });
+      editor.ui.registry.addMenuButton('horizontal-rule', {
+        text: 'Line',
+        tooltip: 'Insert solid or dashed horizontal lines',
+        fetch: callback => callback([
+          {
+            type: 'menuitem',
+            text: 'Single solid line (Ctrl+Shift+H)',
+            onAction: () => insertHorizontalRule(editor, 'single'),
+          },
+          {
+            type: 'menuitem',
+            text: 'Double solid line (Ctrl+Alt+Shift+H)',
+            onAction: () => insertHorizontalRule(editor, 'double'),
+          },
+          { type: 'separator' },
+          {
+            type: 'menuitem',
+            text: 'Single dashed line',
+            onAction: () => insertHorizontalRule(editor, 'dashed'),
+          },
+          {
+            type: 'menuitem',
+            text: 'Double dashed line',
+            onAction: () => insertHorizontalRule(editor, 'double-dashed'),
+          },
+        ]),
       });
       editor.ui.registry.addButton('custom-save', {
         icon: 'customSave',
         tooltip: 'Save',
         onAction: function() {
           editor.execCommand('mceSave');
+        },
+      });
+      const openLabCollectorLinkDialog = (): void => {
+        const helperType = document.getElementById('labcollectorType') as HTMLSelectElement | null;
+        const helperId = document.getElementById('labcollectorId') as HTMLInputElement | null;
+        if (!helperType || !helperId) return;
+        const bookmark = editor.selection.getBookmark(2, true);
+        const hasSelection = !editor.selection.getRng().collapsed;
+        const typeItems = Array.from(helperType.options, option => ({
+          text: option.textContent ?? option.value,
+          value: option.value,
+        }));
+
+        editor.windowManager.open({
+          title: 'Insert LabCollector link',
+          size: 'normal',
+          body: {
+            type: 'panel',
+            items: [
+              {
+                type: 'selectbox',
+                name: 'labcollectorType',
+                label: 'LabCollector type',
+                items: typeItems,
+              },
+              {
+                type: 'input',
+                name: 'labcollectorId',
+                label: 'LabCollector ID',
+              },
+            ],
+          },
+          initialData: {
+            labcollectorType: helperType.value,
+            labcollectorId: helperId.value,
+          },
+          buttons: [
+            { type: 'cancel', text: 'Cancel' },
+            { type: 'submit', text: 'Insert link', primary: true },
+          ],
+          onSubmit: api => {
+            const data = api.getData() as LabCollectorDialogData;
+            const id = data.labcollectorId.trim();
+            let url: string;
+            try {
+              url = buildLabCollectorUrl(data.labcollectorType, id);
+            } catch {
+              editor.notificationManager.open({
+                text: 'Enter a valid positive LabCollector ID.',
+                type: 'error',
+                timeout: 2500,
+              });
+              return;
+            }
+
+            const selectedType = Array.from(helperType.options)
+              .find(option => option.value === data.labcollectorType);
+            const label = `LabCollector ${selectedType?.textContent ?? data.labcollectorType} #${id}`;
+            helperType.value = data.labcollectorType;
+            helperId.value = id;
+            editor.focus();
+            editor.selection.moveToBookmark(bookmark);
+            editor.undoManager.transact(() => {
+              if (hasSelection) {
+                editor.execCommand('mceInsertLink', false, { href: url, target: '_blank' });
+                return;
+              }
+              editor.execCommand(
+                'mceInsertContent',
+                false,
+                `<a href="${escapeHTML(url)}" target="_blank">${escapeHTML(label)}</a>`,
+              );
+            });
+            api.close();
+          },
+        });
+      };
+      editor.ui.registry.addMenuButton('insert-link', {
+        icon: 'link',
+        text: 'Link',
+        tooltip: 'Insert a web, file, or LabCollector link',
+        fetch: callback => {
+          const items = [{
+            type: 'menuitem' as const,
+            text: 'Web or file link…',
+            onAction: () => {
+              editor.execCommand('mceLink');
+            },
+          }];
+          if (document.getElementById('labcollectorHelper')) {
+            items.push({
+              type: 'menuitem' as const,
+              text: 'LabCollector link…',
+              onAction: openLabCollectorLinkDialog,
+            });
+          }
+          callback(items);
+        },
+      });
+      editor.ui.registry.addIcon(
+        'elabftwFormatPainter',
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m14.5 3.5 6 6-8.75 8.75-6-6L14.5 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m5.75 12.25-1.7 1.7c-1.8 1.8-.2 3-1.55 5.55 2.55-1.35 3.75.25 5.55-1.55l1.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.5 5.5 6 6" stroke="currentColor" stroke-width="1.8"/></svg>',
+      );
+      editor.ui.registry.addIcon(
+        'elabftwClearFormatting',
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m14.5 3.5 6 6-8.75 8.75-6-6L14.5 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m5.75 12.25-1.7 1.7c-1.8 1.8-.2 3-1.55 5.55 2.55-1.35 3.75.25 5.55-1.55l1.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4 20 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+      );
+      editor.ui.registry.addToggleButton('format-painter', {
+        icon: 'elabftwFormatPainter',
+        tooltip: 'Format painter: copy formatting, then select target text and click again',
+        onAction: api => {
+          if (!paintedTextFormat) {
+            paintedTextFormat = capturePaintedTextFormat(editor);
+            if (!paintedTextFormat) {
+              editor.notificationManager.open({
+                text: 'Place the cursor in formatted text first.',
+                type: 'info',
+                timeout: 2500,
+              });
+              return;
+            }
+            api.setActive(true);
+            editor.notificationManager.open({
+              text: 'Formatting copied. Select target text and click the brush again.',
+              type: 'info',
+              timeout: 3000,
+            });
+            return;
+          }
+          if (editor.selection.isCollapsed()) {
+            editor.notificationManager.open({
+              text: 'Select the target text before applying the copied formatting.',
+              type: 'info',
+              timeout: 2500,
+            });
+            return;
+          }
+          editor.undoManager.transact(() => {
+            const formatName = `elabftw-format-painter-${painterSequence++}`;
+            editor.formatter.register(formatName, {
+              inline: 'span',
+              styles: paintedTextFormat.styles,
+            });
+            editor.formatter.apply(formatName);
+          });
+          resetFormatPainter();
+          editor.nodeChanged();
+        },
+        onSetup: api => {
+          painterButtonApi = api;
+          return () => {
+            if (painterButtonApi === api) painterButtonApi = null;
+          };
+        },
+      });
+      editor.ui.registry.addButton('remove-formatting', {
+        icon: 'elabftwClearFormatting',
+        tooltip: 'Clear formatting from the selected text',
+        onAction: () => {
+          resetFormatPainter();
+          editor.undoManager.transact(() => editor.execCommand('RemoveFormat'));
+          editor.nodeChanged();
+        },
+      });
+      editor.on('keydown', event => {
+        if (event.key === 'Escape' && paintedTextFormat) resetFormatPainter();
+      });
+      editor.ui.registry.addIcon(
+        'elabftwChecklist',
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2"/><path d="m4.5 7 1.5 1.5L8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7h9M12 17h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="3" y="14" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2"/></svg>',
+      );
+      editor.ui.registry.addToggleButton('checklist', {
+        icon: 'elabftwChecklist',
+        tooltip: 'Checklist ([ ] then Space)',
+        onAction: () => toggleChecklist(editor),
+        onSetup: api => {
+          const update = (): void => {
+            api.setActive(Boolean(checklistFromSelection(editor)));
+          };
+          editor.on('NodeChange', update);
+          update();
+          return () => editor.off('NodeChange', update);
         },
       });
       // save and go back button for toolbar, inside "File" menu.
@@ -439,10 +1056,254 @@ export function getTinymceBaseConfig(page: string): object {
           btn ? btn.click() : editor.execCommand('mceSave');
         },
       });
+      editor.ui.registry.addButton('table-outdent', {
+        icon: 'outdent',
+        tooltip: 'Outdent table',
+        onAction: () => tableIndentation.outdentSelectedTable(),
+        onSetup: api => {
+          const update = (event): void => {
+            const table = tableIndentation.trackSelectedTable(event.element);
+            api.setEnabled(tableIndentation.canOutdent(table));
+          };
+          api.setEnabled(tableIndentation.canOutdent(tableIndentation.trackSelectedTable()));
+          editor.on('NodeChange', update);
+          return () => editor.off('NodeChange', update);
+        },
+      });
+      editor.ui.registry.addButton('table-indent', {
+        icon: 'indent',
+        tooltip: 'Indent table to align with nested bullets',
+        onAction: () => tableIndentation.indentSelectedTable(),
+        onSetup: api => {
+          const update = (event): void => {
+            const table = tableIndentation.trackSelectedTable(event.element);
+            api.setEnabled(tableIndentation.canIndent(table));
+          };
+          api.setEnabled(tableIndentation.canIndent(tableIndentation.trackSelectedTable()));
+          editor.on('NodeChange', update);
+          return () => editor.off('NodeChange', update);
+        },
+      });
+      editor.ui.registry.addButton('cell-properties', {
+        text: 'Cell style',
+        tooltip: 'Cell background, border style, color and width',
+        onAction: () => editor.execCommand('mceTableCellProps'),
+        onSetup: api => {
+          const update = (event): void => {
+            api.setEnabled(Boolean(event.element?.closest?.('td,th')));
+          };
+          api.setEnabled(Boolean(editor.selection.getNode().closest?.('td,th')));
+          editor.on('NodeChange', update);
+          return () => editor.off('NodeChange', update);
+        },
+      });
+      editor.ui.registry.addButton('table-properties', {
+        text: 'Table style',
+        tooltip: 'Table size, alignment, border, background, spacing and caption',
+        onAction: () => editor.execCommand('mceTableProps'),
+        onSetup: api => {
+          const update = (event): void => {
+            api.setEnabled(Boolean(event.element?.closest?.('table')));
+          };
+          api.setEnabled(Boolean(editor.selection.getNode().closest?.('table')));
+          editor.on('NodeChange', update);
+          return () => editor.off('NodeChange', update);
+        },
+      });
+      const openInlineSpreadsheet = (
+        initial: SpreadsheetData,
+        existingTable: HTMLTableElement | null = null,
+      ): void => {
+        const bookmark = editor.selection.getBookmark(2, true);
+        openSpreadsheetModal(initial).then(({ raw, computed }) => {
+          const html = spreadsheetToHTML(raw, computed);
+          editor.focus();
+          editor.selection.moveToBookmark(bookmark);
+          if (existingTable) {
+            editor.selection.select(existingTable);
+          }
+          editor.execCommand('mceInsertContent', false, html);
+          editor.undoManager.add();
+        }).catch(() => {
+          // User cancelled — do nothing
+        });
+      };
+
+      // INLINE SPREADSHEET — expose every layout directly from the toolbar.
+      editor.ui.registry.addMenuButton('inline-sheet', {
+        icon: 'table',
+        text: 'Spreadsheet',
+        tooltip: 'Insert or edit a formula spreadsheet',
+        fetch: callback => {
+          const existingTable = editor.selection.getNode()
+            .closest('table.elabftw-spreadsheet') as HTMLTableElement | null;
+          const items = [];
+          if (existingTable) {
+            items.push({
+              type: 'menuitem' as const,
+              text: 'Edit selected spreadsheet',
+              onAction: () => openInlineSpreadsheet(extractFromTable(existingTable), existingTable),
+            });
+            items.push({ type: 'separator' as const });
+          }
+
+          items.push(
+            {
+              type: 'menuitem' as const,
+              text: 'Custom size…',
+              onAction: () => openInlineSpreadsheet(emptySpreadsheetData(), existingTable),
+            },
+            {
+              type: 'menuitem' as const,
+              text: 'Benchling-style data table',
+              onAction: () => openInlineSpreadsheet(createNotebookSpreadsheetData(), existingTable),
+            },
+            {
+              type: 'nestedmenuitem' as const,
+              text: 'Well plate',
+              getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
+                type: 'menuitem' as const,
+                text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
+                onAction: () => openInlineSpreadsheet(
+                  createWellPlateSpreadsheetData(preset.wells),
+                  existingTable,
+                ),
+              })),
+            },
+          );
+          callback(items);
+        },
+      });
+      // Double-click on a spreadsheet table opens the editor
+      editor.on('dblclick', (e) => {
+        const target = (e.target as HTMLElement).closest('table.elabftw-spreadsheet') as HTMLTableElement;
+        if (!target) return;
+        openInlineSpreadsheet(extractFromTable(target), target);
+      });
+      editor.on('click', event => handleChecklistClick(editor, event));
+
       // some shortcuts
       editor.addShortcut('ctrl+shift+d', 'add date/time at cursor', addDatetimeOnCursor);
+      editor.addShortcut(
+        'ctrl+alt+t',
+        'insert experiment title as a heading',
+        () => experimentTitleEditor.insertUsingDefaults(),
+      );
+      editor.addShortcut(
+        'ctrl+shift+h',
+        'insert single horizontal line',
+        () => insertHorizontalRule(editor, 'single'),
+      );
+      editor.addShortcut(
+        'ctrl+alt+shift+h',
+        'insert double horizontal line',
+        () => insertHorizontalRule(editor, 'double'),
+      );
       editor.addShortcut('ctrl+=', 'subscript', () => editor.execCommand('subscript'));
       editor.addShortcut('ctrl+shift+=', 'superscript', () => editor.execCommand('superscript'));
+      editor.on('init', () => {
+        // Capture Tab before TinyMCE or the browser can move focus to the next control.
+        const editorDocument = editor.getDoc();
+        const blockIndentHandler = (event: KeyboardEvent): void => {
+          handleBlockIndentShortcut(editor, event);
+        };
+        const excelPasteHandler = (event: ClipboardEvent): void => {
+          const clipboard = event.clipboardData;
+          if (!clipboard) return;
+          const plainText = clipboard.getData('text/plain');
+          const normalizedPlainText = normalizePdfPrivateUseText(plainText);
+          const richClipboardHtml = clipboard.getData('text/html');
+          const spreadsheet = spreadsheetFromClipboard(
+            richClipboardHtml,
+            normalizedPlainText,
+          );
+          if (spreadsheet) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            editor.undoManager.transact(() => {
+              editor.insertContent(spreadsheetToHTML(spreadsheet, spreadsheet.data));
+            });
+            return;
+          }
+
+          const flattened = getFlattenedClipboardSuggestion(normalizedPlainText);
+          if (!flattened) {
+            if (normalizedPlainText === plainText) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            editor.undoManager.transact(() => {
+              editor.insertContent(escapeHTML(normalizedPlainText).replace(/\r?\n/g, '<br>'));
+            });
+            return;
+          }
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const bookmark = editor.selection.getBookmark(2, true);
+          editor.windowManager.open({
+            title: 'Paste PDF table',
+            size: 'normal',
+            body: {
+              type: 'panel',
+              items: [{
+                type: 'input',
+                name: 'columns',
+                label: `${flattened.cells} clipboard cells — number of columns`,
+              }],
+            },
+            initialData: { columns: String(flattened.columns) },
+            buttons: [
+              { type: 'cancel', text: 'Cancel' },
+              { type: 'submit', text: 'Paste table', primary: true },
+            ],
+            onSubmit: api => {
+              const data = api.getData() as PdfTableDialogData;
+              const columns = parseInt(data.columns, 10);
+              if (!Number.isInteger(columns) || columns < 2 || columns > 100) {
+                editor.notificationManager.open({
+                  text: 'Enter a column count between 2 and 100.',
+                  type: 'error',
+                  timeout: 2500,
+                });
+                return;
+              }
+              const recovered = spreadsheetFromFlattenedClipboard(
+                normalizedPlainText,
+                columns,
+                richClipboardHtml,
+              );
+              if (!recovered) return;
+              editor.focus();
+              editor.selection.moveToBookmark(bookmark);
+              editor.undoManager.transact(() => {
+                editor.insertContent(spreadsheetToHTML(recovered, recovered.data));
+              });
+              api.close();
+            },
+          });
+        };
+        editorDocument.addEventListener('keydown', blockIndentHandler, true);
+        editorDocument.addEventListener('paste', excelPasteHandler, true);
+        editor.on('remove', () => {
+          editorDocument.removeEventListener('keydown', blockIndentHandler, true);
+          editorDocument.removeEventListener('paste', excelPasteHandler, true);
+        });
+      });
+      let tocHeadingSignature = '';
+      const notifyTocHeadingChanges = (): void => {
+        const signature = Array.from(editor.getBody().querySelectorAll('h1, h2, h3, h4, h5, h6'))
+          .map(heading => `${heading.tagName}:${heading.textContent?.trim() ?? ''}`)
+          .join('|');
+        if (signature === tocHeadingSignature) return;
+        tocHeadingSignature = signature;
+        window.dispatchEvent(new CustomEvent('editor-headings-changed'));
+      };
+      editor.on('init', notifyTocHeadingChanges);
+      editor.on('NodeChange', notifyTocHeadingChanges);
+      editor.on('NodeChange', () => normalizeChecklists(editor));
+      editor.on('keydown', event => {
+        if (handleBlockIndentShortcut(editor, event)) return;
+        handleListShortcut(editor, event);
+      });
 
       // on edit page there is an autosave triggered
       if (page === 'edit') {

@@ -64,6 +64,7 @@ try {
 
 $exportsFs = Storage::EXPORTS->getStorage();
 $sqlFs = FsTools::getFs(dirname(__DIR__) . '/src/sql');
+$customSqlFs = FsTools::getFs(dirname(__DIR__) . '/src/sql/custom');
 
 $Application->add(new InstallRedir());
 $Application->add(new GenI18n4Js());
@@ -71,6 +72,7 @@ $Application->add(new Cache());
 $Application->add(new CacheTwig());
 $Application->add(new CacheNginx());
 $Application->add(new CheckDatabase((int) $Config->configArr['schema']));
+$Application->add(new CheckCustomDatabase((int) $Config->configArr['schema'], $customSqlFs));
 $Application->add(new CheckTsBalance((int) $Config->configArr['ts_balance'], $Email));
 $Application->add(new CleanDatabase());
 $Application->add(new ClearNotifications());
@@ -80,6 +82,8 @@ $Application->add(new ExportEln($exportsFs));
 $Application->add(new ImportEln($exportsFs));
 $Application->add(new ImportCompoundsCsv($exportsFs));
 $Application->add(new UpdateDatabase());
+$Application->add(new UpdateCustomDatabase((int) $Config->configArr['schema'], $customSqlFs));
+$Application->add(new AdoptLegacyCustomDatabase((int) $Config->configArr['schema']));
 $Application->add(new RevertSchema($sqlFs));
 $Application->add(new UpdateTo3());
 $Application->add(new UpdateTo34());

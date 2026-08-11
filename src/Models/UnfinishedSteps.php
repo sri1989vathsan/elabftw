@@ -22,6 +22,7 @@ use Override;
 use PDO;
 
 use function array_column;
+use function array_merge;
 use function explode;
 use function sprintf;
 
@@ -48,17 +49,30 @@ final class UnfinishedSteps extends AbstractRest
     {
         $experimentsSteps = $this->cleanUpResult($this->getSteps(EntityType::Experiments));
         $itemsSteps = $this->cleanUpResult($this->getSteps(EntityType::Items));
-        return array('experiments' => $experimentsSteps, 'items' => $itemsSteps);
+        $calendar = array_merge(
+            $this->getDeadlineSteps(EntityType::Experiments),
+            $this->getDeadlineSteps(EntityType::Items),
+        );
+        return array(
+            'experiments' => $experimentsSteps,
+            'items' => $itemsSteps,
+            'calendar' => $calendar,
+        );
     }
 
     private function getSteps(EntityType $model): array
     {
-        $sql = 'SELECT entity.id, entity.title, stepst.finished, stepst.steps_body, stepst.steps_id
+        $sql = 'SELECT entity.id, entity.title, stepst.finished,
+                stepst.steps_body, stepst.steps_id, stepst.steps_deadline
             FROM ' . $model->value . " as entity
             CROSS JOIN (
                 SELECT item_id, finished,
                 GROUP_CONCAT(entity_steps.body ORDER BY entity_steps.ordering SEPARATOR '|') AS steps_body,
-                GROUP_CONCAT(entity_steps.id ORDER BY entity_steps.ordering SEPARATOR '|') AS steps_id
+                GROUP_CONCAT(entity_steps.id ORDER BY entity_steps.ordering SEPARATOR '|') AS steps_id,
+                GROUP_CONCAT(
+                    COALESCE(DATE_FORMAT(entity_steps.deadline, '%Y-%m-%dT%H:%i:%sZ'), '')
+                    ORDER BY entity_steps.ordering SEPARATOR '|'
+                ) AS steps_deadline
                 FROM " . $model->value . '_steps as entity_steps
                 WHERE finished = 0 GROUP BY item_id
             ) AS stepst ON (stepst.item_id = entity.id)';
@@ -75,6 +89,45 @@ final class UnfinishedSteps extends AbstractRest
         return $req->fetchAll();
     }
 
+    /**
+     * Return a flat deadline feed used by the integrated sidebar calendar.
+     */
+    private function getDeadlineSteps(EntityType $model): array
+    {
+        $sql = sprintf(
+            "SELECT '%s' AS entity_type,
+                '%s' AS entity_page,
+                entity.id AS entity_id,
+                entity.title AS entity_title,
+                entity_steps.id AS step_id,
+                entity_steps.body AS step_body,
+                DATE_FORMAT(entity_steps.deadline, '%%Y-%%m-%%dT%%H:%%i:%%sZ') AS deadline,
+                entity_steps.deadline_notif
+            FROM %s AS entity
+            INNER JOIN %s_steps AS entity_steps
+                ON entity_steps.item_id = entity.id
+            JOIN users2teams
+                ON users2teams.users_id = entity.userid
+                AND users2teams.teams_id = :teamid
+            WHERE %s
+                AND entity.state = %d
+                AND entity_steps.finished = 0
+                AND entity_steps.deadline IS NOT NULL
+            ORDER BY entity_steps.deadline ASC, entity_steps.ordering ASC",
+            $model->value,
+            $model->toPage(),
+            $model->value,
+            $model->value,
+            $this->teamScoped ? $this->getTeamWhereClause($model) : 'entity.userid = :userid',
+            State::Normal->value,
+        );
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':userid', $this->Users->userData['userid'], PDO::PARAM_INT);
+        $req->bindParam(':teamid', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return $req->fetchAll();
+    }
+
     /*
      * Clean up the read result so we get a nice array with entity id/title and steps with their id/body
      * use reference to edit in place
@@ -86,13 +139,23 @@ final class UnfinishedSteps extends AbstractRest
         foreach ($res as &$entity) {
             $stepIDs = explode('|', $entity['steps_id']);
             $stepsBodies = explode('|', $entity['steps_body']);
+            $stepDeadlines = explode('|', $entity['steps_deadline']);
 
             $entitySteps = array();
             foreach ($stepIDs as $key => $stepID) {
-                $entitySteps[] = array($stepID, $stepsBodies[$key]);
+                $entitySteps[] = array(
+                    'id' => $stepID,
+                    'body' => $stepsBodies[$key],
+                    'deadline' => $stepDeadlines[$key] === '' ? null : $stepDeadlines[$key],
+                );
             }
             $entity['steps'] = $entitySteps;
-            unset($entity['steps_body'], $entity['steps_id'], $entity['finished']);
+            unset(
+                $entity['steps_body'],
+                $entity['steps_id'],
+                $entity['steps_deadline'],
+                $entity['finished'],
+            );
         }
 
         return $res;

@@ -1,0 +1,291 @@
+{% set favoriteFilterTarget = 'experiments' %}
+{% if scriptName == 'database.php' or (Entity is defined and Entity.entityType.value == 'items') %}
+  {% set favoriteFilterTarget = 'resources' %}
+{% endif %}
+{% set activeCategoryIds = App.Request.query.get('category')|split(',') %}
+{% set activeStatusIds = App.Request.query.get('status')|split(',') %}
+{% set activeOwner = App.Request.query.get('owner') %}
+{% set activeTags = App.Request.query.all('tags') %}
+
+<div class='side-panel' id='favoritesPanel' data-current-target='{{ favoriteFilterTarget }}' hidden>
+  <button type='button' data-action='toggle-sidepanel' data-target='favorites' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
+  <div class='p-3'>
+    <h3 class='mb-3'><i class='fas fa-filter mr-2'></i>{{ 'Favorite filters'|trans }}</h3>
+
+    <label for='favoriteFilterTarget'>{{ 'Filter'|trans }}</label>
+    <select id='favoriteFilterTarget' class='form-control mb-3'>
+      <option value='experiments' {{ favoriteFilterTarget == 'experiments' ? 'selected' }}>{{ 'Experiments'|trans }}</option>
+      <option value='resources' {{ favoriteFilterTarget == 'resources' ? 'selected' }}>{{ 'Resources'|trans }}</option>
+    </select>
+
+    <label for='favoriteFilterText'>{{ 'Text'|trans }}</label>
+    <div class='input-group input-group-sm favorite-filter-text-group mb-2'>
+      <div class='input-group-prepend'>
+        <span class='input-group-text' aria-hidden='true'><i class='fas fa-search fa-fw'></i></span>
+      </div>
+      <input
+        id='favoriteFilterText'
+        class='form-control'
+        type='search'
+        value='{{ App.Request.query.getString('q')|e('html_attr') }}'
+        placeholder='{{ 'Search title and body'|trans }}'
+        aria-label='{{ 'Search title and body'|trans }}'
+        data-favorite-filter-text
+      >
+    </div>
+
+    <p class='small color-medium'>
+      {{ 'Combine text with favorite categories, tags, statuses, and an owner. Apply filters searches all accessible entries.'|trans }}
+    </p>
+
+    <details class='favorite-filter-section mb-3' open>
+      <summary class='favorite-filter-section-summary h5 mb-0'>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'Categories'|trans }}
+      </summary>
+      <div class='favorite-filter-section-body' id='favoriteCategoriesDiv'>
+      {% for categoryType in ['experiments', 'resources'] %}
+        <div data-favorite-target-group='{{ categoryType }}' {{ categoryType != favoriteFilterTarget ? 'hidden' }}>
+          {% set favoriteCategoriesForType = App.favoriteCategoriesArr|filter(category => category.category_type == categoryType) %}
+          {% for category in favoriteCategoriesForType %}
+              <div class='favorite-filter-option d-flex align-items-center'>
+                <input
+                  class='mr-2'
+                  id='favoriteCategoryFilter-{{ categoryType }}-{{ category.category_id }}'
+                  type='checkbox'
+                  value='{{ category.category_id }}'
+                  data-favorite-filter-category
+                  data-category-type='{{ categoryType }}'
+                  {{ categoryType == favoriteFilterTarget and category.category_id in activeCategoryIds ? 'checked' }}
+                >
+                <label class='d-flex align-items-center flex-grow-1 mb-0' for='favoriteCategoryFilter-{{ categoryType }}-{{ category.category_id }}'>
+                  <span class='category-color-dot mr-2' style='--category-color:#{{ category.color|e('html_attr') }}'></span>
+                  {{ category.title }}
+                </label>
+                <button type='button' class='btn btn-sm btn-ghost' data-id='{{ category.id }}' data-action='destroy-favcategory' title='{{ 'Remove from favorites'|trans }}' aria-label='{{ 'Remove from favorites'|trans }}'>
+                  <i class='fas fa-trash-alt fa-fw'></i>
+                </button>
+              </div>
+          {% endfor %}
+          {% if favoriteCategoriesForType|length == 0 %}
+            <p class='small color-medium mb-0'>{{ 'No favorite categories for this type.'|trans }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+      </div>
+    </details>
+
+    <details class='favorite-filter-section mb-3' open>
+      <summary class='favorite-filter-section-summary h5 mb-0'>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'My favorite tags'|trans }}
+      </summary>
+      <div class='favorite-filter-section-body'>
+      <p class='small color-medium mb-2'>
+        <i class='fas fa-user-lock fa-fw' aria-hidden='true'></i>
+        {{ 'These favorites are saved only for your account.'|trans }}
+      </p>
+      <div id='favtagsTagsDiv'>
+        {% if App.favoriteTagsArr|length == 0 %}
+          <p class='small color-medium mb-0'>{{ 'No favorite tags are present. Add an existing tag below.'|trans }}</p>
+        {% else %}
+          {% for favtag in App.favoriteTagsArr %}
+            <div class='favorite-filter-option d-flex align-items-center'>
+              <input
+                class='mr-2'
+                id='favoriteTagFilter-{{ loop.index }}'
+                type='checkbox'
+                value='{{ favtag.tag|e('html_attr') }}'
+                data-favorite-filter-tag
+                {{ favtag.tag in activeTags ? 'checked' }}
+              >
+              <label class='flex-grow-1 mb-0' for='favoriteTagFilter-{{ loop.index }}'>{{ favtag.tag }}</label>
+              <button type='button' class='btn btn-sm btn-ghost' data-id='{{ favtag.tags_id }}' data-action='destroy-favtags' title='{{ 'Remove from favorites'|trans }}' aria-label='{{ 'Remove from favorites'|trans }}'>
+                <i class='fas fa-trash-alt fa-fw'></i>
+              </button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+      </div>
+    </details>
+
+    <details class='favorite-filter-section mb-3' open>
+      <summary class='favorite-filter-section-summary h5 mb-0'>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'Status'|trans }}
+      </summary>
+      <div class='favorite-filter-section-body' id='favoriteStatusesDiv'>
+      {% for statusType in ['experiments', 'resources'] %}
+        <div data-favorite-target-group='{{ statusType }}' {{ statusType != favoriteFilterTarget ? 'hidden' }}>
+          {% set favoriteStatusesForType = App.favoriteFiltersArr|filter(filter => filter.filter_type == 'status' and filter.target_type == statusType) %}
+          {% for status in favoriteStatusesForType %}
+            <div class='favorite-filter-option d-flex align-items-center'>
+              <input
+                class='mr-2'
+                id='favoriteStatusFilter-{{ statusType }}-{{ status.target_id }}'
+                type='checkbox'
+                value='{{ status.target_id }}'
+                data-favorite-filter-status
+                data-status-type='{{ statusType }}'
+                {{ statusType == favoriteFilterTarget and status.target_id in activeStatusIds ? 'checked' }}
+              >
+              <label class='d-flex align-items-center flex-grow-1 mb-0' for='favoriteStatusFilter-{{ statusType }}-{{ status.target_id }}'>
+                <i class='fas fa-circle fa-fw mr-1' style='color:#{{ status.color|e('html_attr') }}' aria-hidden='true'></i>
+                {{ status.title }}
+              </label>
+              <button type='button' class='btn btn-sm btn-ghost' data-id='{{ status.id }}' data-action='destroy-favfilter' title='{{ 'Remove from favorites'|trans }}' aria-label='{{ 'Remove from favorites'|trans }}'>
+                <i class='fas fa-trash-alt fa-fw'></i>
+              </button>
+            </div>
+          {% endfor %}
+          {% if favoriteStatusesForType|length == 0 %}
+            <p class='small color-medium mb-0'>{{ 'No favorite statuses for this type.'|trans }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+      </div>
+    </details>
+
+    <details class='favorite-filter-section mb-3' open>
+      <summary class='favorite-filter-section-summary h5 mb-0'>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'Owner'|trans }}
+      </summary>
+      <div class='favorite-filter-section-body' id='favoriteOwnersDiv'>
+      {% set favoriteOwners = App.favoriteFiltersArr|filter(filter => filter.filter_type == 'owner') %}
+      {% for owner in favoriteOwners %}
+        <div class='favorite-filter-option d-flex align-items-center'>
+          <input
+            class='mr-2'
+            id='favoriteOwnerFilter-{{ owner.target_id }}'
+            name='favoriteOwnerFilter'
+            type='radio'
+            value='{{ owner.target_id }}'
+            data-favorite-filter-owner
+            {{ owner.target_id == activeOwner ? 'checked' }}
+          >
+          <label class='flex-grow-1 mb-0' for='favoriteOwnerFilter-{{ owner.target_id }}'>{{ owner.title }}</label>
+          <button type='button' class='btn btn-sm btn-ghost' data-id='{{ owner.id }}' data-action='destroy-favfilter' title='{{ 'Remove from favorites'|trans }}' aria-label='{{ 'Remove from favorites'|trans }}'>
+            <i class='fas fa-trash-alt fa-fw'></i>
+          </button>
+        </div>
+      {% endfor %}
+      {% if favoriteOwners|length == 0 %}
+        <p class='small color-medium mb-0'>{{ 'No favorite owners are present.'|trans }}</p>
+      {% endif %}
+      </div>
+    </details>
+
+    <div class='d-flex mb-3'>
+      <button type='button' class='btn btn-primary flex-grow-1' data-action='apply-favorite-filters'>
+        <i class='fas fa-filter fa-fw mr-1'></i>{{ 'Apply filters'|trans }}
+      </button>
+      <button type='button' class='btn btn-secondary ml-2' data-action='clear-favorite-filters'>
+        <i class='fas fa-xmark fa-fw mr-1'></i>{{ 'Clear'|trans }}
+      </button>
+    </div>
+
+    <section class='favorite-filter-results-section mb-3' aria-labelledby='favoriteFilterResultsHeading'>
+      <div class='d-flex align-items-center justify-content-between mb-2'>
+        <h4 class='h5 mb-0' id='favoriteFilterResultsHeading'>
+          {{ 'Results'|trans }}
+          <span id='favoriteFilterResultsCount' class='badge badge-primary ml-1' hidden>0</span>
+        </h4>
+        <a id='favoriteFilterFullResults' class='btn btn-sm btn-outline-secondary' href='#'>
+          <i class='fas fa-list fa-fw mr-1' aria-hidden='true'></i>{{ 'Full list'|trans }}
+        </a>
+      </div>
+      <p id='favoriteFilterResultsStatus' class='small color-medium mb-2'>
+        {{ 'Open this panel or apply filters to load matching entries.'|trans }}
+      </p>
+      <div id='favoriteFilterResults' class='favorite-filter-results' aria-live='polite'></div>
+    </section>
+
+    <details class='favorite-filter-manage'>
+      <summary class='font-weight-bold mb-2'>{{ 'Manage favorites'|trans }}</summary>
+
+      <label for='favoriteNewCategoryName'>{{ 'Create a new category'|trans }}</label>
+      <div class='input-group mb-3'>
+        <input id='favoriteNewCategoryName' type='text' class='form-control' placeholder='{{ 'Category name'|trans }}' aria-label='{{ 'Category name'|trans }}'>
+        <div class='input-group-append'>
+          <label class='sr-only' for='favoriteNewCategoryColor'>{{ 'Color'|trans }}</label>
+          <input id='favoriteNewCategoryColor' class='form-control randomColor color-input h-100' type='color' value='#38618c'>
+          <button class='btn btn-primary' type='button' data-action='create-and-favorite-category' title='{{ 'Create and add to favorites'|trans }}' aria-label='{{ 'Create and add to favorites'|trans }}'>
+            <i class='fas fa-plus fa-fw'></i>
+          </button>
+        </div>
+      </div>
+
+      <label for='favoriteCategorySelect'>{{ 'Add a category as favorite'|trans }}</label>
+      <div class='input-group mb-3'>
+        <select id='favoriteCategorySelect' class='form-control' aria-label='{{ 'Add a category as favorite'|trans }}'>
+          <option value=''>{{ 'Select a category'|trans }}</option>
+          <optgroup label='{{ 'Experiment categories'|trans }}'>
+            {% for category in App.experimentsCategoryArr %}
+              {% if category.is_current_team == 1 %}
+                <option value='experiments:{{ category.id }}'>{{ category.title }}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+          <optgroup label='{{ 'Resource categories'|trans }}'>
+            {% for category in App.itemsCategoryArr %}
+              {% if category.is_current_team == 1 %}
+                <option value='resources:{{ category.id }}'>{{ category.title }}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+        </select>
+        <div class='input-group-append'>
+          <button class='btn btn-primary' type='button' data-action='create-favcategory' title='{{ 'Add'|trans }}' aria-label='{{ 'Add'|trans }}'>
+            <i class='fas fa-plus fa-fw'></i>
+          </button>
+        </div>
+      </div>
+
+      <label for='favoriteFilterSelect'>{{ 'Add an owner or status as favorite'|trans }}</label>
+      <div class='input-group mb-3'>
+        <select id='favoriteFilterSelect' class='form-control' aria-label='{{ 'Add an owner or status as favorite'|trans }}'>
+          <option value=''>{{ 'Select an owner or status'|trans }}</option>
+          <optgroup label='{{ 'Owners'|trans }}'>
+            {% for user in App.favoriteFilterUsersArr %}
+              <option value='owner:all:{{ user.userid }}'>{{ user.fullname }}</option>
+            {% endfor %}
+          </optgroup>
+          <optgroup label='{{ 'Experiment status'|trans }}'>
+            {% for status in App.experimentsStatusArr %}
+              {% if status.is_current_team == 1 %}
+                <option value='status:experiments:{{ status.id }}'>{{ status.title }}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+          <optgroup label='{{ 'Resource status'|trans }}'>
+            {% for status in App.itemsStatusArr %}
+              {% if status.is_current_team == 1 %}
+                <option value='status:resources:{{ status.id }}'>{{ status.title }}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+        </select>
+        <div class='input-group-append'>
+          <button class='btn btn-primary' type='button' data-action='create-favfilter' title='{{ 'Add'|trans }}' aria-label='{{ 'Add'|trans }}'>
+            <i class='fas fa-plus fa-fw'></i>
+          </button>
+        </div>
+      </div>
+
+      <label for='createFavTagInput'>{{ 'Add a tag as favorite'|trans }}</label>
+      <p id='favoriteTagSuggestionHelp' class='small color-medium mb-2'>
+        {{ 'Start typing to search existing team tags. Your favorites are saved only for your account.'|trans }}
+      </p>
+      <div class='input-group mb-3'>
+        <input id='createFavTagInput' data-autocomplete='tags' type='text' class='form-control form-inline' aria-label='{{ 'Add a tag as favorite'|trans }}' aria-describedby='favoriteTagSuggestionHelp' autocomplete='off' placeholder='{{ 'Add a tag as favorite'|trans }}'>
+        <div class='input-group-append'>
+          <button id='createFavTagButton' class='btn btn-primary' type='button' title='{{ 'Add'|trans }}' aria-label='{{ 'Add'|trans }}'>
+            <i class='fas fa-plus fa-fw'></i>
+          </button>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>

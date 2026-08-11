@@ -56,6 +56,7 @@
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='12'>LDAP</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='13'>{{ 'External auth'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='14'>{{ 'Audit Logs'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='15'>{{ 'HTML tools'|trans }}</button></li>
 </ul>
 
 {% include 'loading-spinner.html' %}
@@ -1255,6 +1256,81 @@
               </td>
             </tr>
           {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# TAB 15: HTML TOOLS #}
+<div data-tabcontent='15' hidden>
+  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'HTML tools'|trans }}</h2>
+  <div class='pl-3 mb-5'>
+    <p>
+      {{ 'Install a trusted interactive tool for every authenticated user. Upload a single HTML file or a ZIP package containing index.html.'|trans }}
+    </p>
+    <div class='alert alert-warning' role='alert'>
+      <i class='fas fa-shield-halved fa-fw mr-1' aria-hidden='true'></i>
+      {{ 'HTML tools can contain JavaScript. Only install packages you trust. Tools run in an isolated sandbox without access to the eLabFTW session or network APIs.'|trans }}
+    </div>
+    <form id='htmlToolUploadForm' class='card p-3 mb-4'>
+      <div class='form-row'>
+        <div class='form-group col-md-4'>
+          <label for='htmlToolName'>{{ 'Tool name'|trans }}</label>
+          <input type='text' id='htmlToolName' name='name' maxlength='255' class='form-control' placeholder='{{ 'Uses tool.json or the filename when empty'|trans }}'>
+        </div>
+        <div class='form-group col-md-5'>
+          <label for='htmlToolDescription'>{{ 'Description'|trans }}</label>
+          <input type='text' id='htmlToolDescription' name='description' maxlength='2000' class='form-control'>
+        </div>
+        <div class='form-group col-md-3'>
+          <label for='htmlToolFile'>{{ 'HTML or ZIP package'|trans }}</label>
+          <input type='file' id='htmlToolFile' name='file' accept='.html,.htm,.zip,text/html,application/zip' class='form-control-file' required>
+        </div>
+      </div>
+      <div>
+        <button type='submit' id='htmlToolUploadButton' class='btn btn-primary'>
+          <i class='fas fa-upload fa-fw mr-1' aria-hidden='true'></i>{{ 'Install tool'|trans }}
+        </button>
+      </div>
+    </form>
+
+    <details class='mb-4'>
+      <summary class='font-weight-bold'>{{ 'ZIP package format'|trans }}</summary>
+      <div class='mt-2 small'>
+        <p class='mb-2'>{{ 'Relative CSS, JavaScript, images, fonts, and data files are supported. Server-executable files are rejected.'|trans }}</p>
+        <p class='mb-1'>{{ 'An optional tool.json file can define name, description, version, and entrypoint:'|trans }}</p>
+        <pre class='p-2'><code>{
+  "name": "My laboratory tool",
+  "description": "A short explanation",
+  "version": "1.0.0",
+  "entrypoint": "index.html"
+}</code></pre>
+      </div>
+    </details>
+
+    <div class='d-flex align-items-center justify-content-between mb-2'>
+      <h3 class='mb-0'>{{ 'Installed tools'|trans }}</h3>
+      <button type='button' id='refreshHtmlTools' class='btn btn-outline-secondary btn-sm'>
+        <i class='fas fa-rotate fa-fw mr-1' aria-hidden='true'></i>{{ 'Refresh'|trans }}
+      </button>
+    </div>
+    <p class='small color-medium'>
+      {{ 'Uploaded packages are stored under /elabftw/uploads/html-tools in the persistent uploads volume, so they survive container replacement.'|trans }}
+    </p>
+    <div class='table-responsive'>
+      <table class='table table-hover html-tool-admin-table'>
+        <thead>
+          <tr>
+            <th scope='col'>{{ 'Enabled'|trans }}</th>
+            <th scope='col'>{{ 'Tool'|trans }}</th>
+            <th scope='col'>{{ 'Version'|trans }}</th>
+            <th scope='col'>{{ 'Updated'|trans }}</th>
+            <th scope='col'>{{ 'Actions'|trans }}</th>
+          </tr>
+        </thead>
+        <tbody id='htmlToolsAdminList'>
+          <tr><td colspan='5' class='text-center color-medium'>{{ 'Loading…'|trans }}</td></tr>
         </tbody>
       </table>
     </div>

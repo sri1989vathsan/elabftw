@@ -261,7 +261,7 @@ abstract class AbstractEntity extends AbstractRest
                     $contentType = isset($reqBody['content_type'])
                         ? BodyContentType::from($reqBody['content_type'])
                         : ($useMarkdown ? BodyContentType::Markdown : BodyContentType::Html);
-                    return $this->create(
+                    $newId = $this->create(
                         title: $reqBody['title'] ?? null,
                         body: $reqBody['body'] ?? null,
                         canreadBase: $canreadBase,
@@ -276,6 +276,12 @@ abstract class AbstractEntity extends AbstractRest
                         metadata: $metadata,
                         contentType: $contentType,
                     );
+                    // Assign to folder if provided (experiments only)
+                    if ($this instanceof Experiments && !empty($reqBody['folder_id'])) {
+                        $Folders = new ExperimentsFolders($this->Users);
+                        $Folders->assignExperiment($newId, (int) $reqBody['folder_id']);
+                    }
+                    return $newId;
                 }
             )(),
             Action::Duplicate => $this->duplicate((bool) ($reqBody['copyFiles'] ?? false), (bool) ($reqBody['linkToOriginal'] ?? false)),

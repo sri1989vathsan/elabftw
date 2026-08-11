@@ -1,0 +1,6 @@
+{# MONTHLY LOG BUTTON - Quick-create a log resource for the current month #}
+{% if Entity.entityType.value == 'items' and not App.Session.get('is_anon') %}
+<button type='button' data-action='create-monthly-log' class='btn btn-outline-info ml-2' title='{{ 'Create a new log resource for the current month'|trans }}'>
+  <i class='fas fa-book mr-1'></i>{{ 'New Monthly Log'|trans }}
+</button>
+{% endif %}

@@ -643,16 +643,33 @@ export function addAutocompleteToLinkInputs(): void {
 }
 
 export function addAutocompleteToTagInputs(): void {
-  $('[data-autocomplete="tags"]').autocomplete({
-    source: function(request: Record<string, string>, response: (data) => void): void {
-      ApiC.getJson(`${Model.Team}/current/${Model.Tag}?q=${request.term}`).then(json => {
-        const res = [];
-        json.forEach(tag => {
-          res.push(tag.tag);
+  $('[data-autocomplete="tags"]').each(function(): void {
+    const input = this as HTMLInputElement;
+    if (input.classList.contains('ui-autocomplete-input')) {
+      return;
+    }
+    const isFavoriteTagInput = input.id === 'createFavTagInput';
+    $(input).autocomplete({
+      appendTo: isFavoriteTagInput ? '#favoritesPanel' : undefined,
+      autoFocus: isFavoriteTagInput,
+      delay: isFavoriteTagInput ? 100 : 300,
+      minLength: 1,
+      source: function(request: Record<string, string>, response: (data) => void): void {
+        ApiC.getJson(`${Model.Team}/current/${Model.Tag}?q=${request.term}`).then(json => {
+          const favoriteTags = new Set(
+            Array.from(
+              document.querySelectorAll<HTMLInputElement>('[data-favorite-filter-tag]'),
+              favorite => favorite.value.toLocaleLowerCase(),
+            ),
+          );
+          const res = json
+            .map(tag => tag.tag)
+            .filter(tag => !isFavoriteTagInput || !favoriteTags.has(tag.toLocaleLowerCase()))
+            .slice(0, isFavoriteTagInput ? 12 : undefined);
+          response(res);
         });
-        response(res);
-      });
-    },
+      },
+    });
   });
 }
 
@@ -770,6 +787,18 @@ export function toggleIcon(el: HTMLElement, isHidden: boolean): void
     iconEl.classList.remove(el.dataset.closedIcon);
     iconEl.classList.add(el.dataset.openedIcon);
   }
+}
+
+/** Escape text for safe insertion into generated HTML. */
+export function escapeHTML(text: string): string {
+  const escapeMap: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&#34;',
+    '\'': '&#39;',
+  };
+  return text.replace(/[&<>'"]/g, char => escapeMap[char]);
 }
 
 export function escapeExtendedQuery(searchTerm: string): string {

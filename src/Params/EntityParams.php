@@ -26,8 +26,9 @@ final class EntityParams extends ContentParams implements ContentParamsInterface
     {
         return match ($this->target) {
             'title' => Filter::title($this->asString()),
-            // MySQL with throw an error if this param is incorrect
+            // MySQL will throw an error if this param is incorrect
             'date', 'metadata', 'metadatamerge', 'proc_price_notax', 'proc_price_tax', 'booking_hourly_rate_notax', 'booking_hourly_rate_tax' => $this->getUnfilteredContent(),
+            'spreadsheet_defaults' => $this->getSpreadsheetDefaults(),
             'proc_currency', 'booking_hourly_rate_currency' => Currency::from($this->asInt())->value,
             'body', 'bodyappend' => $this->getBody(),
             'canread', 'canwrite', 'canbook', 'canread_target', 'canwrite_target' => $this->getCanJson(),
@@ -35,7 +36,7 @@ final class EntityParams extends ContentParams implements ContentParamsInterface
             'color' => Check::color($this->asString()),
             'book_max_minutes', 'book_max_slots', 'book_cancel_minutes', 'booking_window_days', 'content_type', 'proc_pack_qty', 'rating', 'userid', 'team' => $this->asInt(),
             'state' => $this->getState(),
-            'custom_id', 'status', 'category', 'storage', 'qty_stored' => $this->getPositiveIntOrNull(),
+            'custom_id', 'status', 'category', 'folder_id', 'storage', 'qty_stored' => $this->getPositiveIntOrNull(),
             'is_procurable', 'book_can_overlap', 'book_is_cancellable', 'book_users_can_in_past', 'is_bookable', 'canread_is_immutable', 'canwrite_is_immutable', 'hide_main_text' => $this->getBinary(),
             'qty_unit' => Check::unit($this->asString()),
             default => throw new ImproperActionException('Invalid update target.'),
