@@ -1263,12 +1263,16 @@ export function showModalAndFocusFirstInput(modalSelector: string) {
 }
 
 on('update-entity-body', async (el: HTMLElement) => {
-  const redirect = el.dataset.redirect === 'view';
-  await updateEntityBody(redirect);
-  // SAVE AND GO BACK BUTTON
-  if (redirect) {
+  const redirectTarget = el.dataset.redirect;
+  const shouldRedirect = redirectTarget === 'view' || redirectTarget === 'list';
+  await updateEntityBody(shouldRedirect);
+  if (shouldRedirect) {
     sessionStorage.setItem('flash_saved', i18next.t('saved'));
-    window.location.replace('?mode=view&id=' + entity.id);
+    window.location.replace(
+      redirectTarget === 'list'
+        ? window.location.pathname
+        : '?mode=view&id=' + entity.id,
+    );
   }
 });
 

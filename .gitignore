@@ -39,3 +39,4 @@ src/ts/langs/*.js
 /ideas
 .yarn
 .DS_Store
+/.env

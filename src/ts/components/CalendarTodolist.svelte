@@ -511,99 +511,6 @@
   </button>
 </section>
 
-<section class='calendar-feed mt-3' aria-labelledby='calendarFeedHeading'>
-  <div class='calendar-feed-header'>
-    <div class='calendar-feed-title'>
-      <span class='calendar-feed-icon' aria-hidden='true'>
-        <i class='fas fa-calendar-days'></i>
-      </span>
-      <div>
-        <span class='calendar-feed-eyebrow'>{t('Calendar subscription')}</span>
-        <h4 id='calendarFeedHeading' class='h5 mb-0'>{t('External calendar')}</h4>
-      </div>
-    </div>
-    {#if calendarFeedEnabled}
-      <span class='badge badge-success'>{t('Account feed active')}</span>
-    {/if}
-  </div>
-  <p class='small text-muted mb-2'>
-    {t('Subscribe to this account’s personal to-dos and owned experiment or resource step deadlines in Google Calendar or Apple Calendar.')}
-  </p>
-  {#if calendarFeedUrl}
-    <label class='sr-only' for='calendarFeedUrl'>{t('Private calendar subscription URL')}</label>
-    <input id='calendarFeedUrl' class='form-control form-control-sm mb-2' readonly value={calendarFeedUrl} />
-    <div class='d-flex flex-wrap calendar-feed-actions'>
-      <button type='button' class='btn btn-sm btn-outline-primary' on:click={copyCalendarFeed}>
-        <i class='fas fa-copy fa-fw mr-1' aria-hidden='true'></i>{t('Copy link')}
-      </button>
-      <a class='btn btn-sm btn-outline-primary' href={calendarFeedUrl} target='_blank' rel='noopener noreferrer'>
-        <i class='fas fa-file-arrow-down fa-fw mr-1' aria-hidden='true'></i>{t('Preview .ics')}
-      </a>
-      {#if canCloudCalendarFetch()}
-        <a class='btn btn-sm btn-outline-primary' href={googleCalendarUrl()} target='_blank' rel='noopener noreferrer'>
-          <i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{t('Google Calendar')}
-        </a>
-      {:else}
-        <button
-          type='button'
-          class='btn btn-sm btn-outline-primary'
-          disabled
-          title={t('Google Calendar cannot fetch a feed from localhost. Deploy eLabFTW at a public trusted HTTPS address first.')}
-        >
-          <i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{t('Google Calendar')}
-        </button>
-      {/if}
-      <a class='btn btn-sm btn-outline-primary' href={appleCalendarUrl()}>
-        <i class='fab fa-apple fa-fw mr-1' aria-hidden='true'></i>{t('Apple Calendar')}
-      </a>
-    </div>
-    <p class='small text-warning mt-2 mb-0'>
-      <i class='fas fa-key fa-fw mr-1' aria-hidden='true'></i>
-      {t('Keep this link private. Anyone with it can read your task titles and deadlines.')}
-    </p>
-  {:else if calendarFeedEnabled}
-    <p class='small mb-2'>
-      {t('Your private account feed is active. Regenerate it to reveal and copy a new link; the old link will stop working.')}
-    </p>
-  {/if}
-  {#if isLocalCalendarFeed()}
-    <p class='small text-warning mb-2'>
-      {t('Google Calendar will show nothing from this localhost demo because Google’s servers cannot reach it. Use Preview .ics to verify the feed; cloud subscription works after eLabFTW is available at a public HTTPS address with a trusted certificate.')}
-    </p>
-  {:else if window.location.protocol !== 'https:'}
-    <p class='small text-warning mb-2'>
-      {t('Cloud calendars require this feed to be served from a public trusted HTTPS address.')}
-    </p>
-  {/if}
-  <p class='small text-muted mb-2'>
-    {t('If Google does not add the feed automatically, copy the private link and use Other calendars → From URL in Google Calendar on a desktop browser.')}
-  </p>
-  <p class='small text-muted mb-2'>
-    {t('Apple subscriptions appear in Apple Calendar. Apple Reminders requires a separate native app or Shortcut integration.')}
-  </p>
-  <div class='d-flex calendar-feed-actions'>
-    <button
-      type='button'
-      class='btn btn-sm btn-primary'
-      disabled={calendarFeedLoading}
-      on:click={createCalendarFeed}
-    >
-      <i class='fas fa-rotate fa-fw mr-1' aria-hidden='true'></i>
-      {calendarFeedEnabled ? t('Regenerate private link') : t('Create private link')}
-    </button>
-    {#if calendarFeedEnabled}
-      <button
-        type='button'
-        class='btn btn-sm btn-outline-danger'
-        disabled={calendarFeedLoading}
-        on:click={revokeCalendarFeed}
-      >
-        {t('Revoke')}
-      </button>
-    {/if}
-  </div>
-</section>
-
 <section class='calendar-todo-month mt-3' aria-label={t('Task calendar')}>
   <div class='calendar-month-header'>
     <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(-1)} aria-label={t('Previous month')}>
@@ -772,6 +679,99 @@
       {/each}
     </ul>
   {/if}
+</section>
+
+<section class='calendar-feed mt-3' aria-labelledby='calendarFeedHeading'>
+  <div class='calendar-feed-header'>
+    <div class='calendar-feed-title'>
+      <span class='calendar-feed-icon' aria-hidden='true'>
+        <i class='fas fa-calendar-days'></i>
+      </span>
+      <div>
+        <span class='calendar-feed-eyebrow'>{t('Calendar subscription')}</span>
+        <h4 id='calendarFeedHeading' class='h5 mb-0'>{t('External calendar')}</h4>
+      </div>
+    </div>
+    {#if calendarFeedEnabled}
+      <span class='badge badge-success'>{t('Account feed active')}</span>
+    {/if}
+  </div>
+  <p class='small text-muted mb-2'>
+    {t('Subscribe to this account’s personal to-dos and owned experiment or resource step deadlines in Google Calendar or Apple Calendar.')}
+  </p>
+  {#if calendarFeedUrl}
+    <label class='sr-only' for='calendarFeedUrl'>{t('Private calendar subscription URL')}</label>
+    <input id='calendarFeedUrl' class='form-control form-control-sm mb-2' readonly value={calendarFeedUrl} />
+    <div class='d-flex flex-wrap calendar-feed-actions'>
+      <button type='button' class='btn btn-sm btn-outline-primary' on:click={copyCalendarFeed}>
+        <i class='fas fa-copy fa-fw mr-1' aria-hidden='true'></i>{t('Copy link')}
+      </button>
+      <a class='btn btn-sm btn-outline-primary' href={calendarFeedUrl} target='_blank' rel='noopener noreferrer'>
+        <i class='fas fa-file-arrow-down fa-fw mr-1' aria-hidden='true'></i>{t('Preview .ics')}
+      </a>
+      {#if canCloudCalendarFetch()}
+        <a class='btn btn-sm btn-outline-primary' href={googleCalendarUrl()} target='_blank' rel='noopener noreferrer'>
+          <i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{t('Google Calendar')}
+        </a>
+      {:else}
+        <button
+          type='button'
+          class='btn btn-sm btn-outline-primary'
+          disabled
+          title={t('Google Calendar cannot fetch a feed from localhost. Deploy eLabFTW at a public trusted HTTPS address first.')}
+        >
+          <i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{t('Google Calendar')}
+        </button>
+      {/if}
+      <a class='btn btn-sm btn-outline-primary' href={appleCalendarUrl()}>
+        <i class='fab fa-apple fa-fw mr-1' aria-hidden='true'></i>{t('Apple Calendar')}
+      </a>
+    </div>
+    <p class='small text-warning mt-2 mb-0'>
+      <i class='fas fa-key fa-fw mr-1' aria-hidden='true'></i>
+      {t('Keep this link private. Anyone with it can read your task titles and deadlines.')}
+    </p>
+  {:else if calendarFeedEnabled}
+    <p class='small mb-2'>
+      {t('Your private account feed is active. Regenerate it to reveal and copy a new link; the old link will stop working.')}
+    </p>
+  {/if}
+  {#if isLocalCalendarFeed()}
+    <p class='small text-warning mb-2'>
+      {t('Google Calendar will show nothing from this localhost demo because Google’s servers cannot reach it. Use Preview .ics to verify the feed; cloud subscription works after eLabFTW is available at a public HTTPS address with a trusted certificate.')}
+    </p>
+  {:else if window.location.protocol !== 'https:'}
+    <p class='small text-warning mb-2'>
+      {t('Cloud calendars require this feed to be served from a public trusted HTTPS address.')}
+    </p>
+  {/if}
+  <p class='small text-muted mb-2'>
+    {t('If Google does not add the feed automatically, copy the private link and use Other calendars → From URL in Google Calendar on a desktop browser.')}
+  </p>
+  <p class='small text-muted mb-2'>
+    {t('Apple subscriptions appear in Apple Calendar. Apple Reminders requires a separate native app or Shortcut integration.')}
+  </p>
+  <div class='d-flex calendar-feed-actions'>
+    <button
+      type='button'
+      class='btn btn-sm btn-primary'
+      disabled={calendarFeedLoading}
+      on:click={createCalendarFeed}
+    >
+      <i class='fas fa-rotate fa-fw mr-1' aria-hidden='true'></i>
+      {calendarFeedEnabled ? t('Regenerate private link') : t('Create private link')}
+    </button>
+    {#if calendarFeedEnabled}
+      <button
+        type='button'
+        class='btn btn-sm btn-outline-danger'
+        disabled={calendarFeedLoading}
+        on:click={revokeCalendarFeed}
+      >
+        {t('Revoke')}
+      </button>
+    {/if}
+  </div>
 </section>
 
 <style>

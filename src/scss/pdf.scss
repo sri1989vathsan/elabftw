@@ -65,7 +65,7 @@ ul.elabftw-checklist > li.elabftw-checklist-item {
 }
 
 ul.elabftw-checklist > li.elabftw-checklist-item::before {
-  color: variables.$elabblue;
+  color: $elabblue;
   content: '☐';
   display: inline-block;
   font-weight: bold;

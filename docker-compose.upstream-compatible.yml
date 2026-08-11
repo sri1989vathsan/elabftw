@@ -1,0 +1,114 @@
+name: elabftw-upstream-compatible
+
+services:
+  storage-init:
+    image: alpine:3.23
+    restart: "no"
+    user: "0:0"
+    command:
+      - sh
+      - -c
+      - >-
+        chown -R ${ELABFTW_RUN_UID:-1000}:${ELABFTW_RUN_GID:-1000}
+        /var/lib/elabftw/uploads /var/lib/elabftw/exports
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    volumes:
+      - elabftw-uploads:/var/lib/elabftw/uploads
+      - elabftw-exports:/var/lib/elabftw/exports
+
+  web:
+    build:
+      context: .
+      dockerfile: containers/elabimg/Dockerfile
+      args:
+        ELABFTW_VERSION: upstream-compatible-custom
+    image: elabftw/elabimg:upstream-compatible-custom
+    user: "${ELABFTW_RUN_UID:-1000}:${ELABFTW_RUN_GID:-1000}"
+    read_only: true
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: elabftw
+      DB_USER: elabftw
+      DB_PASSWORD: ${ELABFTW_DB_PASSWORD}
+
+      SECRET_KEY: ${ELABFTW_SECRET_KEY}
+      SERVER_NAME: localhost
+      SITE_URL: https://localhost:3149
+
+      DISABLE_HTTPS: "false"
+      ENABLE_LETSENCRYPT: "false"
+      PHP_TIMEZONE: Europe/Zurich
+      TZ: Europe/Zurich
+      MAX_PHP_MEMORY: 512M
+      DEV_MODE: "false"
+
+      # Runs official migrations first, followed by custom migrations.
+      AUTO_DB_INIT: "true"
+      AUTO_DB_UPDATE: "true"
+
+    ports:
+      - "127.0.0.1:3149:8080"
+
+    volumes:
+      - elabftw-uploads:/var/lib/elabftw/uploads
+      - elabftw-exports:/var/lib/elabftw/exports
+
+    tmpfs:
+      - /run:mode=755,uid=${ELABFTW_RUN_UID:-1000},gid=${ELABFTW_RUN_GID:-1000},exec,nosuid,nodev
+      - /var/cache/nginx:mode=755,uid=${ELABFTW_RUN_UID:-1000},gid=${ELABFTW_RUN_GID:-1000},noexec,nosuid,nodev
+
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - FOWNER
+      - DAC_OVERRIDE
+
+    networks:
+      - elabftw-net
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ELABFTW_MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: elabftw
+      MYSQL_USER: elabftw
+      MYSQL_PASSWORD: ${ELABFTW_DB_PASSWORD}
+      TZ: Europe/Zurich
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+    volumes:
+      - elabftw-mysql:/var/lib/mysql
+
+    networks:
+      - elabftw-net
+
+networks:
+  elabftw-net:
+
+volumes:
+  elabftw-uploads:
+  elabftw-exports:
+  elabftw-mysql:
