@@ -15,13 +15,49 @@ Fork database changes live in `src/sql/custom/` and are tracked in the
 be edited; add a new numbered custom migration instead. This removes migration
 number conflicts when upstream adds schema 220, 221, and later versions.
 
-The container entrypoint runs migrations in this order when `AUTO_DB_UPDATE`
-is enabled:
+The upstream container entrypoint remains unmodified and responsible only for
+official eLabFTW initialization and migrations. The fork Compose file invokes
+it from the one-shot `migration-init` service in this order:
 
-1. `bin/console db:update`
-2. `bin/console custom:db:update`
+1. wait for MySQL and storage initialization
+2. run the official entrypoint with `AUTO_DB_INIT` and `AUTO_DB_UPDATE`
+3. run `bin/console custom:db:update`
+4. start `web` only after the migration job completes successfully
 
 For manual deployments, run the same two commands after replacing the image.
+
+## Rules for future custom database changes
+
+Existing custom migrations are immutable because their checksums are recorded
+in `custom_schema_migrations`. Do not edit migrations `001` through `007` and
+do not move their live data without a separately reviewed compatibility
+migration.
+
+New custom features should prefer namespaced tables over generic columns added
+to upstream tables. Use names such as:
+
+- `moor_user_settings`
+- `moor_entity_settings`
+- `moor_todolist_metadata`
+- `moor_integration_settings`
+
+Reference the upstream row by its primary key and use `ON DELETE CASCADE` where
+the custom metadata has no meaning without that row. If extending an upstream
+table is unavoidable, prefix the column and index names with `moor_`.
+
+## Keeping editor customizations mergeable
+
+Fork-owned TinyMCE behavior lives under `src/ts/custom-editor/`. The upstream-
+facing `src/ts/tinymce.ts` contains one call to
+`registerCustomEditorExtensions()` rather than the implementations for lists,
+dates and titles, spreadsheets, table tools, links, format painting and the
+table of contents. Add future editor features as another extension module and
+register it in `src/ts/custom-editor/index.ts`.
+
+Saved-document and editor-frame styles are shared through
+`src/scss/_custom-editor.scss`. It is imported by the application stylesheet
+and appended to TinyMCE's content stylesheet during the asset build. Keep it
+valid as plain CSS as well as SCSS; do not add Sass-only nesting or variables.
 
 ## One-time upgrade from the legacy fork database
 

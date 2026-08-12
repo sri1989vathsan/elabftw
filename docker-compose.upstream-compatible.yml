@@ -9,7 +9,7 @@ services:
       - sh
       - -c
       - >-
-        chown -R ${ELABFTW_RUN_UID:-1000}:${ELABFTW_RUN_GID:-1000}
+        chown ${ELABFTW_RUN_UID:-1000}:${ELABFTW_RUN_GID:-1000}
         /var/lib/elabftw/uploads /var/lib/elabftw/exports
     cap_drop:
       - ALL
@@ -19,7 +19,7 @@ services:
       - elabftw-uploads:/var/lib/elabftw/uploads
       - elabftw-exports:/var/lib/elabftw/exports
 
-  web:
+  migration-init:
     build:
       context: .
       dockerfile: containers/elabimg/Dockerfile
@@ -28,7 +28,7 @@ services:
     image: elabftw/elabimg:upstream-compatible-custom
     user: "${ELABFTW_RUN_UID:-1000}:${ELABFTW_RUN_GID:-1000}"
     read_only: true
-    restart: unless-stopped
+    restart: "no"
     depends_on:
       mysql:
         condition: service_healthy
@@ -53,9 +53,69 @@ services:
       MAX_PHP_MEMORY: 512M
       DEV_MODE: "false"
 
-      # Runs official migrations first, followed by custom migrations.
+      # The one-shot job applies official migrations before custom migrations.
       AUTO_DB_INIT: "true"
       AUTO_DB_UPDATE: "true"
+
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - >-
+        mkdir -p /run/s6/container_environment
+        && /usr/sbin/docker-entrypoint.sh
+        && exec /elabftw/bin/console custom:db:update
+
+    volumes:
+      - elabftw-uploads:/var/lib/elabftw/uploads
+      - elabftw-exports:/var/lib/elabftw/exports
+
+    tmpfs:
+      - /run:mode=755,uid=${ELABFTW_RUN_UID:-1000},gid=${ELABFTW_RUN_GID:-1000},exec,nosuid,nodev
+      - /var/cache/nginx:mode=755,uid=${ELABFTW_RUN_UID:-1000},gid=${ELABFTW_RUN_GID:-1000},noexec,nosuid,nodev
+
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - FOWNER
+      - DAC_OVERRIDE
+
+    networks:
+      - elabftw-net
+
+  web:
+    image: elabftw/elabimg:upstream-compatible-custom
+    user: "${ELABFTW_RUN_UID:-1000}:${ELABFTW_RUN_GID:-1000}"
+    read_only: true
+    restart: unless-stopped
+    depends_on:
+      migration-init:
+        condition: service_completed_successfully
+
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: elabftw
+      DB_USER: elabftw
+      DB_PASSWORD: ${ELABFTW_DB_PASSWORD}
+
+      SECRET_KEY: ${ELABFTW_SECRET_KEY}
+      SERVER_NAME: localhost
+      SITE_URL: https://localhost:3149
+
+      DISABLE_HTTPS: "false"
+      ENABLE_LETSENCRYPT: "false"
+      PHP_TIMEZONE: Europe/Zurich
+      TZ: Europe/Zurich
+      MAX_PHP_MEMORY: 512M
+      DEV_MODE: "false"
+
+      # The one-shot migration service owns initialization and upgrades.
+      AUTO_DB_INIT: "false"
+      AUTO_DB_UPDATE: "false"
 
     ports:
       - "127.0.0.1:3149:8080"

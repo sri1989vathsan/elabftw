@@ -85,6 +85,10 @@ module.exports = (env, argv) => {
     mode,
     output: {
       filename: '[name].bundle.js',
+      // Async entry chunks (for example edit.ts/TinyMCE) must be immutable.
+      // A stable chunk filename lets a browser combine a newly versioned main
+      // bundle with an older cached edit bundle after a custom image rebuild.
+      chunkFilename: '[name].[contenthash:8].bundle.js',
       path: path.resolve(__dirname, 'web/assets')
     },
     optimization: {

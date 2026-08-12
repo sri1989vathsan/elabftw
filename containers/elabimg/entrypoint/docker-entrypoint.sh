@@ -416,8 +416,6 @@ dbUpdate() {
     if ($auto_db_update); then
         say "info: updating database structure"
         /elabftw/bin/console db:update
-        say "info: updating fork-owned database extensions"
-        /elabftw/bin/console custom:db:update
     fi
 }
 

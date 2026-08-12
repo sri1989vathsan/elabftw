@@ -1,57 +1,59 @@
-// Fork-specific editor rendering is isolated here so upstream TinyMCE styles
-// can be updated without repeatedly conflicting with these additions.
+/*
+ * Fork-specific content rendering shared by the normal page and TinyMCE's
+ * iframe. Keep this partial valid as plain CSS: the TinyMCE asset builder
+ * appends it directly after the upstream content stylesheet.
+ */
 
-// Make ordered-list nesting visually explicit when Tab/Shift+Tab changes the
-// list structure. Repeat the decimal -> letter -> Roman cycle when nested.
-ol {
+/* Repeat the decimal -> letter -> Roman cycle when ordered lists are nested. */
+:where(#body_view, body.mce-content-body) ol {
   list-style-type: decimal;
 }
 
-ol ol {
+:where(#body_view, body.mce-content-body) ol ol {
   list-style-type: lower-alpha;
 }
 
-ol ol ol {
+:where(#body_view, body.mce-content-body) ol ol ol {
   list-style-type: lower-roman;
 }
 
-ol ol ol ol {
+:where(#body_view, body.mce-content-body) ol ol ol ol {
   list-style-type: decimal;
 }
 
-ol ol ol ol ol {
+:where(#body_view, body.mce-content-body) ol ol ol ol ol {
   list-style-type: lower-alpha;
 }
 
-ol ol ol ol ol ol {
+:where(#body_view, body.mce-content-body) ol ol ol ol ol ol {
   list-style-type: lower-roman;
 }
 
-ol ol ol ol ol ol ol {
+:where(#body_view, body.mce-content-body) ol ol ol ol ol ol ol {
   list-style-type: decimal;
 }
 
-ol ol ol ol ol ol ol ol {
+:where(#body_view, body.mce-content-body) ol ol ol ol ol ol ol ol {
   list-style-type: lower-alpha;
 }
 
-ol ol ol ol ol ol ol ol ol {
+:where(#body_view, body.mce-content-body) ol ol ol ol ol ol ol ol ol {
   list-style-type: lower-roman;
 }
 
-ul.elabftw-checklist {
+:where(#body_view, body.mce-content-body) ul.elabftw-checklist {
   list-style: none;
   padding-left: 1.25rem;
 }
 
-ul.elabftw-checklist > li.elabftw-checklist-item {
+:where(#body_view, body.mce-content-body) ul.elabftw-checklist > li.elabftw-checklist-item {
   list-style: none;
   min-height: 1.4em;
   padding-left: 1.55rem;
   position: relative;
 }
 
-ul.elabftw-checklist > li.elabftw-checklist-item::before {
+:where(#body_view, body.mce-content-body) ul.elabftw-checklist > li.elabftw-checklist-item::before {
   color: var(--primary, #167b85);
   content: '☐';
   cursor: pointer;
@@ -65,11 +67,11 @@ ul.elabftw-checklist > li.elabftw-checklist-item::before {
   width: 1.2rem;
 }
 
-ul.elabftw-checklist > li.elabftw-checklist-item[data-checked='true']::before {
+:where(#body_view, body.mce-content-body) ul.elabftw-checklist > li.elabftw-checklist-item[data-checked='true']::before {
   content: '☑';
 }
 
-table > caption {
+:where(#body_view, body.mce-content-body) table > caption {
   caption-side: top;
   display: table-caption;
   font-weight: 700;
@@ -77,7 +79,7 @@ table > caption {
   text-align: left;
 }
 
-a.elabftw-date-reference {
+:where(#body_view, body.mce-content-body) a.elabftw-date-reference {
   align-items: center;
   background-color: var(--firstlevel, #eef2f5);
   border: 1px solid var(--secondary-muted, #ccd2d8);
@@ -90,12 +92,12 @@ a.elabftw-date-reference {
   white-space: nowrap;
 }
 
-a.elabftw-date-reference:hover {
+:where(#body_view, body.mce-content-body) a.elabftw-date-reference:hover {
   background-color: var(--secondlevel, #e1e8ec);
   text-decoration: underline;
 }
 
-.elabftw-date-icon {
+:where(#body_view, body.mce-content-body) .elabftw-date-icon {
   background-color: var(--white, #fff);
   border: 1px solid var(--secondary-muted, #ccd2d8);
   border-radius: 0.16rem;
@@ -110,7 +112,7 @@ a.elabftw-date-reference:hover {
   width: 1.6rem;
 }
 
-.elabftw-date-icon-month {
+:where(#body_view, body.mce-content-body) .elabftw-date-icon-month {
   background-color: var(--primary, #167b85);
   color: var(--white, #fff);
   font-size: 0.42rem;
@@ -119,39 +121,39 @@ a.elabftw-date-reference:hover {
   padding-top: 0.08rem;
 }
 
-.elabftw-date-icon-month::before {
+:where(#body_view, body.mce-content-body) .elabftw-date-icon-month::before {
   content: attr(title);
 }
 
-.elabftw-date-icon-day {
+:where(#body_view, body.mce-content-body) .elabftw-date-icon-day {
   color: var(--strongest, #343a40);
   font-size: 0.72rem;
   font-weight: 700;
   padding-top: 0.1rem;
 }
 
-.elabftw-date-icon-day::before {
+:where(#body_view, body.mce-content-body) .elabftw-date-icon-day::before {
   content: attr(title);
 }
 
-hr.elabftw-single-rule,
-hr.elabftw-double-rule,
-hr.elabftw-dashed-rule,
-hr.elabftw-double-dashed-rule {
+:where(#body_view, body.mce-content-body) hr.elabftw-single-rule,
+:where(#body_view, body.mce-content-body) hr.elabftw-double-rule,
+:where(#body_view, body.mce-content-body) hr.elabftw-dashed-rule,
+:where(#body_view, body.mce-content-body) hr.elabftw-double-dashed-rule {
   border: 0;
   height: 0;
   margin: 1rem 0;
 }
 
-hr.elabftw-single-rule {
+:where(#body_view, body.mce-content-body) hr.elabftw-single-rule {
   border-top: 1px solid var(--strongest, #343a40);
 }
 
-hr.elabftw-dashed-rule {
+:where(#body_view, body.mce-content-body) hr.elabftw-dashed-rule {
   border-top: 1px dashed var(--strongest, #343a40);
 }
 
-hr.elabftw-double-rule {
+:where(#body_view, body.mce-content-body) hr.elabftw-double-rule {
   background: linear-gradient(
     to bottom,
     var(--strongest, #343a40) 0,
@@ -164,7 +166,7 @@ hr.elabftw-double-rule {
   height: 6px;
 }
 
-hr.elabftw-double-dashed-rule {
+:where(#body_view, body.mce-content-body) hr.elabftw-double-dashed-rule {
   background-image:
     repeating-linear-gradient(
       to right,
@@ -186,54 +188,80 @@ hr.elabftw-double-dashed-rule {
   height: 6px;
 }
 
-table.elabftw-spreadsheet {
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet {
   border-collapse: collapse;
-
-  td,
-  th {
-    border: 1px solid var(--secondary-muted, #ccd2d8);
-    min-width: 3.5rem;
-    padding: 0.35rem 0.5rem;
-  }
-
-  .spreadsheet-coordinate {
-    background-color: var(--superlight, #f0f2f4);
-    color: var(--medium);
-    font-size: 0.85em;
-    min-width: 2rem;
-    text-align: center;
-  }
+  font-size: 0.9em;
+  margin: 8px 0;
 }
 
-table[data-spreadsheet-style='notebook'] {
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet td,
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet th {
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  min-width: 3.5rem;
+  padding: 0.35rem 0.5rem;
+}
+
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet tr:nth-child(even) {
+  background-color: var(--zebrarow, rgba(0, 0, 0, 0.03));
+}
+
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet:hover {
+  cursor: pointer;
+  outline: 2px dashed var(--primary, #29aeb9);
+  outline-offset: 2px;
+}
+
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet .spreadsheet-coordinate {
+  background-color: var(--superlight, #f0f2f4);
+  color: var(--medium);
+  font-size: 0.85em;
+  min-width: 2rem;
+  text-align: center;
+}
+
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] {
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
   width: 100%;
-
-  > caption {
-    background-color: var(--superlight, #f0f2f4);
-    border: 1px solid var(--secondary-muted, #ccd2d8);
-    border-bottom: 0;
-    margin: 0;
-    padding: 0.65rem 0.75rem;
-  }
-
-  thead th {
-    background-color: var(--firstlevel, #e6eaed);
-    font-weight: 700;
-    text-align: left;
-  }
 }
 
-table[data-spreadsheet-style='well-plate'] {
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] > caption {
+  background-color: var(--superlight, #f0f2f4);
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  border-bottom: 0;
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+}
+
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] thead th {
+  background-color: var(--firstlevel, #e6eaed);
+  font-weight: 700;
+  text-align: left;
+}
+
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='well-plate'] {
   table-layout: fixed;
   width: 100%;
+}
 
-  td,
-  th {
-    min-width: 2.5rem;
-    padding: 0.3rem;
-    text-align: center;
-  }
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='well-plate'] td,
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='well-plate'] th {
+  min-width: 2.5rem;
+  padding: 0.3rem;
+  text-align: center;
+}
+
+:where(#body_view, body.mce-content-body) td[data-formula],
+:where(#body_view, body.mce-content-body) th[data-formula] {
+  background-color: color-mix(in srgb, var(--primary, #167b85) 8%, transparent);
+  box-shadow: inset 3px 0 var(--primary, #167b85);
+}
+
+:where(#body_view, body.mce-content-body) td[data-formula-state='error'],
+:where(#body_view, body.mce-content-body) th[data-formula-state='error'] {
+  background-color: color-mix(in srgb, var(--danger, #dc3545) 10%, transparent);
+  box-shadow: inset 3px 0 var(--danger, #dc3545);
+  color: var(--danger, #dc3545);
+  font-weight: 700;
 }

@@ -499,73 +499,6 @@ button:disabled {
   /* we cannot apply strict here */
   contain: content;
 
-  // Match the hierarchy shown while editing: Tab changes ordered-list markers
-  // from decimal to letters to Roman numerals, then repeats for deeper levels.
-  ol {
-    list-style-type: decimal;
-  }
-
-  ol ol {
-    list-style-type: lower-alpha;
-  }
-
-  ol ol ol {
-    list-style-type: lower-roman;
-  }
-
-  ol ol ol ol {
-    list-style-type: decimal;
-  }
-
-  ol ol ol ol ol {
-    list-style-type: lower-alpha;
-  }
-
-  ol ol ol ol ol ol {
-    list-style-type: lower-roman;
-  }
-
-  ol ol ol ol ol ol ol {
-    list-style-type: decimal;
-  }
-
-  ol ol ol ol ol ol ol ol {
-    list-style-type: lower-alpha;
-  }
-
-  ol ol ol ol ol ol ol ol ol {
-    list-style-type: lower-roman;
-  }
-
-  ul.elabftw-checklist {
-    list-style: none;
-    padding-left: 1.25rem;
-  }
-
-  ul.elabftw-checklist > li.elabftw-checklist-item {
-    list-style: none;
-    min-height: 1.4em;
-    padding-left: 1.55rem;
-    position: relative;
-  }
-
-  ul.elabftw-checklist > li.elabftw-checklist-item::before {
-    color: var(--primary);
-    content: '☐';
-    font-family: Arial, sans-serif;
-    font-size: 1.15rem;
-    font-weight: 400;
-    left: 0;
-    line-height: 1;
-    position: absolute;
-    top: 0;
-    width: 1.2rem;
-  }
-
-  ul.elabftw-checklist > li.elabftw-checklist-item[data-checked='true']::before {
-    content: '☑';
-  }
-
   img {
     max-height: 100%;
     max-width: 100%;
@@ -705,32 +638,6 @@ tr:first-child td {
     border: 1px solid var(--secondary-muted);
   }
 
-  td[data-formula],
-  th[data-formula] {
-    background-color: color-mix(in srgb, var(--primary) 8%, transparent);
-    box-shadow: inset 3px 0 var(--primary);
-  }
-
-  td[data-formula-state='error'],
-  th[data-formula-state='error'] {
-    background-color: color-mix(in srgb, var(--danger) 10%, transparent);
-    box-shadow: inset 3px 0 var(--danger);
-    color: var(--danger);
-    font-weight: 700;
-  }
-
-  table[data-well-plate] {
-    font-size: 0.85rem;
-    table-layout: fixed;
-    width: 100%;
-
-    td,
-    th {
-      min-width: 2.5rem;
-      padding: 0.25rem;
-      text-align: center;
-    }
-  }
 }
 
 /* required labels/input */
@@ -1705,71 +1612,6 @@ body.html-tool-workspace-resizing * {
   100% { background-color: transparent; }
 }
 
-table > caption {
-  caption-side: top;
-  display: table-caption;
-  margin: 0 0 0.25rem;
-}
-
-/* LINKABLE EDITOR DATES */
-a.elabftw-date-reference {
-  align-items: center;
-  background-color: var(--firstlevel);
-  border: 1px solid var(--secondary-muted);
-  border-radius: 0.3rem;
-  color: var(--primary);
-  display: inline-flex;
-  gap: 0.3rem;
-  padding: 0.08rem 0.35rem;
-  text-decoration: none;
-  white-space: nowrap;
-
-  &:hover {
-    background-color: var(--secondlevel);
-    color: var(--primary);
-    text-decoration: underline;
-  }
-}
-
-.elabftw-date-icon {
-  background-color: var(--white);
-  border: 1px solid var(--secondary-muted);
-  border-radius: 0.16rem;
-  display: inline-grid;
-  flex: 0 0 auto;
-  font-family: sans-serif;
-  grid-template-rows: 0.55rem 0.9rem;
-  height: 1.55rem;
-  line-height: 1;
-  overflow: hidden;
-  text-align: center;
-  width: 1.6rem;
-}
-
-.elabftw-date-icon-month {
-  background-color: var(--primary);
-  color: var(--white);
-  font-size: 0.42rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding-top: 0.08rem;
-
-  &::before {
-    content: attr(title);
-  }
-}
-
-.elabftw-date-icon-day {
-  color: var(--strongest);
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding-top: 0.1rem;
-
-  &::before {
-    content: attr(title);
-  }
-}
-
 .date-reference-overlay {
   align-items: center;
   background-color: rgba(0, 0, 0, 0.55);
@@ -1942,58 +1784,6 @@ a.elabftw-date-reference {
   min-height: 3rem;
   overflow-wrap: anywhere;
   padding: 0.65rem 0.75rem;
-}
-
-hr.elabftw-single-rule,
-hr.elabftw-double-rule,
-hr.elabftw-dashed-rule,
-hr.elabftw-double-dashed-rule {
-  border: 0;
-  height: 0;
-  margin: 1rem 0;
-}
-
-hr.elabftw-single-rule {
-  border-top: 1px solid var(--strongest);
-}
-
-hr.elabftw-dashed-rule {
-  border-top: 1px dashed var(--strongest);
-}
-
-hr.elabftw-double-rule {
-  background: linear-gradient(
-    to bottom,
-    var(--strongest) 0,
-    var(--strongest) 1px,
-    transparent 1px,
-    transparent 5px,
-    var(--strongest) 5px,
-    var(--strongest) 6px
-  );
-  height: 6px;
-}
-
-hr.elabftw-double-dashed-rule {
-  background-image:
-    repeating-linear-gradient(
-      to right,
-      var(--strongest) 0,
-      var(--strongest) 6px,
-      transparent 6px,
-      transparent 10px
-    ),
-    repeating-linear-gradient(
-      to right,
-      var(--strongest) 0,
-      var(--strongest) 6px,
-      transparent 6px,
-      transparent 10px
-    );
-  background-position: left top, left bottom;
-  background-repeat: no-repeat;
-  background-size: 100% 1px;
-  height: 6px;
 }
 
 /* INLINE SPREADSHEET */
@@ -2208,79 +1998,6 @@ hr.elabftw-double-dashed-rule {
 .inline-spreadsheet-grid-actions {
   display: flex;
   gap: 0.35rem;
-}
-
-/* Styling for spreadsheet tables embedded in the body */
-table.elabftw-spreadsheet {
-  border-collapse: collapse;
-  font-size: 0.9em;
-  margin: 8px 0;
-
-  td,
-  th {
-    border: 1px solid var(--secondary-muted, #dee2e6);
-    min-width: 60px;
-    padding: 4px 8px;
-  }
-
-  tr:nth-child(even) {
-    background-color: var(--zebrarow, rgba(0, 0, 0, 0.03));
-  }
-
-  &:hover {
-    cursor: pointer;
-    outline: 2px dashed var(--primary, #29aeb9);
-    outline-offset: 2px;
-  }
-
-  > caption {
-    caption-side: top;
-    display: table-caption;
-    font-weight: 700;
-    margin: 0 0 0.25rem;
-    text-align: left;
-  }
-
-  .spreadsheet-coordinate {
-    background-color: var(--firstlevel);
-    color: var(--medium);
-    font-size: 0.85em;
-    min-width: 2rem;
-    text-align: center;
-  }
-}
-
-table[data-spreadsheet-style='notebook'] {
-  border-collapse: separate;
-  border-spacing: 0;
-  table-layout: fixed;
-  width: 100%;
-
-  > caption {
-    background-color: var(--firstlevel);
-    border: 1px solid var(--secondary);
-    border-bottom: 0;
-    margin: 0;
-    padding: 0.65rem 0.75rem;
-  }
-
-  thead th {
-    background-color: var(--secondlevel);
-    font-weight: 700;
-    text-align: left;
-  }
-}
-
-table[data-spreadsheet-style='well-plate'] {
-  table-layout: fixed;
-  width: 100%;
-
-  td,
-  th {
-    min-width: 2.5rem;
-    padding: 0.3rem;
-    text-align: center;
-  }
 }
 
 /* Ensure jspreadsheet dropdown menus inside the overlay render on top */
