@@ -32,6 +32,7 @@ module.exports = (env, argv) => {
       main: [
         './src/scss/main.scss',
         './src/ts/common.ts',
+        './src/ts/experiments-folders.ts',
         './src/ts/page-loader.ts',
         './src/ts/create-new.ts',
         './src/ts/i18n.ts',
