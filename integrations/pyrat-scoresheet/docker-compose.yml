@@ -1,0 +1,15 @@
+services:
+  pyrat-scoresheet:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${SCORESHEET_PORT:-8080}:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -41,7 +41,7 @@ use function str_starts_with;
  */
 final class Config extends AbstractRest
 {
-    public const array ENCRYPTED_KEYS = array('smtp_password', 'ldap_password', 'ts_password', 'remote_dir_config', 'dspace_password');
+    public const array ENCRYPTED_KEYS = array('smtp_password', 'ldap_password', 'ts_password', 'remote_dir_config', 'dspace_password', 'pyrat_password');
 
     // the array with all config
     public array $configArr = array();
@@ -381,7 +381,7 @@ final class Config extends AbstractRest
     {
         foreach (self::ENCRYPTED_KEYS as $column) {
             try {
-                $config[$column] = self::decrypt($config[$column]);
+                $config[$column] = self::decrypt($config[$column] ?? null);
             } catch (WrongKeyOrModifiedCiphertextException $e) {
                 $err = "Error decrypting config value %s: %s. This can be caused by having a different SECRET_KEY than the one that was used to encrypt this value. Try setting the value to an empty string in the 'config' table, with the SQL query: update config set conf_value = '' where conf_name = '%s';";
                 throw new AppException(sprintf($err, $column, $e->getMessage(), $column), 500);

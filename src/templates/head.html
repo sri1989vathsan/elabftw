@@ -168,7 +168,7 @@
               {% if App.devMode -%}
                 <!-- [html-validate-disable-next prefer-native-element: using a button here will mess up the navbar] -->
               {%- endif %}
-              <a id='navToolsDropdown' href='#' class='nav-link dropdown-toggle {{ scriptName in ['compounds.php', 'chem-editor.php', 'syc.php', 'inventory.php'] ? 'active' }}' role='button' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>
+              <a id='navToolsDropdown' href='#' class='nav-link dropdown-toggle {{ scriptName in ['compounds.php', 'chem-editor.php', 'syc.php', 'inventory.php', 'animal-studies.php'] ? 'active' }}' role='button' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>
               {{ 'Tools'|trans }}
               </a>
               <div class='dropdown-menu'>
@@ -180,6 +180,11 @@
                 <a class='dropdown-item {{ not envAsBool('USE_OPENCLONING') ? 'disabled' }} {{ isActive ? 'active' }}' href='syc.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-dna fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'OpenCloning'|trans }}</a>
                 {% set isActive = scriptName == 'inventory.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='inventory.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-warehouse fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Inventory'|trans }}</a>
+                {% set pyratAllowedTeams = App.Config.configArr.pyrat_allowed_teams|default('')|replace({' ': ''})|split(',') %}
+                {% if App.Config.configArr.pyrat_enabled|default('0') == '1' and (App.Users.userData.is_sysadmin == 1 or (App.Users.userData.team ~ '') in pyratAllowedTeams) %}
+                  {% set isActive = scriptName == 'animal-studies.php' %}
+                  <a class='dropdown-item {{ isActive ? 'active' }}' href='animal-studies.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-paw fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Animal Studies'|trans }}</a>
+                {% endif %}
               </div>
             </div>
         </div>

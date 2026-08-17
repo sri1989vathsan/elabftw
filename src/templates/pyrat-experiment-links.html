@@ -1,0 +1,34 @@
+{% set pyratAllowedTeams = App.Config.configArr.pyrat_allowed_teams|default('')|replace({' ': ''})|split(',') %}
+{% if Entity.entityType.value == 'experiments' and not App.isAnonymous() and App.Config.configArr.pyrat_enabled|default('0') == '1' and (App.Users.userData.is_sysadmin == 1 or (App.Users.userData.team ~ '') in pyratAllowedTeams) %}
+<section id='pyratExperimentSection' data-experiment-id='{{ Entity.id }}'>
+  <h3 class='d-inline togglable-section-title' data-action='toggle-next' data-scroll-btn='fa-paw' data-scroll-btn-label='{{ 'PyRAT animals and cages'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' tabindex='0' role='button' aria-expanded='true' aria-controls='pyratExperimentDiv'>
+    <i class='fas fa-caret-down fa-fw mr-2'></i><i class='fas fa-paw mr-1'></i>{{ 'PyRAT animals and cages'|trans }} (<span id='pyratExperimentLinksCount'>0</span>)
+  </h3>
+  <div class='mt-2 ml-3' id='pyratExperimentDiv' data-save-hidden='pyratExperimentDiv'>
+    <div class='d-flex flex-wrap align-items-center mb-2'>
+      <span id='pyratExperimentStatus' class='small text-muted mr-2'>{{ 'Loading PyRAT links…'|trans }}</span>
+      <button type='button' class='btn btn-sm btn-outline-primary ml-auto' data-toggle='collapse' data-target='#pyratExperimentLinker' aria-expanded='false'>
+        <i class='fas fa-plus mr-1'></i>{{ 'Add from PyRAT'|trans }}
+      </button>
+    </div>
+    <div id='pyratExperimentLinks' class='mb-2'></div>
+    <div id='pyratExperimentLinker' class='collapse card card-body'>
+      <label for='pyratExperimentAnimalSearch'>{{ 'Search PyRAT'|trans }}</label>
+      <div class='input-group'>
+        <div class='input-group-prepend'>
+          <select id='pyratExperimentEntityType' class='custom-select' aria-label='{{ 'PyRAT entity type'|trans }}'>
+            <option value='animal'>{{ 'Animals'|trans }}</option>
+            <option value='cage'>{{ 'Cages'|trans }}</option>
+          </select>
+        </div>
+        <input id='pyratExperimentAnimalSearch' class='form-control' type='search' placeholder='M1234 / C12 / C57BL/6J'>
+        <div class='input-group-append'>
+          <button type='button' class='btn btn-primary' data-action='pyrat-search-experiment-animals'><i class='fas fa-search mr-1'></i>{{ 'Search'|trans }}</button>
+        </div>
+      </div>
+      <div id='pyratExperimentSearchResults' class='mt-2'></div>
+    </div>
+  </div>
+  <hr>
+</section>
+{% endif %}

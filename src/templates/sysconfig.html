@@ -132,6 +132,80 @@
 
   </div>
 
+  <h2 class='mb-3 p-2 pl-3 section-title' id='pyratIntegration'>{{ 'PyRAT integration'|trans }}</h2>
+  <div class='pl-3 mb-5' id='pyratSettings'>
+    <div class='alert alert-info'>
+      {{ 'eLabFTW uses a read-only PyRAT service account to search animals and cages. It stores only stable identifiers on experiments. Scores remain in the independently deployed scoresheet/PyRAT workflow.'|trans }}
+    </div>
+    {% include 'binary-setting.html' with {'label': 'Enable PyRAT integration'|trans, 'slug': 'pyrat_enabled'} %}
+    {% include 'binary-setting.html' with {'label': 'Use PyRAT demo data'|trans, 'slug': 'pyrat_demo_mode'} %}
+
+    <div class='d-flex justify-content-between'>
+      <label for='pyrat_allowed_teams' class='col-form-label'>{{ 'Allowed eLabFTW team IDs'|trans }}</label>
+      <input class='form-control col-md-5' data-trigger='blur' data-model='config' data-target='pyrat_allowed_teams' type='text' value='{{ App.Config.configArr.pyrat_allowed_teams|default('') }}' id='pyrat_allowed_teams' placeholder='1,3,7'>
+    </div>
+    <p class='smallgray'>{{ 'Comma-separated team IDs. Leave empty to restrict PyRAT to sysadmins. The PyRAT service account must be scoped consistently with these teams.'|trans }}</p>
+    <hr>
+
+    <div class='d-flex justify-content-between'>
+      <label for='pyrat_base_url' class='col-form-label'>{{ 'PyRAT API base URL'|trans }}</label>
+      <input class='form-control col-md-5' data-trigger='blur' data-model='config' data-target='pyrat_base_url' type='url' value='{{ App.Config.configArr.pyrat_base_url|default('') }}' id='pyrat_base_url' placeholder='https://pyrat.example.org'>
+    </div>
+    <p class='smallgray'>{{ 'Use a least-privilege, read-only service account scoped to the animals and cages this eLabFTW instance may expose.'|trans }}</p>
+    <hr>
+
+    <div class='d-flex justify-content-between'>
+      <label for='pyrat_auth_mode' class='col-form-label'>{{ 'API authentication'|trans }}</label>
+      {% set pyratAuth = App.Config.configArr.pyrat_auth_mode|default('basic') %}
+      <select class='form-control col-md-5' data-trigger='change' data-model='config' data-target='pyrat_auth_mode' id='pyrat_auth_mode'>
+        <option value='basic' {{ pyratAuth == 'basic' ? 'selected' }}>{{ 'Service username and password'|trans }}</option>
+        <option value='bearer' {{ pyratAuth == 'bearer' ? 'selected' }}>{{ 'Bearer/API token'|trans }}</option>
+        <option value='none' {{ pyratAuth == 'none' ? 'selected' }}>{{ 'No authentication'|trans }}</option>
+      </select>
+    </div>
+    <hr>
+
+    <div class='d-flex justify-content-between'>
+      <label for='pyrat_username' class='col-form-label'>{{ 'Service username'|trans }}</label>
+      <input class='form-control col-md-5' data-trigger='blur' data-model='config' data-target='pyrat_username' type='text' autocomplete='off' value='{{ App.Config.configArr.pyrat_username|default('') }}' id='pyrat_username'>
+    </div>
+    <hr>
+
+    <div class='d-flex justify-content-between' id='pyratSecretSetting'>
+      <label for='pyrat_password' class='col-form-label'>{{ 'Service password or API token'|trans }}</label>
+      {% if App.Config.configArr.pyrat_password|default('')|length == 0 %}
+        <div class='input-group col-md-5 p-0'>
+          <input class='form-control' type='password' data-trigger='blur' data-model='config' data-target='pyrat_password' id='pyrat_password' autocomplete='new-password'>
+          <div class='input-group-append'><button type='button' class='btn btn-ghost' data-action='toggle-password' data-target='pyrat_password' aria-label='{{ 'Show password'|trans }}'><i class='fas fa-eye'></i></button></div>
+        </div>
+      {% else %}
+        <p>{{ 'A secret is already set.'|trans }} <button type='button' class='btn btn-danger btn-sm' data-action='clear-password' data-target='pyrat' data-reload='pyratSecretSetting'>{{ 'Clear'|trans }}</button></p>
+      {% endif %}
+    </div>
+    <p class='smallgray'>{{ 'This value is encrypted using the eLabFTW SECRET_KEY and is never sent to browser JavaScript.'|trans }}</p>
+    <hr>
+
+    <div class='form-row'>
+      <div class='col-md-6'><label for='pyrat_animals_path'>{{ 'Animals collection path'|trans }}</label><input class='form-control' data-trigger='blur' data-model='config' data-target='pyrat_animals_path' value='{{ App.Config.configArr.pyrat_animals_path|default('') }}' id='pyrat_animals_path' placeholder='/api/animals'></div>
+      <div class='col-md-6'><label for='pyrat_animal_path'>{{ 'Animal detail path (optional)'|trans }}</label><input class='form-control' data-trigger='blur' data-model='config' data-target='pyrat_animal_path' value='{{ App.Config.configArr.pyrat_animal_path|default('') }}' id='pyrat_animal_path' placeholder='/api/animals/{id}'></div>
+      <div class='col-md-6 mt-3'><label for='pyrat_cages_path'>{{ 'Cages collection path'|trans }}</label><input class='form-control' data-trigger='blur' data-model='config' data-target='pyrat_cages_path' value='{{ App.Config.configArr.pyrat_cages_path|default('') }}' id='pyrat_cages_path' placeholder='/api/cages'></div>
+      <div class='col-md-6 mt-3'><label for='pyrat_cage_path'>{{ 'Cage detail path (optional)'|trans }}</label><input class='form-control' data-trigger='blur' data-model='config' data-target='pyrat_cage_path' value='{{ App.Config.configArr.pyrat_cage_path|default('') }}' id='pyrat_cage_path' placeholder='/api/cages/{id}'></div>
+    </div>
+    <p class='smallgray mt-2'>{{ 'Endpoint paths are configurable because the institutional PyRAT API contract must be confirmed with your administrator.'|trans }}</p>
+    <hr>
+
+    <div class='d-flex justify-content-between'>
+      <label for='pyrat_scoresheet_url' class='col-form-label'>{{ 'External scoresheet URL'|trans }}</label>
+      <input class='form-control col-md-5' data-trigger='blur' data-model='config' data-target='pyrat_scoresheet_url' type='url' value='{{ App.Config.configArr.pyrat_scoresheet_url|default('') }}' id='pyrat_scoresheet_url' placeholder='https://scores.example.org/?view=history&amp;type={type}&amp;id={id}'>
+    </div>
+    <p class='smallgray'>{{ 'Use {type} and {id} placeholders to open the scoresheet directly for a selected animal or cage.'|trans }}</p>
+    <hr>
+
+    {% include 'binary-setting.html' with {'label': 'Verify PyRAT TLS certificate'|trans, 'slug': 'pyrat_verify_tls'} %}
+    <button type='button' class='btn btn-primary' data-action='pyrat-test-connection'><i class='fas fa-plug mr-1'></i>{{ 'Test PyRAT connection'|trans }}</button>
+    <span id='pyratConnectionTestResult' class='small text-muted ml-2'></span>
+  </div>
+
 
   <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Revisions system configuration'|trans }}</h2>
   <div class='pl-3'>
