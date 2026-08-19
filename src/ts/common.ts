@@ -16,6 +16,7 @@ import FavoriteFilters from './FavoriteFilters.class';
 import FoldersPanel from './FoldersPanel.class';
 import TocPanel from './TocPanel.class';
 import HtmlToolsPanel from './HtmlToolsPanel.class';
+import CalendarActivity from './CalendarActivity.class';
 import { clearLocalStorage, rememberLastSelected, selectLastSelected } from './localStorage';
 import {
   adjustHiddenState,
@@ -246,8 +247,12 @@ if (core.isAuth) {
 const FavoriteFiltersC = new FavoriteFilters();
 const FoldersPanelC = new FoldersPanel();
 const TodolistC = new Todolist();
+const CalendarActivityC = new CalendarActivity();
 const TocPanelC = new TocPanel();
 const HtmlToolsPanelC = new HtmlToolsPanel();
+// Mount while hidden as well, so reminder badges continue to update even when
+// the user has not opened the standalone calendar during this page visit.
+CalendarActivityC.initialize();
 
 // Keep the entity Back/Edit/Save toolbar immediately below the sticky main
 // navigation. ResizeObserver also tracks the expanded mobile navigation and
@@ -306,14 +311,26 @@ if (openedSidePanel === 'favorites'
 if (openedSidePanel === 'folders') {
   FoldersPanelC.toggle();
 }
-if (openedSidePanel === Model.Todolist) {
+const legacyCalendarPanel = openedSidePanel === Model.Todolist
+  && localStorage.getItem('todolistView') === 'calendar';
+if (openedSidePanel === Model.Todolist && !legacyCalendarPanel) {
   TodolistC.toggle();
+}
+if (openedSidePanel === 'calendar-activity' || legacyCalendarPanel) {
+  localStorage.removeItem('todolistView');
+  CalendarActivityC.toggle();
 }
 if (openedSidePanel === 'toc') {
   TocPanelC.toggle();
 }
 if (openedSidePanel === 'html-tools') {
   HtmlToolsPanelC.toggle();
+}
+const requestedCalendar = new URLSearchParams(window.location.search);
+if (requestedCalendar.get('calendar') === 'activity'
+  || requestedCalendar.get('todo') === 'calendar'
+) {
+  CalendarActivityC.show();
 }
 
 // ACTIVATE REACTIVE COUNT OF .COUNTABLE ITEMS
@@ -791,6 +808,8 @@ on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
     SidePanelC = FoldersPanelC;
   } else if (el.dataset.target === 'favorites') {
     SidePanelC = FavoriteFiltersC;
+  } else if (el.dataset.target === 'calendar-activity') {
+    SidePanelC = CalendarActivityC;
   } else {
     SidePanelC = TodolistC;
   }

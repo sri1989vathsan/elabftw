@@ -57,7 +57,7 @@ final class TodoDeadline extends AbstractNotifications implements MailableInterf
                 "%s\n\n%s\n%s",
                 sprintf(_('Task: %s'), $this->title),
                 sprintf(_('Deadline: %s'), $this->deadline),
-                Env::asUrl('SITE_URL') . '/dashboard.php?todo=calendar&task=' . $this->taskId,
+                Env::asUrl('SITE_URL') . '/dashboard.php?calendar=activity&task=' . $this->taskId,
             ),
         );
     }

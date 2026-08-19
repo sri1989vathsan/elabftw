@@ -2,36 +2,20 @@
   <button type='button' data-action='toggle-sidepanel' data-target='todolist' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
   <div class='p-3'>
     <h3 class='mb-3 py-2'>{{ 'To-do'|trans }}</h3>
-    <div class='btn-group btn-group-sm d-flex mb-3 todo-panel-view-tabs' role='tablist' aria-label='{{ 'To-do views'|trans }}'>
-      <button type='button' id='todoTasksTab' class='btn btn-primary flex-fill' role='tab' aria-selected='true' aria-controls='todolistTasksView' data-action='todo-panel-view' data-view='tasks'>
-        <i class='fas fa-list-check fa-fw mr-1' aria-hidden='true'></i>{{ 'Tasks and steps'|trans }}
-      </button>
-      <button type='button' id='todoCalendarTab' class='btn btn-outline-primary flex-fill' role='tab' aria-selected='false' aria-controls='todolistCalendarView' data-action='todo-panel-view' data-view='calendar'>
-        <i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{{ 'Calendar'|trans }}
-        <span id='todoCalendarUrgentCount' class='badge badge-danger ml-1' hidden>0</span>
-      </button>
-    </div>
-
-    <div id='todolistTasksView' role='tabpanel' aria-labelledby='todoTasksTab'>
-      <div class='d-flex align-items-center justify-content-between mb-2'>
-        <h3 class='h5 mb-0'>{{ 'Due tasks and steps'|trans }}</h3>
-        <div class='d-inline-flex rounded border-white p-1 align-items-center'>
-          <span class='mb-0'>{{ 'User'|trans }}</span>
-          <label class='mb-0 switch mx-1'>
-            <span class='sr-only'>{{ 'Show steps for team'|trans }}</span>
-            <input type='checkbox' id='todolistStepsShowTeam' autocomplete='off' aria-label='{{ 'Show steps for team'|trans }}'>
-            <span class='slider'></span>
-          </label>
-          <span class='mb-0'>{{ 'Team'|trans }}</span>
-        </div>
-      </div>
-      <div data-save-hidden='todolistMainDiv'>
-        <div id='todolist'></div>
+    <div class='d-flex align-items-center justify-content-between mb-2'>
+      <h3 class='h5 mb-0'>{{ 'Tasks and steps'|trans }}</h3>
+      <div class='d-inline-flex rounded border-white p-1 align-items-center'>
+        <span class='mb-0'>{{ 'User'|trans }}</span>
+        <label class='mb-0 switch mx-1'>
+          <span class='sr-only'>{{ 'Show steps for team'|trans }}</span>
+          <input type='checkbox' id='todolistStepsShowTeam' autocomplete='off' aria-label='{{ 'Show steps for team'|trans }}'>
+          <span class='slider'></span>
+        </label>
+        <span class='mb-0'>{{ 'Team'|trans }}</span>
       </div>
     </div>
-
-    <div id='todolistCalendarView' role='tabpanel' aria-labelledby='todoCalendarTab' hidden>
-      <div id='calendarTodolist'></div>
+    <div data-save-hidden='todolistMainDiv'>
+      <div id='todolist'></div>
     </div>
   </div>
 </div>

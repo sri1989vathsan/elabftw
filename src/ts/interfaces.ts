@@ -129,6 +129,7 @@ enum Action {
 
 enum Model {
   Apikey = 'apikeys',
+  CalendarActivity = 'calendar_activity',
   CalendarFeed = 'calendar_feed',
   Comment = 'comments',
   Compounds = 'compounds',

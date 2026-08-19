@@ -111,7 +111,7 @@ final class Transform
                 ),
             Notifications::TodoDeadline =>
                 sprintf(
-                    '<span data-action="ack-notif" data-id="%d" data-href="dashboard.php?todo=calendar&amp;task=%d">%s</span>' . $relativeMoment,
+                    '<span data-action="ack-notif" data-id="%d" data-href="dashboard.php?calendar=activity&amp;task=%d">%s</span>' . $relativeMoment,
                     (int) $notif['id'],
                     (int) $notif['body']['task_id'],
                     sprintf(

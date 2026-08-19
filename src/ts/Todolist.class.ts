@@ -9,13 +9,11 @@ import { Model } from './interfaces';
 import SidePanel from './SidePanel.class';
 import { mount } from 'svelte';
 import TodolistSv from './components/Todolist.svelte';
-import CalendarTodolistSv from './components/CalendarTodolist.svelte';
 
 export default class Todolist extends SidePanel {
 
   unfinishedStepsScope: string;
   private static mounted = false;
-  private static calendarMounted = false;
 
 
   constructor() {
@@ -42,42 +40,11 @@ export default class Todolist extends SidePanel {
       });
       Todolist.mounted = true;
     }
-    const calendarHost = document.getElementById('calendarTodolist');
-    if (calendarHost && !Todolist.calendarMounted && calendarHost.childElementCount === 0) {
-      mount(CalendarTodolistSv, {
-        target: calendarHost,
-      });
-      Todolist.calendarMounted = true;
-    }
-  }
-
-  showView(view: 'tasks' | 'calendar'): void {
-    const tasksView = document.getElementById('todolistTasksView');
-    const calendarView = document.getElementById('todolistCalendarView');
-    const tasksTab = document.getElementById('todoTasksTab');
-    const calendarTab = document.getElementById('todoCalendarTab');
-    const showCalendar = view === 'calendar';
-    tasksView?.toggleAttribute('hidden', showCalendar);
-    calendarView?.toggleAttribute('hidden', !showCalendar);
-    tasksTab?.classList.toggle('btn-primary', !showCalendar);
-    tasksTab?.classList.toggle('btn-outline-primary', showCalendar);
-    calendarTab?.classList.toggle('btn-primary', showCalendar);
-    calendarTab?.classList.toggle('btn-outline-primary', !showCalendar);
-    tasksTab?.setAttribute('aria-selected', String(!showCalendar));
-    calendarTab?.setAttribute('aria-selected', String(showCalendar));
-    localStorage.setItem('todolistView', view);
-    if (!showCalendar) this.loadUnfinishedStep();
   }
 
   // TOGGLE TODOLIST VISIBILITY
   toggle(): void {
     super.toggle();
     this.initialize();
-    const panel = document.getElementById(this.panelId);
-    const isOpen = !!panel && !panel.hasAttribute('hidden');
-    if (isOpen) {
-      const view = localStorage.getItem('todolistView') === 'calendar' ? 'calendar' : 'tasks';
-      this.showView(view);
-    }
   }
 }

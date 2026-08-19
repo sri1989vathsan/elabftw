@@ -33,21 +33,9 @@ window.addEventListener('todolist-changed', () => {
   void reloadElements(['navbarNotifDiv']);
 });
 
-on('todo-panel-view', (el: HTMLElement) => {
-  todolist.showView(el.dataset.view === 'calendar' ? 'calendar' : 'tasks');
-});
-
 scopeSwitch = document.getElementById(todolist.model + 'StepsShowTeam') as HTMLInputElement;
 scopeSwitch.addEventListener('change', () => {
   if (!document.getElementById(todolist.panelId).hasAttribute('hidden')) {
     todolist.toggleUnfinishedStepsScope();
   }
 });
-
-const requestedView = new URLSearchParams(window.location.search).get('todo');
-if (requestedView === 'calendar') {
-  todolist.showView('calendar');
-  if (document.getElementById(todolist.panelId).hasAttribute('hidden')) {
-    todolist.toggle();
-  }
-}
