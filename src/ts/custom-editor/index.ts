@@ -9,6 +9,7 @@ import { registerDateTitleExtension } from './DateTitleExtension';
 import { registerFormatPainterExtension } from './FormatPainterExtension';
 import { registerLinkExtension } from './LinkExtension';
 import { registerListExtension } from './ListExtension';
+import { registerMouseLinkExtension } from './MouseLinkExtension';
 import { registerSpreadsheetExtension } from './SpreadsheetExtension';
 import { registerTableToolsExtension } from './TableToolsExtension';
 import { registerTocExtension } from './TocExtension';
@@ -18,6 +19,7 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   registerFormatPainterExtension(editor);
   registerLinkExtension(editor);
   registerListExtension(editor);
+  registerMouseLinkExtension(editor);
   registerSpreadsheetExtension(editor);
   registerTableToolsExtension(editor);
   registerTocExtension(editor);

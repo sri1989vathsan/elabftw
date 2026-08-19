@@ -88,6 +88,9 @@ final class Todolist extends AbstractRest
     {
         $queryParams ??= $this->getQueryParams();
         $query = $queryParams->getQuery();
+        if ($query->getBoolean('calendar')) {
+            return $this->readCalendarRange($queryParams);
+        }
         $completed = $query->getBoolean('completed');
         $completedFilter = $completed ? 'IS NOT NULL' : 'IS NULL';
         $order = $completed ? 'completed_at DESC' : 'ordering ASC, creation_time DESC';
@@ -113,6 +116,38 @@ final class Todolist extends AbstractRest
         }
         $this->Db->execute($req);
 
+        return $req->fetchAll();
+    }
+
+    /**
+     * Return scheduled tasks, including completed ones, for a bounded calendar range.
+     */
+    private function readCalendarRange(QueryParamsInterface $queryParams): array
+    {
+        $query = $queryParams->getQuery();
+        if (!$query->has('deadline_from') || !$query->has('deadline_to')) {
+            throw new ImproperActionException(_('Calendar task queries require a start and end date.'));
+        }
+        $deadlineFrom = $this->getDeadline($query->getString('deadline_from'));
+        $deadlineTo = $this->getDeadline($query->getString('deadline_to'));
+        if ($deadlineFrom === null || $deadlineTo === null || $deadlineFrom >= $deadlineTo) {
+            throw new ImproperActionException(_('Invalid calendar task date range.'));
+        }
+        $sql = "SELECT id, body, notes,
+                DATE_FORMAT(deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
+                reminder_minutes,
+                DATE_FORMAT(completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
+                creation_time, ordering, userid
+            FROM todolist
+            WHERE userid = :userid
+                AND deadline >= :deadline_from
+                AND deadline < :deadline_to
+            ORDER BY deadline ASC, id ASC";
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
+        $req->bindValue(':deadline_from', $deadlineFrom, PDO::PARAM_STR);
+        $req->bindValue(':deadline_to', $deadlineTo, PDO::PARAM_STR);
+        $this->Db->execute($req);
         return $req->fetchAll();
     }
 

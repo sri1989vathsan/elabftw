@@ -92,6 +92,38 @@ class TodolistTest extends \PHPUnit\Framework\TestCase
         $this->assertTrue($this->Todolist->destroy());
     }
 
+    public function testCalendarRangeIncludesCompletedTasks(): void
+    {
+        $insideId = $this->Todolist->postAction(Action::Create, array(
+            'content' => 'completed calendar task',
+            'deadline' => '2032-03-15T10:00:00Z',
+        ));
+        $this->Todolist->setId($insideId);
+        $this->Todolist->patch(Action::Update, array('completed' => true));
+        $outsideId = $this->Todolist->postAction(Action::Create, array(
+            'content' => 'outside calendar range',
+            'deadline' => '2032-04-15T10:00:00Z',
+        ));
+
+        $calendarItems = $this->Todolist->readAll(new BaseQueryParams(
+            new InputBag(array(
+                'calendar' => '1',
+                'deadline_from' => '2032-03-01T00:00:00Z',
+                'deadline_to' => '2032-04-01T00:00:00Z',
+            )),
+        ));
+        $calendarIds = array_map('intval', array_column($calendarItems, 'id'));
+        $this->assertContains($insideId, $calendarIds);
+        $this->assertNotContains($outsideId, $calendarIds);
+        $completedById = array_column($calendarItems, 'completed_at', 'id');
+        $this->assertNotNull($completedById[$insideId] ?? null);
+
+        $this->Todolist->setId($insideId);
+        $this->assertTrue($this->Todolist->destroy());
+        $this->Todolist->setId($outsideId);
+        $this->assertTrue($this->Todolist->destroy());
+    }
+
     public function testUpdateOrdering(): void
     {
         $this->Todolist->postAction(Action::Create, array('content' => 'item 2'));

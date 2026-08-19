@@ -229,6 +229,12 @@ export function getTinymceBaseConfig(page: string): object {
     // let Image in menu
     removedMenuItems = 'newdocument, anchor';
   }
+  // Keep PyRAT mouse insertion as its own icon-only toolbar action. The
+  // experiment section is rendered only when the integration is enabled and
+  // the current user is allowed to access it.
+  if (page === 'edit' && document.getElementById('pyratExperimentSection')) {
+    toolbar1 = toolbar1.replace('insert-link', 'insert-link insert-mouse');
+  }
 
   const isDark = isDarkTheme();
   const tinymceContentCss = `/assets/tinymce_content.min.css${getAssetVersionQuery()}`;

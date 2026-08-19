@@ -12,6 +12,7 @@
     deadline: string | null;
     reminder_minutes: number | null;
     creation_time: string;
+    completed_at: string | null;
   };
 
   type StepDeadline = {
@@ -33,6 +34,7 @@
     notes: string | null;
     deadline: string;
     reminderMinutes: number | null;
+    completedAt: string | null;
     entityId?: number;
     entityPage?: string;
     entityTitle?: string;
@@ -47,7 +49,7 @@
     isToday: boolean;
     count: number;
     overdue: boolean;
-    taskTone: 'none' | 'upcoming' | 'today' | 'overdue';
+    taskTone: 'none' | 'upcoming' | 'today' | 'overdue' | 'completed';
   };
 
   type CalendarFeedStatus = {
@@ -59,45 +61,59 @@
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
   const urgentWindowMs = 60 * 60 * 1000;
-  const reminderPresets = new Set([0, 15, 60, 1440, 10080]);
-  const timeOptions = Array.from({ length: 96 }, (_, index) => {
-    const hours = String(Math.floor(index / 4)).padStart(2, '0');
-    const minutes = String((index % 4) * 15).padStart(2, '0');
-    return `${hours}:${minutes}`;
-  });
-  const initialDeadline = defaultDeadline();
   const highlightedTaskId = parseInt(
     new URLSearchParams(window.location.search).get('task') ?? '',
     10,
   );
   let locale = 'en-gb';
-  let tasks: Todo[] = [];
+  let calendarTasks: Todo[] = [];
+  let activeTasks: Todo[] = [];
   let stepDeadlines: StepDeadline[] = [];
   let entries: CalendarEntry[] = [];
+  let reminderEntries: CalendarEntry[] = [];
   let calendarCells: CalendarCell[] = [];
   let agendaEntries: CalendarEntry[] = [];
   let monthCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  let selectedDate = '';
-  let draft = '';
-  let notes = '';
-  let deadlineDate = initialDeadline.slice(0, 10);
-  let deadlineTime = initialDeadline.slice(11, 16);
-  let reminderChoice = '60';
-  let customReminder = 120;
-  let editingId: number | null = null;
-  let editNotes = '';
-  let editDeadlineDate = '';
-  let editDeadlineTime = '';
-  let editReminderChoice = '60';
-  let editCustomReminder = 120;
+  let selectedDate = dateKey(new Date());
   let loading = true;
   let reminderTimer: number | undefined;
   let calendarFeedEnabled = false;
   let calendarFeedLoading = true;
   let calendarFeedUrl = '';
+  let draggedTaskId: number | null = null;
+  let dragOverDate = '';
 
   $: entries = [
-    ...tasks
+    ...calendarTasks
+      .map(task => ({
+        key: `todo-${task.id}`,
+        source: 'todo' as const,
+        id: Number(task.id),
+        body: task.body,
+        notes: task.notes,
+        deadline: task.deadline as string,
+        reminderMinutes: task.reminder_minutes === null
+          ? null
+          : Number(task.reminder_minutes),
+        completedAt: task.completed_at,
+      })),
+    ...stepDeadlines.map(step => ({
+      key: `step-${step.entity_type}-${step.step_id}`,
+      source: 'step' as const,
+      id: Number(step.step_id),
+      body: step.step_body,
+      notes: null,
+      deadline: step.deadline,
+      reminderMinutes: Number(step.deadline_notif) === 1 ? 30 : null,
+      completedAt: null,
+      entityId: Number(step.entity_id),
+      entityPage: step.entity_page,
+      entityTitle: step.entity_title,
+      entityType: step.entity_type,
+    })),
+  ].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+  $: reminderEntries = [
+    ...activeTasks
       .filter(task => Boolean(task.deadline))
       .map(task => ({
         key: `todo-${task.id}`,
@@ -109,6 +125,7 @@
         reminderMinutes: task.reminder_minutes === null
           ? null
           : Number(task.reminder_minutes),
+        completedAt: null,
       })),
     ...stepDeadlines.map(step => ({
       key: `step-${step.entity_type}-${step.step_id}`,
@@ -118,34 +135,18 @@
       notes: null,
       deadline: step.deadline,
       reminderMinutes: Number(step.deadline_notif) === 1 ? 30 : null,
+      completedAt: null,
       entityId: Number(step.entity_id),
       entityPage: step.entity_page,
       entityTitle: step.entity_title,
       entityType: step.entity_type,
     })),
-  ].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+  ];
   $: calendarCells = buildCalendarCells(monthCursor, entries);
   $: agendaEntries = entries.filter(entry => (
-    selectedDate ? dateKey(new Date(entry.deadline)) === selectedDate : true
+    selectedDate ? dateKey(new Date(entry.deadline)) === selectedDate : false
   ));
-  $: updateUrgentBadges(entries);
-
-  function defaultDeadline(): string {
-    const date = new Date(Date.now() + 60 * 60 * 1000);
-    date.setMinutes(0, 0, 0);
-    return toLocalInput(date);
-  }
-
-  function toLocalInput(date: Date): string {
-    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-    return localDate.toISOString().slice(0, 16);
-  }
-
-  function resetDeadline(): void {
-    const value = defaultDeadline();
-    deadlineDate = value.slice(0, 10);
-    deadlineTime = value.slice(11, 16);
-  }
+  $: updateUrgentBadges(reminderEntries);
 
   function dateKey(date: Date): string {
     const year = date.getFullYear();
@@ -155,10 +156,7 @@
   }
 
   function buildCalendarCells(month: Date, calendarEntries: CalendarEntry[]): CalendarCell[] {
-    const first = new Date(month.getFullYear(), month.getMonth(), 1);
-    const mondayOffset = (first.getDay() + 6) % 7;
-    const start = new Date(first);
-    start.setDate(first.getDate() - mondayOffset);
+    const start = calendarStart(month);
     const today = dateKey(new Date());
     const now = Date.now();
     return Array.from({ length: 42 }, (_, index) => {
@@ -168,7 +166,8 @@
       const dayEntries = calendarEntries.filter(entry => (
         dateKey(new Date(entry.deadline)) === key
       ));
-      const overdue = dayEntries.some(entry => new Date(entry.deadline).getTime() < now);
+      const activeDayEntries = dayEntries.filter(entry => entry.completedAt === null);
+      const overdue = activeDayEntries.some(entry => new Date(entry.deadline).getTime() < now);
       return {
         date,
         key,
@@ -181,11 +180,34 @@
           ? 'none'
           : overdue
             ? 'overdue'
-            : key === today
-              ? 'today'
-              : 'upcoming',
+            : activeDayEntries.length === 0
+              ? 'completed'
+              : key === today
+                ? 'today'
+                : 'upcoming',
       };
     });
+  }
+
+  function calendarStart(month: Date): Date {
+    const first = new Date(month.getFullYear(), month.getMonth(), 1);
+    const mondayOffset = (first.getDay() + 6) % 7;
+    const start = new Date(first);
+    start.setDate(first.getDate() - mondayOffset);
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }
+
+  function calendarTaskQuery(): string {
+    const start = calendarStart(monthCursor);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 42);
+    const params = new URLSearchParams({
+      calendar: '1',
+      deadline_from: start.toISOString(),
+      deadline_to: end.toISOString(),
+    });
+    return `${Model.Todolist}?${params.toString()}`;
   }
 
   function monthTaskCount(): number {
@@ -220,121 +242,91 @@
   }
 
   function agendaLabel(): string {
-    if (!selectedDate) return t('All deadlines');
+    if (!selectedDate) return t('Select a date');
     return new Intl.DateTimeFormat(locale, {
       dateStyle: 'full',
     }).format(new Date(`${selectedDate}T12:00:00`));
   }
 
   function selectDay(cell: CalendarCell): void {
-    selectedDate = selectedDate === cell.key ? '' : cell.key;
+    selectedDate = cell.key;
     if (!cell.inMonth) {
       monthCursor = new Date(cell.date.getFullYear(), cell.date.getMonth(), 1);
+      void load();
     }
   }
 
   function changeMonth(offset: number): void {
     monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + offset, 1);
     selectedDate = '';
+    void load();
   }
 
   function selectToday(): void {
     const today = new Date();
     monthCursor = new Date(today.getFullYear(), today.getMonth(), 1);
     selectedDate = dateKey(today);
+    void load();
   }
 
-  function getReminderMinutes(choice: string, custom: number): number | null {
-    if (choice === 'none') return null;
-    if (choice === 'custom') {
-      return Math.max(0, Math.min(10080, Math.round(custom)));
+  function startTaskDrag(event: DragEvent, entry: CalendarEntry): void {
+    if (entry.source !== 'todo' || entry.completedAt !== null) return;
+    draggedTaskId = entry.id;
+    event.dataTransfer?.setData('text/plain', String(entry.id));
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+  }
+
+  function allowDayDrop(event: DragEvent, key: string): void {
+    if (draggedTaskId === null) return;
+    event.preventDefault();
+    dragOverDate = key;
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  }
+
+  function finishTaskDrag(): void {
+    draggedTaskId = null;
+    dragOverDate = '';
+  }
+
+  async function dropTaskOnDay(event: DragEvent, cell: CalendarCell): Promise<void> {
+    event.preventDefault();
+    const taskId = draggedTaskId;
+    finishTaskDrag();
+    if (taskId === null) return;
+    const task = calendarTasks.find(item => Number(item.id) === taskId && item.completed_at === null);
+    if (!task?.deadline) return;
+    const currentDeadline = new Date(task.deadline);
+    const movedDeadline = new Date(cell.date);
+    movedDeadline.setHours(
+      currentDeadline.getHours(),
+      currentDeadline.getMinutes(),
+      currentDeadline.getSeconds(),
+      0,
+    );
+    try {
+      await ApiC.patch(`${Model.Todolist}/${taskId}`, {deadline: movedDeadline.toISOString()});
+      monthCursor = new Date(cell.date.getFullYear(), cell.date.getMonth(), 1);
+      selectedDate = cell.key;
+      await load();
+      window.dispatchEvent(new CustomEvent('todolist-changed'));
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'The task date could not be changed.');
+      await load();
     }
-    return parseInt(choice, 10);
-  }
-
-  function setReminderControls(
-    minutes: number | null,
-    edit = false,
-  ): void {
-    const choice = minutes === null
-      ? 'none'
-      : (reminderPresets.has(minutes) ? String(minutes) : 'custom');
-    if (edit) {
-      editReminderChoice = choice;
-      editCustomReminder = minutes ?? 120;
-    } else {
-      reminderChoice = choice;
-      customReminder = minutes ?? 120;
-    }
-  }
-
-  async function create(): Promise<void> {
-    const content = draft.trim();
-    const deadline = new Date(`${deadlineDate}T${deadlineTime}`);
-    if (!content || !deadlineDate || !deadlineTime || Number.isNaN(deadline.getTime())) {
-      notify.error('Enter a task and a valid deadline date and time.');
-      return;
-    }
-    ApiC.notifOnSaved = false;
-    await ApiC.post(Model.Todolist, {
-      content,
-      notes: notes.trim() || null,
-      deadline: deadline.toISOString(),
-      reminder_minutes: getReminderMinutes(reminderChoice, customReminder),
-    });
-    ApiC.notifOnSaved = true;
-    draft = '';
-    notes = '';
-    resetDeadline();
-    setReminderControls(60);
-    await signalChange();
-  }
-
-  async function completeTask(id: number): Promise<void> {
-    await ApiC.patch(`${Model.Todolist}/${id}`, { completed: true });
-    editingId = null;
-    await signalChange();
-  }
-
-  function startEditing(entry: CalendarEntry): void {
-    editingId = entry.id;
-    editNotes = entry.notes ?? '';
-    const deadline = toLocalInput(new Date(entry.deadline));
-    editDeadlineDate = deadline.slice(0, 10);
-    editDeadlineTime = deadline.slice(11, 16);
-    setReminderControls(entry.reminderMinutes, true);
-  }
-
-  async function saveEditing(id: number): Promise<void> {
-    const deadline = new Date(`${editDeadlineDate}T${editDeadlineTime}`);
-    if (!editDeadlineDate || !editDeadlineTime || Number.isNaN(deadline.getTime())) {
-      notify.error('Enter a valid deadline date and time.');
-      return;
-    }
-    await ApiC.patch(`${Model.Todolist}/${id}`, {
-      notes: editNotes.trim() || null,
-      deadline: deadline.toISOString(),
-      reminder_minutes: getReminderMinutes(editReminderChoice, editCustomReminder),
-    });
-    editingId = null;
-    await signalChange();
-  }
-
-  async function signalChange(): Promise<void> {
-    await load();
-    window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
 
   async function load(): Promise<void> {
     loading = true;
     const teamScope = localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
-    const [todoResponse, stepResponse] = await Promise.all([
+    const [calendarResponse, activeResponse, stepResponse] = await Promise.all([
+      ApiC.getJson(calendarTaskQuery()) as Promise<Todo[]>,
       ApiC.getJson(Model.Todolist) as Promise<Todo[]>,
       ApiC.getJson(`unfinished_steps?scope=${teamScope ? 'team' : 'user'}`) as Promise<{
         calendar?: StepDeadline[];
       }>,
     ]);
-    tasks = todoResponse;
+    calendarTasks = calendarResponse;
+    activeTasks = activeResponse;
     stepDeadlines = stepResponse.calendar ?? [];
     loading = false;
     window.setTimeout(checkReminders, 0);
@@ -399,7 +391,7 @@
 
   function checkReminders(): void {
     const now = Date.now();
-    entries.forEach(entry => {
+    reminderEntries.forEach(entry => {
       if (entry.reminderMinutes === null) return;
       const deadline = new Date(entry.deadline).getTime();
       const remindAt = deadline - entry.reminderMinutes * 60000;
@@ -410,7 +402,7 @@
       notify.warning(`${prefix}: ${entry.body} — ${formatDeadline(entry.deadline)}`);
       sessionStorage.setItem(storageKey, '1');
     });
-    updateUrgentBadges(entries, now);
+    updateUrgentBadges(reminderEntries, now);
   }
 
   function updateUrgentBadges(
@@ -431,7 +423,7 @@
   }
 
   function isOverdue(entry: CalendarEntry): boolean {
-    return new Date(entry.deadline).getTime() < Date.now();
+    return entry.completedAt === null && new Date(entry.deadline).getTime() < Date.now();
   }
 
   function isHighlighted(entry: CalendarEntry): boolean {
@@ -461,57 +453,7 @@
   });
 </script>
 
-<section class='calendar-todo-create' aria-labelledby='calendarTodoCreateHeading'>
-  <h4 id='calendarTodoCreateHeading' class='h5 mb-2'>{t('Schedule a task')}</h4>
-  <label class='sr-only' for='calendarTodoTitle'>{t('Task')}</label>
-  <input
-    id='calendarTodoTitle'
-    class='form-control form-control-sm mb-2'
-    bind:value={draft}
-    placeholder={t('What needs to be done?')}
-  />
-  <div class='calendar-todo-form-grid'>
-    <label>
-      <span>{t('Date')}</span>
-      <input class='form-control form-control-sm' type='date' bind:value={deadlineDate} required />
-    </label>
-    <label>
-      <span>{t('Time')}</span>
-      <select class='form-control form-control-sm' bind:value={deadlineTime} required>
-        {#each timeOptions as time}
-          <option value={time}>{time}</option>
-        {/each}
-      </select>
-    </label>
-    <label>
-      <span>{t('Reminder')}</span>
-      <select class='form-control form-control-sm' bind:value={reminderChoice}>
-        <option value='none'>{t('No reminder')}</option>
-        <option value='0'>{t('At deadline')}</option>
-        <option value='15'>{t('15 minutes before')}</option>
-        <option value='60'>{t('1 hour before')}</option>
-        <option value='1440'>{t('1 day before')}</option>
-        <option value='10080'>{t('1 week before')}</option>
-        <option value='custom'>{t('Custom minutes')}</option>
-      </select>
-    </label>
-    {#if reminderChoice === 'custom'}
-      <label>
-        <span>{t('Minutes before')}</span>
-        <input class='form-control form-control-sm' type='number' min='0' max='10080' bind:value={customReminder} />
-      </label>
-    {/if}
-  </div>
-  <label class='w-100 mt-2'>
-    <span class='small'>{t('Notes')}</span>
-    <textarea class='form-control form-control-sm' rows='2' bind:value={notes} placeholder={t('Optional details')}></textarea>
-  </label>
-  <button type='button' class='btn btn-primary btn-sm btn-block mt-2' on:click={create}>
-    <i class='fas fa-calendar-plus fa-fw mr-1' aria-hidden='true'></i>{t('Add scheduled task')}
-  </button>
-</section>
-
-<section class='calendar-todo-month mt-3' aria-label={t('Task calendar')}>
+<section class='calendar-todo-month' aria-label={t('Task calendar')}>
   <div class='calendar-month-header'>
     <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(-1)} aria-label={t('Previous month')}>
       <i class='fas fa-chevron-left' aria-hidden='true'></i>
@@ -540,8 +482,11 @@
         class:today={cell.isToday}
         class:selected={selectedDate === cell.key}
         class:has-overdue={cell.overdue}
+        class:calendar-day-drag-over={dragOverDate === cell.key}
         class='calendar-todo-day'
         on:click={() => selectDay(cell)}
+        on:dragover={(event) => allowDayDrop(event, cell.key)}
+        on:drop={(event) => void dropTaskOnDay(event, cell)}
         aria-label={`${cell.key}, ${cell.count} ${t('tasks')}`}
         aria-pressed={selectedDate === cell.key}
       >
@@ -559,12 +504,12 @@
     <span><i class='calendar-legend-dot upcoming-dot'></i>{t('Upcoming')}</span>
     <span><i class='calendar-legend-dot due-today-dot'></i>{t('Due today')}</span>
     <span><i class='calendar-legend-dot overdue-dot'></i>{t('Overdue')}</span>
+    <span><i class='calendar-legend-dot completed-dot'></i>{t('Completed')}</span>
   </div>
   <div class='d-flex calendar-month-actions'>
     <button type='button' class='btn btn-sm btn-outline-primary mr-2' on:click={selectToday}>
       <i class='fas fa-location-crosshairs fa-fw mr-1' aria-hidden='true'></i>{t('Today')}
     </button>
-    <button type='button' class='btn btn-sm btn-outline-secondary' on:click={() => selectedDate = ''}>{t('All deadlines')}</button>
   </div>
 </section>
 
@@ -585,23 +530,29 @@
       {#each agendaEntries as entry (entry.key)}
         <li
           class:calendar-todo-overdue={isOverdue(entry)}
+          class:calendar-todo-completed={entry.completedAt !== null}
           class:calendar-todo-highlight={isHighlighted(entry)}
           class='list-group-item calendar-todo-entry'
           id={entry.source === 'todo' ? `calendar-todo-${entry.id}` : undefined}
         >
           <div class='d-flex align-items-start'>
-            {#if entry.source === 'step'}
-              <input
-                type='checkbox'
-                class='stepbox mr-2 mt-1'
-                id={`todo_calendar_step_${entry.id}`}
-                data-id={entry.entityId}
-                data-type={entry.entityType}
-                data-stepid={entry.id}
-                aria-label={t('Mark experiment step complete')}
-              />
+            {#if entry.completedAt}
+              <i class='fas fa-circle-check calendar-completed-icon fa-fw mr-2 mt-1' aria-hidden='true'></i>
+            {:else if entry.source === 'step'}
+              <i class='fas fa-list-check color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>
             {:else}
-              <i class='fas fa-circle-check color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>
+              <button
+                type='button'
+                class='btn btn-ghost btn-sm calendar-task-drag-handle mr-1'
+                draggable='true'
+                on:dragstart={(event) => startTaskDrag(event, entry)}
+                on:dragend={finishTaskDrag}
+                title={t('Drag to another calendar day')}
+                aria-label={t('Drag to another calendar day')}
+              >
+                <i class='fas fa-grip-vertical' aria-hidden='true'></i>
+              </button>
+              <i class='fas fa-clock color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>
             {/if}
             <div class='flex-grow-1 min-width-0'>
               <span class='calendar-entry-source'>
@@ -621,7 +572,13 @@
                 <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(entry.deadline)}
                 {#if isOverdue(entry)} · {t('Overdue')}{/if}
               </div>
-              {#if entry.notes}<p class='small mb-1 mt-1'>{entry.notes}</p>{/if}
+              {#if entry.completedAt}
+                <div class='small calendar-task-completed'>
+                  <i class='fas fa-check fa-fw mr-1' aria-hidden='true'></i>
+                  {t('Completed')} {formatDeadline(entry.completedAt)}
+                </div>
+              {/if}
+              {#if entry.notes}<p class='small mb-1 mt-1 calendar-task-notes'>{entry.notes}</p>{/if}
               {#if entry.reminderMinutes !== null}
                 <div class='small text-muted'>
                   <i class='fas fa-bell fa-fw mr-1' aria-hidden='true'></i>
@@ -631,50 +588,7 @@
                 </div>
               {/if}
             </div>
-            {#if entry.source === 'todo'}
-              <div class='btn-group btn-group-sm ml-2'>
-                <button type='button' class='btn btn-ghost' on:click={() => startEditing(entry)} title={t('Edit')} aria-label={t('Edit')}>
-                  <i class='fas fa-pen' aria-hidden='true'></i>
-                </button>
-                <button type='button' class='btn btn-ghost' on:click={() => completeTask(entry.id)} title={t('done')} aria-label={t('done')}>
-                  <i class='fas fa-check' aria-hidden='true'></i>
-                </button>
-              </div>
-            {/if}
           </div>
-          {#if entry.source === 'todo' && editingId === entry.id}
-            <div class='calendar-todo-edit mt-2'>
-              <label class='mb-0'>
-                <span class='small'>{t('Date')}</span>
-                <input class='form-control form-control-sm' type='date' bind:value={editDeadlineDate} />
-              </label>
-              <label class='mb-0'>
-                <span class='small'>{t('Time')}</span>
-                <select class='form-control form-control-sm' bind:value={editDeadlineTime}>
-                  {#each timeOptions as time}
-                    <option value={time}>{time}</option>
-                  {/each}
-                </select>
-              </label>
-              <select class='form-control form-control-sm' bind:value={editReminderChoice}>
-                <option value='none'>{t('No reminder')}</option>
-                <option value='0'>{t('At deadline')}</option>
-                <option value='15'>{t('15 minutes before')}</option>
-                <option value='60'>{t('1 hour before')}</option>
-                <option value='1440'>{t('1 day before')}</option>
-                <option value='10080'>{t('1 week before')}</option>
-                <option value='custom'>{t('Custom minutes')}</option>
-              </select>
-              {#if editReminderChoice === 'custom'}
-                <input class='form-control form-control-sm' type='number' min='0' max='10080' bind:value={editCustomReminder} aria-label={t('Minutes before')} />
-              {/if}
-              <textarea class='form-control form-control-sm' rows='2' bind:value={editNotes} aria-label={t('Notes')}></textarea>
-              <div class='d-flex'>
-                <button type='button' class='btn btn-primary btn-sm mr-1' on:click={() => saveEditing(entry.id)}>{t('Save')}</button>
-                <button type='button' class='btn btn-secondary btn-sm' on:click={() => editingId = null}>{t('Cancel')}</button>
-              </div>
-            </div>
-          {/if}
         </li>
       {/each}
     </ul>
@@ -775,14 +689,6 @@
 </section>
 
 <style>
-  .calendar-todo-create {
-    background: var(--chrome-bg);
-    border: 1px solid var(--secondary);
-    border-radius: 0.25rem;
-    color: var(--chrome-fg);
-    padding: 0.65rem;
-  }
-
   .calendar-feed {
     background: var(--chrome-bg);
     border: 1px solid var(--secondary);
@@ -843,6 +749,7 @@
     --calendar-count-overdue: #b91c1c;
     --calendar-count-today: #b45309;
     --calendar-count-upcoming: #6d28d9;
+    --calendar-count-completed: #2e8b57;
     background: var(--chrome-bg);
     border: 1px solid var(--secondary);
     border-radius: 0.25rem;
@@ -851,7 +758,6 @@
     padding: 0.85rem;
   }
 
-  .calendar-todo-create .fas,
   .calendar-feed .fas,
   .calendar-todo-month .fas,
   .calendar-todo-agenda .fas {
@@ -930,18 +836,6 @@
     transform: scale(1.05);
   }
 
-  .calendar-todo-form-grid,
-  .calendar-todo-edit {
-    display: grid;
-    gap: 0.45rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .calendar-todo-form-grid label {
-    font-size: 0.78rem;
-    margin: 0;
-  }
-
   .calendar-todo-weekdays,
   .calendar-todo-grid {
     display: grid;
@@ -992,6 +886,13 @@
     background: color-mix(in srgb, var(--chrome-bg) 62%, var(--primary));
     border-color: var(--primary);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+
+  .calendar-todo-day.calendar-day-drag-over {
+    background: color-mix(in srgb, var(--chrome-bg) 55%, var(--primary));
+    border-color: var(--primary);
+    box-shadow: inset 0 0 0 2px var(--primary);
+    transform: scale(1.04);
   }
 
   .calendar-todo-day.today {
@@ -1052,6 +953,10 @@
     background: var(--calendar-count-overdue);
   }
 
+  .calendar-day-count-completed {
+    background: var(--calendar-count-completed);
+  }
+
   .calendar-legend {
     align-items: center;
     color: var(--chrome-muted);
@@ -1088,6 +993,10 @@
 
   .calendar-legend-dot.overdue-dot {
     background: var(--calendar-count-overdue);
+  }
+
+  .calendar-legend-dot.completed-dot {
+    background: var(--calendar-count-completed);
   }
 
   .calendar-month-actions {
@@ -1132,8 +1041,20 @@
     border-left-color: var(--side-panel-danger, #ff8a7a);
   }
 
-  .calendar-todo-entry .btn-ghost {
+  .calendar-todo-entry.calendar-todo-completed {
+    border-left-color: var(--calendar-count-completed);
+  }
+
+  .calendar-task-drag-handle {
     color: var(--chrome-fg);
+    cursor: grab;
+    flex: 0 0 auto;
+    line-height: 1;
+    padding: 0.1rem 0.2rem;
+  }
+
+  .calendar-task-drag-handle:active {
+    cursor: grabbing;
   }
 
   .calendar-todo-entry .fas {
@@ -1142,6 +1063,16 @@
 
   .calendar-todo-entry.calendar-todo-overdue .fas {
     color: var(--side-panel-danger, #ff8a7a);
+  }
+
+  .calendar-todo-entry.calendar-todo-completed .calendar-completed-icon,
+  .calendar-task-completed,
+  .calendar-task-completed .fas {
+    color: color-mix(in srgb, var(--calendar-count-completed) 70%, var(--chrome-fg));
+  }
+
+  .calendar-task-notes {
+    white-space: pre-wrap;
   }
 
   .calendar-entry-source {
@@ -1166,18 +1097,6 @@
     color: var(--side-panel-danger, #ff8a7a);
   }
 
-  .calendar-todo-edit {
-    background: color-mix(in srgb, var(--chrome-bg) 82%, var(--primary));
-    border: 1px solid var(--secondary);
-    border-radius: 0.25rem;
-    padding: 0.5rem;
-  }
-
-  .calendar-todo-edit textarea,
-  .calendar-todo-edit .d-flex {
-    grid-column: 1 / -1;
-  }
-
   .calendar-feed .text-muted,
   .calendar-todo-agenda .text-muted {
     color: var(--chrome-muted) !important;
@@ -1188,8 +1107,7 @@
   }
 
   .calendar-feed .btn-outline-primary,
-  .calendar-month-actions .btn-outline-primary,
-  .calendar-month-actions .btn-outline-secondary {
+  .calendar-month-actions .btn-outline-primary {
     border-color: var(--chrome-muted);
     color: var(--chrome-fg);
   }
@@ -1206,13 +1124,6 @@
   @keyframes calendar-highlight {
     50% {
       background-color: color-mix(in srgb, var(--warning) 25%, transparent);
-    }
-  }
-
-  @media (max-width: 480px) {
-    .calendar-todo-form-grid,
-    .calendar-todo-edit {
-      grid-template-columns: 1fr;
     }
   }
 </style>

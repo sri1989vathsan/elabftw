@@ -93,7 +93,9 @@ export function registerLinkExtension(editor: Editor): void {
       const items = [{
         type: 'menuitem' as const,
         text: 'Web or file link…',
-        onAction: () => editor.execCommand('mceLink'),
+        onAction: () => {
+          editor.execCommand('mceLink');
+        },
       }];
       if (document.getElementById('labcollectorHelper')) {
         items.push({

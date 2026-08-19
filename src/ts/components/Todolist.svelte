@@ -6,11 +6,10 @@
    * @license AGPL-3.0
    * @package elabftw
    */
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import { ApiC } from '../api';
   import i18next from '../i18n';
   import { Model } from '../interfaces';
-  import { Malle } from '@deltablot/malle';
   import { Notification as AppNotification } from '../Notifications.class';
   import { toRelative } from '../misc';
 
@@ -22,6 +21,7 @@
     reminder_minutes: number | null;
     creation_time: string;
     completed_at: string | null;
+    ordering: number;
   };
 
   type UnfinishedStep = {
@@ -49,6 +49,7 @@
     deadline: string | null;
     notes: string | null;
     creationTime: string | null;
+    ordering: number | null;
     entityId?: number;
     entityTitle?: string;
     entityType?: 'experiments' | 'items';
@@ -68,13 +69,25 @@
 
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
-  const timeOptions = Array.from({ length: 96 }, (_, index) => {
+  const initialDeadline = new Date();
+  const initialDeadlineDate = [
+    initialDeadline.getFullYear(),
+    String(initialDeadline.getMonth() + 1).padStart(2, '0'),
+    String(initialDeadline.getDate()).padStart(2, '0'),
+  ].join('-');
+  const initialDeadlineTime = [
+    String(initialDeadline.getHours()).padStart(2, '0'),
+    String(initialDeadline.getMinutes()).padStart(2, '0'),
+  ].join(':');
+  const quarterHourOptions = Array.from({ length: 96 }, (_, index) => {
     const hours = String(Math.floor(index / 4)).padStart(2, '0');
     const minutes = String((index % 4) * 15).padStart(2, '0');
     return `${hours}:${minutes}`;
   });
+  const timeOptions = quarterHourOptions.includes(initialDeadlineTime)
+    ? quarterHourOptions
+    : [...quarterHourOptions, initialDeadlineTime].sort();
   let locale = 'en-gb';
-  let malleable: Malle | null = null;
   let items: Todo[] = [];
   let completedItems: Todo[] = [];
   let unfinished: UnfinishedResponse = { experiments: [], items: [] };
@@ -85,10 +98,24 @@
   let completedLoaded = false;
   let loadingCompleted = false;
   let draft = '';
-  let deadlineDate = '';
-  let deadlineTime = '';
+  let draftNotes = '';
+  let deadlineDate = initialDeadlineDate;
+  let deadlineTime = initialDeadlineTime;
   let reminderChoice = '60';
   let customReminder = 120;
+  let reminderDate = '';
+  let reminderTime = '';
+  let editingId: number | null = null;
+  let editTitle = '';
+  let editNotes = '';
+  let editDeadlineDate = '';
+  let editDeadlineTime = '';
+  let editReminderChoice = '60';
+  let editCustomReminder = 120;
+  let editReminderDate = '';
+  let editReminderTime = '';
+  let draggedTaskId: number | null = null;
+  let dragOverKey = '';
   let loading = true;
 
   $: entries = [
@@ -100,6 +127,7 @@
       deadline: item.deadline,
       notes: item.notes,
       creationTime: item.creation_time,
+      ordering: Number(item.ordering),
     })),
     ...(['experiments', 'items'] as const).flatMap(entityType => (
       unfinished[entityType].flatMap(entity => (
@@ -111,6 +139,7 @@
           deadline: step.deadline,
           notes: null,
           creationTime: null,
+          ordering: null,
           entityId: Number(entity.id),
           entityTitle: entity.title,
           entityType,
@@ -120,27 +149,6 @@
   ];
   $: dueGroups = buildDueGroups(entries);
   $: completedGroups = buildCompletedGroups(completedItems);
-
-  function setupMalle(): void {
-    malleable = new Malle({
-      before: original => original.classList.contains('editable'),
-      inputClasses: ['form-control'],
-      fun: async (value, original) => {
-        const id = original.dataset.id;
-        if (!id) {
-          throw new Error('Missing todo id on editable element');
-        }
-        const resp = await ApiC.patch(`${Model.Todolist}/${id}`, { content: value });
-        const json = await resp.json();
-        window.dispatchEvent(new CustomEvent('todolist-changed'));
-        return json.body;
-      },
-      returnedValueIsTrustedHtml: false,
-      listenOn: '.todoItem',
-      tooltip: t('click-to-edit'),
-    });
-    malleable.listen();
-  }
 
   function dateKey(date: Date): string {
     const year = date.getFullYear();
@@ -171,6 +179,9 @@
 
     [...allEntries]
       .sort((a, b) => {
+        if (a.source === 'todo' && b.source === 'todo') {
+          return (a.ordering ?? 0) - (b.ordering ?? 0);
+        }
         if (a.deadline === null && b.deadline === null) {
           return (a.creationTime ?? '').localeCompare(b.creationTime ?? '');
         }
@@ -338,12 +349,129 @@
     await loadPage();
   }
 
-  function getReminderMinutes(): number | null {
-    if (reminderChoice === 'none') return null;
-    if (reminderChoice === 'custom') {
-      return Math.max(0, Math.min(10080, Math.round(customReminder)));
+  function getReminderMinutes(
+    choice: string,
+    custom: number,
+    deadline: Date,
+    specificDate: string,
+    specificTime: string,
+  ): number | null {
+    if (choice === 'none') return null;
+    if (choice === 'specific') {
+      if (!specificDate || !specificTime) {
+        throw new Error('Choose both a reminder date and time.');
+      }
+      const reminder = new Date(`${specificDate}T${specificTime}`);
+      if (Number.isNaN(reminder.getTime())) {
+        throw new Error('Enter a valid reminder date and time.');
+      }
+      const minutes = Math.round((deadline.getTime() - reminder.getTime()) / 60000);
+      if (minutes < 0) {
+        throw new Error('The reminder must be at or before the task deadline.');
+      }
+      if (minutes > 10080) {
+        throw new Error('The reminder can be at most one week before the task deadline.');
+      }
+      return minutes;
     }
-    return parseInt(reminderChoice, 10);
+    if (choice === 'custom') {
+      return Math.max(0, Math.min(10080, Math.round(custom)));
+    }
+    return parseInt(choice, 10);
+  }
+
+  function setEditReminder(minutes: number | null, deadline: Date | null): void {
+    const presets = new Set([0, 15, 60, 1440, 10080]);
+    editReminderChoice = minutes === null
+      ? 'none'
+      : (presets.has(Number(minutes)) ? String(minutes) : 'specific');
+    editCustomReminder = minutes ?? 120;
+    editReminderDate = '';
+    editReminderTime = '';
+    if (minutes !== null && deadline !== null) {
+      const reminder = toLocalInput(new Date(deadline.getTime() - Number(minutes) * 60000));
+      editReminderDate = reminder.slice(0, 10);
+      editReminderTime = reminder.slice(11, 16);
+    }
+  }
+
+  function toLocalInput(date: Date): string {
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  }
+
+  function initializeSpecificReminder(editing = false): void {
+    const date = editing ? editDeadlineDate : deadlineDate;
+    const time = editing ? editDeadlineTime : deadlineTime;
+    if (!date || !time) return;
+    const reminder = toLocalInput(new Date(new Date(`${date}T${time}`).getTime() - 60 * 60000));
+    if (editing) {
+      if (!editReminderDate) editReminderDate = reminder.slice(0, 10);
+      if (!editReminderTime) editReminderTime = reminder.slice(11, 16);
+      return;
+    }
+    if (!reminderDate) reminderDate = reminder.slice(0, 10);
+    if (!reminderTime) reminderTime = reminder.slice(11, 16);
+  }
+
+  function startEditing(entry: SidebarEntry): void {
+    if (entry.source !== 'todo') return;
+    const task = items.find(item => Number(item.id) === entry.id);
+    if (!task) return;
+    editingId = entry.id;
+    editTitle = task.body;
+    editNotes = task.notes ?? '';
+    if (task.deadline) {
+      const deadline = toLocalInput(new Date(task.deadline));
+      editDeadlineDate = deadline.slice(0, 10);
+      editDeadlineTime = deadline.slice(11, 16);
+    } else {
+      editDeadlineDate = '';
+      editDeadlineTime = '';
+    }
+    setEditReminder(task.reminder_minutes, task.deadline ? new Date(task.deadline) : null);
+  }
+
+  async function saveEditing(id: number): Promise<void> {
+    const content = editTitle.trim();
+    if (!content) {
+      notify.error('Enter a task title.');
+      return;
+    }
+    const hasDeadline = Boolean(editDeadlineDate || editDeadlineTime);
+    if (hasDeadline && (!editDeadlineDate || !editDeadlineTime)) {
+      notify.error('Enter both a deadline date and time, or clear both.');
+      return;
+    }
+    const deadline = hasDeadline ? new Date(`${editDeadlineDate}T${editDeadlineTime}`) : null;
+    if (deadline !== null && Number.isNaN(deadline.getTime())) {
+      notify.error('Enter a valid deadline date and time.');
+      return;
+    }
+    let reminderMinutes: number | null = null;
+    try {
+      reminderMinutes = deadline === null
+        ? null
+        : getReminderMinutes(
+          editReminderChoice,
+          editCustomReminder,
+          deadline,
+          editReminderDate,
+          editReminderTime,
+        );
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Enter a valid reminder.');
+      return;
+    }
+    await ApiC.patch(`${Model.Todolist}/${id}`, {
+      content,
+      notes: editNotes.trim() || null,
+      deadline: deadline?.toISOString() ?? null,
+      reminder_minutes: reminderMinutes,
+    });
+    editingId = null;
+    await load();
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
 
   async function create(): Promise<void> {
@@ -360,17 +488,28 @@
       return;
     }
 
+    let reminderMinutes: number | null = null;
+    try {
+      reminderMinutes = deadline === null
+        ? null
+        : getReminderMinutes(reminderChoice, customReminder, deadline, reminderDate, reminderTime);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Enter a valid reminder.');
+      return;
+    }
     await ApiC.post(Model.Todolist, {
       notifOnSaved: 0,
       content,
+      notes: draftNotes.trim() || null,
       deadline: deadline?.toISOString() ?? null,
-      reminder_minutes: deadline === null ? null : getReminderMinutes(),
+      reminder_minutes: reminderMinutes,
     });
     draft = '';
-    deadlineDate = '';
-    deadlineTime = '';
+    draftNotes = '';
     reminderChoice = '60';
     customReminder = 120;
+    reminderDate = '';
+    reminderTime = '';
     await load();
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
@@ -404,8 +543,6 @@
     items = todoResponse;
     unfinished = unfinishedResponse;
     loading = false;
-    await tick();
-    setupMalle();
   }
 
   function formatDeadline(value: string): string {
@@ -425,6 +562,116 @@
 
   function entityPage(entry: SidebarEntry): string {
     return entry.entityType === 'items' ? 'database.php' : 'experiments.php';
+  }
+
+  function startTaskDrag(event: DragEvent, id: number): void {
+    draggedTaskId = id;
+    event.dataTransfer?.setData('text/plain', String(id));
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+  }
+
+  function allowTaskDrop(event: DragEvent, key: string): void {
+    if (draggedTaskId === null) return;
+    event.preventDefault();
+    dragOverKey = key;
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  }
+
+  function finishTaskDrag(): void {
+    draggedTaskId = null;
+    dragOverKey = '';
+  }
+
+  function deadlineForDate(task: Todo, targetDate: string | null): string | null {
+    if (targetDate === null) return null;
+    const source = task.deadline ? new Date(task.deadline) : new Date();
+    const hours = String(source.getHours()).padStart(2, '0');
+    const minutes = String(source.getMinutes()).padStart(2, '0');
+    return new Date(`${targetDate}T${hours}:${minutes}`).toISOString();
+  }
+
+  function groupDate(group: DueGroup): string | null | undefined {
+    if (group.key === 'undated') return null;
+    if (group.key === 'overdue') return undefined;
+    if (group.key === 'today') return dateKey(new Date());
+    if (group.key === 'tomorrow') {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return dateKey(tomorrow);
+    }
+    return group.key;
+  }
+
+  async function persistTaskOrdering(nextItems: Todo[]): Promise<void> {
+    const response = await fetch('app/controllers/SortableAjaxController.php', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-Token': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '',
+      },
+      body: JSON.stringify({
+        table: 'todolist',
+        ordering: nextItems.map(item => `todo_${item.id}`),
+      }),
+    });
+    const payload = await response.json() as { res?: boolean; msg?: string };
+    if (!response.ok || payload.res === false) {
+      throw new Error(payload.msg ?? 'The task order could not be saved.');
+    }
+  }
+
+  async function dropTaskOnTask(event: DragEvent, targetId: number): Promise<void> {
+    event.preventDefault();
+    const sourceId = draggedTaskId;
+    finishTaskDrag();
+    if (sourceId === null || sourceId === targetId) return;
+    const source = items.find(item => Number(item.id) === sourceId);
+    const target = items.find(item => Number(item.id) === targetId);
+    if (!source || !target) return;
+    try {
+      const sourceDay = source.deadline ? dateKey(new Date(source.deadline)) : null;
+      const targetDay = target.deadline ? dateKey(new Date(target.deadline)) : null;
+      if (sourceDay !== targetDay) {
+        await ApiC.patch(`${Model.Todolist}/${sourceId}`, {
+          deadline: deadlineForDate(source, targetDay),
+        });
+      }
+      const nextItems = [...items];
+      const sourceIndex = nextItems.findIndex(item => Number(item.id) === sourceId);
+      const [moved] = nextItems.splice(sourceIndex, 1);
+      const targetIndex = nextItems.findIndex(item => Number(item.id) === targetId);
+      nextItems.splice(targetIndex, 0, moved);
+      items = nextItems;
+      await persistTaskOrdering(nextItems);
+      await load();
+      window.dispatchEvent(new CustomEvent('todolist-changed'));
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'The task could not be moved.');
+      await load();
+    }
+  }
+
+  async function dropTaskOnGroup(event: DragEvent, group: DueGroup): Promise<void> {
+    event.preventDefault();
+    const sourceId = draggedTaskId;
+    const targetDate = groupDate(group);
+    finishTaskDrag();
+    if (sourceId === null || targetDate === undefined) return;
+    const source = items.find(item => Number(item.id) === sourceId);
+    if (!source) return;
+    const sourceDate = source.deadline ? dateKey(new Date(source.deadline)) : null;
+    if (sourceDate === targetDate) return;
+    try {
+      await ApiC.patch(`${Model.Todolist}/${sourceId}`, {
+        deadline: deadlineForDate(source, targetDate),
+      });
+      await load();
+      window.dispatchEvent(new CustomEvent('todolist-changed'));
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'The task date could not be changed.');
+      await load();
+    }
   }
 
   onMount(() => {
@@ -457,49 +704,81 @@
       </button>
     </div>
   </div>
+  <label class='w-100 mb-2'>
+    <span class='small'>{t('Notes')}</span>
+    <textarea
+      class='form-control form-control-sm'
+      rows='2'
+      bind:value={draftNotes}
+      placeholder={t('Optional details')}
+    ></textarea>
+  </label>
   <div class='todo-create-options'>
-    <label class='mb-0'>
-      <span class='small'>{t('Date')}</span>
-      <input
-        class='form-control form-control-sm'
-        type='date'
-        bind:value={deadlineDate}
-      />
-    </label>
-    <label class='mb-0'>
-      <span class='small'>{t('Time')}</span>
-      <select class='form-control form-control-sm' bind:value={deadlineTime}>
-        <option value=''>—</option>
-        {#each timeOptions as time}
-          <option value={time}>{time}</option>
-        {/each}
-      </select>
-    </label>
-    {#if deadlineDate && deadlineTime}
+    <div class='todo-date-time-row'>
       <label class='mb-0'>
-        <span class='small'>{t('Reminder')}</span>
-        <select class='form-control form-control-sm' bind:value={reminderChoice}>
-          <option value='none'>{t('No reminder')}</option>
-          <option value='0'>{t('At deadline')}</option>
-          <option value='15'>{t('15 minutes before')}</option>
-          <option value='60'>{t('1 hour before')}</option>
-          <option value='1440'>{t('1 day before')}</option>
-          <option value='10080'>{t('1 week before')}</option>
-          <option value='custom'>{t('Custom minutes')}</option>
+        <span class='small'>{t('Date')}</span>
+        <input
+          class='form-control form-control-sm'
+          type='date'
+          bind:value={deadlineDate}
+        />
+      </label>
+      <label class='mb-0'>
+        <span class='small'>{t('Time')}</span>
+        <select class='form-control form-control-sm' bind:value={deadlineTime}>
+          <option value=''>—</option>
+          {#each timeOptions as time}
+            <option value={time}>{time}</option>
+          {/each}
         </select>
       </label>
-      {#if reminderChoice === 'custom'}
+    </div>
+    <label class='mb-0'>
+      <span class='small'>{t('Reminder')}</span>
+      <select
+        class='form-control form-control-sm'
+        bind:value={reminderChoice}
+        disabled={!deadlineDate || !deadlineTime}
+        title={!deadlineDate || !deadlineTime ? t('Choose a task date and time first') : undefined}
+        on:change={() => reminderChoice === 'specific' && initializeSpecificReminder()}
+      >
+        <option value='none'>{t('No reminder')}</option>
+        <option value='0'>{t('At deadline')}</option>
+        <option value='15'>{t('15 minutes before')}</option>
+        <option value='60'>{t('1 hour before')}</option>
+        <option value='1440'>{t('1 day before')}</option>
+        <option value='10080'>{t('1 week before')}</option>
+        <option value='custom'>{t('Custom minutes')}</option>
+        <option value='specific'>{t('Specific date and time')}</option>
+      </select>
+    </label>
+    {#if deadlineDate && deadlineTime && reminderChoice === 'custom'}
+      <label class='mb-0'>
+        <span class='small'>{t('Minutes before')}</span>
+        <input
+          class='form-control form-control-sm'
+          type='number'
+          min='0'
+          max='10080'
+          bind:value={customReminder}
+        />
+      </label>
+    {:else if deadlineDate && deadlineTime && reminderChoice === 'specific'}
+      <div class='todo-date-time-row'>
         <label class='mb-0'>
-          <span class='small'>{t('Minutes before')}</span>
-          <input
-            class='form-control form-control-sm'
-            type='number'
-            min='0'
-            max='10080'
-            bind:value={customReminder}
-          />
+          <span class='small'>{t('Reminder date')}</span>
+          <input class='form-control form-control-sm' type='date' bind:value={reminderDate} />
         </label>
-      {/if}
+        <label class='mb-0'>
+          <span class='small'>{t('Reminder time')}</span>
+          <select class='form-control form-control-sm' bind:value={reminderTime}>
+            <option value=''>—</option>
+            {#each timeOptions as time}
+              <option value={time}>{time}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
     {/if}
     {#if deadlineDate || deadlineTime}
       <button
@@ -508,6 +787,9 @@
         on:click={() => {
           deadlineDate = '';
           deadlineTime = '';
+          reminderChoice = 'none';
+          reminderDate = '';
+          reminderTime = '';
         }}
       >
         <i class='fas fa-xmark fa-fw mr-1' aria-hidden='true'></i>{t('Clear')}
@@ -525,13 +807,26 @@
     <div class='todo-due-groups'>
       {#each dueGroups as group (group.key)}
         <section class='todo-due-group' aria-labelledby={`todo-due-${group.key}`}>
-          <h4 id={`todo-due-${group.key}`} class:overdue-heading={group.key === 'overdue'} class='todo-due-heading'>
+          <h4
+            id={`todo-due-${group.key}`}
+            class:overdue-heading={group.key === 'overdue'}
+            class:todo-drag-over={dragOverKey === `group-${group.key}`}
+            class='todo-due-heading'
+            on:dragover={(event) => groupDate(group) !== undefined && allowTaskDrop(event, `group-${group.key}`)}
+            on:drop={(event) => void dropTaskOnGroup(event, group)}
+          >
             <span>{group.label}</span>
             <span class='badge badge-secondary'>{group.entries.length}</span>
           </h4>
           <ul class='list-group'>
             {#each group.entries as entry (entry.key)}
-              <li class:todo-entry-overdue={isOverdue(entry)} class='list-group-item todo-group-entry'>
+              <li
+                class:todo-entry-overdue={isOverdue(entry)}
+                class:todo-drag-over={dragOverKey === entry.key}
+                class='list-group-item todo-group-entry'
+                on:dragover={(event) => entry.source === 'todo' && allowTaskDrop(event, entry.key)}
+                on:drop={(event) => entry.source === 'todo' && void dropTaskOnTask(event, entry.id)}
+              >
                 <div class='d-flex align-items-start'>
                   {#if entry.source === 'step'}
                     <input
@@ -544,11 +839,22 @@
                       aria-label={t('Mark experiment step complete')}
                     />
                   {:else}
+                    <button
+                      type='button'
+                      class='btn btn-ghost btn-sm todo-drag-handle mr-1'
+                      draggable='true'
+                      on:dragstart={(event) => startTaskDrag(event, entry.id)}
+                      on:dragend={finishTaskDrag}
+                      title={t('Drag to reorder or move to another day')}
+                      aria-label={t('Drag to reorder or move to another day')}
+                    >
+                      <i class='fas fa-grip-vertical' aria-hidden='true'></i>
+                    </button>
                     <i class='fas fa-list-check color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>
                   {/if}
                   <div class='d-flex flex-column flex-grow-1 min-width-0'>
                     {#if entry.source === 'todo'}
-                      <span class='editable todoItem' data-id={entry.id}>{entry.body}</span>
+                      <strong>{entry.body}</strong>
                     {:else}
                       <span>{entry.body}</span>
                       <a class='small' href={`${entityPage(entry)}?mode=view&id=${entry.entityId}#step_view_${entry.id}`}>
@@ -562,7 +868,7 @@
                       </div>
                     {/if}
                     {#if entry.notes}
-                      <div class='small todo-secondary-text'>{entry.notes}</div>
+                      <div class='small todo-secondary-text todo-task-notes'>{entry.notes}</div>
                     {/if}
                     {#if entry.creationTime}
                       <div class='relative-moment small todo-secondary-text' title={entry.creationTime}>
@@ -571,15 +877,119 @@
                     {/if}
                   </div>
                   {#if entry.source === 'todo'}
-                    <button
-                      type='button'
-                      class='btn btn-sm btn-ghost ml-2'
-                      on:click={() => complete(entry.id)}
-                    >
-                      {t('done')}
-                    </button>
+                    <div class='btn-group btn-group-sm ml-2'>
+                      <button
+                        type='button'
+                        class='btn btn-ghost'
+                        on:click={() => startEditing(entry)}
+                        title={t('Edit')}
+                        aria-label={t('Edit')}
+                      >
+                        <i class='fas fa-pen' aria-hidden='true'></i>
+                      </button>
+                      <button
+                        type='button'
+                        class='btn btn-ghost'
+                        on:click={() => complete(entry.id)}
+                        title={t('done')}
+                        aria-label={t('done')}
+                      >
+                        <i class='fas fa-check' aria-hidden='true'></i>
+                      </button>
+                    </div>
                   {/if}
                 </div>
+                {#if entry.source === 'todo' && editingId === entry.id}
+                  <div class='todo-task-edit mt-2'>
+                    <label class='todo-edit-full mb-0'>
+                      <span class='small'>{t('Task')}</span>
+                      <input class='form-control form-control-sm' bind:value={editTitle} />
+                    </label>
+                    <label class='todo-edit-full mb-0'>
+                      <span class='small'>{t('Notes')}</span>
+                      <textarea class='form-control form-control-sm' rows='2' bind:value={editNotes}></textarea>
+                    </label>
+                    <div class='todo-edit-full todo-date-time-row'>
+                      <label class='mb-0'>
+                        <span class='small'>{t('Date')}</span>
+                        <input class='form-control form-control-sm' type='date' bind:value={editDeadlineDate} />
+                      </label>
+                      <label class='mb-0'>
+                        <span class='small'>{t('Time')}</span>
+                        <select class='form-control form-control-sm' bind:value={editDeadlineTime}>
+                          <option value=''>—</option>
+                          {#each timeOptions as time}
+                            <option value={time}>{time}</option>
+                          {/each}
+                        </select>
+                      </label>
+                    </div>
+                    <label class='todo-edit-full mb-0'>
+                      <span class='small'>{t('Reminder')}</span>
+                      <select
+                        class='form-control form-control-sm'
+                        bind:value={editReminderChoice}
+                        disabled={!editDeadlineDate || !editDeadlineTime}
+                        title={!editDeadlineDate || !editDeadlineTime ? t('Choose a task date and time first') : undefined}
+                        on:change={() => editReminderChoice === 'specific' && initializeSpecificReminder(true)}
+                      >
+                        <option value='none'>{t('No reminder')}</option>
+                        <option value='0'>{t('At deadline')}</option>
+                        <option value='15'>{t('15 minutes before')}</option>
+                        <option value='60'>{t('1 hour before')}</option>
+                        <option value='1440'>{t('1 day before')}</option>
+                        <option value='10080'>{t('1 week before')}</option>
+                        <option value='custom'>{t('Custom minutes')}</option>
+                        <option value='specific'>{t('Specific date and time')}</option>
+                      </select>
+                    </label>
+                    {#if editDeadlineDate && editDeadlineTime && editReminderChoice === 'custom'}
+                      <label class='todo-edit-full mb-0'>
+                        <span class='small'>{t('Minutes before')}</span>
+                        <input
+                          class='form-control form-control-sm'
+                          type='number'
+                          min='0'
+                          max='10080'
+                          bind:value={editCustomReminder}
+                        />
+                      </label>
+                    {:else if editDeadlineDate && editDeadlineTime && editReminderChoice === 'specific'}
+                      <div class='todo-edit-full todo-date-time-row'>
+                        <label class='mb-0'>
+                          <span class='small'>{t('Reminder date')}</span>
+                          <input class='form-control form-control-sm' type='date' bind:value={editReminderDate} />
+                        </label>
+                        <label class='mb-0'>
+                          <span class='small'>{t('Reminder time')}</span>
+                          <select class='form-control form-control-sm' bind:value={editReminderTime}>
+                            <option value=''>—</option>
+                            {#each timeOptions as time}
+                              <option value={time}>{time}</option>
+                            {/each}
+                          </select>
+                        </label>
+                      </div>
+                    {/if}
+                    <div class='todo-edit-full d-flex flex-wrap align-items-center'>
+                      <button type='button' class='btn btn-primary btn-sm mr-1' on:click={() => saveEditing(entry.id)}>{t('Save')}</button>
+                      <button type='button' class='btn btn-secondary btn-sm mr-1' on:click={() => editingId = null}>{t('Cancel')}</button>
+                      {#if editDeadlineDate || editDeadlineTime}
+                        <button
+                          type='button'
+                          class='btn btn-link btn-sm'
+                          on:click={() => {
+                            editDeadlineDate = '';
+                            editDeadlineTime = '';
+                            editReminderChoice = 'none';
+                            editReminderDate = '';
+                            editReminderTime = '';
+                          }}
+                        >{t('Clear deadline')}</button>
+                      {/if}
+                    </div>
+                  </div>
+                {/if}
               </li>
             {/each}
           </ul>
@@ -661,6 +1071,18 @@
     gap: 0.45rem;
   }
 
+  .todo-date-time-row {
+    display: grid;
+    gap: 0.45rem;
+    grid-template-columns: minmax(0, 1.35fr) minmax(5.75rem, 0.65fr);
+    width: 100%;
+  }
+
+  .todo-date-time-row label,
+  .todo-date-time-row .form-control {
+    min-width: 0;
+  }
+
   .todo-clear-deadline {
     border-color: var(--chrome-muted);
     color: var(--chrome-fg);
@@ -702,6 +1124,12 @@
     color: var(--chrome-bg);
   }
 
+  .todo-due-heading.todo-drag-over,
+  .todo-group-entry.todo-drag-over {
+    border-color: var(--primary);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 45%, transparent);
+  }
+
   .todo-group-entry {
     background: var(--chrome-bg);
     border-color: var(--secondary);
@@ -718,9 +1146,33 @@
     border-left-color: var(--side-panel-danger, #ff8a7a);
   }
 
-  .todo-group-entry .todoItem,
+  .todo-task-edit {
+    background: color-mix(in srgb, var(--chrome-bg) 82%, var(--primary));
+    border: 1px solid var(--secondary);
+    border-radius: 0.25rem;
+    display: grid;
+    gap: 0.45rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding: 0.55rem;
+  }
+
+  .todo-edit-full {
+    grid-column: 1 / -1;
+  }
+
   .todo-group-entry .btn-ghost {
     color: var(--chrome-fg);
+  }
+
+  .todo-drag-handle {
+    cursor: grab;
+    flex: 0 0 auto;
+    line-height: 1;
+    padding: 0.1rem 0.2rem;
+  }
+
+  .todo-drag-handle:active {
+    cursor: grabbing;
   }
 
   .todo-group-entry .fas {
@@ -741,6 +1193,10 @@
 
   .todo-secondary-text {
     color: var(--chrome-muted);
+  }
+
+  .todo-task-notes {
+    white-space: pre-wrap;
   }
 
   .todo-completed-history {
@@ -795,5 +1251,11 @@
 
   .min-width-0 {
     min-width: 0;
+  }
+
+  @media (max-width: 480px) {
+    .todo-task-edit {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
