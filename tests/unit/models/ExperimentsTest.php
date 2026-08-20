@@ -191,6 +191,55 @@ class ExperimentsTest extends \PHPUnit\Framework\TestCase
         ));
     }
 
+    public function testExperimentNotes(): void
+    {
+        $title = 'Experiment notes test ' . bin2hex(random_bytes(6));
+        $new = $this->Experiments->create(title: $title);
+        $this->Experiments->setId($new);
+        $notes = 'Repeat the measurement with a fresh reagent batch.';
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_notes' => $notes));
+        $this->assertSame($notes, $entityData['experiment_notes']);
+
+        $query = new InputBag(array('q' => $title));
+        $DisplayParams = new DisplayParams($this->Users, EntityType::Experiments, $query);
+        $listed = $this->Experiments->readAll($DisplayParams);
+        $matching = array_values(array_filter($listed, static fn(array $row): bool => (int) $row['id'] === $new));
+        $this->assertSame($notes, $matching[0]['experiment_notes']);
+
+        $duplicateId = $this->Experiments->duplicate();
+        $duplicate = new Experiments($this->Users, $duplicateId);
+        $this->assertSame($notes, $duplicate->entityData['experiment_notes']);
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_notes' => ''));
+        $this->assertSame('', $entityData['experiment_notes']);
+    }
+
+    public function testExperimentNotesOnCreate(): void
+    {
+        $notes = 'Created together with the experiment.';
+        $new = $this->Experiments->postAction(Action::Create, array(
+            'title' => 'Experiment notes creation test ' . bin2hex(random_bytes(6)),
+            'experiment_notes' => $notes,
+        ));
+        $created = new Experiments($this->Users, $new);
+        $this->assertSame($notes, $created->entityData['experiment_notes']);
+    }
+
+    public function testExperimentNotesLengthLimit(): void
+    {
+        $new = $this->Experiments->create();
+        $this->Experiments->setId($new);
+        $validNotes = str_repeat('x', 1000);
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_notes' => $validNotes));
+        $this->assertSame($validNotes, $entityData['experiment_notes']);
+
+        $this->expectException(ImproperActionException::class);
+        $this->Experiments->patch(Action::Update, array(
+            'experiment_notes' => $validNotes . 'x',
+        ));
+    }
+
     public function testUpdateIncorrectState(): void
     {
         $new = $this->Experiments->create();

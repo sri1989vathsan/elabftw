@@ -19,13 +19,19 @@
       {% if Entity.entityType.value == 'experiments' and Entity.entityData.experiment_goal %}
         <div class='d-flex align-items-start mb-2'>
           <i class='fas fa-bullseye fa-fw mr-2 mt-1 color-medium' aria-hidden='true'></i>
-          <div class='breakable' style='white-space: pre-wrap;'><span class='font-weight-bold'>{{ 'Experiment goal'|trans }}:</span> {{ Entity.entityData.experiment_goal }}</div>
+          <div class='breakable' style='white-space: pre-wrap;'><span class='font-weight-bold'>{{ 'Goals'|trans }}:</span> {{ Entity.entityData.experiment_goal }}</div>
         </div>
       {% endif %}
       {% if Entity.entityType.value == 'experiments' and Entity.entityData.experiment_conclusion %}
         <div class='d-flex align-items-start mb-2'>
           <i class='fas fa-clipboard-check fa-fw mr-2 mt-1 color-medium' aria-hidden='true'></i>
-          <div class='breakable' style='white-space: pre-wrap;'><span class='font-weight-bold'>{{ 'Experiment conclusion'|trans }}:</span> {{ Entity.entityData.experiment_conclusion }}</div>
+          <div class='breakable' style='white-space: pre-wrap;'><span class='font-weight-bold'>{{ 'Conclusion'|trans }}:</span> {{ Entity.entityData.experiment_conclusion }}</div>
+        </div>
+      {% endif %}
+      {% if Entity.entityType.value == 'experiments' and Entity.entityData.experiment_notes %}
+        <div class='d-flex align-items-start mb-2'>
+          <i class='fas fa-file-lines fa-fw mr-2 mt-1 color-medium' aria-hidden='true'></i>
+          <div class='breakable' style='white-space: pre-wrap;'><span class='font-weight-bold'>{{ 'Notes'|trans }}:</span> {{ Entity.entityData.experiment_notes }}</div>
         </div>
       {% endif %}
     </div>

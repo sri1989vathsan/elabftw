@@ -30,6 +30,7 @@
     title: string | null;
     experiment_goal?: string | null;
     experiment_conclusion?: string | null;
+    experiment_notes?: string | null;
     state: StateValue;
     category?: string | null;
     category_title?: string | null;
@@ -738,7 +739,7 @@
               <details class='experiment-goal border rounded px-2 py-1 mb-2'>
                 <summary class='experiment-goal-summary'>
                   <i class='fas fa-bullseye fa-fw mr-1 color-medium' aria-hidden='true'></i>
-                  <span class='font-weight-bold'>{t('Experiment goal')}:</span>
+                  <span class='font-weight-bold'>{t('Goals')}:</span>
                   <span class='color-medium ml-1'>{getSummaryPreview(entity.experiment_goal)}</span>
                 </summary>
                 <div class='experiment-goal-text breakable mt-2'>{entity.experiment_goal.trim()}</div>
@@ -746,7 +747,7 @@
             {:else}
               <p class='experiment-goal-text breakable my-2'>
                 <i class='fas fa-bullseye fa-fw mr-1 color-medium' aria-hidden='true'></i>
-                <span class='font-weight-bold'>{t('Experiment goal')}:</span>
+                <span class='font-weight-bold'>{t('Goals')}:</span>
                 {entity.experiment_goal.trim()}
               </p>
             {/if}
@@ -756,10 +757,21 @@
             <details class='experiment-conclusion border rounded px-2 py-1 mb-2'>
               <summary class='experiment-conclusion-summary'>
                 <i class='fas fa-clipboard-check fa-fw mr-1 color-medium' aria-hidden='true'></i>
-                <span class='font-weight-bold'>{t('Experiment conclusion')}:</span>
+                <span class='font-weight-bold'>{t('Conclusion')}:</span>
                 <span class='color-medium ml-1'>{getSummaryPreview(entity.experiment_conclusion)}</span>
               </summary>
               <div class='experiment-conclusion-text breakable mt-2'>{entity.experiment_conclusion.trim()}</div>
+            </details>
+          {/if}
+
+          {#if entityType === 'experiments' && entity.experiment_notes?.trim()}
+            <details class='experiment-notes border rounded px-2 py-1 mb-2'>
+              <summary class='experiment-notes-summary'>
+                <i class='fas fa-file-lines fa-fw mr-1 color-medium' aria-hidden='true'></i>
+                <span class='font-weight-bold'>{t('Notes')}:</span>
+                <span class='color-medium ml-1'>{getSummaryPreview(entity.experiment_notes)}</span>
+              </summary>
+              <div class='experiment-notes-text breakable mt-2'>{entity.experiment_notes.trim()}</div>
             </details>
           {/if}
 
@@ -914,12 +926,14 @@
 
 <style>
   .experiment-goal-summary,
-  .experiment-conclusion-summary {
+  .experiment-conclusion-summary,
+  .experiment-notes-summary {
     cursor: pointer;
   }
 
   .experiment-goal-text,
-  .experiment-conclusion-text {
+  .experiment-conclusion-text,
+  .experiment-notes-text {
     white-space: pre-wrap;
   }
 </style>

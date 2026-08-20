@@ -51,16 +51,21 @@ final class Experiments extends AbstractConcreteEntity
     {
         $hasGoal = $action === Action::Create && array_key_exists('experiment_goal', $reqBody);
         $hasConclusion = $action === Action::Create && array_key_exists('experiment_conclusion', $reqBody);
-        $goal = $hasGoal ? $this->normalizeSummary($reqBody['experiment_goal'], 'Experiment goal') : '';
+        $hasNotes = $action === Action::Create && array_key_exists('experiment_notes', $reqBody);
+        $goal = $hasGoal ? $this->normalizeSummary($reqBody['experiment_goal'], 'Goals') : '';
         $conclusion = $hasConclusion
-            ? $this->normalizeSummary($reqBody['experiment_conclusion'], 'Experiment conclusion')
+            ? $this->normalizeSummary($reqBody['experiment_conclusion'], 'Conclusion')
             : '';
+        $notes = $hasNotes ? $this->normalizeSummary($reqBody['experiment_notes'], 'Notes') : '';
         $newId = parent::postAction($action, $reqBody);
         if ($hasGoal) {
             $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_GOAL, $newId, $goal);
         }
         if ($hasConclusion) {
             $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_CONCLUSION, $newId, $conclusion);
+        }
+        if ($hasNotes) {
+            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_NOTES, $newId, $notes);
         }
         return $newId;
     }
@@ -70,19 +75,24 @@ final class Experiments extends AbstractConcreteEntity
     {
         $hasGoal = $action === Action::Update && array_key_exists('experiment_goal', $params);
         $hasConclusion = $action === Action::Update && array_key_exists('experiment_conclusion', $params);
-        $goal = $hasGoal ? $this->normalizeSummary($params['experiment_goal'], 'Experiment goal') : '';
+        $hasNotes = $action === Action::Update && array_key_exists('experiment_notes', $params);
+        $goal = $hasGoal ? $this->normalizeSummary($params['experiment_goal'], 'Goals') : '';
         $conclusion = $hasConclusion
-            ? $this->normalizeSummary($params['experiment_conclusion'], 'Experiment conclusion')
+            ? $this->normalizeSummary($params['experiment_conclusion'], 'Conclusion')
             : '';
+        $notes = $hasNotes ? $this->normalizeSummary($params['experiment_notes'], 'Notes') : '';
         if ($hasGoal) {
             unset($params['experiment_goal']);
         }
         if ($hasConclusion) {
             unset($params['experiment_conclusion']);
         }
+        if ($hasNotes) {
+            unset($params['experiment_notes']);
+        }
 
         $result = parent::patch($action, $params);
-        if ((!$hasGoal && !$hasConclusion) || $this->id === null) {
+        if ((!$hasGoal && !$hasConclusion && !$hasNotes) || $this->id === null) {
             return $result;
         }
 
@@ -91,6 +101,9 @@ final class Experiments extends AbstractConcreteEntity
         }
         if ($hasConclusion) {
             $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_CONCLUSION, $this->id, $conclusion);
+        }
+        if ($hasNotes) {
+            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_NOTES, $this->id, $notes);
         }
         return $this->readOne();
     }
@@ -107,6 +120,10 @@ final class Experiments extends AbstractConcreteEntity
             CustomUiDescriptions::EXPERIMENT_CONCLUSION,
             (int) $result['id'],
         );
+        $result['experiment_notes'] = $this->getSummaryStore()->read(
+            CustomUiDescriptions::EXPERIMENT_NOTES,
+            (int) $result['id'],
+        );
         $this->entityData = $result;
         return $result;
     }
@@ -119,10 +136,15 @@ final class Experiments extends AbstractConcreteEntity
             parent::readShow($displayParams, $extended, $can),
             'experiment_goal',
         );
-        return $this->getSummaryStore()->enrichRows(
+        $rows = $this->getSummaryStore()->enrichRows(
             CustomUiDescriptions::EXPERIMENT_CONCLUSION,
             $rows,
             'experiment_conclusion',
+        );
+        return $this->getSummaryStore()->enrichRows(
+            CustomUiDescriptions::EXPERIMENT_NOTES,
+            $rows,
+            'experiment_notes',
         );
     }
 
@@ -217,6 +239,10 @@ final class Experiments extends AbstractConcreteEntity
         $conclusion = $this->getSummaryStore()->read(CustomUiDescriptions::EXPERIMENT_CONCLUSION, (int) $this->id);
         if ($conclusion !== '') {
             $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_CONCLUSION, $newId, $conclusion);
+        }
+        $notes = $this->getSummaryStore()->read(CustomUiDescriptions::EXPERIMENT_NOTES, (int) $this->id);
+        if ($notes !== '') {
+            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_NOTES, $newId, $notes);
         }
 
         return $newId;

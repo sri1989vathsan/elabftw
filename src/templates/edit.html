@@ -26,7 +26,7 @@
         {% if Entity.entityType.value == 'experiments' %}
           <div class='mb-2'>
             <label for='experimentGoalInput' class='font-weight-bold mb-1'>
-              <i class='fas fa-bullseye fa-fw mr-1' aria-hidden='true'></i>{{ 'Experiment goal'|trans }}
+              <i class='fas fa-bullseye fa-fw mr-1' aria-hidden='true'></i>{{ 'Goals'|trans }}
               <span class='font-weight-normal color-medium'>({{ 'optional'|trans }})</span>
             </label>
             <textarea
@@ -43,7 +43,7 @@
           </div>
           <div class='mb-2'>
             <label for='experimentConclusionInput' class='font-weight-bold mb-1'>
-              <i class='fas fa-clipboard-check fa-fw mr-1' aria-hidden='true'></i>{{ 'Experiment conclusion'|trans }}
+              <i class='fas fa-clipboard-check fa-fw mr-1' aria-hidden='true'></i>{{ 'Conclusion'|trans }}
               <span class='font-weight-normal color-medium'>({{ 'optional'|trans }})</span>
             </label>
             <textarea
@@ -56,6 +56,23 @@
               data-target='experiment_conclusion'
               placeholder='{{ 'Briefly describe the conclusion of this experiment'|trans }}'
             >{{ Entity.entityData.experiment_conclusion }}</textarea>
+            <small class='form-text color-medium'>{{ 'Maximum 1000 characters.'|trans }}</small>
+          </div>
+          <div class='mb-2'>
+            <label for='experimentNotesInput' class='font-weight-bold mb-1'>
+              <i class='fas fa-file-lines fa-fw mr-1' aria-hidden='true'></i>{{ 'Notes'|trans }}
+              <span class='font-weight-normal color-medium'>({{ 'optional'|trans }})</span>
+            </label>
+            <textarea
+              id='experimentNotesInput'
+              class='form-control'
+              rows='3'
+              maxlength='1000'
+              data-trigger='blur'
+              data-model='experiments/{{ Entity.id }}'
+              data-target='experiment_notes'
+              placeholder='{{ 'Add short notes about this experiment'|trans }}'
+            >{{ Entity.entityData.experiment_notes }}</textarea>
             <small class='form-text color-medium'>{{ 'Maximum 1000 characters.'|trans }}</small>
           </div>
         {% endif %}

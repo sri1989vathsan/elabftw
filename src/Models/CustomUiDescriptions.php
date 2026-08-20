@@ -32,6 +32,8 @@ final class CustomUiDescriptions
 
     public const string EXPERIMENT_CONCLUSION = 'experiment_conclusion';
 
+    public const string EXPERIMENT_NOTES = 'experiment_notes';
+
     public const string EXPERIMENT_FOLDER = 'experiment_folder';
 
     public const string EXPERIMENT_CATEGORY = 'experiment_category';
@@ -141,6 +143,7 @@ final class CustomUiDescriptions
         if (!in_array($scope, array(
             self::EXPERIMENT_GOAL,
             self::EXPERIMENT_CONCLUSION,
+            self::EXPERIMENT_NOTES,
             self::EXPERIMENT_FOLDER,
             self::EXPERIMENT_CATEGORY,
             self::RESOURCE_CATEGORY,
@@ -151,6 +154,10 @@ final class CustomUiDescriptions
 
     private function isExperimentSummary(string $scope): bool
     {
-        return in_array($scope, array(self::EXPERIMENT_GOAL, self::EXPERIMENT_CONCLUSION), true);
+        return in_array($scope, array(
+            self::EXPERIMENT_GOAL,
+            self::EXPERIMENT_CONCLUSION,
+            self::EXPERIMENT_NOTES,
+        ), true);
     }
 }
