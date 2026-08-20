@@ -27,7 +27,11 @@ interface TinyMceEditor {
   execCommand(command: string, ui: boolean, value: string | Record<string, string>): void;
   focus(): void;
   getBody(): HTMLElement;
+  getWin(): Window;
+  off(events: string, callback: () => void): void;
+  on(events: string, callback: () => void): void;
   selection: {
+    getNode(): HTMLElement;
     getRng(): Range;
   };
 }
@@ -41,6 +45,8 @@ export default class TocPanel extends SidePanel {
   private collapsedSectionIds = new Set<string>();
   private currentFilterActive = false;
   private currentSectionIds = new Set<string>();
+  private scrollSpyObserver: IntersectionObserver | null = null;
+  private editorScrollSpyCleanup: (() => void) | null = null;
 
   constructor() {
     super(TOC_MODEL);
@@ -147,6 +153,7 @@ export default class TocPanel extends SidePanel {
    * Build the TOC HTML from extracted headings.
    */
   display(): void {
+    this.teardownScrollSpy();
     const entries = this.getHeadings();
     this.entries = entries;
     this.updateAvailability(entries.length > 0);
@@ -789,6 +796,8 @@ export default class TocPanel extends SidePanel {
    * Scroll to a heading, handling both view-mode (#body_view) and edit-mode (TinyMCE iframe).
    */
   private scrollToHeading(targetId: string): void {
+    this.setActiveTocEntry(targetId);
+
     // View mode: heading is in the main document
     const el = document.getElementById(targetId);
     if (el) {
@@ -813,21 +822,20 @@ export default class TocPanel extends SidePanel {
    * Highlight the active TOC entry as the user scrolls through the document.
    */
   private setupScrollSpy(entries: TocEntry[]): void {
+    this.teardownScrollSpy();
     const bodyView = document.getElementById('body_view');
-    if (!bodyView) return;
+    if (!bodyView) {
+      const editor = this.getEditor();
+      if (editor) {
+        this.setupEditorScrollSpy(editor, entries);
+      }
+      return;
+    }
 
-    const observer = new IntersectionObserver((observerEntries) => {
+    this.scrollSpyObserver = new IntersectionObserver((observerEntries) => {
       for (const obsEntry of observerEntries) {
         if (obsEntry.isIntersecting) {
-          const id = obsEntry.target.id;
-          // Remove active from all
-          document.querySelectorAll('#tocItems .toc-link').forEach(l => l.classList.remove('active'));
-          // Add active to matching
-          const activeLink = Array.from(document.querySelectorAll<HTMLElement>('#tocItems .toc-link'))
-            .find(link => link.dataset.tocTarget === id);
-          if (activeLink) {
-            activeLink.classList.add('active');
-          }
+          this.setActiveTocEntry(obsEntry.target.id);
         }
       }
     }, {
@@ -838,9 +846,120 @@ export default class TocPanel extends SidePanel {
     for (const entry of entries) {
       const heading = document.getElementById(entry.id);
       if (heading) {
-        observer.observe(heading);
+        this.scrollSpyObserver.observe(heading);
       }
     }
+  }
+
+  /**
+   * TinyMCE scrolls inside its own iframe, so the main-document observer above
+   * cannot see its headings. Track both iframe scrolling and caret movement so
+   * the current section remains apparent while editing.
+   */
+  private setupEditorScrollSpy(editor: TinyMceEditor, entries: TocEntry[]): void {
+    const editorBody = editor.getBody();
+    const editorWindow = editor.getWin();
+    let animationFrame: number | null = null;
+
+    const getEditorHeadings = (): HTMLElement[] => entries
+      .map(entry => editorBody.querySelector<HTMLElement>(`#${CSS.escape(entry.id)}`))
+      .filter((heading): heading is HTMLElement => heading !== null);
+
+    const syncFromScroll = (): void => {
+      const headings = getEditorHeadings();
+      if (headings.length === 0) {
+        this.setActiveTocEntry();
+        return;
+      }
+
+      // TinyMCE has a small internal top gutter. The last heading that has
+      // crossed it owns the section currently shown in the editor viewport.
+      let activeHeading = headings[0];
+      for (const heading of headings) {
+        if (heading.getBoundingClientRect().top > 36) break;
+        activeHeading = heading;
+      }
+      this.setActiveTocEntry(activeHeading.id);
+    };
+
+    const scheduleScrollSync = (): void => {
+      if (animationFrame !== null) {
+        editorWindow.cancelAnimationFrame(animationFrame);
+      }
+      animationFrame = editorWindow.requestAnimationFrame(() => {
+        animationFrame = null;
+        syncFromScroll();
+      });
+    };
+
+    const syncFromCaret = (): void => {
+      const selectionNode = editor.selection.getNode();
+      const headings = getEditorHeadings();
+      let activeHeading: HTMLElement | undefined;
+
+      for (const heading of headings) {
+        if (heading === selectionNode || heading.contains(selectionNode)) {
+          activeHeading = heading;
+          break;
+        }
+        if (heading.compareDocumentPosition(selectionNode) & Node.DOCUMENT_POSITION_FOLLOWING) {
+          activeHeading = heading;
+          continue;
+        }
+        break;
+      }
+
+      this.setActiveTocEntry(activeHeading?.id ?? headings[0]?.id);
+    };
+
+    editorWindow.addEventListener('scroll', scheduleScrollSync, { passive: true });
+    editor.on('NodeChange SelectionChange SetContent', syncFromCaret);
+    scheduleScrollSync();
+
+    this.editorScrollSpyCleanup = (): void => {
+      editorWindow.removeEventListener('scroll', scheduleScrollSync);
+      editor.off('NodeChange SelectionChange SetContent', syncFromCaret);
+      if (animationFrame !== null) {
+        editorWindow.cancelAnimationFrame(animationFrame);
+      }
+    };
+  }
+
+  private setActiveTocEntry(targetId?: string): void {
+    const links = document.querySelectorAll<HTMLElement>('#tocItems .toc-link');
+    let activeLink: HTMLElement | undefined;
+
+    links.forEach(link => {
+      const isActive = Boolean(targetId) && link.dataset.tocTarget === targetId;
+      link.classList.toggle('active', isActive);
+      if (isActive) {
+        link.setAttribute('aria-current', 'location');
+        activeLink = link;
+      } else {
+        link.removeAttribute('aria-current');
+      }
+    });
+
+    const panel = document.getElementById(this.panelId);
+    if (!activeLink || !panel || panel.hasAttribute('hidden') || activeLink.offsetParent === null) return;
+
+    // Keep the highlighted entry visible without moving the editor or the main
+    // page. This adjusts only the independently scrollable sidebar.
+    const linkRect = activeLink.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const inset = 12;
+    if (linkRect.top < panelRect.top + inset) {
+      panel.scrollTop += linkRect.top - panelRect.top - inset;
+    } else if (linkRect.bottom > panelRect.bottom - inset) {
+      panel.scrollTop += linkRect.bottom - panelRect.bottom + inset;
+    }
+  }
+
+  private teardownScrollSpy(): void {
+    this.scrollSpyObserver?.disconnect();
+    this.scrollSpyObserver = null;
+    this.editorScrollSpyCleanup?.();
+    this.editorScrollSpyCleanup = null;
   }
 
   /**
@@ -851,6 +970,11 @@ export default class TocPanel extends SidePanel {
       && !document.getElementById(this.panelId).hasAttribute('hidden')) {
       this.display();
     }
+  }
+
+  hide(): void {
+    this.teardownScrollSpy();
+    super.hide();
   }
 
   // TOGGLE TOC PANEL VISIBILITY

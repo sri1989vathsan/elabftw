@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Elabftw\Controllers;
 
+use Elabftw\Elabftw\FeatureFlags;
+use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Exceptions\UnauthorizedException;
 use Elabftw\Models\PyratLinks;
 use Elabftw\Services\Pyrat\PyratAccess;
@@ -36,6 +38,9 @@ final class AnimalStudiesController extends AbstractHtmlController
     #[Override]
     protected function getData(): array
     {
+        if (!FeatureFlags::ANIMAL_STUDIES) {
+            throw new ResourceNotFoundException();
+        }
         if ($this->app->isAnonymous()) {
             throw new UnauthorizedException();
         }

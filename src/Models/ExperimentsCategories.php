@@ -12,10 +12,19 @@ declare(strict_types=1);
 
 namespace Elabftw\Models;
 
+use Elabftw\Traits\CategoryDescriptionTrait;
+
 /**
  * Categories for experiments
  */
 final class ExperimentsCategories extends AbstractStatus
 {
+    use CategoryDescriptionTrait;
+
     protected string $table = 'experiments_categories';
+
+    protected function getDescriptionScope(): string
+    {
+        return CustomUiDescriptions::EXPERIMENT_CATEGORY;
+    }
 }

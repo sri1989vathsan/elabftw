@@ -56,7 +56,9 @@
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='12'>LDAP</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='13'>{{ 'External auth'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='14'>{{ 'Audit Logs'|trans }}</button></li>
-  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='15'>{{ 'HTML tools'|trans }}</button></li>
+  {% if constant('Elabftw\\Elabftw\\FeatureFlags::HTML_TOOLS') %}
+    <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='15'>{{ 'HTML tools'|trans }}</button></li>
+  {% endif %}
 </ul>
 
 {% include 'loading-spinner.html' %}
@@ -132,6 +134,7 @@
 
   </div>
 
+  {% if constant('Elabftw\\Elabftw\\FeatureFlags::ANIMAL_STUDIES') %}
   <h2 class='mb-3 p-2 pl-3 section-title' id='pyratIntegration'>{{ 'PyRAT integration'|trans }}</h2>
   <div class='pl-3 mb-5' id='pyratSettings'>
     <div class='alert alert-info'>
@@ -205,6 +208,7 @@
     <button type='button' class='btn btn-primary' data-action='pyrat-test-connection'><i class='fas fa-plug mr-1'></i>{{ 'Test PyRAT connection'|trans }}</button>
     <span id='pyratConnectionTestResult' class='small text-muted ml-2'></span>
   </div>
+  {% endif %}
 
 
   <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Revisions system configuration'|trans }}</h2>
@@ -1337,6 +1341,7 @@
 </div>
 
 {# TAB 15: HTML TOOLS #}
+{% if constant('Elabftw\\Elabftw\\FeatureFlags::HTML_TOOLS') %}
 <div data-tabcontent='15' hidden>
   <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'HTML tools'|trans }}</h2>
   <div class='pl-3 mb-5'>
@@ -1410,6 +1415,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 <div id='info' data-page='sysconfig'></div>
 {% endblock body %}

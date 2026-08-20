@@ -229,10 +229,10 @@ export function getTinymceBaseConfig(page: string): object {
     // let Image in menu
     removedMenuItems = 'newdocument, anchor';
   }
-  // Keep PyRAT mouse insertion as its own icon-only toolbar action. The
-  // experiment section is rendered only when the integration is enabled and
-  // the current user is allowed to access it.
-  if (page === 'edit' && document.getElementById('pyratExperimentSection')) {
+  // Keep the dedicated mouse action visible in experiment editors while the
+  // integration is dormant. MouseLinkExtension disables and greys the button
+  // unless the gated PyRAT experiment section is available.
+  if (page === 'edit' && entity.type === EntityType.Experiment) {
     toolbar1 = toolbar1.replace('insert-link', 'insert-link insert-mouse');
   }
 

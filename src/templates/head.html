@@ -180,8 +180,11 @@
                 <a class='dropdown-item {{ not envAsBool('USE_OPENCLONING') ? 'disabled' }} {{ isActive ? 'active' }}' href='syc.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-dna fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'OpenCloning'|trans }}</a>
                 {% set isActive = scriptName == 'inventory.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='inventory.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-warehouse fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Inventory'|trans }}</a>
+                {% set animalStudiesReady = constant('Elabftw\\Elabftw\\FeatureFlags::ANIMAL_STUDIES') %}
                 {% set pyratAllowedTeams = App.Config.configArr.pyrat_allowed_teams|default('')|replace({' ': ''})|split(',') %}
-                {% if App.Config.configArr.pyrat_enabled|default('0') == '1' and (App.Users.userData.is_sysadmin == 1 or (App.Users.userData.team ~ '') in pyratAllowedTeams) %}
+                {% if not animalStudiesReady %}
+                  <span class='dropdown-item disabled' aria-disabled='true' title='{{ 'Animal Studies is not available yet.'|trans }}'><i class='fas fa-paw fa-fw mr-1'></i>{{ 'Animal Studies'|trans }}</span>
+                {% elseif App.Config.configArr.pyrat_enabled|default('0') == '1' and (App.Users.userData.is_sysadmin == 1 or (App.Users.userData.team ~ '') in pyratAllowedTeams) %}
                   {% set isActive = scriptName == 'animal-studies.php' %}
                   <a class='dropdown-item {{ isActive ? 'active' }}' href='animal-studies.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-paw fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Animal Studies'|trans }}</a>
                 {% endif %}
@@ -306,9 +309,11 @@
     <button type='button' class='sidepanel-btn sidepanel-closed' id='tocPanelOpener' data-action='toggle-sidepanel' data-target='toc' aria-controls='tocPanel' title='{{ 'Toggle table of contents'|trans }}' aria-label='{{ 'Toggle table of contents'|trans }}'>
       <i class='fas fa-bars-staggered'></i>
     </button>
-    <button type='button' class='sidepanel-btn sidepanel-closed' id='htmlToolsPanelOpener' data-action='toggle-sidepanel' data-target='html-tools' aria-expanded='false' aria-controls='htmlToolsPanel' title='{{ 'Toggle HTML tools'|trans }}' aria-label='{{ 'Toggle HTML tools'|trans }}'>
-      <i class='fas fa-toolbox'></i>
-    </button>
+    {% if constant('Elabftw\\Elabftw\\FeatureFlags::HTML_TOOLS') %}
+      <button type='button' class='sidepanel-btn sidepanel-closed' id='htmlToolsPanelOpener' data-action='toggle-sidepanel' data-target='html-tools' aria-expanded='false' aria-controls='htmlToolsPanel' title='{{ 'Toggle HTML tools'|trans }}' aria-label='{{ 'Toggle HTML tools'|trans }}'>
+        <i class='fas fa-toolbox'></i>
+      </button>
+    {% endif %}
   </div>
 {% endif %}
 

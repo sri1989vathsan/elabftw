@@ -6,6 +6,7 @@
  * @package elabftw
  */
 
+import $ from 'jquery';
 import { Api } from './Apiv2.class';
 import { on } from './handlers';
 
@@ -328,6 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
   on('create-experiment-folder', () => {
     const nameInput = document.getElementById('newFolderName') as HTMLInputElement;
     const parentSelect = document.getElementById('newFolderParent') as HTMLSelectElement;
+    const descriptionInput = document.getElementById('newFolderDescription') as HTMLTextAreaElement;
     const name = nameInput.value.trim();
     if (!name) {
       return;
@@ -336,8 +338,10 @@ document.addEventListener('DOMContentLoaded', () => {
     ApiC.post('experiments_folders', {
       name: name,
       parent_id: parentId,
+      description: descriptionInput.value.trim(),
     }).then(() => {
       nameInput.value = '';
+      descriptionInput.value = '';
       window.location.reload();
     });
   });
@@ -350,20 +354,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Rename folder
-  on('rename-folder', (el: HTMLElement, event: Event) => {
+  // Edit a folder name and its short description in one place.
+  on('edit-folder', (el: HTMLElement, event: Event) => {
     event.stopPropagation();
     event.preventDefault();
-    const folderId = el.dataset.id;
-    const currentName = el.dataset.name;
-    const newName = prompt('Enter new folder name:', currentName);
-    if (newName && newName.trim() !== '' && newName !== currentName) {
-      ApiC.patch(`experiments_folders/${folderId}`, {
-        name: newName.trim(),
-      }).then(() => {
-        window.location.reload();
-      });
-    }
+    (document.getElementById('editExperimentFolderId') as HTMLInputElement).value = el.dataset.id ?? '';
+    (document.getElementById('editExperimentFolderName') as HTMLInputElement).value = el.dataset.name ?? '';
+    (document.getElementById('editExperimentFolderDescription') as HTMLTextAreaElement).value = el.dataset.description ?? '';
+    $('#editExperimentFolderModal').modal('show');
+  });
+
+  on('save-folder-details', (_el: HTMLElement, event: Event) => {
+    event.preventDefault();
+    const folderId = (document.getElementById('editExperimentFolderId') as HTMLInputElement).value;
+    const nameInput = document.getElementById('editExperimentFolderName') as HTMLInputElement;
+    const descriptionInput = document.getElementById('editExperimentFolderDescription') as HTMLTextAreaElement;
+    if (!folderId || !nameInput.reportValidity()) return;
+
+    ApiC.patch(`experiments_folders/${folderId}`, {
+      name: nameInput.value.trim(),
+      description: descriptionInput.value.trim(),
+    }).then(() => {
+      $('#editExperimentFolderModal').modal('hide');
+      window.location.reload();
+    });
   });
 
   // Delete folder

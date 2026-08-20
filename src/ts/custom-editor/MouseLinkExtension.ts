@@ -93,6 +93,7 @@ async function searchAnimals(mode: 'mouse' | 'cage', query: string): Promise<Pyr
 }
 
 export function registerMouseLinkExtension(editor: Editor): void {
+  const isAvailable = document.getElementById('pyratExperimentSection') !== null;
   const openDialog = (): void => {
     const bookmark = editor.selection.getBookmark(2, true);
     const hasSelection = !editor.selection.getRng().collapsed;
@@ -230,7 +231,11 @@ export function registerMouseLinkExtension(editor: Editor): void {
   editor.ui.registry.addIcon('pyrat-mouse', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8.5 8.25C8.5 4.8 10.3 2 12.5 2s4 2.8 4 6.25v4.5c0 3.45-1.8 6.25-4 6.25s-4-2.8-4-6.25v-4.5Z" stroke="currentColor" stroke-width="1.8"/><path d="M12.5 2v5.5M12.5 7.5H8.8M16.2 7.5h1.3c2.5 0 4.5 2 4.5 4.5s-2 4.5-4.5 4.5h-1.7M10.5 21l2-2 2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10.5" cy="10" r=".8" fill="currentColor"/><circle cx="14.5" cy="10" r=".8" fill="currentColor"/></svg>');
   editor.ui.registry.addButton('insert-mouse', {
     icon: 'pyrat-mouse',
-    tooltip: 'Insert PyRAT mouse link',
+    tooltip: isAvailable ? 'Insert PyRAT mouse link' : 'Animal Studies is not available yet',
     onAction: openDialog,
+    onSetup: api => {
+      api.setEnabled(isAvailable);
+      return () => undefined;
+    },
   });
 }

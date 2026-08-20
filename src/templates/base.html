@@ -88,7 +88,9 @@
   {% include 'calendar-activity-panel.html' %}
   {% include 'favorite-filters-panel.html' %}
   {% include 'toc-panel.html' %}
-  {% include 'html-tools-panel.html' %}
+  {% if constant('Elabftw\\Elabftw\\FeatureFlags::HTML_TOOLS') %}
+    {% include 'html-tools-panel.html' %}
+  {% endif %}
 {% endif %}
 
 {# FOOTER #}

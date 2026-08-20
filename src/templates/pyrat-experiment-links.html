@@ -1,5 +1,5 @@
 {% set pyratAllowedTeams = App.Config.configArr.pyrat_allowed_teams|default('')|replace({' ': ''})|split(',') %}
-{% if Entity.entityType.value == 'experiments' and not App.isAnonymous() and App.Config.configArr.pyrat_enabled|default('0') == '1' and (App.Users.userData.is_sysadmin == 1 or (App.Users.userData.team ~ '') in pyratAllowedTeams) %}
+{% if constant('Elabftw\\Elabftw\\FeatureFlags::ANIMAL_STUDIES') and Entity.entityType.value == 'experiments' and not App.isAnonymous() and App.Config.configArr.pyrat_enabled|default('0') == '1' and (App.Users.userData.is_sysadmin == 1 or (App.Users.userData.team ~ '') in pyratAllowedTeams) %}
 <section id='pyratExperimentSection' data-experiment-id='{{ Entity.id }}'>
   <h3 class='d-inline togglable-section-title' data-action='toggle-next' data-scroll-btn='fa-paw' data-scroll-btn-label='{{ 'PyRAT animals and cages'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' tabindex='0' role='button' aria-expanded='true' aria-controls='pyratExperimentDiv'>
     <i class='fas fa-caret-down fa-fw mr-2'></i><i class='fas fa-paw mr-1'></i>{{ 'PyRAT animals and cages'|trans }} (<span id='pyratExperimentLinksCount'>0</span>)

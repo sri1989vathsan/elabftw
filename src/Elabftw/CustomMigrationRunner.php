@@ -32,6 +32,7 @@ final class CustomMigrationRunner
         '006_todolist_history.sql',
         '007_html_tools.sql',
         '008_pyrat_links.sql',
+        '009_ui_descriptions.sql',
     );
 
     private Db $Db;

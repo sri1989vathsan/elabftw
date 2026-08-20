@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Elabftw\Models;
 
+use Elabftw\Elabftw\FeatureFlags;
 use Elabftw\Enums\Action;
 use Elabftw\Enums\Storage;
 use Elabftw\Exceptions\ImproperActionException;
@@ -75,6 +76,9 @@ final class HtmlTools extends AbstractRest
 
     public function __construct(private Users $requester, ?int $id = null)
     {
+        if (!FeatureFlags::HTML_TOOLS) {
+            throw new ResourceNotFoundException();
+        }
         parent::__construct();
         $this->setId($id);
         $this->filesystem = Storage::LOCAL->getStorage()->getFs();

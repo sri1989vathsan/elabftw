@@ -1,4 +1,4 @@
-{% macro catstatidx(type, table, subtitle, infotip, sourceArr, emptyWarning, modalTitle, newNamePlaceholder, teamName, isAdmin) %}
+{% macro catstatidx(type, table, subtitle, infotip, sourceArr, emptyWarning, modalTitle, newNamePlaceholder, teamName, isAdmin, descriptionsEnabled = false) %}
 <h2>{{ teamName }}</h2>
 <div class='mb-5 d-flex justify-content-between'>
   <div class='d-flex'>
@@ -34,6 +34,13 @@
             <label for='expcatColor_{{ cat.id }}'>{{ 'Color'|trans }}</label>
             <input class='form-control color-input' type='color' id='expcatColor_{{ cat.id }}' data-trigger='change' data-model='teams/current/{{ type }}/{{ cat.id }}' data-target='color' value='#{{ cat.color }}' />
           </li>
+
+          {% if descriptionsEnabled %}
+            <li class='list-inline-item align-top'>
+              <label for='expcatDescription_{{ cat.id }}'>{{ 'Short description'|trans }}</label>
+              <textarea class='form-control' rows='2' maxlength='500' id='expcatDescription_{{ cat.id }}' data-trigger='blur' data-model='teams/current/{{ type }}/{{ cat.id }}' data-target='description' placeholder='{{ 'Optional summary of this category'|trans }}'>{{ cat.description }}</textarea>
+            </li>
+          {% endif %}
 
           <li class='list-inline-item'>
             <label for='expcatIsPrivate_{{ cat.id }}'>{{ 'Mark as private'|trans }}</label>
@@ -77,6 +84,14 @@
                 <input class='form-control randomColor col-md-6 color-input' type='color' name='color' id='createCatStatColor' />
               </div>
             </div>
+
+            {% if descriptionsEnabled %}
+              <hr>
+              <div class='d-flex justify-content-between'>
+                <label for='createCatStatDescription' class='col-form-label'>{{ 'Short description'|trans }}</label>
+                <textarea class='form-control col-md-6' rows='3' maxlength='500' name='description' id='createCatStatDescription' placeholder='{{ 'Optional summary of this category'|trans }}'></textarea>
+              </div>
+            {% endif %}
         </div>
 
         <div class='modal-footer'>

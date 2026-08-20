@@ -24,6 +24,8 @@ use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
 
+use function array_key_exists;
+
 /**
  * Hierarchical folders for experiments
  */
@@ -96,7 +98,10 @@ final class ExperimentsFolders extends AbstractRest
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
 
-        return $this->Db->fetch($req);
+        return (new CustomUiDescriptions())->enrichRows(
+            CustomUiDescriptions::EXPERIMENT_FOLDER,
+            array($this->Db->fetch($req)),
+        )[0];
     }
 
     /**
@@ -176,6 +181,14 @@ final class ExperimentsFolders extends AbstractRest
             $this->update(new CommentParam($params['name']));
         }
 
+        if (array_key_exists('description', $params)) {
+            (new CustomUiDescriptions())->write(
+                CustomUiDescriptions::EXPERIMENT_FOLDER,
+                (int) $this->id,
+                (string) $params['description'],
+            );
+        }
+
         return $this->readOne();
     }
 
@@ -183,10 +196,18 @@ final class ExperimentsFolders extends AbstractRest
     public function postAction(Action $action, array $reqBody): int
     {
         $this->canWriteOrExplode();
-        return $this->create(
+        $id = $this->create(
             $reqBody['name'] ?? throw new ImproperActionException('Missing value for "name"'),
             Filter::intOrNull($reqBody['parent_id'] ?? 0),
         );
+        if (array_key_exists('description', $reqBody)) {
+            (new CustomUiDescriptions())->write(
+                CustomUiDescriptions::EXPERIMENT_FOLDER,
+                $id,
+                (string) $reqBody['description'],
+            );
+        }
+        return $id;
     }
 
     public function create(string $folderName, ?int $parentId = null): int
@@ -227,7 +248,11 @@ final class ExperimentsFolders extends AbstractRest
         $req = $this->Db->prepare($sql);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
 
-        return $this->Db->execute($req);
+        $deleted = $this->Db->execute($req);
+        if ($deleted) {
+            (new CustomUiDescriptions())->delete(CustomUiDescriptions::EXPERIMENT_FOLDER, (int) $this->id);
+        }
+        return $deleted;
     }
 
     /**
@@ -295,7 +320,10 @@ final class ExperimentsFolders extends AbstractRest
         $req = $this->Db->prepare($sql);
         $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
         $this->Db->execute($req);
-        return $req->fetchAll();
+        return (new CustomUiDescriptions())->enrichRows(
+            CustomUiDescriptions::EXPERIMENT_FOLDER,
+            $req->fetchAll(),
+        );
     }
 
     /**

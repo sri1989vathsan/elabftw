@@ -11,6 +11,7 @@ namespace Elabftw\Elabftw;
 
 use Elabftw\Exceptions\AppException;
 use Elabftw\Exceptions\ImproperActionException;
+use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Exceptions\UnauthorizedException;
 use Elabftw\Models\PyratLinks;
 use Elabftw\Services\Pyrat\PyratAccess;
@@ -29,6 +30,9 @@ require_once dirname(__DIR__) . '/init.inc.php';
 
 $Response = new JsonResponse();
 try {
+    if (!FeatureFlags::ANIMAL_STUDIES) {
+        throw new ResourceNotFoundException();
+    }
     if ($App->isAnonymous()) {
         throw new UnauthorizedException();
     }

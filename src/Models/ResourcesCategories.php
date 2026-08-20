@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Elabftw\Models;
 
+use Elabftw\Traits\CategoryDescriptionTrait;
 use Override;
 
 /**
@@ -19,7 +20,14 @@ use Override;
  */
 final class ResourcesCategories extends AbstractStatus
 {
+    use CategoryDescriptionTrait;
+
     protected string $table = 'items_categories';
+
+    protected function getDescriptionScope(): string
+    {
+        return CustomUiDescriptions::RESOURCE_CATEGORY;
+    }
 
     #[Override]
     protected function getUsersCanwriteName(): string
