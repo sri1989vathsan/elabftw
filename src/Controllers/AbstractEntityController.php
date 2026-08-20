@@ -139,6 +139,7 @@ abstract class AbstractEntityController implements ControllerInterface
 
         $ExperimentsFolders = new ExperimentsFolders($this->App->Users);
         $experimentsFoldersTreeArr = $ExperimentsFolders->readAllRecursive();
+        $favoriteFolderId = $ExperimentsFolders->getFavoriteFolder();
 
         $renderArr = array(
             'DisplayParams' => $DisplayParams,
@@ -146,7 +147,8 @@ abstract class AbstractEntityController implements ControllerInterface
             'categoryArr' => $this->categoryArr,
             'experimentsFoldersArr' => $experimentsFoldersTreeArr,
             'experimentsFoldersTreeArr' => $experimentsFoldersTreeArr,
-            'favoriteFolderId' => $ExperimentsFolders->getFavoriteFolder(),
+            'favoriteFolderId' => $favoriteFolderId,
+            'favoriteRootFolderId' => $ExperimentsFolders->getRootFolderId($favoriteFolderId),
             'statusArr' => $this->statusArr,
             'favTagsArr' => $favTagsArr,
             'pageTitle' => $this->getPageTitle(),
@@ -179,6 +181,7 @@ abstract class AbstractEntityController implements ControllerInterface
     {
         $RequestActions = new RequestActions($this->App->Users, $this->Entity);
         $ExperimentsFoldersView = new ExperimentsFolders($this->App->Users);
+        $favoriteFolderId = $ExperimentsFoldersView->getFavoriteFolder();
         // the mode parameter is for the uploads tpl
         $renderArr = array(
             'categoryArr' => $this->categoryArr,
@@ -189,7 +192,8 @@ abstract class AbstractEntityController implements ControllerInterface
             'entityRequestActionsArr' => $RequestActions->readAllFull(),
             'experimentsFoldersArr' => $ExperimentsFoldersView->readHierarchyRows(),
             'experimentsFoldersTreeArr' => $ExperimentsFoldersView->readAllRecursive(),
-            'favoriteFolderId' => $ExperimentsFoldersView->getFavoriteFolder(),
+            'favoriteFolderId' => $favoriteFolderId,
+            'favoriteRootFolderId' => $ExperimentsFoldersView->getRootFolderId($favoriteFolderId),
             'pageTitle' => $this->getPageTitle(),
             'mode' => 'view',
             'hideTitle' => true,
@@ -240,6 +244,7 @@ abstract class AbstractEntityController implements ControllerInterface
         $DisplayParamsTemplates = new DisplayParams($this->App->Users, EntityType::Templates);
         $DisplayParamsItemsTypes = new DisplayParams($this->App->Users, EntityType::ItemsTypes);
         $ExperimentsFoldersEdit = new ExperimentsFolders($this->App->Users);
+        $favoriteFolderId = $ExperimentsFoldersEdit->getFavoriteFolder();
 
         $renderArr = array(
             'categoryArr' => $this->categoryArr,
@@ -250,7 +255,8 @@ abstract class AbstractEntityController implements ControllerInterface
             'entityRequestActionsArr' => $RequestActions->readAllFull(),
             'experimentsFoldersArr' => $ExperimentsFoldersEdit->readHierarchyRows(),
             'experimentsFoldersTreeArr' => $ExperimentsFoldersEdit->readAllRecursive(),
-            'favoriteFolderId' => $ExperimentsFoldersEdit->getFavoriteFolder(),
+            'favoriteFolderId' => $favoriteFolderId,
+            'favoriteRootFolderId' => $ExperimentsFoldersEdit->getRootFolderId($favoriteFolderId),
             'hideTitle' => true,
             'metadataGroups' => $Metadata->getGroups(),
             'mode' => 'edit',

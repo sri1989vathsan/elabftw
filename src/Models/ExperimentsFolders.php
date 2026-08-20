@@ -278,6 +278,7 @@ final class ExperimentsFolders extends AbstractRest
                 name,
                 parent_id,
                 userid,
+                id AS root_id,
                 name AS full_path,
                 0 AS level_depth,
                 (SELECT COUNT(*) FROM experiments_folders AS ef WHERE ef.parent_id = experiments_folders.id) AS children_count,
@@ -295,6 +296,7 @@ final class ExperimentsFolders extends AbstractRest
                 child.name,
                 child.parent_id,
                 child.userid,
+                parent.root_id,
                 CONCAT(parent.full_path, ' > ', child.name) AS full_path,
                 parent.level_depth + 1,
                 (SELECT COUNT(*) FROM experiments_folders AS ef WHERE ef.parent_id = child.id) AS children_count,
@@ -313,6 +315,7 @@ final class ExperimentsFolders extends AbstractRest
             full_path,
             parent_id,
             userid,
+            root_id,
             level_depth,
             children_count,
             experiments_count
@@ -340,6 +343,36 @@ final class ExperimentsFolders extends AbstractRest
         $this->Db->execute($req);
         $result = $req->fetchColumn();
         return $result !== false && $result !== null ? (int) $result : null;
+    }
+
+    /**
+     * Resolve a folder to the root branch that contains it.
+     */
+    public function getRootFolderId(?int $folderId): ?int
+    {
+        if ($folderId === null) {
+            return null;
+        }
+        $sql = 'WITH RECURSIVE folder_ancestors AS (
+            SELECT id, parent_id, team
+            FROM experiments_folders
+            WHERE id = :folder_id AND team = :root_team
+
+            UNION ALL
+
+            SELECT parent.id, parent.parent_id, parent.team
+            FROM experiments_folders AS parent
+            INNER JOIN folder_ancestors AS child ON child.parent_id = parent.id
+            WHERE parent.team = :ancestor_team
+        )
+        SELECT id FROM folder_ancestors WHERE parent_id IS NULL LIMIT 1';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':folder_id', $folderId, PDO::PARAM_INT);
+        $req->bindValue(':root_team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $req->bindValue(':ancestor_team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $result = $req->fetchColumn();
+        return $result === false ? null : (int) $result;
     }
 
     /**

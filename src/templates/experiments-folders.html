@@ -8,7 +8,6 @@
     data-favorite-folder-id='{{ favoriteFolderId is defined and favoriteFolderId ? favoriteFolderId : '' }}'
     data-current-folder-id='{{ currentFolderId }}'
     data-current-user-id='{{ App.Users.userData.userid }}'
-    data-other-folders-label='{{ 'Other folders'|trans|e('html_attr') }}'
   >
     <div class='d-flex align-items-center justify-content-between mb-3'>
       <h3 class='mb-0'><i class='fas fa-folder-tree mr-2'></i>{{ 'Folders'|trans }}</h3>
@@ -43,61 +42,91 @@
       <div class='d-flex align-items-center justify-content-between mb-2'>
         <h4 class='h6 mb-0'>{{ 'Folder tree'|trans }}</h4>
         {% if favoriteFolderId is defined and favoriteFolderId %}
-          <span class='small color-medium'><i class='fas fa-star fa-fw mr-1'></i>{{ 'Favorite first'|trans }}</span>
+          <span class='small color-medium'><i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked first'|trans }}</span>
         {% endif %}
       </div>
 
-      {# Render folder hierarchy recursively with collapsible parents #}
-      {% macro renderFolderTree(folders, parentId, depth, currentFolderId, favoriteFolderId) %}
-        {% if folders[parentId] is defined %}
-          {% for folder in folders[parentId] %}
-            <div
-              class='ml-{{ depth > 0 ? 3 : 0 }} mb-1 folder-node'
-              data-folder-id='{{ folder.id }}'
-              data-folder-owner-id='{{ folder.userid }}'
-              data-folder-full-path='{{ folder.full_path|e('html_attr') }}'
-            >
-              <div class='d-flex align-items-center folder-row'>
-                {# Toggle caret for folders with children #}
-                {% if folder.children_count > 0 %}
-                  <span class='folder-toggle mr-1' data-action='toggle-folder-children' data-folder-id='{{ folder.id }}' role='button' tabindex='0' title='{{ 'Toggle visibility'|trans }}' style='cursor:pointer;width:16px;text-align:center'>
-                    <i class='fas fa-caret-down fa-fw fa-xs'></i>
-                  </span>
-                {% else %}
-                  <span class='mr-1' style='width:16px;display:inline-block'></span>
-                {% endif %}
-                <a href='experiments.php?folder={{ folder.id }}' title='{{ folder.full_path|e('html_attr') }}' class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'>
-                  <i class='fas fa-folder fa-fw mr-1 folder-icon'></i>{{ folder.name }}
-                  {% if folder.experiments_count > 0 %}
-                    <span class='badge badge-secondary'>{{ folder.experiments_count }}</span>
-                  {% endif %}
-                </a>
-                {# Favorite star toggle #}
-                <span data-action='toggle-favorite-folder' data-id='{{ folder.id }}' class='ml-1 favorite-folder-star hl-hover-gray rounded p-1' title='{{ favoriteFolderId is defined and favoriteFolderId == folder.id ? 'Remove from favorites' : 'Set as favorite' }}' style='cursor:pointer'>
-                  <i class='{{ favoriteFolderId is defined and favoriteFolderId == folder.id ? 'fas' : 'far' }} fa-star fa-xs' style='color:{{ favoriteFolderId is defined and favoriteFolderId == folder.id ? '#f0ad4e' : '#999' }}'></i>
-                </span>
-                {# Actions: edit and delete #}
-                <span class='ml-1 folder-actions' style='display:none'>
-                  <span data-action='edit-folder' data-id='{{ folder.id }}' data-name='{{ folder.name|e('html_attr') }}' data-description='{{ folder.description|e('html_attr') }}' class='hl-hover-gray rounded p-1' title='{{ 'Edit folder'|trans }}'><i class='fas fa-pencil fa-xs'></i></span>
-                  <span data-action='delete-folder' data-id='{{ folder.id }}' class='hl-hover-gray rounded p-1' title='{{ 'Delete'|trans }}'><i class='fas fa-trash-alt fa-xs'></i></span>
-                </span>
-              </div>
-              {% if folder.description %}
-                <div class='small color-medium text-truncate ml-4 pl-2 folder-description' title='{{ folder.description|e('html_attr') }}'>{{ folder.description }}</div>
+      {# Render exactly one branch for each root folder. Children only exist inside their parent branch. #}
+      {% macro renderFolderBranch(folders, folder, depth, currentFolderId, favoriteFolderId) %}
+        <div
+          class='ml-{{ depth > 0 ? 3 : 0 }} mb-1 folder-node'
+          data-folder-id='{{ folder.id }}'
+          data-folder-root-id='{{ folder.root_id }}'
+          data-folder-depth='{{ depth }}'
+          data-folder-owner-id='{{ folder.userid }}'
+          data-folder-full-path='{{ folder.full_path|e('html_attr') }}'
+        >
+          <div class='d-flex align-items-center folder-row'>
+            {% if folder.children_count > 0 %}
+              <span class='folder-toggle mr-1' data-action='toggle-folder-children' data-folder-id='{{ folder.id }}' role='button' tabindex='0' title='{{ 'Toggle visibility'|trans }}' style='cursor:pointer;width:16px;text-align:center'>
+                <i class='fas fa-caret-right fa-fw fa-xs'></i>
+              </span>
+            {% else %}
+              <span class='mr-1' style='width:16px;display:inline-block'></span>
+            {% endif %}
+            <a href='experiments.php?folder={{ folder.id }}' title='{{ folder.full_path|e('html_attr') }}' class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'>
+              <i class='fas fa-folder fa-fw mr-1 folder-icon'></i>{{ folder.name }}
+              {% if folder.experiments_count > 0 %}
+                <span class='badge badge-secondary'>{{ folder.experiments_count }}</span>
               {% endif %}
-              {# Collapsible children container #}
-              {% if folder.children_count > 0 %}
-                <div class='folder-children' data-parent-folder-id='{{ folder.id }}'>
-                  {{ _self.renderFolderTree(folders, folder.id, depth + 1, currentFolderId, favoriteFolderId) }}
-                </div>
+            </a>
+            <span data-action='toggle-favorite-folder' data-id='{{ folder.id }}' class='ml-1 favorite-folder-star hl-hover-gray rounded p-1' title='{{ favoriteFolderId is defined and favoriteFolderId == folder.id ? 'Remove bookmark' : 'Bookmark folder' }}' style='cursor:pointer'>
+              <i class='{{ favoriteFolderId is defined and favoriteFolderId == folder.id ? 'fas' : 'far' }} fa-star fa-xs' style='color:{{ favoriteFolderId is defined and favoriteFolderId == folder.id ? '#f0ad4e' : '#999' }}'></i>
+            </span>
+            <span class='ml-1 folder-actions' style='display:none'>
+              <span data-action='edit-folder' data-id='{{ folder.id }}' data-name='{{ folder.name|e('html_attr') }}' data-description='{{ folder.description|e('html_attr') }}' class='hl-hover-gray rounded p-1' title='{{ 'Edit folder'|trans }}'><i class='fas fa-pencil fa-xs'></i></span>
+              <span data-action='delete-folder' data-id='{{ folder.id }}' class='hl-hover-gray rounded p-1' title='{{ 'Delete'|trans }}'><i class='fas fa-trash-alt fa-xs'></i></span>
+            </span>
+          </div>
+          {% if folder.description %}
+            <div class='small color-medium text-truncate ml-4 pl-2 folder-description' title='{{ folder.description|e('html_attr') }}'>{{ folder.description }}</div>
+          {% endif %}
+          {% if folder.children_count > 0 %}
+            <div class='folder-children' data-parent-folder-id='{{ folder.id }}' style='display:none'>
+              {% if folders[folder.id] is defined %}
+                {% for child in folders[folder.id] %}
+                  {{ _self.renderFolderBranch(folders, child, depth + 1, currentFolderId, favoriteFolderId) }}
+                {% endfor %}
               {% endif %}
             </div>
-          {% endfor %}
-        {% endif %}
+          {% endif %}
+        </div>
       {% endmacro %}
 
       <div id='experimentsFoldersTree' class='folder-tree-list'>
-        {{ _self.renderFolderTree(experimentsFoldersTreeArr, '', 0, currentFolderId, favoriteFolderId is defined ? favoriteFolderId : null) }}
+        {% if favoriteRootFolderId is defined and favoriteRootFolderId %}
+          <section class='bookmarked-folders-section folder-tree-section mb-2'>
+            <div class='folder-tree-section-label small font-weight-bold mb-1'>
+              <i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked'|trans }}
+            </div>
+            <div class='bookmarked-folders-content'>
+              {% if experimentsFoldersTreeArr[''] is defined %}
+                {% for folder in experimentsFoldersTreeArr[''] %}
+                  {% if folder.id == favoriteRootFolderId %}
+                    {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, favoriteFolderId) }}
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            </div>
+          </section>
+        {% endif %}
+
+        <section class='other-folders-wrapper folder-tree-section'>
+          <button type='button' class='btn btn-sm btn-block text-left other-folders-header' data-action='toggle-other-folders' aria-expanded='false'>
+            <i class='fas fa-caret-right fa-fw fa-xs mr-1'></i>
+            <i class='fas fa-folder fa-fw mr-1'></i>
+            <span>{{ 'Other folders'|trans }}</span>
+          </button>
+          <div class='other-folders-content ml-2 mt-1' style='display:none'>
+            {% if experimentsFoldersTreeArr[''] is defined %}
+              {% for folder in experimentsFoldersTreeArr[''] %}
+                {% if favoriteRootFolderId is not defined or not favoriteRootFolderId or folder.id != favoriteRootFolderId %}
+                  {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, favoriteFolderId is defined ? favoriteFolderId : null) }}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          </div>
+        </section>
       </div>
       <div id='myFoldersEmpty' class='small color-medium text-center border rounded p-3 mt-2' hidden>
         <i class='fas fa-folder-open fa-fw mr-1'></i>{{ 'You have not created any folders yet.'|trans }}

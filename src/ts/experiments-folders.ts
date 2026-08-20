@@ -21,9 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const ApiC = new Api();
 
-  const COLLAPSED_KEY = 'collapsed-experiment-folders';
-  const OTHER_FOLDERS_KEY = 'other-folders-collapsed';
   const currentUserId = sidebar.dataset.currentUserId ?? '';
+  // Versioned, per-user keys prevent legacy DOM-order state from leaking into
+  // this deterministic tree layout. A missing value means collapsed by default.
+  const COLLAPSED_KEY = `collapsed-experiment-folders-v2-${currentUserId}`;
+  const OTHER_FOLDERS_KEY = `other-folders-collapsed-v2-${currentUserId}`;
   const folderScopeKey = `experiment-folder-scope-${currentUserId}`;
   const storedFolderScope = localStorage.getItem(folderScopeKey);
   let activeFolderScope: FolderScope = storedFolderScope === 'all' ? 'all' : 'mine';
@@ -71,14 +73,12 @@ document.addEventListener('DOMContentLoaded', () => {
       .some(Boolean);
     const isOwned = node.dataset.folderOwnerId === currentUserId;
     const isCurrent = Boolean(currentFolderId) && node.dataset.folderId === currentFolderId;
-    const isVisible = isOwned || isCurrent || hasVisibleChild;
+    const isBookmarked = Boolean(favoriteFolderId) && node.dataset.folderId === favoriteFolderId;
+    const isVisible = isOwned || isCurrent || isBookmarked || hasVisibleChild;
     node.hidden = !isVisible;
 
-    // A shared ancestor is shown only to preserve the path to one of my folders.
-    node.classList.toggle('folder-scope-context', isVisible && !isOwned && !isCurrent);
-    if (hasVisibleChild && !isOwned && node.dataset.folderId) {
-      applyFolderState(node.dataset.folderId, false);
-    }
+    // A shared ancestor is shown only to preserve tree context.
+    node.classList.toggle('folder-scope-context', isVisible && !isOwned && !isCurrent && !isBookmarked);
     return isVisible;
   }
 
@@ -97,22 +97,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function updateOtherFoldersWrapper(scope: FolderScope): void {
+  function setOtherFoldersOpen(isOpen: boolean): void {
     const wrapper = document.querySelector('.other-folders-wrapper') as HTMLElement | null;
     if (!wrapper) return;
-    const header = wrapper.querySelector('.other-folders-header') as HTMLElement;
-    const content = wrapper.querySelector('.other-folders-content') as HTMLElement;
+    const header = wrapper.querySelector('.other-folders-header') as HTMLButtonElement | null;
+    const content = wrapper.querySelector('.other-folders-content') as HTMLElement | null;
+    if (!header || !content) return;
+    content.style.display = isOpen ? 'block' : 'none';
+    header.setAttribute('aria-expanded', String(isOpen));
+    const caret = header.querySelector('.fa-caret-right, .fa-caret-down');
+    const folderIcon = header.querySelector('.fa-folder, .fa-folder-open');
+    if (caret) {
+      caret.classList.toggle('fa-caret-right', !isOpen);
+      caret.classList.toggle('fa-caret-down', isOpen);
+    }
+    if (folderIcon) {
+      folderIcon.classList.toggle('fa-folder', !isOpen);
+      folderIcon.classList.toggle('fa-folder-open', isOpen);
+    }
+  }
 
-    if (scope === 'mine') {
-      header.hidden = true;
-      content.style.display = 'block';
-      wrapper.hidden = !content.querySelector('.folder-node:not([hidden])');
-      return;
+  function updateFolderSections(): void {
+    const bookmarkedSection = document.querySelector('.bookmarked-folders-section') as HTMLElement | null;
+    const bookmarkedRoot = bookmarkedSection?.querySelector('.folder-node[data-folder-depth="0"]') as HTMLElement | null;
+    if (bookmarkedSection) {
+      bookmarkedSection.hidden = !bookmarkedRoot || bookmarkedRoot.hidden;
     }
 
-    wrapper.hidden = false;
-    header.hidden = false;
-    content.style.display = localStorage.getItem(OTHER_FOLDERS_KEY) === 'open' ? 'block' : 'none';
+    const wrapper = document.querySelector('.other-folders-wrapper') as HTMLElement | null;
+    const otherRoots = wrapper
+      ? Array.from(wrapper.querySelectorAll('.other-folders-content > .folder-node[data-folder-depth="0"]')) as HTMLElement[]
+      : [];
+    if (wrapper) {
+      wrapper.hidden = !otherRoots.some(node => !node.hidden);
+    }
   }
 
   function applyFolderScope(scope: FolderScope): void {
@@ -137,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     } else {
-      const rootNodes = allNodes.filter(node => !node.parentElement?.closest('.folder-node'));
+      const rootNodes = allNodes.filter(node => node.dataset.folderDepth === '0');
       rootNodes.forEach(node => applyMineVisibility(node));
     }
 
@@ -147,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
       emptyState.hidden = scope !== 'mine' || ownedFolderCount > 0;
     }
     filterParentFolders(scope);
-    updateOtherFoldersWrapper(scope);
+    updateFolderSections();
   }
 
   /**
@@ -174,34 +192,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
-   * Walk up from a folder node to find its root-level ancestor folder ID.
-   * Returns the folder ID itself if it's already at root level.
-   */
-  function getRootAncestorId(folderId: string): string {
-    let node = document.querySelector(`.folder-node[data-folder-id="${folderId}"]`) as HTMLElement;
-    if (!node) return folderId;
-    let rootId = folderId;
-    while (node) {
-      const parentChildren = node.parentElement?.closest('.folder-children') as HTMLElement;
-      if (parentChildren) {
-        // This node is inside a .folder-children container — its parent folder is the ancestor
-        const ancestorNode = parentChildren.closest('.folder-node') as HTMLElement;
-        if (ancestorNode && ancestorNode.dataset.folderId) {
-          rootId = ancestorNode.dataset.folderId;
-          node = ancestorNode;
-        } else {
-          break;
-        }
-      } else {
-        // This node is at root level
-        rootId = node.dataset.folderId || rootId;
-        break;
-      }
-    }
-    return rootId;
-  }
-
-  /**
    * Collect all ancestor folder IDs for a given folder (not including itself).
    */
   function getAncestorIds(folderId: string): string[] {
@@ -223,174 +213,33 @@ document.addEventListener('DOMContentLoaded', () => {
     return ancestors;
   }
 
-  /**
-   * Move the favorite folder's root ancestor to the top of the sidebar.
-   * For root-level favorites this moves the folder itself;
-   * for subfolder favorites this moves the containing root folder.
-   */
-  function pinFavoriteToTop(): void {
-    if (!favoriteFolderId) return;
-    const rootId = getRootAncestorId(favoriteFolderId);
-    const rootNode = document.querySelector(`.folder-node[data-folder-id="${rootId}"]`) as HTMLElement;
-    if (!rootNode) return;
-    const parent = rootNode.parentElement;
-    if (!parent) return;
-    // Only move root-level nodes (safety check)
-    if (parent.closest('.folder-children')) return;
-    parent.insertBefore(rootNode, parent.firstChild);
-  }
-
-  /**
-   * On first load, if there's a favorite folder set and no specific folder is
-   * selected in the URL, expand the ancestor chain to the favorite and
-   * collapse subfolders below it.
-   */
-  function applyDefaultCollapseForFavorite(): void {
-    if (!favoriteFolderId) return;
-
-    // If a specific folder is selected, don't override collapse state
-    if (currentFolderId && currentFolderId !== '0') return;
-
-    const collapsed = getCollapsedSet();
-
-    // Expand the root ancestor of the favorite
-    const rootAncestorId = getRootAncestorId(favoriteFolderId);
-    collapsed.delete(rootAncestorId);
-
-    // Expand all ancestors along the path to the favorite subfolder
-    for (const ancestorId of getAncestorIds(favoriteFolderId)) {
-      collapsed.delete(ancestorId);
-    }
-
-    // Collapse subfolders *below* the favorite folder
-    const favChildrenDiv = document.querySelector(`.folder-children[data-parent-folder-id="${favoriteFolderId}"]`);
-    if (favChildrenDiv) {
-      favChildrenDiv.querySelectorAll('.folder-node').forEach((node: HTMLElement) => {
-        const childId = node.dataset.folderId;
-        if (!childId) return;
-        const hasChildren = document.querySelector(`.folder-children[data-parent-folder-id="${childId}"]`);
-        if (hasChildren) {
-          collapsed.add(childId);
-        }
-      });
-    }
-
-    saveCollapsedSet(collapsed);
-  }
-
-  /**
-   * After pinning the favorite, wrap all remaining root-level folder nodes
-   * into a collapsible "Other folders" group that defaults to collapsed.
-   */
-  function wrapOtherFolders(): void {
-    if (!favoriteFolderId) return;
-
-    const rootAncestorId = getRootAncestorId(favoriteFolderId);
-
-    // Find the container that holds root-level folder nodes.
-    const container = document.getElementById('experimentsFoldersTree');
-    if (!container) return;
-
-    // Collect non-favorite root-level folder nodes
-    const otherNodes: HTMLElement[] = [];
-    container.querySelectorAll(':scope > .folder-node').forEach((node: HTMLElement) => {
-      if (node.dataset.folderId !== rootAncestorId) {
-        otherNodes.push(node);
-      }
-    });
-
-    if (otherNodes.length === 0) return;
-
-    // Check stored collapse state (default: collapsed)
-    const isCollapsed = localStorage.getItem(OTHER_FOLDERS_KEY) !== 'open';
-
-    // Build the "Other folders" wrapper
-    const wrapper = document.createElement('div');
-    wrapper.className = 'mb-1 other-folders-wrapper';
-    wrapper.innerHTML = `
-      <div class="d-flex align-items-center other-folders-header" style="cursor:pointer" role="button" tabindex="0">
-        <span class="mr-1" style="width:16px;text-align:center">
-          <i class="fas ${isCollapsed ? 'fa-caret-right' : 'fa-caret-down'} fa-fw fa-xs"></i>
-        </span>
-        <i class="fas ${isCollapsed ? 'fa-folder' : 'fa-folder-open'} fa-fw mr-1 color-medium"></i>
-        <span class="color-medium" data-role="other-folders-label"></span>
-      </div>
-      <div class="other-folders-content ml-3" style="display:${isCollapsed ? 'none' : 'block'}"></div>
-    `;
-    const otherFoldersLabel = wrapper.querySelector('[data-role="other-folders-label"]');
-    if (otherFoldersLabel) {
-      otherFoldersLabel.textContent = sidebar.dataset.otherFoldersLabel ?? 'Other folders';
-    }
-
-    const contentDiv = wrapper.querySelector('.other-folders-content') as HTMLElement;
-    // Move other folder nodes into the wrapper
-    otherNodes.forEach(node => contentDiv.appendChild(node));
-
-    // Insert wrapper after the favorite folder node
-    container.appendChild(wrapper);
-
-    // Toggle handler for the "Other folders" header
-    const header = wrapper.querySelector('.other-folders-header') as HTMLElement;
-    header.addEventListener('click', () => {
-      const content = wrapper.querySelector('.other-folders-content') as HTMLElement;
-      const caret = header.querySelector('.fa-caret-right, .fa-caret-down');
-      const folderIcon = header.querySelector('.fa-folder, .fa-folder-open');
-      const currentlyHidden = content.style.display === 'none';
-
-      content.style.display = currentlyHidden ? 'block' : 'none';
-      if (caret) {
-        caret.classList.replace(
-          currentlyHidden ? 'fa-caret-right' : 'fa-caret-down',
-          currentlyHidden ? 'fa-caret-down' : 'fa-caret-right',
-        );
-      }
-      if (folderIcon) {
-        folderIcon.classList.replace(
-          currentlyHidden ? 'fa-folder' : 'fa-folder-open',
-          currentlyHidden ? 'fa-folder-open' : 'fa-folder',
-        );
-      }
-      localStorage.setItem(OTHER_FOLDERS_KEY, currentlyHidden ? 'open' : 'collapsed');
-    });
-  }
-
-  // Pin favorite folder to top before applying collapse state
-  pinFavoriteToTop();
-
-  // Wrap non-favorite root folders in "Other folders" group
-  wrapOtherFolders();
-
-  // Apply default collapse for favorite (collapse non-favorites)
-  applyDefaultCollapseForFavorite();
-
-  // Restore collapsed state on load, but ensure the path to the active folder is expanded
+  // On first use, every parent folder is collapsed. Only the ancestor paths to
+  // the active and bookmarked folders are opened so their location is visible.
+  const hasStoredCollapseState = localStorage.getItem(COLLAPSED_KEY) !== null;
   const collapsed = getCollapsedSet();
-  // If a folder is selected, ensure all its ancestors are expanded
-  if (currentFolderId && currentFolderId !== '0') {
-    let node = document.querySelector(`.folder-node[data-folder-id="${currentFolderId}"]`);
-    while (node) {
-      const parentChildren = node.closest('.folder-children') as HTMLElement;
-      if (parentChildren) {
-        const parentFolderId = parentChildren.dataset.parentFolderId;
-        if (parentFolderId) {
-          collapsed.delete(parentFolderId);
-        }
-        node = parentChildren.closest('.folder-node');
-      } else {
-        break;
-      }
-    }
-    saveCollapsedSet(collapsed);
+  if (!hasStoredCollapseState) {
+    document.querySelectorAll('.folder-toggle[data-folder-id]').forEach((toggle: HTMLElement) => {
+      if (toggle.dataset.folderId) collapsed.add(toggle.dataset.folderId);
+    });
   }
+  [favoriteFolderId, currentFolderId].forEach(folderId => {
+    if (!folderId || folderId === '0') return;
+    getAncestorIds(folderId).forEach(ancestorId => collapsed.delete(ancestorId));
+  });
+  saveCollapsedSet(collapsed);
 
-  // Apply stored state to all folders (collapsed get closed icon, expanded get open icon)
   document.querySelectorAll('.folder-toggle[data-folder-id]').forEach((toggle: HTMLElement) => {
     const folderId = toggle.dataset.folderId;
     if (!folderId) return;
     applyFolderState(folderId, collapsed.has(folderId));
   });
 
-  // Apply the remembered per-user scope after favorite ordering and collapse state.
+  const currentNode = currentFolderId
+    ? document.querySelector(`.folder-node[data-folder-id="${currentFolderId}"]`)
+    : null;
+  const activeFolderIsOther = Boolean(currentNode?.closest('.other-folders-wrapper'));
+  setOtherFoldersOpen(activeFolderIsOther || localStorage.getItem(OTHER_FOLDERS_KEY) === 'open');
+
   applyFolderScope(activeFolderScope);
 
   on('select-folder-scope', (el: HTMLElement, event: Event) => {
@@ -398,6 +247,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el.dataset.scope === 'mine' || el.dataset.scope === 'all') {
       applyFolderScope(el.dataset.scope);
     }
+  });
+
+  on('toggle-other-folders', (el: HTMLElement, event: Event) => {
+    event.preventDefault();
+    const isOpen = el.getAttribute('aria-expanded') !== 'true';
+    setOtherFoldersOpen(isOpen);
+    localStorage.setItem(OTHER_FOLDERS_KEY, isOpen ? 'open' : 'collapsed');
   });
 
   // Toggle folder on click — registered via the global on() dispatcher

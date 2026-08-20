@@ -1046,6 +1046,37 @@ tr:first-child td {
     padding-right: 0.25rem;
   }
 
+  .folder-tree-section-label {
+    color: var(--chrome-muted);
+    letter-spacing: 0.02em;
+    padding: 0.25rem 0.35rem;
+    text-transform: uppercase;
+  }
+
+  .bookmarked-folders-section {
+    border-bottom: 1px solid var(--chrome-muted);
+    padding-bottom: 0.4rem;
+
+    .folder-tree-section-label .fas {
+      color: #f0ad4e;
+    }
+  }
+
+  .other-folders-header {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--chrome-muted);
+    display: flex;
+    padding: 0.35rem;
+
+    &:hover,
+    &:focus {
+      background: var(--disabled);
+      color: var(--chrome-fg);
+    }
+  }
+
   .folder-scope-context > .folder-row,
   .folder-scope-context > .folder-description {
     opacity: 0.65;
