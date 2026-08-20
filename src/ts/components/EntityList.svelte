@@ -29,6 +29,7 @@
     id: number;
     title: string | null;
     experiment_goal?: string | null;
+    experiment_conclusion?: string | null;
     state: StateValue;
     category?: string | null;
     category_title?: string | null;
@@ -128,6 +129,7 @@
     currentState: string;
     currentScope: string;
     currentBookable: string;
+    currentFolder: string;
     currentOrder: string;
     currentSort: string;
     currentRelated: number | null;
@@ -292,6 +294,7 @@
       currentState: getCurrentUrlParam('state'),
       currentScope: getCurrentUrlParam('scope'),
       currentBookable: getCurrentUrlParam('bookable'),
+      currentFolder: getCurrentUrlParam('folder'),
       currentOrder: getCurrentUrlParamOrFallback('order', order),
       currentSort: getCurrentUrlParamOrFallback('sort', sort),
       currentRelated: getCurrentUrlNumberParam('related'),
@@ -314,6 +317,7 @@
       context.currentState,
       context.currentScope,
       context.currentBookable,
+      context.currentFolder,
       context.currentOrder,
       context.currentSort,
       context.currentRelated,
@@ -395,6 +399,7 @@
       currentState,
       currentScope,
       currentBookable,
+      currentFolder,
       currentOrder,
       currentSort,
       currentRelated,
@@ -447,6 +452,13 @@
 
       if (currentBookable.length > 0) {
         params['bookable'] = currentBookable;
+      }
+
+      // Folder links reload the list page with ?folder=<id>. Keep that
+      // filter when the Svelte list fetches its rows from the API, including
+      // folder=0 for the Unfiled view.
+      if ((currentType === 'experiments' || currentType === 'items') && currentFolder.length > 0) {
+        params['folder'] = currentFolder;
       }
 
       if (currentOrder.length > 0) {
@@ -552,8 +564,8 @@
     return date.toISOString().slice(0, 10);
   }
 
-  function getGoalPreview(goal: string): string {
-    const normalized = goal.replace(/\s+/g, ' ').trim();
+  function getSummaryPreview(summary: string): string {
+    const normalized = summary.replace(/\s+/g, ' ').trim();
     return normalized.length > GOAL_COLLAPSE_LENGTH
       ? `${normalized.slice(0, GOAL_COLLAPSE_LENGTH).trimEnd()}…`
       : normalized;
@@ -727,7 +739,7 @@
                 <summary class='experiment-goal-summary'>
                   <i class='fas fa-bullseye fa-fw mr-1 color-medium' aria-hidden='true'></i>
                   <span class='font-weight-bold'>{t('Experiment goal')}:</span>
-                  <span class='color-medium ml-1'>{getGoalPreview(entity.experiment_goal)}</span>
+                  <span class='color-medium ml-1'>{getSummaryPreview(entity.experiment_goal)}</span>
                 </summary>
                 <div class='experiment-goal-text breakable mt-2'>{entity.experiment_goal.trim()}</div>
               </details>
@@ -738,6 +750,17 @@
                 {entity.experiment_goal.trim()}
               </p>
             {/if}
+          {/if}
+
+          {#if entityType === 'experiments' && entity.experiment_conclusion?.trim()}
+            <details class='experiment-conclusion border rounded px-2 py-1 mb-2'>
+              <summary class='experiment-conclusion-summary'>
+                <i class='fas fa-clipboard-check fa-fw mr-1 color-medium' aria-hidden='true'></i>
+                <span class='font-weight-bold'>{t('Experiment conclusion')}:</span>
+                <span class='color-medium ml-1'>{getSummaryPreview(entity.experiment_conclusion)}</span>
+              </summary>
+              <div class='experiment-conclusion-text breakable mt-2'>{entity.experiment_conclusion.trim()}</div>
+            </details>
           {/if}
 
           <div class='owner'>
@@ -890,11 +913,13 @@
 {/if}
 
 <style>
-  .experiment-goal-summary {
+  .experiment-goal-summary,
+  .experiment-conclusion-summary {
     cursor: pointer;
   }
 
-  .experiment-goal-text {
+  .experiment-goal-text,
+  .experiment-conclusion-text {
     white-space: pre-wrap;
   }
 </style>

@@ -36,7 +36,7 @@
             <label for='createNewFormTitle'>{{ 'Enter a title'|trans }}</label>
             <input name='title' placeholder='{{ 'Type a descriptive title...'|trans }}' class='form-control' type='text' id='createNewFormTitle' />
           </div>
-          {# Folder selection — only shown when creating experiments #}
+          {# Folder selection — shared by experiments and resources #}
           {% if experimentsFoldersArr is defined %}
           <div class='my-2' id='createNewFolderSection' hidden>
             <label for='createNewFolderSelect'>{{ 'Folder'|trans }}</label>

@@ -1,5 +1,5 @@
-{# FOLDER SELECTOR for experiment edit page #}
-{% if Entity.entityType.value == 'experiments' and experimentsFoldersArr is defined %}
+{# Shared folder selector for experiment and resource edit pages. #}
+{% if Entity.entityType.value in ['experiments', 'items'] and experimentsFoldersArr is defined %}
 <div class='d-flex mb-2 align-items-center'>
   <label for='folderSelect' class='col-form-label mr-3 edit-mode-label justify-content-start d-sm-block d-none'>
     <i class='fas fa-folder fa-fw mr-1'></i>{{ 'Folder'|trans }}

@@ -30,6 +30,8 @@ final class CustomUiDescriptions
 {
     public const string EXPERIMENT_GOAL = 'experiment_goal';
 
+    public const string EXPERIMENT_CONCLUSION = 'experiment_conclusion';
+
     public const string EXPERIMENT_FOLDER = 'experiment_folder';
 
     public const string EXPERIMENT_CATEGORY = 'experiment_category';
@@ -37,6 +39,8 @@ final class CustomUiDescriptions
     public const string RESOURCE_CATEGORY = 'resource_category';
 
     public const int MAX_LENGTH = 500;
+
+    public const int MAX_SUMMARY_LENGTH = 1000;
 
     private Db $Db;
 
@@ -98,7 +102,11 @@ final class CustomUiDescriptions
     {
         $this->validateScope($scope);
         $description = trim($description);
-        if (mb_strlen($description) > self::MAX_LENGTH) {
+        if ($this->isExperimentSummary($scope)) {
+            if (mb_strlen($description) > self::MAX_SUMMARY_LENGTH) {
+                throw new ImproperActionException('Experiment summaries must be 1000 characters or fewer.');
+            }
+        } elseif (mb_strlen($description) > self::MAX_LENGTH) {
             throw new ImproperActionException('Description must be 500 characters or fewer.');
         }
         if ($description === '') {
@@ -132,11 +140,17 @@ final class CustomUiDescriptions
     {
         if (!in_array($scope, array(
             self::EXPERIMENT_GOAL,
+            self::EXPERIMENT_CONCLUSION,
             self::EXPERIMENT_FOLDER,
             self::EXPERIMENT_CATEGORY,
             self::RESOURCE_CATEGORY,
         ), true)) {
             throw new ImproperActionException('Invalid UI description scope.');
         }
+    }
+
+    private function isExperimentSummary(string $scope): bool
+    {
+        return in_array($scope, array(self::EXPERIMENT_GOAL, self::EXPERIMENT_CONCLUSION), true);
     }
 }

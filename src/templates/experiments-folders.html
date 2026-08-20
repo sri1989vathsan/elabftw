@@ -1,6 +1,8 @@
-{# EXPERIMENTS FOLDER TREE - dedicated tab in the left sidebar #}
-{% if Entity.entityType.value == 'experiments' and experimentsFoldersTreeArr is defined %}
+{# Shared experiment/resource folder tree - dedicated tab in the left sidebar. #}
+{% if Entity.entityType.value in ['experiments', 'items'] and experimentsFoldersTreeArr is defined %}
 {% set currentFolderId = App.Request.query.has('folder') ? App.Request.query.get('folder') : Entity.entityData.folder_id|default('') %}
+{% set folderPage = Entity.entityType.value == 'items' ? 'database.php' : 'experiments.php' %}
+{% set folderEntityType = Entity.entityType.value %}
 <div class='side-panel' id='foldersPanel' hidden>
   <div
     id='experimentsFoldersSidebar'
@@ -31,10 +33,10 @@
 
     <div id='experimentsFoldersContent'>
       <div class='d-flex mb-3 folder-quick-links'>
-        <a href='experiments.php' class='btn btn-sm btn-outline-secondary flex-fill mr-1 {{ currentFolderId is empty ? 'active' : '' }}'>
-          <i class='fas fa-flask fa-fw mr-1'></i>{{ 'All experiments'|trans }}
+        <a href='{{ folderPage }}' class='btn btn-sm btn-outline-secondary flex-fill mr-1 {{ currentFolderId is empty ? 'active' : '' }}'>
+          <i class='fas {{ folderEntityType == 'items' ? 'fa-box' : 'fa-flask' }} fa-fw mr-1'></i>{{ (folderEntityType == 'items' ? 'All resources' : 'All experiments')|trans }}
         </a>
-        <a href='experiments.php?folder=0' class='btn btn-sm btn-outline-secondary flex-fill ml-1 {{ App.Request.query.get('folder') == '0' ? 'active' : '' }}'>
+        <a href='{{ folderPage }}?folder=0' class='btn btn-sm btn-outline-secondary flex-fill ml-1 {{ App.Request.query.get('folder') == '0' ? 'active' : '' }}'>
           <i class='fas fa-inbox fa-fw mr-1'></i>{{ 'Unfiled'|trans }}
         </a>
       </div>
@@ -47,7 +49,7 @@
       </div>
 
       {# Render exactly one branch for each root folder. Children only exist inside their parent branch. #}
-      {% macro renderFolderBranch(folders, folder, depth, currentFolderId, favoriteFolderId) %}
+      {% macro renderFolderBranch(folders, folder, depth, currentFolderId, favoriteFolderId, folderPage, folderEntityType) %}
         <div
           class='ml-{{ depth > 0 ? 3 : 0 }} mb-1 folder-node'
           data-folder-id='{{ folder.id }}'
@@ -64,10 +66,11 @@
             {% else %}
               <span class='mr-1' style='width:16px;display:inline-block'></span>
             {% endif %}
-            <a href='experiments.php?folder={{ folder.id }}' title='{{ folder.full_path|e('html_attr') }}' class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'>
+            <a href='{{ folderPage }}?folder={{ folder.id }}' title='{{ folder.full_path|e('html_attr') }}' class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'>
               <i class='fas fa-folder fa-fw mr-1 folder-icon'></i>{{ folder.name }}
-              {% if folder.experiments_count > 0 %}
-                <span class='badge badge-secondary'>{{ folder.experiments_count }}</span>
+              {% set entityCount = folderEntityType == 'items' ? folder.resources_count : folder.experiments_count %}
+              {% if entityCount > 0 %}
+                <span class='badge badge-secondary'>{{ entityCount }}</span>
               {% endif %}
             </a>
             <span data-action='toggle-favorite-folder' data-id='{{ folder.id }}' class='ml-1 favorite-folder-star hl-hover-gray rounded p-1' title='{{ favoriteFolderId is defined and favoriteFolderId == folder.id ? 'Remove bookmark' : 'Bookmark folder' }}' style='cursor:pointer'>
@@ -85,7 +88,7 @@
             <div class='folder-children' data-parent-folder-id='{{ folder.id }}' style='display:none'>
               {% if folders[folder.id] is defined %}
                 {% for child in folders[folder.id] %}
-                  {{ _self.renderFolderBranch(folders, child, depth + 1, currentFolderId, favoriteFolderId) }}
+                  {{ _self.renderFolderBranch(folders, child, depth + 1, currentFolderId, favoriteFolderId, folderPage, folderEntityType) }}
                 {% endfor %}
               {% endif %}
             </div>
@@ -103,7 +106,7 @@
               {% if experimentsFoldersTreeArr[''] is defined %}
                 {% for folder in experimentsFoldersTreeArr[''] %}
                   {% if folder.id == favoriteRootFolderId %}
-                    {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, favoriteFolderId) }}
+                    {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, favoriteFolderId, folderPage, folderEntityType) }}
                   {% endif %}
                 {% endfor %}
               {% endif %}
@@ -121,7 +124,7 @@
             {% if experimentsFoldersTreeArr[''] is defined %}
               {% for folder in experimentsFoldersTreeArr[''] %}
                 {% if favoriteRootFolderId is not defined or not favoriteRootFolderId or folder.id != favoriteRootFolderId %}
-                  {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, favoriteFolderId is defined ? favoriteFolderId : null) }}
+                  {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, favoriteFolderId is defined ? favoriteFolderId : null, folderPage, folderEntityType) }}
                 {% endif %}
               {% endfor %}
             {% endif %}

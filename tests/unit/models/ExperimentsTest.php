@@ -38,6 +38,7 @@ use function is_array;
 use function json_decode;
 use function random_bytes;
 use function sprintf;
+use function str_repeat;
 
 class ExperimentsTest extends \PHPUnit\Framework\TestCase
 {
@@ -154,6 +155,40 @@ class ExperimentsTest extends \PHPUnit\Framework\TestCase
 
         $entityData = $this->Experiments->patch(Action::Update, array('experiment_goal' => ''));
         $this->assertSame('', $entityData['experiment_goal']);
+    }
+
+    public function testExperimentConclusion(): void
+    {
+        $title = 'Experiment conclusion test ' . bin2hex(random_bytes(6));
+        $new = $this->Experiments->create(title: $title);
+        $this->Experiments->setId($new);
+        $conclusion = 'Treatment improved recovery under the tested conditions.';
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_conclusion' => $conclusion));
+        $this->assertSame($conclusion, $entityData['experiment_conclusion']);
+
+        $query = new InputBag(array('q' => $title));
+        $DisplayParams = new DisplayParams($this->Users, EntityType::Experiments, $query);
+        $listed = $this->Experiments->readAll($DisplayParams);
+        $matching = array_values(array_filter($listed, static fn(array $row): bool => (int) $row['id'] === $new));
+        $this->assertSame($conclusion, $matching[0]['experiment_conclusion']);
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_conclusion' => ''));
+        $this->assertSame('', $entityData['experiment_conclusion']);
+    }
+
+    public function testExperimentConclusionLengthLimit(): void
+    {
+        $new = $this->Experiments->create();
+        $this->Experiments->setId($new);
+        $validConclusion = str_repeat('x', 1000);
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_conclusion' => $validConclusion));
+        $this->assertSame($validConclusion, $entityData['experiment_conclusion']);
+
+        $this->expectException(ImproperActionException::class);
+        $this->Experiments->patch(Action::Update, array(
+            'experiment_conclusion' => $validConclusion . 'x',
+        ));
     }
 
     public function testUpdateIncorrectState(): void

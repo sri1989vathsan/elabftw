@@ -126,6 +126,24 @@ class ItemsTest extends \PHPUnit\Framework\TestCase
         $this->assertEquals('<p>Body</p>', $entityData['body']);
     }
 
+    public function testAssignResourceToFolderWhileEditing(): void
+    {
+        $Folders = new ExperimentsFolders($this->Items->Users);
+        $folderId = $Folders->create('Resource folder test');
+        $new = $this->Items->create();
+        $this->Items->setId($new);
+
+        $entityData = $this->Items->patch(Action::Update, array('folder_id' => $folderId));
+        $this->assertSame($folderId, $entityData['folder_id']);
+
+        $entityData = $this->Items->patch(Action::Update, array('folder_id' => ''));
+        $this->assertNull($entityData['folder_id']);
+
+        $this->Items->destroy();
+        $Folders->setId($folderId);
+        $this->assertTrue($Folders->destroy());
+    }
+
     public function testWrongActionOnUpdate(): void
     {
         $new = $this->Items->create();

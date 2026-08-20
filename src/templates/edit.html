@@ -33,12 +33,30 @@
               id='experimentGoalInput'
               class='form-control'
               rows='2'
-              maxlength='500'
+              maxlength='1000'
               data-trigger='blur'
               data-model='experiments/{{ Entity.id }}'
               data-target='experiment_goal'
               placeholder='{{ 'Briefly describe the goal of this experiment'|trans }}'
             >{{ Entity.entityData.experiment_goal }}</textarea>
+            <small class='form-text color-medium'>{{ 'Maximum 1000 characters.'|trans }}</small>
+          </div>
+          <div class='mb-2'>
+            <label for='experimentConclusionInput' class='font-weight-bold mb-1'>
+              <i class='fas fa-clipboard-check fa-fw mr-1' aria-hidden='true'></i>{{ 'Experiment conclusion'|trans }}
+              <span class='font-weight-normal color-medium'>({{ 'optional'|trans }})</span>
+            </label>
+            <textarea
+              id='experimentConclusionInput'
+              class='form-control'
+              rows='3'
+              maxlength='1000'
+              data-trigger='blur'
+              data-model='experiments/{{ Entity.id }}'
+              data-target='experiment_conclusion'
+              placeholder='{{ 'Briefly describe the conclusion of this experiment'|trans }}'
+            >{{ Entity.entityData.experiment_conclusion }}</textarea>
+            <small class='form-text color-medium'>{{ 'Maximum 1000 characters.'|trans }}</small>
           </div>
         {% endif %}
       </div>

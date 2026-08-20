@@ -33,6 +33,8 @@ final class CustomMigrationRunner
         '007_html_tools.sql',
         '008_pyrat_links.sql',
         '009_ui_descriptions.sql',
+        '010_experiment_summaries.sql',
+        '011_resource_folders.sql',
     );
 
     private Db $Db;

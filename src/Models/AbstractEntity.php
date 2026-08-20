@@ -276,10 +276,14 @@ abstract class AbstractEntity extends AbstractRest
                         metadata: $metadata,
                         contentType: $contentType,
                     );
-                    // Assign to folder if provided (experiments only)
-                    if ($this instanceof Experiments && !empty($reqBody['folder_id'])) {
+                    // Assign concrete experiments and resources to their shared folder tree.
+                    if (($this instanceof Experiments || $this instanceof Items) && !empty($reqBody['folder_id'])) {
                         $Folders = new ExperimentsFolders($this->Users);
-                        $Folders->assignExperiment($newId, (int) $reqBody['folder_id']);
+                        if ($this instanceof Experiments) {
+                            $Folders->assignExperiment($newId, (int) $reqBody['folder_id']);
+                        } else {
+                            $Folders->assignResource($newId, (int) $reqBody['folder_id']);
+                        }
                     }
                     return $newId;
                 }

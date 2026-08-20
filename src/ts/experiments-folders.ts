@@ -56,32 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem(COLLAPSED_KEY, JSON.stringify(Array.from(collapsed)));
   }
 
-  /** Return only the immediate child folder nodes of a tree node. */
-  function getDirectChildFolderNodes(node: HTMLElement): HTMLElement[] {
-    const childContainer = Array.from(node.children).find(child => child.classList.contains('folder-children'));
-    if (!childContainer) return [];
-    return Array.from(childContainer.children).filter(child => child.classList.contains('folder-node')) as HTMLElement[];
-  }
-
-  /**
-   * Show folders owned by the current user while retaining shared ancestors as
-   * hierarchy context. The currently selected folder is retained too.
-   */
-  function applyMineVisibility(node: HTMLElement): boolean {
-    const hasVisibleChild = getDirectChildFolderNodes(node)
-      .map(child => applyMineVisibility(child))
-      .some(Boolean);
-    const isOwned = node.dataset.folderOwnerId === currentUserId;
-    const isCurrent = Boolean(currentFolderId) && node.dataset.folderId === currentFolderId;
-    const isBookmarked = Boolean(favoriteFolderId) && node.dataset.folderId === favoriteFolderId;
-    const isVisible = isOwned || isCurrent || isBookmarked || hasVisibleChild;
-    node.hidden = !isVisible;
-
-    // A shared ancestor is shown only to preserve tree context.
-    node.classList.toggle('folder-scope-context', isVisible && !isOwned && !isCurrent && !isBookmarked);
-    return isVisible;
-  }
-
   function filterParentFolders(scope: FolderScope): void {
     const parentSelect = document.getElementById('newFolderParent') as HTMLSelectElement | null;
     if (!parentSelect) return;
@@ -146,6 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tree = document.getElementById('experimentsFoldersTree');
     if (!tree) return;
     const allNodes = Array.from(tree.querySelectorAll('.folder-node')) as HTMLElement[];
+    const rootNodes = allNodes.filter(node => node.dataset.folderDepth === '0');
     if (scope === 'all') {
       allNodes.forEach(node => {
         node.hidden = false;
@@ -155,14 +130,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     } else {
-      const rootNodes = allNodes.filter(node => node.dataset.folderDepth === '0');
-      rootNodes.forEach(node => applyMineVisibility(node));
+      rootNodes.forEach(root => {
+        const isMyTree = root.dataset.folderOwnerId === currentUserId;
+        root.hidden = !isMyTree;
+        root.classList.remove('folder-scope-context');
+        root.querySelectorAll('.folder-node').forEach((child: HTMLElement) => {
+          child.hidden = !isMyTree;
+          child.classList.remove('folder-scope-context');
+        });
+      });
     }
 
-    const ownedFolderCount = allNodes.filter(node => node.dataset.folderOwnerId === currentUserId).length;
+    const ownedRootCount = rootNodes.filter(node => node.dataset.folderOwnerId === currentUserId).length;
     const emptyState = document.getElementById('myFoldersEmpty');
     if (emptyState) {
-      emptyState.hidden = scope !== 'mine' || ownedFolderCount > 0;
+      emptyState.hidden = scope !== 'mine' || ownedRootCount > 0;
     }
     filterParentFolders(scope);
     updateFolderSections();

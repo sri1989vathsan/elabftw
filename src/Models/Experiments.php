@@ -32,6 +32,7 @@ use function _;
 use function array_key_exists;
 use function is_string;
 use function mb_strlen;
+use function sprintf;
 use function trim;
 
 /**
@@ -49,10 +50,17 @@ final class Experiments extends AbstractConcreteEntity
     public function postAction(Action $action, array $reqBody): int
     {
         $hasGoal = $action === Action::Create && array_key_exists('experiment_goal', $reqBody);
-        $goal = $hasGoal ? $this->normalizeGoal($reqBody['experiment_goal']) : '';
+        $hasConclusion = $action === Action::Create && array_key_exists('experiment_conclusion', $reqBody);
+        $goal = $hasGoal ? $this->normalizeSummary($reqBody['experiment_goal'], 'Experiment goal') : '';
+        $conclusion = $hasConclusion
+            ? $this->normalizeSummary($reqBody['experiment_conclusion'], 'Experiment conclusion')
+            : '';
         $newId = parent::postAction($action, $reqBody);
         if ($hasGoal) {
-            $this->getGoalStore()->write(CustomUiDescriptions::EXPERIMENT_GOAL, $newId, $goal);
+            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_GOAL, $newId, $goal);
+        }
+        if ($hasConclusion) {
+            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_CONCLUSION, $newId, $conclusion);
         }
         return $newId;
     }
@@ -61,17 +69,29 @@ final class Experiments extends AbstractConcreteEntity
     public function patch(Action $action, array $params): array
     {
         $hasGoal = $action === Action::Update && array_key_exists('experiment_goal', $params);
-        $goal = $hasGoal ? $this->normalizeGoal($params['experiment_goal']) : '';
+        $hasConclusion = $action === Action::Update && array_key_exists('experiment_conclusion', $params);
+        $goal = $hasGoal ? $this->normalizeSummary($params['experiment_goal'], 'Experiment goal') : '';
+        $conclusion = $hasConclusion
+            ? $this->normalizeSummary($params['experiment_conclusion'], 'Experiment conclusion')
+            : '';
         if ($hasGoal) {
             unset($params['experiment_goal']);
         }
+        if ($hasConclusion) {
+            unset($params['experiment_conclusion']);
+        }
 
         $result = parent::patch($action, $params);
-        if (!$hasGoal || $this->id === null) {
+        if ((!$hasGoal && !$hasConclusion) || $this->id === null) {
             return $result;
         }
 
-        $this->getGoalStore()->write(CustomUiDescriptions::EXPERIMENT_GOAL, $this->id, $goal);
+        if ($hasGoal) {
+            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_GOAL, $this->id, $goal);
+        }
+        if ($hasConclusion) {
+            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_CONCLUSION, $this->id, $conclusion);
+        }
         return $this->readOne();
     }
 
@@ -79,8 +99,12 @@ final class Experiments extends AbstractConcreteEntity
     public function readOne(): array
     {
         $result = parent::readOne();
-        $result['experiment_goal'] = $this->getGoalStore()->read(
+        $result['experiment_goal'] = $this->getSummaryStore()->read(
             CustomUiDescriptions::EXPERIMENT_GOAL,
+            (int) $result['id'],
+        );
+        $result['experiment_conclusion'] = $this->getSummaryStore()->read(
+            CustomUiDescriptions::EXPERIMENT_CONCLUSION,
             (int) $result['id'],
         );
         $this->entityData = $result;
@@ -90,10 +114,15 @@ final class Experiments extends AbstractConcreteEntity
     #[Override]
     public function readShow(QueryParamsInterface $displayParams, bool $extended = false, string $can = 'canread'): array
     {
-        return $this->getGoalStore()->enrichRows(
+        $rows = $this->getSummaryStore()->enrichRows(
             CustomUiDescriptions::EXPERIMENT_GOAL,
             parent::readShow($displayParams, $extended, $can),
             'experiment_goal',
+        );
+        return $this->getSummaryStore()->enrichRows(
+            CustomUiDescriptions::EXPERIMENT_CONCLUSION,
+            $rows,
+            'experiment_conclusion',
         );
     }
 
@@ -181,9 +210,13 @@ final class Experiments extends AbstractConcreteEntity
             $ExperimentsLinks->postAction(Action::Create, array());
         }
 
-        $goal = $this->getGoalStore()->read(CustomUiDescriptions::EXPERIMENT_GOAL, (int) $this->id);
+        $goal = $this->getSummaryStore()->read(CustomUiDescriptions::EXPERIMENT_GOAL, (int) $this->id);
         if ($goal !== '') {
-            $this->getGoalStore()->write(CustomUiDescriptions::EXPERIMENT_GOAL, $newId, $goal);
+            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_GOAL, $newId, $goal);
+        }
+        $conclusion = $this->getSummaryStore()->read(CustomUiDescriptions::EXPERIMENT_CONCLUSION, (int) $this->id);
+        if ($conclusion !== '') {
+            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_CONCLUSION, $newId, $conclusion);
         }
 
         return $newId;
@@ -195,23 +228,23 @@ final class Experiments extends AbstractConcreteEntity
         return 'users_canwrite_experiments';
     }
 
-    private function getGoalStore(): CustomUiDescriptions
+    private function getSummaryStore(): CustomUiDescriptions
     {
         return new CustomUiDescriptions();
     }
 
-    private function normalizeGoal(mixed $goal): string
+    private function normalizeSummary(mixed $summary, string $label): string
     {
-        if ($goal === null) {
+        if ($summary === null) {
             return '';
         }
-        if (!is_string($goal)) {
-            throw new ImproperActionException('Experiment goal must be text.');
+        if (!is_string($summary)) {
+            throw new ImproperActionException(sprintf('%s must be text.', $label));
         }
-        $goal = trim($goal);
-        if (mb_strlen($goal) > CustomUiDescriptions::MAX_LENGTH) {
-            throw new ImproperActionException('Experiment goal must be 500 characters or fewer.');
+        $summary = trim($summary);
+        if (mb_strlen($summary) > CustomUiDescriptions::MAX_SUMMARY_LENGTH) {
+            throw new ImproperActionException(sprintf('%s must be 1000 characters or fewer.', $label));
         }
-        return $goal;
+        return $summary;
     }
 }

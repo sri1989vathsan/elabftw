@@ -50,10 +50,10 @@ function setTypeRadio(type: EntityType, scope: string = '') {
       toggleCategoryList(type);
     });
   }
-  // Show folder selection only for experiments
+  // Experiments and resources share the same folder tree.
   const folderSection = document.getElementById('createNewFolderSection');
   if (folderSection) {
-    if (type === EntityType.Experiment) {
+    if (type === EntityType.Experiment || type === EntityType.Item) {
       folderSection.removeAttribute('hidden');
     } else {
       folderSection.setAttribute('hidden', 'hidden');

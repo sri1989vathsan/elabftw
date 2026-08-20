@@ -27,7 +27,7 @@ use PDO;
 use function array_key_exists;
 
 /**
- * Hierarchical folders for experiments
+ * Shared hierarchical folders for experiments and resources.
  */
 final class ExperimentsFolders extends AbstractRest
 {
@@ -241,8 +241,8 @@ final class ExperimentsFolders extends AbstractRest
         if ($this->hasChildren()) {
             throw new ImproperActionException(_('Cannot delete a folder with subfolders! Delete the subfolders first.'));
         }
-        // Move any experiments in this folder back to root (no folder)
-        $this->unassignExperiments();
+        // Move any entities in this folder back to root (no folder).
+        $this->unassignEntities();
 
         $sql = 'DELETE FROM experiments_folders WHERE id = :id';
         $req = $this->Db->prepare($sql);
@@ -268,6 +268,18 @@ final class ExperimentsFolders extends AbstractRest
     }
 
     /**
+     * Assign a resource to a folder.
+     */
+    public function assignResource(int $resourceId, ?int $folderId): bool
+    {
+        $sql = 'UPDATE items SET folder_id = :folder_id WHERE id = :id';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':folder_id', $folderId);
+        $req->bindParam(':id', $resourceId, PDO::PARAM_INT);
+        return $this->Db->execute($req);
+    }
+
+    /**
      * Get the full hierarchy as a flat list with depth info
      */
     public function readHierarchyRows(): array
@@ -282,7 +294,8 @@ final class ExperimentsFolders extends AbstractRest
                 name AS full_path,
                 0 AS level_depth,
                 (SELECT COUNT(*) FROM experiments_folders AS ef WHERE ef.parent_id = experiments_folders.id) AS children_count,
-                (SELECT COUNT(*) FROM experiments AS e WHERE e.folder_id = experiments_folders.id AND e.state = 1) AS experiments_count
+                (SELECT COUNT(*) FROM experiments AS e WHERE e.folder_id = experiments_folders.id AND e.state = 1) AS experiments_count,
+                (SELECT COUNT(*) FROM items AS i WHERE i.folder_id = experiments_folders.id AND i.state = 1) AS resources_count
             FROM
                 experiments_folders
             WHERE
@@ -300,7 +313,8 @@ final class ExperimentsFolders extends AbstractRest
                 CONCAT(parent.full_path, ' > ', child.name) AS full_path,
                 parent.level_depth + 1,
                 (SELECT COUNT(*) FROM experiments_folders AS ef WHERE ef.parent_id = child.id) AS children_count,
-                (SELECT COUNT(*) FROM experiments AS e WHERE e.folder_id = child.id AND e.state = 1) AS experiments_count
+                (SELECT COUNT(*) FROM experiments AS e WHERE e.folder_id = child.id AND e.state = 1) AS experiments_count,
+                (SELECT COUNT(*) FROM items AS i WHERE i.folder_id = child.id AND i.state = 1) AS resources_count
             FROM
                 experiments_folders AS child
             INNER JOIN
@@ -318,7 +332,8 @@ final class ExperimentsFolders extends AbstractRest
             root_id,
             level_depth,
             children_count,
-            experiments_count
+            experiments_count,
+            resources_count
         FROM
             folder_hierarchy
         ORDER BY
@@ -414,11 +429,16 @@ final class ExperimentsFolders extends AbstractRest
     }
 
     /**
-     * Move all experiments from this folder to root (no folder)
+     * Move all experiments and resources from this folder to root (no folder).
      */
-    private function unassignExperiments(): void
+    private function unassignEntities(): void
     {
         $sql = 'UPDATE experiments SET folder_id = NULL WHERE folder_id = :id';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+
+        $sql = 'UPDATE items SET folder_id = NULL WHERE folder_id = :id';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
