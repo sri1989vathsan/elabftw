@@ -277,6 +277,7 @@ final class ExperimentsFolders extends AbstractRest
                 id,
                 name,
                 parent_id,
+                userid,
                 name AS full_path,
                 0 AS level_depth,
                 (SELECT COUNT(*) FROM experiments_folders AS ef WHERE ef.parent_id = experiments_folders.id) AS children_count,
@@ -293,6 +294,7 @@ final class ExperimentsFolders extends AbstractRest
                 child.id,
                 child.name,
                 child.parent_id,
+                child.userid,
                 CONCAT(parent.full_path, ' > ', child.name) AS full_path,
                 parent.level_depth + 1,
                 (SELECT COUNT(*) FROM experiments_folders AS ef WHERE ef.parent_id = child.id) AS children_count,
@@ -310,6 +312,7 @@ final class ExperimentsFolders extends AbstractRest
             name,
             full_path,
             parent_id,
+            userid,
             level_depth,
             children_count,
             experiments_count

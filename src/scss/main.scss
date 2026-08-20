@@ -996,6 +996,64 @@ tr:first-child td {
   [data-action='toggle-next']:hover {
     background-color: var(--secondary);
   }
+
+  .folder-scope-tabs {
+    border-bottom-color: var(--chrome-muted);
+
+    .nav-link {
+      background: transparent;
+      border-color: transparent;
+      color: var(--chrome-muted);
+
+      &:hover,
+      &:focus {
+        border-color: var(--chrome-muted);
+        color: var(--chrome-fg);
+      }
+
+      &.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: var(--primary-fg, #fff);
+
+        .fas {
+          color: inherit;
+        }
+      }
+    }
+  }
+
+  .folder-quick-links .btn {
+    color: var(--chrome-fg);
+
+    &.active,
+    &:hover,
+    &:focus {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--primary-fg, #fff);
+
+      .fas {
+        color: inherit;
+      }
+    }
+  }
+
+  .folder-tree-list {
+    max-height: min(46vh, 34rem);
+    min-height: 3rem;
+    overflow: auto;
+    padding-right: 0.25rem;
+  }
+
+  .folder-scope-context > .folder-row,
+  .folder-scope-context > .folder-description {
+    opacity: 0.65;
+  }
+
+  .folder-create-section {
+    border-color: var(--chrome-muted) !important;
+  }
 }
 
 .side-panel-resizer {
