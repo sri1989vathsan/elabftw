@@ -262,7 +262,10 @@ export function getTinymceBaseConfig(page: string): object {
     // TinyMCE loads content CSS inside its iframe, so carry over the main
     // bundle's cache-buster to avoid stale custom editor styles.
     content_css: isDark ? [`/assets/tinymce_content_dark.min.css${getAssetVersionQuery()}`, tinymceContentCss] : [tinymceContentCss],
-    content_style: `${getEditorPaletteStyle()}img{max-width:100%;height:auto}`,
+    // Keep an empty document large enough to click and place the caret. The
+    // autoresize plugin otherwise collapses a blank editor to an impractically
+    // small strip on some layouts.
+    content_style: `${getEditorPaletteStyle()}body.mce-content-body{box-sizing:border-box;min-height:12rem;cursor:text}img{max-width:100%;height:auto}`,
     emoticons_database_url: 'assets/tinymce_emojis.js',
     // remove the "Upgrade" button
     promotion: false,
@@ -343,6 +346,7 @@ export function getTinymceBaseConfig(page: string): object {
       [0x21BB, 'clockwise open circle arrow'],
     ],
     height: '500',
+    min_height: 240,
     mentions: {
       // use # for autocompletion
       delimiter: ['#'],

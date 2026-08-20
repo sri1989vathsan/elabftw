@@ -4,6 +4,13 @@
  * appends it directly after the upstream content stylesheet.
  */
 
+/* Preserve a usable writing surface when the main text has no content. */
+body.mce-content-body {
+  box-sizing: border-box;
+  cursor: text;
+  min-height: 12rem;
+}
+
 /* Repeat the decimal -> letter -> Roman cycle when ordered lists are nested. */
 :where(#body_view, body.mce-content-body) ol {
   list-style-type: decimal;
