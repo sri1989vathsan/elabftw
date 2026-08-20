@@ -3,11 +3,13 @@
 {% set currentFolderId = App.Request.query.has('folder') ? App.Request.query.get('folder') : Entity.entityData.folder_id|default('') %}
 {% set folderPage = Entity.entityType.value == 'items' ? 'database.php' : 'experiments.php' %}
 {% set folderEntityType = Entity.entityType.value %}
+{% set folderBookmarkIds = favoriteFolderIds|default([]) %}
+{% set folderBookmarkRootIds = favoriteRootFolderIds|default([]) %}
 <div class='side-panel' id='foldersPanel' hidden>
   <div
     id='experimentsFoldersSidebar'
     class='p-3'
-    data-favorite-folder-id='{{ favoriteFolderId is defined and favoriteFolderId ? favoriteFolderId : '' }}'
+    data-favorite-folder-ids='{{ folderBookmarkIds|join(',') }}'
     data-current-folder-id='{{ currentFolderId }}'
     data-current-user-id='{{ App.Users.userData.userid }}'
   >
@@ -43,13 +45,13 @@
 
       <div class='d-flex align-items-center justify-content-between mb-2'>
         <h4 class='h6 mb-0'>{{ 'Folder tree'|trans }}</h4>
-        {% if favoriteFolderId is defined and favoriteFolderId %}
+        {% if folderBookmarkIds is not empty %}
           <span class='small color-medium'><i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked first'|trans }}</span>
         {% endif %}
       </div>
 
       {# Render exactly one branch for each root folder. Children only exist inside their parent branch. #}
-      {% macro renderFolderBranch(folders, folder, depth, currentFolderId, favoriteFolderId, folderPage, folderEntityType) %}
+      {% macro renderFolderBranch(folders, folder, depth, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) %}
         <div
           class='ml-{{ depth > 0 ? 3 : 0 }} mb-1 folder-node'
           data-folder-id='{{ folder.id }}'
@@ -73,8 +75,9 @@
                 <span class='badge badge-secondary'>{{ entityCount }}</span>
               {% endif %}
             </a>
-            <span data-action='toggle-favorite-folder' data-id='{{ folder.id }}' class='ml-1 favorite-folder-star hl-hover-gray rounded p-1' title='{{ favoriteFolderId is defined and favoriteFolderId == folder.id ? 'Remove bookmark' : 'Bookmark folder' }}' style='cursor:pointer'>
-              <i class='{{ favoriteFolderId is defined and favoriteFolderId == folder.id ? 'fas' : 'far' }} fa-star fa-xs' style='color:{{ favoriteFolderId is defined and favoriteFolderId == folder.id ? '#f0ad4e' : '#999' }}'></i>
+            {% set isBookmarked = folder.id in folderBookmarkIds %}
+            <span data-action='toggle-favorite-folder' data-id='{{ folder.id }}' class='ml-1 favorite-folder-star hl-hover-gray rounded p-1' title='{{ isBookmarked ? 'Remove bookmark' : 'Bookmark folder' }}' style='cursor:pointer'>
+              <i class='{{ isBookmarked ? 'fas' : 'far' }} fa-star fa-xs' style='color:{{ isBookmarked ? '#f0ad4e' : '#999' }}'></i>
             </span>
             <span class='ml-1 folder-actions' style='display:none'>
               <span data-action='edit-folder' data-id='{{ folder.id }}' data-name='{{ folder.name|e('html_attr') }}' data-description='{{ folder.description|e('html_attr') }}' class='hl-hover-gray rounded p-1' title='{{ 'Edit folder'|trans }}'><i class='fas fa-pencil fa-xs'></i></span>
@@ -88,7 +91,7 @@
             <div class='folder-children' data-parent-folder-id='{{ folder.id }}' style='display:none'>
               {% if folders[folder.id] is defined %}
                 {% for child in folders[folder.id] %}
-                  {{ _self.renderFolderBranch(folders, child, depth + 1, currentFolderId, favoriteFolderId, folderPage, folderEntityType) }}
+                  {{ _self.renderFolderBranch(folders, child, depth + 1, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) }}
                 {% endfor %}
               {% endif %}
             </div>
@@ -97,7 +100,7 @@
       {% endmacro %}
 
       <div id='experimentsFoldersTree' class='folder-tree-list'>
-        {% if favoriteRootFolderId is defined and favoriteRootFolderId %}
+        {% if folderBookmarkRootIds is not empty %}
           <section class='bookmarked-folders-section folder-tree-section mb-2'>
             <div class='folder-tree-section-label small font-weight-bold mb-1'>
               <i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked'|trans }}
@@ -105,8 +108,8 @@
             <div class='bookmarked-folders-content'>
               {% if experimentsFoldersTreeArr[''] is defined %}
                 {% for folder in experimentsFoldersTreeArr[''] %}
-                  {% if folder.id == favoriteRootFolderId %}
-                    {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, favoriteFolderId, folderPage, folderEntityType) }}
+                  {% if folder.id in folderBookmarkRootIds %}
+                    {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) }}
                   {% endif %}
                 {% endfor %}
               {% endif %}
@@ -123,8 +126,8 @@
           <div class='other-folders-content ml-2 mt-1' style='display:none'>
             {% if experimentsFoldersTreeArr[''] is defined %}
               {% for folder in experimentsFoldersTreeArr[''] %}
-                {% if favoriteRootFolderId is not defined or not favoriteRootFolderId or folder.id != favoriteRootFolderId %}
-                  {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, favoriteFolderId is defined ? favoriteFolderId : null, folderPage, folderEntityType) }}
+                {% if folder.id not in folderBookmarkRootIds %}
+                  {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) }}
                 {% endif %}
               {% endfor %}
             {% endif %}

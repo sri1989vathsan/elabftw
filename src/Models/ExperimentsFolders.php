@@ -165,8 +165,11 @@ final class ExperimentsFolders extends AbstractRest
         // Handle toggling favorite (no folder id needed in URL — uses current user)
         if (isset($params['action']) && $params['action'] === 'toggle_favorite') {
             $folderId = Filter::intOrNull($params['folder_id'] ?? null);
+            if ($folderId === null) {
+                throw new ImproperActionException('A folder id is required to toggle a bookmark.');
+            }
             $this->toggleFavorite($folderId);
-            return array('favorite_experiment_folder' => $this->getFavoriteFolder());
+            return array('favorite_experiment_folders' => $this->getFavoriteFolders());
         }
 
         $this->canWriteOrExplode();
@@ -347,17 +350,59 @@ final class ExperimentsFolders extends AbstractRest
         );
     }
 
-    /**
-     * Get the current user's favorite experiment folder id (or null)
-     */
-    public function getFavoriteFolder(): ?int
+    /** @return list<int> Current user's bookmarked folder ids. */
+    public function getFavoriteFolders(): array
     {
-        $sql = 'SELECT favorite_experiment_folder FROM users WHERE userid = :userid';
+        $sql = 'SELECT bookmarks.folder_id
+            FROM custom_favorite_experiment_folders AS bookmarks
+            INNER JOIN experiments_folders AS folders ON folders.id = bookmarks.folder_id
+            WHERE bookmarks.users_id = :userid
+                AND folders.team = :team
+            ORDER BY bookmarks.created_at, bookmarks.folder_id';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
+        $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
         $this->Db->execute($req);
-        $result = $req->fetchColumn();
-        return $result !== false && $result !== null ? (int) $result : null;
+
+        $folderIds = array();
+        foreach ($req->fetchAll(PDO::FETCH_COLUMN) as $folderId) {
+            $folderIds[] = (int) $folderId;
+        }
+        return $folderIds;
+    }
+
+    /** @return list<int> Unique root branches containing the current user's bookmarks. */
+    public function getFavoriteRootFolderIds(): array
+    {
+        $sql = 'WITH RECURSIVE folder_ancestors AS (
+            SELECT folders.id, folders.parent_id
+            FROM experiments_folders AS folders
+            INNER JOIN custom_favorite_experiment_folders AS bookmarks ON bookmarks.folder_id = folders.id
+            WHERE bookmarks.users_id = :userid
+                AND folders.team = :root_team
+
+            UNION ALL
+
+            SELECT parent.id, parent.parent_id
+            FROM experiments_folders AS parent
+            INNER JOIN folder_ancestors AS child ON child.parent_id = parent.id
+            WHERE parent.team = :ancestor_team
+        )
+        SELECT DISTINCT id
+        FROM folder_ancestors
+        WHERE parent_id IS NULL
+        ORDER BY id';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
+        $req->bindValue(':root_team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $req->bindValue(':ancestor_team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $this->Db->execute($req);
+
+        $rootIds = array();
+        foreach ($req->fetchAll(PDO::FETCH_COLUMN) as $rootId) {
+            $rootIds[] = (int) $rootId;
+        }
+        return $rootIds;
     }
 
     /**
@@ -390,19 +435,28 @@ final class ExperimentsFolders extends AbstractRest
         return $result === false ? null : (int) $result;
     }
 
-    /**
-     * Toggle the favorite folder for the current user.
-     * If the folder is already the favorite, unset it; otherwise set it.
-     */
-    private function toggleFavorite(?int $folderId): void
+    /** Toggle one folder in the current user's bookmark set. */
+    private function toggleFavorite(int $folderId): void
     {
-        $current = $this->getFavoriteFolder();
-        $newValue = ($current === $folderId) ? null : $folderId;
+        if ($this->getRootFolderId($folderId) === null) {
+            throw new ResourceNotFoundException('Folder not found in the current team.');
+        }
 
-        $sql = 'UPDATE users SET favorite_experiment_folder = :fav WHERE userid = :userid';
+        $sql = 'DELETE FROM custom_favorite_experiment_folders
+            WHERE users_id = :userid AND folder_id = :folder_id';
         $req = $this->Db->prepare($sql);
-        $req->bindValue(':fav', $newValue, $newValue === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
+        $req->bindValue(':folder_id', $folderId, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        if ($req->rowCount() > 0) {
+            return;
+        }
+
+        $sql = 'INSERT IGNORE INTO custom_favorite_experiment_folders (users_id, folder_id)
+            VALUES (:userid, :folder_id)';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
+        $req->bindValue(':folder_id', $folderId, PDO::PARAM_INT);
         $this->Db->execute($req);
     }
 

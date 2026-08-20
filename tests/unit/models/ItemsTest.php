@@ -144,6 +144,38 @@ class ItemsTest extends \PHPUnit\Framework\TestCase
         $this->assertTrue($Folders->destroy());
     }
 
+    public function testMultipleFolderBookmarks(): void
+    {
+        $Folders = new ExperimentsFolders($this->Items->Users);
+        $firstFolderId = $Folders->create('First bookmarked folder');
+        $secondFolderId = $Folders->create('Second bookmarked folder');
+
+        $result = $Folders->patch(Action::Update, array(
+            'action' => 'toggle_favorite',
+            'folder_id' => $firstFolderId,
+        ));
+        $this->assertContains($firstFolderId, $result['favorite_experiment_folders']);
+
+        $result = $Folders->patch(Action::Update, array(
+            'action' => 'toggle_favorite',
+            'folder_id' => $secondFolderId,
+        ));
+        $this->assertContains($firstFolderId, $result['favorite_experiment_folders']);
+        $this->assertContains($secondFolderId, $result['favorite_experiment_folders']);
+
+        $result = $Folders->patch(Action::Update, array(
+            'action' => 'toggle_favorite',
+            'folder_id' => $firstFolderId,
+        ));
+        $this->assertNotContains($firstFolderId, $result['favorite_experiment_folders']);
+        $this->assertContains($secondFolderId, $result['favorite_experiment_folders']);
+
+        $Folders->setId($firstFolderId);
+        $this->assertTrue($Folders->destroy());
+        $Folders->setId($secondFolderId);
+        $this->assertTrue($Folders->destroy());
+    }
+
     public function testWrongActionOnUpdate(): void
     {
         $new = $this->Items->create();

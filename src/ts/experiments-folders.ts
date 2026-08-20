@@ -30,9 +30,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const storedFolderScope = localStorage.getItem(folderScopeKey);
   let activeFolderScope: FolderScope = storedFolderScope === 'all' ? 'all' : 'mine';
 
-  // Read the server-provided favorite folder id
-  const favoriteFolderIdAttr = sidebar.dataset.favoriteFolderId;
-  const favoriteFolderId: string | null = favoriteFolderIdAttr && favoriteFolderIdAttr !== '' ? favoriteFolderIdAttr : null;
+  // Read the server-provided set of bookmarked folder ids.
+  const favoriteFolderIds = (sidebar.dataset.favoriteFolderIds ?? '')
+    .split(',')
+    .filter(folderId => folderId !== '');
   const currentFolderId = new URLSearchParams(window.location.search).get('folder')
     || sidebar.dataset.currentFolderId
     || null;
@@ -93,9 +94,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateFolderSections(): void {
     const bookmarkedSection = document.querySelector('.bookmarked-folders-section') as HTMLElement | null;
-    const bookmarkedRoot = bookmarkedSection?.querySelector('.folder-node[data-folder-depth="0"]') as HTMLElement | null;
+    const bookmarkedRoots = bookmarkedSection
+      ? Array.from(bookmarkedSection.querySelectorAll('.folder-node[data-folder-depth="0"]')) as HTMLElement[]
+      : [];
     if (bookmarkedSection) {
-      bookmarkedSection.hidden = !bookmarkedRoot || bookmarkedRoot.hidden;
+      bookmarkedSection.hidden = !bookmarkedRoots.some(node => !node.hidden);
     }
 
     const wrapper = document.querySelector('.other-folders-wrapper') as HTMLElement | null;
@@ -204,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (toggle.dataset.folderId) collapsed.add(toggle.dataset.folderId);
     });
   }
-  [favoriteFolderId, currentFolderId].forEach(folderId => {
+  [...favoriteFolderIds, currentFolderId].forEach(folderId => {
     if (!folderId || folderId === '0') return;
     getAncestorIds(folderId).forEach(ancestorId => collapsed.delete(ancestorId));
   });

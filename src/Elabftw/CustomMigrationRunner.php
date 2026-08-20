@@ -35,6 +35,7 @@ final class CustomMigrationRunner
         '009_ui_descriptions.sql',
         '010_experiment_summaries.sql',
         '011_resource_folders.sql',
+        '012_multiple_folder_bookmarks.sql',
     );
 
     private Db $Db;
