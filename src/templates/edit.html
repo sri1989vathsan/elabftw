@@ -23,6 +23,24 @@
            <!-- [html-validate-disable-block prefer-native-element: suppress error from malle] -->
           <span id='documentTitle' class='breakable malleable-title malleable rounded py-1' data-target='title' data-endpoint='{{ Entity.entityType.value }}' data-id='{{ Entity.id }}'>{{ Entity.entityData.title }}</span>
         </h1>
+        {% if Entity.entityType.value == 'experiments' %}
+          <div class='mb-2'>
+            <label for='experimentGoalInput' class='font-weight-bold mb-1'>
+              <i class='fas fa-bullseye fa-fw mr-1' aria-hidden='true'></i>{{ 'Experiment goal'|trans }}
+              <span class='font-weight-normal color-medium'>({{ 'optional'|trans }})</span>
+            </label>
+            <textarea
+              id='experimentGoalInput'
+              class='form-control'
+              rows='2'
+              maxlength='500'
+              data-trigger='blur'
+              data-model='experiments/{{ Entity.id }}'
+              data-target='experiment_goal'
+              placeholder='{{ 'Briefly describe the goal of this experiment'|trans }}'
+            >{{ Entity.entityData.experiment_goal }}</textarea>
+          </div>
+        {% endif %}
       </div>
     </div>
   {% endblock %}

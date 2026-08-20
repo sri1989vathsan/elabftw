@@ -30,6 +30,8 @@ use Elabftw\Services\Check;
 use Elabftw\Traits\TestsUtilsTrait;
 use Symfony\Component\HttpFoundation\InputBag;
 
+use function array_filter;
+use function array_values;
 use function bin2hex;
 use function count;
 use function is_array;
@@ -132,6 +134,26 @@ class ExperimentsTest extends \PHPUnit\Framework\TestCase
         $this->assertEquals('Untitled', $entityData['title']);
         $this->assertEquals('2016-07-29', $entityData['date']);
         $this->assertEquals('<p>Body</p>', $entityData['body']);
+    }
+
+    public function testExperimentGoal(): void
+    {
+        $title = 'Experiment goal test ' . bin2hex(random_bytes(6));
+        $new = $this->Experiments->create(title: $title);
+        $this->Experiments->setId($new);
+        $goal = 'Determine whether treatment improves recovery.';
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_goal' => $goal));
+        $this->assertSame($goal, $entityData['experiment_goal']);
+
+        $query = new InputBag(array('q' => $title));
+        $DisplayParams = new DisplayParams($this->Users, EntityType::Experiments, $query);
+        $listed = $this->Experiments->readAll($DisplayParams);
+        $matching = array_values(array_filter($listed, static fn(array $row): bool => (int) $row['id'] === $new));
+        $this->assertSame($goal, $matching[0]['experiment_goal']);
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_goal' => ''));
+        $this->assertSame('', $entityData['experiment_goal']);
     }
 
     public function testUpdateIncorrectState(): void

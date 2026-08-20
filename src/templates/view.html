@@ -16,6 +16,12 @@
          <!-- [html-validate-disable-block prefer-native-element: suppress error from malle] -->
         <span id='documentTitle' class='breakable {{ not Entity.isReadOnly ? 'malleable-title malleable' }} rounded py-1' data-target='title' data-endpoint='{{ Entity.entityType.value }}' data-id='{{ Entity.id }}'>{{ Entity.entityData.title }}</span>
       </h1>
+      {% if Entity.entityType.value == 'experiments' and Entity.entityData.experiment_goal %}
+        <div class='d-flex align-items-start mb-2'>
+          <i class='fas fa-bullseye fa-fw mr-2 mt-1 color-medium' aria-hidden='true'></i>
+          <div class='breakable' style='white-space: pre-wrap;'><span class='font-weight-bold'>{{ 'Experiment goal'|trans }}:</span> {{ Entity.entityData.experiment_goal }}</div>
+        </div>
+      {% endif %}
     </div>
   </div>
   {% endblock %}

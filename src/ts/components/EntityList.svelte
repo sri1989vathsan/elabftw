@@ -28,6 +28,7 @@
   interface EntityListItem {
     id: number;
     title: string | null;
+    experiment_goal?: string | null;
     state: StateValue;
     category?: string | null;
     category_title?: string | null;
@@ -56,6 +57,7 @@
 
   const t = i18next.t.bind(i18next);
   const SEARCH_DEBOUNCE_MS = 500;
+  const GOAL_COLLAPSE_LENGTH = 180;
 
   let {
     entityType = 'experiments',
@@ -550,6 +552,13 @@
     return date.toISOString().slice(0, 10);
   }
 
+  function getGoalPreview(goal: string): string {
+    const normalized = goal.replace(/\s+/g, ' ').trim();
+    return normalized.length > GOAL_COLLAPSE_LENGTH
+      ? `${normalized.slice(0, GOAL_COLLAPSE_LENGTH).trimEnd()}…`
+      : normalized;
+  }
+
   function getLeftColor(entity: EntityListItem): string {
     return entity.category_color || '6f6f6f';
   }
@@ -712,6 +721,25 @@
             </a>
           </div>
 
+          {#if entityType === 'experiments' && entity.experiment_goal?.trim()}
+            {#if entity.experiment_goal.trim().length > GOAL_COLLAPSE_LENGTH}
+              <details class='experiment-goal border rounded px-2 py-1 mb-2'>
+                <summary class='experiment-goal-summary'>
+                  <i class='fas fa-bullseye fa-fw mr-1 color-medium' aria-hidden='true'></i>
+                  <span class='font-weight-bold'>{t('Experiment goal')}:</span>
+                  <span class='color-medium ml-1'>{getGoalPreview(entity.experiment_goal)}</span>
+                </summary>
+                <div class='experiment-goal-text breakable mt-2'>{entity.experiment_goal.trim()}</div>
+              </details>
+            {:else}
+              <p class='experiment-goal-text breakable my-2'>
+                <i class='fas fa-bullseye fa-fw mr-1 color-medium' aria-hidden='true'></i>
+                <span class='font-weight-bold'>{t('Experiment goal')}:</span>
+                {entity.experiment_goal.trim()}
+              </p>
+            {/if}
+          {/if}
+
           <div class='owner'>
             {#if entity.userid != null && currentUserId !== entity.userid && !isAnon}
               {t('by')}
@@ -860,3 +888,13 @@
     {/if}
   </div>
 {/if}
+
+<style>
+  .experiment-goal-summary {
+    cursor: pointer;
+  }
+
+  .experiment-goal-text {
+    white-space: pre-wrap;
+  }
+</style>

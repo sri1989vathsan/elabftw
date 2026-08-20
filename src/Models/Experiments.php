@@ -20,6 +20,8 @@ use Elabftw\Enums\BinaryValue;
 use Elabftw\Enums\BodyContentType;
 use Elabftw\Enums\EntityType;
 use Elabftw\Enums\AccessType;
+use Elabftw\Exceptions\ImproperActionException;
+use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Links\Experiments2ExperimentsLinks;
 use Elabftw\Services\Filter;
 use Elabftw\Traits\InsertTagsTrait;
@@ -27,6 +29,10 @@ use PDO;
 use Override;
 
 use function _;
+use function array_key_exists;
+use function is_string;
+use function mb_strlen;
+use function trim;
 
 /**
  * All about the experiments
@@ -38,6 +44,58 @@ final class Experiments extends AbstractConcreteEntity
     protected const string FORCE_TEMPLATE_KEY = 'force_exp_tpl';
 
     public EntityType $entityType = EntityType::Experiments;
+
+    #[Override]
+    public function postAction(Action $action, array $reqBody): int
+    {
+        $hasGoal = $action === Action::Create && array_key_exists('experiment_goal', $reqBody);
+        $goal = $hasGoal ? $this->normalizeGoal($reqBody['experiment_goal']) : '';
+        $newId = parent::postAction($action, $reqBody);
+        if ($hasGoal) {
+            $this->getGoalStore()->write(CustomUiDescriptions::EXPERIMENT_GOAL, $newId, $goal);
+        }
+        return $newId;
+    }
+
+    #[Override]
+    public function patch(Action $action, array $params): array
+    {
+        $hasGoal = $action === Action::Update && array_key_exists('experiment_goal', $params);
+        $goal = $hasGoal ? $this->normalizeGoal($params['experiment_goal']) : '';
+        if ($hasGoal) {
+            unset($params['experiment_goal']);
+        }
+
+        $result = parent::patch($action, $params);
+        if (!$hasGoal || $this->id === null) {
+            return $result;
+        }
+
+        $this->getGoalStore()->write(CustomUiDescriptions::EXPERIMENT_GOAL, $this->id, $goal);
+        return $this->readOne();
+    }
+
+    #[Override]
+    public function readOne(): array
+    {
+        $result = parent::readOne();
+        $result['experiment_goal'] = $this->getGoalStore()->read(
+            CustomUiDescriptions::EXPERIMENT_GOAL,
+            (int) $result['id'],
+        );
+        $this->entityData = $result;
+        return $result;
+    }
+
+    #[Override]
+    public function readShow(QueryParamsInterface $displayParams, bool $extended = false, string $can = 'canread'): array
+    {
+        return $this->getGoalStore()->enrichRows(
+            CustomUiDescriptions::EXPERIMENT_GOAL,
+            parent::readShow($displayParams, $extended, $can),
+            'experiment_goal',
+        );
+    }
 
     #[Override]
     public function create(
@@ -123,6 +181,11 @@ final class Experiments extends AbstractConcreteEntity
             $ExperimentsLinks->postAction(Action::Create, array());
         }
 
+        $goal = $this->getGoalStore()->read(CustomUiDescriptions::EXPERIMENT_GOAL, (int) $this->id);
+        if ($goal !== '') {
+            $this->getGoalStore()->write(CustomUiDescriptions::EXPERIMENT_GOAL, $newId, $goal);
+        }
+
         return $newId;
     }
 
@@ -130,5 +193,25 @@ final class Experiments extends AbstractConcreteEntity
     protected function getCreatePermissionKey(): string
     {
         return 'users_canwrite_experiments';
+    }
+
+    private function getGoalStore(): CustomUiDescriptions
+    {
+        return new CustomUiDescriptions();
+    }
+
+    private function normalizeGoal(mixed $goal): string
+    {
+        if ($goal === null) {
+            return '';
+        }
+        if (!is_string($goal)) {
+            throw new ImproperActionException('Experiment goal must be text.');
+        }
+        $goal = trim($goal);
+        if (mb_strlen($goal) > CustomUiDescriptions::MAX_LENGTH) {
+            throw new ImproperActionException('Experiment goal must be 500 characters or fewer.');
+        }
+        return $goal;
     }
 }

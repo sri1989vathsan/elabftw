@@ -28,13 +28,15 @@ use function trim;
  */
 final class CustomUiDescriptions
 {
+    public const string EXPERIMENT_GOAL = 'experiment_goal';
+
     public const string EXPERIMENT_FOLDER = 'experiment_folder';
 
     public const string EXPERIMENT_CATEGORY = 'experiment_category';
 
     public const string RESOURCE_CATEGORY = 'resource_category';
 
-    private const int MAX_LENGTH = 500;
+    public const int MAX_LENGTH = 500;
 
     private Db $Db;
 
@@ -57,12 +59,12 @@ final class CustomUiDescriptions
     }
 
     /**
-     * Add a description key to every API row without introducing N+1 queries.
+     * Add a metadata value to every API row without introducing N+1 queries.
      *
      * @param array<array-key, array<string, mixed>> $rows
      * @return array<array-key, array<string, mixed>>
      */
-    public function enrichRows(string $scope, array $rows): array
+    public function enrichRows(string $scope, array $rows, string $outputKey = 'description'): array
     {
         $this->validateScope($scope);
         if ($rows === array()) {
@@ -86,7 +88,7 @@ final class CustomUiDescriptions
             $descriptions[(int) $row['entity_id']] = (string) $row['description'];
         }
         foreach ($rows as &$row) {
-            $row['description'] = $descriptions[(int) $row['id']] ?? '';
+            $row[$outputKey] = $descriptions[(int) $row['id']] ?? '';
         }
         unset($row);
         return $rows;
@@ -129,6 +131,7 @@ final class CustomUiDescriptions
     private function validateScope(string $scope): void
     {
         if (!in_array($scope, array(
+            self::EXPERIMENT_GOAL,
             self::EXPERIMENT_FOLDER,
             self::EXPERIMENT_CATEGORY,
             self::RESOURCE_CATEGORY,
