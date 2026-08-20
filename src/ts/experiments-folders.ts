@@ -114,6 +114,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  /**
+   * Folder ownership scope and entity-list scope are separate concepts. Make
+   * that relationship explicit in every folder link so selecting My folders
+   * returns the current user's entities, while All folders returns readable
+   * entities from the team. The API still applies each entity's canread rules.
+   */
+  function updateFolderEntityLinks(scope: FolderScope): void {
+    const entityScope = scope === 'mine' ? '1' : '2';
+    document.querySelectorAll<HTMLAnchorElement>('[data-folder-entity-link]').forEach(link => {
+      const url = new URL(link.href, window.location.origin);
+      url.searchParams.set('scope', entityScope);
+      link.href = `${url.pathname}${url.search}${url.hash}`;
+    });
+  }
+
   function applyFolderScope(scope: FolderScope): void {
     activeFolderScope = scope;
     localStorage.setItem(folderScopeKey, scope);
@@ -154,6 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
       emptyState.hidden = scope !== 'mine' || ownedRootCount > 0;
     }
     filterParentFolders(scope);
+    updateFolderEntityLinks(scope);
     updateFolderSections();
   }
 

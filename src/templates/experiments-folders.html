@@ -68,7 +68,7 @@
             {% else %}
               <span class='mr-1' style='width:16px;display:inline-block'></span>
             {% endif %}
-            <a href='{{ folderPage }}?folder={{ folder.id }}' title='{{ folder.full_path|e('html_attr') }}' class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'>
+            <a href='{{ folderPage }}?folder={{ folder.id }}' data-folder-entity-link title='{{ folder.full_path|e('html_attr') }}' class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'>
               <i class='fas fa-folder fa-fw mr-1 folder-icon'></i>{{ folder.name }}
               {% set entityCount = folderEntityType == 'items' ? folder.resources_count : folder.experiments_count %}
               {% if entityCount > 0 %}
