@@ -37,17 +37,30 @@
             <input name='title' placeholder='{{ 'Type a descriptive title...'|trans }}' class='form-control' type='text' id='createNewFormTitle' />
           </div>
           {# Folder selection — shared by experiments and resources #}
-          {% if experimentsFoldersArr is defined %}
+          {% if experimentsFoldersCreateArr is defined %}
           <div class='my-2' id='createNewFolderSection' hidden>
             <label for='createNewFolderSelect'>{{ 'Folder'|trans }}</label>
+            <div class='btn-group btn-group-sm d-flex mb-2' id='createNewFolderScope' role='tablist' aria-label='{{ 'Folder visibility'|trans }}'>
+              <button type='button' class='btn btn-outline-secondary active flex-fill' data-create-folder-scope='mine' role='tab' aria-selected='true'>
+                <i class='fas fa-user fa-fw mr-1'></i>{{ 'My folders'|trans }}
+              </button>
+              <button type='button' class='btn btn-outline-secondary flex-fill' data-create-folder-scope='bookmarked' role='tab' aria-selected='false'>
+                <i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked'|trans }}
+              </button>
+              <button type='button' class='btn btn-outline-secondary flex-fill' data-create-folder-scope='all' role='tab' aria-selected='false'>
+                <i class='fas fa-users fa-fw mr-1'></i>{{ 'All folders'|trans }}
+              </button>
+            </div>
             <div class='d-flex align-items-center'>
-              <select name='folder_id' class='form-control mr-2' id='createNewFolderSelect' aria-label='{{ 'Folder'|trans }}'>
+              <select name='folder_id' class='form-control mr-2' id='createNewFolderSelect' data-current-user-id='{{ App.Users.userData.userid }}' aria-label='{{ 'Folder'|trans }}'>
                 <option value=''>{{ 'No folder'|trans }}</option>
-                {% if experimentsFoldersArr is iterable %}
-                  {% for parentId, folders in experimentsFoldersArr %}
-                    {% for folder in folders %}
-                      <option value='{{ folder.id }}'>{{ folder.full_path }}</option>
-                    {% endfor %}
+                {% if experimentsFoldersCreateArr is iterable %}
+                  {% for folder in experimentsFoldersCreateArr %}
+                    <option
+                      value='{{ folder.id }}'
+                      data-folder-owner-id='{{ folder.userid }}'
+                      data-folder-bookmarked='{{ folder.id in favoriteFolderIds|default([]) ? 'true' : 'false' }}'
+                    >{{ folder.full_path }}</option>
                   {% endfor %}
                 {% endif %}
               </select>

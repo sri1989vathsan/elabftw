@@ -9,19 +9,21 @@
 import $ from 'jquery';
 import { Api } from './Apiv2.class';
 import { on } from './handlers';
+import { notify } from './notify';
 
 type FolderScope = 'mine' | 'all';
 
 document.addEventListener('DOMContentLoaded', () => {
   // Only run on experiments page
-  const sidebar = document.getElementById('experimentsFoldersSidebar');
-  if (!sidebar) {
+  const initialSidebar = document.getElementById('experimentsFoldersSidebar');
+  if (!initialSidebar) {
     return;
   }
+  let sidebar = initialSidebar;
 
   const ApiC = new Api();
 
-  const currentUserId = sidebar.dataset.currentUserId ?? '';
+  const currentUserId = initialSidebar.dataset.currentUserId ?? '';
   // Versioned, per-user keys prevent legacy DOM-order state from leaking into
   // this deterministic tree layout. A missing value means collapsed by default.
   const COLLAPSED_KEY = `collapsed-experiment-folders-v2-${currentUserId}`;
@@ -30,10 +32,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const storedFolderScope = localStorage.getItem(folderScopeKey);
   let activeFolderScope: FolderScope = storedFolderScope === 'all' ? 'all' : 'mine';
 
+  function readFavoriteFolderIds(element: HTMLElement): string[] {
+    return (element.dataset.favoriteFolderIds ?? '').split(',').filter(folderId => folderId !== '');
+  }
+
   // Read the server-provided set of bookmarked folder ids.
-  const favoriteFolderIds = (sidebar.dataset.favoriteFolderIds ?? '')
-    .split(',')
-    .filter(folderId => folderId !== '');
+  let favoriteFolderIds = readFavoriteFolderIds(sidebar);
   const currentFolderId = new URLSearchParams(window.location.search).get('folder')
     || sidebar.dataset.currentFolderId
     || null;
@@ -198,34 +202,111 @@ document.addEventListener('DOMContentLoaded', () => {
     return ancestors;
   }
 
-  // On first use, every parent folder is collapsed. Only the ancestor paths to
-  // the active and bookmarked folders are opened so their location is visible.
-  const hasStoredCollapseState = localStorage.getItem(COLLAPSED_KEY) !== null;
-  const collapsed = getCollapsedSet();
-  if (!hasStoredCollapseState) {
-    document.querySelectorAll('.folder-toggle[data-folder-id]').forEach((toggle: HTMLElement) => {
-      if (toggle.dataset.folderId) collapsed.add(toggle.dataset.folderId);
+  function bindFolderInteractiveControls(): void {
+    document.querySelectorAll('#experimentsFoldersContent .folder-row').forEach(row => {
+      const actions = row.querySelector('.folder-actions') as HTMLElement | null;
+      if (actions) {
+        row.addEventListener('mouseenter', () => actions.style.display = 'inline');
+        row.addEventListener('mouseleave', () => actions.style.display = 'none');
+      }
+    });
+
+    document.getElementById('newFolderName')?.addEventListener('keypress', (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        (document.querySelector('[data-action="create-experiment-folder"]') as HTMLElement)?.click();
+      }
     });
   }
-  [...favoriteFolderIds, currentFolderId].forEach(folderId => {
-    if (!folderId || folderId === '0') return;
-    getAncestorIds(folderId).forEach(ancestorId => collapsed.delete(ancestorId));
-  });
-  saveCollapsedSet(collapsed);
 
-  document.querySelectorAll('.folder-toggle[data-folder-id]').forEach((toggle: HTMLElement) => {
-    const folderId = toggle.dataset.folderId;
-    if (!folderId) return;
-    applyFolderState(folderId, collapsed.has(folderId));
-  });
+  function initializeFolderTreeState(): void {
+    // On first use, every parent folder is collapsed. Only the ancestor paths to
+    // the active and bookmarked folders are opened so their location is visible.
+    const hasStoredCollapseState = localStorage.getItem(COLLAPSED_KEY) !== null;
+    const collapsed = getCollapsedSet();
+    if (!hasStoredCollapseState) {
+      document.querySelectorAll('.folder-toggle[data-folder-id]').forEach((toggle: HTMLElement) => {
+        if (toggle.dataset.folderId) collapsed.add(toggle.dataset.folderId);
+      });
+    }
+    [...favoriteFolderIds, currentFolderId].forEach(folderId => {
+      if (!folderId || folderId === '0') return;
+      getAncestorIds(folderId).forEach(ancestorId => collapsed.delete(ancestorId));
+    });
+    saveCollapsedSet(collapsed);
 
-  const currentNode = currentFolderId
-    ? document.querySelector(`.folder-node[data-folder-id="${currentFolderId}"]`)
-    : null;
-  const activeFolderIsOther = Boolean(currentNode?.closest('.other-folders-wrapper'));
-  setOtherFoldersOpen(activeFolderIsOther || localStorage.getItem(OTHER_FOLDERS_KEY) === 'open');
+    document.querySelectorAll('.folder-toggle[data-folder-id]').forEach((toggle: HTMLElement) => {
+      const folderId = toggle.dataset.folderId;
+      if (!folderId) return;
+      applyFolderState(folderId, collapsed.has(folderId));
+    });
 
-  applyFolderScope(activeFolderScope);
+    const currentNode = currentFolderId
+      ? document.querySelector(`.folder-node[data-folder-id="${currentFolderId}"]`)
+      : null;
+    const activeFolderIsOther = Boolean(currentNode?.closest('.other-folders-wrapper'));
+    setOtherFoldersOpen(activeFolderIsOther || localStorage.getItem(OTHER_FOLDERS_KEY) === 'open');
+    applyFolderScope(activeFolderScope);
+    bindFolderInteractiveControls();
+  }
+
+  async function refreshFoldersSidebar(): Promise<void> {
+    const currentPanel = document.getElementById('foldersPanel');
+    if (!currentPanel) return;
+
+    const panelWasHidden = currentPanel.hidden;
+    const panelScrollTop = currentPanel.scrollTop;
+    const refreshUrl = new URL(window.location.href);
+    // Reading view mode provides the same folder data without reinitializing an
+    // experiment's exclusive edit session while the user has unsaved content.
+    if (refreshUrl.searchParams.get('mode') === 'edit') {
+      refreshUrl.searchParams.set('mode', 'view');
+    }
+    const response = await fetch(refreshUrl, {
+      credentials: 'same-origin',
+      headers: {'X-Requested-With': 'XMLHttpRequest'},
+    });
+    if (!response.ok) {
+      throw new Error(`Could not refresh folders (${response.status}).`);
+    }
+
+    const freshDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
+    const freshPanel = freshDocument.getElementById('foldersPanel');
+    if (!freshPanel) {
+      throw new Error('Could not find the refreshed folder sidebar.');
+    }
+
+    // Keep the folder chooser in the Create Experiment/Resource dialog in sync
+    // without replacing the select itself (its event listeners remain intact).
+    const createFolderSelect = document.getElementById('createNewFolderSelect') as HTMLSelectElement | null;
+    const freshCreateFolderSelect = freshDocument.getElementById('createNewFolderSelect') as HTMLSelectElement | null;
+    if (createFolderSelect && freshCreateFolderSelect) {
+      const selectedFolderId = createFolderSelect.value;
+      createFolderSelect.replaceChildren(...Array.from(freshCreateFolderSelect.options).map(option => option.cloneNode(true)));
+      if (createFolderSelect.querySelector(`option[value="${selectedFolderId}"]`)) {
+        createFolderSelect.value = selectedFolderId;
+      }
+      document.dispatchEvent(new CustomEvent('elabftw:folders-refreshed'));
+    }
+
+    freshPanel.hidden = panelWasHidden;
+    currentPanel.replaceWith(freshPanel);
+    const refreshedSidebar = document.getElementById('experimentsFoldersSidebar');
+    if (!refreshedSidebar) {
+      throw new Error('Could not initialize the refreshed folder sidebar.');
+    }
+    sidebar = refreshedSidebar;
+    favoriteFolderIds = readFavoriteFolderIds(sidebar);
+    freshPanel.scrollTop = panelScrollTop;
+    initializeFolderTreeState();
+  }
+
+  function refreshFoldersSidebarSafely(): void {
+    void refreshFoldersSidebar().catch(error => notify.error(error));
+  }
+
+  initializeFolderTreeState();
+  document.addEventListener('elabftw:folder-changed', refreshFoldersSidebarSafely);
 
   on('select-folder-scope', (el: HTMLElement, event: Event) => {
     event.preventDefault();
@@ -266,18 +347,8 @@ document.addEventListener('DOMContentLoaded', () => {
       action: 'toggle_favorite',
       folder_id: parseInt(folderId, 10),
     }).then(() => {
-      // Reload to reflect the new favorite state (reorder + collapse)
-      window.location.reload();
+      refreshFoldersSidebarSafely();
     });
-  });
-
-  // Show folder action buttons on hover
-  document.querySelectorAll('#experimentsFoldersContent .folder-node > .d-flex').forEach(row => {
-    const actions = row.querySelector('.folder-actions') as HTMLElement;
-    if (actions) {
-      row.addEventListener('mouseenter', () => actions.style.display = 'inline');
-      row.addEventListener('mouseleave', () => actions.style.display = 'none');
-    }
   });
 
   // Create folder
@@ -297,16 +368,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }).then(() => {
       nameInput.value = '';
       descriptionInput.value = '';
-      window.location.reload();
+      refreshFoldersSidebarSafely();
     });
-  });
-
-  // Allow Enter key to create folder
-  document.getElementById('newFolderName')?.addEventListener('keypress', (event: KeyboardEvent) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      (document.querySelector('[data-action="create-experiment-folder"]') as HTMLElement)?.click();
-    }
   });
 
   // Edit a folder name and its short description in one place.
@@ -331,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
       description: descriptionInput.value.trim(),
     }).then(() => {
       $('#editExperimentFolderModal').modal('hide');
-      window.location.reload();
+      refreshFoldersSidebarSafely();
     });
   });
 
@@ -342,7 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const folderId = el.dataset.id;
     if (confirm('Delete this folder? Experiments inside it will be moved to Unfiled.')) {
       ApiC.delete(`experiments_folders/${folderId}`).then(() => {
-        window.location.reload();
+        refreshFoldersSidebarSafely();
       });
     }
   });

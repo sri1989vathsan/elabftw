@@ -266,6 +266,52 @@ const createNewFolderInput = document.getElementById('createNewFolderInput') as 
 const createNewFolderSaveBtn = document.getElementById('createNewFolderSaveBtn');
 const createNewFolderCancelBtn = document.getElementById('createNewFolderCancelBtn');
 const createNewFolderSelect = document.getElementById('createNewFolderSelect') as HTMLSelectElement;
+const createNewFolderScopeButtons = document.querySelectorAll<HTMLButtonElement>('[data-create-folder-scope]');
+
+type CreateNewFolderScope = 'mine' | 'bookmarked' | 'all';
+
+function applyCreateNewFolderScope(scope: CreateNewFolderScope): void {
+  if (!createNewFolderSelect) return;
+  const currentUserId = createNewFolderSelect.dataset.currentUserId ?? '';
+  createNewFolderSelect.querySelectorAll('option').forEach((option, index) => {
+    if (index === 0) {
+      option.hidden = false;
+      option.disabled = false;
+      return;
+    }
+    const isVisible = scope === 'all'
+      || (scope === 'mine' && option.dataset.folderOwnerId === currentUserId)
+      || (scope === 'bookmarked' && option.dataset.folderBookmarked === 'true');
+    option.hidden = !isVisible;
+    option.disabled = !isVisible;
+  });
+  if (createNewFolderSelect.selectedOptions[0]?.disabled) {
+    createNewFolderSelect.value = '';
+  }
+
+  createNewFolderScopeButtons.forEach(button => {
+    const isActive = button.dataset.createFolderScope === scope;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+}
+
+createNewFolderScopeButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const scope = button.dataset.createFolderScope;
+    if (scope === 'mine' || scope === 'bookmarked' || scope === 'all') {
+      applyCreateNewFolderScope(scope);
+    }
+  });
+});
+
+document.addEventListener('elabftw:folders-refreshed', () => {
+  const activeButton = document.querySelector<HTMLButtonElement>('[data-create-folder-scope].active');
+  const scope = activeButton?.dataset.createFolderScope;
+  applyCreateNewFolderScope(scope === 'bookmarked' || scope === 'all' ? scope : 'mine');
+});
+
+applyCreateNewFolderScope('mine');
 
 if (createNewFolderBtn && createNewFolderInputDiv) {
   createNewFolderBtn.addEventListener('click', () => {
@@ -291,10 +337,14 @@ if (createNewFolderBtn && createNewFolderInputDiv) {
         const option = document.createElement('option');
         option.value = newId;
         option.textContent = name;
+        option.dataset.folderOwnerId = createNewFolderSelect.dataset.currentUserId ?? '';
+        option.dataset.folderBookmarked = 'false';
         option.selected = true;
         createNewFolderSelect.appendChild(option);
+        applyCreateNewFolderScope('mine');
       }
       createNewFolderInputDiv.setAttribute('hidden', 'hidden');
+      document.dispatchEvent(new CustomEvent('elabftw:folder-changed'));
     });
   });
 
