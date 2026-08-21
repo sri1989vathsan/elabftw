@@ -343,13 +343,13 @@ final class ExperimentsFolders extends AbstractRest
         )
 
         SELECT
-            id,
-            name,
-            full_path,
-            parent_id,
-            userid,
-            root_id,
-            level_depth,
+            folder_hierarchy.id,
+            folder_hierarchy.name,
+            folder_hierarchy.full_path,
+            folder_hierarchy.parent_id,
+            folder_hierarchy.userid,
+            folder_hierarchy.root_id,
+            folder_hierarchy.level_depth,
             COALESCE(child_counts.children_count, 0) AS children_count,
             COALESCE(experiment_counts.experiments_count, 0) AS experiments_count,
             COALESCE(resource_counts.resources_count, 0) AS resources_count,
@@ -377,7 +377,7 @@ final class ExperimentsFolders extends AbstractRest
         LEFT JOIN custom_experiment_folder_readmes AS readmes
             ON readmes.folder_id = folder_hierarchy.id AND readmes.body <> ''
         ORDER BY
-            name, parent_id";
+            folder_hierarchy.name, folder_hierarchy.parent_id";
         $req = $this->Db->prepare($sql);
         $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
         $this->Db->execute($req);
