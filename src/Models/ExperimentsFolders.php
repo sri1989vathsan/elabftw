@@ -65,6 +65,7 @@ final class ExperimentsFolders extends AbstractRest
                     experiments_folders
                 WHERE
                     id = :id
+                    AND team = :team
 
                 UNION
 
@@ -83,24 +84,36 @@ final class ExperimentsFolders extends AbstractRest
             )
 
             SELECT
-                original_id AS id,
-                name,
-                full_path,
-                original_parent_id AS parent_id,
-                level_depth
+                hierarchy.original_id AS id,
+                hierarchy.name,
+                hierarchy.full_path,
+                hierarchy.original_parent_id AS parent_id,
+                hierarchy.level_depth,
+                folders.userid,
+                COALESCE(readmes.body, '') AS readme_body,
+                COALESCE(readmes.content_type, 1) AS readme_content_type,
+                readmes.updated_at AS readme_updated_at
             FROM
-                folder_hierarchy
+                folder_hierarchy AS hierarchy
+            INNER JOIN experiments_folders AS folders ON folders.id = hierarchy.original_id
+            LEFT JOIN custom_experiment_folder_readmes AS readmes ON readmes.folder_id = hierarchy.original_id
             ORDER BY
-                level_depth DESC LIMIT 1;
+                hierarchy.level_depth DESC LIMIT 1;
         ";
 
         $req = $this->Db->prepare($sql);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
         $this->Db->execute($req);
-
+        $folder = $this->Db->fetch($req);
+        if ($folder === false) {
+            throw new ResourceNotFoundException('Folder not found in the current team.');
+        }
+        $folder['has_readme'] = $folder['readme_body'] !== '';
+        $folder['can_edit_readme'] = $this->canEditReadme((int) $folder['userid']);
         return (new CustomUiDescriptions())->enrichRows(
             CustomUiDescriptions::EXPERIMENT_FOLDER,
-            array($this->Db->fetch($req)),
+            array($folder),
         )[0];
     }
 
@@ -170,6 +183,15 @@ final class ExperimentsFolders extends AbstractRest
             }
             $this->toggleFavorite($folderId);
             return array('favorite_experiment_folders' => $this->getFavoriteFolders());
+        }
+
+        if (array_key_exists('readme_body', $params)) {
+            $folder = $this->readOne();
+            if (!$folder['can_edit_readme']) {
+                throw new IllegalActionException();
+            }
+            $this->writeReadme((string) $params['readme_body']);
+            return $this->readOne();
         }
 
         $this->canWriteOrExplode();
@@ -298,7 +320,8 @@ final class ExperimentsFolders extends AbstractRest
                 0 AS level_depth,
                 (SELECT COUNT(*) FROM experiments_folders AS ef WHERE ef.parent_id = experiments_folders.id) AS children_count,
                 (SELECT COUNT(*) FROM experiments AS e WHERE e.folder_id = experiments_folders.id AND e.state = 1) AS experiments_count,
-                (SELECT COUNT(*) FROM items AS i WHERE i.folder_id = experiments_folders.id AND i.state = 1) AS resources_count
+                (SELECT COUNT(*) FROM items AS i WHERE i.folder_id = experiments_folders.id AND i.state = 1) AS resources_count,
+                EXISTS(SELECT 1 FROM custom_experiment_folder_readmes AS r WHERE r.folder_id = experiments_folders.id AND r.body <> '') AS has_readme
             FROM
                 experiments_folders
             WHERE
@@ -317,7 +340,8 @@ final class ExperimentsFolders extends AbstractRest
                 parent.level_depth + 1,
                 (SELECT COUNT(*) FROM experiments_folders AS ef WHERE ef.parent_id = child.id) AS children_count,
                 (SELECT COUNT(*) FROM experiments AS e WHERE e.folder_id = child.id AND e.state = 1) AS experiments_count,
-                (SELECT COUNT(*) FROM items AS i WHERE i.folder_id = child.id AND i.state = 1) AS resources_count
+                (SELECT COUNT(*) FROM items AS i WHERE i.folder_id = child.id AND i.state = 1) AS resources_count,
+                EXISTS(SELECT 1 FROM custom_experiment_folder_readmes AS r WHERE r.folder_id = child.id AND r.body <> '') AS has_readme
             FROM
                 experiments_folders AS child
             INNER JOIN
@@ -336,7 +360,8 @@ final class ExperimentsFolders extends AbstractRest
             level_depth,
             children_count,
             experiments_count,
-            resources_count
+            resources_count,
+            has_readme
         FROM
             folder_hierarchy
         ORDER BY
@@ -509,5 +534,25 @@ final class ExperimentsFolders extends AbstractRest
         if (!$this->canWrite()) {
             throw new IllegalActionException();
         }
+    }
+
+    private function canEditReadme(int $ownerId): bool
+    {
+        return $ownerId === (int) $this->requester->userData['userid']
+            || $this->requester->isAdmin()
+            || $this->requester->isSysadmin();
+    }
+
+    private function writeReadme(string $body): void
+    {
+        $sql = 'INSERT INTO custom_experiment_folder_readmes (folder_id, body, content_type, updated_by)
+            VALUES (:folder_id, :body, 1, :updated_by)
+            ON DUPLICATE KEY UPDATE body = VALUES(body), content_type = VALUES(content_type),
+                updated_by = VALUES(updated_by), updated_at = CURRENT_TIMESTAMP';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':folder_id', $this->id, PDO::PARAM_INT);
+        $req->bindValue(':body', Filter::body($body));
+        $req->bindValue(':updated_by', $this->requester->userData['userid'], PDO::PARAM_INT);
+        $this->Db->execute($req);
     }
 }

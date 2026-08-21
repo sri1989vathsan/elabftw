@@ -508,6 +508,17 @@
   {% endif %}
 
   <div id='showModeContent'>
+      {% if App.Request.query.get('folder') and App.Request.query.get('folder') != '0' %}
+        <details id='selectedFolderReadmePanel' class='folder-readme-panel mb-3' data-folder-id='{{ App.Request.query.get('folder')|e('html_attr') }}'>
+          <summary class='folder-readme-summary'>
+            <span><i class='fas fa-file-lines fa-fw mr-2'></i><span data-folder-readme-title>{{ 'Folder README'|trans }}</span></span>
+            <button type='button' class='folder-action-btn ml-auto' data-action='open-folder-readme' data-id='{{ App.Request.query.get('folder')|e('html_attr') }}' aria-label='{{ 'Open folder README'|trans }}' title='{{ 'Open folder README'|trans }}'>
+              <i class='fas fa-pen-to-square fa-xs'></i>
+            </button>
+          </summary>
+          <div class='folder-readme-content p-3' data-folder-readme-content></div>
+        </details>
+      {% endif %}
       <div id='withSelected' hidden>
         <div class='row mx-0'><p>{{ 'With selected:'|trans }}</p></div>
         {# First line #}

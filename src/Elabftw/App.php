@@ -21,6 +21,7 @@ use Elabftw\Models\Users\AnonymousUser;
 use Elabftw\Models\Users\AuthenticatedUser;
 use Elabftw\Models\Config;
 use Elabftw\Models\ExperimentsCategories;
+use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\FavCategories;
 use Elabftw\Models\FavFilters;
@@ -184,14 +185,28 @@ final class App
     public function render(string $template, array $variables): string
     {
         try {
+            $globals = array(
+                'App' => $this,
+                'langsArr' => Language::getAllHuman(),
+                'sessionExpiresAt' => $this->sessionExpiresAt,
+            );
+            // Make the folder panel available from every authenticated page,
+            // while allowing entity controllers to override these values with
+            // the copies they already prepared for their own rendering work.
+            if (
+                $this->Session->has('is_auth')
+                && !$this->isAnonymous()
+                && !isset($variables['experimentsFoldersTreeArr'])
+            ) {
+                $Folders = new ExperimentsFolders($this->Users);
+                $globals['experimentsFoldersTreeArr'] = $Folders->readAllRecursive();
+                $globals['favoriteFolderIds'] = $Folders->getFavoriteFolders();
+                $globals['favoriteRootFolderIds'] = $Folders->getFavoriteRootFolderIds();
+            }
             return $this->getTwig($this->devMode)->render(
                 $template,
                 array_merge(
-                    array(
-                        'App' => $this,
-                        'langsArr' => Language::getAllHuman(),
-                        'sessionExpiresAt' => $this->sessionExpiresAt,
-                    ),
+                    $globals,
                     $variables,
                 )
             );

@@ -1,8 +1,8 @@
 {# Shared experiment/resource folder tree - dedicated tab in the left sidebar. #}
-{% if Entity.entityType.value in ['experiments', 'items'] and experimentsFoldersTreeArr is defined %}
-{% set currentFolderId = App.Request.query.has('folder') ? App.Request.query.get('folder') : Entity.entityData.folder_id|default('') %}
-{% set folderPage = Entity.entityType.value == 'items' ? 'database.php' : 'experiments.php' %}
-{% set folderEntityType = Entity.entityType.value %}
+{% if experimentsFoldersTreeArr is defined %}
+{% set folderEntityType = Entity is defined and Entity.entityType.value == 'items' ? 'items' : 'experiments' %}
+{% set currentFolderId = App.Request.query.has('folder') ? App.Request.query.get('folder') : (Entity is defined ? Entity.entityData.folder_id|default('') : '') %}
+{% set folderPage = folderEntityType == 'items' ? 'database.php' : 'experiments.php' %}
 {% set folderBookmarkIds = favoriteFolderIds|default([]) %}
 {% set folderBookmarkRootIds = favoriteRootFolderIds|default([]) %}
 <div class='side-panel' id='foldersPanel' hidden>
@@ -76,12 +76,15 @@
               {% endif %}
             </a>
             {% set isBookmarked = folder.id in folderBookmarkIds %}
-            <span data-action='toggle-favorite-folder' data-id='{{ folder.id }}' class='ml-1 favorite-folder-star hl-hover-gray rounded p-1' title='{{ isBookmarked ? 'Remove bookmark' : 'Bookmark folder' }}' style='cursor:pointer'>
-              <i class='{{ isBookmarked ? 'fas' : 'far' }} fa-star fa-xs' style='color:{{ isBookmarked ? '#f0ad4e' : '#999' }}'></i>
-            </span>
-            <span class='ml-1 folder-actions' style='display:none'>
-              <span data-action='edit-folder' data-id='{{ folder.id }}' data-name='{{ folder.name|e('html_attr') }}' data-description='{{ folder.description|e('html_attr') }}' class='hl-hover-gray rounded p-1' title='{{ 'Edit folder'|trans }}'><i class='fas fa-pencil fa-xs'></i></span>
-              <span data-action='delete-folder' data-id='{{ folder.id }}' class='hl-hover-gray rounded p-1' title='{{ 'Delete'|trans }}'><i class='fas fa-trash-alt fa-xs'></i></span>
+            <span class='folder-actions ml-auto' role='group' aria-label='{{ 'Folder actions'|trans }}'>
+              <button type='button' data-action='toggle-favorite-folder' data-id='{{ folder.id }}' class='folder-action-btn favorite-folder-star hl-hover-gray rounded' aria-label='{{ isBookmarked ? 'Remove bookmark' : 'Bookmark folder' }}' title='{{ isBookmarked ? 'Remove bookmark' : 'Bookmark folder' }}'>
+                <i class='{{ isBookmarked ? 'fas' : 'far' }} fa-star fa-xs' style='color:{{ isBookmarked ? '#f0ad4e' : '#999' }}'></i>
+              </button>
+              <button type='button' data-action='open-folder-readme' data-id='{{ folder.id }}' class='folder-action-btn hl-hover-gray rounded' aria-label='{{ 'Folder README'|trans }}' title='{{ 'Folder README'|trans }}'>
+                <i class='{{ folder.has_readme ? 'fas' : 'far' }} fa-file-lines fa-xs'></i>
+              </button>
+              <button type='button' data-action='edit-folder' data-id='{{ folder.id }}' data-name='{{ folder.name|e('html_attr') }}' data-description='{{ folder.description|e('html_attr') }}' class='folder-action-btn hl-hover-gray rounded' aria-label='{{ 'Edit folder'|trans }}' title='{{ 'Edit folder'|trans }}'><i class='fas fa-pencil fa-xs'></i></button>
+              <button type='button' data-action='delete-folder' data-id='{{ folder.id }}' class='folder-action-btn folder-action-delete hl-hover-gray rounded' aria-label='{{ 'Delete'|trans }}' title='{{ 'Delete'|trans }}'><i class='fas fa-trash-alt fa-xs'></i></button>
             </span>
           </div>
           {% if folder.description %}
@@ -196,6 +199,31 @@
           <button type='submit' class='btn btn-primary' data-action='save-folder-details'>{{ 'Save'|trans }}</button>
         </div>
       </form>
+    </div>
+  </div>
+</div>
+
+<div class='modal fade' id='folderReadmeModal' tabindex='-1' role='dialog' aria-labelledby='folderReadmeModalLabel' aria-hidden='true'>
+  <div class='modal-dialog modal-lg' role='document'>
+    <div class='modal-content'>
+      <div class='modal-header'>
+        <h5 class='modal-title' id='folderReadmeModalLabel'><i class='fas fa-file-lines fa-fw mr-2'></i><span id='folderReadmeModalTitle'>{{ 'Folder README'|trans }}</span></h5>
+        <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'><span aria-hidden='true'>&times;</span></button>
+      </div>
+      <div class='modal-body'>
+        <input type='hidden' id='folderReadmeId'>
+        <div id='folderReadmeView' class='folder-readme-content'></div>
+        <div id='folderReadmeEmpty' class='color-medium text-center py-4' hidden>
+          <i class='far fa-file-lines fa-2x mb-2 d-block'></i>{{ 'This folder README is empty.'|trans }}
+        </div>
+        <textarea id='folderReadmeEditor' class='form-control' rows='16' hidden></textarea>
+      </div>
+      <div class='modal-footer'>
+        <button type='button' class='btn btn-ghost' data-dismiss='modal'>{{ 'Close'|trans }}</button>
+        <button type='button' id='cancelFolderReadmeEdit' class='btn btn-ghost' data-action='cancel-folder-readme-edit' hidden>{{ 'Cancel'|trans }}</button>
+        <button type='button' id='editFolderReadme' class='btn btn-secondary' data-action='edit-folder-readme' hidden><i class='fas fa-pencil fa-fw mr-1'></i>{{ 'Edit'|trans }}</button>
+        <button type='button' id='saveFolderReadme' class='btn btn-primary' data-action='save-folder-readme' hidden><i class='fas fa-save fa-fw mr-1'></i>{{ 'Save'|trans }}</button>
+      </div>
     </div>
   </div>
 </div>

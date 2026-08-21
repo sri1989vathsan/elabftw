@@ -1085,6 +1085,70 @@ tr:first-child td {
   .folder-create-section {
     border-color: var(--chrome-muted) !important;
   }
+
+  .folder-row > [data-folder-entity-link] {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-actions {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 0.45rem;
+    justify-content: flex-end;
+    padding-left: 0.65rem;
+  }
+}
+
+.folder-action-btn {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--medium);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 1.75rem;
+  height: 1.75rem;
+  justify-content: center;
+  padding: 0;
+  width: 1.75rem;
+
+  &:hover,
+  &:focus {
+    color: var(--strongest);
+  }
+}
+
+.folder-action-delete:hover,
+.folder-action-delete:focus {
+  color: var(--dangerred);
+}
+
+.folder-readme-panel {
+  background: var(--white);
+  border: 1px solid var(--secondlevel);
+  border-radius: 0.25rem;
+}
+
+.folder-readme-summary {
+  align-items: center;
+  color: var(--strongest);
+  cursor: pointer;
+  display: flex;
+  font-weight: 600;
+  padding: 0.65rem 0.8rem;
+}
+
+.folder-readme-content {
+  color: var(--strongest);
+  overflow-wrap: anywhere;
+
+  > :last-child {
+    margin-bottom: 0;
+  }
 }
 
 .side-panel-resizer {

@@ -7,11 +7,20 @@
  */
 
 import $ from 'jquery';
+import tinymce from 'tinymce/tinymce';
 import { Api } from './Apiv2.class';
 import { on } from './handlers';
 import { notify } from './notify';
+import { getTinymceBaseConfig } from './tinymce';
 
 type FolderScope = 'mine' | 'all';
+
+interface FolderReadme {
+  id: number;
+  name: string;
+  readme_body: string;
+  can_edit_readme: boolean;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   // Only run on experiments page
@@ -31,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const folderScopeKey = `experiment-folder-scope-${currentUserId}`;
   const storedFolderScope = localStorage.getItem(folderScopeKey);
   let activeFolderScope: FolderScope = storedFolderScope === 'all' ? 'all' : 'mine';
+  let activeReadme: FolderReadme | null = null;
 
   function readFavoriteFolderIds(element: HTMLElement): string[] {
     return (element.dataset.favoriteFolderIds ?? '').split(',').filter(folderId => folderId !== '');
@@ -219,14 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function bindFolderInteractiveControls(): void {
-    document.querySelectorAll('#experimentsFoldersContent .folder-row').forEach(row => {
-      const actions = row.querySelector('.folder-actions') as HTMLElement | null;
-      if (actions) {
-        row.addEventListener('mouseenter', () => actions.style.display = 'inline');
-        row.addEventListener('mouseleave', () => actions.style.display = 'none');
-      }
-    });
-
     document.getElementById('newFolderName')?.addEventListener('keypress', (event: KeyboardEvent) => {
       if (event.key === 'Enter') {
         event.preventDefault();
@@ -321,7 +323,81 @@ document.addEventListener('DOMContentLoaded', () => {
     void refreshFoldersSidebar().catch(error => notify.error(error));
   }
 
+  async function getFolderReadme(folderId: string): Promise<FolderReadme> {
+    return ApiC.getJson<FolderReadme>(`experiments_folders/${folderId}`);
+  }
+
+  function renderReadmeContent(target: HTMLElement, body: string): void {
+    target.innerHTML = body || '<p class="color-medium mb-0">This folder README is empty.</p>';
+  }
+
+  async function initializeReadmeEditor(): Promise<void> {
+    if (tinymce.get('folderReadmeEditor')) return;
+    const baseConfig = getTinymceBaseConfig('admin');
+    await tinymce.init({
+      ...baseConfig,
+      selector: '#folderReadmeEditor',
+      height: 360,
+      min_height: 280,
+      menubar: false,
+      plugins: 'advlist autolink charmap code fullscreen link lists preview searchreplace table visualblocks',
+      toolbar1: 'undo redo | blocks fontsize | bold italic underline | alignleft aligncenter alignright | bullist numlist | link table | removeformat code',
+      setup: undefined,
+      images_upload_handler: undefined,
+      templates: undefined,
+      paste_data_images: false,
+      contextmenu: false,
+    });
+  }
+
+  function setReadmeEditMode(editing: boolean): void {
+    const view = document.getElementById('folderReadmeView');
+    const empty = document.getElementById('folderReadmeEmpty');
+    const textarea = document.getElementById('folderReadmeEditor');
+    const editButton = document.getElementById('editFolderReadme');
+    const saveButton = document.getElementById('saveFolderReadme');
+    const cancelButton = document.getElementById('cancelFolderReadmeEdit');
+    if (!view || !empty || !textarea || !editButton || !saveButton || !cancelButton) return;
+    view.hidden = editing || !activeReadme?.readme_body;
+    empty.hidden = editing || Boolean(activeReadme?.readme_body);
+    textarea.hidden = !editing;
+    editButton.hidden = editing || !activeReadme?.can_edit_readme;
+    saveButton.hidden = !editing;
+    cancelButton.hidden = !editing;
+    tinymce.get('folderReadmeEditor')?.getContainer().toggleAttribute('hidden', !editing);
+  }
+
+  async function openFolderReadme(folderId: string): Promise<void> {
+    activeReadme = await getFolderReadme(folderId);
+    (document.getElementById('folderReadmeId') as HTMLInputElement).value = folderId;
+    const title = document.getElementById('folderReadmeModalTitle');
+    const view = document.getElementById('folderReadmeView');
+    if (title) title.textContent = `${activeReadme.name} — README`;
+    if (view) renderReadmeContent(view, activeReadme.readme_body);
+    await initializeReadmeEditor();
+    tinymce.get('folderReadmeEditor')?.setContent(activeReadme.readme_body);
+    setReadmeEditMode(false);
+    $('#folderReadmeModal').modal('show');
+  }
+
+  async function loadSelectedFolderReadme(): Promise<void> {
+    const panel = document.getElementById('selectedFolderReadmePanel');
+    const folderId = panel?.dataset.folderId;
+    if (!panel || !folderId) return;
+    try {
+      const folder = await getFolderReadme(folderId);
+      const title = panel.querySelector('[data-folder-readme-title]');
+      const content = panel.querySelector('[data-folder-readme-content]') as HTMLElement | null;
+      if (title) title.textContent = `${folder.name} — README`;
+      if (content) renderReadmeContent(content, folder.readme_body);
+    } catch (error) {
+      panel.hidden = true;
+      notify.error(error);
+    }
+  }
+
   initializeFolderTreeState();
+  void loadSelectedFolderReadme();
   document.addEventListener('elabftw:folder-changed', refreshFoldersSidebarSafely);
 
   on('select-folder-scope', (el: HTMLElement, event: Event) => {
@@ -365,6 +441,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }).then(() => {
       refreshFoldersSidebarSafely();
     });
+  });
+
+  on('open-folder-readme', (el: HTMLElement, event: Event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    if (el.dataset.id) {
+      void openFolderReadme(el.dataset.id).catch(error => notify.error(error));
+    }
+  });
+
+  on('edit-folder-readme', () => {
+    if (!activeReadme?.can_edit_readme) return;
+    tinymce.get('folderReadmeEditor')?.setContent(activeReadme.readme_body);
+    setReadmeEditMode(true);
+    tinymce.get('folderReadmeEditor')?.focus();
+  });
+
+  on('cancel-folder-readme-edit', () => {
+    tinymce.get('folderReadmeEditor')?.setContent(activeReadme?.readme_body ?? '');
+    setReadmeEditMode(false);
+  });
+
+  on('save-folder-readme', () => {
+    if (!activeReadme?.can_edit_readme) return;
+    const body = tinymce.get('folderReadmeEditor')?.getContent() ?? '';
+    ApiC.patch(`experiments_folders/${activeReadme.id}`, {readme_body: body}).then(async () => {
+      activeReadme = await getFolderReadme(String(activeReadme?.id));
+      const view = document.getElementById('folderReadmeView');
+      if (view) renderReadmeContent(view, activeReadme.readme_body);
+      setReadmeEditMode(false);
+      await loadSelectedFolderReadme();
+      refreshFoldersSidebarSafely();
+    }).catch(error => notify.error(error));
   });
 
   // Create folder
