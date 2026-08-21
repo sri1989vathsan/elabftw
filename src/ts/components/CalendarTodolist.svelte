@@ -132,6 +132,9 @@
   let calendarFeedUrl = '';
   let draggedTaskId: number | null = null;
   let dragOverDate = '';
+  let calendarMonthLabel = '';
+  let visibleMonthActivityCount = 0;
+  let loadSequence = 0;
 
   $: entries = [
     ...calendarTasks
@@ -206,6 +209,8 @@
     ? buildAgendaEntities('items', entityActivities, selectedDate, monthCursor, activitySearch)
     : [];
   $: agendaCount = agendaEntries.length + agendaExperiments.length + agendaResources.length;
+  $: calendarMonthLabel = formatMonthLabel(monthCursor, locale);
+  $: visibleMonthActivityCount = countMonthActivity(monthCursor, entries, entityActivities);
   $: updateUrgentBadges(reminderEntries);
 
   function dateKey(date: Date): string {
@@ -305,18 +310,22 @@
     return `${Model.CalendarActivity}?${params.toString()}`;
   }
 
-  function monthActivityCount(): number {
-    const taskCount = entries.filter(entry => {
+  function countMonthActivity(
+    month: Date,
+    calendarEntries: CalendarEntry[],
+    activities: EntityActivity[],
+  ): number {
+    const taskCount = calendarEntries.filter(entry => {
       const deadline = new Date(entry.deadline);
-      return deadline.getFullYear() === monthCursor.getFullYear()
-        && deadline.getMonth() === monthCursor.getMonth();
+      return deadline.getFullYear() === month.getFullYear()
+        && deadline.getMonth() === month.getMonth();
     }).length;
     const entityKeys = new Set<string>();
-    entityActivities.forEach(activity => {
+    activities.forEach(activity => {
       activityDates(activity).forEach(date => {
         const parsed = new Date(`${date}T12:00:00`);
-        if (parsed.getFullYear() === monthCursor.getFullYear()
-          && parsed.getMonth() === monthCursor.getMonth()
+        if (parsed.getFullYear() === month.getFullYear()
+          && parsed.getMonth() === month.getMonth()
         ) {
           entityKeys.add(`${activity.entity_type}-${activity.id}-${date}`);
         }
@@ -425,11 +434,11 @@
     }
   }
 
-  function monthLabel(): string {
-    return new Intl.DateTimeFormat(locale, {
+  function formatMonthLabel(month: Date, activeLocale: string): string {
+    return new Intl.DateTimeFormat(activeLocale, {
       month: 'long',
       year: 'numeric',
-    }).format(monthCursor);
+    }).format(month);
   }
 
   function weekdayLabels(): string[] {
@@ -543,6 +552,7 @@
   }
 
   async function load(): Promise<void> {
+    const requestSequence = ++loadSequence;
     loading = true;
     const [calendarResponse, activeResponse, stepResponse, activityResponse] = await Promise.all([
       ApiC.getJson(calendarTaskQuery()) as Promise<Todo[]>,
@@ -552,6 +562,9 @@
       }>,
       ApiC.getJson(calendarActivityQuery()) as Promise<ActivityResponse>,
     ]);
+    // Month navigation can start another request before this one completes.
+    // Never let an older month overwrite the latest selected month.
+    if (requestSequence !== loadSequence) return;
     calendarTasks = calendarResponse;
     activeTasks = activeResponse;
     stepDeadlines = stepResponse.calendar ?? [];
@@ -737,8 +750,8 @@
     <div class='calendar-month-copy'>
       <span class='calendar-month-eyebrow'>{t('Lab activity')}</span>
       <div class='calendar-month-title'>
-        <strong>{monthLabel()}</strong>
-        <span>{monthActivityCount()} {t('entries')}</span>
+        <strong>{calendarMonthLabel}</strong>
+        <span>{visibleMonthActivityCount} {t('entries')}</span>
       </div>
     </div>
     <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(1)} aria-label={t('Next month')}>
