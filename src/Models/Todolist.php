@@ -98,8 +98,10 @@ final class Todolist extends AbstractRest
             ? $this->getDeadline($query->getString('completed_since'))
             : null;
         $completedSinceFilter = $completedSince === null ? '' : ' AND completed_at >= :completed_since';
-        $limit = $completed ? ($queryParams->getLimit() ?: 100) : 0;
-        $offset = $completed ? max(0, $query->getInt('offset')) : 0;
+        // Keep sidebar payloads bounded for long-lived accounts. Clients can
+        // request subsequent pages with offset.
+        $limit = $queryParams->getLimit() ?: 100;
+        $offset = max(0, $query->getInt('offset'));
         $limitSql = $limit > 0 ? sprintf(' LIMIT %d OFFSET %d', $limit, $offset) : '';
         $sql = "SELECT id, body, notes,
                 DATE_FORMAT(deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,

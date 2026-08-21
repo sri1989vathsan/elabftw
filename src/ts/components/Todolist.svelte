@@ -117,6 +117,10 @@
   let draggedTaskId: number | null = null;
   let dragOverKey = '';
   let loading = true;
+  const pageSize = 100;
+  let nextOffset = pageSize;
+  let canLoadMore = false;
+  let loadingMore = false;
 
   $: entries = [
     ...items.map(item => ({
@@ -537,12 +541,35 @@
     loading = true;
     const teamScope = localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
     const [todoResponse, unfinishedResponse] = await Promise.all([
-      ApiC.getJson(Model.Todolist) as Promise<Todo[]>,
-      ApiC.getJson(`unfinished_steps?scope=${teamScope ? 'team' : 'user'}`) as Promise<UnfinishedResponse>,
+      ApiC.getJson(`${Model.Todolist}?limit=${pageSize}&offset=0`) as Promise<Todo[]>,
+      ApiC.getJson(`unfinished_steps?scope=${teamScope ? 'team' : 'user'}&limit=${pageSize}&offset=0`) as Promise<UnfinishedResponse>,
     ]);
     items = todoResponse;
     unfinished = unfinishedResponse;
+    nextOffset = pageSize;
+    canLoadMore = todoResponse.length === pageSize
+      || unfinishedResponse.experiments.length === pageSize
+      || unfinishedResponse.items.length === pageSize;
     loading = false;
+  }
+
+  async function loadMore(): Promise<void> {
+    loadingMore = true;
+    const teamScope = localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
+    const [todos, steps] = await Promise.all([
+      ApiC.getJson(`${Model.Todolist}?limit=${pageSize}&offset=${nextOffset}`) as Promise<Todo[]>,
+      ApiC.getJson(`unfinished_steps?scope=${teamScope ? 'team' : 'user'}&limit=${pageSize}&offset=${nextOffset}`) as Promise<UnfinishedResponse>,
+    ]);
+    items = [...items, ...todos];
+    unfinished = {
+      experiments: [...unfinished.experiments, ...steps.experiments],
+      items: [...unfinished.items, ...steps.items],
+    };
+    nextOffset += pageSize;
+    canLoadMore = todos.length === pageSize
+      || steps.experiments.length === pageSize
+      || steps.items.length === pageSize;
+    loadingMore = false;
   }
 
   function formatDeadline(value: string): string {
@@ -996,6 +1023,11 @@
         </section>
       {/each}
     </div>
+    {#if canLoadMore}
+      <button type='button' class='btn btn-sm btn-outline-secondary btn-block mt-2' disabled={loadingMore} on:click={loadMore}>
+        {loadingMore ? `${t('Loading')}…` : t('Load more')}
+      </button>
+    {/if}
   {/if}
 
   <details class='todo-completed-history mt-3' on:toggle={toggleCompletedHistory}>

@@ -1,0 +1,11 @@
+<div class='side-panel' id='foldersPanel' data-lazy-folders-panel hidden>
+  <div id='experimentsFoldersSidebar' class='p-3' data-current-user-id='{{ App.Users.userData.userid }}'>
+    <div class='d-flex align-items-center justify-content-between mb-3'>
+      <h3 class='mb-0'><i class='fas fa-folder-tree mr-2'></i>{{ 'Folders'|trans }}</h3>
+      <button type='button' data-action='toggle-sidepanel' data-target='folders' data-purpose='hide' class='btn btn-sm' aria-label='{{ 'Close'|trans }}'><i class='fas fa-xmark fa-2x'></i></button>
+    </div>
+    <div class='d-flex align-items-center justify-content-center color-medium py-5' role='status'>
+      <i class='fas fa-spinner fa-spin mr-2'></i>{{ 'Loading'|trans }}…
+    </div>
+  </div>
+</div>

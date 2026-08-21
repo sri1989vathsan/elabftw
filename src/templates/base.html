@@ -83,6 +83,8 @@
 {% if App.Session.get('is_auth') and not App.isAnonymous() %}
   {% if experimentsFoldersTreeArr is defined %}
     {% include 'experiments-folders.html' %}
+  {% else %}
+    {% include 'experiments-folders-placeholder.html' %}
   {% endif %}
   {% include 'todolist-panel.html' %}
   {% include 'calendar-activity-panel.html' %}

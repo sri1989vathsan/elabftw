@@ -48,6 +48,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Read the server-provided set of bookmarked folder ids.
   let favoriteFolderIds = readFavoriteFolderIds(sidebar);
+  document.addEventListener('elabftw:folders-panel-loaded', () => {
+    const loadedSidebar = document.getElementById('experimentsFoldersSidebar');
+    if (!loadedSidebar) return;
+    sidebar = loadedSidebar;
+    favoriteFolderIds = readFavoriteFolderIds(sidebar);
+    initializeFolderTreeState();
+  });
   const currentFolderId = new URLSearchParams(window.location.search).get('folder')
     || sidebar.dataset.currentFolderId
     || null;
@@ -274,7 +281,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const panelWasHidden = currentPanel.hidden;
     const panelScrollTop = currentPanel.scrollTop;
-    const refreshUrl = new URL(window.location.href);
+    sessionStorage.removeItem('folders-panel-html-v1');
+    sessionStorage.removeItem('folders-panel-html-v1-at');
+    const supportsFolderData = ['/experiments.php', '/database.php'].includes(window.location.pathname);
+    const refreshUrl = supportsFolderData
+      ? new URL(window.location.href)
+      : new URL('/experiments.php?mode=show&scope=1', window.location.origin);
     // Reading view mode provides the same folder data without reinitializing an
     // experiment's exclusive edit session while the user has unsaved content.
     if (refreshUrl.searchParams.get('mode') === 'edit') {

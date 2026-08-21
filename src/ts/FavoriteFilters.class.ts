@@ -39,7 +39,26 @@ export default class FavoriteFilters extends SidePanel {
 
   show(): void {
     super.show();
+    void this.loadOwnerOptions();
     if (!this.resultsLoaded) void this.loadResults();
+  }
+
+  private async loadOwnerOptions(): Promise<void> {
+    const target = document.getElementById('favoriteFilterOwnerOptions');
+    if (!target || target.dataset.lazyOwnerOptions !== '1') return;
+    target.dataset.lazyOwnerOptions = 'loading';
+    const url = new URL(window.location.href);
+    url.searchParams.set('load_filter_options', '1');
+    const response = await fetch(url, { credentials: 'same-origin' });
+    if (!response.ok) {
+      target.dataset.lazyOwnerOptions = '1';
+      return;
+    }
+    const parsed = new DOMParser().parseFromString(await response.text(), 'text/html');
+    const loaded = parsed.getElementById('favoriteFilterOwnerOptions');
+    if (!loaded) return;
+    target.replaceChildren(...Array.from(loaded.children).map(option => option.cloneNode(true)));
+    target.dataset.lazyOwnerOptions = '0';
   }
 
   updateTarget(): void {

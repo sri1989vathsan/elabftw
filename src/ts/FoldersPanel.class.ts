@@ -5,8 +5,48 @@
 import SidePanel from './SidePanel.class';
 
 export default class FoldersPanel extends SidePanel {
+  private loading: Promise<void> | null = null;
+
   constructor() {
     super('folders');
     this.panelId = 'foldersPanel';
+  }
+
+  show(): void {
+    super.show();
+    if (document.getElementById(this.panelId)?.hasAttribute('data-lazy-folders-panel')) {
+      this.loading ??= this.loadPanel();
+    }
+  }
+
+  private async loadPanel(): Promise<void> {
+    const cacheKey = 'folders-panel-html-v1';
+    const cached = sessionStorage.getItem(cacheKey);
+    const cachedAt = Number(sessionStorage.getItem(`${cacheKey}-at`) ?? 0);
+    let fragmentHtml = cachedAt > Date.now() - 30000 ? cached : null;
+    if (!fragmentHtml) {
+      const response = await fetch('/experiments.php?mode=show&scope=1', { credentials: 'same-origin' });
+      if (!response.ok) throw new Error(`Unable to load folders (${response.status})`);
+      const responseDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
+      fragmentHtml = [
+        responseDocument.getElementById(this.panelId)?.outerHTML ?? '',
+        responseDocument.getElementById('editExperimentFolderModal')?.outerHTML ?? '',
+        responseDocument.getElementById('folderReadmeModal')?.outerHTML ?? '',
+      ].join('');
+      sessionStorage.setItem(cacheKey, fragmentHtml);
+      sessionStorage.setItem(`${cacheKey}-at`, String(Date.now()));
+    }
+    const documentCopy = new DOMParser().parseFromString(fragmentHtml, 'text/html');
+    const freshPanel = documentCopy.getElementById(this.panelId);
+    const currentPanel = document.getElementById(this.panelId);
+    if (!freshPanel || !currentPanel) return;
+    freshPanel.removeAttribute('hidden');
+    currentPanel.replaceWith(freshPanel);
+    ['editExperimentFolderModal', 'folderReadmeModal'].forEach(id => {
+      if (document.getElementById(id)) return;
+      const modal = documentCopy.getElementById(id);
+      if (modal) document.body.append(modal);
+    });
+    document.dispatchEvent(new CustomEvent('elabftw:folders-panel-loaded'));
   }
 }

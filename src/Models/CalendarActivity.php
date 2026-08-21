@@ -14,26 +14,22 @@ use DateInterval;
 use DateTimeImmutable;
 use Elabftw\Elabftw\CanSqlBuilder;
 use Elabftw\Enums\AccessType;
-use Elabftw\Enums\BodyContentType;
 use Elabftw\Enums\EntityType;
 use Elabftw\Enums\State;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Users\Users;
-use Elabftw\Services\CalendarActivityHeadingExtractor;
+use Elabftw\Services\CalendarActivityIndexer;
 use Override;
 use PDO;
 
-use function array_map;
-use function count;
-use function implode;
 use function sprintf;
 
 /**
  * Read owned experiment/resource activity for the account calendar.
  *
- * This is deliberately computed from existing entity data and saved date
- * references, so the feature does not need its own schema migration.
+ * Dated headings are read from a fork-owned materialized index. This avoids
+ * scanning and parsing every full entity body on every calendar request.
  */
 final class CalendarActivity extends AbstractRest
 {
@@ -41,7 +37,7 @@ final class CalendarActivity extends AbstractRest
 
     public function __construct(
         private Users $Users,
-        private CalendarActivityHeadingExtractor $HeadingExtractor = new CalendarActivityHeadingExtractor(),
+        private CalendarActivityIndexer $Indexer = new CalendarActivityIndexer(),
     ) {
         parent::__construct();
     }
@@ -83,15 +79,9 @@ final class CalendarActivity extends AbstractRest
         bool $teamScoped,
     ): array
     {
-        $dateClauses = array();
-        $dates = array();
-        $cursor = $from;
-        while ($cursor <= $to) {
-            $parameter = ':body_date_' . count($dates);
-            $dateClauses[] = 'entity.body LIKE ' . $parameter;
-            $dates[$parameter] = '%datetime="' . $cursor->format('Y-m-d') . '%';
-            $cursor = $cursor->add(new DateInterval('P1D'));
-        }
+        // This also performs a one-time backfill for existing installations and
+        // incrementally refreshes only entities whose modified_at changed.
+        $this->Indexer->synchronizeTeam($entityType, $this->Users->team);
 
         $scopeSql = 'entity.team = :teamid AND entity.userid = :userid';
         if ($teamScoped) {
@@ -101,63 +91,56 @@ final class CalendarActivity extends AbstractRest
         }
 
         $sql = sprintf(
-            'SELECT entity.id, entity.title, entity.date, entity.body, entity.content_type
+            'SELECT entity.id, entity.title, entity.date,
+                    activity.heading_index, activity.entry_date, activity.heading_level,
+                    activity.heading_text, activity.parent_index, activity.anchor
                 FROM %s AS entity
+                LEFT JOIN custom_calendar_activity_entries AS activity
+                    ON activity.entity_type = :entity_type
+                    AND activity.entity_id = entity.id
+                    AND activity.entry_date BETWEEN :from_date AND :to_date
                 WHERE %s
                     AND entity.state IN (%d, %d)
-                    AND (entity.date BETWEEN :from_date AND :to_date OR %s)
-                ORDER BY entity.date ASC, entity.title ASC',
+                    AND (entity.date BETWEEN :from_date AND :to_date OR activity.entity_id IS NOT NULL)
+                ORDER BY entity.date ASC, entity.title ASC, activity.heading_index ASC',
             $entityType->value,
             $scopeSql,
             State::Normal->value,
             State::Archived->value,
-            implode(' OR ', $dateClauses),
         );
         $req = $this->Db->prepare($sql);
         $req->bindValue(':userid', $this->Users->userid, PDO::PARAM_INT);
         $req->bindValue(':teamid', $this->Users->team, PDO::PARAM_INT);
         $req->bindValue(':from_date', $from->format('Y-m-d'));
         $req->bindValue(':to_date', $to->format('Y-m-d'));
-        foreach ($dates as $parameter => $pattern) {
-            $req->bindValue($parameter, $pattern);
-        }
+        $req->bindValue(':entity_type', $entityType->value);
         $this->Db->execute($req);
 
         $result = array();
         foreach ($req->fetchAll() as $entity) {
-            $entityDate = (string) $entity['date'];
-            $headings = $this->HeadingExtractor->extract(
-                (string) ($entity['body'] ?? ''),
-                BodyContentType::from((int) $entity['content_type']),
-                $entityDate,
-            );
-            $hasDatedHeading = false;
-            foreach ($headings as $heading) {
-                if ($heading['date'] >= $from->format('Y-m-d') && $heading['date'] <= $to->format('Y-m-d')) {
-                    $hasDatedHeading = true;
-                    break;
-                }
+            $id = (int) $entity['id'];
+            if (!isset($result[$id])) {
+                $result[$id] = array(
+                    'id' => (int) $entity['id'],
+                    'title' => (string) ($entity['title'] ?? ''),
+                    'date' => (string) $entity['date'],
+                    'entity_type' => $entityType->value,
+                    'entity_page' => $entityType->toPage(),
+                    'headings' => array(),
+                );
             }
-            if (!$hasDatedHeading && ($entityDate < $from->format('Y-m-d') || $entityDate > $to->format('Y-m-d'))) {
-                continue;
+            if ($entity['heading_index'] !== null) {
+                $result[$id]['headings'][] = array(
+                    'index' => (int) $entity['heading_index'],
+                    'level' => (int) $entity['heading_level'],
+                    'text' => (string) $entity['heading_text'],
+                    'date' => (string) $entity['entry_date'],
+                    'parent_index' => $entity['parent_index'] === null ? null : (int) $entity['parent_index'],
+                    'anchor' => (string) $entity['anchor'],
+                );
             }
-            $result[] = array(
-                'id' => (int) $entity['id'],
-                'title' => (string) ($entity['title'] ?? ''),
-                'date' => $entityDate,
-                'entity_type' => $entityType->value,
-                'entity_page' => $entityType->toPage(),
-                'headings' => array_map(static fn(array $heading): array => array(
-                    'index' => (int) $heading['index'],
-                    'level' => (int) $heading['level'],
-                    'text' => (string) $heading['text'],
-                    'date' => (string) $heading['date'],
-                    'parent_index' => $heading['parent_index'] === null ? null : (int) $heading['parent_index'],
-                    'anchor' => (string) $heading['anchor'],
-                ), $headings),
-            );
         }
-        return $result;
+        return array_values($result);
     }
 
     private function parseDate(string $value): DateTimeImmutable

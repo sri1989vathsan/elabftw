@@ -247,10 +247,13 @@
       <div class='input-group mb-3'>
         <select id='favoriteFilterSelect' class='form-control' aria-label='{{ 'Add an owner or status as favorite'|trans }}'>
           <option value=''>{{ 'Select an owner or status'|trans }}</option>
-          <optgroup label='{{ 'Owners'|trans }}'>
+          <optgroup id='favoriteFilterOwnerOptions' label='{{ 'Owners'|trans }}' data-lazy-owner-options='{{ App.favoriteFilterUsersArr is empty ? '1' : '0' }}'>
             {% for user in App.favoriteFilterUsersArr %}
               <option value='owner:all:{{ user.userid }}'>{{ user.fullname }}</option>
             {% endfor %}
+            {% if App.favoriteFilterUsersArr is empty %}
+              <option value='' disabled>{{ 'Owners load when this panel opens.'|trans }}</option>
+            {% endif %}
           </optgroup>
           <optgroup label='{{ 'Experiment status'|trans }}'>
             {% for status in App.experimentsStatusArr %}

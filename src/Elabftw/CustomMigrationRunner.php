@@ -37,6 +37,7 @@ final class CustomMigrationRunner
         '011_resource_folders.sql',
         '012_multiple_folder_bookmarks.sql',
         '013_folder_readmes.sql',
+        '014_scalability_indexes.sql',
     );
 
     private Db $Db;

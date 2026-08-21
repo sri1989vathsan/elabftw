@@ -47,11 +47,14 @@ final class UnfinishedSteps extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
-        $experimentsSteps = $this->cleanUpResult($this->getSteps(EntityType::Experiments));
-        $itemsSteps = $this->cleanUpResult($this->getSteps(EntityType::Items));
+        $queryParams ??= $this->getQueryParams();
+        $limit = $queryParams->getLimit() ?: 100;
+        $offset = max(0, $queryParams->getQuery()->getInt('offset'));
+        $experimentsSteps = $this->cleanUpResult($this->getSteps(EntityType::Experiments, $limit, $offset));
+        $itemsSteps = $this->cleanUpResult($this->getSteps(EntityType::Items, $limit, $offset));
         $calendar = array_merge(
-            $this->getDeadlineSteps(EntityType::Experiments),
-            $this->getDeadlineSteps(EntityType::Items),
+            $this->getDeadlineSteps(EntityType::Experiments, $limit, $offset),
+            $this->getDeadlineSteps(EntityType::Items, $limit, $offset),
         );
         return array(
             'experiments' => $experimentsSteps,
@@ -60,7 +63,7 @@ final class UnfinishedSteps extends AbstractRest
         );
     }
 
-    private function getSteps(EntityType $model): array
+    private function getSteps(EntityType $model, int $limit, int $offset): array
     {
         $sql = 'SELECT entity.id, entity.title, stepst.finished,
                 stepst.steps_body, stepst.steps_id, stepst.steps_deadline
@@ -80,7 +83,12 @@ final class UnfinishedSteps extends AbstractRest
         $sql .= ' JOIN users2teams ON (users2teams.users_id = entity.userid AND users2teams.teams_id = :teamid)';
         $sql .= ' WHERE ' . ($this->teamScoped ? $this->getTeamWhereClause($model) : 'entity.userid = :userid');
 
-        $sql .= sprintf(' AND entity.state = %d GROUP BY entity.id ORDER BY entity.id DESC', State::Normal->value);
+        $sql .= sprintf(
+            ' AND entity.state = %d GROUP BY entity.id ORDER BY entity.id DESC LIMIT %d OFFSET %d',
+            State::Normal->value,
+            $limit,
+            $offset,
+        );
         $req = $this->Db->prepare($sql);
         $req->bindParam(':userid', $this->Users->userData['userid'], PDO::PARAM_INT);
         $req->bindParam(':teamid', $this->Users->team, PDO::PARAM_INT);
@@ -92,7 +100,7 @@ final class UnfinishedSteps extends AbstractRest
     /**
      * Return a flat deadline feed used by the integrated sidebar calendar.
      */
-    private function getDeadlineSteps(EntityType $model): array
+    private function getDeadlineSteps(EntityType $model, int $limit, int $offset): array
     {
         $sql = sprintf(
             "SELECT '%s' AS entity_type,
@@ -113,13 +121,16 @@ final class UnfinishedSteps extends AbstractRest
                 AND entity.state = %d
                 AND entity_steps.finished = 0
                 AND entity_steps.deadline IS NOT NULL
-            ORDER BY entity_steps.deadline ASC, entity_steps.ordering ASC",
+            ORDER BY entity_steps.deadline ASC, entity_steps.ordering ASC
+            LIMIT %d OFFSET %d",
             $model->value,
             $model->toPage(),
             $model->value,
             $model->value,
             $this->teamScoped ? $this->getTeamWhereClause($model) : 'entity.userid = :userid',
             State::Normal->value,
+            $limit,
+            $offset,
         );
         $req = $this->Db->prepare($sql);
         $req->bindParam(':userid', $this->Users->userData['userid'], PDO::PARAM_INT);

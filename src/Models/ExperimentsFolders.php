@@ -317,11 +317,7 @@ final class ExperimentsFolders extends AbstractRest
                 userid,
                 id AS root_id,
                 name AS full_path,
-                0 AS level_depth,
-                (SELECT COUNT(*) FROM experiments_folders AS ef WHERE ef.parent_id = experiments_folders.id) AS children_count,
-                (SELECT COUNT(*) FROM experiments AS e WHERE e.folder_id = experiments_folders.id AND e.state = 1) AS experiments_count,
-                (SELECT COUNT(*) FROM items AS i WHERE i.folder_id = experiments_folders.id AND i.state = 1) AS resources_count,
-                EXISTS(SELECT 1 FROM custom_experiment_folder_readmes AS r WHERE r.folder_id = experiments_folders.id AND r.body <> '') AS has_readme
+                0 AS level_depth
             FROM
                 experiments_folders
             WHERE
@@ -337,11 +333,7 @@ final class ExperimentsFolders extends AbstractRest
                 child.userid,
                 parent.root_id,
                 CONCAT(parent.full_path, ' > ', child.name) AS full_path,
-                parent.level_depth + 1,
-                (SELECT COUNT(*) FROM experiments_folders AS ef WHERE ef.parent_id = child.id) AS children_count,
-                (SELECT COUNT(*) FROM experiments AS e WHERE e.folder_id = child.id AND e.state = 1) AS experiments_count,
-                (SELECT COUNT(*) FROM items AS i WHERE i.folder_id = child.id AND i.state = 1) AS resources_count,
-                EXISTS(SELECT 1 FROM custom_experiment_folder_readmes AS r WHERE r.folder_id = child.id AND r.body <> '') AS has_readme
+                parent.level_depth + 1
             FROM
                 experiments_folders AS child
             INNER JOIN
@@ -358,12 +350,32 @@ final class ExperimentsFolders extends AbstractRest
             userid,
             root_id,
             level_depth,
-            children_count,
-            experiments_count,
-            resources_count,
-            has_readme
+            COALESCE(child_counts.children_count, 0) AS children_count,
+            COALESCE(experiment_counts.experiments_count, 0) AS experiments_count,
+            COALESCE(resource_counts.resources_count, 0) AS resources_count,
+            (readmes.folder_id IS NOT NULL) AS has_readme
         FROM
             folder_hierarchy
+        LEFT JOIN (
+            SELECT parent_id, COUNT(*) AS children_count
+            FROM experiments_folders
+            WHERE parent_id IS NOT NULL
+            GROUP BY parent_id
+        ) AS child_counts ON child_counts.parent_id = folder_hierarchy.id
+        LEFT JOIN (
+            SELECT folder_id, COUNT(*) AS experiments_count
+            FROM experiments
+            WHERE state = 1 AND folder_id IS NOT NULL
+            GROUP BY folder_id
+        ) AS experiment_counts ON experiment_counts.folder_id = folder_hierarchy.id
+        LEFT JOIN (
+            SELECT folder_id, COUNT(*) AS resources_count
+            FROM items
+            WHERE state = 1 AND folder_id IS NOT NULL
+            GROUP BY folder_id
+        ) AS resource_counts ON resource_counts.folder_id = folder_hierarchy.id
+        LEFT JOIN custom_experiment_folder_readmes AS readmes
+            ON readmes.folder_id = folder_hierarchy.id AND readmes.body <> ''
         ORDER BY
             name, parent_id";
         $req = $this->Db->prepare($sql);

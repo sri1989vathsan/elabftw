@@ -290,11 +290,9 @@
 {# FLOATING SIDEBAR TAB RAIL #}
 {% if App.Session.has('is_auth') and not App.isAnonymous() %}
   <div class='pr-2 mt-3 float-left d-flex flex-column' id='sidepanel-buttons'>
-    {% if experimentsFoldersTreeArr is defined %}
-      <button type='button' class='sidepanel-btn sidepanel-closed' id='foldersPanelOpener' data-action='toggle-sidepanel' data-target='folders' aria-expanded='false' aria-controls='foldersPanel' title='{{ 'Toggle folders'|trans }}' aria-label='{{ 'Toggle folders'|trans }}'>
-        <i class='fas fa-folder-tree'></i>
-      </button>
-    {% endif %}
+    <button type='button' class='sidepanel-btn sidepanel-closed' id='foldersPanelOpener' data-action='toggle-sidepanel' data-target='folders' aria-expanded='false' aria-controls='foldersPanel' title='{{ 'Toggle folders'|trans }}' aria-label='{{ 'Toggle folders'|trans }}'>
+      <i class='fas fa-folder-tree'></i>
+    </button>
     <button type='button' class='sidepanel-btn sidepanel-closed' id='favoritesPanelOpener' data-action='toggle-sidepanel' data-target='favorites' aria-expanded='false' aria-controls='favoritesPanel' title='{{ 'Toggle favorite filters'|trans }}' aria-label='{{ 'Toggle favorite filters'|trans }}'>
       <i class='fas fa-filter'></i>
     </button>
