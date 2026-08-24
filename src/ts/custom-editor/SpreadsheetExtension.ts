@@ -15,14 +15,12 @@ import {
   WELL_PLATE_PRESETS,
 } from '../inline-spreadsheet';
 import { escapeHTML } from '../misc';
-import TableIndentation from '../TableIndentation.class';
 
 interface PdfTableDialogData {
   columns: string;
 }
 
 export function registerSpreadsheetExtension(editor: Editor): void {
-  const tableIndentation = new TableIndentation(editor);
   const openInlineSpreadsheet = (
     initial: SpreadsheetData,
     existingTable: HTMLTableElement | null = null,
@@ -93,18 +91,6 @@ export function registerSpreadsheetExtension(editor: Editor): void {
 
   editor.on('init', () => {
     const editorDocument = editor.getDoc();
-    const spreadsheetTabHandler = (event: KeyboardEvent): void => {
-      if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
-      const table = (editor.selection.getNode() as HTMLElement)
-        .closest('table.elabftw-spreadsheet') as HTMLTableElement | null;
-      if (!table) return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      tableIndentation.trackSelectedTable(table);
-      if (event.shiftKey) tableIndentation.outdentSelectedTable();
-      else tableIndentation.indentSelectedTable();
-    };
     const spreadsheetPasteHandler = (event: ClipboardEvent): void => {
       const clipboard = event.clipboardData;
       if (!clipboard) return;
@@ -178,10 +164,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       });
     };
     editorDocument.addEventListener('paste', spreadsheetPasteHandler, true);
-    editorDocument.addEventListener('keydown', spreadsheetTabHandler, true);
     editor.on('remove', () => {
       editorDocument.removeEventListener('paste', spreadsheetPasteHandler, true);
-      editorDocument.removeEventListener('keydown', spreadsheetTabHandler, true);
     });
   });
 }

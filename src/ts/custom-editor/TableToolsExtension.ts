@@ -5,6 +5,40 @@ import TableIndentation from '../TableIndentation.class';
 export function registerTableToolsExtension(editor: Editor): void {
   const tableIndentation = new TableIndentation(editor);
 
+  editor.on('init', () => {
+    const editorDocument = editor.getDoc();
+    const tableTabHandler = (event: KeyboardEvent): void => {
+      if (event.key !== 'Tab'
+        || event.ctrlKey
+        || event.metaKey
+        || event.altKey
+        || event.isComposing
+        || event.defaultPrevented
+      ) {
+        return;
+      }
+
+      // A contenteditable iframe can target either the active cell or its
+      // editable body. Prefer the native target and fall back to TinyMCE's
+      // range so Shift+Tab still finds a table after it has been wrapped.
+      const target = event.target as Node | null;
+      const table = tableIndentation.trackSelectedTable(target)
+        ?? tableIndentation.trackSelectedTable();
+      if (!table) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      if (event.shiftKey) tableIndentation.outdentSelectedTable();
+      else tableIndentation.indentSelectedTable();
+    };
+
+    editorDocument.addEventListener('keydown', tableTabHandler, true);
+    editor.on('remove', () => {
+      editorDocument.removeEventListener('keydown', tableTabHandler, true);
+    });
+  });
+
   editor.ui.registry.addButton('table-outdent', {
     icon: 'outdent',
     tooltip: 'Outdent table',
