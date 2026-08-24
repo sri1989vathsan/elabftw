@@ -3133,12 +3133,11 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
 
     const onSpreadsheetPaste = (event: ClipboardEvent): void => {
       const clipboard = event.clipboardData;
-      if (!clipboard
-        || event.target instanceof HTMLInputElement
-        || event.target instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
+      // jspreadsheet performs in-cell editing through an input/textarea. Do
+      // not bypass structured clipboard handling for that active editor or a
+      // copied Excel/HTML/TSV range is inserted into one cell as plain text.
+      // Unstructured single-cell text still falls through to jspreadsheet.
+      if (!clipboard) return;
       const plainText = clipboard.getData('text/plain');
       const normalizedPlainText = normalizePdfPrivateUseText(plainText);
       const richClipboardHtml = clipboard.getData('text/html');

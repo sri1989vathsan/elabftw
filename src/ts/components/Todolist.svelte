@@ -884,7 +884,7 @@
                       <strong>{entry.body}</strong>
                     {:else}
                       <span>{entry.body}</span>
-                      <a class='small' href={`${entityPage(entry)}?mode=view&id=${entry.entityId}#step_view_${entry.id}`}>
+                      <a class='small todo-step-entity-link' href={`${entityPage(entry)}?mode=view&id=${entry.entityId}#step_view_${entry.id}`}>
                         {entry.entityTitle}
                       </a>
                     {/if}
@@ -1225,6 +1225,20 @@
 
   .todo-secondary-text {
     color: var(--chrome-muted);
+  }
+
+  .todo-step-entity-link {
+    color: var(--side-panel-link, var(--primary));
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.12em;
+  }
+
+  .todo-step-entity-link:hover,
+  .todo-step-entity-link:focus {
+    color: var(--side-panel-link-hover, var(--primary));
+    filter: brightness(1.2);
   }
 
   .todo-task-notes {

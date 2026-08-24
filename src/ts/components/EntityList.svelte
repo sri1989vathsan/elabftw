@@ -734,46 +734,30 @@
             </a>
           </div>
 
-          {#if entityType === 'experiments' && entity.experiment_goal?.trim()}
-            {#if entity.experiment_goal.trim().length > GOAL_COLLAPSE_LENGTH}
-              <details class='experiment-goal border rounded px-2 py-1 mb-2'>
-                <summary class='experiment-goal-summary'>
-                  <i class='fas fa-bullseye fa-fw mr-1 color-medium' aria-hidden='true'></i>
-                  <span class='font-weight-bold'>{t('Goals')}:</span>
-                  <span class='color-medium ml-1'>{getSummaryPreview(entity.experiment_goal)}</span>
-                </summary>
-                <div class='experiment-goal-text breakable mt-2'>{entity.experiment_goal.trim()}</div>
-              </details>
-            {:else}
-              <p class='experiment-goal-text breakable my-2'>
-                <i class='fas fa-bullseye fa-fw mr-1 color-medium' aria-hidden='true'></i>
-                <span class='font-weight-bold'>{t('Goals')}:</span>
-                {entity.experiment_goal.trim()}
-              </p>
+          {#each [
+            { value: entity.experiment_goal, label: t('Goals'), icon: 'fa-bullseye', css: 'experiment-goal' },
+            { value: entity.experiment_conclusion, label: t('Conclusion'), icon: 'fa-clipboard-check', css: 'experiment-conclusion' },
+            { value: entity.experiment_notes, label: t('Notes'), icon: 'fa-file-lines', css: 'experiment-notes' },
+          ] as summary}
+            {#if entityType === 'experiments' && summary.value?.trim()}
+              {#if summary.value.trim().length > GOAL_COLLAPSE_LENGTH}
+                <details class={`${summary.css} experiment-summary border rounded px-2 py-1 mb-2`}>
+                  <summary class='experiment-summary-toggle'>
+                    <i class={`fas ${summary.icon} fa-fw mr-1 color-medium`} aria-hidden='true'></i>
+                    <span class='font-weight-bold'>{summary.label}:</span>
+                    <span class='experiment-summary-preview color-medium ml-1'>{getSummaryPreview(summary.value)}</span>
+                  </summary>
+                  <div class='experiment-summary-text breakable mt-2'>{summary.value.trim()}</div>
+                </details>
+              {:else}
+                <p class='experiment-summary-text breakable my-2'>
+                  <i class={`fas ${summary.icon} fa-fw mr-1 color-medium`} aria-hidden='true'></i>
+                  <span class='font-weight-bold'>{summary.label}:</span>
+                  {summary.value.trim()}
+                </p>
+              {/if}
             {/if}
-          {/if}
-
-          {#if entityType === 'experiments' && entity.experiment_conclusion?.trim()}
-            <details class='experiment-conclusion border rounded px-2 py-1 mb-2'>
-              <summary class='experiment-conclusion-summary'>
-                <i class='fas fa-clipboard-check fa-fw mr-1 color-medium' aria-hidden='true'></i>
-                <span class='font-weight-bold'>{t('Conclusion')}:</span>
-                <span class='color-medium ml-1'>{getSummaryPreview(entity.experiment_conclusion)}</span>
-              </summary>
-              <div class='experiment-conclusion-text breakable mt-2'>{entity.experiment_conclusion.trim()}</div>
-            </details>
-          {/if}
-
-          {#if entityType === 'experiments' && entity.experiment_notes?.trim()}
-            <details class='experiment-notes border rounded px-2 py-1 mb-2'>
-              <summary class='experiment-notes-summary'>
-                <i class='fas fa-file-lines fa-fw mr-1 color-medium' aria-hidden='true'></i>
-                <span class='font-weight-bold'>{t('Notes')}:</span>
-                <span class='color-medium ml-1'>{getSummaryPreview(entity.experiment_notes)}</span>
-              </summary>
-              <div class='experiment-notes-text breakable mt-2'>{entity.experiment_notes.trim()}</div>
-            </details>
-          {/if}
+          {/each}
 
           <div class='owner'>
             {#if entity.userid != null && currentUserId !== entity.userid && !isAnon}
@@ -925,15 +909,15 @@
 {/if}
 
 <style>
-  .experiment-goal-summary,
-  .experiment-conclusion-summary,
-  .experiment-notes-summary {
+  .experiment-summary-toggle {
     cursor: pointer;
   }
 
-  .experiment-goal-text,
-  .experiment-conclusion-text,
-  .experiment-notes-text {
+  .experiment-summary-text {
     white-space: pre-wrap;
+  }
+
+  .experiment-summary[open] .experiment-summary-preview {
+    display: none;
   }
 </style>
