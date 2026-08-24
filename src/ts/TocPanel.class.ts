@@ -7,6 +7,11 @@
  * or from the active TinyMCE editor (edit mode) and renders a navigable list.
  */
 import SidePanel from './SidePanel.class';
+import {
+  copiedContentAsPlainText,
+  prepareCopiedContent,
+  writeRichClipboard,
+} from './ClipboardContent';
 
 // We don't register this in the Model enum because TOC is purely client-side
 // and doesn't correspond to any API endpoint.
@@ -247,9 +252,11 @@ export default class TocPanel extends SidePanel {
     const clear = document.getElementById('tocSearchClear') as HTMLButtonElement | null;
     const mode = document.getElementById('tocSearchMode') as HTMLSelectElement | null;
     const print = document.getElementById('tocPrintSelection') as HTMLButtonElement | null;
+    const copy = document.getElementById('tocCopySelection') as HTMLButtonElement | null;
     if (!input || !add || !clear || !mode || input.dataset.tocSearchReady) return;
 
     print?.addEventListener('click', () => this.printSelection());
+    copy?.addEventListener('click', () => void this.copySelection(copy));
     input.addEventListener('input', () => this.filterEntries());
     input.addEventListener('keydown', event => {
       if (event.key !== 'Enter') return;
@@ -564,11 +571,18 @@ export default class TocPanel extends SidePanel {
     this.currentFilterActive = filterActive;
     this.currentSectionIds = new Set(sectionIds);
     const print = document.getElementById('tocPrintSelection') as HTMLButtonElement | null;
+    const copy = document.getElementById('tocCopySelection') as HTMLButtonElement | null;
     if (print) {
       print.disabled = filterActive && sectionIds.size === 0;
       print.title = print.disabled
         ? 'No sections match the current selection'
         : 'Print the selected or filtered notebook sections';
+    }
+    if (copy) {
+      copy.disabled = filterActive && sectionIds.size === 0;
+      copy.title = copy.disabled
+        ? 'No sections match the current selection'
+        : 'Copy the selected or filtered notebook sections';
     }
     this.updateSectionFilterTree();
     this.filterMainText(filterActive, sectionIds);
@@ -624,6 +638,55 @@ export default class TocPanel extends SidePanel {
         printContainer.remove();
       }
     });
+  }
+
+  private async copySelection(button: HTMLButtonElement): Promise<void> {
+    const source = document.getElementById('body_view') ?? this.getEditor()?.getBody();
+    if (!source) return;
+
+    const content = source.cloneNode(true) as HTMLElement;
+    content.removeAttribute('id');
+    content.querySelectorAll(`.${FILTER_HIDDEN_CLASS}`).forEach(element => {
+      element.classList.remove(FILTER_HIDDEN_CLASS);
+    });
+    if (this.currentFilterActive) {
+      this.filterPrintContent(content, this.currentSectionIds);
+    }
+    prepareCopiedContent(content);
+
+    const copied = await writeRichClipboard(
+      content.innerHTML,
+      copiedContentAsPlainText(content),
+    ) || this.copySelectionFallback(content);
+
+    const icon = button.querySelector('i');
+    if (!icon) return;
+    const originalClass = icon.className;
+    icon.className = copied ? 'fas fa-check fa-fw mr-1' : 'fas fa-xmark fa-fw mr-1';
+    button.classList.toggle('text-success', copied);
+    button.title = copied ? 'Filtered content copied' : 'Unable to copy filtered content';
+    setTimeout(() => {
+      icon.className = originalClass;
+      button.classList.remove('text-success');
+      button.title = 'Copy the selected or filtered notebook sections';
+    }, 1800);
+  }
+
+  private copySelectionFallback(content: HTMLElement): boolean {
+    const wrapper = document.createElement('div');
+    wrapper.contentEditable = 'true';
+    wrapper.style.cssText = 'position:fixed;left:-9999px;top:0;';
+    wrapper.append(...Array.from(content.childNodes));
+    document.body.appendChild(wrapper);
+    const range = document.createRange();
+    range.selectNodeContents(wrapper);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    const copied = document.execCommand('copy');
+    selection?.removeAllRanges();
+    wrapper.remove();
+    return copied;
   }
 
   private filterPrintContent(content: HTMLElement, sectionIds: Set<string>): void {

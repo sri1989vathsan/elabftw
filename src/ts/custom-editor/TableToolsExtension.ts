@@ -1,6 +1,12 @@
 /** Fork-owned table indentation and direct property shortcuts. */
 import { Editor } from 'tinymce/tinymce';
 import TableIndentation from '../TableIndentation.class';
+import {
+  copiedContentAsPlainText,
+  prepareCopiedContent,
+  writeRichClipboard,
+} from '../ClipboardContent';
+import { EDITOR_COLLAPSED_ATTRIBUTE, installTableCollapse } from '../TableCollapse';
 
 export function registerTableToolsExtension(editor: Editor): void {
   const tableIndentation = new TableIndentation(editor);
@@ -36,61 +42,38 @@ export function registerTableToolsExtension(editor: Editor): void {
     existing.remove();
   };
 
-  const toggleCompactTable = (): void => {
-    const table = selectedTable();
-    if (!table) return;
-    const bookmark = editor.selection.getBookmark(2, true);
-    editor.undoManager.transact(() => {
-      // Earlier builds wrapped tables in <details>. Remove that wrapper when
-      // encountered, then use a TinyMCE-only state attribute instead. The
-      // table remains normal saved HTML and is merely compacted in the editor.
-      unwrapLegacyCollapsibleTable(table);
-      if (table.dataset.mceElabftwCollapsed === 'true') {
-        delete table.dataset.mceElabftwCollapsed;
-      } else {
-        table.dataset.mceElabftwCollapsed = 'true';
-      }
-    });
-    editor.selection.moveToBookmark(bookmark);
-    editor.nodeChanged();
-    editor.focus();
-  };
-
-  const tableAsPlainText = (table: HTMLTableElement): string => (
-    Array.from(table.rows)
-      .map(row => Array.from(row.cells).map(cell => cell.innerText).join('\t'))
-      .join('\n')
-  );
-
   const copyWholeTable = async(): Promise<void> => {
     const table = selectedTable();
     if (!table) return;
+    const container = editor.getDoc().createElement('div');
     const clone = table.cloneNode(true) as HTMLTableElement;
-    delete clone.dataset.mceElabftwCollapsed;
+    container.append(clone);
+    prepareCopiedContent(container);
     const html = clone.outerHTML;
-    const plainText = tableAsPlainText(clone);
+    const plainText = copiedContentAsPlainText(container);
 
-    try {
-      const clipboardItem = new ClipboardItem({
-        'text/html': new Blob([html], { type: 'text/html' }),
-        'text/plain': new Blob([plainText], { type: 'text/plain' }),
-      });
-      await navigator.clipboard.write([clipboardItem]);
+    if (await writeRichClipboard(html, plainText)) {
       editor.notificationManager.open({
         text: 'Table copied',
         type: 'success',
         timeout: 1800,
       });
-    } catch {
-      // Some browsers disallow the rich Clipboard API inside an editor
-      // iframe. Preserve a useful fallback: select the complete table and
-      // invoke the native copy command while the toolbar click is active.
-      editor.focus();
-      editor.selection.select(table);
+    } else {
+      // Rich clipboard access can be unavailable inside an editor iframe.
+      // Copy a cleaned clone so row/column coordinate labels stay excluded.
+      container.contentEditable = 'true';
+      container.style.cssText = 'position:fixed;left:-9999px;top:0;';
+      editor.getBody().append(container);
+      const range = editor.getDoc().createRange();
+      range.selectNodeContents(container);
+      const selection = editor.getDoc().getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
       const copied = editor.getDoc().execCommand('copy');
+      container.remove();
       editor.nodeChanged();
       editor.notificationManager.open({
-        text: copied ? 'Table copied' : 'Table selected — press Ctrl/Cmd+C',
+        text: copied ? 'Table copied' : 'Unable to copy table',
         type: copied ? 'success' : 'info',
         timeout: 2400,
       });
@@ -108,6 +91,7 @@ export function registerTableToolsExtension(editor: Editor): void {
     type CaretPoint = { node: Node; offset: number };
     let mixedSelectionAnchor: CaretPoint | null = null;
     let selectingAcrossTable = false;
+    let lastMixedSelectionRange: Range | null = null;
 
     const caretPointFromCoordinates = (x: number, y: number): CaretPoint | null => {
       const documentWithCaretApi = editorDocument as Document & {
@@ -120,7 +104,7 @@ export function registerTableToolsExtension(editor: Editor): void {
       return range ? { node: range.startContainer, offset: range.startOffset } : null;
     };
 
-    const setMixedContentSelection = (anchor: CaretPoint, focus: CaretPoint): void => {
+    const setMixedContentSelection = (anchor: CaretPoint, focus: CaretPoint): Range => {
       const anchorRange = editorDocument.createRange();
       anchorRange.setStart(anchor.node, anchor.offset);
       anchorRange.collapse(true);
@@ -139,31 +123,19 @@ export function registerTableToolsExtension(editor: Editor): void {
       const selection = editorDocument.getSelection();
       selection?.removeAllRanges();
       selection?.addRange(selectionRange);
+      return selectionRange;
     };
-
-    const tableCollapseHandler = (event: MouseEvent): void => {
-      if (event.button !== 0) return;
-      const target = event.target as Element | null;
-      const table = target?.closest?.('table') as HTMLTableElement | null;
-      if (!table) return;
-      const cornerCell = table.querySelector<HTMLTableCellElement>(
-        ':scope > thead:first-child > tr:first-child > :is(th,td):first-child, :scope > tbody:first-child > tr:first-child > :is(th,td):first-child, :scope > tfoot:first-child > tr:first-child > :is(th,td):first-child',
-      );
-      const bounds = cornerCell?.getBoundingClientRect();
-      if (!bounds) return;
-      const inToggle = event.clientX >= bounds.left
-        && event.clientX <= bounds.left + 24
-        && event.clientY >= bounds.top
-        && event.clientY <= bounds.top + 24;
-      if (!inToggle) return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      lastSelectedTable = table;
-      toggleCompactTable();
-    };
+    const removeTableCollapse = installTableCollapse(
+      editor.getBody(),
+      EDITOR_COLLAPSED_ATTRIBUTE,
+      table => {
+        lastSelectedTable = table;
+        unwrapLegacyCollapsibleTable(table);
+      },
+    );
     const mixedSelectionStartHandler = (event: MouseEvent): void => {
       if (event.button !== 0) return;
+      lastMixedSelectionRange = null;
       const target = event.target as Element | null;
       if (target?.closest?.('table')) {
         mixedSelectionAnchor = null;
@@ -182,25 +154,38 @@ export function registerTableToolsExtension(editor: Editor): void {
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      setMixedContentSelection(mixedSelectionAnchor, focus);
+      lastMixedSelectionRange = setMixedContentSelection(mixedSelectionAnchor, focus).cloneRange();
     };
     const mixedSelectionEndHandler = (event: MouseEvent): void => {
       if (selectingAcrossTable) {
         event.stopPropagation();
         event.stopImmediatePropagation();
+        const range = lastMixedSelectionRange?.cloneRange();
+        if (range) {
+          editor.getWin().requestAnimationFrame(() => {
+            const selection = editorDocument.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          });
+        }
       }
       mixedSelectionAnchor = null;
       selectingAcrossTable = false;
     };
     const richSelectionCopyHandler = (event: ClipboardEvent): void => {
       const selection = editorDocument.getSelection();
-      if (!event.clipboardData || !selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+      const range = lastMixedSelectionRange
+        ?? (selection && selection.rangeCount > 0 && !selection.isCollapsed
+          ? selection.getRangeAt(0)
+          : null);
+      if (!event.clipboardData || !range || range.collapsed) return;
       const container = editorDocument.createElement('div');
-      container.append(selection.getRangeAt(0).cloneContents());
+      container.append(range.cloneContents());
       if (!container.querySelector('table')) return;
+      prepareCopiedContent(container);
       event.preventDefault();
       event.clipboardData.setData('text/html', container.innerHTML);
-      event.clipboardData.setData('text/plain', selection.toString());
+      event.clipboardData.setData('text/plain', copiedContentAsPlainText(container));
     };
     const tableTabHandler = (event: KeyboardEvent): void => {
       if (event.key !== 'Tab'
@@ -229,14 +214,13 @@ export function registerTableToolsExtension(editor: Editor): void {
     };
 
     editorDocument.addEventListener('mousedown', mixedSelectionStartHandler, true);
-    editorDocument.addEventListener('mousedown', tableCollapseHandler, true);
     editorDocument.addEventListener('mousemove', mixedSelectionMoveHandler, true);
     editorDocument.addEventListener('mouseup', mixedSelectionEndHandler, true);
     editorDocument.addEventListener('copy', richSelectionCopyHandler, true);
     editorDocument.addEventListener('keydown', tableTabHandler, true);
     editor.on('remove', () => {
       editorDocument.removeEventListener('mousedown', mixedSelectionStartHandler, true);
-      editorDocument.removeEventListener('mousedown', tableCollapseHandler, true);
+      removeTableCollapse();
       editorDocument.removeEventListener('mousemove', mixedSelectionMoveHandler, true);
       editorDocument.removeEventListener('mouseup', mixedSelectionEndHandler, true);
       editorDocument.removeEventListener('copy', richSelectionCopyHandler, true);

@@ -78,6 +78,7 @@ import Todolist from './Todolist.class';
 import { entity } from './getEntity';
 import { get, on } from './handlers';
 import Tab from './Tab.class';
+import { installTableCollapse } from './TableCollapse';
 import { core } from './core';
 import { get as getFromSvelte } from 'svelte/store';
 import { writable } from 'svelte/store';
@@ -250,6 +251,8 @@ const TodolistC = new Todolist();
 const CalendarActivityC = new CalendarActivity();
 const TocPanelC = new TocPanel();
 const HtmlToolsPanelC = new HtmlToolsPanel();
+const renderedBody = document.getElementById('body_view');
+if (renderedBody) installTableCollapse(renderedBody);
 // Mount while hidden as well, so reminder badges continue to update even when
 // the user has not opened the standalone calendar during this page visit.
 CalendarActivityC.initialize();

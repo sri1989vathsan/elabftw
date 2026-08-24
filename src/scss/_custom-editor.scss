@@ -234,27 +234,41 @@ body.mce-content-body {
   max-width: 100%;
 }
 
-// Compacting a table is an editor convenience, not an accordion in the saved
-// experiment. TinyMCE strips its internal data-mce-* state from saved HTML.
-body.mce-content-body table[data-mce-elabftw-collapsed="true"] tbody tr,
-body.mce-content-body table[data-mce-elabftw-collapsed="true"] tfoot {
+// Collapse is a transient interaction in both editor and rendered view. It
+// never wraps or rewrites the table and therefore cannot alter saved content.
+:where(#body_view, body.mce-content-body) table:is(
+  [data-mce-elabftw-collapsed],
+  [data-elabftw-collapsed]
+) tbody tr,
+:where(#body_view, body.mce-content-body) table:is(
+  [data-mce-elabftw-collapsed],
+  [data-elabftw-collapsed]
+) tfoot {
   display: none;
 }
 
-body.mce-content-body table[data-mce-elabftw-collapsed="true"] tbody tr:first-child {
+:where(#body_view, body.mce-content-body) table:is(
+  [data-mce-elabftw-collapsed],
+  [data-elabftw-collapsed]
+) tbody tr:first-child {
   display: table-row;
 }
 
-body.mce-content-body table[data-mce-elabftw-collapsed="true"] {
+:where(#body_view, body.mce-content-body) table:is(
+  [data-mce-elabftw-collapsed],
+  [data-elabftw-collapsed]
+) {
   box-shadow: 0 0 0 2px var(--primary, #29aeb9);
   opacity: 0.92;
 }
 
-body.mce-content-body table > :is(thead, tbody, tfoot) > tr:first-child > :is(th, td):first-child {
+:where(#body_view, body.mce-content-body) table > :is(thead, tbody, tfoot) > tr:first-child > :is(th, td):first-child {
   position: relative;
 }
 
-body.mce-content-body table > :is(thead, tbody, tfoot):first-child > tr:first-child > :is(th, td):first-child::before {
+:where(#body_view, body.mce-content-body) table > thead:first-of-type > tr:first-child > :is(th, td):first-child::before,
+:where(#body_view, body.mce-content-body) table:not(:has(> thead)) > tbody:first-of-type > tr:first-child > :is(th, td):first-child::before,
+:where(#body_view, body.mce-content-body) table:not(:has(> thead)):not(:has(> tbody)) > tfoot:first-of-type > tr:first-child > :is(th, td):first-child::before {
   background: var(--bg, #fff);
   border: 1px solid var(--secondary-muted, #ccd2d8);
   border-radius: 0.2rem;
@@ -273,7 +287,9 @@ body.mce-content-body table > :is(thead, tbody, tfoot):first-child > tr:first-ch
   z-index: 2;
 }
 
-body.mce-content-body table[data-mce-elabftw-collapsed="true"] > :is(thead, tbody, tfoot):first-child > tr:first-child > :is(th, td):first-child::before {
+:where(#body_view, body.mce-content-body) table:is([data-mce-elabftw-collapsed], [data-elabftw-collapsed]) > thead:first-of-type > tr:first-child > :is(th, td):first-child::before,
+:where(#body_view, body.mce-content-body) table:is([data-mce-elabftw-collapsed], [data-elabftw-collapsed]):not(:has(> thead)) > tbody:first-of-type > tr:first-child > :is(th, td):first-child::before,
+:where(#body_view, body.mce-content-body) table:is([data-mce-elabftw-collapsed], [data-elabftw-collapsed]):not(:has(> thead)):not(:has(> tbody)) > tfoot:first-of-type > tr:first-child > :is(th, td):first-child::before {
   content: '▸';
 }
 
