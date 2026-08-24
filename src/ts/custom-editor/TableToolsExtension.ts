@@ -50,64 +50,78 @@ export function registerTableToolsExtension(editor: Editor): void {
       } else {
         table.dataset.mceElabftwCollapsed = 'true';
       }
-      updateCompactToggle(table);
     });
     editor.selection.moveToBookmark(bookmark);
     editor.nodeChanged();
     editor.focus();
   };
 
-  const updateCompactToggle = (table: HTMLTableElement): void => {
-    const button = table.querySelector<HTMLButtonElement>(':scope .elabftw-table-collapse-toggle');
-    if (!button) return;
-    const collapsed = table.dataset.mceElabftwCollapsed === 'true';
-    button.textContent = collapsed ? '▸' : '▾';
-    button.title = collapsed ? 'Expand table' : 'Collapse table';
-    button.setAttribute('aria-label', button.title);
-  };
+  const tableAsPlainText = (table: HTMLTableElement): string => (
+    Array.from(table.rows)
+      .map(row => Array.from(row.cells).map(cell => cell.innerText).join('\t'))
+      .join('\n')
+  );
 
-  const ensureCompactToggle = (table: HTMLTableElement): void => {
-    if (table.querySelector(':scope .elabftw-table-collapse-toggle')) return;
-    const cornerCell = table.querySelector<HTMLTableCellElement>('th,td');
-    if (!cornerCell) return;
-    const button = table.ownerDocument.createElement('button');
-    button.type = 'button';
-    button.className = 'elabftw-table-collapse-toggle';
-    button.contentEditable = 'false';
-    button.dataset.mceBogus = 'all';
-    button.addEventListener('click', event => {
-      event.preventDefault();
-      event.stopPropagation();
-      lastSelectedTable = table;
-      toggleCompactTable();
-    });
-    cornerCell.prepend(button);
-    updateCompactToggle(table);
-  };
-
-  const selectWholeTable = (): void => {
+  const copyWholeTable = async(): Promise<void> => {
     const table = selectedTable();
     if (!table) return;
-    editor.focus();
-    editor.selection.select(table);
-    editor.nodeChanged();
+    const clone = table.cloneNode(true) as HTMLTableElement;
+    delete clone.dataset.mceElabftwCollapsed;
+    const html = clone.outerHTML;
+    const plainText = tableAsPlainText(clone);
+
+    try {
+      const clipboardItem = new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plainText], { type: 'text/plain' }),
+      });
+      await navigator.clipboard.write([clipboardItem]);
+      editor.notificationManager.open({
+        text: 'Table copied',
+        type: 'success',
+        timeout: 1800,
+      });
+    } catch {
+      // Some browsers disallow the rich Clipboard API inside an editor
+      // iframe. Preserve a useful fallback: select the complete table and
+      // invoke the native copy command while the toolbar click is active.
+      editor.focus();
+      editor.selection.select(table);
+      const copied = editor.getDoc().execCommand('copy');
+      editor.nodeChanged();
+      editor.notificationManager.open({
+        text: copied ? 'Table copied' : 'Table selected — press Ctrl/Cmd+C',
+        type: copied ? 'success' : 'info',
+        timeout: 2400,
+      });
+    }
   };
 
   editor.on('NodeChange', event => {
     const element = event.element as Element | undefined;
     const table = element?.closest?.('table') as HTMLTableElement | null;
-    if (table) {
-      lastSelectedTable = table;
-      ensureCompactToggle(table);
-    }
-  });
-
-  editor.on('SetContent', () => {
-    editor.getBody().querySelectorAll<HTMLTableElement>('table').forEach(ensureCompactToggle);
+    if (table) lastSelectedTable = table;
   });
 
   editor.on('init', () => {
     const editorDocument = editor.getDoc();
+    const tableCollapseHandler = (event: MouseEvent): void => {
+      if (event.button !== 0) return;
+      const target = event.target as Element | null;
+      const table = target?.closest?.('table') as HTMLTableElement | null;
+      if (!table) return;
+      const bounds = table.getBoundingClientRect();
+      const inToggle = event.clientX >= bounds.left
+        && event.clientX <= bounds.left + 24
+        && event.clientY >= bounds.top
+        && event.clientY <= bounds.top + 24;
+      if (!inToggle) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      lastSelectedTable = table;
+      toggleCompactTable();
+    };
     const tableTabHandler = (event: KeyboardEvent): void => {
       if (event.key !== 'Tab'
         || event.ctrlKey
@@ -134,8 +148,10 @@ export function registerTableToolsExtension(editor: Editor): void {
       else tableIndentation.indentSelectedTable();
     };
 
+    editorDocument.addEventListener('mousedown', tableCollapseHandler, true);
     editorDocument.addEventListener('keydown', tableTabHandler, true);
     editor.on('remove', () => {
+      editorDocument.removeEventListener('mousedown', tableCollapseHandler, true);
       editorDocument.removeEventListener('keydown', tableTabHandler, true);
     });
   });
@@ -155,9 +171,9 @@ export function registerTableToolsExtension(editor: Editor): void {
     },
   });
   editor.ui.registry.addButton('table-select-copy', {
-    text: 'Select table',
-    tooltip: 'Select the whole table, then use Copy',
-    onAction: selectWholeTable,
+    text: 'Copy table',
+    tooltip: 'Copy the complete table with formatting',
+    onAction: () => void copyWholeTable(),
     onSetup: api => {
       const update = (event?): void => api.setEnabled(Boolean(selectedTable(event?.element)));
       update();

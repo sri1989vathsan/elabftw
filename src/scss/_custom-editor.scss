@@ -247,24 +247,27 @@ body.mce-content-body table > :is(thead, tbody, tfoot) > tr:first-child > :is(th
   position: relative;
 }
 
-body.mce-content-body .elabftw-table-collapse-toggle {
-  align-items: center;
+body.mce-content-body table > :is(thead, tbody, tfoot):first-child > tr:first-child > :is(th, td):first-child::before {
   background: var(--bg, #fff);
   border: 1px solid var(--secondary-muted, #ccd2d8);
   border-radius: 0.2rem;
   color: var(--primary, #29aeb9);
-  cursor: pointer;
-  display: flex;
+  content: '▾';
+  display: grid;
   font-size: 0.75rem;
   height: 1.15rem;
-  justify-content: center;
+  place-items: center;
   left: 0.15rem;
   line-height: 1;
-  padding: 0;
+  pointer-events: none;
   position: absolute;
   top: 0.15rem;
   width: 1.15rem;
   z-index: 2;
+}
+
+body.mce-content-body table[data-mce-elabftw-collapsed="true"] > :is(thead, tbody, tfoot):first-child > tr:first-child > :is(th, td):first-child::before {
+  content: '▸';
 }
 
 :where(#body_view, body.mce-content-body) table.elabftw-spreadsheet tr:nth-child(even) {
