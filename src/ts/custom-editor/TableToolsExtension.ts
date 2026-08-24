@@ -26,36 +26,63 @@ export function registerTableToolsExtension(editor: Editor): void {
     return table?.closest('details.elabftw-collapsible-table') as HTMLDetailsElement | null;
   };
 
-  const toggleCollapsibleTable = (): void => {
+  const unwrapLegacyCollapsibleTable = (table: HTMLTableElement): void => {
+    const existing = collapsibleWrapper(table);
+    if (!existing) return;
+    const container = table.parentElement?.classList.contains('elabftw-table-indent')
+      ? table.parentElement
+      : table;
+    existing.parentNode?.insertBefore(container, existing);
+    existing.remove();
+  };
+
+  const toggleCompactTable = (): void => {
     const table = selectedTable();
     if (!table) return;
     const bookmark = editor.selection.getBookmark(2, true);
     editor.undoManager.transact(() => {
-      const existing = collapsibleWrapper(table);
-      if (existing) {
-        Array.from(existing.childNodes).forEach(child => {
-          if (child.nodeType !== 1 || (child as Element).tagName !== 'SUMMARY') {
-            existing.parentNode?.insertBefore(child, existing);
-          }
-        });
-        existing.remove();
+      // Earlier builds wrapped tables in <details>. Remove that wrapper when
+      // encountered, then use a TinyMCE-only state attribute instead. The
+      // table remains normal saved HTML and is merely compacted in the editor.
+      unwrapLegacyCollapsibleTable(table);
+      if (table.dataset.mceElabftwCollapsed === 'true') {
+        delete table.dataset.mceElabftwCollapsed;
       } else {
-        const details = table.ownerDocument.createElement('details');
-        details.className = 'elabftw-collapsible-table';
-        details.open = true;
-        const summary = table.ownerDocument.createElement('summary');
-        summary.className = 'elabftw-collapsible-table-summary';
-        summary.textContent = table.querySelector('caption')?.textContent?.trim() || 'Table';
-        const container = table.parentElement?.classList.contains('elabftw-table-indent')
-          ? table.parentElement
-          : table;
-        container.parentNode?.insertBefore(details, container);
-        details.append(summary, container);
+        table.dataset.mceElabftwCollapsed = 'true';
       }
+      updateCompactToggle(table);
     });
     editor.selection.moveToBookmark(bookmark);
     editor.nodeChanged();
     editor.focus();
+  };
+
+  const updateCompactToggle = (table: HTMLTableElement): void => {
+    const button = table.querySelector<HTMLButtonElement>(':scope .elabftw-table-collapse-toggle');
+    if (!button) return;
+    const collapsed = table.dataset.mceElabftwCollapsed === 'true';
+    button.textContent = collapsed ? '▸' : '▾';
+    button.title = collapsed ? 'Expand table' : 'Collapse table';
+    button.setAttribute('aria-label', button.title);
+  };
+
+  const ensureCompactToggle = (table: HTMLTableElement): void => {
+    if (table.querySelector(':scope .elabftw-table-collapse-toggle')) return;
+    const cornerCell = table.querySelector<HTMLTableCellElement>('th,td');
+    if (!cornerCell) return;
+    const button = table.ownerDocument.createElement('button');
+    button.type = 'button';
+    button.className = 'elabftw-table-collapse-toggle';
+    button.contentEditable = 'false';
+    button.dataset.mceBogus = 'all';
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      lastSelectedTable = table;
+      toggleCompactTable();
+    });
+    cornerCell.prepend(button);
+    updateCompactToggle(table);
   };
 
   const selectWholeTable = (): void => {
@@ -69,7 +96,14 @@ export function registerTableToolsExtension(editor: Editor): void {
   editor.on('NodeChange', event => {
     const element = event.element as Element | undefined;
     const table = element?.closest?.('table') as HTMLTableElement | null;
-    if (table) lastSelectedTable = table;
+    if (table) {
+      lastSelectedTable = table;
+      ensureCompactToggle(table);
+    }
+  });
+
+  editor.on('SetContent', () => {
+    editor.getBody().querySelectorAll<HTMLTableElement>('table').forEach(ensureCompactToggle);
   });
 
   editor.on('init', () => {
@@ -120,21 +154,6 @@ export function registerTableToolsExtension(editor: Editor): void {
       return () => editor.off('NodeChange', update);
     },
   });
-  editor.ui.registry.addToggleButton('table-collapse', {
-    text: 'Collapse',
-    tooltip: 'Make this table collapsible',
-    onAction: toggleCollapsibleTable,
-    onSetup: api => {
-      const update = (): void => {
-        const table = selectedTable();
-        api.setEnabled(Boolean(table));
-        api.setActive(Boolean(collapsibleWrapper(table)));
-      };
-      update();
-      editor.on('NodeChange', update);
-      return () => editor.off('NodeChange', update);
-    },
-  });
   editor.ui.registry.addButton('table-select-copy', {
     text: 'Select table',
     tooltip: 'Select the whole table, then use Copy',
@@ -148,7 +167,7 @@ export function registerTableToolsExtension(editor: Editor): void {
   });
   editor.ui.registry.addContextToolbar('elabftw-table-actions', {
     predicate: node => Boolean((node as Element).closest?.('table')),
-    items: 'table-collapse table-select-copy',
+    items: 'table-select-copy',
     position: 'node',
     scope: 'node',
   });

@@ -227,6 +227,46 @@ body.mce-content-body {
   max-width: 100%;
 }
 
+// Compacting a table is an editor convenience, not an accordion in the saved
+// experiment. TinyMCE strips its internal data-mce-* state from saved HTML.
+body.mce-content-body table[data-mce-elabftw-collapsed="true"] tbody tr,
+body.mce-content-body table[data-mce-elabftw-collapsed="true"] tfoot {
+  display: none;
+}
+
+body.mce-content-body table[data-mce-elabftw-collapsed="true"] tbody tr:first-child {
+  display: table-row;
+}
+
+body.mce-content-body table[data-mce-elabftw-collapsed="true"] {
+  box-shadow: 0 0 0 2px var(--primary, #29aeb9);
+  opacity: 0.92;
+}
+
+body.mce-content-body table > :is(thead, tbody, tfoot) > tr:first-child > :is(th, td):first-child {
+  position: relative;
+}
+
+body.mce-content-body .elabftw-table-collapse-toggle {
+  align-items: center;
+  background: var(--bg, #fff);
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  border-radius: 0.2rem;
+  color: var(--primary, #29aeb9);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.75rem;
+  height: 1.15rem;
+  justify-content: center;
+  left: 0.15rem;
+  line-height: 1;
+  padding: 0;
+  position: absolute;
+  top: 0.15rem;
+  width: 1.15rem;
+  z-index: 2;
+}
+
 :where(#body_view, body.mce-content-body) table.elabftw-spreadsheet tr:nth-child(even) {
   background-color: var(--zebrarow, rgba(0, 0, 0, 0.03));
 }
