@@ -129,6 +129,12 @@ class FilterTest extends \PHPUnit\Framework\TestCase
         $this->assertStringContainsString('class="elabftw-double-rule"', $rules);
         $this->assertStringContainsString('class="elabftw-dashed-rule"', $rules);
         $this->assertStringContainsString('class="elabftw-double-dashed-rule"', $rules);
+
+        $collapsible = Filter::body('<details class="elabftw-collapsible-table" open><summary class="elabftw-collapsible-table-summary">Results</summary><table><tbody><tr><td>42</td></tr></tbody></table></details>');
+        $this->assertStringContainsString('class="elabftw-collapsible-table"', $collapsible);
+        $this->assertStringContainsString('class="elabftw-collapsible-table-summary"', $collapsible);
+        $this->assertStringContainsString('<summary', $collapsible);
+        $this->assertStringContainsString('<table>', $collapsible);
     }
 
     public function testForFilesystem(): void

@@ -215,7 +215,7 @@ function getAssetVersionQuery(): string {
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist checklist outdent indent | forecolor backcolor format-painter remove-formatting | charmap emoticons adddate horizontal-rule | codesample | insert-link | inline-sheet table-properties cell-properties table-outdent table-indent sort-table';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist checklist outdent indent | forecolor backcolor format-painter remove-formatting | charmap emoticons adddate horizontal-rule | codesample | insert-link | inline-sheet table-properties cell-properties table-collapse table-outdent table-indent sort-table';
   if (document.getElementById('documentTitle')) {
     toolbar1 = toolbar1.replace('adddate', 'experiment-title adddate');
   }
@@ -253,8 +253,11 @@ export function getTinymceBaseConfig(page: string): object {
     table_default_styles: {
       'min-width':'25%',
     },
-    // The table width is changed when manipulating columns, the size of other columns is maintained.
-    table_column_resizing: 'resizetable',
+    // Keep the outer table width stable while dragging a column boundary; the
+    // neighbouring column absorbs the change, which is much easier to control.
+    table_column_resizing: 'preservetable',
+    table_resize_bars: true,
+    object_resizing: 'table',
     browser_spellcheck: true,
     // location of the skin directory
     skin_url: isDark ? '/assets/tinymce_skins_dark' : '/assets/tinymce_skins',

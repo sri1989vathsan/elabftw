@@ -204,8 +204,27 @@ body.mce-content-body {
 :where(#body_view, body.mce-content-body) table.elabftw-spreadsheet td,
 :where(#body_view, body.mce-content-body) table.elabftw-spreadsheet th {
   border: 1px solid var(--secondary-muted, #ccd2d8);
-  min-width: 3.5rem;
+  min-width: 2rem;
   padding: 0.35rem 0.5rem;
+}
+
+:where(#body_view, body.mce-content-body) details.elabftw-collapsible-table {
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  border-radius: 0.3rem;
+  margin: 0.5rem 0;
+  padding: 0.35rem 0.5rem 0.5rem;
+}
+
+:where(#body_view, body.mce-content-body) summary.elabftw-collapsible-table-summary {
+  color: var(--strong, inherit);
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.25rem;
+}
+
+:where(#body_view, body.mce-content-body) details.elabftw-collapsible-table > table {
+  margin-bottom: 0;
+  max-width: 100%;
 }
 
 :where(#body_view, body.mce-content-body) table.elabftw-spreadsheet tr:nth-child(even) {
@@ -229,8 +248,7 @@ body.mce-content-body {
 :where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] {
   border-collapse: separate;
   border-spacing: 0;
-  table-layout: fixed;
-  width: 100%;
+  max-width: 100%;
 }
 
 :where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] > caption {
@@ -248,8 +266,7 @@ body.mce-content-body {
 }
 
 :where(#body_view, body.mce-content-body) table[data-spreadsheet-style='well-plate'] {
-  table-layout: fixed;
-  width: 100%;
+  max-width: 100%;
 }
 
 :where(#body_view, body.mce-content-body) table[data-spreadsheet-style='well-plate'] td,

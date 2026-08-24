@@ -5,6 +5,46 @@ import TableIndentation from '../TableIndentation.class';
 export function registerTableToolsExtension(editor: Editor): void {
   const tableIndentation = new TableIndentation(editor);
 
+  const selectedTable = (): HTMLTableElement | null => (
+    (editor.selection.getNode() as HTMLElement).closest('table') as HTMLTableElement | null
+  );
+
+  const collapsibleWrapper = (table: HTMLTableElement | null): HTMLDetailsElement | null => {
+    return table?.closest('details.elabftw-collapsible-table') as HTMLDetailsElement | null;
+  };
+
+  const toggleCollapsibleTable = (): void => {
+    const table = selectedTable();
+    if (!table) return;
+    const bookmark = editor.selection.getBookmark(2, true);
+    editor.undoManager.transact(() => {
+      const existing = collapsibleWrapper(table);
+      if (existing) {
+        Array.from(existing.childNodes).forEach(child => {
+          if (child.nodeType !== 1 || (child as Element).tagName !== 'SUMMARY') {
+            existing.parentNode?.insertBefore(child, existing);
+          }
+        });
+        existing.remove();
+      } else {
+        const details = table.ownerDocument.createElement('details');
+        details.className = 'elabftw-collapsible-table';
+        details.open = true;
+        const summary = table.ownerDocument.createElement('summary');
+        summary.className = 'elabftw-collapsible-table-summary';
+        summary.textContent = table.querySelector('caption')?.textContent?.trim() || 'Table';
+        const container = table.parentElement?.classList.contains('elabftw-table-indent')
+          ? table.parentElement
+          : table;
+        container.parentNode?.insertBefore(details, container);
+        details.append(summary, container);
+      }
+    });
+    editor.selection.moveToBookmark(bookmark);
+    editor.nodeChanged();
+    editor.focus();
+  };
+
   editor.on('init', () => {
     const editorDocument = editor.getDoc();
     const tableTabHandler = (event: KeyboardEvent): void => {
@@ -49,6 +89,21 @@ export function registerTableToolsExtension(editor: Editor): void {
         api.setEnabled(tableIndentation.canOutdent(table));
       };
       api.setEnabled(tableIndentation.canOutdent(tableIndentation.trackSelectedTable()));
+      editor.on('NodeChange', update);
+      return () => editor.off('NodeChange', update);
+    },
+  });
+  editor.ui.registry.addToggleButton('table-collapse', {
+    icon: 'chevron-down',
+    tooltip: 'Make table collapsible',
+    onAction: toggleCollapsibleTable,
+    onSetup: api => {
+      const update = (): void => {
+        const table = selectedTable();
+        api.setEnabled(Boolean(table));
+        api.setActive(Boolean(collapsibleWrapper(table)));
+      };
+      update();
       editor.on('NodeChange', update);
       return () => editor.off('NodeChange', update);
     },
