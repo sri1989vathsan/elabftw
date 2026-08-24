@@ -253,6 +253,7 @@ final class Filter
             'elabftw-checklist-item',
             'elabftw-collapsible-table',
             'elabftw-collapsible-table-summary',
+            'elabftw-pasted-table',
             'elabftw-table-indent',
             'spreadsheet-coordinate',
         ));

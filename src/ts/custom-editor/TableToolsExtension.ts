@@ -105,12 +105,52 @@ export function registerTableToolsExtension(editor: Editor): void {
 
   editor.on('init', () => {
     const editorDocument = editor.getDoc();
+    type CaretPoint = { node: Node; offset: number };
+    let mixedSelectionAnchor: CaretPoint | null = null;
+    let selectingAcrossTable = false;
+
+    const caretPointFromCoordinates = (x: number, y: number): CaretPoint | null => {
+      const documentWithCaretApi = editorDocument as Document & {
+        caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      };
+      const position = documentWithCaretApi.caretPositionFromPoint?.(x, y);
+      if (position) return { node: position.offsetNode, offset: position.offset };
+      const range = documentWithCaretApi.caretRangeFromPoint?.(x, y);
+      return range ? { node: range.startContainer, offset: range.startOffset } : null;
+    };
+
+    const setMixedContentSelection = (anchor: CaretPoint, focus: CaretPoint): void => {
+      const anchorRange = editorDocument.createRange();
+      anchorRange.setStart(anchor.node, anchor.offset);
+      anchorRange.collapse(true);
+      const focusRange = editorDocument.createRange();
+      focusRange.setStart(focus.node, focus.offset);
+      focusRange.collapse(true);
+      const anchorFirst = anchorRange.compareBoundaryPoints(Range.START_TO_START, focusRange) <= 0;
+      const selectionRange = editorDocument.createRange();
+      if (anchorFirst) {
+        selectionRange.setStart(anchor.node, anchor.offset);
+        selectionRange.setEnd(focus.node, focus.offset);
+      } else {
+        selectionRange.setStart(focus.node, focus.offset);
+        selectionRange.setEnd(anchor.node, anchor.offset);
+      }
+      const selection = editorDocument.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(selectionRange);
+    };
+
     const tableCollapseHandler = (event: MouseEvent): void => {
       if (event.button !== 0) return;
       const target = event.target as Element | null;
       const table = target?.closest?.('table') as HTMLTableElement | null;
       if (!table) return;
-      const bounds = table.getBoundingClientRect();
+      const cornerCell = table.querySelector<HTMLTableCellElement>(
+        ':scope > thead:first-child > tr:first-child > :is(th,td):first-child, :scope > tbody:first-child > tr:first-child > :is(th,td):first-child, :scope > tfoot:first-child > tr:first-child > :is(th,td):first-child',
+      );
+      const bounds = cornerCell?.getBoundingClientRect();
+      if (!bounds) return;
       const inToggle = event.clientX >= bounds.left
         && event.clientX <= bounds.left + 24
         && event.clientY >= bounds.top
@@ -121,6 +161,46 @@ export function registerTableToolsExtension(editor: Editor): void {
       event.stopImmediatePropagation();
       lastSelectedTable = table;
       toggleCompactTable();
+    };
+    const mixedSelectionStartHandler = (event: MouseEvent): void => {
+      if (event.button !== 0) return;
+      const target = event.target as Element | null;
+      if (target?.closest?.('table')) {
+        mixedSelectionAnchor = null;
+        return;
+      }
+      mixedSelectionAnchor = caretPointFromCoordinates(event.clientX, event.clientY);
+      selectingAcrossTable = false;
+    };
+    const mixedSelectionMoveHandler = (event: MouseEvent): void => {
+      if (!mixedSelectionAnchor || (event.buttons & 1) === 0) return;
+      const target = event.target as Element | null;
+      if (target?.closest?.('table')) selectingAcrossTable = true;
+      if (!selectingAcrossTable) return;
+      const focus = caretPointFromCoordinates(event.clientX, event.clientY);
+      if (!focus) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      setMixedContentSelection(mixedSelectionAnchor, focus);
+    };
+    const mixedSelectionEndHandler = (event: MouseEvent): void => {
+      if (selectingAcrossTable) {
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+      }
+      mixedSelectionAnchor = null;
+      selectingAcrossTable = false;
+    };
+    const richSelectionCopyHandler = (event: ClipboardEvent): void => {
+      const selection = editorDocument.getSelection();
+      if (!event.clipboardData || !selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+      const container = editorDocument.createElement('div');
+      container.append(selection.getRangeAt(0).cloneContents());
+      if (!container.querySelector('table')) return;
+      event.preventDefault();
+      event.clipboardData.setData('text/html', container.innerHTML);
+      event.clipboardData.setData('text/plain', selection.toString());
     };
     const tableTabHandler = (event: KeyboardEvent): void => {
       if (event.key !== 'Tab'
@@ -148,10 +228,18 @@ export function registerTableToolsExtension(editor: Editor): void {
       else tableIndentation.indentSelectedTable();
     };
 
+    editorDocument.addEventListener('mousedown', mixedSelectionStartHandler, true);
     editorDocument.addEventListener('mousedown', tableCollapseHandler, true);
+    editorDocument.addEventListener('mousemove', mixedSelectionMoveHandler, true);
+    editorDocument.addEventListener('mouseup', mixedSelectionEndHandler, true);
+    editorDocument.addEventListener('copy', richSelectionCopyHandler, true);
     editorDocument.addEventListener('keydown', tableTabHandler, true);
     editor.on('remove', () => {
+      editorDocument.removeEventListener('mousedown', mixedSelectionStartHandler, true);
       editorDocument.removeEventListener('mousedown', tableCollapseHandler, true);
+      editorDocument.removeEventListener('mousemove', mixedSelectionMoveHandler, true);
+      editorDocument.removeEventListener('mouseup', mixedSelectionEndHandler, true);
+      editorDocument.removeEventListener('copy', richSelectionCopyHandler, true);
       editorDocument.removeEventListener('keydown', tableTabHandler, true);
     });
   });

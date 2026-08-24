@@ -309,6 +309,15 @@ export function getTinymceBaseConfig(page: string): object {
     // use the preprocessing function on paste event to fix the bgcolor attribute from libreoffice into proper background-color style
     paste_preprocess: function(plugin, args) {
       args.content = args.content.replaceAll('bgcolor="', 'style="background-color:');
+      const pasteContainer = document.createElement('div');
+      pasteContainer.innerHTML = args.content;
+      pasteContainer.querySelectorAll<HTMLTableElement>('table').forEach(table => {
+        table.removeAttribute('width');
+        table.style.removeProperty('width');
+        table.classList.add('elabftw-pasted-table');
+        if (!table.getAttribute('style')?.trim()) table.removeAttribute('style');
+      });
+      args.content = pasteContainer.innerHTML;
     },
     // also add it to Filter.php in Attr.AllowedClasses
     codesample_languages: [

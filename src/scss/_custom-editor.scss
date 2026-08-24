@@ -199,6 +199,13 @@ body.mce-content-body {
   border-collapse: collapse;
   font-size: 0.9em;
   margin: 8px 0;
+  max-width: 100%;
+  width: max-content;
+}
+
+:where(#body_view, body.mce-content-body) table.elabftw-pasted-table {
+  max-width: 100%;
+  width: max-content;
 }
 
 :where(#body_view, body.mce-content-body) table.elabftw-spreadsheet td,
