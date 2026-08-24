@@ -4,10 +4,23 @@ import TableIndentation from '../TableIndentation.class';
 
 export function registerTableToolsExtension(editor: Editor): void {
   const tableIndentation = new TableIndentation(editor);
+  let lastSelectedTable: HTMLTableElement | null = null;
 
-  const selectedTable = (): HTMLTableElement | null => (
-    (editor.selection.getNode() as HTMLElement).closest('table') as HTMLTableElement | null
-  );
+  const selectedTable = (node?: Node | null): HTMLTableElement | null => {
+    const element = node?.nodeType === 1
+      ? node as Element
+      : node?.parentElement ?? editor.selection.getNode() as Element;
+    const table = element?.closest?.('table') as HTMLTableElement | null;
+    if (table) {
+      lastSelectedTable = table;
+      return table;
+    }
+    if (lastSelectedTable && editor.getBody().contains(lastSelectedTable)) {
+      return lastSelectedTable;
+    }
+    lastSelectedTable = null;
+    return null;
+  };
 
   const collapsibleWrapper = (table: HTMLTableElement | null): HTMLDetailsElement | null => {
     return table?.closest('details.elabftw-collapsible-table') as HTMLDetailsElement | null;
@@ -44,6 +57,20 @@ export function registerTableToolsExtension(editor: Editor): void {
     editor.nodeChanged();
     editor.focus();
   };
+
+  const selectWholeTable = (): void => {
+    const table = selectedTable();
+    if (!table) return;
+    editor.focus();
+    editor.selection.select(table);
+    editor.nodeChanged();
+  };
+
+  editor.on('NodeChange', event => {
+    const element = event.element as Element | undefined;
+    const table = element?.closest?.('table') as HTMLTableElement | null;
+    if (table) lastSelectedTable = table;
+  });
 
   editor.on('init', () => {
     const editorDocument = editor.getDoc();
@@ -94,8 +121,8 @@ export function registerTableToolsExtension(editor: Editor): void {
     },
   });
   editor.ui.registry.addToggleButton('table-collapse', {
-    icon: 'chevron-down',
-    tooltip: 'Make table collapsible',
+    text: 'Collapse',
+    tooltip: 'Make this table collapsible',
     onAction: toggleCollapsibleTable,
     onSetup: api => {
       const update = (): void => {
@@ -107,6 +134,23 @@ export function registerTableToolsExtension(editor: Editor): void {
       editor.on('NodeChange', update);
       return () => editor.off('NodeChange', update);
     },
+  });
+  editor.ui.registry.addButton('table-select-copy', {
+    text: 'Select table',
+    tooltip: 'Select the whole table, then use Copy',
+    onAction: selectWholeTable,
+    onSetup: api => {
+      const update = (event?): void => api.setEnabled(Boolean(selectedTable(event?.element)));
+      update();
+      editor.on('NodeChange', update);
+      return () => editor.off('NodeChange', update);
+    },
+  });
+  editor.ui.registry.addContextToolbar('elabftw-table-actions', {
+    predicate: node => Boolean((node as Element).closest?.('table')),
+    items: 'table-collapse table-select-copy',
+    position: 'node',
+    scope: 'node',
   });
   editor.ui.registry.addButton('table-indent', {
     icon: 'indent',

@@ -1194,6 +1194,13 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
   if (cols === 0) return null;
   const richTextStyles = clipboardTable?.cellStyles
     ?? getClipboardRichTextStyles(html, parsed);
+  const appearance = getEffectiveAppearanceDefaults();
+
+  // Clipboard tables should keep the shape of their source instead of
+  // inheriting a notebook/account default that can stretch every imported
+  // table to 100% of the editor. Users can still set an explicit width later
+  // from Table style or the spreadsheet appearance controls.
+  appearance.tableWidth = 0;
 
   return {
     data: resizeData(parsed, rows, cols),
@@ -1202,7 +1209,7 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
     kind: 'standard',
     caption: '',
     cellStyles: normalizeCellStyles(richTextStyles, rows, cols),
-    appearance: getEffectiveAppearanceDefaults(),
+    appearance,
   };
 }
 
