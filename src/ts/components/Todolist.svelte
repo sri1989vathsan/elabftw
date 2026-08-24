@@ -1228,7 +1228,7 @@
   }
 
   .todo-step-entity-link {
-    color: var(--side-panel-link, var(--primary));
+    color: inherit;
     font-weight: 600;
     text-decoration: underline;
     text-decoration-thickness: 0.08em;
@@ -1237,8 +1237,8 @@
 
   .todo-step-entity-link:hover,
   .todo-step-entity-link:focus {
-    color: var(--side-panel-link-hover, var(--primary));
-    filter: brightness(1.2);
+    color: inherit;
+    text-decoration-thickness: 0.12em;
   }
 
   .todo-task-notes {

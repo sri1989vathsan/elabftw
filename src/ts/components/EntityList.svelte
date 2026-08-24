@@ -98,7 +98,7 @@
   let isLoading = $state(false);
   let isLoadingMore = $state(false);
   let hasMore = $state(true);
-  let sentinelEl: HTMLDivElement | null = null;
+  let sentinelEl = $state<HTMLDivElement | null>(null);
   let currentQueryKey = '';
   let reloadVersion = $state(0);
   let debouncedSearchQuery = $state('');
@@ -341,6 +341,11 @@
     const currentReloadVersion = reloadVersion;
     const context = getEntityQueryContext();
     const nextQueryKey = getEntityQueryKey(context, currentReloadVersion);
+    // Reconnect the observer after every appended page. When the sentinel is
+    // still within rootMargin, IntersectionObserver does not necessarily emit
+    // a second transition after its position changes, which used to stop the
+    // list after one page on tall screens.
+    const currentEntityCount = entities.length;
 
     if (nextQueryKey !== currentQueryKey) {
       currentQueryKey = nextQueryKey;
@@ -361,13 +366,13 @@
           return;
         }
 
-        if (hasPendingQueryResults || isLoading || isLoadingMore || !hasMore || entities.length === 0) {
+        if (hasPendingQueryResults || isLoading || isLoadingMore || !hasMore || currentEntityCount === 0) {
           return;
         }
 
         void loadEntities(
           getEntityQueryContext(),
-          entities.length,
+          currentEntityCount,
           false,
         );
       },

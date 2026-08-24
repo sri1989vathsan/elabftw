@@ -265,11 +265,11 @@ export function getTinymceBaseConfig(page: string): object {
     // Keep an empty document large enough to click and place the caret. The
     // autoresize plugin otherwise collapses a blank editor to an impractically
     // small strip on some layouts.
-    content_style: `${getEditorPaletteStyle()}html,body{min-height:0!important}body.mce-content-body{box-sizing:border-box;min-height:12rem!important;cursor:text}body.mce-content-body:empty:before{content:' ';display:block;min-height:12rem}img{max-width:100%;height:auto}`,
+    content_style: `${getEditorPaletteStyle()}html{min-height:0!important}body.mce-content-body{box-sizing:border-box;min-height:12rem!important;cursor:text}img{max-width:100%;height:auto}`,
     emoticons_database_url: 'assets/tinymce_emojis.js',
     // remove the "Upgrade" button
     promotion: false,
-    autoresize_bottom_margin: 50,
+    autoresize_bottom_margin: 16,
     // autoresize plugin will disallow manually resizing, but setting resize to true will make the scrollbar disappear
     //resize: true,
     plugins: plugins,
@@ -557,6 +557,10 @@ export function getTinymceBaseConfig(page: string): object {
     toolbar_sticky_offset: isToolbarSticky ? ((document.querySelector<HTMLElement>('.sticky-navbar')?.offsetHeight ?? 0) + (entityToolbar?.offsetHeight ?? 0)) : 0,
     // render MathJax for TinyMCE preview
     init_instance_callback: (editor) => {
+      // Recalculate from the loaded document instead of retaining TinyMCE's
+      // provisional iframe height. Without this, edit mode can initially
+      // expose a long empty scrolling region until the editor receives focus.
+      window.requestAnimationFrame(() => editor.execCommand('mceAutoResize'));
       editor.on('ExecCommand', (e) => {
         if (e.command == 'mcePreview') {
           // declaration as iFrame element required to avoid errors with getting srcdoc property
