@@ -170,7 +170,7 @@
 {% include 'pyrat-experiment-links.html' %}
 
 {# we only show this section in view mode if there are at least one link #}
-{% if Entity.entityData.experiments_links or Entity.entityData.items_links or Entity.entityData.compounds_links or Entity.entityData.related_experiments_links or Entity.entityData.related_items_links %}
+{% if Entity.entityData.experiments_links or Entity.entityData.items_links or Entity.entityData.compounds_links or Entity.entityData.related_experiments_links or Entity.entityData.related_items_links or Entity.entityData.uploads %}
   {% include 'links.html' %}
 {% endif %}
 

@@ -73,7 +73,7 @@ export function registerLinkExtension(editor: Editor): void {
           });
         }
 
-        await reloadElements(['uploadsDiv']);
+        await reloadElements(['uploadsDiv', 'filesFoldersLinksSection']);
         editor.focus();
         editor.selection.moveToBookmark(bookmark);
         editor.undoManager.transact(() => {

@@ -84,6 +84,30 @@
   </div>
   <hr>
 
+  {# LOCAL FILE AND FOLDER LINKS #}
+  {% set accessKey = App.Request.query.getString('access_key') %}
+  <section id='filesFoldersLinksSection'>
+    <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='filesFoldersLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Files / folders'|trans }} (<span id='filesFoldersLinksCount'>{{ Entity.entityData.uploads|length }}</span>)</h4>
+    <div id='filesFoldersLinksDiv' class='ml-4'>
+      {% for upload in Entity.entityData.uploads %}
+        {% set ext = upload.real_name|getExt %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center' id='fileFolderLink_{{ upload.id }}'>
+          <a class='mr-auto text-break' target='_blank' rel='noopener' href='app/download.php?f={{ upload.long_name|e('url') }}&amp;name={{ upload.real_name|e('url') }}&amp;storage={{ upload.storage }}{% if accessKey %}&amp;access_key={{ accessKey|e('url') }}{% endif %}'>
+            <i class='fas {{ ext2icon(ext) }} fa-fw mr-2' aria-hidden='true'></i>{{ upload.real_name }}
+          </a>
+          {% if mode == 'edit' %}
+            <button type='button' class='btn btn-ghost btn-sm' data-action='insert-upload-link' data-name='{{ upload.real_name|e('html_attr') }}' data-storage='{{ upload.storage }}' data-link='{{ upload.long_name|e('html_attr') }}' data-uploadid='{{ upload.id }}' title='{{ 'Insert file link in main text'|trans }}' aria-label='{{ 'Insert file link in main text'|trans }}'>
+              <i class='fas fa-fw fa-link'></i>
+            </button>
+          {% endif %}
+        </div>
+      {% else %}
+        <p class='smallgray mt-2 mb-0'>{{ 'Files selected from a local folder will be listed here individually.'|trans }}</p>
+      {% endfor %}
+    </div>
+  </section>
+  <hr>
+
   {% include 'compounds-view-edit.html' %}
 </div>
 <hr>
