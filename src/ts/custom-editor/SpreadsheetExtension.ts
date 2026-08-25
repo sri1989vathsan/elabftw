@@ -15,6 +15,7 @@ import {
   WELL_PLATE_PRESETS,
 } from '../inline-spreadsheet';
 import { escapeHTML } from '../misc';
+import { RICH_SELECTION_ATTRIBUTE } from '../ClipboardContent';
 
 interface PdfTableDialogData {
   columns: string;
@@ -131,6 +132,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       const plainText = clipboard.getData('text/plain');
       const normalizedPlainText = normalizePdfPrivateUseText(plainText);
       const richClipboardHtml = clipboard.getData('text/html');
+      if (richClipboardHtml.includes(RICH_SELECTION_ATTRIBUTE)) return;
       // A mixed rich copy belongs to TinyMCE. Converting it here would retain
       // only its first table and silently discard the surrounding content.
       const containsHtmlTable = /<table[\s>]/i.test(richClipboardHtml);

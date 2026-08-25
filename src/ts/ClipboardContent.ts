@@ -1,6 +1,6 @@
 /** Helpers for copying rich editor content without spreadsheet coordinate labels. */
 
-import { TABLE_COLLAPSE_BUTTON_CLASS } from './TableCollapse';
+export const RICH_SELECTION_ATTRIBUTE = 'data-elabftw-rich-selection';
 
 const BLOCK_ELEMENTS = new Set([
   'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'DIV', 'DL', 'FIELDSET',
@@ -11,7 +11,6 @@ const BLOCK_ELEMENTS = new Set([
 
 /** Convert spreadsheet display tables into normal clipboard tables. */
 export function prepareCopiedContent(root: HTMLElement): void {
-  root.querySelectorAll(`.${TABLE_COLLAPSE_BUTTON_CLASS}`).forEach(element => element.remove());
   root.querySelectorAll<HTMLTableElement>('table').forEach(table => {
     const coordinates = table.querySelectorAll('.spreadsheet-coordinate');
     if (coordinates.length > 0) {
@@ -36,6 +35,19 @@ export function prepareCopiedContent(root: HTMLElement): void {
   root.querySelectorAll('[contenteditable]').forEach(element => element.removeAttribute('contenteditable'));
 }
 
+/** Remove markup left by the retired table-collapse implementation. */
+export function removeLegacyTableCollapse(root: HTMLElement): void {
+  root.querySelectorAll('.elabftw-table-collapse-toggle').forEach(element => element.remove());
+  root.querySelectorAll<HTMLTableElement>('table').forEach(table => {
+    table.removeAttribute('data-mce-elabftw-collapsed');
+    table.removeAttribute('data-elabftw-collapsed');
+  });
+  root.querySelectorAll<HTMLDetailsElement>('details.elabftw-collapsible-table').forEach(details => {
+    details.querySelector(':scope > summary')?.remove();
+    details.replaceWith(...Array.from(details.childNodes));
+  });
+}
+
 /** Put a rich DOM range on a native copy event. */
 export function writeRangeToClipboardEvent(event: ClipboardEvent, range: Range): boolean {
   if (!event.clipboardData || range.collapsed) return false;
@@ -45,7 +57,10 @@ export function writeRangeToClipboardEvent(event: ClipboardEvent, range: Range):
   if (!container.querySelector('table')) return false;
   prepareCopiedContent(container);
   event.preventDefault();
-  event.clipboardData.setData('text/html', container.innerHTML);
+  event.clipboardData.setData(
+    'text/html',
+    `<div ${RICH_SELECTION_ATTRIBUTE}="true">${container.innerHTML}</div>`,
+  );
   event.clipboardData.setData('text/plain', copiedContentAsPlainText(container));
   return true;
 }

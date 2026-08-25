@@ -10,6 +10,7 @@ import SidePanel from './SidePanel.class';
 import {
   copiedContentAsPlainText,
   prepareCopiedContent,
+  RICH_SELECTION_ATTRIBUTE,
   writeRichClipboard,
 } from './ClipboardContent';
 
@@ -653,6 +654,11 @@ export default class TocPanel extends SidePanel {
       this.filterPrintContent(content, this.currentSectionIds);
     }
     prepareCopiedContent(content);
+
+    const marker = document.createElement('div');
+    marker.setAttribute(RICH_SELECTION_ATTRIBUTE, 'true');
+    marker.append(...Array.from(content.childNodes));
+    content.append(marker);
 
     const copied = await writeRichClipboard(
       content.innerHTML,

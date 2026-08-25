@@ -311,6 +311,9 @@ export function getTinymceBaseConfig(page: string): object {
       args.content = args.content.replaceAll('bgcolor="', 'style="background-color:');
       const pasteContainer = document.createElement('div');
       pasteContainer.innerHTML = args.content;
+      pasteContainer.querySelectorAll('[data-elabftw-rich-selection]').forEach(marker => {
+        marker.replaceWith(...Array.from(marker.childNodes));
+      });
       pasteContainer.querySelectorAll<HTMLTableElement>('table').forEach(table => {
         table.removeAttribute('width');
         table.style.removeProperty('width');

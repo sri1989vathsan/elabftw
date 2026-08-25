@@ -78,8 +78,7 @@ import Todolist from './Todolist.class';
 import { entity } from './getEntity';
 import { get, on } from './handlers';
 import Tab from './Tab.class';
-import { installTableCollapse } from './TableCollapse';
-import { installRichContentCopy } from './ClipboardContent';
+import { installRichContentCopy, removeLegacyTableCollapse } from './ClipboardContent';
 import { core } from './core';
 import { get as getFromSvelte } from 'svelte/store';
 import { writable } from 'svelte/store';
@@ -254,7 +253,7 @@ const TocPanelC = new TocPanel();
 const HtmlToolsPanelC = new HtmlToolsPanel();
 const renderedBody = document.getElementById('body_view');
 if (renderedBody) {
-  installTableCollapse(renderedBody);
+  removeLegacyTableCollapse(renderedBody);
   installRichContentCopy(renderedBody);
 }
 // Mount while hidden as well, so reminder badges continue to update even when

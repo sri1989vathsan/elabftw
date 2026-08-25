@@ -4,10 +4,11 @@ import TableIndentation from '../TableIndentation.class';
 import {
   copiedContentAsPlainText,
   prepareCopiedContent,
+  removeLegacyTableCollapse,
+  RICH_SELECTION_ATTRIBUTE,
   writeRangeToClipboardEvent,
   writeRichClipboard,
 } from '../ClipboardContent';
-import { EDITOR_COLLAPSED_ATTRIBUTE, installTableCollapse } from '../TableCollapse';
 
 export function registerTableToolsExtension(editor: Editor): void {
   const tableIndentation = new TableIndentation(editor);
@@ -31,22 +32,18 @@ export function registerTableToolsExtension(editor: Editor): void {
     return null;
   };
 
-  const collapsibleWrapper = (table: HTMLTableElement | null): HTMLDetailsElement | null => {
-    return table?.closest('details.elabftw-collapsible-table') as HTMLDetailsElement | null;
-  };
-
-  const unwrapLegacyCollapsibleTable = (table: HTMLTableElement): void => {
-    const existing = collapsibleWrapper(table);
-    if (!existing) return;
-    const container = table.parentElement?.classList.contains('elabftw-table-indent')
-      ? table.parentElement
-      : table;
-    existing.parentNode?.insertBefore(container, existing);
-    existing.remove();
-  };
-
-  const copyContainer = async(container: HTMLElement, successMessage: string): Promise<void> => {
+  const copyContainer = async(
+    container: HTMLElement,
+    successMessage: string,
+    markAsMixedSelection = false,
+  ): Promise<void> => {
     prepareCopiedContent(container);
+    if (markAsMixedSelection) {
+      const marker = editor.getDoc().createElement('div');
+      marker.setAttribute(RICH_SELECTION_ATTRIBUTE, 'true');
+      marker.append(...Array.from(container.childNodes));
+      container.append(marker);
+    }
     const html = container.innerHTML;
     const plainText = copiedContentAsPlainText(container);
 
@@ -88,9 +85,10 @@ export function registerTableToolsExtension(editor: Editor): void {
 
   const copySelectedContent = async(): Promise<void> => {
     const selection = editor.getDoc().getSelection();
-    const range = selection && selection.rangeCount > 0 && !selection.isCollapsed
-      ? selection.getRangeAt(0).cloneRange()
-      : lastMixedSelectionRange;
+    const range = lastMixedSelectionRange
+      ?? (selection && selection.rangeCount > 0 && !selection.isCollapsed
+        ? selection.getRangeAt(0).cloneRange()
+        : null);
     if (!range || range.collapsed) {
       editor.notificationManager.open({
         text: 'Select text and/or tables first',
@@ -101,7 +99,7 @@ export function registerTableToolsExtension(editor: Editor): void {
     }
     const container = editor.getDoc().createElement('div');
     container.append(range.cloneContents());
-    await copyContainer(container, 'Selected content copied with formatting');
+    await copyContainer(container, 'Selected content copied with formatting', true);
   };
 
   editor.on('NodeChange', event => {
@@ -114,6 +112,7 @@ export function registerTableToolsExtension(editor: Editor): void {
     const editorDocument = editor.getDoc();
     type CaretPoint = { node: Node; offset: number };
     let mixedSelectionAnchor: CaretPoint | null = null;
+    let mixedSelectionAnchorTable: HTMLTableElement | null = null;
     let selectingAcrossTable = false;
 
     const caretPointFromCoordinates = (x: number, y: number): CaretPoint | null => {
@@ -127,7 +126,7 @@ export function registerTableToolsExtension(editor: Editor): void {
       return range ? { node: range.startContainer, offset: range.startOffset } : null;
     };
 
-    const setMixedContentSelection = (anchor: CaretPoint, focus: CaretPoint): Range => {
+    const createMixedContentRange = (anchor: CaretPoint, focus: CaretPoint): Range => {
       const anchorRange = editorDocument.createRange();
       anchorRange.setStart(anchor.node, anchor.offset);
       anchorRange.collapse(true);
@@ -143,41 +142,41 @@ export function registerTableToolsExtension(editor: Editor): void {
         selectionRange.setStart(focus.node, focus.offset);
         selectionRange.setEnd(anchor.node, anchor.offset);
       }
+      return selectionRange;
+    };
+
+    const applyMixedContentSelection = (selectionRange: Range): void => {
       const selection = editorDocument.getSelection();
       selection?.removeAllRanges();
       selection?.addRange(selectionRange);
-      return selectionRange;
     };
-    const removeTableCollapse = installTableCollapse(
-      editor.getBody(),
-      EDITOR_COLLAPSED_ATTRIBUTE,
-      table => {
-        lastSelectedTable = table;
-        unwrapLegacyCollapsibleTable(table);
-      },
-    );
+    removeLegacyTableCollapse(editor.getBody());
     const mixedSelectionStartHandler = (event: MouseEvent): void => {
       if (event.button !== 0) return;
       lastMixedSelectionRange = null;
       const target = event.target as Element | null;
-      if (target?.closest?.('table')) {
-        mixedSelectionAnchor = null;
-        return;
-      }
+      mixedSelectionAnchorTable = target?.closest?.('table') as HTMLTableElement | null;
       mixedSelectionAnchor = caretPointFromCoordinates(event.clientX, event.clientY);
       selectingAcrossTable = false;
     };
     const mixedSelectionMoveHandler = (event: MouseEvent): void => {
       if (!mixedSelectionAnchor || (event.buttons & 1) === 0) return;
       const target = event.target as Element | null;
-      if (target?.closest?.('table')) selectingAcrossTable = true;
-      if (!selectingAcrossTable) return;
       const focus = caretPointFromCoordinates(event.clientX, event.clientY);
       if (!focus) return;
+      const candidate = createMixedContentRange(mixedSelectionAnchor, focus);
+      const targetTable = target?.closest?.('table') as HTMLTableElement | null;
+      const crossesTableBoundary = mixedSelectionAnchorTable
+        ? targetTable !== mixedSelectionAnchorTable
+        : Array.from(editor.getBody().querySelectorAll('table'))
+          .some(table => candidate.intersectsNode(table));
+      if (!selectingAcrossTable && !crossesTableBoundary) return;
+      selectingAcrossTable = true;
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      lastMixedSelectionRange = setMixedContentSelection(mixedSelectionAnchor, focus).cloneRange();
+      applyMixedContentSelection(candidate);
+      lastMixedSelectionRange = candidate.cloneRange();
     };
     const mixedSelectionEndHandler = (event: MouseEvent): void => {
       if (selectingAcrossTable) {
@@ -193,14 +192,16 @@ export function registerTableToolsExtension(editor: Editor): void {
         }
       }
       mixedSelectionAnchor = null;
+      mixedSelectionAnchorTable = null;
       selectingAcrossTable = false;
     };
     const richSelectionCopyHandler = (event: ClipboardEvent): void => {
       if (copyFallbackInProgress) return;
       const selection = editorDocument.getSelection();
-      const range = selection && selection.rangeCount > 0 && !selection.isCollapsed
-        ? selection.getRangeAt(0)
-        : lastMixedSelectionRange;
+      const range = lastMixedSelectionRange
+        ?? (selection && selection.rangeCount > 0 && !selection.isCollapsed
+          ? selection.getRangeAt(0)
+          : null);
       if (!range) return;
       writeRangeToClipboardEvent(event, range);
     };
@@ -237,7 +238,6 @@ export function registerTableToolsExtension(editor: Editor): void {
     editorDocument.addEventListener('keydown', tableTabHandler, true);
     editor.on('remove', () => {
       editorDocument.removeEventListener('mousedown', mixedSelectionStartHandler, true);
-      removeTableCollapse();
       editorDocument.removeEventListener('mousemove', mixedSelectionMoveHandler, true);
       editorDocument.removeEventListener('mouseup', mixedSelectionEndHandler, true);
       editorDocument.removeEventListener('copy', richSelectionCopyHandler, true);
