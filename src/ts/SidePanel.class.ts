@@ -15,6 +15,7 @@ export default class SidePanel {
   private static readonly MAX_WIDTH = 720;
   private static currentWidth = 0;
   private static widthInitialized = false;
+  private static layoutRefreshFrame: number | null = null;
 
   panelId: string;
   model: Model | string;
@@ -38,7 +39,20 @@ export default class SidePanel {
     return Math.round(Math.min(Math.max(width, bounds.min), bounds.max));
   }
 
-  private static setWidth(width: number, persist = false): void {
+  private static refreshMainLayout(): void {
+    if (SidePanel.layoutRefreshFrame !== null) {
+      cancelAnimationFrame(SidePanel.layoutRefreshFrame);
+    }
+    SidePanel.layoutRefreshFrame = requestAnimationFrame(() => {
+      SidePanel.layoutRefreshFrame = null;
+      // TinyMCE calculates which toolbar groups fit at initialization. A
+      // synthetic resize makes it recalculate after the sidebar changes the
+      // available document width in either direction.
+      window.dispatchEvent(new Event('resize'));
+    });
+  }
+
+  private static setWidth(width: number, persist = false, refreshLayout = true): void {
     SidePanel.currentWidth = SidePanel.clampWidth(width);
     document.documentElement.style.setProperty(
       SidePanel.WIDTH_PROPERTY,
@@ -55,6 +69,9 @@ export default class SidePanel {
     if (persist) {
       localStorage.setItem(SidePanel.WIDTH_KEY, SidePanel.currentWidth.toString());
     }
+    if (refreshLayout) {
+      SidePanel.refreshMainLayout();
+    }
   }
 
   private static initializeWidth(): void {
@@ -65,7 +82,9 @@ export default class SidePanel {
     const defaultWidth = Math.max(window.innerWidth * 0.24, 330);
     SidePanel.setWidth(Number.isFinite(storedWidth) ? storedWidth : defaultWidth);
     window.addEventListener('resize', () => {
-      SidePanel.setWidth(SidePanel.currentWidth);
+      // Avoid scheduling another resize while handling the synthetic resize
+      // emitted by refreshMainLayout().
+      SidePanel.setWidth(SidePanel.currentWidth, false, false);
     });
   }
 
@@ -74,9 +93,11 @@ export default class SidePanel {
       $('#container')
         .css('width', `calc(100% - var(${SidePanel.WIDTH_PROPERTY}))`)
         .css('margin-left', `var(${SidePanel.WIDTH_PROPERTY})`);
+      SidePanel.refreshMainLayout();
       return;
     }
     $('#container').css('width', '100%').css('margin-left', 'auto');
+    SidePanel.refreshMainLayout();
   }
 
   private addResizer(panel: HTMLElement): void {

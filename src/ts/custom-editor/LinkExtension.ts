@@ -2,9 +2,9 @@
 import { Editor } from 'tinymce/tinymce';
 import { ApiC } from '../api';
 import { entity } from '../getEntity';
+import { createFileFolderReferences } from '../file-folder-references';
 import { Model } from '../interfaces';
 import { buildLabCollectorUrl } from '../labcollector-link';
-import { createLocalFolderLink, localFolderUrl } from '../local-folder-links';
 import {
   escapeHTML,
   getNewIdFromPostRequest,
@@ -17,8 +17,8 @@ interface LabCollectorDialogData {
   labcollectorId: string;
 }
 
-interface LocalFolderDialogData {
-  folderName: string;
+interface FileFolderReferenceDialogData {
+  references: string;
 }
 
 interface UploadedLocalFile {
@@ -119,54 +119,48 @@ export function registerLinkExtension(editor: Editor): void {
     input.click();
   };
 
-  const openLocalFolderShortcutDialog = (): void => {
+  const addAndInsertFileFolderReferences = (): void => {
     const bookmark = editor.selection.getBookmark(2, true);
-    const hasSelection = !editor.selection.getRng().collapsed;
     const selectedText = editor.selection.getContent({ format: 'text' }).trim();
     editor.windowManager.open({
-      title: 'Insert local folder shortcut',
+      title: 'Add file/folder references',
       size: 'normal',
       body: {
         type: 'panel',
         items: [{
-          type: 'input',
-          name: 'folderName',
-          label: 'Shortcut name',
+          type: 'textarea',
+          name: 'references',
+          label: 'One plain-text reference per line',
         }],
       },
-      initialData: { folderName: selectedText },
+      initialData: { references: selectedText },
       buttons: [
         { type: 'cancel', text: 'Cancel' },
-        { type: 'submit', text: 'Create shortcut', primary: true },
+        { type: 'submit', text: 'Add and insert', primary: true },
       ],
       onSubmit: async api => {
         try {
-          const data = api.getData() as LocalFolderDialogData;
-          const folder = await createLocalFolderLink(data.folderName);
-          const url = localFolderUrl(folder.id);
+          const data = api.getData() as FileFolderReferenceDialogData;
+          const references = await createFileFolderReferences(data.references);
           editor.focus();
           editor.selection.moveToBookmark(bookmark);
           editor.undoManager.transact(() => {
-            if (hasSelection) {
-              editor.execCommand('mceInsertLink', false, { href: url });
-              return;
-            }
             editor.execCommand(
               'mceInsertContent',
               false,
-              `<a href="${escapeHTML(url)}">${escapeHTML(folder.name)}</a>`,
+              references.map(reference => escapeHTML(reference.text)).join('<br>'),
             );
           });
           await updateEntityBody(false);
           api.close();
           editor.notificationManager.open({
-            text: 'Folder shortcut created. Use it once to choose the folder on this computer.',
+            text: `${references.length} reference${references.length === 1 ? '' : 's'} added`,
             type: 'success',
-            timeout: 3500,
+            timeout: 2200,
           });
         } catch (error) {
           editor.notificationManager.open({
-            text: error instanceof Error ? error.message : 'Unable to create folder shortcut',
+            text: error instanceof Error ? error.message : 'Unable to add file/folder references',
             type: 'error',
             timeout: 3500,
           });
@@ -254,7 +248,7 @@ export function registerLinkExtension(editor: Editor): void {
   editor.ui.registry.addMenuButton('insert-link', {
     icon: 'link',
     text: 'Link',
-    tooltip: 'Insert a web, uploaded file/folder, local folder shortcut, or LabCollector link',
+    tooltip: 'Insert a web, uploaded file/folder, or LabCollector link',
     fetch: callback => {
       const items = [{
         type: 'menuitem' as const,
@@ -276,8 +270,8 @@ export function registerLinkExtension(editor: Editor): void {
         });
         items.push({
           type: 'menuitem' as const,
-          text: 'Local folder shortcut…',
-          onAction: openLocalFolderShortcutDialog,
+          text: 'File/folder reference…',
+          onAction: addAndInsertFileFolderReferences,
         });
       }
       if (document.getElementById('labcollectorHelper')) {

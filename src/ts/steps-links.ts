@@ -24,35 +24,31 @@ import { ApiC } from './api';
 import { entity } from './getEntity';
 import { on } from './handlers';
 import {
-  createLocalFolderLink,
-  deleteLocalFolderLink,
-  openLocalFolder,
-} from './local-folder-links';
+  createFileFolderReferences,
+  deleteFileFolderReference,
+} from './file-folder-references';
+import { notify } from './notify';
 
 addAutocompleteToLinkInputs();
 
-on('add-local-folder-link', async (_, event: Event) => {
+on('add-file-folder-references', async (_, event: Event) => {
   event.preventDefault();
-  const input = document.getElementById('localFolderLinkName') as HTMLInputElement;
-  const name = input.value.trim();
-  if (!name) {
+  const input = document.getElementById('fileFolderReferencesInput') as HTMLTextAreaElement;
+  if (!input.value.trim()) {
     input.focus();
     return;
   }
-  await createLocalFolderLink(name);
+  try {
+    await createFileFolderReferences(input.value);
+    input.value = '';
+  } catch (error) {
+    notify.error(error instanceof Error ? error.message : 'Unable to save file/folder references');
+  }
 });
 
-on('open-local-folder-link', (el: HTMLElement) => {
-  openLocalFolder(el.dataset.folderid, 'open');
-});
-
-on('register-local-folder-link', (el: HTMLElement) => {
-  openLocalFolder(el.dataset.folderid, 'register');
-});
-
-on('delete-local-folder-link', async (el: HTMLElement) => {
-  if (!confirm('Delete this local folder shortcut?')) return;
-  await deleteLocalFolderLink(el.dataset.folderid);
+on('delete-file-folder-reference', async (el: HTMLElement) => {
+  if (!confirm('Delete this file/folder reference?')) return;
+  await deleteFileFolderReference(el.dataset.referenceid);
 });
 
 // FINISH: outside if stepsDiv because can be from Todolist panel

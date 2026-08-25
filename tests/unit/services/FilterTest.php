@@ -69,15 +69,6 @@ class FilterTest extends \PHPUnit\Framework\TestCase
         $link = '<a href="/experiments/1" target="_blank" rel="noreferrer noopener">Experiment</a>';
         $this->assertSame($link, Filter::body($link));
 
-        $folderLink = '<a href="elabftw-folder://open/84f0b17b-6d9a-4b52-9429-6fbdf663b424">Microscopy data</a>';
-        $this->assertSame($folderLink, Filter::body($folderLink));
-        $registerFolderLink = '<a href="elabftw-folder://register/84f0b17b-6d9a-4b52-9429-6fbdf663b424">Choose microscopy data</a>';
-        $this->assertSame($registerFolderLink, Filter::body($registerFolderLink));
-        $this->assertSame(
-            '<a>Invalid folder link</a>',
-            Filter::body('<a href="elabftw-folder://open/../../etc">Invalid folder link</a>'),
-        );
-
         $this->assertSame(
             '<a href="/experiments/1">Experiment</a>',
             Filter::body('<a href="/experiments/1" target="_top">Experiment</a>'),

@@ -84,26 +84,23 @@
   </div>
   <hr>
 
-  {# LOCAL FILE AND FOLDER LINKS #}
+  {# ATTACHED FILES AND PLAIN-TEXT FILE/FOLDER REFERENCES #}
   {% set accessKey = App.Request.query.getString('access_key') %}
-  {% set localFolderLinks = Entity.entityData.metadata_decoded.elabftw.local_folder_links|default([]) %}
-  {% set filesFoldersLinksCount = (Entity.entityData.uploads|length) + (localFolderLinks|length) %}
+  {% set fileFolderReferences = Entity.entityData.metadata_decoded.elabftw.file_folder_references|default([]) %}
+  {% set filesFoldersLinksCount = (Entity.entityData.uploads|length) + (fileFolderReferences|length) %}
   <section id='filesFoldersLinksSection'>
     <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='filesFoldersLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Files / folders'|trans }} (<span id='filesFoldersLinksCount'>{{ filesFoldersLinksCount }}</span>)</h4>
     <div id='filesFoldersLinksDiv' class='ml-4'>
-      {% for folder in localFolderLinks %}
-        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center' id='localFolderLink_{{ folder.id }}'>
-          <button type='button' class='btn btn-ghost border-0 mr-auto text-left text-break' data-action='open-local-folder-link' data-folderid='{{ folder.id|e('html_attr') }}' title='{{ 'Open in Finder or Explorer'|trans }}'>
-            <i class='fas fa-folder-open fa-fw mr-2' aria-hidden='true'></i>{{ folder.name }}
-          </button>
-          <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='register-local-folder-link' data-folderid='{{ folder.id|e('html_attr') }}' title='{{ 'Choose or change the folder on this computer'|trans }}' aria-label='{{ 'Choose or change the folder on this computer'|trans }}'>
-            <i class='fas fa-folder-plus fa-fw'></i>
-          </button>
+      {% for reference in fileFolderReferences %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center' id='fileFolderReference_{{ reference.id }}'>
+          <span class='mr-auto text-break'>
+            <i class='fas fa-folder fa-fw mr-2' aria-hidden='true'></i>{{ reference.text }}
+          </span>
           {% if mode == 'edit' %}
-            <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='insert-local-folder-link' data-folderid='{{ folder.id|e('html_attr') }}' data-name='{{ folder.name|e('html_attr') }}' title='{{ 'Insert folder shortcut in main text'|trans }}' aria-label='{{ 'Insert folder shortcut in main text'|trans }}'>
-              <i class='fas fa-link fa-fw'></i>
+            <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='insert-file-folder-reference' data-text='{{ reference.text|e('html_attr') }}' title='{{ 'Insert reference in main text'|trans }}' aria-label='{{ 'Insert reference in main text'|trans }}'>
+              <i class='fas fa-file-import fa-fw'></i>
             </button>
-            <button type='button' class='btn btn-danger-ghost btn-sm' data-action='delete-local-folder-link' data-folderid='{{ folder.id|e('html_attr') }}' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}'>
+            <button type='button' class='btn btn-danger-ghost btn-sm' data-action='delete-file-folder-reference' data-referenceid='{{ reference.id|e('html_attr') }}' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}'>
               <i class='fas fa-trash-alt fa-fw'></i>
             </button>
           {% endif %}
@@ -123,19 +120,22 @@
         </div>
       {% endfor %}
       {% if filesFoldersLinksCount == 0 %}
-        <p class='smallgray mt-2 mb-0'>{{ 'Files selected from a local folder will be listed here individually.'|trans }}</p>
+        <p class='smallgray mt-2 mb-0'>{{ 'Uploaded files and file/folder references will be listed here.'|trans }}</p>
       {% endif %}
       {% if mode == 'edit' %}
-        <form class='input-group mt-3' id='addLocalFolderLinkForm'>
-          <div class='input-group-prepend'>
-            <span class='input-group-text'><i class='fas fa-folder-plus fa-fw'></i></span>
-          </div>
-          <input type='text' id='localFolderLinkName' class='form-control' maxlength='200' placeholder='{{ 'Local folder shortcut name'|trans }}' aria-label='{{ 'Local folder shortcut name'|trans }}' required>
-          <div class='input-group-append'>
-            <button type='submit' class='btn btn-primary' data-action='add-local-folder-link'>{{ 'Add folder shortcut'|trans }}</button>
+        <form class='mt-3' id='addFileFolderReferencesForm'>
+          <label for='fileFolderReferencesInput' class='sr-only'>{{ 'File or folder references'|trans }}</label>
+          <div class='input-group'>
+            <div class='input-group-prepend'>
+              <span class='input-group-text'><i class='fas fa-folder-plus fa-fw'></i></span>
+            </div>
+            <textarea id='fileFolderReferencesInput' class='form-control' rows='2' maxlength='100099' placeholder='{{ 'Paste one file or folder reference per line'|trans }}' aria-label='{{ 'File or folder references'|trans }}' required></textarea>
+            <div class='input-group-append'>
+              <button type='submit' class='btn btn-primary' data-action='add-file-folder-references'>{{ 'Add reference(s)'|trans }}</button>
+            </div>
           </div>
         </form>
-        <p class='smallgray mt-1 mb-0'>{{ 'The first time you open this shortcut on a computer, the optional eLabFTW Folder Opener asks you to choose its local folder.'|trans }}</p>
+        <p class='smallgray mt-1 mb-0'>{{ 'References are stored as plain text and do not open files or folders. Use the link button beside an entry to insert its text into the main text.'|trans }}</p>
       {% endif %}
     </div>
   </section>

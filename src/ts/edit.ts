@@ -21,7 +21,6 @@ import { clearLocalStorage } from './localStorage';
 import { entity } from './getEntity';
 import { on } from './handlers';
 import { buildLabCollectorUrl } from './labcollector-link';
-import { localFolderUrl } from './local-folder-links';
 
 // remove exclusive edit mode when leaving the page
 window.onbeforeunload = function() {
@@ -246,19 +245,15 @@ on('insert-upload-link', (el: HTMLElement) => {
   updateEntityBody();
 });
 
-on('insert-local-folder-link', (el: HTMLElement) => {
-  const id = el.dataset.folderid;
-  const name = el.dataset.name ?? 'Local folder';
-  if (!id) return;
-  const url = localFolderUrl(id);
+on('insert-file-folder-reference', (el: HTMLElement) => {
+  const text = el.dataset.text?.trim();
+  if (!text) return;
   if (editor.type === 'md') {
-    const markdownLabel = name.replace(/([\\[\]])/g, '\\$1');
-    editor.setContent(`[${markdownLabel}](${url})`);
+    editor.setContent(text);
   } else {
-    const link = document.createElement('a');
-    link.href = url;
-    link.textContent = name;
-    editor.setContent(link.outerHTML);
+    const plainText = document.createElement('span');
+    plainText.textContent = text;
+    editor.setContent(plainText.innerHTML);
   }
   updateEntityBody();
 });
