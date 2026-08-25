@@ -142,6 +142,9 @@ on('toggle-create-modal', async (el: HTMLElement) => {
   // allow data-type to override selected type (for instance on dashboard)
   const entityType = el.dataset.type ? el.dataset.type as EntityType : getEntityTypeFromPage(window.location);
   setTypeRadio(entityType);
+  if (entityType === EntityType.Experiment || entityType === EntityType.Item) {
+    preselectCreateFolderFromContext();
+  }
   if (el.dataset.getCompoundIdFrom) {
     const compoundId = (document.getElementById(el.dataset.getCompoundIdFrom) as HTMLElement).dataset.compoundId;
     getInput('createNewCompoundInput').value = compoundId;
@@ -270,6 +273,18 @@ const createNewFolderScopeButtons = document.querySelectorAll<HTMLButtonElement>
 
 type CreateNewFolderScope = 'mine' | 'bookmarked' | 'all';
 
+function syncCreateFolderBookmarks(): void {
+  if (!createNewFolderSelect) return;
+  const favoriteIds = new Set(
+    (document.getElementById('experimentsFoldersSidebar')?.dataset.favoriteFolderIds ?? '')
+      .split(',')
+      .filter(Boolean),
+  );
+  Array.from(createNewFolderSelect.options).slice(1).forEach(option => {
+    option.dataset.folderBookmarked = String(favoriteIds.has(option.value));
+  });
+}
+
 function applyCreateNewFolderScope(scope: CreateNewFolderScope): void {
   if (!createNewFolderSelect) return;
   const currentUserId = createNewFolderSelect.dataset.currentUserId ?? '';
@@ -296,6 +311,34 @@ function applyCreateNewFolderScope(scope: CreateNewFolderScope): void {
   });
 }
 
+function getContextFolderId(): string | null {
+  const query = new URLSearchParams(window.location.search);
+  if (query.has('folder')) {
+    const folderId = query.get('folder') ?? '';
+    return folderId === '0' ? '' : folderId;
+  }
+  const currentEditFolder = document.getElementById('folderSelect') as HTMLSelectElement | null;
+  if (currentEditFolder) return currentEditFolder.value;
+  const sidebarFolderId = document.getElementById('experimentsFoldersSidebar')?.dataset.currentFolderId;
+  if (sidebarFolderId !== undefined) return sidebarFolderId === '0' ? '' : sidebarFolderId;
+  return null;
+}
+
+function preselectCreateFolderFromContext(): void {
+  if (!createNewFolderSelect) return;
+  const folderId = getContextFolderId();
+  if (folderId === null) return;
+  const option = Array.from(createNewFolderSelect.options).find(candidate => candidate.value === folderId);
+  if (!option) return;
+
+  createNewFolderSelect.value = folderId;
+  let scope: CreateNewFolderScope = 'mine';
+  if (folderId && option.dataset.folderOwnerId !== createNewFolderSelect.dataset.currentUserId) {
+    scope = option.dataset.folderBookmarked === 'true' ? 'bookmarked' : 'all';
+  }
+  applyCreateNewFolderScope(scope);
+}
+
 createNewFolderScopeButtons.forEach(button => {
   button.addEventListener('click', () => {
     const scope = button.dataset.createFolderScope;
@@ -306,6 +349,7 @@ createNewFolderScopeButtons.forEach(button => {
 });
 
 document.addEventListener('elabftw:folders-refreshed', () => {
+  syncCreateFolderBookmarks();
   const activeButton = document.querySelector<HTMLButtonElement>('[data-create-folder-scope].active');
   const scope = activeButton?.dataset.createFolderScope;
   applyCreateNewFolderScope(scope === 'bookmarked' || scope === 'all' ? scope : 'mine');

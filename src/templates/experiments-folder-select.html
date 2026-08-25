@@ -1,16 +1,40 @@
 {# Shared folder selector for experiment and resource edit pages. #}
 {% if Entity.entityType.value in ['experiments', 'items'] and experimentsFoldersArr is defined %}
-<div class='d-flex mb-2 align-items-center'>
+<div class='d-flex mb-2 align-items-start'>
   <label for='folderSelect' class='col-form-label mr-3 edit-mode-label justify-content-start d-sm-block d-none'>
     <i class='fas fa-folder fa-fw mr-1'></i>{{ 'Folder'|trans }}
   </label>
-  <select id='folderSelect' class='form-control' data-trigger='change' data-model='{{ Entity.entityType.value }}/{{ Entity.entityData.id }}' data-target='folder_id' aria-label='{{ 'Folder'|trans }}'>
-    <option value=''>{{ 'No folder (Unfiled)'|trans }}</option>
-    {% for folder in experimentsFoldersArr %}
-      <option value='{{ folder.id }}' {{ Entity.entityData.folder_id == folder.id ? 'selected' : '' }}>
-        {{ folder.full_path }}
-      </option>
-    {% endfor %}
-  </select>
+  <div class='flex-grow-1'>
+    <div class='btn-group btn-group-sm d-flex mb-2' role='tablist' aria-label='{{ 'Folder visibility'|trans }}'>
+      <button type='button' class='btn btn-outline-secondary active flex-fill' data-edit-folder-scope='mine' role='tab' aria-selected='true'>
+        <i class='fas fa-user fa-fw mr-1'></i>{{ 'My folders'|trans }}
+      </button>
+      <button type='button' class='btn btn-outline-secondary flex-fill' data-edit-folder-scope='bookmarked' role='tab' aria-selected='false'>
+        <i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked'|trans }}
+      </button>
+      <button type='button' class='btn btn-outline-secondary flex-fill' data-edit-folder-scope='all' role='tab' aria-selected='false'>
+        <i class='fas fa-users fa-fw mr-1'></i>{{ 'All folders'|trans }}
+      </button>
+    </div>
+    <select
+      id='folderSelect'
+      class='form-control'
+      data-current-user-id='{{ App.Users.userData.userid }}'
+      data-trigger='change'
+      data-model='{{ Entity.entityType.value }}/{{ Entity.entityData.id }}'
+      data-target='folder_id'
+      aria-label='{{ 'Folder'|trans }}'
+    >
+      <option value=''>{{ 'No folder (Unfiled)'|trans }}</option>
+      {% for folder in experimentsFoldersArr %}
+        <option
+          value='{{ folder.id }}'
+          data-folder-owner-id='{{ folder.userid }}'
+          data-folder-bookmarked='{{ folder.id in favoriteFolderIds|default([]) ? 'true' : 'false' }}'
+          {{ Entity.entityData.folder_id == folder.id ? 'selected' : '' }}
+        >{{ folder.full_path }}</option>
+      {% endfor %}
+    </select>
+  </div>
 </div>
 {% endif %}

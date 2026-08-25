@@ -33,6 +33,66 @@ editor.init('edit');
 // initialize the file uploader
 (new Uploader()).init();
 
+type EditFolderScope = 'mine' | 'bookmarked' | 'all';
+
+const editFolderSelect = document.getElementById('folderSelect') as HTMLSelectElement | null;
+const editFolderScopeButtons = document.querySelectorAll<HTMLButtonElement>('[data-edit-folder-scope]');
+let activeEditFolderScope: EditFolderScope = 'mine';
+
+function syncEditFolderBookmarks(): void {
+  if (!editFolderSelect) return;
+  const favoriteIds = new Set(
+    (document.getElementById('experimentsFoldersSidebar')?.dataset.favoriteFolderIds ?? '')
+      .split(',')
+      .filter(Boolean),
+  );
+  Array.from(editFolderSelect.options).slice(1).forEach(option => {
+    option.dataset.folderBookmarked = String(favoriteIds.has(option.value));
+  });
+}
+
+function applyEditFolderScope(scope: EditFolderScope): void {
+  if (!editFolderSelect) return;
+  activeEditFolderScope = scope;
+  const currentUserId = editFolderSelect.dataset.currentUserId ?? '';
+  Array.from(editFolderSelect.options).forEach((option, index) => {
+    if (index === 0) {
+      option.hidden = false;
+      option.disabled = false;
+      return;
+    }
+    // Always retain the current assignment in the list. Changing which
+    // folders are displayed must never silently move the entity to Unfiled.
+    const isVisible = option.selected
+      || scope === 'all'
+      || (scope === 'mine' && option.dataset.folderOwnerId === currentUserId)
+      || (scope === 'bookmarked' && option.dataset.folderBookmarked === 'true');
+    option.hidden = !isVisible;
+    option.disabled = !isVisible;
+  });
+  editFolderScopeButtons.forEach(button => {
+    const isActive = button.dataset.editFolderScope === scope;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+}
+
+editFolderScopeButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const scope = button.dataset.editFolderScope;
+    if (scope === 'mine' || scope === 'bookmarked' || scope === 'all') {
+      applyEditFolderScope(scope);
+    }
+  });
+});
+
+editFolderSelect?.addEventListener('change', () => applyEditFolderScope(activeEditFolderScope));
+document.addEventListener('elabftw:folders-refreshed', () => {
+  syncEditFolderBookmarks();
+  applyEditFolderScope(activeEditFolderScope);
+});
+applyEditFolderScope('mine');
+
 ////////////////
 // DATA RECOVERY
 
