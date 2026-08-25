@@ -205,43 +205,17 @@ export function registerTableToolsExtension(editor: Editor): void {
       if (!range) return;
       writeRangeToClipboardEvent(event, range);
     };
-    const tableTabHandler = (event: KeyboardEvent): void => {
-      if (event.key !== 'Tab'
-        || event.ctrlKey
-        || event.metaKey
-        || event.altKey
-        || event.isComposing
-        || event.defaultPrevented
-      ) {
-        return;
-      }
-
-      // A contenteditable iframe can target either the active cell or its
-      // editable body. Prefer the native target and fall back to TinyMCE's
-      // range so Shift+Tab still finds a table after it has been wrapped.
-      const target = event.target as Node | null;
-      const table = tableIndentation.trackSelectedTable(target)
-        ?? tableIndentation.trackSelectedTable();
-      if (!table) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      if (event.shiftKey) tableIndentation.outdentSelectedTable();
-      else tableIndentation.indentSelectedTable();
-    };
-
     editorDocument.addEventListener('mousedown', mixedSelectionStartHandler, true);
     editorDocument.addEventListener('mousemove', mixedSelectionMoveHandler, true);
     editorDocument.addEventListener('mouseup', mixedSelectionEndHandler, true);
     editorDocument.addEventListener('copy', richSelectionCopyHandler, true);
-    editorDocument.addEventListener('keydown', tableTabHandler, true);
+    // Leave Tab/Shift+Tab to TinyMCE so they navigate table cells. Table
+    // indentation is intentionally available only through the toolbar buttons.
     editor.on('remove', () => {
       editorDocument.removeEventListener('mousedown', mixedSelectionStartHandler, true);
       editorDocument.removeEventListener('mousemove', mixedSelectionMoveHandler, true);
       editorDocument.removeEventListener('mouseup', mixedSelectionEndHandler, true);
       editorDocument.removeEventListener('copy', richSelectionCopyHandler, true);
-      editorDocument.removeEventListener('keydown', tableTabHandler, true);
     });
   });
 
