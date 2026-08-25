@@ -4,6 +4,7 @@ import TableIndentation from '../TableIndentation.class';
 import {
   copiedContentAsPlainText,
   prepareCopiedContent,
+  writeRangeToClipboardEvent,
   writeRichClipboard,
 } from '../ClipboardContent';
 import { EDITOR_COLLAPSED_ATTRIBUTE, installTableCollapse } from '../TableCollapse';
@@ -11,6 +12,8 @@ import { EDITOR_COLLAPSED_ATTRIBUTE, installTableCollapse } from '../TableCollap
 export function registerTableToolsExtension(editor: Editor): void {
   const tableIndentation = new TableIndentation(editor);
   let lastSelectedTable: HTMLTableElement | null = null;
+  let lastMixedSelectionRange: Range | null = null;
+  let copyFallbackInProgress = false;
 
   const selectedTable = (node?: Node | null): HTMLTableElement | null => {
     const element = node?.nodeType === 1
@@ -42,42 +45,63 @@ export function registerTableToolsExtension(editor: Editor): void {
     existing.remove();
   };
 
+  const copyContainer = async(container: HTMLElement, successMessage: string): Promise<void> => {
+    prepareCopiedContent(container);
+    const html = container.innerHTML;
+    const plainText = copiedContentAsPlainText(container);
+
+    if (await writeRichClipboard(html, plainText)) {
+      editor.notificationManager.open({ text: successMessage, type: 'success', timeout: 1800 });
+      return;
+    }
+
+    // Rich clipboard access can be unavailable inside an editor iframe.
+    // Copy the cleaned clone with the synchronous native clipboard command.
+    copyFallbackInProgress = true;
+    container.contentEditable = 'true';
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;';
+    editor.getBody().append(container);
+    const range = editor.getDoc().createRange();
+    range.selectNodeContents(container);
+    const selection = editor.getDoc().getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    const copied = editor.getDoc().execCommand('copy');
+    container.remove();
+    copyFallbackInProgress = false;
+    editor.nodeChanged();
+    editor.notificationManager.open({
+      text: copied ? successMessage : 'Unable to copy content',
+      type: copied ? 'success' : 'error',
+      timeout: 2400,
+    });
+  };
+
   const copyWholeTable = async(): Promise<void> => {
     const table = selectedTable();
     if (!table) return;
     const container = editor.getDoc().createElement('div');
     const clone = table.cloneNode(true) as HTMLTableElement;
     container.append(clone);
-    prepareCopiedContent(container);
-    const html = clone.outerHTML;
-    const plainText = copiedContentAsPlainText(container);
+    await copyContainer(container, 'Table copied');
+  };
 
-    if (await writeRichClipboard(html, plainText)) {
+  const copySelectedContent = async(): Promise<void> => {
+    const selection = editor.getDoc().getSelection();
+    const range = selection && selection.rangeCount > 0 && !selection.isCollapsed
+      ? selection.getRangeAt(0).cloneRange()
+      : lastMixedSelectionRange;
+    if (!range || range.collapsed) {
       editor.notificationManager.open({
-        text: 'Table copied',
-        type: 'success',
-        timeout: 1800,
+        text: 'Select text and/or tables first',
+        type: 'info',
+        timeout: 2200,
       });
-    } else {
-      // Rich clipboard access can be unavailable inside an editor iframe.
-      // Copy a cleaned clone so row/column coordinate labels stay excluded.
-      container.contentEditable = 'true';
-      container.style.cssText = 'position:fixed;left:-9999px;top:0;';
-      editor.getBody().append(container);
-      const range = editor.getDoc().createRange();
-      range.selectNodeContents(container);
-      const selection = editor.getDoc().getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-      const copied = editor.getDoc().execCommand('copy');
-      container.remove();
-      editor.nodeChanged();
-      editor.notificationManager.open({
-        text: copied ? 'Table copied' : 'Unable to copy table',
-        type: copied ? 'success' : 'info',
-        timeout: 2400,
-      });
+      return;
     }
+    const container = editor.getDoc().createElement('div');
+    container.append(range.cloneContents());
+    await copyContainer(container, 'Selected content copied with formatting');
   };
 
   editor.on('NodeChange', event => {
@@ -91,7 +115,6 @@ export function registerTableToolsExtension(editor: Editor): void {
     type CaretPoint = { node: Node; offset: number };
     let mixedSelectionAnchor: CaretPoint | null = null;
     let selectingAcrossTable = false;
-    let lastMixedSelectionRange: Range | null = null;
 
     const caretPointFromCoordinates = (x: number, y: number): CaretPoint | null => {
       const documentWithCaretApi = editorDocument as Document & {
@@ -173,19 +196,13 @@ export function registerTableToolsExtension(editor: Editor): void {
       selectingAcrossTable = false;
     };
     const richSelectionCopyHandler = (event: ClipboardEvent): void => {
+      if (copyFallbackInProgress) return;
       const selection = editorDocument.getSelection();
-      const range = lastMixedSelectionRange
-        ?? (selection && selection.rangeCount > 0 && !selection.isCollapsed
-          ? selection.getRangeAt(0)
-          : null);
-      if (!event.clipboardData || !range || range.collapsed) return;
-      const container = editorDocument.createElement('div');
-      container.append(range.cloneContents());
-      if (!container.querySelector('table')) return;
-      prepareCopiedContent(container);
-      event.preventDefault();
-      event.clipboardData.setData('text/html', container.innerHTML);
-      event.clipboardData.setData('text/plain', copiedContentAsPlainText(container));
+      const range = selection && selection.rangeCount > 0 && !selection.isCollapsed
+        ? selection.getRangeAt(0)
+        : lastMixedSelectionRange;
+      if (!range) return;
+      writeRangeToClipboardEvent(event, range);
     };
     const tableTabHandler = (event: KeyboardEvent): void => {
       if (event.key !== 'Tab'
@@ -252,6 +269,11 @@ export function registerTableToolsExtension(editor: Editor): void {
       editor.on('NodeChange', update);
       return () => editor.off('NodeChange', update);
     },
+  });
+  editor.ui.registry.addButton('copy-rich-selection', {
+    icon: 'copy',
+    tooltip: 'Copy selected text and tables with formatting',
+    onAction: () => void copySelectedContent(),
   });
   editor.ui.registry.addContextToolbar('elabftw-table-actions', {
     predicate: node => Boolean((node as Element).closest?.('table')),

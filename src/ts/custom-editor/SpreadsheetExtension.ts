@@ -20,6 +20,40 @@ interface PdfTableDialogData {
   columns: string;
 }
 
+/**
+ * Return true only when the rich clipboard payload represents one table by
+ * itself. Mixed selections (paragraph + table + paragraph, for example) must
+ * be left to TinyMCE so all selected content and formatting are retained.
+ */
+function isStandaloneClipboardTable(html: string): boolean {
+  if (!/<table[\s>]/i.test(html)) return false;
+  const clipboardDocument = new DOMParser().parseFromString(html, 'text/html');
+  const body = clipboardDocument.body;
+  const tables = body.querySelectorAll('table');
+  if (tables.length !== 1) return false;
+
+  const table = tables[0];
+  let current: Element = table;
+  while (current.parentElement && current.parentElement !== body) {
+    const parent = current.parentElement;
+    const hasMeaningfulSibling = Array.from(parent.childNodes).some(node => {
+      if (node === current) return false;
+      if (node.nodeType === Node.TEXT_NODE) return Boolean(node.textContent?.trim());
+      return node.nodeType === Node.ELEMENT_NODE
+        && !['META', 'STYLE'].includes((node as Element).tagName);
+    });
+    if (hasMeaningfulSibling) return false;
+    current = parent;
+  }
+
+  return !Array.from(body.childNodes).some(node => {
+    if (node === current) return false;
+    if (node.nodeType === Node.TEXT_NODE) return Boolean(node.textContent?.trim());
+    return node.nodeType === Node.ELEMENT_NODE
+      && !['META', 'STYLE'].includes((node as Element).tagName);
+  });
+}
+
 export function registerSpreadsheetExtension(editor: Editor): void {
   const openInlineSpreadsheet = (
     initial: SpreadsheetData,
@@ -97,6 +131,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       const plainText = clipboard.getData('text/plain');
       const normalizedPlainText = normalizePdfPrivateUseText(plainText);
       const richClipboardHtml = clipboard.getData('text/html');
+      // A mixed rich copy belongs to TinyMCE. Converting it here would retain
+      // only its first table and silently discard the surrounding content.
+      const containsHtmlTable = /<table[\s>]/i.test(richClipboardHtml);
+      if (containsHtmlTable && !isStandaloneClipboardTable(richClipboardHtml)) return;
+
       const spreadsheet = spreadsheetFromClipboard(richClipboardHtml, normalizedPlainText);
       if (spreadsheet) {
         event.preventDefault();

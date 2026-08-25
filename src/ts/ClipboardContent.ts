@@ -1,5 +1,7 @@
 /** Helpers for copying rich editor content without spreadsheet coordinate labels. */
 
+import { TABLE_COLLAPSE_BUTTON_CLASS } from './TableCollapse';
+
 const BLOCK_ELEMENTS = new Set([
   'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'DIV', 'DL', 'FIELDSET',
   'FIGCAPTION', 'FIGURE', 'FOOTER', 'FORM', 'H1', 'H2', 'H3', 'H4',
@@ -9,6 +11,7 @@ const BLOCK_ELEMENTS = new Set([
 
 /** Convert spreadsheet display tables into normal clipboard tables. */
 export function prepareCopiedContent(root: HTMLElement): void {
+  root.querySelectorAll(`.${TABLE_COLLAPSE_BUTTON_CLASS}`).forEach(element => element.remove());
   root.querySelectorAll<HTMLTableElement>('table').forEach(table => {
     const coordinates = table.querySelectorAll('.spreadsheet-coordinate');
     if (coordinates.length > 0) {
@@ -31,6 +34,40 @@ export function prepareCopiedContent(root: HTMLElement): void {
   root.querySelectorAll('script, style').forEach(element => element.remove());
   root.removeAttribute('contenteditable');
   root.querySelectorAll('[contenteditable]').forEach(element => element.removeAttribute('contenteditable'));
+}
+
+/** Put a rich DOM range on a native copy event. */
+export function writeRangeToClipboardEvent(event: ClipboardEvent, range: Range): boolean {
+  if (!event.clipboardData || range.collapsed) return false;
+  const container = range.startContainer.ownerDocument?.createElement('div')
+    ?? document.createElement('div');
+  container.append(range.cloneContents());
+  if (!container.querySelector('table')) return false;
+  prepareCopiedContent(container);
+  event.preventDefault();
+  event.clipboardData.setData('text/html', container.innerHTML);
+  event.clipboardData.setData('text/plain', copiedContentAsPlainText(container));
+  return true;
+}
+
+/** Clean mixed text/table copies made from a rendered entity body. */
+export function installRichContentCopy(root: HTMLElement): () => void {
+  const ownerDocument = root.ownerDocument;
+  const onCopy = (event: ClipboardEvent): void => {
+    const selection = ownerDocument.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+    const range = selection.getRangeAt(0);
+    const start = range.startContainer.nodeType === Node.ELEMENT_NODE
+      ? range.startContainer as Element
+      : range.startContainer.parentElement;
+    const end = range.endContainer.nodeType === Node.ELEMENT_NODE
+      ? range.endContainer as Element
+      : range.endContainer.parentElement;
+    if ((!start || !root.contains(start)) && (!end || !root.contains(end))) return;
+    writeRangeToClipboardEvent(event, range);
+  };
+  ownerDocument.addEventListener('copy', onCopy, true);
+  return () => ownerDocument.removeEventListener('copy', onCopy, true);
 }
 
 function nodeAsPlainText(node: Node): string {
