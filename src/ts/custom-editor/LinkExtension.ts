@@ -4,6 +4,7 @@ import { ApiC } from '../api';
 import { entity } from '../getEntity';
 import { Model } from '../interfaces';
 import { buildLabCollectorUrl } from '../labcollector-link';
+import { createLocalFolderLink, localFolderUrl } from '../local-folder-links';
 import {
   escapeHTML,
   getNewIdFromPostRequest,
@@ -14,6 +15,10 @@ import {
 interface LabCollectorDialogData {
   labcollectorType: string;
   labcollectorId: string;
+}
+
+interface LocalFolderDialogData {
+  folderName: string;
 }
 
 interface UploadedLocalFile {
@@ -114,6 +119,62 @@ export function registerLinkExtension(editor: Editor): void {
     input.click();
   };
 
+  const openLocalFolderShortcutDialog = (): void => {
+    const bookmark = editor.selection.getBookmark(2, true);
+    const hasSelection = !editor.selection.getRng().collapsed;
+    const selectedText = editor.selection.getContent({ format: 'text' }).trim();
+    editor.windowManager.open({
+      title: 'Insert local folder shortcut',
+      size: 'normal',
+      body: {
+        type: 'panel',
+        items: [{
+          type: 'input',
+          name: 'folderName',
+          label: 'Shortcut name',
+        }],
+      },
+      initialData: { folderName: selectedText },
+      buttons: [
+        { type: 'cancel', text: 'Cancel' },
+        { type: 'submit', text: 'Create shortcut', primary: true },
+      ],
+      onSubmit: async api => {
+        try {
+          const data = api.getData() as LocalFolderDialogData;
+          const folder = await createLocalFolderLink(data.folderName);
+          const url = localFolderUrl(folder.id);
+          editor.focus();
+          editor.selection.moveToBookmark(bookmark);
+          editor.undoManager.transact(() => {
+            if (hasSelection) {
+              editor.execCommand('mceInsertLink', false, { href: url });
+              return;
+            }
+            editor.execCommand(
+              'mceInsertContent',
+              false,
+              `<a href="${escapeHTML(url)}">${escapeHTML(folder.name)}</a>`,
+            );
+          });
+          await updateEntityBody(false);
+          api.close();
+          editor.notificationManager.open({
+            text: 'Folder shortcut created. Use it once to choose the folder on this computer.',
+            type: 'success',
+            timeout: 3500,
+          });
+        } catch (error) {
+          editor.notificationManager.open({
+            text: error instanceof Error ? error.message : 'Unable to create folder shortcut',
+            type: 'error',
+            timeout: 3500,
+          });
+        }
+      },
+    });
+  };
+
   const openLabCollectorLinkDialog = (): void => {
     const helperType = document.getElementById('labcollectorType') as HTMLSelectElement | null;
     const helperId = document.getElementById('labcollectorId') as HTMLInputElement | null;
@@ -193,7 +254,7 @@ export function registerLinkExtension(editor: Editor): void {
   editor.ui.registry.addMenuButton('insert-link', {
     icon: 'link',
     text: 'Link',
-    tooltip: 'Insert a web, local file/folder, or LabCollector link',
+    tooltip: 'Insert a web, uploaded file/folder, local folder shortcut, or LabCollector link',
     fetch: callback => {
       const items = [{
         type: 'menuitem' as const,
@@ -205,13 +266,18 @@ export function registerLinkExtension(editor: Editor): void {
       if (document.getElementById('filesDiv')) {
         items.push({
           type: 'menuitem' as const,
-          text: 'Local file…',
+          text: 'Upload and link file…',
           onAction: () => chooseAndLinkLocalFiles(false),
         });
         items.push({
           type: 'menuitem' as const,
-          text: 'Local folder…',
+          text: 'Upload and link folder…',
           onAction: () => chooseAndLinkLocalFiles(true),
+        });
+        items.push({
+          type: 'menuitem' as const,
+          text: 'Local folder shortcut…',
+          onAction: openLocalFolderShortcutDialog,
         });
       }
       if (document.getElementById('labcollectorHelper')) {

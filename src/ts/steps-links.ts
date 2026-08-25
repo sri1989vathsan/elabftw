@@ -23,8 +23,37 @@ import { Action, Target } from './interfaces';
 import { ApiC } from './api';
 import { entity } from './getEntity';
 import { on } from './handlers';
+import {
+  createLocalFolderLink,
+  deleteLocalFolderLink,
+  openLocalFolder,
+} from './local-folder-links';
 
 addAutocompleteToLinkInputs();
+
+on('add-local-folder-link', async (_, event: Event) => {
+  event.preventDefault();
+  const input = document.getElementById('localFolderLinkName') as HTMLInputElement;
+  const name = input.value.trim();
+  if (!name) {
+    input.focus();
+    return;
+  }
+  await createLocalFolderLink(name);
+});
+
+on('open-local-folder-link', (el: HTMLElement) => {
+  openLocalFolder(el.dataset.folderid, 'open');
+});
+
+on('register-local-folder-link', (el: HTMLElement) => {
+  openLocalFolder(el.dataset.folderid, 'register');
+});
+
+on('delete-local-folder-link', async (el: HTMLElement) => {
+  if (!confirm('Delete this local folder shortcut?')) return;
+  await deleteLocalFolderLink(el.dataset.folderid);
+});
 
 // FINISH: outside if stepsDiv because can be from Todolist panel
 $(document).on('click', 'input[type=checkbox].stepbox', function(e) {

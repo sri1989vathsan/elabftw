@@ -208,6 +208,11 @@ final class Filter
         // keep stable anchors generated for linkable Table of Contents entries
         $config->set('Attr.EnableID', true);
         $config->set('HTML.TargetBlank', true);
+        // Local folder shortcuts contain an opaque identifier only. The
+        // optional workstation helper resolves it to a user-approved path.
+        $allowedSchemes = $config->get('URI.AllowedSchemes');
+        $allowedSchemes['elabftw-folder'] = true;
+        $config->set('URI.AllowedSchemes', $allowedSchemes);
         // configure the cache for htmlpurifier
         $tmpDir = FsTools::getCacheFolder('purifier');
         $config->set('Cache.SerializerPath', $tmpDir);

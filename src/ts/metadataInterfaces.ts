@@ -50,6 +50,12 @@ export interface ExtraFieldProperties {
 
 export interface MetadataElabftw {
   extra_fields_groups?: Array<ExtraFieldsGroup>,
+  local_folder_links?: Array<LocalFolderLink>,
+}
+
+export interface LocalFolderLink {
+  id: string,
+  name: string,
 }
 
 export interface ExtraFieldsGroup {
