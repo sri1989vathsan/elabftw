@@ -513,8 +513,21 @@ document.addEventListener('DOMContentLoaded', () => {
   on('edit-folder', (el: HTMLElement, event: Event) => {
     event.stopPropagation();
     event.preventDefault();
-    (document.getElementById('editExperimentFolderId') as HTMLInputElement).value = el.dataset.id ?? '';
+    const folderId = el.dataset.id ?? '';
+    const parentSelect = document.getElementById('editExperimentFolderParent') as HTMLSelectElement;
+    const descendantIds = new Set<string>();
+    document.querySelectorAll<HTMLElement>(`.folder-node[data-folder-id="${folderId}"] .folder-node[data-folder-id]`).forEach(node => {
+      if (node.dataset.folderId) descendantIds.add(node.dataset.folderId);
+    });
+    Array.from(parentSelect.options).forEach(option => {
+      const invalidParent = option.value === folderId || descendantIds.has(option.value);
+      option.hidden = invalidParent;
+      option.disabled = invalidParent;
+    });
+
+    (document.getElementById('editExperimentFolderId') as HTMLInputElement).value = folderId;
     (document.getElementById('editExperimentFolderName') as HTMLInputElement).value = el.dataset.name ?? '';
+    parentSelect.value = el.dataset.parentId ?? '';
     (document.getElementById('editExperimentFolderDescription') as HTMLTextAreaElement).value = el.dataset.description ?? '';
     $('#editExperimentFolderModal').modal('show');
   });
@@ -523,11 +536,13 @@ document.addEventListener('DOMContentLoaded', () => {
     event.preventDefault();
     const folderId = (document.getElementById('editExperimentFolderId') as HTMLInputElement).value;
     const nameInput = document.getElementById('editExperimentFolderName') as HTMLInputElement;
+    const parentSelect = document.getElementById('editExperimentFolderParent') as HTMLSelectElement;
     const descriptionInput = document.getElementById('editExperimentFolderDescription') as HTMLTextAreaElement;
     if (!folderId || !nameInput.reportValidity()) return;
 
     ApiC.patch(`experiments_folders/${folderId}`, {
       name: nameInput.value.trim(),
+      parent_id: parentSelect.value ? parseInt(parentSelect.value, 10) : null,
       description: descriptionInput.value.trim(),
     }).then(() => {
       $('#editExperimentFolderModal').modal('hide');

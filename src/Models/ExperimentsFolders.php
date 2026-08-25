@@ -197,7 +197,7 @@ final class ExperimentsFolders extends AbstractRest
         $this->canWriteOrExplode();
 
         // Handle moving to a different parent
-        if (isset($params['parent_id'])) {
+        if (array_key_exists('parent_id', $params)) {
             $this->moveToParent(Filter::intOrNull($params['parent_id']));
         }
 
@@ -499,9 +499,44 @@ final class ExperimentsFolders extends AbstractRest
 
     private function moveToParent(?int $parentId): bool
     {
-        // Prevent moving a folder into itself or its own children
-        if ($parentId !== null && $parentId === $this->id) {
-            throw new ImproperActionException(_('Cannot move a folder into itself!'));
+        if ($parentId !== null) {
+            // Resolve every descendant of this folder. Selecting any of them as
+            // the new parent would create a cycle and break recursive folder reads.
+            $sql = 'WITH RECURSIVE descendants AS (
+                SELECT id
+                FROM experiments_folders
+                WHERE id = :folder_id AND team = :folder_team
+
+                UNION ALL
+
+                SELECT child.id
+                FROM experiments_folders AS child
+                INNER JOIN descendants AS parent ON child.parent_id = parent.id
+                WHERE child.team = :child_team
+            )
+            SELECT EXISTS(SELECT 1 FROM descendants WHERE id = :parent_id)';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':folder_id', $this->id, PDO::PARAM_INT);
+            $req->bindValue(':folder_team', $this->requester->userData['team'], PDO::PARAM_INT);
+            $req->bindValue(':child_team', $this->requester->userData['team'], PDO::PARAM_INT);
+            $req->bindValue(':parent_id', $parentId, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            if ((bool) $req->fetchColumn()) {
+                throw new ImproperActionException(_('Cannot move a folder inside itself or one of its subfolders!'));
+            }
+
+            // A parent id from another team (or a deleted/non-existent folder)
+            // must never be accepted even if foreign-key constraints are absent.
+            $sql = 'SELECT EXISTS(
+                SELECT 1 FROM experiments_folders WHERE id = :parent_id AND team = :team
+            )';
+            $req = $this->Db->prepare($sql);
+            $req->bindValue(':parent_id', $parentId, PDO::PARAM_INT);
+            $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
+            $this->Db->execute($req);
+            if (!(bool) $req->fetchColumn()) {
+                throw new ImproperActionException(_('The selected parent folder does not exist in the current team.'));
+            }
         }
         $sql = 'UPDATE experiments_folders SET parent_id = :parent_id WHERE id = :id';
         $req = $this->Db->prepare($sql);
