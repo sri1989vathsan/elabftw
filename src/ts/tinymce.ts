@@ -311,10 +311,17 @@ export function getTinymceBaseConfig(page: string): object {
       args.content = args.content.replaceAll('bgcolor="', 'style="background-color:');
       const pasteContainer = document.createElement('div');
       pasteContainer.innerHTML = args.content;
+      const isElabftwRichSelection = Boolean(
+        pasteContainer.querySelector('[data-elabftw-rich-selection]'),
+      );
       pasteContainer.querySelectorAll('[data-elabftw-rich-selection]').forEach(marker => {
         marker.replaceWith(...Array.from(marker.childNodes));
       });
       pasteContainer.querySelectorAll<HTMLTableElement>('table').forEach(table => {
+        // Internal rich copies already contain the complete safe table style,
+        // spreadsheet data and display preset. Do not normalize them into a
+        // generic pasted table or discard their explicit dimensions.
+        if (isElabftwRichSelection) return;
         table.removeAttribute('width');
         table.style.removeProperty('width');
         table.classList.add('elabftw-pasted-table');

@@ -1,4 +1,4 @@
-/** Helpers for copying rich editor content without spreadsheet coordinate labels. */
+/** Helpers for copying rich editor content while preserving table formatting. */
 
 export const RICH_SELECTION_ATTRIBUTE = 'data-elabftw-rich-selection';
 
@@ -9,26 +9,11 @@ const BLOCK_ELEMENTS = new Set([
   'SECTION', 'UL',
 ]);
 
-/** Convert spreadsheet display tables into normal clipboard tables. */
+/** Remove transient editor state while retaining complete table/spreadsheet data. */
 export function prepareCopiedContent(root: HTMLElement): void {
   root.querySelectorAll<HTMLTableElement>('table').forEach(table => {
-    const coordinates = table.querySelectorAll('.spreadsheet-coordinate');
-    if (coordinates.length > 0) {
-      coordinates.forEach(cell => cell.remove());
-      table.removeAttribute('data-spreadsheet');
-      table.removeAttribute('data-spreadsheet-style');
-      table.classList.remove('elabftw-spreadsheet');
-      table.classList.add('elabftw-pasted-table');
-    }
     table.removeAttribute('data-mce-elabftw-collapsed');
     table.removeAttribute('data-elabftw-collapsed');
-  });
-
-  root.querySelectorAll<HTMLTableRowElement>('tr').forEach(row => {
-    if (row.cells.length === 0) row.remove();
-  });
-  root.querySelectorAll('thead, tbody, tfoot').forEach(section => {
-    if (!section.querySelector('tr')) section.remove();
   });
   root.querySelectorAll('script, style').forEach(element => element.remove());
   root.removeAttribute('contenteditable');
@@ -95,10 +80,13 @@ function nodeAsPlainText(node: Node): string {
   if (element.tagName === 'TABLE') {
     return Array.from((element as HTMLTableElement).rows)
       .map(row => Array.from(row.cells)
-        .map(cell => Array.from(cell.childNodes).map(nodeAsPlainText).join('').trim())
-        .join('\t'))
+        .filter(cell => !cell.classList.contains('spreadsheet-coordinate'))
+        .map(cell => Array.from(cell.childNodes).map(nodeAsPlainText).join('').trim()))
+      .filter(row => row.length > 0)
+      .map(row => row.join('\t'))
       .join('\n');
   }
+  if (element.classList.contains('spreadsheet-coordinate')) return '';
 
   const text = Array.from(element.childNodes).map(nodeAsPlainText).join('');
   return BLOCK_ELEMENTS.has(element.tagName) ? `${text}\n` : text;
