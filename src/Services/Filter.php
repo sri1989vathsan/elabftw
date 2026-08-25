@@ -17,6 +17,7 @@ use Elabftw\Elabftw\FsTools;
 use Elabftw\Exceptions\ImproperActionException;
 use HTMLPurifier;
 use HTMLPurifier_HTML5Config;
+use HTMLPurifier_URISchemeRegistry;
 
 use function filter_var;
 use function grapheme_substr;
@@ -210,9 +211,20 @@ final class Filter
         $config->set('HTML.TargetBlank', true);
         // Local folder shortcuts contain an opaque identifier only. The
         // optional workstation helper resolves it to a user-approved path.
-        $allowedSchemes = $config->get('URI.AllowedSchemes');
-        $allowedSchemes['elabftw-folder'] = true;
-        $config->set('URI.AllowedSchemes', $allowedSchemes);
+        // Set the complete default list directly: get() finalizes the
+        // HTMLPurifier configuration and would make subsequent set() calls
+        // fail at runtime.
+        $config->set('URI.AllowedSchemes', array(
+            'http' => true,
+            'https' => true,
+            'mailto' => true,
+            'ftp' => true,
+            'nntp' => true,
+            'news' => true,
+            'tel' => true,
+            'elabftw-folder' => true,
+        ));
+        HTMLPurifier_URISchemeRegistry::instance()->register('elabftw-folder', new LocalFolderUriScheme());
         // configure the cache for htmlpurifier
         $tmpDir = FsTools::getCacheFolder('purifier');
         $config->set('Cache.SerializerPath', $tmpDir);
