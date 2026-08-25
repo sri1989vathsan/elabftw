@@ -217,6 +217,33 @@ on('insert-in-body', (el: HTMLElement) => {
   const url = `app/download.php?name=${encodeURIComponent(el.dataset.name)}&f=${encodeURIComponent(el.dataset.link)}&storage=${encodeURIComponent(el.dataset.storage)}`;
   insertHandlers.get(el.dataset.ext.replace(/^\./, '').toLowerCase())?.(url);
 });
+
+// Insert a download link for any attached local file. Unlike insert-in-body,
+// this remains useful for file types that cannot be embedded in the editor.
+on('insert-upload-link', (el: HTMLElement) => {
+  const name = el.dataset.name ?? 'Attached file';
+  const storedName = el.dataset.link;
+  const storage = el.dataset.storage;
+  if (!storedName || !storage) return;
+  const params = new URLSearchParams({
+    name,
+    f: storedName,
+    storage,
+  });
+  const url = `app/download.php?${params.toString()}`;
+  if (editor.type === 'md') {
+    const markdownLabel = name.replace(/([\\[\]])/g, '\\$1');
+    editor.setContent(`[${markdownLabel}](${url})`);
+  } else {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = name;
+    editor.setContent(link.outerHTML);
+  }
+  updateEntityBody();
+});
 // END INSERT IN BODY
 
 function getLabCollectorSelection(): { id: string; label: string; url: string } | null {

@@ -37,6 +37,10 @@
       <div class='dropdown-divider'></div>
     {% endif %}
     {% if mode == 'edit' %}
+      {% if not isGrid %}
+        <button type='button' class='dropdown-item' data-action='insert-upload-link' data-name='{{ upload.real_name|e('html_attr') }}' data-storage='{{ upload.storage }}' data-link='{{ upload.long_name|e('html_attr') }}' data-uploadid='{{ upload.id }}'><i class='fas fa-fw fa-link mr-1'></i>{{ 'Insert file link in main text'|trans }}</button>
+      {% endif %}
+
       {% if not upload.immutable and not Entity.isReadOnly %}
         <button type='button' class='dropdown-item' data-action='duplicate-upload' data-uploadid='{{ upload.id }}'><i class='fas fa-fw fa-clone mr-1'></i>{{ 'Duplicate'|trans }}</button>
       {% endif %}
