@@ -22,10 +22,16 @@ use InvalidArgumentException;
 use Override;
 
 use function mb_strlen;
+use function array_is_list;
 use function filter_var;
 use function _;
+use function in_array;
+use function is_array;
+use function json_decode;
+use function json_encode;
 use function is_subclass_of;
 use function sprintf;
+use function strlen;
 
 class ContentParams implements ContentParamsInterface
 {
@@ -108,6 +114,35 @@ class ContentParams implements ContentParamsInterface
             return null;
         }
         return $this->asString();
+    }
+
+    /**
+     * Validate the account-wide defaults used by the date and title editor tools.
+     */
+    protected function getEditorDefaults(): ?string
+    {
+        if ($this->content === null || $this->asString() === '') {
+            return null;
+        }
+        try {
+            $defaults = json_decode($this->asString(), true, 8, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            throw new ImproperActionException('Invalid editor defaults.');
+        }
+        if (!is_array($defaults) || array_is_list($defaults)) {
+            throw new ImproperActionException('Invalid editor defaults.');
+        }
+        $allowed = array('date', 'title');
+        foreach ($defaults as $key => $value) {
+            if (!in_array($key, $allowed, true) || !is_array($value) || array_is_list($value)) {
+                throw new ImproperActionException('Invalid editor defaults.');
+            }
+        }
+        $encoded = json_encode($defaults, JSON_THROW_ON_ERROR);
+        if (strlen($encoded) > 16384) {
+            throw new ImproperActionException('Editor defaults are too large.');
+        }
+        return $encoded;
     }
 
     /**

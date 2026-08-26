@@ -12,6 +12,7 @@ import { ApiC } from './api';
 import { entity } from './getEntity';
 import { EntityType } from './interfaces';
 import { escapeExtendedQuery, escapeHTML } from './misc';
+import { getAccountEditorDefault, saveAccountEditorDefault } from './editor-defaults';
 
 interface ExperimentSearchResult {
   id: number;
@@ -102,30 +103,45 @@ function getDateInsertDefaults(): DateInsertDefaults {
     asHeading: false,
     headingLevel: 2,
   };
+  const accountDefault = getAccountEditorDefault<DateInsertDefaults>('date');
+  if (accountDefault) {
+    return normalizeDateInsertDefaults(accountDefault, fallback);
+  }
   try {
     const stored = localStorage.getItem(DATE_DEFAULTS_STORAGE_KEY);
     if (!stored) return fallback;
-    const parsed = JSON.parse(stored) as Partial<DateInsertDefaults>;
-    const format = typeof parsed.format === 'string' && isDateDisplayFormat(parsed.format)
-      ? parsed.format
-      : fallback.format;
-    const headingLevel = Number(parsed.headingLevel);
-    return {
-      format,
-      customLabel: format === 'custom' && typeof parsed.customLabel === 'string'
-        ? parsed.customLabel
-        : '',
-      asHeading: parsed.asHeading === true,
-      headingLevel: Number.isInteger(headingLevel) && headingLevel >= 1 && headingLevel <= 6
-        ? headingLevel
-        : fallback.headingLevel,
-    };
+    return normalizeDateInsertDefaults(
+      JSON.parse(stored) as Partial<DateInsertDefaults>,
+      fallback,
+    );
   } catch {
     return fallback;
   }
 }
 
-function saveDateInsertDefaults(defaults: DateInsertDefaults): void {
+function normalizeDateInsertDefaults(
+  parsed: Partial<DateInsertDefaults>,
+  fallback: DateInsertDefaults,
+): DateInsertDefaults {
+  const format = typeof parsed.format === 'string' && isDateDisplayFormat(parsed.format)
+    ? parsed.format
+    : fallback.format;
+  const headingLevel = Number(parsed.headingLevel);
+  return {
+    format,
+    customLabel: format === 'custom' && typeof parsed.customLabel === 'string'
+      ? parsed.customLabel
+      : '',
+    asHeading: parsed.asHeading === true,
+    headingLevel: Number.isInteger(headingLevel) && headingLevel >= 1 && headingLevel <= 6
+      ? headingLevel
+      : fallback.headingLevel,
+  };
+}
+
+async function saveDateInsertDefaults(defaults: DateInsertDefaults): Promise<void> {
+  await saveAccountEditorDefault('date', defaults);
+  // Keep a local fallback for accounts upgraded from earlier installations.
   localStorage.setItem(DATE_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
   // Keep the earlier format preference in sync for existing installations.
   if (defaults.format !== 'custom') {
@@ -551,19 +567,30 @@ export default class DateReferenceEditor {
       return false;
     };
 
-    saveDefaultButton.addEventListener('click', () => {
+    saveDefaultButton.addEventListener('click', async () => {
       if (!validateCustomLabel()) return;
-      saveDateInsertDefaults({
-        format: selectedFormat,
-        customLabel: customLabelInput.value.trim(),
-        asHeading: headingCheckbox.checked,
-        headingLevel: Number(headingLevelSelect.value),
-      });
-      this.editor.notificationManager.open({
-        text: 'Date defaults saved for one-click insertion',
-        type: 'success',
-        timeout: 2500,
-      });
+      saveDefaultButton.disabled = true;
+      try {
+        await saveDateInsertDefaults({
+          format: selectedFormat,
+          customLabel: customLabelInput.value.trim(),
+          asHeading: headingCheckbox.checked,
+          headingLevel: Number(headingLevelSelect.value),
+        });
+        this.editor.notificationManager.open({
+          text: 'Date defaults saved for your account',
+          type: 'success',
+          timeout: 2500,
+        });
+      } catch {
+        this.editor.notificationManager.open({
+          text: 'Could not save date defaults for your account',
+          type: 'error',
+          timeout: 3500,
+        });
+      } finally {
+        saveDefaultButton.disabled = false;
+      }
     });
 
     insertButton.addEventListener('click', () => {

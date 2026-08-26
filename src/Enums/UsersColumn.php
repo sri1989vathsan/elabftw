@@ -34,6 +34,7 @@ enum UsersColumn: string
     case DisplayMode = 'display_mode';
     case Email = 'email';
     case Entrypoint = 'entrypoint';
+    case EditorDefaults = 'editor_defaults';
     case Firstname = 'firstname';
     case IncFilesPdf = 'inc_files_pdf';
     case IsSysadmin = 'is_sysadmin';

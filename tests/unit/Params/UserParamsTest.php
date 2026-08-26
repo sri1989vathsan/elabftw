@@ -121,4 +121,20 @@ class UserParamsTest extends \PHPUnit\Framework\TestCase
         $this->expectException(ImproperActionException::class);
         $params->getContent();
     }
+
+    public function testEditorDefaults(): void
+    {
+        $input = '{"date":{"format":"compact","asHeading":true},"title":{"headingLevel":2,"bold":true}}';
+        $params = new UserParams('editor_defaults', $input);
+        $result = json_decode($params->getContent(), true, 8, JSON_THROW_ON_ERROR);
+        $this->assertSame('compact', $result['date']['format']);
+        $this->assertSame(2, $result['title']['headingLevel']);
+    }
+
+    public function testInvalidEditorDefaults(): void
+    {
+        $params = new UserParams('editor_defaults', '{"unknown":true}');
+        $this->expectException(ImproperActionException::class);
+        $params->getContent();
+    }
 }

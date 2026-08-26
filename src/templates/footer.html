@@ -84,6 +84,7 @@
   data-lang='{{ App.getLang }}'
   data-jslang='{{ App.getJsLang }}'
   data-isodate='{{ App.Session.has('is_auth') ? App.Users.userData.use_isodate : '0' }}'
+  data-editor-defaults='{{ App.Users.userData.editor_defaults|default('')|e('html_attr') }}'
   data-sc-search='{{ App.Users.userData.sc_search|default('s') }}'
   data-sc-todolist='{{ App.Users.userData.sc_todo|default('t') }}'
   data-sc-create='{{ App.Users.userData.sc_create|default('c') }}'

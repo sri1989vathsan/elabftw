@@ -4,6 +4,7 @@
 import type { Editor } from 'tinymce/tinymce';
 import { entity } from './getEntity';
 import { escapeHTML } from './misc';
+import { getAccountEditorDefault, saveAccountEditorDefault } from './editor-defaults';
 
 type HeadingAlignment = 'left' | 'center' | 'right' | 'justify';
 type BackgroundCoverage = 'title' | 'text';
@@ -99,6 +100,8 @@ function normalizeDefaults(candidate?: Partial<ExperimentTitleDefaults>): Experi
 }
 
 function getDefaults(): ExperimentTitleDefaults {
+  const accountDefault = getAccountEditorDefault<ExperimentTitleDefaults>('title');
+  if (accountDefault) return normalizeDefaults(accountDefault);
   try {
     const stored = localStorage.getItem(TITLE_DEFAULTS_STORAGE_KEY);
     if (stored) return normalizeDefaults(JSON.parse(stored) as Partial<ExperimentTitleDefaults>);
@@ -108,7 +111,9 @@ function getDefaults(): ExperimentTitleDefaults {
   return getFallbackDefaults();
 }
 
-function saveDefaults(defaults: ExperimentTitleDefaults): void {
+async function saveDefaults(defaults: ExperimentTitleDefaults): Promise<void> {
+  await saveAccountEditorDefault('title', defaults);
+  // Keep a local fallback for accounts upgraded from earlier installations.
   localStorage.setItem(TITLE_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
 }
 
@@ -507,12 +512,15 @@ export default class ExperimentTitleEditor {
       if (event.target === overlay) close();
     });
     cancelButton.addEventListener('click', close);
-    saveDefaultButton.addEventListener('click', () => {
+    saveDefaultButton.addEventListener('click', async () => {
+      saveDefaultButton.disabled = true;
       try {
-        saveDefaults(readControls());
-        status.textContent = 'Default title formatting saved for future insertions.';
+        await saveDefaults(readControls());
+        status.textContent = 'Default title formatting saved for your account.';
       } catch {
-        status.textContent = 'The browser could not save these defaults.';
+        status.textContent = 'Could not save title defaults for your account.';
+      } finally {
+        saveDefaultButton.disabled = false;
       }
     });
     insertButton.addEventListener('click', () => {
