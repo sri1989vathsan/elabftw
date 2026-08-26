@@ -251,7 +251,13 @@ export function registerTableToolsExtension(editor: Editor): void {
   });
   editor.ui.registry.addContextToolbar('elabftw-table-actions', {
     predicate: node => Boolean((node as Element).closest?.('table')),
-    items: 'table-select-copy',
+    items: [
+      'tableinsertrowbefore tableinsertrowafter tabledeleterow',
+      'tableinsertcolbefore tableinsertcolafter tabledeletecol',
+      'tablemergecells tablesplitcells',
+      'tableprops tablecellprops tabledelete',
+      'table-select-copy',
+    ].join(' | '),
     position: 'node',
     scope: 'node',
   });
