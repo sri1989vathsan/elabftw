@@ -643,6 +643,25 @@ export default class DateReferenceEditor {
       if (!validateCustomLabel()) return;
       close();
       this.editor.focus();
+      const requestedHeadingLevel = Math.min(
+        6,
+        Math.max(1, Math.round(Number(headingLevelSelect.value))),
+      );
+      const keepsExistingStructure = Boolean(
+        reference
+        && headingCheckbox.checked === Boolean(existingHeading)
+        && (!existingHeading || existingHeading.tagName === `H${requestedHeadingLevel}`),
+      );
+      if (reference && keepsExistingStructure) {
+        this.updateReference(
+          reference,
+          dateInput.value,
+          selectedTarget,
+          selectedFormat,
+          customLabelInput.value,
+        );
+        return;
+      }
       const referenceHost = existingHeading ?? reference;
       if (referenceHost?.isConnected) {
         this.editor.selection.select(referenceHost);
@@ -656,7 +675,7 @@ export default class DateReferenceEditor {
         selectedFormat,
         customLabelInput.value,
         headingCheckbox.checked,
-        Number(headingLevelSelect.value),
+        requestedHeadingLevel,
       );
     });
     deleteButton?.addEventListener('click', () => {
@@ -712,6 +731,44 @@ export default class DateReferenceEditor {
       type: 'success',
       timeout: 2500,
     });
+  }
+
+  /** Update the date badge without reinserting it and inheriting surrounding font styles. */
+  private updateReference(
+    reference: HTMLAnchorElement,
+    date: string,
+    target: ExperimentTarget | null,
+    format: DateDisplayFormat,
+    customLabel: string,
+  ): void {
+    const anchorId = getReferenceAnchorId(reference) || generateAnchorId(date);
+    const label = formatDate(date, format, customLabel);
+    const parsedDate = DateTime.fromISO(date).setLocale(getLocale());
+    const iconMonth = parsedDate.isValid ? parsedDate.toFormat('LLL').toLocaleUpperCase() : '';
+    const iconDay = parsedDate.isValid ? parsedDate.toFormat('d') : '';
+    const title = target
+      ? `${label} — open ${target.title}`
+      : `${label} — permanent link to this passage`;
+
+    this.editor.undoManager.transact(() => {
+      reference.setAttribute(
+        'href',
+        target ? getExperimentHref(target.id) : getEntityViewHref(anchorId),
+      );
+      reference.setAttribute('title', title);
+      const time = reference.querySelector('time') ?? document.createElement('time');
+      time.setAttribute('datetime', date);
+      time.textContent = label;
+      if (!time.isConnected) reference.appendChild(time);
+
+      const month = reference.querySelector<HTMLElement>('.elabftw-date-icon-month');
+      const day = reference.querySelector<HTMLElement>('.elabftw-date-icon-day');
+      if (month) month.title = iconMonth;
+      if (day) day.title = iconDay;
+    });
+    this.editor.selection.select(reference);
+    this.editor.nodeChanged();
+    window.dispatchEvent(new CustomEvent('editor-headings-changed'));
   }
 
   private insertReference(
