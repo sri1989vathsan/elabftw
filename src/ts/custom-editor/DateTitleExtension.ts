@@ -54,6 +54,21 @@ export function registerDateTitleExtension(editor: Editor): void {
     },
   });
 
+  editor.ui.registry.addButton('delete-date-reference', {
+    icon: 'remove',
+    tooltip: 'Delete selected date (Undo restores it)',
+    enabled: false,
+    onAction: () => dateReferenceEditor.deleteReference(),
+    onSetup: api => {
+      const updateEnabledState = (): void => {
+        api.setEnabled(Boolean(dateReferenceEditor.getSelectedReference()));
+      };
+      editor.on('NodeChange', updateEnabledState);
+      updateEnabledState();
+      return () => editor.off('NodeChange', updateEnabledState);
+    },
+  });
+
   editor.on('dblclick', event => {
     const target = event.target as HTMLElement;
     const reference = target.closest?.('a.elabftw-date-reference') as HTMLAnchorElement | null;
@@ -85,6 +100,9 @@ export function registerDateTitleExtension(editor: Editor): void {
       }
       case 'copy':
         dateReferenceEditor.copySelectedReferenceLink();
+        break;
+      case 'delete':
+        dateReferenceEditor.deleteReference();
         break;
       }
     },
@@ -122,6 +140,12 @@ export function registerDateTitleExtension(editor: Editor): void {
           text: 'Copy permanent link to date',
           value: 'copy',
           icon: 'copy',
+        });
+        items.push({
+          type: 'choiceitem' as const,
+          text: 'Delete selected date',
+          value: 'delete',
+          icon: 'remove',
         });
       }
       callback(items);

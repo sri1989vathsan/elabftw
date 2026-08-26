@@ -277,6 +277,39 @@ export default class DateReferenceEditor {
     return this.editor.selection.getNode().closest(DATE_REFERENCE_SELECTOR) as HTMLAnchorElement | null;
   }
 
+  public deleteReference(reference: HTMLAnchorElement | null = this.getSelectedReference()): void {
+    if (!reference?.isConnected) return;
+
+    const heading = reference.closest('h1, h2, h3, h4, h5, h6') as HTMLHeadingElement | null;
+    const headingCopy = heading?.cloneNode(true) as HTMLHeadingElement | undefined;
+    headingCopy?.querySelector(DATE_REFERENCE_SELECTOR)?.remove();
+    const headingContainsOtherContent = Boolean(
+      headingCopy?.textContent?.replaceAll('\u200b', '').trim()
+      || headingCopy?.querySelector('img, video, audio, table, hr'),
+    );
+
+    this.editor.undoManager.transact(() => {
+      if (heading && !headingContainsOtherContent) {
+        const paragraph = this.editor.dom.create('p', {}, '<br data-mce-bogus="1">');
+        heading.replaceWith(paragraph);
+        this.editor.selection.setCursorLocation(paragraph, 0);
+      } else {
+        const parent = reference.parentNode;
+        if (!parent) return;
+        const childIndex = Array.from(parent.childNodes).indexOf(reference);
+        const spacer = reference.nextSibling;
+        reference.remove();
+        if (spacer?.nodeType === Node.TEXT_NODE && spacer.textContent?.startsWith('\u00a0')) {
+          spacer.textContent = spacer.textContent.slice(1);
+          if (!spacer.textContent) spacer.remove();
+        }
+        this.editor.selection.setCursorLocation(parent, Math.min(childIndex, parent.childNodes.length));
+      }
+    });
+    this.editor.nodeChanged();
+    window.dispatchEvent(new CustomEvent('editor-headings-changed'));
+  }
+
   public insertToday(): void {
     const defaults = getDateInsertDefaults();
     this.insertReference(
@@ -444,6 +477,13 @@ export default class DateReferenceEditor {
 
     const actions = document.createElement('div');
     actions.className = 'date-reference-actions';
+    const deleteButton = reference ? document.createElement('button') : null;
+    if (deleteButton) {
+      deleteButton.type = 'button';
+      deleteButton.className = 'btn btn-outline-danger mr-auto';
+      deleteButton.textContent = 'Delete date';
+      deleteButton.title = 'Remove this date; Undo can restore it';
+    }
     const cancelButton = document.createElement('button');
     cancelButton.type = 'button';
     cancelButton.className = 'btn btn-secondary';
@@ -457,6 +497,7 @@ export default class DateReferenceEditor {
     insertButton.type = 'button';
     insertButton.className = 'btn btn-primary';
     insertButton.textContent = reference ? 'Update date' : 'Insert date';
+    if (deleteButton) actions.appendChild(deleteButton);
     actions.append(cancelButton, saveDefaultButton, insertButton);
 
     dialog.append(
@@ -617,6 +658,11 @@ export default class DateReferenceEditor {
         headingCheckbox.checked,
         Number(headingLevelSelect.value),
       );
+    });
+    deleteButton?.addEventListener('click', () => {
+      close();
+      this.editor.focus();
+      this.deleteReference(reference);
     });
     cancelButton.addEventListener('click', close);
     overlay.addEventListener('click', event => {
