@@ -1763,6 +1763,7 @@ function createOverlay(initial: SpreadsheetData): {
   tableCellSpacingInput: HTMLInputElement;
   cellPaddingInput: HTMLInputElement;
   appearanceScopeSelect: HTMLSelectElement;
+  applyAppearanceBtn: HTMLButtonElement;
   saveAppearanceDefaultBtn: HTMLButtonElement;
   appearanceStatus: HTMLSpanElement;
   defaultCellNoColorInput: HTMLInputElement;
@@ -2094,14 +2095,20 @@ function createOverlay(initial: SpreadsheetData): {
     <option value="notebook">This notebook</option>
     <option value="user">My account</option>
   `;
+  const applyAppearanceBtn = document.createElement('button');
+  applyAppearanceBtn.type = 'button';
+  applyAppearanceBtn.className = 'btn btn-sm btn-primary';
+  applyAppearanceBtn.textContent = 'Apply appearance';
+  applyAppearanceBtn.title = 'Apply all table, cell and font controls to this spreadsheet';
   const saveAppearanceDefaultBtn = document.createElement('button');
   saveAppearanceDefaultBtn.type = 'button';
   saveAppearanceDefaultBtn.className = 'btn btn-sm btn-outline-primary';
   saveAppearanceDefaultBtn.textContent = 'Save everything as default';
   const appearanceStatus = document.createElement('span');
   appearanceStatus.className = 'inline-spreadsheet-appearance-status';
-  appearanceStatus.textContent = 'Saves table, cell and font settings; notebook defaults override account defaults.';
+  appearanceStatus.textContent = 'Apply changes to this spreadsheet. Saving makes them the notebook or account default.';
   appearanceDefaults.append(
+    applyAppearanceBtn,
     appearanceScopeSelect,
     saveAppearanceDefaultBtn,
     appearanceStatus,
@@ -2341,6 +2348,7 @@ function createOverlay(initial: SpreadsheetData): {
     tableCellSpacingInput,
     cellPaddingInput,
     appearanceScopeSelect,
+    applyAppearanceBtn,
     saveAppearanceDefaultBtn,
     appearanceStatus,
     defaultCellNoColorInput,
@@ -3320,6 +3328,17 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     ui.defaultFontTextColorInput.addEventListener('change', () => {
       ui.defaultFontNoTextColorInput.checked = false;
       ui.defaultFontTextColorInput.disabled = false;
+    });
+    ui.applyAppearanceBtn.addEventListener('click', () => {
+      const appearance = appearanceFromControls(ui, defaultCellStyleFromControls(ui));
+      const updated: SpreadsheetData = {
+        ...working,
+        data: resizeData(readRawData(), working.rows, working.cols),
+        cellStyles: readCellStyles(),
+        appearance,
+      };
+      mountSpreadsheet(updated);
+      ui.appearanceStatus.textContent = 'Appearance applied to this spreadsheet. Use Insert / Update to save it.';
     });
     ui.saveAppearanceDefaultBtn.addEventListener('click', async () => {
       const appearance = appearanceFromControls(ui, defaultCellStyleFromControls(ui));
