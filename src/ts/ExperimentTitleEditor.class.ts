@@ -29,6 +29,10 @@ interface ExperimentTitlePreset {
   defaults: ExperimentTitleDefaults;
 }
 
+interface ExperimentTitleAccountSettings extends ExperimentTitleDefaults {
+  presets?: Array<Partial<ExperimentTitlePreset>>;
+}
+
 const TITLE_DEFAULTS_STORAGE_KEY = 'elabftw-experiment-title-heading-defaults-v1';
 const TITLE_PRESETS_STORAGE_KEY = 'elabftw-experiment-title-heading-presets-v1';
 const MAX_TITLE_PRESETS = 20;
@@ -112,30 +116,50 @@ function getDefaults(): ExperimentTitleDefaults {
 }
 
 async function saveDefaults(defaults: ExperimentTitleDefaults): Promise<void> {
-  await saveAccountEditorDefault('title', defaults);
+  await saveAccountEditorDefault<ExperimentTitleAccountSettings>('title', {
+    ...defaults,
+    presets: getPresets(),
+  });
   // Keep a local fallback for accounts upgraded from earlier installations.
   localStorage.setItem(TITLE_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
 }
 
-function getPresets(): ExperimentTitlePreset[] {
+function normalizePresets(candidates: unknown): ExperimentTitlePreset[] {
+  if (!Array.isArray(candidates)) return [];
+  return (candidates as Array<Partial<ExperimentTitlePreset>>)
+    .filter(candidate => typeof candidate?.name === 'string' && candidate.name.trim())
+    .slice(0, MAX_TITLE_PRESETS)
+    .map(candidate => ({
+      name: candidate.name?.trim().slice(0, 50) ?? '',
+      defaults: normalizeDefaults(candidate.defaults),
+    }));
+}
+
+function getAccountPresets(): ExperimentTitlePreset[] | null {
+  const settings = getAccountEditorDefault<ExperimentTitleAccountSettings>('title');
+  return Array.isArray(settings?.presets) ? normalizePresets(settings.presets) : null;
+}
+
+function getLocalPresets(): ExperimentTitlePreset[] {
   try {
     const stored = localStorage.getItem(TITLE_PRESETS_STORAGE_KEY);
     if (!stored) return [];
-    const candidates = JSON.parse(stored) as Array<Partial<ExperimentTitlePreset>>;
-    if (!Array.isArray(candidates)) return [];
-    return candidates
-      .filter(candidate => typeof candidate?.name === 'string' && candidate.name.trim())
-      .slice(0, MAX_TITLE_PRESETS)
-      .map(candidate => ({
-        name: candidate.name?.trim().slice(0, 50) ?? '',
-        defaults: normalizeDefaults(candidate.defaults),
-      }));
+    return normalizePresets(JSON.parse(stored) as unknown);
   } catch {
     return [];
   }
 }
 
-function savePresets(presets: ExperimentTitlePreset[]): void {
+function getPresets(): ExperimentTitlePreset[] {
+  return getAccountPresets() ?? getLocalPresets();
+}
+
+async function savePresets(presets: ExperimentTitlePreset[]): Promise<void> {
+  const defaults = getDefaults();
+  await saveAccountEditorDefault<ExperimentTitleAccountSettings>('title', {
+    ...defaults,
+    presets,
+  });
   localStorage.setItem(TITLE_PRESETS_STORAGE_KEY, JSON.stringify(presets));
 }
 
@@ -239,7 +263,8 @@ export default class ExperimentTitleEditor {
     }
     headingLevelSelect.value = String(defaults.headingLevel);
 
-    let presets = getPresets();
+    const accountPresets = getAccountPresets();
+    let presets = accountPresets ?? getLocalPresets();
     const presetRow = document.createElement('div');
     presetRow.className = 'experiment-title-preset-row';
     const presetSelect = document.createElement('select');
@@ -343,7 +368,24 @@ export default class ExperimentTitleEditor {
     const status = document.createElement('span');
     status.className = 'date-reference-target-status';
     status.setAttribute('aria-live', 'polite');
-    status.textContent = 'Ctrl+Alt+T inserts the title using the saved defaults.';
+    const initialStatus = 'Ctrl+Alt+T inserts the title using the saved defaults.';
+    status.textContent = initialStatus;
+
+    // Transparently move presets created by older versions from this browser
+    // into the account-backed JSON so SQL backups and other devices receive them.
+    if (accountPresets === null && presets.length > 0) {
+      void savePresets(presets)
+        .then(() => {
+          if (status.textContent === initialStatus) {
+            status.textContent = 'Saved title styles moved to your account.';
+          }
+        })
+        .catch(() => {
+          if (status.textContent === initialStatus) {
+            status.textContent = 'Saved title styles remain available in this browser only.';
+          }
+        });
+    }
 
     const actions = document.createElement('div');
     actions.className = 'date-reference-actions';
@@ -466,7 +508,7 @@ export default class ExperimentTitleEditor {
       applyControls(preset.defaults);
       status.textContent = `Loaded title style “${preset.name}”.`;
     });
-    savePresetButton.addEventListener('click', () => {
+    savePresetButton.addEventListener('click', async () => {
       const name = presetNameInput.value.trim();
       if (!name) {
         status.textContent = 'Enter a name before saving this title style.';
@@ -477,35 +519,44 @@ export default class ExperimentTitleEditor {
         preset => preset.name.localeCompare(name, undefined, { sensitivity: 'accent' }) === 0,
       );
       const preset = { name, defaults: readControls() };
+      const updatedPresets = [...presets];
       if (existingIndex >= 0) {
-        presets[existingIndex] = preset;
+        updatedPresets[existingIndex] = preset;
       } else if (presets.length < MAX_TITLE_PRESETS) {
-        presets.push(preset);
+        updatedPresets.push(preset);
       } else {
         status.textContent = `You can save up to ${MAX_TITLE_PRESETS} title styles.`;
         return;
       }
+      savePresetButton.disabled = true;
       try {
-        savePresets(presets);
+        await savePresets(updatedPresets);
+        presets = updatedPresets;
         renderPresets(name);
         status.textContent = existingIndex >= 0
-          ? `Updated title style “${name}”.`
-          : `Saved title style “${name}”.`;
+          ? `Updated account title style “${name}”.`
+          : `Saved account title style “${name}”.`;
       } catch {
-        status.textContent = 'The browser could not save this title style.';
+        status.textContent = 'Could not save this title style to your account.';
+      } finally {
+        savePresetButton.disabled = false;
       }
     });
-    deletePresetButton.addEventListener('click', () => {
+    deletePresetButton.addEventListener('click', async () => {
       const name = presetSelect.value;
       if (!name) return;
-      presets = presets.filter(preset => preset.name !== name);
+      const updatedPresets = presets.filter(preset => preset.name !== name);
+      deletePresetButton.disabled = true;
       try {
-        savePresets(presets);
+        await savePresets(updatedPresets);
+        presets = updatedPresets;
         renderPresets();
         presetNameInput.value = '';
-        status.textContent = `Removed title style “${name}”.`;
+        status.textContent = `Removed account title style “${name}”.`;
       } catch {
-        status.textContent = 'The browser could not remove this title style.';
+        status.textContent = 'Could not remove this title style from your account.';
+      } finally {
+        deletePresetButton.disabled = !presetSelect.value;
       }
     });
     overlay.addEventListener('click', event => {
