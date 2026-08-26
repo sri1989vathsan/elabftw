@@ -34,6 +34,34 @@ export function registerDateTitleExtension(editor: Editor): void {
   const experimentTitleEditor = new ExperimentTitleEditor(editor);
   editor.on('init', () => dateReferenceEditor.normalizeReferences());
 
+  // Keep date editing discoverable: the split-button menu is useful for
+  // insertion, but a selected date should also have an immediate edit action.
+  editor.ui.registry.addButton('edit-date-reference', {
+    icon: 'edit-block',
+    tooltip: 'Edit selected date (or double-click a date)',
+    enabled: false,
+    onAction: () => {
+      const selectedReference = dateReferenceEditor.getSelectedReference();
+      if (selectedReference) dateReferenceEditor.openCalendar(selectedReference);
+    },
+    onSetup: api => {
+      const updateEnabledState = (): void => {
+        api.setEnabled(Boolean(dateReferenceEditor.getSelectedReference()));
+      };
+      editor.on('NodeChange', updateEnabledState);
+      updateEnabledState();
+      return () => editor.off('NodeChange', updateEnabledState);
+    },
+  });
+
+  editor.on('dblclick', event => {
+    const target = event.target as HTMLElement;
+    const reference = target.closest?.('a.elabftw-date-reference') as HTMLAnchorElement | null;
+    if (!reference) return;
+    event.preventDefault();
+    dateReferenceEditor.openCalendar(reference);
+  });
+
   editor.ui.registry.addSplitButton('adddate', {
     icon: 'insert-time',
     text: 'Date',
