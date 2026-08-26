@@ -3622,7 +3622,12 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     });
 
     ui.cancelBtn.addEventListener('click', cancel);
-    ui.overlay.addEventListener('click', cancel);
+    ui.overlay.addEventListener('click', event => {
+      if (event.target !== ui.overlay) return;
+      // A backdrop click is easy to trigger while selecting or formatting a
+      // large sheet. Keep the dialog open so it cannot silently discard work.
+      ui.formulaStatus.textContent = 'Spreadsheet is still open. Use Insert / Update to save your changes, or Cancel to discard them.';
+    });
     document.addEventListener('keydown', onKey);
   });
 }
