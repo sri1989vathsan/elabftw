@@ -478,8 +478,11 @@ export default class TocPanel extends SidePanel {
       const entryId = row.dataset.tocSectionId;
       const entry = this.entries.find(candidate => candidate.id === entryId);
       if (!entry) return;
-      const hiddenByCollapsedParent = filters.length === 0
-        && entry.ancestorIds.some(id => this.collapsedSectionIds.has(id));
+      // A search narrows which branches are relevant, but it must not force
+      // those branches open. Keep the user's explicit collapse state active
+      // for live text, saved search chips and selected-section filters alike.
+      const hiddenByCollapsedParent = entry.ancestorIds
+        .some(id => this.collapsedSectionIds.has(id));
       const visible = matchingIds.has(entry.id) && !hiddenByCollapsedParent;
       row.hidden = !visible;
       if (visible) visibleOptions++;
