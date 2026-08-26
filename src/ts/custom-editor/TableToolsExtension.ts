@@ -249,18 +249,6 @@ export function registerTableToolsExtension(editor: Editor): void {
     tooltip: 'Copy selected text and tables with formatting',
     onAction: () => void copySelectedContent(),
   });
-  editor.ui.registry.addContextToolbar('elabftw-table-actions', {
-    predicate: node => Boolean((node as Element).closest?.('table')),
-    items: [
-      'tableinsertrowbefore tableinsertrowafter tabledeleterow',
-      'tableinsertcolbefore tableinsertcolafter tabledeletecol',
-      'tablemergecells tablesplitcells',
-      'tableprops tablecellprops tabledelete',
-      'table-select-copy',
-    ].join(' | '),
-    position: 'node',
-    scope: 'node',
-  });
   editor.ui.registry.addButton('table-indent', {
     icon: 'indent',
     tooltip: 'Indent table to align with nested bullets',
