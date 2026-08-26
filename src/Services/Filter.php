@@ -254,6 +254,9 @@ final class Filter
             'elabftw-collapsible-table',
             'elabftw-collapsible-table-summary',
             'elabftw-pasted-table',
+            'elabftw-note-block',
+            'elabftw-note-content',
+            'elabftw-note-heading',
             'elabftw-table-indent',
             'spreadsheet-coordinate',
         ));

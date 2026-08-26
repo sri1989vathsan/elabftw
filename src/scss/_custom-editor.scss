@@ -11,6 +11,44 @@ body.mce-content-body {
   min-height: 12rem;
 }
 
+/* Linkable note callouts. Their heading is intentionally a real h2-h6 so the
+ * existing Table of Contents, section search and permanent links all work. */
+:where(#body_view, body.mce-content-body) .elabftw-note-block {
+  background-color: var(--firstlevel, #eef2f5);
+  background-color: color-mix(in srgb, var(--primary, #167b85) 9%, var(--white, #fff));
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  border: 1px solid color-mix(in srgb, var(--primary, #167b85) 42%, var(--white, #fff));
+  border-left: 0.35rem solid var(--primary, #167b85);
+  border-radius: 0.35rem;
+  box-sizing: border-box;
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-note-heading {
+  color: var(--strongest, #343a40);
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.45rem;
+  padding: 0;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-note-heading::before {
+  color: var(--primary, #167b85);
+  content: '\270E';
+  display: inline-block;
+  margin-right: 0.45rem;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-note-content {
+  color: var(--strongest, #343a40);
+  min-height: 1.35em;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-note-content > :last-child {
+  margin-bottom: 0;
+}
+
 /* Repeat the decimal -> letter -> Roman cycle when ordered lists are nested. */
 :where(#body_view, body.mce-content-body) ol {
   list-style-type: decimal;

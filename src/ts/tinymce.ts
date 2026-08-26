@@ -215,7 +215,7 @@ function getAssetVersionQuery(): string {
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist checklist outdent indent | forecolor backcolor format-painter remove-formatting | charmap emoticons adddate horizontal-rule | codesample | insert-link | copy-rich-selection inline-sheet table-properties cell-properties table-select-copy table-outdent table-indent sort-table';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist checklist outdent indent | forecolor backcolor format-painter remove-formatting | charmap emoticons adddate horizontal-rule insert-note | codesample | insert-link | copy-rich-selection inline-sheet table-properties cell-properties table-select-copy table-outdent table-indent sort-table';
   if (document.getElementById('documentTitle')) {
     toolbar1 = toolbar1.replace('adddate', 'experiment-title adddate');
   }

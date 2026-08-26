@@ -10,6 +10,7 @@ import { registerFormatPainterExtension } from './FormatPainterExtension';
 import { registerLinkExtension } from './LinkExtension';
 import { registerListExtension } from './ListExtension';
 import { registerMouseLinkExtension } from './MouseLinkExtension';
+import { registerNoteExtension } from './NoteExtension';
 import { registerSpreadsheetExtension } from './SpreadsheetExtension';
 import { registerTableToolsExtension } from './TableToolsExtension';
 import { registerTocExtension } from './TocExtension';
@@ -20,6 +21,7 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   registerLinkExtension(editor);
   registerListExtension(editor);
   registerMouseLinkExtension(editor);
+  registerNoteExtension(editor);
   registerSpreadsheetExtension(editor);
   registerTableToolsExtension(editor);
   registerTocExtension(editor);
