@@ -51,11 +51,18 @@ export interface ExtraFieldProperties {
 export interface MetadataElabftw {
   extra_fields_groups?: Array<ExtraFieldsGroup>,
   file_folder_references?: Array<FileFolderReference>,
+  web_links?: Array<WebLink>,
 }
 
 export interface FileFolderReference {
   id: string,
   text: string,
+}
+
+export interface WebLink {
+  id: string,
+  label: string,
+  url: string,
 }
 
 export interface ExtraFieldsGroup {

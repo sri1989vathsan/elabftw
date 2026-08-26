@@ -171,7 +171,8 @@
 
 {# we only show this section in view mode if there are at least one link #}
 {% set fileFolderReferences = Entity.entityData.metadata_decoded.elabftw.file_folder_references|default([]) %}
-{% if Entity.entityData.experiments_links or Entity.entityData.items_links or Entity.entityData.compounds_links or Entity.entityData.related_experiments_links or Entity.entityData.related_items_links or Entity.entityData.uploads or fileFolderReferences %}
+{% set webLinks = Entity.entityData.metadata_decoded.elabftw.web_links|default([]) %}
+{% if Entity.entityData.experiments_links or Entity.entityData.items_links or Entity.entityData.compounds_links or Entity.entityData.related_experiments_links or Entity.entityData.related_items_links or Entity.entityData.uploads or fileFolderReferences or webLinks %}
   {% include 'links.html' %}
 {% endif %}
 

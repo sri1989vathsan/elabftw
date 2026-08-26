@@ -5,6 +5,7 @@ import { entity } from '../getEntity';
 import { createFileFolderReferences } from '../file-folder-references';
 import { Model } from '../interfaces';
 import { buildLabCollectorUrl } from '../labcollector-link';
+import { createWebLink, normalizeWebLinkUrl } from '../web-links';
 import {
   escapeHTML,
   getNewIdFromPostRequest,
@@ -19,6 +20,12 @@ interface LabCollectorDialogData {
 
 interface FileFolderReferenceDialogData {
   references: string;
+}
+
+interface WebLinkDialogData {
+  url: string;
+  label: string;
+  saveToReferences: boolean;
 }
 
 interface UploadedLocalFile {
@@ -37,6 +44,69 @@ function uploadedFileUrl(upload: UploadedLocalFile): string {
 }
 
 export function registerLinkExtension(editor: Editor): void {
+  const openWebLinkDialog = (): void => {
+    const bookmark = editor.selection.getBookmark(2, true);
+    const selectedText = editor.selection.getContent({format: 'text'}).trim();
+    const selectedAnchor = editor.dom.getParent(editor.selection.getNode(), 'a[href]') as HTMLAnchorElement | null;
+    editor.windowManager.open({
+      title: 'Insert web link',
+      size: 'normal',
+      body: {
+        type: 'panel',
+        items: [
+          {type: 'input', name: 'url', label: 'Web address'},
+          {type: 'input', name: 'label', label: 'Link text'},
+          {
+            type: 'checkbox',
+            name: 'saveToReferences',
+            label: 'Also save under Web links',
+          },
+        ],
+      },
+      initialData: {
+        url: selectedAnchor?.getAttribute('href') ?? '',
+        label: selectedText || selectedAnchor?.textContent?.trim() || '',
+        saveToReferences: true,
+      },
+      buttons: [
+        {type: 'cancel', text: 'Cancel'},
+        {type: 'submit', text: 'Insert link', primary: true},
+      ],
+      onSubmit: async api => {
+        const data = api.getData() as WebLinkDialogData;
+        try {
+          const url = normalizeWebLinkUrl(data.url);
+          const label = data.label.trim() || url;
+          if (data.saveToReferences) await createWebLink(url, label);
+          editor.focus();
+          editor.selection.moveToBookmark(bookmark);
+          editor.undoManager.transact(() => {
+            const anchor = editor.dom.getParent(editor.selection.getNode(), 'a[href]') as HTMLAnchorElement | null;
+            if (anchor) {
+              editor.dom.setAttribs(anchor, {href: url, target: '_blank', rel: 'noreferrer noopener'});
+              anchor.textContent = label;
+              editor.selection.select(anchor);
+              return;
+            }
+            editor.execCommand(
+              'mceInsertContent',
+              false,
+              `<a href="${escapeHTML(url)}" target="_blank" rel="noreferrer noopener">${escapeHTML(label)}</a>`,
+            );
+          });
+          await updateEntityBody(false);
+          api.close();
+        } catch (error) {
+          editor.notificationManager.open({
+            text: error instanceof Error ? error.message : 'Unable to add web link',
+            type: 'error',
+            timeout: 3500,
+          });
+        }
+      },
+    });
+  };
+
   const chooseAndLinkLocalFiles = (directory: boolean): void => {
     const bookmark = editor.selection.getBookmark(2, true);
     const hasSelection = !editor.selection.getRng().collapsed;
@@ -253,9 +323,7 @@ export function registerLinkExtension(editor: Editor): void {
       const items = [{
         type: 'menuitem' as const,
         text: 'Web link…',
-        onAction: () => {
-          editor.execCommand('mceLink');
-        },
+        onAction: openWebLinkDialog,
       }];
       if (document.getElementById('filesDiv')) {
         items.push({

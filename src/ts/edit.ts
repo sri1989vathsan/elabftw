@@ -317,6 +317,24 @@ on('insert-file-folder-reference', (el: HTMLElement) => {
   }
   updateEntityBody();
 });
+
+on('insert-web-link', (el: HTMLElement) => {
+  const label = el.dataset.label?.trim();
+  const url = el.dataset.url?.trim();
+  if (!label || !url) return;
+  if (editor.type === 'md') {
+    const markdownLabel = label.replace(/([\\[\]])/g, '\\$1');
+    editor.setContent(`[${markdownLabel}](${url})`);
+  } else {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noreferrer noopener';
+    link.textContent = label;
+    editor.setContent(link.outerHTML);
+  }
+  updateEntityBody();
+});
 // END INSERT IN BODY
 
 function getLabCollectorSelection(): { id: string; label: string; url: string } | null {

@@ -28,6 +28,7 @@ import {
   deleteFileFolderReference,
 } from './file-folder-references';
 import { notify } from './notify';
+import { createWebLink, deleteWebLink } from './web-links';
 
 addAutocompleteToLinkInputs();
 
@@ -49,6 +50,24 @@ on('add-file-folder-references', async (_, event: Event) => {
 on('delete-file-folder-reference', async (el: HTMLElement) => {
   if (!confirm('Delete this file/folder reference?')) return;
   await deleteFileFolderReference(el.dataset.referenceid);
+});
+
+on('add-web-link', async (_, event: Event) => {
+  event.preventDefault();
+  const urlInput = document.getElementById('webLinkUrlInput') as HTMLInputElement;
+  const labelInput = document.getElementById('webLinkLabelInput') as HTMLInputElement;
+  try {
+    await createWebLink(urlInput.value, labelInput.value);
+    urlInput.value = '';
+    labelInput.value = '';
+  } catch (error) {
+    notify.error(error instanceof Error ? error.message : 'Unable to save web link');
+  }
+});
+
+on('delete-web-link', async (el: HTMLElement) => {
+  if (!confirm('Delete this web link?')) return;
+  await deleteWebLink(el.dataset.linkid);
 });
 
 // FINISH: outside if stepsDiv because can be from Todolist panel

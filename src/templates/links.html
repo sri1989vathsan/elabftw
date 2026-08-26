@@ -84,6 +84,51 @@
   </div>
   <hr>
 
+  {# EXTERNAL WEB REFERENCES #}
+  {% set webLinks = Entity.entityData.metadata_decoded.elabftw.web_links|default([]) %}
+  <section id='webLinksSection'>
+    <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='webLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Web links'|trans }} (<span id='webLinksCount'>{{ webLinks|length }}</span>)</h4>
+    <div id='webLinksDiv' class='ml-4'>
+      {% for webLink in webLinks %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center' id='webLink_{{ webLink.id }}'>
+          <a class='mr-auto text-break' href='{{ webLink.url|e('html_attr') }}' target='_blank' rel='noreferrer noopener' title='{{ webLink.url|e('html_attr') }}'>
+            <i class='fas fa-globe fa-fw mr-2' aria-hidden='true'></i>{{ webLink.label }}
+          </a>
+          {% if mode == 'edit' %}
+            <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='insert-web-link' data-label='{{ webLink.label|e('html_attr') }}' data-url='{{ webLink.url|e('html_attr') }}' title='{{ 'Insert link in main text'|trans }}' aria-label='{{ 'Insert link in main text'|trans }}'>
+              <i class='fas fa-file-import fa-fw'></i>
+            </button>
+            <button type='button' class='btn btn-danger-ghost btn-sm' data-action='delete-web-link' data-linkid='{{ webLink.id|e('html_attr') }}' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}'>
+              <i class='fas fa-trash-alt fa-fw'></i>
+            </button>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% if webLinks is empty %}
+        <p class='smallgray mt-2 mb-0'>{{ 'Links to websites, repositories, and papers will be listed here.'|trans }}</p>
+      {% endif %}
+      {% if mode == 'edit' %}
+        <form class='mt-3' id='addWebLinkForm'>
+          <div class='form-row'>
+            <div class='col-md-7 mb-2'>
+              <label class='sr-only' for='webLinkUrlInput'>{{ 'Web address'|trans }}</label>
+              <input type='url' id='webLinkUrlInput' class='form-control' maxlength='2000' placeholder='{{ 'https://github.com/… or a paper URL'|trans }}' aria-label='{{ 'Web address'|trans }}' required>
+            </div>
+            <div class='col-md-3 mb-2'>
+              <label class='sr-only' for='webLinkLabelInput'>{{ 'Link text'|trans }}</label>
+              <input type='text' id='webLinkLabelInput' class='form-control' maxlength='500' placeholder='{{ 'Label (optional)'|trans }}' aria-label='{{ 'Link text'|trans }}'>
+            </div>
+            <div class='col-md-2 mb-2'>
+              <button type='submit' class='btn btn-primary btn-block' data-action='add-web-link'>{{ 'Add'|trans }}</button>
+            </div>
+          </div>
+        </form>
+        <p class='smallgray mb-0'>{{ 'Use the insert button beside a saved link to add it to the main text.'|trans }}</p>
+      {% endif %}
+    </div>
+  </section>
+  <hr>
+
   {# ATTACHED FILES AND PLAIN-TEXT FILE/FOLDER REFERENCES #}
   {% set accessKey = App.Request.query.getString('access_key') %}
   {% set fileFolderReferences = Entity.entityData.metadata_decoded.elabftw.file_folder_references|default([]) %}
