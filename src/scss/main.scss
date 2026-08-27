@@ -2137,15 +2137,54 @@ body.html-tool-workspace-resizing * {
   margin-left: 0.35rem;
 }
 
+.inline-spreadsheet-viewport-controls {
+  align-items: center;
+  color: var(--medium);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+
+  .inline-spreadsheet-appearance-control {
+    flex-direction: row;
+    gap: 0.25rem;
+    margin: 0;
+  }
+
+  input[type='number'] {
+    height: 1.75rem;
+    width: 5rem;
+  }
+}
+
 .inline-spreadsheet-container {
   --spreadsheet-column-index-height: 30px;
   --spreadsheet-row-index-width: 42px;
 
-  flex: 1;
+  flex: 0 0 auto;
+  height: 400px;
   margin-bottom: 0.75rem;
-  min-height: 300px;
+  max-height: 70vh;
+  max-width: 100%;
+  min-height: 220px;
+  min-width: min(320px, 100%);
   overflow: auto;
+  resize: both;
+  width: 100%;
 }
+
+/* The library's own scroll viewport must follow the user-resizable host rather
+ * than retaining the fixed dimensions supplied when the sheet was mounted. */
+/* stylelint-disable selector-class-pattern */
+.inline-spreadsheet-container > .jss_container,
+.inline-spreadsheet-container .jss_content {
+  height: 100% !important;
+  max-height: none !important;
+  max-width: none !important;
+  width: 100% !important;
+}
+/* stylelint-enable selector-class-pattern */
 
 /* Keep jspreadsheet's coordinate headers stable when data is pasted or the
  * grid dimensions change. The custom properties are updated by the appearance

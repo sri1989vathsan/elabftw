@@ -1989,6 +1989,9 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatStatus: HTMLSpanElement;
   cellFormatNoColorInput: HTMLInputElement;
   cellFormatNoTextColorInput: HTMLInputElement;
+  viewportHeightInput: HTMLInputElement;
+  viewportFullWidthBtn: HTMLButtonElement;
+  viewportFullHeightBtn: HTMLButtonElement;
 } {
   const overlay = document.createElement('div');
   overlay.className = 'inline-spreadsheet-overlay';
@@ -2511,9 +2514,42 @@ function createOverlay(initial: SpreadsheetData): {
   formulaBar.appendChild(formulaStatus);
   dialog.appendChild(formulaBar);
 
+  const viewportBar = document.createElement('div');
+  viewportBar.className = 'inline-spreadsheet-viewport-controls';
+  const viewportLabel = document.createElement('strong');
+  viewportLabel.textContent = 'Editing area';
+  const defaultViewportHeight = Math.max(220, Math.min(1200, Math.round(window.innerHeight * 0.65)));
+  const viewportHeightInput = createInput(
+    'number',
+    String(defaultViewportHeight),
+    'Spreadsheet editing area height',
+  );
+  viewportHeightInput.min = '220';
+  viewportHeightInput.max = '1200';
+  const viewportFullWidthBtn = document.createElement('button');
+  viewportFullWidthBtn.type = 'button';
+  viewportFullWidthBtn.className = 'btn btn-sm btn-outline-secondary';
+  viewportFullWidthBtn.textContent = 'Full width';
+  viewportFullWidthBtn.title = 'Restore the editing area to the full dialog width';
+  const viewportFullHeightBtn = document.createElement('button');
+  viewportFullHeightBtn.type = 'button';
+  viewportFullHeightBtn.className = 'btn btn-sm btn-outline-secondary';
+  viewportFullHeightBtn.textContent = 'Full height';
+  viewportFullHeightBtn.title = 'Expand the editing area to the available screen height';
+  const viewportHint = document.createElement('span');
+  viewportHint.textContent = 'Drag the bottom-right corner to resize the editing area.';
+  viewportBar.append(
+    viewportLabel,
+    createLabeledControl('Height (px)', viewportHeightInput),
+    viewportFullWidthBtn,
+    viewportFullHeightBtn,
+    viewportHint,
+  );
+
   const sheetHost = document.createElement('div');
   sheetHost.className = 'inline-spreadsheet-container';
-  dialog.appendChild(sheetHost);
+  sheetHost.style.height = `${defaultViewportHeight}px`;
+  dialog.append(viewportBar, sheetHost);
 
   const buttonRow = document.createElement('div');
   buttonRow.className = 'inline-spreadsheet-actions';
@@ -2601,6 +2637,9 @@ function createOverlay(initial: SpreadsheetData): {
     cellFormatStatus,
     cellFormatNoColorInput,
     cellFormatNoTextColorInput,
+    viewportHeightInput,
+    viewportFullWidthBtn,
+    viewportFullHeightBtn,
   };
 }
 
@@ -3327,7 +3366,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           style: mountedStyles,
           tableOverflow: true,
           tableWidth: '100%',
-          tableHeight: '400px',
+          tableHeight: '100%',
           allowInsertRow: true,
           allowInsertColumn: true,
           allowDeleteRow: true,
@@ -3652,6 +3691,29 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     };
 
     mountSpreadsheet(working);
+    const updateViewportHeight = (height: number): void => {
+      if (!Number.isFinite(height)) return;
+      const safeHeight = Math.max(220, Math.min(1200, Math.round(height)));
+      ui.sheetHost.style.height = `${safeHeight}px`;
+      ui.viewportHeightInput.value = String(safeHeight);
+    };
+    ui.viewportHeightInput.addEventListener('change', () => {
+      updateViewportHeight(Number(ui.viewportHeightInput.value));
+    });
+    ui.viewportFullWidthBtn.addEventListener('click', () => {
+      ui.sheetHost.style.width = '100%';
+    });
+    ui.viewportFullHeightBtn.addEventListener('click', () => {
+      // Leave room for the popup title, controls and action buttons.
+      updateViewportHeight(window.innerHeight * 0.65);
+    });
+    const viewportResizeObserver = new ResizeObserver(entries => {
+      const height = entries[0]?.contentRect.height;
+      if (height && Number.isFinite(height)) {
+        ui.viewportHeightInput.value = String(Math.round(height));
+      }
+    });
+    viewportResizeObserver.observe(ui.sheetHost);
     ui.sheetHost.addEventListener('mousedown', onRowResizePointerDown, true);
     document.addEventListener('mouseup', onRowResizePointerUp, true);
     ui.sheetHost.addEventListener('copy', onSpreadsheetCopy, true);
@@ -4010,6 +4072,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
 
     const cleanup = (): void => {
       finishFormulaSelection();
+      viewportResizeObserver.disconnect();
       ui.sheetHost.removeEventListener('mousedown', onFormulaSelectionStart, true);
       ui.sheetHost.removeEventListener('keydown', onCellEditorKeydown, true);
       ui.sheetHost.removeEventListener('mousedown', onRowResizePointerDown, true);
