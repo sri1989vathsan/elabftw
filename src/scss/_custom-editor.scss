@@ -236,8 +236,11 @@ body.mce-content-body {
 :where(#body_view, body.mce-content-body) table.elabftw-spreadsheet {
   border-collapse: collapse;
   font-size: 0.9em;
+  height: auto !important;
   margin: 8px 0;
+  max-height: none !important;
   max-width: 100%;
+  min-height: 0 !important;
   width: max-content;
 }
 

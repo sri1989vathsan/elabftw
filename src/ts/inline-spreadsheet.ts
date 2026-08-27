@@ -1558,6 +1558,24 @@ function stripAppearanceTableStyle(
   );
 }
 
+/**
+ * Spreadsheet row heights must determine the total table height. TinyMCE can
+ * add an explicit outer height while object-resizing a table; browsers then
+ * redistribute that fixed height across the remaining rows.
+ */
+function stripFixedTableHeight(style: string | undefined): string | undefined {
+  if (!style) return undefined;
+  const table = document.createElement('table');
+  table.setAttribute('style', style);
+  table.style.removeProperty('height');
+  table.style.removeProperty('min-height');
+  table.style.removeProperty('max-height');
+  return sanitizeStyle(
+    table.getAttribute('style') ?? undefined,
+    PRESERVED_TABLE_STYLE_PROPERTIES,
+  );
+}
+
 function coordinatesFromCellName(cellName: string): { col: number; row: number } | null {
   const match = /^([A-Z]+)([1-9]\d*)$/i.exec(cellName);
   if (!match) return null;
@@ -4360,7 +4378,9 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
   const plateAttribute = kind === 'well-plate' && raw.plateSize
     ? ` data-well-plate="${raw.plateSize}"`
     : '';
-  let tableStyle = `${getAppearanceTableStyle(appearance)};${raw.tableStyle ?? DEFAULT_TABLE_STYLE}`;
+  let tableStyle = stripFixedTableHeight(
+    `${getAppearanceTableStyle(appearance)};${raw.tableStyle ?? DEFAULT_TABLE_STYLE}`,
+  ) ?? DEFAULT_TABLE_STYLE;
   if (raw.tableBorder !== undefined
     && !/(?:^|;)border(?!-(?:collapse|spacing)\b)(?:-[a-z-]+)?\s*:/i.test(raw.tableStyle ?? '')
   ) {
@@ -4452,9 +4472,8 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
       cols,
     );
     const extractedRowHeights = extractRowHeights(tableElement, kind, rows);
-    const extractedTableStyle = sanitizeStyle(
+    const extractedTableStyle = stripFixedTableHeight(
       tableElement.getAttribute('style') ?? undefined,
-      PRESERVED_TABLE_STYLE_PROPERTIES,
     );
     return normalizeSpreadsheetData({
       ...decoded,
@@ -4501,9 +4520,8 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
       : undefined,
     cellStyles: extractCellStyles(tableElement, kind, rows, cols),
     rowHeights: extractRowHeights(tableElement, kind, rows),
-    tableStyle: sanitizeStyle(
+    tableStyle: stripFixedTableHeight(
       tableElement.getAttribute('style') ?? undefined,
-      PRESERVED_TABLE_STYLE_PROPERTIES,
     ),
     captionStyle: sanitizeStyle(
       tableElement.querySelector('caption')?.getAttribute('style') ?? undefined,
