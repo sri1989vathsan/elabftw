@@ -2969,6 +2969,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     // truth so rendering never destroys what the user entered.
     let rawDataMirror = resizeData(working.data, working.rows, working.cols);
     let selectedRange: CellRange | null = null;
+    let formulaInputTarget: { col: number; row: number } | null = null;
     let formulaSelectionDrag: {
       input: HTMLInputElement | HTMLTextAreaElement;
       startRange: CellRange;
@@ -3115,16 +3116,21 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const cellCount = (endCol - startCol + 1) * (endRow - startRow + 1);
       const rangeLabel = `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
       ui.cellFormatStatus.textContent = `${rangeLabel} selected (${cellCount} cell${cellCount === 1 ? '' : 's'}).`;
-      ui.formulaCellLabel.textContent = cellCount === 1
-        ? `${colLabel(startCol)}${startRow + 1}`
-        : rangeLabel;
-      if (cellCount === 1) {
-        ui.formulaInput.value = String(readRawData()[startRow]?.[startCol] ?? '');
-        ui.formulaInput.disabled = false;
-      } else {
-        ui.formulaInput.value = '';
-        ui.formulaInput.disabled = true;
-        ui.formulaInput.placeholder = 'Select one cell to edit its value or formula';
+      const selectingForFormulaBar = formulaSelectionDrag?.input === ui.formulaInput;
+      if (!selectingForFormulaBar) {
+        ui.formulaCellLabel.textContent = cellCount === 1
+          ? `${colLabel(startCol)}${startRow + 1}`
+          : rangeLabel;
+        if (cellCount === 1) {
+          formulaInputTarget = { col: startCol, row: startRow };
+          ui.formulaInput.value = String(readRawData()[startRow]?.[startCol] ?? '');
+          ui.formulaInput.disabled = false;
+        } else {
+          formulaInputTarget = null;
+          ui.formulaInput.value = '';
+          ui.formulaInput.disabled = true;
+          ui.formulaInput.placeholder = 'Select one cell to edit its value or formula';
+        }
       }
       const selectedRowHeights = new Set<number>();
       for (let row = startRow; row <= endRow; row++) {
@@ -3261,13 +3267,23 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
 
     const onFormulaSelectionStart = (event: MouseEvent): void => {
       if (event.button !== 0) return;
-      const input = sheetContainer?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      let input = sheetContainer?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
         'td.editor[data-x][data-y] > input, td.editor[data-x][data-y] > textarea',
       );
-      if (!input || event.target === input) return;
-      const formulaCell = input.closest<HTMLElement>('td.editor[data-x][data-y]');
-      const formulaCol = Number.parseInt(formulaCell?.dataset.x ?? '', 10);
-      const formulaRow = Number.parseInt(formulaCell?.dataset.y ?? '', 10);
+      if (event.target === input) return;
+      let formulaCol: number;
+      let formulaRow: number;
+      if (input) {
+        const formulaCell = input.closest<HTMLElement>('td.editor[data-x][data-y]');
+        formulaCol = Number.parseInt(formulaCell?.dataset.x ?? '', 10);
+        formulaRow = Number.parseInt(formulaCell?.dataset.y ?? '', 10);
+      } else if (document.activeElement === ui.formulaInput && formulaInputTarget) {
+        input = ui.formulaInput;
+        formulaCol = formulaInputTarget.col;
+        formulaRow = formulaInputTarget.row;
+      } else {
+        return;
+      }
       if (!Number.isInteger(formulaCol) || !Number.isInteger(formulaRow)) return;
       const startRange = getGridRangeFromTarget(event.target);
       if (!startRange) return;
@@ -3277,7 +3293,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const expectsCellReference = /^=\s*$/.test(formulaBeforeCaret)
         || /[+\-*/(,;]\s*$/.test(formulaBeforeCaret);
       if (!expectsCellReference) return;
-      const allowRange = /^=\s*(SUM|AVERAGE|COUNT|MIN|MAX)\s*\([^)]*$/i.test(
+      const allowRange = /(SUM|AVERAGE|COUNT|MIN|MAX)\s*\([^)]*$/i.test(
         formulaBeforeCaret,
       );
 
@@ -4229,6 +4245,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const result = evaluateFormula(formulaValue, rawData, targetCol, targetRow);
       scheduleFormulaResultRender();
       worksheet?.updateSelectionFromCoords?.(targetCol, targetRow, targetCol, targetRow);
+      formulaInputTarget = { col: targetCol, row: targetRow };
       ui.formulaCellLabel.textContent = `${colLabel(targetCol)}${targetRow + 1}`;
       ui.formulaInput.disabled = false;
       ui.formulaInput.value = formulaValue;
@@ -4238,14 +4255,12 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     }));
     ui.formulaInput.addEventListener('keydown', event => {
       if (event.key !== 'Enter') return;
-      const selection = getSelectedRange();
-      if (!selection || selection[0] !== selection[2] || selection[1] !== selection[3]) {
+      if (!formulaInputTarget) {
         ui.formulaStatus.textContent = 'Select one cell before editing its value or formula.';
         return;
       }
       event.preventDefault();
-      const col = selection[0];
-      const row = selection[1];
+      const { col, row } = formulaInputTarget;
       let value = ui.formulaInput.value;
       if (value.trimStart().startsWith('=')) {
         const missingParentheses = formulaParenthesisBalance(value);
@@ -4254,6 +4269,8 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       ui.formulaInput.value = value;
       updateRawDataMirrorCell(col, row, value, false);
       worksheet?.setValueFromCoords?.(col, row, value);
+      selectedRange = [col, row, col, row];
+      worksheet?.updateSelectionFromCoords?.(col, row, col, row);
       scheduleFormulaResultRender();
       const result = evaluateFormula(value, readRawData(), col, row);
       ui.formulaStatus.textContent = value.trimStart().startsWith('=') && result !== undefined
