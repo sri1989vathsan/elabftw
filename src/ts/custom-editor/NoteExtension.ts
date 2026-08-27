@@ -4,6 +4,7 @@ import { escapeHTML } from '../misc';
 
 interface NoteDialogData {
   title: string;
+  includeInToc: boolean;
   headingLevel: string;
   content: string;
 }
@@ -40,12 +41,17 @@ export function registerNoteExtension(editor: Editor): void {
           {
             type: 'input',
             name: 'title',
-            label: 'Note heading (shown in Table of Contents)',
+            label: 'Note title',
+          },
+          {
+            type: 'checkbox',
+            name: 'includeInToc',
+            label: 'Include note title in the Table of Contents',
           },
           {
             type: 'selectbox',
             name: 'headingLevel',
-            label: 'Heading level',
+            label: 'Heading level (when included)',
             items: [
               { text: 'Heading 2', value: '2' },
               { text: 'Heading 3', value: '3' },
@@ -65,6 +71,7 @@ export function registerNoteExtension(editor: Editor): void {
       },
       initialData: {
         title: 'Note',
+        includeInToc: true,
         headingLevel: '3',
         content: selectedText,
       },
@@ -76,7 +83,9 @@ export function registerNoteExtension(editor: Editor): void {
         const data = api.getData() as NoteDialogData;
         const title = data.title.trim() || 'Note';
         const level = /^[2-6]$/.test(data.headingLevel) ? data.headingLevel : '3';
-        const id = createNoteId(editor, title);
+        const heading = data.includeInToc
+          ? `<h${level} class="elabftw-note-heading" id="${createNoteId(editor, title)}">${escapeHTML(title)}</h${level}>`
+          : `<div class="elabftw-note-heading">${escapeHTML(title)}</div>`;
         const contentUnchanged = Boolean(selectedHtml) && data.content.trim() === selectedText;
         const body = contentUnchanged
           ? selectedHtml
@@ -89,7 +98,7 @@ export function registerNoteExtension(editor: Editor): void {
           editor.execCommand(
             'mceInsertContent',
             false,
-            `<div class="elabftw-note-block"><h${level} class="elabftw-note-heading" id="${id}">${escapeHTML(title)}</h${level}><div class="elabftw-note-content">${noteBody}</div></div><p><br data-mce-bogus="1"></p>`,
+            `<div class="elabftw-note-block">${heading}<div class="elabftw-note-content">${noteBody}</div></div><p><br data-mce-bogus="1"></p>`,
           );
         });
         api.close();
