@@ -17,12 +17,14 @@ type CellValue = string | number | boolean | null;
 type AOA = CellValue[][];
 type SpreadsheetKind = 'standard' | 'notebook' | 'well-plate';
 type CellStyles = Record<string, string>;
+type RowHeights = Record<string, number>;
 type AppearanceScope = 'user' | 'notebook';
 type CellRange = [number, number, number, number];
 
 interface ClipboardTable {
   data: AOA;
   cellStyles?: CellStyles;
+  rowHeights?: RowHeights;
 }
 
 export interface FlattenedClipboardSuggestion {
@@ -112,6 +114,8 @@ export interface SpreadsheetData {
   plateSize?: number;
   /** Inline styles keyed by spreadsheet coordinates such as A1 or C4. */
   cellStyles?: CellStyles;
+  /** Explicit data-row heights in pixels, keyed by zero-based row index. */
+  rowHeights?: RowHeights;
   /** Preserved TinyMCE formatting on the generated table and caption. */
   tableStyle?: string;
   captionStyle?: string;
@@ -139,6 +143,8 @@ const DEFAULT_COLS = 6;
 const DEFAULT_ROWS = 5;
 const MAX_DIMENSION = 50;
 const MAX_TABLE_BORDER = 20;
+const MIN_DATA_ROW_HEIGHT = 20;
+const MAX_DATA_ROW_HEIGHT = 500;
 const MIN_ROW_INDEX_WIDTH = 28;
 const MAX_ROW_INDEX_WIDTH = 120;
 const MIN_COLUMN_INDEX_HEIGHT = 24;
@@ -522,6 +528,7 @@ function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): Spreadsh
       ? candidate.plateSize
       : undefined,
     cellStyles: normalizeCellStyles(candidate.cellStyles, rows, cols),
+    rowHeights: normalizeRowHeights(candidate.rowHeights, rows),
     tableStyle: sanitizeStyle(candidate.tableStyle, PRESERVED_TABLE_STYLE_PROPERTIES),
     captionStyle: sanitizeStyle(candidate.captionStyle, PRESERVED_STYLE_PROPERTIES),
     tableBorder: Number.isInteger(candidate.tableBorder)
@@ -531,6 +538,24 @@ function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): Spreadsh
       ? normalizeAppearance(candidate.appearance)
       : undefined,
   };
+}
+
+function normalizeRowHeights(
+  candidate: RowHeights | undefined,
+  rows: number,
+): RowHeights | undefined {
+  if (!candidate || typeof candidate !== 'object') return undefined;
+  const normalized: RowHeights = {};
+  Object.entries(candidate).forEach(([rowKey, value]) => {
+    const row = Number.parseInt(rowKey, 10);
+    const height = Number(value);
+    if (!Number.isInteger(row) || row < 0 || row >= rows || !Number.isFinite(height)) return;
+    normalized[String(row)] = Math.max(
+      MIN_DATA_ROW_HEIGHT,
+      Math.min(MAX_DATA_ROW_HEIGHT, Math.round(height)),
+    );
+  });
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
 function clampDimension(value: number | undefined, fallback: number): number {
@@ -1142,6 +1167,7 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
 
   const rows: AOA = [];
   const cellStyles: CellStyles = {};
+  const rowHeights: RowHeights = {};
   const styleRules = getClipboardStyleRules(clipboardDocument);
   const isFormulaSpreadsheet = table.classList.contains('elabftw-spreadsheet');
   Array.from(table.rows).forEach(tableRow => {
@@ -1150,6 +1176,13 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
     ));
     if (sourceCells.length === 0) return;
     const rowIndex = rows.length;
+    const rowHeight = Number.parseFloat(tableRow.style.height);
+    if (Number.isFinite(rowHeight)) {
+      rowHeights[String(rowIndex)] = Math.max(
+        MIN_DATA_ROW_HEIGHT,
+        Math.min(MAX_DATA_ROW_HEIGHT, Math.round(rowHeight)),
+      );
+    }
     rows[rowIndex] ??= [];
     let colIndex = 0;
     sourceCells.forEach(cell => {
@@ -1198,6 +1231,7 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
   return {
     data: rows,
     cellStyles: Object.keys(cellStyles).length > 0 ? cellStyles : undefined,
+    rowHeights: Object.keys(rowHeights).length > 0 ? rowHeights : undefined,
   };
 }
 
@@ -1250,6 +1284,7 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
     kind: 'standard',
     caption: '',
     cellStyles: normalizeCellStyles(richTextStyles, rows, cols),
+    rowHeights: normalizeRowHeights(clipboardTable?.rowHeights, rows),
     appearance,
   };
 }
@@ -1283,6 +1318,13 @@ export function pasteSpreadsheetRange(
     if (targetCol >= cols || targetRow >= rows) return;
     cellStyles[`${colLabel(targetCol)}${targetRow + 1}`] = style;
   });
+  const rowHeights: RowHeights = { ...(target.rowHeights ?? {}) };
+  Object.entries(source.rowHeights ?? {}).forEach(([rowKey, height]) => {
+    const sourceRow = Number.parseInt(rowKey, 10);
+    const targetRow = safeStartRow + sourceRow;
+    if (!Number.isInteger(sourceRow) || targetRow < 0 || targetRow >= rows) return;
+    rowHeights[String(targetRow)] = height;
+  });
 
   const changedPlateSize = target.kind === 'well-plate'
     && (rows !== target.rows || cols !== target.cols);
@@ -1295,6 +1337,7 @@ export function pasteSpreadsheetRange(
     kind: changedPlateSize ? 'standard' : target.kind,
     plateSize: changedPlateSize ? undefined : target.plateSize,
     cellStyles: Object.keys(cellStyles).length > 0 ? cellStyles : undefined,
+    rowHeights: Object.keys(rowHeights).length > 0 ? rowHeights : undefined,
   });
 }
 
@@ -1824,6 +1867,28 @@ function applyCoordinateHeaderDimensions(
       cell.style.minHeight = columnIndexHeight;
       cell.style.maxHeight = columnIndexHeight;
     });
+  });
+}
+
+/** Reapply saved data-row heights after jspreadsheet rebuilds its worksheet DOM. */
+function applySpreadsheetRowHeights(
+  container: HTMLElement,
+  worksheet: JssInstance,
+  rowHeights: RowHeights | undefined,
+): void {
+  if (!rowHeights) return;
+  const bodyRows = Array.from(
+    container.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr'),
+  );
+  Object.entries(rowHeights).forEach(([rowKey, height]) => {
+    const row = Number.parseInt(rowKey, 10);
+    if (!Number.isInteger(row) || !Number.isFinite(height)) return;
+    try {
+      worksheet?.setHeight?.(row, height);
+    } catch {
+      // Keep the DOM fallback below for jspreadsheet builds without setHeight.
+    }
+    if (bodyRows[row]) bodyRows[row].style.height = `${height}px`;
   });
 }
 
@@ -3089,6 +3154,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const mountedContainer = sheetContainer;
       const mountedRows = working.rows;
       const mountedCols = working.cols;
+      const initialRowHeights = normalizeRowHeights(working.rowHeights, mountedRows);
       const mountedData = resizeData(working.data, mountedRows, mountedCols);
       rawDataMirror = resizeData(mountedData, mountedRows, mountedCols);
       const mountedStyles = mergeCellStyles(
@@ -3100,6 +3166,11 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const enforceCoordinateDimensions = (): void => {
         if (sheetContainer !== mountedContainer) return;
         applyCoordinateHeaderDimensions(mountedContainer, mountedAppearance);
+        applySpreadsheetRowHeights(
+          mountedContainer,
+          worksheet,
+          normalizeRowHeights(working.rowHeights, mountedRows),
+        );
       };
       const scheduleCoordinateDimensionEnforcement = (): void => {
         enforceCoordinateDimensions();
@@ -3191,6 +3262,13 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         worksheets: [{
           data: mountedData,
           minDimensions: [mountedCols, mountedRows],
+          rows: initialRowHeights
+            ? Array.from({ length: mountedRows }, (_, row) => (
+              initialRowHeights[String(row)]
+                ? { height: initialRowHeights[String(row)] }
+                : {}
+            ))
+            : undefined,
           style: mountedStyles,
           tableOverflow: true,
           tableWidth: '100%',
@@ -3261,6 +3339,37 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         },
         onpaste: (changedWorksheet: JssInstance): void => {
           syncMountedDimensions(changedWorksheet);
+        },
+        onresizerow: (
+          changedWorksheet: JssInstance,
+          row: number | number[],
+          height: number | number[],
+        ): void => {
+          const changedRows = Array.isArray(row) ? row : [row];
+          const changedHeights = Array.isArray(height) ? height : [height];
+          const rowHeights: RowHeights = { ...(working.rowHeights ?? {}) };
+          changedRows.forEach((changedRow, index) => {
+            const safeRow = Number(changedRow);
+            const rawHeight = changedHeights[index] ?? changedHeights[0];
+            const safeHeight = Math.max(
+              MIN_DATA_ROW_HEIGHT,
+              Math.min(MAX_DATA_ROW_HEIGHT, Math.round(Number(rawHeight))),
+            );
+            if (!Number.isInteger(safeRow)
+              || safeRow < 0
+              || safeRow >= working.rows
+              || !Number.isFinite(safeHeight)
+            ) {
+              return;
+            }
+            rowHeights[String(safeRow)] = safeHeight;
+          });
+          worksheet = changedWorksheet;
+          working = normalizeSpreadsheetData({
+            ...working,
+            data: readRawData(),
+            rowHeights,
+          });
         },
         onselection: (
           selectedWorksheet: JssInstance,
@@ -3341,7 +3450,10 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           );
         }
         textRows.push(textCells.join('\t'));
-        htmlRows.push(`<tr>${htmlCells.join('')}</tr>`);
+        const copiedHeight = working.rowHeights?.[String(row)];
+        htmlRows.push(
+          `<tr${Number.isFinite(copiedHeight) ? ` style="height:${copiedHeight}px"` : ''}>${htmlCells.join('')}</tr>`,
+        );
       }
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -3410,6 +3522,15 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         if (targetCol >= cols || targetRow >= rows) return;
         nextStyles[`${colLabel(targetCol)}${targetRow + 1}`] = style;
       });
+      const nextRowHeights: RowHeights = {
+        ...(normalizeRowHeights(working.rowHeights, rows) ?? {}),
+      };
+      Object.entries(pasted.rowHeights ?? {}).forEach(([rowKey, height]) => {
+        const sourceRow = Number.parseInt(rowKey, 10);
+        const targetRow = startRow + sourceRow;
+        if (!Number.isInteger(sourceRow) || targetRow < 0 || targetRow >= rows) return;
+        nextRowHeights[String(targetRow)] = height;
+      });
 
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -3430,6 +3551,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         kind: changedPlateSize ? 'standard' : working.kind,
         plateSize: changedPlateSize ? undefined : working.plateSize,
         cellStyles: Object.keys(nextStyles).length > 0 ? nextStyles : undefined,
+        rowHeights: Object.keys(nextRowHeights).length > 0 ? nextRowHeights : undefined,
       });
       ui.cellFormatStatus.textContent = pasted.cellStyles
         ? 'Pasted values and cell formatting.'
@@ -3833,6 +3955,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         caption: ui.captionInput.value.trim(),
         plateSize: working.kind === 'well-plate' ? working.plateSize : undefined,
         cellStyles: readCellStyles(rows, cols),
+        rowHeights: normalizeRowHeights(working.rowHeights, rows),
         tableStyle: working.tableStyle,
         captionStyle: working.captionStyle,
         tableBorder: working.tableBorder,
@@ -3894,13 +4017,13 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
   }
 
   if (kind === 'notebook') {
-    html += '<thead><tr>';
+    html += `<thead><tr${getRowHeightAttribute(raw.rowHeights, 0)}>`;
     for (let col = 0; col < raw.cols; col++) {
       html += `<th${getCellStyleAttribute(raw.cellStyles, appearance, col, 0)}>${escapeHTML(String(displayData[0]?.[col] ?? ''))}</th>`;
     }
     html += '</tr></thead><tbody>';
     for (let row = 1; row < raw.rows; row++) {
-      html += '<tr>';
+      html += `<tr${getRowHeightAttribute(raw.rowHeights, row)}>`;
       for (let col = 0; col < raw.cols; col++) {
         html += `<td${getCellStyleAttribute(raw.cellStyles, appearance, col, row)}>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
       }
@@ -3916,7 +4039,7 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
     html += '</tr></thead><tbody>';
     for (let row = 0; row < raw.rows; row++) {
       const rowLabel = kind === 'well-plate' ? colLabel(row) : String(row + 1);
-      html += `<tr><th class="spreadsheet-coordinate"${getCoordinateStyleAttribute(appearance, 'row')}>${rowLabel}</th>`;
+      html += `<tr${getRowHeightAttribute(raw.rowHeights, row)}><th class="spreadsheet-coordinate"${getCoordinateStyleAttribute(appearance, 'row')}>${rowLabel}</th>`;
       for (let col = 0; col < raw.cols; col++) {
         html += `<td${getCellStyleAttribute(raw.cellStyles, appearance, col, row)}>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
       }
@@ -3970,6 +4093,7 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
       rows,
       cols,
     );
+    const extractedRowHeights = extractRowHeights(tableElement, kind, rows);
     const extractedTableStyle = sanitizeStyle(
       tableElement.getAttribute('style') ?? undefined,
       PRESERVED_TABLE_STYLE_PROPERTIES,
@@ -3990,6 +4114,10 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
           cols,
         )
         : extractedCellStyles,
+      rowHeights: normalizeRowHeights({
+        ...(decoded.rowHeights ?? {}),
+        ...(extractedRowHeights ?? {}),
+      }, rows),
       tableStyle: appearance
         ? stripAppearanceTableStyle(extractedTableStyle, appearance)
         : extractedTableStyle,
@@ -4014,6 +4142,7 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
       ? parseInt(tableElement.dataset.wellPlate ?? '', 10) || undefined
       : undefined,
     cellStyles: extractCellStyles(tableElement, kind, rows, cols),
+    rowHeights: extractRowHeights(tableElement, kind, rows),
     tableStyle: sanitizeStyle(
       tableElement.getAttribute('style') ?? undefined,
       PRESERVED_TABLE_STYLE_PROPERTIES,
@@ -4024,6 +4153,25 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
     ),
     tableBorder: parseTableBorder(tableElement),
   });
+}
+
+function extractRowHeights(
+  tableElement: HTMLTableElement,
+  kind: SpreadsheetKind,
+  rows: number,
+): RowHeights | undefined {
+  const tableRows = Array.from(tableElement.querySelectorAll<HTMLTableRowElement>('tr'));
+  const dataRows = kind === 'notebook' ? tableRows : tableRows.slice(1);
+  const rowHeights: RowHeights = {};
+  dataRows.slice(0, rows).forEach((row, rowIndex) => {
+    const height = Number.parseFloat(row.style.height);
+    if (!Number.isFinite(height)) return;
+    rowHeights[String(rowIndex)] = Math.max(
+      MIN_DATA_ROW_HEIGHT,
+      Math.min(MAX_DATA_ROW_HEIGHT, Math.round(height)),
+    );
+  });
+  return Object.keys(rowHeights).length > 0 ? rowHeights : undefined;
 }
 
 function extractVisibleTableData(
@@ -4059,6 +4207,11 @@ function getCellStyleAttribute(
     ? `${getAppearanceCellStyle(appearance, col, row)};${explicitStyle}`
     : getAppearanceCellStyle(appearance, col, row);
   return ` style="${escapeHTMLAttribute(style)}"`;
+}
+
+function getRowHeightAttribute(rowHeights: RowHeights | undefined, row: number): string {
+  const height = rowHeights?.[String(row)];
+  return Number.isFinite(height) ? ` style="height:${height}px"` : '';
 }
 
 function getCoordinateStyleAttribute(
