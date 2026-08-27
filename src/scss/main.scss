@@ -1960,12 +1960,14 @@ body.html-tool-workspace-resizing * {
   background-color: var(--mainbackground);
   border-radius: 8px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  box-sizing: border-box;
   color: var(--strongest);
   display: flex;
   flex-direction: column;
+  height: 90vh;
   max-height: 90vh;
   max-width: 1100px;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 0;
   width: 90vw;
 }
@@ -2245,7 +2247,7 @@ body.html-tool-workspace-resizing * {
   --spreadsheet-column-index-height: 30px;
   --spreadsheet-row-index-width: 42px;
 
-  flex: 0 0 auto;
+  flex: 1 1 220px;
   height: 400px;
   margin: 0 0.65rem 0.5rem;
   max-height: 70vh;
@@ -2309,13 +2311,11 @@ body.html-tool-workspace-resizing * {
   align-items: center;
   background-color: var(--firstlevel);
   border-top: 1px solid var(--secondary);
-  bottom: 0;
   display: flex;
+  flex: 0 0 auto;
   gap: 0.5rem;
   justify-content: space-between;
   padding: 0.5rem 0.65rem;
-  position: sticky;
-  z-index: 4;
 }
 
 .inline-spreadsheet-grid-actions {
