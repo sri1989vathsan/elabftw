@@ -275,6 +275,23 @@ body.mce-content-body {
   text-align: center;
 }
 
+/* Coordinate headers are structural spreadsheet controls, not data cells.
+ * Keep their saved dimensions stable while the surrounding table, rows, or
+ * columns are resized. The values remain adjustable in Spreadsheet appearance. */
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet[style*='--spreadsheet-'] > thead > tr > .spreadsheet-coordinate {
+  height: var(--spreadsheet-column-index-height) !important;
+  max-height: var(--spreadsheet-column-index-height) !important;
+  min-height: var(--spreadsheet-column-index-height) !important;
+}
+
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet[style*='--spreadsheet-'] > thead > tr > .spreadsheet-coordinate:first-child,
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet[style*='--spreadsheet-'] > tbody > tr > .spreadsheet-coordinate:first-child {
+  box-sizing: border-box;
+  max-width: var(--spreadsheet-row-index-width) !important;
+  min-width: var(--spreadsheet-row-index-width) !important;
+  width: var(--spreadsheet-row-index-width) !important;
+}
+
 :where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] {
   border-collapse: separate;
   border-spacing: 0;

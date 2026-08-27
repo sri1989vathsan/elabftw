@@ -1445,6 +1445,8 @@ function getAppearanceCellStyle(
 
 function getAppearanceTableStyle(appearance: SpreadsheetAppearance): string {
   const declarations = [
+    `--spreadsheet-row-index-width:${appearance.rowIndexWidth}px`,
+    `--spreadsheet-column-index-height:${appearance.columnIndexHeight}px`,
     appearance.tableBorderStyle === 'none' || appearance.tableBorderWidth === 0
       ? 'border:none'
       : `border:${appearance.tableBorderWidth}px ${appearance.tableBorderStyle} ${appearance.tableBorderColor}`,
