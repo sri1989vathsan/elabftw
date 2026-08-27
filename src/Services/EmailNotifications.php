@@ -102,22 +102,29 @@ class EmailNotifications
 
     private function getNotificationsToSend(): array
     {
-        $sql = 'SELECT id, userid, category, body
+        $sql = 'SELECT notifications.id, notifications.userid, notifications.category, notifications.body
             FROM notifications
-            WHERE send_email = 1
-                AND email_sent = 0
+            INNER JOIN users ON users.userid = notifications.userid
+            WHERE notifications.send_email = 1
+                AND notifications.email_sent = 0
                 AND (
-                    category NOT IN (:step_deadline, :todo_deadline)
+                    notifications.category NOT IN (:step_deadline_pref, :todo_deadline_pref)
+                    OR users.notif_step_deadline_email = 1
+                )
+                AND (
+                    notifications.category NOT IN (:step_deadline, :todo_deadline)
                     OR (
-                        category = :step_deadline
-                        AND DATE_ADD(NOW(), INTERVAL :notif_lead_time MINUTE) >= body->>"$.deadline"
+                        notifications.category = :step_deadline
+                        AND DATE_ADD(NOW(), INTERVAL :notif_lead_time MINUTE) >= notifications.body->>"$.deadline"
                     )
                     OR (
-                        category = :todo_deadline
-                        AND NOW() >= CAST(body->>"$.remind_at" AS DATETIME)
+                        notifications.category = :todo_deadline
+                        AND NOW() >= CAST(notifications.body->>"$.remind_at" AS DATETIME)
                     )
                 )';
         $req = $this->Db->prepare($sql);
+        $req->bindValue(':step_deadline_pref', Notifications::StepDeadline->value, PDO::PARAM_INT);
+        $req->bindValue(':todo_deadline_pref', Notifications::TodoDeadline->value, PDO::PARAM_INT);
         $req->bindValue(':step_deadline', Notifications::StepDeadline->value, PDO::PARAM_INT);
         $req->bindValue(':todo_deadline', Notifications::TodoDeadline->value, PDO::PARAM_INT);
         $req->bindValue(':notif_lead_time', StepDeadline::NOTIFLEADTIME, PDO::PARAM_INT);
