@@ -2149,13 +2149,15 @@ body.html-tool-workspace-resizing * {
 }
 
 .inline-spreadsheet-cell-format {
+  align-items: center;
   background-color: var(--firstlevel);
   border: 1px solid var(--secondary);
   border-radius: 4px;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.25rem;
   margin: 0 0.65rem 0.35rem;
+  overflow-x: auto;
   padding: 0.25rem 0.35rem;
 
   .inline-spreadsheet-appearance-control {
@@ -2198,10 +2200,10 @@ body.html-tool-workspace-resizing * {
 }
 
 .inline-spreadsheet-cell-format-row {
-  align-items: end;
+  align-items: center;
   display: flex;
-  flex: 0 1 auto;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   gap: 0.35rem;
 
   > strong {

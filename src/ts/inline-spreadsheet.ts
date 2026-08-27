@@ -1660,8 +1660,28 @@ function evaluateFormula(
   const match = /^=\s*(SUM|AVERAGE|COUNT|MIN|MAX)\s*\((.*)\)\s*$/i.exec(formulaValue);
 
   if (!match) {
+    let arithmeticExpression = formulaValue.trim().slice(1);
+    const aggregatePattern = /(SUM|AVERAGE|COUNT|MIN|MAX)\s*\(([^()]*)\)/i;
+    let aggregateMatch = aggregatePattern.exec(arithmeticExpression);
+    while (aggregateMatch) {
+      const nestedResolving = new Set(resolving);
+      nestedResolving.delete(formulaKey);
+      const aggregateValue = evaluateFormula(
+        `=${aggregateMatch[0]}`,
+        data,
+        formulaCol,
+        formulaRow,
+        nestedResolving,
+      );
+      if (aggregateValue === undefined) {
+        resolving.delete(formulaKey);
+        return undefined;
+      }
+      arithmeticExpression = `${arithmeticExpression.slice(0, aggregateMatch.index)}${aggregateValue}${arithmeticExpression.slice(aggregateMatch.index + aggregateMatch[0].length)}`;
+      aggregateMatch = aggregatePattern.exec(arithmeticExpression);
+    }
     const result = evaluateArithmeticExpression(
-      formulaValue.trim().slice(1),
+      arithmeticExpression,
       cellName => {
         const coordinates = coordinatesFromCellName(cellName);
         if (!coordinates
@@ -2396,9 +2416,6 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatBar.className = 'inline-spreadsheet-cell-format';
   const cellStyleRow = document.createElement('div');
   cellStyleRow.className = 'inline-spreadsheet-cell-format-row';
-  const cellFormatLabel = document.createElement('strong');
-  cellFormatLabel.innerHTML = '<i class="fas fa-th" aria-hidden="true"></i>';
-  cellFormatLabel.title = 'Cell formatting';
   const cellFormatColorInput = createInput(
     'color',
     savedCellDefaults?.backgroundColor ?? appearance.cellColor,
@@ -2435,19 +2452,11 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatBorderWidthInput.min = '0';
   cellFormatBorderWidthInput.max = String(MAX_TABLE_BORDER);
   cellStyleRow.append(
-    cellFormatLabel,
     createIconControl('<i class="fas fa-fill-drip"></i>', 'Cell background color', cellFormatColorInput),
     createIconControl('<i class="fas fa-ban"></i>', 'Remove cell background color', cellFormatNoColorInput),
-    createIconControl('<i class="fas fa-square"></i>', 'Border color', cellFormatBorderColorInput),
-    createIconControl('<i class="fas fa-border-style"></i>', 'Border style', cellFormatBorderStyleSelect),
-    createIconControl('<i class="fas fa-border-all"></i>', 'Border width', cellFormatBorderWidthInput),
   );
 
-  const fontStyleRow = document.createElement('div');
-  fontStyleRow.className = 'inline-spreadsheet-cell-format-row';
-  const fontFormatLabel = document.createElement('strong');
-  fontFormatLabel.innerHTML = '<i class="fas fa-font" aria-hidden="true"></i>';
-  fontFormatLabel.title = 'Font formatting';
+  const fontStyleRow = cellStyleRow;
   const cellFormatFontFamilySelect = document.createElement('select');
   cellFormatFontFamilySelect.className = 'form-control form-control-sm';
   cellFormatFontFamilySelect.setAttribute('aria-label', 'Selected cell font family');
@@ -2553,11 +2562,6 @@ function createOverlay(initial: SpreadsheetData): {
     { value: 'right', label: 'Align right', icon: '<i class="fas fa-align-right" aria-hidden="true"></i>' },
     { value: 'justify', label: 'Justify', icon: '<i class="fas fa-align-justify" aria-hidden="true"></i>' },
   ]);
-  const verticalAlignmentButtons = createAlignmentButtons(cellFormatVerticalAlignSelect, [
-    { value: 'top', label: 'Align top', icon: '↥' },
-    { value: 'middle', label: 'Align middle', icon: '↕' },
-    { value: 'bottom', label: 'Align bottom', icon: '↧' },
-  ]);
   const rowHeightInput = createInput(
     'number',
     String(MIN_DATA_ROW_HEIGHT),
@@ -2566,7 +2570,6 @@ function createOverlay(initial: SpreadsheetData): {
   rowHeightInput.min = String(MIN_DATA_ROW_HEIGHT);
   rowHeightInput.max = String(MAX_DATA_ROW_HEIGHT);
   fontStyleRow.append(
-    fontFormatLabel,
     createIconControl('<i class="fas fa-font"></i>', 'Font family', cellFormatFontFamilySelect),
     createStepperControl(cellFormatFontSizeInput, 'font size'),
     createLabeledControl('', cellFormatBoldInput),
@@ -2575,8 +2578,6 @@ function createOverlay(initial: SpreadsheetData): {
     createIconControl('<span class="inline-spreadsheet-text-color-icon">A</span>', 'Text color', cellFormatTextColorInput),
     createIconControl('<i class="fas fa-ban"></i>', 'Remove text color', cellFormatNoTextColorInput),
     horizontalAlignmentButtons,
-    verticalAlignmentButtons,
-    createIconControl('<i class="fas fa-arrows-alt-v"></i>', 'Row height', rowHeightInput),
   );
 
   const clearCellFormatBtn = document.createElement('button');
@@ -2590,7 +2591,6 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatStatus.textContent = 'Select cells, then change a property to apply it immediately.';
   cellFormatBar.append(
     cellStyleRow,
-    fontStyleRow,
     clearCellFormatBtn,
     cellFormatStatus,
   );
