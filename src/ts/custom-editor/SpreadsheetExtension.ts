@@ -160,7 +160,92 @@ function isStandaloneClipboardTable(html: string): boolean {
   });
 }
 
+function distributeTableHeight(
+  currentHeights: number[],
+  minimumHeights: number[],
+  requestedTotal: number,
+): number[] {
+  const minimumTotal = minimumHeights.reduce((sum, height) => sum + height, 0);
+  const target = Math.max(minimumTotal, requestedTotal);
+  const currentTotal = currentHeights.reduce((sum, height) => sum + height, 0);
+  if (currentTotal <= 0) return minimumHeights;
+  if (target >= currentTotal) {
+    const scale = target / currentTotal;
+    return currentHeights.map((height, index) => Math.max(minimumHeights[index], height * scale));
+  }
+
+  const result = [...minimumHeights];
+  let remainingTarget = target;
+  let adjustable = currentHeights.map((_height, index) => index);
+  while (adjustable.length > 0) {
+    const adjustableCurrent = adjustable.reduce((sum, index) => sum + currentHeights[index], 0);
+    if (adjustableCurrent <= 0) break;
+    const scale = remainingTarget / adjustableCurrent;
+    const clamped = adjustable.filter(index => currentHeights[index] * scale <= minimumHeights[index]);
+    if (clamped.length === 0) {
+      adjustable.forEach(index => { result[index] = currentHeights[index] * scale; });
+      break;
+    }
+    clamped.forEach(index => { remainingTarget -= minimumHeights[index]; });
+    const clampedSet = new Set(clamped);
+    adjustable = adjustable.filter(index => !clampedSet.has(index));
+  }
+  return result;
+}
+
+function removeOuterTableHeight(table: HTMLTableElement): void {
+  table.removeAttribute('height');
+  table.style.removeProperty('height');
+  table.style.removeProperty('min-height');
+  table.style.removeProperty('max-height');
+  const internalStyle = table.getAttribute('data-mce-style');
+  if (!internalStyle) return;
+  const styleProbe = table.ownerDocument.createElement('table');
+  styleProbe.setAttribute('style', internalStyle);
+  styleProbe.style.removeProperty('height');
+  styleProbe.style.removeProperty('min-height');
+  styleProbe.style.removeProperty('max-height');
+  const normalized = styleProbe.getAttribute('style')?.trim();
+  if (normalized) {
+    table.setAttribute('data-mce-style', normalized);
+  } else {
+    table.removeAttribute('data-mce-style');
+  }
+}
+
+function resizeSpreadsheetRowsFromTableHeight(
+  table: HTMLTableElement,
+  requestedHeight: number,
+): void {
+  if (!Number.isFinite(requestedHeight) || requestedHeight <= 0) return;
+  const kind = table.dataset.spreadsheetStyle;
+  const rows = kind === 'notebook'
+    ? Array.from(table.querySelectorAll<HTMLTableRowElement>('tr'))
+    : Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody > tr'));
+  if (rows.length === 0) return;
+
+  removeOuterTableHeight(table);
+  const currentHeights = rows.map(row => Math.max(20, row.getBoundingClientRect().height));
+  const previousInlineHeights = rows.map(row => row.style.height);
+  rows.forEach(row => row.style.removeProperty('height'));
+  const minimumHeights = rows.map(row => Math.max(20, Math.ceil(row.getBoundingClientRect().height)));
+  const naturalTableHeight = table.getBoundingClientRect().height;
+  const naturalRowsHeight = minimumHeights.reduce((sum, height) => sum + height, 0);
+  const fixedHeight = Math.max(0, naturalTableHeight - naturalRowsHeight);
+  rows.forEach((row, index) => { row.style.height = previousInlineHeights[index]; });
+
+  const targetRowsHeight = Math.max(0, requestedHeight - fixedHeight);
+  const distributed = distributeTableHeight(currentHeights, minimumHeights, targetRowsHeight);
+  rows.forEach((row, index) => {
+    row.style.height = `${Math.max(minimumHeights[index], Math.round(distributed[index]))}px`;
+    const serializedStyle = row.getAttribute('style')?.trim();
+    if (serializedStyle) row.setAttribute('data-mce-style', serializedStyle);
+  });
+  removeOuterTableHeight(table);
+}
+
 export function registerSpreadsheetExtension(editor: Editor): void {
+  const resizeStartHeights = new WeakMap<Element, number>();
   const openStandardTableDialog = (): void => {
     editor.windowManager.open({
       title: 'Insert table',
@@ -303,6 +388,31 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const target = (event.target as HTMLElement)
       .closest('table.elabftw-spreadsheet') as HTMLTableElement | null;
     if (target) openInlineSpreadsheet(extractFromTable(target), target);
+  });
+
+  editor.on('ObjectResizeStart', event => {
+    const resizing = event as unknown as { height?: number; target?: Element };
+    if (resizing.target && Number.isFinite(resizing.height)) {
+      resizeStartHeights.set(resizing.target, resizing.height as number);
+    }
+  });
+
+  editor.on('ObjectResized', event => {
+    const resized = event as unknown as { height?: number; origin?: string; target?: Element };
+    const table = resized.target?.closest?.('table.elabftw-spreadsheet') as HTMLTableElement | null;
+    if (!table
+      || !resized.origin?.startsWith('corner-')
+      || !Number.isFinite(resized.height)
+    ) {
+      return;
+    }
+    const startHeight = resizeStartHeights.get(table);
+    resizeStartHeights.delete(table);
+    if (Number.isFinite(startHeight)
+      && Math.abs((resized.height as number) - (startHeight as number)) < 1
+    ) return;
+    resizeSpreadsheetRowsFromTableHeight(table, resized.height as number);
+    editor.nodeChanged();
   });
 
   editor.on('init', () => {
