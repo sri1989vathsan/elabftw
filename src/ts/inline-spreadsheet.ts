@@ -1984,6 +1984,7 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatTextColorInput: HTMLInputElement;
   cellFormatTextAlignSelect: HTMLSelectElement;
   cellFormatVerticalAlignSelect: HTMLSelectElement;
+  rowHeightInput: HTMLInputElement;
   clearCellFormatBtn: HTMLButtonElement;
   cellFormatStatus: HTMLSpanElement;
   cellFormatNoColorInput: HTMLInputElement;
@@ -2441,6 +2442,13 @@ function createOverlay(initial: SpreadsheetData): {
     <option value="bottom">Bottom</option>
   `;
   cellFormatVerticalAlignSelect.value = savedCellDefaults?.verticalAlign ?? '';
+  const rowHeightInput = createInput(
+    'number',
+    String(MIN_DATA_ROW_HEIGHT),
+    'Height of selected rows in pixels',
+  );
+  rowHeightInput.min = String(MIN_DATA_ROW_HEIGHT);
+  rowHeightInput.max = String(MAX_DATA_ROW_HEIGHT);
   fontStyleRow.append(
     fontFormatLabel,
     createLabeledControl('Family', cellFormatFontFamilySelect),
@@ -2452,6 +2460,7 @@ function createOverlay(initial: SpreadsheetData): {
     createLabeledControl('No text color', cellFormatNoTextColorInput),
     createLabeledControl('Horizontal', cellFormatTextAlignSelect),
     createLabeledControl('Vertical', cellFormatVerticalAlignSelect),
+    createLabeledControl('Row height (px)', rowHeightInput),
   );
 
   const clearCellFormatBtn = document.createElement('button');
@@ -2587,6 +2596,7 @@ function createOverlay(initial: SpreadsheetData): {
     cellFormatTextColorInput,
     cellFormatTextAlignSelect,
     cellFormatVerticalAlignSelect,
+    rowHeightInput,
     clearCellFormatBtn,
     cellFormatStatus,
     cellFormatNoColorInput,
@@ -2790,6 +2800,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       formulaRow: number;
       allowRange: boolean;
     } | null = null;
+    let rowResizePointerActive = false;
     document.body.appendChild(ui.overlay);
 
     const readRawData = (): AOA => {
@@ -2855,6 +2866,43 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       });
     };
 
+    const captureRenderedRowHeights = (): void => {
+      if (!sheetContainer) return;
+      const rowHeights: RowHeights = { ...(working.rowHeights ?? {}) };
+      sheetContainer.querySelectorAll<HTMLTableRowElement>('.jss_worksheet > tbody > tr')
+        .forEach((row, rowIndex) => {
+          const height = Number.parseFloat(row.style.height || row.getAttribute('height') || '');
+          if (!Number.isFinite(height)) return;
+          rowHeights[String(rowIndex)] = Math.max(
+            MIN_DATA_ROW_HEIGHT,
+            Math.min(MAX_DATA_ROW_HEIGHT, Math.round(height)),
+          );
+        });
+      working = normalizeSpreadsheetData({
+        ...working,
+        data: readRawData(),
+        rowHeights,
+      });
+    };
+
+    const onRowResizePointerDown = (event: MouseEvent): void => {
+      const target = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_row[data-y]')
+        : null;
+      if (!target || !ui.sheetHost.contains(target)) return;
+      const bounds = target.getBoundingClientRect();
+      const distanceFromBottom = bounds.bottom - event.clientY;
+      rowResizePointerActive = distanceFromBottom >= 0 && distanceFromBottom <= 8;
+    };
+
+    const onRowResizePointerUp = (): void => {
+      if (!rowResizePointerActive) return;
+      rowResizePointerActive = false;
+      // jspreadsheet finalizes its row DOM on this same mouseup. Read the
+      // committed height just after its handler, even if onresizerow was lost.
+      window.setTimeout(captureRenderedRowHeights, 0);
+    };
+
     const readCellStyles = (rows = working.rows, cols = working.cols): CellStyles | undefined => {
       const styles = worksheet?.getStyle?.();
       const normalized = normalizeCellStyles(
@@ -2889,6 +2937,13 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const cellCount = (endCol - startCol + 1) * (endRow - startRow + 1);
       const rangeLabel = `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
       ui.cellFormatStatus.textContent = `${rangeLabel} selected (${cellCount} cell${cellCount === 1 ? '' : 's'}).`;
+      const selectedRowHeights = new Set<number>();
+      for (let row = startRow; row <= endRow; row++) {
+        selectedRowHeights.add(working.rowHeights?.[String(row)] ?? MIN_DATA_ROW_HEIGHT);
+      }
+      if (selectedRowHeights.size === 1) {
+        ui.rowHeightInput.value = String([...selectedRowHeights][0]);
+      }
     };
 
     const formulaParenthesisBalance = (value: string): number => {
@@ -3277,6 +3332,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           allowInsertColumn: true,
           allowDeleteRow: true,
           allowDeleteColumn: true,
+          rowResize: true,
           columnSorting: false,
           selectionCopy: true,
         }],
@@ -3596,6 +3652,8 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     };
 
     mountSpreadsheet(working);
+    ui.sheetHost.addEventListener('mousedown', onRowResizePointerDown, true);
+    document.addEventListener('mouseup', onRowResizePointerUp, true);
     ui.sheetHost.addEventListener('copy', onSpreadsheetCopy, true);
     ui.sheetHost.addEventListener('paste', onSpreadsheetPaste, true);
 
@@ -3853,6 +3911,33 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         'Applied vertical alignment to',
       );
     });
+    ui.rowHeightInput.addEventListener('change', () => {
+      const selection = getSelectedRange();
+      if (!selection) {
+        ui.cellFormatStatus.textContent = 'Select one or more rows or cells first.';
+        return;
+      }
+      const height = Math.max(
+        MIN_DATA_ROW_HEIGHT,
+        Math.min(MAX_DATA_ROW_HEIGHT, Math.round(Number(ui.rowHeightInput.value))),
+      );
+      if (!Number.isFinite(height)) return;
+      ui.rowHeightInput.value = String(height);
+      const startRow = Math.min(selection[1], selection[3]);
+      const endRow = Math.max(selection[1], selection[3]);
+      const rowHeights: RowHeights = { ...(working.rowHeights ?? {}) };
+      for (let row = startRow; row <= endRow; row++) {
+        rowHeights[String(row)] = height;
+        worksheet?.setHeight?.(row, height);
+      }
+      working = normalizeSpreadsheetData({
+        ...working,
+        data: readRawData(),
+        rowHeights,
+      });
+      applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights, working.rows);
+      ui.cellFormatStatus.textContent = `Set rows ${startRow + 1}–${endRow + 1} to ${height}px.`;
+    });
     ui.clearCellFormatBtn.addEventListener('click', () => {
       updateSelectedCells(
         style => updateQuickFontStyle(
@@ -3927,6 +4012,8 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       finishFormulaSelection();
       ui.sheetHost.removeEventListener('mousedown', onFormulaSelectionStart, true);
       ui.sheetHost.removeEventListener('keydown', onCellEditorKeydown, true);
+      ui.sheetHost.removeEventListener('mousedown', onRowResizePointerDown, true);
+      document.removeEventListener('mouseup', onRowResizePointerUp, true);
       ui.sheetHost.removeEventListener('copy', onSpreadsheetCopy, true);
       ui.sheetHost.removeEventListener('paste', onSpreadsheetPaste, true);
       document.removeEventListener('keydown', onKey);
