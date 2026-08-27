@@ -1707,8 +1707,11 @@ body.html-tool-workspace-resizing * {
 .toc-section-filter-tree {
   border: 1px solid var(--secondary);
   border-radius: 0.25rem;
-  max-height: 15rem;
+  height: 15rem;
+  max-height: 60vh;
+  min-height: 5rem;
   overflow-y: auto;
+  resize: vertical;
 }
 
 .toc-section-filter-option {
@@ -2158,6 +2161,12 @@ body.html-tool-workspace-resizing * {
   height: var(--spreadsheet-column-index-height) !important;
   max-height: var(--spreadsheet-column-index-height) !important;
   min-height: var(--spreadsheet-column-index-height) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet > colgroup > col:first-child {
+  max-width: var(--spreadsheet-row-index-width) !important;
+  min-width: var(--spreadsheet-row-index-width) !important;
+  width: var(--spreadsheet-row-index-width) !important;
 }
 
 .inline-spreadsheet-container .jss_worksheet > thead > tr > :first-child,

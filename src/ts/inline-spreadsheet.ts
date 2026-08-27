@@ -1143,10 +1143,16 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
   const rows: AOA = [];
   const cellStyles: CellStyles = {};
   const styleRules = getClipboardStyleRules(clipboardDocument);
-  Array.from(table.rows).forEach((tableRow, rowIndex) => {
+  const isFormulaSpreadsheet = table.classList.contains('elabftw-spreadsheet');
+  Array.from(table.rows).forEach(tableRow => {
+    const sourceCells = Array.from(tableRow.cells).filter(cell => (
+      !isFormulaSpreadsheet || !cell.classList.contains('spreadsheet-coordinate')
+    ));
+    if (sourceCells.length === 0) return;
+    const rowIndex = rows.length;
     rows[rowIndex] ??= [];
     let colIndex = 0;
-    Array.from(tableRow.cells).forEach(cell => {
+    sourceCells.forEach(cell => {
       while (rows[rowIndex][colIndex] !== undefined) colIndex++;
       const colSpan = Math.max(1, cell.colSpan || 1);
       const rowSpan = Math.max(1, cell.rowSpan || 1);
@@ -1196,14 +1202,27 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
 }
 
 /**
+ * Browsers may put a selected row or group of cells on the clipboard without
+ * its surrounding table. Wrap those fragments so the regular HTML table
+ * parser can retain their cell boundaries and formatting.
+ */
+function normalizeClipboardTableHtml(html: string): string {
+  if (/<table[\s>]/i.test(html)) return html;
+  if (/<tr[\s>]/i.test(html)) return `<table><tbody>${html}</tbody></table>`;
+  if (/<(?:td|th)[\s>]/i.test(html)) return `<table><tbody><tr>${html}</tr></tbody></table>`;
+  return html;
+}
+
+/**
  * Convert structured clipboard content to a formula-enabled data table.
  * Excel/LibreOffice HTML retains safe cell formatting; plain-text fallbacks
  * cover CSV, TSV, semicolon/pipe tables and PDF-style repeated-space columns.
  */
 export function spreadsheetFromClipboard(html: string, plainText: string): SpreadsheetData | null {
-  const containsTable = /<table[\s>]/i.test(html);
+  const normalizedHtml = normalizeClipboardTableHtml(html);
+  const containsTable = /<table[\s>]/i.test(normalizedHtml);
   const clipboardTable = containsTable
-    ? parseClipboardHtmlTable(html)
+    ? parseClipboardHtmlTable(normalizedHtml)
     : null;
   const parsed = clipboardTable?.data
     ?? parseStructuredPlainText(normalizePdfPrivateUseText(plainText));
@@ -1215,7 +1234,7 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
   );
   if (cols === 0) return null;
   const richTextStyles = clipboardTable?.cellStyles
-    ?? getClipboardRichTextStyles(html, parsed);
+    ?? getClipboardRichTextStyles(normalizedHtml, parsed);
   const appearance = getEffectiveAppearanceDefaults();
 
   // Clipboard tables should keep the shape of their source instead of
@@ -1233,6 +1252,50 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
     cellStyles: normalizeCellStyles(richTextStyles, rows, cols),
     appearance,
   };
+}
+
+/** Paste a rectangular source grid into an existing formula spreadsheet. */
+export function pasteSpreadsheetRange(
+  targetData: SpreadsheetData,
+  sourceData: SpreadsheetData,
+  startCol: number,
+  startRow: number,
+): SpreadsheetData {
+  const target = normalizeSpreadsheetData(targetData);
+  const source = normalizeSpreadsheetData(sourceData);
+  const safeStartCol = Math.max(0, Math.min(MAX_DIMENSION - 1, startCol));
+  const safeStartRow = Math.max(0, Math.min(MAX_DIMENSION - 1, startRow));
+  const rows = Math.min(MAX_DIMENSION, Math.max(target.rows, safeStartRow + source.rows));
+  const cols = Math.min(MAX_DIMENSION, Math.max(target.cols, safeStartCol + source.cols));
+  const data = resizeData(target.data, rows, cols);
+  for (let row = 0; row < source.rows && safeStartRow + row < rows; row++) {
+    for (let col = 0; col < source.cols && safeStartCol + col < cols; col++) {
+      data[safeStartRow + row][safeStartCol + col] = source.data[row]?.[col] ?? '';
+    }
+  }
+
+  const cellStyles: CellStyles = { ...(target.cellStyles ?? {}) };
+  Object.entries(source.cellStyles ?? {}).forEach(([cellName, style]) => {
+    const coordinates = coordinatesFromCellName(cellName);
+    if (!coordinates) return;
+    const targetCol = safeStartCol + coordinates.col;
+    const targetRow = safeStartRow + coordinates.row;
+    if (targetCol >= cols || targetRow >= rows) return;
+    cellStyles[`${colLabel(targetCol)}${targetRow + 1}`] = style;
+  });
+
+  const changedPlateSize = target.kind === 'well-plate'
+    && (rows !== target.rows || cols !== target.cols);
+  return normalizeSpreadsheetData({
+    ...target,
+    data,
+    displayData: undefined,
+    rows,
+    cols,
+    kind: changedPlateSize ? 'standard' : target.kind,
+    plateSize: changedPlateSize ? undefined : target.plateSize,
+    cellStyles: Object.keys(cellStyles).length > 0 ? cellStyles : undefined,
+  });
 }
 
 function sanitizeStyle(
@@ -1719,6 +1782,49 @@ function getMountedWorksheet(
     ?? mountedContainer.jspreadsheet
     ?? mountedContainer.jssWorksheet
     ?? null;
+}
+
+/**
+ * jspreadsheet recreates its coordinate colgroup with a hard-coded 50 px
+ * gutter whenever a worksheet is mounted. Apply the user's dimensions to the
+ * layout elements themselves so row/column changes cannot reset them.
+ */
+function applyCoordinateHeaderDimensions(
+  container: HTMLElement,
+  appearance: SpreadsheetAppearance,
+): void {
+  const rowIndexWidth = `${appearance.rowIndexWidth}px`;
+  const columnIndexHeight = `${appearance.columnIndexHeight}px`;
+
+  container.querySelectorAll<HTMLTableColElement>(
+    '.jss_worksheet > colgroup > col:first-child',
+  ).forEach(col => {
+    col.setAttribute('width', String(appearance.rowIndexWidth));
+    col.style.width = rowIndexWidth;
+    col.style.minWidth = rowIndexWidth;
+    col.style.maxWidth = rowIndexWidth;
+  });
+
+  container.querySelectorAll<HTMLElement>('.jss_worksheet .jss_row, .jss_worksheet .jss_selectall')
+    .forEach(cell => {
+      cell.style.width = rowIndexWidth;
+      cell.style.minWidth = rowIndexWidth;
+      cell.style.maxWidth = rowIndexWidth;
+    });
+
+  container.querySelectorAll<HTMLElement>('.jss_worksheet .jss_selectall').forEach(selectAll => {
+    const headerRow = selectAll.parentElement;
+    if (!headerRow) return;
+    headerRow.style.height = columnIndexHeight;
+    headerRow.style.minHeight = columnIndexHeight;
+    headerRow.style.maxHeight = columnIndexHeight;
+    Array.from(headerRow.children).forEach(cell => {
+      if (!(cell instanceof HTMLElement)) return;
+      cell.style.height = columnIndexHeight;
+      cell.style.minHeight = columnIndexHeight;
+      cell.style.maxHeight = columnIndexHeight;
+    });
+  });
 }
 
 function getComputedDataFromDOM(container: HTMLElement): AOA {
@@ -2991,6 +3097,15 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         mountedRows,
         mountedCols,
       );
+      const enforceCoordinateDimensions = (): void => {
+        if (sheetContainer !== mountedContainer) return;
+        applyCoordinateHeaderDimensions(mountedContainer, mountedAppearance);
+      };
+      const scheduleCoordinateDimensionEnforcement = (): void => {
+        enforceCoordinateDimensions();
+        window.requestAnimationFrame(enforceCoordinateDimensions);
+        window.setTimeout(enforceCoordinateDimensions, 50);
+      };
       let hydrationComplete = false;
       const savedCells = mountedData
         .flatMap((row, rowIndex) => row.map((value, colIndex) => ({ value, colIndex, rowIndex })))
@@ -3012,6 +3127,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         const mountedWorksheet = getMountedWorksheet(mountedContainer, candidate);
         if (!mountedWorksheet) return false;
         worksheet = mountedWorksheet;
+        scheduleCoordinateDimensionEnforcement();
 
         // jspreadsheet v5 creates worksheets asynchronously. A worksheet can
         // therefore exist with its headers/minDimensions but without the data
@@ -3067,6 +3183,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           });
           if (changedPlateSize) ui.presetSelect.value = 'custom';
           updateSizeControls(rows, cols);
+          scheduleCoordinateDimensionEnforcement();
           scheduleFormulaResultRender();
         }, 0);
       };
@@ -3169,6 +3286,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       // guaranteed to finish. Keep checking for a bounded interval even when
       // onload was delayed or skipped by an earlier render error.
       window.setTimeout(() => hydrateWorksheetUntilReady(), 0);
+      scheduleCoordinateDimensionEnforcement();
       updateSizeControls(working.rows, working.cols);
       if (selectedRange) {
         const maxCol = working.cols - 1;

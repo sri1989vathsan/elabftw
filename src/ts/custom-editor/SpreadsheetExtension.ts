@@ -8,6 +8,7 @@ import {
   getFlattenedClipboardSuggestion,
   normalizePdfPrivateUseText,
   openSpreadsheetModal,
+  pasteSpreadsheetRange,
   spreadsheetFromClipboard,
   spreadsheetFromFlattenedClipboard,
   spreadsheetToHTML,
@@ -19,6 +20,110 @@ import { RICH_SELECTION_ATTRIBUTE } from '../ClipboardContent';
 
 interface PdfTableDialogData {
   columns: string;
+}
+
+function spreadsheetColumnLabel(index: number): string {
+  let label = '';
+  let current = index;
+  do {
+    label = String.fromCharCode(65 + (current % 26)) + label;
+    current = Math.floor(current / 26) - 1;
+  } while (current >= 0);
+  return label;
+}
+
+function getFormulaSpreadsheetCoordinates(
+  table: HTMLTableElement,
+  cell: HTMLTableCellElement,
+): { col: number; row: number } | null {
+  const visualRow = Array.from(table.rows).indexOf(cell.parentElement as HTMLTableRowElement);
+  const kind = table.dataset.spreadsheetStyle;
+  const row = kind === 'notebook' ? visualRow : visualRow - 1;
+  const col = kind === 'notebook' ? cell.cellIndex : cell.cellIndex - 1;
+  return row >= 0 && col >= 0 ? { col, row } : null;
+}
+
+function replaceFormulaSpreadsheetRange(
+  editor: Editor,
+  table: HTMLTableElement,
+  cell: HTMLTableCellElement,
+  source: SpreadsheetData,
+): boolean {
+  const coordinates = getFormulaSpreadsheetCoordinates(table, cell);
+  if (!coordinates) return false;
+  const updated = pasteSpreadsheetRange(
+    extractFromTable(table),
+    source,
+    coordinates.col,
+    coordinates.row,
+  );
+  const container = editor.getDoc().createElement('div');
+  container.innerHTML = spreadsheetToHTML(updated, updated.data);
+  const replacement = container.firstElementChild as HTMLTableElement | null;
+  if (!replacement) return false;
+  table.replaceWith(replacement);
+
+  const visualRow = coordinates.row + (updated.kind === 'notebook' ? 0 : 1);
+  const visualCol = coordinates.col + (updated.kind === 'notebook' ? 0 : 1);
+  const replacementCell = replacement.rows[visualRow]?.cells[visualCol];
+  if (replacementCell) editor.selection.setCursorLocation(replacementCell, 0);
+  return true;
+}
+
+function tableHasMergedCells(table: HTMLTableElement): boolean {
+  return Array.from(table.querySelectorAll<HTMLTableCellElement>('td, th')).some(cell => (
+    cell.colSpan > 1 || cell.rowSpan > 1
+  ));
+}
+
+function createDestinationCell(
+  row: HTMLTableRowElement,
+  tagName: 'TD' | 'TH',
+): HTMLTableCellElement {
+  const cell = row.ownerDocument.createElement(tagName.toLowerCase()) as HTMLTableCellElement;
+  row.appendChild(cell);
+  return cell;
+}
+
+function pasteIntoHtmlTable(
+  targetTable: HTMLTableElement,
+  targetCell: HTMLTableCellElement,
+  source: SpreadsheetData,
+): HTMLTableCellElement | null {
+  if (tableHasMergedCells(targetTable)) return null;
+  const targetRow = targetCell.parentElement as HTMLTableRowElement | null;
+  const targetSection = targetRow?.parentElement;
+  if (!targetRow || !targetSection) return null;
+  const sectionRows = Array.from(targetSection.children)
+    .filter((element): element is HTMLTableRowElement => element.tagName === 'TR');
+  const startRow = sectionRows.indexOf(targetRow);
+  const startCol = targetCell.cellIndex;
+  if (startRow < 0 || startCol < 0) return null;
+  const newCellTag = targetCell.tagName === 'TH' ? 'TH' : 'TD';
+  let lastCell: HTMLTableCellElement | null = targetCell;
+
+  for (let rowOffset = 0; rowOffset < source.rows; rowOffset++) {
+    let destinationRow = sectionRows[startRow + rowOffset];
+    if (!destinationRow) {
+      destinationRow = targetRow.ownerDocument.createElement('tr');
+      targetSection.appendChild(destinationRow);
+      sectionRows.push(destinationRow);
+    }
+    while (destinationRow.cells.length < startCol + source.cols) {
+      createDestinationCell(destinationRow, newCellTag);
+    }
+    for (let colOffset = 0; colOffset < source.cols; colOffset++) {
+      const destinationCell = destinationRow.cells[startCol + colOffset];
+      const value = String(source.data[rowOffset]?.[colOffset] ?? '');
+      destinationCell.innerHTML = escapeHTML(value).replace(/\r?\n/g, '<br>');
+      const style = source.cellStyles?.[
+        `${spreadsheetColumnLabel(colOffset)}${rowOffset + 1}`
+      ];
+      if (style) destinationCell.setAttribute('style', style);
+      lastCell = destinationCell;
+    }
+  }
+  return lastCell;
 }
 
 /**
@@ -132,7 +237,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       const plainText = clipboard.getData('text/plain');
       const normalizedPlainText = normalizePdfPrivateUseText(plainText);
       const richClipboardHtml = clipboard.getData('text/html');
-      if (richClipboardHtml.includes(RICH_SELECTION_ATTRIBUTE)) return;
+      const selectedCell = editor.selection.getNode()
+        .closest('td, th') as HTMLTableCellElement | null;
+      const isRichSelection = richClipboardHtml.includes(RICH_SELECTION_ATTRIBUTE);
+      if (isRichSelection && (!selectedCell || !isStandaloneClipboardTable(richClipboardHtml))) {
+        return;
+      }
       // A mixed rich copy belongs to TinyMCE. Converting it here would retain
       // only its first table and silently discard the surrounding content.
       const containsHtmlTable = /<table[\s>]/i.test(richClipboardHtml);
@@ -142,6 +252,37 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       if (spreadsheet) {
         event.preventDefault();
         event.stopImmediatePropagation();
+        if (selectedCell) {
+          const selectedTable = selectedCell.closest('table') as HTMLTableElement | null;
+          if (!selectedTable) return;
+          let pastedIntoTable = false;
+          editor.undoManager.transact(() => {
+            if (selectedTable.classList.contains('elabftw-spreadsheet')) {
+              pastedIntoTable = replaceFormulaSpreadsheetRange(
+                editor,
+                selectedTable,
+                selectedCell,
+                spreadsheet,
+              );
+              return;
+            }
+            const lastCell = pasteIntoHtmlTable(selectedTable, selectedCell, spreadsheet);
+            if (lastCell) {
+              editor.selection.setCursorLocation(lastCell, lastCell.childNodes.length);
+              pastedIntoTable = true;
+            }
+          });
+          if (!pastedIntoTable) {
+            editor.notificationManager.open({
+              text: tableHasMergedCells(selectedTable)
+                ? 'Pasting a cell range into a table with merged cells is not supported.'
+                : 'The copied cells could not be pasted at this table position.',
+              type: 'warning',
+              timeout: 3500,
+            });
+          }
+          return;
+        }
         editor.undoManager.transact(() => {
           editor.insertContent(spreadsheetToHTML(spreadsheet, spreadsheet.data));
         });

@@ -368,7 +368,9 @@ export default class TocPanel extends SidePanel {
       const label = document.createElement('label');
       label.htmlFor = checkbox.id;
       label.className = 'toc-section-filter-label';
-      label.textContent = entry.path;
+      // Hierarchy is already conveyed by the tree indentation. Showing the
+      // full ancestor path here makes deep headings needlessly repetitive.
+      label.textContent = entry.text;
       label.title = entry.path;
 
       row.append(toggle, checkbox, label);
