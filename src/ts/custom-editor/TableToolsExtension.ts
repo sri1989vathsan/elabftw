@@ -11,6 +11,10 @@ import {
 } from '../ClipboardContent';
 
 export function registerTableToolsExtension(editor: Editor): void {
+  editor.ui.registry.addIcon(
+    'elabftw-copy-table',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="4" width="11" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 8h7M8 11.5h7M11.5 8v7" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="10" width="10" height="10" rx="1.5" fill="var(--tox-icon-highlight-bg, white)" stroke="currentColor" stroke-width="1.8"/><path d="M13 13h4M13 16h4M15 13v5" stroke="currentColor" stroke-width="1.2"/></svg>',
+  );
   const tableIndentation = new TableIndentation(editor);
   let lastSelectedTable: HTMLTableElement | null = null;
   let lastMixedSelectionRange: Range | null = null;
@@ -234,7 +238,7 @@ export function registerTableToolsExtension(editor: Editor): void {
     },
   });
   editor.ui.registry.addButton('table-select-copy', {
-    text: 'Copy table',
+    icon: 'elabftw-copy-table',
     tooltip: 'Copy the complete table with formatting',
     onAction: () => void copyWholeTable(),
     onSetup: api => {

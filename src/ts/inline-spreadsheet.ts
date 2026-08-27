@@ -1925,6 +1925,53 @@ function createLabeledControl(labelText: string, control: HTMLElement): HTMLLabe
   return label;
 }
 
+function createIconControl(
+  icon: string,
+  labelText: string,
+  control: HTMLElement,
+): HTMLLabelElement {
+  const label = createLabeledControl('', control);
+  label.classList.add('inline-spreadsheet-compact-control');
+  label.title = labelText;
+  const iconElement = document.createElement('span');
+  iconElement.className = 'inline-spreadsheet-control-icon';
+  iconElement.innerHTML = icon;
+  iconElement.setAttribute('aria-hidden', 'true');
+  label.prepend(iconElement);
+  return label;
+}
+
+function createStepperControl(
+  input: HTMLInputElement,
+  labelText: string,
+): HTMLDivElement {
+  const group = document.createElement('div');
+  group.className = 'inline-spreadsheet-stepper';
+  group.title = labelText;
+  const decrease = document.createElement('button');
+  decrease.type = 'button';
+  decrease.className = 'inline-spreadsheet-icon-button';
+  decrease.textContent = '−';
+  decrease.setAttribute('aria-label', `Decrease ${labelText}`);
+  const increase = document.createElement('button');
+  increase.type = 'button';
+  increase.className = 'inline-spreadsheet-icon-button';
+  increase.textContent = '+';
+  increase.setAttribute('aria-label', `Increase ${labelText}`);
+  const step = (direction: number): void => {
+    if (direction > 0) {
+      input.stepUp();
+    } else {
+      input.stepDown();
+    }
+    input.dispatchEvent(new Event('change'));
+  };
+  decrease.addEventListener('click', () => step(-1));
+  increase.addEventListener('click', () => step(1));
+  group.append(decrease, input, increase);
+  return group;
+}
+
 function createOverlay(initial: SpreadsheetData): {
   overlay: HTMLDivElement;
   sheetHost: HTMLDivElement;
@@ -1938,6 +1985,8 @@ function createOverlay(initial: SpreadsheetData): {
   captionInput: HTMLInputElement;
   presetSelect: HTMLSelectElement;
   formulaButtons: NodeListOf<HTMLButtonElement>;
+  formulaCellLabel: HTMLSpanElement;
+  formulaInput: HTMLInputElement;
   formulaStatus: HTMLSpanElement;
   formulaBar: HTMLDivElement;
   formulaCollapseBtn: HTMLButtonElement;
@@ -2149,17 +2198,17 @@ function createOverlay(initial: SpreadsheetData): {
   columnIndexHeightInput.min = String(MIN_COLUMN_INDEX_HEIGHT);
   columnIndexHeightInput.max = String(MAX_COLUMN_INDEX_HEIGHT);
   tableAppearanceGrid.append(
-    createLabeledControl('Width % (0 = auto)', tableWidthInput),
-    createLabeledControl('Alignment', tableAlignmentSelect),
-    createLabeledControl('Border width', tableBorderWidthInput),
-    createLabeledControl('Border style', tableBorderStyleSelect),
-    createLabeledControl('Border color', tableBorderColorInput),
-    createLabeledControl('Background', tableBackgroundColorInput),
-    createLabeledControl('No background', tableNoBackgroundInput),
-    createLabeledControl('Cell spacing', tableCellSpacingInput),
-    createLabeledControl('Cell padding', cellPaddingInput),
-    createLabeledControl('Row index width', rowIndexWidthInput),
-    createLabeledControl('Column index height', columnIndexHeightInput),
+    createIconControl('<i class="fas fa-arrows-alt-h"></i>', 'Table width (0 is automatic)', tableWidthInput),
+    createIconControl('<i class="fas fa-align-center"></i>', 'Table alignment', tableAlignmentSelect),
+    createIconControl('<i class="fas fa-border-all"></i>', 'Table border width', tableBorderWidthInput),
+    createIconControl('<i class="fas fa-border-style"></i>', 'Table border style', tableBorderStyleSelect),
+    createIconControl('<i class="fas fa-square"></i>', 'Table border color', tableBorderColorInput),
+    createIconControl('<i class="fas fa-fill-drip"></i>', 'Table background', tableBackgroundColorInput),
+    createIconControl('<i class="fas fa-ban"></i>', 'No table background', tableNoBackgroundInput),
+    createIconControl('<i class="fas fa-th"></i>', 'Cell spacing', tableCellSpacingInput),
+    createIconControl('<i class="fas fa-expand"></i>', 'Cell padding', cellPaddingInput),
+    createIconControl('<i class="fas fa-arrows-alt-h"></i>', 'Row index width', rowIndexWidthInput),
+    createIconControl('<i class="fas fa-arrows-alt-v"></i>', 'Column index height', columnIndexHeightInput),
   );
   appearancePanel.append(tableAppearanceLabel, tableAppearanceGrid);
 
@@ -2214,15 +2263,15 @@ function createOverlay(initial: SpreadsheetData): {
   alternateColumnsInput.setAttribute('aria-label', 'Use alternating column color');
 
   appearanceGrid.append(
-    createLabeledControl('Border size', borderWidthInput),
-    createLabeledControl('Border color', borderColorInput),
-    createLabeledControl('Border style', defaultCellBorderStyleSelect),
-    createLabeledControl('Cell color', cellColorInput),
-    createLabeledControl('No cell color', defaultCellNoColorInput),
-    createLabeledControl('Alternate rows', alternateRowsInput),
-    createLabeledControl('Row color', alternateRowColorInput),
-    createLabeledControl('Alternate columns', alternateColumnsInput),
-    createLabeledControl('Column color', alternateColumnColorInput),
+    createIconControl('<i class="fas fa-border-all"></i>', 'Default cell border width', borderWidthInput),
+    createIconControl('<i class="fas fa-square"></i>', 'Default cell border color', borderColorInput),
+    createIconControl('<i class="fas fa-border-style"></i>', 'Default cell border style', defaultCellBorderStyleSelect),
+    createIconControl('<i class="fas fa-fill-drip"></i>', 'Default cell color', cellColorInput),
+    createIconControl('<i class="fas fa-ban"></i>', 'No default cell color', defaultCellNoColorInput),
+    createIconControl('<i class="fas fa-grip-lines"></i>', 'Use alternating row color', alternateRowsInput),
+    createIconControl('<i class="fas fa-fill-drip"></i>', 'Alternating row color', alternateRowColorInput),
+    createIconControl('<i class="fas fa-columns"></i>', 'Use alternating column color', alternateColumnsInput),
+    createIconControl('<i class="fas fa-fill-drip"></i>', 'Alternating column color', alternateColumnColorInput),
   );
   appearancePanel.append(cellAppearanceLabel, appearanceGrid);
 
@@ -2253,14 +2302,20 @@ function createOverlay(initial: SpreadsheetData): {
   defaultFontBoldInput.type = 'checkbox';
   defaultFontBoldInput.checked = savedCellDefaults?.bold ?? false;
   defaultFontBoldInput.setAttribute('aria-label', 'Bold cells by default');
+  defaultFontBoldInput.className = 'inline-spreadsheet-icon-toggle';
+  defaultFontBoldInput.dataset.icon = 'B';
   const defaultFontItalicInput = document.createElement('input');
   defaultFontItalicInput.type = 'checkbox';
   defaultFontItalicInput.checked = savedCellDefaults?.italic ?? false;
   defaultFontItalicInput.setAttribute('aria-label', 'Italicize cells by default');
+  defaultFontItalicInput.className = 'inline-spreadsheet-icon-toggle inline-spreadsheet-icon-italic';
+  defaultFontItalicInput.dataset.icon = 'I';
   const defaultFontUnderlineInput = document.createElement('input');
   defaultFontUnderlineInput.type = 'checkbox';
   defaultFontUnderlineInput.checked = savedCellDefaults?.underline ?? false;
   defaultFontUnderlineInput.setAttribute('aria-label', 'Underline cells by default');
+  defaultFontUnderlineInput.className = 'inline-spreadsheet-icon-toggle inline-spreadsheet-icon-underline';
+  defaultFontUnderlineInput.dataset.icon = 'U';
   const defaultFontTextColorInput = createInput(
     'color',
     savedCellDefaults?.textColor ?? '#212529',
@@ -2270,6 +2325,8 @@ function createOverlay(initial: SpreadsheetData): {
   defaultFontNoTextColorInput.type = 'checkbox';
   defaultFontNoTextColorInput.checked = savedCellDefaults?.textColor === null;
   defaultFontNoTextColorInput.setAttribute('aria-label', 'No default cell text color');
+  defaultFontNoTextColorInput.className = 'inline-spreadsheet-icon-toggle';
+  defaultFontNoTextColorInput.dataset.icon = '∅';
   defaultFontTextColorInput.disabled = defaultFontNoTextColorInput.checked;
   const defaultFontTextAlignSelect = document.createElement('select');
   defaultFontTextAlignSelect.className = 'form-control form-control-sm';
@@ -2293,15 +2350,15 @@ function createOverlay(initial: SpreadsheetData): {
   `;
   defaultFontVerticalAlignSelect.value = savedCellDefaults?.verticalAlign ?? '';
   fontAppearanceGrid.append(
-    createLabeledControl('Family', defaultFontFamilySelect),
-    createLabeledControl('Size (pt)', defaultFontSizeInput),
-    createLabeledControl('Bold', defaultFontBoldInput),
-    createLabeledControl('Italic', defaultFontItalicInput),
-    createLabeledControl('Underline', defaultFontUnderlineInput),
-    createLabeledControl('Text color', defaultFontTextColorInput),
-    createLabeledControl('No text color', defaultFontNoTextColorInput),
-    createLabeledControl('Horizontal', defaultFontTextAlignSelect),
-    createLabeledControl('Vertical', defaultFontVerticalAlignSelect),
+    createIconControl('<i class="fas fa-font"></i>', 'Default font family', defaultFontFamilySelect),
+    createStepperControl(defaultFontSizeInput, 'default font size'),
+    createIconControl('<b>B</b>', 'Bold by default', defaultFontBoldInput),
+    createIconControl('<i>I</i>', 'Italic by default', defaultFontItalicInput),
+    createIconControl('<u>U</u>', 'Underline by default', defaultFontUnderlineInput),
+    createIconControl('<span class="inline-spreadsheet-text-color-icon">A</span>', 'Default text color', defaultFontTextColorInput),
+    createIconControl('<i class="fas fa-ban"></i>', 'No default text color', defaultFontNoTextColorInput),
+    createIconControl('<i class="fas fa-align-left"></i>', 'Default horizontal alignment', defaultFontTextAlignSelect),
+    createIconControl('<i class="fas fa-arrows-alt-v"></i>', 'Default vertical alignment', defaultFontVerticalAlignSelect),
   );
   appearancePanel.append(fontAppearanceLabel, fontAppearanceGrid);
 
@@ -2340,7 +2397,8 @@ function createOverlay(initial: SpreadsheetData): {
   const cellStyleRow = document.createElement('div');
   cellStyleRow.className = 'inline-spreadsheet-cell-format-row';
   const cellFormatLabel = document.createElement('strong');
-  cellFormatLabel.textContent = 'Cell';
+  cellFormatLabel.innerHTML = '<i class="fas fa-th" aria-hidden="true"></i>';
+  cellFormatLabel.title = 'Cell formatting';
   const cellFormatColorInput = createInput(
     'color',
     savedCellDefaults?.backgroundColor ?? appearance.cellColor,
@@ -2350,6 +2408,8 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatNoColorInput.type = 'checkbox';
   cellFormatNoColorInput.setAttribute('aria-label', 'Remove selected cell background color');
   cellFormatNoColorInput.checked = savedCellDefaults?.backgroundColor === null;
+  cellFormatNoColorInput.className = 'inline-spreadsheet-icon-toggle';
+  cellFormatNoColorInput.dataset.icon = '∅';
   cellFormatColorInput.disabled = cellFormatNoColorInput.checked;
   const cellFormatBorderColorInput = createInput(
     'color',
@@ -2376,17 +2436,18 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatBorderWidthInput.max = String(MAX_TABLE_BORDER);
   cellStyleRow.append(
     cellFormatLabel,
-    createLabeledControl('Fill', cellFormatColorInput),
-    createLabeledControl('No fill', cellFormatNoColorInput),
-    createLabeledControl('Border color', cellFormatBorderColorInput),
-    createLabeledControl('Border style', cellFormatBorderStyleSelect),
-    createLabeledControl('Border width', cellFormatBorderWidthInput),
+    createIconControl('<i class="fas fa-fill-drip"></i>', 'Cell background color', cellFormatColorInput),
+    createIconControl('<i class="fas fa-ban"></i>', 'Remove cell background color', cellFormatNoColorInput),
+    createIconControl('<i class="fas fa-square"></i>', 'Border color', cellFormatBorderColorInput),
+    createIconControl('<i class="fas fa-border-style"></i>', 'Border style', cellFormatBorderStyleSelect),
+    createIconControl('<i class="fas fa-border-all"></i>', 'Border width', cellFormatBorderWidthInput),
   );
 
   const fontStyleRow = document.createElement('div');
   fontStyleRow.className = 'inline-spreadsheet-cell-format-row';
   const fontFormatLabel = document.createElement('strong');
-  fontFormatLabel.textContent = 'Font';
+  fontFormatLabel.innerHTML = '<i class="fas fa-font" aria-hidden="true"></i>';
+  fontFormatLabel.title = 'Font formatting';
   const cellFormatFontFamilySelect = document.createElement('select');
   cellFormatFontFamilySelect.className = 'form-control form-control-sm';
   cellFormatFontFamilySelect.setAttribute('aria-label', 'Selected cell font family');
@@ -2433,6 +2494,8 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatNoTextColorInput.type = 'checkbox';
   cellFormatNoTextColorInput.setAttribute('aria-label', 'Remove selected cell text color');
   cellFormatNoTextColorInput.checked = savedCellDefaults?.textColor === null;
+  cellFormatNoTextColorInput.className = 'inline-spreadsheet-icon-toggle';
+  cellFormatNoTextColorInput.dataset.icon = '∅';
   cellFormatTextColorInput.disabled = cellFormatNoTextColorInput.checked;
   const cellFormatTextAlignSelect = document.createElement('select');
   cellFormatTextAlignSelect.className = 'form-control form-control-sm';
@@ -2504,16 +2567,16 @@ function createOverlay(initial: SpreadsheetData): {
   rowHeightInput.max = String(MAX_DATA_ROW_HEIGHT);
   fontStyleRow.append(
     fontFormatLabel,
-    createLabeledControl('Family', cellFormatFontFamilySelect),
-    createLabeledControl('Size (pt)', cellFormatFontSizeInput),
+    createIconControl('<i class="fas fa-font"></i>', 'Font family', cellFormatFontFamilySelect),
+    createStepperControl(cellFormatFontSizeInput, 'font size'),
     createLabeledControl('', cellFormatBoldInput),
     createLabeledControl('', cellFormatItalicInput),
     createLabeledControl('', cellFormatUnderlineInput),
-    createLabeledControl('Text color', cellFormatTextColorInput),
-    createLabeledControl('No text color', cellFormatNoTextColorInput),
+    createIconControl('<span class="inline-spreadsheet-text-color-icon">A</span>', 'Text color', cellFormatTextColorInput),
+    createIconControl('<i class="fas fa-ban"></i>', 'Remove text color', cellFormatNoTextColorInput),
     horizontalAlignmentButtons,
     verticalAlignmentButtons,
-    createLabeledControl('Row height (px)', rowHeightInput),
+    createIconControl('<i class="fas fa-arrows-alt-v"></i>', 'Row height', rowHeightInput),
   );
 
   const clearCellFormatBtn = document.createElement('button');
@@ -2539,6 +2602,16 @@ function createOverlay(initial: SpreadsheetData): {
   formulaLabel.textContent = 'ƒx';
   formulaLabel.title = 'Formula builder';
   formulaBar.appendChild(formulaLabel);
+  const formulaCellLabel = document.createElement('span');
+  formulaCellLabel.className = 'inline-spreadsheet-formula-cell';
+  formulaCellLabel.textContent = '—';
+  formulaCellLabel.title = 'Selected cell';
+  const formulaInput = createInput('text', '', 'Selected cell value or formula');
+  formulaInput.classList.add('inline-spreadsheet-formula-input');
+  formulaInput.disabled = true;
+  formulaInput.placeholder = 'Select a cell to view or edit its value/formula';
+  formulaInput.spellcheck = false;
+  formulaBar.append(formulaCellLabel, formulaInput);
   const formulaActions = [
     { value: 'SUM', label: 'SUM', title: 'Sum the selected cells' },
     { value: 'AVERAGE', label: 'AVERAGE', title: 'Average the selected cells' },
@@ -2568,7 +2641,7 @@ function createOverlay(initial: SpreadsheetData): {
   });
   const formulaStatus = document.createElement('span');
   formulaStatus.className = 'inline-spreadsheet-formula-status';
-  formulaStatus.textContent = 'Select cells, then choose a function or arithmetic operation. You can also type formulas such as =A1*B1.';
+  formulaStatus.textContent = 'Enter applies the value or formula to the selected cell.';
   formulaBar.appendChild(formulaStatus);
   const formulaCollapseBtn = document.createElement('button');
   formulaCollapseBtn.type = 'button';
@@ -2582,8 +2655,6 @@ function createOverlay(initial: SpreadsheetData): {
 
   const viewportBar = document.createElement('div');
   viewportBar.className = 'inline-spreadsheet-viewport-controls';
-  const viewportLabel = document.createElement('strong');
-  viewportLabel.textContent = 'Editing area';
   const defaultViewportHeight = Math.max(220, Math.min(1200, Math.round(window.innerHeight * 0.65)));
   const viewportHeightInput = createInput(
     'number',
@@ -2604,14 +2675,10 @@ function createOverlay(initial: SpreadsheetData): {
   viewportFullHeightBtn.innerHTML = '<i class="fas fa-arrows-alt-v" aria-hidden="true"></i>';
   viewportFullHeightBtn.setAttribute('aria-label', 'Full height');
   viewportFullHeightBtn.title = 'Expand the editing area to the available screen height';
-  const viewportHint = document.createElement('span');
-  viewportHint.textContent = 'Drag the bottom-right corner to resize the editing area.';
   viewportBar.append(
-    viewportLabel,
-    createLabeledControl('Height (px)', viewportHeightInput),
+    createIconControl('<i class="fas fa-arrows-alt-v"></i>', 'Spreadsheet viewport height', viewportHeightInput),
     viewportFullWidthBtn,
     viewportFullHeightBtn,
-    viewportHint,
   );
 
   const sheetHost = document.createElement('div');
@@ -2654,6 +2721,8 @@ function createOverlay(initial: SpreadsheetData): {
     captionInput,
     presetSelect,
     formulaButtons: formulaBar.querySelectorAll<HTMLButtonElement>('[data-formula]'),
+    formulaCellLabel,
+    formulaInput,
     formulaStatus,
     formulaBar,
     formulaCollapseBtn,
@@ -3046,6 +3115,17 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const cellCount = (endCol - startCol + 1) * (endRow - startRow + 1);
       const rangeLabel = `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
       ui.cellFormatStatus.textContent = `${rangeLabel} selected (${cellCount} cell${cellCount === 1 ? '' : 's'}).`;
+      ui.formulaCellLabel.textContent = cellCount === 1
+        ? `${colLabel(startCol)}${startRow + 1}`
+        : rangeLabel;
+      if (cellCount === 1) {
+        ui.formulaInput.value = String(readRawData()[startRow]?.[startCol] ?? '');
+        ui.formulaInput.disabled = false;
+      } else {
+        ui.formulaInput.value = '';
+        ui.formulaInput.disabled = true;
+        ui.formulaInput.placeholder = 'Select one cell to edit its value or formula';
+      }
       const selectedRowHeights = new Set<number>();
       for (let row = startRow; row <= endRow; row++) {
         selectedRowHeights.add(working.rowHeights?.[String(row)] ?? MIN_DATA_ROW_HEIGHT);
@@ -4149,10 +4229,37 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       const result = evaluateFormula(formulaValue, rawData, targetCol, targetRow);
       scheduleFormulaResultRender();
       worksheet?.updateSelectionFromCoords?.(targetCol, targetRow, targetCol, targetRow);
+      ui.formulaCellLabel.textContent = `${colLabel(targetCol)}${targetRow + 1}`;
+      ui.formulaInput.disabled = false;
+      ui.formulaInput.value = formulaValue;
       ui.formulaStatus.textContent = result === undefined
         ? `${formulaDescription} → ${colLabel(targetCol)}${targetRow + 1}`
         : `${formulaDescription} → ${colLabel(targetCol)}${targetRow + 1} = ${result}`;
     }));
+    ui.formulaInput.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      const selection = getSelectedRange();
+      if (!selection || selection[0] !== selection[2] || selection[1] !== selection[3]) {
+        ui.formulaStatus.textContent = 'Select one cell before editing its value or formula.';
+        return;
+      }
+      event.preventDefault();
+      const col = selection[0];
+      const row = selection[1];
+      let value = ui.formulaInput.value;
+      if (value.trimStart().startsWith('=')) {
+        const missingParentheses = formulaParenthesisBalance(value);
+        if (missingParentheses > 0) value += ')'.repeat(missingParentheses);
+      }
+      ui.formulaInput.value = value;
+      updateRawDataMirrorCell(col, row, value, false);
+      worksheet?.setValueFromCoords?.(col, row, value);
+      scheduleFormulaResultRender();
+      const result = evaluateFormula(value, readRawData(), col, row);
+      ui.formulaStatus.textContent = value.trimStart().startsWith('=') && result !== undefined
+        ? `${ui.formulaCellLabel.textContent} = ${result}`
+        : `${ui.formulaCellLabel.textContent} updated.`;
+    });
 
     const cleanup = (): void => {
       finishFormulaSelection();

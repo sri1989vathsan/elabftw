@@ -215,7 +215,10 @@ function getAssetVersionQuery(): string {
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize | bold italic underline strikethrough superscript subscript forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist checklist outdent indent | format-painter remove-formatting | insert-link custom-insert custom-edit | copy-rich-selection table table-select-copy table-outdent table-indent sort-table | charmap emoticons codesample';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize | bold italic underline strikethrough superscript subscript forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist checklist outdent indent | format-painter remove-formatting | insert-link adddate experiment-title custom-insert custom-edit | copy-rich-selection insert-data-table table-select-copy table-outdent table-indent sort-table | charmap emoticons codesample';
+  if (!document.getElementById('documentTitle')) {
+    toolbar1 = toolbar1.replace('experiment-title ', '');
+  }
   let removedMenuItems = 'newdocument, image, anchor';
   let fileMenuItems = 'preview | print';
   if (page === 'edit') {

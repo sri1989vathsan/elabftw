@@ -16,6 +16,10 @@ import { registerTableToolsExtension } from './TableToolsExtension';
 import { registerTocExtension } from './TocExtension';
 
 export function registerCustomEditorExtensions(editor: Editor): void {
+  editor.ui.registry.addIcon(
+    'elabftw-heading',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M5 4v16M19 4v16M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  );
   registerDateTitleExtension(editor);
   registerFormatPainterExtension(editor);
   registerLinkExtension(editor);
@@ -31,10 +35,9 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   // split-button menus, enabled states and keyboard shortcuts remain intact.
   editor.ui.registry.addGroupToolbarButton('custom-insert', {
     icon: 'plus',
-    tooltip: 'Insert date, title, spreadsheet, line or note',
-    items: document.getElementById('documentTitle')
-      ? 'adddate experiment-title inline-sheet horizontal-rule insert-note'
-      : 'adddate inline-sheet horizontal-rule insert-note',
+    text: 'Insert',
+    tooltip: 'Insert line or note',
+    items: 'horizontal-rule insert-note',
   });
   editor.ui.registry.addGroupToolbarButton('custom-edit', {
     icon: 'edit-block',

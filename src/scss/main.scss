@@ -2003,6 +2003,15 @@ body.html-tool-workspace-resizing * {
   white-space: nowrap;
 }
 
+/* Make the custom TinyMCE insert group read as one intentional action rather
+ * than an unlabelled toolbar glyph. */
+.tox .tox-tbtn[aria-label='Insert line or note'] {
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  padding-inline: 0.45rem;
+  width: auto;
+}
+
 .inline-spreadsheet-appearance {
   background-color: var(--firstlevel);
   border: 1px solid var(--secondary);
@@ -2011,16 +2020,34 @@ body.html-tool-workspace-resizing * {
   padding: 0.4rem 0.5rem;
 
   summary {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
     font-weight: 600;
     margin-bottom: 0.35rem;
+    min-height: 1.75rem;
+
+    &::marker {
+      color: var(--primary);
+    }
+  }
+
+  > strong {
+    color: var(--mediumstrong);
+    display: block;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    margin: 0.35rem 0 0.15rem;
+    text-transform: uppercase;
   }
 }
 
 .inline-spreadsheet-appearance-grid {
   align-items: end;
-  display: grid;
-  gap: 0.45rem;
-  grid-template-columns: repeat(7, minmax(5.5rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.25rem;
 }
 
 .inline-spreadsheet-appearance-control {
@@ -2041,6 +2068,75 @@ body.html-tool-workspace-resizing * {
     height: 2rem;
     padding: 0.1rem;
     width: 100%;
+  }
+}
+
+.inline-spreadsheet-compact-control {
+  align-items: center;
+  background-color: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.3rem;
+  flex-direction: row;
+  gap: 0.25rem;
+  min-height: 1.85rem;
+  padding: 0.12rem 0.28rem;
+
+  > span:first-child {
+    color: var(--mediumstrong);
+    display: inline-flex;
+    justify-content: center;
+    min-width: 1rem;
+  }
+
+  .form-control {
+    border: 0;
+    box-shadow: none;
+    height: 1.55rem;
+    min-width: 3rem;
+    padding: 0.05rem 0.2rem;
+  }
+
+  input[type='number'] {
+    width: 3.6rem;
+  }
+
+  input[type='color'] {
+    border: 0;
+    height: 1.45rem;
+    min-width: 1.9rem;
+    padding: 0;
+    width: 1.9rem;
+  }
+}
+
+.inline-spreadsheet-text-color-icon {
+  border-bottom: 3px solid currentColor;
+  font-family: serif;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.inline-spreadsheet-stepper {
+  align-items: center;
+  background-color: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.3rem;
+  display: inline-flex;
+  height: 1.85rem;
+
+  input[type='number'] {
+    border: 0;
+    border-left: 1px solid var(--secondary);
+    border-radius: 0;
+    border-right: 1px solid var(--secondary);
+    height: 1.7rem;
+    padding: 0.1rem;
+    text-align: center;
+    width: 3.2rem;
+  }
+
+  .inline-spreadsheet-icon-button {
+    border: 0;
   }
 }
 
@@ -2220,6 +2316,25 @@ body.html-tool-workspace-resizing * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.inline-spreadsheet-formula-cell {
+  border-right: 1px solid var(--secondary);
+  color: var(--mediumstrong);
+  font-family: monospace;
+  font-size: 0.78rem;
+  min-width: 3.3rem;
+  padding: 0 0.35rem;
+  text-align: center;
+}
+
+.inline-spreadsheet-formula-input.form-control {
+  flex: 2 1 15rem;
+  font-family: monospace;
+  font-size: 0.82rem;
+  height: 1.7rem;
+  min-width: 10rem;
+  padding: 0.1rem 0.4rem;
 }
 
 .inline-spreadsheet-viewport-controls {

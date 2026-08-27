@@ -161,6 +161,30 @@ function isStandaloneClipboardTable(html: string): boolean {
 }
 
 export function registerSpreadsheetExtension(editor: Editor): void {
+  const openStandardTableDialog = (): void => {
+    editor.windowManager.open({
+      title: 'Insert table',
+      body: {
+        type: 'panel',
+        items: [
+          { type: 'input', name: 'rows', label: 'Rows', inputMode: 'numeric' },
+          { type: 'input', name: 'columns', label: 'Columns', inputMode: 'numeric' },
+        ],
+      },
+      initialData: { rows: '3', columns: '3' },
+      buttons: [
+        { type: 'cancel', text: 'Cancel' },
+        { type: 'submit', text: 'Insert', buttonType: 'primary' },
+      ],
+      onSubmit: api => {
+        const data = api.getData();
+        const rows = Math.max(1, Math.min(100, Number.parseInt(data.rows, 10) || 3));
+        const columns = Math.max(1, Math.min(100, Number.parseInt(data.columns, 10) || 3));
+        editor.execCommand('mceInsertTable', false, { rows, columns });
+        api.close();
+      },
+    });
+  };
   const openInlineSpreadsheet = (
     initial: SpreadsheetData,
     existingTable: HTMLTableElement | null = null,
@@ -218,6 +242,59 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           })),
         },
       );
+      callback(items);
+    },
+  });
+
+  editor.ui.registry.addMenuButton('insert-data-table', {
+    icon: 'table',
+    tooltip: 'Insert a table, spreadsheet or well plate',
+    fetch: callback => {
+      const existingTable = editor.selection.getNode()
+        .closest('table.elabftw-spreadsheet') as HTMLTableElement | null;
+      const items = [];
+      if (existingTable) {
+        items.push({
+          type: 'menuitem' as const,
+          text: 'Edit selected spreadsheet…',
+          icon: 'edit-block',
+          onAction: () => openInlineSpreadsheet(extractFromTable(existingTable), existingTable),
+        });
+        items.push({ type: 'separator' as const });
+      }
+      items.push({
+        type: 'menuitem',
+        text: 'Table…',
+        icon: 'table',
+        onAction: openStandardTableDialog,
+      },
+      {
+        type: 'nestedmenuitem',
+        text: 'Spreadsheet',
+        icon: 'table',
+        getSubmenuItems: () => [
+          {
+            type: 'menuitem',
+            text: 'Custom spreadsheet…',
+            onAction: () => openInlineSpreadsheet(emptySpreadsheetData()),
+          },
+          {
+            type: 'menuitem',
+            text: 'Benchling-style data table',
+            onAction: () => openInlineSpreadsheet(createNotebookSpreadsheetData()),
+          },
+        ],
+      },
+      {
+        type: 'nestedmenuitem',
+        text: 'Well plate',
+        icon: 'table',
+        getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
+          type: 'menuitem',
+          text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
+          onAction: () => openInlineSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
+        })),
+      });
       callback(items);
     },
   });
