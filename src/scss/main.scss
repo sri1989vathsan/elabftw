@@ -2003,15 +2003,6 @@ body.html-tool-workspace-resizing * {
   white-space: nowrap;
 }
 
-/* Make the custom TinyMCE insert group read as one intentional action rather
- * than an unlabelled toolbar glyph. */
-.tox .tox-tbtn[aria-label='Insert line or note'] {
-  background-color: var(--firstlevel);
-  border: 1px solid var(--secondary);
-  padding-inline: 0.45rem;
-  width: auto;
-}
-
 .inline-spreadsheet-appearance {
   background-color: var(--firstlevel);
   border: 1px solid var(--secondary);

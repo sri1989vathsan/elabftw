@@ -30,15 +30,8 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   registerTableToolsExtension(editor);
   registerTocExtension(editor);
 
-  // Keep the primary toolbar compact without replacing the established action
-  // handlers. TinyMCE expands these groups into their original controls, so
-  // split-button menus, enabled states and keyboard shortcuts remain intact.
-  editor.ui.registry.addGroupToolbarButton('custom-insert', {
-    icon: 'plus',
-    text: 'Insert',
-    tooltip: 'Insert line or note',
-    items: 'horizontal-rule insert-note',
-  });
+  // Keep editing actions grouped without replacing their established handlers,
+  // enabled states or keyboard shortcuts.
   editor.ui.registry.addGroupToolbarButton('custom-edit', {
     icon: 'edit-block',
     tooltip: 'Edit selected content',
