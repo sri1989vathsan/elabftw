@@ -84,6 +84,10 @@ export interface SpreadsheetAppearance {
   tableBackgroundColor: string;
   tableNoBackground: boolean;
   tableCellSpacing: number;
+  /** Width of the fixed row-number/row-letter gutter in the spreadsheet grid. */
+  rowIndexWidth: number;
+  /** Height of the fixed column-letter/column-number header in the spreadsheet grid. */
+  columnIndexHeight: number;
   /** Optional account/notebook defaults taken from the cell-style toolbar. */
   cellStyle?: SpreadsheetCellDefaults;
 }
@@ -135,6 +139,10 @@ const DEFAULT_COLS = 6;
 const DEFAULT_ROWS = 5;
 const MAX_DIMENSION = 50;
 const MAX_TABLE_BORDER = 20;
+const MIN_ROW_INDEX_WIDTH = 28;
+const MAX_ROW_INDEX_WIDTH = 120;
+const MIN_COLUMN_INDEX_HEIGHT = 24;
+const MAX_COLUMN_INDEX_HEIGHT = 80;
 const PDF_PRIVATE_USE_ASCII_OFFSET = 0xFFFE3;
 const DEFAULT_TABLE_STYLE = 'min-width:25%';
 const DEFAULT_APPEARANCE: SpreadsheetAppearance = {
@@ -154,6 +162,8 @@ const DEFAULT_APPEARANCE: SpreadsheetAppearance = {
   tableBackgroundColor: '#ffffff',
   tableNoBackground: true,
   tableCellSpacing: 0,
+  rowIndexWidth: 42,
+  columnIndexHeight: 30,
 };
 const PRESERVED_STYLE_PROPERTIES = new Set([
   'background-color',
@@ -398,6 +408,18 @@ function normalizeAppearance(
       DEFAULT_APPEARANCE.tableCellSpacing,
       0,
       50,
+    ),
+    rowIndexWidth: normalizeInteger(
+      candidate?.rowIndexWidth,
+      DEFAULT_APPEARANCE.rowIndexWidth,
+      MIN_ROW_INDEX_WIDTH,
+      MAX_ROW_INDEX_WIDTH,
+    ),
+    columnIndexHeight: normalizeInteger(
+      candidate?.columnIndexHeight,
+      DEFAULT_APPEARANCE.columnIndexHeight,
+      MIN_COLUMN_INDEX_HEIGHT,
+      MAX_COLUMN_INDEX_HEIGHT,
     ),
     cellStyle: normalizeCellDefaults(candidate?.cellStyle),
   };
@@ -1762,6 +1784,8 @@ function createOverlay(initial: SpreadsheetData): {
   tableNoBackgroundInput: HTMLInputElement;
   tableCellSpacingInput: HTMLInputElement;
   cellPaddingInput: HTMLInputElement;
+  rowIndexWidthInput: HTMLInputElement;
+  columnIndexHeightInput: HTMLInputElement;
   appearanceScopeSelect: HTMLSelectElement;
   applyAppearanceBtn: HTMLButtonElement;
   saveAppearanceDefaultBtn: HTMLButtonElement;
@@ -1931,6 +1955,20 @@ function createOverlay(initial: SpreadsheetData): {
   );
   cellPaddingInput.min = '0';
   cellPaddingInput.max = '50';
+  const rowIndexWidthInput = createInput(
+    'number',
+    String(appearance.rowIndexWidth),
+    'Width of the row-number or row-letter index column',
+  );
+  rowIndexWidthInput.min = String(MIN_ROW_INDEX_WIDTH);
+  rowIndexWidthInput.max = String(MAX_ROW_INDEX_WIDTH);
+  const columnIndexHeightInput = createInput(
+    'number',
+    String(appearance.columnIndexHeight),
+    'Height of the column-letter or column-number index row',
+  );
+  columnIndexHeightInput.min = String(MIN_COLUMN_INDEX_HEIGHT);
+  columnIndexHeightInput.max = String(MAX_COLUMN_INDEX_HEIGHT);
   tableAppearanceGrid.append(
     createLabeledControl('Width % (0 = auto)', tableWidthInput),
     createLabeledControl('Alignment', tableAlignmentSelect),
@@ -1941,6 +1979,8 @@ function createOverlay(initial: SpreadsheetData): {
     createLabeledControl('No background', tableNoBackgroundInput),
     createLabeledControl('Cell spacing', tableCellSpacingInput),
     createLabeledControl('Cell padding', cellPaddingInput),
+    createLabeledControl('Row index width', rowIndexWidthInput),
+    createLabeledControl('Column index height', columnIndexHeightInput),
   );
   appearancePanel.append(tableAppearanceLabel, tableAppearanceGrid);
 
@@ -2347,6 +2387,8 @@ function createOverlay(initial: SpreadsheetData): {
     tableNoBackgroundInput,
     tableCellSpacingInput,
     cellPaddingInput,
+    rowIndexWidthInput,
+    columnIndexHeightInput,
     appearanceScopeSelect,
     applyAppearanceBtn,
     saveAppearanceDefaultBtn,
@@ -2410,6 +2452,8 @@ function appearanceFromControls(
     tableBackgroundColor: ui.tableBackgroundColorInput.value,
     tableNoBackground: ui.tableNoBackgroundInput.checked,
     tableCellSpacing: parseInt(ui.tableCellSpacingInput.value, 10),
+    rowIndexWidth: parseInt(ui.rowIndexWidthInput.value, 10),
+    columnIndexHeight: parseInt(ui.columnIndexHeightInput.value, 10),
     cellStyle,
   });
 }
@@ -2838,40 +2882,72 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       document.addEventListener('mouseup', onFormulaSelectionEnd, true);
     };
 
-    const onFormulaEditorKeydown = (event: KeyboardEvent): void => {
+    const onCellEditorKeydown = (event: KeyboardEvent): void => {
       if (event.key !== 'Enter'
+        || event.isComposing
         || !(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
-        || !event.target.value.trimStart().startsWith('=')
       ) {
         return;
       }
-      const formulaCell = event.target.closest<HTMLElement>('td.editor[data-x][data-y]');
-      if (!formulaCell || typeof worksheet?.closeEditor !== 'function') return;
-      const missingParentheses = formulaParenthesisBalance(event.target.value);
-      if (missingParentheses > 0) {
-        event.target.value += ')'.repeat(missingParentheses);
-      }
-      const formulaCol = Number.parseInt(formulaCell.dataset.x ?? '', 10);
-      const formulaRow = Number.parseInt(formulaCell.dataset.y ?? '', 10);
+      const editor = event.target;
+      const editedCell = editor.closest<HTMLElement>('td.editor[data-x][data-y]');
+      if (!editedCell || typeof worksheet?.closeEditor !== 'function') return;
+      const editedCol = Number.parseInt(editedCell.dataset.x ?? '', 10);
+      const editedRow = Number.parseInt(editedCell.dataset.y ?? '', 10);
+      if (!Number.isInteger(editedCol) || !Number.isInteger(editedRow)) return;
+      if (!event.shiftKey && (event.altKey || event.ctrlKey || event.metaKey)) return;
+
       event.preventDefault();
       event.stopImmediatePropagation();
-      const formulaValue = event.target.value;
-      updateRawDataMirrorCell(formulaCol, formulaRow, formulaValue, false);
-      worksheet.closeEditor(formulaCell, true);
-      const rawData = readRawData();
-      const result = evaluateFormula(formulaValue, rawData, formulaCol, formulaRow);
-      scheduleFormulaResultRender();
-      if (Number.isInteger(formulaCol) && Number.isInteger(formulaRow)) {
-        selectedRange = [formulaCol, formulaRow, formulaCol, formulaRow];
+
+      if (event.shiftKey) {
+        const selectionStart = editor.selectionStart ?? editor.value.length;
+        const selectionEnd = editor.selectionEnd ?? selectionStart;
+        const multilineValue = `${editor.value.slice(0, selectionStart)}\n${editor.value.slice(selectionEnd)}`;
+        if (editor instanceof HTMLTextAreaElement) {
+          editor.value = multilineValue;
+          const nextCaret = selectionStart + 1;
+          editor.setSelectionRange(nextCaret, nextCaret);
+          editor.dispatchEvent(new Event('input', { bubbles: true }));
+          return;
+        }
+
+        // Some jspreadsheet text editors use a single-line input. Commit the
+        // line break directly and leave the same cell selected; HTML inputs
+        // cannot retain newline characters while they remain open.
+        updateRawDataMirrorCell(editedCol, editedRow, multilineValue, false);
+        worksheet.closeEditor(editedCell, false);
+        worksheet.setValueFromCoords?.(editedCol, editedRow, multilineValue, true);
+        updateRawDataMirrorCell(editedCol, editedRow, multilineValue, false);
+        selectedRange = [editedCol, editedRow, editedCol, editedRow];
         worksheet.updateSelectionFromCoords?.(...selectedRange);
+        scheduleFormulaResultRender();
+        return;
+      }
+
+      const isFormula = editor.value.trimStart().startsWith('=');
+      if (isFormula) {
+        const missingParentheses = formulaParenthesisBalance(editor.value);
+        if (missingParentheses > 0) editor.value += ')'.repeat(missingParentheses);
+      }
+      const editedValue = editor.value;
+      updateRawDataMirrorCell(editedCol, editedRow, editedValue, false);
+      worksheet.closeEditor(editedCell, true);
+      const targetRow = Math.min(working.rows - 1, editedRow + 1);
+      selectedRange = [editedCol, targetRow, editedCol, targetRow];
+      worksheet.updateSelectionFromCoords?.(...selectedRange);
+      scheduleFormulaResultRender();
+
+      if (isFormula) {
+        const result = evaluateFormula(editedValue, readRawData(), editedCol, editedRow);
         ui.formulaStatus.textContent = result === undefined
-          ? `Formula applied in ${colLabel(formulaCol)}${formulaRow + 1}.`
-          : `Formula applied in ${colLabel(formulaCol)}${formulaRow + 1}: ${result}.`;
+          ? `Formula applied in ${colLabel(editedCol)}${editedRow + 1}.`
+          : `Formula applied in ${colLabel(editedCol)}${editedRow + 1}: ${result}.`;
       }
     };
 
     ui.sheetHost.addEventListener('mousedown', onFormulaSelectionStart, true);
-    ui.sheetHost.addEventListener('keydown', onFormulaEditorKeydown, true);
+    ui.sheetHost.addEventListener('keydown', onCellEditorKeydown, true);
 
     const updateSizeControls = (rows: number, cols: number): void => {
       ui.rowsInput.value = String(rows);
@@ -2891,9 +2967,18 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       sheetContainer = document.createElement('div');
       ui.sheetHost.appendChild(sheetContainer);
       working = normalizeSpreadsheetData(spreadsheet);
+      const mountedAppearance = normalizeAppearance(working.appearance);
+      ui.sheetHost.style.setProperty(
+        '--spreadsheet-row-index-width',
+        `${mountedAppearance.rowIndexWidth}px`,
+      );
+      ui.sheetHost.style.setProperty(
+        '--spreadsheet-column-index-height',
+        `${mountedAppearance.columnIndexHeight}px`,
+      );
       ui.sheetHost.setAttribute(
         'style',
-        `${getAppearanceTableStyle(normalizeAppearance(working.appearance))};max-width:100%`,
+        `${ui.sheetHost.getAttribute('style') ?? ''};${getAppearanceTableStyle(mountedAppearance)};max-width:100%`,
       );
       const mountedContainer = sheetContainer;
       const mountedRows = working.rows;
@@ -3306,6 +3391,8 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       ui.tableNoBackgroundInput,
       ui.tableCellSpacingInput,
       ui.cellPaddingInput,
+      ui.rowIndexWidthInput,
+      ui.columnIndexHeightInput,
     ].forEach(input => input.addEventListener('change', applyAppearance));
     ui.tableBackgroundColorInput.addEventListener('change', () => {
       ui.tableNoBackgroundInput.checked = false;
@@ -3599,7 +3686,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     const cleanup = (): void => {
       finishFormulaSelection();
       ui.sheetHost.removeEventListener('mousedown', onFormulaSelectionStart, true);
-      ui.sheetHost.removeEventListener('keydown', onFormulaEditorKeydown, true);
+      ui.sheetHost.removeEventListener('keydown', onCellEditorKeydown, true);
       ui.sheetHost.removeEventListener('copy', onSpreadsheetCopy, true);
       ui.sheetHost.removeEventListener('paste', onSpreadsheetPaste, true);
       document.removeEventListener('keydown', onKey);
@@ -3703,15 +3790,15 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
     }
     html += '</tbody>';
   } else {
-    html += `<thead><tr><th class="spreadsheet-coordinate"${getCoordinateStyleAttribute(appearance)}></th>`;
+    html += `<thead><tr><th class="spreadsheet-coordinate"${getCoordinateStyleAttribute(appearance, 'corner')}></th>`;
     for (let col = 0; col < raw.cols; col++) {
       const label = kind === 'well-plate' ? String(col + 1) : colLabel(col);
-      html += `<th class="spreadsheet-coordinate"${getCoordinateStyleAttribute(appearance)}>${label}</th>`;
+      html += `<th class="spreadsheet-coordinate"${getCoordinateStyleAttribute(appearance, 'column')}>${label}</th>`;
     }
     html += '</tr></thead><tbody>';
     for (let row = 0; row < raw.rows; row++) {
       const rowLabel = kind === 'well-plate' ? colLabel(row) : String(row + 1);
-      html += `<tr><th class="spreadsheet-coordinate"${getCoordinateStyleAttribute(appearance)}>${rowLabel}</th>`;
+      html += `<tr><th class="spreadsheet-coordinate"${getCoordinateStyleAttribute(appearance, 'row')}>${rowLabel}</th>`;
       for (let col = 0; col < raw.cols; col++) {
         html += `<td${getCellStyleAttribute(raw.cellStyles, appearance, col, row)}>${escapeHTML(String(displayData[row]?.[col] ?? ''))}</td>`;
       }
@@ -3856,8 +3943,26 @@ function getCellStyleAttribute(
   return ` style="${escapeHTMLAttribute(style)}"`;
 }
 
-function getCoordinateStyleAttribute(appearance: SpreadsheetAppearance): string {
-  const style = getAppearanceCellStyle(appearance, 0, 0, false);
+function getCoordinateStyleAttribute(
+  appearance: SpreadsheetAppearance,
+  axis: 'column' | 'corner' | 'row',
+): string {
+  const dimensions: string[] = [];
+  if (axis === 'row' || axis === 'corner') {
+    dimensions.push(
+      `width:${appearance.rowIndexWidth}px`,
+      `min-width:${appearance.rowIndexWidth}px`,
+      `max-width:${appearance.rowIndexWidth}px`,
+    );
+  }
+  if (axis === 'column' || axis === 'corner') {
+    dimensions.push(
+      `height:${appearance.columnIndexHeight}px`,
+      `min-height:${appearance.columnIndexHeight}px`,
+      `max-height:${appearance.columnIndexHeight}px`,
+    );
+  }
+  const style = `${getAppearanceCellStyle(appearance, 0, 0, false)};${dimensions.join(';')}`;
   return ` style="${escapeHTMLAttribute(style)}"`;
 }
 

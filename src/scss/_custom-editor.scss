@@ -251,6 +251,7 @@ body.mce-content-body {
   border: 1px solid var(--secondary-muted, #ccd2d8);
   min-width: 2rem;
   padding: 0.35rem 0.5rem;
+  white-space: pre-wrap;
 }
 
 :where(#body_view, body.mce-content-body) table.elabftw-spreadsheet tr:nth-child(even) {

@@ -2135,11 +2135,44 @@ body.html-tool-workspace-resizing * {
 }
 
 .inline-spreadsheet-container {
+  --spreadsheet-column-index-height: 30px;
+  --spreadsheet-row-index-width: 42px;
+
   flex: 1;
   margin-bottom: 0.75rem;
   min-height: 300px;
   overflow: auto;
 }
+
+/* Keep jspreadsheet's coordinate headers stable when data is pasted or the
+ * grid dimensions change. The custom properties are updated by the appearance
+ * controls, so their fixed dimensions remain intentionally adjustable. */
+/* stylelint-disable selector-class-pattern */
+.inline-spreadsheet-container .jss_worksheet > thead > tr {
+  height: var(--spreadsheet-column-index-height) !important;
+  max-height: var(--spreadsheet-column-index-height) !important;
+  min-height: var(--spreadsheet-column-index-height) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet > thead > tr > * {
+  height: var(--spreadsheet-column-index-height) !important;
+  max-height: var(--spreadsheet-column-index-height) !important;
+  min-height: var(--spreadsheet-column-index-height) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet > thead > tr > :first-child,
+.inline-spreadsheet-container .jss_worksheet > tbody > tr > :first-child,
+.inline-spreadsheet-container .jss_worksheet .jss_row,
+.inline-spreadsheet-container .jss_worksheet .jss_selectall {
+  max-width: var(--spreadsheet-row-index-width) !important;
+  min-width: var(--spreadsheet-row-index-width) !important;
+  width: var(--spreadsheet-row-index-width) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet td[data-x][data-y] {
+  white-space: pre-wrap;
+}
+/* stylelint-enable selector-class-pattern */
 
 .inline-spreadsheet-actions {
   align-items: center;
