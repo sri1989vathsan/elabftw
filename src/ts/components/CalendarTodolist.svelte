@@ -363,6 +363,7 @@
     search: string,
   ): AgendaEntityActivity[] {
     const result: AgendaEntityActivity[] = [];
+    const normalizedSearch = search.trim().toLocaleLowerCase();
     activities
       .filter(activity => activity.entity_type === type && (
         agendaDate
@@ -383,7 +384,7 @@
             }
           });
 
-        const visibleHeadings = activity.headings
+        const dateVisibleHeadings = activity.headings
           .filter(heading => included.has(heading.index))
           .map(heading => {
             let depth = 0;
@@ -399,7 +400,18 @@
             };
           });
 
-        if (!matchesSearch(`${activity.title} ${visibleHeadings.map(heading => heading.text).join(' ')}`, search)) {
+        // A calendar search should narrow a matching experiment/resource to
+        // the matching headings, rather than revealing every heading from
+        // that entry. The filtering is entirely in-memory on the activity
+        // already loaded for the visible calendar range.
+        const visibleHeadings = normalizedSearch.length === 0
+          ? dateVisibleHeadings
+          : dateVisibleHeadings.filter(heading => (
+            heading.text.toLocaleLowerCase().includes(normalizedSearch)
+          ));
+        const titleMatches = normalizedSearch.length > 0
+          && activity.title.toLocaleLowerCase().includes(normalizedSearch);
+        if (normalizedSearch.length > 0 && !titleMatches && visibleHeadings.length === 0) {
           return;
         }
         result.push({ ...activity, visibleHeadings });

@@ -91,17 +91,15 @@ function isDateDisplayFormat(value: string): value is DateDisplayFormat {
 function getDefaultDateFormat(): DateDisplayFormat {
   const stored = localStorage.getItem(DATE_FORMAT_STORAGE_KEY);
   if (stored && isDateDisplayFormat(stored) && stored !== 'custom') return stored;
-  return document.getElementById('user-prefs')?.dataset.isodate === '1'
-    ? 'iso'
-    : 'localized';
+  return 'iso';
 }
 
 function getDateInsertDefaults(): DateInsertDefaults {
   const fallback: DateInsertDefaults = {
     format: getDefaultDateFormat(),
     customLabel: '',
-    asHeading: false,
-    headingLevel: 2,
+    asHeading: true,
+    headingLevel: 1,
   };
   const accountDefault = getAccountEditorDefault<DateInsertDefaults>('date');
   if (accountDefault) {
@@ -777,8 +775,8 @@ export default class DateReferenceEditor {
     existingAnchorId?: string,
     format: DateDisplayFormat = getDefaultDateFormat(),
     customLabel = '',
-    asHeading = false,
-    headingLevel = 2,
+    asHeading = true,
+    headingLevel = 1,
   ): void {
     const anchorId = existingAnchorId || generateAnchorId(date);
     const href = target ? getExperimentHref(target.id) : getEntityViewHref(anchorId);
