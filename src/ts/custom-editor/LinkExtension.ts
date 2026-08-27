@@ -317,7 +317,6 @@ export function registerLinkExtension(editor: Editor): void {
 
   editor.ui.registry.addMenuButton('insert-link', {
     icon: 'link',
-    text: 'Link',
     tooltip: 'Insert a web, uploaded file/folder, or LabCollector link',
     fetch: callback => {
       const items = [{

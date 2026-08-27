@@ -25,4 +25,20 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   registerSpreadsheetExtension(editor);
   registerTableToolsExtension(editor);
   registerTocExtension(editor);
+
+  // Keep the primary toolbar compact without replacing the established action
+  // handlers. TinyMCE expands these groups into their original controls, so
+  // split-button menus, enabled states and keyboard shortcuts remain intact.
+  editor.ui.registry.addGroupToolbarButton('custom-insert', {
+    icon: 'plus',
+    tooltip: 'Insert date, title, spreadsheet, line or note',
+    items: document.getElementById('documentTitle')
+      ? 'adddate experiment-title inline-sheet horizontal-rule insert-note'
+      : 'adddate inline-sheet horizontal-rule insert-note',
+  });
+  editor.ui.registry.addGroupToolbarButton('custom-edit', {
+    icon: 'edit-block',
+    tooltip: 'Edit selected content',
+    items: 'edit-date-reference delete-date-reference table-properties cell-properties',
+  });
 }

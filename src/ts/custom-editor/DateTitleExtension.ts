@@ -79,7 +79,6 @@ export function registerDateTitleExtension(editor: Editor): void {
 
   editor.ui.registry.addSplitButton('adddate', {
     icon: 'insert-time',
-    text: 'Date',
     tooltip: 'Insert today using saved defaults; open the menu for date options',
     onAction: () => dateReferenceEditor.insertToday(),
     onItemAction: (_api, value) => {
@@ -153,7 +152,7 @@ export function registerDateTitleExtension(editor: Editor): void {
   });
 
   editor.ui.registry.addSplitButton('experiment-title', {
-    text: 'Title',
+    icon: 'heading',
     tooltip: 'Insert experiment title as a heading (Ctrl+Alt+T)',
     onAction: () => experimentTitleEditor.insertUsingDefaults(),
     onItemAction: (_api, value) => {
@@ -178,7 +177,7 @@ export function registerDateTitleExtension(editor: Editor): void {
   });
 
   editor.ui.registry.addMenuButton('horizontal-rule', {
-    text: 'Line',
+    icon: 'horizontal-rule',
     tooltip: 'Insert solid or dashed horizontal lines',
     fetch: callback => callback([
       {

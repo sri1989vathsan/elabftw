@@ -109,7 +109,6 @@ export function registerNoteExtension(editor: Editor): void {
 
   editor.ui.registry.addButton('insert-note', {
     icon: 'comment-add',
-    text: 'Note',
     tooltip: 'Insert a note box (Ctrl+Alt+N)',
     onAction: openDialog,
   });

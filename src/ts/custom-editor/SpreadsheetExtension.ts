@@ -180,7 +180,6 @@ export function registerSpreadsheetExtension(editor: Editor): void {
 
   editor.ui.registry.addMenuButton('inline-sheet', {
     icon: 'table',
-    text: 'Spreadsheet',
     tooltip: 'Insert or edit a formula spreadsheet',
     fetch: callback => {
       const existingTable = editor.selection.getNode()

@@ -1939,6 +1939,8 @@ function createOverlay(initial: SpreadsheetData): {
   presetSelect: HTMLSelectElement;
   formulaButtons: NodeListOf<HTMLButtonElement>;
   formulaStatus: HTMLSpanElement;
+  formulaBar: HTMLDivElement;
+  formulaCollapseBtn: HTMLButtonElement;
   borderWidthInput: HTMLInputElement;
   borderColorInput: HTMLInputElement;
   cellColorInput: HTMLInputElement;
@@ -2031,7 +2033,9 @@ function createOverlay(initial: SpreadsheetData): {
 
   const resizeBtn = document.createElement('button');
   resizeBtn.type = 'button';
-  resizeBtn.textContent = 'Apply size';
+  resizeBtn.innerHTML = '<i class="fas fa-expand-arrows-alt" aria-hidden="true"></i>';
+  resizeBtn.title = 'Apply row and column count';
+  resizeBtn.setAttribute('aria-label', 'Apply row and column count');
   resizeBtn.className = 'btn btn-sm btn-outline-secondary';
 
   const rowsControl = createLabeledControl('Rows', rowsInput);
@@ -2043,12 +2047,12 @@ function createOverlay(initial: SpreadsheetData): {
   sizeButtons.className = 'inline-spreadsheet-size-actions';
   const addRowBtn = document.createElement('button');
   addRowBtn.type = 'button';
-  addRowBtn.textContent = 'Add row';
+  addRowBtn.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i> <i class="fas fa-grip-lines" aria-hidden="true"></i>';
   addRowBtn.title = 'Add one row at the bottom';
   addRowBtn.className = 'btn btn-sm btn-outline-secondary';
   const addColBtn = document.createElement('button');
   addColBtn.type = 'button';
-  addColBtn.textContent = 'Add column';
+  addColBtn.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i> <i class="fas fa-columns" aria-hidden="true"></i>';
   addColBtn.title = 'Add one column on the right';
   addColBtn.className = 'btn btn-sm btn-outline-secondary';
   sizeButtons.appendChild(resizeBtn);
@@ -2406,14 +2410,20 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatBoldInput.type = 'checkbox';
   cellFormatBoldInput.setAttribute('aria-label', 'Bold selected cells');
   cellFormatBoldInput.checked = savedCellDefaults?.bold ?? false;
+  cellFormatBoldInput.className = 'inline-spreadsheet-icon-toggle';
+  cellFormatBoldInput.dataset.icon = 'B';
   const cellFormatItalicInput = document.createElement('input');
   cellFormatItalicInput.type = 'checkbox';
   cellFormatItalicInput.setAttribute('aria-label', 'Italicize selected cells');
   cellFormatItalicInput.checked = savedCellDefaults?.italic ?? false;
+  cellFormatItalicInput.className = 'inline-spreadsheet-icon-toggle inline-spreadsheet-icon-italic';
+  cellFormatItalicInput.dataset.icon = 'I';
   const cellFormatUnderlineInput = document.createElement('input');
   cellFormatUnderlineInput.type = 'checkbox';
   cellFormatUnderlineInput.setAttribute('aria-label', 'Underline selected cells');
   cellFormatUnderlineInput.checked = savedCellDefaults?.underline ?? false;
+  cellFormatUnderlineInput.className = 'inline-spreadsheet-icon-toggle inline-spreadsheet-icon-underline';
+  cellFormatUnderlineInput.dataset.icon = 'U';
   const cellFormatTextColorInput = createInput(
     'color',
     savedCellDefaults?.textColor ?? '#212529',
@@ -2445,6 +2455,46 @@ function createOverlay(initial: SpreadsheetData): {
     <option value="bottom">Bottom</option>
   `;
   cellFormatVerticalAlignSelect.value = savedCellDefaults?.verticalAlign ?? '';
+  const createAlignmentButtons = (
+    select: HTMLSelectElement,
+    options: Array<{ value: string; label: string; icon: string }>,
+  ): HTMLDivElement => {
+    const group = document.createElement('div');
+    group.className = 'inline-spreadsheet-alignment-buttons';
+    select.classList.add('d-none');
+    group.appendChild(select);
+    const buttons = options.map(option => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'inline-spreadsheet-icon-button';
+      button.title = option.label;
+      button.setAttribute('aria-label', option.label);
+      button.setAttribute('aria-pressed', String(select.value === option.value));
+      button.innerHTML = option.icon;
+      button.addEventListener('click', () => {
+        select.value = option.value;
+        buttons.forEach(candidate => candidate.setAttribute(
+          'aria-pressed',
+          String(candidate === button),
+        ));
+        select.dispatchEvent(new Event('change'));
+      });
+      return button;
+    });
+    group.append(...buttons);
+    return group;
+  };
+  const horizontalAlignmentButtons = createAlignmentButtons(cellFormatTextAlignSelect, [
+    { value: 'left', label: 'Align left', icon: '<i class="fas fa-align-left" aria-hidden="true"></i>' },
+    { value: 'center', label: 'Align center', icon: '<i class="fas fa-align-center" aria-hidden="true"></i>' },
+    { value: 'right', label: 'Align right', icon: '<i class="fas fa-align-right" aria-hidden="true"></i>' },
+    { value: 'justify', label: 'Justify', icon: '<i class="fas fa-align-justify" aria-hidden="true"></i>' },
+  ]);
+  const verticalAlignmentButtons = createAlignmentButtons(cellFormatVerticalAlignSelect, [
+    { value: 'top', label: 'Align top', icon: '↥' },
+    { value: 'middle', label: 'Align middle', icon: '↕' },
+    { value: 'bottom', label: 'Align bottom', icon: '↧' },
+  ]);
   const rowHeightInput = createInput(
     'number',
     String(MIN_DATA_ROW_HEIGHT),
@@ -2456,20 +2506,22 @@ function createOverlay(initial: SpreadsheetData): {
     fontFormatLabel,
     createLabeledControl('Family', cellFormatFontFamilySelect),
     createLabeledControl('Size (pt)', cellFormatFontSizeInput),
-    createLabeledControl('Bold', cellFormatBoldInput),
-    createLabeledControl('Italic', cellFormatItalicInput),
-    createLabeledControl('Underline', cellFormatUnderlineInput),
+    createLabeledControl('', cellFormatBoldInput),
+    createLabeledControl('', cellFormatItalicInput),
+    createLabeledControl('', cellFormatUnderlineInput),
     createLabeledControl('Text color', cellFormatTextColorInput),
     createLabeledControl('No text color', cellFormatNoTextColorInput),
-    createLabeledControl('Horizontal', cellFormatTextAlignSelect),
-    createLabeledControl('Vertical', cellFormatVerticalAlignSelect),
+    horizontalAlignmentButtons,
+    verticalAlignmentButtons,
     createLabeledControl('Row height (px)', rowHeightInput),
   );
 
   const clearCellFormatBtn = document.createElement('button');
   clearCellFormatBtn.type = 'button';
   clearCellFormatBtn.className = 'btn btn-sm btn-outline-secondary';
-  clearCellFormatBtn.textContent = 'Clear all cell formatting';
+  clearCellFormatBtn.innerHTML = '<i class="fas fa-eraser" aria-hidden="true"></i>';
+  clearCellFormatBtn.title = 'Clear all formatting from selected cells';
+  clearCellFormatBtn.setAttribute('aria-label', 'Clear all formatting from selected cells');
   const cellFormatStatus = document.createElement('span');
   cellFormatStatus.className = 'inline-spreadsheet-cell-format-status';
   cellFormatStatus.textContent = 'Select cells, then change a property to apply it immediately.';
@@ -2503,7 +2555,13 @@ function createOverlay(initial: SpreadsheetData): {
     button.type = 'button';
     button.className = 'btn btn-sm btn-outline-secondary';
     button.dataset.formula = action.value;
-    button.textContent = action.label;
+    button.textContent = action.value === 'SUM'
+      ? '∑'
+      : (action.value === 'AVERAGE'
+        ? 'x̄'
+        : (action.value === 'COUNT'
+          ? '#'
+          : action.label));
     button.title = action.title;
     button.setAttribute('aria-label', action.title);
     formulaBar.appendChild(button);
@@ -2512,6 +2570,14 @@ function createOverlay(initial: SpreadsheetData): {
   formulaStatus.className = 'inline-spreadsheet-formula-status';
   formulaStatus.textContent = 'Select cells, then choose a function or arithmetic operation. You can also type formulas such as =A1*B1.';
   formulaBar.appendChild(formulaStatus);
+  const formulaCollapseBtn = document.createElement('button');
+  formulaCollapseBtn.type = 'button';
+  formulaCollapseBtn.className = 'inline-spreadsheet-icon-button ml-auto';
+  formulaCollapseBtn.title = 'Collapse formula toolbar';
+  formulaCollapseBtn.setAttribute('aria-label', 'Collapse formula toolbar');
+  formulaCollapseBtn.setAttribute('aria-expanded', 'true');
+  formulaCollapseBtn.innerHTML = '<i class="fas fa-chevron-up" aria-hidden="true"></i>';
+  formulaBar.appendChild(formulaCollapseBtn);
   dialog.appendChild(formulaBar);
 
   const viewportBar = document.createElement('div');
@@ -2529,12 +2595,14 @@ function createOverlay(initial: SpreadsheetData): {
   const viewportFullWidthBtn = document.createElement('button');
   viewportFullWidthBtn.type = 'button';
   viewportFullWidthBtn.className = 'btn btn-sm btn-outline-secondary';
-  viewportFullWidthBtn.textContent = 'Full width';
+  viewportFullWidthBtn.innerHTML = '<i class="fas fa-arrows-alt-h" aria-hidden="true"></i>';
+  viewportFullWidthBtn.setAttribute('aria-label', 'Full width');
   viewportFullWidthBtn.title = 'Restore the editing area to the full dialog width';
   const viewportFullHeightBtn = document.createElement('button');
   viewportFullHeightBtn.type = 'button';
   viewportFullHeightBtn.className = 'btn btn-sm btn-outline-secondary';
-  viewportFullHeightBtn.textContent = 'Full height';
+  viewportFullHeightBtn.innerHTML = '<i class="fas fa-arrows-alt-v" aria-hidden="true"></i>';
+  viewportFullHeightBtn.setAttribute('aria-label', 'Full height');
   viewportFullHeightBtn.title = 'Expand the editing area to the available screen height';
   const viewportHint = document.createElement('span');
   viewportHint.textContent = 'Drag the bottom-right corner to resize the editing area.';
@@ -2587,6 +2655,8 @@ function createOverlay(initial: SpreadsheetData): {
     presetSelect,
     formulaButtons: formulaBar.querySelectorAll<HTMLButtonElement>('[data-formula]'),
     formulaStatus,
+    formulaBar,
+    formulaCollapseBtn,
     borderWidthInput,
     borderColorInput,
     cellColorInput,
@@ -3706,6 +3776,20 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     ui.viewportFullHeightBtn.addEventListener('click', () => {
       // Leave room for the popup title, controls and action buttons.
       updateViewportHeight(window.innerHeight * 0.65);
+    });
+    ui.formulaCollapseBtn.addEventListener('click', () => {
+      const collapsed = ui.formulaBar.classList.toggle('is-collapsed');
+      ui.formulaCollapseBtn.setAttribute('aria-expanded', String(!collapsed));
+      ui.formulaCollapseBtn.setAttribute(
+        'aria-label',
+        collapsed ? 'Expand formula toolbar' : 'Collapse formula toolbar',
+      );
+      ui.formulaCollapseBtn.title = collapsed
+        ? 'Expand formula toolbar'
+        : 'Collapse formula toolbar';
+      ui.formulaCollapseBtn.innerHTML = collapsed
+        ? '<i class="fas fa-chevron-down" aria-hidden="true"></i>'
+        : '<i class="fas fa-chevron-up" aria-hidden="true"></i>';
     });
     const viewportResizeObserver = new ResizeObserver(entries => {
       const height = entries[0]?.contentRect.height;

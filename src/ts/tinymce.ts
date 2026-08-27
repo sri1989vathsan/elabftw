@@ -215,17 +215,14 @@ function getAssetVersionQuery(): string {
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist checklist outdent indent | forecolor backcolor format-painter remove-formatting | charmap emoticons adddate edit-date-reference delete-date-reference horizontal-rule insert-note | codesample | insert-link | copy-rich-selection inline-sheet table-properties cell-properties table-select-copy table-outdent table-indent sort-table';
-  if (document.getElementById('documentTitle')) {
-    toolbar1 = toolbar1.replace('adddate', 'experiment-title adddate');
-  }
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize | bold italic underline strikethrough superscript subscript forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist checklist outdent indent | format-painter remove-formatting | insert-link custom-insert custom-edit | copy-rich-selection table table-select-copy table-outdent table-indent sort-table | charmap emoticons codesample';
   let removedMenuItems = 'newdocument, image, anchor';
   let fileMenuItems = 'preview | print';
   if (page === 'edit') {
     fileMenuItems = 'restoredraft | saveAndGoBack ' + fileMenuItems;
     plugins += ' autosave';
     // add Image button in toolbar
-    toolbar1 = toolbar1.replace('insert-link |', 'insert-link image |');
+    toolbar1 = toolbar1.replace('insert-link', 'insert-link image');
     // let Image in menu
     removedMenuItems = 'newdocument, anchor';
   }

@@ -1966,8 +1966,18 @@ body.html-tool-workspace-resizing * {
   max-height: 90vh;
   max-width: 1100px;
   overflow-y: auto;
-  padding: 16px;
+  padding: 0;
   width: 90vw;
+}
+
+.inline-spreadsheet-dialog > h5 {
+  background-color: var(--firstlevel);
+  border-bottom: 1px solid var(--secondary);
+  margin: 0 !important;
+  padding: 0.7rem 0.9rem;
+  position: sticky;
+  top: 0;
+  z-index: 4;
 }
 
 .inline-spreadsheet-settings {
@@ -1975,7 +1985,7 @@ body.html-tool-workspace-resizing * {
   display: grid;
   gap: 0.5rem;
   grid-template-columns: minmax(12rem, 1fr) 5rem 5rem auto minmax(14rem, 2fr);
-  margin-bottom: 0.5rem;
+  margin: 0.5rem 0.65rem;
 }
 
 .inline-spreadsheet-size-control {
@@ -1995,7 +2005,7 @@ body.html-tool-workspace-resizing * {
   background-color: var(--firstlevel);
   border: 1px solid var(--secondary);
   border-radius: 4px;
-  margin-bottom: 0.5rem;
+  margin: 0 0.65rem 0.4rem;
   padding: 0.4rem 0.5rem;
 
   summary {
@@ -2056,8 +2066,8 @@ body.html-tool-workspace-resizing * {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
-  margin-bottom: 0.5rem;
-  padding: 0.3rem 0.4rem;
+  margin: 0 0.65rem 0.35rem;
+  padding: 0.25rem 0.35rem;
 
   .inline-spreadsheet-appearance-control {
     flex-direction: row;
@@ -2101,7 +2111,7 @@ body.html-tool-workspace-resizing * {
 .inline-spreadsheet-cell-format-row {
   align-items: end;
   display: flex;
-  flex: 1 0 100%;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   gap: 0.35rem;
 
@@ -2110,6 +2120,56 @@ body.html-tool-workspace-resizing * {
     font-size: 0.82rem;
     min-width: 2.25rem;
   }
+}
+
+.inline-spreadsheet-icon-button,
+.inline-spreadsheet-icon-toggle {
+  align-items: center;
+  appearance: none;
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  color: var(--strongest);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.82rem;
+  height: 1.75rem;
+  justify-content: center;
+  margin: 0;
+  min-width: 1.75rem;
+  padding: 0.15rem 0.3rem;
+}
+
+.inline-spreadsheet-icon-button:hover,
+.inline-spreadsheet-icon-toggle:hover {
+  background-color: var(--secondlevel);
+  border-color: var(--secondary);
+}
+
+.inline-spreadsheet-icon-button[aria-pressed='true'],
+.inline-spreadsheet-icon-toggle:checked {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  color: var(--white);
+}
+
+.inline-spreadsheet-icon-toggle::before {
+  content: attr(data-icon);
+  font-weight: 700;
+}
+
+.inline-spreadsheet-icon-italic::before {
+  font-style: italic;
+}
+
+.inline-spreadsheet-icon-underline::before {
+  text-decoration: underline;
+}
+
+.inline-spreadsheet-alignment-buttons {
+  align-items: center;
+  display: inline-flex;
+  gap: 1px;
 }
 
 .inline-spreadsheet-cell-format-status {
@@ -2125,16 +2185,39 @@ body.html-tool-workspace-resizing * {
   border-radius: 4px;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-bottom: 0.5rem;
-  padding: 0.4rem;
+  gap: 0.2rem;
+  margin: 0 0.65rem 0.35rem;
+  min-height: 2rem;
+  padding: 0.15rem 0.25rem;
+
+  .btn {
+    align-items: center;
+    display: inline-flex;
+    font-size: 0.78rem;
+    height: 1.7rem;
+    justify-content: center;
+    min-width: 1.7rem;
+    padding: 0.1rem 0.3rem;
+  }
+
+  &.is-collapsed {
+    justify-content: flex-end;
+    min-height: 1.65rem;
+
+    > :not(.inline-spreadsheet-icon-button) {
+      display: none;
+    }
+  }
 }
 
 .inline-spreadsheet-formula-status {
   color: var(--medium);
   flex: 1 1 16rem;
   font-size: 0.82rem;
-  margin-left: 0.35rem;
+  margin-left: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .inline-spreadsheet-viewport-controls {
@@ -2144,7 +2227,7 @@ body.html-tool-workspace-resizing * {
   flex-wrap: wrap;
   font-size: 0.78rem;
   gap: 0.4rem;
-  margin-bottom: 0.35rem;
+  margin: 0 0.65rem 0.3rem;
 
   .inline-spreadsheet-appearance-control {
     flex-direction: row;
@@ -2164,7 +2247,7 @@ body.html-tool-workspace-resizing * {
 
   flex: 0 0 auto;
   height: 400px;
-  margin-bottom: 0.75rem;
+  margin: 0 0.65rem 0.5rem;
   max-height: 70vh;
   max-width: 100%;
   min-height: 220px;
@@ -2224,9 +2307,15 @@ body.html-tool-workspace-resizing * {
 
 .inline-spreadsheet-actions {
   align-items: center;
+  background-color: var(--firstlevel);
+  border-top: 1px solid var(--secondary);
+  bottom: 0;
   display: flex;
   gap: 0.5rem;
   justify-content: space-between;
+  padding: 0.5rem 0.65rem;
+  position: sticky;
+  z-index: 4;
 }
 
 .inline-spreadsheet-grid-actions {
