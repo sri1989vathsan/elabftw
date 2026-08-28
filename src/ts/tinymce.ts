@@ -398,7 +398,9 @@ export function getTinymceBaseConfig(page: string): object {
       plugins: [ 'autolink', 'image', 'link', 'lists', 'save', 'table', 'mention' ],
     },
     // use a custom function for the save button in toolbar
-    save_onsavecallback: (): Promise<void> => updateEntityBody(),
+    save_onsavecallback: async (): Promise<void> => {
+      await updateEntityBody();
+    },
     // keyboard shortcut to insert today's date at cursor in editor
     menu: {
       file: { title: 'File', items: fileMenuItems },

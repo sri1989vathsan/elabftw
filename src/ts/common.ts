@@ -1290,8 +1290,8 @@ export function showModalAndFocusFirstInput(modalSelector: string) {
 on('update-entity-body', async (el: HTMLElement) => {
   const redirectTarget = el.dataset.redirect;
   const shouldRedirect = redirectTarget === 'view' || redirectTarget === 'list';
-  await updateEntityBody(shouldRedirect);
-  if (shouldRedirect) {
+  const wasSaved = await updateEntityBody(shouldRedirect);
+  if (shouldRedirect && wasSaved) {
     sessionStorage.setItem('flash_saved', i18next.t('saved'));
     window.location.replace(
       redirectTarget === 'list'

@@ -17,10 +17,14 @@ import { getEditor } from './Editor.class';
 import DOMPurify from 'dompurify';
 import { ApiC } from './api';
 import { Uploader } from './uploader';
-import { clearLocalStorage } from './localStorage';
 import { entity } from './getEntity';
 import { on } from './handlers';
 import { buildLabCollectorUrl } from './labcollector-link';
+import {
+  clearRecoveryDraft,
+  isSameRecoveryContent,
+  readRecoveryDraft,
+} from './RecoveryDraft.class';
 
 // remove exclusive edit mode when leaving the page
 window.onbeforeunload = function() {
@@ -29,6 +33,8 @@ window.onbeforeunload = function() {
 };
 // Which editor are we using? md or tiny
 const editor = getEditor();
+// Capture the server-rendered value before TinyMCE replaces the textarea.
+const serverBody = (document.getElementById('body_area') as HTMLTextAreaElement | null)?.value ?? '';
 editor.init('edit');
 // initialize the file uploader
 (new Uploader()).init();
@@ -96,13 +102,20 @@ applyEditFolderScope('mine');
 ////////////////
 // DATA RECOVERY
 
-// check if there is some local data with this id to recover
-if ((localStorage.getItem('id') == String(entity.id)) && (localStorage.getItem('type') == entity.type)) {
-  const savedDate = localStorage.getItem('date') ?? '';
-  const savedBody = localStorage.getItem('body') ?? '';
+// Check whether a failed save left content for this entity to recover.
+const recoveryDraft = readRecoveryDraft(entity.type, entity.id);
+if (recoveryDraft && isSameRecoveryContent(recoveryDraft.body, serverBody)) {
+  // The server already contains this content, so prompting would be a false positive.
+  clearRecoveryDraft(entity.type, entity.id, recoveryDraft.body);
+} else if (recoveryDraft) {
+  const savedDate = recoveryDraft.savedAt;
+  const savedBody = recoveryDraft.body;
 
   const savedSpan = document.createElement('span');
-  savedSpan.innerText = savedDate;
+  const savedTimestamp = Date.parse(savedDate);
+  savedSpan.innerText = Number.isFinite(savedTimestamp)
+    ? new Date(savedTimestamp).toLocaleString()
+    : savedDate;
 
   const bodyRecovery = document.createElement('div');
   bodyRecovery.id = 'recoveryDiv';
@@ -147,18 +160,20 @@ if ((localStorage.getItem('id') == String(entity.id)) && (localStorage.getItem('
 // RECOVER YES
 on('recover-yes', () => {
   const params = {};
-  params[Target.Body] = localStorage.getItem('body');
+  const draft = readRecoveryDraft(entity.type, entity.id);
+  if (!draft) return;
+  params[Target.Body] = draft.body;
 
   ApiC.patch(`${entity.type}/${entity.id}`, params).then(() => {
-    editor.replaceContent(localStorage.getItem('body'));
-    clearLocalStorage();
+    editor.replaceContent(draft.body);
+    clearRecoveryDraft(entity.type, entity.id, draft.body);
     document.getElementById('recoveryDiv')?.remove();
   });
 });
 
 // RECOVER NO
 on('recover-no', () => {
-  clearLocalStorage();
+  clearRecoveryDraft(entity.type, entity.id);
   document.getElementById('recoveryDiv')?.remove();
 });
 // END DATA RECOVERY

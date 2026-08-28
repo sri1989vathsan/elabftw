@@ -25,6 +25,7 @@ import TomSelectCheckboxOptions from 'tom-select/dist/esm/plugins/checkbox_optio
 import TomSelectClearButton from 'tom-select/dist/esm/plugins/clear_button/plugin.js';
 import TomSelectDropdownHeader from 'tom-select/dist/esm/plugins/dropdown_header/plugin.js';
 import TomSelectDropdownInput from 'tom-select/dist/esm/plugins/dropdown_input/plugin.js';
+import { clearRecoveryDraft, saveRecoveryDraft } from './RecoveryDraft.class';
 import TomSelectNoActiveItems from 'tom-select/dist/esm/plugins/no_active_items/plugin.js';
 import TomSelectRemoveButton from 'tom-select/dist/esm/plugins/remove_button/plugin.js';
 import TomSelectNoBackspaceDelete from 'tom-select/dist/esm/plugins/no_backspace_delete/plugin.js';
@@ -885,11 +886,21 @@ export async function saveStringAsFile(filename: string, content: string|Promise
 }
 
 // Shared function to UPDATE ENTITY BODY via save shortcut and/or save button, or autosave
-export async function updateEntityBody(redirect = true): Promise<void> {
+let retrySaveWhenOnline = false;
+
+window.addEventListener('online', () => {
+  if (!retrySaveWhenOnline) return;
+  retrySaveWhenOnline = false;
+  void updateEntityBody(false);
+});
+
+export async function updateEntityBody(redirect = true): Promise<boolean> {
   const editor = getEditor();
   const entity = getEntity();
+  const body = editor.getContent();
+  const saveStartedAt = Date.now();
 
-  return ApiC.patch(`${entity.type}/${entity.id}`, {body: editor.getContent(), notifOnSaved: redirect ? 0 : 1}).then(response => response.json()).then(json => {
+  return ApiC.patch(`${entity.type}/${entity.id}`, {body, notifOnSaved: redirect ? 0 : 1}).then(response => response.json()).then(json => {
     if (editor.type === 'tiny') {
       // set the editor as non dirty so we can navigate out without a warning to clear
       tinymce.activeEditor.setDirty(false);
@@ -901,15 +912,21 @@ export async function updateEntityBody(redirect = true): Promise<void> {
         reloadElements(['lastSavedAt']);
       }
     }
-  }).catch(() => {
-    // detect if the session timedout (Session expired error is thrown)
-    // store the modifications in local storage to prevent any data loss
-    localStorage.setItem('body', editor.getContent());
-    localStorage.setItem('id', String(entity.id));
-    localStorage.setItem('type', entity.type);
-    localStorage.setItem('date', new Date().toLocaleString());
-    // reload the page so user gets redirected to the login page
-    location.reload();
+    clearRecoveryDraft(entity.type, entity.id, body, saveStartedAt);
+    retrySaveWhenOnline = false;
+    return true;
+  }).catch((error: Error & { status?: number }) => {
+    // Preserve failed saves per entity. A later successful save clears only
+    // the matching draft, so an older request cannot erase newer work.
+    saveRecoveryDraft(entity.type, entity.id, body);
+    if (error.status === 401 || error.status === 403) {
+      location.reload();
+    } else {
+      // Temporary disconnects (including sleep/wake) should not force a reload.
+      // The browser's online event retries the most recent editor content.
+      retrySaveWhenOnline = true;
+    }
+    return false;
   });
 }
 
