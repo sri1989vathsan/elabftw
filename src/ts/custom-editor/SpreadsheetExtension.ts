@@ -335,7 +335,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     icon: 'table',
     tooltip: 'Insert a table, spreadsheet or well plate',
     fetch: callback => {
-      const existingTable = editor.selection.getNode()
+      const selectedNode = editor.selection.getNode();
+      const selectedCell = selectedNode.closest('td,th') as HTMLTableCellElement | null;
+      const selectedTable = selectedNode.closest('table') as HTMLTableElement | null;
+      const existingTable = selectedNode
         .closest('table.elabftw-spreadsheet') as HTMLTableElement | null;
       const items = [];
       if (existingTable) {
@@ -380,6 +383,23 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           onAction: () => openInlineSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
         })),
       });
+      if (selectedTable) {
+        items.push(
+          { type: 'separator' as const },
+          {
+            type: 'menuitem' as const,
+            text: 'Table style…',
+            onAction: () => editor.execCommand('mceTableProps'),
+          },
+        );
+        if (selectedCell) {
+          items.push({
+            type: 'menuitem' as const,
+            text: 'Cell style…',
+            onAction: () => editor.execCommand('mceTableCellProps'),
+          });
+        }
+      }
       callback(items);
     },
   });

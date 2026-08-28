@@ -38,11 +38,4 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   registerTableToolsExtension(editor);
   registerTocExtension(editor);
 
-  // Keep editing actions grouped without replacing their established handlers,
-  // enabled states or keyboard shortcuts.
-  editor.ui.registry.addGroupToolbarButton('custom-edit', {
-    icon: 'edit-block',
-    tooltip: 'Edit selected content',
-    items: 'table-properties cell-properties',
-  });
 }

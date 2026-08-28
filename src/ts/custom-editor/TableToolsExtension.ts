@@ -267,26 +267,4 @@ export function registerTableToolsExtension(editor: Editor): void {
       return () => editor.off('NodeChange', update);
     },
   });
-  editor.ui.registry.addButton('cell-properties', {
-    text: 'Cell style',
-    tooltip: 'Cell background, border style, color and width',
-    onAction: () => editor.execCommand('mceTableCellProps'),
-    onSetup: api => {
-      const update = (event): void => api.setEnabled(Boolean(event.element?.closest?.('td,th')));
-      api.setEnabled(Boolean(editor.selection.getNode().closest?.('td,th')));
-      editor.on('NodeChange', update);
-      return () => editor.off('NodeChange', update);
-    },
-  });
-  editor.ui.registry.addButton('table-properties', {
-    text: 'Table style',
-    tooltip: 'Table size, alignment, border, background, spacing and caption',
-    onAction: () => editor.execCommand('mceTableProps'),
-    onSetup: api => {
-      const update = (event): void => api.setEnabled(Boolean(event.element?.closest?.('table')));
-      api.setEnabled(Boolean(editor.selection.getNode().closest?.('table')));
-      editor.on('NodeChange', update);
-      return () => editor.off('NodeChange', update);
-    },
-  });
 }
