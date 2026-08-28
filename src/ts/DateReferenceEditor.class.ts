@@ -53,6 +53,9 @@ interface DateInsertDefaults {
   customLabel: string;
   asHeading: boolean;
   headingLevel: number;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
 }
 
 const DATE_REFERENCE_SELECTOR = 'a.elabftw-date-reference';
@@ -100,6 +103,9 @@ function getDateInsertDefaults(): DateInsertDefaults {
     customLabel: '',
     asHeading: true,
     headingLevel: 1,
+    bold: false,
+    italic: false,
+    underline: false,
   };
   const accountDefault = getAccountEditorDefault<DateInsertDefaults>('date');
   if (accountDefault) {
@@ -134,7 +140,53 @@ function normalizeDateInsertDefaults(
     headingLevel: Number.isInteger(headingLevel) && headingLevel >= 1 && headingLevel <= 6
       ? headingLevel
       : fallback.headingLevel,
+    bold: parsed.bold === true,
+    italic: parsed.italic === true,
+    underline: parsed.underline === true,
   };
+}
+
+function createEmphasisToggle(
+  labelText: string,
+  symbol: string,
+  checked: boolean,
+): { label: HTMLLabelElement; input: HTMLInputElement } {
+  const label = document.createElement('label');
+  label.className = 'date-title-format-toggle';
+  label.title = labelText;
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = checked;
+  input.setAttribute('aria-label', labelText);
+  const visible = document.createElement('span');
+  visible.textContent = symbol;
+  visible.setAttribute('aria-hidden', 'true');
+  label.append(input, visible);
+  return { label, input };
+}
+
+function getReferenceEmphasis(
+  reference: HTMLAnchorElement | null,
+  defaults: DateInsertDefaults,
+): Pick<DateInsertDefaults, 'bold' | 'italic' | 'underline'> {
+  if (!reference) return defaults;
+  return {
+    bold: reference.style.fontWeight === 'bold' || Number(reference.style.fontWeight) >= 600,
+    italic: reference.style.fontStyle === 'italic',
+    underline: reference.style.textDecorationLine.includes('underline')
+      || reference.style.textDecoration.includes('underline'),
+  };
+}
+
+function applyReferenceEmphasis(
+  reference: HTMLAnchorElement,
+  bold: boolean,
+  italic: boolean,
+  underline: boolean,
+): void {
+  reference.style.fontWeight = bold ? 'bold' : 'normal';
+  reference.style.fontStyle = italic ? 'italic' : 'normal';
+  reference.style.textDecoration = underline ? 'underline' : 'none';
 }
 
 async function saveDateInsertDefaults(defaults: DateInsertDefaults): Promise<void> {
@@ -318,6 +370,9 @@ export default class DateReferenceEditor {
       defaults.customLabel,
       defaults.asHeading,
       defaults.headingLevel,
+      defaults.bold,
+      defaults.italic,
+      defaults.underline,
     );
   }
 
@@ -334,6 +389,7 @@ export default class DateReferenceEditor {
     const existingHeading = reference?.closest(
       'h1, h2, h3, h4, h5, h6',
     ) as HTMLHeadingElement | null;
+    const emphasis = getReferenceEmphasis(reference, savedDefaults);
     let selectedTarget = reference ? getTargetFromAnchor(reference) : null;
     let requestSerial = 0;
     let searchTimer: number | undefined;
@@ -434,6 +490,19 @@ export default class DateReferenceEditor {
     });
     headingGroup.append(headingCheckboxLabel, headingLevelSelect);
 
+    const emphasisGroup = document.createElement('div');
+    emphasisGroup.className = 'date-title-format-row';
+    const emphasisLabel = document.createElement('span');
+    emphasisLabel.className = 'date-title-format-label';
+    emphasisLabel.textContent = 'Date text';
+    const emphasisButtons = document.createElement('div');
+    emphasisButtons.className = 'date-title-format-buttons';
+    const bold = createEmphasisToggle('Bold', 'B', emphasis.bold);
+    const italic = createEmphasisToggle('Italic', 'I', emphasis.italic);
+    const underline = createEmphasisToggle('Underline', 'U', emphasis.underline);
+    emphasisButtons.append(bold.label, italic.label, underline.label);
+    emphasisGroup.append(emphasisLabel, emphasisButtons);
+
     const linkGroup = document.createElement('div');
     linkGroup.className = 'date-reference-field';
     const linkLabel = document.createElement('label');
@@ -504,6 +573,7 @@ export default class DateReferenceEditor {
       dateGroup,
       formatGroup,
       headingGroup,
+      emphasisGroup,
       linkGroup,
       actions,
     );
@@ -615,6 +685,9 @@ export default class DateReferenceEditor {
           customLabel: customLabelInput.value.trim(),
           asHeading: headingCheckbox.checked,
           headingLevel: Number(headingLevelSelect.value),
+          bold: bold.input.checked,
+          italic: italic.input.checked,
+          underline: underline.input.checked,
         });
         this.editor.notificationManager.open({
           text: 'Date defaults saved for your account',
@@ -657,6 +730,9 @@ export default class DateReferenceEditor {
           selectedTarget,
           selectedFormat,
           customLabelInput.value,
+          bold.input.checked,
+          italic.input.checked,
+          underline.input.checked,
         );
         return;
       }
@@ -674,6 +750,9 @@ export default class DateReferenceEditor {
         customLabelInput.value,
         headingCheckbox.checked,
         requestedHeadingLevel,
+        bold.input.checked,
+        italic.input.checked,
+        underline.input.checked,
       );
     });
     deleteButton?.addEventListener('click', () => {
@@ -738,6 +817,9 @@ export default class DateReferenceEditor {
     target: ExperimentTarget | null,
     format: DateDisplayFormat,
     customLabel: string,
+    bold: boolean,
+    italic: boolean,
+    underline: boolean,
   ): void {
     const anchorId = getReferenceAnchorId(reference) || generateAnchorId(date);
     const label = formatDate(date, format, customLabel);
@@ -754,6 +836,7 @@ export default class DateReferenceEditor {
         target ? getExperimentHref(target.id) : getEntityViewHref(anchorId),
       );
       reference.setAttribute('title', title);
+      applyReferenceEmphasis(reference, bold, italic, underline);
       const time = reference.querySelector('time') ?? document.createElement('time');
       time.setAttribute('datetime', date);
       time.textContent = label;
@@ -777,6 +860,9 @@ export default class DateReferenceEditor {
     customLabel = '',
     asHeading = true,
     headingLevel = 1,
+    bold = false,
+    italic = false,
+    underline = false,
   ): void {
     const anchorId = existingAnchorId || generateAnchorId(date);
     const href = target ? getExperimentHref(target.id) : getEntityViewHref(anchorId);
@@ -790,6 +876,7 @@ export default class DateReferenceEditor {
     const anchorHtml = [
       `<a${asHeading ? '' : ` id="${escapeHTML(anchorId)}"`}`,
       ' class="elabftw-date-reference"',
+      ` style="font-weight:${bold ? 'bold' : 'normal'};font-style:${italic ? 'italic' : 'normal'};text-decoration:${underline ? 'underline' : 'none'}"`,
       ` href="${escapeHTML(href)}" title="${escapeHTML(title)}">`,
       '<span class="elabftw-date-icon">',
       `<span class="elabftw-date-icon-month" title="${escapeHTML(iconMonth)}">&#8203;</span>`,

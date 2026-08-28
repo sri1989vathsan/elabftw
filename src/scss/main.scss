@@ -1840,9 +1840,101 @@ body.html-tool-workspace-resizing * {
   grid-template-columns: minmax(0, 1fr) minmax(5rem, 8rem) minmax(8rem, 12rem);
 }
 
+.experiment-title-dialog {
+  max-width: 44rem;
+  padding: 1rem;
+
+  .date-reference-help,
+  .date-reference-field,
+  .date-reference-heading-row,
+  .experiment-title-heading-preview {
+    margin-bottom: 0.65rem;
+  }
+}
+
+.experiment-title-typography-grid {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: minmax(7rem, 0.8fr) minmax(10rem, 1.5fr) minmax(5rem, 0.6fr) minmax(7rem, 0.8fr);
+
+  .date-reference-field {
+    margin-bottom: 0;
+  }
+}
+
+.date-title-format-row {
+  align-items: center;
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 0.4rem;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  padding: 0.45rem 0.6rem;
+}
+
+.date-title-format-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.date-title-format-buttons {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.date-title-format-toggle {
+  cursor: pointer;
+  margin: 0;
+
+  input {
+    height: 1px;
+    opacity: 0;
+    position: absolute;
+    width: 1px;
+  }
+
+  span {
+    align-items: center;
+    background-color: var(--mainbackground);
+    border: 1px solid var(--secondary);
+    border-radius: 0.3rem;
+    color: var(--strongest);
+    display: inline-flex;
+    font-family: serif;
+    font-size: 1rem;
+    font-weight: 700;
+    height: 2rem;
+    justify-content: center;
+    width: 2rem;
+  }
+
+  &:nth-child(2) span {
+    font-style: italic;
+  }
+
+  &:nth-child(3) span {
+    text-decoration: underline;
+  }
+
+  input:checked + span {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.18);
+  }
+
+  input:focus-visible + span {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
 @media (max-width: 575.98px) {
   .experiment-title-preset-row,
-  .experiment-title-background-row {
+  .experiment-title-background-row,
+  .experiment-title-typography-grid {
     grid-template-columns: 1fr;
   }
 

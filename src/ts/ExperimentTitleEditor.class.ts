@@ -219,6 +219,25 @@ function createCheckbox(labelText: string, checked: boolean): {
   return { label, input };
 }
 
+function createEmphasisToggle(
+  labelText: string,
+  symbol: string,
+  checked: boolean,
+): { label: HTMLLabelElement; input: HTMLInputElement } {
+  const label = document.createElement('label');
+  label.className = 'date-title-format-toggle';
+  label.title = labelText;
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = checked;
+  input.setAttribute('aria-label', labelText);
+  const visible = document.createElement('span');
+  visible.textContent = symbol;
+  visible.setAttribute('aria-hidden', 'true');
+  label.append(input, visible);
+  return { label, input };
+}
+
 export default class ExperimentTitleEditor {
   constructor(private editor: Editor) {}
 
@@ -233,7 +252,7 @@ export default class ExperimentTitleEditor {
     overlay.setAttribute('role', 'presentation');
 
     const dialog = document.createElement('div');
-    dialog.className = 'date-reference-dialog';
+    dialog.className = 'date-reference-dialog experiment-title-dialog';
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
     dialog.setAttribute('aria-labelledby', 'experiment-title-dialog-title');
@@ -343,11 +362,17 @@ export default class ExperimentTitleEditor {
     );
 
     const emphasisRow = document.createElement('div');
-    emphasisRow.className = 'date-reference-heading-row';
-    const bold = createCheckbox('Bold', defaults.bold);
-    const italic = createCheckbox('Italic', defaults.italic);
-    const underline = createCheckbox('Underline', defaults.underline);
-    emphasisRow.append(bold.label, italic.label, underline.label);
+    emphasisRow.className = 'date-title-format-row';
+    const emphasisLabel = document.createElement('span');
+    emphasisLabel.className = 'date-title-format-label';
+    emphasisLabel.textContent = 'Text style';
+    const emphasisButtons = document.createElement('div');
+    emphasisButtons.className = 'date-title-format-buttons';
+    const bold = createEmphasisToggle('Bold', 'B', defaults.bold);
+    const italic = createEmphasisToggle('Italic', 'I', defaults.italic);
+    const underline = createEmphasisToggle('Underline', 'U', defaults.underline);
+    emphasisButtons.append(bold.label, italic.label, underline.label);
+    emphasisRow.append(emphasisLabel, emphasisButtons);
 
     const alignmentSelect = document.createElement('select');
     alignmentSelect.className = 'form-control';
@@ -358,6 +383,15 @@ export default class ExperimentTitleEditor {
       <option value="justify">Justify</option>
     `;
     alignmentSelect.value = defaults.alignment;
+
+    const typographyGrid = document.createElement('div');
+    typographyGrid.className = 'experiment-title-typography-grid';
+    typographyGrid.append(
+      createField('Heading', headingLevelSelect),
+      createField('Font', fontFamilySelect),
+      createField('Size (pt)', fontSizeInput),
+      createField('Align', alignmentSelect),
+    );
 
     const preview = document.createElement('div');
     preview.className = 'experiment-title-heading-preview';
@@ -408,13 +442,10 @@ export default class ExperimentTitleEditor {
       explanation,
       createField('Heading text', headingTextInput),
       createControlGroup('Saved title styles', presetRow),
-      createField('Heading level', headingLevelSelect),
-      createField('Font family', fontFamilySelect),
-      createField('Font size (pt)', fontSizeInput),
+      typographyGrid,
       colorRow,
       backgroundRow,
       emphasisRow,
-      createField('Alignment', alignmentSelect),
       preview,
       status,
       actions,
