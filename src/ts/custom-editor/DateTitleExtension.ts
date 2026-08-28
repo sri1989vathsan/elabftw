@@ -79,6 +79,7 @@ export function registerDateTitleExtension(editor: Editor): void {
 
   editor.ui.registry.addSplitButton('adddate', {
     icon: 'elabftw-calendar',
+    text: 'Day',
     tooltip: 'Insert today using saved defaults; open the menu for date options',
     onAction: () => dateReferenceEditor.insertToday(),
     onItemAction: (_api, value) => {
