@@ -122,6 +122,7 @@ export function registerDateTitleExtension(editor: Editor): void {
           type: 'choiceitem' as const,
           text: 'Insert timestamp',
           value: 'timestamp',
+          icon: 'elabftw-clock',
         },
       ];
       const selectedReference = dateReferenceEditor.getSelectedReference();
