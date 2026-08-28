@@ -581,6 +581,20 @@ export function getTinymceBaseConfig(page: string): object {
     toolbar_sticky_offset: isToolbarSticky ? ((document.querySelector<HTMLElement>('.sticky-navbar')?.offsetHeight ?? 0) + (entityToolbar?.offsetHeight ?? 0)) : 0,
     // render MathJax for TinyMCE preview
     init_instance_callback: (editor) => {
+      // toolbar_sticky_offset above is only this instance's starting value.
+      // TinyMCE reads it fresh on every scroll/resize-triggered docking
+      // recalculation (it's a live option lookup, not cached at init), so
+      // keeping it in sync here is enough to track the navbar/entity
+      // toolbar's own show/hide state instead of going stale and causing a
+      // jump right as this toolbar reaches sticky range.
+      if (isToolbarSticky) {
+        const updateStickyOffset = (event: Event): void => {
+          const offset = (event as CustomEvent<{ offset: number }>).detail?.offset;
+          if (typeof offset === 'number') editor.options.set('toolbar_sticky_offset', offset);
+        };
+        window.addEventListener('elabftw-sticky-offset-changed', updateStickyOffset);
+        editor.on('remove', () => window.removeEventListener('elabftw-sticky-offset-changed', updateStickyOffset));
+      }
       // Recalculate from the loaded document instead of retaining TinyMCE's
       // provisional iframe height. Without this, edit mode can initially
       // expose a long empty scrolling region until the editor receives focus.

@@ -2559,6 +2559,14 @@ body.html-tool-workspace-resizing * {
     padding: 0.1rem 0.3rem;
   }
 
+  .inline-spreadsheet-formula-function-select {
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    height: 1.7rem;
+    max-width: 9rem;
+    padding: 0.1rem 0.3rem;
+  }
+
   &.is-collapsed {
     justify-content: flex-end;
     min-height: 1.65rem;

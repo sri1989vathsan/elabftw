@@ -192,12 +192,23 @@ if (navbar) {
 
   const applyStickyHeaderState = (): void => {
     const visibleNavbarHeight = isNavbarHidden ? 0 : navbarHeight;
-    const visibleToolbarHeight = isNavbarHidden ? 0 : entityToolbarHeight;
     navbar.classList.toggle('hidden', isNavbarHidden);
-    entityStickyToolbar?.classList.toggle('hidden', isNavbarHidden);
+    // The entity save/back toolbar stays visible even while the plain navbar
+    // hides on scroll-down: losing one-click access to Save while reviewing
+    // a long document is worse than the vertical space it costs. It just
+    // docks higher — top: var(--navbar-height) on .sticky-toolbar already
+    // tracks that — instead of disappearing along with the navbar.
     root.style.setProperty('--navbar-height', `${visibleNavbarHeight}px`);
     root.style.setProperty('--sticky-navbar-height', `${visibleNavbarHeight}px`);
-    root.style.setProperty('--toolbar-height', `${visibleToolbarHeight}px`);
+    root.style.setProperty('--toolbar-height', `${entityToolbarHeight}px`);
+    // TinyMCE's own sticky toolbar offset (how far from the viewport top it
+    // docks) is otherwise computed once at editor init and never updated,
+    // so it goes stale the moment the navbar hides/shows and causes a jump
+    // right as the toolbar reaches sticky range. Let any active editor
+    // recompute it live.
+    window.dispatchEvent(new CustomEvent('elabftw-sticky-offset-changed', {
+      detail: { offset: visibleNavbarHeight + entityToolbarHeight },
+    }));
   };
 
   const measureStickyHeaders = (): void => {
