@@ -43,6 +43,6 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   editor.ui.registry.addGroupToolbarButton('custom-edit', {
     icon: 'edit-block',
     tooltip: 'Edit selected content',
-    items: 'edit-date-reference delete-date-reference table-properties cell-properties',
+    items: 'table-properties cell-properties',
   });
 }
