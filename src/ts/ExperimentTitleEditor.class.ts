@@ -204,6 +204,22 @@ function createControlGroup(labelText: string, control: HTMLElement): HTMLDivEle
   return field;
 }
 
+function createIconControl(
+  iconClass: string,
+  labelText: string,
+  control: HTMLElement,
+): HTMLDivElement {
+  const field = document.createElement('div');
+  field.className = 'experiment-title-icon-control';
+  field.title = labelText;
+  const icon = document.createElement('i');
+  icon.className = iconClass;
+  icon.setAttribute('aria-hidden', 'true');
+  control.setAttribute('aria-label', labelText);
+  field.append(icon, control);
+  return field;
+}
+
 function createCheckbox(labelText: string, checked: boolean): {
   label: HTMLLabelElement;
   input: HTMLInputElement;
@@ -277,7 +293,7 @@ export default class ExperimentTitleEditor {
     for (let level = 1; level <= 6; level += 1) {
       const option = document.createElement('option');
       option.value = String(level);
-      option.textContent = `Heading ${level}`;
+      option.textContent = `H${level}`;
       headingLevelSelect.appendChild(option);
     }
     headingLevelSelect.value = String(defaults.headingLevel);
@@ -361,18 +377,12 @@ export default class ExperimentTitleEditor {
       backgroundCoverageSelect,
     );
 
-    const emphasisRow = document.createElement('div');
-    emphasisRow.className = 'date-title-format-row';
-    const emphasisLabel = document.createElement('span');
-    emphasisLabel.className = 'date-title-format-label';
-    emphasisLabel.textContent = 'Text style';
     const emphasisButtons = document.createElement('div');
-    emphasisButtons.className = 'date-title-format-buttons';
+    emphasisButtons.className = 'date-title-format-buttons experiment-title-emphasis-buttons';
     const bold = createEmphasisToggle('Bold', 'B', defaults.bold);
     const italic = createEmphasisToggle('Italic', 'I', defaults.italic);
     const underline = createEmphasisToggle('Underline', 'U', defaults.underline);
     emphasisButtons.append(bold.label, italic.label, underline.label);
-    emphasisRow.append(emphasisLabel, emphasisButtons);
 
     const alignmentSelect = document.createElement('select');
     alignmentSelect.className = 'form-control';
@@ -385,12 +395,13 @@ export default class ExperimentTitleEditor {
     alignmentSelect.value = defaults.alignment;
 
     const typographyGrid = document.createElement('div');
-    typographyGrid.className = 'experiment-title-typography-grid';
+    typographyGrid.className = 'experiment-title-typography-toolbar';
     typographyGrid.append(
-      createField('Heading', headingLevelSelect),
-      createField('Font', fontFamilySelect),
-      createField('Size (pt)', fontSizeInput),
-      createField('Align', alignmentSelect),
+      createIconControl('fas fa-heading', 'Heading level', headingLevelSelect),
+      createIconControl('fas fa-font', 'Font family', fontFamilySelect),
+      createIconControl('fas fa-text-height', 'Font size in points', fontSizeInput),
+      createIconControl('fas fa-align-left', 'Text alignment', alignmentSelect),
+      emphasisButtons,
     );
 
     const preview = document.createElement('div');
@@ -445,7 +456,6 @@ export default class ExperimentTitleEditor {
       typographyGrid,
       colorRow,
       backgroundRow,
-      emphasisRow,
       preview,
       status,
       actions,

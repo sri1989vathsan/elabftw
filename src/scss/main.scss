@@ -1852,14 +1852,69 @@ body.html-tool-workspace-resizing * {
   }
 }
 
-.experiment-title-typography-grid {
-  display: grid;
-  gap: 0.6rem;
-  grid-template-columns: minmax(7rem, 0.8fr) minmax(10rem, 1.5fr) minmax(5rem, 0.6fr) minmax(7rem, 0.8fr);
+.experiment-title-typography-toolbar {
+  align-items: stretch;
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 0.45rem;
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+  overflow-x: auto;
+  padding: 0.4rem;
+}
 
-  .date-reference-field {
-    margin-bottom: 0;
+.experiment-title-icon-control {
+  align-items: center;
+  background-color: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.3rem;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.3rem;
+  min-height: 2rem;
+  padding-left: 0.45rem;
+
+  i {
+    color: var(--medium);
+    font-size: 0.82rem;
+    width: 0.9rem;
   }
+
+  .form-control {
+    background-color: transparent;
+    border: 0;
+    box-shadow: none;
+    height: 1.9rem;
+    min-width: 0;
+    padding: 0 1.5rem 0 0;
+  }
+
+  select[aria-label='Heading level'] {
+    width: 3.8rem;
+  }
+
+  select[aria-label='Font family'] {
+    width: 8.5rem;
+  }
+
+  input[aria-label='Font size in points'] {
+    padding-right: 0.2rem;
+    width: 3.6rem;
+  }
+
+  select[aria-label='Text alignment'] {
+    width: 5.8rem;
+  }
+}
+
+.experiment-title-emphasis-buttons {
+  align-items: center;
+  border-left: 1px solid var(--secondary);
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: 0.1rem;
+  padding-left: 0.45rem;
 }
 
 .date-title-format-row {
@@ -1933,9 +1988,12 @@ body.html-tool-workspace-resizing * {
 
 @media (max-width: 575.98px) {
   .experiment-title-preset-row,
-  .experiment-title-background-row,
-  .experiment-title-typography-grid {
+  .experiment-title-background-row {
     grid-template-columns: 1fr;
+  }
+
+  .experiment-title-typography-toolbar {
+    flex-wrap: wrap;
   }
 
   .experiment-title-preset-row {
