@@ -253,9 +253,12 @@ export function getTinymceBaseConfig(page: string): object {
     table_default_styles: {
       'min-width':'25%',
     },
-    // Keep the outer table width stable while dragging a column boundary; the
-    // neighbouring column absorbs the change, which is much easier to control.
-    table_column_resizing: 'preservetable',
+    // Dragging a column boundary grows/shrinks the table itself instead of
+    // squeezing the neighbouring column to compensate — this matches how a
+    // spreadsheet is expected to behave (widen one column without visually
+    // shrinking every other one), at the cost of the same drag also being
+    // able to grow/shrink a plain table's total width.
+    table_column_resizing: 'resizetable',
     table_resize_bars: true,
     object_resizing: 'table',
     browser_spellcheck: true,
