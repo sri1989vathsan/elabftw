@@ -20,6 +20,10 @@ export function registerCustomEditorExtensions(editor: Editor): void {
     'elabftw-heading',
     '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M5 4v16M19 4v16M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
   );
+  editor.ui.registry.addIcon(
+    'elabftw-calendar',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><rect x="3.5" y="4.5" width="17" height="16" rx="3" stroke="currentColor" stroke-width="2"/><path d="M4 9h16M7 2.75v3.5M12 2.75v3.5M17 2.75v3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 12h2v2H7zM11 12h2v2h-2zM15 12h2v2h-2zM7 16h2v2H7zM11 16h2v2h-2zM15 16h2v2h-2z" fill="currentColor"/></svg>',
+  );
   registerDateTitleExtension(editor);
   registerFormatPainterExtension(editor);
   registerLinkExtension(editor);

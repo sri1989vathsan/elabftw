@@ -78,8 +78,7 @@ export function registerDateTitleExtension(editor: Editor): void {
   });
 
   editor.ui.registry.addSplitButton('adddate', {
-    icon: 'calendar',
-    text: 'Day',
+    icon: 'elabftw-calendar',
     tooltip: 'Insert today using saved defaults; open the menu for date options',
     onAction: () => dateReferenceEditor.insertToday(),
     onItemAction: (_api, value) => {
@@ -112,13 +111,12 @@ export function registerDateTitleExtension(editor: Editor): void {
           type: 'choiceitem' as const,
           text: 'Insert today using saved defaults',
           value: 'today',
-          icon: 'calendar',
         },
         {
           type: 'choiceitem' as const,
           text: 'Choose date, format, heading or experiment…',
           value: 'options',
-          icon: 'calendar',
+          icon: 'elabftw-calendar',
         },
         {
           type: 'choiceitem' as const,
