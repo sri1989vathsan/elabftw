@@ -35,6 +35,12 @@ final class CalendarActivity extends AbstractRest
 {
     private const int MAX_RANGE_DAYS = 62;
 
+    // Cap on entities (re)indexed inline per request. A team with a large never-indexed
+    // backlog (e.g. right after this feature ships) gets its calendar filled in over a
+    // few page views instead of one request doing the whole backlog. Run
+    // `bin/console custom:calendar-backfill` to drain a backlog in one go instead.
+    private const int MAX_INLINE_BACKFILL = 200;
+
     public function __construct(
         private Users $Users,
         private CalendarActivityIndexer $Indexer = new CalendarActivityIndexer(),
@@ -80,8 +86,9 @@ final class CalendarActivity extends AbstractRest
     ): array
     {
         // This also performs a one-time backfill for existing installations and
-        // incrementally refreshes only entities whose modified_at changed.
-        $this->Indexer->synchronizeTeam($entityType, $this->Users->team);
+        // incrementally refreshes only entities whose modified_at changed, bounded
+        // so a large backlog can't turn this request into a long-running one.
+        $this->Indexer->synchronizeTeam($entityType, $this->Users->team, self::MAX_INLINE_BACKFILL);
 
         $scopeSql = 'entity.team = :teamid AND entity.userid = :userid';
         if ($teamScoped) {
