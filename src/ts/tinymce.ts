@@ -599,6 +599,13 @@ export function getTinymceBaseConfig(page: string): object {
       // provisional iframe height. Without this, edit mode can initially
       // expose a long empty scrolling region until the editor receives focus.
       window.requestAnimationFrame(() => editor.execCommand('mceAutoResize'));
+      // The frame above can still fire before the iframe's own fonts finish
+      // loading, so the initial height is measured against fallback-font
+      // metrics; TinyMCE only recalculates again on its next trigger (a
+      // click, which fires NodeChange), which is why the editor visibly
+      // shrinks the moment it's clicked. Recheck once those fonts are
+      // actually ready so the correct height shows up without needing focus.
+      editor.getDoc()?.fonts?.ready.then(() => editor.execCommand('mceAutoResize'));
       editor.on('ExecCommand', (e) => {
         if (e.command == 'mcePreview') {
           // declaration as iFrame element required to avoid errors with getting srcdoc property
