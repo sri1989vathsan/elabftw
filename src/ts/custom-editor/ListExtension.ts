@@ -173,7 +173,7 @@ function handleBlockIndentShortcut(editor: Editor, event: KeyboardEvent): boolea
 export function registerListExtension(editor: Editor): void {
   editor.ui.registry.addIcon(
     'elabftwChecklist',
-    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2"/><path d="m4.5 7 1.5 1.5L8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7h9M12 17h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="3" y="14" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2"/></svg>',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><path d="m4.5 7 1.5 1.5L8 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7h9M12 17h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="3" y="14" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
   );
   editor.ui.registry.addToggleButton('checklist', {
     icon: 'elabftwChecklist',

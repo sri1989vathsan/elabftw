@@ -22,11 +22,15 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   );
   editor.ui.registry.addIcon(
     'elabftw-calendar',
-    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><rect x="3.5" y="4.5" width="17" height="16" rx="3" stroke="currentColor" stroke-width="2"/><path d="M4 9h16M7 2.75v3.5M12 2.75v3.5M17 2.75v3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 12h2v2H7zM11 12h2v2h-2zM15 12h2v2h-2zM7 16h2v2H7zM11 16h2v2h-2zM15 16h2v2h-2z" fill="currentColor"/></svg>',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3.5" y="5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 9.5h17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="14.6" r="1.7" fill="currentColor"/></svg>',
+  );
+  editor.ui.registry.addIcon(
+    'elabftw-calendar-options',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3.5" y="5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 9.5h17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="14.6" r="1" fill="currentColor"/><circle cx="12" cy="14.6" r="1" fill="currentColor"/><circle cx="15" cy="14.6" r="1" fill="currentColor"/></svg>',
   );
   editor.ui.registry.addIcon(
     'elabftw-clock',
-    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l-3.25 3.25" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l-3.25 3.25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   );
   registerDateTitleExtension(editor);
   registerFormatPainterExtension(editor);

@@ -55,11 +55,11 @@ export function registerFormatPainterExtension(editor: Editor): void {
 
   editor.ui.registry.addIcon(
     'elabftwFormatPainter',
-    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m14.5 3.5 6 6-8.75 8.75-6-6L14.5 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m5.75 12.25-1.7 1.7c-1.8 1.8-.2 3-1.55 5.55 2.55-1.35 3.75.25 5.55-1.55l1.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="m12.5 5.5 6 6" stroke="currentColor" stroke-width="1.8"/></svg>',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M5 8 7.3 3 9.7 8 12 3 14.3 8 16.7 3 19 8 19 9.5 14.5 12 14.5 18.5A2 2 0 0 1 12.5 20.5H11.5A2 2 0 0 1 9.5 18.5L9.5 12 5 9.5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M6.3 9.3H17.7M7.6 10.6H16.4" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><ellipse cx="12" cy="16.3" rx="1.3" ry="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>',
   );
   editor.ui.registry.addIcon(
     'elabftwClearFormatting',
-    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m14.5 3.5 6 6-8.75 8.75-6-6L14.5 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m5.75 12.25-1.7 1.7c-1.8 1.8-.2 3-1.55 5.55 2.55-1.35 3.75.25 5.55-1.55l1.7-1.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4 20 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M5 8 7.3 3 9.7 8 12 3 14.3 8 16.7 3 19 8 19 9.5 14.5 12 14.5 18.5A2 2 0 0 1 12.5 20.5H11.5A2 2 0 0 1 9.5 18.5L9.5 12 5 9.5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M6.3 9.3H17.7M7.6 10.6H16.4" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><ellipse cx="12" cy="16.3" rx="1.3" ry="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3 21 21 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   );
   editor.ui.registry.addToggleButton('format-painter', {
     icon: 'elabftwFormatPainter',

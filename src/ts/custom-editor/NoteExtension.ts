@@ -187,13 +187,13 @@ export function registerNoteExtension(editor: Editor): void {
     fetch: callback => callback([
       {
         type: 'choiceitem',
-        text: 'Insert note using saved defaults',
+        text: 'Insert note',
         value: 'insert',
         icon: 'comment-add',
       },
       {
         type: 'choiceitem',
-        text: 'Note title and heading options…',
+        text: 'Note options…',
         value: 'options',
         icon: 'edit-block',
       },

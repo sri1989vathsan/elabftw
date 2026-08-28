@@ -1677,11 +1677,11 @@ function evaluateFormula(
   const formulaKey = `${formulaCol}:${formulaRow}`;
   if (resolving.has(formulaKey)) return undefined;
   resolving.add(formulaKey);
-  const match = /^=\s*(SUM|AVERAGE|COUNT|MIN|MAX)\s*\((.*)\)\s*$/i.exec(formulaValue);
+  const match = /^=\s*(SUM|AVERAGE|COUNT|MIN|MAX|MEDIAN|STDEV|ROUND)\s*\((.*)\)\s*$/i.exec(formulaValue);
 
   if (!match) {
     let arithmeticExpression = formulaValue.trim().slice(1);
-    const aggregatePattern = /(SUM|AVERAGE|COUNT|MIN|MAX)\s*\(([^()]*)\)/i;
+    const aggregatePattern = /(SUM|AVERAGE|COUNT|MIN|MAX|MEDIAN|STDEV|ROUND)\s*\(([^()]*)\)/i;
     let aggregateMatch = aggregatePattern.exec(arithmeticExpression);
     while (aggregateMatch) {
       const nestedResolving = new Set(resolving);
@@ -1782,12 +1782,29 @@ function evaluateFormula(
   if (functionName === 'SUM') {
     return numericValues.reduce((sum, value) => sum + value, 0);
   }
+  if (functionName === 'ROUND') {
+    if (numericValues.length !== 2) return undefined;
+    const factor = 10 ** Math.max(0, Math.round(numericValues[1]));
+    return Math.round(numericValues[0] * factor) / factor;
+  }
   if (numericValues.length === 0) return 0;
   if (functionName === 'AVERAGE') {
     return numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
   }
   if (functionName === 'MIN') return Math.min(...numericValues);
   if (functionName === 'MAX') return Math.max(...numericValues);
+  if (functionName === 'MEDIAN') {
+    const sorted = [...numericValues].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  }
+  if (functionName === 'STDEV') {
+    if (numericValues.length < 2) return undefined;
+    const mean = numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
+    const variance = numericValues.reduce((sum, value) => sum + (value - mean) ** 2, 0)
+      / (numericValues.length - 1);
+    return Math.sqrt(variance);
+  }
   return undefined;
 }
 
@@ -2012,7 +2029,7 @@ function createStepperControl(
   return group;
 }
 
-function createOverlay(initial: SpreadsheetData): {
+function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   overlay: HTMLDivElement;
   sheetHost: HTMLDivElement;
   insertBtn: HTMLButtonElement;
@@ -2080,9 +2097,6 @@ function createOverlay(initial: SpreadsheetData): {
   cellFormatStatus: HTMLSpanElement;
   cellFormatNoColorInput: HTMLInputElement;
   cellFormatNoTextColorInput: HTMLInputElement;
-  viewportHeightInput: HTMLInputElement;
-  viewportFullWidthBtn: HTMLButtonElement;
-  viewportFullHeightBtn: HTMLButtonElement;
 } {
   const overlay = document.createElement('div');
   overlay.className = 'inline-spreadsheet-overlay';
@@ -2091,7 +2105,7 @@ function createOverlay(initial: SpreadsheetData): {
   dialog.className = 'inline-spreadsheet-dialog';
 
   const title = document.createElement('h5');
-  title.textContent = 'Edit spreadsheet';
+  title.textContent = isEditing ? 'Edit spreadsheet' : 'Insert spreadsheet';
   title.className = 'mb-2';
   dialog.appendChild(title);
 
@@ -2638,6 +2652,8 @@ function createOverlay(initial: SpreadsheetData): {
     { value: 'COUNT', label: 'COUNT', title: 'Count the selected numeric cells' },
     { value: 'MIN', label: 'MIN', title: 'Find the minimum selected value' },
     { value: 'MAX', label: 'MAX', title: 'Find the maximum selected value' },
+    { value: 'MEDIAN', label: 'MEDIAN', title: 'Find the median of the selected cells' },
+    { value: 'STDEV', label: 'STDEV', title: 'Sample standard deviation of the selected cells' },
     { value: '+', label: '+', title: 'Add the selected cells in reading order' },
     { value: '-', label: '−', title: 'Subtract each selected cell from the first' },
     { value: '*', label: '×', title: 'Multiply the selected cells' },
@@ -2654,7 +2670,11 @@ function createOverlay(initial: SpreadsheetData): {
         ? 'x̄'
         : (action.value === 'COUNT'
           ? '#'
-          : action.label));
+          : (action.value === 'MEDIAN'
+            ? 'x̃'
+            : (action.value === 'STDEV'
+              ? 'σ'
+              : action.label))));
     button.title = action.title;
     button.setAttribute('aria-label', action.title);
     formulaBar.appendChild(button);
@@ -2673,38 +2693,13 @@ function createOverlay(initial: SpreadsheetData): {
   formulaBar.appendChild(formulaCollapseBtn);
   dialog.appendChild(formulaBar);
 
-  const viewportBar = document.createElement('div');
-  viewportBar.className = 'inline-spreadsheet-viewport-controls';
-  const defaultViewportHeight = Math.max(220, Math.min(1200, Math.round(window.innerHeight * 0.65)));
-  const viewportHeightInput = createInput(
-    'number',
-    String(defaultViewportHeight),
-    'Spreadsheet editing area height',
-  );
-  viewportHeightInput.min = '220';
-  viewportHeightInput.max = '1200';
-  const viewportFullWidthBtn = document.createElement('button');
-  viewportFullWidthBtn.type = 'button';
-  viewportFullWidthBtn.className = 'btn btn-sm btn-outline-secondary';
-  viewportFullWidthBtn.innerHTML = '<i class="fas fa-arrows-alt-h" aria-hidden="true"></i>';
-  viewportFullWidthBtn.setAttribute('aria-label', 'Full width');
-  viewportFullWidthBtn.title = 'Restore the editing area to the full dialog width';
-  const viewportFullHeightBtn = document.createElement('button');
-  viewportFullHeightBtn.type = 'button';
-  viewportFullHeightBtn.className = 'btn btn-sm btn-outline-secondary';
-  viewportFullHeightBtn.innerHTML = '<i class="fas fa-arrows-alt-v" aria-hidden="true"></i>';
-  viewportFullHeightBtn.setAttribute('aria-label', 'Full height');
-  viewportFullHeightBtn.title = 'Expand the editing area to the available screen height';
-  viewportBar.append(
-    createIconControl('<i class="fas fa-arrows-alt-v"></i>', 'Spreadsheet viewport height', viewportHeightInput),
-    viewportFullWidthBtn,
-    viewportFullHeightBtn,
-  );
-
   const sheetHost = document.createElement('div');
   sheetHost.className = 'inline-spreadsheet-container';
+  // .inline-spreadsheet-container already has resize:both, so the editing
+  // area is natively drag-resizable without a dedicated control bar.
+  const defaultViewportHeight = Math.max(220, Math.min(1200, Math.round(window.innerHeight * 0.65)));
   sheetHost.style.height = `${defaultViewportHeight}px`;
-  dialog.append(viewportBar, sheetHost);
+  dialog.append(sheetHost);
 
   const buttonRow = document.createElement('div');
   buttonRow.className = 'inline-spreadsheet-actions';
@@ -2719,7 +2714,7 @@ function createOverlay(initial: SpreadsheetData): {
   cancelBtn.className = 'btn btn-sm btn-secondary mr-1';
   const insertBtn = document.createElement('button');
   insertBtn.type = 'button';
-  insertBtn.textContent = 'Insert / Update';
+  insertBtn.textContent = isEditing ? 'Update' : 'Insert';
   insertBtn.className = 'btn btn-sm btn-primary';
   rightButtons.append(cancelBtn, insertBtn);
   buttonRow.append(gridButtons, rightButtons);
@@ -2796,9 +2791,6 @@ function createOverlay(initial: SpreadsheetData): {
     cellFormatStatus,
     cellFormatNoColorInput,
     cellFormatNoTextColorInput,
-    viewportHeightInput,
-    viewportFullWidthBtn,
-    viewportFullHeightBtn,
   };
 }
 
@@ -2975,13 +2967,16 @@ function updateQuickFontStyle(
  * Open the spreadsheet overlay and return the raw formula data plus computed
  * values when the user inserts or updates the table.
  */
-export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ raw: SpreadsheetData; computed: AOA }> {
+export function openSpreadsheetModal(
+  initialData: SpreadsheetData,
+  isEditing = false,
+): Promise<{ raw: SpreadsheetData; computed: AOA }> {
   return new Promise((resolve, reject) => {
     let working = normalizeSpreadsheetData({
       ...initialData,
       appearance: initialData.appearance ?? getEffectiveAppearanceDefaults(),
     });
-    const ui = createOverlay(working);
+    const ui = createOverlay(working, isEditing);
     let sheetContainer: HTMLDivElement | null = null;
     let worksheet: JssInstance = null;
     // jspreadsheet's formula engine can replace a raw formula with its
@@ -2990,6 +2985,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     let rawDataMirror = resizeData(working.data, working.rows, working.cols);
     let selectedRange: CellRange | null = null;
     let formulaInputTarget: { col: number; row: number } | null = null;
+    let lastCommittedFormulaValue: string | null = null;
     let formulaSelectionDrag: {
       input: HTMLInputElement | HTMLTextAreaElement;
       startRange: CellRange;
@@ -3144,10 +3140,12 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         if (cellCount === 1) {
           formulaInputTarget = { col: startCol, row: startRow };
           ui.formulaInput.value = String(readRawData()[startRow]?.[startCol] ?? '');
+          lastCommittedFormulaValue = ui.formulaInput.value;
           ui.formulaInput.disabled = false;
         } else {
           formulaInputTarget = null;
           ui.formulaInput.value = '';
+          lastCommittedFormulaValue = null;
           ui.formulaInput.disabled = true;
           ui.formulaInput.placeholder = 'Select one cell to edit its value or formula';
         }
@@ -3560,6 +3558,7 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
           rowResize: true,
           columnSorting: false,
           selectionCopy: true,
+          allowUndo: true,
         }],
         // Aggregate formulas are evaluated and painted by this module. Let
         // jspreadsheet retain the raw `=SUM(...)` text without executing its
@@ -3877,22 +3876,6 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
     };
 
     mountSpreadsheet(working);
-    const updateViewportHeight = (height: number): void => {
-      if (!Number.isFinite(height)) return;
-      const safeHeight = Math.max(220, Math.min(1200, Math.round(height)));
-      ui.sheetHost.style.height = `${safeHeight}px`;
-      ui.viewportHeightInput.value = String(safeHeight);
-    };
-    ui.viewportHeightInput.addEventListener('change', () => {
-      updateViewportHeight(Number(ui.viewportHeightInput.value));
-    });
-    ui.viewportFullWidthBtn.addEventListener('click', () => {
-      ui.sheetHost.style.width = '100%';
-    });
-    ui.viewportFullHeightBtn.addEventListener('click', () => {
-      // Leave room for the popup title, controls and action buttons.
-      updateViewportHeight(window.innerHeight * 0.65);
-    });
     ui.formulaCollapseBtn.addEventListener('click', () => {
       const collapsed = ui.formulaBar.classList.toggle('is-collapsed');
       ui.formulaCollapseBtn.setAttribute('aria-expanded', String(!collapsed));
@@ -3907,13 +3890,6 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         ? '<i class="fas fa-chevron-down" aria-hidden="true"></i>'
         : '<i class="fas fa-chevron-up" aria-hidden="true"></i>';
     });
-    const viewportResizeObserver = new ResizeObserver(entries => {
-      const height = entries[0]?.contentRect.height;
-      if (height && Number.isFinite(height)) {
-        ui.viewportHeightInput.value = String(Math.round(height));
-      }
-    });
-    viewportResizeObserver.observe(ui.sheetHost);
     ui.sheetHost.addEventListener('mousedown', onRowResizePointerDown, true);
     document.addEventListener('mouseup', onRowResizePointerUp, true);
     ui.sheetHost.addEventListener('copy', onSpreadsheetCopy, true);
@@ -4273,20 +4249,17 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
         ? `${formulaDescription} → ${colLabel(targetCol)}${targetRow + 1}`
         : `${formulaDescription} → ${colLabel(targetCol)}${targetRow + 1} = ${result}`;
     }));
-    ui.formulaInput.addEventListener('keydown', event => {
-      if (event.key !== 'Enter') return;
-      if (!formulaInputTarget) {
-        ui.formulaStatus.textContent = 'Select one cell before editing its value or formula.';
-        return;
-      }
-      event.preventDefault();
+    const commitFormulaInput = (): void => {
+      if (!formulaInputTarget) return;
       const { col, row } = formulaInputTarget;
       let value = ui.formulaInput.value;
+      if (value === lastCommittedFormulaValue) return;
       if (value.trimStart().startsWith('=')) {
         const missingParentheses = formulaParenthesisBalance(value);
         if (missingParentheses > 0) value += ')'.repeat(missingParentheses);
       }
       ui.formulaInput.value = value;
+      lastCommittedFormulaValue = value;
       updateRawDataMirrorCell(col, row, value, false);
       worksheet?.setValueFromCoords?.(col, row, value);
       selectedRange = [col, row, col, row];
@@ -4296,11 +4269,34 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       ui.formulaStatus.textContent = value.trimStart().startsWith('=') && result !== undefined
         ? `${ui.formulaCellLabel.textContent} = ${result}`
         : `${ui.formulaCellLabel.textContent} updated.`;
+    };
+    ui.formulaInput.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      if (!formulaInputTarget) {
+        ui.formulaStatus.textContent = 'Select one cell before editing its value or formula.';
+        return;
+      }
+      event.preventDefault();
+      commitFormulaInput();
     });
+    // Clicking a different cell (or any other control) blurs the formula
+    // input without ever firing Enter. That alone isn't enough though: a
+    // mousedown on a grid cell always runs jspreadsheet's own selection
+    // handling — which repopulates this same input for the newly clicked
+    // cell — before the browser gets around to firing blur on the old one.
+    // By the time blur fires, formulaInputTarget and the input's value have
+    // already moved on to the new cell, so committing there is too late and
+    // silently drops the edit. A capture-phase listener on document runs
+    // before any handler further down the tree (jspreadsheet's included),
+    // so it can commit the pending edit while it's still addressed to the
+    // right cell. Keep the blur listener too, for non-mousedown ways of
+    // losing focus (Tab, clicking outside the document, etc).
+    ui.formulaInput.addEventListener('blur', commitFormulaInput);
+    document.addEventListener('mousedown', commitFormulaInput, true);
 
     const cleanup = (): void => {
       finishFormulaSelection();
-      viewportResizeObserver.disconnect();
+      document.removeEventListener('mousedown', commitFormulaInput, true);
       ui.sheetHost.removeEventListener('mousedown', onFormulaSelectionStart, true);
       ui.sheetHost.removeEventListener('keydown', onCellEditorKeydown, true);
       ui.sheetHost.removeEventListener('mousedown', onRowResizePointerDown, true);
@@ -4315,7 +4311,11 @@ export function openSpreadsheetModal(initialData: SpreadsheetData): Promise<{ ra
       reject(new Error('cancelled'));
     };
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') cancel();
+      if (event.key !== 'Escape') return;
+      // Escape is easy to hit out of habit. Unlike the explicit Cancel button,
+      // guard it the same way backdrop clicks already are: don't silently
+      // discard a fully-formatted spreadsheet.
+      if (window.confirm('Discard changes to this spreadsheet?')) cancel();
     };
 
     ui.insertBtn.addEventListener('click', () => {

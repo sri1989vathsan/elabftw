@@ -110,18 +110,19 @@ export function registerDateTitleExtension(editor: Editor): void {
       const items = [
         {
           type: 'choiceitem' as const,
-          text: 'Insert today using saved defaults',
+          text: 'Insert today',
           value: 'today',
-        },
-        {
-          type: 'choiceitem' as const,
-          text: 'Choose date, format, heading or experiment…',
-          value: 'options',
           icon: 'elabftw-calendar',
         },
         {
           type: 'choiceitem' as const,
-          text: 'Insert timestamp',
+          text: 'Custom date…',
+          value: 'options',
+          icon: 'elabftw-calendar-options',
+        },
+        {
+          type: 'choiceitem' as const,
+          text: 'Timestamp',
           value: 'timestamp',
           icon: 'elabftw-clock',
         },
@@ -131,19 +132,19 @@ export function registerDateTitleExtension(editor: Editor): void {
         items.push({ type: 'separator' as const } as unknown as typeof items[number]);
         items.push({
           type: 'choiceitem' as const,
-          text: 'Edit selected date…',
+          text: 'Edit date…',
           value: 'edit',
           icon: 'edit-block',
         });
         items.push({
           type: 'choiceitem' as const,
-          text: 'Copy permanent link to date',
+          text: 'Copy link',
           value: 'copy',
           icon: 'copy',
         });
         items.push({
           type: 'choiceitem' as const,
-          text: 'Delete selected date',
+          text: 'Delete date',
           value: 'delete',
           icon: 'remove',
         });
@@ -169,12 +170,12 @@ export function registerDateTitleExtension(editor: Editor): void {
       const items = [
         {
           type: 'choiceitem' as const,
-          text: 'Insert title using saved defaults',
+          text: 'Insert title',
           value: 'insert',
         },
         {
           type: 'choiceitem' as const,
-          text: 'Title heading and font options…',
+          text: 'Title options…',
           value: 'options',
         },
       ];
@@ -183,7 +184,7 @@ export function registerDateTitleExtension(editor: Editor): void {
         items.push({ type: 'separator' as const } as unknown as typeof items[number]);
         presets.forEach(name => items.push({
           type: 'choiceitem' as const,
-          text: `Apply saved style: ${name}`,
+          text: `Style: ${name}`,
           value: `preset:${encodeURIComponent(name)}`,
         }));
       }

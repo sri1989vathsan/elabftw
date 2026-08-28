@@ -213,6 +213,27 @@ function removeOuterTableHeight(table: HTMLTableElement): void {
   }
 }
 
+// Unlike height, DEFAULT_TABLE_STYLE persists a real min-width:25% that must
+// survive a resize, so only the width/max-width a drag itself would have set
+// are stripped here.
+function removeOuterTableWidth(table: HTMLTableElement): void {
+  table.removeAttribute('width');
+  table.style.removeProperty('width');
+  table.style.removeProperty('max-width');
+  const internalStyle = table.getAttribute('data-mce-style');
+  if (!internalStyle) return;
+  const styleProbe = table.ownerDocument.createElement('table');
+  styleProbe.setAttribute('style', internalStyle);
+  styleProbe.style.removeProperty('width');
+  styleProbe.style.removeProperty('max-width');
+  const normalized = styleProbe.getAttribute('style')?.trim();
+  if (normalized) {
+    table.setAttribute('data-mce-style', normalized);
+  } else {
+    table.removeAttribute('data-mce-style');
+  }
+}
+
 function resizeSpreadsheetRowsFromTableHeight(
   table: HTMLTableElement,
   requestedHeight: number,
@@ -224,8 +245,25 @@ function resizeSpreadsheetRowsFromTableHeight(
     : Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody > tr'));
   if (rows.length === 0) return;
 
+  // Rows may not carry an explicit height of their own yet (a freshly
+  // inserted spreadsheet with no saved row heights). Reading their live
+  // rendered height in that case just inherits whatever the browser's
+  // content-based auto-layout picked — usually uneven when cell content
+  // lengths differ — and scaling proportionally from that lets one row grow
+  // disproportionately. Start every row equal until we've explicitly pinned
+  // heights of our own on a previous resize. Notebook tables are exempt: row
+  // 0 there is a real title/header row that's expected to differ in height
+  // from ordinary data rows, not an artifact to flatten.
+  const explicitHeights = rows.map(row => {
+    const parsed = Number.parseFloat(row.style.height);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  });
+  const hasExplicitHeights = explicitHeights.some(height => height !== null);
+
   removeOuterTableHeight(table);
-  const currentHeights = rows.map(row => Math.max(20, row.getBoundingClientRect().height));
+  const currentHeights = kind !== 'notebook' && !hasExplicitHeights
+    ? rows.map(() => 30)
+    : explicitHeights.map((height, index) => height ?? Math.max(20, rows[index].getBoundingClientRect().height));
   const previousInlineHeights = rows.map(row => row.style.height);
   rows.forEach(row => row.style.removeProperty('height'));
   const minimumHeights = rows.map(row => Math.max(20, Math.ceil(row.getBoundingClientRect().height)));
@@ -244,8 +282,92 @@ function resizeSpreadsheetRowsFromTableHeight(
   removeOuterTableHeight(table);
 }
 
+// Mirrors resizeSpreadsheetRowsFromTableHeight for the horizontal axis. The
+// row-index/well-plate coordinate column (the first cell of every row) is
+// deliberately kept at a fixed width instead of scaling with the rest: only
+// data columns absorb width added or removed by the drag.
+function resizeSpreadsheetColumnsFromTableWidth(
+  table: HTMLTableElement,
+  requestedWidth: number,
+): void {
+  if (!Number.isFinite(requestedWidth) || requestedWidth <= 0) return;
+  const headerRow = table.querySelector<HTMLTableRowElement>('thead > tr');
+  if (!headerRow) return;
+  const headerCells = Array.from(headerRow.children) as HTMLTableCellElement[];
+  const coordinateHeaderCell = headerCells.find(cell => cell.classList.contains('spreadsheet-coordinate')) ?? null;
+  const dataHeaderCells = headerCells.filter(cell => cell !== coordinateHeaderCell);
+  if (dataHeaderCells.length === 0) return;
+
+  // Read the configured row-index width from the table's own saved data
+  // instead of measuring the live DOM: mid-drag the browser may already have
+  // stretched that cell before this handler runs, and trusting a live
+  // measurement would let that drift compound on every subsequent resize.
+  const savedRowIndexWidth = extractFromTable(table).appearance?.rowIndexWidth;
+  const indexWidth = coordinateHeaderCell
+    ? Math.max(20, Math.round(savedRowIndexWidth ?? coordinateHeaderCell.getBoundingClientRect().width))
+    : 0;
+
+  // Data columns carry no explicit width of their own until a resize sets
+  // one (unlike rows, which already have one from creation). Reading their
+  // live rendered width here as the "current" proportions would just inherit
+  // whatever the browser's own auto-layout happened to pick — commonly
+  // dumping most of the slack into a single column. Start every column equal
+  // until we've explicitly pinned widths of our own on a previous resize.
+  const explicitWidths = dataHeaderCells.map(cell => {
+    const parsed = Number.parseFloat(cell.style.width);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  });
+  const hasExplicitWidths = explicitWidths.some(width => width !== null);
+  const currentWidths = hasExplicitWidths
+    ? explicitWidths.map((width, index) => width ?? Math.max(20, dataHeaderCells[index].getBoundingClientRect().width))
+    : dataHeaderCells.map(() => 100);
+
+  removeOuterTableWidth(table);
+  const previousInlineWidths = dataHeaderCells.map(cell => cell.style.width);
+  dataHeaderCells.forEach(cell => cell.style.removeProperty('width'));
+  const minimumWidths = dataHeaderCells.map(cell => Math.max(20, Math.ceil(cell.getBoundingClientRect().width)));
+  dataHeaderCells.forEach((cell, index) => { cell.style.width = previousInlineWidths[index]; });
+
+  const targetColumnsWidth = Math.max(0, requestedWidth - indexWidth);
+  const distributed = distributeTableHeight(currentWidths, minimumWidths, targetColumnsWidth);
+
+  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('thead > tr, tbody > tr'));
+  rows.forEach(row => {
+    const cells = Array.from(row.children) as HTMLTableCellElement[];
+    const rowCoordinateCell = cells.find(cell => cell.classList.contains('spreadsheet-coordinate')) ?? null;
+    if (rowCoordinateCell) {
+      rowCoordinateCell.style.width = `${indexWidth}px`;
+      rowCoordinateCell.style.minWidth = `${indexWidth}px`;
+      rowCoordinateCell.style.maxWidth = `${indexWidth}px`;
+      const serializedIndexStyle = rowCoordinateCell.getAttribute('style')?.trim();
+      if (serializedIndexStyle) rowCoordinateCell.setAttribute('data-mce-style', serializedIndexStyle);
+    }
+    const rowDataCells = cells.filter(cell => cell !== rowCoordinateCell);
+    rowDataCells.forEach((cell, index) => {
+      const width = distributed[index];
+      if (width === undefined) return;
+      cell.style.width = `${Math.max(minimumWidths[index] ?? 20, Math.round(width))}px`;
+      const serializedStyle = cell.getAttribute('style')?.trim();
+      if (serializedStyle) cell.setAttribute('data-mce-style', serializedStyle);
+    });
+  });
+}
+
 export function registerSpreadsheetExtension(editor: Editor): void {
+  editor.ui.registry.addIcon(
+    'elabftw-spreadsheet-formula',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 4v16M15 4v16M3 9.5h18M3 14.5h18" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M16.3 11.3h3.2M16.3 12.9h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  );
+  editor.ui.registry.addIcon(
+    'elabftw-data-table',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3.9" y="4.9" width="16.2" height="3.6" fill="currentColor"/><path d="M3 13h18M9 8.5v11.5M15 8.5v11.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
+  );
+  editor.ui.registry.addIcon(
+    'elabftw-well-plate',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="7.5" cy="8" r="1.3" fill="currentColor"/><circle cx="12" cy="8" r="1.3" fill="currentColor"/><circle cx="16.5" cy="8" r="1.3" fill="currentColor"/><circle cx="7.5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="16.5" cy="12" r="1.3" fill="currentColor"/><circle cx="7.5" cy="16" r="1.3" fill="currentColor"/><circle cx="12" cy="16" r="1.3" fill="currentColor"/><circle cx="16.5" cy="16" r="1.3" fill="currentColor"/></svg>',
+  );
   const resizeStartHeights = new WeakMap<Element, number>();
+  const resizeStartWidths = new WeakMap<Element, number>();
   const openStandardTableDialog = (): void => {
     editor.windowManager.open({
       title: 'Insert table',
@@ -275,7 +397,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     existingTable: HTMLTableElement | null = null,
   ): void => {
     const bookmark = editor.selection.getBookmark(2, true);
-    openSpreadsheetModal(initial).then(({ raw, computed }) => {
+    openSpreadsheetModal(initial, existingTable !== null).then(({ raw, computed }) => {
       const html = spreadsheetToHTML(raw, computed);
       editor.focus();
       editor.selection.moveToBookmark(bookmark);
@@ -288,7 +410,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
 
   editor.ui.registry.addMenuButton('inline-sheet', {
-    icon: 'table',
+    icon: 'elabftw-spreadsheet-formula',
     tooltip: 'Insert or edit a formula spreadsheet',
     fetch: callback => {
       const existingTable = editor.selection.getNode()
@@ -298,6 +420,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         items.push({
           type: 'menuitem' as const,
           text: 'Edit selected spreadsheet',
+          icon: 'edit-block',
           onAction: () => openInlineSpreadsheet(extractFromTable(existingTable), existingTable),
         });
         items.push({ type: 'separator' as const });
@@ -307,16 +430,19 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         {
           type: 'menuitem' as const,
           text: 'Custom size…',
+          icon: 'elabftw-spreadsheet-formula',
           onAction: () => openInlineSpreadsheet(emptySpreadsheetData(), existingTable),
         },
         {
           type: 'menuitem' as const,
           text: 'Benchling-style data table',
+          icon: 'elabftw-data-table',
           onAction: () => openInlineSpreadsheet(createNotebookSpreadsheetData(), existingTable),
         },
         {
           type: 'nestedmenuitem' as const,
           text: 'Well plate',
+          icon: 'elabftw-well-plate',
           getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
             type: 'menuitem' as const,
             text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
@@ -359,16 +485,18 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       {
         type: 'nestedmenuitem',
         text: 'Spreadsheet',
-        icon: 'table',
+        icon: 'elabftw-spreadsheet-formula',
         getSubmenuItems: () => [
           {
             type: 'menuitem',
             text: 'Custom spreadsheet…',
+            icon: 'elabftw-spreadsheet-formula',
             onAction: () => openInlineSpreadsheet(emptySpreadsheetData()),
           },
           {
             type: 'menuitem',
             text: 'Benchling-style data table',
+            icon: 'elabftw-data-table',
             onAction: () => openInlineSpreadsheet(createNotebookSpreadsheetData()),
           },
         ],
@@ -376,7 +504,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       {
         type: 'nestedmenuitem',
         text: 'Well plate',
-        icon: 'table',
+        icon: 'elabftw-well-plate',
         getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
           type: 'menuitem',
           text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
@@ -411,28 +539,41 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   });
 
   editor.on('ObjectResizeStart', event => {
-    const resizing = event as unknown as { height?: number; target?: Element };
+    const resizing = event as unknown as { height?: number; width?: number; target?: Element };
     if (resizing.target && Number.isFinite(resizing.height)) {
       resizeStartHeights.set(resizing.target, resizing.height as number);
+    }
+    if (resizing.target && Number.isFinite(resizing.width)) {
+      resizeStartWidths.set(resizing.target, resizing.width as number);
     }
   });
 
   editor.on('ObjectResized', event => {
-    const resized = event as unknown as { height?: number; origin?: string; target?: Element };
+    const resized = event as unknown as { height?: number; width?: number; target?: Element };
     const table = resized.target?.closest?.('table.elabftw-spreadsheet') as HTMLTableElement | null;
-    if (!table
-      || !resized.origin?.startsWith('corner-')
-      || !Number.isFinite(resized.height)
-    ) {
-      return;
-    }
+    if (!table) return;
+
     const startHeight = resizeStartHeights.get(table);
+    const startWidth = resizeStartWidths.get(table);
     resizeStartHeights.delete(table);
-    if (Number.isFinite(startHeight)
-      && Math.abs((resized.height as number) - (startHeight as number)) < 1
-    ) return;
-    resizeSpreadsheetRowsFromTableHeight(table, resized.height as number);
-    editor.nodeChanged();
+    resizeStartWidths.delete(table);
+
+    // Not restricted to corner-origin drags: a pure edge drag (width or
+    // height only) deserves the same redistribution as a corner drag.
+    let changed = false;
+    if (Number.isFinite(resized.height)
+      && (!Number.isFinite(startHeight) || Math.abs((resized.height as number) - (startHeight as number)) >= 1)
+    ) {
+      resizeSpreadsheetRowsFromTableHeight(table, resized.height as number);
+      changed = true;
+    }
+    if (Number.isFinite(resized.width)
+      && (!Number.isFinite(startWidth) || Math.abs((resized.width as number) - (startWidth as number)) >= 1)
+    ) {
+      resizeSpreadsheetColumnsFromTableWidth(table, resized.width as number);
+      changed = true;
+    }
+    if (changed) editor.nodeChanged();
   });
 
   editor.on('init', () => {
