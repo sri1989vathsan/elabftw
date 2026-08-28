@@ -220,19 +220,44 @@ function createIconControl(
   return field;
 }
 
-function createCheckbox(labelText: string, checked: boolean): {
+function createIconToggle(
+  iconClass: string,
+  labelText: string,
+  checked: boolean,
+): {
   label: HTMLLabelElement;
   input: HTMLInputElement;
 } {
   const label = document.createElement('label');
-  label.className = 'date-reference-heading-toggle';
+  label.className = 'experiment-title-option-toggle';
+  label.title = labelText;
   const input = document.createElement('input');
   input.type = 'checkbox';
   input.checked = checked;
-  const text = document.createElement('span');
-  text.textContent = labelText;
-  label.append(input, text);
+  input.setAttribute('aria-label', labelText);
+  const visible = document.createElement('span');
+  const icon = document.createElement('i');
+  icon.className = iconClass;
+  icon.setAttribute('aria-hidden', 'true');
+  visible.appendChild(icon);
+  label.append(input, visible);
   return { label, input };
+}
+
+function createColorControl(
+  iconClass: string,
+  labelText: string,
+  input: HTMLInputElement,
+): HTMLLabelElement {
+  const label = document.createElement('label');
+  label.className = 'experiment-title-color-control';
+  label.title = labelText;
+  const icon = document.createElement('i');
+  icon.className = iconClass;
+  icon.setAttribute('aria-hidden', 'true');
+  input.setAttribute('aria-label', labelText);
+  label.append(icon, input);
+  return label;
 }
 
 function createEmphasisToggle(
@@ -342,25 +367,33 @@ export default class ExperimentTitleEditor {
     fontSizeInput.max = '72';
     fontSizeInput.value = String(defaults.fontSize);
 
-    const colorRow = document.createElement('div');
-    colorRow.className = 'date-reference-heading-row';
     const textColorInput = document.createElement('input');
     textColorInput.type = 'color';
-    textColorInput.className = 'form-control';
     textColorInput.value = defaults.textColor;
-    const themeColor = createCheckbox('Use theme text colour', defaults.useThemeColor);
+    const themeColor = createIconToggle(
+      'fas fa-palette',
+      'Use theme text colour',
+      defaults.useThemeColor,
+    );
     textColorInput.disabled = themeColor.input.checked;
-    colorRow.append(themeColor.label, textColorInput);
+    const textColorControl = createColorControl(
+      'fas fa-font',
+      'Choose text colour',
+      textColorInput,
+    );
 
-    const backgroundRow = document.createElement('div');
-    backgroundRow.className = 'date-reference-heading-row experiment-title-background-row';
     const backgroundColorInput = document.createElement('input');
     backgroundColorInput.type = 'color';
-    backgroundColorInput.className = 'form-control';
     backgroundColorInput.value = defaults.backgroundColor;
-    const noBackground = createCheckbox(
+    const noBackground = createIconToggle(
+      'fas fa-ban',
       'No background colour',
       !defaults.useBackgroundColor,
+    );
+    const backgroundColorControl = createColorControl(
+      'fas fa-highlighter',
+      'Choose background colour',
+      backgroundColorInput,
     );
     const backgroundCoverageSelect = document.createElement('select');
     backgroundCoverageSelect.className = 'form-control';
@@ -371,11 +404,6 @@ export default class ExperimentTitleEditor {
     backgroundCoverageSelect.value = defaults.backgroundCoverage;
     backgroundColorInput.disabled = noBackground.input.checked;
     backgroundCoverageSelect.disabled = noBackground.input.checked;
-    backgroundRow.append(
-      noBackground.label,
-      backgroundColorInput,
-      backgroundCoverageSelect,
-    );
 
     const emphasisButtons = document.createElement('div');
     emphasisButtons.className = 'date-title-format-buttons experiment-title-emphasis-buttons';
@@ -402,6 +430,11 @@ export default class ExperimentTitleEditor {
       createIconControl('fas fa-text-height', 'Font size in points', fontSizeInput),
       createIconControl('fas fa-align-left', 'Text alignment', alignmentSelect),
       emphasisButtons,
+      themeColor.label,
+      textColorControl,
+      noBackground.label,
+      backgroundColorControl,
+      createIconControl('fas fa-fill-drip', 'Background coverage', backgroundCoverageSelect),
     );
 
     const preview = document.createElement('div');
@@ -454,8 +487,6 @@ export default class ExperimentTitleEditor {
       createField('Heading text', headingTextInput),
       createControlGroup('Saved title styles', presetRow),
       typographyGrid,
-      colorRow,
-      backgroundRow,
       preview,
       status,
       actions,
@@ -485,6 +516,10 @@ export default class ExperimentTitleEditor {
       textColorInput.disabled = themeColor.input.checked;
       backgroundColorInput.disabled = noBackground.input.checked;
       backgroundCoverageSelect.disabled = noBackground.input.checked;
+      textColorControl.classList.toggle('is-disabled', textColorInput.disabled);
+      backgroundColorControl.classList.toggle('is-disabled', backgroundColorInput.disabled);
+      textColorControl.style.setProperty('--selected-color', textColorInput.value);
+      backgroundColorControl.style.setProperty('--selected-color', backgroundColorInput.value);
     };
     const applyControls = (values: ExperimentTitleDefaults): void => {
       headingLevelSelect.value = String(values.headingLevel);
