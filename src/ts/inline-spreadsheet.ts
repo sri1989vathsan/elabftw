@@ -2042,6 +2042,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   captionInput: HTMLInputElement;
   presetSelect: HTMLSelectElement;
   formulaButtons: NodeListOf<HTMLButtonElement>;
+  formulaFunctionSelect: HTMLSelectElement;
   formulaCellLabel: HTMLSpanElement;
   formulaInput: HTMLInputElement;
   formulaStatus: HTMLSpanElement;
@@ -2646,14 +2647,37 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   formulaInput.placeholder = 'Select a cell to view or edit its value/formula';
   formulaInput.spellcheck = false;
   formulaBar.append(formulaCellLabel, formulaInput);
-  const formulaActions = [
-    { value: 'SUM', label: 'SUM', title: 'Sum the selected cells' },
-    { value: 'AVERAGE', label: 'AVERAGE', title: 'Average the selected cells' },
-    { value: 'COUNT', label: 'COUNT', title: 'Count the selected numeric cells' },
+  // Statistical functions grow over time (SUM/AVERAGE/... started at 5, now
+  // 7) and read poorly as an ever-longer row of buttons and symbols. A single
+  // dropdown scales without adding visual width; the four arithmetic
+  // operators stay as buttons since they're compact single glyphs.
+  const formulaFunctions = [
+    { value: 'SUM', label: '∑ SUM', title: 'Sum the selected cells' },
+    { value: 'AVERAGE', label: 'x̄ AVERAGE', title: 'Average the selected cells' },
+    { value: 'COUNT', label: '# COUNT', title: 'Count the selected numeric cells' },
     { value: 'MIN', label: 'MIN', title: 'Find the minimum selected value' },
     { value: 'MAX', label: 'MAX', title: 'Find the maximum selected value' },
-    { value: 'MEDIAN', label: 'MEDIAN', title: 'Find the median of the selected cells' },
-    { value: 'STDEV', label: 'STDEV', title: 'Sample standard deviation of the selected cells' },
+    { value: 'MEDIAN', label: 'x̃ MEDIAN', title: 'Find the median of the selected cells' },
+    { value: 'STDEV', label: 'σ STDEV', title: 'Sample standard deviation of the selected cells' },
+  ];
+  const formulaFunctionSelect = document.createElement('select');
+  formulaFunctionSelect.className = 'form-control form-control-sm inline-spreadsheet-formula-function-select';
+  formulaFunctionSelect.setAttribute('aria-label', 'Insert a function applied to the selected cells');
+  formulaFunctionSelect.title = 'Insert a function applied to the selected cells';
+  const formulaFunctionPlaceholder = document.createElement('option');
+  formulaFunctionPlaceholder.value = '';
+  formulaFunctionPlaceholder.textContent = 'ƒ Insert function…';
+  formulaFunctionSelect.appendChild(formulaFunctionPlaceholder);
+  formulaFunctions.forEach(fn => {
+    const option = document.createElement('option');
+    option.value = fn.value;
+    option.textContent = fn.label;
+    option.title = fn.title;
+    formulaFunctionSelect.appendChild(option);
+  });
+  formulaBar.appendChild(formulaFunctionSelect);
+
+  const formulaActions = [
     { value: '+', label: '+', title: 'Add the selected cells in reading order' },
     { value: '-', label: '−', title: 'Subtract each selected cell from the first' },
     { value: '*', label: '×', title: 'Multiply the selected cells' },
@@ -2664,17 +2688,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     button.type = 'button';
     button.className = 'btn btn-sm btn-outline-secondary';
     button.dataset.formula = action.value;
-    button.textContent = action.value === 'SUM'
-      ? '∑'
-      : (action.value === 'AVERAGE'
-        ? 'x̄'
-        : (action.value === 'COUNT'
-          ? '#'
-          : (action.value === 'MEDIAN'
-            ? 'x̃'
-            : (action.value === 'STDEV'
-              ? 'σ'
-              : action.label))));
+    button.textContent = action.label;
     button.title = action.title;
     button.setAttribute('aria-label', action.title);
     formulaBar.appendChild(button);
@@ -2736,6 +2750,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     captionInput,
     presetSelect,
     formulaButtons: formulaBar.querySelectorAll<HTMLButtonElement>('[data-formula]'),
+    formulaFunctionSelect,
     formulaCellLabel,
     formulaInput,
     formulaStatus,
@@ -4200,7 +4215,7 @@ export function openSpreadsheetModal(
       resizeSpreadsheet(working.rows, Math.min(MAX_DIMENSION, working.cols + 1));
     });
 
-    ui.formulaButtons.forEach(button => button.addEventListener('click', () => {
+    const applyFormulaAction = (formulaName: string): void => {
       const selection = getSelectedRange();
       if (!selection) {
         ui.formulaStatus.textContent = 'Select one or more source cells first.';
@@ -4210,8 +4225,6 @@ export function openSpreadsheetModal(
       const startRow = Math.min(selection[1], selection[3]);
       const endCol = Math.max(selection[0], selection[2]);
       const endRow = Math.max(selection[1], selection[3]);
-      const formulaName = button.dataset.formula;
-      if (!formulaName) return;
       const range = `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
       const selectedCells: string[] = [];
       for (let row = startRow; row <= endRow; row++) {
@@ -4248,7 +4261,20 @@ export function openSpreadsheetModal(
       ui.formulaStatus.textContent = result === undefined
         ? `${formulaDescription} → ${colLabel(targetCol)}${targetRow + 1}`
         : `${formulaDescription} → ${colLabel(targetCol)}${targetRow + 1} = ${result}`;
+    };
+    ui.formulaButtons.forEach(button => button.addEventListener('click', () => {
+      const formulaName = button.dataset.formula;
+      if (!formulaName) return;
+      applyFormulaAction(formulaName);
     }));
+    ui.formulaFunctionSelect.addEventListener('change', () => {
+      const formulaName = ui.formulaFunctionSelect.value;
+      if (!formulaName) return;
+      applyFormulaAction(formulaName);
+      // Reset to the placeholder so the select reads as a one-shot action,
+      // consistent with the buttons it replaced, not a persistent choice.
+      ui.formulaFunctionSelect.value = '';
+    });
     const commitFormulaInput = (): void => {
       if (!formulaInputTarget) return;
       const { col, row } = formulaInputTarget;
