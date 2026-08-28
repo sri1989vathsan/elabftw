@@ -18,6 +18,10 @@
   top: 0;
   // Keep navigation dropdowns above the sticky entity edit/save toolbar (1010).
   z-index: 1020;
+
+  &.has-entity-toolbar {
+    margin-bottom: 0;
+  }
 }
 
 .navbar-brand {

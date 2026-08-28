@@ -669,9 +669,6 @@ tr:first-child td {
   border-bottom: 1px solid var(--secondary);
   box-shadow: 0 0.2rem 0.4rem rgba(0, 0, 0, 0.08);
   padding: 0.35rem 0.25rem;
-  position: sticky;
-  top: var(--sticky-navbar-height, 0);
-  z-index: 1010;
 }
 
 /* NOTIFICATIONS */
@@ -3861,9 +3858,17 @@ div > .sticky-navbar {
   background: var(--mainbackground);
   position: sticky;
   top: var(--navbar-height);
-  transition: top 0.2s ease;
+  transition: top 0.2s ease, transform 0.2s ease;
   width: 100%;
   z-index: 50;
+
+  > hr {
+    margin: 0.125rem 0;
+  }
+
+  &.hidden {
+    transform: translateY(-100%);
+  }
 }
 
 /* chemical compounds danger (hazard pictograms) */

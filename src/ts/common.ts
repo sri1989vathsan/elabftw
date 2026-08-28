@@ -178,13 +178,36 @@ on('delete-selected-entities', async () => {
 // code to hide navbar on scroll down, and show it on scroll up.
 const root = document.documentElement;
 const navbar = document.getElementById('main-navbar');
+const entityStickyToolbar = document.getElementById('entityToolbar');
 
 if (navbar) {
-  const navbarHeight = `${navbar.offsetHeight}px`;
-  root.style.setProperty('--navbar-height', navbarHeight);
+  navbar.classList.toggle('has-entity-toolbar', Boolean(entityStickyToolbar));
+  let navbarHeight = navbar.offsetHeight;
+  let entityToolbarHeight = entityStickyToolbar?.offsetHeight ?? 0;
   let lastScroll = Math.max(0, window.scrollY);
   let ticking = false;
   let isNavbarHidden = false;
+
+  const applyStickyHeaderState = (): void => {
+    const visibleNavbarHeight = isNavbarHidden ? 0 : navbarHeight;
+    const visibleToolbarHeight = isNavbarHidden ? 0 : entityToolbarHeight;
+    navbar.classList.toggle('hidden', isNavbarHidden);
+    entityStickyToolbar?.classList.toggle('hidden', isNavbarHidden);
+    root.style.setProperty('--navbar-height', `${visibleNavbarHeight}px`);
+    root.style.setProperty('--sticky-navbar-height', `${visibleNavbarHeight}px`);
+    root.style.setProperty('--toolbar-height', `${visibleToolbarHeight}px`);
+  };
+
+  const measureStickyHeaders = (): void => {
+    navbarHeight = navbar.offsetHeight;
+    entityToolbarHeight = entityStickyToolbar?.offsetHeight ?? 0;
+    applyStickyHeaderState();
+  };
+
+  measureStickyHeaders();
+  const stickyHeaderObserver = new ResizeObserver(measureStickyHeaders);
+  stickyHeaderObserver.observe(navbar);
+  if (entityStickyToolbar) stickyHeaderObserver.observe(entityStickyToolbar);
 
   window.addEventListener('scroll', () => {
     if (ticking) {
@@ -198,9 +221,8 @@ if (navbar) {
       const shouldHide = currentScroll > 0 && currentScroll > lastScroll;
 
       if (shouldHide !== isNavbarHidden) {
-        navbar.classList.toggle('hidden', shouldHide);
-        root.style.setProperty('--navbar-height', shouldHide ? '0px' : navbarHeight);
         isNavbarHidden = shouldHide;
+        applyStickyHeaderState();
       }
 
       lastScroll = currentScroll;
@@ -259,21 +281,6 @@ if (renderedBody) {
 // Mount while hidden as well, so reminder badges continue to update even when
 // the user has not opened the standalone calendar during this page visit.
 CalendarActivityC.initialize();
-
-// Keep the entity Back/Edit/Save toolbar immediately below the sticky main
-// navigation. ResizeObserver also tracks the expanded mobile navigation and
-// late logo/font sizing without relying on a hard-coded navbar height.
-const mainNavbar = document.querySelector<HTMLElement>('#container > nav.navbar');
-if (mainNavbar) {
-  const syncStickyNavbarHeight = (): void => {
-    document.documentElement.style.setProperty(
-      '--sticky-navbar-height',
-      `${mainNavbar.offsetHeight}px`,
-    );
-  };
-  syncStickyNavbarHeight();
-  new ResizeObserver(syncStickyNavbarHeight).observe(mainNavbar);
-}
 
 const TableSortingC = new TableSorting();
 // for searching inputs, allow specific triggers for East & South East Asian characters
