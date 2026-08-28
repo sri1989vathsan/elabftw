@@ -282,6 +282,53 @@ function createEmphasisToggle(
 export default class ExperimentTitleEditor {
   constructor(private editor: Editor) {}
 
+  public getSavedStyleNames(): string[] {
+    return getPresets().map(preset => preset.name);
+  }
+
+  public applySavedStyle(name: string): void {
+    const preset = getPresets().find(candidate => candidate.name === name);
+    if (!preset) return;
+    const selectedText = this.editor.selection.getContent({ format: 'text' }).trim();
+    const selectedNode = this.editor.selection.getNode();
+    const existingHeading = selectedNode.closest?.(
+      'h1, h2, h3, h4, h5, h6',
+    ) as HTMLHeadingElement | null;
+    if (!selectedText && !existingHeading) {
+      this.editor.notificationManager.open({
+        text: 'Select text or place the cursor in a heading first',
+        type: 'info',
+        timeout: 2500,
+      });
+      return;
+    }
+
+    if (!existingHeading) {
+      this.insert(preset.defaults, selectedText);
+      return;
+    }
+
+    // A heading is a block-level unit: restyle the complete heading even if
+    // only part of its text was selected, so surrounding words are never lost.
+    const text = existingHeading.textContent?.trim() || 'Heading';
+    const replacement = this.editor.getDoc().createElement(`h${preset.defaults.headingLevel}`);
+    replacement.id = existingHeading.id || this.getUniqueHeadingId();
+    replacement.style.cssText = getHeadingStyle(preset.defaults);
+    const textStyle = getTitleTextStyle(preset.defaults);
+    if (textStyle) {
+      const span = this.editor.getDoc().createElement('span');
+      span.style.cssText = textStyle;
+      span.textContent = text;
+      replacement.appendChild(span);
+    } else {
+      replacement.textContent = text;
+    }
+    this.editor.undoManager.transact(() => existingHeading.replaceWith(replacement));
+    this.editor.selection.select(replacement, true);
+    this.editor.nodeChanged();
+    window.dispatchEvent(new CustomEvent('editor-headings-changed'));
+  }
+
   public insertUsingDefaults(): void {
     this.insert(getDefaults(), this.getCurrentTitle());
   }

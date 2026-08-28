@@ -160,20 +160,34 @@ export function registerDateTitleExtension(editor: Editor): void {
         experimentTitleEditor.insertUsingDefaults();
       } else if (value === 'options') {
         experimentTitleEditor.openDialog();
+      } else if (value.startsWith('preset:')) {
+        experimentTitleEditor.applySavedStyle(decodeURIComponent(value.slice(7)));
       }
     },
-    fetch: callback => callback([
-      {
-        type: 'choiceitem',
-        text: 'Insert title using saved defaults',
-        value: 'insert',
-      },
-      {
-        type: 'choiceitem',
-        text: 'Title heading and font options…',
-        value: 'options',
-      },
-    ]),
+    fetch: callback => {
+      const items = [
+        {
+          type: 'choiceitem' as const,
+          text: 'Insert title using saved defaults',
+          value: 'insert',
+        },
+        {
+          type: 'choiceitem' as const,
+          text: 'Title heading and font options…',
+          value: 'options',
+        },
+      ];
+      const presets = experimentTitleEditor.getSavedStyleNames();
+      if (presets.length > 0) {
+        items.push({ type: 'separator' as const } as unknown as typeof items[number]);
+        presets.forEach(name => items.push({
+          type: 'choiceitem' as const,
+          text: `Apply saved style: ${name}`,
+          value: `preset:${encodeURIComponent(name)}`,
+        }));
+      }
+      callback(items);
+    },
   });
 
   editor.ui.registry.addMenuButton('horizontal-rule', {
