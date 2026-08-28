@@ -353,6 +353,124 @@ function resizeSpreadsheetColumnsFromTableWidth(
   });
 }
 
+const MAX_AUTOFIT_COLUMN_WIDTH = 400;
+
+// Measures how wide a cell would need to be to show its content on one line,
+// same as double-clicking a column border in Excel/Sheets: it does not
+// widen to fit a whole wrapped paragraph, only the longest unwrapped line.
+function measureNaturalCellWidth(cell: HTMLTableCellElement): number {
+  const previousWhiteSpace = cell.style.whiteSpace;
+  const previousWidth = cell.style.width;
+  cell.style.whiteSpace = 'nowrap';
+  cell.style.removeProperty('width');
+  const width = Math.max(20, Math.ceil(cell.getBoundingClientRect().width));
+  cell.style.whiteSpace = previousWhiteSpace;
+  cell.style.width = previousWidth;
+  return width;
+}
+
+// On-demand "autofit column widths": size every data column to its own
+// longest single line of content, across every row (not just the header).
+function autofitSpreadsheetColumns(table: HTMLTableElement): void {
+  const headerRow = table.querySelector<HTMLTableRowElement>('thead > tr');
+  if (!headerRow) return;
+  const headerCells = Array.from(headerRow.children) as HTMLTableCellElement[];
+  const coordinateHeaderCell = headerCells.find(cell => cell.classList.contains('spreadsheet-coordinate')) ?? null;
+  const columnCount = headerCells.length - (coordinateHeaderCell ? 1 : 0);
+  if (columnCount === 0) return;
+
+  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('thead > tr, tbody > tr'));
+  const naturalWidths = new Array<number>(columnCount).fill(20);
+
+  removeOuterTableWidth(table);
+  rows.forEach(row => {
+    const cells = Array.from(row.children) as HTMLTableCellElement[];
+    const rowCoordinateCell = cells.find(cell => cell.classList.contains('spreadsheet-coordinate')) ?? null;
+    const rowDataCells = cells.filter(cell => cell !== rowCoordinateCell);
+    rowDataCells.forEach((cell, index) => {
+      const width = Math.min(MAX_AUTOFIT_COLUMN_WIDTH, measureNaturalCellWidth(cell));
+      if (width > naturalWidths[index]) naturalWidths[index] = width;
+    });
+  });
+
+  rows.forEach(row => {
+    const cells = Array.from(row.children) as HTMLTableCellElement[];
+    const rowCoordinateCell = cells.find(cell => cell.classList.contains('spreadsheet-coordinate')) ?? null;
+    const rowDataCells = cells.filter(cell => cell !== rowCoordinateCell);
+    rowDataCells.forEach((cell, index) => {
+      const width = naturalWidths[index];
+      if (width === undefined) return;
+      cell.style.width = `${width}px`;
+      const serializedStyle = cell.getAttribute('style')?.trim();
+      if (serializedStyle) cell.setAttribute('data-mce-style', serializedStyle);
+    });
+  });
+}
+
+// On-demand "autofit row heights": every row (other than a notebook table's
+// real header row) goes back to exactly the height its own content needs.
+function autofitSpreadsheetRows(table: HTMLTableElement): void {
+  const kind = table.dataset.spreadsheetStyle;
+  const rows = kind === 'notebook'
+    ? Array.from(table.querySelectorAll<HTMLTableRowElement>('tr'))
+    : Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody > tr'));
+  if (rows.length === 0) return;
+
+  removeOuterTableHeight(table);
+  const previousInlineHeights = rows.map(row => row.style.height);
+  rows.forEach(row => row.style.removeProperty('height'));
+  const naturalHeights = rows.map(row => Math.max(20, Math.ceil(row.getBoundingClientRect().height)));
+  previousInlineHeights.forEach((_height, index) => { rows[index].style.removeProperty('height'); });
+  rows.forEach((row, index) => {
+    row.style.height = `${naturalHeights[index]}px`;
+    const serializedStyle = row.getAttribute('style')?.trim();
+    if (serializedStyle) row.setAttribute('data-mce-style', serializedStyle);
+  });
+  removeOuterTableHeight(table);
+}
+
+// Grows (never auto-shrinks, so it never fights a size you set on purpose) a
+// row to fit whatever was just typed into one of its cells, the same way
+// Excel keeps row height following wrapped content without any explicit
+// resize action.
+function growSpreadsheetRowToFitContent(row: HTMLTableRowElement): void {
+  const previousHeight = row.style.height;
+  const currentHeight = previousHeight ? Number.parseFloat(previousHeight) : 0;
+  row.style.removeProperty('height');
+  const naturalHeight = Math.ceil(row.getBoundingClientRect().height);
+  row.style.height = `${Math.max(naturalHeight, currentHeight)}px`;
+  const serializedStyle = row.getAttribute('style')?.trim();
+  if (serializedStyle) row.setAttribute('data-mce-style', serializedStyle);
+}
+
+// Same idea for the column the edited cell is in: only ever widens, and
+// widens every cell in that column together (not just the one being typed
+// into) so the whole column agrees on one width, matching what a manual
+// column-width drag already does. The row-index/well-plate coordinate
+// column is excluded — that one stays a fixed, deliberately-set width.
+function growSpreadsheetColumnToFitCell(cell: HTMLTableCellElement): void {
+  if (cell.classList.contains('spreadsheet-coordinate')) return;
+  const table = cell.closest('table.elabftw-spreadsheet') as HTMLTableElement | null;
+  const row = cell.closest('tr');
+  if (!table || !row) return;
+  const cellIndex = Array.from(row.children).indexOf(cell);
+  if (cellIndex === -1) return;
+
+  const previousWidth = cell.style.width;
+  const currentWidth = previousWidth ? Number.parseFloat(previousWidth) : 0;
+  const naturalWidth = Math.min(MAX_AUTOFIT_COLUMN_WIDTH, measureNaturalCellWidth(cell));
+  if (naturalWidth <= currentWidth) return;
+
+  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('thead > tr, tbody > tr'));
+  rows.forEach(otherRow => {
+    const targetCell = otherRow.children[cellIndex] as HTMLTableCellElement | undefined;
+    if (!targetCell || targetCell.classList.contains('spreadsheet-coordinate')) return;
+    targetCell.style.width = `${naturalWidth}px`;
+    const serializedStyle = targetCell.getAttribute('style')?.trim();
+    if (serializedStyle) targetCell.setAttribute('data-mce-style', serializedStyle);
+  });
+}
+
 export function registerSpreadsheetExtension(editor: Editor): void {
   editor.ui.registry.addIcon(
     'elabftw-spreadsheet-formula',
@@ -423,6 +541,22 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           icon: 'edit-block',
           onAction: () => openInlineSpreadsheet(extractFromTable(existingTable), existingTable),
         });
+        items.push({
+          type: 'menuitem' as const,
+          text: 'Autofit column widths',
+          onAction: () => {
+            autofitSpreadsheetColumns(existingTable);
+            editor.nodeChanged();
+          },
+        });
+        items.push({
+          type: 'menuitem' as const,
+          text: 'Autofit row heights',
+          onAction: () => {
+            autofitSpreadsheetRows(existingTable);
+            editor.nodeChanged();
+          },
+        });
         items.push({ type: 'separator' as const });
       }
 
@@ -473,6 +607,22 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           text: 'Edit selected spreadsheet…',
           icon: 'edit-block',
           onAction: () => openInlineSpreadsheet(extractFromTable(existingTable), existingTable),
+        });
+        items.push({
+          type: 'menuitem' as const,
+          text: 'Autofit column widths',
+          onAction: () => {
+            autofitSpreadsheetColumns(existingTable);
+            editor.nodeChanged();
+          },
+        });
+        items.push({
+          type: 'menuitem' as const,
+          text: 'Autofit row heights',
+          onAction: () => {
+            autofitSpreadsheetRows(existingTable);
+            editor.nodeChanged();
+          },
         });
         items.push({ type: 'separator' as const });
       }
@@ -574,6 +724,21 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       changed = true;
     }
     if (changed) editor.nodeChanged();
+  });
+
+  // Keep a row's height, and the edited cell's column width, following
+  // content as you type, the same way Excel does without any explicit
+  // resize action. rAF-deferred: the DOM hasn't reflowed to the new content
+  // yet at the moment 'input' fires.
+  editor.on('input', () => {
+    const node = editor.selection.getNode();
+    const row = node.closest('table.elabftw-spreadsheet tr') as HTMLTableRowElement | null;
+    if (!row) return;
+    const cell = node.closest('table.elabftw-spreadsheet td, table.elabftw-spreadsheet th') as HTMLTableCellElement | null;
+    window.requestAnimationFrame(() => {
+      growSpreadsheetRowToFitContent(row);
+      if (cell) growSpreadsheetColumnToFitCell(cell);
+    });
   });
 
   editor.on('init', () => {
