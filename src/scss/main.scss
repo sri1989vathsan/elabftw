@@ -106,6 +106,8 @@
 
 :root {
   --navbar-height: 0;
+  --sticky-header-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --sticky-header-speed: 260ms;
   --toolbar-height: 0;
 }
 
@@ -3847,18 +3849,27 @@ input:user-invalid {
 }
 
 div > .sticky-navbar {
+  opacity: 1;
   position: sticky;
   top: 0;
-  transition: transform 0.2s ease;
+  transition:
+    opacity var(--sticky-header-speed) var(--sticky-header-easing),
+    transform var(--sticky-header-speed) var(--sticky-header-easing);
+  will-change: opacity, transform;
   width: 100%;
   z-index: 100;
 }
 
 .sticky-toolbar {
   background: var(--mainbackground);
+  opacity: 1;
   position: sticky;
   top: var(--navbar-height);
-  transition: top 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity var(--sticky-header-speed) var(--sticky-header-easing),
+    top var(--sticky-header-speed) var(--sticky-header-easing),
+    transform var(--sticky-header-speed) var(--sticky-header-easing);
+  will-change: opacity, top, transform;
   width: 100%;
   z-index: 50;
 
@@ -3867,6 +3878,8 @@ div > .sticky-navbar {
   }
 
   &.hidden {
+    opacity: 0;
+    pointer-events: none;
     transform: translateY(-100%);
   }
 }
@@ -3880,5 +3893,14 @@ div > .sticky-navbar {
 }
 
 .sticky-navbar.hidden {
+  opacity: 0;
+  pointer-events: none;
   transform: translateY(-100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  div > .sticky-navbar,
+  .sticky-toolbar {
+    transition: none;
+  }
 }

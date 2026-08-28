@@ -185,8 +185,10 @@ if (navbar) {
   let navbarHeight = navbar.offsetHeight;
   let entityToolbarHeight = entityStickyToolbar?.offsetHeight ?? 0;
   let lastScroll = Math.max(0, window.scrollY);
+  let accumulatedScroll = 0;
   let ticking = false;
   let isNavbarHidden = false;
+  const directionThreshold = 8;
 
   const applyStickyHeaderState = (): void => {
     const visibleNavbarHeight = isNavbarHidden ? 0 : navbarHeight;
@@ -218,11 +220,23 @@ if (navbar) {
 
     window.requestAnimationFrame(() => {
       const currentScroll = Math.max(0, window.scrollY);
-      const shouldHide = currentScroll > 0 && currentScroll > lastScroll;
+      const delta = currentScroll - lastScroll;
+      if ((delta > 0 && accumulatedScroll < 0) || (delta < 0 && accumulatedScroll > 0)) {
+        accumulatedScroll = 0;
+      }
+      accumulatedScroll += delta;
+
+      let shouldHide = isNavbarHidden;
+      if (currentScroll === 0 || accumulatedScroll <= -directionThreshold) {
+        shouldHide = false;
+      } else if (accumulatedScroll >= directionThreshold) {
+        shouldHide = true;
+      }
 
       if (shouldHide !== isNavbarHidden) {
         isNavbarHidden = shouldHide;
         applyStickyHeaderState();
+        accumulatedScroll = 0;
       }
 
       lastScroll = currentScroll;

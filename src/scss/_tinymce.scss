@@ -11,5 +11,12 @@ figure {
 
 .tox-tinymce--toolbar-sticky-on .tox-editor-header {
   top: calc(var(--navbar-height) + var(--toolbar-height)) !important;
-  transition: top 0.2s ease;
+  transition: top var(--sticky-header-speed) var(--sticky-header-easing);
+  will-change: top;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tox-tinymce--toolbar-sticky-on .tox-editor-header {
+    transition: none;
+  }
 }
