@@ -1907,6 +1907,38 @@ body.html-tool-workspace-resizing * {
   select[aria-label='Background coverage'] {
     width: 8.5rem;
   }
+
+  input[aria-label='Choose date'] {
+    padding-right: 0.35rem;
+    width: 8.7rem;
+  }
+
+  select[aria-label='Date display format'] {
+    width: 14rem;
+  }
+
+  input[aria-label='Custom date label'] {
+    padding-right: 0.35rem;
+    width: 10rem;
+  }
+
+  select[aria-label='Date heading level'] {
+    width: 3.8rem;
+  }
+}
+
+.date-reference-editing-toolbar {
+  margin-bottom: 0.35rem;
+}
+
+.date-reference-editor-dialog {
+  max-width: 58rem;
+}
+
+.date-reference-dialog > .date-reference-format-preview {
+  display: block;
+  margin-bottom: 0.65rem;
+  padding-left: 0.15rem;
 }
 
 .experiment-title-emphasis-buttons {

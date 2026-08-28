@@ -78,7 +78,7 @@ export function registerDateTitleExtension(editor: Editor): void {
   });
 
   editor.ui.registry.addSplitButton('adddate', {
-    icon: 'insert-time',
+    icon: 'calendar',
     text: 'Day',
     tooltip: 'Insert today using saved defaults; open the menu for date options',
     onAction: () => dateReferenceEditor.insertToday(),
@@ -112,7 +112,7 @@ export function registerDateTitleExtension(editor: Editor): void {
           type: 'choiceitem' as const,
           text: 'Insert today using saved defaults',
           value: 'today',
-          icon: 'insert-time',
+          icon: 'calendar',
         },
         {
           type: 'choiceitem' as const,

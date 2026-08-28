@@ -1,6 +1,6 @@
 import { ApiC } from './api';
 
-type EditorDefaultKey = 'date' | 'title';
+type EditorDefaultKey = 'date' | 'note' | 'title';
 
 type EditorDefaults = Partial<Record<EditorDefaultKey, unknown>>;
 

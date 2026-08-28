@@ -165,6 +165,43 @@ function createEmphasisToggle(
   return { label, input };
 }
 
+function createDateIconControl(
+  iconClass: string,
+  labelText: string,
+  control: HTMLElement,
+): HTMLDivElement {
+  const field = document.createElement('div');
+  field.className = 'experiment-title-icon-control date-reference-icon-control';
+  field.title = labelText;
+  const icon = document.createElement('i');
+  icon.className = iconClass;
+  icon.setAttribute('aria-hidden', 'true');
+  control.setAttribute('aria-label', labelText);
+  field.append(icon, control);
+  return field;
+}
+
+function createDateIconToggle(
+  iconClass: string,
+  labelText: string,
+  checked: boolean,
+): { label: HTMLLabelElement; input: HTMLInputElement } {
+  const label = document.createElement('label');
+  label.className = 'experiment-title-option-toggle';
+  label.title = labelText;
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = checked;
+  input.setAttribute('aria-label', labelText);
+  const visible = document.createElement('span');
+  const icon = document.createElement('i');
+  icon.className = iconClass;
+  icon.setAttribute('aria-hidden', 'true');
+  visible.appendChild(icon);
+  label.append(input, visible);
+  return { label, input };
+}
+
 function getReferenceEmphasis(
   reference: HTMLAnchorElement | null,
   defaults: DateInsertDefaults,
@@ -399,7 +436,7 @@ export default class DateReferenceEditor {
     overlay.setAttribute('role', 'presentation');
 
     const dialog = document.createElement('div');
-    dialog.className = 'date-reference-dialog';
+    dialog.className = 'date-reference-dialog date-reference-editor-dialog';
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
     dialog.setAttribute('aria-labelledby', 'date-reference-title');
@@ -412,19 +449,13 @@ export default class DateReferenceEditor {
     explanation.className = 'date-reference-help';
     explanation.textContent = 'Choose a date from the calendar. It receives a permanent link, and can optionally open another experiment.';
 
-    const dateGroup = document.createElement('label');
-    dateGroup.className = 'date-reference-field';
-    dateGroup.textContent = 'Date';
     const dateInput = document.createElement('input');
     dateInput.type = 'date';
     dateInput.className = 'form-control';
     dateInput.required = true;
     dateInput.value = existingDate;
-    dateGroup.appendChild(dateInput);
+    const dateControl = createDateIconControl('fas fa-calendar-alt', 'Choose date', dateInput);
 
-    const formatGroup = document.createElement('label');
-    formatGroup.className = 'date-reference-field';
-    formatGroup.textContent = 'Display format';
     const formatSelect = document.createElement('select');
     formatSelect.className = 'form-control';
     formatSelect.setAttribute('aria-label', 'Date display format');
@@ -433,13 +464,18 @@ export default class DateReferenceEditor {
     customLabelInput.className = 'form-control';
     customLabelInput.placeholder = 'Custom date label';
     customLabelInput.value = customLabel;
+    const customLabelControl = createDateIconControl(
+      'fas fa-pen',
+      'Custom date label',
+      customLabelInput,
+    );
     const formatPreview = document.createElement('span');
     formatPreview.className = 'date-reference-format-preview';
     formatPreview.setAttribute('aria-live', 'polite');
 
     const updateFormatControls = (): void => {
       selectedFormat = formatSelect.value as DateDisplayFormat;
-      customLabelInput.hidden = selectedFormat !== 'custom';
+      customLabelControl.hidden = selectedFormat !== 'custom';
       customLabel = customLabelInput.value;
       formatPreview.textContent = `Preview: ${formatDate(dateInput.value, selectedFormat, customLabel)}`;
     };
@@ -461,47 +497,56 @@ export default class DateReferenceEditor {
     formatSelect.addEventListener('change', updateFormatControls);
     customLabelInput.addEventListener('input', updateFormatControls);
     dateInput.addEventListener('change', renderFormatOptions);
-    formatGroup.append(formatSelect, customLabelInput, formatPreview);
+    const formatControl = createDateIconControl(
+      'fas fa-calendar-day',
+      'Date display format',
+      formatSelect,
+    );
 
-    const headingGroup = document.createElement('div');
-    headingGroup.className = 'date-reference-heading-row';
-    const headingCheckboxLabel = document.createElement('label');
-    headingCheckboxLabel.className = 'date-reference-heading-toggle';
-    const headingCheckbox = document.createElement('input');
-    headingCheckbox.type = 'checkbox';
-    headingCheckbox.checked = reference ? Boolean(existingHeading) : savedDefaults.asHeading;
-    const headingText = document.createElement('span');
-    headingText.textContent = 'Use this date as a heading';
-    headingCheckboxLabel.append(headingCheckbox, headingText);
+    const heading = createDateIconToggle(
+      'fas fa-heading',
+      'Use this date as a heading',
+      reference ? Boolean(existingHeading) : savedDefaults.asHeading,
+    );
+    const headingCheckbox = heading.input;
     const headingLevelSelect = document.createElement('select');
     headingLevelSelect.className = 'form-control';
     headingLevelSelect.setAttribute('aria-label', 'Date heading level');
     for (let level = 1; level <= 6; level++) {
       const option = document.createElement('option');
       option.value = String(level);
-      option.textContent = `Heading ${level}`;
+      option.textContent = `H${level}`;
       headingLevelSelect.appendChild(option);
     }
     headingLevelSelect.value = existingHeading?.tagName.slice(1)
       ?? String(savedDefaults.headingLevel);
-    headingLevelSelect.hidden = !headingCheckbox.checked;
     headingCheckbox.addEventListener('change', () => {
-      headingLevelSelect.hidden = !headingCheckbox.checked;
+      headingLevelControl.hidden = !headingCheckbox.checked;
     });
-    headingGroup.append(headingCheckboxLabel, headingLevelSelect);
+    const headingLevelControl = createDateIconControl(
+      'fas fa-layer-group',
+      'Date heading level',
+      headingLevelSelect,
+    );
+    headingLevelControl.hidden = !headingCheckbox.checked;
 
-    const emphasisGroup = document.createElement('div');
-    emphasisGroup.className = 'date-title-format-row';
-    const emphasisLabel = document.createElement('span');
-    emphasisLabel.className = 'date-title-format-label';
-    emphasisLabel.textContent = 'Date text';
     const emphasisButtons = document.createElement('div');
-    emphasisButtons.className = 'date-title-format-buttons';
+    emphasisButtons.className = 'date-title-format-buttons experiment-title-emphasis-buttons';
     const bold = createEmphasisToggle('Bold', 'B', emphasis.bold);
     const italic = createEmphasisToggle('Italic', 'I', emphasis.italic);
     const underline = createEmphasisToggle('Underline', 'U', emphasis.underline);
     emphasisButtons.append(bold.label, italic.label, underline.label);
-    emphasisGroup.append(emphasisLabel, emphasisButtons);
+
+    const editingToolbar = document.createElement('div');
+    editingToolbar.className = 'experiment-title-typography-toolbar date-reference-editing-toolbar';
+    editingToolbar.append(
+      dateControl,
+      formatControl,
+      customLabelControl,
+      heading.label,
+      headingLevelControl,
+      emphasisButtons,
+    );
 
     const linkGroup = document.createElement('div');
     linkGroup.className = 'date-reference-field';
@@ -570,10 +615,8 @@ export default class DateReferenceEditor {
     dialog.append(
       title,
       explanation,
-      dateGroup,
-      formatGroup,
-      headingGroup,
-      emphasisGroup,
+      editingToolbar,
+      formatPreview,
       linkGroup,
       actions,
     );
@@ -669,7 +712,7 @@ export default class DateReferenceEditor {
         customLabelInput.setCustomValidity('');
         return true;
       }
-      customLabelInput.hidden = false;
+      customLabelControl.hidden = false;
       customLabelInput.focus();
       customLabelInput.setCustomValidity('Enter a custom date label.');
       customLabelInput.reportValidity();

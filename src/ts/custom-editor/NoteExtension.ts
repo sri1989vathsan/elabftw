@@ -1,12 +1,40 @@
 /** Insert an editable, linkable note callout into the entity body. */
 import { Editor } from 'tinymce/tinymce';
 import { escapeHTML } from '../misc';
+import { getAccountEditorDefault, saveAccountEditorDefault } from '../editor-defaults';
+
+interface NoteDefaults {
+  title: string;
+  includeInToc: boolean;
+  headingLevel: string;
+}
 
 interface NoteDialogData {
   title: string;
   includeInToc: boolean;
   headingLevel: string;
   content: string;
+  saveAsDefault: boolean;
+}
+
+const FALLBACK_NOTE_DEFAULTS: NoteDefaults = {
+  title: 'Note',
+  includeInToc: true,
+  headingLevel: '3',
+};
+
+function getNoteDefaults(): NoteDefaults {
+  const saved = getAccountEditorDefault<NoteDefaults>('note');
+  return {
+    title: typeof saved?.title === 'string' && saved.title.trim()
+      ? saved.title.trim().slice(0, 255)
+      : FALLBACK_NOTE_DEFAULTS.title,
+    includeInToc: saved?.includeInToc !== false,
+    headingLevel: typeof saved?.headingLevel === 'string'
+      && /^[2-6]$/.test(saved.headingLevel)
+      ? saved.headingLevel
+      : FALLBACK_NOTE_DEFAULTS.headingLevel,
+  };
 }
 
 function createNoteId(editor: Editor, title: string): string {
@@ -27,7 +55,41 @@ function createNoteId(editor: Editor, title: string): string {
 }
 
 export function registerNoteExtension(editor: Editor): void {
+  const insertNote = (
+    defaults: NoteDefaults,
+    content: string,
+    selectedHtml = '',
+    selectedText = '',
+  ): void => {
+    const title = defaults.title.trim() || 'Note';
+    const level = /^[2-6]$/.test(defaults.headingLevel) ? defaults.headingLevel : '3';
+    const heading = defaults.includeInToc
+      ? `<h${level} class="elabftw-note-heading" id="${createNoteId(editor, title)}">${escapeHTML(title)}</h${level}>`
+      : `<div class="elabftw-note-heading">${escapeHTML(title)}</div>`;
+    const contentUnchanged = Boolean(selectedHtml) && content.trim() === selectedText;
+    const body = contentUnchanged
+      ? selectedHtml
+      : escapeHTML(content.trim()).replaceAll('\n', '<br>');
+    const noteBody = body || '<br data-mce-bogus="1">';
+
+    editor.undoManager.transact(() => {
+      editor.execCommand(
+        'mceInsertContent',
+        false,
+        `<div class="elabftw-note-block">${heading}<div class="elabftw-note-content">${noteBody}</div></div><p><br data-mce-bogus="1"></p>`,
+      );
+    });
+    window.dispatchEvent(new CustomEvent('editor-headings-changed'));
+  };
+
+  const insertUsingDefaults = (): void => {
+    const selectedHtml = editor.selection.getContent({ format: 'html' }).trim();
+    const selectedText = editor.selection.getContent({ format: 'text' }).trim();
+    insertNote(getNoteDefaults(), selectedText, selectedHtml, selectedText);
+  };
+
   const openDialog = (): void => {
+    const defaults = getNoteDefaults();
     const bookmark = editor.selection.getBookmark(2, true);
     const selectedHtml = editor.selection.getContent({ format: 'html' }).trim();
     const selectedText = editor.selection.getContent({ format: 'text' }).trim();
@@ -67,13 +129,19 @@ export function registerNoteExtension(editor: Editor): void {
               ? 'Note text (leave unchanged to retain the selected text formatting)'
               : 'Note text',
           },
+          {
+            type: 'checkbox',
+            name: 'saveAsDefault',
+            label: 'Save title and heading options as my account default',
+          },
         ],
       },
       initialData: {
-        title: 'Note',
-        includeInToc: true,
-        headingLevel: '3',
+        title: defaults.title,
+        includeInToc: defaults.includeInToc,
+        headingLevel: defaults.headingLevel,
         content: selectedText,
+        saveAsDefault: false,
       },
       buttons: [
         { type: 'cancel', text: 'Cancel' },
@@ -81,36 +149,55 @@ export function registerNoteExtension(editor: Editor): void {
       ],
       onSubmit: api => {
         const data = api.getData() as NoteDialogData;
-        const title = data.title.trim() || 'Note';
-        const level = /^[2-6]$/.test(data.headingLevel) ? data.headingLevel : '3';
-        const heading = data.includeInToc
-          ? `<h${level} class="elabftw-note-heading" id="${createNoteId(editor, title)}">${escapeHTML(title)}</h${level}>`
-          : `<div class="elabftw-note-heading">${escapeHTML(title)}</div>`;
-        const contentUnchanged = Boolean(selectedHtml) && data.content.trim() === selectedText;
-        const body = contentUnchanged
-          ? selectedHtml
-          : escapeHTML(data.content.trim()).replaceAll('\n', '<br>');
-        const noteBody = body || '<br data-mce-bogus="1">';
+        const nextDefaults: NoteDefaults = {
+          title: data.title.trim() || 'Note',
+          includeInToc: data.includeInToc,
+          headingLevel: /^[2-6]$/.test(data.headingLevel) ? data.headingLevel : '3',
+        };
 
         editor.focus();
         editor.selection.moveToBookmark(bookmark);
-        editor.undoManager.transact(() => {
-          editor.execCommand(
-            'mceInsertContent',
-            false,
-            `<div class="elabftw-note-block">${heading}<div class="elabftw-note-content">${noteBody}</div></div><p><br data-mce-bogus="1"></p>`,
-          );
-        });
+        insertNote(nextDefaults, data.content, selectedHtml, selectedText);
+        if (data.saveAsDefault) {
+          void saveAccountEditorDefault('note', nextDefaults)
+            .then(() => editor.notificationManager.open({
+              text: 'Note defaults saved for your account',
+              type: 'success',
+              timeout: 2500,
+            }))
+            .catch(() => editor.notificationManager.open({
+              text: 'Could not save note defaults',
+              type: 'error',
+              timeout: 3500,
+            }));
+        }
         api.close();
-        window.dispatchEvent(new CustomEvent('editor-headings-changed'));
       },
     });
   };
 
-  editor.ui.registry.addButton('insert-note', {
+  editor.ui.registry.addSplitButton('insert-note', {
     icon: 'comment-add',
-    tooltip: 'Insert a note box (Ctrl+Alt+N)',
-    onAction: openDialog,
+    tooltip: 'Insert a note using saved defaults; open the arrow for options (Ctrl+Alt+N)',
+    onAction: insertUsingDefaults,
+    onItemAction: (_api, value) => {
+      if (value === 'insert') insertUsingDefaults();
+      if (value === 'options') openDialog();
+    },
+    fetch: callback => callback([
+      {
+        type: 'choiceitem',
+        text: 'Insert note using saved defaults',
+        value: 'insert',
+        icon: 'comment-add',
+      },
+      {
+        type: 'choiceitem',
+        text: 'Note title and heading options…',
+        value: 'options',
+        icon: 'edit-block',
+      },
+    ]),
   });
-  editor.addShortcut('ctrl+alt+n', 'insert a note box', openDialog);
+  editor.addShortcut('ctrl+alt+n', 'insert a note box using saved defaults', insertUsingDefaults);
 }
