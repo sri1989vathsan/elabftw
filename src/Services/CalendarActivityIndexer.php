@@ -19,8 +19,17 @@ final class CalendarActivityIndexer
         $this->Db = Db::getConnection();
     }
 
-    /** Index new or modified entities in a team. Existing installations are backfilled on first calendar use. */
-    public function synchronizeTeam(EntityType $type, int $teamId): void
+    /**
+     * Index new or modified entities in a team.
+     *
+     * Pass a $limit to bound the work done inline in a request (e.g. from CalendarActivity),
+     * so a team with a large never-indexed backlog can't turn a page view into a long-running
+     * request. Omit $limit (or run bin/console custom:calendar-backfill) to drain the backlog
+     * in full, in batches, outside of a user request.
+     *
+     * @return int number of entities (re)indexed
+     */
+    public function synchronizeTeam(EntityType $type, int $teamId, ?int $limit = null): int
     {
         $sql = sprintf(
             'SELECT entity.id, entity.team, entity.userid, entity.date, entity.body, entity.content_type, entity.modified_at
@@ -28,16 +37,25 @@ final class CalendarActivityIndexer
              LEFT JOIN custom_calendar_activity_index_state AS state
                ON state.entity_type = :entity_type AND state.entity_id = entity.id
              WHERE entity.team = :team
-               AND (state.entity_id IS NULL OR state.source_modified_at <> entity.modified_at)',
+               AND (state.entity_id IS NULL OR state.source_modified_at <> entity.modified_at)
+             ORDER BY entity.modified_at ASC, entity.id ASC',
             $type->value,
         );
+        if ($limit !== null) {
+            $sql .= ' LIMIT :limit';
+        }
         $req = $this->Db->prepare($sql);
         $req->bindValue(':entity_type', $type->value);
         $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+        if ($limit !== null) {
+            $req->bindValue(':limit', $limit, PDO::PARAM_INT);
+        }
         $this->Db->execute($req);
-        foreach ($req->fetchAll() as $entity) {
+        $entities = $req->fetchAll();
+        foreach ($entities as $entity) {
             $this->replace($type, $entity);
         }
+        return count($entities);
     }
 
     private function replace(EntityType $type, array $entity): void

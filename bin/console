@@ -101,5 +101,7 @@ $Application->add(new PruneItems());
 $Application->add(new CheckUploads());
 $Application->add(new MigrateUploads());
 $Application->add(new ExperimentsTimestamp());
+$Application->add(new CalendarActivityBackfill());
+$Application->add(new PruneCustomHistory());
 
 $Application->run();

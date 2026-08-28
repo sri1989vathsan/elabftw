@@ -19,7 +19,6 @@ import i18next from './i18n';
 import { ApiC } from './api';
 import { notify } from './notify';
 import { entity } from './getEntity';
-import { mountEntitiesTable, unmountEntitiesTable } from './entities-table';
 import { get } from 'svelte/store';
 import { mount, unmount } from 'svelte';
 import { writable } from 'svelte/store';
@@ -29,6 +28,9 @@ import $ from 'jquery';
 import { core } from './core';
 import { selectedEntities } from './common';
 import { on } from './handlers';
+
+// Loaded on demand: the "table" view pulls in ag-grid, which most page loads never need.
+let entitiesTableModule: typeof import('./entities-table') | null = null;
 
 type TeamScopedTomSelect = TomSelectWithAllOptions & {
   _showAll?: boolean;
@@ -222,11 +224,15 @@ async function displayEntities(
   const rootEl = document.getElementById('entityList');
   if (mode === 'tb') {
     unmountEntityListSv();
-    mountEntitiesTable(rootEl, selectedEntities, order, sort, related, relatedOrigin);
+    entitiesTableModule ??= await import(
+      /* webpackChunkName: 'entities-table' */
+      './entities-table'
+    );
+    entitiesTableModule.mountEntitiesTable(rootEl, selectedEntities, order, sort, related, relatedOrigin);
     handleInitialLoadDone();
     return;
   }
-  unmountEntitiesTable();
+  entitiesTableModule?.unmountEntitiesTable();
   mountEntityListSv(rootEl, order, sort);
 }
 
