@@ -42,6 +42,7 @@ final class CustomMigrationRunner
         '016_entity_review_decisions.sql',
         '017_template_version.sql',
         '018_step_details.sql',
+        '019_template_version_history.sql',
     );
 
     private Db $Db;

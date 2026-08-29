@@ -541,15 +541,25 @@ abstract class AbstractEntity extends AbstractRest
                 throw new ImproperActionException('Publishing a version is only available for templates.');
             }
             $this->canOrExplode(AccessType::Write);
+            $newVersion = (int) ($this->entityData['version'] ?? 1) + 1;
             $sql = 'UPDATE experiments_templates
-                SET version = version + 1, locked = 1, lockedby = :lockedby, locked_at = CURRENT_TIMESTAMP
+                SET version = :version, locked = 1, lockedby = :lockedby, locked_at = CURRENT_TIMESTAMP
                 WHERE id = :id';
             $req = $this->Db->prepare($sql);
+            $req->bindParam(':version', $newVersion, PDO::PARAM_INT);
             $req->bindParam(':lockedby', $this->Users->userData['userid'], PDO::PARAM_INT);
             $req->bindParam(':id', $this->id, PDO::PARAM_INT);
             $this->Db->execute($req);
+            // permanent snapshot of what this version's body actually looked
+            // like -- the version column above is only a counter
+            TemplateVersions::create(
+                entityId: $this->id,
+                version: $newVersion,
+                body: $this->entityData['body'] ?? '',
+                publishedBy: (int) $this->Users->userData['userid'],
+            );
             $Changelog = new Changelog($this);
-            $Changelog->create(new ContentParams('version_published', sprintf('Published version %d', ($this->entityData['version'] ?? 1) + 1)));
+            $Changelog->create(new ContentParams('version_published', sprintf('Published version %d', $newVersion)));
             return $this->readOne();
         }
         // for deleted or archived entities, allow specific actions (Restore & Unarchive)

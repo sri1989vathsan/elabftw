@@ -55,6 +55,34 @@
     </div>
   </div>
 </div>
+{# Modal listing every published version of a template, with its snapshot body #}
+<div class='modal fade' id='templateVersionHistoryModal' tabindex='-1' role='dialog' aria-labelledby='templateVersionHistoryModalLabel'>
+  <div class='modal-dialog modal-lg' role='document'>
+    <div class='modal-content'>
+      <div class='modal-header'>
+        <h5 class='modal-title' id='templateVersionHistoryModalLabel'>{{ 'Version history'|trans }}</h5>
+        <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'>
+          <span aria-hidden='true'>&times;</span>
+        </button>
+      </div>
+      <div class='modal-body'>
+        {% for v in templateVersionsArr %}
+          <div class='mb-3'>
+            <button type='button' class='btn btn-link p-0' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' aria-expanded='false' aria-controls='templateVersionBody_{{ v.id }}'>
+              <i class='fas fa-caret-right fa-fw'></i> {{ 'Version %d'|trans|format(v.version) }} — {{ v.published_by_fullname }} — <span class='relative-moment' title='{{ v.published_at }}'></span>
+            </button>
+            <div hidden id='templateVersionBody_{{ v.id }}' class='border rounded p-2 mt-1 ml-4'>{{ v.body|raw }}</div>
+          </div>
+        {% else %}
+          <p>{{ 'No published versions yet.'|trans }}</p>
+        {% endfor %}
+      </div>
+      <div class='modal-footer'>
+        <button type='button' class='btn btn-secondary' data-dismiss='modal'>{{ 'Close'|trans }}</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% include 'duplicate-modal.html' %}
 
 {# Modal for timestamping #}
@@ -308,7 +336,9 @@
 
         {# TEMPLATE VERSION #}
         {% if Entity.entityType.value == 'experiments_templates' %}
-          <span class='badge badge-secondary mr-2' title='{{ 'Version'|trans }}'>v{{ Entity.entityData.version }}</span>
+          <button type='button' title='{{ 'Version history'|trans }}' aria-label='{{ 'Version history'|trans }}' data-action='toggle-modal' data-target='templateVersionHistoryModal' class='btn btn-transparent p-1 mr-1'>
+            <span class='badge badge-secondary'>v{{ Entity.entityData.version }}</span>
+          </button>
           {% if not Entity.entityData.locked %}
             <button type='button' title='{{ 'Publish new version'|trans }}' aria-label='{{ 'Publish new version'|trans }}' data-action='publish-template-version' class='btn btn-transparent mr-2'>
               <i class='fas fa-file-signature fa-fw'></i> {{ 'Publish new version'|trans }}

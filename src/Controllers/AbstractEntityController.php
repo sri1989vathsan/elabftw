@@ -37,6 +37,7 @@ use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\StorageUnits;
 use Elabftw\Models\TeamGroups;
 use Elabftw\Models\TeamTags;
+use Elabftw\Models\TemplateVersions;
 use Elabftw\Models\Templates;
 use Elabftw\Models\UserRequestActions;
 use Elabftw\Params\DisplayParams;
@@ -198,6 +199,9 @@ abstract class AbstractEntityController implements ControllerInterface
                 $this->Entity->entityType->value,
                 $this->Entity->id ?? 0,
             ),
+            'templateVersionsArr' => $this->Entity->entityType === EntityType::Templates
+                ? TemplateVersions::readAllForEntity($this->Entity->id ?? 0)
+                : array(),
             'experimentsFoldersArr' => $experimentsFoldersViewArr,
             'experimentsFoldersCreateArr' => $experimentsFoldersViewArr,
             'experimentsFoldersTreeArr' => $ExperimentsFoldersView->readAllRecursive(),
@@ -267,6 +271,9 @@ abstract class AbstractEntityController implements ControllerInterface
                 $this->Entity->entityType->value,
                 $this->Entity->id ?? 0,
             ),
+            'templateVersionsArr' => $this->Entity->entityType === EntityType::Templates
+                ? TemplateVersions::readAllForEntity($this->Entity->id ?? 0)
+                : array(),
             'experimentsFoldersArr' => $experimentsFoldersEditArr,
             'experimentsFoldersCreateArr' => $experimentsFoldersEditArr,
             'experimentsFoldersTreeArr' => $ExperimentsFoldersEdit->readAllRecursive(),
