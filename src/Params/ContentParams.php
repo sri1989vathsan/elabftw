@@ -117,7 +117,7 @@ class ContentParams implements ContentParamsInterface
     }
 
     /**
-     * Validate the account-wide defaults used by the date and title editor tools.
+     * Validate the account-wide defaults used by the date, title, and note editor tools.
      */
     protected function getEditorDefaults(): ?string
     {
@@ -132,7 +132,7 @@ class ContentParams implements ContentParamsInterface
         if (!is_array($defaults) || array_is_list($defaults)) {
             throw new ImproperActionException('Invalid editor defaults.');
         }
-        $allowed = array('date', 'title');
+        $allowed = array('date', 'title', 'note');
         foreach ($defaults as $key => $value) {
             if (!in_array($key, $allowed, true) || !is_array($value) || array_is_list($value)) {
                 throw new ImproperActionException('Invalid editor defaults.');
