@@ -11,7 +11,6 @@ import { registerLinkExtension } from './LinkExtension';
 import { registerListExtension } from './ListExtension';
 import { registerMouseLinkExtension } from './MouseLinkExtension';
 import { registerNoteExtension } from './NoteExtension';
-import { registerSequenceExtension } from './SequenceExtension';
 import { registerSpreadsheetExtension } from './SpreadsheetExtension';
 import { registerTableToolsExtension } from './TableToolsExtension';
 import { registerTemplateInsertExtension } from './TemplateInsertExtension';
@@ -40,7 +39,6 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   registerListExtension(editor);
   registerMouseLinkExtension(editor);
   registerNoteExtension(editor);
-  registerSequenceExtension(editor);
   registerSpreadsheetExtension(editor);
   registerTableToolsExtension(editor);
   registerTemplateInsertExtension(editor);

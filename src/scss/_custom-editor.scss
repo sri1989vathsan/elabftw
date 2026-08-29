@@ -343,18 +343,3 @@ body.mce-content-body {
   color: var(--danger, #dc3545);
   font-weight: 700;
 }
-
-/* inline sequence viewer block (see sequence-embed.ts): a static placeholder
-   card while editing, or before the Open Vector Editor mounts on view */
-:where(#body_view, body.mce-content-body) .elabftw-sequence-embed {
-  display: block;
-  margin: 0.5rem 0;
-}
-
-:where(#body_view, body.mce-content-body) .elabftw-sequence-embed-placeholder {
-  border: 1px dashed var(--gray-500, #adb5bd);
-  border-radius: 0.3rem;
-  color: var(--gray-700, #495057);
-  display: inline-block;
-  padding: 0.5rem 0.9rem;
-}
