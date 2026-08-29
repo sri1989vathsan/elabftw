@@ -305,6 +305,11 @@
         <button type='button' title='{{ alt }}' aria-label='{{ alt }}' data-action='do-requestable-action' data-target='lock' class='btn {{ Entity.entityData.locked ? 'btn-secondary' : 'btn-transparent' }} mr-2'>
           <i class='fas {{ lockIcon }} fa-fw'></i>
         </button>
+
+        {# TEMPLATE VERSION: bumped and locked automatically on review approval #}
+        {% if Entity.entityType.value == 'experiments_templates' %}
+          <span class='badge badge-secondary mr-2' title='{{ 'Version'|trans }}'>v{{ Entity.entityData.version }}</span>
+        {% endif %}
       {% endif %}
 
       {# REQUEST ACTION #}

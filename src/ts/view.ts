@@ -13,6 +13,7 @@ import { on } from './handlers';
 import i18next from './i18n';
 import { Action, Model } from './interfaces';
 import { reloadElements } from './misc';
+import { hydrateSequenceEmbeds } from './sequence-embed';
 
 // UPDATE MALLEABLE COMMENT
 const malleableComments = new Malle({
@@ -64,3 +65,5 @@ if (!core.isAnon) {
   // listen on existing comments
   malleableComments.listen();
 }
+
+hydrateSequenceEmbeds();

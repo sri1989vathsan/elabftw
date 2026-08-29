@@ -65,6 +65,14 @@
           {% endif %}
           <br>
 
+          {{ 'Reagent:'|trans }}
+          <span data-stepid='{{ step.id }}' data-target='reagent' class='step editable hl-hover p-1 rounded'>{{ step.reagent|default('') }}</span>
+          {{ 'Quantity:'|trans }}
+          <span data-stepid='{{ step.id }}' data-target='quantity' class='step editable hl-hover p-1 rounded'>{{ step.quantity|default('') }}</span>
+          {{ 'Duration (min):'|trans }}
+          <span data-stepid='{{ step.id }}' data-target='duration_minutes' class='step editable hl-hover p-1 rounded'>{{ step.duration_minutes|default('') }}</span>
+          <br>
+
           <div id='stepDeadlineDiv_{{ step.id }}'>
             {% if step.deadline %}
               {{ 'Deadline:'|trans }}

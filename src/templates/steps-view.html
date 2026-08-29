@@ -18,6 +18,16 @@
             {{ 'Deadline:'|trans }} {{ step.deadline|format_datetime() }}
         </span>
         {% endif %}
+        {% if step.reagent %}
+        <span class='mr-2 text-muted'>
+            {{ 'Reagent:'|trans }} {{ step.reagent }}{{ step.quantity ? ' (' ~ step.quantity ~ ')' }}
+        </span>
+        {% endif %}
+        {% if step.duration_minutes %}
+        <span class='mr-2 text-muted'>
+            {{ 'Duration:'|trans }} {{ step.duration_minutes }} {{ 'min'|trans }}
+        </span>
+        {% endif %}
         </div>
       {% endfor %}
     </div>

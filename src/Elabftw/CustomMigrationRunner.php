@@ -40,6 +40,8 @@ final class CustomMigrationRunner
         '014_scalability_indexes.sql',
         '015_editor_defaults.sql',
         '016_entity_review_decisions.sql',
+        '017_template_version.sql',
+        '018_step_details.sql',
     );
 
     private Db $Db;
