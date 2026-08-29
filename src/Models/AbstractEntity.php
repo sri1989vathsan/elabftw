@@ -595,6 +595,34 @@ abstract class AbstractEntity extends AbstractRest
             $Changelog->create(new ContentParams('version_restored', sprintf('Restored content from version %d', $versionRow['version'])));
             return $this->readOne();
         }
+        // Record which template was pulled into this experiment via the
+        // "Insert template" editor button, so the template's own "Used in"
+        // list also picks up experiments that never went through the
+        // "create new experiment from this template" flow. Never overwrites
+        // an existing created_from_type/id: that reflects how the entity was
+        // actually created and takes precedence over a later insert.
+        if ($action === Action::LinkTemplateSource) {
+            if ($this->entityType !== EntityType::Experiments) {
+                throw new ImproperActionException('Linking a template source is only available for experiments.');
+            }
+            $this->canOrExplode(AccessType::Write);
+            if (($this->entityData['created_from_type'] ?? null) === null) {
+                $templateId = (int) ($params['template_id'] ?? 0);
+                if ($templateId <= 0) {
+                    throw new ImproperActionException('A template id is required.');
+                }
+                $sql = sprintf(
+                    'UPDATE %s SET created_from_type = :type, created_from_id = :template_id WHERE id = :id',
+                    $this->entityType->value,
+                );
+                $req = $this->Db->prepare($sql);
+                $req->bindValue(':type', EntityType::Templates->toInt(), PDO::PARAM_INT);
+                $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
+                $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+                $this->Db->execute($req);
+            }
+            return $this->readOne();
+        }
         // for deleted or archived entities, allow specific actions (Restore & Unarchive)
         $state = $this->entityData['state'] ?? null;
         // Allow RemoveExclusiveEditMode even on deleted entities: when navigating away from the edit page, a keepalive PATCH may be sent
@@ -764,7 +792,21 @@ abstract class AbstractEntity extends AbstractRest
         }
         $exclusiveEditMode = $this->ExclusiveEditMode->readOne();
         $this->entityData['exclusive_edit_mode'] = empty($exclusiveEditMode) ? null : $exclusiveEditMode;
-        $this->entityData['created_from_type_human'] = EntityType::fromInt($this->entityData['created_from_type'])?->toGenre();
+        $createdFromSourceType = EntityType::fromInt($this->entityData['created_from_type']);
+        $this->entityData['created_from_type_human'] = $createdFromSourceType?->toGenre();
+        $this->entityData['created_from_title'] = null;
+        $this->entityData['created_from_page'] = null;
+        if ($createdFromSourceType !== null && !empty($this->entityData['created_from_id'])) {
+            $sql = sprintf('SELECT title FROM %s WHERE id = :id', $createdFromSourceType->value);
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':id', $this->entityData['created_from_id'], PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $sourceTitle = $req->fetchColumn();
+            if ($sourceTitle !== false) {
+                $this->entityData['created_from_title'] = $sourceTitle;
+                $this->entityData['created_from_page'] = $createdFromSourceType->toPage();
+            }
+        }
         $this->entityData['canread_base_human'] = BasePermissions::from($this->entityData['canread_base'])->toHuman();
         $this->entityData['canwrite_base_human'] = BasePermissions::from($this->entityData['canwrite_base'])->toHuman();
         if (isset($this->entityData['canbook_base'])) {

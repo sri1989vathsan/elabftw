@@ -16,6 +16,12 @@
          <!-- [html-validate-disable-block prefer-native-element: suppress error from malle] -->
         <span id='documentTitle' class='breakable {{ not Entity.isReadOnly ? 'malleable-title malleable' }} rounded py-1' data-target='title' data-endpoint='{{ Entity.entityType.value }}' data-id='{{ Entity.id }}'>{{ Entity.entityData.title }}</span>
       </h1>
+      {% if Entity.entityData.created_from_title %}
+        <div class='mb-2 smallgray'>
+          <i class='fas fa-file-import mr-1'></i>{{ 'Created from %s:'|trans|format(Entity.entityData.created_from_type_human) }}
+          <a href='{{ Entity.entityData.created_from_page }}?mode=view&id={{ Entity.entityData.created_from_id }}'>{{ Entity.entityData.created_from_title }}</a>
+        </div>
+      {% endif %}
       {% if Entity.entityType.value == 'experiments' and Entity.entityData.experiment_goal %}
         <div class='d-flex align-items-start mb-2'>
           <i class='fas fa-bullseye fa-fw mr-2 mt-1 color-medium' aria-hidden='true'></i>

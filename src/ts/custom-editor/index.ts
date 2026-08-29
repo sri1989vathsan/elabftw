@@ -14,6 +14,7 @@ import { registerNoteExtension } from './NoteExtension';
 import { registerSequenceExtension } from './SequenceExtension';
 import { registerSpreadsheetExtension } from './SpreadsheetExtension';
 import { registerTableToolsExtension } from './TableToolsExtension';
+import { registerTemplateInsertExtension } from './TemplateInsertExtension';
 import { registerTocExtension } from './TocExtension';
 
 export function registerCustomEditorExtensions(editor: Editor): void {
@@ -42,6 +43,7 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   registerSequenceExtension(editor);
   registerSpreadsheetExtension(editor);
   registerTableToolsExtension(editor);
+  registerTemplateInsertExtension(editor);
   registerTocExtension(editor);
 
 }

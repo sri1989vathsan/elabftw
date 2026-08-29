@@ -43,6 +43,7 @@ final class CustomMigrationRunner
         '017_template_version.sql',
         '018_step_details.sql',
         '019_template_version_history.sql',
+        '020_template_favorites.sql',
     );
 
     private Db $Db;

@@ -69,11 +69,10 @@
         {% for v in templateVersionsArr %}
           <div class='mb-3'>
             <span>{{ 'Version %d'|trans|format(v.version) }} — {{ v.published_by_fullname }} — <span class='relative-moment' title='{{ v.published_at }}'></span></span>
-            <button type='button' class='btn btn-sm btn-secondary ml-2' data-action='toggle-next' data-opened-icon='fa-eye-slash' data-closed-icon='fa-eye' aria-expanded='false' aria-controls='templateVersionBody_{{ v.id }}'>
+            <a href='template-version.php?id={{ v.id }}' target='_blank' rel='noopener' class='btn btn-sm btn-secondary ml-2'>
               <i class='fas fa-eye fa-fw'></i> {{ 'View'|trans }}
-            </button>
+            </a>
             <button type='button' class='btn btn-sm btn-secondary ml-2' data-action='restore-template-version' data-versionid='{{ v.id }}' data-version='{{ v.version }}'>{{ 'Restore this version'|trans }}</button>
-            <div hidden id='templateVersionBody_{{ v.id }}' class='border rounded p-2 mt-1 ml-4'>{{ v.body|raw }}</div>
           </div>
         {% else %}
           <p>{{ 'No published versions yet.'|trans }}</p>

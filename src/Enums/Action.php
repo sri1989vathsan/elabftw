@@ -32,6 +32,7 @@ enum Action: string
     case Finish = 'finish';
     case ForceLock = 'forcelock';
     case ForceUnlock = 'forceunlock';
+    case LinkTemplateSource = 'linktemplatesource';
     case Lock = 'lock';
     case Notif = 'notif';
     case NotifDestroy = 'notifdestroy';

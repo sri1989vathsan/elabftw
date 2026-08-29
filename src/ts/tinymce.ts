@@ -234,6 +234,9 @@ export function getTinymceBaseConfig(page: string): object {
   // unless the gated PyRAT experiment section is available.
   if (page === 'edit' && entity.type === EntityType.Experiment) {
     toolbar1 = toolbar1.replace('insert-link', 'insert-link insert-mouse');
+    // searchable/favouritable template picker, in addition to the stock
+    // Insert > Template… menu item still driven by the templates: callback below
+    toolbar1 = toolbar1.replace('insertsequence', 'insertsequence inserttemplate');
   }
 
   const isDark = isDarkTheme();
