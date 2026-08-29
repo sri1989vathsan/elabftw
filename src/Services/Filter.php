@@ -259,6 +259,8 @@ final class Filter
             'elabftw-note-heading',
             'elabftw-table-indent',
             'spreadsheet-coordinate',
+            'elabftw-sequence-embed',
+            'elabftw-sequence-embed-placeholder',
         ));
         // note: hyphens and word-break are not supported
         $config->set('CSS.AllowedProperties', array(
@@ -321,6 +323,9 @@ final class Filter
             $def->addAttribute('table', 'data-spreadsheet-style', 'Enum#standard,notebook,well-plate');
             $def->addAttribute('table', 'data-well-plate', 'Enum#6,12,24,48,96,384');
             $def->addAttribute('li', 'data-checked', 'Enum#true,false');
+            // allow 'data-sequence-json' attribute to store the inline sequence viewer data (base64-encoded JSON)
+            $def->addAttribute('div', 'data-sequence-json', 'Text');
+            $def->addAttribute('div', 'contenteditable', 'Enum#true,false');
         }
 
         $purifier = new HTMLPurifier($config);

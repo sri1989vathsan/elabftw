@@ -306,9 +306,14 @@
           <i class='fas {{ lockIcon }} fa-fw'></i>
         </button>
 
-        {# TEMPLATE VERSION: bumped and locked automatically on review approval #}
+        {# TEMPLATE VERSION #}
         {% if Entity.entityType.value == 'experiments_templates' %}
           <span class='badge badge-secondary mr-2' title='{{ 'Version'|trans }}'>v{{ Entity.entityData.version }}</span>
+          {% if not Entity.entityData.locked %}
+            <button type='button' title='{{ 'Publish new version'|trans }}' aria-label='{{ 'Publish new version'|trans }}' data-action='publish-template-version' class='btn btn-transparent mr-2'>
+              <i class='fas fa-file-signature fa-fw'></i> {{ 'Publish new version'|trans }}
+            </button>
+          {% endif %}
         {% endif %}
       {% endif %}
 

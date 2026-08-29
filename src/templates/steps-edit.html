@@ -66,11 +66,11 @@
           <br>
 
           {{ 'Reagent:'|trans }}
-          <span data-stepid='{{ step.id }}' data-target='reagent' class='step editable hl-hover p-1 rounded'>{{ step.reagent|default('') }}</span>
+          <span data-stepid='{{ step.id }}' data-target='reagent' data-isempty='{{ step.reagent is empty ? '1' : '0' }}' class='step editable hl-hover p-1 rounded'>{{ step.reagent is empty ? 'Click to add a reagent'|trans : step.reagent }}</span>
           {{ 'Quantity:'|trans }}
-          <span data-stepid='{{ step.id }}' data-target='quantity' class='step editable hl-hover p-1 rounded'>{{ step.quantity|default('') }}</span>
+          <span data-stepid='{{ step.id }}' data-target='quantity' data-isempty='{{ step.quantity is empty ? '1' : '0' }}' class='step editable hl-hover p-1 rounded'>{{ step.quantity is empty ? 'Click to add a quantity'|trans : step.quantity }}</span>
           {{ 'Duration (min):'|trans }}
-          <span data-stepid='{{ step.id }}' data-target='duration_minutes' class='step editable hl-hover p-1 rounded'>{{ step.duration_minutes|default('') }}</span>
+          <span data-stepid='{{ step.id }}' data-target='duration_minutes' data-isempty='{{ step.duration_minutes is empty ? '1' : '0' }}' class='step editable hl-hover p-1 rounded'>{{ step.duration_minutes is empty ? 'Click to add a duration'|trans : step.duration_minutes }}</span>
           <br>
 
           <div id='stepDeadlineDiv_{{ step.id }}'>
@@ -113,5 +113,15 @@
       </div>
     </div>
   </form>
+  {# Bulk add several steps at once, one per line #}
+  <button class='btn btn-link p-0 mt-2' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' type='button' aria-expanded='false' aria-controls='bulkAddStepsDiv'>
+    <i class='fas fa-caret-right fa-fw'></i> {{ 'Add multiple steps at once'|trans }}
+  </button>
+  <div hidden id='bulkAddStepsDiv' data-save-hidden='bulkAddStepsDiv' class='mt-2'>
+    <form aria-label='{{ 'Add multiple steps'|trans }}' id='bulkAddStepsForm'>
+      <textarea aria-label='{{ 'Add multiple steps'|trans }}' class='form-control' rows='5' placeholder='{{ 'One step per line'|trans }}' id='bulkAddStepsInput'></textarea>
+      <button class='btn btn-primary mt-2' data-action='create-steps-bulk' type='submit'>{{ 'Add steps'|trans }}</button>
+    </form>
+  </div>
 </div>
 <hr>

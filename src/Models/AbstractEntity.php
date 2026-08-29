@@ -529,22 +529,27 @@ abstract class AbstractEntity extends AbstractRest
                 reviewedBy: (int) $this->Users->userData['userid'],
             );
 
-            // A template is meant to be reused as-is once approved, so an
-            // approval also bumps its version and locks it, the same way a
-            // paper SOP revision gets a new number and the old one is
-            // retired. Rejections leave it editable for another round.
-            if ($decision === 'approved' && $this->entityType === EntityType::Templates) {
-                $sql = 'UPDATE experiments_templates
-                    SET version = version + 1, locked = 1, lockedby = :lockedby, locked_at = CURRENT_TIMESTAMP
-                    WHERE id = :id';
-                $req = $this->Db->prepare($sql);
-                $req->bindParam(':lockedby', $this->Users->userData['userid'], PDO::PARAM_INT);
-                $req->bindParam(':id', $this->id, PDO::PARAM_INT);
-                $this->Db->execute($req);
-            }
-
             $RequestActions = new RequestActions($this->Users, $this);
             $RequestActions->remove(RequestableAction::Review);
+            return $this->readOne();
+        }
+        // Explicit "Publish new version" action for templates: independent of
+        // the review workflow above, so teams that don't use formal review
+        // requests can still number and freeze a template revision.
+        if ($action === Action::PublishVersion) {
+            if ($this->entityType !== EntityType::Templates) {
+                throw new ImproperActionException('Publishing a version is only available for templates.');
+            }
+            $this->canOrExplode(AccessType::Write);
+            $sql = 'UPDATE experiments_templates
+                SET version = version + 1, locked = 1, lockedby = :lockedby, locked_at = CURRENT_TIMESTAMP
+                WHERE id = :id';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':lockedby', $this->Users->userData['userid'], PDO::PARAM_INT);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $Changelog = new Changelog($this);
+            $Changelog->create(new ContentParams('version_published', sprintf('Published version %d', ($this->entityData['version'] ?? 1) + 1)));
             return $this->readOne();
         }
         // for deleted or archived entities, allow specific actions (Restore & Unarchive)

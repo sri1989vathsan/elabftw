@@ -37,6 +37,7 @@ enum Action: string
     case NotifDestroy = 'notifdestroy';
     case PatchUser2Team = 'patchuser2team';
     case Pin = 'pin';
+    case PublishVersion = 'publishversion';
     case RemoveExclusiveEditMode = 'removeexclusiveeditmode';
     case Replace = 'replace';
     case Restore = 'restore';

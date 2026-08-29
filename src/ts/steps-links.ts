@@ -117,6 +117,23 @@ on('create-step', (_, event: Event) => {
   });
 });
 
+async function createStepsSequentially(lines: string[]): Promise<void> {
+  // steps must be created in order, so requests are sent sequentially rather than in parallel
+  for (const line of lines) {
+    await StepC.create(line);
+  }
+}
+
+on('create-steps-bulk', (_, event: Event) => {
+  event.preventDefault();
+  const input = document.getElementById('bulkAddStepsInput') as HTMLTextAreaElement;
+  const lines = input.value.split('\n').map(line => line.trim()).filter(line => line !== '');
+  if (lines.length === 0) return;
+  createStepsSequentially(lines).then(() => reloadElements(['stepsDiv']).then(() => {
+    input.value = '';
+  }));
+});
+
 on('step-update-deadline', (el: HTMLElement) => {
   const value = (document.getElementById('stepSelectDeadline_' + el.dataset.stepid) as HTMLSelectElement).value;
   const stepid = parseInt(el.dataset.stepid, 10);
@@ -179,10 +196,18 @@ const malleableStep = new Malle({
       .then(resp => resp.json())
       .then(json => original.dataset.target === Target.Body
         ? json.body
-        : json.deadline,
+        : json[original.dataset.target],
       );
   },
   listenOn: '.step.editable',
+  onEdit: (original, event, input) => {
+    // clear the "Click to add a ..." placeholder before editing starts
+    if (original.dataset.isempty === '1') {
+      (input as HTMLInputElement).value = '';
+      original.dataset.isempty = '0';
+      return true;
+    }
+  },
   returnedValueIsTrustedHtml: false,
   submit : i18next.t('save'),
   submitClasses: ['button', 'btn', 'btn-primary', 'mt-2'],

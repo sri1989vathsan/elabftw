@@ -118,6 +118,14 @@ on('do-requestable-action', (el: HTMLElement) => {
   }
 });
 
+on('publish-template-version', () => {
+  if (!confirm(i18next.t('publish-version-warning'))) return;
+  // reload the page to update the version badge and lock icon
+  ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.PublishVersion})
+    .then(() => window.location.href = `?mode=view&id=${entity.id}`)
+    .catch(error => notify.error(error));
+});
+
 on('submit-review-decision', (el: HTMLElement) => {
   const decision = el.dataset.decision;
   if (decision !== 'approved' && decision !== 'rejected') return;
