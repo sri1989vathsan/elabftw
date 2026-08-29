@@ -110,6 +110,7 @@ enum Action {
   RemoveExclusiveEditMode = 'removeexclusiveeditmode',
   Replace = 'replace',
   Restore = 'restore',
+  RestoreTemplateVersion = 'restoretemplateversion',
   RequestAction = 'requestaction',
   Review = 'review',
   SendOnboardingEmails = 'sendonboardingemails',

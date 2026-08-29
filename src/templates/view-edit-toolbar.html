@@ -71,6 +71,7 @@
             <button type='button' class='btn btn-link p-0' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' aria-expanded='false' aria-controls='templateVersionBody_{{ v.id }}'>
               <i class='fas fa-caret-right fa-fw'></i> {{ 'Version %d'|trans|format(v.version) }} — {{ v.published_by_fullname }} — <span class='relative-moment' title='{{ v.published_at }}'></span>
             </button>
+            <button type='button' class='btn btn-sm btn-secondary ml-2' data-action='restore-template-version' data-versionid='{{ v.id }}' data-version='{{ v.version }}'>{{ 'Restore this version'|trans }}</button>
             <div hidden id='templateVersionBody_{{ v.id }}' class='border rounded p-2 mt-1 ml-4'>{{ v.body|raw }}</div>
           </div>
         {% else %}

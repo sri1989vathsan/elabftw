@@ -126,6 +126,13 @@ on('publish-template-version', () => {
     .catch(error => notify.error(error));
 });
 
+on('restore-template-version', (el: HTMLElement) => {
+  if (!confirm(i18next.t('restore-version-warning', {version: el.dataset.version}))) return;
+  ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.RestoreTemplateVersion, version_id: parseInt(el.dataset.versionid, 10)})
+    .then(() => window.location.href = `?mode=edit&id=${entity.id}`)
+    .catch(error => notify.error(error));
+});
+
 on('submit-review-decision', (el: HTMLElement) => {
   const decision = el.dataset.decision;
   if (decision !== 'approved' && decision !== 'rejected') return;

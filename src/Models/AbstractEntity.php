@@ -562,6 +562,39 @@ abstract class AbstractEntity extends AbstractRest
             $Changelog->create(new ContentParams('version_published', sprintf('Published version %d', $newVersion)));
             return $this->readOne();
         }
+        // Restore a template's body to what it looked like at a previously
+        // published version, replacing the current (draft or locked) content.
+        // Unlocks the template so the restored content can be reviewed and
+        // adjusted before being published again.
+        if ($action === Action::RestoreTemplateVersion) {
+            if ($this->entityType !== EntityType::Templates) {
+                throw new ImproperActionException('Restoring a version is only available for templates.');
+            }
+            $this->canOrExplode(AccessType::Write);
+            $versionId = (int) ($params['version_id'] ?? 0);
+            if ($versionId <= 0) {
+                throw new ImproperActionException('A version to restore is required.');
+            }
+            $sql = 'SELECT body, version FROM custom_template_versions WHERE id = :id AND entity_id = :entity_id';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':id', $versionId, PDO::PARAM_INT);
+            $req->bindParam(':entity_id', $this->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $versionRow = $req->fetch(PDO::FETCH_ASSOC);
+            if (!$versionRow) {
+                throw new ImproperActionException('This version does not exist.');
+            }
+            $sql = 'UPDATE experiments_templates
+                SET body = :body, locked = 0, lockedby = NULL, locked_at = NULL
+                WHERE id = :id';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':body', $versionRow['body']);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $Changelog = new Changelog($this);
+            $Changelog->create(new ContentParams('version_restored', sprintf('Restored content from version %d', $versionRow['version'])));
+            return $this->readOne();
+        }
         // for deleted or archived entities, allow specific actions (Restore & Unarchive)
         $state = $this->entityData['state'] ?? null;
         // Allow RemoveExclusiveEditMode even on deleted entities: when navigating away from the edit page, a keepalive PATCH may be sent

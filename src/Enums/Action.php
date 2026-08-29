@@ -41,6 +41,7 @@ enum Action: string
     case RemoveExclusiveEditMode = 'removeexclusiveeditmode';
     case Replace = 'replace';
     case Restore = 'restore';
+    case RestoreTemplateVersion = 'restoretemplateversion';
     case Review = 'review';
     case SendOnboardingEmails = 'sendonboardingemails';
     case SetCanRead = 'setcanread';
