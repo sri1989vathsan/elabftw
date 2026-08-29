@@ -48,6 +48,15 @@
         </div>
         <div class='pl-2 step-static form-control-plaintext d-flex flex-wrap'>
           <span class='step {{ not disabled ? 'editable hl-hover' }} align-self-center {{- step.finished ? ' finished' }}' data-target='body' data-stepid='{{ step.id }}'>{{ step.body }}</span>
+          <span class='mx-1 align-self-center' title='{{ 'Reagent'|trans }}'><i class='fas fa-flask fa-fw text-muted'></i>
+            <span data-stepid='{{ step.id }}' data-target='reagent' data-isempty='{{ step.reagent is empty ? '1' : '0' }}' class='step editable hl-hover p-1 rounded'>{{ step.reagent is empty ? 'Click to add a reagent'|trans : step.reagent }}</span>
+          </span>
+          <span class='mx-1 align-self-center' title='{{ 'Quantity'|trans }}'><i class='fas fa-weight-hanging fa-fw text-muted'></i>
+            <span data-stepid='{{ step.id }}' data-target='quantity' data-isempty='{{ step.quantity is empty ? '1' : '0' }}' class='step editable hl-hover p-1 rounded'>{{ step.quantity is empty ? 'Click to add a quantity'|trans : step.quantity }}</span>
+          </span>
+          <span class='mx-1 align-self-center' title='{{ 'Duration (min)'|trans }}'><i class='fas fa-clock fa-fw text-muted'></i>
+            <span data-stepid='{{ step.id }}' data-target='duration_minutes' data-isempty='{{ step.duration_minutes is empty ? '1' : '0' }}' class='step editable hl-hover p-1 rounded'>{{ step.duration_minutes is empty ? 'Click to add a duration'|trans : step.duration_minutes }}</span>
+          </span>
           {% if step.finished %}
           <span class='mx-2 text-muted align-self-center'>
             {{ 'completed'|trans }} <span title='{{ step.finished_time }}' class='relative-moment'></span>
@@ -63,14 +72,6 @@
           {% else %}
             {{ 'Not finished'|trans }}
           {% endif %}
-          <br>
-
-          {{ 'Reagent:'|trans }}
-          <span data-stepid='{{ step.id }}' data-target='reagent' data-isempty='{{ step.reagent is empty ? '1' : '0' }}' class='step editable hl-hover p-1 rounded'>{{ step.reagent is empty ? 'Click to add a reagent'|trans : step.reagent }}</span>
-          {{ 'Quantity:'|trans }}
-          <span data-stepid='{{ step.id }}' data-target='quantity' data-isempty='{{ step.quantity is empty ? '1' : '0' }}' class='step editable hl-hover p-1 rounded'>{{ step.quantity is empty ? 'Click to add a quantity'|trans : step.quantity }}</span>
-          {{ 'Duration (min):'|trans }}
-          <span data-stepid='{{ step.id }}' data-target='duration_minutes' data-isempty='{{ step.duration_minutes is empty ? '1' : '0' }}' class='step editable hl-hover p-1 rounded'>{{ step.duration_minutes is empty ? 'Click to add a duration'|trans : step.duration_minutes }}</span>
           <br>
 
           <div id='stepDeadlineDiv_{{ step.id }}'>

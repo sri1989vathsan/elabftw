@@ -611,13 +611,23 @@ abstract class AbstractEntity extends AbstractRest
                 if ($templateId <= 0) {
                     throw new ImproperActionException('A template id is required.');
                 }
+                $sql = 'SELECT version FROM experiments_templates WHERE id = :template_id';
+                $req = $this->Db->prepare($sql);
+                $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
+                $this->Db->execute($req);
+                $templateVersion = $req->fetchColumn();
+                if ($templateVersion === false) {
+                    throw new ImproperActionException('This template does not exist.');
+                }
+
                 $sql = sprintf(
-                    'UPDATE %s SET created_from_type = :type, created_from_id = :template_id WHERE id = :id',
+                    'UPDATE %s SET created_from_type = :type, created_from_id = :template_id, created_from_version = :version WHERE id = :id',
                     $this->entityType->value,
                 );
                 $req = $this->Db->prepare($sql);
                 $req->bindValue(':type', EntityType::Templates->toInt(), PDO::PARAM_INT);
                 $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
+                $req->bindParam(':version', $templateVersion, PDO::PARAM_INT);
                 $req->bindParam(':id', $this->id, PDO::PARAM_INT);
                 $this->Db->execute($req);
             }
@@ -1154,6 +1164,20 @@ abstract class AbstractEntity extends AbstractRest
         ), $overrideCreateParams);
 
         $newId = $this->create(...$createParams);
+
+        // Freeze which template version this was created from: the template
+        // row itself can keep changing (or be published again) after this,
+        // and created_from_id alone would then point at stale content.
+        if ($sourceEntity->entityType === EntityType::Templates
+            && $this->entityType === EntityType::Experiments
+            && isset($source['version'])
+        ) {
+            $sql = 'UPDATE experiments SET created_from_version = :version WHERE id = :id';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':version', $source['version'], PDO::PARAM_INT);
+            $req->bindParam(':id', $newId, PDO::PARAM_INT);
+            $this->Db->execute($req);
+        }
 
         $fresh = new $this($this->Users, $newId);
 

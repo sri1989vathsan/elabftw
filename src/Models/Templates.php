@@ -105,7 +105,7 @@ final class Templates extends AbstractTemplateEntity
     /** Experiments created from this template (see created_from_type/created_from_id on experiments). */
     public function readExperimentsUsingThis(): array
     {
-        $sql = 'SELECT id, title, date, userid
+        $sql = 'SELECT id, title, date, userid, created_from_version
             FROM experiments
             WHERE created_from_type = :created_from_type AND created_from_id = :created_from_id
             ORDER BY date DESC';

@@ -7,7 +7,7 @@ import { escapeHTML } from '../misc';
 export function registerSequenceExtension(editor: Editor): void {
   editor.ui.registry.addIcon(
     'elabftw-sequence',
-    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 3c0 4 10 4 10 8s-10 4-10 8"/><path d="M17 3c0 4-10 4-10 8s10 4 10 8"/><path d="M8.3 6h7.4M8.3 18h7.4M6.6 11h10.8"/></svg>',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M7 3c0 4 10 4 10 8s-10 4-10 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M17 3c0 4-10 4-10 8s10 4 10 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M8.3 6h7.4M8.3 18h7.4M6.6 11h10.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
   );
 
   editor.ui.registry.addButton('insertsequence', {

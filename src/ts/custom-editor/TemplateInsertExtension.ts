@@ -8,7 +8,7 @@ import { Editor } from 'tinymce/tinymce';
 import { ApiC } from '../api';
 import { core } from '../core';
 import { entity } from '../getEntity';
-import { Action, Model } from '../interfaces';
+import { Action, EntityType, Model } from '../interfaces';
 import { escapeHTML } from '../misc';
 import { notify } from '../notify';
 
@@ -25,7 +25,7 @@ type Tab = 'all' | 'mine' | 'favorites';
 export function registerTemplateInsertExtension(editor: Editor): void {
   editor.ui.registry.addIcon(
     'elabftw-insert-template',
-    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M7.5 8h9M7.5 12h9M7.5 16h5" stroke-linecap="round"/></svg>',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="3" width="16" height="18" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.5 8h9M7.5 12h9M7.5 16h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
   );
   editor.ui.registry.addButton('inserttemplate', {
     icon: 'elabftw-insert-template',
@@ -36,7 +36,7 @@ export function registerTemplateInsertExtension(editor: Editor): void {
 
 function openTemplatePicker(editor: Editor): void {
   Promise.all([
-    ApiC.getJson(`${Model.Template}?full=1`),
+    ApiC.getJson(`${EntityType.Template}?full=1`),
     ApiC.getJson(Model.TemplateFavorite).catch(() => []),
   ]).then(([templates, favoriteIds]: [TemplateSummary[], number[]]) => {
     showPicker(editor, templates, new Set(favoriteIds));

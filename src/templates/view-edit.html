@@ -67,14 +67,31 @@
     </ul>
   {% endif %}
 </div>
+{# CREATED FROM A TEMPLATE #}
+{% if Entity.entityData.created_from_title %}
+  <div id='createdFromDiv'>
+    <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-scroll-btn='fa-file-import' data-scroll-btn-label='{{ 'Template'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='createdFromContent'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Created from %s'|trans|format(Entity.entityData.created_from_type_human) }}</h3>
+    <div id='createdFromContent' class='mt-2'>
+      <a href='{{ Entity.entityData.created_from_page }}?mode=view&id={{ Entity.entityData.created_from_id }}' class='btn btn-secondary btn-sm'>
+        <i class='fas fa-arrow-up-right-from-square mr-1'></i>{{ Entity.entityData.created_from_title }}
+      </a>
+      {% if Entity.entityData.created_from_version %}
+        <span class='badge badge-secondary ml-1'>{{ 'Version %d'|trans|format(Entity.entityData.created_from_version) }}</span>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
 {# EXPERIMENTS USING THIS TEMPLATE #}
 {% if templateUsedByArr %}
   <div id='templateUsedByDiv'>
-    <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='templateUsedByContent'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Used in %d experiment(s)'|trans|format(templateUsedByArr|length) }}</h3>
+    <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-scroll-btn='fa-file-invoice' data-scroll-btn-label='{{ 'Used in'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='templateUsedByContent'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Used in %d experiment(s)'|trans|format(templateUsedByArr|length) }}</h3>
     <ul id='templateUsedByContent' class='list-group mt-2'>
       {% for exp in templateUsedByArr %}
         <li class='list-group-item'>
           <a href='experiments.php?mode=view&id={{ exp.id }}'>{{ exp.title }}</a>
+          {% if exp.created_from_version %}
+            <span class='badge badge-secondary ml-1'>{{ 'Version %d'|trans|format(exp.created_from_version) }}</span>
+          {% endif %}
           <span class='smallgray ml-2'>{{ exp.date }}</span>
         </li>
       {% endfor %}
