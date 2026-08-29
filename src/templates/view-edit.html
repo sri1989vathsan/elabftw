@@ -50,6 +50,23 @@
     </ul>
   {% endif %}
 </div>
+{# REVIEW DECISIONS #}
+<div id='reviewDecisionsDiv'>
+  {% if entityReviewDecisionsArr %}
+    <ul class='list-group mt-2'>
+      {% for decision in entityReviewDecisionsArr %}
+        <li class='list-group-item'>
+          <i class='fas {{ decision.decision == "approved" ? "fa-check text-success" : "fa-xmark text-danger" }} mr-2'></i>
+          {{- (decision.decision == "approved" ? '%s approved this' : '%s rejected this')|trans|format(decision.reviewer_fullname) }}
+          <span title='{{ decision.reviewed_at }}' class='relative-moment text-nowrap smallgray ml-2'></span>
+          {% if decision.comment %}
+            <div class='mt-1 smallgray'>{{ decision.comment }}</div>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
 {# PROCUREMENT REQUESTS #}
 <div id='procurementRequestsDiv'>
   {% if entityProcurementRequestsArr %}

@@ -27,4 +27,5 @@ enum Meaning: int
     case Responsibility = 30;
     case Review = 40;
     case Safety = 50;
+    case Witness = 60;
 }

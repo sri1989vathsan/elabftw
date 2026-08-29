@@ -33,6 +33,28 @@
     </div>
   </div>
 </div>
+{# Modal for recording a review decision #}
+<div class='modal fade' id='reviewDecisionModal' tabindex='-1' role='dialog' aria-labelledby='reviewDecisionModalLabel'>
+  <div class='modal-dialog' role='document'>
+    <div class='modal-content'>
+      <div class='modal-header'>
+        <h5 class='modal-title' id='reviewDecisionModalLabel'>{{ 'Review'|trans }}</h5>
+        <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'>
+          <span aria-hidden='true'>&times;</span>
+        </button>
+      </div>
+      <div class='modal-body'>
+        <label for='reviewDecisionComment'>{{ 'Comment (optional)'|trans }}</label>
+        <textarea id='reviewDecisionComment' class='form-control' rows='3'></textarea>
+      </div>
+      <div class='modal-footer'>
+        <button type='button' class='btn btn-secondary' data-dismiss='modal'>{{ 'Close'|trans }}</button>
+        <button type='button' class='btn btn-danger' data-action='submit-review-decision' data-decision='rejected'>{{ 'Reject'|trans }}</button>
+        <button type='button' class='btn btn-primary' data-action='submit-review-decision' data-decision='approved'>{{ 'Approve'|trans }}</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% include 'duplicate-modal.html' %}
 
 {# Modal for timestamping #}

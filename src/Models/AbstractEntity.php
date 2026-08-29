@@ -488,8 +488,47 @@ abstract class AbstractEntity extends AbstractRest
     #[Override]
     public function patch(Action $action, array $params): array
     {
-        // a Review action doesn't do anything: TODO leave a comment
         if ($action === Action::Review) {
+            $decision = $params['decision'] ?? null;
+            if ($decision !== 'approved' && $decision !== 'rejected') {
+                throw new ImproperActionException('A review decision (approved or rejected) is required.');
+            }
+            $comment = $params['comment'] ?? null;
+            $comment = is_string($comment) && trim($comment) !== '' ? trim($comment) : null;
+
+            // Find who asked for this review before the request row below gets
+            // closed out (RequestActions::remove() archives it, and this
+            // query would no longer see it as "pending" afterward).
+            $requestedBy = null;
+            $sql = sprintf(
+                'SELECT requester_userid FROM %s_request_actions
+                    WHERE entity_id = :entity_id AND action = :action AND state = :state
+                    ORDER BY created_at DESC LIMIT 1',
+                $this->entityType->value,
+            );
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':entity_id', $this->id, PDO::PARAM_INT);
+            $req->bindValue(':action', RequestableAction::Review->value, PDO::PARAM_INT);
+            $req->bindValue(':state', State::Normal->value, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $requesterRow = $req->fetch(PDO::FETCH_ASSOC);
+            if ($requesterRow) {
+                $requestedBy = (int) $requesterRow['requester_userid'];
+            }
+
+            EntityReviewDecisions::create(
+                entityType: $this->entityType->value,
+                entityId: $this->id,
+                decision: $decision,
+                comment: $comment,
+                // Ordinary revisions are pruned (max 10, dropped once
+                // superseded), so an "approved version" keeps its own
+                // permanent copy of the body rather than pointing at one.
+                approvedBody: $decision === 'approved' ? ($this->entityData['body'] ?? '') : null,
+                requestedBy: $requestedBy,
+                reviewedBy: (int) $this->Users->userData['userid'],
+            );
+
             $RequestActions = new RequestActions($this->Users, $this);
             $RequestActions->remove(RequestableAction::Review);
             return $this->readOne();
@@ -508,7 +547,7 @@ abstract class AbstractEntity extends AbstractRest
 
         $requiredAccess = AccessType::Write;
         // some actions only require read access even if they are using PATCH verb
-        $readAccessActions = array(Action::Pin, Action::Sign, Action::Timestamp, Action::Bloxberg);
+        $readAccessActions = array(Action::Pin, Action::Sign, Action::Timestamp, Action::Bloxberg, Action::Witness);
         if (in_array($action, $readAccessActions, true)) {
             $requiredAccess = AccessType::Read;
             // allow uploading a file to that entity too

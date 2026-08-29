@@ -31,6 +31,7 @@ use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\FavTags;
 use Elabftw\Models\ItemsStatus;
 use Elabftw\Models\ItemsTypes;
+use Elabftw\Models\EntityReviewDecisions;
 use Elabftw\Models\RequestActions;
 use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\StorageUnits;
@@ -193,6 +194,10 @@ abstract class AbstractEntityController implements ControllerInterface
             'Entity' => $this->Entity,
             'entityProcurementRequestsArr' => $this->getEntityProcurementRequestsArr(),
             'entityRequestActionsArr' => $RequestActions->readAllFull(),
+            'entityReviewDecisionsArr' => EntityReviewDecisions::readAllForEntity(
+                $this->Entity->entityType->value,
+                $this->Entity->id ?? 0,
+            ),
             'experimentsFoldersArr' => $experimentsFoldersViewArr,
             'experimentsFoldersCreateArr' => $experimentsFoldersViewArr,
             'experimentsFoldersTreeArr' => $ExperimentsFoldersView->readAllRecursive(),
@@ -258,6 +263,10 @@ abstract class AbstractEntityController implements ControllerInterface
             'Entity' => $this->Entity,
             'entityProcurementRequestsArr' => $this->getEntityProcurementRequestsArr(),
             'entityRequestActionsArr' => $RequestActions->readAllFull(),
+            'entityReviewDecisionsArr' => EntityReviewDecisions::readAllForEntity(
+                $this->Entity->entityType->value,
+                $this->Entity->id ?? 0,
+            ),
             'experimentsFoldersArr' => $experimentsFoldersEditArr,
             'experimentsFoldersCreateArr' => $experimentsFoldersEditArr,
             'experimentsFoldersTreeArr' => $ExperimentsFoldersEdit->readAllRecursive(),
