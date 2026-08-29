@@ -101,4 +101,19 @@ final class Templates extends AbstractTemplateEntity
     {
         return 'users_canwrite_experiments_templates';
     }
+
+    /** Experiments created from this template (see created_from_type/created_from_id on experiments). */
+    public function readExperimentsUsingThis(): array
+    {
+        $sql = 'SELECT id, title, date, userid
+            FROM experiments
+            WHERE created_from_type = :created_from_type AND created_from_id = :created_from_id
+            ORDER BY date DESC';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':created_from_type', $this->entityType->toInt(), PDO::PARAM_INT);
+        $req->bindParam(':created_from_id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+
+        return $req->fetchAll();
+    }
 }

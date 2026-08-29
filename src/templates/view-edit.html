@@ -67,6 +67,20 @@
     </ul>
   {% endif %}
 </div>
+{# EXPERIMENTS USING THIS TEMPLATE #}
+{% if templateUsedByArr %}
+  <div id='templateUsedByDiv'>
+    <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='templateUsedByContent'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Used in %d experiment(s)'|trans|format(templateUsedByArr|length) }}</h3>
+    <ul id='templateUsedByContent' class='list-group mt-2'>
+      {% for exp in templateUsedByArr %}
+        <li class='list-group-item'>
+          <a href='experiments.php?mode=view&id={{ exp.id }}'>{{ exp.title }}</a>
+          <span class='smallgray ml-2'>{{ exp.date }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
 {# PROCUREMENT REQUESTS #}
 <div id='procurementRequestsDiv'>
   {% if entityProcurementRequestsArr %}

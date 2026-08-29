@@ -202,6 +202,9 @@ abstract class AbstractEntityController implements ControllerInterface
             'templateVersionsArr' => $this->Entity->entityType === EntityType::Templates
                 ? TemplateVersions::readAllForEntity($this->Entity->id ?? 0)
                 : array(),
+            'templateUsedByArr' => $this->Entity instanceof Templates
+                ? $this->Entity->readExperimentsUsingThis()
+                : array(),
             'experimentsFoldersArr' => $experimentsFoldersViewArr,
             'experimentsFoldersCreateArr' => $experimentsFoldersViewArr,
             'experimentsFoldersTreeArr' => $ExperimentsFoldersView->readAllRecursive(),
@@ -273,6 +276,9 @@ abstract class AbstractEntityController implements ControllerInterface
             ),
             'templateVersionsArr' => $this->Entity->entityType === EntityType::Templates
                 ? TemplateVersions::readAllForEntity($this->Entity->id ?? 0)
+                : array(),
+            'templateUsedByArr' => $this->Entity instanceof Templates
+                ? $this->Entity->readExperimentsUsingThis()
                 : array(),
             'experimentsFoldersArr' => $experimentsFoldersEditArr,
             'experimentsFoldersCreateArr' => $experimentsFoldersEditArr,
