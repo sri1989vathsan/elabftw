@@ -47,6 +47,7 @@ export default class CommandPalette {
     this.results = this.overlay.querySelector('.command-palette-results');
     this.entries = this.buildEntries();
     this.bindEvents();
+    document.getElementById('commandPaletteOpener')?.addEventListener('click', () => this.open());
   }
 
   private buildEntries(): PaletteEntry[] {
