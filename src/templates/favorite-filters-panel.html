@@ -46,15 +46,15 @@
       {{ 'Combine text with favorite categories, tags, statuses, and an owner. Results update as you check a filter.'|trans }}
     </p>
 
-    <div class='d-flex mb-3'>
+    <div class='d-flex mb-3 favorite-filter-toolbar'>
     <div class='dropdown flex-grow-1 mr-1'>
-      <button type='button' class='btn btn-secondary btn-block' data-toggle='dropdown' data-boundary='viewport' aria-haspopup='true' aria-expanded='false'>
+      <button type='button' class='btn btn-secondary btn-block' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>
         <i class='fas fa-sliders fa-fw mr-1' aria-hidden='true'></i>{{ 'Filters'|trans }}
       </button>
-      <div class='dropdown-menu favorite-filter-dropdown-menu p-3'>
+      <div class='dropdown-menu favorite-filter-dropdown-menu p-3' data-display='static'>
 
     <details class='favorite-filter-section mb-3' open>
-      <summary class='favorite-filter-section-summary h5 mb-0'>
+      <summary class='favorite-filter-section-summary mb-0'>
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
         {{ 'Categories'|trans }}
       </summary>
@@ -91,7 +91,7 @@
     </details>
 
     <details class='favorite-filter-section mb-3' open>
-      <summary class='favorite-filter-section-summary h5 mb-0'>
+      <summary class='favorite-filter-section-summary mb-0'>
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
         {{ 'My favorite tags'|trans }}
       </summary>
@@ -126,7 +126,7 @@
     </details>
 
     <details class='favorite-filter-section mb-3' open>
-      <summary class='favorite-filter-section-summary h5 mb-0'>
+      <summary class='favorite-filter-section-summary mb-0'>
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
         {{ 'Status'|trans }}
       </summary>
@@ -163,7 +163,7 @@
     </details>
 
     <details class='favorite-filter-section mb-3' open>
-      <summary class='favorite-filter-section-summary h5 mb-0'>
+      <summary class='favorite-filter-section-summary mb-0'>
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
         {{ 'Owner'|trans }}
       </summary>
@@ -207,7 +207,7 @@
       <button type='button' class='btn btn-secondary btn-block' data-toggle='dropdown' data-boundary='viewport' aria-haspopup='true' aria-expanded='false'>
         <i class='fas fa-gear fa-fw mr-1' aria-hidden='true'></i>{{ 'Manage'|trans }}
       </button>
-      <div class='dropdown-menu favorite-filter-dropdown-menu p-3'>
+      <div class='dropdown-menu favorite-filter-dropdown-menu p-3' data-display='static'>
       {% include 'favorite-filters-manage.html' %}
       </div>
     </div>

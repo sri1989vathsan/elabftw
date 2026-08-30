@@ -274,11 +274,42 @@ select.form-control {
   background: var(--white);
 }
 
+// Shared positioning context for the Filters/Manage dropdown row: with
+// data-display='static' on the menus below, Bootstrap skips Popper's
+// per-button transform and just positions each menu via plain CSS relative
+// to this row instead -- so both always sit flush left at the same place
+// and width, regardless of which of the two side-by-side buttons opened it.
+.favorite-filter-toolbar {
+  position: relative;
+}
+
 .favorite-filter-dropdown-menu {
   color: var(--strongest, #343a40);
+  font-size: 0.85rem;
+  left: 0;
   max-height: 70vh;
   overflow-y: auto;
-  width: 100%;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: auto;
+
+  .favorite-filter-section-summary {
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  p,
+  .color-medium,
+  .smallgray {
+    color: var(--strongest, #343a40);
+    font-size: 0.78rem;
+    opacity: 0.8;
+  }
+
+  label {
+    font-size: 0.85rem;
+  }
 }
 
 .dropdown-item {
