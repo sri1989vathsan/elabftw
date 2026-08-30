@@ -60,6 +60,44 @@ export default class FavoriteFilters extends SidePanel {
         this.apply();
       }
     });
+    this.bindOverlayToggles();
+  }
+
+  // Plain hidden-attribute toggling instead of Bootstrap's dropdown/Popper
+  // component: only one of Filters/Manage open at a time, closes on an
+  // outside click or Escape, and there's no per-button transform
+  // positioning to fight -- both overlays are placed with the same CSS,
+  // anchored to their own button, regardless of which one is open.
+  private bindOverlayToggles(): void {
+    const overlays: Record<string, HTMLElement | null> = {
+      filters: document.getElementById('favoriteFiltersOverlay'),
+      manage: document.getElementById('favoriteManageOverlay'),
+    };
+    const closeAll = (except?: string): void => {
+      Object.entries(overlays).forEach(([key, overlay]) => {
+        if (key !== except) overlay?.toggleAttribute('hidden', true);
+      });
+    };
+    document.querySelectorAll<HTMLElement>('[data-action="toggle-favorite-overlay"]').forEach(button => {
+      button.addEventListener('click', event => {
+        event.stopPropagation();
+        const key = button.dataset.target;
+        const overlay = key ? overlays[key] : null;
+        if (!overlay) return;
+        const opening = overlay.hasAttribute('hidden');
+        closeAll();
+        overlay.toggleAttribute('hidden', !opening);
+        button.setAttribute('aria-expanded', String(opening));
+      });
+    });
+    document.addEventListener('click', event => {
+      const target = event.target as HTMLElement;
+      if (target.closest('.favorite-filter-overlay-anchor')) return;
+      closeAll();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') closeAll();
+    });
   }
 
   show(): void {

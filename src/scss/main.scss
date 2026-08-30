@@ -274,16 +274,24 @@ select.form-control {
   background: var(--white);
 }
 
-// Shared positioning context for the Filters/Manage dropdown row: with
-// data-display='static' on the menus below, Bootstrap skips Popper's
-// per-button transform and just positions each menu via plain CSS relative
-// to this row instead -- so both always sit flush left at the same place
-// and width, regardless of which of the two side-by-side buttons opened it.
+// Self-controlled overlay (see FavoriteFilters.class.ts's
+// toggle-favorite-overlay handler): plain hidden-attribute toggling instead
+// of Bootstrap's dropdown/Popper component, so there's no per-button
+// transform positioning to fight -- both panels always anchor the same way,
+// flush left against the shared button row, regardless of which of the two
+// side-by-side buttons opened them.
 .favorite-filter-toolbar {
   position: relative;
 }
 
-.favorite-filter-dropdown-menu {
+.favorite-filter-overlay-anchor {
+  position: relative;
+}
+
+.favorite-filter-overlay {
+  background: var(--white, #fff);
+  border-radius: 0.75rem;
+  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.28);
   color: var(--strongest, #343a40);
   font-size: 0.85rem;
   left: 0;
@@ -291,8 +299,12 @@ select.form-control {
   overflow-y: auto;
   position: absolute;
   right: 0;
-  top: 100%;
-  width: auto;
+  top: calc(100% + 0.4rem);
+  z-index: 40;
+
+  &[hidden] {
+    display: none;
+  }
 
   .favorite-filter-section-summary {
     font-size: 0.9rem;
@@ -1661,8 +1673,12 @@ body.html-tool-workspace-resizing * {
 }
 
 .favorite-filter-section {
-  border: 1px solid var(--secondary);
-  border-radius: 0.25rem;
+  border: 0;
+  border-bottom: 1px solid var(--secondary);
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
 
   &[open] {
     .favorite-filter-section-chevron {
@@ -1675,7 +1691,7 @@ body.html-tool-workspace-resizing * {
     cursor: pointer;
     display: flex;
     list-style: none;
-    padding: 0.75rem;
+    padding: 0.6rem 0.15rem;
     user-select: none;
 
     &::-webkit-details-marker {
@@ -1689,32 +1705,24 @@ body.html-tool-workspace-resizing * {
   }
 
   .favorite-filter-section-body {
-    padding: 0 0.75rem 0.75rem;
+    padding: 0 0.15rem 0.6rem;
   }
 }
 
 .favorite-filter-option {
-  border-bottom: 1px solid var(--secondary);
-  min-height: 2.4rem;
-  padding: 0.3rem 0;
+  border-radius: 0.4rem;
+  min-height: 2.2rem;
+  padding: 0.25rem 0.3rem;
 
-  &:last-child {
-    border-bottom: 0;
+  &:hover {
+    background: var(--superlight);
   }
 
-  input[type='checkbox'] {
+  input[type='checkbox'],
+  input[type='radio'] {
     accent-color: var(--primary);
     height: 1rem;
     width: 1rem;
-  }
-}
-
-.favorite-filter-manage {
-  border-top: 1px solid var(--secondary);
-  padding-top: 0.75rem;
-
-  summary {
-    cursor: pointer;
   }
 }
 

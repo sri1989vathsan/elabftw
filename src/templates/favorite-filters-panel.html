@@ -47,11 +47,11 @@
     </p>
 
     <div class='d-flex mb-3 favorite-filter-toolbar'>
-    <div class='dropdown flex-grow-1 mr-1'>
-      <button type='button' class='btn btn-secondary btn-block' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>
+    <div class='favorite-filter-overlay-anchor flex-grow-1 mr-1'>
+      <button type='button' class='btn btn-secondary btn-block' data-action='toggle-favorite-overlay' data-target='filters' aria-haspopup='true' aria-expanded='false'>
         <i class='fas fa-sliders fa-fw mr-1' aria-hidden='true'></i>{{ 'Filters'|trans }}
       </button>
-      <div class='dropdown-menu favorite-filter-dropdown-menu p-3' data-display='static'>
+      <div id='favoriteFiltersOverlay' class='favorite-filter-overlay p-3' hidden>
 
     <details class='favorite-filter-section mb-3' open>
       <summary class='favorite-filter-section-summary mb-0'>
@@ -203,11 +203,11 @@
       </div>
     </div>
 
-    <div class='dropdown flex-grow-1 ml-1'>
-      <button type='button' class='btn btn-secondary btn-block' data-toggle='dropdown' data-boundary='viewport' aria-haspopup='true' aria-expanded='false'>
+    <div class='favorite-filter-overlay-anchor flex-grow-1 ml-1'>
+      <button type='button' class='btn btn-secondary btn-block' data-action='toggle-favorite-overlay' data-target='manage' aria-haspopup='true' aria-expanded='false'>
         <i class='fas fa-gear fa-fw mr-1' aria-hidden='true'></i>{{ 'Manage'|trans }}
       </button>
-      <div class='dropdown-menu favorite-filter-dropdown-menu p-3' data-display='static'>
+      <div id='favoriteManageOverlay' class='favorite-filter-overlay p-3' hidden>
       {% include 'favorite-filters-manage.html' %}
       </div>
     </div>
