@@ -15,6 +15,7 @@ import { registerSpreadsheetExtension } from './SpreadsheetExtension';
 import { registerTableToolsExtension } from './TableToolsExtension';
 import { registerTemplateInsertExtension } from './TemplateInsertExtension';
 import { registerTocExtension } from './TocExtension';
+import { registerUnifiedInsertExtension } from './UnifiedInsertExtension';
 
 export function registerCustomEditorExtensions(editor: Editor): void {
   editor.ui.registry.addIcon(
@@ -43,5 +44,6 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   registerTableToolsExtension(editor);
   registerTemplateInsertExtension(editor);
   registerTocExtension(editor);
+  registerUnifiedInsertExtension(editor);
 
 }
