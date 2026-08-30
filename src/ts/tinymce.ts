@@ -64,7 +64,7 @@ import '../js/tinymce-langs/zh_CN.js';
 import '../js/tinymce-langs/zh_TW.js';
 import '../js/tinymce-plugins/mention/plugin.js';
 import { EntityType, Model } from './interfaces';
-import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPostRequest } from './misc';
+import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPostRequest, setEntitySaveState } from './misc';
 import { ApiC } from './api';
 import { isSortable } from './TableSorting.class';
 import type { MathJaxObject } from '@mathjax/src/js/components/startup.js';
@@ -499,6 +499,7 @@ export function getTinymceBaseConfig(page: string): object {
       });
       // on edit page there is an autosave triggered
       if (page === 'edit') {
+        editor.on('Dirty', () => setEntitySaveState('unsaved'));
         editor.on('keydown', () => clearTimeout(typingTimer));
         editor.on('keyup', () => {
           clearTimeout(typingTimer);

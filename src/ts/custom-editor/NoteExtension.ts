@@ -88,11 +88,19 @@ export function registerNoteExtension(editor: Editor): void {
     insertNote(getNoteDefaults(), selectedText, selectedHtml, selectedText);
   };
 
-  const openDialog = (): void => {
+  const openDialog = (dataOverride?: NoteDialogData): void => {
     const defaults = getNoteDefaults();
     const bookmark = editor.selection.getBookmark(2, true);
     const selectedHtml = editor.selection.getContent({ format: 'html' }).trim();
     const selectedText = editor.selection.getContent({ format: 'text' }).trim();
+    const initialData: NoteDialogData = dataOverride ?? {
+      title: defaults.title,
+      includeInToc: defaults.includeInToc,
+      headingLevel: defaults.headingLevel,
+      content: selectedText,
+      saveAsDefault: false,
+    };
+    let lastData = initialData;
 
     editor.windowManager.open({
       title: 'Insert note',
@@ -136,17 +144,25 @@ export function registerNoteExtension(editor: Editor): void {
           },
         ],
       },
-      initialData: {
-        title: defaults.title,
-        includeInToc: defaults.includeInToc,
-        headingLevel: defaults.headingLevel,
-        content: selectedText,
-        saveAsDefault: false,
-      },
+      initialData,
       buttons: [
         { type: 'cancel', text: 'Cancel' },
         { type: 'submit', text: 'Insert note', primary: true },
       ],
+      onChange: api => {
+        lastData = api.getData() as NoteDialogData;
+      },
+      onCancel: () => {
+        const changed = lastData.title !== initialData.title
+          || lastData.content !== initialData.content
+          || lastData.includeInToc !== initialData.includeInToc
+          || lastData.headingLevel !== initialData.headingLevel;
+        if (changed && !window.confirm('Discard this note?')) {
+          // TinyMCE dialogs cannot be kept open past onCancel; reopen with
+          // whatever was typed so it isn't silently lost.
+          window.setTimeout(() => openDialog(lastData), 0);
+        }
+      },
       onSubmit: api => {
         const data = api.getData() as NoteDialogData;
         const nextDefaults: NoteDefaults = {

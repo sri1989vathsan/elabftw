@@ -17,6 +17,7 @@ import FoldersPanel from './FoldersPanel.class';
 import TocPanel from './TocPanel.class';
 import HtmlToolsPanel from './HtmlToolsPanel.class';
 import CalendarActivity from './CalendarActivity.class';
+import CommandPalette from './CommandPalette.class';
 import { clearLocalStorage, rememberLastSelected, selectLastSelected } from './localStorage';
 import {
   adjustHiddenState,
@@ -298,6 +299,33 @@ const TodolistC = new Todolist();
 const CalendarActivityC = new CalendarActivity();
 const TocPanelC = new TocPanel();
 const HtmlToolsPanelC = new HtmlToolsPanel();
+new CommandPalette();
+const entitySaveState = document.getElementById('entitySaveState');
+document.addEventListener('elabftw-save-state', event => {
+  if (!entitySaveState) return;
+  const detail = (event as CustomEvent<{ state: string; detail?: string }>).detail;
+  const state = detail?.state ?? 'unsaved';
+  const labels: Record<string, string> = {
+    saved: 'Saved',
+    saving: 'Saving…',
+    unsaved: 'Unsaved changes',
+    offline: 'Offline — changes kept locally',
+    error: 'Save failed — retrying when online',
+  };
+  const icons: Record<string, string> = {
+    saved: 'fa-check-circle',
+    saving: 'fa-spinner fa-spin',
+    unsaved: 'fa-circle',
+    offline: 'fa-cloud-arrow-down',
+    error: 'fa-triangle-exclamation',
+  };
+  entitySaveState.dataset.state = state;
+  const icon = entitySaveState.querySelector<HTMLElement>('i');
+  const label = entitySaveState.querySelector<HTMLElement>('span');
+  if (icon) icon.className = `fas ${icons[state] ?? icons.unsaved} fa-fw`;
+  if (label) label.textContent = labels[state] ?? labels.unsaved;
+  if (detail?.detail) entitySaveState.title = detail.detail;
+});
 const renderedBody = document.getElementById('body_view');
 if (renderedBody) {
   removeLegacyTableCollapse(renderedBody);

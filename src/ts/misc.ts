@@ -888,6 +888,14 @@ export async function saveStringAsFile(filename: string, content: string|Promise
 // Shared function to UPDATE ENTITY BODY via save shortcut and/or save button, or autosave
 let retrySaveWhenOnline = false;
 
+export type EntitySaveState = 'saved' | 'saving' | 'unsaved' | 'offline' | 'error';
+
+export function setEntitySaveState(state: EntitySaveState, detail = ''): void {
+  document.dispatchEvent(new CustomEvent('elabftw-save-state', {
+    detail: { state, detail, at: new Date().toISOString() },
+  }));
+}
+
 window.addEventListener('online', () => {
   if (!retrySaveWhenOnline) return;
   retrySaveWhenOnline = false;
@@ -899,6 +907,7 @@ export async function updateEntityBody(redirect = true): Promise<boolean> {
   const entity = getEntity();
   const body = editor.getContent();
   const saveStartedAt = Date.now();
+  setEntitySaveState('saving');
 
   return ApiC.patch(`${entity.type}/${entity.id}`, {body, notifOnSaved: redirect ? 0 : 1}).then(response => response.json()).then(json => {
     if (editor.type === 'tiny') {
@@ -914,6 +923,7 @@ export async function updateEntityBody(redirect = true): Promise<boolean> {
     }
     clearRecoveryDraft(entity.type, entity.id, body, saveStartedAt);
     retrySaveWhenOnline = false;
+    setEntitySaveState('saved', json.modified_at ?? '');
     return true;
   }).catch((error: Error & { status?: number }) => {
     // Preserve failed saves per entity. A later successful save clears only
@@ -925,6 +935,7 @@ export async function updateEntityBody(redirect = true): Promise<boolean> {
       // Temporary disconnects (including sleep/wake) should not force a reload.
       // The browser's online event retries the most recent editor content.
       retrySaveWhenOnline = true;
+      setEntitySaveState(navigator.onLine ? 'error' : 'offline');
     }
     return false;
   });

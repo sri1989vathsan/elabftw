@@ -2994,6 +2994,8 @@ export function openSpreadsheetModal(
     const ui = createOverlay(working, isEditing);
     let sheetContainer: HTMLDivElement | null = null;
     let worksheet: JssInstance = null;
+    let hasChanges = false;
+    let acceptsGridChanges = false;
     // jspreadsheet's formula engine can replace a raw formula with its
     // calculated value (or #ERROR) in getData(). Keep a separate source of
     // truth so rendering never destroys what the user entered.
@@ -3012,6 +3014,12 @@ export function openSpreadsheetModal(
     } | null = null;
     let rowResizePointerActive = false;
     document.body.appendChild(ui.overlay);
+    ui.overlay.querySelector('.inline-spreadsheet-dialog')?.addEventListener('input', () => {
+      hasChanges = true;
+    });
+    ui.overlay.querySelector('.inline-spreadsheet-dialog')?.addEventListener('change', () => {
+      hasChanges = true;
+    });
 
     const readRawData = (): AOA => {
       const worksheetData = worksheet?.getData?.();
@@ -3582,6 +3590,7 @@ export function openSpreadsheetModal(
         parseFormulas: false,
         onload: (spreadsheet: JssInstance): void => {
           bindAndHydrateWorksheet(spreadsheet?.worksheets ?? spreadsheet);
+          window.requestAnimationFrame(() => { acceptsGridChanges = true; });
         },
         onbeforechange: (
           _changedWorksheet: JssInstance,
@@ -3607,6 +3616,7 @@ export function openSpreadsheetModal(
         ): void => {
           worksheet = changedWorksheet;
           updateRawDataMirrorCell(changedCol, changedRow, newValue);
+          if (acceptsGridChanges) hasChanges = true;
           scheduleFormulaResultRender();
         },
         oneditionend: (
@@ -3621,15 +3631,19 @@ export function openSpreadsheetModal(
           scheduleFormulaResultRender();
         },
         oninsertrow: (changedWorksheet: JssInstance): void => {
+          if (acceptsGridChanges) hasChanges = true;
           syncMountedDimensions(changedWorksheet);
         },
         oninsertcolumn: (changedWorksheet: JssInstance): void => {
+          if (acceptsGridChanges) hasChanges = true;
           syncMountedDimensions(changedWorksheet);
         },
         ondeleterow: (changedWorksheet: JssInstance): void => {
+          if (acceptsGridChanges) hasChanges = true;
           syncMountedDimensions(changedWorksheet);
         },
         ondeletecolumn: (changedWorksheet: JssInstance): void => {
+          if (acceptsGridChanges) hasChanges = true;
           syncMountedDimensions(changedWorksheet);
         },
         onpaste: (changedWorksheet: JssInstance): void => {
@@ -4332,7 +4346,8 @@ export function openSpreadsheetModal(
       document.removeEventListener('keydown', onKey);
       ui.overlay.remove();
     };
-    const cancel = (): void => {
+    const cancel = (force = false): void => {
+      if (!force && hasChanges && !window.confirm('Discard unsaved spreadsheet changes?')) return;
       cleanup();
       reject(new Error('cancelled'));
     };
@@ -4341,7 +4356,7 @@ export function openSpreadsheetModal(
       // Escape is easy to hit out of habit. Unlike the explicit Cancel button,
       // guard it the same way backdrop clicks already are: don't silently
       // discard a fully-formatted spreadsheet.
-      if (window.confirm('Discard changes to this spreadsheet?')) cancel();
+      cancel();
     };
 
     ui.insertBtn.addEventListener('click', () => {
@@ -4372,7 +4387,7 @@ export function openSpreadsheetModal(
       resolve({ raw: result, computed });
     });
 
-    ui.cancelBtn.addEventListener('click', cancel);
+    ui.cancelBtn.addEventListener('click', () => cancel());
     ui.overlay.addEventListener('click', event => {
       if (event.target !== ui.overlay) return;
       // A backdrop click is easy to trigger while selecting or formatting a
