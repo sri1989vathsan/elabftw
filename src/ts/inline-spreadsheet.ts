@@ -3180,6 +3180,28 @@ export function openSpreadsheetModal(
       if (selectedRowHeights.size === 1) {
         ui.rowHeightInput.value = String([...selectedRowHeights][0]);
       }
+      // Context-sensitive formula toolbar: arithmetic needs two source cells
+      // (applyFormulaAction already refused with a status message otherwise --
+      // disabling the buttons up front is the same rule, just visible before
+      // the click instead of after), and a statistical function is only
+      // meaningful once the selection actually contains a number.
+      const selectionData = readRawData();
+      let hasNumericCell = false;
+      for (let row = startRow; row <= endRow && !hasNumericCell; row++) {
+        for (let col = startCol; col <= endCol; col++) {
+          const value = selectionData[row]?.[col];
+          const isNumeric = typeof value === 'number'
+            || (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value)));
+          if (isNumeric) {
+            hasNumericCell = true;
+            break;
+          }
+        }
+      }
+      ui.formulaButtons.forEach(button => {
+        button.disabled = cellCount < 2;
+      });
+      ui.formulaFunctionSelect.disabled = !hasNumericCell;
     };
 
     const formulaParenthesisBalance = (value: string): number => {

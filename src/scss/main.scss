@@ -1118,16 +1118,11 @@ tr:first-child td {
 }
 
 .unified-search-result {
-  // .list-group-item's background is --white; .side-panel sets its own text
-  // color to --white too (meant for the panel's dark chrome), so without an
-  // explicit dark color here the text is invisible against the card.
-  color: var(--strongest, #343a40);
-
-  small {
-    color: var(--mediumstrong);
-    display: block;
-  }
-
+  // Now rendered as a .favorite-filter-result card (dark sidebar chrome,
+  // same as the Experiments/Resources groups) rather than a white
+  // .list-group-item, so it inherits that class's colors -- nothing to
+  // override here beyond what's specific to tags/tasks/folders/headings
+  // entries: no per-selection insert buttons, just an optional click/link.
   a {
     color: inherit;
     display: block;

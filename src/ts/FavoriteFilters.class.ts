@@ -25,12 +25,21 @@ interface FavoriteFilterResult {
   fullname?: string | null;
 }
 
-interface TeamTag { id: number; tag: string; item_count?: number; }
 interface TodoTask { id: number; body: string; }
 interface ResultGroup {
   heading: string;
   items: { label: string; description: string; href?: string; onSelect?: () => void }[];
 }
+// Experiment/resource groups carry their raw results (instead of pre-built
+// display items) so renderGrouped() can render them with renderResult() --
+// same "Link"/"Add to text" insert actions as the single-target flow, which
+// the grouped search would otherwise lack entirely.
+interface EntityResultGroup {
+  heading: string;
+  target: FavoriteFilterTarget;
+  results: FavoriteFilterResult[];
+}
+type SearchResultGroup = ResultGroup | EntityResultGroup;
 
 const GROUPED_SEARCH_MIN_LENGTH = 2;
 const GROUPED_SEARCH_PER_GROUP_LIMIT = 8;
@@ -499,24 +508,6 @@ export default class FavoriteFilters extends SidePanel {
   // -- Grouped "search everything" (folded in from the former standalone
   // Unified Search panel) --------------------------------------------------
 
-  private headingResults(query: string): ResultGroup {
-    const items: ResultGroup['items'] = [];
-    const roots = [
-      document.getElementById('body_view'),
-      document.querySelector<HTMLIFrameElement>('.tox-edit-area iframe')?.contentDocument?.body,
-    ];
-    roots.forEach(root => root?.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6').forEach(heading => {
-      const label = heading.textContent?.trim();
-      if (!label || !label.toLowerCase().includes(query)) return;
-      items.push({
-        label,
-        description: 'Heading in this entry',
-        onSelect: () => heading.scrollIntoView({ behavior: 'smooth', block: 'center' }),
-      });
-    }));
-    return { heading: 'Headings in this entry', items: items.slice(0, GROUPED_SEARCH_PER_GROUP_LIMIT) };
-  }
-
   private folderResults(query: string): ResultGroup {
     const items: ResultGroup['items'] = [];
     document.querySelectorAll<HTMLAnchorElement>('#foldersPanel a[href]').forEach(link => {
@@ -531,36 +522,18 @@ export default class FavoriteFilters extends SidePanel {
     target: FavoriteFilterTarget,
     heading: string,
     query: string,
-  ): Promise<ResultGroup> {
+  ): Promise<EntityResultGroup> {
     const entityType = this.getTargetEntityType(target);
+    // An empty query omits fastq entirely rather than sending fastq= --
+    // that's a plain unfiltered listing (most recent first), not "match
+    // nothing", so "All" with no text still shows something per group.
+    const params = new URLSearchParams({ limit: String(GROUPED_SEARCH_PER_GROUP_LIMIT), scope: '3' });
+    if (query) params.set('fastq', query);
     try {
-      const results = await ApiC.getJson<FavoriteFilterResult[]>(
-        `${entityType}?limit=${GROUPED_SEARCH_PER_GROUP_LIMIT}&scope=3&fastq=${encodeURIComponent(query)}`,
-      );
-      const entries = Array.isArray(results) ? results : [];
-      return {
-        heading,
-        items: entries.map(result => ({
-          label: result.title || `Untitled ${this.getTargetLabel(target)}`,
-          description: result.category_title ?? '',
-          href: this.getResultUrl(target, result.id).toString(),
-        })),
-      };
+      const results = await ApiC.getJson<FavoriteFilterResult[]>(`${entityType}?${params.toString()}`);
+      return { heading, target, results: Array.isArray(results) ? results : [] };
     } catch {
-      return { heading, items: [] };
-    }
-  }
-
-  private async tagResults(query: string): Promise<ResultGroup> {
-    try {
-      const tags = await ApiC.getJson<TeamTag[]>(`teams/current/tags?q=${encodeURIComponent(query)}`);
-      const items = tags.slice(0, GROUPED_SEARCH_PER_GROUP_LIMIT).map(tag => ({
-        label: tag.tag,
-        description: typeof tag.item_count === 'number' ? `${tag.item_count} entries` : 'Tag',
-      }));
-      return { heading: 'Tags', items };
-    } catch {
-      return { heading: 'Tags', items: [] };
+      return { heading, target, results: [] };
     }
   }
 
@@ -581,7 +554,7 @@ export default class FavoriteFilters extends SidePanel {
     }
   }
 
-  private renderGrouped(groups: ResultGroup[], message?: string): void {
+  private renderGrouped(groups: SearchResultGroup[], message?: string): void {
     const results = document.getElementById('favoriteFilterResults');
     if (!results) return;
     results.replaceChildren();
@@ -592,7 +565,8 @@ export default class FavoriteFilters extends SidePanel {
       results.append(info);
       return;
     }
-    const nonEmpty = groups.filter(group => group.items.length > 0);
+    const groupSize = (group: SearchResultGroup): number => ('results' in group ? group.results.length : group.items.length);
+    const nonEmpty = groups.filter(group => groupSize(group) > 0);
     if (nonEmpty.length === 0) {
       const empty = document.createElement('p');
       empty.className = 'text-muted px-2';
@@ -605,27 +579,41 @@ export default class FavoriteFilters extends SidePanel {
       title.className = 'unified-search-group-title';
       title.textContent = group.heading;
       results.append(title);
-      const list = document.createElement('ul');
-      list.className = 'list-group mb-2';
+
+      if ('results' in group) {
+        // Experiments/resources: reuse the single-target flow's card
+        // renderer, so the same "Link"/"Add to text" insert actions (only
+        // offered in experiment edit mode) are available here too.
+        group.results.forEach(result => results.append(this.renderResult(result, group.target)));
+        return;
+      }
+
+      // Tags/tasks/folders/headings: same transparent dark-chrome card as
+      // renderResult() produces for experiments/resources, instead of
+      // Bootstrap's .list-group-item (opaque --white background) -- these
+      // are non-linkable entries so they don't need renderResult() itself,
+      // but they still need to look like part of the same result list.
       group.items.forEach(item => {
-        const entry = document.createElement('li');
-        entry.className = 'list-group-item unified-search-result';
-        entry.innerHTML = `<strong></strong>${item.description ? '<small></small>' : ''}`;
+        const entry = document.createElement('article');
+        entry.className = 'favorite-filter-result unified-search-result';
+        entry.innerHTML = `<strong class="favorite-filter-result-link"></strong>`
+          + `${item.description ? '<p class="favorite-filter-result-meta mb-0"></p>' : ''}`;
         entry.querySelector('strong').textContent = item.label;
-        const small = entry.querySelector('small');
-        if (small) small.textContent = item.description;
+        const meta = entry.querySelector('p');
+        if (meta) meta.textContent = item.description;
         if (item.href) {
           const link = document.createElement('a');
+          link.className = 'favorite-filter-result-link';
           link.href = item.href;
-          link.append(...Array.from(entry.childNodes));
-          entry.replaceChildren(link);
+          const label = entry.querySelector('strong');
+          link.textContent = label.textContent;
+          label.replaceWith(link);
         } else if (item.onSelect) {
           entry.style.cursor = 'pointer';
           entry.addEventListener('click', item.onSelect);
         }
-        list.append(entry);
+        results.append(entry);
       });
-      results.append(list);
     });
   }
 
@@ -634,27 +622,30 @@ export default class FavoriteFilters extends SidePanel {
     const count = document.getElementById('favoriteFilterResultsCount');
     const fullResults = document.getElementById('favoriteFilterFullResults') as HTMLAnchorElement | null;
     const requestId = ++this.requestSequence;
+    const loadingMessage = query ? 'Searching…' : 'Loading everything…';
     count?.toggleAttribute('hidden', true);
     fullResults?.toggleAttribute('hidden', true);
     if (status) {
       status.removeAttribute('hidden');
-      status.textContent = 'Searching…';
+      status.textContent = loadingMessage;
     }
-    this.renderGrouped([], 'Searching…');
+    this.renderGrouped([], loadingMessage);
 
     const groups = await Promise.all([
       this.groupedEntityResults('experiments', 'Experiments', query),
       this.groupedEntityResults('resources', 'Resources', query),
       this.groupedEntityResults('experiments_templates', 'Experiment templates', query),
       this.groupedEntityResults('items_types', 'Resource templates', query),
-      this.tagResults(query),
       this.taskResults(query),
       Promise.resolve(this.folderResults(query)),
-      Promise.resolve(this.headingResults(query)),
     ]);
     if (requestId !== this.requestSequence) return;
     this.renderGrouped(groups);
-    if (status) status.textContent = 'Searching everything for matches.';
+    if (status) {
+      status.textContent = query
+        ? 'Searching everything for matches.'
+        : 'Showing recent entries across everything.';
+    }
     this.resultsLoaded = true;
   }
 
@@ -669,21 +660,15 @@ export default class FavoriteFilters extends SidePanel {
 
     const query = document.querySelector<HTMLInputElement>('[data-favorite-filter-text]')?.value.trim() ?? '';
     const target = this.getTarget();
-    if (!this.hasDetailedFilters() && query.length >= GROUPED_SEARCH_MIN_LENGTH) {
+    // "All" has no single-entity-type listing of its own -- it always shows
+    // everything grouped, with or without a query (an empty query just means
+    // each group's own default/most-recent listing instead of a match list).
+    if (target === 'all') {
       void this.runGroupedSearch(query.toLowerCase());
       return;
     }
-    // "All" has no single listing of its own -- it only searches everything
-    // once there's a query (handled above). With no query, prompt instead of
-    // silently falling back to one specific entity type's default listing.
-    if (target === 'all') {
-      results.replaceChildren();
-      count.toggleAttribute('hidden', true);
-      fullResults.toggleAttribute('hidden', true);
-      status.removeAttribute('hidden');
-      status.textContent = 'Type at least 2 characters to search everything, '
-        + 'or pick a specific type in Filters to browse a list.';
-      this.resultsLoaded = true;
+    if (!this.hasDetailedFilters() && query.length >= GROUPED_SEARCH_MIN_LENGTH) {
+      void this.runGroupedSearch(query.toLowerCase());
       return;
     }
     fullResults.removeAttribute('hidden');
