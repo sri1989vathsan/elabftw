@@ -70,7 +70,7 @@ export default class CommandPalette {
       { label: 'Insert link', description: 'Insert a web, file/folder or LabCollector link', icon: 'fa-link', keywords: 'url file folder', action: () => editorAction('Insert a web') },
       { label: 'Open folders', description: 'Browse personal, bookmarked and team folders', icon: 'fa-folder-tree', keywords: 'sidebar navigation', action: () => click('#foldersPanelOpener') },
       { label: 'Open filters', description: 'Search and filter experiments or resources', icon: 'fa-filter', keywords: 'tags category owner status', action: () => click('#favoritesPanelOpener') },
-      { label: 'Search everything', description: 'Search experiments, resources, tags, tasks, folders and headings at once', icon: 'fa-magnifying-glass', keywords: 'unified find', action: () => click('#unifiedSearchPanelOpener') },
+      { label: 'Search everything', description: 'Search experiments, resources, templates, tags, tasks, folders and headings at once', icon: 'fa-magnifying-glass', keywords: 'unified find filters favorites', action: () => click('#favoritesPanelOpener') },
       { label: 'Open tasks', description: 'View tasks and steps', icon: 'fa-list-check', keywords: 'todo reminder', action: () => click('#todolistPanelOpener') },
       { label: 'Open calendar', description: 'View tasks and document activity by date', icon: 'fa-calendar', keywords: 'agenda activity', action: () => click('#calendarActivityPanelOpener') },
       { label: 'Open table of contents', description: 'Navigate headings in the current entry', icon: 'fa-list-ul', keywords: 'toc headers', action: () => click('#tocPanelOpener') },

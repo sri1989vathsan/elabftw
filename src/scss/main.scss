@@ -1103,7 +1103,12 @@ tr:first-child td {
 }
 
 .unified-search-group-title {
-  color: var(--mediumstrong);
+  // Rendered directly on the sidebar's own dark chrome (not inside the white
+  // .favorite-filter-overlay card), so it needs the chrome's own muted-text
+  // variable -- var(--mediumstrong) is a light-background color and comes
+  // out barely visible here, same failure mode documented on
+  // .favorite-filter-overlay above.
+  color: var(--chrome-muted);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.05em;

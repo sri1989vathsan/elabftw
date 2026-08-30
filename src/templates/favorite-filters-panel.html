@@ -1,10 +1,22 @@
-{% set favoriteFilterTarget = 'experiments' %}
-{% if scriptName == 'database.php' or (Entity is defined and Entity.entityType.value == 'items') %}
-  {% set favoriteFilterTarget = 'resources' %}
-{% elseif scriptName == 'templates.php' or (Entity is defined and Entity.entityType.value == 'experiments_templates') %}
-  {% set favoriteFilterTarget = 'experiments_templates' %}
-{% elseif scriptName == 'resources-templates.php' or (Entity is defined and Entity.entityType.value == 'items_types') %}
-  {% set favoriteFilterTarget = 'items_types' %}
+{# "All" is the default -- it's what makes typing in the text box search
+   everything (experiments, resources, templates, tags, tasks, folders,
+   headings) at once. A specific target is only pre-selected when the URL
+   already carries an actual category/status/owner filter for it (e.g. via
+   the "Full list" link), so re-opening the panel still reflects what's
+   applied. #}
+{% set hasActiveFilterParams = App.Request.query.get('category') is not empty
+  or App.Request.query.get('status') is not empty
+  or App.Request.query.get('owner') is not empty %}
+{% set favoriteFilterTarget = 'all' %}
+{% if hasActiveFilterParams %}
+  {% set favoriteFilterTarget = 'experiments' %}
+  {% if scriptName == 'database.php' or (Entity is defined and Entity.entityType.value == 'items') %}
+    {% set favoriteFilterTarget = 'resources' %}
+  {% elseif scriptName == 'templates.php' or (Entity is defined and Entity.entityType.value == 'experiments_templates') %}
+    {% set favoriteFilterTarget = 'experiments_templates' %}
+  {% elseif scriptName == 'resources-templates.php' or (Entity is defined and Entity.entityType.value == 'items_types') %}
+    {% set favoriteFilterTarget = 'items_types' %}
+  {% endif %}
 {% endif %}
 {% set activeCategoryIds = App.Request.query.get('category')|split(',') %}
 {% set activeStatusIds = App.Request.query.get('status')|split(',') %}
@@ -14,15 +26,7 @@
 <div class='side-panel' id='favoritesPanel' data-current-target='{{ favoriteFilterTarget }}' hidden>
   <button type='button' data-action='toggle-sidepanel' data-target='favorites' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
   <div class='p-3'>
-    <h3 class='mb-3'><i class='fas fa-filter mr-2'></i>{{ 'Favorite filters'|trans }}</h3>
-
-    <label for='favoriteFilterTarget'>{{ 'Filter'|trans }}</label>
-    <select id='favoriteFilterTarget' class='form-control mb-3'>
-      <option value='experiments' {{ favoriteFilterTarget == 'experiments' ? 'selected' }}>{{ 'Experiments'|trans }}</option>
-      <option value='resources' {{ favoriteFilterTarget == 'resources' ? 'selected' }}>{{ 'Resources'|trans }}</option>
-      <option value='experiments_templates' {{ favoriteFilterTarget == 'experiments_templates' ? 'selected' }}>{{ 'Experiment templates'|trans }}</option>
-      <option value='items_types' {{ favoriteFilterTarget == 'items_types' ? 'selected' }}>{{ 'Resource templates'|trans }}</option>
-    </select>
+    <h3 class='mb-3'><i class='fas fa-magnifying-glass mr-2'></i>{{ 'Search'|trans }}</h3>
 
     <label for='favoriteFilterText'>{{ 'Text'|trans }}</label>
     <div class='input-group input-group-sm favorite-filter-text-group mb-2'>
@@ -34,8 +38,8 @@
         class='form-control'
         type='search'
         value='{{ App.Request.query.getString('q')|e('html_attr') }}'
-        placeholder='{{ 'Search title and body'|trans }}'
-        aria-label='{{ 'Search title and body'|trans }}'
+        placeholder='{{ 'Search experiments, resources, templates, tags, tasks, folders…'|trans }}'
+        aria-label='{{ 'Search experiments, resources, templates, tags, tasks, folders…'|trans }}'
         data-favorite-filter-text
       >
     </div>
@@ -43,7 +47,7 @@
     <div id='favoriteActiveFiltersDiv' class='favorite-active-filters mb-2' hidden aria-live='polite'></div>
 
     <p class='small color-medium'>
-      {{ 'Combine text with favorite categories, tags, statuses, and an owner. Results update as you check a filter.'|trans }}
+      {{ 'Type to search everything at once, or use Filters below to narrow one entry type by category, tag, status, and owner.'|trans }}
     </p>
 
     <div class='d-flex mb-3 favorite-filter-toolbar'>
@@ -54,6 +58,15 @@
     </div>
 
       <div id='favoriteFiltersOverlay' class='favorite-filter-overlay p-2' hidden>
+
+    <label for='favoriteFilterTarget'>{{ 'Type'|trans }}</label>
+    <select id='favoriteFilterTarget' class='form-control mb-3'>
+      <option value='all' {{ favoriteFilterTarget == 'all' ? 'selected' }}>{{ 'All'|trans }}</option>
+      <option value='experiments' {{ favoriteFilterTarget == 'experiments' ? 'selected' }}>{{ 'Experiments'|trans }}</option>
+      <option value='resources' {{ favoriteFilterTarget == 'resources' ? 'selected' }}>{{ 'Resources'|trans }}</option>
+      <option value='experiments_templates' {{ favoriteFilterTarget == 'experiments_templates' ? 'selected' }}>{{ 'Experiment templates'|trans }}</option>
+      <option value='items_types' {{ favoriteFilterTarget == 'items_types' ? 'selected' }}>{{ 'Resource templates'|trans }}</option>
+    </select>
 
     <details class='favorite-filter-section mb-3' open>
       <summary class='favorite-filter-section-summary mb-0'>

@@ -15,7 +15,6 @@ import ScrollButtons from './ScrollButtons.class';
 import FavoriteFilters from './FavoriteFilters.class';
 import FoldersPanel from './FoldersPanel.class';
 import TocPanel from './TocPanel.class';
-import UnifiedSearchPanel from './UnifiedSearchPanel.class';
 import HtmlToolsPanel from './HtmlToolsPanel.class';
 import CalendarActivity from './CalendarActivity.class';
 import CommandPalette from './CommandPalette.class';
@@ -299,7 +298,6 @@ const FoldersPanelC = new FoldersPanel();
 const TodolistC = new Todolist();
 const CalendarActivityC = new CalendarActivity();
 const TocPanelC = new TocPanel();
-const UnifiedSearchPanelC = new UnifiedSearchPanel();
 const HtmlToolsPanelC = new HtmlToolsPanel();
 new CommandPalette();
 const entitySaveState = document.getElementById('entitySaveState');
@@ -393,9 +391,6 @@ if (openedSidePanel === 'toc') {
 }
 if (openedSidePanel === 'html-tools') {
   HtmlToolsPanelC.toggle();
-}
-if (openedSidePanel === 'unified-search') {
-  UnifiedSearchPanelC.toggle();
 }
 const requestedCalendar = new URLSearchParams(window.location.search);
 if (requestedCalendar.get('calendar') === 'activity'
@@ -828,7 +823,7 @@ on('destroy-favfilter', (el: HTMLElement) => {
   }
 });
 
-on('apply-favorite-filters', () => FavoriteFiltersC.apply());
+on('apply-favorite-filters', () => FavoriteFiltersC.applyAndClose());
 on('clear-favorite-filters', () => FavoriteFiltersC.clear());
 
 on('insert-param-and-reload', async (el: HTMLElement) => {
@@ -881,8 +876,6 @@ on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
     SidePanelC = FavoriteFiltersC;
   } else if (el.dataset.target === 'calendar-activity') {
     SidePanelC = CalendarActivityC;
-  } else if (el.dataset.target === 'unified-search') {
-    SidePanelC = UnifiedSearchPanelC;
   } else {
     SidePanelC = TodolistC;
   }
