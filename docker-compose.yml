@@ -20,7 +20,7 @@ services:
       - elabftw-exports:/var/lib/elabftw/exports
 
   migration-init:
-    image: elabftw/elabimg:codex-operations-hardening
+    image: elabftw/elabimg:codex-usability-improvements
     build:
       context: .
       dockerfile: containers/elabimg/Dockerfile
@@ -88,7 +88,7 @@ services:
       - elabftw-net
 
   web:
-    image: elabftw/elabimg:codex-operations-hardening
+    image: elabftw/elabimg:codex-usability-improvements
     build:
       context: .
       dockerfile: containers/elabimg/Dockerfile
@@ -203,7 +203,7 @@ services:
   maintenance:
     profiles:
       - maintenance
-    image: elabftw/elabimg:codex-operations-hardening
+    image: elabftw/elabimg:codex-usability-improvements
     build:
       context: .
       dockerfile: containers/elabimg/Dockerfile
