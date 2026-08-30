@@ -85,14 +85,23 @@ export default class UnifiedSearchPanel extends SidePanel {
     return { heading: 'Folders', items };
   }
 
-  private async entityResults(entityType: EntityType.Experiment | EntityType.Item, query: string): Promise<ResultGroup> {
+  private async entityResults(
+    entityType: EntityType.Experiment | EntityType.Item | EntityType.Template | EntityType.ItemType,
+    query: string,
+  ): Promise<ResultGroup> {
+    const info: Record<string, { heading: string; page: string }> = {
+      [EntityType.Experiment]: { heading: 'Experiments', page: 'experiments' },
+      [EntityType.Item]: { heading: 'Resources', page: 'database' },
+      [EntityType.Template]: { heading: 'Experiment templates', page: 'templates' },
+      [EntityType.ItemType]: { heading: 'Resource templates', page: 'resources-templates' },
+    };
+    const { heading, page } = info[entityType];
     try {
       const results = await ApiC.getJson(
         `${entityType}?limit=${PER_GROUP_LIMIT}&scope=3&fastq=${encodeURIComponent(query)}`,
       ) as SearchEntity[];
-      const page = entityType === EntityType.Experiment ? 'experiments' : 'database';
       return {
-        heading: entityType === EntityType.Experiment ? 'Experiments' : 'Resources',
+        heading,
         items: results.map(result => ({
           label: result.title ?? `#${result.id}`,
           description: result.category_title ?? '',
@@ -100,7 +109,7 @@ export default class UnifiedSearchPanel extends SidePanel {
         })),
       };
     } catch {
-      return { heading: entityType === EntityType.Experiment ? 'Experiments' : 'Resources', items: [] };
+      return { heading, items: [] };
     }
   }
 
@@ -194,6 +203,8 @@ export default class UnifiedSearchPanel extends SidePanel {
     const groups = await Promise.all([
       this.entityResults(EntityType.Experiment, query),
       this.entityResults(EntityType.Item, query),
+      this.entityResults(EntityType.Template, query),
+      this.entityResults(EntityType.ItemType, query),
       this.tagResults(query),
       this.taskResults(query),
       Promise.resolve(this.folderResults(query)),

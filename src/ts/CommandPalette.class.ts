@@ -47,21 +47,6 @@ export default class CommandPalette {
     this.results = this.overlay.querySelector('.command-palette-results');
     this.entries = this.buildEntries();
     this.bindEvents();
-    this.addLauncher();
-  }
-
-  private addLauncher(): void {
-    const buttonBar = document.getElementById('sidepanel-buttons');
-    if (!buttonBar || document.getElementById('commandPaletteOpener')) return;
-    const button = document.createElement('button');
-    button.id = 'commandPaletteOpener';
-    button.type = 'button';
-    button.className = 'sidepanel-btn sidepanel-closed command-palette-opener';
-    button.title = 'Search and commands (Ctrl/Cmd + K)';
-    button.setAttribute('aria-label', button.title);
-    button.innerHTML = '<i class="fas fa-magnifying-glass fa-fw" aria-hidden="true"></i>';
-    button.addEventListener('click', () => this.open());
-    buttonBar.prepend(button);
   }
 
   private buildEntries(): PaletteEntry[] {
