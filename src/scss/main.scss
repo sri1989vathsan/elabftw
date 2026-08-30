@@ -313,7 +313,15 @@ select.form-control {
     display: none;
   }
 
-  .favorite-filter-section-summary {
+  // !important is required here: .side-panel { .color-medium, .text-muted
+  // { color: var(--chrome-muted) !important; } } (main.scss, ~line 1227)
+  // force-applies the sidebar's own pale muted-chrome color to any matching
+  // element inside it, including this white card -- a non-important
+  // override can never win against that regardless of specificity.
+  .favorite-filter-section-summary,
+  h3,
+  h4 {
+    color: #23272b !important;
     font-size: 0.85rem;
     font-weight: 600;
   }
@@ -321,13 +329,28 @@ select.form-control {
   p,
   .color-medium,
   .smallgray,
+  .text-muted,
   label {
-    color: #495057;
+    color: #495057 !important;
     font-size: 0.75rem;
   }
 
   .favorite-filter-option label {
-    color: #23272b;
+    color: #23272b !important;
+  }
+
+  // Same leak: .side-panel { .fas, .far, h3, h4, label { color:
+  // var(--chrome-fg); } } colors every icon for the dark sidebar chrome
+  // (invisible/wrong-colored against this white card) -- e.g. the trash
+  // icon on each "remove from favorites" button.
+  .fas,
+  .far {
+    color: #495057 !important;
+  }
+
+  .btn-primary .fas,
+  .btn-primary .far {
+    color: #ffffff !important;
   }
 
   .form-control,
