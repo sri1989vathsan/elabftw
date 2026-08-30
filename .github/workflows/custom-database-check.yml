@@ -1,0 +1,105 @@
+name: Check custom database migrations
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/sql/custom/**'
+      - 'src/Elabftw/CustomMigrationRunner.php'
+      - 'src/Commands/*CustomDatabase.php'
+      - 'containers/elabimg/**'
+      - '.github/workflows/custom-database-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  fresh-and-idempotent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create isolated CI environment
+        run: |
+          cp .env.example .env
+          sed -i 's/replace-with-a-long-random-password/custom-ci-password/' .env
+          sed -i 's/replace-with-a-different-long-random-password/custom-ci-root-password/' .env
+          sed -i 's|replace-with-output-from-generate-defuse-key|def00000195a92432f2ebb86bf6e9b9646b45ea955cab7b8f2d96ba2259a85c9e09b04647078c425c5392cb631fa3d9816974bbe8e458d61e16f897ef36c0def362458fd|' .env
+      - name: Build and migrate a fresh installation
+        run: docker compose up -d --build --wait web
+      - name: Verify custom migrations and idempotence
+        run: |
+          docker compose exec -T web bin/console custom:db:check
+          docker compose exec -T web bin/console custom:db:update
+          docker compose exec -T web bin/console custom:db:check
+          expected=$(find src/sql/custom -maxdepth 1 -type f -name '*.sql' | wc -l)
+          applied=$(docker compose exec -T mysql mysql -N -uelabftw -pcustom-ci-password elabftw -e 'SELECT COUNT(*) FROM custom_schema_migrations')
+          test "$applied" -eq "$expected"
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Stop test stack
+        if: always()
+        run: docker compose down -v
+
+  upgrade-from-official-base:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Export the official base used by this fork
+        run: |
+          mkdir /tmp/elabftw-official-base
+          git archive 12ddfaf38^1 | tar -x -C /tmp/elabftw-official-base
+          test ! -d /tmp/elabftw-official-base/src/sql/custom
+      - name: Build official-base and current images only from Git
+        run: |
+          docker build -t elabftw/official-base-ci -f /tmp/elabftw-official-base/containers/elabimg/Dockerfile /tmp/elabftw-official-base
+          docker build -t elabftw/operations-hardening-ci -f containers/elabimg/Dockerfile .
+      - name: Start an empty MySQL database
+        run: |
+          docker network create elabftw-upgrade-ci
+          docker run -d --name elabftw-upgrade-mysql --network elabftw-upgrade-ci \
+            -e MYSQL_ROOT_PASSWORD=root-ci-password \
+            -e MYSQL_DATABASE=elabftw \
+            -e MYSQL_USER=elabftw \
+            -e MYSQL_PASSWORD=custom-ci-password \
+            mysql:8.4
+          for attempt in $(seq 1 60); do
+            docker exec elabftw-upgrade-mysql mysqladmin ping -uroot -proot-ci-password && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Install official database and upgrade into custom migrations
+        run: |
+          common_env=(
+            -e DB_HOST=elabftw-upgrade-mysql
+            -e DB_PORT=3306
+            -e DB_NAME=elabftw
+            -e DB_USER=elabftw
+            -e DB_PASSWORD=custom-ci-password
+            -e SECRET_KEY=def00000195a92432f2ebb86bf6e9b9646b45ea955cab7b8f2d96ba2259a85c9e09b04647078c425c5392cb631fa3d9816974bbe8e458d61e16f897ef36c0def362458fd
+            -e SERVER_NAME=localhost
+            -e SITE_URL=https://localhost
+            -e DISABLE_HTTPS=false
+            -e ENABLE_LETSENCRYPT=false
+            -e PHP_TIMEZONE=UTC
+            -e TZ=UTC
+          )
+          docker run --rm --network elabftw-upgrade-ci "${common_env[@]}" \
+            --entrypoint /elabftw/bin/init elabftw/official-base-ci db:install
+          docker run --rm --network elabftw-upgrade-ci "${common_env[@]}" \
+            --entrypoint /elabftw/bin/console elabftw/operations-hardening-ci custom:db:update
+          docker run --rm --network elabftw-upgrade-ci "${common_env[@]}" \
+            --entrypoint /elabftw/bin/console elabftw/operations-hardening-ci custom:db:check
+          docker run --rm --network elabftw-upgrade-ci "${common_env[@]}" \
+            --entrypoint /elabftw/bin/console elabftw/operations-hardening-ci custom:db:update
+      - name: Remove upgrade containers
+        if: always()
+        run: |
+          docker rm -f elabftw-upgrade-mysql || true
+          docker network rm elabftw-upgrade-ci || true

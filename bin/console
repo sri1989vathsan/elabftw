@@ -103,5 +103,7 @@ $Application->add(new MigrateUploads());
 $Application->add(new ExperimentsTimestamp());
 $Application->add(new CalendarActivityBackfill());
 $Application->add(new PruneCustomHistory());
+$Application->add(new Maintenance());
+$Application->add(new CustomDiagnostics((int) $Config->configArr['schema'], $customSqlFs));
 
 $Application->run();

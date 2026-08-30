@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Elabftw\Models;
 
+use Elabftw\Elabftw\CanSqlBuilder;
+use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\IllegalActionException;
 use Elabftw\Exceptions\ImproperActionException;
@@ -20,11 +22,14 @@ use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Users\Users;
 use Elabftw\Params\CommentParam;
 use Elabftw\Services\Filter;
+use Elabftw\Services\SlowOperationTimer;
 use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
 
 use function array_key_exists;
+use function count;
+use function _;
 
 /**
  * Shared hierarchical folders for experiments and resources.
@@ -148,26 +153,28 @@ final class ExperimentsFolders extends AbstractRest
      */
     public function readExperimentsInFolder(?int $folderId = null): array
     {
+        $canRead = (new CanSqlBuilder($this->requester, AccessType::Read))->getCanFilter();
         if ($folderId === null) {
             // Read experiments with no folder (root level)
-            $sql = 'SELECT id, title, date, created_at, modified_at
-                FROM experiments
-                WHERE folder_id IS NULL
-                AND team = :team
-                AND state = 1
-                ORDER BY modified_at DESC';
+            $sql = 'SELECT entity.id, entity.title, entity.date, entity.created_at, entity.modified_at
+                FROM experiments AS entity
+                WHERE entity.folder_id IS NULL
+                AND entity.team = :team
+                AND entity.state = 1' . $canRead . '
+                ORDER BY entity.modified_at DESC';
             $req = $this->Db->prepare($sql);
         } else {
-            $sql = 'SELECT id, title, date, created_at, modified_at
-                FROM experiments
-                WHERE folder_id = :folder_id
-                AND team = :team
-                AND state = 1
-                ORDER BY modified_at DESC';
+            $sql = 'SELECT entity.id, entity.title, entity.date, entity.created_at, entity.modified_at
+                FROM experiments AS entity
+                WHERE entity.folder_id = :folder_id
+                AND entity.team = :team
+                AND entity.state = 1' . $canRead . '
+                ORDER BY entity.modified_at DESC';
             $req = $this->Db->prepare($sql);
             $req->bindParam(':folder_id', $folderId, PDO::PARAM_INT);
         }
         $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $req->bindValue(':userid', $this->requester->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         return $req->fetchAll();
     }
@@ -309,6 +316,9 @@ final class ExperimentsFolders extends AbstractRest
      */
     public function readHierarchyRows(): array
     {
+        $Timer = SlowOperationTimer::start('folder_hierarchy', array(
+            'team_id' => (int) $this->requester->userData['team'],
+        ));
         $sql = "WITH RECURSIVE folder_hierarchy AS (
             SELECT
                 id,
@@ -381,10 +391,12 @@ final class ExperimentsFolders extends AbstractRest
         $req = $this->Db->prepare($sql);
         $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
         $this->Db->execute($req);
-        return (new CustomUiDescriptions())->enrichRows(
+        $rows = (new CustomUiDescriptions())->enrichRows(
             CustomUiDescriptions::EXPERIMENT_FOLDER,
             $req->fetchAll(),
         );
+        $Timer->finish(count($rows));
+        return $rows;
     }
 
     /** @return list<int> Current user's bookmarked folder ids. */
