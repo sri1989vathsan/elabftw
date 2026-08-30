@@ -1015,6 +1015,29 @@ tr:first-child td {
   text-align: center;
 }
 
+.unified-search-group-title {
+  color: var(--mediumstrong);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin: 0.6rem 0 0.25rem;
+  padding: 0 0.25rem;
+  text-transform: uppercase;
+}
+
+.unified-search-result {
+  small {
+    color: var(--mediumstrong);
+    display: block;
+  }
+
+  a {
+    color: inherit;
+    display: block;
+    text-decoration: none;
+  }
+}
+
 .entity-save-state {
   align-items: center;
   border-radius: 1rem;
