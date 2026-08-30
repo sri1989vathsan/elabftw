@@ -575,45 +575,62 @@ export default class FavoriteFilters extends SidePanel {
       return;
     }
     nonEmpty.forEach(group => {
-      const title = document.createElement('div');
-      title.className = 'unified-search-group-title';
-      title.textContent = group.heading;
-      results.append(title);
+      // Each type gets its own collapsible section (same <details>/<summary>
+      // pattern as Categories/Status/Owner in the Filters overlay) with a
+      // divider between sections, instead of one flat list where the type
+      // boundary was only a small uppercase label easy to miss while scrolling.
+      const section = document.createElement('details');
+      section.className = 'favorite-filter-section';
+      section.open = true;
+      const summary = document.createElement('summary');
+      summary.className = 'favorite-filter-section-summary';
+      const chevron = document.createElement('i');
+      chevron.className = 'fas fa-chevron-right fa-fw favorite-filter-section-chevron';
+      chevron.setAttribute('aria-hidden', 'true');
+      const label = document.createElement('span');
+      label.className = 'unified-search-group-title mb-0';
+      label.textContent = group.heading;
+      summary.append(chevron, label);
+      section.append(summary);
+
+      const body = document.createElement('div');
+      body.className = 'favorite-filter-section-body';
 
       if ('results' in group) {
         // Experiments/resources: reuse the single-target flow's card
         // renderer, so the same "Link"/"Add to text" insert actions (only
         // offered in experiment edit mode) are available here too.
-        group.results.forEach(result => results.append(this.renderResult(result, group.target)));
-        return;
+        group.results.forEach(result => body.append(this.renderResult(result, group.target)));
+      } else {
+        // Tasks/folders: same transparent dark-chrome card as renderResult()
+        // produces for experiments/resources, instead of Bootstrap's
+        // .list-group-item (opaque --white background) -- these are
+        // non-linkable entries so they don't need renderResult() itself, but
+        // they still need to look like part of the same result list.
+        group.items.forEach(item => {
+          const entry = document.createElement('article');
+          entry.className = 'favorite-filter-result unified-search-result';
+          entry.innerHTML = `<strong class="favorite-filter-result-link"></strong>`
+            + `${item.description ? '<p class="favorite-filter-result-meta mb-0"></p>' : ''}`;
+          entry.querySelector('strong').textContent = item.label;
+          const meta = entry.querySelector('p');
+          if (meta) meta.textContent = item.description;
+          if (item.href) {
+            const link = document.createElement('a');
+            link.className = 'favorite-filter-result-link';
+            link.href = item.href;
+            const itemLabel = entry.querySelector('strong');
+            link.textContent = itemLabel.textContent;
+            itemLabel.replaceWith(link);
+          } else if (item.onSelect) {
+            entry.style.cursor = 'pointer';
+            entry.addEventListener('click', item.onSelect);
+          }
+          body.append(entry);
+        });
       }
-
-      // Tags/tasks/folders/headings: same transparent dark-chrome card as
-      // renderResult() produces for experiments/resources, instead of
-      // Bootstrap's .list-group-item (opaque --white background) -- these
-      // are non-linkable entries so they don't need renderResult() itself,
-      // but they still need to look like part of the same result list.
-      group.items.forEach(item => {
-        const entry = document.createElement('article');
-        entry.className = 'favorite-filter-result unified-search-result';
-        entry.innerHTML = `<strong class="favorite-filter-result-link"></strong>`
-          + `${item.description ? '<p class="favorite-filter-result-meta mb-0"></p>' : ''}`;
-        entry.querySelector('strong').textContent = item.label;
-        const meta = entry.querySelector('p');
-        if (meta) meta.textContent = item.description;
-        if (item.href) {
-          const link = document.createElement('a');
-          link.className = 'favorite-filter-result-link';
-          link.href = item.href;
-          const label = entry.querySelector('strong');
-          link.textContent = label.textContent;
-          label.replaceWith(link);
-        } else if (item.onSelect) {
-          entry.style.cursor = 'pointer';
-          entry.addEventListener('click', item.onSelect);
-        }
-        results.append(entry);
-      });
+      section.append(body);
+      results.append(section);
     });
   }
 
