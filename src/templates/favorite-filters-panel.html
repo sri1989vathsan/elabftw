@@ -46,6 +46,11 @@
       {{ 'Combine text with favorite categories, tags, statuses, and an owner. Results update as you check a filter.'|trans }}
     </p>
 
+    <details class='favorite-filter-sections mb-3'>
+      <summary class='font-weight-bold mb-2'>
+        <i class='fas fa-sliders fa-fw mr-1' aria-hidden='true'></i>{{ 'Filters (categories, tags, status, owner)'|trans }}
+      </summary>
+
     <details class='favorite-filter-section mb-3' open>
       <summary class='favorite-filter-section-summary h5 mb-0'>
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
@@ -193,6 +198,7 @@
         <i class='fas fa-xmark fa-fw mr-1'></i>{{ 'Clear'|trans }}
       </button>
     </div>
+    </details>
 
     <section class='favorite-filter-results-section mb-3' aria-labelledby='favoriteFilterResultsHeading'>
       <div class='d-flex align-items-center justify-content-between mb-2'>
