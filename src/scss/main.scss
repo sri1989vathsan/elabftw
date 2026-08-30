@@ -1043,6 +1043,32 @@ tr:first-child td {
   }
 }
 
+.favorite-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.favorite-filter-chip {
+  align-items: center;
+  background: color-mix(in srgb, var(--primary, #167b85) 12%, var(--white, #fff));
+  border: 1px solid color-mix(in srgb, var(--primary, #167b85) 35%, transparent);
+  border-radius: 1rem;
+  color: var(--strongest, #343a40);
+  display: inline-flex;
+  font-size: 0.78rem;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+
+  &:hover {
+    background: color-mix(in srgb, var(--primary, #167b85) 20%, var(--white, #fff));
+  }
+
+  i {
+    color: var(--primary, #167b85);
+  }
+}
+
 .entity-save-state {
   align-items: center;
   border-radius: 1rem;

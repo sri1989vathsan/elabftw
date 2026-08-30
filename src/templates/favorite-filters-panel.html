@@ -1,6 +1,10 @@
 {% set favoriteFilterTarget = 'experiments' %}
 {% if scriptName == 'database.php' or (Entity is defined and Entity.entityType.value == 'items') %}
   {% set favoriteFilterTarget = 'resources' %}
+{% elseif scriptName == 'templates.php' or (Entity is defined and Entity.entityType.value == 'experiments_templates') %}
+  {% set favoriteFilterTarget = 'experiments_templates' %}
+{% elseif scriptName == 'resources-templates.php' or (Entity is defined and Entity.entityType.value == 'items_types') %}
+  {% set favoriteFilterTarget = 'items_types' %}
 {% endif %}
 {% set activeCategoryIds = App.Request.query.get('category')|split(',') %}
 {% set activeStatusIds = App.Request.query.get('status')|split(',') %}
@@ -16,6 +20,8 @@
     <select id='favoriteFilterTarget' class='form-control mb-3'>
       <option value='experiments' {{ favoriteFilterTarget == 'experiments' ? 'selected' }}>{{ 'Experiments'|trans }}</option>
       <option value='resources' {{ favoriteFilterTarget == 'resources' ? 'selected' }}>{{ 'Resources'|trans }}</option>
+      <option value='experiments_templates' {{ favoriteFilterTarget == 'experiments_templates' ? 'selected' }}>{{ 'Experiment templates'|trans }}</option>
+      <option value='items_types' {{ favoriteFilterTarget == 'items_types' ? 'selected' }}>{{ 'Resource templates'|trans }}</option>
     </select>
 
     <label for='favoriteFilterText'>{{ 'Text'|trans }}</label>
@@ -34,8 +40,10 @@
       >
     </div>
 
+    <div id='favoriteActiveFiltersDiv' class='favorite-active-filters mb-2' hidden aria-live='polite'></div>
+
     <p class='small color-medium'>
-      {{ 'Combine text with favorite categories, tags, statuses, and an owner. Apply filters searches all accessible entries.'|trans }}
+      {{ 'Combine text with favorite categories, tags, statuses, and an owner. Results update as you check a filter.'|trans }}
     </p>
 
     <details class='favorite-filter-section mb-3' open>
@@ -202,8 +210,11 @@
       <div id='favoriteFilterResults' class='favorite-filter-results' aria-live='polite'></div>
     </section>
 
+    <hr>
     <details class='favorite-filter-manage'>
-      <summary class='font-weight-bold mb-2'>{{ 'Manage favorites'|trans }}</summary>
+      <summary class='font-weight-bold mb-2 color-medium'>
+        <i class='fas fa-gear fa-fw mr-1' aria-hidden='true'></i>{{ 'Manage favorites (create new categories, tags…)'|trans }}
+      </summary>
 
       <label for='favoriteNewCategoryName'>{{ 'Create a new category'|trans }}</label>
       <div class='input-group mb-3'>

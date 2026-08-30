@@ -9,7 +9,13 @@ import { EntityType, LinkSubModel } from './interfaces';
 import { escapeHTML, reloadElements } from './misc';
 import SidePanel from './SidePanel.class';
 
-type FavoriteFilterTarget = 'experiments' | 'resources';
+type FavoriteFilterTarget = 'experiments' | 'resources' | 'experiments_templates' | 'items_types';
+// Templates share the same category/status tables as their parent entity
+// type (see EntityType::toCategoryTable/toStatusTable server-side), so the
+// existing favorite categories/tags/statuses -- grouped by 'experiments' or
+// 'resources' only -- apply to their templates too, without needing a
+// second, duplicate set of favorites.
+type FavoriteCategoryGroup = 'experiments' | 'resources';
 
 interface FavoriteFilterResult {
   id: number;
@@ -23,6 +29,8 @@ export default class FavoriteFilters extends SidePanel {
   private resultsLoaded = false;
   private requestSequence = 0;
 
+  private textFilterTimer: number | null = null;
+
   constructor() {
     super('favorites');
     this.panelId = 'favoritesPanel';
@@ -33,8 +41,25 @@ export default class FavoriteFilters extends SidePanel {
         event.preventDefault();
         this.apply();
       });
+      textFilter.addEventListener('input', () => {
+        if (this.textFilterTimer !== null) window.clearTimeout(this.textFilterTimer);
+        this.textFilterTimer = window.setTimeout(() => this.apply(), 300);
+      });
       textFilter.dataset.favoriteFilterReady = 'true';
     }
+    // Delegated (not per-checkbox) so it survives reloadSections() swapping
+    // the checkboxes out for freshly rendered ones after a favorite is
+    // added/removed. Results now update as soon as a filter is toggled,
+    // instead of only when "Apply filters" is clicked.
+    const panel = document.getElementById(this.panelId);
+    panel?.addEventListener('change', event => {
+      const target = event.target as HTMLElement;
+      if (target.matches(
+        '[data-favorite-filter-category], [data-favorite-filter-tag], [data-favorite-filter-status], [data-favorite-filter-owner]',
+      )) {
+        this.apply();
+      }
+    });
   }
 
   show(): void {
@@ -61,10 +86,14 @@ export default class FavoriteFilters extends SidePanel {
     target.dataset.lazyOwnerOptions = '0';
   }
 
+  private getCategoryGroup(target: FavoriteFilterTarget = this.getTarget()): FavoriteCategoryGroup {
+    return target === 'resources' || target === 'items_types' ? 'resources' : 'experiments';
+  }
+
   updateTarget(): void {
-    const target = this.getTarget();
+    const categoryGroup = this.getCategoryGroup();
     document.querySelectorAll<HTMLElement>('[data-favorite-target-group]').forEach(group => {
-      const isActive = group.dataset.favoriteTargetGroup === target;
+      const isActive = group.dataset.favoriteTargetGroup === categoryGroup;
       group.toggleAttribute('hidden', !isActive);
       group.querySelectorAll<HTMLInputElement>('input').forEach(input => {
         input.disabled = !isActive;
@@ -111,11 +140,13 @@ export default class FavoriteFilters extends SidePanel {
 
   getTarget(): FavoriteFilterTarget {
     const select = document.getElementById('favoriteFilterTarget') as HTMLSelectElement | null;
-    return select?.value === 'resources' ? 'resources' : 'experiments';
+    const value = select?.value;
+    if (value === 'resources' || value === 'experiments_templates' || value === 'items_types') return value;
+    return 'experiments';
   }
 
   private getFilterParams(): URLSearchParams {
-    const target = this.getTarget();
+    const categoryGroup = this.getCategoryGroup();
     const params = new URLSearchParams();
     // Always search the complete accessible listing. Reusing the current page
     // could unintentionally retain "My experiments", a query, or pagination.
@@ -128,7 +159,7 @@ export default class FavoriteFilters extends SidePanel {
 
     const categories = Array.from(
       document.querySelectorAll<HTMLInputElement>(
-        `[data-favorite-filter-category][data-category-type="${target}"]:checked`,
+        `[data-favorite-filter-category][data-category-type="${categoryGroup}"]:checked`,
       ),
       input => input.value,
     );
@@ -138,7 +169,7 @@ export default class FavoriteFilters extends SidePanel {
 
     const statuses = Array.from(
       document.querySelectorAll<HTMLInputElement>(
-        `[data-favorite-filter-status][data-status-type="${target}"]:checked`,
+        `[data-favorite-filter-status][data-status-type="${categoryGroup}"]:checked`,
       ),
       input => input.value,
     );
@@ -157,16 +188,41 @@ export default class FavoriteFilters extends SidePanel {
     return params;
   }
 
+  private getTargetPath(target: FavoriteFilterTarget): string {
+    switch (target) {
+    case 'resources': return '/database.php';
+    case 'experiments_templates': return '/templates.php';
+    case 'items_types': return '/resources-templates.php';
+    default: return '/experiments.php';
+    }
+  }
+
+  private getTargetLabel(target: FavoriteFilterTarget): string {
+    switch (target) {
+    case 'resources': return 'resource';
+    case 'experiments_templates': return 'experiment template';
+    case 'items_types': return 'resource template';
+    default: return 'experiment';
+    }
+  }
+
+  private getTargetEntityType(target: FavoriteFilterTarget): EntityType {
+    switch (target) {
+    case 'resources': return EntityType.Item;
+    case 'experiments_templates': return EntityType.Template;
+    case 'items_types': return EntityType.ItemType;
+    default: return EntityType.Experiment;
+    }
+  }
+
   private getListingUrl(): URL {
-    const targetPath = this.getTarget() === 'experiments' ? '/experiments.php' : '/database.php';
-    const url = new URL(targetPath, window.location.origin);
+    const url = new URL(this.getTargetPath(this.getTarget()), window.location.origin);
     url.search = this.getFilterParams().toString();
     return url;
   }
 
   private getResultUrl(target: FavoriteFilterTarget, id: number): URL {
-    const targetPath = target === 'experiments' ? '/experiments.php' : '/database.php';
-    const url = new URL(targetPath, window.location.origin);
+    const url = new URL(this.getTargetPath(target), window.location.origin);
     url.searchParams.set('mode', 'view');
     url.searchParams.set('id', String(id));
     url.hash = 'pageTitle';
@@ -180,7 +236,10 @@ export default class FavoriteFilters extends SidePanel {
   }
 
   private canInsertResultLink(target: FavoriteFilterTarget, resultId: number): boolean {
-    return this.isExperimentEditMode()
+    // Templates aren't linkable entities on an experiment the way another
+    // experiment or resource is -- only offer the "attach" action for those.
+    return (target === 'experiments' || target === 'resources')
+      && this.isExperimentEditMode()
       && !(target === 'experiments' && resultId === entity.id);
   }
 
@@ -196,8 +255,8 @@ export default class FavoriteFilters extends SidePanel {
     const link = document.createElement('a');
     link.className = 'favorite-filter-result-link flex-grow-1';
     link.href = this.getResultUrl(target, result.id).toString();
-    link.textContent = result.title || `Untitled ${target === 'experiments' ? 'experiment' : 'resource'}`;
-    link.title = `Open ${target === 'experiments' ? 'experiment' : 'resource'}`;
+    link.textContent = result.title || `Untitled ${this.getTargetLabel(target)}`;
+    link.title = `Open ${this.getTargetLabel(target)}`;
     if (this.isExperimentEditMode()
       && !(target === 'experiments' && result.id === entity.id)
     ) {
@@ -308,6 +367,43 @@ export default class FavoriteFilters extends SidePanel {
     }
   }
 
+  // A single glance at what's actually applied, instead of having to scroll
+  // back up through every collapsible section to remember what's checked.
+  // Each chip removes just that one filter and re-searches immediately.
+  private renderActiveChips(): void {
+    const container = document.getElementById('favoriteActiveFiltersDiv');
+    if (!container) return;
+    const chips: { label: string; onRemove: () => void }[] = [];
+
+    const textFilter = document.querySelector<HTMLInputElement>('[data-favorite-filter-text]');
+    if (textFilter?.value.trim()) {
+      const value = textFilter.value.trim();
+      chips.push({ label: `Text: ${value}`, onRemove: () => { textFilter.value = ''; this.apply(); } });
+    }
+
+    document.querySelectorAll<HTMLInputElement>(
+      '[data-favorite-filter-category]:checked, [data-favorite-filter-tag]:checked, '
+      + '[data-favorite-filter-status]:checked, [data-favorite-filter-owner]:checked',
+    ).forEach(input => {
+      if (input.disabled) return; // belongs to a hidden (inactive target) group
+      const label = document.querySelector(`label[for="${input.id}"]`)?.textContent?.trim() ?? input.value;
+      chips.push({ label, onRemove: () => { input.checked = false; this.apply(); } });
+    });
+
+    container.replaceChildren();
+    container.toggleAttribute('hidden', chips.length === 0);
+    chips.forEach(chip => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'favorite-filter-chip';
+      button.title = `Remove filter: ${chip.label}`;
+      button.innerHTML = '<span></span><i class="fas fa-xmark fa-fw ml-1" aria-hidden="true"></i>';
+      button.querySelector('span').textContent = chip.label;
+      button.addEventListener('click', chip.onRemove);
+      container.append(button);
+    });
+  }
+
   private async loadResults(): Promise<void> {
     const results = document.getElementById('favoriteFilterResults');
     const status = document.getElementById('favoriteFilterResultsStatus');
@@ -315,6 +411,7 @@ export default class FavoriteFilters extends SidePanel {
     const fullResults = document.getElementById('favoriteFilterFullResults') as HTMLAnchorElement | null;
     if (!results || !status || !count || !fullResults) return;
 
+    this.renderActiveChips();
     const requestId = ++this.requestSequence;
     const target = this.getTarget();
     const params = this.getFilterParams();
@@ -326,7 +423,7 @@ export default class FavoriteFilters extends SidePanel {
     fullResults.href = this.getListingUrl().toString();
 
     try {
-      const endpoint = target === 'experiments' ? EntityType.Experiment : EntityType.Item;
+      const endpoint = this.getTargetEntityType(target);
       const response = await ApiC.getJson<FavoriteFilterResult[]>(
         `${endpoint}?${params.toString()}`,
       );
