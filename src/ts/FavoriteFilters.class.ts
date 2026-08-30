@@ -68,7 +68,14 @@ export default class FavoriteFilters extends SidePanel {
   // outside click or Escape, and there's no per-button transform
   // positioning to fight -- both overlays are placed with the same CSS,
   // anchored to their own button, regardless of which one is open.
+  //
+  // FavoriteFilters is instantiated more than once (common.ts AND
+  // KeyboardShortcuts.class.ts each construct their own instance), so
+  // without this guard each button would get one listener per instance --
+  // a click would open then immediately re-close via the duplicate handler.
   private bindOverlayToggles(): void {
+    if (document.body.dataset.favoriteOverlayBound === 'true') return;
+    document.body.dataset.favoriteOverlayBound = 'true';
     const overlays: Record<string, HTMLElement | null> = {
       filters: document.getElementById('favoriteFiltersOverlay'),
       manage: document.getElementById('favoriteManageOverlay'),
@@ -92,7 +99,11 @@ export default class FavoriteFilters extends SidePanel {
     });
     document.addEventListener('click', event => {
       const target = event.target as HTMLElement;
-      if (target.closest('.favorite-filter-overlay-anchor')) return;
+      // Overlays are full-width siblings of both button wrappers within the
+      // shared toolbar (not nested inside one anchor), so a click anywhere
+      // in either overlay's content must be checked against the toolbar,
+      // not the narrower per-button anchor.
+      if (target.closest('.favorite-filter-toolbar')) return;
       closeAll();
     });
     document.addEventListener('keydown', event => {
