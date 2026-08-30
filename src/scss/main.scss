@@ -274,6 +274,13 @@ select.form-control {
   background: var(--white);
 }
 
+.favorite-filter-dropdown-menu {
+  color: var(--strongest, #343a40);
+  max-height: 70vh;
+  overflow-y: auto;
+  width: 100%;
+}
+
 .dropdown-item {
   color: var(--medium);
   cursor: pointer;
