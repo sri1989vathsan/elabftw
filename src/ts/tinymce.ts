@@ -436,6 +436,14 @@ export function getTinymceBaseConfig(page: string): object {
         if (page !== 'admin' && page !== 'sysconfig') {
           editor.execCommand('lineheight', false, '1');
         }
+        // The link plugin's own default shortcut is the same Meta/Ctrl+K used
+        // app-wide for the command palette. Free it up so Cmd+K always opens
+        // the palette, everywhere, instead of doing something different
+        // depending on whether the cursor happens to be in the editor.
+        editor.shortcuts.remove('meta+k');
+        editor.addShortcut('meta+k', 'Search and commands', () => {
+          document.dispatchEvent(new CustomEvent('elabftw-open-command-palette'));
+        });
       });
       // Hook into the blur event - Finalize potential changes to images if user clicks outside of editor
       editor.on('blur', () => {

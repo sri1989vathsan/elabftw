@@ -83,6 +83,11 @@ export default class CommandPalette {
   }
 
   private bindEvents(): void {
+    // Ctrl/Cmd+K pressed while focus is inside the TinyMCE iframe never
+    // reaches this outer document's keydown listener (separate document
+    // tree) -- tinymce.ts frees up its own meta+k shortcut and dispatches
+    // this instead, so the palette opens the same way regardless of focus.
+    document.addEventListener('elabftw-open-command-palette', () => this.open());
     document.addEventListener('keydown', event => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
