@@ -106,9 +106,8 @@ export default class UnifiedSearchPanel extends SidePanel {
 
   private async tagResults(query: string): Promise<ResultGroup> {
     try {
-      const tags = await ApiC.getJson('team_tags') as TeamTag[];
+      const tags = await ApiC.getJson(`teams/current/tags?q=${encodeURIComponent(query)}`) as TeamTag[];
       const items = tags
-        .filter(tag => tag.tag.toLowerCase().includes(query))
         .slice(0, PER_GROUP_LIMIT)
         .map(tag => ({
           label: tag.tag,
