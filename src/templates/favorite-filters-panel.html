@@ -1,5 +1,5 @@
 {# "All" is the default -- it's what makes typing in the text box search
-   everything (experiments, resources, templates, tasks, folders) at once.
+   everything (experiments, resources, templates, folders) at once.
    A specific target is only pre-selected when the URL
    already carries an actual category/status/owner filter for it (e.g. via
    the "Full list" link), so re-opening the panel still reflects what's
@@ -38,8 +38,8 @@
         class='form-control'
         type='search'
         value='{{ App.Request.query.getString('q')|e('html_attr') }}'
-        placeholder='{{ 'Search experiments, resources, templates, tasks, folders…'|trans }}'
-        aria-label='{{ 'Search experiments, resources, templates, tasks, folders…'|trans }}'
+        placeholder='{{ 'Search experiments, resources, templates, folders…'|trans }}'
+        aria-label='{{ 'Search experiments, resources, templates, folders…'|trans }}'
         data-favorite-filter-text
       >
     </div>

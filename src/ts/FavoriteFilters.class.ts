@@ -25,7 +25,6 @@ interface FavoriteFilterResult {
   fullname?: string | null;
 }
 
-interface TodoTask { id: number; body: string; }
 interface ResultGroup {
   heading: string;
   items: { label: string; description: string; href?: string; onSelect?: () => void }[];
@@ -537,23 +536,6 @@ export default class FavoriteFilters extends SidePanel {
     }
   }
 
-  private async taskResults(query: string): Promise<ResultGroup> {
-    try {
-      const tasks = await ApiC.getJson<TodoTask[]>('todolist');
-      const items = tasks
-        .filter(task => task.body?.toLowerCase().includes(query))
-        .slice(0, GROUPED_SEARCH_PER_GROUP_LIMIT)
-        .map(task => ({
-          label: task.body,
-          description: 'Task',
-          onSelect: () => document.getElementById('todolistPanelOpener')?.click(),
-        }));
-      return { heading: 'Tasks', items };
-    } catch {
-      return { heading: 'Tasks', items: [] };
-    }
-  }
-
   private renderGrouped(groups: SearchResultGroup[], message?: string): void {
     const results = document.getElementById('favoriteFilterResults');
     if (!results) return;
@@ -653,7 +635,6 @@ export default class FavoriteFilters extends SidePanel {
       this.groupedEntityResults('resources', 'Resources', query),
       this.groupedEntityResults('experiments_templates', 'Experiment templates', query),
       this.groupedEntityResults('items_types', 'Resource templates', query),
-      this.taskResults(query),
       Promise.resolve(this.folderResults(query)),
     ]);
     if (requestId !== this.requestSequence) return;
