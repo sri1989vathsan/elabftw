@@ -444,6 +444,13 @@ export function getTinymceBaseConfig(page: string): object {
         editor.addShortcut('meta+k', 'Search and commands', () => {
           document.dispatchEvent(new CustomEvent('elabftw-open-command-palette'));
         });
+        // The autoresize plugin computes its initial height before the
+        // toolbar (save-state indicator, insert menu, etc.) has finished
+        // settling into its final layout, so the editor renders far taller
+        // than its content until the next recompute -- which focus happens
+        // to trigger, making it "shrink" only once clicked into. Force one
+        // extra recompute once everything has actually settled.
+        window.setTimeout(() => editor.execCommand('mceAutoResize'), 100);
       });
       // Hook into the blur event - Finalize potential changes to images if user clicks outside of editor
       editor.on('blur', () => {
