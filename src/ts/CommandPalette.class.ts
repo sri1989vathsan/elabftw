@@ -1,4 +1,6 @@
+import tinymce from 'tinymce/tinymce';
 import { ApiC } from './api';
+import { confirmLeaveEditing } from './misc';
 
 interface PaletteEntry {
   label: string;
@@ -25,6 +27,11 @@ export default class CommandPalette {
   private searchTimer: number | null = null;
   private searchSequence = 0;
   private activeIndex = 0;
+  private remoteAbort: AbortController | null = null;
+  // Short-lived so a repeated/backspaced-then-retyped query feels instant
+  // without ever serving results stale enough to matter for a live search box.
+  private remoteCache = new Map<string, { expires: number; entries: PaletteEntry[] }>();
+  private static readonly REMOTE_CACHE_TTL_MS = 15_000;
 
   constructor() {
     this.overlay = document.createElement('div');
@@ -54,21 +61,21 @@ export default class CommandPalette {
     const click = (selector: string): void => {
       (document.querySelector(selector) as HTMLElement | null)?.click();
     };
-    const editorAction = (label: string): void => {
-      const containers = Array.from(document.querySelectorAll<HTMLElement>('.tox-tinymce'));
-      const button = containers
-        .flatMap(container => Array.from(container.querySelectorAll<HTMLElement>('[aria-label]')))
-        .find(candidate => candidate.getAttribute('aria-label')?.toLowerCase().startsWith(label.toLowerCase()));
-      button?.click();
+    // Named TinyMCE editor commands (registered by each custom-editor/*
+    // extension) instead of locating a toolbar button by its visible,
+    // English, wording-dependent aria-label/tooltip -- immune to toolbar
+    // rewording, translated interfaces, and upstream TinyMCE toolbar changes.
+    const editorCommand = (command: string): void => {
+      tinymce.activeEditor?.execCommand(command);
     };
     return [
       { label: 'Save', description: 'Save the current entry', icon: 'fa-save', keywords: 'write autosave', action: () => click('[data-action="update-entity-body"]') },
       { label: 'Save and go back', description: 'Save and return to view mode', icon: 'fa-arrow-left', keywords: 'return view', action: () => click('[data-action="update-entity-body"][data-redirect]') },
-      { label: 'Insert date', description: 'Insert today using your saved date style', icon: 'fa-calendar-days', keywords: 'day today calendar', action: () => editorAction('Insert today') },
-      { label: 'Insert title', description: 'Insert a styled experiment title', icon: 'fa-heading', keywords: 'header heading', action: () => editorAction('Insert experiment title') },
-      { label: 'Insert note', description: 'Insert a note using your saved defaults', icon: 'fa-note-sticky', keywords: 'callout box', action: () => editorAction('Insert a note') },
-      { label: 'Insert table or spreadsheet', description: 'Open table, spreadsheet and well-plate options', icon: 'fa-table', keywords: 'formula well plate benchling', action: () => editorAction('Insert a table') },
-      { label: 'Insert link', description: 'Insert a web, file/folder or LabCollector link', icon: 'fa-link', keywords: 'url file folder', action: () => editorAction('Insert a web') },
+      { label: 'Insert date', description: 'Insert today using your saved date style', icon: 'fa-calendar-days', keywords: 'day today calendar', action: () => editorCommand('elabftwInsertDateToday') },
+      { label: 'Insert title', description: 'Insert a styled experiment title', icon: 'fa-heading', keywords: 'header heading', action: () => editorCommand('elabftwInsertExperimentTitle') },
+      { label: 'Insert note', description: 'Insert a note using your saved defaults', icon: 'fa-note-sticky', keywords: 'callout box', action: () => editorCommand('elabftwInsertNote') },
+      { label: 'Insert table or spreadsheet', description: 'Open table, spreadsheet and well-plate options', icon: 'fa-table', keywords: 'formula well plate benchling', action: () => editorCommand('elabftwInsertTable') },
+      { label: 'Insert link', description: 'Insert a web, file/folder or LabCollector link', icon: 'fa-link', keywords: 'url file folder', action: () => editorCommand('elabftwInsertWebLink') },
       { label: 'Open folders', description: 'Browse personal, bookmarked and team folders', icon: 'fa-folder-tree', keywords: 'sidebar navigation', action: () => click('#foldersPanelOpener') },
       { label: 'Open filters', description: 'Search and filter experiments or resources', icon: 'fa-filter', keywords: 'tags category owner status', action: () => click('#favoritesPanelOpener') },
       { label: 'Search everything', description: 'Search experiments, resources, templates and folders at once', icon: 'fa-magnifying-glass', keywords: 'unified find filters favorites', action: () => click('#favoritesPanelOpener') },
@@ -162,20 +169,33 @@ export default class CommandPalette {
 
   private async remoteResults(query: string, sequence: number): Promise<PaletteEntry[]> {
     if (query.length < 2) return [];
+    const cached = this.remoteCache.get(query);
+    if (cached && cached.expires > Date.now()) return cached.entries;
+    // A query superseded by newer keystrokes is no longer worth the network
+    // round-trip -- abort it instead of just discarding its (still in-flight)
+    // response via the sequence check below.
+    this.remoteAbort?.abort();
+    const abort = new AbortController();
+    this.remoteAbort = abort;
     try {
       const encoded = encodeURIComponent(query);
       const [experiments, resources] = await Promise.all([
-        ApiC.getJson(`experiments?limit=8&scope=3&fastq=${encoded}`),
-        ApiC.getJson(`items?limit=8&scope=3&fastq=${encoded}`),
+        ApiC.getJson(`experiments?limit=8&scope=3&fastq=${encoded}`, { notifOnError: 0 }, abort.signal),
+        ApiC.getJson(`items?limit=8&scope=3&fastq=${encoded}`, { notifOnError: 0 }, abort.signal),
       ]) as [SearchEntity[], SearchEntity[]];
       if (sequence !== this.searchSequence) return [];
-      return [...experiments, ...resources].map(result => ({
+      const entries = [...experiments, ...resources].map(result => ({
         label: result.title ?? `Entry ${result.id}`,
         description: `${result.type === 'items' ? 'Resource' : 'Experiment'}${result.category_title ? ` · ${result.category_title}` : ''}`,
         icon: result.type === 'items' ? 'fa-box' : 'fa-flask',
         keywords: '',
-        action: () => { window.location.href = result.page ?? `${result.type === 'items' ? 'database' : 'experiments'}.php?mode=view&id=${result.id}`; },
+        action: () => {
+          if (!confirmLeaveEditing()) return;
+          window.location.href = result.page ?? `${result.type === 'items' ? 'database' : 'experiments'}.php?mode=view&id=${result.id}`;
+        },
       }));
+      this.remoteCache.set(query, { expires: Date.now() + CommandPalette.REMOTE_CACHE_TTL_MS, entries });
+      return entries;
     } catch {
       return [];
     }

@@ -2,6 +2,7 @@
  * @author eLabFTW contributors
  * @license AGPL-3.0
  */
+import { confirmLeaveEditing } from './misc';
 import SidePanel from './SidePanel.class';
 
 export default class FoldersPanel extends SidePanel {
@@ -10,6 +11,15 @@ export default class FoldersPanel extends SidePanel {
   constructor() {
     super('folders');
     this.panelId = 'foldersPanel';
+    // Delegated (not bound per-render) so it survives loadPanel() replacing
+    // the whole panel element -- same "leave this page and lose unsaved
+    // edits?" guard as the Search panel's result links (FavoriteFilters).
+    document.addEventListener('click', event => {
+      const link = (event.target as HTMLElement)?.closest<HTMLAnchorElement>(`#${this.panelId} a[href]`);
+      if (!link) return;
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      if (!confirmLeaveEditing()) event.preventDefault();
+    });
   }
 
   show(): void {

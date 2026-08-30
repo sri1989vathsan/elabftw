@@ -6,7 +6,7 @@ import { ApiC } from './api';
 import { getEditor } from './Editor.class';
 import { entity } from './getEntity';
 import { EntityType, LinkSubModel } from './interfaces';
-import { escapeHTML, reloadElements } from './misc';
+import { confirmLeaveEditing, escapeHTML, isEditingEntity, reloadElements } from './misc';
 import SidePanel from './SidePanel.class';
 
 type FavoriteFilterTarget = 'all' | 'experiments' | 'resources' | 'experiments_templates' | 'items_types';
@@ -46,6 +46,11 @@ const GROUPED_SEARCH_PER_GROUP_LIMIT = 8;
 export default class FavoriteFilters extends SidePanel {
   private resultsLoaded = false;
   private requestSequence = 0;
+  private resultsAbort: AbortController | null = null;
+  // Short-lived so a repeated/backspaced-then-retyped query feels instant
+  // without ever serving results stale enough to matter for a live search box.
+  private resultsCache = new Map<string, { expires: number; data: unknown }>();
+  private static readonly RESULTS_CACHE_TTL_MS = 15_000;
 
   private textFilterTimer: number | null = null;
 
@@ -329,17 +334,11 @@ export default class FavoriteFilters extends SidePanel {
     return url;
   }
 
-  private isExperimentEditMode(): boolean {
-    return entity.type === EntityType.Experiment
-      && Number.isInteger(entity.id)
-      && new URLSearchParams(window.location.search).get('mode') === 'edit';
-  }
-
   private canInsertResultLink(target: FavoriteFilterTarget, resultId: number): boolean {
     // Templates aren't linkable entities on an experiment the way another
     // experiment or resource is -- only offer the "attach" action for those.
     return (target === 'experiments' || target === 'resources')
-      && this.isExperimentEditMode()
+      && isEditingEntity()
       && !(target === 'experiments' && resultId === entity.id);
   }
 
@@ -357,14 +356,12 @@ export default class FavoriteFilters extends SidePanel {
     link.href = this.getResultUrl(target, result.id).toString();
     link.textContent = result.title || `Untitled ${this.getTargetLabel(target)}`;
     link.title = `Open ${this.getTargetLabel(target)}`;
-    if (this.isExperimentEditMode()
+    if (isEditingEntity()
       && !(target === 'experiments' && result.id === entity.id)
     ) {
       link.addEventListener('click', (event: MouseEvent) => {
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-        if (!window.confirm(
-          'You are editing an experiment. Leave this page and risk losing unsaved changes?',
-        )) {
+        if (!confirmLeaveEditing()) {
           event.preventDefault();
         }
       });
@@ -517,10 +514,19 @@ export default class FavoriteFilters extends SidePanel {
     return { heading: 'Folders', items };
   }
 
+  private async cachedGetJson<T>(url: string, signal: AbortSignal): Promise<T> {
+    const cached = this.resultsCache.get(url);
+    if (cached && cached.expires > Date.now()) return cached.data as T;
+    const data = await ApiC.getJson<T>(url, { notifOnError: 0 }, signal);
+    this.resultsCache.set(url, { expires: Date.now() + FavoriteFilters.RESULTS_CACHE_TTL_MS, data });
+    return data;
+  }
+
   private async groupedEntityResults(
     target: FavoriteFilterTarget,
     heading: string,
     query: string,
+    signal: AbortSignal,
   ): Promise<EntityResultGroup> {
     const entityType = this.getTargetEntityType(target);
     // An empty query omits fastq entirely rather than sending fastq= --
@@ -529,7 +535,7 @@ export default class FavoriteFilters extends SidePanel {
     const params = new URLSearchParams({ limit: String(GROUPED_SEARCH_PER_GROUP_LIMIT), scope: '3' });
     if (query) params.set('fastq', query);
     try {
-      const results = await ApiC.getJson<FavoriteFilterResult[]>(`${entityType}?${params.toString()}`);
+      const results = await this.cachedGetJson<FavoriteFilterResult[]>(`${entityType}?${params.toString()}`, signal);
       return { heading, target, results: Array.isArray(results) ? results : [] };
     } catch {
       return { heading, target, results: [] };
@@ -621,6 +627,12 @@ export default class FavoriteFilters extends SidePanel {
     const count = document.getElementById('favoriteFilterResultsCount');
     const fullResults = document.getElementById('favoriteFilterFullResults') as HTMLAnchorElement | null;
     const requestId = ++this.requestSequence;
+    // A search superseded by newer keystrokes is no longer worth the network
+    // round-trip -- abort its still-in-flight requests instead of just
+    // discarding their responses via the sequence check below.
+    this.resultsAbort?.abort();
+    const abort = new AbortController();
+    this.resultsAbort = abort;
     const loadingMessage = query ? 'Searching…' : 'Loading everything…';
     count?.toggleAttribute('hidden', true);
     fullResults?.toggleAttribute('hidden', true);
@@ -631,10 +643,10 @@ export default class FavoriteFilters extends SidePanel {
     this.renderGrouped([], loadingMessage);
 
     const groups = await Promise.all([
-      this.groupedEntityResults('experiments', 'Experiments', query),
-      this.groupedEntityResults('resources', 'Resources', query),
-      this.groupedEntityResults('experiments_templates', 'Experiment templates', query),
-      this.groupedEntityResults('items_types', 'Resource templates', query),
+      this.groupedEntityResults('experiments', 'Experiments', query, abort.signal),
+      this.groupedEntityResults('resources', 'Resources', query, abort.signal),
+      this.groupedEntityResults('experiments_templates', 'Experiment templates', query, abort.signal),
+      this.groupedEntityResults('items_types', 'Resource templates', query, abort.signal),
       Promise.resolve(this.folderResults(query)),
     ]);
     if (requestId !== this.requestSequence) return;
@@ -672,6 +684,9 @@ export default class FavoriteFilters extends SidePanel {
     fullResults.removeAttribute('hidden');
 
     const requestId = ++this.requestSequence;
+    this.resultsAbort?.abort();
+    const abort = new AbortController();
+    this.resultsAbort = abort;
     const params = this.getFilterParams();
     params.set('limit', '25');
     results.replaceChildren();
@@ -682,8 +697,9 @@ export default class FavoriteFilters extends SidePanel {
 
     try {
       const endpoint = this.getTargetEntityType(target);
-      const response = await ApiC.getJson<FavoriteFilterResult[]>(
+      const response = await this.cachedGetJson<FavoriteFilterResult[]>(
         `${endpoint}?${params.toString()}`,
+        abort.signal,
       );
       if (requestId !== this.requestSequence) return;
       const entries = Array.isArray(response) ? response : [];

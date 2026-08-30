@@ -12,7 +12,7 @@ import type { Entity } from './interfaces';
 import JsonEditorHelper from './JsonEditorHelper.class';
 import { ExtraFieldInputType } from './metadataInterfaces';
 import type { ExtraFieldProperties, ExtraFieldsGroup, ValidMetadata } from './metadataInterfaces';
-import { adjustHiddenState, makeSortableGreatAgain, reloadElements, replaceWithTitle } from './misc';
+import { adjustHiddenState, beginEntitySave, endEntitySave, makeSortableGreatAgain, reloadElements, replaceWithTitle } from './misc';
 import { notify } from './notify';
 
 export function ResourceNotFoundException(message: string): void {
@@ -111,9 +111,12 @@ export class Metadata {
     const params = {};
     params['action'] = Action.UpdateMetadataField;
     params[el.dataset.field] = value;
+    beginEntitySave();
     ApiC.patch(`${this.entity.type}/${this.entity.id}`, params).then(() => {
+      endEntitySave('saved');
       this.editor.loadMetadata();
     }).catch(() => {
+      endEntitySave('error');
       return;
     });
     return true;
@@ -136,7 +139,16 @@ export class Metadata {
   }
 
   save(metadata: ValidMetadata): Promise<Response> {
-    return ApiC.patch(`${this.entity.type}/${this.entity.id}`, {'metadata': JSON.stringify(metadata)});
+    beginEntitySave();
+    return ApiC.patch(`${this.entity.type}/${this.entity.id}`, {'metadata': JSON.stringify(metadata)})
+      .then(response => {
+        endEntitySave('saved');
+        return response;
+      })
+      .catch(error => {
+        endEntitySave('error');
+        throw error;
+      });
   }
 
   /**

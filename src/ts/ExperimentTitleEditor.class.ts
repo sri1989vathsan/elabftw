@@ -597,7 +597,12 @@ export default class ExperimentTitleEditor {
       presetSelect.value = selectedName;
       deletePresetButton.disabled = !presetSelect.value;
     };
-    const close = (): void => {
+    // Same discard-confirmation the spreadsheet editor and "Insert Note"
+    // dialog already have -- this dialog previously closed silently on
+    // Escape/backdrop-click/Cancel with an edited heading/style pending.
+    let hasChanges = false;
+    const close = (force = false): void => {
+      if (!force && hasChanges && !window.confirm('Discard unsaved changes to this title?')) return;
       document.removeEventListener('keydown', handleKeydown);
       overlay.remove();
       this.editor.focus();
@@ -607,6 +612,7 @@ export default class ExperimentTitleEditor {
     };
 
     dialog.addEventListener('input', event => {
+      hasChanges = true;
       updatePreview();
       if (!presetRow.contains(event.target as Node)) {
         presetSelect.value = '';
@@ -614,6 +620,7 @@ export default class ExperimentTitleEditor {
       }
     });
     dialog.addEventListener('change', event => {
+      hasChanges = true;
       updatePreview();
       if (!presetRow.contains(event.target as Node)) {
         presetSelect.value = '';
@@ -685,7 +692,7 @@ export default class ExperimentTitleEditor {
     overlay.addEventListener('click', event => {
       if (event.target === overlay) close();
     });
-    cancelButton.addEventListener('click', close);
+    cancelButton.addEventListener('click', () => close());
     saveDefaultButton.addEventListener('click', async () => {
       saveDefaultButton.disabled = true;
       try {
@@ -699,7 +706,7 @@ export default class ExperimentTitleEditor {
     });
     insertButton.addEventListener('click', () => {
       this.insert(readControls(), headingTextInput.value);
-      close();
+      close(true);
     });
     document.addEventListener('keydown', handleKeydown);
     renderPresets();

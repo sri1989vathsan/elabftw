@@ -591,6 +591,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     },
   });
 
+  // Named command so the command palette can jump straight to the table
+  // dialog instead of locating this menu button by its (English,
+  // wording-dependent) tooltip/aria-label and merely opening its dropdown --
+  // see CommandPalette.class.ts.
+  editor.addCommand('elabftwInsertTable', openStandardTableDialog);
+
   editor.ui.registry.addMenuButton('insert-data-table', {
     icon: 'table',
     tooltip: 'Insert a table, spreadsheet or well plate',

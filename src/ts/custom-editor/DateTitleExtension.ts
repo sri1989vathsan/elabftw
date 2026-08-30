@@ -77,6 +77,12 @@ export function registerDateTitleExtension(editor: Editor): void {
     dateReferenceEditor.openCalendar(reference);
   });
 
+  // Named commands so the command palette can invoke these directly instead
+  // of locating the toolbar button by its (English, wording-dependent)
+  // tooltip/aria-label -- see CommandPalette.class.ts.
+  editor.addCommand('elabftwInsertDateToday', () => dateReferenceEditor.insertToday());
+  editor.addCommand('elabftwInsertExperimentTitle', () => experimentTitleEditor.insertUsingDefaults());
+
   editor.ui.registry.addSplitButton('adddate', {
     icon: 'elabftw-calendar',
     text: 'Day',

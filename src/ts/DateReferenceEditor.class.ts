@@ -623,11 +623,20 @@ export default class DateReferenceEditor {
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
 
-    const close = (): void => {
+    // Same discard-confirmation the spreadsheet editor and "Insert Note"
+    // dialog already have -- this dialog previously closed silently on
+    // Escape/backdrop-click/Cancel even with an edited date, format, or
+    // linked experiment pending. A delegated change/input listener (below)
+    // covers every field without wiring each one individually.
+    let hasChanges = false;
+    const close = (force = false): void => {
+      if (!force && hasChanges && !window.confirm('Discard unsaved changes to this date?')) return;
       if (searchTimer !== undefined) window.clearTimeout(searchTimer);
       document.removeEventListener('keydown', handleKeydown);
       overlay.remove();
     };
+    dialog.addEventListener('input', () => { hasChanges = true; });
+    dialog.addEventListener('change', () => { hasChanges = true; });
 
     const handleKeydown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') close();
@@ -755,7 +764,7 @@ export default class DateReferenceEditor {
         return;
       }
       if (!validateCustomLabel()) return;
-      close();
+      close(true);
       this.editor.focus();
       const requestedHeadingLevel = Math.min(
         6,
@@ -799,11 +808,11 @@ export default class DateReferenceEditor {
       );
     });
     deleteButton?.addEventListener('click', () => {
-      close();
+      close(true);
       this.editor.focus();
       this.deleteReference(reference);
     });
-    cancelButton.addEventListener('click', close);
+    cancelButton.addEventListener('click', () => close());
     overlay.addEventListener('click', event => {
       if (event.target === overlay) close();
     });

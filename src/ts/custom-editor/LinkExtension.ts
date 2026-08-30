@@ -315,6 +315,12 @@ export function registerLinkExtension(editor: Editor): void {
     });
   };
 
+  // Named command so the command palette can jump straight to the web-link
+  // dialog instead of locating this menu button by its (English,
+  // wording-dependent) tooltip/aria-label and merely opening its dropdown --
+  // see CommandPalette.class.ts.
+  editor.addCommand('elabftwInsertWebLink', openWebLinkDialog);
+
   editor.ui.registry.addMenuButton('insert-link', {
     icon: 'link',
     tooltip: 'Insert a web, uploaded file/folder, or LabCollector link',

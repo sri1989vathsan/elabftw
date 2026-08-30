@@ -192,6 +192,11 @@ export function registerNoteExtension(editor: Editor): void {
     });
   };
 
+  // Named command so the command palette can invoke this directly instead of
+  // locating the toolbar button by its (English, wording-dependent)
+  // tooltip/aria-label -- see CommandPalette.class.ts.
+  editor.addCommand('elabftwInsertNote', insertUsingDefaults);
+
   editor.ui.registry.addSplitButton('insert-note', {
     icon: 'comment-add',
     tooltip: 'Insert a note using saved defaults; open the arrow for options (Ctrl+Alt+N)',
