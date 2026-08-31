@@ -237,21 +237,29 @@ export function registerTableToolsExtension(editor: Editor): void {
       return () => editor.off('NodeChange', update);
     },
   });
-  editor.ui.registry.addButton('table-select-copy', {
-    icon: 'elabftw-copy-table',
-    tooltip: 'Copy the complete table with formatting',
-    onAction: () => void copyWholeTable(),
-    onSetup: api => {
-      const update = (event?): void => api.setEnabled(Boolean(selectedTable(event?.element)));
-      update();
-      editor.on('NodeChange', update);
-      return () => editor.off('NodeChange', update);
-    },
-  });
-  editor.ui.registry.addButton('copy-rich-selection', {
+  // One dropdown instead of two separate always-visible buttons: "copy the
+  // whole table" only makes sense inside a table, so it's greyed out there
+  // rather than needing its own toolbar slot.
+  editor.ui.registry.addMenuButton('copy-table-or-selection', {
     icon: 'copy',
-    tooltip: 'Copy selected text and tables with formatting',
-    onAction: () => void copySelectedContent(),
+    tooltip: 'Copy table or selection with formatting',
+    fetch: callback => {
+      callback([
+        {
+          type: 'menuitem',
+          text: 'Copy complete table',
+          icon: 'elabftw-copy-table',
+          disabled: !selectedTable(),
+          onAction: () => void copyWholeTable(),
+        },
+        {
+          type: 'menuitem',
+          text: 'Copy selected text and tables',
+          icon: 'copy',
+          onAction: () => void copySelectedContent(),
+        },
+      ]);
+    },
   });
   editor.ui.registry.addButton('table-indent', {
     icon: 'indent',

@@ -98,7 +98,10 @@ final class TwigFilters
             return self::displayMessage(Tools::eLabHtmlspecialchars($e->getMessage()), 'ko', false);
         }
         if (empty($extraFields)) {
-            return $Metadata->getRaw();
+            // getAnyContent() (not getRaw()) so fork-owned elabftw-namespaced
+            // metadata already shown elsewhere (file_folder_references,
+            // web_links...) doesn't get redundantly dumped here too.
+            return $Metadata->getAnyContent();
         }
 
         $final = '';

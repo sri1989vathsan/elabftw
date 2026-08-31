@@ -215,7 +215,11 @@ function getAssetVersionQuery(): string {
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize | bold italic underline strikethrough superscript subscript forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist checklist outdent indent | format-painter remove-formatting | elabftw-insert-menu insert-link adddate experiment-title horizontal-rule insert-note | copy-rich-selection insert-data-table table-select-copy table-outdent table-indent sort-table | charmap emoticons codesample';
+  // Grouped by function: file/history, then all text/paragraph formatting
+  // together, then the standalone Insert-menu, then all individual insert
+  // actions (including table tools, since they act on what you just
+  // inserted) together, then everything else.
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough superscript subscript forecolor backcolor alignleft aligncenter alignright alignjustify bullist numlist checklist outdent indent format-painter remove-formatting | elabftw-insert-menu | insert-link adddate experiment-title horizontal-rule insert-note insert-data-table copy-table-or-selection table-outdent table-indent sort-table | charmap emoticons codesample';
   if (!document.getElementById('documentTitle')) {
     toolbar1 = toolbar1.replace('experiment-title ', '');
   }
@@ -233,10 +237,12 @@ export function getTinymceBaseConfig(page: string): object {
   // integration is dormant. MouseLinkExtension disables and greys the button
   // unless the gated PyRAT experiment section is available.
   if (page === 'edit' && entity.type === EntityType.Experiment) {
-    toolbar1 = toolbar1.replace('insert-link', 'insert-link insert-mouse');
+    toolbar1 = toolbar1.replace('codesample', 'codesample insert-mouse');
     // searchable/favouritable template picker, in addition to the stock
-    // Insert > Template… menu item still driven by the templates: callback below
-    toolbar1 = toolbar1.replace('sort-table', 'sort-table inserttemplate');
+    // Insert > Template… menu item still driven by the templates: callback below.
+    // Kept next to insert-data-table (links/date/title/divider/note/spreadsheet
+    // group) rather than off in the table-tools group.
+    toolbar1 = toolbar1.replace('insert-data-table', 'insert-data-table inserttemplate');
   }
 
   const isDark = isDarkTheme();

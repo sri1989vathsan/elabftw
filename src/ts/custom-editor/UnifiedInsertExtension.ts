@@ -59,16 +59,21 @@ function fetchRegisteredItems(editor: Editor, name: string): Promise<AnyMenuItem
   });
 }
 
-/** Wrap a plain addButton spec's onAction as a single menu item. */
-function buttonAsMenuItem(editor: Editor, name: string, text: string, icon?: string): AnyMenuItem | null {
+/**
+ * Wrap a plain addButton spec's onAction as a single menu item, reusing that
+ * button's own registered icon rather than a second, separately-guessed icon
+ * name -- a mismatched guess (e.g. 'calendar' vs the actually-registered
+ * 'elabftw-calendar') silently falls back to a generic bullet in the menu.
+ */
+function buttonAsMenuItem(editor: Editor, name: string, text: string): AnyMenuItem | null {
   const spec = (editor.ui.registry.getAll() as AnyMenuItem).buttons?.[name];
   if (!spec?.onAction) return null;
-  return { type: 'menuitem', text, icon, onAction: () => spec.onAction() };
+  return { type: 'menuitem', text, icon: spec.icon, onAction: () => spec.onAction() };
 }
 
 export function registerUnifiedInsertExtension(editor: Editor): void {
   editor.ui.registry.addMenuButton('elabftw-insert-menu', {
-    icon: 'plus',
+    text: 'Insert',
     tooltip: 'Insert (text, tables, links, laboratory)',
     fetch: async callback => {
       const [tableItems, linkItems, noteItems] = await Promise.all([
@@ -82,13 +87,13 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
         if (item) catalog[id] = trackRecent(id, { ...item, text: item.text ?? id });
       };
 
-      register('date', buttonAsMenuItem(editor, 'adddate', 'Insert date', 'calendar'));
-      register('title', buttonAsMenuItem(editor, 'experiment-title', 'Insert title', 'heading-1'));
-      register('divider', buttonAsMenuItem(editor, 'horizontal-rule', 'Insert divider', 'horizontal-rule'));
+      register('date', buttonAsMenuItem(editor, 'adddate', 'Insert date'));
+      register('title', buttonAsMenuItem(editor, 'experiment-title', 'Insert title'));
+      register('divider', buttonAsMenuItem(editor, 'horizontal-rule', 'Insert divider'));
       noteItems.forEach((item, index) => register(`note-${index}`, item));
       tableItems.forEach((item, index) => register(`table-${index}`, item));
       linkItems.forEach((item, index) => register(`link-${index}`, item));
-      register('template', buttonAsMenuItem(editor, 'inserttemplate', 'Insert template', 'duplicate'));
+      register('template', buttonAsMenuItem(editor, 'inserttemplate', 'Insert template'));
 
       const recentItems = getRecentIds()
         .map(id => catalog[id])
