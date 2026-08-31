@@ -65,6 +65,17 @@ on('add-file-folder-reference', async (_, event: Event) => {
   }
 });
 
+on('copy-unc-path', async (el: HTMLElement) => {
+  const unc = el.dataset.unc;
+  if (!unc) return;
+  try {
+    await navigator.clipboard.writeText(unc);
+    notify.success('Windows path copied to clipboard');
+  } catch {
+    notify.error('Could not copy to clipboard');
+  }
+});
+
 on('delete-file-folder-reference', async (el: HTMLElement) => {
   if (!confirm('Delete this file/folder reference?')) return;
   await deleteFileFolderReference(el.dataset.referenceid);

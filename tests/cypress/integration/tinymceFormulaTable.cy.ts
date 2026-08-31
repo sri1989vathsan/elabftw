@@ -88,4 +88,36 @@ describe('TinyMCE formula tables', () => {
         .get('button[data-action="destroy"]').click();
     });
   });
+
+  it('mounts the attachment spreadsheet editor and loads every workbook sheet', () => {
+    cy.createEntity('experiment', 'Cypress workbook editor').then(() => {
+      cy.get<HTMLIFrameElement>('#spreadsheetIframe').should('exist').then($iframe => {
+        const iframe = $iframe[0];
+        cy.wrap(iframe.contentDocument?.getElementById('spreadsheetEditorRoot'))
+          .should('not.be.null')
+          .children()
+          .should('have.length.greaterThan', 0);
+
+        iframe.contentWindow?.postMessage({
+          type: 'jss-load-workbook',
+          detail: {
+            name: 'multi-sheet.xlsx',
+            uploadId: 42,
+            worksheets: [
+              { name: 'Measurements', data: [[1], [2], ['=SUM(A1:A2)']] },
+              { name: 'Notes', data: [['second sheet']] },
+            ],
+          },
+        }, window.location.origin);
+      });
+
+      cy.get<HTMLIFrameElement>('#spreadsheetIframe')
+        .its('0.contentDocument.body')
+        .should('contain.text', 'Measurements')
+        .and('contain.text', 'Notes');
+
+      cy.get('button[title="More options"]').click()
+        .get('button[data-action="destroy"]').click();
+    });
+  });
 });

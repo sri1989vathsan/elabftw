@@ -6,7 +6,6 @@
 import $ from 'jquery';
 import { Editor } from 'tinymce/tinymce';
 import { ApiC } from '../api';
-import { core } from '../core';
 import { entity } from '../getEntity';
 import { Action, EntityType, Model } from '../interfaces';
 import { escapeHTML } from '../misc';
@@ -29,6 +28,25 @@ interface TemplateVersionEntry {
 }
 
 type Tab = 'all' | 'mine' | 'favorites';
+
+/**
+ * Read the current user only when the template picker is opened.
+ *
+ * This extension is pulled into the standalone spreadsheet bundle through
+ * shared editor utilities. That document intentionally has no `#core` JSON
+ * element, so importing the eager `core` module here prevented the
+ * spreadsheet application from mounting at all.
+ */
+function getCurrentUserid(): number | null {
+  const rawCore = document.getElementById('core')?.textContent;
+  if (!rawCore) return null;
+  try {
+    const userid = Number(JSON.parse(rawCore).currentUserid);
+    return Number.isInteger(userid) ? userid : null;
+  } catch {
+    return null;
+  }
+}
 
 export function registerTemplateInsertExtension(editor: Editor): void {
   editor.ui.registry.addIcon(
@@ -90,6 +108,7 @@ function showPicker(editor: Editor, templates: TemplateSummary[], favoriteIds: S
   const insertSelectedBtn = modal.querySelector('#templateInsertSelectedBtn') as HTMLButtonElement;
   const tabButtons = Array.from(modal.querySelectorAll<HTMLButtonElement>('[data-tab]'));
   let activeTab: Tab = 'all';
+  const currentUserid = getCurrentUserid();
   // template id -> how many times to insert it. Persists across render()
   // (search/tab changes) so checking a template, then filtering it out of
   // view with a search, doesn't silently drop it. A quantity above 1 covers
@@ -176,7 +195,7 @@ function showPicker(editor: Editor, templates: TemplateSummary[], favoriteIds: S
   };
 
   function matchesTab(tpl: TemplateSummary): boolean {
-    if (activeTab === 'mine') return tpl.userid === core.currentUserid;
+    if (activeTab === 'mine') return currentUserid !== null && tpl.userid === currentUserid;
     if (activeTab === 'favorites') return favoriteIds.has(tpl.id);
     return true;
   }

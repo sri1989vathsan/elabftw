@@ -1214,7 +1214,11 @@ tr:first-child td {
   --side-panel-warning: #ffd166;
   background: var(--chrome-bg);
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
-  color: var(--white);
+  // `--white` is a surface color in the dark palette themes (and can be
+  // almost as dark as the panel itself). Sidebar chrome has its own stable
+  // foreground token, so unclassified prose and native controls must inherit
+  // that instead.
+  color: var(--chrome-fg);
   height: 100%;
   left: 0;
   overflow: hidden;
@@ -1968,11 +1972,31 @@ body.html-tool-workspace-resizing * {
 }
 
 .toc-section-filter-summary {
+  color: var(--chrome-fg);
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 600;
   margin-bottom: 0.4rem;
   user-select: none;
+}
+
+#tocPanel {
+  .btn-outline-primary {
+    border-color: var(--chrome-muted);
+    color: var(--chrome-fg);
+
+    &:hover,
+    &:focus {
+      background-color: var(--primary);
+      border-color: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+
+    .fas,
+    .far {
+      color: inherit;
+    }
+  }
 }
 
 .toc-section-filter-tree {
@@ -2020,6 +2044,7 @@ body.html-tool-workspace-resizing * {
 }
 
 .toc-section-filter-label {
+  color: var(--chrome-fg);
   cursor: pointer;
   flex: 1;
   font-size: 0.78rem;

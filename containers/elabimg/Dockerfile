@@ -346,11 +346,11 @@ RUN if [ "$BUILD_ALL" = "1" ]; then \
         && yarn install --immutable \
         && if [ "$CI" = "1" ]; then \
             yarn run buildall:ci \
-            && /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer install --prefer-source --no-cache --no-progress -o; \
+            && /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer install --prefer-dist --no-cache --no-progress -o; \
         else \
             yarn run buildall:prod \
             && yarn workspaces focus -A --production \
-            && /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer install --prefer-source --no-cache --no-progress --no-dev -a; \
+            && /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer install --prefer-dist --no-cache --no-progress --no-dev -a; \
         fi \
         && rm -rf /run/elabftw/yarn /run/elabftw/cache /run/composer; \
     fi

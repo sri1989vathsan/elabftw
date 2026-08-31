@@ -20,7 +20,7 @@ import { Uploader } from './uploader';
 import { entity } from './getEntity';
 import { on } from './handlers';
 import { buildLabCollectorUrl } from './labcollector-link';
-import { toSmbHref } from './file-folder-references';
+import { platformSmbHref } from './file-folder-references';
 import {
   clearRecoveryDraft,
   isSameRecoveryContent,
@@ -325,7 +325,7 @@ on('insert-file-folder-reference', (el: HTMLElement) => {
   const text = el.dataset.text?.trim();
   if (!text) return;
   const label = el.dataset.label?.trim();
-  const smbHref = toSmbHref(text);
+  const smbHref = platformSmbHref(text);
   const displayText = label || text;
   if (editor.type === 'md') {
     if (smbHref) {

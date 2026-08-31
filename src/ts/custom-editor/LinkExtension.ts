@@ -2,7 +2,7 @@
 import { Editor } from 'tinymce/tinymce';
 import { ApiC } from '../api';
 import { entity } from '../getEntity';
-import { createFileFolderReference, toSmbHref } from '../file-folder-references';
+import { createFileFolderReference, platformSmbHref } from '../file-folder-references';
 import { Model } from '../interfaces';
 import { buildLabCollectorUrl } from '../labcollector-link';
 import { createWebLink, normalizeWebLinkUrl } from '../web-links';
@@ -222,7 +222,7 @@ export function registerLinkExtension(editor: Editor): void {
           const reference = await createFileFolderReference(data.text, data.label);
           editor.focus();
           editor.selection.moveToBookmark(bookmark);
-          const smbHref = toSmbHref(reference.text);
+          const smbHref = platformSmbHref(reference.text);
           const displayText = reference.label || reference.text;
           editor.undoManager.transact(() => {
             if (smbHref) {

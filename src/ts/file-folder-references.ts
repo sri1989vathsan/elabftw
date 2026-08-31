@@ -12,13 +12,36 @@ const MAX_LABEL_LENGTH = 200;
 /**
  * A reference typed/pasted as an smb:// url or a \\server\share UNC path
  * can be opened by the OS's file browser; anything else is just text.
- * Mirrors the same rule in associated-templates.html/links.html so the
- * clickable list and "insert in main text" stay consistent.
+ * Mirrors the same rule in links.html so the clickable list and "insert in
+ * main text" stay consistent.
+ *
+ * host/share/path core shared by both link forms below, e.g. from either
+ * "smb://host/share/path" or "\\host\share\path".
  */
-export function toSmbHref(text: string): string | null {
-  if (text.startsWith('smb://')) return text;
-  if (text.startsWith('\\\\')) return `smb:${text.replaceAll('\\', '/')}`;
+function smbCore(text: string): string | null {
+  if (text.startsWith('smb://')) return text.slice('smb://'.length);
+  if (text.startsWith('\\\\')) return text.slice(2).replaceAll('\\', '/');
   return null;
+}
+
+/** Mac/Finder link form. */
+export function toSmbHref(text: string): string | null {
+  const core = smbCore(text);
+  return core === null ? null : `smb://${core}`;
+}
+
+/**
+ * For contexts where only one link can be embedded (inserting into prose,
+ * as opposed to the file/folder list which shows a Mac button and a Windows
+ * copy-to-clipboard button side by side): on Mac this can be a real smb://
+ * link; on Windows there is no href form that reliably keeps the hostname
+ * (file://host/path gets rewritten to file:///path, dropping it, in some
+ * browsers), so return null there -- callers fall back to inserting the
+ * reference as plain, copyable text.
+ */
+export function platformSmbHref(text: string): string | null {
+  if (navigator.userAgent.includes('Windows')) return null;
+  return toSmbHref(text);
 }
 
 async function readMetadata(): Promise<ValidMetadata> {
