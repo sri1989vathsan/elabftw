@@ -24,6 +24,7 @@ import { ApiC } from './api';
 import { entity } from './getEntity';
 import { on } from './handlers';
 import {
+  createFileFolderReference,
   createFileFolderReferences,
   deleteFileFolderReference,
 } from './file-folder-references';
@@ -44,6 +45,23 @@ on('add-file-folder-references', async (_, event: Event) => {
     input.value = '';
   } catch (error) {
     notify.error(error instanceof Error ? error.message : 'Unable to save file/folder references');
+  }
+});
+
+on('add-file-folder-reference', async (_, event: Event) => {
+  event.preventDefault();
+  const textInput = document.getElementById('fileFolderReferenceTextInput') as HTMLInputElement;
+  const labelInput = document.getElementById('fileFolderReferenceLabelInput') as HTMLInputElement;
+  if (!textInput.value.trim()) {
+    textInput.focus();
+    return;
+  }
+  try {
+    await createFileFolderReference(textInput.value, labelInput.value);
+    textInput.value = '';
+    labelInput.value = '';
+  } catch (error) {
+    notify.error(error instanceof Error ? error.message : 'Unable to save file/folder reference');
   }
 });
 

@@ -20,6 +20,7 @@ import { Uploader } from './uploader';
 import { entity } from './getEntity';
 import { on } from './handlers';
 import { buildLabCollectorUrl } from './labcollector-link';
+import { toSmbHref } from './file-folder-references';
 import {
   clearRecoveryDraft,
   isSameRecoveryContent,
@@ -323,11 +324,24 @@ on('insert-upload-link', (el: HTMLElement) => {
 on('insert-file-folder-reference', (el: HTMLElement) => {
   const text = el.dataset.text?.trim();
   if (!text) return;
+  const label = el.dataset.label?.trim();
+  const smbHref = toSmbHref(text);
+  const displayText = label || text;
   if (editor.type === 'md') {
-    editor.setContent(text);
+    if (smbHref) {
+      const markdownLabel = displayText.replace(/([\\[\]])/g, '\\$1');
+      editor.setContent(`[${markdownLabel}](${smbHref})`);
+    } else {
+      editor.setContent(displayText);
+    }
+  } else if (smbHref) {
+    const link = document.createElement('a');
+    link.href = smbHref;
+    link.textContent = displayText;
+    editor.setContent(link.outerHTML);
   } else {
     const plainText = document.createElement('span');
-    plainText.textContent = text;
+    plainText.textContent = displayText;
     editor.setContent(plainText.innerHTML);
   }
   updateEntityBody();

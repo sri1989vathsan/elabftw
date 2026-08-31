@@ -43,6 +43,10 @@
   </div>
   <hr>
 
+  {% if Entity.entityData.type == 'experiments' %}
+    {% include 'associated-templates.html' %}
+  {% endif %}
+
   <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='itemsLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Resource links'|trans }} (<span id='itemsLinksCount'>{{ Entity.entityData.items_links|length }}</span>)</h4>
   <div id='itemsLinksDiv' class='ml-4'>
     <div data-count-for='itemsLinksCount'>
@@ -137,12 +141,25 @@
     <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='filesFoldersLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Files / folders'|trans }} (<span id='filesFoldersLinksCount'>{{ filesFoldersLinksCount }}</span>)</h4>
     <div id='filesFoldersLinksDiv' class='ml-4'>
       {% for reference in fileFolderReferences %}
+        {# a reference typed/pasted as an smb:// url or a \\server\share UNC
+           path becomes a real link the OS can open in its file browser;
+           anything else (e.g. "see freezer box 3, shelf B") stays plain text #}
+        {% set isSmbUnc = reference.text starts with '\\\\' %}
+        {% set isSmbUrl = reference.text starts with 'smb://' %}
+        {% set displayText = reference.label|default(reference.text) %}
         <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center' id='fileFolderReference_{{ reference.id }}'>
-          <span class='mr-auto text-break'>
-            <i class='fas fa-folder fa-fw mr-2' aria-hidden='true'></i>{{ reference.text }}
-          </span>
+          {% if isSmbUnc or isSmbUrl %}
+            {% set smbHref = isSmbUnc ? ('smb:' ~ reference.text|replace({'\\': '/'})) : reference.text %}
+            <a class='mr-auto text-break' href='{{ smbHref|e('html_attr') }}' title='{{ reference.label ? reference.text : 'Open in file browser'|trans }}'>
+              <i class='fas fa-folder fa-fw mr-2' aria-hidden='true'></i>{{ displayText }}
+            </a>
+          {% else %}
+            <span class='mr-auto text-break' title='{{ reference.label ? reference.text : '' }}'>
+              <i class='fas fa-folder fa-fw mr-2' aria-hidden='true'></i>{{ displayText }}
+            </span>
+          {% endif %}
           {% if mode == 'edit' %}
-            <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='insert-file-folder-reference' data-text='{{ reference.text|e('html_attr') }}' title='{{ 'Insert reference in main text'|trans }}' aria-label='{{ 'Insert reference in main text'|trans }}'>
+            <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='insert-file-folder-reference' data-text='{{ reference.text|e('html_attr') }}' data-label='{{ reference.label|default('')|e('html_attr') }}' title='{{ 'Insert reference in main text'|trans }}' aria-label='{{ 'Insert reference in main text'|trans }}'>
               <i class='fas fa-file-import fa-fw'></i>
             </button>
             <button type='button' class='btn btn-danger-ghost btn-sm' data-action='delete-file-folder-reference' data-referenceid='{{ reference.id|e('html_attr') }}' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}'>
@@ -180,7 +197,26 @@
             </div>
           </div>
         </form>
-        <p class='smallgray mt-1 mb-0'>{{ 'References are stored as plain text and do not open files or folders. Use the link button beside an entry to insert its text into the main text.'|trans }}</p>
+        <p class='smallgray mt-1 mb-0'>{{ 'A reference starting with smb:// or \\\\server\\share opens in your file browser; anything else is stored as plain text. Use the link button beside an entry to insert its text into the main text.'|trans }}</p>
+
+        {# single-item add with an optional display label, e.g. a long smb://
+           path shown as "Raw data folder" instead of the full url #}
+        <form class='mt-3' id='addFileFolderReferenceForm'>
+          <div class='form-row'>
+            <div class='col-md-7 mb-2'>
+              <label class='sr-only' for='fileFolderReferenceTextInput'>{{ 'File or folder reference'|trans }}</label>
+              <input type='text' id='fileFolderReferenceTextInput' class='form-control' maxlength='1000' placeholder='{{ 'smb://server/share/folder or a plain-text reference'|trans }}' aria-label='{{ 'File or folder reference'|trans }}' required>
+            </div>
+            <div class='col-md-3 mb-2'>
+              <label class='sr-only' for='fileFolderReferenceLabelInput'>{{ 'Display label'|trans }}</label>
+              <input type='text' id='fileFolderReferenceLabelInput' class='form-control' maxlength='200' placeholder='{{ 'Label (optional)'|trans }}' aria-label='{{ 'Display label'|trans }}'>
+            </div>
+            <div class='col-md-2 mb-2'>
+              <button type='submit' class='btn btn-primary btn-block' data-action='add-file-folder-reference'>{{ 'Add'|trans }}</button>
+            </div>
+          </div>
+        </form>
+        <p class='smallgray mt-1 mb-0'>{{ 'A label replaces the full path/url in the list and in the main text, for a single reference at a time.'|trans }}</p>
       {% endif %}
     </div>
   </section>

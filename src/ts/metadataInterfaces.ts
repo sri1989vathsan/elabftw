@@ -57,6 +57,7 @@ export interface MetadataElabftw {
 export interface FileFolderReference {
   id: string,
   text: string,
+  label?: string,
 }
 
 export interface WebLink {

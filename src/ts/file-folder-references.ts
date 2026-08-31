@@ -7,6 +7,19 @@ import { reloadElements } from './misc';
 const ID_PATTERN = /^[a-zA-Z0-9-]{1,80}$/;
 const MAX_REFERENCE_LENGTH = 1000;
 const MAX_REFERENCES_PER_ADD = 100;
+const MAX_LABEL_LENGTH = 200;
+
+/**
+ * A reference typed/pasted as an smb:// url or a \\server\share UNC path
+ * can be opened by the OS's file browser; anything else is just text.
+ * Mirrors the same rule in associated-templates.html/links.html so the
+ * clickable list and "insert in main text" stay consistent.
+ */
+export function toSmbHref(text: string): string | null {
+  if (text.startsWith('smb://')) return text;
+  if (text.startsWith('\\\\')) return `smb:${text.replaceAll('\\', '/')}`;
+  return null;
+}
 
 async function readMetadata(): Promise<ValidMetadata> {
   const json = await ApiC.getJson(`${entity.type}/${entity.id}`);
@@ -48,6 +61,28 @@ export async function createFileFolderReferences(input: string): Promise<FileFol
   metadata.elabftw.file_folder_references.push(...references);
   await saveMetadata(metadata);
   return references;
+}
+
+/** Single-item add with an optional display label, distinct from the bulk textarea add above. */
+export async function createFileFolderReference(text: string, label: string): Promise<FileFolderReference> {
+  const trimmedText = text.trim();
+  const trimmedLabel = label.trim();
+  if (!trimmedText) throw new Error('Enter a file or folder reference');
+  if (trimmedText.length > MAX_REFERENCE_LENGTH) {
+    throw new Error(`The reference must be ${MAX_REFERENCE_LENGTH} characters or fewer`);
+  }
+  if (trimmedLabel.length > MAX_LABEL_LENGTH) {
+    throw new Error(`The label must be ${MAX_LABEL_LENGTH} characters or fewer`);
+  }
+  const metadata = await readMetadata();
+  const reference: FileFolderReference = {
+    id: crypto.randomUUID(),
+    text: trimmedText,
+    ...(trimmedLabel ? {label: trimmedLabel} : {}),
+  };
+  metadata.elabftw.file_folder_references.push(reference);
+  await saveMetadata(metadata);
+  return reference;
 }
 
 export async function deleteFileFolderReference(id: string): Promise<void> {
