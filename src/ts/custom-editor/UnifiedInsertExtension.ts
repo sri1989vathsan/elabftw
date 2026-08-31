@@ -73,6 +73,7 @@ function buttonAsMenuItem(editor: Editor, name: string, text: string): AnyMenuIt
 
 export function registerUnifiedInsertExtension(editor: Editor): void {
   editor.ui.registry.addMenuButton('elabftw-insert-menu', {
+    icon: 'plus',
     text: 'Insert',
     tooltip: 'Insert (text, tables, links, laboratory)',
     fetch: async callback => {

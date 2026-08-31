@@ -66,7 +66,6 @@ import '../js/tinymce-plugins/mention/plugin.js';
 import { EntityType, Model } from './interfaces';
 import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPostRequest, setEntitySaveState } from './misc';
 import { ApiC } from './api';
-import { isSortable } from './TableSorting.class';
 import type { MathJaxObject } from '@mathjax/src/js/components/startup.js';
 declare const MathJax: MathJaxObject;
 import { entity } from './getEntity';
@@ -219,7 +218,10 @@ export function getTinymceBaseConfig(page: string): object {
   // together, then the standalone Insert-menu, then all individual insert
   // actions (including table tools, since they act on what you just
   // inserted) together, then everything else.
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough superscript subscript forecolor backcolor alignleft aligncenter alignright alignjustify bullist numlist checklist outdent indent format-painter remove-formatting | elabftw-insert-menu | insert-link adddate experiment-title horizontal-rule insert-note insert-data-table copy-table-or-selection table-outdent table-indent sort-table | charmap emoticons codesample';
+  // Table alignment (outdent/indent) and sortable-table toggle live inside
+  // the insert-data-table dropdown itself (see SpreadsheetExtension.ts)
+  // rather than as their own toolbar buttons.
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough superscript subscript forecolor backcolor alignleft aligncenter alignright alignjustify bullist numlist checklist outdent indent format-painter remove-formatting | elabftw-insert-menu | insert-link adddate experiment-title horizontal-rule insert-note insert-data-table copy-table-or-selection | charmap emoticons codesample';
   if (!document.getElementById('documentTitle')) {
     toolbar1 = toolbar1.replace('experiment-title ', '');
   }
@@ -528,64 +530,6 @@ export function getTinymceBaseConfig(page: string): object {
         });
       }
 
-      // sort down icon from COLLECTION: Dazzle Line Icons LICENSE: CC Attribution License AUTHOR: Dazzle UI
-      editor.ui.registry.addIcon('sort-amount-down-alt', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 12h8m-8-4h8m-8 8h8M6 7v10m0 0-3-3m3 3 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'), // eslint-disable-line
-      // add toggle button for table sorting
-      editor.ui.registry.addToggleButton('sort-table', {
-        icon: 'sort-amount-down-alt',
-        tooltip: 'sortable table',
-        onAction: api => {
-          const table = editor.selection.getNode().closest('table');
-          if (table) {
-            if (api.isActive()) {
-              // unset sortable
-              delete table.dataset.tableSort;
-              api.setActive(false);
-            } else {
-              // show alert if table is not sortable
-              if (!isSortable(table, true)) {
-                editor.focus();
-                return;
-              }
-              // set sortable
-              table.dataset.tableSort = 'true';
-              // here the top row could be reformatted automatically td -> th
-              api.setActive(true);
-            }
-            editor.undoManager.add();
-          }
-          editor.focus();
-        },
-        onSetup: api => {
-          // button is enabled only if table is selected
-          // button is active (highlighted) only if table is set sortable
-          api.setEnabled(false);
-
-          const callback = event => {
-            const table = event.element.closest('table');
-            if (!table) {
-              api.setEnabled(false);
-              api.setActive(false);
-              return;
-            }
-
-            // table is selected, enable button
-            api.setEnabled(true);
-            if (table.dataset.tableSort === 'true') {
-              // table is set sortable, highlight button
-              api.setActive(true);
-              return;
-            }
-            api.setActive(false);
-          };
-
-          editor.on('NodeChange', callback);
-
-          return () => {
-            editor.off('NodeChange', callback);
-          };
-        },
-      });
     },
     style_formats_merge: true,
     style_formats: [

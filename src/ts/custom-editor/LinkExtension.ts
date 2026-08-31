@@ -2,7 +2,7 @@
 import { Editor } from 'tinymce/tinymce';
 import { ApiC } from '../api';
 import { entity } from '../getEntity';
-import { createFileFolderReferences } from '../file-folder-references';
+import { createFileFolderReference, toSmbHref } from '../file-folder-references';
 import { Model } from '../interfaces';
 import { buildLabCollectorUrl } from '../labcollector-link';
 import { createWebLink, normalizeWebLinkUrl } from '../web-links';
@@ -19,7 +19,8 @@ interface LabCollectorDialogData {
 }
 
 interface FileFolderReferenceDialogData {
-  references: string;
+  text: string;
+  label: string;
 }
 
 interface WebLinkDialogData {
@@ -193,17 +194,24 @@ export function registerLinkExtension(editor: Editor): void {
     const bookmark = editor.selection.getBookmark(2, true);
     const selectedText = editor.selection.getContent({ format: 'text' }).trim();
     editor.windowManager.open({
-      title: 'Add file/folder references',
+      title: 'Add a file/folder reference',
       size: 'normal',
       body: {
         type: 'panel',
-        items: [{
-          type: 'textarea',
-          name: 'references',
-          label: 'One plain-text reference per line',
-        }],
+        items: [
+          {
+            type: 'input',
+            name: 'text',
+            label: 'smb://server/share/folder or a plain-text reference',
+          },
+          {
+            type: 'input',
+            name: 'label',
+            label: 'Display label (optional)',
+          },
+        ],
       },
-      initialData: { references: selectedText },
+      initialData: { text: selectedText, label: '' },
       buttons: [
         { type: 'cancel', text: 'Cancel' },
         { type: 'submit', text: 'Add and insert', primary: true },
@@ -211,26 +219,28 @@ export function registerLinkExtension(editor: Editor): void {
       onSubmit: async api => {
         try {
           const data = api.getData() as FileFolderReferenceDialogData;
-          const references = await createFileFolderReferences(data.references);
+          const reference = await createFileFolderReference(data.text, data.label);
           editor.focus();
           editor.selection.moveToBookmark(bookmark);
+          const smbHref = toSmbHref(reference.text);
+          const displayText = reference.label || reference.text;
           editor.undoManager.transact(() => {
-            editor.execCommand(
-              'mceInsertContent',
-              false,
-              references.map(reference => escapeHTML(reference.text)).join('<br>'),
-            );
+            if (smbHref) {
+              editor.execCommand(
+                'mceInsertContent',
+                false,
+                `<a href="${escapeHTML(smbHref)}">${escapeHTML(displayText)}</a>`,
+              );
+            } else {
+              editor.execCommand('mceInsertContent', false, escapeHTML(displayText));
+            }
           });
           await updateEntityBody(false);
           api.close();
-          editor.notificationManager.open({
-            text: `${references.length} reference${references.length === 1 ? '' : 's'} added`,
-            type: 'success',
-            timeout: 2200,
-          });
+          editor.notificationManager.open({ text: 'Reference added', type: 'success', timeout: 2200 });
         } catch (error) {
           editor.notificationManager.open({
-            text: error instanceof Error ? error.message : 'Unable to add file/folder references',
+            text: error instanceof Error ? error.message : 'Unable to add file/folder reference',
             type: 'error',
             timeout: 3500,
           });

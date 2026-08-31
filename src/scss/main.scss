@@ -3315,6 +3315,13 @@ the form-control fails to do that so we do the border ourselves */
   }
 
   body.toc-print-selection-active #tocPrintSelectionDocument {
+    /* neutralize the account theme palette's own background variables
+       (e.g. .bg-firstlevel elements copied in from the note) without
+       touching a literal background-color a user picked directly on a
+       header or highlighted text -- those aren't theme-driven and still
+       print as authored */
+    --firstlevel: transparent;
+    --secondlevel: transparent;
     background: #fff;
     color: #111;
     display: block !important;

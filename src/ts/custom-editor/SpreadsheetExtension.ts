@@ -17,6 +17,8 @@ import {
 } from '../inline-spreadsheet';
 import { escapeHTML } from '../misc';
 import { RICH_SELECTION_ATTRIBUTE } from '../ClipboardContent';
+import TableIndentation from '../TableIndentation.class';
+import { isSortable } from '../TableSorting.class';
 
 interface PdfTableDialogData {
   columns: string;
@@ -472,6 +474,9 @@ function growSpreadsheetColumnToFitCell(cell: HTMLTableCellElement): void {
 }
 
 export function registerSpreadsheetExtension(editor: Editor): void {
+  const tableIndentation = new TableIndentation(editor);
+  // sort down icon from COLLECTION: Dazzle Line Icons LICENSE: CC Attribution License AUTHOR: Dazzle UI
+  editor.ui.registry.addIcon('sort-amount-down-alt', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 12h8m-8-4h8m-8 8h8M6 7v10m0 0-3-3m3 3 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'); // eslint-disable-line
   editor.ui.registry.addIcon(
     'elabftw-spreadsheet-formula',
     '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 4v16M15 4v16M3 9.5h18M3 14.5h18" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M16.3 11.3h3.2M16.3 12.9h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
@@ -683,6 +688,41 @@ export function registerSpreadsheetExtension(editor: Editor): void {
             onAction: () => editor.execCommand('mceTableCellProps'),
           });
         }
+        if (tableIndentation.canOutdent(selectedTable)) {
+          items.push({
+            type: 'menuitem' as const,
+            text: 'Outdent table',
+            icon: 'outdent',
+            onAction: () => tableIndentation.outdentSelectedTable(),
+          });
+        }
+        if (tableIndentation.canIndent(selectedTable)) {
+          items.push({
+            type: 'menuitem' as const,
+            text: 'Indent table to align with nested bullets',
+            icon: 'indent',
+            onAction: () => tableIndentation.indentSelectedTable(),
+          });
+        }
+        const tableIsSortable = selectedTable.dataset.tableSort === 'true';
+        items.push({
+          type: 'menuitem' as const,
+          text: tableIsSortable ? 'Remove table sorting' : 'Make table sortable',
+          icon: 'sort-amount-down-alt',
+          onAction: () => {
+            if (tableIsSortable) {
+              delete selectedTable.dataset.tableSort;
+            } else {
+              if (!isSortable(selectedTable, true)) {
+                editor.focus();
+                return;
+              }
+              selectedTable.dataset.tableSort = 'true';
+            }
+            editor.undoManager.add();
+            editor.focus();
+          },
+        });
       }
       callback(items);
     },

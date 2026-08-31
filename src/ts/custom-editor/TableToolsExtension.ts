@@ -1,6 +1,5 @@
 /** Fork-owned table indentation and direct property shortcuts. */
 import { Editor } from 'tinymce/tinymce';
-import TableIndentation from '../TableIndentation.class';
 import {
   copiedContentAsPlainText,
   prepareCopiedContent,
@@ -15,7 +14,6 @@ export function registerTableToolsExtension(editor: Editor): void {
     'elabftw-copy-table',
     '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="4" width="11" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 8h7M8 11.5h7M11.5 8v7" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="10" width="10" height="10" rx="1.5" fill="var(--tox-icon-highlight-bg, none)" stroke="currentColor" stroke-width="1.8"/><path d="M13 13h4M13 16h4M15 13v5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
   );
-  const tableIndentation = new TableIndentation(editor);
   let lastSelectedTable: HTMLTableElement | null = null;
   let lastMixedSelectionRange: Range | null = null;
   let copyFallbackInProgress = false;
@@ -223,20 +221,6 @@ export function registerTableToolsExtension(editor: Editor): void {
     });
   });
 
-  editor.ui.registry.addButton('table-outdent', {
-    icon: 'outdent',
-    tooltip: 'Outdent table',
-    onAction: () => tableIndentation.outdentSelectedTable(),
-    onSetup: api => {
-      const update = (event): void => {
-        const table = tableIndentation.trackSelectedTable(event.element);
-        api.setEnabled(tableIndentation.canOutdent(table));
-      };
-      api.setEnabled(tableIndentation.canOutdent(tableIndentation.trackSelectedTable()));
-      editor.on('NodeChange', update);
-      return () => editor.off('NodeChange', update);
-    },
-  });
   // One dropdown instead of two separate always-visible buttons: "copy the
   // whole table" only makes sense inside a table, so it's greyed out there
   // rather than needing its own toolbar slot.
@@ -259,20 +243,6 @@ export function registerTableToolsExtension(editor: Editor): void {
           onAction: () => void copySelectedContent(),
         },
       ]);
-    },
-  });
-  editor.ui.registry.addButton('table-indent', {
-    icon: 'indent',
-    tooltip: 'Indent table to align with nested bullets',
-    onAction: () => tableIndentation.indentSelectedTable(),
-    onSetup: api => {
-      const update = (event): void => {
-        const table = tableIndentation.trackSelectedTable(event.element);
-        api.setEnabled(tableIndentation.canIndent(table));
-      };
-      api.setEnabled(tableIndentation.canIndent(tableIndentation.trackSelectedTable()));
-      editor.on('NodeChange', update);
-      return () => editor.off('NodeChange', update);
     },
   });
 }
