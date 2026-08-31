@@ -6,6 +6,7 @@
  * @package elabftw
  */
 import $ from 'jquery';
+import { captureFocus, restoreFocus, trapTabFocus } from './a11y';
 import { Model } from './interfaces';
 
 export default class SidePanel {
@@ -19,6 +20,7 @@ export default class SidePanel {
 
   panelId: string;
   model: Model | string;
+  private lastFocused: HTMLElement | null = null;
 
   constructor(model: Model | string) {
     this.model = model;
@@ -146,6 +148,28 @@ export default class SidePanel {
     SidePanel.setWidth(SidePanel.currentWidth);
   }
 
+  // Keyboard/screen-reader parity with the standalone dialogs (command
+  // palette, date/title editors): Escape closes the panel, Tab stays inside
+  // it, and closing returns focus to whatever opened it. One-time-per-panel
+  // -element guard (like FavoriteFilters' overlay-toggle binding) since show()
+  // can run many times against the same persistent DOM node.
+  private bindPanelKeyboardHandling(panel: HTMLElement): void {
+    if (panel.dataset.a11yBound === 'true') return;
+    panel.dataset.a11yBound = 'true';
+    panel.addEventListener('keydown', event => {
+      if (panel.hasAttribute('hidden')) return;
+      if (event.key === 'Escape') {
+        // A nested overlay (e.g. FavoriteFilters' Filters/Manage dropdowns)
+        // may be open on top of the panel with its own Escape handling --
+        // let it close first rather than also collapsing the whole panel.
+        if (panel.querySelector('.favorite-filter-overlay:not([hidden])')) return;
+        this.hide();
+        return;
+      }
+      trapTabFocus(panel, event);
+    });
+  }
+
   hide(): void {
     // make container great again
     SidePanel.setContainerOpen(false);
@@ -155,6 +179,8 @@ export default class SidePanel {
     panel.toggleAttribute('hidden', true);
     // store the current state
     localStorage.removeItem('opened-sidepanel');
+    restoreFocus(this.lastFocused);
+    this.lastFocused = null;
     const opener = document.getElementById(`${this.panelId}Opener`);
     if (!opener) return;
     opener.classList.remove('sidepanel-opened');
@@ -177,7 +203,9 @@ export default class SidePanel {
       otherOpener?.setAttribute('aria-expanded', 'false');
     });
 
+    this.lastFocused = captureFocus();
     this.addResizer(panel);
+    this.bindPanelKeyboardHandling(panel);
     SidePanel.setContainerOpen(true);
     // show panel
     panel.removeAttribute('hidden');
@@ -186,6 +214,11 @@ export default class SidePanel {
     opener.classList.add('sidepanel-opened');
     opener.classList.remove('sidepanel-closed');
     opener.setAttribute('aria-expanded', 'true');
+    // Give screen readers a signal the panel just became the active region
+    // (mirrors the standalone dialogs moving focus to their first control),
+    // instead of leaving focus on the opener button with no announcement.
+    const closeButton = panel.querySelector<HTMLElement>('[data-action="toggle-sidepanel"][data-purpose="hide"]');
+    window.requestAnimationFrame(() => closeButton?.focus());
   }
 
   // TOGGLE PANEL VISIBILITY

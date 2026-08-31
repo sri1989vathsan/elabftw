@@ -33,6 +33,7 @@ enum ApiEndpoint: string
     case FavCategories = 'favcategories';
     case FavFilters = 'favfilters';
     case TemplateFavorites = 'templatefavorites';
+    case TemplateVersions = 'templateversions';
     case FavTags = 'favtags';
     case Idps = 'idps';
     case IdpsSources = 'idps_sources';

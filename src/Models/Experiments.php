@@ -128,6 +128,32 @@ final class Experiments extends AbstractConcreteEntity
         return $result;
     }
 
+    /**
+     * Every template inserted into this experiment's body via the "Insert
+     * template" editor picker (custom migration 022), grouped by template
+     * since the same one can be inserted more than once (e.g. 3x PCR).
+     * Distinct from created_from_type/id/version, which only ever reflects
+     * the single template this experiment was originally created from.
+     */
+    public function readAssociatedTemplates(): array
+    {
+        $sql = 'SELECT
+                eti.template_id,
+                et.title,
+                MAX(eti.version) AS latest_version,
+                COUNT(*) AS insert_count,
+                MIN(eti.inserted_at) AS first_inserted_at
+            FROM experiment_template_inserts eti
+            JOIN experiments_templates et ON et.id = eti.template_id
+            WHERE eti.experiment_id = :experiment_id
+            GROUP BY eti.template_id, et.title
+            ORDER BY first_inserted_at ASC';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':experiment_id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return $req->fetchAll();
+    }
+
     #[Override]
     public function readShow(QueryParamsInterface $displayParams, bool $extended = false, string $can = 'canread'): array
     {

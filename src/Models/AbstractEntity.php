@@ -596,21 +596,40 @@ abstract class AbstractEntity extends AbstractRest
             return $this->readOne();
         }
         // Record which template was pulled into this experiment via the
-        // "Insert template" editor button, so the template's own "Used in"
-        // list also picks up experiments that never went through the
-        // "create new experiment from this template" flow. Never overwrites
-        // an existing created_from_type/id: that reflects how the entity was
-        // actually created and takes precedence over a later insert.
+        // "Insert template" editor button. Two separate things are tracked:
+        // created_from_type/id/version (upstream columns) reflect how the
+        // entity was actually created and are set at most once, the first
+        // time -- a later insert never overwrites them. experiment_template_
+        // inserts (custom migration 022) is a full repeatable audit trail:
+        // every insert gets its own row, so inserting the same template
+        // several times (or several different templates) is fully
+        // represented, which the single-value columns can't do.
         if ($action === Action::LinkTemplateSource) {
             if ($this->entityType !== EntityType::Experiments) {
                 throw new ImproperActionException('Linking a template source is only available for experiments.');
             }
             $this->canOrExplode(AccessType::Write);
-            if (($this->entityData['created_from_type'] ?? null) === null) {
-                $templateId = (int) ($params['template_id'] ?? 0);
-                if ($templateId <= 0) {
-                    throw new ImproperActionException('A template id is required.');
+            $templateId = (int) ($params['template_id'] ?? 0);
+            if ($templateId <= 0) {
+                throw new ImproperActionException('A template id is required.');
+            }
+            // An explicit version means the user picked an older snapshot from
+            // the version-history picker (see TemplateInsertExtension.ts):
+            // record that historical version, not whatever the template
+            // currently is, so "Version %d" in the associated-templates list
+            // reflects what was actually inserted.
+            $requestedVersion = Filter::intOrNull($params['version'] ?? null);
+            if ($requestedVersion !== null) {
+                $sql = 'SELECT version FROM custom_template_versions WHERE entity_id = :template_id AND version = :version';
+                $req = $this->Db->prepare($sql);
+                $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
+                $req->bindParam(':version', $requestedVersion, PDO::PARAM_INT);
+                $this->Db->execute($req);
+                $templateVersion = $req->fetchColumn();
+                if ($templateVersion === false) {
+                    throw new ImproperActionException('This template version does not exist.');
                 }
+            } else {
                 $sql = 'SELECT version FROM experiments_templates WHERE id = :template_id';
                 $req = $this->Db->prepare($sql);
                 $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
@@ -619,7 +638,9 @@ abstract class AbstractEntity extends AbstractRest
                 if ($templateVersion === false) {
                     throw new ImproperActionException('This template does not exist.');
                 }
+            }
 
+            if (($this->entityData['created_from_type'] ?? null) === null) {
                 $sql = sprintf(
                     'UPDATE %s SET created_from_type = :type, created_from_id = :template_id, created_from_version = :version WHERE id = :id',
                     $this->entityType->value,
@@ -631,6 +652,14 @@ abstract class AbstractEntity extends AbstractRest
                 $req->bindParam(':id', $this->id, PDO::PARAM_INT);
                 $this->Db->execute($req);
             }
+
+            $sql = 'INSERT INTO experiment_template_inserts (experiment_id, template_id, version) VALUES (:experiment_id, :template_id, :version)';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':experiment_id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
+            $req->bindParam(':version', $templateVersion, PDO::PARAM_INT);
+            $this->Db->execute($req);
+
             return $this->readOne();
         }
         // for deleted or archived entities, allow specific actions (Restore & Unarchive)
@@ -1176,6 +1205,16 @@ abstract class AbstractEntity extends AbstractRest
             $req = $this->Db->prepare($sql);
             $req->bindParam(':version', $source['version'], PDO::PARAM_INT);
             $req->bindParam(':id', $newId, PDO::PARAM_INT);
+            $this->Db->execute($req);
+
+            // Also counts as an "associated template" (see readAssociatedTemplates())
+            // so this new experiment's own creation template shows up in that
+            // list too, not just templates inserted afterward via the editor.
+            $sql = 'INSERT INTO experiment_template_inserts (experiment_id, template_id, version) VALUES (:experiment_id, :template_id, :version)';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':experiment_id', $newId, PDO::PARAM_INT);
+            $req->bindParam(':template_id', $sourceId, PDO::PARAM_INT);
+            $req->bindParam(':version', $source['version'], PDO::PARAM_INT);
             $this->Db->execute($req);
         }
 

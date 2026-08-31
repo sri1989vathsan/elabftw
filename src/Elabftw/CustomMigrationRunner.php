@@ -45,6 +45,7 @@ final class CustomMigrationRunner
         '019_template_version_history.sql',
         '020_template_favorites.sql',
         '021_created_from_version.sql',
+        '022_experiment_template_inserts.sql',
     );
 
     private Db $Db;

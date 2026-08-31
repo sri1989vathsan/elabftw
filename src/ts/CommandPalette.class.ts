@@ -1,5 +1,6 @@
 import tinymce from 'tinymce/tinymce';
 import { ApiC } from './api';
+import { captureFocus, restoreFocus, trapTabFocus } from './a11y';
 import { confirmLeaveEditing } from './misc';
 
 interface PaletteEntry {
@@ -32,6 +33,7 @@ export default class CommandPalette {
   // without ever serving results stale enough to matter for a live search box.
   private remoteCache = new Map<string, { expires: number; entries: PaletteEntry[] }>();
   private static readonly REMOTE_CACHE_TTL_MS = 15_000;
+  private lastFocused: HTMLElement | null = null;
 
   constructor() {
     this.overlay = document.createElement('div');
@@ -103,6 +105,7 @@ export default class CommandPalette {
         return;
       }
       if (this.overlay.hidden) return;
+      trapTabFocus(this.overlay, event);
       if (event.key === 'Escape') {
         event.preventDefault();
         this.close();
@@ -124,6 +127,7 @@ export default class CommandPalette {
   }
 
   private open(): void {
+    this.lastFocused = captureFocus();
     this.overlay.hidden = false;
     document.body.classList.add('command-palette-open');
     this.input.value = '';
@@ -135,6 +139,8 @@ export default class CommandPalette {
   private close(): void {
     this.overlay.hidden = true;
     document.body.classList.remove('command-palette-open');
+    restoreFocus(this.lastFocused);
+    this.lastFocused = null;
   }
 
   private moveActive(change: number): void {

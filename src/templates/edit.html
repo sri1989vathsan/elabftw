@@ -222,6 +222,10 @@
 
 {% include 'links.html' %}
 
+{% if Entity.entityData.type == 'experiments' %}
+  {% include 'associated-templates.html' %}
+{% endif %}
+
 {% include 'storage-view-edit.html' %}
 
 {# PERMISSIONS #}

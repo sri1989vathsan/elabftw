@@ -4171,4 +4171,20 @@ div > .sticky-navbar {
   .sticky-toolbar {
     transition: none;
   }
+
+  // Sidebar/dialog-adjacent transitions and animations gated the same way --
+  // matching each rule's own selector so specificity actually overrides it
+  // (a lower-specificity override here would silently lose to the original).
+  .side-panel-resizer::after,
+  .favorite-filter-section .favorite-filter-section-chevron,
+  .toc-items-container .toc-link,
+  .infotip-text,
+  .malleable::after {
+    transition: none;
+  }
+
+  .toc-highlight,
+  .state-indicator[data-state='5'] {
+    animation: none;
+  }
 }

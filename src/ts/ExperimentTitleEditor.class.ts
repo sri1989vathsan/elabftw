@@ -3,6 +3,7 @@
  */
 import type { Editor } from 'tinymce/tinymce';
 import { entity } from './getEntity';
+import { trapTabFocus } from './a11y';
 import { escapeHTML } from './misc';
 import { getAccountEditorDefault, saveAccountEditorDefault } from './editor-defaults';
 
@@ -116,12 +117,13 @@ function getDefaults(): ExperimentTitleDefaults {
 }
 
 async function saveDefaults(defaults: ExperimentTitleDefaults): Promise<void> {
+  // Write the local fallback first: if the account sync below fails (e.g.
+  // offline), this is the only copy of the just-saved value that survives.
+  localStorage.setItem(TITLE_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
   await saveAccountEditorDefault<ExperimentTitleAccountSettings>('title', {
     ...defaults,
     presets: getPresets(),
   });
-  // Keep a local fallback for accounts upgraded from earlier installations.
-  localStorage.setItem(TITLE_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
 }
 
 function normalizePresets(candidates: unknown): ExperimentTitlePreset[] {
@@ -156,11 +158,13 @@ function getPresets(): ExperimentTitlePreset[] {
 
 async function savePresets(presets: ExperimentTitlePreset[]): Promise<void> {
   const defaults = getDefaults();
+  // Write the local fallback first: if the account sync below fails (e.g.
+  // offline), this is the only copy of the just-saved value that survives.
+  localStorage.setItem(TITLE_PRESETS_STORAGE_KEY, JSON.stringify(presets));
   await saveAccountEditorDefault<ExperimentTitleAccountSettings>('title', {
     ...defaults,
     presets,
   });
-  localStorage.setItem(TITLE_PRESETS_STORAGE_KEY, JSON.stringify(presets));
 }
 
 function getHeadingStyle(defaults: ExperimentTitleDefaults): string {
@@ -608,7 +612,8 @@ export default class ExperimentTitleEditor {
       this.editor.focus();
     };
     const handleKeydown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') close();
+      if (event.key === 'Escape') { close(); return; }
+      trapTabFocus(dialog, event);
     };
 
     dialog.addEventListener('input', event => {
@@ -688,9 +693,6 @@ export default class ExperimentTitleEditor {
       } finally {
         deletePresetButton.disabled = !presetSelect.value;
       }
-    });
-    overlay.addEventListener('click', event => {
-      if (event.target === overlay) close();
     });
     cancelButton.addEventListener('click', () => close());
     saveDefaultButton.addEventListener('click', async () => {

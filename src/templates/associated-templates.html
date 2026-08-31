@@ -1,0 +1,22 @@
+{# ASSOCIATED EXPERIMENTAL TEMPLATES -- every template inserted into this
+   experiment's body via the "Insert template" editor picker, one row per
+   distinct template with a x-count badge if inserted more than once.
+   Distinct from the (single-value, set-once) "Created from" provenance. #}
+{% if associatedTemplatesArr %}
+  <div id='associatedTemplatesDiv'>
+    <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-scroll-btn='fa-file-import' data-scroll-btn-label='{{ 'Templates'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='associatedTemplatesContent'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Associated experimental templates'|trans }}</h3>
+    <ul id='associatedTemplatesContent' class='list-group mt-2'>
+      {% for tpl in associatedTemplatesArr %}
+        <li class='list-group-item d-flex align-items-center'>
+          <a href='templates.php?mode=view&id={{ tpl.template_id }}' class='flex-grow-1 text-decoration-none'>
+            <i class='fas fa-arrow-up-right-from-square mr-1'></i>{{ tpl.title }}
+          </a>
+          {% if tpl.insert_count > 1 %}
+            <span class='badge badge-secondary ml-1'>{{ 'Inserted %d times'|trans|format(tpl.insert_count) }}</span>
+          {% endif %}
+          <span class='badge badge-secondary ml-1'>{{ 'Version %d'|trans|format(tpl.latest_version) }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}

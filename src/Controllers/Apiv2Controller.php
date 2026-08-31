@@ -47,6 +47,7 @@ use Elabftw\Models\ExtraFieldsKeys;
 use Elabftw\Models\FavFilters;
 use Elabftw\Models\FavTags;
 use Elabftw\Models\TemplateFavorites;
+use Elabftw\Models\TemplateVersionsRest;
 use Elabftw\Models\Idps;
 use Elabftw\Models\IdpsCerts;
 use Elabftw\Models\IdpsEndpoints;
@@ -380,6 +381,7 @@ final class Apiv2Controller extends AbstractApiController
             ApiEndpoint::FavTags => new FavTags($this->requester, $this->id),
             ApiEndpoint::Reports => new ReportsHandler($this->requester),
             ApiEndpoint::TemplateFavorites => new TemplateFavorites($this->requester, $this->id),
+            ApiEndpoint::TemplateVersions => new TemplateVersionsRest($this->requester, $this->id),
             ApiEndpoint::StorageUnits => new StorageUnits($this->requester, Config::getConfig()->configArr['inventory_require_edit_rights'] === '1', $this->id),
             // Temporary informational endpoint, can be removed in 5.2
             ApiEndpoint::TeamTags => throw new ImproperActionException('Use api/v2/teams/current/tags endpoint instead.'),

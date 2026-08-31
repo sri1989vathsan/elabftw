@@ -11,6 +11,7 @@ import jspreadsheet from 'jspreadsheet-ce';
 import 'jspreadsheet-ce/dist/jspreadsheet.css';
 import 'jsuites/dist/jsuites.css';
 import { ApiC } from './api';
+import { captureFocus, restoreFocus } from './a11y';
 import { entity } from './getEntity';
 
 type CellValue = string | number | boolean | null;
@@ -3013,6 +3014,7 @@ export function openSpreadsheetModal(
       allowRange: boolean;
     } | null = null;
     let rowResizePointerActive = false;
+    const openerFocus = captureFocus();
     document.body.appendChild(ui.overlay);
     ui.overlay.querySelector('.inline-spreadsheet-dialog')?.addEventListener('input', () => {
       hasChanges = true;
@@ -4367,6 +4369,7 @@ export function openSpreadsheetModal(
       ui.sheetHost.removeEventListener('paste', onSpreadsheetPaste, true);
       document.removeEventListener('keydown', onKey);
       ui.overlay.remove();
+      restoreFocus(openerFocus);
     };
     const cancel = (force = false): void => {
       if (!force && hasChanges && !window.confirm('Discard unsaved spreadsheet changes?')) return;

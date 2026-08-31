@@ -27,6 +27,7 @@ use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\ControllerInterface;
 use Elabftw\Models\AbstractEntity;
 use Elabftw\Models\Config;
+use Elabftw\Models\Experiments;
 use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\FavTags;
 use Elabftw\Models\ItemsStatus;
@@ -205,6 +206,9 @@ abstract class AbstractEntityController implements ControllerInterface
             'templateUsedByArr' => $this->Entity instanceof Templates
                 ? $this->Entity->readExperimentsUsingThis()
                 : array(),
+            'associatedTemplatesArr' => $this->Entity instanceof Experiments
+                ? $this->Entity->readAssociatedTemplates()
+                : array(),
             'experimentsFoldersArr' => $experimentsFoldersViewArr,
             'experimentsFoldersCreateArr' => $experimentsFoldersViewArr,
             'experimentsFoldersTreeArr' => $ExperimentsFoldersView->readAllRecursive(),
@@ -279,6 +283,9 @@ abstract class AbstractEntityController implements ControllerInterface
                 : array(),
             'templateUsedByArr' => $this->Entity instanceof Templates
                 ? $this->Entity->readExperimentsUsingThis()
+                : array(),
+            'associatedTemplatesArr' => $this->Entity instanceof Experiments
+                ? $this->Entity->readAssociatedTemplates()
                 : array(),
             'experimentsFoldersArr' => $experimentsFoldersEditArr,
             'experimentsFoldersCreateArr' => $experimentsFoldersEditArr,

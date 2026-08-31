@@ -141,6 +141,7 @@ enum Model {
   FavFilter = 'favfilters',
   FavTag = 'favtags',
   TemplateFavorite = 'templatefavorites',
+  TemplateVersion = 'templateversions',
   Idp = 'idps',
   IdpsSources = 'idps_sources',
   ItemsStatus = 'items_status',

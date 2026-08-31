@@ -176,6 +176,10 @@
   {% include 'links.html' %}
 {% endif %}
 
+{% if Entity.entityData.type == 'experiments' %}
+  {% include 'associated-templates.html' %}
+{% endif %}
+
 {% if not App.isAnonymous() %}
 
   {# same for storage #}
