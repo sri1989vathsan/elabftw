@@ -176,6 +176,16 @@ function SpreadsheetEditor() {
     }
   };
 
+  // Copy the current workbook into TinyMCE as formula-enabled inline tables.
+  // The parent owns the editor instance and performs the HTML conversion so
+  // this standalone bundle stays independent from the main editor modules.
+  const insertInMainText = () => {
+    window.parent.postMessage({
+      type: 'jss-insert-main-text',
+      detail: { worksheets: getWorksheets() },
+    }, window.location.origin);
+  };
+
   // load an attachment into the editor, capture filename & id
   useEffect(() => {
     const onMessage = (event) => {
@@ -254,6 +264,12 @@ function SpreadsheetEditor() {
       const fullscreenBtn = { type: 'icon', class: 'mx-2 fas fa-expand', tooltip: i18next.t('fullscreen'), onclick: () => toggleFullscreen()};
       const clearBtn = { type: 'icon', class: 'ml-2 fas fa-trash', tooltip: i18next.t('clear'), onclick: clearSpreadsheet };
       const importBtn = { type: 'icon', class: 'fas fa-upload', tooltip: i18next.t('import'), onclick: () => document.getElementById('importFileInput').click() };
+      const insertInMainTextBtn = {
+        type: 'icon',
+        class: 'ml-2 fas fa-file-import',
+        tooltip: 'Insert workbook into main text',
+        onclick: insertInMainText,
+      };
       // replace original save & fullscreen buttons with our custom functions
       if (saveBtn) {
         Object.assign(saveBtn, {
@@ -265,7 +281,7 @@ function SpreadsheetEditor() {
         });
       }
 
-      tb.items.push(fullscreenBtn, importBtn, exportBtn, clearBtn);
+      tb.items.push(fullscreenBtn, importBtn, insertInMainTextBtn, exportBtn, clearBtn);
       return tb;
     } catch (error) {
       console.error('Could not customize spreadsheet toolbar, using default:', error);
