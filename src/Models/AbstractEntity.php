@@ -770,6 +770,16 @@ abstract class AbstractEntity extends AbstractRest
                                 : Tools::md2html($currentBody);
                         }
                     }
+                    // process content_type before body: update() decides
+                    // whether to purify the body as html based on
+                    // entityData['content_type'], so it must already
+                    // reflect the type being switched to, not the old one,
+                    // by the time body is processed below
+                    if (array_key_exists('content_type', $params)) {
+                        $this->update(new EntityParams('content_type', (string) $params['content_type']));
+                        $this->entityData['content_type'] = (int) $params['content_type'];
+                        unset($params['content_type']);
+                    }
                     foreach ($params as $key => $value) {
                         $this->update(new EntityParams($key, (string) $value));
                     }
@@ -1086,7 +1096,17 @@ abstract class AbstractEntity extends AbstractRest
     // Update an entity. The revision is saved before so it can easily compare old and new body.
     public function update(ContentParamsInterface $params): bool
     {
-        $content = $params->getContent();
+        $target = $params->getTarget();
+        if (($target === 'body' || $target === 'bodyappend')
+            && (int) ($this->entityData['content_type'] ?? BodyContentType::Html->value) === BodyContentType::Markdown->value
+        ) {
+            // a markdown entity's body is plain text, not html; the normal
+            // Filter::body() path runs it through HTMLPurifier, which
+            // otherwise mangles harmless markdown syntax (see Filter::body())
+            $content = Filter::body($params->getUnfilteredContent(), purify: false);
+        } else {
+            $content = $params->getContent();
+        }
         if ($params->getTarget() === 'bodyappend') {
             $content = $this->readColumn('body') . $content;
         }

@@ -191,7 +191,7 @@ final class Filter
      * @param string $input Body to sanitize
      * @return string The sanitized body or empty string if there is no input
      */
-    public static function body(?string $input = null): string
+    public static function body(?string $input = null, bool $purify = true): string
     {
         if ($input === null) {
             return '';
@@ -199,6 +199,13 @@ final class Filter
         // use strlen() instead of mb_strlen() because we want the size in bytes
         if (strlen($input) > self::MAX_BODY_SIZE) {
             throw new ImproperActionException('Content is too big! Cannot save!');
+        }
+        // a markdown body is plain text, not html -- running it through
+        // HTMLPurifier below mangles harmless markdown syntax that happens
+        // to contain html-significant characters, e.g. the "> " prefix of a
+        // blockquote becomes "&gt; "
+        if ($purify === false) {
+            return $input;
         }
         // create base config for html5
         $config = HTMLPurifier_HTML5Config::createDefault();
