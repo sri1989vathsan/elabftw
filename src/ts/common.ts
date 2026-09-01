@@ -17,6 +17,7 @@ import FoldersPanel from './FoldersPanel.class';
 import TocPanel from './TocPanel.class';
 import HtmlToolsPanel from './HtmlToolsPanel.class';
 import CalendarActivity from './CalendarActivity.class';
+import CommandPalette from './CommandPalette.class';
 import { clearLocalStorage, rememberLastSelected, selectLastSelected } from './localStorage';
 import {
   adjustHiddenState,
@@ -192,12 +193,23 @@ if (navbar) {
 
   const applyStickyHeaderState = (): void => {
     const visibleNavbarHeight = isNavbarHidden ? 0 : navbarHeight;
-    const visibleToolbarHeight = isNavbarHidden ? 0 : entityToolbarHeight;
     navbar.classList.toggle('hidden', isNavbarHidden);
-    entityStickyToolbar?.classList.toggle('hidden', isNavbarHidden);
+    // The entity save/back toolbar stays visible even while the plain navbar
+    // hides on scroll-down: losing one-click access to Save while reviewing
+    // a long document is worse than the vertical space it costs. It just
+    // docks higher — top: var(--navbar-height) on .sticky-toolbar already
+    // tracks that — instead of disappearing along with the navbar.
     root.style.setProperty('--navbar-height', `${visibleNavbarHeight}px`);
     root.style.setProperty('--sticky-navbar-height', `${visibleNavbarHeight}px`);
-    root.style.setProperty('--toolbar-height', `${visibleToolbarHeight}px`);
+    root.style.setProperty('--toolbar-height', `${entityToolbarHeight}px`);
+    // TinyMCE's own sticky toolbar offset (how far from the viewport top it
+    // docks) is otherwise computed once at editor init and never updated,
+    // so it goes stale the moment the navbar hides/shows and causes a jump
+    // right as the toolbar reaches sticky range. Let any active editor
+    // recompute it live.
+    window.dispatchEvent(new CustomEvent('elabftw-sticky-offset-changed', {
+      detail: { offset: visibleNavbarHeight + entityToolbarHeight },
+    }));
   };
 
   const measureStickyHeaders = (): void => {
@@ -287,6 +299,33 @@ const TodolistC = new Todolist();
 const CalendarActivityC = new CalendarActivity();
 const TocPanelC = new TocPanel();
 const HtmlToolsPanelC = new HtmlToolsPanel();
+new CommandPalette();
+const entitySaveState = document.getElementById('entitySaveState');
+document.addEventListener('elabftw-save-state', event => {
+  if (!entitySaveState) return;
+  const detail = (event as CustomEvent<{ state: string; detail?: string }>).detail;
+  const state = detail?.state ?? 'unsaved';
+  const labels: Record<string, string> = {
+    saved: 'Saved',
+    saving: 'Saving…',
+    unsaved: 'Unsaved changes',
+    offline: 'Offline — changes kept locally',
+    error: 'Save failed — retrying when online',
+  };
+  const icons: Record<string, string> = {
+    saved: 'fa-check-circle',
+    saving: 'fa-spinner fa-spin',
+    unsaved: 'fa-circle',
+    offline: 'fa-cloud-arrow-down',
+    error: 'fa-triangle-exclamation',
+  };
+  entitySaveState.dataset.state = state;
+  const icon = entitySaveState.querySelector<HTMLElement>('i');
+  const label = entitySaveState.querySelector<HTMLElement>('span');
+  if (icon) icon.className = `fas ${icons[state] ?? icons.unsaved} fa-fw`;
+  if (label) label.textContent = labels[state] ?? labels.unsaved;
+  if (detail?.detail) entitySaveState.title = detail.detail;
+});
 const renderedBody = document.getElementById('body_view');
 if (renderedBody) {
   removeLegacyTableCollapse(renderedBody);
@@ -784,7 +823,7 @@ on('destroy-favfilter', (el: HTMLElement) => {
   }
 });
 
-on('apply-favorite-filters', () => FavoriteFiltersC.apply());
+on('apply-favorite-filters', () => FavoriteFiltersC.applyAndClose());
 on('clear-favorite-filters', () => FavoriteFiltersC.clear());
 
 on('insert-param-and-reload', async (el: HTMLElement) => {

@@ -619,6 +619,13 @@ export default class TocPanel extends SidePanel {
 
     const content = source.cloneNode(true) as HTMLElement;
     content.id = 'tocPrintSelectionBody';
+    // In edit mode `source` is the live TinyMCE editor body itself
+    // (class 'mce-content-body'), and the account theme's note/date-reference
+    // styling in _custom-editor.scss is scoped to match that class directly
+    // (":where(#body_view, body.mce-content-body) ..."), regardless of this
+    // clone's id. Drop it so the print copy renders identically to the
+    // view-mode case, where the source never had this class to begin with.
+    content.classList.remove('mce-content-body');
     content.removeAttribute('contenteditable');
     content.querySelectorAll('script, style, .toc-section-filter-hidden').forEach(element => {
       if (element.matches('.toc-section-filter-hidden')) {

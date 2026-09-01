@@ -92,6 +92,13 @@ class FilterTest extends \PHPUnit\Framework\TestCase
         $this->assertStringContainsString('padding:4px', $result);
         $this->assertStringContainsString('vertical-align:middle', $result);
 
+        // The obsolete HTML border attribute is unsupported by the HTML5
+        // purifier definition. CSS borders remain the canonical persisted
+        // representation and avoid emitting a warning on every save.
+        $legacyBorder = Filter::body('<table border="2" style="border: 2px solid #123456"><tbody><tr><td>value</td></tr></tbody></table>');
+        $this->assertStringNotContainsString('border="2"', $legacyBorder);
+        $this->assertStringContainsString('border:2px solid #123456', $legacyBorder);
+
         $list = Filter::body('<ul><li style="list-style-type: none;"><ul><li>Nested item</li></ul></li></ul>');
         $this->assertStringContainsString('list-style-type:none', $list);
 

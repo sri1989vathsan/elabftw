@@ -156,6 +156,8 @@ const t = {
     "sort-by-column": "Sort by column",
     "started-on": "Started on",
     "status": "Status",
+    "publish-version-warning": "Publish a new version? This will lock the template and cannot be undone.",
+    "restore-version-warning": "Restore version {{version}}? This replaces the current content and unlocks the template.",
     "step-delete-warning": "Delete this step?",
     "step-unfinish-warning": "Are you sure you want to undo this step?",
     "tag-delete-warning": "Delete this tag?",

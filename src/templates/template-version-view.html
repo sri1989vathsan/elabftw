@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block body %}
+
+<a href='templates.php?mode=view&id={{ version.entity_id }}' class='btn btn-ghost'>
+  <i class='fas fa-chevron-left mr-1'></i>{{ 'Go back'|trans }}
+</a>
+
+<h1 class='mt-2'>
+  {{ version.template_title }}
+  <span class='badge badge-secondary'>{{ 'Version %d'|trans|format(version.version) }}</span>
+</h1>
+<p class='smallgray'>
+  {{ 'Published by %s'|trans|format(version.published_by_fullname) }}
+  <span class='relative-moment' title='{{ version.published_at }}'></span>
+</p>
+
+<div id='body_view' class='pt-2 mt-3 overflow-auto'>{{ version.body|raw }}</div>
+
+{% endblock body %}

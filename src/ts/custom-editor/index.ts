@@ -13,12 +13,14 @@ import { registerMouseLinkExtension } from './MouseLinkExtension';
 import { registerNoteExtension } from './NoteExtension';
 import { registerSpreadsheetExtension } from './SpreadsheetExtension';
 import { registerTableToolsExtension } from './TableToolsExtension';
+import { registerTemplateInsertExtension } from './TemplateInsertExtension';
 import { registerTocExtension } from './TocExtension';
+import { registerUnifiedInsertExtension } from './UnifiedInsertExtension';
 
 export function registerCustomEditorExtensions(editor: Editor): void {
   editor.ui.registry.addIcon(
     'elabftw-heading',
-    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M5 4v16M19 4v16M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M5 4v16M19 4v16M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   );
   editor.ui.registry.addIcon(
     'elabftw-calendar',
@@ -40,6 +42,8 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   registerNoteExtension(editor);
   registerSpreadsheetExtension(editor);
   registerTableToolsExtension(editor);
+  registerTemplateInsertExtension(editor);
   registerTocExtension(editor);
+  registerUnifiedInsertExtension(editor);
 
 }

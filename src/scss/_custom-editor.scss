@@ -233,7 +233,14 @@ body.mce-content-body {
   height: 6px;
 }
 
-:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet {
+/* :not(.mce-clonedresizable) matters: TinyMCE's whole-table resize handle
+ * clones the table (same classes) into a dashed-outline "ghost" to preview
+ * the target size while dragging, setting height directly on that clone via
+ * inline style. No !important override can let that inline style win —
+ * !important always beats inline style regardless of its value — so the only
+ * way to keep this rule from also freezing the ghost's height is to make it
+ * not match the ghost at all. */
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet:not(.mce-clonedresizable) {
   border-collapse: collapse;
   font-size: 0.9em;
   height: auto !important;

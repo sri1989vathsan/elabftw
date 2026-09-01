@@ -9,6 +9,7 @@ import { Model, Target, Action } from './interfaces';
 import type { Entity } from './interfaces';
 import { ApiC } from './api';
 import { getEditor } from './Editor.class';
+import { beginEntitySave, endEntitySave } from './misc';
 
 export default class Step {
   entity: Entity;
@@ -19,8 +20,23 @@ export default class Step {
     this.model = Model.Step;
   }
 
+  // Feeds the same "Saved/Saving/Unsaved" indicator as the main entity body
+  // (see beginEntitySave/endEntitySave in misc.ts) -- every step action goes
+  // through this so task/step details are covered without wrapping each
+  // method below individually.
+  private tracked(request: Promise<Response>): Promise<Response> {
+    beginEntitySave();
+    return request.then(response => {
+      endEntitySave('saved');
+      return response;
+    }).catch((error: unknown) => {
+      endEntitySave('error');
+      throw error;
+    });
+  }
+
   create(content: string): Promise<Response> {
-    return ApiC.post(`${this.entity.type}/${this.entity.id}/${this.model}`, {body: content});
+    return this.tracked(ApiC.post(`${this.entity.type}/${this.entity.id}/${this.model}`, {body: content}));
   }
 
   update(id: number, content: string|null, target = Target.Body): Promise<Response> {
@@ -37,7 +53,7 @@ export default class Step {
     if (target === Target.Deadline && content === null) {
       this.notifDestroy(id);
     }
-    return ApiC.patch(`${this.entity.type}/${this.entity.id}/${this.model}/${id}`, params);
+    return this.tracked(ApiC.patch(`${this.entity.type}/${this.entity.id}/${this.model}/${id}`, params));
   }
 
   finish(id: number): Promise<Response> {
@@ -53,10 +69,10 @@ export default class Step {
   }
 
   genericPatch(id: number, action: Action): Promise<Response> {
-    return ApiC.patch(`${this.entity.type}/${this.entity.id}/${this.model}/${id}`, {action});
+    return this.tracked(ApiC.patch(`${this.entity.type}/${this.entity.id}/${this.model}/${id}`, {action}));
   }
 
   destroy(id: number): Promise<Response> {
-    return ApiC.delete(`${this.entity.type}/${this.entity.id}/${this.model}/${id}`);
+    return this.tracked(ApiC.delete(`${this.entity.type}/${this.entity.id}/${this.model}/${id}`));
   }
 }

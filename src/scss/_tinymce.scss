@@ -20,3 +20,13 @@ figure {
     transition: none;
   }
 }
+
+/* TinyMCE's own oxide skin (light and dark alike) hardcodes the resize
+ * preview outline to a literal black, which is a 50%-opacity black line on
+ * a dark background: effectively invisible while dragging a table/image
+ * resize handle. currentColor picks up the surrounding text color instead,
+ * so it stays visible in both themes. This file loads after the skin's own
+ * content.css in both modes, so it wins the cascade. */
+.mce-content-body .mce-clonedresizable {
+  outline-color: currentColor;
+}

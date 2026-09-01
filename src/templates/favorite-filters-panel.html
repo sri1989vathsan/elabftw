@@ -1,6 +1,22 @@
-{% set favoriteFilterTarget = 'experiments' %}
-{% if scriptName == 'database.php' or (Entity is defined and Entity.entityType.value == 'items') %}
-  {% set favoriteFilterTarget = 'resources' %}
+{# "All" is the default -- it's what makes typing in the text box search
+   everything (experiments, resources, templates, folders) at once.
+   A specific target is only pre-selected when the URL
+   already carries an actual category/status/owner filter for it (e.g. via
+   the "Full list" link), so re-opening the panel still reflects what's
+   applied. #}
+{% set hasActiveFilterParams = App.Request.query.get('category') is not empty
+  or App.Request.query.get('status') is not empty
+  or App.Request.query.get('owner') is not empty %}
+{% set favoriteFilterTarget = 'all' %}
+{% if hasActiveFilterParams %}
+  {% set favoriteFilterTarget = 'experiments' %}
+  {% if scriptName == 'database.php' or (Entity is defined and Entity.entityType.value == 'items') %}
+    {% set favoriteFilterTarget = 'resources' %}
+  {% elseif scriptName == 'templates.php' or (Entity is defined and Entity.entityType.value == 'experiments_templates') %}
+    {% set favoriteFilterTarget = 'experiments_templates' %}
+  {% elseif scriptName == 'resources-templates.php' or (Entity is defined and Entity.entityType.value == 'items_types') %}
+    {% set favoriteFilterTarget = 'items_types' %}
+  {% endif %}
 {% endif %}
 {% set activeCategoryIds = App.Request.query.get('category')|split(',') %}
 {% set activeStatusIds = App.Request.query.get('status')|split(',') %}
@@ -10,13 +26,7 @@
 <div class='side-panel' id='favoritesPanel' data-current-target='{{ favoriteFilterTarget }}' hidden>
   <button type='button' data-action='toggle-sidepanel' data-target='favorites' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
   <div class='p-3'>
-    <h3 class='mb-3'><i class='fas fa-filter mr-2'></i>{{ 'Favorite filters'|trans }}</h3>
-
-    <label for='favoriteFilterTarget'>{{ 'Filter'|trans }}</label>
-    <select id='favoriteFilterTarget' class='form-control mb-3'>
-      <option value='experiments' {{ favoriteFilterTarget == 'experiments' ? 'selected' }}>{{ 'Experiments'|trans }}</option>
-      <option value='resources' {{ favoriteFilterTarget == 'resources' ? 'selected' }}>{{ 'Resources'|trans }}</option>
-    </select>
+    <h3 class='mb-3'><i class='fas fa-magnifying-glass mr-2'></i>{{ 'Search'|trans }}</h3>
 
     <label for='favoriteFilterText'>{{ 'Text'|trans }}</label>
     <div class='input-group input-group-sm favorite-filter-text-group mb-2'>
@@ -28,18 +38,38 @@
         class='form-control'
         type='search'
         value='{{ App.Request.query.getString('q')|e('html_attr') }}'
-        placeholder='{{ 'Search title and body'|trans }}'
-        aria-label='{{ 'Search title and body'|trans }}'
+        placeholder='{{ 'Search experiments, resources, templates, folders…'|trans }}'
+        aria-label='{{ 'Search experiments, resources, templates, folders…'|trans }}'
         data-favorite-filter-text
       >
     </div>
 
+    <div id='favoriteActiveFiltersDiv' class='favorite-active-filters mb-2' hidden aria-live='polite'></div>
+
     <p class='small color-medium'>
-      {{ 'Combine text with favorite categories, tags, statuses, and an owner. Apply filters searches all accessible entries.'|trans }}
+      {{ 'Type to search everything at once, or use Filters below to narrow one entry type by category, tag, status, and owner.'|trans }}
     </p>
 
+    <div class='d-flex mb-3 favorite-filter-toolbar'>
+    <div class='favorite-filter-overlay-anchor flex-grow-1 mr-1'>
+      <button type='button' class='btn btn-sm btn-secondary btn-block' data-action='toggle-favorite-overlay' data-target='filters' aria-haspopup='true' aria-expanded='false'>
+        <i class='fas fa-sliders fa-fw mr-1' aria-hidden='true'></i>{{ 'Filters'|trans }}
+      </button>
+    </div>
+
+      <div id='favoriteFiltersOverlay' class='favorite-filter-overlay p-2' hidden>
+
+    <label for='favoriteFilterTarget'>{{ 'Type'|trans }}</label>
+    <select id='favoriteFilterTarget' class='form-control mb-3'>
+      <option value='all' {{ favoriteFilterTarget == 'all' ? 'selected' }}>{{ 'All'|trans }}</option>
+      <option value='experiments' {{ favoriteFilterTarget == 'experiments' ? 'selected' }}>{{ 'Experiments'|trans }}</option>
+      <option value='resources' {{ favoriteFilterTarget == 'resources' ? 'selected' }}>{{ 'Resources'|trans }}</option>
+      <option value='experiments_templates' {{ favoriteFilterTarget == 'experiments_templates' ? 'selected' }}>{{ 'Experiment templates'|trans }}</option>
+      <option value='items_types' {{ favoriteFilterTarget == 'items_types' ? 'selected' }}>{{ 'Resource templates'|trans }}</option>
+    </select>
+
     <details class='favorite-filter-section mb-3' open>
-      <summary class='favorite-filter-section-summary h5 mb-0'>
+      <summary class='favorite-filter-section-summary mb-0'>
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
         {{ 'Categories'|trans }}
       </summary>
@@ -76,7 +106,7 @@
     </details>
 
     <details class='favorite-filter-section mb-3' open>
-      <summary class='favorite-filter-section-summary h5 mb-0'>
+      <summary class='favorite-filter-section-summary mb-0'>
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
         {{ 'My favorite tags'|trans }}
       </summary>
@@ -111,7 +141,7 @@
     </details>
 
     <details class='favorite-filter-section mb-3' open>
-      <summary class='favorite-filter-section-summary h5 mb-0'>
+      <summary class='favorite-filter-section-summary mb-0'>
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
         {{ 'Status'|trans }}
       </summary>
@@ -148,7 +178,7 @@
     </details>
 
     <details class='favorite-filter-section mb-3' open>
-      <summary class='favorite-filter-section-summary h5 mb-0'>
+      <summary class='favorite-filter-section-summary mb-0'>
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
         {{ 'Owner'|trans }}
       </summary>
@@ -185,6 +215,18 @@
         <i class='fas fa-xmark fa-fw mr-1'></i>{{ 'Clear'|trans }}
       </button>
     </div>
+      </div>
+
+    <div class='favorite-filter-overlay-anchor flex-grow-1 ml-1'>
+      <button type='button' class='btn btn-sm btn-secondary btn-block' data-action='toggle-favorite-overlay' data-target='manage' aria-haspopup='true' aria-expanded='false'>
+        <i class='fas fa-gear fa-fw mr-1' aria-hidden='true'></i>{{ 'Manage'|trans }}
+      </button>
+    </div>
+
+      <div id='favoriteManageOverlay' class='favorite-filter-overlay p-2' hidden>
+      {% include 'favorite-filters-manage.html' %}
+      </div>
+    </div>
 
     <section class='favorite-filter-results-section mb-3' aria-labelledby='favoriteFilterResultsHeading'>
       <div class='d-flex align-items-center justify-content-between mb-2'>
@@ -202,93 +244,5 @@
       <div id='favoriteFilterResults' class='favorite-filter-results' aria-live='polite'></div>
     </section>
 
-    <details class='favorite-filter-manage'>
-      <summary class='font-weight-bold mb-2'>{{ 'Manage favorites'|trans }}</summary>
-
-      <label for='favoriteNewCategoryName'>{{ 'Create a new category'|trans }}</label>
-      <div class='input-group mb-3'>
-        <input id='favoriteNewCategoryName' type='text' class='form-control' placeholder='{{ 'Category name'|trans }}' aria-label='{{ 'Category name'|trans }}'>
-        <div class='input-group-append'>
-          <label class='sr-only' for='favoriteNewCategoryColor'>{{ 'Color'|trans }}</label>
-          <input id='favoriteNewCategoryColor' class='form-control randomColor color-input h-100' type='color' value='#38618c'>
-          <button class='btn btn-primary' type='button' data-action='create-and-favorite-category' title='{{ 'Create and add to favorites'|trans }}' aria-label='{{ 'Create and add to favorites'|trans }}'>
-            <i class='fas fa-plus fa-fw'></i>
-          </button>
-        </div>
-      </div>
-
-      <label for='favoriteCategorySelect'>{{ 'Add a category as favorite'|trans }}</label>
-      <div class='input-group mb-3'>
-        <select id='favoriteCategorySelect' class='form-control' aria-label='{{ 'Add a category as favorite'|trans }}'>
-          <option value=''>{{ 'Select a category'|trans }}</option>
-          <optgroup label='{{ 'Experiment categories'|trans }}'>
-            {% for category in App.experimentsCategoryArr %}
-              {% if category.is_current_team == 1 %}
-                <option value='experiments:{{ category.id }}'>{{ category.title }}</option>
-              {% endif %}
-            {% endfor %}
-          </optgroup>
-          <optgroup label='{{ 'Resource categories'|trans }}'>
-            {% for category in App.itemsCategoryArr %}
-              {% if category.is_current_team == 1 %}
-                <option value='resources:{{ category.id }}'>{{ category.title }}</option>
-              {% endif %}
-            {% endfor %}
-          </optgroup>
-        </select>
-        <div class='input-group-append'>
-          <button class='btn btn-primary' type='button' data-action='create-favcategory' title='{{ 'Add'|trans }}' aria-label='{{ 'Add'|trans }}'>
-            <i class='fas fa-plus fa-fw'></i>
-          </button>
-        </div>
-      </div>
-
-      <label for='favoriteFilterSelect'>{{ 'Add an owner or status as favorite'|trans }}</label>
-      <div class='input-group mb-3'>
-        <select id='favoriteFilterSelect' class='form-control' aria-label='{{ 'Add an owner or status as favorite'|trans }}'>
-          <option value=''>{{ 'Select an owner or status'|trans }}</option>
-          <optgroup id='favoriteFilterOwnerOptions' label='{{ 'Owners'|trans }}' data-lazy-owner-options='{{ App.favoriteFilterUsersArr is empty ? '1' : '0' }}'>
-            {% for user in App.favoriteFilterUsersArr %}
-              <option value='owner:all:{{ user.userid }}'>{{ user.fullname }}</option>
-            {% endfor %}
-            {% if App.favoriteFilterUsersArr is empty %}
-              <option value='' disabled>{{ 'Owners load when this panel opens.'|trans }}</option>
-            {% endif %}
-          </optgroup>
-          <optgroup label='{{ 'Experiment status'|trans }}'>
-            {% for status in App.experimentsStatusArr %}
-              {% if status.is_current_team == 1 %}
-                <option value='status:experiments:{{ status.id }}'>{{ status.title }}</option>
-              {% endif %}
-            {% endfor %}
-          </optgroup>
-          <optgroup label='{{ 'Resource status'|trans }}'>
-            {% for status in App.itemsStatusArr %}
-              {% if status.is_current_team == 1 %}
-                <option value='status:resources:{{ status.id }}'>{{ status.title }}</option>
-              {% endif %}
-            {% endfor %}
-          </optgroup>
-        </select>
-        <div class='input-group-append'>
-          <button class='btn btn-primary' type='button' data-action='create-favfilter' title='{{ 'Add'|trans }}' aria-label='{{ 'Add'|trans }}'>
-            <i class='fas fa-plus fa-fw'></i>
-          </button>
-        </div>
-      </div>
-
-      <label for='createFavTagInput'>{{ 'Add a tag as favorite'|trans }}</label>
-      <p id='favoriteTagSuggestionHelp' class='small color-medium mb-2'>
-        {{ 'Start typing to search existing team tags. Your favorites are saved only for your account.'|trans }}
-      </p>
-      <div class='input-group mb-3'>
-        <input id='createFavTagInput' data-autocomplete='tags' type='text' class='form-control form-inline' aria-label='{{ 'Add a tag as favorite'|trans }}' aria-describedby='favoriteTagSuggestionHelp' autocomplete='off' placeholder='{{ 'Add a tag as favorite'|trans }}'>
-        <div class='input-group-append'>
-          <button id='createFavTagButton' class='btn btn-primary' type='button' title='{{ 'Add'|trans }}' aria-label='{{ 'Add'|trans }}'>
-            <i class='fas fa-plus fa-fw'></i>
-          </button>
-        </div>
-      </div>
-    </details>
   </div>
 </div>

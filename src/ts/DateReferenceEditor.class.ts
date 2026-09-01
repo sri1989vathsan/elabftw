@@ -11,6 +11,7 @@ import { DateTime } from 'luxon';
 import { ApiC } from './api';
 import { entity } from './getEntity';
 import { EntityType } from './interfaces';
+import { captureFocus, restoreFocus, trapTabFocus } from './a11y';
 import { escapeExtendedQuery, escapeHTML } from './misc';
 import { getAccountEditorDefault, saveAccountEditorDefault } from './editor-defaults';
 
@@ -227,13 +228,14 @@ function applyReferenceEmphasis(
 }
 
 async function saveDateInsertDefaults(defaults: DateInsertDefaults): Promise<void> {
-  await saveAccountEditorDefault('date', defaults);
-  // Keep a local fallback for accounts upgraded from earlier installations.
+  // Write the local fallback first: if the account sync below fails (e.g.
+  // offline), this is the only copy of the just-saved value that survives.
   localStorage.setItem(DATE_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
   // Keep the earlier format preference in sync for existing installations.
   if (defaults.format !== 'custom') {
     localStorage.setItem(DATE_FORMAT_STORAGE_KEY, defaults.format);
   }
+  await saveAccountEditorDefault('date', defaults);
 }
 
 function formatDate(
@@ -623,14 +625,26 @@ export default class DateReferenceEditor {
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
 
-    const close = (): void => {
+    // Same discard-confirmation the spreadsheet editor and "Insert Note"
+    // dialog already have -- this dialog previously closed silently on
+    // Escape/backdrop-click/Cancel even with an edited date, format, or
+    // linked experiment pending. A delegated change/input listener (below)
+    // covers every field without wiring each one individually.
+    let hasChanges = false;
+    const openerFocus = captureFocus();
+    const close = (force = false): void => {
+      if (!force && hasChanges && !window.confirm('Discard unsaved changes to this date?')) return;
       if (searchTimer !== undefined) window.clearTimeout(searchTimer);
       document.removeEventListener('keydown', handleKeydown);
       overlay.remove();
+      restoreFocus(openerFocus);
     };
+    dialog.addEventListener('input', () => { hasChanges = true; });
+    dialog.addEventListener('change', () => { hasChanges = true; });
 
     const handleKeydown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') close();
+      if (event.key === 'Escape') { close(); return; }
+      trapTabFocus(dialog, event);
     };
 
     const showSearchMessage = (message: string): void => {
@@ -755,7 +769,7 @@ export default class DateReferenceEditor {
         return;
       }
       if (!validateCustomLabel()) return;
-      close();
+      close(true);
       this.editor.focus();
       const requestedHeadingLevel = Math.min(
         6,
@@ -799,14 +813,11 @@ export default class DateReferenceEditor {
       );
     });
     deleteButton?.addEventListener('click', () => {
-      close();
+      close(true);
       this.editor.focus();
       this.deleteReference(reference);
     });
-    cancelButton.addEventListener('click', close);
-    overlay.addEventListener('click', event => {
-      if (event.target === overlay) close();
-    });
+    cancelButton.addEventListener('click', () => close());
     document.addEventListener('keydown', handleKeydown);
 
     // Resolve an edited experiment link to its current title without delaying

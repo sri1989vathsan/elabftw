@@ -20,6 +20,8 @@ import { Uploader } from './uploader';
 import { entity } from './getEntity';
 import { on } from './handlers';
 import { buildLabCollectorUrl } from './labcollector-link';
+import { platformSmbHref } from './file-folder-references';
+import { spreadsheetToHTML, SpreadsheetData } from './inline-spreadsheet';
 import {
   clearRecoveryDraft,
   isSameRecoveryContent,
@@ -36,6 +38,61 @@ const editor = getEditor();
 // Capture the server-rendered value before TinyMCE replaces the textarea.
 const serverBody = (document.getElementById('body_area') as HTMLTextAreaElement | null)?.value ?? '';
 editor.init('edit');
+
+type WorkbookCell = string | number | boolean | null;
+interface WorkbookWorksheet {
+  data: WorkbookCell[][];
+  name: string;
+}
+
+function trimWorksheetData(data: WorkbookCell[][]): WorkbookCell[][] {
+  let lastRow = -1;
+  let lastColumn = -1;
+  data.forEach((row, rowIndex) => row.forEach((value, columnIndex) => {
+    if (value !== null && String(value).length > 0) {
+      lastRow = Math.max(lastRow, rowIndex);
+      lastColumn = Math.max(lastColumn, columnIndex);
+    }
+  }));
+  if (lastRow < 0 || lastColumn < 0) return [['']];
+  return data.slice(0, lastRow + 1).map(row => (
+    Array.from({ length: lastColumn + 1 }, (_unused, index) => row[index] ?? '')
+  ));
+}
+
+function workbookSheetToInlineSpreadsheet(
+  worksheet: WorkbookWorksheet,
+  includeCaption: boolean,
+): string {
+  const data = trimWorksheetData(worksheet.data);
+  const raw: SpreadsheetData = {
+    data,
+    rows: data.length,
+    cols: data.reduce((maximum, row) => Math.max(maximum, row.length), 1),
+    kind: 'standard',
+    caption: includeCaption ? worksheet.name : '',
+  };
+  // spreadsheetToHTML evaluates supported formulas for display and embeds
+  // the untouched formula data so reopening the inline editor restores it.
+  return spreadsheetToHTML(raw, data);
+}
+
+window.addEventListener('message', event => {
+  if (event.origin !== window.location.origin || event.data?.type !== 'jss-insert-main-text') return;
+  const spreadsheetIframe = document.getElementById('spreadsheetIframe') as HTMLIFrameElement | null;
+  if (!spreadsheetIframe || event.source !== spreadsheetIframe.contentWindow) return;
+  const worksheets = event.data.detail?.worksheets as WorkbookWorksheet[] | undefined;
+  if (!Array.isArray(worksheets) || worksheets.length === 0) return;
+  if (editor.type !== 'tiny') {
+    window.alert('Formula spreadsheets can only be inserted in the rich text editor.');
+    return;
+  }
+  const html = worksheets
+    .filter(worksheet => Array.isArray(worksheet?.data))
+    .map(worksheet => workbookSheetToInlineSpreadsheet(worksheet, worksheets.length > 1))
+    .join('<p><br></p>');
+  if (html) editor.setContent(html);
+});
 // initialize the file uploader
 (new Uploader()).init();
 
@@ -323,11 +380,24 @@ on('insert-upload-link', (el: HTMLElement) => {
 on('insert-file-folder-reference', (el: HTMLElement) => {
   const text = el.dataset.text?.trim();
   if (!text) return;
+  const label = el.dataset.label?.trim();
+  const smbHref = platformSmbHref(text);
+  const displayText = label || text;
   if (editor.type === 'md') {
-    editor.setContent(text);
+    if (smbHref) {
+      const markdownLabel = displayText.replace(/([\\[\]])/g, '\\$1');
+      editor.setContent(`[${markdownLabel}](${smbHref})`);
+    } else {
+      editor.setContent(displayText);
+    }
+  } else if (smbHref) {
+    const link = document.createElement('a');
+    link.href = smbHref;
+    link.textContent = displayText;
+    editor.setContent(link.outerHTML);
   } else {
     const plainText = document.createElement('span');
-    plainText.textContent = text;
+    plainText.textContent = displayText;
     editor.setContent(plainText.innerHTML);
   }
   updateEntityBody();

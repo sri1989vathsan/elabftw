@@ -274,6 +274,93 @@ select.form-control {
   background: var(--white);
 }
 
+// Self-controlled overlay (see FavoriteFilters.class.ts's
+// toggle-favorite-overlay handler): plain hidden-attribute toggling instead
+// of Bootstrap's dropdown/Popper component, so there's no per-button
+// transform positioning to fight -- both panels always anchor the same way,
+// flush left against the shared button row, regardless of which of the two
+// side-by-side buttons opened them.
+.favorite-filter-toolbar {
+  position: relative;
+}
+
+.favorite-filter-overlay-anchor {
+  position: relative;
+}
+
+// Deliberately NOT using the app's --white/--strongest theme variables here:
+// they carry sidebar-chrome-specific meaning (--white is the *text* color
+// meant for the panel's own dark chrome background, not literally "white
+// background") and differ across this app's several palettes, which is
+// exactly what produced unreadable text in more than one of them. A plain
+// self-contained light card with explicit colors is guaranteed readable
+// regardless of the active theme.
+.favorite-filter-overlay {
+  background: #ffffff;
+  border-radius: 0.6rem;
+  box-shadow: 0 0.6rem 1.5rem rgba(0, 0, 0, 0.3);
+  color: #23272b;
+  font-size: 0.8rem;
+  left: 0;
+  max-height: 65vh;
+  overflow-y: auto;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.3rem);
+  z-index: 40;
+
+  &[hidden] {
+    display: none;
+  }
+
+  // !important is required here: .side-panel { .color-medium, .text-muted
+  // { color: var(--chrome-muted) !important; } } (main.scss, ~line 1227)
+  // force-applies the sidebar's own pale muted-chrome color to any matching
+  // element inside it, including this white card -- a non-important
+  // override can never win against that regardless of specificity.
+  .favorite-filter-section-summary,
+  h3,
+  h4 {
+    color: #23272b !important;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  p,
+  .color-medium,
+  .smallgray,
+  .text-muted,
+  label {
+    color: #495057 !important;
+    font-size: 0.75rem;
+  }
+
+  .favorite-filter-option label {
+    color: #23272b !important;
+  }
+
+  // Same leak: .side-panel { .fas, .far, h3, h4, label { color:
+  // var(--chrome-fg); } } colors every icon for the dark sidebar chrome
+  // (invisible/wrong-colored against this white card) -- e.g. the trash
+  // icon on each "remove from favorites" button.
+  .fas,
+  .far {
+    color: #495057 !important;
+  }
+
+  .btn-primary .fas,
+  .btn-primary .far {
+    color: #ffffff !important;
+  }
+
+  .form-control,
+  .input-group-text,
+  .btn {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.55rem;
+  }
+}
+
 .dropdown-item {
   color: var(--medium);
   cursor: pointer;
@@ -901,6 +988,195 @@ tr:first-child td {
   top: -0.35rem;
 }
 
+.command-palette-overlay {
+  align-items: flex-start;
+  background: rgba(10, 18, 28, 0.48);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: min(14vh, 8rem) 1rem 1rem;
+  position: fixed;
+  z-index: 20050;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.command-palette {
+  background: var(--chrome-bg);
+  border: 1px solid var(--chrome-muted);
+  border-radius: 0.75rem;
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.32);
+  color: var(--chrome-fg);
+  max-height: min(70vh, 42rem);
+  max-width: 44rem;
+  overflow: hidden;
+  width: 100%;
+
+  footer {
+    border-top: 1px solid var(--chrome-muted);
+    color: var(--chrome-muted);
+    font-size: 0.75rem;
+    padding: 0.55rem 0.9rem;
+  }
+}
+
+.command-palette-header {
+  align-items: center;
+  border-bottom: 1px solid var(--chrome-muted);
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+
+  input {
+    background: transparent;
+    border: 0;
+    color: var(--chrome-fg);
+    flex: 1;
+    font-size: 1.05rem;
+    min-width: 0;
+    outline: 0;
+  }
+
+  kbd {
+    background: var(--secondlevel);
+    border: 1px solid var(--chrome-muted);
+    color: var(--chrome-muted);
+  }
+}
+
+.command-palette-results {
+  max-height: min(55vh, 34rem);
+  overflow-y: auto;
+  padding: 0.35rem;
+}
+
+.command-palette-section-title {
+  color: var(--chrome-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.45rem 0.65rem 0.25rem;
+  text-transform: uppercase;
+}
+
+.command-palette-result {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0.45rem;
+  color: var(--chrome-fg);
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  width: 100%;
+
+  &[aria-selected='true'],
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, var(--chrome-bg) 84%, var(--primary));
+    outline: 0;
+  }
+
+  > i {
+    color: var(--primary);
+    font-size: 1rem;
+  }
+
+  span {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  small {
+    color: var(--chrome-muted);
+  }
+}
+
+.command-palette-empty {
+  color: var(--chrome-muted);
+  margin: 1rem;
+  text-align: center;
+}
+
+.unified-search-group-title {
+  // Rendered directly on the sidebar's own dark chrome (not inside the white
+  // .favorite-filter-overlay card), so it needs the chrome's own muted-text
+  // variable -- var(--mediumstrong) is a light-background color and comes
+  // out barely visible here, same failure mode documented on
+  // .favorite-filter-overlay above.
+  color: var(--chrome-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin: 0.6rem 0 0.25rem;
+  padding: 0 0.25rem;
+  text-transform: uppercase;
+}
+
+.unified-search-result {
+  // Now rendered as a .favorite-filter-result card (dark sidebar chrome,
+  // same as the Experiments/Resources groups) rather than a white
+  // .list-group-item, so it inherits that class's colors -- nothing to
+  // override here beyond what's specific to tags/tasks/folders/headings
+  // entries: no per-selection insert buttons, just an optional click/link.
+  a {
+    color: inherit;
+    display: block;
+    text-decoration: none;
+  }
+}
+
+.favorite-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.favorite-filter-chip {
+  align-items: center;
+  background: color-mix(in srgb, var(--primary, #167b85) 12%, var(--white, #fff));
+  border: 1px solid color-mix(in srgb, var(--primary, #167b85) 35%, transparent);
+  border-radius: 1rem;
+  color: var(--strongest, #343a40);
+  display: inline-flex;
+  font-size: 0.78rem;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+
+  &:hover {
+    background: color-mix(in srgb, var(--primary, #167b85) 20%, var(--white, #fff));
+  }
+
+  i {
+    color: var(--primary, #167b85);
+  }
+}
+
+.entity-save-state {
+  align-items: center;
+  border-radius: 1rem;
+  color: var(--mediumstrong);
+  display: inline-flex;
+  font-size: 0.8rem;
+  gap: 0.2rem;
+  padding: 0.3rem 0.55rem;
+  white-space: nowrap;
+
+  &[data-state='saved'] {
+    color: var(--success);
+  }
+
+  &[data-state='offline'],
+  &[data-state='error'] {
+    background: var(--secondlevel);
+    color: var(--danger);
+  }
+}
+
 .todo-panel-view-tabs {
   background: var(--chrome-bg);
   position: sticky;
@@ -938,7 +1214,11 @@ tr:first-child td {
   --side-panel-warning: #ffd166;
   background: var(--chrome-bg);
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
-  color: var(--white);
+  // `--white` is a surface color in the dark palette themes (and can be
+  // almost as dark as the panel itself). Sidebar chrome has its own stable
+  // foreground token, so unclassified prose and native controls must inherit
+  // that instead.
+  color: var(--chrome-fg);
   height: 100%;
   left: 0;
   overflow: hidden;
@@ -1434,8 +1714,12 @@ body.html-tool-workspace-resizing * {
 }
 
 .favorite-filter-section {
-  border: 1px solid var(--secondary);
-  border-radius: 0.25rem;
+  border: 0;
+  border-bottom: 1px solid var(--secondary);
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
 
   &[open] {
     .favorite-filter-section-chevron {
@@ -1448,7 +1732,7 @@ body.html-tool-workspace-resizing * {
     cursor: pointer;
     display: flex;
     list-style: none;
-    padding: 0.75rem;
+    padding: 0.35rem 0.15rem;
     user-select: none;
 
     &::-webkit-details-marker {
@@ -1462,32 +1746,24 @@ body.html-tool-workspace-resizing * {
   }
 
   .favorite-filter-section-body {
-    padding: 0 0.75rem 0.75rem;
+    padding: 0 0.15rem 0.35rem;
   }
 }
 
 .favorite-filter-option {
-  border-bottom: 1px solid var(--secondary);
-  min-height: 2.4rem;
-  padding: 0.3rem 0;
+  border-radius: 0.35rem;
+  min-height: 1.8rem;
+  padding: 0.15rem 0.3rem;
 
-  &:last-child {
-    border-bottom: 0;
+  &:hover {
+    background: var(--superlight);
   }
 
-  input[type='checkbox'] {
+  input[type='checkbox'],
+  input[type='radio'] {
     accent-color: var(--primary);
     height: 1rem;
     width: 1rem;
-  }
-}
-
-.favorite-filter-manage {
-  border-top: 1px solid var(--secondary);
-  padding-top: 0.75rem;
-
-  summary {
-    cursor: pointer;
   }
 }
 
@@ -1696,11 +1972,31 @@ body.html-tool-workspace-resizing * {
 }
 
 .toc-section-filter-summary {
+  color: var(--chrome-fg);
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 600;
   margin-bottom: 0.4rem;
   user-select: none;
+}
+
+#tocPanel {
+  .btn-outline-primary {
+    border-color: var(--chrome-muted);
+    color: var(--chrome-fg);
+
+    &:hover,
+    &:focus {
+      background-color: var(--primary);
+      border-color: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+
+    .fas,
+    .far {
+      color: inherit;
+    }
+  }
 }
 
 .toc-section-filter-tree {
@@ -1748,6 +2044,7 @@ body.html-tool-workspace-resizing * {
 }
 
 .toc-section-filter-label {
+  color: var(--chrome-fg);
   cursor: pointer;
   flex: 1;
   font-size: 0.78rem;
@@ -2559,6 +2856,14 @@ body.html-tool-workspace-resizing * {
     padding: 0.1rem 0.3rem;
   }
 
+  .inline-spreadsheet-formula-function-select {
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    height: 1.7rem;
+    max-width: 9rem;
+    padding: 0.1rem 0.3rem;
+  }
+
   &.is-collapsed {
     justify-content: flex-end;
     min-height: 1.65rem;
@@ -3035,6 +3340,13 @@ the form-control fails to do that so we do the border ourselves */
   }
 
   body.toc-print-selection-active #tocPrintSelectionDocument {
+    /* neutralize the account theme palette's own background variables
+       (e.g. .bg-firstlevel elements copied in from the note) without
+       touching a literal background-color a user picked directly on a
+       header or highlighted text -- those aren't theme-driven and still
+       print as authored */
+    --firstlevel: transparent;
+    --secondlevel: transparent;
     background: #fff;
     color: #111;
     display: block !important;
@@ -3890,5 +4202,21 @@ div > .sticky-navbar {
   div > .sticky-navbar,
   .sticky-toolbar {
     transition: none;
+  }
+
+  // Sidebar/dialog-adjacent transitions and animations gated the same way --
+  // matching each rule's own selector so specificity actually overrides it
+  // (a lower-specificity override here would silently lose to the original).
+  .side-panel-resizer::after,
+  .favorite-filter-section .favorite-filter-section-chevron,
+  .toc-items-container .toc-link,
+  .infotip-text,
+  .malleable::after {
+    transition: none;
+  }
+
+  .toc-highlight,
+  .state-indicator[data-state='5'] {
+    animation: none;
   }
 }

@@ -20,6 +20,7 @@ import $ from 'jquery';
 import i18next from './i18n';
 import { ApiC } from './api';
 import { getEditor } from './Editor.class';
+import { entity as currentEntity } from './getEntity';
 import TomSelect from 'tom-select/base';
 import TomSelectCheckboxOptions from 'tom-select/dist/esm/plugins/checkbox_options/plugin.js';
 import TomSelectClearButton from 'tom-select/dist/esm/plugins/clear_button/plugin.js';
@@ -144,9 +145,18 @@ async function triggerHandler(event: Event, el: HTMLInputElement): Promise<void>
     }
   };
 
+  // Feeds the same "Saved/Saving/Unsaved" indicator as the main entity body
+  // (see setEntitySaveState/beginEntitySave/endEntitySave in this file) --
+  // this handler covers every data-trigger field app-wide (Goals, Conclusion,
+  // Notes, folder assignment, and others outside entity editing entirely),
+  // but the indicator itself only renders on entity edit pages and is a
+  // no-op elsewhere, so dispatching unconditionally is safe.
+  beginEntitySave();
   try {
     await run();
+    endEntitySave('saved');
   } catch (error) {
+    endEntitySave('error');
     // if input is a checkbox we revert the change
     if (isCheckbox && originalChecked !== undefined) {
       el.checked = originalChecked;
@@ -707,7 +717,15 @@ export function addAutocompleteToExtraFieldsKeyInputs(): void {
 export async function updateCatStat(target: string, entity: Entity, value: string): Promise<string> {
   const params = {};
   params[target] = value;
-  const newEntity = await ApiC.patch(`${entity.type}/${entity.id}`, params).then(resp => resp.json());
+  beginEntitySave();
+  let newEntity: { category_color?: string; status_color?: string };
+  try {
+    newEntity = await ApiC.patch(`${entity.type}/${entity.id}`, params).then(resp => resp.json());
+  } catch (error) {
+    endEntitySave('error');
+    throw error;
+  }
+  endEntitySave('saved');
   // return a string separated with | with the id first so we can use it in data-id of new element
   let response = value + '|';
   /* eslint-disable-next-line */
@@ -888,6 +906,60 @@ export async function saveStringAsFile(filename: string, content: string|Promise
 // Shared function to UPDATE ENTITY BODY via save shortcut and/or save button, or autosave
 let retrySaveWhenOnline = false;
 
+export type EntitySaveState = 'saved' | 'saving' | 'unsaved' | 'offline' | 'error';
+
+// Shared across every custom navigation path that can leave the page mid-edit
+// (folders, filters/search, calendar results, command-palette results, table
+// of contents, PyRAT links) instead of each implementing its own check.
+export function isEditingEntity(): boolean {
+  return currentEntity.type === EntityType.Experiment
+    && Number.isInteger(currentEntity.id)
+    && new URLSearchParams(window.location.search).get('mode') === 'edit';
+}
+
+// Returns true if it's safe to navigate now (not editing, or the user
+// confirmed discarding). Call before following any link/href that isn't a
+// plain in-page click already protected by the browser's own navigation.
+export function confirmLeaveEditing(): boolean {
+  if (!isEditingEntity()) return true;
+  return window.confirm('You are editing an experiment. Leave this page and risk losing unsaved changes?');
+}
+
+export function setEntitySaveState(state: EntitySaveState, detail = ''): void {
+  document.dispatchEvent(new CustomEvent('elabftw-save-state', {
+    detail: { state, detail, at: new Date().toISOString() },
+  }));
+}
+
+// The indicator originally modeled a single in-flight save (the TinyMCE body).
+// Extending it to the many other independently-saved fields (Goals,
+// Conclusion, Notes, folder, categories/status, metadata, steps) means
+// several saves can now be in flight together -- this counter keeps the
+// indicator on "Saving…" until all of them have settled, instead of flipping
+// to "Saved" the instant the first one finishes while others are still
+// pending.
+let pendingEntitySaves = 0;
+
+export function beginEntitySave(): void {
+  pendingEntitySaves++;
+  setEntitySaveState('saving');
+}
+
+// state is the terminal state for the save that just settled ('saved' for
+// success, 'error'/'offline' for failure). A failure is shown immediately --
+// it takes priority over any other save still in flight -- while 'saved'
+// only becomes visible once every concurrent save has finished.
+export function endEntitySave(state: 'saved' | 'offline' | 'error', detail = ''): void {
+  pendingEntitySaves = Math.max(0, pendingEntitySaves - 1);
+  if (state !== 'saved') {
+    setEntitySaveState(state, detail);
+    return;
+  }
+  if (pendingEntitySaves === 0) {
+    setEntitySaveState('saved', detail);
+  }
+}
+
 window.addEventListener('online', () => {
   if (!retrySaveWhenOnline) return;
   retrySaveWhenOnline = false;
@@ -899,6 +971,7 @@ export async function updateEntityBody(redirect = true): Promise<boolean> {
   const entity = getEntity();
   const body = editor.getContent();
   const saveStartedAt = Date.now();
+  beginEntitySave();
 
   return ApiC.patch(`${entity.type}/${entity.id}`, {body, notifOnSaved: redirect ? 0 : 1}).then(response => response.json()).then(json => {
     if (editor.type === 'tiny') {
@@ -914,6 +987,7 @@ export async function updateEntityBody(redirect = true): Promise<boolean> {
     }
     clearRecoveryDraft(entity.type, entity.id, body, saveStartedAt);
     retrySaveWhenOnline = false;
+    endEntitySave('saved', json.modified_at ?? '');
     return true;
   }).catch((error: Error & { status?: number }) => {
     // Preserve failed saves per entity. A later successful save clears only
@@ -925,6 +999,7 @@ export async function updateEntityBody(redirect = true): Promise<boolean> {
       // Temporary disconnects (including sleep/wake) should not force a reload.
       // The browser's online event retries the most recent editor content.
       retrySaveWhenOnline = true;
+      endEntitySave(navigator.onLine ? 'error' : 'offline');
     }
     return false;
   });

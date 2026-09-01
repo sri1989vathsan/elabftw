@@ -563,6 +563,16 @@
     }
   }
 
+  async function completeTask(id: number): Promise<void> {
+    try {
+      await ApiC.patch(`${Model.Todolist}/${id}`, { completed: true });
+      await load();
+      window.dispatchEvent(new CustomEvent('todolist-changed'));
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'The task could not be marked done.');
+    }
+  }
+
   async function load(): Promise<void> {
     const requestSequence = ++loadSequence;
     loading = true;
@@ -893,7 +903,9 @@
                   <button type='button' class='btn btn-ghost btn-sm calendar-task-drag-handle mr-1' draggable='true' on:dragstart={(event) => startTaskDrag(event, entry)} on:dragend={finishTaskDrag} title={t('Drag to another calendar day')} aria-label={t('Drag to another calendar day')}>
                     <i class='fas fa-grip-vertical' aria-hidden='true'></i>
                   </button>
-                  <i class='fas fa-clock color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>
+                  <button type='button' class='btn btn-ghost btn-sm mr-1' on:click={() => completeTask(entry.id)} title={t('done')} aria-label={t('Mark task done')}>
+                    <i class='fas fa-check' aria-hidden='true'></i>
+                  </button>
                 {/if}
                 <div class='flex-grow-1 min-width-0'>
                   <span class='calendar-entry-source'>

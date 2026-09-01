@@ -88,4 +88,72 @@ describe('TinyMCE formula tables', () => {
         .get('button[data-action="destroy"]').click();
     });
   });
+
+  it('mounts the attachment spreadsheet editor and loads every workbook sheet', () => {
+    cy.createEntity('experiment', 'Cypress workbook editor').then(() => {
+      cy.get<HTMLIFrameElement>('#spreadsheetIframe').should('exist').then($iframe => {
+        const iframe = $iframe[0];
+        cy.wrap(iframe.contentDocument?.getElementById('spreadsheetEditorRoot'))
+          .should('not.be.null')
+          .children()
+          .should('have.length.greaterThan', 0);
+
+        iframe.contentWindow?.postMessage({
+          type: 'jss-load-workbook',
+          detail: {
+            name: 'multi-sheet.xlsx',
+            uploadId: 42,
+            worksheets: [
+              { name: 'Measurements', data: [[1], [2], ['=SUM(A1:A2)']] },
+              { name: 'Notes', data: [['second sheet']] },
+            ],
+          },
+        }, window.location.origin);
+      });
+
+      cy.get<HTMLIFrameElement>('#spreadsheetIframe')
+        .its('0.contentDocument.body')
+        .should('contain.text', 'Measurements')
+        .and('contain.text', 'Notes');
+
+      cy.get('button[title="More options"]').click()
+        .get('button[data-action="destroy"]').click();
+    });
+  });
+
+  it('inserts workbook sheets into Main Text with formulas retained', () => {
+    cy.createEntity('experiment', 'Cypress workbook to main text').then(() => {
+      cy.get<HTMLIFrameElement>('#spreadsheetIframe').then($iframe => {
+        const iframe = $iframe[0];
+        iframe.contentWindow?.postMessage({
+          type: 'jss-load-workbook',
+          detail: {
+            worksheets: [
+              { name: 'Measurements', data: [[1], [2], ['=SUM(A1:A2)']] },
+              { name: 'Notes', data: [['retained']] },
+            ],
+          },
+        }, window.location.origin);
+      });
+
+      cy.get<HTMLIFrameElement>('#spreadsheetIframe')
+        .its('0.contentDocument.body')
+        .find('[title="Insert workbook into main text"]')
+        .click();
+
+      getEditorBody().find('table.elabftw-spreadsheet').should('have.length', 2);
+      getEditorBody().find('table.elabftw-spreadsheet').eq(0).within(() => {
+        cy.get('caption').should('have.text', 'Measurements');
+        cy.get('tbody tr').eq(2).find('td').eq(0).should('have.text', '3');
+      }).then($table => {
+        const encoded = $table.attr('data-spreadsheet');
+        expect(encoded).to.be.a('string').and.not.be.empty;
+        const raw = JSON.parse(decodeURIComponent(escape(atob(encoded))));
+        expect(raw.data[2][0]).to.equal('=SUM(A1:A2)');
+      });
+
+      cy.get('button[title="More options"]').click()
+        .get('button[data-action="destroy"]').click();
+    });
+  });
 });

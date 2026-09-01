@@ -39,6 +39,13 @@ final class CustomMigrationRunner
         '013_folder_readmes.sql',
         '014_scalability_indexes.sql',
         '015_editor_defaults.sql',
+        '016_entity_review_decisions.sql',
+        '017_template_version.sql',
+        '018_step_details.sql',
+        '019_template_version_history.sql',
+        '020_template_favorites.sql',
+        '021_created_from_version.sql',
+        '022_experiment_template_inserts.sql',
     );
 
     private Db $Db;

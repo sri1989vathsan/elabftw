@@ -24,6 +24,7 @@ import { ApiC } from './api';
 import { entity } from './getEntity';
 import { on } from './handlers';
 import {
+  createFileFolderReference,
   createFileFolderReferences,
   deleteFileFolderReference,
 } from './file-folder-references';
@@ -44,6 +45,34 @@ on('add-file-folder-references', async (_, event: Event) => {
     input.value = '';
   } catch (error) {
     notify.error(error instanceof Error ? error.message : 'Unable to save file/folder references');
+  }
+});
+
+on('add-file-folder-reference', async (_, event: Event) => {
+  event.preventDefault();
+  const textInput = document.getElementById('fileFolderReferenceTextInput') as HTMLInputElement;
+  const labelInput = document.getElementById('fileFolderReferenceLabelInput') as HTMLInputElement;
+  if (!textInput.value.trim()) {
+    textInput.focus();
+    return;
+  }
+  try {
+    await createFileFolderReference(textInput.value, labelInput.value);
+    textInput.value = '';
+    labelInput.value = '';
+  } catch (error) {
+    notify.error(error instanceof Error ? error.message : 'Unable to save file/folder reference');
+  }
+});
+
+on('copy-unc-path', async (el: HTMLElement) => {
+  const unc = el.dataset.unc;
+  if (!unc) return;
+  try {
+    await navigator.clipboard.writeText(unc);
+    notify.success('Windows path copied to clipboard');
+  } catch {
+    notify.error('Could not copy to clipboard');
   }
 });
 
@@ -117,6 +146,23 @@ on('create-step', (_, event: Event) => {
   });
 });
 
+async function createStepsSequentially(lines: string[]): Promise<void> {
+  // steps must be created in order, so requests are sent sequentially rather than in parallel
+  for (const line of lines) {
+    await StepC.create(line);
+  }
+}
+
+on('create-steps-bulk', (_, event: Event) => {
+  event.preventDefault();
+  const input = document.getElementById('bulkAddStepsInput') as HTMLTextAreaElement;
+  const lines = input.value.split('\n').map(line => line.trim()).filter(line => line !== '');
+  if (lines.length === 0) return;
+  createStepsSequentially(lines).then(() => reloadElements(['stepsDiv']).then(() => {
+    input.value = '';
+  }));
+});
+
 on('step-update-deadline', (el: HTMLElement) => {
   const value = (document.getElementById('stepSelectDeadline_' + el.dataset.stepid) as HTMLSelectElement).value;
   const stepid = parseInt(el.dataset.stepid, 10);
@@ -179,10 +225,18 @@ const malleableStep = new Malle({
       .then(resp => resp.json())
       .then(json => original.dataset.target === Target.Body
         ? json.body
-        : json.deadline,
+        : json[original.dataset.target],
       );
   },
   listenOn: '.step.editable',
+  onEdit: (original, event, input) => {
+    // clear the "Click to add a ..." placeholder before editing starts
+    if (original.dataset.isempty === '1') {
+      (input as HTMLInputElement).value = '';
+      original.dataset.isempty = '0';
+      return true;
+    }
+  },
   returnedValueIsTrustedHtml: false,
   submit : i18next.t('save'),
   submitClasses: ['button', 'btn', 'btn-primary', 'mt-2'],

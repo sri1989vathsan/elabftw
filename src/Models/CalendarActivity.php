@@ -20,10 +20,13 @@ use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\CalendarActivityIndexer;
+use Elabftw\Services\SlowOperationTimer;
 use Override;
 use PDO;
 
+use function count;
 use function sprintf;
+use function array_values;
 
 /**
  * Read owned experiment/resource activity for the account calendar.
@@ -83,8 +86,11 @@ final class CalendarActivity extends AbstractRest
         DateTimeImmutable $from,
         DateTimeImmutable $to,
         bool $teamScoped,
-    ): array
-    {
+    ): array {
+        $Timer = SlowOperationTimer::start('calendar_activity', array(
+            'entity_type' => $entityType->value,
+            'team_scope' => $teamScoped,
+        ));
         // This also performs a one-time backfill for existing installations and
         // incrementally refreshes only entities whose modified_at changed, bounded
         // so a large backlog can't turn this request into a long-running one.
@@ -147,7 +153,10 @@ final class CalendarActivity extends AbstractRest
                 );
             }
         }
-        return array_values($result);
+        $result = array_values($result);
+        $Timer->finish(count($result));
+
+        return $result;
     }
 
     private function parseDate(string $value): DateTimeImmutable

@@ -64,9 +64,8 @@ import '../js/tinymce-langs/zh_CN.js';
 import '../js/tinymce-langs/zh_TW.js';
 import '../js/tinymce-plugins/mention/plugin.js';
 import { EntityType, Model } from './interfaces';
-import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPostRequest } from './misc';
+import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPostRequest, setEntitySaveState } from './misc';
 import { ApiC } from './api';
-import { isSortable } from './TableSorting.class';
 import type { MathJaxObject } from '@mathjax/src/js/components/startup.js';
 declare const MathJax: MathJaxObject;
 import { entity } from './getEntity';
@@ -215,7 +214,14 @@ function getAssetVersionQuery(): string {
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize | bold italic underline strikethrough superscript subscript forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist checklist outdent indent | format-painter remove-formatting | insert-link adddate experiment-title horizontal-rule insert-note | copy-rich-selection insert-data-table table-select-copy table-outdent table-indent sort-table | charmap emoticons codesample';
+  // Grouped by function: file/history, then all text/paragraph formatting
+  // together, then the standalone Insert-menu, then all individual insert
+  // actions (including table tools, since they act on what you just
+  // inserted) together, then everything else.
+  // Table alignment (outdent/indent) and sortable-table toggle live inside
+  // the insert-data-table dropdown itself (see SpreadsheetExtension.ts)
+  // rather than as their own toolbar buttons.
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough superscript subscript forecolor backcolor alignleft aligncenter alignright alignjustify bullist numlist checklist outdent indent format-painter remove-formatting | elabftw-insert-menu | insert-link adddate experiment-title horizontal-rule insert-note insert-data-table copy-table-or-selection | charmap emoticons codesample';
   if (!document.getElementById('documentTitle')) {
     toolbar1 = toolbar1.replace('experiment-title ', '');
   }
@@ -233,7 +239,12 @@ export function getTinymceBaseConfig(page: string): object {
   // integration is dormant. MouseLinkExtension disables and greys the button
   // unless the gated PyRAT experiment section is available.
   if (page === 'edit' && entity.type === EntityType.Experiment) {
-    toolbar1 = toolbar1.replace('insert-link', 'insert-link insert-mouse');
+    toolbar1 = toolbar1.replace('codesample', 'codesample insert-mouse');
+    // searchable/favouritable template picker, in addition to the stock
+    // Insert > Template… menu item still driven by the templates: callback below.
+    // Kept next to insert-data-table (links/date/title/divider/note/spreadsheet
+    // group) rather than off in the table-tools group.
+    toolbar1 = toolbar1.replace('insert-data-table', 'insert-data-table inserttemplate');
   }
 
   const isDark = isDarkTheme();
@@ -253,9 +264,12 @@ export function getTinymceBaseConfig(page: string): object {
     table_default_styles: {
       'min-width':'25%',
     },
-    // Keep the outer table width stable while dragging a column boundary; the
-    // neighbouring column absorbs the change, which is much easier to control.
-    table_column_resizing: 'preservetable',
+    // Dragging a column boundary grows/shrinks the table itself instead of
+    // squeezing the neighbouring column to compensate — this matches how a
+    // spreadsheet is expected to behave (widen one column without visually
+    // shrinking every other one), at the cost of the same drag also being
+    // able to grow/shrink a plain table's total width.
+    table_column_resizing: 'resizetable',
     table_resize_bars: true,
     object_resizing: 'table',
     browser_spellcheck: true,
@@ -430,6 +444,21 @@ export function getTinymceBaseConfig(page: string): object {
         if (page !== 'admin' && page !== 'sysconfig') {
           editor.execCommand('lineheight', false, '1');
         }
+        // The link plugin's own default shortcut is the same Meta/Ctrl+K used
+        // app-wide for the command palette. Free it up so Cmd+K always opens
+        // the palette, everywhere, instead of doing something different
+        // depending on whether the cursor happens to be in the editor.
+        editor.shortcuts.remove('meta+k');
+        editor.addShortcut('meta+k', 'Search and commands', () => {
+          document.dispatchEvent(new CustomEvent('elabftw-open-command-palette'));
+        });
+        // The autoresize plugin computes its initial height before the
+        // toolbar (save-state indicator, insert menu, etc.) has finished
+        // settling into its final layout, so the editor renders far taller
+        // than its content until the next recompute -- which focus happens
+        // to trigger, making it "shrink" only once clicked into. Force one
+        // extra recompute once everything has actually settled.
+        window.setTimeout(() => editor.execCommand('mceAutoResize'), 100);
       });
       // Hook into the blur event - Finalize potential changes to images if user clicks outside of editor
       editor.on('blur', () => {
@@ -493,6 +522,7 @@ export function getTinymceBaseConfig(page: string): object {
       });
       // on edit page there is an autosave triggered
       if (page === 'edit') {
+        editor.on('Dirty', () => setEntitySaveState('unsaved'));
         editor.on('keydown', () => clearTimeout(typingTimer));
         editor.on('keyup', () => {
           clearTimeout(typingTimer);
@@ -500,64 +530,6 @@ export function getTinymceBaseConfig(page: string): object {
         });
       }
 
-      // sort down icon from COLLECTION: Dazzle Line Icons LICENSE: CC Attribution License AUTHOR: Dazzle UI
-      editor.ui.registry.addIcon('sort-amount-down-alt', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 12h8m-8-4h8m-8 8h8M6 7v10m0 0-3-3m3 3 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'), // eslint-disable-line
-      // add toggle button for table sorting
-      editor.ui.registry.addToggleButton('sort-table', {
-        icon: 'sort-amount-down-alt',
-        tooltip: 'sortable table',
-        onAction: api => {
-          const table = editor.selection.getNode().closest('table');
-          if (table) {
-            if (api.isActive()) {
-              // unset sortable
-              delete table.dataset.tableSort;
-              api.setActive(false);
-            } else {
-              // show alert if table is not sortable
-              if (!isSortable(table, true)) {
-                editor.focus();
-                return;
-              }
-              // set sortable
-              table.dataset.tableSort = 'true';
-              // here the top row could be reformatted automatically td -> th
-              api.setActive(true);
-            }
-            editor.undoManager.add();
-          }
-          editor.focus();
-        },
-        onSetup: api => {
-          // button is enabled only if table is selected
-          // button is active (highlighted) only if table is set sortable
-          api.setEnabled(false);
-
-          const callback = event => {
-            const table = event.element.closest('table');
-            if (!table) {
-              api.setEnabled(false);
-              api.setActive(false);
-              return;
-            }
-
-            // table is selected, enable button
-            api.setEnabled(true);
-            if (table.dataset.tableSort === 'true') {
-              // table is set sortable, highlight button
-              api.setActive(true);
-              return;
-            }
-            api.setActive(false);
-          };
-
-          editor.on('NodeChange', callback);
-
-          return () => {
-            editor.off('NodeChange', callback);
-          };
-        },
-      });
     },
     style_formats_merge: true,
     style_formats: [
@@ -581,10 +553,31 @@ export function getTinymceBaseConfig(page: string): object {
     toolbar_sticky_offset: isToolbarSticky ? ((document.querySelector<HTMLElement>('.sticky-navbar')?.offsetHeight ?? 0) + (entityToolbar?.offsetHeight ?? 0)) : 0,
     // render MathJax for TinyMCE preview
     init_instance_callback: (editor) => {
+      // toolbar_sticky_offset above is only this instance's starting value.
+      // TinyMCE reads it fresh on every scroll/resize-triggered docking
+      // recalculation (it's a live option lookup, not cached at init), so
+      // keeping it in sync here is enough to track the navbar/entity
+      // toolbar's own show/hide state instead of going stale and causing a
+      // jump right as this toolbar reaches sticky range.
+      if (isToolbarSticky) {
+        const updateStickyOffset = (event: Event): void => {
+          const offset = (event as CustomEvent<{ offset: number }>).detail?.offset;
+          if (typeof offset === 'number') editor.options.set('toolbar_sticky_offset', offset);
+        };
+        window.addEventListener('elabftw-sticky-offset-changed', updateStickyOffset);
+        editor.on('remove', () => window.removeEventListener('elabftw-sticky-offset-changed', updateStickyOffset));
+      }
       // Recalculate from the loaded document instead of retaining TinyMCE's
       // provisional iframe height. Without this, edit mode can initially
       // expose a long empty scrolling region until the editor receives focus.
       window.requestAnimationFrame(() => editor.execCommand('mceAutoResize'));
+      // The frame above can still fire before the iframe's own fonts finish
+      // loading, so the initial height is measured against fallback-font
+      // metrics; TinyMCE only recalculates again on its next trigger (a
+      // click, which fires NodeChange), which is why the editor visibly
+      // shrinks the moment it's clicked. Recheck once those fonts are
+      // actually ready so the correct height shows up without needing focus.
+      editor.getDoc()?.fonts?.ready.then(() => editor.execCommand('mceAutoResize'));
       editor.on('ExecCommand', (e) => {
         if (e.command == 'mcePreview') {
           // declaration as iFrame element required to avoid errors with getting srcdoc property

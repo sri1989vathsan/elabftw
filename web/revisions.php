@@ -20,6 +20,9 @@ use Exception;
 use Symfony\Component\HttpFoundation\Response;
 
 use function _;
+use function in_array;
+use function is_array;
+use function json_decode;
 
 /**
  * Show history of body of experiment or db item
@@ -41,11 +44,28 @@ try {
         (int) $App->Config->configArr['min_days_revisions'],
     )->readAll();
 
+    // Templates use the ordinary, upstream revision records as their version
+    // snapshots. Keep optional human documentation in the entity metadata so
+    // it is exported/backed up with the template and requires no schema fork.
+    $isTemplate = in_array($Entity->entityType, array(EntityType::Templates, EntityType::ItemsTypes), true);
+    $templateVersionDocs = array();
+    if ($isTemplate && !empty($Entity->entityData['metadata'])) {
+        $metadata = json_decode((string) $Entity->entityData['metadata'], true);
+        if (is_array($metadata)) {
+            $docs = $metadata['elabftw']['template_version_docs'] ?? array();
+            if (is_array($docs)) {
+                $templateVersionDocs = $docs;
+            }
+        }
+    }
+
     $template = 'revisions.html';
     $renderArr = array(
         'Entity' => $Entity,
-        'pageTitle' => _('Revisions'),
+        'pageTitle' => $isTemplate ? _('Template versions') : _('Revisions'),
         'revisionsArr' => $revisionsArr,
+        'isTemplate' => $isTemplate,
+        'templateVersionDocs' => $templateVersionDocs,
     );
 
     $Response->setContent($App->render($template, $renderArr));

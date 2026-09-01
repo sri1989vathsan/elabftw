@@ -8,41 +8,50 @@
  */
 
 import { read, utils, write } from '@e965/xlsx';
-import type { WorkBook } from '@e965/xlsx';
+import type { WorkBook, WorkSheet } from '@e965/xlsx';
 import { FileType, Model } from './interfaces';
 import { askFileName, getNewIdFromPostRequest } from './misc';
 import { notify } from './notify';
 import { getBookType, getMime, inferFileTypeFromName } from './spreadsheet-formats';
 
 type Cell = string | number | boolean | null;
+export type SpreadsheetWorksheet = {
+  data: Cell[][];
+  name: string;
+};
+
 // save current spreadsheet as a new attachment
-export async function saveAsAttachment(aoa: Cell[][], entityType: string, entityId: number, fileName?: string): Promise<{ id:number; name:string } | void> {
+export async function saveAsAttachment(worksheets: SpreadsheetWorksheet[], entityType: string, entityId: number, fileName?: string): Promise<{ id:number; name:string } | void> {
   const raw = fileName?.trim() || askFileName(FileType.Xlsx);
   if (!raw) return;
-  return uploadAOA(aoa, ensureExtensionExists(raw), entityType, entityId);
+  return uploadWorksheets(worksheets, ensureExtensionExists(raw), entityType, entityId);
 }
 
 // replace an existing attachment with current spreadsheet
-export async function replaceAttachment(aoa: Cell[][], entityType: string, entityId: number, uploadId: number, currentName: string): Promise<{id:number; name:string} | void> {
+export async function replaceAttachment(worksheets: SpreadsheetWorksheet[], entityType: string, entityId: number, uploadId: number, currentName: string): Promise<{id:number; name:string} | void> {
   if (!uploadId || !currentName) return;
-  return uploadAOA(aoa, currentName, entityType, entityId, uploadId);
+  return uploadWorksheets(worksheets, currentName, entityType, entityId, uploadId);
 }
 
-// import file from computer: convert to spreadsheet
-export async function fileToAOA(file: File): Promise<Cell[][]> {
+// import every workbook sheet, retaining its name and formulas
+export async function fileToWorksheets(file: File): Promise<SpreadsheetWorksheet[]> {
   const buffer = await file.arrayBuffer();
-  return parseFileToAOA(buffer);
+  return parseFileToWorksheets(buffer);
 }
 
-function parseFileToAOA(buffer: ArrayBuffer): Cell[][] {
+function parseFileToWorksheets(buffer: ArrayBuffer): SpreadsheetWorksheet[] {
   const wb = read(buffer, { type: 'array', codepage: 65001 }); // UTF-8
   if (!wb.SheetNames || wb.SheetNames.length === 0) {
     throw new Error('No sheets found in uploaded file.');
   }
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  if (!ws) {
-    throw new Error('Failed to load the first sheet from the file.');
-  }
+  return wb.SheetNames.map(name => {
+    const ws = wb.Sheets[name];
+    if (!ws) throw new Error(`Failed to load worksheet: ${name}`);
+    return { name, data: worksheetToAOA(ws) };
+  });
+}
+
+function worksheetToAOA(ws: WorkSheet): Cell[][] {
   // Walk cells manually instead of using utils.sheet_to_json(): that helper
   // only returns each cell's computed value, so formula cells collapse down
   // to a plain number/string and the formula itself is lost. Reading each
@@ -74,9 +83,9 @@ export async function loadInSpreadsheetEditor(storage: string, path: string, nam
     });
     if (!res.ok) throw new Error('Failed to fetch uploaded file.');
     const buffer = await res.arrayBuffer();
-    const aoa = parseFileToAOA(buffer);
+    const worksheets = parseFileToWorksheets(buffer);
     const iframe = document.getElementById('spreadsheetIframe') as HTMLIFrameElement;
-    iframe.contentWindow.postMessage({ type: 'jss-load-aoa', detail: { aoa, name, uploadId } }, window.location.origin);
+    iframe.contentWindow?.postMessage({ type: 'jss-load-workbook', detail: { worksheets, name, uploadId } }, window.location.origin);
   } catch (e) {
     notify.error(e.message || 'Unexpected error while loading spreadsheet.');
   }
@@ -106,8 +115,7 @@ const uploadUrl = (entityType: string, entityId: number, uploadId?: number): str
   return uploadId ? `${base}/${uploadId}` : base;
 };
 
-// TODO: later - handle multiple sheets
-const wbFromAOA = (aoa: Cell[][]): WorkBook => {
+const worksheetFromAOA = (aoa: Cell[][]) => {
   const ws = utils.aoa_to_sheet(aoa);
   // aoa_to_sheet() writes formula-looking strings (e.g. "=SUM(A1:A3)") as
   // plain text cells. Convert those back into real formula cells so the
@@ -127,8 +135,21 @@ const wbFromAOA = (aoa: Cell[][]): WorkBook => {
       }
     }
   }
+  return ws;
+};
+
+const wbFromWorksheets = (worksheets: SpreadsheetWorksheet[]): WorkBook => {
   const wb = utils.book_new();
-  utils.book_append_sheet(wb, ws, 'Sheet1');
+  worksheets.forEach((worksheet, index) => {
+    const fallbackName = `Sheet${index + 1}`;
+    // Excel sheet names are limited to 31 characters and cannot contain
+    // these characters. Jspreadsheet normally supplies a valid name, but
+    // sanitizing here keeps exports robust after programmatic changes.
+    const safeName = (worksheet.name || fallbackName)
+      .replace(/[\\/?*[\]:]/g, '_')
+      .slice(0, 31) || fallbackName;
+    utils.book_append_sheet(wb, worksheetFromAOA(worksheet.data), safeName);
+  });
   return wb;
 };
 
@@ -141,9 +162,9 @@ const fileFromWB = (wb: WorkBook, name: string) => {
 };
 
 // upload to eLab as attachment (save/replace)
-async function uploadAOA(aoa: Cell[][], name: string, entityType: string, entityId: number, uploadId?: number): Promise<{ id: number; name: string } | void> {
-  if (!aoa?.length) return;
-  const wb = wbFromAOA(aoa);
+async function uploadWorksheets(worksheets: SpreadsheetWorksheet[], name: string, entityType: string, entityId: number, uploadId?: number): Promise<{ id: number; name: string } | void> {
+  if (!worksheets?.length) return;
+  const wb = wbFromWorksheets(worksheets);
   const file = fileFromWB(wb, name);
   const url = uploadUrl(entityType, entityId, uploadId);
   const id = await postAndReturnId(file, url);
