@@ -78,11 +78,33 @@ export function htmlToMarkdown(html: string): string {
 
 /** Render Markdown before changing the stored content type to HTML. */
 export function markdownToHtml(markdown: string): string {
-  const rendered = marked.parse(markdown) as string;
+  const rendered = marked.parse(normalizeCompactHeadings(markdown)) as string;
   return DOMPurify.sanitize(rendered, {
     USE_PROFILES: { html: true },
     ADD_ATTR: ['target'],
   });
+}
+
+/**
+ * Accept compact ATX headings such as `####Heading` in addition to the
+ * CommonMark form `#### Heading`. Do not rewrite examples inside fenced code.
+ */
+export function normalizeCompactHeadings(markdown: string): string {
+  let fenceMarker = '';
+  return markdown.split('\n').map(line => {
+    const fence = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (fence) {
+      const marker = fence[1].charAt(0);
+      if (!fenceMarker) {
+        fenceMarker = marker;
+      } else if (fenceMarker === marker) {
+        fenceMarker = '';
+      }
+      return line;
+    }
+    if (fenceMarker) return line;
+    return line.replace(/^( {0,3}#{1,6})(?=[^#\s])/, '$1 ');
+  }).join('\n');
 }
 
 class TinyEditor extends Editor implements EditorInterface {
@@ -115,7 +137,7 @@ export class MdEditor extends Editor implements EditorInterface {
     /* eslint-disable-next-line */
     ($('.markdown-textarea') as any).markdown({
       onPreview: ed => {
-        const html = marked(ed.$textarea.val()) as string;
+        const html = marked(normalizeCompactHeadings(ed.$textarea.val())) as string;
 
         window.setTimeout(() => {
           void MathJax.typesetPromise().catch(error => {
