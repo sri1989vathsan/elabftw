@@ -61,7 +61,11 @@ export function htmlToMarkdown(html: string): string {
   converter.keep(node => {
     if (!(node instanceof HTMLElement)) return false;
     return node.matches([
-      'table',
+      // Formula spreadsheets need their encoded data and inline appearance.
+      // Ordinary tables must not be kept here: retaining every <table>
+      // caused otherwise-normal editor content to appear as one large HTML
+      // embed after switching to Markdown.
+      'table.elabftw-spreadsheet',
       '.elabftw-note-block',
       '.elabftw-date-reference',
       '[id^="experiment-title-"]',
