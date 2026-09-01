@@ -2,6 +2,12 @@
 
 {% block body %}
 
+{% if isTemplate %}
+  <div class='alert alert-info'>
+    <strong>{{ 'Template version documentation'|trans }}</strong><br>
+    {{ 'Add a short name and notes to explain what changed in each retained template version. The documentation is saved with the template and included in backups and exports.'|trans }}
+  </div>
+{% endif %}
 <p>{{ 'This server is configured to store %d revisions per entry maximum.'|trans|format(App.Config.configArr.max_revisions) }}
 {{ 'A change of at least %d characters is required to trigger a revision save.'|trans|format(App.Config.configArr.min_delta_revisions) }}</p>
 
@@ -19,10 +25,13 @@
 <ul class='list-group mt-3'>
   {% for revision in revisionsArr %}
     {% set randomId = random() %}
+    {% set versionNumber = revisionsArr|length - loop.index0 %}
+    {% set versionDoc = templateVersionDocs[revision.id]|default({}) %}
     <li id='parent_{{ randomId }}' class='list-group-item'>
       <div class='d-flex'>
         <div>
           <input autocomplete='off' type='checkbox' data-action='checkbox-revision' data-id='{{ Entity.id }}' data-revid='{{ revision.id }}' data-type='{{ Entity.entityType.value }}' aria-label='{{ 'Select'|trans }}' class='mr-2' />
+          {% if isTemplate %}<span class='badge badge-primary mr-1'>{{ 'Version %d'|trans|format(versionNumber) }}</span>{% endif %}
           <span title='{{ 'Revision ID'|trans }}' class='badge badge-secondary mr-2'>{{ revision.id }}</span>
           <button type='button' aria-label='{{ 'Toggle content '|trans }}' class='btn btn-ghost border-0' data-type='{{ Entity.entityType.value }}' data-id='{{ Entity.id }}' data-revid={{ revision.id }} data-randid={{ randomId }} data-action='toggle-body' data-opened-icon='fa-square-minus' data-closed-icon='fa-square-plus' title='{{ 'Toggle content'|trans }}'>
             <i class='fas fa-square-plus fa-fw'></i>
@@ -33,6 +42,32 @@
           {% if not Entity.isReadOnly %}<button type='button' data-action='restore-revision' data-id='{{ Entity.id }}' data-type='{{ Entity.entityType.value }}' data-revid='{{ revision.id }}' class='btn btn-ghost'>{{ 'Restore'|trans }}</button>{% endif %}
         </div>
       </div>
+      {% if isTemplate %}
+        <div class='row mt-2 ml-4 mr-1'>
+          <div class='col-md-4 pl-0'>
+            <label class='sr-only' for='templateVersionLabel_{{ revision.id }}'>{{ 'Version name'|trans }}</label>
+            <input id='templateVersionLabel_{{ revision.id }}' class='form-control form-control-sm'
+              maxlength='120' value='{{ versionDoc.label|default('') }}'
+              placeholder='{{ 'Version name (for example: Added analysis steps)'|trans }}'
+              {{ Entity.isReadOnly ? 'disabled' }}>
+          </div>
+          <div class='col-md pl-0 mt-2 mt-md-0'>
+            <label class='sr-only' for='templateVersionNotes_{{ revision.id }}'>{{ 'Version notes'|trans }}</label>
+            <textarea id='templateVersionNotes_{{ revision.id }}' class='form-control form-control-sm'
+              rows='2' maxlength='2000' placeholder='{{ 'Describe changes, compatibility, or usage notes…'|trans }}'
+              {{ Entity.isReadOnly ? 'disabled' }}>{{ versionDoc.notes|default('') }}</textarea>
+          </div>
+          {% if not Entity.isReadOnly %}
+            <div class='col-md-auto pl-0 mt-2 mt-md-0'>
+              <button type='button' class='btn btn-primary btn-sm'
+                data-action='save-template-version-docs' data-id='{{ Entity.id }}'
+                data-type='{{ Entity.entityType.value }}' data-revid='{{ revision.id }}'>
+                <i class='fas fa-save fa-fw mr-1'></i>{{ 'Save notes'|trans }}
+              </button>
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
       <div hidden id='{{ randomId }}' style='overflow:auto;margin: 10px 0 0 20px'><div></div></div>
     </li>
   {% endfor %}

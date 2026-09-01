@@ -29,6 +29,19 @@ interface SimpleSpreadsheetGrid {
   cells: string[][];
 }
 
+interface TemplateVersionDoc {
+  label: string;
+  notes: string;
+}
+
+interface TemplateMetadata {
+  elabftw?: {
+    template_version_docs?: Record<string, TemplateVersionDoc>;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 function findSpreadsheetTable(html: string): HTMLTableElement | null {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   return doc.querySelector('table.elabftw-spreadsheet');
@@ -219,4 +232,30 @@ on('compare-revisions', async (el: HTMLElement) => {
 
 on('restore-revision', (el: HTMLElement) => {
   ApiC.patch(`${el.dataset.type}/${el.dataset.id}/revisions/${el.dataset.revid}`, {'action': Action.Replace});
+});
+
+on('save-template-version-docs', async (el: HTMLElement) => {
+  const label = (document.getElementById(`templateVersionLabel_${el.dataset.revid}`) as HTMLInputElement).value.trim();
+  const notes = (document.getElementById(`templateVersionNotes_${el.dataset.revid}`) as HTMLTextAreaElement).value.trim();
+  try {
+    const entity = await ApiC.getJson(`${el.dataset.type}/${el.dataset.id}`);
+    let metadata: TemplateMetadata = {};
+    if (entity.metadata) {
+      metadata = typeof entity.metadata === 'string' ? JSON.parse(entity.metadata) : entity.metadata;
+    }
+    metadata.elabftw ??= {};
+    metadata.elabftw.template_version_docs ??= {};
+    if (label || notes) {
+      metadata.elabftw.template_version_docs[el.dataset.revid] = {label, notes};
+    } else {
+      delete metadata.elabftw.template_version_docs[el.dataset.revid];
+      if (Object.keys(metadata.elabftw.template_version_docs).length === 0) {
+        delete metadata.elabftw.template_version_docs;
+      }
+    }
+    await ApiC.patch(`${el.dataset.type}/${el.dataset.id}`, {metadata: JSON.stringify(metadata)});
+    notify.success('Template version documentation saved.');
+  } catch (error) {
+    notify.error(error);
+  }
 });
