@@ -692,13 +692,20 @@ export default class FavoriteFilters extends SidePanel {
             itemLabel.replaceWith(link);
           } else if (item.onSelect) {
             entry.style.cursor = 'pointer';
-            entry.addEventListener('click', item.onSelect);
+            // Skip navigation when the click landed on the action button
+            // (the bookmark star) instead of stopping the event from
+            // bubbling further -- the global 'toggle-favorite-folder'
+            // handler is a delegated listener up on document, so
+            // stopPropagation() here would silently swallow the click
+            // before it ever reached that handler, making the button
+            // unpressable.
+            const onSelect = item.onSelect;
+            entry.addEventListener('click', event => {
+              if (item.actionElement?.contains(event.target as Node)) return;
+              onSelect();
+            });
           }
           if (item.actionElement) {
-            // Stop the click from also bubbling into the row's own
-            // onSelect (which would navigate to the folder instead of just
-            // toggling its bookmark).
-            item.actionElement.addEventListener('click', event => event.stopPropagation());
             item.actionElement.classList.add('ml-2', 'flex-shrink-0');
             entry.classList.add('d-flex', 'align-items-center', 'justify-content-between');
             entry.append(item.actionElement);

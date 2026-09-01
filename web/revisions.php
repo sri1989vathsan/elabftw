@@ -16,6 +16,7 @@ use Elabftw\Enums\EntityType;
 use Elabftw\Enums\AccessType;
 use Elabftw\Exceptions\AppException;
 use Elabftw\Models\Revisions;
+use Elabftw\Models\TemplateVersions;
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -37,17 +38,22 @@ try {
     $Entity->setId($App->Request->query->getInt('item_id'));
     $Entity->canOrExplode(AccessType::Read);
 
-    $revisionsArr = new Revisions(
-        $Entity,
-        (int) $App->Config->configArr['max_revisions'],
-        (int) $App->Config->configArr['min_delta_revisions'],
-        (int) $App->Config->configArr['min_days_revisions'],
-    )->readAll();
-
-    // Templates use the ordinary, upstream revision records as their version
-    // snapshots. Keep optional human documentation in the entity metadata so
-    // it is exported/backed up with the template and requires no schema fork.
+    // Templates: this page shows the permanent snapshots created by
+    // "Publish new version" (custom_template_versions), not the ordinary
+    // upstream auto-saved revisions -- those are two unrelated systems, and
+    // publishing a version never touched the revisions table, so this page
+    // used to never reflect what was actually published. Optional human
+    // documentation per version still lives in the entity metadata so it's
+    // exported/backed up with the template and requires no schema fork.
     $isTemplate = in_array($Entity->entityType, array(EntityType::Templates, EntityType::ItemsTypes), true);
+    $revisionsArr = $isTemplate
+        ? TemplateVersions::readAllForEntity($Entity->id ?? 0)
+        : new Revisions(
+            $Entity,
+            (int) $App->Config->configArr['max_revisions'],
+            (int) $App->Config->configArr['min_delta_revisions'],
+            (int) $App->Config->configArr['min_days_revisions'],
+        )->readAll();
     $templateVersionDocs = array();
     if ($isTemplate && !empty($Entity->entityData['metadata'])) {
         $metadata = json_decode((string) $Entity->entityData['metadata'], true);

@@ -93,6 +93,18 @@ final class Templates extends AbstractTemplateEntity
         $this->insertTags($tags, $newId);
         $this->addCreationToChangelog($newId, $createdFromType, $createdFromId);
 
+        // Capture v1 immediately, at creation, since "Publish new version"
+        // (see AbstractEntity::patch()) only ever snapshots the *new*
+        // version it creates (v2, v3, ...) -- without this, v1 itself never
+        // gets a permanent record and silently disappears from the version
+        // history/picker for any template that's since moved past it.
+        TemplateVersions::create(
+            entityId: $newId,
+            version: 1,
+            body: $body ?? '',
+            publishedBy: $this->Users->userid,
+        );
+
         return $newId;
     }
 
