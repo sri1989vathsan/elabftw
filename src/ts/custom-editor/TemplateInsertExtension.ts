@@ -8,7 +8,7 @@ import { Editor } from 'tinymce/tinymce';
 import { ApiC } from '../api';
 import { entity } from '../getEntity';
 import { Action, EntityType, Model } from '../interfaces';
-import { escapeHTML } from '../misc';
+import { escapeHTML, reloadElements } from '../misc';
 import { notify } from '../notify';
 
 interface TemplateSummary {
@@ -92,7 +92,7 @@ function showPicker(editor: Editor, templates: TemplateSummary[], favoriteIds: S
             <button type='button' class='btn btn-secondary' data-tab='mine'>Mine</button>
             <button type='button' class='btn btn-secondary' data-tab='favorites'>Favourites</button>
           </div>
-          <p class='small text-muted mb-2'>Click a template to insert it now, or check several and insert them together.</p>
+          <p class='small text-muted mb-2'>Click a template to add it to the main text, use Link to associate it without inserting, or check several and insert them together.</p>
           <ul class='list-group' id='templateInsertList' style='max-height: 50vh; overflow-y: auto;'></ul>
         </div>
         <div class='modal-footer'>
@@ -169,21 +169,41 @@ function showPicker(editor: Editor, templates: TemplateSummary[], favoriteIds: S
     editor.selection.setCursorLocation(p, 0);
   };
 
-  const insertTemplate = (tpl: TemplateSummary): void => {
+  const resolveHistoricalEntry = (tpl: TemplateSummary): TemplateVersionEntry | undefined => {
     const chosenVersion = selectedVersion.get(tpl.id);
-    const historicalEntry = chosenVersion !== undefined
+    return chosenVersion !== undefined
       ? versionCache.get(tpl.id)?.find(v => v.version === chosenVersion)
       : undefined;
-    editor.execCommand('mceInsertContent', false, historicalEntry?.body ?? tpl.body_html ?? tpl.body ?? '');
-    insertLineBreakAfterInsert();
-    // best-effort: lets the template's own "Used in" list also pick up
-    // experiments that got its content via insert rather than creation
+  };
+
+  // Records the template as associated with this experiment (shows up in
+  // the "Associated experimental templates" list) without touching the main
+  // text -- shared by the insert flow (best-effort, so an insert still
+  // succeeds even if this bookkeeping call fails) and the standalone "Link"
+  // button (where it's the only thing happening, so failures are surfaced).
+  const recordTemplateLink = (tpl: TemplateSummary, historicalEntry?: TemplateVersionEntry): Promise<void> => {
     const patchBody: {action: Action; template_id: number; version?: number} = {
       action: Action.LinkTemplateSource,
       template_id: tpl.id,
     };
     if (historicalEntry) patchBody.version = historicalEntry.version;
-    ApiC.patch(`${entity.type}/${entity.id}`, patchBody).catch(() => {});
+    return ApiC.patch(`${entity.type}/${entity.id}`, patchBody)
+      .then(() => reloadElements(['associatedTemplatesContent']));
+  };
+
+  const insertTemplate = (tpl: TemplateSummary): void => {
+    const historicalEntry = resolveHistoricalEntry(tpl);
+    editor.execCommand('mceInsertContent', false, historicalEntry?.body ?? tpl.body_html ?? tpl.body ?? '');
+    insertLineBreakAfterInsert();
+    // best-effort: lets the template's own "Used in" list also pick up
+    // experiments that got its content via insert rather than creation
+    recordTemplateLink(tpl, historicalEntry).catch(() => {});
+  };
+
+  const linkTemplateOnly = (tpl: TemplateSummary): void => {
+    recordTemplateLink(tpl, resolveHistoricalEntry(tpl))
+      .then(() => notify.success(`${tpl.title} linked without inserting`))
+      .catch(() => notify.error('Could not link template.'));
   };
 
   const totalSelectedCount = (): number => Array.from(selectedQty.values()).reduce((sum, qty) => sum + qty, 0);
@@ -234,6 +254,9 @@ function showPicker(editor: Editor, templates: TemplateSummary[], favoriteIds: S
             <i class='fa-star fa-fw ${isFav ? 'fas text-warning' : 'far'}'></i>
           </button>
           <span class='flex-grow-1 template-insert-choice' data-id='${tpl.id}' style='cursor: pointer;'>${escapeHTML(tpl.title)}</span>
+          <button type='button' class='btn btn-ghost btn-sm mr-1 template-link-only' data-id='${tpl.id}' title='Link without inserting into the main text'>
+            <i class='fas fa-link fa-fw'></i> Link
+          </button>
         </li>
       `;
     }).join('');
@@ -262,6 +285,13 @@ function showPicker(editor: Editor, templates: TemplateSummary[], favoriteIds: S
         else favoriteIds.add(id);
         render();
       }).catch(() => notify.error('Could not update favourite.'));
+      return;
+    }
+    const linkOnly = target.closest<HTMLElement>('.template-link-only');
+    if (linkOnly) {
+      const id = parseInt(linkOnly.dataset.id, 10);
+      const tpl = templates.find(t => t.id === id);
+      if (tpl) linkTemplateOnly(tpl);
       return;
     }
     const choice = target.closest<HTMLElement>('.template-insert-choice');

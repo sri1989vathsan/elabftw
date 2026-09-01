@@ -2,22 +2,31 @@
    experiment's body via the "Insert template" editor picker, one row per
    distinct template with a x-count badge if inserted more than once.
    Distinct from the (single-value, set-once) "Created from" provenance. #}
-{% if associatedTemplatesArr %}
-  <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='associatedTemplatesContent'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Associated experimental templates'|trans }} (<span id='associatedTemplatesCount'>{{ associatedTemplatesArr|length }}</span>)</h4>
-  <div id='associatedTemplatesContent' class='ml-4'>
-    <ul class='list-group mt-2'>
-      {% for tpl in associatedTemplatesArr %}
-        <li class='list-group-item d-flex align-items-center'>
-          <a href='templates.php?mode=view&id={{ tpl.template_id }}' class='flex-grow-1 text-decoration-none'>
-            <i class='fas fa-arrow-up-right-from-square mr-1'></i>{{ tpl.title }}
-          </a>
-          {% if tpl.insert_count > 1 %}
-            <span class='badge badge-secondary ml-1'>{{ 'Inserted %d times'|trans|format(tpl.insert_count) }}</span>
-          {% endif %}
-          <span class='badge badge-secondary ml-1'>{{ 'Version %d'|trans|format(tpl.latest_version) }}</span>
-        </li>
-      {% endfor %}
-    </ul>
-  </div>
-  <hr>
-{% endif %}
+{# always rendered (even with zero templates) so reloadElements() can find
+   associatedTemplatesContent by id after the first live link/insert --
+   an element that doesn't exist yet can't be refreshed in place #}
+<h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='associatedTemplatesContent'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Associated experimental templates'|trans }} (<span id='associatedTemplatesCount'>{{ associatedTemplatesArr|length }}</span>)</h4>
+<div id='associatedTemplatesContent' class='ml-4'>
+  <ul class='list-group mt-2'>
+    {% for tpl in associatedTemplatesArr %}
+      <li class='list-group-item d-flex align-items-center'>
+        <a href='templates.php?mode=view&id={{ tpl.template_id }}' class='flex-grow-1 text-decoration-none'>
+          <i class='fas fa-arrow-up-right-from-square mr-1'></i>{{ tpl.title }}
+        </a>
+        {% if tpl.insert_count > 1 %}
+          <span class='badge badge-secondary ml-1'>{{ 'Inserted %d times'|trans|format(tpl.insert_count) }}</span>
+        {% endif %}
+        <span class='badge badge-secondary ml-1'>{{ 'Version %d'|trans|format(tpl.latest_version) }}</span>
+        {% if mode == 'edit' %}
+          <button type='button' class='btn btn-danger-ghost btn-sm ml-1' data-action='unlink-associated-template' data-templateid='{{ tpl.template_id }}' title='{{ 'Remove this association'|trans }}' aria-label='{{ 'Remove this association'|trans }}'>
+            <i class='fas fa-trash-alt fa-fw'></i>
+          </button>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+  {% if associatedTemplatesArr is empty %}
+    <p class='smallgray mt-2 mb-0'>{{ 'Templates linked or inserted into this experiment will be listed here.'|trans }}</p>
+  {% endif %}
+</div>
+<hr>

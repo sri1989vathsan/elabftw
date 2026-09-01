@@ -5,8 +5,9 @@
 import { ApiC } from './api';
 import { getEditor } from './Editor.class';
 import { entity } from './getEntity';
-import { EntityType, LinkSubModel } from './interfaces';
+import { Action, EntityType, LinkSubModel } from './interfaces';
 import { confirmLeaveEditing, escapeHTML, isEditingEntity, reloadElements } from './misc';
+import { notify } from './notify';
 import SidePanel from './SidePanel.class';
 
 type FavoriteFilterTarget = 'all' | 'experiments' | 'resources' | 'experiments_templates' | 'items_types';
@@ -27,7 +28,17 @@ interface FavoriteFilterResult {
 
 interface ResultGroup {
   heading: string;
-  items: { label: string; description: string; href?: string; onSelect?: () => void }[];
+  items: {
+    label: string;
+    description: string;
+    href?: string;
+    onSelect?: () => void;
+    // Folders: a clone of that folder's own bookmark star button (see
+    // experiments-folders.html), so its current on/off state renders
+    // correctly and clicking it reuses the existing global
+    // 'toggle-favorite-folder' delegated handler without any new wiring.
+    actionElement?: HTMLElement;
+  }[];
 }
 // Experiment/resource groups carry their raw results (instead of pre-built
 // display items) so renderGrouped() can render them with renderResult() --
@@ -253,9 +264,10 @@ export default class FavoriteFilters extends SidePanel {
   private getFilterParams(): URLSearchParams {
     const categoryGroup = this.getCategoryGroup();
     const params = new URLSearchParams();
-    // Always search the complete accessible listing. Reusing the current page
-    // could unintentionally retain "My experiments", a query, or pagination.
-    params.set('scope', '3');
+    // Default to the current user's own items (Scope::User) across
+    // experiments, resources, templates and folders, rather than everyone
+    // on the team.
+    params.set('scope', '1');
 
     const textFilter = document.querySelector<HTMLInputElement>('[data-favorite-filter-text]')?.value.trim();
     if (textFilter) {
@@ -335,11 +347,30 @@ export default class FavoriteFilters extends SidePanel {
   }
 
   private canInsertResultLink(target: FavoriteFilterTarget, resultId: number): boolean {
-    // Templates aren't linkable entities on an experiment the way another
-    // experiment or resource is -- only offer the "attach" action for those.
     return (target === 'experiments' || target === 'resources')
       && isEditingEntity()
       && !(target === 'experiments' && resultId === entity.id);
+  }
+
+  // Templates aren't linkable via a generic experiments_links/items_links
+  // submodel the way another experiment or resource is -- "Link" instead
+  // records the association via LinkTemplateSource (see AbstractEntity.php),
+  // which today only exists for experiments linking an experiment template.
+  private canLinkTemplate(target: FavoriteFilterTarget): boolean {
+    return isEditingEntity() && target === 'experiments_templates' && entity.type === EntityType.Experiment;
+  }
+
+  // "Add to text" for a template inserts its actual body content (fetched
+  // on click), not just a link to it -- unlike experiments/resources, where
+  // "Add to text" is just a reference link, a template's whole point is its
+  // content. Resource templates (items_types) can do this even though
+  // Link/attach isn't wired up for them yet (no backend support), since this
+  // is a pure client-side fetch-and-insert with no new API dependency.
+  private canAddTemplateToText(target: FavoriteFilterTarget): boolean {
+    if (!isEditingEntity()) return false;
+    if (target === 'experiments_templates') return entity.type === EntityType.Experiment;
+    if (target === 'items_types') return entity.type === EntityType.Item;
+    return false;
   }
 
   private renderResult(
@@ -368,11 +399,17 @@ export default class FavoriteFilters extends SidePanel {
     }
     heading.append(link);
 
-    if (this.canInsertResultLink(target, result.id)) {
+    const isTemplateTarget = target === 'experiments_templates' || target === 'items_types';
+    const showLink = isTemplateTarget ? this.canLinkTemplate(target) : this.canInsertResultLink(target, result.id);
+    const showAddToText = isTemplateTarget ? this.canAddTemplateToText(target) : this.canInsertResultLink(target, result.id);
+
+    if (showLink) {
       const insert = document.createElement('button');
       insert.type = 'button';
       insert.className = 'btn btn-sm btn-outline-primary favorite-filter-result-insert ml-2';
-      insert.title = 'Attach this entry to the current experiment';
+      insert.title = isTemplateTarget
+        ? 'Associate this template with the current experiment, without inserting its content'
+        : 'Attach this entry to the current experiment';
       insert.setAttribute('aria-label', insert.title);
       const icon = document.createElement('i');
       icon.className = 'fas fa-link fa-fw';
@@ -385,11 +422,15 @@ export default class FavoriteFilters extends SidePanel {
         void this.insertResultLink(result, target, insert);
       });
       heading.append(insert);
+    }
 
+    if (showAddToText) {
       const insertInText = document.createElement('button');
       insertInText.type = 'button';
       insertInText.className = 'btn btn-sm btn-outline-primary favorite-filter-result-insert ml-1';
-      insertInText.title = 'Add a link to this entry at the current main-text cursor';
+      insertInText.title = isTemplateTarget
+        ? "Insert this template's content at the current main-text cursor"
+        : 'Add a link to this entry at the current main-text cursor';
       insertInText.setAttribute('aria-label', insertInText.title);
       const textIcon = document.createElement('i');
       textIcon.className = 'fas fa-paragraph fa-fw';
@@ -399,7 +440,7 @@ export default class FavoriteFilters extends SidePanel {
       textLabel.textContent = 'Add to text';
       insertInText.append(textIcon, textLabel);
       insertInText.addEventListener('click', () => {
-        this.insertResultInMainText(result, target);
+        void this.insertResultInMainText(result, target, insertInText);
       });
       heading.append(insertInText);
     }
@@ -433,12 +474,37 @@ export default class FavoriteFilters extends SidePanel {
       : `<a href="${escapeHTML(resultUrl.toString())}">${escapeHTML(label)}</a>`;
   }
 
-  private insertResultInMainText(
+  private async insertResultInMainText(
     result: FavoriteFilterResult,
     target: FavoriteFilterTarget,
-  ): void {
+    button?: HTMLButtonElement,
+  ): Promise<void> {
     const editor = getEditor();
-    editor.setContent(this.getMainTextLink(result, target, editor.type));
+    if (target !== 'experiments_templates' && target !== 'items_types') {
+      editor.setContent(this.getMainTextLink(result, target, editor.type));
+      return;
+    }
+    // A template's whole point is its content, so this inserts the actual
+    // body (fetched fresh, since the sidebar result list only carries
+    // title/category) rather than a bare reference link.
+    if (button) button.disabled = true;
+    try {
+      const template = await ApiC.getJson<{body?: string; body_html?: string}>(
+        `${this.getTargetEntityType(target)}/${result.id}`,
+      );
+      editor.setContent(template.body_html ?? template.body ?? '');
+      if (target === 'experiments_templates') {
+        // best-effort: lets the template show up in "Associated experimental
+        // templates" too, same as inserting via the toolbar's template picker
+        ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.LinkTemplateSource, template_id: result.id})
+          .then(() => reloadElements(['associatedTemplatesContent']))
+          .catch(() => {});
+      }
+    } catch {
+      notify.error("Could not load this template's content.");
+    } finally {
+      if (button) button.disabled = false;
+    }
   }
 
   private async insertResultLink(
@@ -446,19 +512,25 @@ export default class FavoriteFilters extends SidePanel {
     target: FavoriteFilterTarget,
     button: HTMLButtonElement,
   ): Promise<void> {
-    const submodel = target === 'experiments'
-      ? LinkSubModel.ExperimentsLinks
-      : LinkSubModel.ItemsLinks;
-
     button.disabled = true;
     try {
-      await ApiC.post(`${entity.type}/${entity.id}/${submodel}/${result.id}`);
-      await reloadElements(['linksDiv']);
-      button.title = 'Attached to the current experiment';
+      if (target === 'experiments_templates') {
+        await ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.LinkTemplateSource, template_id: result.id});
+        await reloadElements(['associatedTemplatesContent']);
+      } else {
+        const submodel = target === 'experiments'
+          ? LinkSubModel.ExperimentsLinks
+          : LinkSubModel.ItemsLinks;
+        await ApiC.post(`${entity.type}/${entity.id}/${submodel}/${result.id}`);
+        await reloadElements(['linksDiv']);
+      }
+      button.title = target === 'experiments_templates'
+        ? 'Associated with the current experiment'
+        : 'Attached to the current experiment';
       button.setAttribute('aria-label', button.title);
       button.querySelector('i')?.classList.replace('fa-link', 'fa-check');
       const buttonLabel = button.querySelector<HTMLSpanElement>('span');
-      if (buttonLabel) buttonLabel.textContent = 'Attached';
+      if (buttonLabel) buttonLabel.textContent = target === 'experiments_templates' ? 'Linked' : 'Attached';
     } finally {
       button.disabled = false;
     }
@@ -509,7 +581,13 @@ export default class FavoriteFilters extends SidePanel {
     document.querySelectorAll<HTMLAnchorElement>('#foldersPanel a[href]').forEach(link => {
       const label = link.textContent?.trim();
       if (!label || !label.toLowerCase().includes(query) || items.length >= GROUPED_SEARCH_PER_GROUP_LIMIT) return;
-      items.push({ label, description: 'Folder', onSelect: () => link.click() });
+      const star = link.closest('.folder-node')?.querySelector<HTMLButtonElement>('.favorite-folder-star');
+      items.push({
+        label,
+        description: 'Folder',
+        onSelect: () => link.click(),
+        actionElement: star?.cloneNode(true) as HTMLElement | undefined,
+      });
     });
     return { heading: 'Folders', items };
   }
@@ -532,7 +610,9 @@ export default class FavoriteFilters extends SidePanel {
     // An empty query omits fastq entirely rather than sending fastq= --
     // that's a plain unfiltered listing (most recent first), not "match
     // nothing", so "All" with no text still shows something per group.
-    const params = new URLSearchParams({ limit: String(GROUPED_SEARCH_PER_GROUP_LIMIT), scope: '3' });
+    // Default to the current user's own items (Scope::User), matching
+    // getFilterParams() above.
+    const params = new URLSearchParams({ limit: String(GROUPED_SEARCH_PER_GROUP_LIMIT), scope: '1' });
     if (query) params.set('fastq', query);
     try {
       const results = await this.cachedGetJson<FavoriteFilterResult[]>(`${entityType}?${params.toString()}`, signal);
@@ -613,6 +693,15 @@ export default class FavoriteFilters extends SidePanel {
           } else if (item.onSelect) {
             entry.style.cursor = 'pointer';
             entry.addEventListener('click', item.onSelect);
+          }
+          if (item.actionElement) {
+            // Stop the click from also bubbling into the row's own
+            // onSelect (which would navigate to the folder instead of just
+            // toggling its bookmark).
+            item.actionElement.addEventListener('click', event => event.stopPropagation());
+            item.actionElement.classList.add('ml-2', 'flex-shrink-0');
+            entry.classList.add('d-flex', 'align-items-center', 'justify-content-between');
+            entry.append(item.actionElement);
           }
           body.append(entry);
         });

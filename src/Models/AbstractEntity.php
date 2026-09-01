@@ -618,7 +618,10 @@ abstract class AbstractEntity extends AbstractRest
             // record that historical version, not whatever the template
             // currently is, so "Version %d" in the associated-templates list
             // reflects what was actually inserted.
-            $requestedVersion = Filter::intOrNull($params['version'] ?? null);
+            // Filter::intOrNull() only accepts string|int, not null -- guard
+            // the common case (no version param at all, i.e. "Latest") so it
+            // doesn't crash before ever reaching the function.
+            $requestedVersion = isset($params['version']) ? Filter::intOrNull($params['version']) : null;
             if ($requestedVersion !== null) {
                 $sql = 'SELECT version FROM custom_template_versions WHERE entity_id = :template_id AND version = :version';
                 $req = $this->Db->prepare($sql);
@@ -658,6 +661,27 @@ abstract class AbstractEntity extends AbstractRest
             $req->bindParam(':experiment_id', $this->id, PDO::PARAM_INT);
             $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
             $req->bindParam(':version', $templateVersion, PDO::PARAM_INT);
+            $this->Db->execute($req);
+
+            return $this->readOne();
+        }
+        // Removes every insert/link row for one template from this
+        // experiment (see the "Associated experimental templates" list in
+        // associated-templates.html) -- distinct from created_from_type/id,
+        // which reflects provenance and is left untouched.
+        if ($action === Action::UnlinkTemplateSource) {
+            if ($this->entityType !== EntityType::Experiments) {
+                throw new ImproperActionException('Unlinking a template source is only available for experiments.');
+            }
+            $this->canOrExplode(AccessType::Write);
+            $templateId = (int) ($params['template_id'] ?? 0);
+            if ($templateId <= 0) {
+                throw new ImproperActionException('A template id is required.');
+            }
+            $sql = 'DELETE FROM experiment_template_inserts WHERE experiment_id = :experiment_id AND template_id = :template_id';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':experiment_id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
             $this->Db->execute($req);
 
             return $this->readOne();

@@ -65,6 +65,18 @@ on('add-file-folder-reference', async (_, event: Event) => {
   }
 });
 
+on('unlink-associated-template', async (el: HTMLElement) => {
+  if (!confirm('Remove this template association? This does not remove any content already inserted from it.')) return;
+  const templateId = parseInt(el.dataset.templateid, 10);
+  if (!templateId) return;
+  try {
+    await ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.UnlinkTemplateSource, template_id: templateId});
+    await reloadElements(['associatedTemplatesContent']);
+  } catch (error) {
+    notify.error(error instanceof Error ? error.message : 'Unable to remove template association.');
+  }
+});
+
 on('copy-unc-path', async (el: HTMLElement) => {
   const unc = el.dataset.unc;
   if (!unc) return;

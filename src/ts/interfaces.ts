@@ -102,6 +102,7 @@ enum Action {
   ForceLock = 'forcelock',
   ForceUnlock = 'forceunlock',
   LinkTemplateSource = 'linktemplatesource',
+  UnlinkTemplateSource = 'unlinktemplatesource',
   Lock = 'lock',
   Notif = 'notif',
   NotifDestroy = 'notifdestroy',
