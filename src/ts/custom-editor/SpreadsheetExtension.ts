@@ -532,6 +532,28 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     });
   };
 
+  // Send a table already in the main text to the standalone Spreadsheet
+  // Editor iframe (spreadsheet-editor.html), reusing the same
+  // 'jss-load-workbook' message the "load an uploaded file" path already
+  // sends (see loadInSpreadsheetEditor in spreadsheet-utils.ts). Unlike that
+  // path, there's no upload behind this yet, so uploadId stays null -- the
+  // editor's own Save button creates a new attachment on first save.
+  const openInStandaloneSpreadsheetEditor = (table: HTMLTableElement): void => {
+    const iframe = document.getElementById('spreadsheetIframe') as HTMLIFrameElement | null;
+    if (!iframe?.contentWindow) return;
+    const extracted = extractFromTable(table);
+    const worksheets = [{ name: extracted.caption || 'Sheet1', data: extracted.data }];
+    const panelBody = document.getElementById('spreadsheetEditorDiv');
+    if (panelBody?.hasAttribute('hidden')) {
+      document.querySelector<HTMLElement>('[data-toggle-target="spreadsheetEditorDiv"]')?.click();
+    }
+    iframe.contentWindow.postMessage(
+      { type: 'jss-load-workbook', detail: { worksheets, name: null, uploadId: null } },
+      window.location.origin,
+    );
+    iframe.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   editor.ui.registry.addMenuButton('inline-sheet', {
     icon: 'elabftw-spreadsheet-formula',
     tooltip: 'Insert or edit a formula spreadsheet',
@@ -619,6 +641,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           icon: 'edit-block',
           onAction: () => openInlineSpreadsheet(extractFromTable(existingTable), existingTable),
         });
+        // The standalone Spreadsheet Editor panel only exists on the edit
+        // page (see spreadsheet-editor.html); hidden entirely elsewhere.
+        if (document.getElementById('spreadsheetIframe')) {
+          items.push({
+            type: 'menuitem' as const,
+            text: 'Open in Spreadsheet Editor…',
+            icon: 'table',
+            onAction: () => openInStandaloneSpreadsheetEditor(existingTable),
+          });
+        }
         items.push({
           type: 'menuitem' as const,
           text: 'Autofit column widths',

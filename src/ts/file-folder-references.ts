@@ -57,7 +57,11 @@ async function saveMetadata(metadata: ValidMetadata): Promise<void> {
   await ApiC.patch(`${entity.type}/${entity.id}`, {
     metadata: JSON.stringify(metadata),
   });
-  await reloadElements(['filesFoldersLinksSection']);
+  // file/folder references render into two separate sections depending on
+  // content: smb://\\server\share ones under Data, everything else under
+  // Files / folders (see links.html) -- both need refreshing regardless of
+  // which one the just-changed reference actually landed in.
+  await reloadElements(['filesFoldersLinksSection', 'dataLinksSection']);
 }
 
 export function parseFileFolderReferences(input: string): string[] {
