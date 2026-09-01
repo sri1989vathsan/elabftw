@@ -756,6 +756,20 @@ abstract class AbstractEntity extends AbstractRest
                     if (array_key_exists('userid', $params) || array_key_exists('team', $params)) {
                         throw new ImproperActionException("Use the 'action:updateowner' to transfer ownership.");
                     }
+                    // switching editor mode (rich text <-> markdown) only ever
+                    // sends content_type, so the body is left as-is otherwise:
+                    // convert it here so switching doesn't leave literal,
+                    // unrendered markup/syntax behind
+                    if (array_key_exists('content_type', $params) && !array_key_exists('body', $params)) {
+                        $newContentType = (int) $params['content_type'];
+                        $currentContentType = (int) ($this->entityData['content_type'] ?? BodyContentType::Html->value);
+                        if ($newContentType !== $currentContentType) {
+                            $currentBody = (string) ($this->entityData['body'] ?? '');
+                            $params['body'] = $newContentType === BodyContentType::Markdown->value
+                                ? Tools::html2md($currentBody)
+                                : Tools::md2html($currentBody);
+                        }
+                    }
                     foreach ($params as $key => $value) {
                         $this->update(new EntityParams($key, (string) $value));
                     }

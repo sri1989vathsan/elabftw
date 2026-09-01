@@ -25,14 +25,91 @@ interface EditorInterface {
   replaceContent(content: string): void;
 }
 
+// Convert the content along with the content_type in the same request:
+// computing "current" content server-side (from entityData at the start of
+// the request) is fragile against anything else that might also PATCH the
+// body around the same time, whereas the editor always knows its own
+// up-to-the-moment content directly.
+function elementToMarkdown(el: Element): string {
+  let out = '';
+  el.childNodes.forEach(node => {
+    out += nodeToMarkdown(node);
+  });
+  return out;
+}
+
+function listToMarkdown(list: Element, ordered: boolean): string {
+  let out = '';
+  let i = 1;
+  Array.from(list.children).forEach(child => {
+    if (child.tagName.toLowerCase() === 'li') {
+      const prefix = ordered ? `${i}. ` : '- ';
+      out += prefix + elementToMarkdown(child).trim() + '\n';
+      i++;
+    }
+  });
+  return out + '\n';
+}
+
+function nodeToMarkdown(node: ChildNode): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent ?? '';
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return '';
+  }
+  const el = node as Element;
+  const tag = el.tagName.toLowerCase();
+  if (/^h[1-6]$/.test(tag)) {
+    return '#'.repeat(parseInt(tag[1], 10)) + ' ' + elementToMarkdown(el).trim() + '\n\n';
+  }
+  const inner = elementToMarkdown(el);
+  switch (tag) {
+    case 'br':
+      return '  \n';
+    case 'p':
+    case 'div':
+      return inner.trim() + '\n\n';
+    case 'strong':
+    case 'b':
+      return '**' + inner.trim() + '**';
+    case 'em':
+    case 'i':
+      return '_' + inner.trim() + '_';
+    case 'a':
+      return `[${inner.trim()}](${el.getAttribute('href') ?? ''})`;
+    case 'img':
+      return `![${el.getAttribute('alt') ?? ''}](${el.getAttribute('src') ?? ''})`;
+    case 'pre':
+      return '```\n' + inner.trim() + '\n```\n\n';
+    case 'code':
+      return el.parentElement?.tagName.toLowerCase() === 'pre' ? inner : '`' + inner.trim() + '`';
+    case 'blockquote':
+      return '> ' + inner.trim().replace(/\n/g, '\n> ') + '\n\n';
+    case 'ul':
+      return listToMarkdown(el, false);
+    case 'ol':
+      return listToMarkdown(el, true);
+    case 'li':
+      return inner.trim();
+    default:
+      return inner;
+  }
+}
+
+// only covers the formatting the markdown editor's own (restricted) toolbar
+// can produce -- bold, italic, headings, links, images, lists, code, quotes
+function htmlToMarkdown(html: string): string {
+  if (html.trim() === '') {
+    return '';
+  }
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return elementToMarkdown(doc.body).replace(/\n{3,}/g, '\n\n').trim();
+}
+
 class Editor {
   type: string;
   typeAsInt: number;
-  switch(entity: Entity): Promise<Response> {
-    const params = {};
-    params[Target.ContentType] = this.type === 'tiny' ? 2 : 1;
-    return ApiC.patch(`${entity.type}/${entity.id}`, params);
-  }
 }
 
 class TinyEditor extends Editor implements EditorInterface {
@@ -53,6 +130,12 @@ class TinyEditor extends Editor implements EditorInterface {
   replaceContent(content: string): void {
     tinymce.get(0).setContent(content);
   }
+  switch(entity: Entity): Promise<Response> {
+    const params = {};
+    params[Target.ContentType] = 2;
+    params[Target.Body] = htmlToMarkdown(this.getContent());
+    return ApiC.patch(`${entity.type}/${entity.id}`, params);
+  }
 }
 
 export class MdEditor extends Editor implements EditorInterface {
@@ -61,9 +144,16 @@ export class MdEditor extends Editor implements EditorInterface {
     this.type = 'md';
     this.typeAsInt = 2;
   }
+  switch(entity: Entity): Promise<Response> {
+    const params = {};
+    params[Target.ContentType] = 1;
+    params[Target.Body] = marked(this.getContent()) as string;
+    return ApiC.patch(`${entity.type}/${entity.id}`, params);
+  }
   init(): void {
     /* eslint-disable-next-line */
     ($('.markdown-textarea') as any).markdown({
+      hiddenButtons: ['cmdPreview'],
       onPreview: ed => {
         const html = marked(ed.$textarea.val()) as string;
 

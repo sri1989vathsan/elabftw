@@ -23,6 +23,7 @@ enum ExportFormat: string
     case Eln = 'eln';
     case ElnHtml = 'elnhtml';
     case Json = 'json';
+    case Markdown = 'md';
     case QrPdf = 'qrpdf';
     case QrPng = 'qrpng';
     case Pdf = 'pdf';

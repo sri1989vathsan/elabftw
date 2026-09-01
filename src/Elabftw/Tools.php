@@ -12,18 +12,27 @@ declare(strict_types=1);
 
 namespace Elabftw\Elabftw;
 
+use DOMDocument;
+use DOMElement;
+use DOMNode;
 use League\CommonMark\Exception\UnexpectedEncodingException;
 use League\CommonMark\GithubFlavoredMarkdownConverter;
 use Symfony\Component\HttpFoundation\Request;
 
 use function bin2hex;
+use function ctype_digit;
 use function date;
 use function htmlspecialchars;
 use function implode;
+use function libxml_clear_errors;
+use function libxml_use_internal_errors;
 use function pathinfo;
+use function preg_replace;
 use function random_bytes;
 use function mb_substr;
 use function sha1;
+use function str_repeat;
+use function str_replace;
 use function str_split;
 use function trim;
 use function chr;
@@ -71,6 +80,88 @@ final class Tools
             // so at least the thing is displayed instead of triggering a fatal error
             return $md;
         }
+    }
+
+    /**
+     * Convert html to markdown, covering only the formatting the markdown
+     * editor toolbar can actually produce (bold, italic, headings, links,
+     * images, lists, code, blockquotes). Used when switching an entity's
+     * body from the rich text editor to the markdown editor, so the content
+     * isn't left as literal, unrendered html tags.
+     */
+    public static function html2md(string $html): string
+    {
+        if (trim($html) === '') {
+            return '';
+        }
+        $dom = new DOMDocument();
+        libxml_use_internal_errors(true);
+        $dom->loadHTML(
+            '<?xml encoding="utf-8" ?><div>' . $html . '</div>',
+            LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD,
+        );
+        libxml_clear_errors();
+        $container = $dom->getElementsByTagName('div')->item(0);
+        if ($container === null) {
+            return trim($html);
+        }
+        $md = self::childNodesToMarkdown($container);
+        return trim((string) preg_replace("/\n{3,}/", "\n\n", $md));
+    }
+
+    private static function childNodesToMarkdown(DOMNode $node): string
+    {
+        $out = '';
+        foreach ($node->childNodes as $child) {
+            $out .= self::nodeToMarkdown($child);
+        }
+        return $out;
+    }
+
+    private static function nodeToMarkdown(DOMNode $node): string
+    {
+        if ($node->nodeType === XML_TEXT_NODE) {
+            return $node->textContent;
+        }
+        if (!($node instanceof DOMElement)) {
+            return '';
+        }
+        $tag = strtolower($node->tagName);
+        if (strlen($tag) === 2 && $tag[0] === 'h' && ctype_digit($tag[1])) {
+            return str_repeat('#', (int) $tag[1]) . ' ' . trim(self::childNodesToMarkdown($node)) . "\n\n";
+        }
+        $inner = self::childNodesToMarkdown($node);
+        return match ($tag) {
+            'br' => "  \n",
+            'p', 'div' => trim($inner) . "\n\n",
+            'strong', 'b' => '**' . trim($inner) . '**',
+            'em', 'i' => '_' . trim($inner) . '_',
+            'a' => '[' . trim($inner) . '](' . $node->getAttribute('href') . ')',
+            'img' => '![' . $node->getAttribute('alt') . '](' . $node->getAttribute('src') . ')',
+            'pre' => "```\n" . trim($inner) . "\n```\n\n",
+            'code' => $node->parentNode instanceof DOMElement && strtolower($node->parentNode->tagName) === 'pre'
+                ? $inner
+                : '`' . trim($inner) . '`',
+            'blockquote' => '> ' . str_replace("\n", "\n> ", trim($inner)) . "\n\n",
+            'ul' => self::listToMarkdown($node, false),
+            'ol' => self::listToMarkdown($node, true),
+            'li' => trim($inner),
+            default => $inner,
+        };
+    }
+
+    private static function listToMarkdown(DOMElement $list, bool $ordered): string
+    {
+        $out = '';
+        $i = 1;
+        foreach ($list->childNodes as $child) {
+            if ($child instanceof DOMElement && strtolower($child->tagName) === 'li') {
+                $prefix = $ordered ? $i . '. ' : '- ';
+                $out .= $prefix . trim(self::childNodesToMarkdown($child)) . "\n";
+                $i++;
+            }
+        }
+        return $out . "\n";
     }
 
     /**
