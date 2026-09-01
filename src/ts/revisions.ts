@@ -234,6 +234,34 @@ on('restore-revision', (el: HTMLElement) => {
   ApiC.patch(`${el.dataset.type}/${el.dataset.id}/revisions/${el.dataset.revid}`, {'action': Action.Replace});
 });
 
+function setTemplateVersionDocsEditMode(revisionId: string, editing: boolean): void {
+  const container = document.getElementById(`templateVersionDocs_${revisionId}`);
+  if (!container) return;
+  container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')
+    .forEach(field => field.disabled = !editing);
+  const editButton = container.querySelector<HTMLElement>('[data-action="edit-template-version-docs"]');
+  const saveButton = container.querySelector<HTMLElement>('[data-action="save-template-version-docs"]');
+  const cancelButton = container.querySelector<HTMLElement>('[data-action="cancel-template-version-docs"]');
+  if (!editButton || !saveButton || !cancelButton) return;
+  editButton.hidden = editing;
+  saveButton.hidden = !editing;
+  cancelButton.hidden = !editing;
+  if (editing) {
+    container.querySelector<HTMLInputElement>('input')?.focus();
+  }
+}
+
+on('edit-template-version-docs', (el: HTMLElement) => {
+  setTemplateVersionDocsEditMode(el.dataset.revid, true);
+});
+
+on('cancel-template-version-docs', (el: HTMLElement) => {
+  const container = document.getElementById(`templateVersionDocs_${el.dataset.revid}`);
+  container?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')
+    .forEach(field => field.value = field.defaultValue);
+  setTemplateVersionDocsEditMode(el.dataset.revid, false);
+});
+
 on('save-template-version-docs', async (el: HTMLElement) => {
   const label = (document.getElementById(`templateVersionLabel_${el.dataset.revid}`) as HTMLInputElement).value.trim();
   const notes = (document.getElementById(`templateVersionNotes_${el.dataset.revid}`) as HTMLTextAreaElement).value.trim();
@@ -254,6 +282,10 @@ on('save-template-version-docs', async (el: HTMLElement) => {
       }
     }
     await ApiC.patch(`${el.dataset.type}/${el.dataset.id}`, {metadata: JSON.stringify(metadata)});
+    const container = document.getElementById(`templateVersionDocs_${el.dataset.revid}`);
+    container?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')
+      .forEach(field => field.defaultValue = field.value);
+    setTemplateVersionDocsEditMode(el.dataset.revid, false);
     notify.success('Template version documentation saved.');
   } catch (error) {
     notify.error(error);

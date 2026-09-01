@@ -43,26 +43,34 @@
         </div>
       </div>
       {% if isTemplate %}
-        <div class='row mt-2 ml-4 mr-1'>
+        <div id='templateVersionDocs_{{ revision.id }}' class='row mt-2 ml-4 mr-1'>
           <div class='col-md-4 pl-0'>
             <label class='sr-only' for='templateVersionLabel_{{ revision.id }}'>{{ 'Version name'|trans }}</label>
             <input id='templateVersionLabel_{{ revision.id }}' class='form-control form-control-sm'
               maxlength='120' value='{{ versionDoc.label|default('') }}'
               placeholder='{{ 'Version name (for example: Added analysis steps)'|trans }}'
-              {{ Entity.isReadOnly ? 'disabled' }}>
+              disabled>
           </div>
           <div class='col-md pl-0 mt-2 mt-md-0'>
             <label class='sr-only' for='templateVersionNotes_{{ revision.id }}'>{{ 'Version notes'|trans }}</label>
             <textarea id='templateVersionNotes_{{ revision.id }}' class='form-control form-control-sm'
               rows='2' maxlength='2000' placeholder='{{ 'Describe changes, compatibility, or usage notes…'|trans }}'
-              {{ Entity.isReadOnly ? 'disabled' }}>{{ versionDoc.notes|default('') }}</textarea>
+              disabled>{{ versionDoc.notes|default('') }}</textarea>
           </div>
           {% if not Entity.isReadOnly %}
             <div class='col-md-auto pl-0 mt-2 mt-md-0'>
-              <button type='button' class='btn btn-primary btn-sm'
+              <button type='button' class='btn btn-secondary btn-sm' data-action='edit-template-version-docs'
+                data-revid='{{ revision.id }}'>
+                <i class='fas fa-pen fa-fw mr-1'></i>{{ 'Edit'|trans }}
+              </button>
+              <button type='button' class='btn btn-primary btn-sm' hidden
                 data-action='save-template-version-docs' data-id='{{ Entity.id }}'
                 data-type='{{ Entity.entityType.value }}' data-revid='{{ revision.id }}'>
                 <i class='fas fa-save fa-fw mr-1'></i>{{ 'Save notes'|trans }}
+              </button>
+              <button type='button' class='btn btn-ghost btn-sm' hidden
+                data-action='cancel-template-version-docs' data-revid='{{ revision.id }}'>
+                {{ 'Cancel'|trans }}
               </button>
             </div>
           {% endif %}
