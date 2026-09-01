@@ -35,9 +35,14 @@ interface ResultGroup {
     onSelect?: () => void;
     // Folders: a clone of that folder's own bookmark star button (see
     // experiments-folders.html), so its current on/off state renders
-    // correctly and clicking it reuses the existing global
-    // 'toggle-favorite-folder' delegated handler without any new wiring.
+    // correctly here too. Clicking the clone triggers a real click on
+    // sourceElement (the live button still in the folders panel) so the
+    // existing 'toggle-favorite-folder' handler does the actual API call
+    // and folder-panel refresh unmodified; the clone's own icon is then
+    // flipped directly, since that panel refresh has no way to reach back
+    // into this separate, already-rendered search result.
     actionElement?: HTMLElement;
+    actionSourceElement?: HTMLElement;
   }[];
 }
 // Experiment/resource groups carry their raw results (instead of pre-built
@@ -582,11 +587,21 @@ export default class FavoriteFilters extends SidePanel {
       const label = link.textContent?.trim();
       if (!label || !label.toLowerCase().includes(query) || items.length >= GROUPED_SEARCH_PER_GROUP_LIMIT) return;
       const star = link.closest('.folder-node')?.querySelector<HTMLButtonElement>('.favorite-folder-star');
+      // Strip data-action/data-id from the clone: it gets its own dedicated
+      // click handler below (which forwards to the real button instead),
+      // so it must not also match the global delegated
+      // 'toggle-favorite-folder' handler directly -- that would fire twice
+      // per click (once via the clone, once via the forwarded click on the
+      // real button) and silently toggle the bookmark right back off.
+      const starClone = star?.cloneNode(true) as HTMLElement | undefined;
+      starClone?.removeAttribute('data-action');
+      starClone?.removeAttribute('data-id');
       items.push({
         label,
         description: 'Folder',
         onSelect: () => link.click(),
-        actionElement: star?.cloneNode(true) as HTMLElement | undefined,
+        actionElement: starClone,
+        actionSourceElement: star,
       });
     });
     return { heading: 'Folders', items };
@@ -708,6 +723,31 @@ export default class FavoriteFilters extends SidePanel {
           if (item.actionElement) {
             item.actionElement.classList.add('ml-2', 'flex-shrink-0');
             entry.classList.add('d-flex', 'align-items-center', 'justify-content-between');
+            if (item.actionSourceElement) {
+              const clone = item.actionElement;
+              const source = item.actionSourceElement;
+              clone.addEventListener('click', () => {
+                // The folders panel refresh (triggered by the real button
+                // below) has no way to reach back into this separate,
+                // already-rendered search result, so flip this icon
+                // directly too -- otherwise it's stuck showing whatever
+                // state it had when this list was rendered.
+                const nowBookmarked = clone.getAttribute('aria-label') === 'Bookmark folder';
+                const icon = clone.querySelector('i');
+                if (icon) {
+                  icon.classList.toggle('fas', nowBookmarked);
+                  icon.classList.toggle('far', !nowBookmarked);
+                  icon.style.color = nowBookmarked ? '#f0ad4e' : '#999';
+                }
+                const label = nowBookmarked ? 'Remove bookmark' : 'Bookmark folder';
+                clone.setAttribute('aria-label', label);
+                clone.setAttribute('title', label);
+                // Reuses the existing, correctly-wired handler on the real
+                // button (API call + folders panel refresh) instead of
+                // duplicating that logic here.
+                source.click();
+              });
+            }
             entry.append(item.actionElement);
           }
           body.append(entry);
