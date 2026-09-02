@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { ApiC } from '../api';
+  import { core } from '../core';
   import i18next from '../i18n';
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
@@ -20,6 +21,8 @@
     entity_page: string;
     entity_id: number;
     entity_title: string;
+    entity_userid: number;
+    owner_fullname: string;
     step_id: number;
     step_body: string;
     deadline: string;
@@ -35,10 +38,17 @@
     deadline: string;
     reminderMinutes: number | null;
     completedAt: string | null;
+    userid: number;
+    ownerFullname: string;
     entityId?: number;
     entityPage?: string;
     entityTitle?: string;
     entityType?: 'experiments' | 'items';
+  };
+
+  type Person = {
+    userid: number;
+    fullname: string;
   };
 
   type ActivityHeading = {
@@ -56,6 +66,8 @@
     date: string;
     entity_type: 'experiments' | 'items';
     entity_page: string;
+    userid: number;
+    owner_fullname: string;
     headings: ActivityHeading[];
   };
 
@@ -121,7 +133,13 @@
   let showTasks = true;
   let showExperiments = true;
   let showResources = true;
-  let teamScope = localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
+  // the team scope toggle is admin-only; ignore any stale non-admin
+  // localStorage value from before this restriction (or from a team where
+  // the user is no longer an admin) rather than stranding them in team scope
+  let teamScope = core.isAdmin && localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
+  // empty means everyone; only meaningful (and only shown) for an admin
+  // viewing team scope
+  let selectedPersonIds = new Set<number>();
   let monthCursor = storedMonthCursor();
   // With no selected date, the agenda displays the entire visible calendar
   // range. This makes entity activity available on every eLabFTW page.
@@ -154,6 +172,8 @@
           ? null
           : Number(task.reminder_minutes),
         completedAt: task.completed_at,
+        userid: core.currentUserid,
+        ownerFullname: '',
       })),
     ...stepDeadlines.map(step => ({
       key: `step-${step.entity_type}-${step.step_id}`,
@@ -164,6 +184,8 @@
       deadline: step.deadline,
       reminderMinutes: Number(step.deadline_notif) === 1 ? 30 : null,
       completedAt: null,
+      userid: Number(step.entity_userid),
+      ownerFullname: step.owner_fullname,
       entityId: Number(step.entity_id),
       entityPage: step.entity_page,
       entityTitle: step.entity_title,
@@ -184,6 +206,8 @@
           ? null
           : Number(task.reminder_minutes),
         completedAt: null,
+        userid: core.currentUserid,
+        ownerFullname: '',
       })),
     ...stepDeadlines.map(step => ({
       key: `step-${step.entity_type}-${step.step_id}`,
@@ -194,29 +218,41 @@
       deadline: step.deadline,
       reminderMinutes: Number(step.deadline_notif) === 1 ? 30 : null,
       completedAt: null,
+      userid: Number(step.entity_userid),
+      ownerFullname: step.owner_fullname,
       entityId: Number(step.entity_id),
       entityPage: step.entity_page,
       entityTitle: step.entity_title,
       entityType: step.entity_type,
     })),
   ];
-  $: calendarCells = buildCalendarCells(monthCursor, entries, entityActivities);
+  // the people list always reflects the full team-scoped dataset, not the
+  // currently filtered-down one, so picking a person doesn't shrink the
+  // list of people to pick from
+  $: teamPeople = teamScope ? buildTeamPeople(entries, entityActivities) : [];
+  $: filteredEntries = selectedPersonIds.size > 0
+    ? entries.filter(entry => selectedPersonIds.has(entry.userid))
+    : entries;
+  $: filteredActivities = selectedPersonIds.size > 0
+    ? entityActivities.filter(activity => selectedPersonIds.has(activity.userid))
+    : entityActivities;
+  $: calendarCells = buildCalendarCells(monthCursor, filteredEntries, filteredActivities);
   $: activeRange = selectionRange(selectedDate, selectedRangeEnd);
   $: agendaEntries = showTasks
-    ? entries.filter(entry => (
+    ? filteredEntries.filter(entry => (
       matchesAgendaDate(dateKey(new Date(entry.deadline)), activeRange, monthCursor)
         && matchesSearch(`${entry.body} ${entry.notes ?? ''} ${entry.entityTitle ?? ''}`, activitySearch)
     ))
     : [];
   $: agendaExperiments = showExperiments
-    ? buildAgendaEntities('experiments', entityActivities, activeRange, monthCursor, activitySearch)
+    ? buildAgendaEntities('experiments', filteredActivities, activeRange, monthCursor, activitySearch)
     : [];
   $: agendaResources = showResources
-    ? buildAgendaEntities('items', entityActivities, activeRange, monthCursor, activitySearch)
+    ? buildAgendaEntities('items', filteredActivities, activeRange, monthCursor, activitySearch)
     : [];
   $: agendaCount = agendaEntries.length + agendaExperiments.length + agendaResources.length;
   $: calendarMonthLabel = formatMonthLabel(monthCursor, locale);
-  $: visibleMonthActivityCount = countMonthActivity(monthCursor, entries, entityActivities);
+  $: visibleMonthActivityCount = countMonthActivity(monthCursor, filteredEntries, filteredActivities);
   $: updateUrgentBadges(reminderEntries);
 
   function dateKey(date: Date): string {
@@ -565,12 +601,40 @@
   }
 
   function setCalendarScope(useTeamScope: boolean): void {
+    if (useTeamScope && !core.isAdmin) return;
     if (teamScope === useTeamScope) return;
     teamScope = useTeamScope;
+    if (!teamScope) selectedPersonIds = new Set();
     localStorage.setItem(`${Model.Todolist}StepsShowTeam`, teamScope ? '1' : '0');
     const tasksScopeSwitch = document.getElementById(`${Model.Todolist}StepsShowTeam`) as HTMLInputElement | null;
     if (tasksScopeSwitch) tasksScopeSwitch.checked = teamScope;
     window.dispatchEvent(new CustomEvent('todolist-scope-changed'));
+  }
+
+  // Built from the full (unfiltered) team-scoped dataset so picking a
+  // person doesn't shrink the list of people left to pick from.
+  function buildTeamPeople(calendarEntries: CalendarEntry[], activities: EntityActivity[]): Person[] {
+    const byId = new Map<number, string>();
+    activities.forEach(activity => {
+      if (activity.userid) byId.set(activity.userid, activity.owner_fullname || `#${activity.userid}`);
+    });
+    calendarEntries.forEach(entry => {
+      if (entry.source === 'step' && entry.userid) {
+        byId.set(entry.userid, entry.ownerFullname || `#${entry.userid}`);
+      }
+    });
+    return Array.from(byId, ([userid, fullname]) => ({ userid, fullname }))
+      .sort((a, b) => a.fullname.localeCompare(b.fullname));
+  }
+
+  function togglePersonFilter(userid: number): void {
+    const next = new Set(selectedPersonIds);
+    if (next.has(userid)) {
+      next.delete(userid);
+    } else {
+      next.add(userid);
+    }
+    selectedPersonIds = next;
   }
 
   function startTaskDrag(event: DragEvent, entry: CalendarEntry): void {
@@ -775,7 +839,8 @@
       void load();
     };
     const reloadScope = (): void => {
-      teamScope = localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
+      teamScope = core.isAdmin && localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
+      if (!teamScope) selectedPersonIds = new Set();
       void load();
     };
     const refresh = (): void => {
@@ -806,26 +871,52 @@
 </script>
 
 <section class='calendar-todo-month' aria-label={t('Activity calendar')}>
-  <div class='calendar-scope-selector' role='group' aria-label={t('Calendar scope')}>
-    <button
-      type='button'
-      class:active={!teamScope}
-      class='btn btn-sm'
-      aria-pressed={!teamScope}
-      on:click={() => setCalendarScope(false)}
-    >
-      <i class='fas fa-user fa-fw mr-1' aria-hidden='true'></i>{t('User')}
-    </button>
-    <button
-      type='button'
-      class:active={teamScope}
-      class='btn btn-sm'
-      aria-pressed={teamScope}
-      on:click={() => setCalendarScope(true)}
-    >
-      <i class='fas fa-users fa-fw mr-1' aria-hidden='true'></i>{t('Team')}
-    </button>
-  </div>
+  {#if core.isAdmin}
+    <div class='calendar-scope-selector' role='group' aria-label={t('Calendar scope')}>
+      <button
+        type='button'
+        class:active={!teamScope}
+        class='btn btn-sm'
+        aria-pressed={!teamScope}
+        on:click={() => setCalendarScope(false)}
+      >
+        <i class='fas fa-user fa-fw mr-1' aria-hidden='true'></i>{t('User')}
+      </button>
+      <button
+        type='button'
+        class:active={teamScope}
+        class='btn btn-sm'
+        aria-pressed={teamScope}
+        on:click={() => setCalendarScope(true)}
+      >
+        <i class='fas fa-users fa-fw mr-1' aria-hidden='true'></i>{t('Team')}
+      </button>
+    </div>
+    {#if teamScope && teamPeople.length > 0}
+      <details class='calendar-person-filter'>
+        <summary class='btn btn-sm btn-outline-primary'>
+          <i class='fas fa-filter fa-fw mr-1' aria-hidden='true'></i>{t('Filter by person')}
+          {#if selectedPersonIds.size > 0}<span class='badge badge-primary ml-1'>{selectedPersonIds.size}</span>{/if}
+        </summary>
+        <div class='calendar-person-filter-panel'>
+          <label class='calendar-person-filter-option calendar-person-filter-all'>
+            <input type='checkbox' checked={selectedPersonIds.size === 0} on:change={() => { selectedPersonIds = new Set(); }} />
+            {t('Everyone')}
+          </label>
+          {#each teamPeople as person (person.userid)}
+            <label class='calendar-person-filter-option'>
+              <input
+                type='checkbox'
+                checked={selectedPersonIds.has(person.userid)}
+                on:change={() => togglePersonFilter(person.userid)}
+              />
+              {person.fullname}
+            </label>
+          {/each}
+        </div>
+      </details>
+    {/if}
+  {/if}
   <div class='calendar-month-header'>
     <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(-1)} aria-label={t('Previous month')}>
       <i class='fas fa-chevron-left' aria-hidden='true'></i>
@@ -1223,6 +1314,62 @@
     background: var(--primary);
     box-shadow: 0 0.18rem 0.4rem color-mix(in srgb, var(--primary) 26%, transparent);
     color: var(--primary-fg, #fff);
+  }
+
+  .calendar-person-filter {
+    margin-bottom: 0.65rem;
+    position: relative;
+  }
+
+  .calendar-person-filter summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .calendar-person-filter summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .calendar-person-filter-panel {
+    background: var(--chrome-bg);
+    border: 1px solid var(--secondary);
+    border-radius: 0.4rem;
+    box-shadow: 0 0.35rem 0.9rem rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    left: 0;
+    margin-top: 0.3rem;
+    max-height: 14rem;
+    overflow-y: auto;
+    padding: 0.4rem;
+    position: absolute;
+    top: 100%;
+    width: 100%;
+    z-index: 5;
+  }
+
+  .calendar-person-filter-option {
+    align-items: center;
+    border-radius: 0.3rem;
+    color: var(--chrome-fg);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.78rem;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0.28rem 0.35rem;
+  }
+
+  .calendar-person-filter-option:hover {
+    background: color-mix(in srgb, var(--chrome-bg) 80%, var(--primary));
+  }
+
+  .calendar-person-filter-all {
+    border-bottom: 1px solid var(--secondary);
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+    padding-bottom: 0.4rem;
   }
 
   .calendar-feed .fas,

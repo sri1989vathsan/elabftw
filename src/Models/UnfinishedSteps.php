@@ -107,6 +107,8 @@ final class UnfinishedSteps extends AbstractRest
                 '%s' AS entity_page,
                 entity.id AS entity_id,
                 entity.title AS entity_title,
+                entity.userid AS entity_userid,
+                CONCAT(owner.firstname, ' ', owner.lastname) AS owner_fullname,
                 entity_steps.id AS step_id,
                 entity_steps.body AS step_body,
                 DATE_FORMAT(entity_steps.deadline, '%%Y-%%m-%%dT%%H:%%i:%%sZ') AS deadline,
@@ -114,6 +116,7 @@ final class UnfinishedSteps extends AbstractRest
             FROM %s AS entity
             INNER JOIN %s_steps AS entity_steps
                 ON entity_steps.item_id = entity.id
+            LEFT JOIN users AS owner ON owner.userid = entity.userid
             JOIN users2teams
                 ON users2teams.users_id = entity.userid
                 AND users2teams.teams_id = :teamid

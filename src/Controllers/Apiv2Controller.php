@@ -75,6 +75,7 @@ use Elabftw\Models\TeamGroups;
 use Elabftw\Models\Teams;
 use Elabftw\Models\Teams2Rors;
 use Elabftw\Models\TeamTags;
+use Elabftw\Models\Feedback;
 use Elabftw\Models\Todolist;
 use Elabftw\Models\UnfinishedSteps;
 use Elabftw\Models\Uploads;
@@ -377,6 +378,7 @@ final class Apiv2Controller extends AbstractApiController
             ),
             ApiEndpoint::ExperimentsFolders => new ExperimentsFolders($this->requester, $this->id),
             ApiEndpoint::FavCategories => new FavCategories($this->requester, $this->id),
+            ApiEndpoint::Feedback => new Feedback($this->requester, $this->id),
             ApiEndpoint::FavFilters => new FavFilters($this->requester, $this->id),
             ApiEndpoint::FavTags => new FavTags($this->requester, $this->id),
             ApiEndpoint::Reports => new ReportsHandler($this->requester),

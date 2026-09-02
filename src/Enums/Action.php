@@ -52,6 +52,7 @@ enum Action: string
     case Sign = 'sign';
     case Test = 'test';
     case Timestamp = 'timestamp';
+    case ToggleVote = 'togglevote';
     case Unarchive = 'unarchive';
     case Unreference = 'unreference';
     case Update = 'update';
