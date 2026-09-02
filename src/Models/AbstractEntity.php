@@ -618,7 +618,10 @@ abstract class AbstractEntity extends AbstractRest
             // record that historical version, not whatever the template
             // currently is, so "Version %d" in the associated-templates list
             // reflects what was actually inserted.
-            $requestedVersion = Filter::intOrNull($params['version'] ?? null);
+            // Filter::intOrNull() only accepts string|int, not null -- guard
+            // the common case (no version param at all, i.e. "Latest") so it
+            // doesn't crash before ever reaching the function.
+            $requestedVersion = isset($params['version']) ? Filter::intOrNull($params['version']) : null;
             if ($requestedVersion !== null) {
                 $sql = 'SELECT version FROM custom_template_versions WHERE entity_id = :template_id AND version = :version';
                 $req = $this->Db->prepare($sql);
@@ -658,6 +661,27 @@ abstract class AbstractEntity extends AbstractRest
             $req->bindParam(':experiment_id', $this->id, PDO::PARAM_INT);
             $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
             $req->bindParam(':version', $templateVersion, PDO::PARAM_INT);
+            $this->Db->execute($req);
+
+            return $this->readOne();
+        }
+        // Removes every insert/link row for one template from this
+        // experiment (see the "Associated experimental templates" list in
+        // associated-templates.html) -- distinct from created_from_type/id,
+        // which reflects provenance and is left untouched.
+        if ($action === Action::UnlinkTemplateSource) {
+            if ($this->entityType !== EntityType::Experiments) {
+                throw new ImproperActionException('Unlinking a template source is only available for experiments.');
+            }
+            $this->canOrExplode(AccessType::Write);
+            $templateId = (int) ($params['template_id'] ?? 0);
+            if ($templateId <= 0) {
+                throw new ImproperActionException('A template id is required.');
+            }
+            $sql = 'DELETE FROM experiment_template_inserts WHERE experiment_id = :experiment_id AND template_id = :template_id';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':experiment_id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
             $this->Db->execute($req);
 
             return $this->readOne();
@@ -731,6 +755,30 @@ abstract class AbstractEntity extends AbstractRest
                 function () use ($params) {
                     if (array_key_exists('userid', $params) || array_key_exists('team', $params)) {
                         throw new ImproperActionException("Use the 'action:updateowner' to transfer ownership.");
+                    }
+                    // switching editor mode (rich text <-> markdown) only ever
+                    // sends content_type, so the body is left as-is otherwise:
+                    // convert it here so switching doesn't leave literal,
+                    // unrendered markup/syntax behind
+                    if (array_key_exists('content_type', $params) && !array_key_exists('body', $params)) {
+                        $newContentType = (int) $params['content_type'];
+                        $currentContentType = (int) ($this->entityData['content_type'] ?? BodyContentType::Html->value);
+                        if ($newContentType !== $currentContentType) {
+                            $currentBody = (string) ($this->entityData['body'] ?? '');
+                            $params['body'] = $newContentType === BodyContentType::Markdown->value
+                                ? Tools::html2md($currentBody)
+                                : Tools::md2html($currentBody);
+                        }
+                    }
+                    // process content_type before body: update() decides
+                    // whether to purify the body as html based on
+                    // entityData['content_type'], so it must already
+                    // reflect the type being switched to, not the old one,
+                    // by the time body is processed below
+                    if (array_key_exists('content_type', $params)) {
+                        $this->update(new EntityParams('content_type', (string) $params['content_type']));
+                        $this->entityData['content_type'] = (int) $params['content_type'];
+                        unset($params['content_type']);
                     }
                     foreach ($params as $key => $value) {
                         $this->update(new EntityParams($key, (string) $value));
@@ -1048,7 +1096,17 @@ abstract class AbstractEntity extends AbstractRest
     // Update an entity. The revision is saved before so it can easily compare old and new body.
     public function update(ContentParamsInterface $params): bool
     {
-        $content = $params->getContent();
+        $target = $params->getTarget();
+        if (($target === 'body' || $target === 'bodyappend')
+            && (int) ($this->entityData['content_type'] ?? BodyContentType::Html->value) === BodyContentType::Markdown->value
+        ) {
+            // a markdown entity's body is plain text, not html; the normal
+            // Filter::body() path runs it through HTMLPurifier, which
+            // otherwise mangles harmless markdown syntax (see Filter::body())
+            $content = Filter::body($params->getUnfilteredContent(), purify: false);
+        } else {
+            $content = $params->getContent();
+        }
         if ($params->getTarget() === 'bodyappend') {
             $content = $this->readColumn('body') . $content;
         }

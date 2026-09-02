@@ -104,10 +104,12 @@ final class CalendarActivity extends AbstractRest
         }
 
         $sql = sprintf(
-            'SELECT entity.id, entity.title, entity.date,
+            'SELECT entity.id, entity.title, entity.date, entity.userid,
+                    CONCAT(owner.firstname, " ", owner.lastname) AS owner_fullname,
                     activity.heading_index, activity.entry_date, activity.heading_level,
                     activity.heading_text, activity.parent_index, activity.anchor
                 FROM %s AS entity
+                LEFT JOIN users AS owner ON owner.userid = entity.userid
                 LEFT JOIN custom_calendar_activity_entries AS activity
                     ON activity.entity_type = :entity_type
                     AND activity.entity_id = entity.id
@@ -139,6 +141,8 @@ final class CalendarActivity extends AbstractRest
                     'date' => (string) $entity['date'],
                     'entity_type' => $entityType->value,
                     'entity_page' => $entityType->toPage(),
+                    'userid' => (int) $entity['userid'],
+                    'owner_fullname' => (string) $entity['owner_fullname'],
                     'headings' => array(),
                 );
             }

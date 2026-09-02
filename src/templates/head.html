@@ -164,6 +164,12 @@
                 href='lab-logs.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-book mr-1'></i>{{ 'Lab Logs'|trans }}</a>
             {% endif %}
 
+            {% if not App.isAnonymous() %}
+            {% set isActive = scriptName == 'feedback.php' %}
+            <a class='nav-item nav-link {{ isActive ? 'active' }}'
+                href='feedback.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-lightbulb mr-1'></i>{{ 'Feedback'|trans }}</a>
+            {% endif %}
+
             <div class='nav-item dropdown'>
               {% if App.devMode -%}
                 <!-- [html-validate-disable-next prefer-native-element: using a button here will mess up the navbar] -->

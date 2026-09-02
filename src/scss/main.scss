@@ -3588,6 +3588,13 @@ figure figcaption {
   width: 100%;
 }
 
+/* bootstrap-markdown-fa5's hideButtons() adds this class, but Bootstrap 4
+   dropped the old .hidden utility (replaced by .d-none) so it has no effect
+   without this rule */
+.md-editor .hidden {
+  display: none !important;
+}
+
 /* styling TinyMCE preview */
 /* stylelint-disable-next-line selector-class-pattern -- permit selecting classes with underscores */
 .tox-dialog__header:has(+ .tox-dialog__content-js .mce-preview-body) {

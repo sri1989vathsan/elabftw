@@ -123,3 +123,10 @@ if (document.getElementById('todolistPanel') && !core.isAnon) {
     './todolist'
   );
 }
+
+if (document.getElementById('feedbackRoot')) {
+  void import(
+    /* webpackChunkName: 'feedback' */
+    './feedback'
+  );
+}

@@ -194,25 +194,39 @@ on('checkbox-revision', (el: HTMLElement) => {
   }
 });
 
+// Templates: the two sides' bodies are already embedded in the page (see
+// revisions.html, id='templateVersionBody_<versionRowId>'), since
+// readAllForEntity() already had them in hand at render time -- no need to
+// hit an API at all, let alone the wrong one (core revisions, which these
+// ids don't belong to).
+function getTemplateVersionBody(revid: number): string {
+  return document.querySelector(`#templateVersionBody_${revid} > div`)?.innerHTML ?? '';
+}
+
 on('compare-revisions', async (el: HTMLElement) => {
   const checkedBoxes = getCheckedBoxes();
   if (checkedBoxes.length !== 2) {
     notify.error('revisions-error');
     return;
   }
-  const json0 = await ApiC.getJson(`${el.dataset.type}/${checkedBoxes[0].id}/revisions/${checkedBoxes[0].revid}`);
-  const json1 = await ApiC.getJson(`${el.dataset.type}/${checkedBoxes[1].id}/revisions/${checkedBoxes[1].revid}`);
+  const isTemplate = el.dataset.type === 'experiments_templates' || el.dataset.type === 'items_types';
+  const body0 = isTemplate
+    ? getTemplateVersionBody(checkedBoxes[0].revid)
+    : (await ApiC.getJson(`${el.dataset.type}/${checkedBoxes[0].id}/revisions/${checkedBoxes[0].revid}`)).body;
+  const body1 = isTemplate
+    ? getTemplateVersionBody(checkedBoxes[1].revid)
+    : (await ApiC.getJson(`${el.dataset.type}/${checkedBoxes[1].id}/revisions/${checkedBoxes[1].revid}`)).body;
   const diffDiv = document.getElementById('compareRevisionsDiffDiv');
   diffDiv.replaceChildren();
 
-  const spreadsheetDiff = renderSpreadsheetDiff(json0.body, json1.body);
+  const spreadsheetDiff = renderSpreadsheetDiff(body0, body1);
   if (spreadsheetDiff) {
     diffDiv.appendChild(spreadsheetDiff);
     return;
   }
 
   const dmp = new DiffMatchPatch();
-  const diff = dmp.diff_main(json0.body, json1.body);
+  const diff = dmp.diff_main(body0, body1);
   diff.forEach((part: DiffArr) => {
     let color = '';
     const res = part[0];
@@ -232,6 +246,16 @@ on('compare-revisions', async (el: HTMLElement) => {
 
 on('restore-revision', (el: HTMLElement) => {
   ApiC.patch(`${el.dataset.type}/${el.dataset.id}/revisions/${el.dataset.revid}`, {'action': Action.Replace});
+});
+
+on('restore-template-version', (el: HTMLElement) => {
+  if (!confirm(`Restore version ${el.dataset.version}? This replaces the current draft content and unlocks the template.`)) return;
+  ApiC.patch(`${el.dataset.type}/${el.dataset.id}`, {
+    action: Action.RestoreTemplateVersion,
+    version_id: parseInt(el.dataset.versionid, 10),
+  })
+    .then(() => window.location.href = `?mode=edit&id=${el.dataset.id}`)
+    .catch(error => notify.error(error));
 });
 
 function setTemplateVersionDocsEditMode(revisionId: string, editing: boolean): void {

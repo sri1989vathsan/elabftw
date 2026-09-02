@@ -26,6 +26,7 @@ use Elabftw\Make\MakeCsv;
 use Elabftw\Make\MakeEln;
 use Elabftw\Make\MakeElnHtml;
 use Elabftw\Make\MakeJson;
+use Elabftw\Make\MakeMd;
 use Elabftw\Make\MakeMultiPdf;
 use Elabftw\Make\MakePdf;
 use Elabftw\Make\MakeProcurementRequestsCsv;
@@ -118,6 +119,13 @@ final class MakeController extends AbstractController
 
             case ExportFormat::Json:
                 return new MakeJson($this->entityArr)->getResponse();
+
+            case ExportFormat::Markdown:
+                // only works for 1 entry
+                if (count($this->entityArr) !== 1) {
+                    throw new ImproperActionException('Markdown format is only suitable for one ID.');
+                }
+                return new MakeMd($this->entityArr[0])->getResponse();
 
             case ExportFormat::PdfA:
                 $this->pdfa = true;

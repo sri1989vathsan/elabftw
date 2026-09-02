@@ -140,6 +140,7 @@ export class MdEditor extends Editor implements EditorInterface {
   init(): void {
     /* eslint-disable-next-line */
     ($('.markdown-textarea') as any).markdown({
+      hiddenButtons: ['cmdPreview'],
       onPreview: ed => {
         const html = marked(normalizeCompactHeadings(ed.$textarea.val())) as string;
 

@@ -96,12 +96,20 @@ abstract class AbstractEntityController implements ControllerInterface
     #[Override]
     public function getResponse(): Response
     {
-        return match ($this->App->Request->query->getAlpha('mode')) {
+        $Response = match ($this->App->Request->query->getAlpha('mode')) {
             'view' => $this->view(),
             'edit' => $this->edit(),
             'changelog' => $this->changelog(),
             default => $this->show(),
         };
+        // without this, a same-URL window.location.reload() (e.g. right
+        // after switching the editor mode, which flips content_type and
+        // converts the body server-side) can be served from the browser's
+        // HTTP cache instead of fetching the just-saved content, showing
+        // stale, unconverted body content until the user navigates away and
+        // back
+        $Response->headers->set('Cache-Control', 'no-store');
+        return $Response;
     }
 
     /**

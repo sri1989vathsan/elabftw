@@ -8,8 +8,10 @@
     {{ 'Add a short name and notes to explain what changed in each retained template version. The documentation is saved with the template and included in backups and exports.'|trans }}
   </div>
 {% endif %}
-<p>{{ 'This server is configured to store %d revisions per entry maximum.'|trans|format(App.Config.configArr.max_revisions) }}
-{{ 'A change of at least %d characters is required to trigger a revision save.'|trans|format(App.Config.configArr.min_delta_revisions) }}</p>
+{% if not isTemplate %}
+  <p>{{ 'This server is configured to store %d revisions per entry maximum.'|trans|format(App.Config.configArr.max_revisions) }}
+  {{ 'A change of at least %d characters is required to trigger a revision save.'|trans|format(App.Config.configArr.min_delta_revisions) }}</p>
+{% endif %}
 
 {% set query = '?mode=view&' %}
 <a href='{{ Entity.entityType.toPage ~ query }}id={{ Entity.id }}' class='btn btn-ghost'>
@@ -24,8 +26,11 @@
 
 <ul class='list-group mt-3'>
   {% for revision in revisionsArr %}
-    {% set randomId = random() %}
-    {% set versionNumber = revisionsArr|length - loop.index0 %}
+    {# for templates, a predictable id (keyed by the permanent version row,
+       not a random one) lets compare-revisions locate this same pre-embedded
+       body content client-side, with no extra fetch #}
+    {% set randomId = isTemplate ? ('templateVersionBody_' ~ revision.id) : random() %}
+    {% set versionNumber = isTemplate ? revision.version : (revisionsArr|length - loop.index0) %}
     {% set versionDoc = templateVersionDocs[revision.id]|default({}) %}
     <li id='parent_{{ randomId }}' class='list-group-item'>
       <div class='d-flex'>
@@ -39,7 +44,13 @@
           <span class='relative-moment' title='{{ revision.created_at }}'></span> {{ 'by'|trans }} {{ revision.fullname }}
         </div>
         <div class='ml-auto'>
-          {% if not Entity.isReadOnly %}<button type='button' data-action='restore-revision' data-id='{{ Entity.id }}' data-type='{{ Entity.entityType.value }}' data-revid='{{ revision.id }}' class='btn btn-ghost'>{{ 'Restore'|trans }}</button>{% endif %}
+          {% if not Entity.isReadOnly %}
+            {% if isTemplate %}
+              <button type='button' data-action='restore-template-version' data-id='{{ Entity.id }}' data-type='{{ Entity.entityType.value }}' data-versionid='{{ revision.id }}' data-version='{{ revision.version }}' class='btn btn-ghost'>{{ 'Restore'|trans }}</button>
+            {% else %}
+              <button type='button' data-action='restore-revision' data-id='{{ Entity.id }}' data-type='{{ Entity.entityType.value }}' data-revid='{{ revision.id }}' class='btn btn-ghost'>{{ 'Restore'|trans }}</button>
+            {% endif %}
+          {% endif %}
         </div>
       </div>
       {% if isTemplate %}
@@ -76,7 +87,12 @@
           {% endif %}
         </div>
       {% endif %}
-      <div hidden id='{{ randomId }}' style='overflow:auto;margin: 10px 0 0 20px'><div></div></div>
+      {# templates: the body is already in hand from readAllForEntity(), so
+         embed it directly and mark it pre-loaded -- toggle-body (common.ts)
+         then just shows/hides it instead of fetching from the (wrong, for
+         these ids) core revisions endpoint. Also lets compare-revisions
+         below read it straight out of the DOM, no extra fetch either. #}
+      <div hidden id='{{ randomId }}' {{ isTemplate ? "data-body-loaded='1'" }} style='overflow:auto;margin: 10px 0 0 20px'><div>{{ isTemplate ? revision.body|raw : '' }}</div></div>
     </li>
   {% endfor %}
 </ul>
