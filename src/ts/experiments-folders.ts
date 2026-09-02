@@ -12,7 +12,9 @@ import { Api } from './Apiv2.class';
 import { on } from './handlers';
 import { notify } from './notify';
 import { getTinymceBaseConfig } from './tinymce';
-import { htmlToMarkdown, markdownToHtml } from './Editor.class';
+import { htmlToMarkdown } from './Editor.class';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 type FolderScope = 'mine' | 'all';
 
@@ -339,6 +341,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function getFolderReadme(folderId: string): Promise<FolderReadme> {
     return ApiC.getJson<FolderReadme>(`experiments_folders/${folderId}`);
+  }
+
+  function markdownToHtml(markdown: string): string {
+    return DOMPurify.sanitize(marked(markdown) as string, {
+      USE_PROFILES: { html: true },
+      ADD_ATTR: ['target'],
+    });
   }
 
   function renderReadmeContent(target: HTMLElement, body: string, contentType = 1): void {

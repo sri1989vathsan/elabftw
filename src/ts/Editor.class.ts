@@ -99,7 +99,7 @@ function nodeToMarkdown(node: ChildNode): string {
 
 // only covers the formatting the markdown editor's own (restricted) toolbar
 // can produce -- bold, italic, headings, links, images, lists, code, quotes
-function htmlToMarkdown(html: string): string {
+export function htmlToMarkdown(html: string): string {
   if (html.trim() === '') {
     return '';
   }
