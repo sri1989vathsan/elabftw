@@ -12,6 +12,7 @@ import { Api } from './Apiv2.class';
 import { on } from './handlers';
 import { notify } from './notify';
 import { getTinymceBaseConfig } from './tinymce';
+import { htmlToMarkdown, markdownToHtml } from './Editor.class';
 
 type FolderScope = 'mine' | 'all';
 
@@ -19,6 +20,7 @@ interface FolderReadme {
   id: number;
   name: string;
   readme_body: string;
+  readme_content_type: number;
   can_edit_readme: boolean;
 }
 
@@ -339,8 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
     return ApiC.getJson<FolderReadme>(`experiments_folders/${folderId}`);
   }
 
-  function renderReadmeContent(target: HTMLElement, body: string): void {
-    target.innerHTML = body || '<p class="color-medium mb-0">This folder README is empty.</p>';
+  function renderReadmeContent(target: HTMLElement, body: string, contentType = 1): void {
+    target.innerHTML = (Number(contentType) === 2 ? markdownToHtml(body) : body)
+      || '<p class="color-medium mb-0">This folder README is empty.</p>';
   }
 
   async function initializeReadmeEditor(): Promise<void> {
@@ -366,17 +369,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const view = document.getElementById('folderReadmeView');
     const empty = document.getElementById('folderReadmeEmpty');
     const textarea = document.getElementById('folderReadmeEditor');
+    const markdownEditor = document.getElementById('folderReadmeMarkdownEditor');
+    const typeGroup = document.getElementById('folderReadmeEditorTypeGroup');
+    const typeSelect = document.getElementById('folderReadmeEditorType') as HTMLSelectElement | null;
     const editButton = document.getElementById('editFolderReadme');
     const saveButton = document.getElementById('saveFolderReadme');
     const cancelButton = document.getElementById('cancelFolderReadmeEdit');
-    if (!view || !empty || !textarea || !editButton || !saveButton || !cancelButton) return;
+    if (!view || !empty || !textarea || !markdownEditor || !typeGroup || !typeSelect || !editButton || !saveButton || !cancelButton) return;
+    const markdownMode = typeSelect.value === '2';
     view.hidden = editing || !activeReadme?.readme_body;
     empty.hidden = editing || Boolean(activeReadme?.readme_body);
-    textarea.hidden = !editing;
+    textarea.hidden = !editing || markdownMode;
+    markdownEditor.hidden = !editing || !markdownMode;
+    typeGroup.hidden = !editing;
     editButton.hidden = editing || !activeReadme?.can_edit_readme;
     saveButton.hidden = !editing;
     cancelButton.hidden = !editing;
-    tinymce.get('folderReadmeEditor')?.getContainer().toggleAttribute('hidden', !editing);
+    tinymce.get('folderReadmeEditor')?.getContainer().toggleAttribute('hidden', !editing || markdownMode);
   }
 
   async function openFolderReadme(folderId: string): Promise<void> {
@@ -385,11 +394,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const title = document.getElementById('folderReadmeModalTitle');
     const view = document.getElementById('folderReadmeView');
     if (title) title.textContent = `${activeReadme.name} — README`;
-    if (view) renderReadmeContent(view, activeReadme.readme_body);
+    if (view) renderReadmeContent(view, activeReadme.readme_body, activeReadme.readme_content_type);
+    $('#folderReadmeModal').modal('show');
     await initializeReadmeEditor();
     tinymce.get('folderReadmeEditor')?.setContent(activeReadme.readme_body);
+    (document.getElementById('folderReadmeMarkdownEditor') as HTMLTextAreaElement).value = activeReadme.readme_body;
+    (document.getElementById('folderReadmeEditorType') as HTMLSelectElement).value = String(activeReadme.readme_content_type);
     setReadmeEditMode(false);
-    $('#folderReadmeModal').modal('show');
   }
 
   async function loadSelectedFolderReadme(): Promise<void> {
@@ -401,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const title = panel.querySelector('[data-folder-readme-title]');
       const content = panel.querySelector('[data-folder-readme-content]') as HTMLElement | null;
       if (title) title.textContent = `${folder.name} — README`;
-      if (content) renderReadmeContent(content, folder.readme_body);
+      if (content) renderReadmeContent(content, folder.readme_body, folder.readme_content_type);
     } catch (error) {
       panel.hidden = true;
       notify.error(error);
@@ -465,23 +476,55 @@ document.addEventListener('DOMContentLoaded', () => {
 
   on('edit-folder-readme', () => {
     if (!activeReadme?.can_edit_readme) return;
-    tinymce.get('folderReadmeEditor')?.setContent(activeReadme.readme_body);
+    const typeSelect = document.getElementById('folderReadmeEditorType') as HTMLSelectElement;
+    typeSelect.value = String(activeReadme.readme_content_type);
+    tinymce.get('folderReadmeEditor')?.setContent(Number(activeReadme.readme_content_type) === 2
+      ? markdownToHtml(activeReadme.readme_body)
+      : activeReadme.readme_body);
+    (document.getElementById('folderReadmeMarkdownEditor') as HTMLTextAreaElement).value = Number(activeReadme.readme_content_type) === 1
+      ? htmlToMarkdown(activeReadme.readme_body)
+      : activeReadme.readme_body;
     setReadmeEditMode(true);
-    tinymce.get('folderReadmeEditor')?.focus();
+    if (Number(activeReadme.readme_content_type) === 1) tinymce.get('folderReadmeEditor')?.focus();
+  });
+
+  function changeFolderReadmeEditor(typeSelect: HTMLSelectElement): void {
+    const markdownEditor = document.getElementById('folderReadmeMarkdownEditor') as HTMLTextAreaElement;
+    if (typeSelect.value === '2') {
+      markdownEditor.value = htmlToMarkdown(tinymce.get('folderReadmeEditor')?.getContent() ?? '');
+    } else {
+      tinymce.get('folderReadmeEditor')?.setContent(markdownToHtml(markdownEditor.value));
+    }
+    setReadmeEditMode(true);
+  }
+
+  document.addEventListener('change', event => {
+    const target = event.target;
+    if (target instanceof HTMLSelectElement && target.id === 'folderReadmeEditorType') {
+      changeFolderReadmeEditor(target);
+    }
   });
 
   on('cancel-folder-readme-edit', () => {
-    tinymce.get('folderReadmeEditor')?.setContent(activeReadme?.readme_body ?? '');
+    if (activeReadme) {
+      (document.getElementById('folderReadmeEditorType') as HTMLSelectElement).value = String(activeReadme.readme_content_type);
+    }
     setReadmeEditMode(false);
   });
 
   on('save-folder-readme', () => {
     if (!activeReadme?.can_edit_readme) return;
-    const body = tinymce.get('folderReadmeEditor')?.getContent() ?? '';
-    ApiC.patch(`experiments_folders/${activeReadme.id}`, {readme_body: body}).then(async () => {
+    const contentType = Number((document.getElementById('folderReadmeEditorType') as HTMLSelectElement).value);
+    const body = contentType === 2
+      ? (document.getElementById('folderReadmeMarkdownEditor') as HTMLTextAreaElement).value
+      : tinymce.get('folderReadmeEditor')?.getContent() ?? '';
+    ApiC.patch(`experiments_folders/${activeReadme.id}`, {
+      readme_body: body,
+      readme_content_type: contentType,
+    }).then(async () => {
       activeReadme = await getFolderReadme(String(activeReadme?.id));
       const view = document.getElementById('folderReadmeView');
-      if (view) renderReadmeContent(view, activeReadme.readme_body);
+      if (view) renderReadmeContent(view, activeReadme.readme_body, activeReadme.readme_content_type);
       setReadmeEditMode(false);
       await loadSelectedFolderReadme();
       refreshFoldersSidebarSafely();

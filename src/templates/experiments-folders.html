@@ -229,11 +229,19 @@
       </div>
       <div class='modal-body'>
         <input type='hidden' id='folderReadmeId'>
+        <div id='folderReadmeEditorTypeGroup' class='form-group mb-2' hidden>
+          <label class='sr-only' for='folderReadmeEditorType'>{{ 'Editor type'|trans }}</label>
+          <select id='folderReadmeEditorType' class='custom-select custom-select-sm w-auto'>
+            <option value='1'>{{ 'Rich text'|trans }}</option>
+            <option value='2'>{{ 'Markdown'|trans }}</option>
+          </select>
+        </div>
         <div id='folderReadmeView' class='folder-readme-content'></div>
         <div id='folderReadmeEmpty' class='color-medium text-center py-4' hidden>
           <i class='far fa-file-lines fa-2x mb-2 d-block'></i>{{ 'This folder README is empty.'|trans }}
         </div>
         <textarea id='folderReadmeEditor' class='form-control' rows='16' hidden></textarea>
+        <textarea id='folderReadmeMarkdownEditor' class='form-control font-monospace' rows='16' hidden aria-label='{{ 'Markdown editor'|trans }}'></textarea>
       </div>
       <div class='modal-footer'>
         <button type='button' class='btn btn-ghost' data-dismiss='modal'>{{ 'Close'|trans }}</button>

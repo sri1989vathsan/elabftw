@@ -29,6 +29,7 @@ use PDO;
 
 use function array_key_exists;
 use function count;
+use function in_array;
 use function _;
 
 /**
@@ -197,7 +198,11 @@ final class ExperimentsFolders extends AbstractRest
             if (!$folder['can_edit_readme']) {
                 throw new IllegalActionException();
             }
-            $this->writeReadme((string) $params['readme_body']);
+            $contentType = (int) ($params['readme_content_type'] ?? $folder['readme_content_type']);
+            if (!in_array($contentType, array(1, 2), true)) {
+                throw new ImproperActionException('Invalid folder README content type.');
+            }
+            $this->writeReadme((string) $params['readme_body'], $contentType);
             return $this->readOne();
         }
 
@@ -602,15 +607,16 @@ final class ExperimentsFolders extends AbstractRest
             || $this->requester->isSysadmin();
     }
 
-    private function writeReadme(string $body): void
+    private function writeReadme(string $body, int $contentType): void
     {
         $sql = 'INSERT INTO custom_experiment_folder_readmes (folder_id, body, content_type, updated_by)
-            VALUES (:folder_id, :body, 1, :updated_by)
+            VALUES (:folder_id, :body, :content_type, :updated_by)
             ON DUPLICATE KEY UPDATE body = VALUES(body), content_type = VALUES(content_type),
                 updated_by = VALUES(updated_by), updated_at = CURRENT_TIMESTAMP';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':folder_id', $this->id, PDO::PARAM_INT);
         $req->bindValue(':body', Filter::body($body));
+        $req->bindValue(':content_type', $contentType, PDO::PARAM_INT);
         $req->bindValue(':updated_by', $this->requester->userData['userid'], PDO::PARAM_INT);
         $this->Db->execute($req);
     }
