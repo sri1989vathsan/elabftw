@@ -99,6 +99,7 @@
   const notify = new AppNotification();
   const urgentWindowMs = 60 * 60 * 1000;
   const selectedDateStorageKey = 'activity-calendar-selected-date';
+  const selectedRangeEndStorageKey = 'activity-calendar-selected-range-end';
   const monthStorageKey = 'activity-calendar-month';
   const highlightedTaskId = parseInt(
     new URLSearchParams(window.location.search).get('task') ?? '',
@@ -125,6 +126,10 @@
   // With no selected date, the agenda displays the entire visible calendar
   // range. This makes entity activity available on every eLabFTW page.
   let selectedDate = sessionStorage.getItem(selectedDateStorageKey) ?? '';
+  // Empty means the selection is just the single selectedDate above.
+  // Dragging across day cells sets this to the day the drag ends on.
+  let selectedRangeEnd = sessionStorage.getItem(selectedRangeEndStorageKey) ?? '';
+  let isRangeSelecting = false;
   let loading = true;
   let reminderTimer: number | undefined;
   let calendarFeedEnabled = false;
@@ -196,17 +201,18 @@
     })),
   ];
   $: calendarCells = buildCalendarCells(monthCursor, entries, entityActivities);
+  $: activeRange = selectionRange(selectedDate, selectedRangeEnd);
   $: agendaEntries = showTasks
     ? entries.filter(entry => (
-      matchesAgendaDate(dateKey(new Date(entry.deadline)), selectedDate, monthCursor)
+      matchesAgendaDate(dateKey(new Date(entry.deadline)), activeRange, monthCursor)
         && matchesSearch(`${entry.body} ${entry.notes ?? ''} ${entry.entityTitle ?? ''}`, activitySearch)
     ))
     : [];
   $: agendaExperiments = showExperiments
-    ? buildAgendaEntities('experiments', entityActivities, selectedDate, monthCursor, activitySearch)
+    ? buildAgendaEntities('experiments', entityActivities, activeRange, monthCursor, activitySearch)
     : [];
   $: agendaResources = showResources
-    ? buildAgendaEntities('items', entityActivities, selectedDate, monthCursor, activitySearch)
+    ? buildAgendaEntities('items', entityActivities, activeRange, monthCursor, activitySearch)
     : [];
   $: agendaCount = agendaEntries.length + agendaExperiments.length + agendaResources.length;
   $: calendarMonthLabel = formatMonthLabel(monthCursor, locale);
@@ -347,8 +353,17 @@
     return query.length === 0 || value.toLocaleLowerCase().includes(query);
   }
 
-  function matchesAgendaDate(date: string, agendaDate: string, month: Date): boolean {
-    if (agendaDate) return date === agendaDate;
+  // Empty selectedDate means no selection (agenda shows the whole visible
+  // month). Otherwise the selection is the single day selectedDate, unless
+  // dragging across cells set selectedRangeEnd to a different day.
+  function selectionRange(start: string, end: string): { start: string; end: string } | null {
+    if (!start) return null;
+    const rangeEnd = end || start;
+    return start <= rangeEnd ? { start, end: rangeEnd } : { start: rangeEnd, end: start };
+  }
+
+  function matchesAgendaDate(date: string, range: { start: string; end: string } | null, month: Date): boolean {
+    if (range) return date >= range.start && date <= range.end;
     const start = calendarStart(month);
     const end = new Date(start);
     end.setDate(start.getDate() + 41);
@@ -358,23 +373,20 @@
   function buildAgendaEntities(
     type: 'experiments' | 'items',
     activities: EntityActivity[],
-    agendaDate: string,
+    range: { start: string; end: string } | null,
     month: Date,
     search: string,
   ): AgendaEntityActivity[] {
     const result: AgendaEntityActivity[] = [];
     const normalizedSearch = search.trim().toLocaleLowerCase();
     activities
-      .filter(activity => activity.entity_type === type && (
-        agendaDate
-          ? activityOccursOn(activity, agendaDate)
-          : [...activityDates(activity)].some(date => matchesAgendaDate(date, agendaDate, month))
-      ))
+      .filter(activity => activity.entity_type === type
+        && [...activityDates(activity)].some(date => matchesAgendaDate(date, range, month)))
       .forEach(activity => {
         const byIndex = new Map(activity.headings.map(heading => [heading.index, heading]));
         const included = new Set<number>();
         activity.headings
-          .filter(heading => matchesAgendaDate(heading.date, agendaDate, month))
+          .filter(heading => matchesAgendaDate(heading.date, range, month))
           .forEach(heading => {
             included.add(heading.index);
             let parentIndex = heading.parent_index;
@@ -396,7 +408,7 @@
             return {
               ...heading,
               depth,
-              contextual: !matchesAgendaDate(heading.date, agendaDate, month),
+              contextual: !matchesAgendaDate(heading.date, range, month),
             };
           });
 
@@ -470,15 +482,33 @@
   }
 
   function agendaLabel(): string {
-    if (!selectedDate) return t('All visible dates');
-    return new Intl.DateTimeFormat(locale, {
-      dateStyle: 'full',
-    }).format(new Date(`${selectedDate}T12:00:00`));
+    if (!activeRange) return t('All visible dates');
+    if (activeRange.start === activeRange.end) {
+      return new Intl.DateTimeFormat(locale, {
+        dateStyle: 'full',
+      }).format(new Date(`${activeRange.start}T12:00:00`));
+    }
+    const formatter = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
+    return `${formatter.format(new Date(`${activeRange.start}T12:00:00`))} – ${formatter.format(new Date(`${activeRange.end}T12:00:00`))}`;
+  }
+
+  function isCellSelected(key: string): boolean {
+    return activeRange !== null && key >= activeRange.start && key <= activeRange.end;
+  }
+
+  function persistSelection(): void {
+    sessionStorage.setItem(selectedDateStorageKey, selectedDate);
+    if (selectedRangeEnd && selectedRangeEnd !== selectedDate) {
+      sessionStorage.setItem(selectedRangeEndStorageKey, selectedRangeEnd);
+    } else {
+      sessionStorage.removeItem(selectedRangeEndStorageKey);
+    }
   }
 
   function selectDay(cell: CalendarCell): void {
     selectedDate = cell.key;
-    sessionStorage.setItem(selectedDateStorageKey, selectedDate);
+    selectedRangeEnd = cell.key;
+    persistSelection();
     if (!cell.inMonth) {
       monthCursor = new Date(cell.date.getFullYear(), cell.date.getMonth(), 1);
       sessionStorage.setItem(monthStorageKey, dateKey(monthCursor));
@@ -486,11 +516,34 @@
     }
   }
 
+  // Dragging the mouse across day cells selects a date range: mousedown
+  // starts it, mouseenter on another cell while the button is held extends
+  // it, and mouseup (tracked at the window level so releasing outside the
+  // grid still ends the drag) commits it to sessionStorage.
+  function beginRangeSelect(cell: CalendarCell): void {
+    isRangeSelecting = true;
+    selectedDate = cell.key;
+    selectedRangeEnd = cell.key;
+  }
+
+  function extendRangeSelect(cell: CalendarCell): void {
+    if (!isRangeSelecting) return;
+    selectedRangeEnd = cell.key;
+  }
+
+  function endRangeSelect(): void {
+    if (!isRangeSelecting) return;
+    isRangeSelecting = false;
+    persistSelection();
+  }
+
   function changeMonth(offset: number): void {
     monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + offset, 1);
     selectedDate = '';
+    selectedRangeEnd = '';
     sessionStorage.setItem(monthStorageKey, dateKey(monthCursor));
     sessionStorage.removeItem(selectedDateStorageKey);
+    sessionStorage.removeItem(selectedRangeEndStorageKey);
     void load();
   }
 
@@ -498,14 +551,17 @@
     const today = new Date();
     monthCursor = new Date(today.getFullYear(), today.getMonth(), 1);
     selectedDate = dateKey(today);
+    selectedRangeEnd = selectedDate;
     sessionStorage.setItem(monthStorageKey, dateKey(monthCursor));
-    sessionStorage.setItem(selectedDateStorageKey, selectedDate);
+    persistSelection();
     void load();
   }
 
   function selectAllVisibleDates(): void {
     selectedDate = '';
+    selectedRangeEnd = '';
     sessionStorage.removeItem(selectedDateStorageKey);
+    sessionStorage.removeItem(selectedRangeEndStorageKey);
   }
 
   function setCalendarScope(useTeamScope: boolean): void {
@@ -555,6 +611,7 @@
       await ApiC.patch(`${Model.Todolist}/${taskId}`, {deadline: movedDeadline.toISOString()});
       monthCursor = new Date(cell.date.getFullYear(), cell.date.getMonth(), 1);
       selectedDate = cell.key;
+      selectedRangeEnd = cell.key;
       await load();
       window.dispatchEvent(new CustomEvent('todolist-changed'));
     } catch (error) {
@@ -728,6 +785,9 @@
     window.addEventListener('todolist-changed', reload);
     window.addEventListener('todolist-scope-changed', reloadScope);
     document.addEventListener('visibilitychange', checkReminders);
+    // tracked at the window level so releasing the mouse button outside the
+    // calendar grid (e.g. the drag ran past its edge) still ends the drag
+    window.addEventListener('mouseup', endRangeSelect);
     reminderTimer = window.setInterval(checkReminders, 30000);
     void load();
     void loadCalendarFeedStatus();
@@ -735,6 +795,7 @@
       window.removeEventListener('todolist-changed', reload);
       window.removeEventListener('todolist-scope-changed', reloadScope);
       document.removeEventListener('visibilitychange', checkReminders);
+      window.removeEventListener('mouseup', endRangeSelect);
       refreshButton?.removeEventListener('click', refresh);
     };
   });
@@ -791,15 +852,17 @@
         type='button'
         class:outside={!cell.inMonth}
         class:today={cell.isToday}
-        class:selected={selectedDate === cell.key}
+        class:selected={isCellSelected(cell.key)}
         class:has-overdue={cell.overdue}
         class:calendar-day-drag-over={dragOverDate === cell.key}
         class='calendar-todo-day'
         on:click={() => selectDay(cell)}
+        on:mousedown={() => beginRangeSelect(cell)}
+        on:mouseenter={() => extendRangeSelect(cell)}
         on:dragover={(event) => allowDayDrop(event, cell.key)}
         on:drop={(event) => void dropTaskOnDay(event, cell)}
         aria-label={`${cell.key}, ${cell.count} ${t('calendar entries')}`}
-        aria-pressed={selectedDate === cell.key}
+        aria-pressed={isCellSelected(cell.key)}
       >
         <span class='calendar-day-number'>{cell.day}</span>
         {#if cell.count > 0}
@@ -957,7 +1020,7 @@
                           <i class={`fas fa-heading calendar-heading-level-${heading.level} fa-fw mr-1`} aria-hidden='true'></i>
                           <a href={headingUrl(activity, heading)} on:click={(event) => confirmEntityNavigation(event, activity)}>{heading.text}</a>
                           {#if heading.contextual}<span class='badge badge-light ml-1'>{t('context')}</span>{/if}
-                          {#if !selectedDate}<time class='calendar-heading-date ml-auto' datetime={heading.date}>{heading.date}</time>{/if}
+                          {#if !activeRange || activeRange.start !== activeRange.end}<time class='calendar-heading-date ml-auto' datetime={heading.date}>{heading.date}</time>{/if}
                         </li>
                       {/each}
                     </ul>
