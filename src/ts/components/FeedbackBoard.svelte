@@ -125,11 +125,10 @@
 <div class='feedback-board'>
   <div class='feedback-card feedback-new-card'>
     <form on:submit|preventDefault={submitNewItem}>
-      <div class='feedback-toggle-group' role='group' aria-label={t('Type')}>
+      <div class='btn-group btn-group-sm' role='group' aria-label={t('Type')}>
         <button
           type='button'
-          class:active={newType === 'feature'}
-          class='feedback-toggle-btn'
+          class={newType === 'feature' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'}
           aria-pressed={newType === 'feature'}
           on:click={() => newType = 'feature'}
         >
@@ -137,8 +136,7 @@
         </button>
         <button
           type='button'
-          class:active={newType === 'bug'}
-          class='feedback-toggle-btn'
+          class={newType === 'bug' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'}
           aria-pressed={newType === 'bug'}
           on:click={() => newType = 'bug'}
         >
@@ -148,7 +146,7 @@
       <label class='sr-only' for='feedbackNewTitle'>{t('Title')}</label>
       <input
         id='feedbackNewTitle'
-        class='form-control feedback-input mb-2'
+        class='form-control mt-2 mb-2'
         type='text'
         maxlength='255'
         placeholder={t('Short summary…')}
@@ -158,7 +156,7 @@
       <label class='sr-only' for='feedbackNewBody'>{t('Description')}</label>
       <textarea
         id='feedbackNewBody'
-        class='form-control feedback-input mb-2'
+        class='form-control mb-2'
         rows='2'
         placeholder={t('More details (optional)')}
         bind:value={newBody}
@@ -175,16 +173,16 @@
   </div>
 
   <div class='d-flex flex-wrap align-items-center my-3'>
-    <div class='feedback-toggle-group mr-2' role='group' aria-label={t('Filter by type')}>
-      <button type='button' class:active={typeFilter === 'all'} class='feedback-toggle-btn' on:click={() => typeFilter = 'all'}>{t('All')}</button>
-      <button type='button' class:active={typeFilter === 'feature'} class='feedback-toggle-btn' on:click={() => typeFilter = 'feature'}>
+    <div class='btn-group btn-group-sm mr-2' role='group' aria-label={t('Filter by type')}>
+      <button type='button' class={typeFilter === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => typeFilter = 'all'}>{t('All')}</button>
+      <button type='button' class={typeFilter === 'feature' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => typeFilter = 'feature'}>
         <i class='fas fa-star fa-fw mr-1' aria-hidden='true'></i>{t('Features')}
       </button>
-      <button type='button' class:active={typeFilter === 'bug'} class='feedback-toggle-btn' on:click={() => typeFilter = 'bug'}>
+      <button type='button' class={typeFilter === 'bug' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => typeFilter = 'bug'}>
         <i class='fas fa-bug fa-fw mr-1' aria-hidden='true'></i>{t('Bugs')}
       </button>
     </div>
-    <button type='button' class:active={showFinished} class='feedback-toggle-btn' on:click={() => showFinished = !showFinished}>
+    <button type='button' class={showFinished ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => showFinished = !showFinished}>
       <i class='fas fa-check fa-fw mr-1' aria-hidden='true'></i>{t('Finished')}
       {#if finishedCount > 0}<span class='badge badge-light ml-1'>{finishedCount}</span>{/if}
     </button>
@@ -200,8 +198,7 @@
         <li class='feedback-card feedback-item'>
           <button
             type='button'
-            class:voted={item.has_voted}
-            class='feedback-vote-button'
+            class={item.has_voted ? 'btn btn-primary feedback-vote-button' : 'btn btn-ghost feedback-vote-button'}
             aria-pressed={item.has_voted}
             title={item.has_voted ? t('Remove your vote') : t('Upvote')}
             on:click={() => toggleVote(item)}
@@ -224,7 +221,7 @@
                 <div class='feedback-item-actions ml-auto'>
                   <button
                     type='button'
-                    class='feedback-action-button'
+                    class='btn btn-ghost btn-sm feedback-icon-button'
                     title={item.status === 'done' ? t('Reopen') : t('Mark as finished')}
                     aria-label={item.status === 'done' ? t('Reopen') : t('Mark as finished')}
                     on:click={() => toggleFinished(item)}
@@ -233,7 +230,7 @@
                   </button>
                   <button
                     type='button'
-                    class='feedback-action-button feedback-delete-button'
+                    class='btn btn-danger-ghost btn-sm feedback-icon-button'
                     title={core.isAdmin && item.userid !== core.currentUserid ? t('Delete (team admin)') : t('Delete your post')}
                     aria-label={t('Delete')}
                     on:click={() => deleteItem(item)}
@@ -257,63 +254,32 @@
 <style>
   /* Every color below is spelled out explicitly (background AND matching
      text color together) instead of relying on inherited/global styles --
-     this page sits in the main content area, not a dark sidebar, and a few
-     app-wide rules (e.g. .text-muted) assume a chrome/sidebar context that
-     doesn't apply here. --white/--mediumstrong/--thirdlevel/--primary are
-     the same theme-aware tokens Bootstrap cards already use in this app, so
-     this still follows the user's light/dark theme choice correctly. */
+     this page sits in the main content area. Cards use the same background
+     as the page itself (var(--mainbackground)) with just a border to set
+     them apart, and every button is one of the app's own real button
+     classes (btn-primary/btn-secondary/btn-ghost/btn-danger-ghost) so this
+     looks and themes exactly like the rest of eLabFTW, light or dark. */
   .feedback-board {
     max-width: 46rem;
   }
 
   .feedback-card {
-    background: var(--white);
-    border: 1px solid var(--thirdlevel);
-    border-radius: 0.4rem;
-    color: var(--mediumstrong);
+    background: var(--mainbackground);
+    border: 1px solid var(--secondary);
+    border-radius: 0.5rem;
   }
 
   .feedback-new-card {
     padding: 0.85rem;
   }
 
-  .feedback-input {
-    background: var(--white);
-    border-color: var(--thirdlevel);
-    color: var(--mediumstrong);
-  }
-
   .feedback-hint {
-    color: var(--thirdlevel);
+    color: var(--secondary);
     font-size: 0.78rem;
   }
 
-  .feedback-toggle-group {
-    display: inline-flex;
-    gap: 0.3rem;
-  }
-
-  .feedback-toggle-btn {
-    background: var(--white);
-    border: 1px solid var(--thirdlevel);
-    border-radius: 0.3rem;
-    color: var(--mediumstrong);
-    font-size: 0.82rem;
-    padding: 0.28rem 0.6rem;
-  }
-
-  .feedback-toggle-btn:hover {
-    background: color-mix(in srgb, var(--primary) 12%, var(--white));
-  }
-
-  .feedback-toggle-btn.active {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: var(--primary-fg, #fff);
-  }
-
   .feedback-muted {
-    color: var(--thirdlevel);
+    color: var(--secondary);
   }
 
   .feedback-list {
@@ -333,29 +299,15 @@
 
   .feedback-vote-button {
     align-items: center;
-    background: var(--white);
-    border: 1px solid var(--thirdlevel);
-    border-radius: 0.4rem;
-    color: var(--mediumstrong);
     display: flex;
     flex: 0 0 auto;
     flex-direction: column;
     font-size: 0.85rem;
-    font-weight: 700;
     height: 3.1rem;
     justify-content: center;
     line-height: 1;
+    padding: 0;
     width: 3.1rem;
-  }
-
-  .feedback-vote-button:hover {
-    background: color-mix(in srgb, var(--primary) 12%, var(--white));
-  }
-
-  .feedback-vote-button.voted {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: var(--primary-fg, #fff);
   }
 
   .feedback-vote-button i {
@@ -379,22 +331,11 @@
 
   .feedback-item-actions {
     display: flex;
-    gap: 0.2rem;
+    gap: 0.3rem;
   }
 
-  .feedback-action-button {
-    background: transparent;
-    border: 0;
-    color: var(--mediumstrong);
-    padding: 0.1rem 0.35rem;
-  }
-
-  .feedback-action-button:hover {
-    text-decoration: underline;
-  }
-
-  .feedback-delete-button {
-    color: var(--dangerred, #7b1100);
+  .feedback-icon-button {
+    padding: 0.15rem 0.4rem;
   }
 
   .feedback-item-description {

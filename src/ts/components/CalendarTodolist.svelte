@@ -139,7 +139,7 @@
   let teamScope = core.isAdmin && localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
   // empty means everyone; only meaningful (and only shown) for an admin
   // viewing team scope
-  let selectedPersonIds = new Set<number>();
+  let personFilter = '';
   let monthCursor = storedMonthCursor();
   // With no selected date, the agenda displays the entire visible calendar
   // range. This makes entity activity available on every eLabFTW page.
@@ -230,11 +230,11 @@
   // currently filtered-down one, so picking a person doesn't shrink the
   // list of people to pick from
   $: teamPeople = teamScope ? buildTeamPeople(entries, entityActivities) : [];
-  $: filteredEntries = selectedPersonIds.size > 0
-    ? entries.filter(entry => selectedPersonIds.has(entry.userid))
+  $: filteredEntries = personFilter
+    ? entries.filter(entry => entry.userid === Number(personFilter))
     : entries;
-  $: filteredActivities = selectedPersonIds.size > 0
-    ? entityActivities.filter(activity => selectedPersonIds.has(activity.userid))
+  $: filteredActivities = personFilter
+    ? entityActivities.filter(activity => activity.userid === Number(personFilter))
     : entityActivities;
   $: calendarCells = buildCalendarCells(monthCursor, filteredEntries, filteredActivities);
   $: activeRange = selectionRange(selectedDate, selectedRangeEnd);
@@ -604,7 +604,7 @@
     if (useTeamScope && !core.isAdmin) return;
     if (teamScope === useTeamScope) return;
     teamScope = useTeamScope;
-    if (!teamScope) selectedPersonIds = new Set();
+    if (!teamScope) personFilter = '';
     localStorage.setItem(`${Model.Todolist}StepsShowTeam`, teamScope ? '1' : '0');
     const tasksScopeSwitch = document.getElementById(`${Model.Todolist}StepsShowTeam`) as HTMLInputElement | null;
     if (tasksScopeSwitch) tasksScopeSwitch.checked = teamScope;
@@ -625,16 +625,6 @@
     });
     return Array.from(byId, ([userid, fullname]) => ({ userid, fullname }))
       .sort((a, b) => a.fullname.localeCompare(b.fullname));
-  }
-
-  function togglePersonFilter(userid: number): void {
-    const next = new Set(selectedPersonIds);
-    if (next.has(userid)) {
-      next.delete(userid);
-    } else {
-      next.add(userid);
-    }
-    selectedPersonIds = next;
   }
 
   function startTaskDrag(event: DragEvent, entry: CalendarEntry): void {
@@ -840,7 +830,7 @@
     };
     const reloadScope = (): void => {
       teamScope = core.isAdmin && localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
-      if (!teamScope) selectedPersonIds = new Set();
+      if (!teamScope) personFilter = '';
       void load();
     };
     const refresh = (): void => {
@@ -893,28 +883,15 @@
       </button>
     </div>
     {#if teamScope && teamPeople.length > 0}
-      <details class='calendar-person-filter'>
-        <summary class='btn btn-sm btn-outline-primary'>
-          <i class='fas fa-filter fa-fw mr-1' aria-hidden='true'></i>{t('Filter by person')}
-          {#if selectedPersonIds.size > 0}<span class='badge badge-primary ml-1'>{selectedPersonIds.size}</span>{/if}
-        </summary>
-        <div class='calendar-person-filter-panel'>
-          <label class='calendar-person-filter-option calendar-person-filter-all'>
-            <input type='checkbox' checked={selectedPersonIds.size === 0} on:change={() => { selectedPersonIds = new Set(); }} />
-            {t('Everyone')}
-          </label>
+      <div class='calendar-person-filter'>
+        <label class='sr-only' for='calendarPersonFilter'>{t('Filter by person')}</label>
+        <select id='calendarPersonFilter' class='form-control form-control-sm' bind:value={personFilter}>
+          <option value=''>{t('Everyone')}</option>
           {#each teamPeople as person (person.userid)}
-            <label class='calendar-person-filter-option'>
-              <input
-                type='checkbox'
-                checked={selectedPersonIds.has(person.userid)}
-                on:change={() => togglePersonFilter(person.userid)}
-              />
-              {person.fullname}
-            </label>
+            <option value={String(person.userid)}>{person.fullname}</option>
           {/each}
-        </div>
-      </details>
+        </select>
+      </div>
     {/if}
   {/if}
   <div class='calendar-month-header'>
@@ -1318,58 +1295,12 @@
 
   .calendar-person-filter {
     margin-bottom: 0.65rem;
-    position: relative;
   }
 
-  .calendar-person-filter summary {
-    cursor: pointer;
-    list-style: none;
-  }
-
-  .calendar-person-filter summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .calendar-person-filter-panel {
+  .calendar-person-filter .form-control {
     background: var(--chrome-bg);
-    border: 1px solid var(--secondary);
-    border-radius: 0.4rem;
-    box-shadow: 0 0.35rem 0.9rem rgba(0, 0, 0, 0.2);
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    left: 0;
-    margin-top: 0.3rem;
-    max-height: 14rem;
-    overflow-y: auto;
-    padding: 0.4rem;
-    position: absolute;
-    top: 100%;
-    width: 100%;
-    z-index: 5;
-  }
-
-  .calendar-person-filter-option {
-    align-items: center;
-    border-radius: 0.3rem;
+    border-color: var(--secondary);
     color: var(--chrome-fg);
-    cursor: pointer;
-    display: flex;
-    font-size: 0.78rem;
-    gap: 0.4rem;
-    margin: 0;
-    padding: 0.28rem 0.35rem;
-  }
-
-  .calendar-person-filter-option:hover {
-    background: color-mix(in srgb, var(--chrome-bg) 80%, var(--primary));
-  }
-
-  .calendar-person-filter-all {
-    border-bottom: 1px solid var(--secondary);
-    font-weight: 700;
-    margin-bottom: 0.2rem;
-    padding-bottom: 0.4rem;
   }
 
   .calendar-feed .fas,
