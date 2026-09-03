@@ -148,15 +148,23 @@
                 {% endfor %}
                 </div>
             </div>
-            {% set isActive = scriptName == 'scheduler.php' %}
-            <a class='nav-item nav-link {{ isActive ? 'active' }}'
-                href='scheduler.php' {{ isActive ? 'aria-current="page"' }}>{{ 'Scheduler'|trans }}</a>
-
-            <div class='nav-item d-flex align-items-center'>
-              <a class='nav-link' id='openirisLink' href='{{ App.Teams.teamArr.openiris_url|default('https://reservation-bsse.openiris.io/') }}' target='_blank' rel='noopener noreferrer'>OpenIRIS</a>
-              {% if App.Users.isAdmin %}
-                <button type='button' class='btn btn-link p-0' data-action='edit-openiris-link' data-current-url='{{ App.Teams.teamArr.openiris_url|default('https://reservation-bsse.openiris.io/') }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit OpenIRIS link'|trans }}'><i class='fas fa-pen fa-fw fa-xs' aria-hidden='true'></i></button>
-              {% endif %}
+            <div class='nav-item dropdown'>
+              {% if App.devMode -%}
+                <!-- [html-validate-disable-next prefer-native-element: using a button here will mess up the navbar] -->
+              {%- endif %}
+              {% set isActive = scriptName == 'scheduler.php' %}
+              <a id='navSchedulerDropdown' href='#' class='nav-link dropdown-toggle {{ isActive ? 'active' }}' role='button' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>
+                {{ 'Scheduler'|trans }}
+              </a>
+              <div class='dropdown-menu'>
+                <a class='dropdown-item {{ isActive ? 'active' }}' href='scheduler.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-calendar-days fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Scheduler'|trans }}</a>
+                <div class='dropdown-item d-flex align-items-center justify-content-between'>
+                  <a id='openirisLink' href='{{ App.Teams.teamArr.openiris_url|default('https://reservation-bsse.openiris.io/') }}' target='_blank' rel='noopener noreferrer'><i class='fas fa-arrow-up-right-from-square fa-fw mr-1'></i>OpenIRIS</a>
+                  {% if App.Users.isAdmin %}
+                    <button type='button' class='btn btn-link p-0 ml-2' data-action='edit-openiris-link' data-current-url='{{ App.Teams.teamArr.openiris_url|default('https://reservation-bsse.openiris.io/') }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit OpenIRIS link'|trans }}'><i class='fas fa-pen fa-fw fa-xs' aria-hidden='true'></i></button>
+                  {% endif %}
+                </div>
+              </div>
             </div>
 
             {% if not App.isAnonymous() %}

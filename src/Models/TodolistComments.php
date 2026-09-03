@@ -47,7 +47,9 @@ final class TodolistComments extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
-        $sql = 'SELECT comment.id, comment.body, comment.created_at, comment.userid,
+        $sql = 'SELECT comment.id, comment.body,
+                DATE_FORMAT(comment.created_at, \'%Y-%m-%dT%H:%i:%sZ\') AS created_at,
+                comment.userid,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname
             FROM custom_todolist_comments AS comment
             INNER JOIN todolist AS task ON task.id = comment.task_id AND task.team = :team
