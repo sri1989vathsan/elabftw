@@ -50,6 +50,7 @@ final class CustomMigrationRunner
         '024_feedback_comments.sql',
         '025_todolist_assignment.sql',
         '026_todolist_projects.sql',
+        '027_todolist_description_comments.sql',
     );
 
     private Db $Db;

@@ -10,6 +10,7 @@
     id: number;
     body: string;
     notes: string | null;
+    description: string | null;
     deadline: string | null;
     completed_at: string | null;
     creation_time: string;
@@ -35,27 +36,44 @@
     members: TeamMember[];
   };
 
+  type TaskComment = {
+    id: number;
+    body: string;
+    created_at: string;
+    userid: number;
+    author_fullname: string;
+  };
+
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
 
   let tasks: Task[] = [];
-  let allTasks: Task[] = [];
   let teamMembers: TeamMember[] = [];
   let projects: Project[] = [];
   // null = the "Unfiled" bucket (tasks with no project)
   let activeProjectId: number | null = null;
   let loading = true;
   // 'assigned' shows tasks assigned to me (by myself or someone else);
-  // 'created' shows tasks I set up, whether for myself or someone else --
-  // never a view of everyone else's work
-  let scope: 'assigned' | 'created' = 'assigned';
+  // 'created' shows tasks I set up, whether for myself or someone else;
+  // 'all' is the union of both -- never a view of everyone else's work
+  let scope: 'assigned' | 'created' | 'all' = 'assigned';
   let newTitle = '';
   let newAssignedUserid = core.currentUserid;
   let newDeadline = '';
   let submitting = false;
   let detailTask: Task | null = null;
+  let detailTitle = '';
+  let detailDeadline = '';
+  let detailAssignedUserid = core.currentUserid;
+  let detailDescription = '';
   let detailNotes = '';
   let savingDetail = false;
+  let detailComments: TaskComment[] = [];
+  let loadingComments = false;
+  let newCommentText = '';
+  let postingComment = false;
+  let descriptionEl: HTMLDivElement;
+  let notesEl: HTMLDivElement;
 
   $: activeProject = projects.find(p => p.id === activeProjectId) ?? null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
@@ -107,7 +125,7 @@
     void load();
   });
 
-  function selectScope(next: 'assigned' | 'created'): void {
+  function selectScope(next: 'assigned' | 'created' | 'all'): void {
     scope = next;
     void load();
   }
@@ -171,27 +189,95 @@
     }
   }
 
+  function toDateInputValue(deadline: string | null): string {
+    if (!deadline) return '';
+    return deadline.slice(0, 10);
+  }
+
   function openDetail(task: Task): void {
     detailTask = task;
+    detailTitle = task.body;
+    detailDeadline = toDateInputValue(task.deadline);
+    detailAssignedUserid = task.assigned_userid ?? core.currentUserid;
+    detailDescription = task.description ?? '';
     detailNotes = task.notes ?? '';
+    newCommentText = '';
+    void loadComments(task.id);
   }
 
   function closeDetail(): void {
     detailTask = null;
+    detailComments = [];
   }
 
   async function saveDetail(): Promise<void> {
     if (!detailTask) return;
+    const title = detailTitle.trim();
+    if (!title) {
+      notify.error('Enter a task title.');
+      return;
+    }
     savingDetail = true;
     try {
-      await ApiC.patch(`${Model.Todolist}/${detailTask.id}`, { notes: detailNotes });
+      await ApiC.patch(`${Model.Todolist}/${detailTask.id}`, {
+        content: title,
+        deadline: detailDeadline || null,
+        assigned_userid: detailAssignedUserid,
+        description: descriptionEl?.innerHTML ?? detailDescription,
+        notes: notesEl?.innerHTML ?? detailNotes,
+      });
       closeDetail();
       await load();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not save notes.');
+      notify.error(error instanceof Error ? error.message : 'Could not save the task.');
     } finally {
       savingDetail = false;
     }
+  }
+
+  async function loadComments(taskId: number): Promise<void> {
+    loadingComments = true;
+    try {
+      detailComments = await ApiC.getJson(`${Model.Todolist}/${taskId}/${Model.Comment}`) as TaskComment[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load comments.');
+    } finally {
+      loadingComments = false;
+    }
+  }
+
+  async function postComment(): Promise<void> {
+    const body = newCommentText.trim();
+    if (!body || !detailTask) return;
+    postingComment = true;
+    try {
+      await ApiC.post(`${Model.Todolist}/${detailTask.id}/${Model.Comment}`, { body });
+      newCommentText = '';
+      await loadComments(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not post the comment.');
+    } finally {
+      postingComment = false;
+    }
+  }
+
+  async function deleteComment(comment: TaskComment): Promise<void> {
+    if (!detailTask) return;
+    try {
+      await ApiC.delete(`${Model.Todolist}/${detailTask.id}/${Model.Comment}/${comment.id}`);
+      await loadComments(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not delete the comment.');
+    }
+  }
+
+  // A lightweight rich-text toolbar (contenteditable + execCommand) rather
+  // than wiring the full TinyMCE editor into a Svelte-managed dialog -- gives
+  // headings/bullets/bold without the added integration risk.
+  function exec(el: HTMLElement | undefined, cmd: string, value?: string): void {
+    if (!el) return;
+    el.focus();
+    document.execCommand(cmd, false, value ?? '');
   }
 
   // project dialog: null = creating a new project; a project = editing it
@@ -317,6 +403,9 @@
       <button type="button" class={scope === 'created' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('created')}>
         <i class="fas fa-pen-to-square fa-fw mr-1" aria-hidden="true"></i>{t('Created by me')}
       </button>
+      <button type="button" class={scope === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('all')}>
+        <i class="fas fa-list fa-fw mr-1" aria-hidden="true"></i>{t('All')}
+      </button>
     </div>
   </div>
 
@@ -335,6 +424,9 @@
               <button type="button" class="pm-task-title-btn flex-grow-1" on:click={() => openDetail(task)}>{task.body}</button>
               {#if canManage(task)}
                 <div class="pm-task-actions">
+                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task)}>
+                    <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+                  </button>
                   <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Mark as done')} aria-label={t('Mark as done')} on:click={() => toggleCompleted(task)}>
                     <i class="fas fa-check fa-fw" aria-hidden="true"></i>
                   </button>
@@ -383,6 +475,9 @@
               <button type="button" class="pm-task-title-btn flex-grow-1" on:click={() => openDetail(task)}>{task.body}</button>
               {#if canManage(task)}
                 <div class="pm-task-actions">
+                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task)}>
+                    <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+                  </button>
                   <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Reopen')} aria-label={t('Reopen')} on:click={() => toggleCompleted(task)}>
                     <i class="fas fa-rotate-left fa-fw" aria-hidden="true"></i>
                   </button>
@@ -406,23 +501,114 @@
 
 {#if detailTask}
   <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeDetail(); }}>
-    <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pmDetailTitle">
+    <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmDetailTitle">
       <div class="pm-dialog-header">
-        <h4 id="pmDetailTitle" class="mb-0">{detailTask.body}</h4>
+        <h4 id="pmDetailTitle" class="mb-0">{t('Task details')}</h4>
         <button type="button" class="pm-close-btn" on:click={closeDetail} aria-label={t('Close')}>&times;</button>
       </div>
       <div class="pm-dialog-body">
-        {#if detailTask.project_name}<span class="badge badge-info">{detailTask.project_name}</span>{/if}
-        {#if detailTask.deadline}
-          <div class="small"><i class="fas fa-calendar fa-fw mr-1" aria-hidden="true"></i>{formatDeadline(detailTask.deadline)}</div>
-        {/if}
-        <div class="small">
-          <i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Assigned to')} {detailTask.assigned_fullname ?? t('Unassigned')}
-          {#if detailTask.assigned_userid !== detailTask.userid} &middot; {t('Assigned by')} {detailTask.creator_fullname}{/if}
-        </div>
+        {#if detailTask.project_name}<span class="badge badge-info mb-2">{detailTask.project_name}</span>{/if}
+
         <div class="pm-dialog-field">
-          <label class="pm-label" for="pm-detail-notes">{t('Notes')}</label>
-          <textarea id="pm-detail-notes" class="form-control" rows="4" bind:value={detailNotes}></textarea>
+          <label class="pm-label" for="pm-detail-title">{t('Title')}</label>
+          <input id="pm-detail-title" type="text" class="form-control" bind:value={detailTitle} />
+        </div>
+
+        <div class="d-flex pm-dialog-row">
+          <div class="pm-dialog-field flex-grow-1">
+            <label class="pm-label" for="pm-detail-deadline">{t('Deadline')}</label>
+            <input id="pm-detail-deadline" type="date" class="form-control" bind:value={detailDeadline} />
+          </div>
+          <div class="pm-dialog-field flex-grow-1">
+            <label class="pm-label" for="pm-detail-assignee">{t('Assigned to')}</label>
+            <select id="pm-detail-assignee" class="form-control" bind:value={detailAssignedUserid}>
+              <option value={core.currentUserid}>{t('Myself')}</option>
+              {#each assignableMembers.filter(member => member.userid !== core.currentUserid) as member (member.userid)}
+                <option value={member.userid}>{member.fullname}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+        <div class="small pm-muted mb-2">
+          {t('Created by')} {detailTask.creator_fullname}
+        </div>
+
+        <div class="pm-dialog-field">
+          <span class="pm-label">{t('Description')}</span>
+          <div class="rte-toolbar" role="toolbar" aria-label={t('Formatting')}>
+            <button type="button" class="rte-btn" title={t('Heading')} on:mousedown|preventDefault={() => exec(descriptionEl, 'formatBlock', 'H4')}><i class="fas fa-heading" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Bold')} on:mousedown|preventDefault={() => exec(descriptionEl, 'bold')}><i class="fas fa-bold" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Italic')} on:mousedown|preventDefault={() => exec(descriptionEl, 'italic')}><i class="fas fa-italic" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Bullet list')} on:mousedown|preventDefault={() => exec(descriptionEl, 'insertUnorderedList')}><i class="fas fa-list-ul" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Numbered list')} on:mousedown|preventDefault={() => exec(descriptionEl, 'insertOrderedList')}><i class="fas fa-list-ol" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Clear formatting')} on:mousedown|preventDefault={() => exec(descriptionEl, 'removeFormat')}><i class="fas fa-eraser" aria-hidden="true"></i></button>
+          </div>
+          <div
+            id="pm-detail-description"
+            class="rte-content form-control"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+            aria-label={t('Description')}
+            bind:this={descriptionEl}
+          >{@html detailDescription}</div>
+        </div>
+
+        <div class="pm-dialog-field">
+          <span class="pm-label">{t('Notes')}</span>
+          <div class="rte-toolbar" role="toolbar" aria-label={t('Formatting')}>
+            <button type="button" class="rte-btn" title={t('Heading')} on:mousedown|preventDefault={() => exec(notesEl, 'formatBlock', 'H4')}><i class="fas fa-heading" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Bold')} on:mousedown|preventDefault={() => exec(notesEl, 'bold')}><i class="fas fa-bold" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Italic')} on:mousedown|preventDefault={() => exec(notesEl, 'italic')}><i class="fas fa-italic" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Bullet list')} on:mousedown|preventDefault={() => exec(notesEl, 'insertUnorderedList')}><i class="fas fa-list-ul" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Numbered list')} on:mousedown|preventDefault={() => exec(notesEl, 'insertOrderedList')}><i class="fas fa-list-ol" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Clear formatting')} on:mousedown|preventDefault={() => exec(notesEl, 'removeFormat')}><i class="fas fa-eraser" aria-hidden="true"></i></button>
+          </div>
+          <div
+            id="pm-detail-notes"
+            class="rte-content form-control"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+            aria-label={t('Notes')}
+            bind:this={notesEl}
+          >{@html detailNotes}</div>
+        </div>
+
+        <div class="pm-dialog-field">
+          <span class="pm-label">{t('Comments')}</span>
+          {#if loadingComments}
+            <p class="pm-muted small">{t('Loading')}…</p>
+          {:else if detailComments.length === 0}
+            <p class="pm-muted small">{t('No comments yet.')}</p>
+          {:else}
+            <ul class="pm-comment-list">
+              {#each detailComments as comment (comment.id)}
+                <li class="pm-comment">
+                  <div class="pm-comment-meta">
+                    <strong>{comment.author_fullname}</strong>
+                    <span class="pm-muted">{formatDeadline(comment.created_at)}</span>
+                    {#if comment.userid === core.currentUserid}
+                      <button type="button" class="btn-unstyled pm-comment-delete" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteComment(comment)}>
+                        <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                      </button>
+                    {/if}
+                  </div>
+                  <div class="pm-comment-body">{comment.body}</div>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          <div class="d-flex pm-comment-form">
+            <input
+              type="text"
+              class="form-control"
+              placeholder={t('Add a comment…')}
+              bind:value={newCommentText}
+              on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void postComment(); } }}
+            />
+            <button type="button" class="btn btn-secondary ml-2" disabled={postingComment || !newCommentText.trim()} on:click={postComment}>{t('Post')}</button>
+          </div>
         </div>
       </div>
       <div class="pm-dialog-footer">

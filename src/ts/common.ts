@@ -862,6 +862,10 @@ on('scroll-top', () => {
   });
 });
 
+on('refresh-todolist', () => {
+  window.dispatchEvent(new CustomEvent('todolist-changed'));
+});
+
 on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
   // this action might exist on a link: prevent jump to top
   event.preventDefault();

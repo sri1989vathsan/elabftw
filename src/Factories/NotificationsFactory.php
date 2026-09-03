@@ -25,6 +25,7 @@ use Elabftw\Models\Notifications\OnboardingEmail;
 use Elabftw\Models\Notifications\SelfIsValidated;
 use Elabftw\Models\Notifications\SelfNeedValidation;
 use Elabftw\Models\Notifications\StepDeadline;
+use Elabftw\Models\Notifications\TaskAssigned;
 use Elabftw\Models\Notifications\TodoDeadline;
 use Elabftw\Models\Notifications\UserCreated;
 use Elabftw\Models\Notifications\UserNeedValidation;
@@ -65,6 +66,12 @@ final class NotificationsFactory
             Notifications::OnboardingEmail => new OnboardingEmail($this->targetUser, $this->body['team'], $this->body['forAdmin'] ?? false),
             // note: not sure why the bypassReadPermission is necessary here...
             Notifications::ActionRequested => new ActionRequested($this->targetUser, new Users($this->body['requester_userid']), RequestableAction::from($this->body['action_enum_value']), EntityType::from($this->body['entity_type_value'])->toInstance(new Users($this->body['requester_userid']), $this->body['entity_id'], bypassReadPermission: true)),
+            Notifications::TaskAssigned => new TaskAssigned(
+                $this->targetUser,
+                new Users($this->body['assigner_userid']),
+                (int) $this->body['task_id'],
+                (string) $this->body['title'],
+            ),
             default => throw new ImproperActionException(sprintf('This notification (%d) is not mailable.', $this->category)),
         };
     }

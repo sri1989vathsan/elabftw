@@ -4553,3 +4553,100 @@ div > .sticky-navbar {
   line-height: 1;
   padding: 0 0.2rem;
 }
+
+.pm-dialog-wide {
+  max-width: 40rem;
+}
+
+.pm-dialog-row {
+  gap: 0.7rem;
+}
+
+.rte-toolbar {
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary-muted, #d9d9d9);
+  border-bottom: 0;
+  border-radius: 0.25rem 0.25rem 0 0;
+  display: flex;
+  gap: 0.15rem;
+  padding: 0.3rem;
+}
+
+.rte-btn {
+  background: transparent;
+  border: 0;
+  border-radius: 0.2rem;
+  color: var(--mediumstrong, #343434);
+  height: 1.8rem;
+  width: 1.8rem;
+}
+
+.rte-btn:hover {
+  background: var(--secondary-muted, #d9d9d9);
+  color: var(--primary);
+}
+
+.rte-content {
+  border-radius: 0 0 0.25rem 0.25rem;
+  height: auto;
+  min-height: 6rem;
+  overflow-y: auto;
+  padding: 0.5rem 0.7rem;
+}
+
+.rte-content:focus {
+  outline: none;
+}
+
+.rte-content h4 {
+  font-size: 1rem;
+  margin: 0.4rem 0;
+}
+
+.rte-content ul,
+.rte-content ol {
+  margin: 0.3rem 0;
+  padding-left: 1.3rem;
+}
+
+.rte-content p {
+  margin: 0 0 0.4rem;
+}
+
+.pm-comment-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.pm-comment {
+  border-bottom: 1px solid var(--secondary-muted, #d9d9d9);
+  padding: 0.4rem 0;
+}
+
+.pm-comment:last-child {
+  border-bottom: 0;
+}
+
+.pm-comment-meta {
+  align-items: center;
+  display: flex;
+  font-size: 0.8rem;
+  gap: 0.4rem;
+}
+
+.pm-comment-delete {
+  color: var(--secondary);
+  margin-left: auto;
+}
+
+.pm-comment-body {
+  margin-top: 0.15rem;
+  white-space: pre-wrap;
+}
+
+.pm-comment-form {
+  gap: 0.4rem;
+}

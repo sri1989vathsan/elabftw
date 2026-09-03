@@ -66,15 +66,17 @@ final class Todolist extends AbstractRest
     {
         $content = $this->getContent($reqBody['content'] ?? '');
         $notes = $this->getNotes($reqBody['notes'] ?? null);
+        $description = $this->getDescription($reqBody['description'] ?? null);
         $deadline = $this->getDeadline($reqBody['deadline'] ?? null);
         $reminderMinutes = $this->getReminderMinutes($reqBody['reminder_minutes'] ?? 60);
         $assignedUserid = $this->getAssignedUserid($reqBody['assigned_userid'] ?? null);
         $projectId = $this->getProjectId($reqBody['project_id'] ?? null);
-        $sql = 'INSERT INTO todolist (body, notes, deadline, reminder_minutes, userid, team, assigned_userid, project_id)
-            VALUES(:content, :notes, :deadline, :reminder_minutes, :userid, :team, :assigned_userid, :project_id)';
+        $sql = 'INSERT INTO todolist (body, notes, description, deadline, reminder_minutes, userid, team, assigned_userid, project_id)
+            VALUES(:content, :notes, :description, :deadline, :reminder_minutes, :userid, :team, :assigned_userid, :project_id)';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':content', $content);
         $req->bindValue(':notes', $notes, $notes === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':description', $description, $description === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':deadline', $deadline, $deadline === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(
             ':reminder_minutes',
@@ -112,8 +114,9 @@ final class Todolist extends AbstractRest
         $scope = $query->getString('scope') ?: 'assigned';
         $scopeFilter = match ($scope) {
             'team' => '',
-            'created' => ' AND userid = :requester',
-            default => ' AND assigned_userid = :requester',
+            'created' => ' AND t.userid = :requester',
+            'all' => ' AND (t.userid = :requester OR t.assigned_userid = :requester2)',
+            default => ' AND t.assigned_userid = :requester',
         };
         $completed = $query->getBoolean('completed');
         $completedFilter = $completed ? 'IS NOT NULL' : 'IS NULL';
@@ -127,7 +130,7 @@ final class Todolist extends AbstractRest
         $limit = $queryParams->getLimit() ?: 100;
         $offset = max(0, $query->getInt('offset'));
         $limitSql = $limit > 0 ? sprintf(' LIMIT %d OFFSET %d', $limit, $offset) : '';
-        $sql = "SELECT t.id, t.body, t.notes,
+        $sql = "SELECT t.id, t.body, t.notes, t.description,
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
                 t.reminder_minutes,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
@@ -145,6 +148,9 @@ final class Todolist extends AbstractRest
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         if ($scope !== 'team') {
             $req->bindParam(':requester', $this->userid, PDO::PARAM_INT);
+        }
+        if ($scope === 'all') {
+            $req->bindParam(':requester2', $this->userid, PDO::PARAM_INT);
         }
         if ($completedSince !== null) {
             $req->bindValue(':completed_since', $completedSince, PDO::PARAM_STR);
@@ -189,7 +195,7 @@ final class Todolist extends AbstractRest
     #[Override]
     public function readOne(): array
     {
-        $sql = "SELECT t.id, t.body, t.notes,
+        $sql = "SELECT t.id, t.body, t.notes, t.description,
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
                 t.reminder_minutes,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
@@ -347,6 +353,7 @@ final class Todolist extends AbstractRest
             'completed' => array('completed_at', $this->getCompletedAt($value), PDO::PARAM_STR),
             'assigned_userid' => array('assigned_userid', $this->getAssignedUserid($value), PDO::PARAM_INT),
             'project_id' => array('project_id', $this->getProjectId($value), PDO::PARAM_INT),
+            'description' => array('description', $this->getDescription($value), PDO::PARAM_STR),
             default => throw new ImproperActionException(_('Invalid to-do property.')),
         };
         $sql = sprintf(
@@ -375,11 +382,25 @@ final class Todolist extends AbstractRest
         if ($value === null || trim((string) $value) === '') {
             return null;
         }
-        $notes = Filter::toPureString((string) $value);
+        // Filter::body() (not toPureString()) so the rich text editor's
+        // headings/lists/bold/etc. survive -- toPureString() strips all HTML.
+        $notes = Filter::body((string) $value);
         if (mb_strlen($notes) > 10000) {
             throw new ImproperActionException(_('To-do notes must be shorter than 10000 characters.'));
         }
         return $notes;
+    }
+
+    private function getDescription(mixed $value): ?string
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+        $description = Filter::body((string) $value);
+        if (mb_strlen($description) > 10000) {
+            throw new ImproperActionException(_('To-do description must be shorter than 10000 characters.'));
+        }
+        return $description;
     }
 
     private function getDeadline(mixed $value): ?string

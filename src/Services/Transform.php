@@ -140,6 +140,17 @@ final class Transform
                     ),
                     $notif['created_at'],
                 ),
+            Notifications::TaskAssigned =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="projectmanagement.php">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    sprintf(
+                        _('%s assigned you a task: %s'),
+                        $notif['body']['assigner_fullname'],
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
+                    $notif['created_at'],
+                ),
             default => throw new ImproperActionException('Invalid notification type.'),
         };
     }
