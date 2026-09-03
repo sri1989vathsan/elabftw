@@ -26,6 +26,7 @@ final class TeamParam extends ContentParams
             'announcement', 'newcomer_banner',
             'onboarding_email_subject',
             'onboarding_email_body' => $this->getNullableContent(),
+            'openiris_url' => $this->getNullableUrl(),
             'user_create_tag',
             'force_exp_tpl',
             'force_res_tpl',
@@ -51,5 +52,17 @@ final class TeamParam extends ContentParams
             return null;
         }
         return Filter::body(parent::getContent());
+    }
+
+    private function getNullableUrl(): ?string
+    {
+        if (empty($this->content)) {
+            return null;
+        }
+        $url = Filter::toPureString(parent::getContent());
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            throw new ImproperActionException('Please enter a valid URL.');
+        }
+        return $url;
     }
 }

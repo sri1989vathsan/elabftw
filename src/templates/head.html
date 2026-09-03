@@ -152,6 +152,13 @@
             <a class='nav-item nav-link {{ isActive ? 'active' }}'
                 href='scheduler.php' {{ isActive ? 'aria-current="page"' }}>{{ 'Scheduler'|trans }}</a>
 
+            <div class='nav-item d-flex align-items-center'>
+              <a class='nav-link' id='openirisLink' href='{{ App.Teams.teamArr.openiris_url|default('https://reservation-bsse.openiris.io/') }}' target='_blank' rel='noopener noreferrer'>OpenIRIS</a>
+              {% if App.Users.isAdmin %}
+                <button type='button' class='btn btn-link p-0' data-action='edit-openiris-link' data-current-url='{{ App.Teams.teamArr.openiris_url|default('https://reservation-bsse.openiris.io/') }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit OpenIRIS link'|trans }}'><i class='fas fa-pen fa-fw fa-xs' aria-hidden='true'></i></button>
+              {% endif %}
+            </div>
+
             {% if not App.isAnonymous() %}
             {% set isActive = scriptName == 'team.php' %}
             <a class='nav-item nav-link {{ isActive ? 'active' }}'

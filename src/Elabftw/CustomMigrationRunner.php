@@ -51,6 +51,7 @@ final class CustomMigrationRunner
         '025_todolist_assignment.sql',
         '026_todolist_projects.sql',
         '027_todolist_description_comments.sql',
+        '028_openiris_link.sql',
     );
 
     private Db $Db;

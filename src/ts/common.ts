@@ -278,6 +278,24 @@ on('set-theme', (el: HTMLElement) => {
   });
 });
 
+on('edit-openiris-link', (el: HTMLElement) => {
+  const current = el.dataset.currentUrl ?? '';
+  // eslint-disable-next-line no-alert
+  const next = window.prompt(i18next.t('Enter the OpenIRIS booking URL'), current);
+  if (next === null || next.trim() === '' || next.trim() === current) {
+    return;
+  }
+  const url = next.trim();
+  ApiC.patch(`${Model.Team}/current`, { openiris_url: url }).then(() => {
+    el.dataset.currentUrl = url;
+    const link = document.getElementById('openirisLink') as HTMLAnchorElement | null;
+    if (link) {
+      link.href = url;
+    }
+    notify.success();
+  }).catch(() => notify.error('Please enter a valid URL.'));
+});
+
 const primaryColorPickerTarget = document.getElementById('primary-color-picker');
 
 if (primaryColorPickerTarget) {
