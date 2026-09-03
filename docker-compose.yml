@@ -162,6 +162,7 @@ services:
       - ./web/resources-categories.php:/elabftw/web/resources-categories.php:ro
       - ./web/feedback.php:/elabftw/web/feedback.php:ro
       - ./web/projectmanagement.php:/elabftw/web/projectmanagement.php:ro
+      - ./web/labcollector.php:/elabftw/web/labcollector.php:ro
 
     tmpfs:
       - /run:mode=755,uid=${ELABFTW_RUN_UID:-1000},gid=${ELABFTW_RUN_GID:-1000},exec,nosuid,nodev
