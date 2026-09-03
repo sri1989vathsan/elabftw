@@ -110,10 +110,10 @@
             </span>
           </div>
           <div class='ml-4 pl-2 mt-1 folder-more-actions' data-folder-more-actions-for='{{ folder.id }}' hidden>
-            <button type='button' data-action='open-folder-export' data-id='{{ folder.id }}' data-name='{{ folder.full_path|e('html_attr') }}' class='btn btn-sm btn-outline-secondary mr-1'>
+            <button type='button' data-action='open-folder-export' data-id='{{ folder.id }}' data-name='{{ folder.full_path|e('html_attr') }}' class='btn btn-sm btn-secondary mr-1'>
               <i class='fas fa-download fa-fw mr-1'></i>{{ 'Export'|trans }}
             </button>
-            <button type='button' data-action='edit-folder' data-id='{{ folder.id }}' data-parent-id='{{ folder.parent_id }}' data-name='{{ folder.name|e('html_attr') }}' data-description='{{ folder.description|e('html_attr') }}' class='btn btn-sm btn-outline-secondary mr-1'>
+            <button type='button' data-action='edit-folder' data-id='{{ folder.id }}' data-parent-id='{{ folder.parent_id }}' data-name='{{ folder.name|e('html_attr') }}' data-description='{{ folder.description|e('html_attr') }}' class='btn btn-sm btn-primary mr-1'>
               <i class='fas fa-pencil fa-fw mr-1'></i>{{ 'Edit'|trans }}
             </button>
             <button type='button' data-action='delete-folder' data-id='{{ folder.id }}' class='btn btn-sm btn-outline-danger folder-action-delete'>
