@@ -469,16 +469,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function openFolderReadme(folderId: string): Promise<void> {
     activeReadme = await getFolderReadme(folderId);
-    (document.getElementById('folderReadmeId') as HTMLInputElement).value = folderId;
+    const idInput = document.getElementById('folderReadmeId') as HTMLInputElement | null;
     const title = document.getElementById('folderReadmeModalTitle');
     const view = document.getElementById('folderReadmeView');
+    const markdownEditor = document.getElementById('folderReadmeMarkdownEditor') as HTMLTextAreaElement | null;
+    const typeSelect = document.getElementById('folderReadmeEditorType') as HTMLSelectElement | null;
+    if (!idInput || !markdownEditor || !typeSelect) {
+      // The Folders side panel (and its README modal) loads lazily on pages
+      // other than the Experiments list -- if this fires before that finishes
+      // injecting the modal into the DOM, fail loudly instead of silently
+      // throwing partway through and leaving the UI stuck.
+      notify.error('The folder README could not be opened yet -- please try again in a moment.');
+      return;
+    }
+    idInput.value = folderId;
     if (title) title.textContent = `${activeReadme.name} — README`;
     if (view) renderReadmeContent(view, activeReadme.readme_body, activeReadme.readme_content_type);
     $('#folderReadmeModal').modal('show');
     await initializeReadmeEditor();
     tinymce.get('folderReadmeEditor')?.setContent(activeReadme.readme_body);
-    (document.getElementById('folderReadmeMarkdownEditor') as HTMLTextAreaElement).value = activeReadme.readme_body;
-    (document.getElementById('folderReadmeEditorType') as HTMLSelectElement).value = String(activeReadme.readme_content_type);
+    markdownEditor.value = activeReadme.readme_body;
+    typeSelect.value = String(activeReadme.readme_content_type);
     setReadmeEditMode(false);
   }
 
@@ -587,12 +598,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   on('edit-folder-readme', () => {
     if (!activeReadme?.can_edit_readme) return;
-    const typeSelect = document.getElementById('folderReadmeEditorType') as HTMLSelectElement;
+    const typeSelect = document.getElementById('folderReadmeEditorType') as HTMLSelectElement | null;
+    const markdownEditor = document.getElementById('folderReadmeMarkdownEditor') as HTMLTextAreaElement | null;
+    if (!typeSelect || !markdownEditor) {
+      notify.error('The folder README editor is not ready yet -- please try again in a moment.');
+      return;
+    }
     typeSelect.value = String(activeReadme.readme_content_type);
     tinymce.get('folderReadmeEditor')?.setContent(Number(activeReadme.readme_content_type) === 2
       ? markdownToHtml(activeReadme.readme_body)
       : activeReadme.readme_body);
-    (document.getElementById('folderReadmeMarkdownEditor') as HTMLTextAreaElement).value = Number(activeReadme.readme_content_type) === 1
+    markdownEditor.value = Number(activeReadme.readme_content_type) === 1
       ? htmlToMarkdown(activeReadme.readme_body)
       : activeReadme.readme_body;
     setReadmeEditMode(true);

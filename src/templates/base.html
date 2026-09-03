@@ -86,6 +86,10 @@
   {% else %}
     {% include 'experiments-folders-placeholder.html' %}
   {% endif %}
+  {# Always present, regardless of page: its content is fetched live via the
+     API when opened, so the folder README popup works the same whether the
+     Folders side panel loaded natively or lazily. #}
+  {% include 'folder-readme-modal.html' %}
   {% include 'todolist-panel.html' %}
   {% include 'calendar-activity-panel.html' %}
   {% include 'favorite-filters-panel.html' %}

@@ -1146,7 +1146,7 @@
 {/if}
 
 {#if detailEntry}
-  <div class='todo-detail-overlay' on:click={(event) => { if (event.target === event.currentTarget) closeDetail(); }} role='presentation'>
+  <div class='todo-detail-overlay' role='presentation'>
     <div class='todo-detail-dialog' role='dialog' aria-modal='true' aria-labelledby='todoDetailTitle'>
       <div class='todo-detail-header'>
         <h4 id='todoDetailTitle' class='mb-0'>{detailEntry.body}</h4>

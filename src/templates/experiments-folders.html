@@ -253,38 +253,5 @@
   </div>
 </div>
 
-<div class='modal fade' id='folderReadmeModal' tabindex='-1' role='dialog' aria-labelledby='folderReadmeModalLabel' aria-hidden='true' data-backdrop='static'>
-  <div class='modal-dialog modal-lg' role='document'>
-    <div class='modal-content'>
-      <div class='modal-header'>
-        <h5 class='modal-title' id='folderReadmeModalLabel'><i class='fas fa-file-lines fa-fw mr-2'></i><span id='folderReadmeModalTitle'>{{ 'Folder README'|trans }}</span></h5>
-        <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'><span aria-hidden='true'>&times;</span></button>
-      </div>
-      <div class='modal-body'>
-        <input type='hidden' id='folderReadmeId'>
-        <div id='folderReadmeEditorTypeGroup' class='form-group mb-2' hidden>
-          <label class='sr-only' for='folderReadmeEditorType'>{{ 'Editor type'|trans }}</label>
-          <select id='folderReadmeEditorType' class='custom-select custom-select-sm w-auto'>
-            <option value='1'>{{ 'Rich text'|trans }}</option>
-            <option value='2'>{{ 'Markdown'|trans }}</option>
-          </select>
-        </div>
-        <div id='folderReadmeView' class='folder-readme-content'></div>
-        <div id='folderReadmeEmpty' class='color-medium text-center py-4' hidden>
-          <i class='far fa-file-lines fa-2x mb-2 d-block'></i>{{ 'This folder README is empty.'|trans }}
-        </div>
-        <textarea id='folderReadmeEditor' class='form-control' rows='16' hidden></textarea>
-        <textarea id='folderReadmeMarkdownEditor' class='form-control font-monospace' rows='16' hidden aria-label='{{ 'Markdown editor'|trans }}'></textarea>
-      </div>
-      <div class='modal-footer'>
-        <button type='button' class='btn btn-ghost' data-dismiss='modal'>{{ 'Close'|trans }}</button>
-        <button type='button' id='cancelFolderReadmeEdit' class='btn btn-ghost' data-action='cancel-folder-readme-edit' hidden>{{ 'Cancel'|trans }}</button>
-        <button type='button' id='editFolderReadme' class='btn btn-secondary' data-action='edit-folder-readme' hidden><i class='fas fa-pencil fa-fw mr-1'></i>{{ 'Edit'|trans }}</button>
-        <button type='button' id='saveFolderReadme' class='btn btn-primary' data-action='save-folder-readme' hidden><i class='fas fa-save fa-fw mr-1'></i>{{ 'Save'|trans }}</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 {% include 'folder-export-modal.html' %}
 {% endif %}

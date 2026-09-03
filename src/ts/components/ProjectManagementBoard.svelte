@@ -110,6 +110,16 @@
     return new Date(deadline).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   }
 
+  function formatCommentTime(timestamp: string): string {
+    return new Date(timestamp).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
   async function loadTeamMembers(): Promise<void> {
     try {
       teamMembers = await ApiC.getJson('users?currentTeam=1') as TeamMember[];
@@ -525,7 +535,7 @@
 </div>
 
 {#if detailTask}
-  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeDetail(); }}>
+  <div class="pm-overlay" role="presentation">
     <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmDetailTitle">
       <div class="pm-dialog-header">
         <h4 id="pmDetailTitle" class="mb-0">{t('Task details')}</h4>
@@ -625,7 +635,7 @@
                 <li class="pm-comment">
                   <div class="pm-comment-meta">
                     <strong>{comment.author_fullname}</strong>
-                    <span class="pm-muted">{formatDeadline(comment.created_at)}</span>
+                    <span class="pm-muted">{formatCommentTime(comment.created_at)}</span>
                     {#if comment.userid === core.currentUserid}
                       <button type="button" class="btn-unstyled pm-comment-delete" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteComment(comment)}>
                         <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
