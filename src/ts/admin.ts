@@ -144,9 +144,17 @@ on('export-category', () => {
 });
 
 on('export-user', () => {
-  const source = (document.getElementById('userExport') as HTMLSelectElement).value;
+  // the users picker's option values look like "user:5" (see fetchUsers()
+  // in misc.ts), so pull the numeric id back out before building the url
+  const rawValue = (document.getElementById('userExport_select_users') as HTMLSelectElement).value;
+  const userid = rawValue.startsWith('user:') ? rawValue.split(':')[1] : rawValue;
+  const type = (document.getElementById('userExportType') as HTMLSelectElement).value;
   const format = (document.getElementById('userExportFormat') as HTMLSelectElement).value;
-  window.location.href = `make.php?format=${encodeURIComponent(format)}&owner=${encodeURIComponent(source)}&type=experiments`;
+  if (!userid) {
+    notify.error('Pick a user to export first.');
+    return;
+  }
+  window.location.href = `make.php?format=${encodeURIComponent(format)}&owner=${encodeURIComponent(userid)}&type=${encodeURIComponent(type)}`;
 });
 
 on('admin-add-tag', () => {

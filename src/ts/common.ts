@@ -1008,6 +1008,53 @@ on('save-permissions-both', (el: HTMLElement) => {
   ApiC.patch(`${entity.type}/${entity.id}`, params).then(() => reloadElements(['canreadDiv', 'canwriteDiv']));
 });
 
+// merge newly selected teams/teamgroups/users into an existing canread or
+// canwrite permissions JSON, without touching whatever was already there
+function mergePermissionsJson(existing: string, extra: string[]): string {
+  let parsed: { teams?: number[]; teamgroups?: number[]; users?: number[] };
+  try {
+    parsed = JSON.parse(existing || '{}');
+  } catch {
+    parsed = {};
+  }
+  const addFrom = (prefix: string): number[] => extra
+    .filter(value => value.startsWith(prefix))
+    .map(value => parseInt(value.split(':')[1], 10));
+  return JSON.stringify({
+    teams: Array.from(new Set([...(parsed.teams ?? []), ...addFrom('team:')])),
+    teamgroups: Array.from(new Set([...(parsed.teamgroups ?? []), ...addFrom('teamgroup:')])),
+    users: Array.from(new Set([...(parsed.users ?? []), ...addFrom('user:')])),
+  });
+}
+
+// the "Share" modal: grant read-only, write-only, or read & write access to
+// whoever is selected, on top of (never instead of) the existing lists --
+// unlike save-permissions/save-permissions-both, which replace a list wholesale
+on('save-permissions-share', async (el: HTMLElement) => {
+  const selected = [
+    ...(($('#share_select_teams').val() as string[] | null) ?? []),
+    ...(($('#share_select_teamgroups').val() as string[] | null) ?? []),
+    ...(($('#share_select_users').val() as string[] | null) ?? []),
+  ];
+  if (selected.length === 0) return;
+  const level = el.dataset.level;
+  const current = await ApiC.getJson(`${entity.type}/${entity.id}`);
+  const params: Record<string, string> = {};
+  if (level === 'read' || level === 'both') {
+    params['canread'] = mergePermissionsJson(current.canread, selected);
+  }
+  if (level === 'write' || level === 'both') {
+    params['canwrite'] = mergePermissionsJson(current.canwrite, selected);
+  }
+  await ApiC.patch(`${entity.type}/${entity.id}`, params);
+  await reloadElements(['canreadDiv', 'canwriteDiv']);
+  // clear the picker so the next share starts empty
+  ['share_select_teams', 'share_select_teamgroups', 'share_select_users'].forEach(id => {
+    const select = document.getElementById(id) as HTMLSelectElement & { tomselect?: { clear: () => void } };
+    select?.tomselect?.clear();
+  });
+});
+
 on('select-lang', () => {
   const select = (document.getElementById('langSelect') as HTMLSelectElement);
   fetch(`app/controllers/UnauthRequestHandler.php?lang=${select.value}`).then(() => window.location.reload());
@@ -1670,16 +1717,20 @@ on('reload-color', (el: HTMLElement) => {
 // CREATE CATEGORY OR STATUS
 on('create-catstat', (el: HTMLElement, e: Event) => {
   e.preventDefault();
-  const modalId = 'createCatStatModal';
-  const form = document.getElementById(modalId);
+  // the same macro can be included more than once on one page (e.g. the
+  // admin panel's Category manager tab, experiments + resources side by
+  // side), so find this button's own modal/reload target instead of a
+  // hardcoded id that would always hit the first instance on the page
+  const modal = el.closest('.modal') as HTMLElement;
+  const reloadTarget = el.dataset.reloadTarget ?? 'catStatDiv';
   try {
-    const params = collectForm(form);
+    const params = collectForm(modal);
     ApiC.post(`${Model.Team}/current/${el.dataset.endpoint}`, params).then(() => {
-      $(`#${modalId}`).modal('toggle');
-      reloadElements(['catStatDiv']);
-      clearForm(form);
+      $(modal).modal('toggle');
+      reloadElements([reloadTarget]);
+      clearForm(modal);
       // assign a new random color after clearing the form
-      const colorInput = (form.querySelector('input[type="color"]') as HTMLInputElement);
+      const colorInput = (modal.querySelector('input[type="color"]') as HTMLInputElement);
       colorInput.value = getRandomColor();
     });
   } catch (e) {

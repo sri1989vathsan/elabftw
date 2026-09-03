@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% import 'categories-status-index.macro.html' as idx %}
 
 {% block body %}
 {# UNVALIDATED USERS BLOCK #}
@@ -30,6 +31,8 @@
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='4'>{{ 'Export'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='5'>{{ 'Tag manager'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='6'>{{ 'Batch actions'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='7'>{{ 'Category manager'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='8'>{{ 'Export by user'|trans }}</button></li>
 </ul>
 
 {% include 'loading-spinner.html' %}
@@ -524,6 +527,90 @@
         <button data-action='run-action-selected' type='button' data-what='setcanread' class='btn btn-primary mr-1 mb-2'>{{ 'Set read permissions'|trans }}</button>
         <button data-action='run-action-selected' type='button' data-what='setcanwrite' class='btn btn-primary mr-1 mb-2'>{{ 'Set write permissions'|trans }}</button>
       </div>
+    </div>
+  </div>
+</div>
+
+{# TAB 7 CATEGORY MANAGER #}
+<div data-tabcontent='7' hidden>
+  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Experiment categories'|trans }}</h2>
+  <div class='pl-3 mb-5'>
+    {{ idx.catstatidx(
+      'experiments_categories',
+      'experiments_categories',
+      'Create and modify the categories available to experiments.'|trans,
+      'Experiments categories can be associated with an Experiment or an Experiment Template as a Category. They belong to a team and have two main properties: name and color. Examples: Analysis, Measurement, Test, Project XYZ, etc...'|trans,
+      App.experimentsCategoryArr|filter(c => c.is_current_team == 1),
+      'No experiments categories have been created in this team yet.'|trans|msg('warning', false),
+      'Create new experiments category'|trans,
+      'Category name'|trans,
+      App.Teams.teamArr.name,
+      true,
+      false,
+      'Exp',
+      ) }}
+  </div>
+
+  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Resource categories'|trans }}</h2>
+  <div class='pl-3 mb-5'>
+    {{ idx.catstatidx(
+      'resources_categories',
+      'items_categories',
+      'Create and modify the categories available to resources.'|trans,
+      'Resource categories can be associated with a Resource or a Resource Template as a Category. They belong to a team and have two main properties: name and color. Examples: Equipment, Chemical, Cell line, Plasmid, Antibody, Microscope, etc...'|trans,
+      App.itemsCategoryArr|filter(c => c.is_current_team == 1),
+      'No resource categories have been created in this team yet.'|trans|msg('warning', false),
+      'Create new resource category'|trans,
+      'Category name'|trans,
+      App.Teams.teamArr.name,
+      true,
+      false,
+      'Res',
+      ) }}
+  </div>
+</div>
+
+{# TAB 8 EXPORT BY USER #}
+<div data-tabcontent='8' hidden>
+  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Export a team member&#8217;s data'|trans }}</h2>
+  <p class='pl-3'>{{ 'For archival purposes: export everything a specific team member owns, e.g. before they leave the team.'|trans }}</p>
+  <div class='pl-3 mb-5'>
+    <div class='d-flex justify-content-between align-items-center'>
+      <label for='userExport_select_users' class='col-form-label'>{{ 'Team member'|trans }}</label>
+      <div class='ts-wrapper col-md-6'>
+        {% if App.devMode -%}<!-- [html-validate-disable-block prefer-native-element] -->{%- endif %}
+        <select id='userExport_select_users' class='form-control' autocomplete='off' aria-label='{{ 'Search for a team member'|trans }}' data-tom-select='1'></select>
+        <input type='text' class='form-control mt-2' id='userExport-users-select-input' placeholder='{{ 'Search for a team member'|trans }}' aria-label='{{ 'Search for a team member'|trans }}'>
+      </div>
+    </div>
+    <hr>
+
+    <div class='d-flex justify-content-between'>
+      <label for='userExportType' class='col-form-label'>{{ 'What to export'|trans }}</label>
+      <select class='form-control col-md-3' id='userExportType' autocomplete='off'>
+        <option value='experiments'>{{ 'Experiments'|trans }}</option>
+        <option value='items'>{{ 'Resources'|trans }}</option>
+      </select>
+    </div>
+    <hr>
+
+    <div class='d-flex justify-content-between'>
+      <label for='userExportFormat' class='col-form-label'>{{ 'Select an export format'|trans }}</label>
+      <select class='form-control col-md-3' id='userExportFormat' autocomplete='off'>
+        <option value='eln'>{{ 'ELN Archive'|trans }}</option>
+        <option value='zip'>{{ 'ZIP Archive'|trans }}</option>
+        <option value='csv'>{{ 'CSV File'|trans }}</option>
+        <option value='pdf'>{{ 'PDF File'|trans }}</option>
+        <option value='qrpdf'>{{ 'QR codes PDF'|trans }}</option>
+        <option value='json'>{{ 'JSON'|trans }}</option>
+      </select>
+    </div>
+    <hr>
+
+    <p class='smallgray'>{{ 'Experiments and Resources are exported separately, so run this twice (once per type) for a complete archive of a person&#8217;s data.'|trans }}</p>
+
+    <div class='my-2 text-center'>
+      <button type='button' data-action='export-user' class='btn btn-primary'>{{ 'Export'|trans }}</button>
     </div>
   </div>
 </div>

@@ -76,6 +76,7 @@ use Elabftw\Models\Teams;
 use Elabftw\Models\Teams2Rors;
 use Elabftw\Models\TeamTags;
 use Elabftw\Models\Feedback;
+use Elabftw\Models\FeedbackComments;
 use Elabftw\Models\Todolist;
 use Elabftw\Models\UnfinishedSteps;
 use Elabftw\Models\Uploads;
@@ -480,6 +481,12 @@ final class Apiv2Controller extends AbstractApiController
                 ApiSubModels::Branding => new Branding($this->requester->isSysadmin(), $this->subId),
                 ApiSubModels::Rors => new Instance2Rors($this->requester->isSysadmin(), $this->subIdString),
                 default => throw new InvalidApiSubModelException(ApiEndpoint::Instance),
+            };
+        }
+        if ($this->Model instanceof Feedback) {
+            return match ($submodel) {
+                ApiSubModels::Comments => new FeedbackComments($this->requester, $this->Model, $this->subId),
+                default => throw new InvalidApiSubModelException(ApiEndpoint::Feedback),
             };
         }
         throw new ImproperActionException('Incorrect endpoint.');
