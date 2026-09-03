@@ -53,6 +53,7 @@ final class CustomMigrationRunner
         '027_todolist_description_comments.sql',
         '028_openiris_link.sql',
         '029_todolist_multi_assignee.sql',
+        '030_labcollector_link.sql',
     );
 
     private Db $Db;

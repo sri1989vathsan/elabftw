@@ -123,6 +123,20 @@
 
   </div>
 
+  <h2 class='p-2 pl-3 section-title' id='labcollectorSettings'>{{ 'LabCollector'|trans }}</h2>
+  <div class='pl-3 mt-2 mb-5'>
+    <p class='smallgray'>{{ 'Connect this team to a LabCollector instance to browse its records from the Tools menu. The API key is stored encrypted and is never displayed again once saved.'|trans }}</p>
+    <div class='d-flex justify-content-between align-items-center mb-2'>
+      <label for='labcollector_url' class='col-form-label'>{{ 'LabCollector URL'|trans }}</label>
+      <input class='form-control col-md-6' data-trigger='blur' data-model='{{ model }}' data-target='labcollector_url' type='url' id='labcollector_url' name='labcollector_url' placeholder='https://labcollector.example.org' value='{{ App.Teams.teamArr.labcollector_url }}' />
+    </div>
+    <div class='d-flex justify-content-between align-items-center mb-2'>
+      <label for='labcollector_api_key' class='col-form-label'>{{ 'LabCollector API key'|trans }}</label>
+      <input class='form-control col-md-6' data-trigger='change' data-model='{{ model }}' data-target='labcollector_api_key' type='password' id='labcollector_api_key' name='labcollector_api_key' autocomplete='off' placeholder='{{ App.Teams.teamArr.labcollector_api_key ? 'A key is already set. Enter a new one to replace it.'|trans : 'X-LC-APP-Auth token'|trans }}' />
+    </div>
+    <p class='smallgray mb-0'>{{ 'Find or generate this token in LabCollector under Admin > Others > Setup > Web services API.'|trans }}</p>
+  </div>
+
   <h2 class='p-2 pl-3 section-title' id='existingRors'>{{ 'Research Organization Registry (ROR)'|trans }}</h2>
 
   <div class='mb-2' data-svelte-component='rors' data-endpoint='teams/current/rors'></div>

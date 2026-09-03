@@ -12,6 +12,9 @@ declare(strict_types=1);
 
 namespace Elabftw\Params;
 
+use Defuse\Crypto\Crypto;
+use Defuse\Crypto\Key;
+use Elabftw\Elabftw\Env;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Services\Filter;
 use Override;
@@ -26,7 +29,8 @@ final class TeamParam extends ContentParams
             'announcement', 'newcomer_banner',
             'onboarding_email_subject',
             'onboarding_email_body' => $this->getNullableContent(),
-            'openiris_url' => $this->getNullableUrl(),
+            'openiris_url', 'labcollector_url' => $this->getNullableUrl(),
+            'labcollector_api_key' => $this->getNullableSecret(),
             'user_create_tag',
             'force_exp_tpl',
             'force_res_tpl',
@@ -64,5 +68,16 @@ final class TeamParam extends ContentParams
             throw new ImproperActionException('Please enter a valid URL.');
         }
         return $url;
+    }
+
+    // Encrypt at rest with the same SECRET_KEY convention as Config::ENCRYPTED_KEYS,
+    // since unlike other team params this column can be read back through the team API.
+    private function getNullableSecret(): ?string
+    {
+        if (empty($this->content)) {
+            return null;
+        }
+        $secret = Filter::toPureString(parent::getContent());
+        return Crypto::encrypt($secret, Key::loadFromAsciiSafeString(Env::asString('SECRET_KEY')));
     }
 }

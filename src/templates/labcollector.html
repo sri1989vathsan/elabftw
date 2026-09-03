@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class='container-fluid px-0'>
+  <div class='d-flex flex-wrap align-items-center justify-content-between mb-3'>
+    <div>
+      <h1 class='mb-1'><i class='fas fa-flask mr-2'></i>{{ 'LabCollector'|trans }}</h1>
+      <p class='text-muted mb-0'>{{ 'Browse LabCollector records without duplicating them in eLabFTW.'|trans }}</p>
+    </div>
+    <div class='mt-2 mt-md-0'>
+      {% if labCollectorStatus.connected %}
+        <span class='badge badge-success p-2'><i class='fas fa-circle mr-1'></i>{{ 'LabCollector connected'|trans }}</span>
+      {% elseif labCollectorStatus.configured %}
+        <span class='badge badge-warning p-2'><i class='fas fa-triangle-exclamation mr-1'></i>{{ 'LabCollector not connected'|trans }}</span>
+      {% else %}
+        <span class='badge badge-secondary p-2'>{{ 'LabCollector not configured'|trans }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not labCollectorStatus.configured %}
+    <div class='alert alert-info'>
+      {{ 'A team admin must configure the LabCollector URL and API key first, in Team settings.'|trans }}
+      {% if App.Users.isAdmin %}
+        <a href='admin.php?tab=1#labcollectorSettings'>{{ 'Go to Team settings'|trans }}</a>
+      {% endif %}
+    </div>
+  {% elseif not labCollectorStatus.connected %}
+    <div class='alert alert-warning'>{{ labCollectorStatus.message }}</div>
+  {% endif %}
+  {% if labCollectorError %}
+    <div class='alert alert-danger'><strong>{{ 'LabCollector error'|trans }}:</strong> {{ labCollectorError }}</div>
+  {% endif %}
+
+  {% if labCollectorStatus.configured %}
+    <form class='card card-body mb-3' method='get' action='labcollector.php'>
+      <div class='form-row align-items-end'>
+        <div class='col-md-4 mb-2'>
+          <label for='labCollectorModule'>{{ 'Module'|trans }}</label>
+          <select id='labCollectorModule' class='form-control' name='module'>
+            <option value=''>{{ 'Select a module'|trans }}</option>
+            {% for m in labCollectorModules %}
+              <option value='{{ m }}' {{ m == labCollectorModule ? 'selected' }}>{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class='col-md-6 mb-2'>
+          <label for='labCollectorSearch'>{{ 'Search'|trans }}</label>
+          <input id='labCollectorSearch' class='form-control' type='search' name='q' value='{{ App.Request.query.get('q') }}'>
+        </div>
+        <div class='col-md-2 mb-2'>
+          <button class='btn btn-primary btn-block' type='submit'><i class='fas fa-search mr-1'></i>{{ 'Search'|trans }}</button>
+        </div>
+      </div>
+    </form>
+
+    {% if labCollectorModule %}
+      <div class='table-responsive' id='labCollectorResults'>
+        {% if labCollectorRecords|length > 0 %}
+          {% set columns = labCollectorRecords[0]|keys %}
+          <table class='table table-hover table-sm'>
+            <thead><tr>{% for col in columns %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+            <tbody>
+            {% for record in labCollectorRecords %}
+              <tr>{% for col in columns %}<td>{{ record[col] }}</td>{% endfor %}</tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class='text-muted py-4 text-center'>{{ 'No records matched the current filters.'|trans }}</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock body %}
