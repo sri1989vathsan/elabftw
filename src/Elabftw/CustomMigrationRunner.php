@@ -48,6 +48,8 @@ final class CustomMigrationRunner
         '022_experiment_template_inserts.sql',
         '023_feedback_board.sql',
         '024_feedback_comments.sql',
+        '025_todolist_assignment.sql',
+        '026_todolist_projects.sql',
     );
 
     private Db $Db;
