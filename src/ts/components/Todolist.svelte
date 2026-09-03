@@ -27,6 +27,7 @@
     assigned_userid?: number | null;
     creator_fullname?: string | null;
     assigned_fullname?: string | null;
+    assignees?: { userid: number; fullname: string }[];
     project_id?: number | null;
     project_name?: string | null;
   };
@@ -64,6 +65,7 @@
     assignedUserid?: number | null;
     creatorFullname?: string | null;
     assignedFullname?: string | null;
+    assignees?: { userid: number; fullname: string }[];
     projectId?: number | null;
     projectName?: string | null;
   };
@@ -150,6 +152,7 @@
       assignedUserid: item.assigned_userid,
       creatorFullname: item.creator_fullname,
       assignedFullname: item.assigned_fullname,
+      assignees: item.assignees ?? [],
       projectId: item.project_id,
       projectName: item.project_name,
     })),
@@ -440,9 +443,13 @@
 
   function isAssignedByOther(entry: SidebarEntry): boolean {
     return entry.source === 'todo'
-      && entry.assignedUserid === core.currentUserid
+      && (entry.assignees ?? []).some(a => a.userid === core.currentUserid)
       && entry.creatorUserid !== undefined
       && entry.creatorUserid !== core.currentUserid;
+  }
+
+  function assigneeNames(entry: SidebarEntry): string {
+    return (entry.assignees ?? []).map(a => a.fullname).join(', ');
   }
 
   function openDetail(entry: SidebarEntry): void {
@@ -1154,9 +1161,9 @@
             <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(detailEntry.deadline)}
           </div>
         {/if}
-        {#if detailEntry.assignedFullname}
+        {#if (detailEntry.assignees ?? []).length > 0}
           <div class='small'>
-            <i class='fas fa-user fa-fw mr-1' aria-hidden='true'></i>{t('Assigned to')} {detailEntry.assignedFullname}
+            <i class='fas fa-user fa-fw mr-1' aria-hidden='true'></i>{t('Assigned to')} {assigneeNames(detailEntry)}
             {#if isAssignedByOther(detailEntry)} &middot; {t('Assigned by')} {detailEntry.creatorFullname}{/if}
           </div>
         {/if}

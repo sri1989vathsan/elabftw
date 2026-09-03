@@ -4650,3 +4650,28 @@ div > .sticky-navbar {
 .pm-comment-form {
   gap: 0.4rem;
 }
+
+.pm-avatar-group {
+  align-items: center;
+  display: flex;
+}
+
+.pm-avatar {
+  align-items: center;
+  background: var(--primary);
+  border: 2px solid var(--white);
+  border-radius: 50%;
+  color: var(--primary-fg, #fff);
+  cursor: default;
+  display: inline-flex;
+  font-size: 0.7rem;
+  font-weight: 700;
+  height: 1.7rem;
+  justify-content: center;
+  margin-left: -0.5rem;
+  width: 1.7rem;
+}
+
+.pm-avatar:first-child {
+  margin-left: 0;
+}

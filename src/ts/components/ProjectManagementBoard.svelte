@@ -20,6 +20,7 @@
     project_id: number | null;
     creator_fullname: string;
     assigned_fullname: string | null;
+    assignees: TeamMember[];
     project_name: string | null;
   };
 
@@ -58,13 +59,13 @@
   // 'all' is the union of both -- never a view of everyone else's work
   let scope: 'assigned' | 'created' | 'all' = 'assigned';
   let newTitle = '';
-  let newAssignedUserid = core.currentUserid;
+  let newAssignees: TeamMember[] = [];
   let newDeadline = '';
   let submitting = false;
   let detailTask: Task | null = null;
   let detailTitle = '';
   let detailDeadline = '';
-  let detailAssignedUserid = core.currentUserid;
+  let detailAssignees: TeamMember[] = [];
   let detailDescription = '';
   let detailNotes = '';
   let savingDetail = false;
@@ -83,8 +84,25 @@
 
   function canManage(task: Task): boolean {
     return task.userid === core.currentUserid
-      || task.assigned_userid === core.currentUserid
+      || task.assignees.some(a => a.userid === core.currentUserid)
       || core.isAdmin;
+  }
+
+  function addAssignee(list: TeamMember[], userid: number, pool: TeamMember[]): TeamMember[] {
+    if (list.some(m => m.userid === userid)) return list;
+    const member = pool.find(m => m.userid === userid);
+    return member ? [...list, member] : list;
+  }
+
+  function initials(fullname: string): string {
+    const parts = fullname.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  function removeAssignee(list: TeamMember[], userid: number): TeamMember[] {
+    return list.filter(m => m.userid !== userid);
   }
 
   function formatDeadline(deadline: string | null): string {
@@ -111,7 +129,14 @@
   async function load(): Promise<void> {
     loading = true;
     try {
-      tasks = await ApiC.getJson(`${Model.Todolist}?scope=${scope}`) as Task[];
+      // readAll() only returns either open or completed tasks per call
+      // (the sidebar To-do widget relies on that split), so the board
+      // fetches both and merges them to populate the To do/Done columns.
+      const [open, done] = await Promise.all([
+        ApiC.getJson(`${Model.Todolist}?scope=${scope}`) as Promise<Task[]>,
+        ApiC.getJson(`${Model.Todolist}?scope=${scope}&completed=1`) as Promise<Task[]>,
+      ]);
+      tasks = [...open, ...done];
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load tasks.');
     } finally {
@@ -132,11 +157,9 @@
 
   function selectProject(id: number | null): void {
     activeProjectId = id;
-    if (newAssignedUserid !== core.currentUserid) {
-      const project = projects.find(p => p.id === id);
-      if (project && !project.members.some(m => m.userid === newAssignedUserid)) {
-        newAssignedUserid = core.currentUserid;
-      }
+    const project = projects.find(p => p.id === id);
+    if (project) {
+      newAssignees = newAssignees.filter(a => project.members.some(m => m.userid === a.userid));
     }
   }
 
@@ -146,13 +169,13 @@
     try {
       await ApiC.post(Model.Todolist, {
         content: newTitle.trim(),
-        assigned_userid: newAssignedUserid,
+        assignee_userids: newAssignees.map(a => a.userid),
         deadline: newDeadline || null,
         project_id: activeProjectId,
       });
       newTitle = '';
       newDeadline = '';
-      newAssignedUserid = core.currentUserid;
+      newAssignees = [];
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not create the task.');
@@ -167,16 +190,6 @@
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not update the task.');
-    }
-  }
-
-  async function reassign(task: Task, userid: number): Promise<void> {
-    if (userid === task.assigned_userid) return;
-    try {
-      await ApiC.patch(`${Model.Todolist}/${task.id}`, { assigned_userid: userid });
-      await load();
-    } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not reassign the task.');
     }
   }
 
@@ -198,7 +211,7 @@
     detailTask = task;
     detailTitle = task.body;
     detailDeadline = toDateInputValue(task.deadline);
-    detailAssignedUserid = task.assigned_userid ?? core.currentUserid;
+    detailAssignees = [...task.assignees];
     detailDescription = task.description ?? '';
     detailNotes = task.notes ?? '';
     newCommentText = '';
@@ -222,7 +235,7 @@
       await ApiC.patch(`${Model.Todolist}/${detailTask.id}`, {
         content: title,
         deadline: detailDeadline || null,
-        assigned_userid: detailAssignedUserid,
+        assignee_userids: detailAssignees.map(a => a.userid),
         description: descriptionEl?.innerHTML ?? detailDescription,
         notes: notesEl?.innerHTML ?? detailNotes,
       });
@@ -378,10 +391,23 @@
       </div>
       <div>
         <label class="pm-label" for="pm-new-assignee">{t('Assign to')}</label>
-        <select id="pm-new-assignee" class="form-control" bind:value={newAssignedUserid}>
-          <option value={core.currentUserid}>{t('Myself')}</option>
-          {#each assignableMembers.filter(member => member.userid !== core.currentUserid) as member (member.userid)}
-            <option value={member.userid}>{member.fullname}</option>
+        <div class="pm-chips">
+          {#each newAssignees as member (member.userid)}
+            <span class="pm-chip">
+              {member.fullname}
+              <button type="button" aria-label={`${t('Remove')} ${member.fullname}`} on:click={() => newAssignees = removeAssignee(newAssignees, member.userid)}>&times;</button>
+            </span>
+          {/each}
+        </div>
+        <select
+          id="pm-new-assignee"
+          class="form-control"
+          value=""
+          on:change={(event) => { const value = (event.target as HTMLSelectElement).value; if (value) newAssignees = addAssignee(newAssignees, Number(value), assignableMembers); (event.target as HTMLSelectElement).value = ''; }}
+        >
+          <option value="" disabled>{t('Yourself, if left empty')}</option>
+          {#each assignableMembers.filter(member => !newAssignees.some(a => a.userid === member.userid)) as member (member.userid)}
+            <option value={member.userid}>{member.userid === core.currentUserid ? t('Myself') : member.fullname}</option>
           {/each}
         </select>
       </div>
@@ -440,24 +466,17 @@
               <div class="pm-muted pm-task-meta"><i class="fas fa-calendar fa-fw mr-1" aria-hidden="true"></i>{formatDeadline(task.deadline)}</div>
             {/if}
             <div class="pm-task-meta d-flex align-items-center flex-wrap mt-1">
-              <span class="badge badge-info mr-1">
-                <i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{task.assigned_fullname ?? t('Unassigned')}
-              </span>
-              {#if scope === 'created' && task.assigned_userid !== task.userid}
-                <span class="pm-muted mr-1">{t('from')} {task.creator_fullname}</span>
-              {/if}
-              {#if canManage(task) && task.userid === core.currentUserid}
-                <select
-                  class="form-control form-control-sm pm-reassign-select"
-                  value={task.assigned_userid}
-                  on:change={(event) => reassign(task, Number((event.target as HTMLSelectElement).value))}
-                  aria-label={t('Reassign')}
-                >
-                  <option value={core.currentUserid}>{t('Myself')}</option>
-                  {#each assignableMembers.filter(member => member.userid !== core.currentUserid) as member (member.userid)}
-                    <option value={member.userid}>{member.fullname}</option>
+              {#if task.assignees.length === 0}
+                <span class="badge badge-info mr-1"><i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Unassigned')}</span>
+              {:else}
+                <div class="pm-avatar-group">
+                  {#each task.assignees as assignee (assignee.userid)}
+                    <span class="pm-avatar" title={assignee.fullname}>{initials(assignee.fullname)}</span>
                   {/each}
-                </select>
+                </div>
+              {/if}
+              {#if scope === 'created' && !task.assignees.some(a => a.userid === task.userid)}
+                <span class="pm-muted mr-1">{t('from')} {task.creator_fullname}</span>
               {/if}
             </div>
           </div>
@@ -488,9 +507,15 @@
               {/if}
             </div>
             <div class="pm-task-meta">
-              <span class="badge badge-info">
-                <i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{task.assigned_fullname ?? t('Unassigned')}
-              </span>
+              {#if task.assignees.length === 0}
+                <span class="badge badge-info"><i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Unassigned')}</span>
+              {:else}
+                <div class="pm-avatar-group">
+                  {#each task.assignees as assignee (assignee.userid)}
+                    <span class="pm-avatar" title={assignee.fullname}>{initials(assignee.fullname)}</span>
+                  {/each}
+                </div>
+              {/if}
             </div>
           </div>
         {/each}
@@ -521,10 +546,23 @@
           </div>
           <div class="pm-dialog-field flex-grow-1">
             <label class="pm-label" for="pm-detail-assignee">{t('Assigned to')}</label>
-            <select id="pm-detail-assignee" class="form-control" bind:value={detailAssignedUserid}>
-              <option value={core.currentUserid}>{t('Myself')}</option>
-              {#each assignableMembers.filter(member => member.userid !== core.currentUserid) as member (member.userid)}
-                <option value={member.userid}>{member.fullname}</option>
+            <div class="pm-chips">
+              {#each detailAssignees as member (member.userid)}
+                <span class="pm-chip">
+                  {member.fullname}
+                  <button type="button" aria-label={`${t('Remove')} ${member.fullname}`} on:click={() => detailAssignees = removeAssignee(detailAssignees, member.userid)}>&times;</button>
+                </span>
+              {/each}
+            </div>
+            <select
+              id="pm-detail-assignee"
+              class="form-control"
+              value=""
+              on:change={(event) => { const value = (event.target as HTMLSelectElement).value; if (value) detailAssignees = addAssignee(detailAssignees, Number(value), assignableMembers); (event.target as HTMLSelectElement).value = ''; }}
+            >
+              <option value="" disabled>{t('Yourself, if left empty')}</option>
+              {#each assignableMembers.filter(member => !detailAssignees.some(a => a.userid === member.userid)) as member (member.userid)}
+                <option value={member.userid}>{member.userid === core.currentUserid ? t('Myself') : member.fullname}</option>
               {/each}
             </select>
           </div>

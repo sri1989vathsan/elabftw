@@ -30,10 +30,20 @@ use Override;
 use PDO;
 
 use function _;
+use function array_column;
+use function array_key_exists;
+use function array_map;
+use function array_unique;
+use function array_values;
 use function filter_var;
+use function in_array;
+use function is_array;
+use function json_decode;
 use function mb_strlen;
 use function sprintf;
 use function trim;
+
+use const JSON_THROW_ON_ERROR;
 
 /**
  * All about the todolist, including tasks assigned to teammates (project management)
@@ -69,7 +79,8 @@ final class Todolist extends AbstractRest
         $description = $this->getDescription($reqBody['description'] ?? null);
         $deadline = $this->getDeadline($reqBody['deadline'] ?? null);
         $reminderMinutes = $this->getReminderMinutes($reqBody['reminder_minutes'] ?? 60);
-        $assignedUserid = $this->getAssignedUserid($reqBody['assigned_userid'] ?? null);
+        $assigneeUserids = $this->getAssigneeUserids($reqBody['assignee_userids'] ?? $reqBody['assigned_userid'] ?? null);
+        $primaryAssignee = $assigneeUserids[0];
         $projectId = $this->getProjectId($reqBody['project_id'] ?? null);
         $sql = 'INSERT INTO todolist (body, notes, description, deadline, reminder_minutes, userid, team, assigned_userid, project_id)
             VALUES(:content, :notes, :description, :deadline, :reminder_minutes, :userid, :team, :assigned_userid, :project_id)';
@@ -85,15 +96,18 @@ final class Todolist extends AbstractRest
         );
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
-        $req->bindParam(':assigned_userid', $assignedUserid, PDO::PARAM_INT);
+        $req->bindParam(':assigned_userid', $primaryAssignee, PDO::PARAM_INT);
         $req->bindValue(':project_id', $projectId, $projectId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $this->Db->execute($req);
 
-        $id = $this->Db->lastInsertId();
+        $id = (int) $this->Db->lastInsertId();
         $this->setId($id);
+        $this->syncAssignees($id, $assigneeUserids);
         $this->syncDeadlineNotification();
-        if ($assignedUserid !== $this->userid) {
-            $this->notifyAssignee($assignedUserid, $content);
+        foreach ($assigneeUserids as $assignedUserid) {
+            if ($assignedUserid !== $this->userid) {
+                $this->notifyAssignee($assignedUserid, $content);
+            }
         }
         return $id;
     }
@@ -112,11 +126,12 @@ final class Todolist extends AbstractRest
             return $this->readCalendarRange($queryParams);
         }
         $scope = $query->getString('scope') ?: 'assigned';
+        $assignedExists = 'EXISTS (SELECT 1 FROM todolist_task_assignees ta2 WHERE ta2.task_id = t.id AND ta2.userid = %s)';
         $scopeFilter = match ($scope) {
             'team' => '',
             'created' => ' AND t.userid = :requester',
-            'all' => ' AND (t.userid = :requester OR t.assigned_userid = :requester2)',
-            default => ' AND t.assigned_userid = :requester',
+            'all' => ' AND (t.userid = :requester OR ' . sprintf($assignedExists, ':requester2') . ')',
+            default => ' AND ' . sprintf($assignedExists, ':requester'),
         };
         $completed = $query->getBoolean('completed');
         $completedFilter = $completed ? 'IS NOT NULL' : 'IS NULL';
@@ -137,7 +152,13 @@ final class Todolist extends AbstractRest
                 t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id,
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
-                project.name AS project_name
+                project.name AS project_name,
+                COALESCE((
+                    SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', au.userid, 'fullname', au.fullname))
+                    FROM todolist_task_assignees AS ta
+                    INNER JOIN (SELECT userid, CONCAT(firstname, ' ', lastname) AS fullname FROM users) AS au ON au.userid = ta.userid
+                    WHERE ta.task_id = t.id
+                ), JSON_ARRAY()) AS assignees
             FROM todolist AS t
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
@@ -157,7 +178,7 @@ final class Todolist extends AbstractRest
         }
         $this->Db->execute($req);
 
-        return $req->fetchAll();
+        return array_map(fn(array $row): array => $this->decodeAssignees($row), $req->fetchAll());
     }
 
     /**
@@ -180,7 +201,9 @@ final class Todolist extends AbstractRest
                 DATE_FORMAT(completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
                 creation_time, ordering, userid, team, assigned_userid
             FROM todolist
-            WHERE assigned_userid = :userid
+            WHERE EXISTS (
+                    SELECT 1 FROM todolist_task_assignees ta WHERE ta.task_id = todolist.id AND ta.userid = :userid
+                )
                 AND deadline >= :deadline_from
                 AND deadline < :deadline_to
             ORDER BY deadline ASC, id ASC";
@@ -202,7 +225,13 @@ final class Todolist extends AbstractRest
                 t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id,
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
-                project.name AS project_name
+                project.name AS project_name,
+                COALESCE((
+                    SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', au.userid, 'fullname', au.fullname))
+                    FROM todolist_task_assignees AS ta
+                    INNER JOIN (SELECT userid, CONCAT(firstname, ' ', lastname) AS fullname FROM users) AS au ON au.userid = ta.userid
+                    WHERE ta.task_id = t.id
+                ), JSON_ARRAY()) AS assignees
             FROM todolist AS t
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
@@ -217,22 +246,34 @@ final class Todolist extends AbstractRest
         if ($task === false) {
             return array();
         }
-        return $task;
+        return $this->decodeAssignees($task);
     }
 
     #[Override]
     public function patch(Action $action, array $params): array
     {
         $this->canWriteOrExplode();
-        $previousAssignee = (int) ($this->readOne()['assigned_userid'] ?? $this->userid);
+        $previousAssignees = array_map('intval', array_column($this->readOne()['assignees'] ?? array(), 'userid'));
         foreach ($params as $key => $value) {
+            if ($key === 'assignee_userids' || $key === 'assigned_userid') {
+                continue;
+            }
             $this->update($key, $value);
+        }
+        $newAssignees = null;
+        if (array_key_exists('assignee_userids', $params) || array_key_exists('assigned_userid', $params)) {
+            $newAssignees = $this->getAssigneeUserids($params['assignee_userids'] ?? $params['assigned_userid']);
+            $this->syncAssignees((int) $this->id, $newAssignees);
+            $this->updatePrimaryAssignee($newAssignees[0]);
         }
         $this->syncDeadlineNotification();
         $task = $this->readOne();
-        $newAssignee = (int) ($task['assigned_userid'] ?? $this->userid);
-        if (array_key_exists('assigned_userid', $params) && $newAssignee !== $previousAssignee && $newAssignee !== $this->userid) {
-            $this->notifyAssignee($newAssignee, $task['body']);
+        if ($newAssignees !== null) {
+            foreach ($newAssignees as $assignedUserid) {
+                if ($assignedUserid !== $this->userid && !in_array($assignedUserid, $previousAssignees, true)) {
+                    $this->notifyAssignee($assignedUserid, $task['body']);
+                }
+            }
         }
         return $task;
     }
@@ -262,7 +303,9 @@ final class Todolist extends AbstractRest
         $req->bindValue(':category', Notifications::TodoDeadline->value, PDO::PARAM_INT);
         $this->Db->execute($req);
 
-        $sql = 'DELETE FROM todolist WHERE assigned_userid = :userid AND team = :team';
+        $sql = 'DELETE FROM todolist WHERE team = :team AND id IN (
+            SELECT task_id FROM todolist_task_assignees WHERE userid = :userid
+        )';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
@@ -280,22 +323,39 @@ final class Todolist extends AbstractRest
             throw new IllegalActionException('Task not found in this team.');
         }
         $isCreator = (int) $task['userid'] === $this->userid;
-        $isAssignee = (int) ($task['assigned_userid'] ?? 0) === $this->userid;
+        $assigneeIds = array_map('intval', array_column($task['assignees'] ?? array(), 'userid'));
+        $isAssignee = in_array($this->userid, $assigneeIds, true);
         if (!$isCreator && !$isAssignee && !$this->requester->isAdmin) {
             throw new IllegalActionException('User tried to modify a task that is not theirs.');
         }
     }
 
-    private function getAssignedUserid(mixed $value): int
+    /**
+     * Validate and normalize one or more assignee user ids, restricted to
+     * fellow members of the current team. Falls back to self-assignment
+     * when nothing is given.
+     *
+     * @return list<int>
+     */
+    private function getAssigneeUserids(mixed $value): array
     {
-        if ($value === null || $value === '') {
-            return $this->userid;
+        $raw = is_array($value) ? $value : ($value === null || $value === '' ? array() : array($value));
+        $ids = array();
+        foreach ($raw as $item) {
+            $assignedUserid = filter_var($item, FILTER_VALIDATE_INT);
+            if ($assignedUserid === false) {
+                throw new ImproperActionException(_('Invalid assignee.'));
+            }
+            $ids[] = $assignedUserid;
         }
-        $assignedUserid = filter_var($value, FILTER_VALIDATE_INT);
-        if ($assignedUserid === false) {
-            throw new ImproperActionException(_('Invalid assignee.'));
+        $ids = array_values(array_unique($ids));
+        if (empty($ids)) {
+            return array($this->userid);
         }
-        if ($assignedUserid !== $this->userid) {
+        foreach ($ids as $assignedUserid) {
+            if ($assignedUserid === $this->userid) {
+                continue;
+            }
             // only allow assigning to a fellow member of the current team
             $sql = 'SELECT COUNT(*) AS count FROM users2teams WHERE users_id = :userid AND teams_id = :team';
             $req = $this->Db->prepare($sql);
@@ -306,7 +366,43 @@ final class Todolist extends AbstractRest
                 throw new ImproperActionException(_('You can only assign tasks to a member of your team.'));
             }
         }
-        return $assignedUserid;
+        return $ids;
+    }
+
+    /**
+     * Replace the full assignee list for a task with the given user ids
+     */
+    private function syncAssignees(int $taskId, array $userids): void
+    {
+        $del = $this->Db->prepare('DELETE FROM todolist_task_assignees WHERE task_id = :task_id');
+        $del->bindParam(':task_id', $taskId, PDO::PARAM_INT);
+        $this->Db->execute($del);
+        foreach ($userids as $userid) {
+            $ins = $this->Db->prepare('INSERT INTO todolist_task_assignees(task_id, userid) VALUES(:task_id, :userid)');
+            $ins->bindParam(':task_id', $taskId, PDO::PARAM_INT);
+            $ins->bindParam(':userid', $userid, PDO::PARAM_INT);
+            $this->Db->execute($ins);
+        }
+    }
+
+    /**
+     * Keep the legacy single-assignee column (used for the calendar range
+     * query and "clear my tasks") pointed at the first assignee
+     */
+    private function updatePrimaryAssignee(int $userid): void
+    {
+        $sql = 'UPDATE todolist SET assigned_userid = :assigned_userid WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':assigned_userid', $userid, PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    private function decodeAssignees(array $row): array
+    {
+        $row['assignees'] = json_decode((string) $row['assignees'], true, 512, JSON_THROW_ON_ERROR);
+        return $row;
     }
 
     private function getProjectId(mixed $value): ?int
@@ -351,7 +447,6 @@ final class Todolist extends AbstractRest
                 PDO::PARAM_INT,
             ),
             'completed' => array('completed_at', $this->getCompletedAt($value), PDO::PARAM_STR),
-            'assigned_userid' => array('assigned_userid', $this->getAssignedUserid($value), PDO::PARAM_INT),
             'project_id' => array('project_id', $this->getProjectId($value), PDO::PARAM_INT),
             'description' => array('description', $this->getDescription($value), PDO::PARAM_STR),
             default => throw new ImproperActionException(_('Invalid to-do property.')),
@@ -447,13 +542,15 @@ final class Todolist extends AbstractRest
         ) {
             return;
         }
-        (new TodoDeadline(
-            new Users((int) ($task['assigned_userid'] ?? $this->userid), $this->team),
-            (int) $task['id'],
-            $task['body'],
-            $task['deadline'],
-            (int) $task['reminder_minutes'],
-        ))->create();
+        foreach ($this->getAssigneeIdsForNotification($task) as $assignedUserid) {
+            (new TodoDeadline(
+                new Users($assignedUserid, $this->team),
+                (int) $task['id'],
+                $task['body'],
+                $task['deadline'],
+                (int) $task['reminder_minutes'],
+            ))->create();
+        }
     }
 
     private function destroyDeadlineNotification(): void
@@ -462,13 +559,24 @@ final class Todolist extends AbstractRest
             return;
         }
         $task = $this->readOne();
-        $assignedUserid = (int) ($task['assigned_userid'] ?? $this->userid);
-        (new TodoDeadline(
-            new Users($assignedUserid, $this->team),
-            $this->id,
-            '',
-            '1970-01-01 00:00:00',
-            0,
-        ))->destroy();
+        foreach ($this->getAssigneeIdsForNotification($task) as $assignedUserid) {
+            (new TodoDeadline(
+                new Users($assignedUserid, $this->team),
+                $this->id,
+                '',
+                '1970-01-01 00:00:00',
+                0,
+            ))->destroy();
+        }
+    }
+
+    /** @return list<int> */
+    private function getAssigneeIdsForNotification(array $task): array
+    {
+        $ids = array_map('intval', array_column($task['assignees'] ?? array(), 'userid'));
+        if (empty($ids)) {
+            $ids = array((int) ($task['assigned_userid'] ?? $this->userid));
+        }
+        return $ids;
     }
 }

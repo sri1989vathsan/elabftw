@@ -884,6 +884,20 @@ on('refresh-todolist', () => {
   window.dispatchEvent(new CustomEvent('todolist-changed'));
 });
 
+on('edit-openiris-link', (el: HTMLElement) => {
+  const link = document.getElementById('openirisLink') as HTMLAnchorElement | null;
+  if (!link) return;
+  const currentUrl = el.dataset.currentUrl ?? link.href;
+  const nextUrl = window.prompt(i18next.t('Enter the OpenIRIS booking URL'), currentUrl);
+  if (nextUrl === null || nextUrl.trim() === '' || nextUrl.trim() === currentUrl) return;
+  const trimmed = nextUrl.trim();
+  ApiC.patch(`${Model.Team}/current`, {openiris_url: trimmed}).then(() => {
+    link.href = trimmed;
+    el.dataset.currentUrl = trimmed;
+    notify.success();
+  }).catch((error: Error) => notify.error(error.message));
+});
+
 on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
   // this action might exist on a link: prevent jump to top
   event.preventDefault();
