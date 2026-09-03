@@ -48,7 +48,7 @@ final class TodolistComments extends AbstractRest
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
         $sql = 'SELECT comment.id, comment.body,
-                DATE_FORMAT(comment.created_at, \'%Y-%m-%dT%H:%i:%sZ\') AS created_at,
+                DATE_FORMAT(comment.created_at, \'%Y-%m-%dT%H:%i:%s\') AS created_at,
                 comment.userid,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname
             FROM custom_todolist_comments AS comment
