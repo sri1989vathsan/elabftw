@@ -523,8 +523,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const panel = document.querySelector(`[data-folder-more-actions-for="${folderId}"]`) as HTMLElement | null;
     if (!panel) return;
     const isOpen = panel.hidden;
+    // close any other open "more" panel first
+    document.querySelectorAll<HTMLElement>('.folder-more-actions').forEach(other => {
+      if (other !== panel) other.hidden = true;
+    });
+    document.querySelectorAll<HTMLElement>('[data-action="toggle-folder-more-actions"]').forEach(toggle => {
+      if (toggle !== el) toggle.setAttribute('aria-expanded', 'false');
+    });
     panel.hidden = !isOpen;
     el.setAttribute('aria-expanded', String(isOpen));
+  });
+
+  // clicking anywhere outside an open "more" panel (and its toggle button) closes it
+  document.addEventListener('click', (event: Event) => {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    document.querySelectorAll<HTMLElement>('.folder-more-actions').forEach(panel => {
+      if (panel.hidden || panel.contains(target)) return;
+      const folderId = panel.dataset.folderMoreActionsFor;
+      const toggle = document.querySelector<HTMLElement>(`[data-action="toggle-folder-more-actions"][data-id="${folderId}"]`);
+      if (toggle?.contains(target)) return;
+      panel.hidden = true;
+      toggle?.setAttribute('aria-expanded', 'false');
+    });
   });
 
   // Toggle folder on click — registered via the global on() dispatcher
