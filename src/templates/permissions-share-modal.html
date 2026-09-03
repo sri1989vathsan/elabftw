@@ -14,8 +14,38 @@
       </div>
       <div class='modal-body'>
         <p class='smallgray'>{{ 'Search for teams, user groups, or specific users, then grant them read-only, write-only, or read & write access. This only adds access -- it never removes access granted elsewhere.'|trans }}</p>
+
+        {# BASE #}
+        <label for='share_select_base'><strong><i class='fas fa-user-shield mr-2' aria-hidden='true'></i>{{ 'Base'|trans }}</strong></label>
+        <p class='smallgray'>{{ 'A baseline visibility (e.g. only members of the team) applied together with whatever you pick below. Leave as-is to only add the specific teams/groups/users you pick.'|trans }}</p>
+        <select id='share_select_base' class='form-control mb-2' autocomplete='off'>
+          <option value=''>{{ 'Leave unchanged'|trans }}</option>
+          {% for key, value in visibilityArr %}
+            <option value='{{ key }}'>{{ value|trans }}</option>
+          {% endfor %}
+        </select>
+        <hr>
+
         {# TEAMS #}
-        <label for='share_select_teams'><strong><i class='fas fa-users mr-2' aria-hidden='true'></i>{{ 'Teams'|trans }}</strong></label>
+        <div class='d-flex justify-content-between align-items-center'>
+          <label for='share_select_teams' class='mb-0'><strong><i class='fas fa-users mr-2' aria-hidden='true'></i>{{ 'Teams'|trans }}</strong></label>
+          {% set shareTeamScope = App.Request.query.getInt('team_scope') ?: 3 %}
+          <div class='btn-group'>
+            <button class='btn btn-transparent dropdown-toggle' type='button' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>
+              {{ shareTeamScope == 1 ? 'My teams'|trans : 'All teams'|trans }}
+              <i class='fas fa-fw {{ shareTeamScope == 1 ? 'fa-user' : 'fa-globe' }} mx-1'></i>
+            </button>
+            <div class='dropdown-menu'>
+              <h6 class='dropdown-header'>{{ 'Scope'|trans }}</h6>
+              <button type='button' class='dropdown-item {{ shareTeamScope == 1 ? 'active' }}' data-action='team-scope-change' data-value='1' data-identifier='share'>
+                <i class='fas fa-user fa-fw mr-2 {{ shareTeamScope == 1 ? 'color-white' }}'></i>{{ 'My teams'|trans }}
+              </button>
+              <button type='button' class='dropdown-item {{ shareTeamScope == 3 ? 'active' }}' data-action='team-scope-change' data-value='3' data-identifier='share'>
+                <i class='fas fa-globe fa-fw mr-2 {{ shareTeamScope == 3 ? 'color-white' }}'></i>{{ 'All teams'|trans }}
+              </button>
+            </div>
+          </div>
+        </div>
         <div class='ts-wrapper'>
           {% if App.devMode -%}<!-- [html-validate-disable-block prefer-native-element] -->{%- endif %}
           <select id='share_select_teams' multiple class='form-control' autocomplete='off' aria-label='{{ 'Search for user team'|trans }}' data-tom-select='1'>

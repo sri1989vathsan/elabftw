@@ -20,6 +20,32 @@
       </button>
     </div>
 
+    <div class='mb-2' data-active-entity-type='{{ folderEntityType }}'>
+      <select id='folderEntityTypeSelect' class='form-control form-control-sm' aria-label='{{ 'Folder content type'|trans }}'>
+        <option value='experiments' {{ folderEntityType == 'experiments' ? 'selected' }}>{{ 'Experiments'|trans }}</option>
+        <option value='items' {{ folderEntityType == 'items' ? 'selected' }}>{{ 'Resources'|trans }}</option>
+      </select>
+    </div>
+
+    <div class='mb-3'>
+      <select id='folderQuickLinkSelect' class='form-control form-control-sm' aria-label='{{ 'Quick folder link'|trans }}'>
+        <option
+          value='all'
+          data-experiments-href='experiments.php'
+          data-items-href='database.php'
+          data-experiments-label='{{ 'All experiments'|trans|e('html_attr') }}'
+          data-items-label='{{ 'All resources'|trans|e('html_attr') }}'
+          {{ currentFolderId is empty ? 'selected' }}
+        >{{ (folderEntityType == 'items' ? 'All resources' : 'All experiments')|trans }}</option>
+        <option
+          value='unfiled'
+          data-experiments-href='experiments.php?folder=0'
+          data-items-href='database.php?folder=0'
+          {{ App.Request.query.get('folder') == '0' ? 'selected' }}
+        >{{ 'Unfiled'|trans }}</option>
+      </select>
+    </div>
+
     <ul class='nav nav-tabs nav-fill mb-3 folder-scope-tabs' role='tablist' aria-label='{{ 'Folder visibility'|trans }}'>
       <li class='nav-item'>
         <button type='button' class='nav-link active w-100' data-action='select-folder-scope' data-scope='mine' role='tab' aria-selected='true'>
@@ -34,20 +60,8 @@
     </ul>
 
     <div id='experimentsFoldersContent'>
-      <div class='d-flex mb-3 folder-quick-links'>
-        <a href='{{ folderPage }}' class='btn btn-sm btn-outline-secondary flex-fill mr-1 {{ currentFolderId is empty ? 'active' : '' }}'>
-          <i class='fas {{ folderEntityType == 'items' ? 'fa-box' : 'fa-flask' }} fa-fw mr-1'></i>{{ (folderEntityType == 'items' ? 'All resources' : 'All experiments')|trans }}
-        </a>
-        <a href='{{ folderPage }}?folder=0' class='btn btn-sm btn-outline-secondary flex-fill ml-1 {{ App.Request.query.get('folder') == '0' ? 'active' : '' }}'>
-          <i class='fas fa-inbox fa-fw mr-1'></i>{{ 'Unfiled'|trans }}
-        </a>
-      </div>
-
       <div class='d-flex align-items-center justify-content-between mb-2'>
         <h4 class='h6 mb-0'>{{ 'Folder tree'|trans }}</h4>
-        {% if folderBookmarkIds is not empty %}
-          <span class='small color-medium'><i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked first'|trans }}</span>
-        {% endif %}
       </div>
 
       {# Render exactly one branch for each root folder. Children only exist inside their parent branch. #}
@@ -68,12 +82,19 @@
             {% else %}
               <span class='mr-1' style='width:16px;display:inline-block'></span>
             {% endif %}
-            <a href='{{ folderPage }}?folder={{ folder.id }}' data-folder-entity-link title='{{ folder.full_path|e('html_attr') }}' class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'>
+            <a
+              href='{{ folderPage }}?folder={{ folder.id }}'
+              data-folder-entity-link
+              data-experiments-href='experiments.php?folder={{ folder.id }}'
+              data-items-href='database.php?folder={{ folder.id }}'
+              data-experiments-count='{{ folder.experiments_count }}'
+              data-resources-count='{{ folder.resources_count }}'
+              title='{{ folder.full_path|e('html_attr') }}'
+              class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'
+            >
               <i class='fas fa-folder fa-fw mr-1 folder-icon'></i>{{ folder.name }}
               {% set entityCount = folderEntityType == 'items' ? folder.resources_count : folder.experiments_count %}
-              {% if entityCount > 0 %}
-                <span class='badge badge-secondary'>{{ entityCount }}</span>
-              {% endif %}
+              <span class='badge badge-secondary folder-entity-count' {{ entityCount > 0 ? '' : 'hidden' }}>{{ entityCount }}</span>
             </a>
             {% set isBookmarked = folder.id in folderBookmarkIds %}
             <span class='folder-actions ml-auto' role='group' aria-label='{{ 'Folder actions'|trans }}'>
@@ -83,9 +104,21 @@
               <button type='button' data-action='open-folder-readme' data-id='{{ folder.id }}' class='folder-action-btn hl-hover-gray rounded' aria-label='{{ 'Folder README'|trans }}' title='{{ 'Folder README'|trans }}'>
                 <i class='{{ folder.has_readme ? 'fas' : 'far' }} fa-file-lines fa-xs'></i>
               </button>
-              <button type='button' data-action='edit-folder' data-id='{{ folder.id }}' data-parent-id='{{ folder.parent_id }}' data-name='{{ folder.name|e('html_attr') }}' data-description='{{ folder.description|e('html_attr') }}' class='folder-action-btn hl-hover-gray rounded' aria-label='{{ 'Edit folder'|trans }}' title='{{ 'Edit folder'|trans }}'><i class='fas fa-pencil fa-xs'></i></button>
-              <button type='button' data-action='delete-folder' data-id='{{ folder.id }}' class='folder-action-btn folder-action-delete hl-hover-gray rounded' aria-label='{{ 'Delete'|trans }}' title='{{ 'Delete'|trans }}'><i class='fas fa-trash-alt fa-xs'></i></button>
+              <button type='button' data-action='toggle-folder-more-actions' data-id='{{ folder.id }}' class='folder-action-btn hl-hover-gray rounded' aria-label='{{ 'More folder actions'|trans }}' title='{{ 'More'|trans }}' aria-expanded='false'>
+                <i class='fas fa-ellipsis-v fa-xs'></i>
+              </button>
             </span>
+          </div>
+          <div class='ml-4 pl-2 mt-1 folder-more-actions' data-folder-more-actions-for='{{ folder.id }}' hidden>
+            <button type='button' data-action='open-folder-export' data-id='{{ folder.id }}' data-name='{{ folder.full_path|e('html_attr') }}' class='btn btn-sm btn-outline-secondary mr-1'>
+              <i class='fas fa-download fa-fw mr-1'></i>{{ 'Export'|trans }}
+            </button>
+            <button type='button' data-action='edit-folder' data-id='{{ folder.id }}' data-parent-id='{{ folder.parent_id }}' data-name='{{ folder.name|e('html_attr') }}' data-description='{{ folder.description|e('html_attr') }}' class='btn btn-sm btn-outline-secondary mr-1'>
+              <i class='fas fa-pencil fa-fw mr-1'></i>{{ 'Edit'|trans }}
+            </button>
+            <button type='button' data-action='delete-folder' data-id='{{ folder.id }}' class='btn btn-sm btn-outline-danger folder-action-delete'>
+              <i class='fas fa-trash-alt fa-fw mr-1'></i>{{ 'Delete'|trans }}
+            </button>
           </div>
           {% if folder.description %}
             <div class='small color-medium text-truncate ml-4 pl-2 folder-description' title='{{ folder.description|e('html_attr') }}'>{{ folder.description }}</div>
@@ -252,4 +285,6 @@
     </div>
   </div>
 </div>
+
+{% include 'folder-export-modal.html' %}
 {% endif %}

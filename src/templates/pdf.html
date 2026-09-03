@@ -61,6 +61,27 @@
   </div>
   {% endif %}
 
+{% if entityData.experiment_goal %}
+  <section class='no-break'>
+    <h3>{{ 'Goals'|trans }}</h3>
+    <p>{{ entityData.experiment_goal|nl2br }}</p>
+  </section>
+{% endif %}
+
+{% if entityData.experiment_conclusion %}
+  <section class='no-break'>
+    <h3>{{ 'Conclusion'|trans }}</h3>
+    <p>{{ entityData.experiment_conclusion|nl2br }}</p>
+  </section>
+{% endif %}
+
+{% if entityData.experiment_notes %}
+  <section class='no-break'>
+    <h3>{{ 'Notes'|trans }}</h3>
+    <p>{{ entityData.experiment_notes|nl2br }}</p>
+  </section>
+{% endif %}
+
 {{ body|raw }}
 
 {% if entityData.metadata %}

@@ -1027,6 +1027,50 @@ function mergePermissionsJson(existing: string, extra: string[]): string {
   });
 }
 
+// union of teams/teamgroups/users already granted read OR write access, so
+// the Share modal can show what's already shared instead of always opening empty
+function unionPermissionsJson(canread: string, canwrite: string): { teams: number[]; teamgroups: number[]; users: number[] } {
+  const parse = (json: string): { teams?: number[]; teamgroups?: number[]; users?: number[] } => {
+    try {
+      return JSON.parse(json || '{}');
+    } catch {
+      return {};
+    }
+  };
+  const read = parse(canread);
+  const write = parse(canwrite);
+  return {
+    teams: Array.from(new Set([...(read.teams ?? []), ...(write.teams ?? [])])),
+    teamgroups: Array.from(new Set([...(read.teamgroups ?? []), ...(write.teamgroups ?? [])])),
+    users: Array.from(new Set([...(read.users ?? []), ...(write.users ?? [])])),
+  };
+}
+
+// pre-fill the Share modal with whoever the entry is already shared with,
+// so reopening it shows the previous selection instead of starting empty
+$('#permModal-share').on('show.bs.modal', async () => {
+  const current = await ApiC.getJson(`${entity.type}/${entity.id}`);
+  const permissions = unionPermissionsJson(current.canread, current.canwrite);
+
+  const teamsSelect = document.getElementById('share_select_teams') as HTMLSelectElement & { tomselect?: { setValue: (v: string[]) => void } };
+  teamsSelect?.tomselect?.setValue(permissions.teams.map(id => `team:${id}`));
+
+  const teamgroupsSelect = document.getElementById('share_select_teamgroups') as HTMLSelectElement & { tomselect?: { setValue: (v: string[]) => void } };
+  teamgroupsSelect?.tomselect?.setValue(permissions.teamgroups.map(id => `teamgroup:${id}`));
+
+  const usersSelect = document.getElementById('share_select_users') as HTMLSelectElement & {
+    tomselect?: { addOption: (o: { value: string; text: string }) => void; setValue: (v: string[]) => void };
+  };
+  if (usersSelect?.tomselect && permissions.users.length > 0) {
+    const users = await Promise.all(permissions.users.map(id => ApiC.getJson(`users/${id}`)));
+    users.forEach(u => usersSelect.tomselect.addOption({value: `user:${u.userid}`, text: `${u.fullname} (${u.email})`}));
+    usersSelect.tomselect.setValue(permissions.users.map(id => `user:${id}`));
+  }
+
+  const baseSelect = document.getElementById('share_select_base') as HTMLSelectElement;
+  if (baseSelect) baseSelect.value = current.canread_base || current.canwrite_base || '';
+});
+
 // the "Share" modal: grant read-only, write-only, or read & write access to
 // whoever is selected, on top of (never instead of) the existing lists --
 // unlike save-permissions/save-permissions-both, which replace a list wholesale
@@ -1036,23 +1080,23 @@ on('save-permissions-share', async (el: HTMLElement) => {
     ...(($('#share_select_teamgroups').val() as string[] | null) ?? []),
     ...(($('#share_select_users').val() as string[] | null) ?? []),
   ];
-  if (selected.length === 0) return;
+  const base = (document.getElementById('share_select_base') as HTMLSelectElement).value;
+  if (selected.length === 0 && !base) return;
   const level = el.dataset.level;
   const current = await ApiC.getJson(`${entity.type}/${entity.id}`);
   const params: Record<string, string> = {};
   if (level === 'read' || level === 'both') {
-    params['canread'] = mergePermissionsJson(current.canread, selected);
+    if (selected.length > 0) params['canread'] = mergePermissionsJson(current.canread, selected);
+    if (base) params['canread_base'] = base;
   }
   if (level === 'write' || level === 'both') {
-    params['canwrite'] = mergePermissionsJson(current.canwrite, selected);
+    if (selected.length > 0) params['canwrite'] = mergePermissionsJson(current.canwrite, selected);
+    if (base) params['canwrite_base'] = base;
   }
   await ApiC.patch(`${entity.type}/${entity.id}`, params);
   await reloadElements(['canreadDiv', 'canwriteDiv']);
-  // clear the picker so the next share starts empty
-  ['share_select_teams', 'share_select_teamgroups', 'share_select_users'].forEach(id => {
-    const select = document.getElementById(id) as HTMLSelectElement & { tomselect?: { clear: () => void } };
-    select?.tomselect?.clear();
-  });
+  // the modal's show.bs.modal handler re-syncs the picker from the entity's
+  // current state next time it's opened, so nothing needs clearing here
 });
 
 on('select-lang', () => {
@@ -1406,29 +1450,6 @@ on('update-entity-body', async (el: HTMLElement) => {
         : '?mode=view&id=' + entity.id,
     );
   }
-});
-
-// APPEND LOG ENTRY: insert a timestamped heading at the end of the body and auto-save
-on('append-log-entry', () => {
-  const editor = getEditor();
-  const now = DateTime.now();
-  const timestamp = now.toFormat('yyyy-MM-dd HH:mm');
-
-  if (editor.type === 'tiny') {
-    // TinyMCE: get current content, append log entry, replace all
-    const currentContent = editor.getContent();
-    const logHtml = `<hr><h3>${timestamp}</h3><p>&nbsp;</p>`;
-    editor.replaceContent(currentContent + logHtml);
-  } else {
-    // Markdown: append timestamped heading
-    const textarea = document.getElementById('body_area') as HTMLTextAreaElement;
-    const logMd = `\n\n---\n### ${timestamp}\n\n`;
-    textarea.value += logMd;
-    textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
-    textarea.focus();
-  }
-  // Auto-save after inserting
-  updateEntityBody();
 });
 
 on('search-pubchem', (el: HTMLElement) => {

@@ -30,7 +30,7 @@ export default class FoldersPanel extends SidePanel {
   }
 
   private async loadPanel(): Promise<void> {
-    const cacheKey = 'folders-panel-html-v1';
+    const cacheKey = 'folders-panel-html-v2';
     const cached = sessionStorage.getItem(cacheKey);
     const cachedAt = Number(sessionStorage.getItem(`${cacheKey}-at`) ?? 0);
     let fragmentHtml = cachedAt > Date.now() - 30000 ? cached : null;
@@ -42,6 +42,7 @@ export default class FoldersPanel extends SidePanel {
         responseDocument.getElementById(this.panelId)?.outerHTML ?? '',
         responseDocument.getElementById('editExperimentFolderModal')?.outerHTML ?? '',
         responseDocument.getElementById('folderReadmeModal')?.outerHTML ?? '',
+        responseDocument.getElementById('folderExportModal')?.outerHTML ?? '',
       ].join('');
       sessionStorage.setItem(cacheKey, fragmentHtml);
       sessionStorage.setItem(`${cacheKey}-at`, String(Date.now()));
@@ -52,7 +53,7 @@ export default class FoldersPanel extends SidePanel {
     if (!freshPanel || !currentPanel) return;
     freshPanel.removeAttribute('hidden');
     currentPanel.replaceWith(freshPanel);
-    ['editExperimentFolderModal', 'folderReadmeModal'].forEach(id => {
+    ['editExperimentFolderModal', 'folderReadmeModal', 'folderExportModal'].forEach(id => {
       if (document.getElementById(id)) return;
       const modal = documentCopy.getElementById(id);
       if (modal) document.body.append(modal);

@@ -17,6 +17,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
 type FolderScope = 'mine' | 'all';
+type FolderEntityType = 'experiments' | 'items';
 
 interface FolderReadme {
   id: number;
@@ -44,6 +45,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const folderScopeKey = `experiment-folder-scope-${currentUserId}`;
   const storedFolderScope = localStorage.getItem(folderScopeKey);
   let activeFolderScope: FolderScope = storedFolderScope === 'all' ? 'all' : 'mine';
+  // the folder tree itself is shared between experiments and resources, only
+  // which page a folder link opens (and which entity count badge shows)
+  // depends on this -- persisted per-user so it survives navigating around
+  const folderEntityTypeKey = `experiment-folder-entity-type-${currentUserId}`;
+  const storedFolderEntityType = localStorage.getItem(folderEntityTypeKey);
+  let activeFolderEntityType: FolderEntityType = storedFolderEntityType === 'items' ? 'items' : 'experiments';
   let activeReadme: FolderReadme | null = null;
 
   function readFavoriteFolderIds(element: HTMLElement): string[] {
@@ -150,6 +157,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /**
+   * The folder tree is shared between experiments and resources -- this
+   * swaps which page folder links point to and which entity-count badge
+   * shows, entirely client-side (both counts are already in the DOM).
+   */
+  function applyFolderEntityType(type: FolderEntityType): void {
+    activeFolderEntityType = type;
+    localStorage.setItem(folderEntityTypeKey, type);
+
+    const typeSelect = document.getElementById('folderEntityTypeSelect') as HTMLSelectElement | null;
+    if (typeSelect) {
+      typeSelect.value = type;
+      typeSelect.closest('[data-active-entity-type]')?.setAttribute('data-active-entity-type', type);
+    }
+
+    // the "All X" quick-link option's visible label depends on the entity type
+    const quickLinkSelect = document.getElementById('folderQuickLinkSelect') as HTMLSelectElement | null;
+    if (quickLinkSelect) {
+      const allOption = quickLinkSelect.querySelector('option[value="all"]') as HTMLOptionElement | null;
+      const targetLabel = type === 'items' ? allOption?.dataset.itemsLabel : allOption?.dataset.experimentsLabel;
+      if (allOption && targetLabel) allOption.textContent = targetLabel;
+    }
+
+    document.querySelectorAll<HTMLAnchorElement>('[data-folder-entity-link]').forEach(link => {
+      const targetHref = type === 'items' ? link.dataset.itemsHref : link.dataset.experimentsHref;
+      if (targetHref) link.href = targetHref;
+      const count = (type === 'items' ? link.dataset.resourcesCount : link.dataset.experimentsCount) ?? '0';
+      const badge = link.querySelector('.folder-entity-count') as HTMLElement | null;
+      if (badge) {
+        badge.textContent = count;
+        badge.hidden = count === '0';
+      }
+    });
+
+    // re-apply the mine/all entity-list scope on top, since it also rewrites href
+    updateFolderEntityLinks(activeFolderScope);
+  }
+
+  function getQuickLinkHref(option: HTMLOptionElement, type: FolderEntityType): string | undefined {
+    return type === 'items' ? option.dataset.itemsHref : option.dataset.experimentsHref;
+  }
+
   function applyFolderScope(scope: FolderScope): void {
     activeFolderScope = scope;
     localStorage.setItem(folderScopeKey, scope);
@@ -246,6 +295,26 @@ document.addEventListener('DOMContentLoaded', () => {
         (document.querySelector('[data-action="create-experiment-folder"]') as HTMLElement)?.click();
       }
     });
+
+    document.getElementById('folderEntityTypeSelect')?.addEventListener('change', (event: Event) => {
+      const value = (event.target as HTMLSelectElement).value;
+      if (value === 'experiments' || value === 'items') {
+        applyFolderEntityType(value);
+      }
+    });
+
+    document.getElementById('folderQuickLinkSelect')?.addEventListener('change', (event: Event) => {
+      const select = event.target as HTMLSelectElement;
+      const option = select.selectedOptions[0];
+      const href = option && getQuickLinkHref(option, activeFolderEntityType);
+      if (href) window.location.href = href;
+    });
+
+    document.getElementById('folderExportModalFormat')?.addEventListener('change', (event: Event) => {
+      const format = (event.target as HTMLSelectElement).value;
+      const row = document.getElementById('folderExportModalZipEntityFormatRow');
+      if (row) row.hidden = format !== 'zip';
+    });
   }
 
   function initializeFolderTreeState(): void {
@@ -275,6 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
       : null;
     const activeFolderIsOther = Boolean(currentNode?.closest('.other-folders-wrapper'));
     setOtherFoldersOpen(activeFolderIsOther || localStorage.getItem(OTHER_FOLDERS_KEY) === 'open');
+    applyFolderEntityType(activeFolderEntityType);
     applyFolderScope(activeFolderScope);
     bindFolderInteractiveControls();
   }
@@ -446,6 +516,17 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem(OTHER_FOLDERS_KEY, isOpen ? 'open' : 'collapsed');
   });
 
+  on('toggle-folder-more-actions', (el: HTMLElement, event: Event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    const folderId = el.dataset.id;
+    const panel = document.querySelector(`[data-folder-more-actions-for="${folderId}"]`) as HTMLElement | null;
+    if (!panel) return;
+    const isOpen = panel.hidden;
+    panel.hidden = !isOpen;
+    el.setAttribute('aria-expanded', String(isOpen));
+  });
+
   // Toggle folder on click — registered via the global on() dispatcher
   // because #container's click listener routes all data-action clicks
   on('toggle-folder-children', (el: HTMLElement) => {
@@ -582,6 +663,41 @@ document.addEventListener('DOMContentLoaded', () => {
     parentSelect.value = el.dataset.parentId ?? '';
     (document.getElementById('editExperimentFolderDescription') as HTMLTextAreaElement).value = el.dataset.description ?? '';
     $('#editExperimentFolderModal').modal('show');
+  });
+
+  on('open-folder-export', (el: HTMLElement, event: Event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    (document.getElementById('folderExportModalFolderId') as HTMLInputElement).value = el.dataset.id ?? '';
+    (document.getElementById('folderExportModalEntityType') as HTMLInputElement).value = activeFolderEntityType;
+    const nameEl = document.getElementById('folderExportModalFolderName');
+    if (nameEl) nameEl.textContent = el.dataset.name ?? '';
+    $('#folderExportModal').modal('show');
+  });
+
+  on('export-folder-confirm', () => {
+    const folderId = (document.getElementById('folderExportModalFolderId') as HTMLInputElement).value;
+    const type = (document.getElementById('folderExportModalEntityType') as HTMLInputElement).value || 'experiments';
+    let format = (document.getElementById('folderExportModalFormat') as HTMLSelectElement).value;
+    if (!folderId) return;
+    const pdfa = (document.getElementById('folderExportModalPdfa') as HTMLInputElement).checked;
+    if (pdfa && format === 'pdf') {
+      format = 'pdfa';
+    } else if (pdfa && format === 'zip') {
+      format = 'zipa';
+    }
+    let url = `make.php?format=${encodeURIComponent(format)}&folder=${encodeURIComponent(folderId)}&type=${encodeURIComponent(type)}`;
+    if (format === 'zip' || format === 'zipa') {
+      const entityFormat = (document.getElementById('folderExportModalZipEntityFormat') as HTMLSelectElement).value;
+      url += `&entity_format=${encodeURIComponent(entityFormat)}`;
+      if ((document.getElementById('folderExportModalJson') as HTMLInputElement).checked) {
+        url += '&json=1';
+      }
+    }
+    if ((document.getElementById('folderExportModalChangelog') as HTMLInputElement).checked) {
+      url += '&changelog=1';
+    }
+    window.location.href = url;
   });
 
   on('save-folder-details', (_el: HTMLElement, event: Event) => {

@@ -1376,9 +1376,9 @@ tr:first-child td {
     align-items: center;
     display: inline-flex;
     flex: 0 0 auto;
-    gap: 0.45rem;
+    gap: 0.1rem;
     justify-content: flex-end;
-    padding-left: 0.65rem;
+    padding-left: 0.35rem;
   }
 }
 
@@ -1389,11 +1389,11 @@ tr:first-child td {
   color: var(--medium);
   cursor: pointer;
   display: inline-flex;
-  flex: 0 0 1.75rem;
-  height: 1.75rem;
+  flex: 0 0 1.5rem;
+  height: 1.5rem;
   justify-content: center;
   padding: 0;
-  width: 1.75rem;
+  width: 1.5rem;
 
   &:hover,
   &:focus {

@@ -1,7 +1,7 @@
 /** Fork-owned date, title and horizontal-rule tools for TinyMCE. */
 import { DateTime } from 'luxon';
 import { Editor } from 'tinymce/tinymce';
-import DateReferenceEditor from '../DateReferenceEditor.class';
+import DateReferenceEditor, { formatTodayWithSavedDefaults } from '../DateReferenceEditor.class';
 import ExperimentTitleEditor from '../ExperimentTitleEditor.class';
 
 function getNow(): DateTime {
@@ -16,6 +16,14 @@ function getDatetime(): string {
     return fullDatetime.slice(0, -4);
   }
   return getNow().toLocaleString(DateTime.DATETIME_MED_WITH_WEEKDAY);
+}
+
+// Same date format the user picked for normal "Day" insertion, followed by
+// a hyphen and the current time -- for a quick "log entry" timestamp.
+function getLogEntryDatetime(): string {
+  const date = formatTodayWithSavedDefaults();
+  const time = getNow().toLocaleString(DateTime.TIME_SIMPLE);
+  return `${date} - ${time}`;
 }
 
 function insertHorizontalRule(
@@ -96,8 +104,8 @@ export function registerDateTitleExtension(editor: Editor): void {
       case 'options':
         dateReferenceEditor.openCalendar();
         break;
-      case 'timestamp':
-        editor.insertContent(`${getDatetime()} `);
+      case 'logentry':
+        editor.insertContent(`${getLogEntryDatetime()} `);
         break;
       case 'edit': {
         const selectedReference = dateReferenceEditor.getSelectedReference();
@@ -128,8 +136,8 @@ export function registerDateTitleExtension(editor: Editor): void {
         },
         {
           type: 'choiceitem' as const,
-          text: 'Timestamp',
-          value: 'timestamp',
+          text: 'Log entry',
+          value: 'logentry',
           icon: 'elabftw-clock',
         },
       ];

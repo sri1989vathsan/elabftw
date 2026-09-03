@@ -17,7 +17,19 @@ export default class Tab {
     if (!menu) {
       return;
     }
+    // the browser restores the scroll position tied to this history entry
+    // (e.g. from a previous, taller tab) once the hidden tab content is
+    // revealed below -- always land on top of the page instead. Async
+    // widgets in the tab (TinyMCE, TomSelect) can also grow the page and
+    // shift the scroll position well after this runs, so re-assert on
+    // 'load' and once more shortly after for anything that mounts later.
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
     this.display(this.currentTab);
+    window.scrollTo(0, 0);
+    window.addEventListener('load', () => window.scrollTo(0, 0), { once: true });
+    setTimeout(() => window.scrollTo(0, 0), 500);
     document.getElementById('loading-spinner')?.remove();
     // add a listener on actionable elements from the menu
     menu.querySelectorAll('[data-action="switch-tab"]').forEach(el => {

@@ -17,6 +17,7 @@ use Elabftw\Enums\AccessType;
 use Elabftw\Exceptions\AppException;
 use Elabftw\Exceptions\IllegalActionException;
 use Elabftw\Factories\LinksFactory;
+use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\FavTags;
 use Elabftw\Models\ItemsStatus;
@@ -65,6 +66,7 @@ try {
         $ItemsTypes->entityData['containers'] = $ContainersLinks->readAll();
     }
     $statusArr = $Status->readAll($Status->getQueryParams(new InputBag(array('limit' => 9999))));
+    $experimentsFoldersArr = new ExperimentsFolders($App->Users)->readAll();
     $teamGroupsArr = $TeamGroups->readAll();
     $allTeamUsersArr = $App->Users->readAllFromTeam();
     // only the unvalidated ones
@@ -110,6 +112,7 @@ try {
     $template = 'admin.html';
     $renderArr = array(
         'allTeamUsersArr' => $allTeamUsersArr,
+        'experimentsFoldersArr' => $experimentsFoldersArr,
         'tagsArr' => $TeamTags->readAll(),
         'metadataGroups' => $metadataGroups,
         'allTeamgroupsArr' => $TeamGroups->readAllEverything(),

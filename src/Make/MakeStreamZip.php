@@ -26,14 +26,27 @@ use Elabftw\Models\Users2Rors;
 use Elabftw\Models\Users\Users;
 use ZipStream\ZipStream;
 use Override;
+use Psr\Log\NullLogger;
 
+use function fclose;
+use function fopen;
+use function htmlspecialchars;
+use function is_string;
+use function in_array;
 use function json_encode;
+use function rewind;
+use function sprintf;
+use function stream_get_contents;
 
 /**
  * Make a zip archive from experiment or db item
  */
 class MakeStreamZip extends AbstractMakeZip
 {
+    private const array VALID_ENTITY_FORMATS = array('eln', 'pdf', 'html');
+
+    private readonly string $entityFormat;
+
     public function __construct(
         protected ZipStream $Zip,
         protected Users $requester,
@@ -42,8 +55,16 @@ class MakeStreamZip extends AbstractMakeZip
         protected bool $includeChangelog = false,
         protected bool $includeJson = false,
         protected Classification $classification = Classification::None,
+        // what each entity is saved as inside the zip: a self-contained
+        // .eln archive by default (so each entry can be reimported
+        // elsewhere), a rendered PDF, or a plain HTML file
+        string $entityFormat = 'eln',
+        // when exporting a folder, its readme is embedded as README.md at the root of the zip
+        protected ?string $folderReadme = null,
+        protected ?string $folderName = null,
     ) {
         parent::__construct($Zip);
+        $this->entityFormat = in_array($entityFormat, self::VALID_ENTITY_FORMATS, true) ? $entityFormat : 'eln';
     }
 
     /**
@@ -62,6 +83,12 @@ class MakeStreamZip extends AbstractMakeZip
     #[Override]
     public function getStreamZip(): void
     {
+        if ($this->folderReadme !== null) {
+            $this->Zip->addFile(
+                sprintf('%s - README.md', $this->folderName ?? 'folder'),
+                $this->folderReadme,
+            );
+        }
         foreach ($this->entityArr as $entity) {
             $this->addToZip($entity);
         }
@@ -105,6 +132,53 @@ class MakeStreamZip extends AbstractMakeZip
     }
 
     /**
+     * Add this single entity as its own self-contained .eln file inside the zip.
+     * An .eln archive is itself a zip (RO-Crate), so this builds one in memory
+     * (rather than streaming straight to the HTTP response, like a plain
+     * .eln export does) and embeds those bytes as one file in the outer zip.
+     */
+    protected function addEln(AbstractEntity $entity): void
+    {
+        $buffer = fopen('php://temp', 'r+');
+        try {
+            $innerZip = new ZipStream(sendHttpHeaders: false, outputStream: $buffer);
+            $MakeEln = new MakeEln(
+                new NullLogger(),
+                $innerZip,
+                $this->requester,
+                array($entity),
+                new Instance2Rors(),
+                new Teams2Rors($this->requester->getTeam()),
+                new Users2Rors($this->requester->getUserid()),
+            );
+            $MakeEln->getStreamZip();
+            rewind($buffer);
+            $bytes = stream_get_contents($buffer);
+        } finally {
+            fclose($buffer);
+        }
+        if (is_string($bytes) && $bytes !== '') {
+            $this->Zip->addFile($this->folder . '/' . $entity->toFsTitle() . '.eln', $bytes);
+        }
+    }
+
+    /**
+     * Add this entity as a plain, standalone HTML file inside the zip
+     */
+    protected function addHtml(AbstractEntity $entity): void
+    {
+        $title = $entity->entityData['title'] ?? '';
+        $body = $entity->entityData['body_html'] ?? $entity->entityData['body'] ?? '';
+        $html = sprintf(
+            "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title>%s</title></head><body><h1>%s</h1>%s</body></html>\n",
+            htmlspecialchars($title, ENT_QUOTES),
+            htmlspecialchars($title, ENT_QUOTES),
+            $body,
+        );
+        $this->Zip->addFile($this->folder . '/' . $entity->toFsTitle() . '.html', $html);
+    }
+
+    /**
      * Produce metadata for the "meta" key of the json file
      */
     protected function getMeta(): array
@@ -136,7 +210,11 @@ class MakeStreamZip extends AbstractMakeZip
                 return;
             }
         }
-        $this->addPdf($entity);
+        match ($this->entityFormat) {
+            'eln' => $this->addEln($entity),
+            'html' => $this->addHtml($entity),
+            default => $this->addPdf($entity),
+        };
         // add a full json export too, if requested
         if ($this->includeJson) {
             $JsonMaker = new MakeFullJson(array($entity));

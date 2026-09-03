@@ -137,10 +137,28 @@ on('destroy-teamgroup', (el: HTMLElement) => {
   }
 });
 
+// show the "inside the ZIP, save each entry as" picker only when a zip format is selected
+function toggleZipEntityFormat(formatSelectId: string, wrapperId: string): void {
+  const formatSelect = document.getElementById(formatSelectId) as HTMLSelectElement;
+  const wrapper = document.getElementById(wrapperId);
+  if (!formatSelect || !wrapper) {
+    return;
+  }
+  wrapper.hidden = formatSelect.value !== 'zip';
+}
+document.getElementById('categoryExportFormat')?.addEventListener('change', () => toggleZipEntityFormat('categoryExportFormat', 'categoryExportZipEntityFormat'));
+document.getElementById('userExportFormat')?.addEventListener('change', () => toggleZipEntityFormat('userExportFormat', 'userExportZipEntityFormat'));
+document.getElementById('folderExportFormat')?.addEventListener('change', () => toggleZipEntityFormat('folderExportFormat', 'folderExportZipEntityFormat'));
+
 on('export-category', () => {
   const source = (document.getElementById('categoryExport') as HTMLSelectElement).value;
   const format = (document.getElementById('categoryExportFormat') as HTMLSelectElement).value;
-  window.location.href = `make.php?format=${encodeURIComponent(format)}&category=${encodeURIComponent(source)}&type=items`;
+  let url = `make.php?format=${encodeURIComponent(format)}&category=${encodeURIComponent(source)}&type=items`;
+  if (format === 'zip') {
+    const entityFormat = (document.getElementById('categoryExportZipEntityFormatSelect') as HTMLSelectElement).value;
+    url += `&entity_format=${encodeURIComponent(entityFormat)}`;
+  }
+  window.location.href = url;
 });
 
 on('export-user', () => {
@@ -149,12 +167,40 @@ on('export-user', () => {
   const rawValue = (document.getElementById('userExport_select_users') as HTMLSelectElement).value;
   const userid = rawValue.startsWith('user:') ? rawValue.split(':')[1] : rawValue;
   const type = (document.getElementById('userExportType') as HTMLSelectElement).value;
-  const format = (document.getElementById('userExportFormat') as HTMLSelectElement).value;
+  let format = (document.getElementById('userExportFormat') as HTMLSelectElement).value;
   if (!userid) {
     notify.error('Pick a user to export first.');
     return;
   }
-  window.location.href = `make.php?format=${encodeURIComponent(format)}&owner=${encodeURIComponent(userid)}&type=${encodeURIComponent(type)}`;
+  const pdfa = (document.getElementById('userExportPdfa') as HTMLInputElement).checked;
+  if (pdfa && format === 'pdf') {
+    format = 'pdfa';
+  } else if (pdfa && format === 'zip') {
+    format = 'zipa';
+  }
+  let url = `make.php?format=${encodeURIComponent(format)}&owner=${encodeURIComponent(userid)}&type=${encodeURIComponent(type)}`;
+  if (format === 'zip' || format === 'zipa') {
+    const entityFormat = (document.getElementById('userExportZipEntityFormatSelect') as HTMLSelectElement).value;
+    url += `&entity_format=${encodeURIComponent(entityFormat)}`;
+    if ((document.getElementById('userExportJson') as HTMLInputElement).checked) {
+      url += '&json=1';
+    }
+  }
+  if ((document.getElementById('userExportWithChangelog') as HTMLInputElement).checked) {
+    url += '&changelog=1';
+  }
+  window.location.href = url;
+});
+
+on('export-folder', () => {
+  const folder = (document.getElementById('folderExport') as HTMLSelectElement).value;
+  const format = (document.getElementById('folderExportFormat') as HTMLSelectElement).value;
+  let url = `make.php?format=${encodeURIComponent(format)}&folder=${encodeURIComponent(folder)}&type=experiments`;
+  if (format === 'zip') {
+    const entityFormat = (document.getElementById('folderExportZipEntityFormatSelect') as HTMLSelectElement).value;
+    url += `&entity_format=${encodeURIComponent(entityFormat)}`;
+  }
+  window.location.href = url;
 });
 
 on('admin-add-tag', () => {
