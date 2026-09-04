@@ -609,7 +609,75 @@
   function insertChecklistItem(el: HTMLElement | undefined): void {
     if (!el) return;
     el.focus();
-    document.execCommand('insertHTML', false, '<div class="pm-check-item"><input type="checkbox"> </div>');
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    const hasText = !range.collapsed && selection.toString().trim() !== '';
+    const text = hasText ? selection.toString() : '';
+    if (hasText) range.deleteContents();
+
+    // Built via the DOM (not string interpolation), and inserted via the
+    // Range API (not execCommand, whose own choice of where to leave the
+    // caret afterwards is inconsistent across browsers and broke chaining
+    // a second checklist item with Enter).
+    const item = document.createElement('span');
+    item.className = 'pm-check-item';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    item.appendChild(checkbox);
+    const textNode = document.createTextNode(hasText ? ` ${text}` : '\u00A0');
+    item.appendChild(textNode);
+
+    // A block-level <div> inserted mid-flow gets misplaced by the browser's
+    // HTML parser when the cursor isn't already at the start of a line (it
+    // can't nest inside inline content) -- an inline <span> preceded by an
+    // explicit <br> avoids that while still starting its own line.
+    const br = document.createElement('br');
+    range.insertNode(br);
+    range.setStartAfter(br);
+    range.collapse(true);
+    range.insertNode(item);
+
+    // Leave the caret inside the item's own text, right after the checkbox,
+    // so handleChecklistKeydown() below can find it as the current line's
+    // owner and typed text lands next to the checkbox rather than after it.
+    const caretRange = document.createRange();
+    caretRange.setStart(textNode, textNode.length);
+    caretRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(caretRange);
+  }
+
+  // Pressing Enter while on a checklist line should continue the list, like
+  // pressing Enter in a bullet/numbered list does -- otherwise it just ends
+  // the checklist and starts a plain line.
+  function handleChecklistKeydown(event: KeyboardEvent, el: HTMLElement | undefined): void {
+    if (!el || event.key !== 'Enter' || event.shiftKey) return;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    // The caret's container is either a descendant of `el` (climb to the
+    // child of `el` that owns it) or `el` itself, positioned between two of
+    // its top-level children (use the one right before the caret).
+    let node: Node | null = range.startContainer;
+    if (node === el) {
+      node = range.startOffset > 0 ? el.childNodes[range.startOffset - 1] : null;
+    } else {
+      while (node && node.parentNode !== el) node = node.parentNode;
+    }
+    let sibling: Node | null = node;
+    let onChecklistLine = false;
+    while (sibling) {
+      if (sibling instanceof HTMLElement && sibling.tagName === 'BR') break;
+      if (sibling instanceof HTMLElement && sibling.classList.contains('pm-check-item')) {
+        onChecklistLine = true;
+        break;
+      }
+      sibling = sibling.previousSibling;
+    }
+    if (!onChecklistLine) return;
+    event.preventDefault();
+    insertChecklistItem(el);
   }
 
   function insertLink(el: HTMLElement | undefined): void {
@@ -1474,7 +1542,7 @@
           <span class='pm-label'>{t('Notes')}</span>
           {#if detailEditing}
             <div class='rte-toolbar' role='toolbar' aria-label={t('Formatting')}>
-              <button type='button' class='rte-btn' title={t('Heading')} on:mousedown|preventDefault={() => exec(detailNotesEl, 'formatBlock', 'H4')}><i class='fas fa-heading' aria-hidden='true'></i></button>
+              <button type='button' class='rte-btn' title={t('Heading')} on:mousedown|preventDefault={() => exec(detailNotesEl, 'formatBlock', '<h4>')}><i class='fas fa-heading' aria-hidden='true'></i></button>
               <button type='button' class='rte-btn' title={t('Bold')} on:mousedown|preventDefault={() => exec(detailNotesEl, 'bold')}><i class='fas fa-bold' aria-hidden='true'></i></button>
               <button type='button' class='rte-btn' title={t('Italic')} on:mousedown|preventDefault={() => exec(detailNotesEl, 'italic')}><i class='fas fa-italic' aria-hidden='true'></i></button>
               <button type='button' class='rte-btn' title={t('Bullet list')} on:mousedown|preventDefault={() => exec(detailNotesEl, 'insertUnorderedList')}><i class='fas fa-list-ul' aria-hidden='true'></i></button>
@@ -1492,6 +1560,7 @@
               aria-label={t('Notes')}
               bind:this={detailNotesEl}
               on:change={syncChecklistState}
+              on:keydown={(event) => handleChecklistKeydown(event, detailNotesEl)}
             >{@html editNotes}</div>
           {:else if detailEntry.notes}
             <div class='rte-content'>{@html detailEntry.notes}</div>
