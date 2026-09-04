@@ -4280,7 +4280,7 @@ div > .sticky-navbar {
   display: flex;
   flex-direction: column;
   max-height: 90vh;
-  max-width: 28rem;
+  max-width: 40rem;
   width: 100%;
 }
 
@@ -4407,7 +4407,11 @@ div > .sticky-navbar {
 }
 
 .pm-project-description {
-  margin: 0.5rem 0 0;
+  background: var(--chrome-bg);
+  border: 1px solid var(--secondary);
+  border-radius: 0.25rem;
+  margin: 0.6rem 0 0;
+  padding: 0.5rem 0.7rem;
 }
 
 .pm-columns {
@@ -4718,30 +4722,26 @@ div > .sticky-navbar {
   border-bottom: 0;
 }
 
-.pm-entity-search-results {
-  background: var(--white);
-  border: 1px solid var(--secondary-muted, #d9d9d9);
-  border-radius: 0.25rem;
-  list-style: none;
-  margin: 0.3rem 0 0;
-  max-height: 10rem;
-  overflow-y: auto;
-  padding: 0;
-}
-
-.pm-entity-search-result {
-  display: block;
-  padding: 0.4rem 0.6rem;
-  text-align: left;
-  width: 100%;
-}
-
-.pm-entity-search-result:hover {
-  background: var(--secondary-muted, #d9d9d9);
-}
 
 .pm-check-item {
   align-items: center;
   display: flex;
   gap: 0.4rem;
+}
+
+.pm-field-edit-btn {
+  color: var(--secondary);
+  font-size: 0.8rem;
+  padding: 0.1rem 0.2rem;
+}
+
+.pm-field-edit-btn:hover {
+  color: var(--primary);
+}
+
+// Sits below the Search/Folders/etc. side panels (z-index 1030) so one can
+// be opened and used to link items to the open task without it being
+// hidden behind this dialog's dimming background.
+.pm-overlay-task {
+  z-index: 1020;
 }

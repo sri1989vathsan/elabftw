@@ -56,11 +56,6 @@
     title: string | null;
   };
 
-  type EntitySearchResult = {
-    id: number;
-    title: string;
-  };
-
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
 
@@ -94,11 +89,6 @@
   let notesEl: HTMLDivElement;
   let detailEntityLinks: EntityLink[] = [];
   let loadingEntityLinks = false;
-  let entityLinkType: EntityLinkType = 'experiments';
-  let entityLinkQuery = '';
-  let entityLinkResults: EntitySearchResult[] = [];
-  let searchingEntityLinks = false;
-  let entityLinkSearchToken = 0;
   let weblinkUrl = '';
   let weblinkLabel = '';
   let addingWeblink = false;
@@ -217,6 +207,18 @@
     void loadTeamMembers();
     void loadProjects();
     void load();
+
+    // Lets the Search side panel offer a "Link to task" button on its
+    // results (see FavoriteFilters.class.ts) while a task's detail dialog is
+    // open, the same way it offers "Link" while editing an experiment.
+    const onEntityLinkAdded = (): void => {
+      if (detailTask) void loadEntityLinks(detailTask.id);
+    };
+    window.addEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
+    return () => {
+      window.removeEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
+      window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: null }));
+    };
   });
 
   function selectScope(next: 'assigned' | 'created' | 'all'): void {
@@ -285,12 +287,11 @@
     detailDescription = task.description ?? '';
     detailNotes = task.notes ?? '';
     newCommentText = '';
-    entityLinkQuery = '';
-    entityLinkResults = [];
     weblinkUrl = '';
     weblinkLabel = '';
     void loadComments(task.id);
     void loadEntityLinks(task.id);
+    window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: { id: task.id, title: task.body } }));
   }
 
   function closeDetail(): void {
@@ -298,6 +299,7 @@
     detailEditing = false;
     detailComments = [];
     detailEntityLinks = [];
+    window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: null }));
   }
 
   function startEdit(): void {
@@ -352,40 +354,6 @@
       notify.error(error instanceof Error ? error.message : 'Could not load linked items.');
     } finally {
       loadingEntityLinks = false;
-    }
-  }
-
-  async function searchEntityLinks(): Promise<void> {
-    const query = entityLinkQuery.trim();
-    if (query.length < 2) {
-      entityLinkResults = [];
-      return;
-    }
-    const token = ++entityLinkSearchToken;
-    searchingEntityLinks = true;
-    try {
-      const results = await ApiC.getJson(`${entityLinkType}?q=${encodeURIComponent(query)}&limit=10`) as EntitySearchResult[];
-      if (token !== entityLinkSearchToken) return; // a newer search superseded this one
-      entityLinkResults = results;
-    } catch {
-      if (token === entityLinkSearchToken) entityLinkResults = [];
-    } finally {
-      if (token === entityLinkSearchToken) searchingEntityLinks = false;
-    }
-  }
-
-  async function addEntityLink(result: EntitySearchResult): Promise<void> {
-    if (!detailTask) return;
-    try {
-      await ApiC.post(`${Model.Todolist}/${detailTask.id}/entity_links`, {
-        entity_type: entityLinkType,
-        entity_id: result.id,
-      });
-      entityLinkQuery = '';
-      entityLinkResults = [];
-      await loadEntityLinks(detailTask.id);
-    } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not link that item.');
     }
   }
 
@@ -486,6 +454,25 @@
     document.execCommand('insertHTML', false, '<div class="pm-check-item"><input type="checkbox"> </div>');
   }
 
+  function insertLink(el: HTMLElement | undefined): void {
+    if (!el) return;
+    const input = window.prompt(t('Enter a URL'));
+    const url = input?.trim();
+    if (!url) return;
+    el.focus();
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed && selection.toString().trim() !== '') {
+      document.execCommand('createLink', false, url);
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noreferrer noopener';
+    link.textContent = url;
+    document.execCommand('insertHTML', false, link.outerHTML);
+  }
+
   // Toggling a checkbox updates its live `checked` property but not the
   // serialized attribute, so it wouldn't survive being read back out of
   // notesEl.innerHTML on save without this -- keep the attribute in sync.
@@ -575,8 +562,15 @@
     {/if}
     <button type="button" class="pm-project-tab-new" on:click={() => openProjectDialog(null)}>+ {t('New project')}</button>
   </div>
-  {#if activeProject?.description}
-    <p class="pm-muted pm-project-description">{activeProject.description}</p>
+  {#if activeProject}
+    <div class="pm-project-description">
+      <span class="pm-label mb-0">{t('Description')}</span>
+      {#if activeProject.description}
+        <p class="mb-0">{activeProject.description}</p>
+      {:else}
+        <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+      {/if}
+    </div>
   {/if}
 
   <div class="pm-card pm-new-card mb-3 mt-2">
@@ -740,14 +734,14 @@
 </div>
 
 {#if detailTask}
-  <div class="pm-overlay" role="presentation">
+  <div class="pm-overlay pm-overlay-task" role="presentation">
     <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmDetailTitle">
       <div class="pm-dialog-header">
-        <h4 id="pmDetailTitle" class="mb-0">{t('Task details')}</h4>
+        <h4 id="pmDetailTitle" class="mb-0">{detailEditing ? t('Edit task') : detailTask.body}</h4>
+        {#if detailTask.project_name}<span class="badge badge-info">{detailTask.project_name}</span>{/if}
         <button type="button" class="pm-close-btn" on:click={closeDetail} aria-label={t('Close')}>&times;</button>
       </div>
       <div class="pm-dialog-body">
-        {#if detailTask.project_name}<span class="badge badge-info mb-2">{detailTask.project_name}</span>{/if}
 
         {#if detailEditing}
           <div class="pm-dialog-field">
@@ -788,7 +782,12 @@
           </div>
 
           <div class="pm-dialog-field">
-            <span class="pm-label">{t('Description')}</span>
+            <div class="d-flex align-items-center justify-content-between">
+              <span class="pm-label mb-0">{t('Description')}</span>
+              <button type="button" class="btn-unstyled pm-field-edit-btn" title={t('Edit')} aria-label={t('Edit description')} on:mousedown|preventDefault={() => descriptionEl?.focus()}>
+                <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+              </button>
+            </div>
             <div
               id="pm-detail-description"
               class="rte-content form-control"
@@ -809,6 +808,7 @@
               <button type="button" class="rte-btn" title={t('Bullet list')} on:mousedown|preventDefault={() => exec(notesEl, 'insertUnorderedList')}><i class="fas fa-list-ul" aria-hidden="true"></i></button>
               <button type="button" class="rte-btn" title={t('Numbered list')} on:mousedown|preventDefault={() => exec(notesEl, 'insertOrderedList')}><i class="fas fa-list-ol" aria-hidden="true"></i></button>
               <button type="button" class="rte-btn" title={t('Checklist item')} on:mousedown|preventDefault={() => insertChecklistItem(notesEl)}><i class="fas fa-square-check" aria-hidden="true"></i></button>
+              <button type="button" class="rte-btn" title={t('Insert link')} on:mousedown|preventDefault={() => insertLink(notesEl)}><i class="fas fa-link" aria-hidden="true"></i></button>
               <button type="button" class="rte-btn" title={t('Clear formatting')} on:mousedown|preventDefault={() => exec(notesEl, 'removeFormat')}><i class="fas fa-eraser" aria-hidden="true"></i></button>
             </div>
             <div
@@ -823,7 +823,6 @@
             >{@html detailNotes}</div>
           </div>
         {:else}
-          <h5 class="mb-2">{detailTask.body}</h5>
           {#if detailTask.deadline}
             <div class="small pm-muted mb-1"><i class="fas fa-calendar fa-fw mr-1" aria-hidden="true"></i>{formatDeadline(detailTask.deadline)}</div>
           {/if}
@@ -842,22 +841,40 @@
             {t('Created by')} {detailTask.creator_fullname}
           </div>
 
-          {#if detailTask.description}
-            <div class="pm-dialog-field">
-              <span class="pm-label">{t('Description')}</span>
+          <div class="pm-dialog-field">
+            <span class="pm-label">{t('Description')}</span>
+            {#if detailTask.description}
               <div class="rte-content">{@html detailTask.description}</div>
-            </div>
-          {/if}
-          {#if detailTask.notes}
-            <div class="pm-dialog-field">
-              <span class="pm-label">{t('Notes')}</span>
+            {:else}
+              <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+            {/if}
+          </div>
+          <div class="pm-dialog-field">
+            <span class="pm-label">{t('Notes')}</span>
+            {#if detailTask.notes}
               <div class="rte-content">{@html detailTask.notes}</div>
-            </div>
-          {/if}
+            {:else}
+              <p class="pm-muted small mb-0">{t('No notes yet.')}</p>
+            {/if}
+          </div>
         {/if}
 
         <div class="pm-dialog-field">
-          <span class="pm-label">{t('Linked items')}</span>
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="pm-label mb-0">{t('Linked items')}</span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              on:click={() => {
+                const panel = document.getElementById('favoritesPanel');
+                if (panel?.hasAttribute('hidden')) {
+                  (document.querySelector('[data-action="toggle-sidepanel"][data-target="favorites"]') as HTMLElement | null)?.click();
+                }
+              }}
+            >
+              <i class="fas fa-magnifying-glass fa-fw mr-1" aria-hidden="true"></i>{t('Open Search to link')}
+            </button>
+          </div>
           {#if loadingEntityLinks}
             <p class="pm-muted small">{t('Loading')}…</p>
           {:else if detailEntityLinks.length === 0}
@@ -876,59 +893,22 @@
             </ul>
           {/if}
           <div class="d-flex pm-dialog-row">
-            <select
-              class="form-control flex-grow-0"
-              style="max-width:11rem"
-              bind:value={entityLinkType}
-              on:change={() => { entityLinkQuery = ''; entityLinkResults = []; weblinkUrl = ''; weblinkLabel = ''; }}
-              aria-label={t('Item type')}
-            >
-              <option value="experiments">{t('Experiment')}</option>
-              <option value="experiments_templates">{t('Template')}</option>
-              <option value="items">{t('Resource')}</option>
-              <option value="items_types">{t('Resource template')}</option>
-              <option value="weblink">{t('Link')}</option>
-            </select>
-            {#if entityLinkType === 'weblink'}
-              <input
-                type="url"
-                class="form-control"
-                placeholder={t('https://…')}
-                bind:value={weblinkUrl}
-                aria-label={t('Web address')}
-              />
-              <input
-                type="text"
-                class="form-control"
-                placeholder={t('Label (optional)')}
-                bind:value={weblinkLabel}
-                aria-label={t('Link label')}
-              />
-              <button type="button" class="btn btn-secondary ml-2" disabled={addingWeblink || !weblinkUrl.trim()} on:click={addWeblink}>{t('Add')}</button>
-            {:else}
-              <input
-                type="text"
-                class="form-control"
-                placeholder={t('Search by title…')}
-                bind:value={entityLinkQuery}
-                on:input={searchEntityLinks}
-                aria-label={t('Search by title')}
-              />
-            {/if}
+            <input
+              type="url"
+              class="form-control"
+              placeholder={t('https://…')}
+              bind:value={weblinkUrl}
+              aria-label={t('Web address')}
+            />
+            <input
+              type="text"
+              class="form-control"
+              placeholder={t('Label (optional)')}
+              bind:value={weblinkLabel}
+              aria-label={t('Link label')}
+            />
+            <button type="button" class="btn btn-secondary ml-2" disabled={addingWeblink || !weblinkUrl.trim()} on:click={addWeblink}>{t('Add')}</button>
           </div>
-          {#if entityLinkType !== 'weblink'}
-            {#if searchingEntityLinks}
-              <p class="pm-muted small mt-1">{t('Searching')}…</p>
-            {:else if entityLinkResults.length > 0}
-              <ul class="pm-entity-search-results">
-                {#each entityLinkResults as result (result.id)}
-                  <li>
-                    <button type="button" class="btn-unstyled pm-entity-search-result" on:click={() => addEntityLink(result)}>{result.title}</button>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          {/if}
         </div>
 
         <div class="pm-dialog-field">
@@ -995,8 +975,8 @@
           <input id="pm-project-name" type="text" class="form-control" bind:value={dialogName} maxlength="255" />
         </div>
         <div class="pm-dialog-field">
-          <label class="pm-label" for="pm-project-desc">{t('Short description')}</label>
-          <input id="pm-project-desc" type="text" class="form-control" bind:value={dialogDescription} maxlength="500" />
+          <label class="pm-label" for="pm-project-desc">{t('Description')}</label>
+          <textarea id="pm-project-desc" class="form-control" rows="3" bind:value={dialogDescription} maxlength="500"></textarea>
         </div>
         <div class="pm-dialog-field">
           <label class="pm-label" for="pm-project-picker">{t('Team members on this project')}</label>
