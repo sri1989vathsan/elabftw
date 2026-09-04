@@ -13,7 +13,7 @@
         </button>
       </div>
       <div class='modal-body'>
-        <p class='smallgray'>{{ 'Search for teams, user groups, or specific users, then grant them read-only, write-only, or read & write access. This only adds access -- it never removes access granted elsewhere.'|trans }}</p>
+        <p class='smallgray'>{{ 'Search for teams, user groups, or specific users, then grant them read-only or read & write access. This only adds access -- it never removes access granted elsewhere. To remove access, use the + button next to Visibility or Can write instead.'|trans }}</p>
 
         {# BASE #}
         <label for='share_select_base'><strong><i class='fas fa-user-shield mr-2' aria-hidden='true'></i>{{ 'Base'|trans }}</strong></label>
@@ -77,7 +77,6 @@
       <div class='modal-footer'>
         <button type='button' class='btn btn-secondary' data-dismiss='modal'>{{ 'Close'|trans }}</button>
         <button type='button' class='btn btn-ghost' data-dismiss='modal' data-level='read' data-action='save-permissions-share'><i class='fas fa-eye fa-fw mr-1' aria-hidden='true'></i>{{ 'Read only'|trans }}</button>
-        <button type='button' class='btn btn-ghost' data-dismiss='modal' data-level='write' data-action='save-permissions-share'><i class='fas fa-pencil-alt fa-fw mr-1' aria-hidden='true'></i>{{ 'Write only'|trans }}</button>
         <button type='button' class='btn btn-primary' data-dismiss='modal' data-level='both' data-action='save-permissions-share'><i class='fas fa-eye fa-fw mr-1' aria-hidden='true'></i><i class='fas fa-pencil-alt fa-fw mr-1' aria-hidden='true'></i>{{ 'Read & Write'|trans }}</button>
       </div>
     </div>
