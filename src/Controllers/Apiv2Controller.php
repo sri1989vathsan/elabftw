@@ -76,7 +76,10 @@ use Elabftw\Models\Teams;
 use Elabftw\Models\Teams2Rors;
 use Elabftw\Models\TeamTags;
 use Elabftw\Models\Feedback;
+use Elabftw\Models\FeedbackComments;
 use Elabftw\Models\Todolist;
+use Elabftw\Models\TodolistComments;
+use Elabftw\Models\TodolistProjects;
 use Elabftw\Models\UnfinishedSteps;
 use Elabftw\Models\Uploads;
 use Elabftw\Models\UserRequestActions;
@@ -388,7 +391,8 @@ final class Apiv2Controller extends AbstractApiController
             // Temporary informational endpoint, can be removed in 5.2
             ApiEndpoint::TeamTags => throw new ImproperActionException('Use api/v2/teams/current/tags endpoint instead.'),
             ApiEndpoint::Teams => new Teams($this->requester, $this->id),
-            ApiEndpoint::Todolist => new Todolist($this->requester->userData['userid'], $this->id),
+            ApiEndpoint::Todolist => new Todolist($this->requester, $this->id),
+            ApiEndpoint::TodolistProjects => new TodolistProjects($this->requester, $this->id),
             ApiEndpoint::UnfinishedSteps => new UnfinishedSteps(
                 $this->requester,
                 $this->Request->query->get('scope') === 'team',
@@ -480,6 +484,18 @@ final class Apiv2Controller extends AbstractApiController
                 ApiSubModels::Branding => new Branding($this->requester->isSysadmin(), $this->subId),
                 ApiSubModels::Rors => new Instance2Rors($this->requester->isSysadmin(), $this->subIdString),
                 default => throw new InvalidApiSubModelException(ApiEndpoint::Instance),
+            };
+        }
+        if ($this->Model instanceof Feedback) {
+            return match ($submodel) {
+                ApiSubModels::Comments => new FeedbackComments($this->requester, $this->Model, $this->subId),
+                default => throw new InvalidApiSubModelException(ApiEndpoint::Feedback),
+            };
+        }
+        if ($this->Model instanceof Todolist) {
+            return match ($submodel) {
+                ApiSubModels::Comments => new TodolistComments($this->requester, $this->Model, $this->subId),
+                default => throw new InvalidApiSubModelException(ApiEndpoint::Todolist),
             };
         }
         throw new ImproperActionException('Incorrect endpoint.');

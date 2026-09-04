@@ -278,6 +278,24 @@ on('set-theme', (el: HTMLElement) => {
   });
 });
 
+on('edit-openiris-link', (el: HTMLElement) => {
+  const current = el.dataset.currentUrl ?? '';
+  // eslint-disable-next-line no-alert
+  const next = window.prompt(i18next.t('Enter the OpenIRIS booking URL'), current);
+  if (next === null || next.trim() === '' || next.trim() === current) {
+    return;
+  }
+  const url = next.trim();
+  ApiC.patch(`${Model.Team}/current`, { openiris_url: url }).then(() => {
+    el.dataset.currentUrl = url;
+    const link = document.getElementById('openirisLink') as HTMLAnchorElement | null;
+    if (link) {
+      link.href = url;
+    }
+    notify.success();
+  }).catch(() => notify.error('Please enter a valid URL.'));
+});
+
 const primaryColorPickerTarget = document.getElementById('primary-color-picker');
 
 if (primaryColorPickerTarget) {
@@ -862,6 +880,24 @@ on('scroll-top', () => {
   });
 });
 
+on('refresh-todolist', () => {
+  window.dispatchEvent(new CustomEvent('todolist-changed'));
+});
+
+on('edit-openiris-link', (el: HTMLElement) => {
+  const link = document.getElementById('openirisLink') as HTMLAnchorElement | null;
+  if (!link) return;
+  const currentUrl = el.dataset.currentUrl ?? link.href;
+  const nextUrl = window.prompt(i18next.t('Enter the OpenIRIS booking URL'), currentUrl);
+  if (nextUrl === null || nextUrl.trim() === '' || nextUrl.trim() === currentUrl) return;
+  const trimmed = nextUrl.trim();
+  ApiC.patch(`${Model.Team}/current`, {openiris_url: trimmed}).then(() => {
+    link.href = trimmed;
+    el.dataset.currentUrl = trimmed;
+    notify.success();
+  }).catch((error: Error) => notify.error(error.message));
+});
+
 on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
   // this action might exist on a link: prevent jump to top
   event.preventDefault();
@@ -1006,6 +1042,97 @@ on('save-permissions-both', (el: HTMLElement) => {
   const baseSelect = getSafeElementById(`${el.dataset.identifier}_select_base`) as HTMLSelectElement;
   const params = {canread: permissions, canread_base: baseSelect.value, canwrite: permissions, canwrite_base: baseSelect.value};
   ApiC.patch(`${entity.type}/${entity.id}`, params).then(() => reloadElements(['canreadDiv', 'canwriteDiv']));
+});
+
+// merge newly selected teams/teamgroups/users into an existing canread or
+// canwrite permissions JSON, without touching whatever was already there
+function mergePermissionsJson(existing: string, extra: string[]): string {
+  let parsed: { teams?: number[]; teamgroups?: number[]; users?: number[] };
+  try {
+    parsed = JSON.parse(existing || '{}');
+  } catch {
+    parsed = {};
+  }
+  const addFrom = (prefix: string): number[] => extra
+    .filter(value => value.startsWith(prefix))
+    .map(value => parseInt(value.split(':')[1], 10));
+  return JSON.stringify({
+    teams: Array.from(new Set([...(parsed.teams ?? []), ...addFrom('team:')])),
+    teamgroups: Array.from(new Set([...(parsed.teamgroups ?? []), ...addFrom('teamgroup:')])),
+    users: Array.from(new Set([...(parsed.users ?? []), ...addFrom('user:')])),
+  });
+}
+
+// union of teams/teamgroups/users already granted read OR write access, so
+// the Share modal can show what's already shared instead of always opening empty
+function unionPermissionsJson(canread: string, canwrite: string): { teams: number[]; teamgroups: number[]; users: number[] } {
+  const parse = (json: string): { teams?: number[]; teamgroups?: number[]; users?: number[] } => {
+    try {
+      return JSON.parse(json || '{}');
+    } catch {
+      return {};
+    }
+  };
+  const read = parse(canread);
+  const write = parse(canwrite);
+  return {
+    teams: Array.from(new Set([...(read.teams ?? []), ...(write.teams ?? [])])),
+    teamgroups: Array.from(new Set([...(read.teamgroups ?? []), ...(write.teamgroups ?? [])])),
+    users: Array.from(new Set([...(read.users ?? []), ...(write.users ?? [])])),
+  };
+}
+
+// pre-fill the Share modal with whoever the entry is already shared with,
+// so reopening it shows the previous selection instead of starting empty
+$('#permModal-share').on('show.bs.modal', async () => {
+  const current = await ApiC.getJson(`${entity.type}/${entity.id}`);
+  const permissions = unionPermissionsJson(current.canread, current.canwrite);
+
+  const teamsSelect = document.getElementById('share_select_teams') as HTMLSelectElement & { tomselect?: { setValue: (v: string[]) => void } };
+  teamsSelect?.tomselect?.setValue(permissions.teams.map(id => `team:${id}`));
+
+  const teamgroupsSelect = document.getElementById('share_select_teamgroups') as HTMLSelectElement & { tomselect?: { setValue: (v: string[]) => void } };
+  teamgroupsSelect?.tomselect?.setValue(permissions.teamgroups.map(id => `teamgroup:${id}`));
+
+  const usersSelect = document.getElementById('share_select_users') as HTMLSelectElement & {
+    tomselect?: { addOption: (o: { value: string; text: string }) => void; setValue: (v: string[]) => void };
+  };
+  if (usersSelect?.tomselect && permissions.users.length > 0) {
+    const users = await Promise.all(permissions.users.map(id => ApiC.getJson(`users/${id}`)));
+    users.forEach(u => usersSelect.tomselect.addOption({value: `user:${u.userid}`, text: `${u.fullname} (${u.email})`}));
+    usersSelect.tomselect.setValue(permissions.users.map(id => `user:${id}`));
+  }
+
+  const baseSelect = document.getElementById('share_select_base') as HTMLSelectElement;
+  if (baseSelect) baseSelect.value = current.canread_base || current.canwrite_base || '';
+});
+
+// the "Share" modal: grant read-only, write-only, or read & write access to
+// whoever is selected, on top of (never instead of) the existing lists --
+// unlike save-permissions/save-permissions-both, which replace a list wholesale
+on('save-permissions-share', async (el: HTMLElement) => {
+  const selected = [
+    ...(($('#share_select_teams').val() as string[] | null) ?? []),
+    ...(($('#share_select_teamgroups').val() as string[] | null) ?? []),
+    ...(($('#share_select_users').val() as string[] | null) ?? []),
+  ];
+  const base = (document.getElementById('share_select_base') as HTMLSelectElement).value;
+  if (selected.length === 0 && !base) return;
+  const level = el.dataset.level;
+  const current = await ApiC.getJson(`${entity.type}/${entity.id}`);
+  const params: Record<string, string> = {};
+  if (level === 'read' || level === 'both') {
+    if (selected.length > 0) params['canread'] = mergePermissionsJson(current.canread, selected);
+    if (base) params['canread_base'] = base;
+  }
+  if (level === 'write' || level === 'both') {
+    if (selected.length > 0) params['canwrite'] = mergePermissionsJson(current.canwrite, selected);
+    if (base) params['canwrite_base'] = base;
+  }
+  await ApiC.patch(`${entity.type}/${entity.id}`, params);
+  await reloadElements(['canreadDiv', 'canwriteDiv']);
+  // the modal's show.bs.modal handler re-syncs the picker from the entity's
+  // current state next time it's opened, so nothing needs clearing here
 });
 
 on('select-lang', () => {
@@ -1361,29 +1488,6 @@ on('update-entity-body', async (el: HTMLElement) => {
   }
 });
 
-// APPEND LOG ENTRY: insert a timestamped heading at the end of the body and auto-save
-on('append-log-entry', () => {
-  const editor = getEditor();
-  const now = DateTime.now();
-  const timestamp = now.toFormat('yyyy-MM-dd HH:mm');
-
-  if (editor.type === 'tiny') {
-    // TinyMCE: get current content, append log entry, replace all
-    const currentContent = editor.getContent();
-    const logHtml = `<hr><h3>${timestamp}</h3><p>&nbsp;</p>`;
-    editor.replaceContent(currentContent + logHtml);
-  } else {
-    // Markdown: append timestamped heading
-    const textarea = document.getElementById('body_area') as HTMLTextAreaElement;
-    const logMd = `\n\n---\n### ${timestamp}\n\n`;
-    textarea.value += logMd;
-    textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
-    textarea.focus();
-  }
-  // Auto-save after inserting
-  updateEntityBody();
-});
-
 on('search-pubchem', (el: HTMLElement) => {
   const inputEl = el.parentElement.parentElement.querySelector('input') as HTMLInputElement;
   if (!inputEl.checkValidity()) {
@@ -1670,16 +1774,20 @@ on('reload-color', (el: HTMLElement) => {
 // CREATE CATEGORY OR STATUS
 on('create-catstat', (el: HTMLElement, e: Event) => {
   e.preventDefault();
-  const modalId = 'createCatStatModal';
-  const form = document.getElementById(modalId);
+  // the same macro can be included more than once on one page (e.g. the
+  // admin panel's Category manager tab, experiments + resources side by
+  // side), so find this button's own modal/reload target instead of a
+  // hardcoded id that would always hit the first instance on the page
+  const modal = el.closest('.modal') as HTMLElement;
+  const reloadTarget = el.dataset.reloadTarget ?? 'catStatDiv';
   try {
-    const params = collectForm(form);
+    const params = collectForm(modal);
     ApiC.post(`${Model.Team}/current/${el.dataset.endpoint}`, params).then(() => {
-      $(`#${modalId}`).modal('toggle');
-      reloadElements(['catStatDiv']);
-      clearForm(form);
+      $(modal).modal('toggle');
+      reloadElements([reloadTarget]);
+      clearForm(modal);
       // assign a new random color after clearing the form
-      const colorInput = (form.querySelector('input[type="color"]') as HTMLInputElement);
+      const colorInput = (modal.querySelector('input[type="color"]') as HTMLInputElement);
       colorInput.value = getRandomColor();
     });
   } catch (e) {

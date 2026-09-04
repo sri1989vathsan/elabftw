@@ -8,6 +8,7 @@
    */
   import { onMount } from 'svelte';
   import { ApiC } from '../api';
+  import { core } from '../core';
   import i18next from '../i18n';
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
@@ -22,6 +23,13 @@
     creation_time: string;
     completed_at: string | null;
     ordering: number;
+    userid?: number;
+    assigned_userid?: number | null;
+    creator_fullname?: string | null;
+    assigned_fullname?: string | null;
+    assignees?: { userid: number; fullname: string }[];
+    project_id?: number | null;
+    project_name?: string | null;
   };
 
   type UnfinishedStep = {
@@ -53,6 +61,13 @@
     entityId?: number;
     entityTitle?: string;
     entityType?: 'experiments' | 'items';
+    creatorUserid?: number;
+    assignedUserid?: number | null;
+    creatorFullname?: string | null;
+    assignedFullname?: string | null;
+    assignees?: { userid: number; fullname: string }[];
+    projectId?: number | null;
+    projectName?: string | null;
   };
 
   type DueGroup = {
@@ -106,6 +121,7 @@
   let reminderDate = '';
   let reminderTime = '';
   let editingId: number | null = null;
+  let detailEntry: SidebarEntry | null = null;
   let editTitle = '';
   let editNotes = '';
   let editDeadlineDate = '';
@@ -132,6 +148,13 @@
       notes: item.notes,
       creationTime: item.creation_time,
       ordering: Number(item.ordering),
+      creatorUserid: item.userid,
+      assignedUserid: item.assigned_userid,
+      creatorFullname: item.creator_fullname,
+      assignedFullname: item.assigned_fullname,
+      assignees: item.assignees ?? [],
+      projectId: item.project_id,
+      projectName: item.project_name,
     })),
     ...(['experiments', 'items'] as const).flatMap(entityType => (
       unfinished[entityType].flatMap(entity => (
@@ -416,6 +439,33 @@
     }
     if (!reminderDate) reminderDate = reminder.slice(0, 10);
     if (!reminderTime) reminderTime = reminder.slice(11, 16);
+  }
+
+  function isAssignedByOther(entry: SidebarEntry): boolean {
+    return entry.source === 'todo'
+      && (entry.assignees ?? []).some(a => a.userid === core.currentUserid)
+      && entry.creatorUserid !== undefined
+      && entry.creatorUserid !== core.currentUserid;
+  }
+
+  function assigneeNames(entry: SidebarEntry): string {
+    return (entry.assignees ?? []).map(a => a.fullname).join(', ');
+  }
+
+  function openDetail(entry: SidebarEntry): void {
+    if (entry.source !== 'todo') return;
+    detailEntry = entry;
+  }
+
+  function closeDetail(): void {
+    detailEntry = null;
+  }
+
+  function editFromDetail(): void {
+    if (!detailEntry) return;
+    const entry = detailEntry;
+    closeDetail();
+    startEditing(entry);
   }
 
   function startEditing(entry: SidebarEntry): void {
@@ -881,7 +931,13 @@
                   {/if}
                   <div class='d-flex flex-column flex-grow-1 min-width-0'>
                     {#if entry.source === 'todo'}
-                      <strong>{entry.body}</strong>
+                      <button type='button' class='btn-unstyled todo-title-btn' on:click={() => openDetail(entry)}>{entry.body}</button>
+                      {#if entry.projectName || isAssignedByOther(entry)}
+                        <div class='small todo-secondary-text d-flex align-items-center flex-wrap' style='gap:0.3rem'>
+                          {#if entry.projectName}<span class='badge badge-info todo-project-badge'>{entry.projectName}</span>{/if}
+                          {#if isAssignedByOther(entry)}<span>{t('Assigned by')} {entry.creatorFullname}</span>{/if}
+                        </div>
+                      {/if}
                     {:else}
                       <span>{entry.body}</span>
                       <a class='small todo-step-entity-link' href={`${entityPage(entry)}?mode=view&id=${entry.entityId}#step_view_${entry.id}`}>
@@ -1087,6 +1143,43 @@
       {/each}
     {/if}
   </details>
+{/if}
+
+{#if detailEntry}
+  <div class='todo-detail-overlay' role='presentation'>
+    <div class='todo-detail-dialog' role='dialog' aria-modal='true' aria-labelledby='todoDetailTitle'>
+      <div class='todo-detail-header'>
+        <h4 id='todoDetailTitle' class='mb-0'>{detailEntry.body}</h4>
+        <button type='button' class='btn-unstyled todo-detail-close' on:click={closeDetail} aria-label={t('Close')}>&times;</button>
+      </div>
+      <div class='todo-detail-body'>
+        {#if detailEntry.projectName}
+          <div><span class='badge badge-info'>{detailEntry.projectName}</span></div>
+        {/if}
+        {#if detailEntry.deadline}
+          <div class='small'>
+            <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(detailEntry.deadline)}
+          </div>
+        {/if}
+        {#if (detailEntry.assignees ?? []).length > 0}
+          <div class='small'>
+            <i class='fas fa-user fa-fw mr-1' aria-hidden='true'></i>{t('Assigned to')} {assigneeNames(detailEntry)}
+            {#if isAssignedByOther(detailEntry)} &middot; {t('Assigned by')} {detailEntry.creatorFullname}{/if}
+          </div>
+        {/if}
+        {#if detailEntry.notes}
+          <div class='todo-detail-notes'>
+            <label class='small font-weight-bold mb-1'>{t('Notes')}</label>
+            <div>{detailEntry.notes}</div>
+          </div>
+        {/if}
+      </div>
+      <div class='todo-detail-footer'>
+        <button type='button' class='btn btn-ghost' on:click={closeDetail}>{t('Close')}</button>
+        <button type='button' class='btn btn-primary' on:click={editFromDetail}>{t('Edit')}</button>
+      </div>
+    </div>
+  </div>
 {/if}
 
 <style>

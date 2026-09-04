@@ -47,6 +47,13 @@ final class CustomMigrationRunner
         '021_created_from_version.sql',
         '022_experiment_template_inserts.sql',
         '023_feedback_board.sql',
+        '024_feedback_comments.sql',
+        '025_todolist_assignment.sql',
+        '026_todolist_projects.sql',
+        '027_todolist_description_comments.sql',
+        '028_openiris_link.sql',
+        '029_todolist_multi_assignee.sql',
+        '030_labcollector_link.sql',
     );
 
     private Db $Db;

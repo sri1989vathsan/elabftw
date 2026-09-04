@@ -21,6 +21,14 @@
     has_voted: boolean;
   };
 
+  type FeedbackComment = {
+    id: number;
+    body: string;
+    created_at: string;
+    userid: number;
+    author_fullname: string;
+  };
+
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
 
@@ -34,6 +42,23 @@
   let newTitle = '';
   let newBody = '';
   let submitting = false;
+
+  const COMMENT_PAGE_SIZE = 5;
+  let expandedComments = new Set<number>();
+  // items whose full comment history is shown, instead of just the latest 5
+  let fullyExpandedComments = new Set<number>();
+
+  function visibleComments(itemId: number): FeedbackComment[] {
+    const all = commentsByItem[itemId] ?? [];
+    return fullyExpandedComments.has(itemId) ? all : all.slice(-COMMENT_PAGE_SIZE);
+  }
+
+  function showAllComments(itemId: number): void {
+    fullyExpandedComments = new Set(fullyExpandedComments).add(itemId);
+  }
+  let commentsByItem: Record<number, FeedbackComment[]> = {};
+  let commentsLoading = new Set<number>();
+  let commentDrafts: Record<number, string> = {};
 
   $: visibleItems = items
     .filter(item => showFinished ? item.status === 'done' : item.status !== 'done')
@@ -110,6 +135,61 @@
       items = items.filter(existing => existing.id !== item.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not delete this item.');
+    }
+  }
+
+  async function loadComments(itemId: number): Promise<void> {
+    commentsLoading = new Set(commentsLoading).add(itemId);
+    try {
+      commentsByItem[itemId] = await ApiC.getJson(`${Model.Feedback}/${itemId}/${Model.Comment}`) as FeedbackComment[];
+      commentsByItem = commentsByItem;
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load comments.');
+    } finally {
+      const next = new Set(commentsLoading);
+      next.delete(itemId);
+      commentsLoading = next;
+    }
+  }
+
+  async function toggleComments(item: FeedbackItem): Promise<void> {
+    const next = new Set(expandedComments);
+    if (next.has(item.id)) {
+      next.delete(item.id);
+      expandedComments = next;
+      return;
+    }
+    next.add(item.id);
+    expandedComments = next;
+    if (!commentsByItem[item.id]) {
+      await loadComments(item.id);
+    }
+  }
+
+  async function submitComment(item: FeedbackItem): Promise<void> {
+    const text = (commentDrafts[item.id] ?? '').trim();
+    if (!text) return;
+    try {
+      await ApiC.post(`${Model.Feedback}/${item.id}/${Model.Comment}`, { body: text });
+      commentDrafts[item.id] = '';
+      commentDrafts = commentDrafts;
+      await loadComments(item.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not post this comment.');
+    }
+  }
+
+  function canDeleteComment(comment: FeedbackComment): boolean {
+    return core.isAdmin || comment.userid === core.currentUserid;
+  }
+
+  async function deleteComment(item: FeedbackItem, comment: FeedbackComment): Promise<void> {
+    if (!window.confirm(t('Delete this comment?'))) return;
+    try {
+      await ApiC.delete(`${Model.Feedback}/${item.id}/${Model.Comment}/${comment.id}`);
+      await loadComments(item.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not delete this comment.');
     }
   }
 
@@ -244,6 +324,70 @@
             <div class='feedback-muted feedback-item-meta'>
               {t('Posted by')} {item.author_fullname} · {formatDate(item.created_at)}
             </div>
+            <button
+              type='button'
+              class='btn btn-ghost btn-sm feedback-comments-toggle mt-1'
+              aria-expanded={expandedComments.has(item.id)}
+              on:click={() => toggleComments(item)}
+            >
+              <i class='fas fa-comment fa-fw mr-1' aria-hidden='true'></i>
+              {expandedComments.has(item.id)
+                ? t('Hide comments')
+                : (commentsByItem[item.id] ? `${t('Comments')} (${commentsByItem[item.id].length})` : t('Comments'))}
+            </button>
+            {#if expandedComments.has(item.id)}
+              <div class='feedback-comments'>
+                {#if commentsLoading.has(item.id)}
+                  <p class='feedback-muted mb-0'>{t('Loading')}…</p>
+                {:else}
+                  {#if (commentsByItem[item.id] ?? []).length === 0}
+                    <p class='feedback-muted mb-2'>{t('No comments yet.')}</p>
+                  {:else}
+                    {#if !fullyExpandedComments.has(item.id) && commentsByItem[item.id].length > COMMENT_PAGE_SIZE}
+                      <button type='button' class='btn btn-ghost btn-sm mb-2' on:click={() => showAllComments(item.id)}>
+                        {t('Show')} {commentsByItem[item.id].length - COMMENT_PAGE_SIZE} {t('earlier comments')}
+                      </button>
+                    {/if}
+                    <ul class='feedback-comment-list'>
+                      {#each visibleComments(item.id) as comment (comment.id)}
+                        <li class='feedback-comment'>
+                          <div class='feedback-comment-header'>
+                            <strong>{comment.author_fullname}</strong>
+                            <span class='feedback-muted'>{formatDate(comment.created_at)}</span>
+                            {#if canDeleteComment(comment)}
+                              <button
+                                type='button'
+                                class='btn btn-danger-ghost btn-sm feedback-icon-button ml-auto'
+                                title={t('Delete comment')}
+                                aria-label={t('Delete comment')}
+                                on:click={() => deleteComment(item, comment)}
+                              >
+                                <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
+                              </button>
+                            {/if}
+                          </div>
+                          <p class='mb-0 feedback-comment-body'>{comment.body}</p>
+                        </li>
+                      {/each}
+                    </ul>
+                  {/if}
+                  <form class='d-flex' on:submit|preventDefault={() => submitComment(item)}>
+                    <label class='sr-only' for={`feedbackComment-${item.id}`}>{t('Add a comment')}</label>
+                    <input
+                      id={`feedbackComment-${item.id}`}
+                      class='form-control form-control-sm mr-2'
+                      type='text'
+                      maxlength='5000'
+                      placeholder={t('Add a comment…')}
+                      bind:value={commentDrafts[item.id]}
+                    />
+                    <button type='submit' class='btn btn-primary btn-sm' disabled={!(commentDrafts[item.id] ?? '').trim()}>
+                      {t('Post')}
+                    </button>
+                  </form>
+                {/if}
+              </div>
+            {/if}
           </div>
         </li>
       {/each}
@@ -346,5 +490,42 @@
 
   .feedback-item-meta {
     font-size: 0.78rem;
+  }
+
+  .feedback-comments-toggle {
+    font-weight: normal;
+  }
+
+  .feedback-comments {
+    border-top: 1px solid var(--secondary);
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+  }
+
+  .feedback-comment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0 0 0.6rem;
+    padding: 0;
+  }
+
+  .feedback-comment {
+    border-left: 2px solid var(--secondary);
+    padding-left: 0.5rem;
+  }
+
+  .feedback-comment-header {
+    align-items: center;
+    display: flex;
+    font-size: 0.78rem;
+    gap: 0.4rem;
+  }
+
+  .feedback-comment-body {
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   }
 </style>

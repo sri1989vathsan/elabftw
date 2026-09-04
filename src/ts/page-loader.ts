@@ -130,3 +130,10 @@ if (document.getElementById('feedbackRoot')) {
     './feedback'
   );
 }
+
+if (document.getElementById('projectManagementRoot')) {
+  void import(
+    /* webpackChunkName: 'projectmanagement' */
+    './projectmanagement'
+  );
+}

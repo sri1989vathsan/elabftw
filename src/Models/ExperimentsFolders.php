@@ -27,6 +27,7 @@ use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
 
+use function array_column;
 use function array_key_exists;
 use function count;
 use function in_array;
@@ -180,6 +181,66 @@ final class ExperimentsFolders extends AbstractRest
         return $req->fetchAll();
     }
 
+    /**
+     * Get the ids of all experiments inside a folder and its subfolders, for export
+     *
+     * @return array<int>
+     */
+    public function getIdFromFolder(int $folderId): array
+    {
+        $canRead = (new CanSqlBuilder($this->requester, AccessType::Read))->getCanFilter();
+        $sql = 'WITH RECURSIVE folder_tree AS (
+                SELECT id FROM experiments_folders WHERE id = :folder_id AND team = :team
+
+                UNION ALL
+
+                SELECT child.id FROM experiments_folders AS child
+                INNER JOIN folder_tree ON child.parent_id = folder_tree.id
+            )
+            SELECT entity.id
+            FROM experiments AS entity
+            INNER JOIN folder_tree ON folder_tree.id = entity.folder_id
+            WHERE entity.team = :team
+            AND entity.state = 1' . $canRead . '
+            ORDER BY entity.modified_at DESC';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':folder_id', $folderId, PDO::PARAM_INT);
+        $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $req->bindValue(':userid', $this->requester->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return array_column($req->fetchAll(), 'id');
+    }
+
+    /**
+     * Same as getIdFromFolder() but for resources (items), for export
+     *
+     * @return array<int>
+     */
+    public function getIdFromFolderForItems(int $folderId): array
+    {
+        $canRead = (new CanSqlBuilder($this->requester, AccessType::Read))->getCanFilter();
+        $sql = 'WITH RECURSIVE folder_tree AS (
+                SELECT id FROM experiments_folders WHERE id = :folder_id AND team = :team
+
+                UNION ALL
+
+                SELECT child.id FROM experiments_folders AS child
+                INNER JOIN folder_tree ON child.parent_id = folder_tree.id
+            )
+            SELECT entity.id
+            FROM items AS entity
+            INNER JOIN folder_tree ON folder_tree.id = entity.folder_id
+            WHERE entity.team = :team
+            AND entity.state = 1' . $canRead . '
+            ORDER BY entity.modified_at DESC';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':folder_id', $folderId, PDO::PARAM_INT);
+        $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $req->bindValue(':userid', $this->requester->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return array_column($req->fetchAll(), 'id');
+    }
+
     #[Override]
     public function patch(Action $action, array $params): array
     {
@@ -245,6 +306,36 @@ final class ExperimentsFolders extends AbstractRest
             );
         }
         return $id;
+    }
+
+    /**
+     * Find or create a folder path such as "Parent > Child" (the same
+     * separator used in full_path), creating any missing segment along the
+     * way. Used when importing a .eln so an entity can be refiled into the
+     * same folder it was exported from.
+     */
+    public function getIdFromPath(string $path): int
+    {
+        $parentId = null;
+        foreach (array_filter(array_map('trim', explode(' > ', $path)), fn(string $s): bool => $s !== '') as $segment) {
+            $parentId = $this->getIdempotentIdFromNameAndParent($segment, $parentId);
+        }
+        return $parentId ?? throw new ImproperActionException('Cannot resolve an empty folder path.');
+    }
+
+    private function getIdempotentIdFromNameAndParent(string $name, ?int $parentId): int
+    {
+        $sql = 'SELECT id FROM experiments_folders WHERE team = :team AND name = :name AND parent_id <=> :parent_id LIMIT 1';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $req->bindParam(':name', $name);
+        $req->bindParam(':parent_id', $parentId);
+        $this->Db->execute($req);
+        $res = $this->Db->fetch($req);
+        if ($res !== false) {
+            return (int) $res['id'];
+        }
+        return $this->create($name, $parentId);
     }
 
     public function create(string $folderName, ?int $parentId = null): int

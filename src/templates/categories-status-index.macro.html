@@ -1,4 +1,6 @@
-{% macro catstatidx(type, table, subtitle, infotip, sourceArr, emptyWarning, modalTitle, newNamePlaceholder, teamName, isAdmin, descriptionsEnabled = false) %}
+{% macro catstatidx(type, table, subtitle, infotip, sourceArr, emptyWarning, modalTitle, newNamePlaceholder, teamName, isAdmin, descriptionsEnabled = false, affix = '') %}
+{% set modalId = 'createCatStatModal' ~ affix %}
+{% set formId = 'createCatStatForm' ~ affix %}
 <h2>{{ teamName }}</h2>
 <div class='mb-5 d-flex justify-content-between'>
   <div class='d-flex'>
@@ -6,53 +8,62 @@
     {% include 'infotip.html' with {text: infotip} %}
   </div>
   {# CREATE NEW BUTTON the div around the button is necessary or the button itself gets resized on small viewports #}
-  <div>
-    <button type='button' class='btn btn-primary' data-action='toggle-modal' data-target='createCatStatModal'>{{ 'Create'|trans }}</button>
-  </div>
+  {% if isAdmin %}
+    <div>
+      <button type='button' class='btn btn-primary' data-action='toggle-modal' data-target='{{ modalId }}'>{{ 'Create'|trans }}</button>
+    </div>
+  {% endif %}
 </div>
+{% if not isAdmin %}
+  <p class='smallgray'>{{ 'Only team admins can create, edit, or delete categories.'|trans }}</p>
+{% endif %}
 
-<div id='catStatDiv'>
+<div id='catStatDiv{{ affix }}'>
   {% if sourceArr|length == 0 %}
     <p>{{ emptyWarning|raw }}</p>
   {% endif %}
-  <ul class='list-group sortable d-flex' data-axis='y' data-table='{{ table }}'>
+  <ul class='list-group {{ isAdmin ? 'sortable' }} d-flex' data-axis='y' data-table='{{ table }}'>
     {% for cat in sourceArr %}
-      <li id='expcat_{{ cat.id }}' data-statusid='expcat_{{ cat.id }}' class='list-group-item'>
+      <li id='expcat{{ affix }}_{{ cat.id }}' data-statusid='expcat{{ affix }}_{{ cat.id }}' class='list-group-item'>
         <ul class='list-inline'>
+          {% if isAdmin %}
           <li class='list-inline-item'>
             <span class='draggable sortableHandle'>
               <i class='fas fa-grip-vertical fa-fw'></i>
             </span>
           </li>
+          {% endif %}
 
           <li class='list-inline-item'>
-            <label for='expcatName_{{ cat.id }}'>{{ 'Name'|trans }}</label>
-            <input class='form-control' required type='text' id='expcatName_{{ cat.id }}' data-trigger='blur' data-model='teams/current/{{ type }}/{{ cat.id }}' data-target='title' data-cy='expcatName' value='{{ cat.title|e('html_attr') }}' />
+            <label for='expcatName{{ affix }}_{{ cat.id }}'>{{ 'Name'|trans }}</label>
+            <input class='form-control' required type='text' id='expcatName{{ affix }}_{{ cat.id }}' data-trigger='blur' data-model='teams/current/{{ type }}/{{ cat.id }}' data-target='title' data-cy='expcatName' value='{{ cat.title|e('html_attr') }}' {{ not isAdmin ? 'disabled="disabled"' }} />
           </li>
 
           <li class='list-inline-item align-top'>
-            <label for='expcatColor_{{ cat.id }}'>{{ 'Color'|trans }}</label>
-            <input class='form-control color-input' type='color' id='expcatColor_{{ cat.id }}' data-trigger='change' data-model='teams/current/{{ type }}/{{ cat.id }}' data-target='color' value='#{{ cat.color }}' />
+            <label for='expcatColor{{ affix }}_{{ cat.id }}'>{{ 'Color'|trans }}</label>
+            <input class='form-control color-input' type='color' id='expcatColor{{ affix }}_{{ cat.id }}' data-trigger='change' data-model='teams/current/{{ type }}/{{ cat.id }}' data-target='color' value='#{{ cat.color }}' {{ not isAdmin ? 'disabled="disabled"' }} />
           </li>
 
           {% if descriptionsEnabled %}
             <li class='list-inline-item align-top'>
-              <label for='expcatDescription_{{ cat.id }}'>{{ 'Short description'|trans }}</label>
-              <textarea class='form-control' rows='2' maxlength='500' id='expcatDescription_{{ cat.id }}' data-trigger='blur' data-model='teams/current/{{ type }}/{{ cat.id }}' data-target='description' placeholder='{{ 'Optional summary of this category'|trans }}'>{{ cat.description }}</textarea>
+              <label for='expcatDescription{{ affix }}_{{ cat.id }}'>{{ 'Short description'|trans }}</label>
+              <textarea class='form-control' rows='2' maxlength='500' id='expcatDescription{{ affix }}_{{ cat.id }}' data-trigger='blur' data-model='teams/current/{{ type }}/{{ cat.id }}' data-target='description' placeholder='{{ 'Optional summary of this category'|trans }}' {{ not isAdmin ? 'disabled="disabled"' }}>{{ cat.description }}</textarea>
             </li>
           {% endif %}
 
           <li class='list-inline-item'>
-            <label for='expcatIsPrivate_{{ cat.id }}'>{{ 'Mark as private'|trans }}</label>
+            <label for='expcatIsPrivate{{ affix }}_{{ cat.id }}'>{{ 'Mark as private'|trans }}</label>
             <label class='switch ucp-align {{ not isAdmin ? 'disabled' }}'><span class='sr-only'>{{ 'Mark as private'|trans }}</span>
-              <input type='checkbox' autocomplete='off' data-trigger='change' data-model='teams/current/{{ type }}/{{ cat.id }}' data-target='is_private' {{ cat.is_private ? 'checked="checked"' }} {{ not isAdmin ? 'disabled="disabled"' }} id='expcatIsPrivate_{{ cat.id }}'>
+              <input type='checkbox' autocomplete='off' data-trigger='change' data-model='teams/current/{{ type }}/{{ cat.id }}' data-target='is_private' {{ cat.is_private ? 'checked="checked"' }} {{ not isAdmin ? 'disabled="disabled"' }} id='expcatIsPrivate{{ affix }}_{{ cat.id }}'>
               <span class='slider'></span>
             </label>
           </li>
 
-          <li class='list-inline-item'>
-            <button type='button' data-id='{{ cat.id }}' data-endpoint='{{ type }}' data-action='destroy-catstat' class='btn btn-danger' >{{ 'Delete'|trans }}</button>
-          </li>
+          {% if isAdmin %}
+            <li class='list-inline-item'>
+              <button type='button' data-id='{{ cat.id }}' data-endpoint='{{ type }}' data-action='destroy-catstat' class='btn btn-danger' >{{ 'Delete'|trans }}</button>
+            </li>
+          {% endif %}
         </ul>
       </li>
     {% endfor %}
@@ -60,43 +71,43 @@
 </div>
 
 {# MODAL FOR CREATION: name and color #}
-<div class='modal fade' id='createCatStatModal' tabindex='-1' role='dialog' aria-labelledby='createCatStatModalLabel'>
+<div class='modal fade' id='{{ modalId }}' tabindex='-1' role='dialog' aria-labelledby='{{ modalId }}Label'>
   <div class='modal-dialog' role='document'>
     <div class='modal-content'>
       <div class='modal-header'>
-        <h5 class='modal-title' id='createCatStatModalLabel'><i class='fas fa-fw fa-plus-square mr-1'></i>{{ modalTitle }}</h5>
+        <h5 class='modal-title' id='{{ modalId }}Label'><i class='fas fa-fw fa-plus-square mr-1'></i>{{ modalTitle }}</h5>
         <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'>
           <span aria-hidden='true'>&times;</span>
         </button>
       </div>
-      <form id='createCatStatForm' aria-label='{{ modalTitle }}'>
+      <form id='{{ formId }}' aria-label='{{ modalTitle }}'>
         <div class='modal-body'>
             <div class='d-flex justify-content-between mb-2'>
-              <label for='createCatStatName' class='col-form-label'>{{ 'Name'|trans }}</label>
-              <input class='form-control col-md-6' type='text' name='name' placeholder='{{ newNamePlaceholder }}' required id='createCatStatName' />
+              <label for='createCatStatName{{ affix }}' class='col-form-label'>{{ 'Name'|trans }}</label>
+              <input class='form-control col-md-6' type='text' name='name' placeholder='{{ newNamePlaceholder }}' required id='createCatStatName{{ affix }}' />
             </div>
             <hr>
 
             <div class='d-flex justify-content-between'>
-              <label for='createCatStatColor' class='col-form-label'>{{ 'Color'|trans }}</label>
+              <label for='createCatStatColor{{ affix }}' class='col-form-label'>{{ 'Color'|trans }}</label>
               <div class='d-flex flex-row'>
                 <button aria-label='{{ 'Change color'|trans }}' title='{{ 'Change color'|trans }}' type='button' class='btn btn-ghost mr-1' data-action='reload-color'><i class='fas fa-rotate'></i></button>
-                <input class='form-control randomColor col-md-6 color-input' type='color' name='color' id='createCatStatColor' />
+                <input class='form-control randomColor col-md-6 color-input' type='color' name='color' id='createCatStatColor{{ affix }}' />
               </div>
             </div>
 
             {% if descriptionsEnabled %}
               <hr>
               <div class='d-flex justify-content-between'>
-                <label for='createCatStatDescription' class='col-form-label'>{{ 'Short description'|trans }}</label>
-                <textarea class='form-control col-md-6' rows='3' maxlength='500' name='description' id='createCatStatDescription' placeholder='{{ 'Optional summary of this category'|trans }}'></textarea>
+                <label for='createCatStatDescription{{ affix }}' class='col-form-label'>{{ 'Short description'|trans }}</label>
+                <textarea class='form-control col-md-6' rows='3' maxlength='500' name='description' id='createCatStatDescription{{ affix }}' placeholder='{{ 'Optional summary of this category'|trans }}'></textarea>
               </div>
             {% endif %}
         </div>
 
         <div class='modal-footer'>
           <button type='button' class='btn btn-ghost' data-dismiss='modal'>{{ 'Cancel'|trans }}</button>
-          <button type='submit' data-endpoint='{{ type }}' data-action='create-catstat' class='btn btn-primary'>{{ 'Create'|trans }}</button>
+          <button type='submit' data-endpoint='{{ type }}' data-reload-target='catStatDiv{{ affix }}' data-action='create-catstat' class='btn btn-primary'>{{ 'Create'|trans }}</button>
         </div>
       </form>
     </div>

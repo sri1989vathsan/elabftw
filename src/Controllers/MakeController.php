@@ -36,6 +36,7 @@ use Elabftw\Make\MakeSchedulerReport;
 use Elabftw\Make\MakeStreamZip;
 use Elabftw\Make\ReportsHandler;
 use Elabftw\Models\AuditLogs;
+use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\Items;
 use Elabftw\Models\ProcurementRequests;
 use Elabftw\Models\Scheduler;
@@ -67,6 +68,11 @@ final class MakeController extends AbstractController
     private const int AUDIT_THRESHOLD = 12;
 
     private bool $pdfa = false;
+
+    // set when exporting a folder, so the readme can be embedded in the zip
+    private ?string $folderReadme = null;
+
+    private ?string $folderName = null;
 
     // @var array<AbstractEntity>
     private array $entityArr = array();
@@ -198,6 +204,17 @@ final class MakeController extends AbstractController
             $targetUserid = $this->Request->query->getInt('owner');
             $entity = $entityType->toInstance($this->requester);
             $idArr = $entity->getIdFromUser($targetUserid);
+        } elseif ($this->Request->query->has('folder')) {
+            $folderId = $this->Request->query->getInt('folder');
+            $ExperimentsFolders = new ExperimentsFolders($this->requester, $folderId);
+            $folder = $ExperimentsFolders->readOne();
+            $this->folderName = $folder['name'];
+            if (!empty($folder['readme_body'])) {
+                $this->folderReadme = $folder['readme_body'];
+            }
+            $idArr = $entityType === EntityType::Items
+                ? $ExperimentsFolders->getIdFromFolderForItems($folderId)
+                : $ExperimentsFolders->getIdFromFolder($folderId);
         } elseif ($this->Request->query->has('id')) {
             $idArr = array_map(
                 fn(string $id): int => (int) $id,
@@ -268,6 +285,9 @@ final class MakeController extends AbstractController
             $this->shouldIncludeChangelog(),
             $this->Request->query->getBoolean('json'),
             $classification,
+            $this->Request->query->getString('entity_format') ?: 'eln',
+            $this->folderReadme,
+            $this->folderName,
         ));
     }
 

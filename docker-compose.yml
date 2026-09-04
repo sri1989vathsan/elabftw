@@ -149,6 +149,21 @@ services:
     volumes:
       - elabftw-uploads:/var/lib/elabftw/uploads
       - elabftw-exports:/var/lib/elabftw/exports
+      # Dev-loop bind mounts: pure PHP/Twig source, read-only. These apply
+      # instantly (no rebuild) since PHP-FPM reads files per-request and
+      # Twig auto-recompiles on mtime change. Deliberately NOT mounting
+      # web/assets (built JS/CSS) or src/ts, src/scss (build INPUTS) here --
+      # those still need `yarn build` run inside the container, since this
+      # image's rootfs is read_only and web/assets is not separately mounted.
+      - ./src:/elabftw/src:ro
+      - ./web/app:/elabftw/web/app:ro
+      - ./web/admin.php:/elabftw/web/admin.php:ro
+      - ./web/experiments-categories.php:/elabftw/web/experiments-categories.php:ro
+      - ./web/resources-categories.php:/elabftw/web/resources-categories.php:ro
+      - ./web/feedback.php:/elabftw/web/feedback.php:ro
+      - ./web/projectmanagement.php:/elabftw/web/projectmanagement.php:ro
+      - ./web/labcollector.php:/elabftw/web/labcollector.php:ro
+      - ./web/labcollector-lookup.php:/elabftw/web/labcollector-lookup.php:ro
 
     tmpfs:
       - /run:mode=755,uid=${ELABFTW_RUN_UID:-1000},gid=${ELABFTW_RUN_GID:-1000},exec,nosuid,nodev

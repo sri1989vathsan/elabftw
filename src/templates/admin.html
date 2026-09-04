@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% import 'categories-status-index.macro.html' as idx %}
 
 {% block body %}
 {# UNVALIDATED USERS BLOCK #}
@@ -30,6 +31,8 @@
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='4'>{{ 'Export'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='5'>{{ 'Tag manager'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='6'>{{ 'Batch actions'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='7'>{{ 'Category manager'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='8'>{{ 'Export by user'|trans }}</button></li>
 </ul>
 
 {% include 'loading-spinner.html' %}
@@ -118,6 +121,20 @@
       'slug': 'users_canwrite_resources_templates',
       'label': 'Allow users to create resources templates'|trans} %}
 
+  </div>
+
+  <h2 class='p-2 pl-3 section-title' id='labcollectorSettings'>{{ 'LabCollector'|trans }}</h2>
+  <div class='pl-3 mt-2 mb-5'>
+    <p class='smallgray'>{{ 'Connect this team to a LabCollector instance to browse its records from the Tools menu. The API key is stored encrypted and is never displayed again once saved.'|trans }}</p>
+    <div class='d-flex justify-content-between align-items-center mb-2'>
+      <label for='labcollector_url' class='col-form-label'>{{ 'LabCollector URL'|trans }}</label>
+      <input class='form-control col-md-6' data-trigger='blur' data-model='{{ model }}' data-target='labcollector_url' type='url' id='labcollector_url' name='labcollector_url' placeholder='https://labcollector.example.org' value='{{ App.Teams.teamArr.labcollector_url }}' />
+    </div>
+    <div class='d-flex justify-content-between align-items-center mb-2'>
+      <label for='labcollector_api_key' class='col-form-label'>{{ 'LabCollector API key'|trans }}</label>
+      <input class='form-control col-md-6' data-trigger='change' data-model='{{ model }}' data-target='labcollector_api_key' type='password' id='labcollector_api_key' name='labcollector_api_key' autocomplete='off' placeholder='{{ App.Teams.teamArr.labcollector_api_key ? 'A key is already set. Enter a new one to replace it.'|trans : 'X-LC-APP-Auth token'|trans }}' />
+    </div>
+    <p class='smallgray mb-0'>{{ 'Find or generate this token in LabCollector under Admin > Others > Setup > Web services API.'|trans }}</p>
   </div>
 
   <h2 class='p-2 pl-3 section-title' id='existingRors'>{{ 'Research Organization Registry (ROR)'|trans }}</h2>
@@ -247,42 +264,62 @@
     </div>
     <hr>
 
+    <div class='d-flex justify-content-between' id='categoryExportZipEntityFormat' hidden>
+      <label for='categoryExportZipEntityFormatSelect' class='col-form-label'>{{ 'Inside the ZIP, save each entry as'|trans }}</label>
+      <select class='form-control col-md-3' id='categoryExportZipEntityFormatSelect' autocomplete='off'>
+        <option value='eln'>{{ '.eln (self-contained, reimportable)'|trans }}</option>
+        <option value='pdf'>{{ 'PDF'|trans }}</option>
+        <option value='html'>{{ 'HTML'|trans }}</option>
+      </select>
+    </div>
+    <hr>
+
     <div class='my-2 text-center'>
       <button type='button' data-action='export-category' class='btn btn-primary'>{{ 'Export'|trans }}</button>
     </div>
   </div>
 
-  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Export experiments of user'|trans }}</h2>
-  <div class='pl-3 mb-5'>
+  {% if experimentsFoldersArr %}
+    <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Export an experiments folder'|trans }}</h2>
+    <p class='pl-3'>{{ 'Exports every experiment in the folder (including subfolders). The folder’s readme, if any, is included in ZIP archives.'|trans }}</p>
+    <div class='pl-3 mb-5'>
+      <div class='d-flex justify-content-between'>
+        <label for='folderExport' class='col-form-label'>{{ 'Select a folder'|trans }}</label>
+        <select class='form-control col-md-3' id='folderExport' autocomplete='off'>
+          {% for folder in experimentsFoldersArr %}
+            <option value='{{ folder.id }}'>{{ folder.full_path }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <hr>
 
-    <div class='d-flex justify-content-between'>
-      <label for='userExport' class='col-form-label'>{{ 'Select user'|trans }}</label>
-      <select class='form-control col-md-3' id='userExport' autocomplete='off'>
-        {% for user in allTeamUsersArr %}
-          <option value='{{ user.userid }}'>{{ user.fullname }}</option>
-        {% endfor %}
-      </select>
+      <div class='d-flex justify-content-between'>
+        <label for='folderExportFormat' class='col-form-label'>{{ 'Select an export format'|trans }}</label>
+        <select class='form-control col-md-3' id='folderExportFormat' autocomplete='off'>
+          <option value='eln'>{{ 'ELN Archive'|trans }}</option>
+          <option value='zip'>{{ 'ZIP Archive'|trans }}</option>
+          <option value='csv'>{{ 'CSV File'|trans }}</option>
+          <option value='pdf'>{{ 'PDF File'|trans }}</option>
+          <option value='json'>{{ 'JSON'|trans }}</option>
+        </select>
+      </div>
+      <hr>
+
+      <div class='d-flex justify-content-between' id='folderExportZipEntityFormat' hidden>
+        <label for='folderExportZipEntityFormatSelect' class='col-form-label'>{{ 'Inside the ZIP, save each entry as'|trans }}</label>
+        <select class='form-control col-md-3' id='folderExportZipEntityFormatSelect' autocomplete='off'>
+          <option value='eln'>{{ '.eln (self-contained, reimportable)'|trans }}</option>
+          <option value='pdf'>{{ 'PDF'|trans }}</option>
+          <option value='html'>{{ 'HTML'|trans }}</option>
+        </select>
+      </div>
+      <hr>
+
+      <div class='my-2 text-center'>
+        <button type='button' data-action='export-folder' class='btn btn-primary'>{{ 'Export'|trans }}</button>
+      </div>
     </div>
-    <hr>
-
-    <div class='d-flex justify-content-between'>
-      <label for='userExportFormat' class='col-form-label'>{{ 'Select an export format'|trans }}</label>
-      <select class='form-control col-md-3' id='userExportFormat' autocomplete='off'>
-        <option value='eln'>{{ 'ELN Archive'|trans }}</option>
-        <option value='zip'>{{ 'ZIP Archive'|trans }}</option>
-        <option value='csv'>{{ 'CSV File'|trans }}</option>
-        <option value='pdf'>{{ 'PDF File'|trans }}</option>
-        <option value='qrpdf'>{{ 'QR codes PDF'|trans }}</option>
-        <option value='json'>{{ 'JSON'|trans }}</option>
-      </select>
-    </div>
-    <hr>
-
-    <div class='mt-2 text-center'>
-      <button type='button' data-action='export-user' class='btn btn-primary'>{{ 'Export'|trans }}</button>
-    </div>
-
-  </div>
+  {% endif %}
 
 </div>
 
@@ -524,6 +561,137 @@
         <button data-action='run-action-selected' type='button' data-what='setcanread' class='btn btn-primary mr-1 mb-2'>{{ 'Set read permissions'|trans }}</button>
         <button data-action='run-action-selected' type='button' data-what='setcanwrite' class='btn btn-primary mr-1 mb-2'>{{ 'Set write permissions'|trans }}</button>
       </div>
+    </div>
+  </div>
+</div>
+
+{# TAB 7 CATEGORY MANAGER #}
+<div data-tabcontent='7' hidden>
+  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Experiment categories'|trans }}</h2>
+  <div class='pl-3 mb-5'>
+    {{ idx.catstatidx(
+      'experiments_categories',
+      'experiments_categories',
+      'Create and modify the categories available to experiments.'|trans,
+      'Experiments categories can be associated with an Experiment or an Experiment Template as a Category. They belong to a team and have two main properties: name and color. Examples: Analysis, Measurement, Test, Project XYZ, etc...'|trans,
+      App.experimentsCategoryArr|filter(c => c.is_current_team == 1),
+      'No experiments categories have been created in this team yet.'|trans|msg('warning', false),
+      'Create new experiments category'|trans,
+      'Category name'|trans,
+      App.Teams.teamArr.name,
+      true,
+      false,
+      'Exp',
+      ) }}
+  </div>
+
+  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Resource categories'|trans }}</h2>
+  <div class='pl-3 mb-5'>
+    {{ idx.catstatidx(
+      'resources_categories',
+      'items_categories',
+      'Create and modify the categories available to resources.'|trans,
+      'Resource categories can be associated with a Resource or a Resource Template as a Category. They belong to a team and have two main properties: name and color. Examples: Equipment, Chemical, Cell line, Plasmid, Antibody, Microscope, etc...'|trans,
+      App.itemsCategoryArr|filter(c => c.is_current_team == 1),
+      'No resource categories have been created in this team yet.'|trans|msg('warning', false),
+      'Create new resource category'|trans,
+      'Category name'|trans,
+      App.Teams.teamArr.name,
+      true,
+      false,
+      'Res',
+      ) }}
+  </div>
+</div>
+
+{# TAB 8 EXPORT BY USER #}
+<div data-tabcontent='8' hidden>
+  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Export team member’s data'|trans }}</h2>
+  <p class='pl-3'>{{ 'For archival purposes: export everything a specific team member owns, e.g. before they leave the team.'|trans }}</p>
+  <div class='pl-3 mb-5'>
+    <div class='d-flex justify-content-between align-items-center'>
+      <label for='userExport_select_users' class='col-form-label'>{{ 'Team member'|trans }}</label>
+      <div class='ts-wrapper col-md-6'>
+        {% if App.devMode -%}<!-- [html-validate-disable-block prefer-native-element] -->{%- endif %}
+        <select id='userExport_select_users' class='form-control' autocomplete='off' aria-label='{{ 'Search for a team member'|trans }}' data-tom-select='1'></select>
+        <input type='text' class='form-control mt-2' id='userExport-users-select-input' placeholder='{{ 'Search for a team member'|trans }}' aria-label='{{ 'Search for a team member'|trans }}'>
+      </div>
+    </div>
+    <hr>
+
+    <div class='d-flex justify-content-between'>
+      <label for='userExportType' class='col-form-label'>{{ 'What to export'|trans }}</label>
+      <select class='form-control col-md-3' id='userExportType' autocomplete='off'>
+        <option value='experiments'>{{ 'Experiments'|trans }}</option>
+        <option value='items'>{{ 'Resources'|trans }}</option>
+      </select>
+    </div>
+    <hr>
+
+    <div class='d-flex justify-content-between'>
+      <label for='userExportFormat' class='col-form-label'>{{ 'Select an export format'|trans }}</label>
+      <select class='form-control col-md-3' id='userExportFormat' autocomplete='off'>
+        <option value='eln'>{{ 'ELN Archive'|trans }}</option>
+        <option value='zip'>{{ 'ZIP Archive'|trans }}</option>
+        <option value='csv'>{{ 'CSV File'|trans }}</option>
+        <option value='pdf'>{{ 'PDF File'|trans }}</option>
+        <option value='qrpdf'>{{ 'QR codes PDF'|trans }}</option>
+        <option value='json'>{{ 'JSON'|trans }}</option>
+      </select>
+    </div>
+    <hr>
+
+    <div class='d-flex justify-content-between' id='userExportZipEntityFormat' hidden>
+      <label for='userExportZipEntityFormatSelect' class='col-form-label'>{{ 'Inside the ZIP, save each entry as'|trans }}</label>
+      <select class='form-control col-md-3' id='userExportZipEntityFormatSelect' autocomplete='off'>
+        <option value='eln'>{{ '.eln (self-contained, reimportable)'|trans }}</option>
+        <option value='pdf'>{{ 'PDF'|trans }}</option>
+        <option value='html'>{{ 'HTML'|trans }}</option>
+      </select>
+    </div>
+    <hr>
+
+    {# CHANGELOG #}
+    <div class='d-flex justify-content-between mb-2'>
+      <div>
+        <label class='d-inline mr-1' for='userExportWithChangelog'>{{ 'Include changelog'|trans }}</label>
+        <p class='smallgray'>{{ 'The PDF files will contain the changelog.'|trans }}</p>
+      </div>
+      <label class='switch' title='{{ 'Include changelog'|trans }}'><span class='sr-only'>{{ 'Include changelog'|trans }}</span>
+        <input type='checkbox' autocomplete='off' id='userExportWithChangelog'>
+        <span class='slider'></span>
+      </label>
+    </div>
+
+    {# PDF/A #}
+    <div class='d-flex justify-content-between mb-2'>
+      <div>
+        <label class='d-inline mr-1' for='userExportPdfa'>{{ 'Use PDF/A'|trans }}</label>
+        <p class='smallgray'>{{ 'For long term archiving. Warning: using this option will make the files much bigger!'|trans }}</p>
+      </div>
+      <label class='switch' title='{{ 'Use PDF/A'|trans }}'><span class='sr-only'>{{ 'Use PDF/A'|trans }}</span>
+        <input type='checkbox' autocomplete='off' id='userExportPdfa'>
+        <span class='slider'></span>
+      </label>
+    </div>
+
+    {# JSON #}
+    <div class='d-flex justify-content-between mb-2'>
+      <div>
+        <label class='d-inline mr-1' for='userExportJson'>{{ 'Include JSON'|trans }}</label>
+        <p class='smallgray'>{{ 'Only for ZIP: include a full JSON export for each entry.'|trans }}</p>
+      </div>
+      <label class='switch' title='{{ 'Include JSON'|trans }}'><span class='sr-only'>{{ 'Include JSON'|trans }}</span>
+        <input type='checkbox' autocomplete='off' id='userExportJson'>
+        <span class='slider'></span>
+      </label>
+    </div>
+    <hr>
+
+    <p class='smallgray'>{{ 'Experiments and Resources are exported separately, so run this twice (once per type) for a complete archive of a person’s data.'|trans }}</p>
+
+    <div class='my-2 text-center'>
+      <button type='button' data-action='export-user' class='btn btn-primary'>{{ 'Export'|trans }}</button>
     </div>
   </div>
 </div>

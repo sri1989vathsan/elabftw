@@ -280,6 +280,14 @@ function formatDate(
   }
 }
 
+// Today's date, formatted using the user's saved "Day" insertion defaults --
+// so a log entry's date always matches whatever format the user picked for
+// normal date insertion.
+export function formatTodayWithSavedDefaults(): string {
+  const defaults = getDateInsertDefaults();
+  return formatDate(getToday(), defaults.format, defaults.customLabel);
+}
+
 function inferDateDisplayFormat(
   date: string,
   label: string,

@@ -164,13 +164,6 @@
         </div>
       </div>
 
-      {% if Entity.entityType.value == 'items' %}
-        <div class='mt-1 text-center'>
-          <button type='button' data-action='append-log-entry' class='btn btn-outline-info ml-2' title='Insert a timestamped log entry at the end'>
-            <i class='fas fa-clock mr-1'></i>{{ 'Add Log Entry'|trans }}
-          </button>
-        </div>
-      {% endif %}
   </div>
   {% endif %}
 </section>
@@ -206,6 +199,12 @@
       <button type='button' class='btn btn-outline-secondary' data-action='insert-labcollector-link'>
         <i class='fas fa-pen mr-1'></i>Insert in text
       </button>
+    </div>
+    <div class='form-check mt-2'>
+      <input type='checkbox' id='labcollectorLookup' class='form-check-input'>
+      <label for='labcollectorLookup' class='form-check-label small color-medium'>
+        {{ 'Look up the name and storage location via the LabCollector API before inserting'|trans }}
+      </label>
     </div>
   </div>
   {% endif %}

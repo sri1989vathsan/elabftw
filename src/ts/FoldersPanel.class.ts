@@ -30,7 +30,7 @@ export default class FoldersPanel extends SidePanel {
   }
 
   private async loadPanel(): Promise<void> {
-    const cacheKey = 'folders-panel-html-v1';
+    const cacheKey = 'folders-panel-html-v3';
     const cached = sessionStorage.getItem(cacheKey);
     const cachedAt = Number(sessionStorage.getItem(`${cacheKey}-at`) ?? 0);
     let fragmentHtml = cachedAt > Date.now() - 30000 ? cached : null;
@@ -38,10 +38,13 @@ export default class FoldersPanel extends SidePanel {
       const response = await fetch('/experiments.php?mode=show&scope=1', { credentials: 'same-origin' });
       if (!response.ok) throw new Error(`Unable to load folders (${response.status})`);
       const responseDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
+      // folderReadmeModal is NOT scraped here -- base.html now includes it on
+      // every page unconditionally, so it's always present regardless of
+      // which page the Folders panel loaded from.
       fragmentHtml = [
         responseDocument.getElementById(this.panelId)?.outerHTML ?? '',
         responseDocument.getElementById('editExperimentFolderModal')?.outerHTML ?? '',
-        responseDocument.getElementById('folderReadmeModal')?.outerHTML ?? '',
+        responseDocument.getElementById('folderExportModal')?.outerHTML ?? '',
       ].join('');
       sessionStorage.setItem(cacheKey, fragmentHtml);
       sessionStorage.setItem(`${cacheKey}-at`, String(Date.now()));
@@ -52,7 +55,7 @@ export default class FoldersPanel extends SidePanel {
     if (!freshPanel || !currentPanel) return;
     freshPanel.removeAttribute('hidden');
     currentPanel.replaceWith(freshPanel);
-    ['editExperimentFolderModal', 'folderReadmeModal'].forEach(id => {
+    ['editExperimentFolderModal', 'folderExportModal'].forEach(id => {
       if (document.getElementById(id)) return;
       const modal = documentCopy.getElementById(id);
       if (modal) document.body.append(modal);

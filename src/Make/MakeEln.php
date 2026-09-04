@@ -20,8 +20,10 @@ use Elabftw\Enums\Metadata;
 use Elabftw\Enums\State;
 use Elabftw\Enums\Storage;
 use Elabftw\Exceptions\IllegalActionException;
+use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Models\AbstractEntity;
 use Elabftw\Models\Experiments;
+use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\Instance2Rors;
 use Elabftw\Models\Items;
 use Elabftw\Models\Teams2Rors;
@@ -49,8 +51,10 @@ use function fclose;
 use function fopen;
 use function hash;
 use function hash_file;
+use function htmlspecialchars;
 use function implode;
 use function in_array;
+use function nl2br;
 use function json_decode;
 use function json_encode;
 use function random_bytes;
@@ -278,6 +282,14 @@ class MakeEln extends AbstractMakeEln
             'url' => Env::asUrl('SITE_URL') . '/' . $entity->entityType->toPage() . ($entity->entityType == EntityType::ItemsTypes ? '&' : '?') . 'mode=view&id=' . $e['id'],
             'genre' => $entity->entityType->toGenre(),
         );
+        // GOALS / CONCLUSION / NOTES (experiment summary fields, prepended to the body text)
+        $summaryHtml = '';
+        foreach (array('experiment_goal' => 'Goals', 'experiment_conclusion' => 'Conclusion', 'experiment_notes' => 'Notes') as $summaryKey => $summaryLabel) {
+            if (!empty($e[$summaryKey] ?? '')) {
+                $summaryHtml .= sprintf('<h3>%s</h3><p>%s</p>', $summaryLabel, nl2br(htmlspecialchars((string) $e[$summaryKey])));
+            }
+        }
+
         $datasetNode = self::addIfNotEmpty(
             $datasetNode,
             array('alternateName' => $e['custom_id'] ?? ''),
@@ -290,7 +302,7 @@ class MakeEln extends AbstractMakeEln
             array('identifier' => $e['elabid'] ?? ''),
             array('keywords' => $keywords),
             array('mentions' => $mentions),
-            array('text' => $e['body']),
+            array('text' => $summaryHtml . $e['body']),
         );
         if (!empty($e['category_title'])) {
             $categoryAtId = '#category-' . $e['category_title'];
@@ -304,6 +316,25 @@ class MakeEln extends AbstractMakeEln
                 );
             }
             $datasetNode['about'] = array('@id' => $categoryAtId);
+        }
+        // FOLDER (so importing the .eln can recreate the folder path and refile the entity into it)
+        if (!empty($e['folder_id'])) {
+            try {
+                $folderPath = new ExperimentsFolders($this->requester, (int) $e['folder_id'])->readOne()['full_path'] ?? '';
+            } catch (ResourceNotFoundException) {
+                $folderPath = '';
+            }
+            if ($folderPath !== '') {
+                $folderAtId = '#folder-' . $folderPath;
+                if (!in_array($folderAtId, array_column($this->dataEntities, '@id'), true)) {
+                    $this->dataEntities[] = array(
+                        '@id' => $folderAtId,
+                        '@type' => 'Collection',
+                        'name' => $folderPath,
+                    );
+                }
+                $datasetNode['isPartOf'] = array('@id' => $folderAtId);
+            }
         }
         // METADATA (extra fields)
         if ($e['metadata']) {
