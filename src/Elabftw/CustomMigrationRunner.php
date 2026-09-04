@@ -54,6 +54,7 @@ final class CustomMigrationRunner
         '028_openiris_link.sql',
         '029_todolist_multi_assignee.sql',
         '030_labcollector_link.sql',
+        '031_todolist_entity_links.sql',
     );
 
     private Db $Db;

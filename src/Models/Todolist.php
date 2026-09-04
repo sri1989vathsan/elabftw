@@ -158,7 +158,8 @@ final class Todolist extends AbstractRest
                     FROM todolist_task_assignees AS ta
                     INNER JOIN (SELECT userid, CONCAT(firstname, ' ', lastname) AS fullname FROM users) AS au ON au.userid = ta.userid
                     WHERE ta.task_id = t.id
-                ), JSON_ARRAY()) AS assignees
+                ), JSON_ARRAY()) AS assignees,
+                {$this->entityLinksSubquery()} AS entity_links
             FROM todolist AS t
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
@@ -178,7 +179,35 @@ final class Todolist extends AbstractRest
         }
         $this->Db->execute($req);
 
-        return array_map(fn(array $row): array => $this->decodeAssignees($row), $req->fetchAll());
+        return array_map(fn(array $row): array => $this->decodeEntityLinks($this->decodeAssignees($row)), $req->fetchAll());
+    }
+
+    /**
+     * Correlated subquery aggregating a task's linked experiments/templates/
+     * resources/resource templates/plain URLs, dropping any entity link
+     * whose target was deleted. Shared by readAll() and readOne() -- must be
+     * embedded as a string since {t.id} references the outer query's
+     * todolist row (a bound parameter can't cross a correlated subquery
+     * boundary like this).
+     */
+    private function entityLinksSubquery(): string
+    {
+        return "COALESCE((
+                    SELECT JSON_ARRAYAGG(JSON_OBJECT('id', link.id, 'entity_type', link.entity_type, 'entity_id', link.entity_id, 'url', link.url, 'title', link.title))
+                    FROM (
+                        SELECT tel.id, tel.entity_type, tel.entity_id, tel.url,
+                            CASE tel.entity_type
+                                WHEN 'weblink' THEN tel.label
+                                WHEN 'experiments' THEN (SELECT title FROM experiments WHERE id = tel.entity_id)
+                                WHEN 'items' THEN (SELECT title FROM items WHERE id = tel.entity_id)
+                                WHEN 'experiments_templates' THEN (SELECT title FROM experiments_templates WHERE id = tel.entity_id)
+                                WHEN 'items_types' THEN (SELECT title FROM items_types WHERE id = tel.entity_id)
+                            END AS title
+                        FROM todolist_entity_links AS tel
+                        WHERE tel.task_id = t.id
+                    ) AS link
+                    WHERE link.title IS NOT NULL
+                ), JSON_ARRAY())";
     }
 
     /**
@@ -231,7 +260,8 @@ final class Todolist extends AbstractRest
                     FROM todolist_task_assignees AS ta
                     INNER JOIN (SELECT userid, CONCAT(firstname, ' ', lastname) AS fullname FROM users) AS au ON au.userid = ta.userid
                     WHERE ta.task_id = t.id
-                ), JSON_ARRAY()) AS assignees
+                ), JSON_ARRAY()) AS assignees,
+                {$this->entityLinksSubquery()} AS entity_links
             FROM todolist AS t
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
@@ -246,7 +276,7 @@ final class Todolist extends AbstractRest
         if ($task === false) {
             return array();
         }
-        return $this->decodeAssignees($task);
+        return $this->decodeEntityLinks($this->decodeAssignees($task));
     }
 
     #[Override]
@@ -402,6 +432,12 @@ final class Todolist extends AbstractRest
     private function decodeAssignees(array $row): array
     {
         $row['assignees'] = json_decode((string) $row['assignees'], true, 512, JSON_THROW_ON_ERROR);
+        return $row;
+    }
+
+    private function decodeEntityLinks(array $row): array
+    {
+        $row['entity_links'] = json_decode((string) $row['entity_links'], true, 512, JSON_THROW_ON_ERROR);
         return $row;
     }
 

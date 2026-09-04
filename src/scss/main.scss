@@ -4689,3 +4689,59 @@ div > .sticky-navbar {
 .pm-avatar:first-child {
   margin-left: 0;
 }
+
+.pm-task-preview {
+  font-size: 0.8rem;
+  margin: 0.25rem 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-entity-link-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  max-height: 10rem;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.pm-entity-link {
+  align-items: center;
+  border-bottom: 1px solid var(--secondary-muted, #d9d9d9);
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.35rem 0;
+}
+
+.pm-entity-link:last-child {
+  border-bottom: 0;
+}
+
+.pm-entity-search-results {
+  background: var(--white);
+  border: 1px solid var(--secondary-muted, #d9d9d9);
+  border-radius: 0.25rem;
+  list-style: none;
+  margin: 0.3rem 0 0;
+  max-height: 10rem;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.pm-entity-search-result {
+  display: block;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  width: 100%;
+}
+
+.pm-entity-search-result:hover {
+  background: var(--secondary-muted, #d9d9d9);
+}
+
+.pm-check-item {
+  align-items: center;
+  display: flex;
+  gap: 0.4rem;
+}

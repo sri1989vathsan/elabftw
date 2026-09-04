@@ -79,6 +79,7 @@ use Elabftw\Models\Feedback;
 use Elabftw\Models\FeedbackComments;
 use Elabftw\Models\Todolist;
 use Elabftw\Models\TodolistComments;
+use Elabftw\Models\TodolistEntityLinks;
 use Elabftw\Models\TodolistProjects;
 use Elabftw\Models\UnfinishedSteps;
 use Elabftw\Models\Uploads;
@@ -495,6 +496,7 @@ final class Apiv2Controller extends AbstractApiController
         if ($this->Model instanceof Todolist) {
             return match ($submodel) {
                 ApiSubModels::Comments => new TodolistComments($this->requester, $this->Model, $this->subId),
+                ApiSubModels::EntityLinks => new TodolistEntityLinks($this->requester, $this->Model, $this->subId),
                 default => throw new InvalidApiSubModelException(ApiEndpoint::Todolist),
             };
         }
