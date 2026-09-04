@@ -4273,10 +4273,10 @@ div > .sticky-navbar {
 }
 
 .todo-detail-dialog {
-  background: var(--white);
+  background: #ffffff;
   border-radius: 0.5rem;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
-  color: var(--mediumstrong, #343434);
+  color: #343434;
   display: flex;
   flex-direction: column;
   max-height: 90vh;
@@ -4286,7 +4286,7 @@ div > .sticky-navbar {
 
 .todo-detail-header {
   align-items: flex-start;
-  border-bottom: 1px solid var(--secondary-muted, #d9d9d9);
+  border-bottom: 1px solid #d9d9d9;
   display: flex;
   flex: 0 0 auto;
   gap: 0.75rem;
@@ -4294,6 +4294,7 @@ div > .sticky-navbar {
 }
 
 .todo-detail-header h4 {
+  color: #23272b;
   flex: 1 1 auto;
 }
 
@@ -4312,22 +4313,40 @@ div > .sticky-navbar {
 }
 
 .todo-detail-body > .pm-dialog-field + .pm-dialog-field {
-  border-top: 1px solid var(--secondary-muted, #d9d9d9);
+  border-top: 1px solid #d9d9d9;
   padding-top: 0.9rem;
 }
 
 .todo-detail-notes {
-  border-top: 1px solid var(--secondary-muted, #d9d9d9);
+  border-top: 1px solid #d9d9d9;
   padding-top: 0.6rem;
 }
 
 .todo-detail-footer {
-  border-top: 1px solid var(--secondary-muted, #d9d9d9);
+  border-top: 1px solid #d9d9d9;
   display: flex;
   flex: 0 0 auto;
   gap: 0.5rem;
   justify-content: flex-end;
   padding: 0.8rem 1.2rem;
+}
+
+// The dialogs above render fine as a normal page overlay (ProjectManagementBoard),
+// but Todolist.svelte's copy is mounted inside the sidebar's .side-panel, whose
+// `.fas, .far, h3, h4, label { color: var(--chrome-fg); }` rule (meant for the
+// panel's own dark chrome) leaks into any white card nested inside it -- same
+// class of bug as .favorite-filter-overlay above, and its `--white`/`--mediumstrong`
+// warning applies here too, hence the hardcoded colors rather than theme variables.
+.todo-detail-dialog .fas,
+.todo-detail-dialog .far,
+.pm-dialog .fas,
+.pm-dialog .far {
+  color: inherit;
+}
+
+.todo-detail-dialog label,
+.pm-dialog label {
+  color: #23272b;
 }
 
 // ProjectManagementBoard.svelte -- same reasoning as the todo-detail-* block
@@ -4348,7 +4367,7 @@ div > .sticky-navbar {
 }
 
 .pm-label {
-  color: var(--mediumstrong);
+  color: #23272b;
   display: block;
   font-size: 0.72rem;
   font-weight: 700;
@@ -4358,7 +4377,7 @@ div > .sticky-navbar {
 }
 
 .pm-muted {
-  color: var(--secondary);
+  color: #495057;
 }
 
 .pm-project-row {
@@ -4492,10 +4511,10 @@ div > .sticky-navbar {
 }
 
 .pm-dialog {
-  background: var(--white);
+  background: #ffffff;
   border-radius: 0.5rem;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
-  color: var(--mediumstrong, #343434);
+  color: #343434;
   display: flex;
   flex-direction: column;
   max-height: 90vh;
@@ -4505,7 +4524,7 @@ div > .sticky-navbar {
 
 .pm-dialog-header {
   align-items: flex-start;
-  border-bottom: 1px solid var(--secondary-muted, #d9d9d9);
+  border-bottom: 1px solid #d9d9d9;
   display: flex;
   flex: 0 0 auto;
   gap: 0.75rem;
@@ -4513,13 +4532,14 @@ div > .sticky-navbar {
 }
 
 .pm-dialog-header h4 {
+  color: #23272b;
   flex: 1 1 auto;
 }
 
 .pm-close-btn {
   background: transparent;
   border: 0;
-  color: var(--secondary);
+  color: #495057;
   font-size: 1.3rem;
   line-height: 1;
   padding: 0.1rem;
@@ -4535,7 +4555,7 @@ div > .sticky-navbar {
 }
 
 .pm-dialog-body > .pm-dialog-field + .pm-dialog-field {
-  border-top: 1px solid var(--secondary-muted, #d9d9d9);
+  border-top: 1px solid #d9d9d9;
   padding-top: 0.9rem;
 }
 
@@ -4545,7 +4565,7 @@ div > .sticky-navbar {
 }
 
 .pm-dialog-footer {
-  border-top: 1px solid var(--secondary-muted, #d9d9d9);
+  border-top: 1px solid #d9d9d9;
   display: flex;
   flex: 0 0 auto;
   gap: 0.5rem;
@@ -4570,7 +4590,7 @@ div > .sticky-navbar {
   align-items: center;
   background: var(--primary);
   border-radius: 999px;
-  color: var(--chrome-fg, #fff);
+  color: #ffffff;
   display: inline-flex;
   font-size: 0.8rem;
   font-weight: 700;
@@ -4595,8 +4615,8 @@ div > .sticky-navbar {
 }
 
 .rte-toolbar {
-  background: var(--mainbackground);
-  border: 1px solid var(--secondary-muted, #d9d9d9);
+  background: #f2f2f2;
+  border: 1px solid #d9d9d9;
   border-bottom: 0;
   border-radius: 0.25rem 0.25rem 0 0;
   display: flex;
@@ -4608,13 +4628,13 @@ div > .sticky-navbar {
   background: transparent;
   border: 0;
   border-radius: 0.2rem;
-  color: var(--mediumstrong, #343434);
+  color: #343434;
   height: 1.8rem;
   width: 1.8rem;
 }
 
 .rte-btn:hover {
-  background: var(--secondary-muted, #d9d9d9);
+  background: #d9d9d9;
   color: var(--primary);
 }
 
@@ -4654,7 +4674,7 @@ div > .sticky-navbar {
 }
 
 .pm-comment {
-  border-bottom: 1px solid var(--secondary-muted, #d9d9d9);
+  border-bottom: 1px solid #d9d9d9;
   padding: 0.4rem 0;
 }
 
@@ -4670,7 +4690,7 @@ div > .sticky-navbar {
 }
 
 .pm-comment-delete {
-  color: var(--secondary);
+  color: #495057;
   margin-left: auto;
 }
 
@@ -4691,7 +4711,7 @@ div > .sticky-navbar {
 .pm-avatar {
   align-items: center;
   background: var(--primary);
-  border: 2px solid var(--white);
+  border: 2px solid #ffffff;
   border-radius: 50%;
   color: var(--primary-fg, #fff);
   cursor: default;
@@ -4726,7 +4746,7 @@ div > .sticky-navbar {
 
 .pm-entity-link {
   align-items: center;
-  border-bottom: 1px solid var(--secondary-muted, #d9d9d9);
+  border-bottom: 1px solid #d9d9d9;
   display: flex;
   gap: 0.3rem;
   padding: 0.35rem 0;
@@ -4744,7 +4764,7 @@ div > .sticky-navbar {
 }
 
 .pm-field-edit-btn {
-  color: var(--secondary);
+  color: #495057;
   font-size: 0.8rem;
   padding: 0.1rem 0.2rem;
 }
