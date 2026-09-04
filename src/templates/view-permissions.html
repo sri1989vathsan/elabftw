@@ -18,11 +18,11 @@
 
 {% include('permissions-edit-modal.html') %}
 <label class='col-form-label mr-3 edit-mode-label'><i class='fas fa-fw fa-{{ icon }} mr-1' title='{{ label }}'></i>{{ label }}</label>
-{# canread/canwrite (the two plain, non-template-target variants) are now
-   managed from the single "Share" button/modal instead -- keep the
-   per-permission "+" for canbook and the *_target (template inheritance)
-   variants, which the Share modal doesn't cover #}
-{% if not Entity.isReadOnly and rw != 'canread' and rw != 'canwrite' %}
+{# The "Share" button/modal is an additive-only quick way to grant access to
+   more people for canread/canwrite. This "+" opens the full editor, which
+   shows current grants and lets you remove them (Save replaces the list) --
+   the only way to revoke access already granted. #}
+{% if not Entity.isReadOnly %}
   {% set permissionsIsDisabled = false %}
   {% if Entity.entityData[immutableVar] and Entity.entityType.value != 'experiments_templates' and Entity.entityType.value != 'items_types' and not App.Users.isAdmin %}
     {% set permissionsIsDisabled = true %}

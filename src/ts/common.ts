@@ -1107,9 +1107,9 @@ $('#permModal-share').on('show.bs.modal', async () => {
   if (baseSelect) baseSelect.value = current.canread_base || current.canwrite_base || '';
 });
 
-// the "Share" modal: grant read-only, write-only, or read & write access to
-// whoever is selected, on top of (never instead of) the existing lists --
-// unlike save-permissions/save-permissions-both, which replace a list wholesale
+// the "Share" modal: grant read-only or read & write access to whoever is
+// selected, on top of (never instead of) the existing lists -- unlike
+// save-permissions/save-permissions-both, which replace a list wholesale
 on('save-permissions-share', async (el: HTMLElement) => {
   const selected = [
     ...(($('#share_select_teams').val() as string[] | null) ?? []),
@@ -1121,11 +1121,9 @@ on('save-permissions-share', async (el: HTMLElement) => {
   const level = el.dataset.level;
   const current = await ApiC.getJson(`${entity.type}/${entity.id}`);
   const params: Record<string, string> = {};
-  if (level === 'read' || level === 'both') {
-    if (selected.length > 0) params['canread'] = mergePermissionsJson(current.canread, selected);
-    if (base) params['canread_base'] = base;
-  }
-  if (level === 'write' || level === 'both') {
+  if (selected.length > 0) params['canread'] = mergePermissionsJson(current.canread, selected);
+  if (base) params['canread_base'] = base;
+  if (level === 'both') {
     if (selected.length > 0) params['canwrite'] = mergePermissionsJson(current.canwrite, selected);
     if (base) params['canwrite_base'] = base;
   }
