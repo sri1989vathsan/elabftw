@@ -30,6 +30,7 @@ import {
 } from './file-folder-references';
 import { notify } from './notify';
 import { createWebLink, deleteWebLink } from './web-links';
+import { deleteLabCollectorLink } from './labcollector-link';
 
 addAutocompleteToLinkInputs();
 
@@ -109,6 +110,11 @@ on('add-web-link', async (_, event: Event) => {
 on('delete-web-link', async (el: HTMLElement) => {
   if (!confirm('Delete this web link?')) return;
   await deleteWebLink(el.dataset.linkid);
+});
+
+on('delete-labcollector-link', async (el: HTMLElement) => {
+  if (!confirm('Delete this LabCollector link?')) return;
+  await deleteLabCollectorLink(el.dataset.linkid);
 });
 
 // FINISH: outside if stepsDiv because can be from Todolist panel

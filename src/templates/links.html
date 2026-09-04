@@ -213,6 +213,35 @@
   </section>
   <hr>
 
+  {# LABCOLLECTOR LINKS: recorded here whenever one is created from the
+     "LabCollector Link" helper box or the TinyMCE Insert-menu dialog, the
+     same way an inserted web link is tracked above. #}
+  {% set labcollectorLinks = Entity.entityData.metadata_decoded.elabftw.labcollector_links|default([]) %}
+  <section id='labcollectorLinksSection'>
+    <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='labcollectorLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'LabCollector links'|trans }} (<span id='labcollectorLinksCount'>{{ labcollectorLinks|length }}</span>)</h4>
+    <div id='labcollectorLinksDiv' class='ml-4'>
+      {% for labcollectorLink in labcollectorLinks %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center' id='labcollectorLink_{{ labcollectorLink.id }}'>
+          <a class='mr-auto text-break' href='{{ labcollectorLink.url|e('html_attr') }}' target='_blank' rel='noreferrer noopener' title='{{ labcollectorLink.url|e('html_attr') }}'>
+            <i class='fas fa-flask fa-fw mr-2' aria-hidden='true'></i>{{ labcollectorLink.label }}
+          </a>
+          {% if mode == 'edit' %}
+            <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='insert-web-link' data-label='{{ labcollectorLink.label|e('html_attr') }}' data-url='{{ labcollectorLink.url|e('html_attr') }}' title='{{ 'Insert link in main text'|trans }}' aria-label='{{ 'Insert link in main text'|trans }}'>
+              <i class='fas fa-file-import fa-fw'></i>
+            </button>
+            <button type='button' class='btn btn-danger-ghost btn-sm' data-action='delete-labcollector-link' data-linkid='{{ labcollectorLink.id|e('html_attr') }}' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}'>
+              <i class='fas fa-trash-alt fa-fw'></i>
+            </button>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% if labcollectorLinks is empty %}
+        <p class='smallgray mt-2 mb-0'>{{ 'Links added from the LabCollector Link helper below or the editor Insert menu will be listed here.'|trans }}</p>
+      {% endif %}
+    </div>
+  </section>
+  <hr>
+
   {# ATTACHED FILES AND PLAIN-TEXT FILE/FOLDER REFERENCES #}
   <section id='filesFoldersLinksSection'>
     <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='filesFoldersLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Files / folders'|trans }} (<span id='filesFoldersLinksCount'>{{ filesFoldersLinksCount }}</span>)</h4>

@@ -4,7 +4,7 @@ import { ApiC } from '../api';
 import { entity } from '../getEntity';
 import { createFileFolderReference, platformSmbHref } from '../file-folder-references';
 import { Model } from '../interfaces';
-import { buildLabCollectorUrl } from '../labcollector-link';
+import { buildLabCollectorUrl, createLabCollectorLink, lookupLabCollectorRecord } from '../labcollector-link';
 import { createWebLink, normalizeWebLinkUrl } from '../web-links';
 import {
   escapeHTML,
@@ -16,6 +16,7 @@ import {
 interface LabCollectorDialogData {
   labcollectorType: string;
   labcollectorId: string;
+  labcollectorLookup: boolean;
 }
 
 interface FileFolderReferenceDialogData {
@@ -260,6 +261,8 @@ export function registerLinkExtension(editor: Editor): void {
       value: option.value,
     }));
 
+    const lookupCheckbox = document.getElementById('labcollectorLookup') as HTMLInputElement | null;
+
     editor.windowManager.open({
       title: 'Insert LabCollector link',
       size: 'normal',
@@ -277,17 +280,23 @@ export function registerLinkExtension(editor: Editor): void {
             name: 'labcollectorId',
             label: 'LabCollector ID',
           },
+          {
+            type: 'checkbox',
+            name: 'labcollectorLookup',
+            label: 'Look up the name and storage location via the LabCollector API before inserting',
+          },
         ],
       },
       initialData: {
         labcollectorType: helperType.value,
         labcollectorId: helperId.value,
+        labcollectorLookup: lookupCheckbox?.checked ?? false,
       },
       buttons: [
         { type: 'cancel', text: 'Cancel' },
         { type: 'submit', text: 'Insert link', primary: true },
       ],
-      onSubmit: api => {
+      onSubmit: async api => {
         const data = api.getData() as LabCollectorDialogData;
         const id = data.labcollectorId.trim();
         let url: string;
@@ -304,9 +313,19 @@ export function registerLinkExtension(editor: Editor): void {
 
         const selectedType = Array.from(helperType.options)
           .find(option => option.value === data.labcollectorType);
-        const label = `LabCollector ${selectedType?.textContent ?? data.labcollectorType} #${id}`;
+        const typeLabel = selectedType?.textContent ?? data.labcollectorType;
+        let label = `${typeLabel} #${id}`;
+        if (data.labcollectorLookup) {
+          api.block('Looking up record…');
+          const record = await lookupLabCollectorRecord(data.labcollectorType, id);
+          api.unblock();
+          if (record) {
+            label = `${typeLabel}: ${record.name}${record.storage ? ` (${record.storage})` : ''} #${id}`;
+          }
+        }
         helperType.value = data.labcollectorType;
         helperId.value = id;
+        if (lookupCheckbox) lookupCheckbox.checked = data.labcollectorLookup;
         editor.focus();
         editor.selection.moveToBookmark(bookmark);
         editor.undoManager.transact(() => {
@@ -321,6 +340,7 @@ export function registerLinkExtension(editor: Editor): void {
           );
         });
         api.close();
+        void createLabCollectorLink(label, url);
       },
     });
   };

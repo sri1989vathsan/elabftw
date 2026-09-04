@@ -51,6 +51,15 @@ final class LabCollectorClient
 
     private const int MAX_RESPONSE_BYTES = 5_000_000;
 
+    /** Candidate field names a LabCollector module might use for a record's display name */
+    private const array NAME_FIELDS = array('name', 'title', 'plasmid_name', 'strain_name', 'sample_name', 'label', 'gene_name');
+
+    /** Candidate field names a LabCollector module might use for where the record is physically stored */
+    private const array STORAGE_FIELDS = array(
+        'storage', 'storage_location', 'location', 'storage_unit',
+        'box', 'box_name', 'freezer', 'shelf', 'position', 'unit_hierarchy',
+    );
+
     private Client $client;
 
     private string $baseUrl;
@@ -137,6 +146,24 @@ final class LabCollectorClient
             throw new ImproperActionException('LabCollector record not found.');
         }
         return $rows[0];
+    }
+
+    /**
+     * Fetch just enough about one record to enrich a link inserted into an
+     * entity's body: its display name and, if the module tracks it, where
+     * it's physically stored. Field names vary per LabCollector module
+     * configuration, so this tries a generous list of common candidates
+     * rather than assuming a fixed schema.
+     *
+     * @return array{name: string, storage: string}
+     */
+    public function getSummary(string $module, string $id): array
+    {
+        $row = $this->getRecord($module, $id);
+        return array(
+            'name' => $this->value($row, self::NAME_FIELDS),
+            'storage' => $this->value($row, self::STORAGE_FIELDS),
+        );
     }
 
     /** @return array<string, mixed> */
