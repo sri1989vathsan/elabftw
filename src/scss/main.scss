@@ -4560,7 +4560,7 @@ div > .sticky-navbar {
 }
 
 .pm-dialog-field textarea,
-.pm-dialog-field input {
+.pm-dialog-field input:not([type='checkbox']) {
   width: 100%;
 }
 
@@ -4744,6 +4744,35 @@ div > .sticky-navbar {
   padding: 0;
 }
 
+.pm-step-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.pm-step {
+  align-items: center;
+  border-bottom: 1px solid #d9d9d9;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+}
+
+.pm-step:last-child {
+  border-bottom: 0;
+}
+
+.pm-step-body {
+  flex: 1 1 auto;
+}
+
+.pm-step-done .pm-step-body {
+  color: #495057;
+  text-decoration: line-through;
+}
+
 .pm-entity-link {
   align-items: center;
   border-bottom: 1px solid #d9d9d9;
@@ -4756,12 +4785,6 @@ div > .sticky-navbar {
   border-bottom: 0;
 }
 
-
-.pm-check-item {
-  align-items: center;
-  display: inline-flex;
-  gap: 0.4rem;
-}
 
 .pm-field-edit-btn {
   color: #495057;

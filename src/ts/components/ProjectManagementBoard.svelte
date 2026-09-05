@@ -56,6 +56,13 @@
     title: string | null;
   };
 
+  type Step = {
+    id: number;
+    body: string;
+    ordering: number;
+    finished: boolean;
+  };
+
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
 
@@ -92,6 +99,10 @@
   let weblinkUrl = '';
   let weblinkLabel = '';
   let addingWeblink = false;
+  let detailSteps: Step[] = [];
+  let loadingSteps = false;
+  let newStepText = '';
+  let addingStep = false;
 
   $: activeProject = projects.find(p => p.id === activeProjectId) ?? null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
@@ -291,6 +302,7 @@
     weblinkLabel = '';
     void loadComments(task.id);
     void loadEntityLinks(task.id);
+    void loadSteps(task.id);
     window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: { id: task.id, title: task.body } }));
   }
 
@@ -299,6 +311,8 @@
     detailEditing = false;
     detailComments = [];
     detailEntityLinks = [];
+    detailSteps = [];
+    newStepText = '';
     window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: null }));
   }
 
@@ -360,13 +374,29 @@
   function normalizeWeblinkUrl(input: string): string | null {
     let candidate = input.trim();
     if (!candidate) return null;
+    // A bare "\\server\share" (Windows UNC path notation) is a common way
+    // people write a network share -- accept it as shorthand for smb://.
+    if (/^\\\\/.test(candidate)) candidate = `smb://${candidate.slice(2).replace(/\\/g, '/')}`;
     if (!/^[a-z][a-z\d+.-]*:/i.test(candidate)) candidate = `https://${candidate}`;
     try {
       const url = new URL(candidate);
-      return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null;
+      return ['http:', 'https:', 'smb:'].includes(url.protocol) ? url.toString() : null;
     } catch {
       return null;
     }
+  }
+
+  // Same host/share/path convention as file-folder-references.ts and
+  // links.html's Data section, so a network share renders exactly the same
+  // way here: a real smb:// link for Mac, and a copy-to-clipboard \\UNC\path
+  // button for Windows (data-action="copy-unc-path" is a global handler
+  // already wired in common.ts, so it works here with no extra JS).
+  function smbCore(url: string): string | null {
+    return url.startsWith('smb://') ? url.slice('smb://'.length) : null;
+  }
+
+  function uncPath(core: string): string {
+    return `\\\\${core.replace(/\//g, '\\')}`;
   }
 
   async function addWeblink(): Promise<void> {
@@ -400,6 +430,53 @@
       await loadEntityLinks(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not remove that link.');
+    }
+  }
+
+  async function loadSteps(taskId: number): Promise<void> {
+    loadingSteps = true;
+    try {
+      detailSteps = await ApiC.getJson(`${Model.Todolist}/${taskId}/steps`) as Step[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load steps.');
+    } finally {
+      loadingSteps = false;
+    }
+  }
+
+  async function addStep(): Promise<void> {
+    if (!detailTask) return;
+    const body = newStepText.trim();
+    if (!body) return;
+    addingStep = true;
+    try {
+      await ApiC.post(`${Model.Todolist}/${detailTask.id}/steps`, { body });
+      newStepText = '';
+      await loadSteps(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not add that step.');
+    } finally {
+      addingStep = false;
+    }
+  }
+
+  async function toggleStep(step: Step): Promise<void> {
+    if (!detailTask) return;
+    try {
+      await ApiC.patch(`${Model.Todolist}/${detailTask.id}/steps/${step.id}`, { finished: !step.finished });
+      await loadSteps(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update that step.');
+    }
+  }
+
+  async function removeStep(step: Step): Promise<void> {
+    if (!detailTask) return;
+    try {
+      await ApiC.delete(`${Model.Todolist}/${detailTask.id}/steps/${step.id}`);
+      await loadSteps(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not remove that step.');
     }
   }
 
@@ -448,90 +525,6 @@
     document.execCommand(cmd, false, value ?? '');
   }
 
-  function insertChecklistItem(el: HTMLElement | undefined): void {
-    if (!el) return;
-    el.focus();
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-    const range = selection.getRangeAt(0);
-    const hasText = !range.collapsed && selection.toString().trim() !== '';
-    // A multi-line selection becomes one checklist item per line, same as
-    // clicking the bullet-list button would turn each line into its own
-    // bullet, rather than one item containing every line's text.
-    const lines = hasText
-      ? selection.toString().split('\n').map(line => line.trim()).filter(line => line !== '')
-      : [''];
-    if (hasText) range.deleteContents();
-
-    // Built via the DOM (not string interpolation), and inserted via the
-    // Range API (not execCommand, whose own choice of where to leave the
-    // caret afterwards is inconsistent across browsers and broke chaining
-    // a second checklist item with Enter).
-    const fragment = document.createDocumentFragment();
-    let lastTextNode: Text | null = null;
-    for (const line of lines) {
-      // A block-level <div> inserted mid-flow gets misplaced by the browser's
-      // HTML parser when the cursor isn't already at the start of a line (it
-      // can't nest inside inline content) -- an inline <span> preceded by an
-      // explicit <br> avoids that while still starting its own line.
-      fragment.appendChild(document.createElement('br'));
-      const item = document.createElement('span');
-      item.className = 'pm-check-item';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      item.appendChild(checkbox);
-      const textNode = document.createTextNode(line ? ` ${line}` : '\u00A0');
-      item.appendChild(textNode);
-      fragment.appendChild(item);
-      lastTextNode = textNode;
-    }
-    range.insertNode(fragment);
-
-    // Leave the caret inside the last item's own text, right after the
-    // checkbox, so handleChecklistKeydown() below can find it as the current
-    // line's owner and typed text lands next to the checkbox rather than
-    // after it.
-    if (lastTextNode) {
-      const caretRange = document.createRange();
-      caretRange.setStart(lastTextNode, lastTextNode.length);
-      caretRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(caretRange);
-    }
-  }
-
-  // Pressing Enter while on a checklist line should continue the list, like
-  // pressing Enter in a bullet/numbered list does -- otherwise it just ends
-  // the checklist and starts a plain line.
-  function handleChecklistKeydown(event: KeyboardEvent, el: HTMLElement | undefined): void {
-    if (!el || event.key !== 'Enter' || event.shiftKey) return;
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-    const range = selection.getRangeAt(0);
-    // The caret's container is either a descendant of `el` (climb to the
-    // child of `el` that owns it) or `el` itself, positioned between two of
-    // its top-level children (use the one right before the caret).
-    let node: Node | null = range.startContainer;
-    if (node === el) {
-      node = range.startOffset > 0 ? el.childNodes[range.startOffset - 1] : null;
-    } else {
-      while (node && node.parentNode !== el) node = node.parentNode;
-    }
-    let sibling: Node | null = node;
-    let onChecklistLine = false;
-    while (sibling) {
-      if (sibling instanceof HTMLElement && sibling.tagName === 'BR') break;
-      if (sibling instanceof HTMLElement && sibling.classList.contains('pm-check-item')) {
-        onChecklistLine = true;
-        break;
-      }
-      sibling = sibling.previousSibling;
-    }
-    if (!onChecklistLine) return;
-    event.preventDefault();
-    insertChecklistItem(el);
-  }
-
   function insertLink(el: HTMLElement | undefined): void {
     if (!el) return;
     const input = window.prompt(t('Enter a URL'));
@@ -549,16 +542,6 @@
     link.rel = 'noreferrer noopener';
     link.textContent = url;
     document.execCommand('insertHTML', false, link.outerHTML);
-  }
-
-  // Toggling a checkbox updates its live `checked` property but not the
-  // serialized attribute, so it wouldn't survive being read back out of
-  // notesEl.innerHTML on save without this -- keep the attribute in sync.
-  function syncChecklistState(event: Event): void {
-    const target = event.target;
-    if (target instanceof HTMLInputElement && target.type === 'checkbox') {
-      target.toggleAttribute('checked', target.checked);
-    }
   }
 
   // project dialog: null = creating a new project; a project = editing it
@@ -885,7 +868,6 @@
               <button type="button" class="rte-btn" title={t('Italic')} on:mousedown|preventDefault={() => exec(notesEl, 'italic')}><i class="fas fa-italic" aria-hidden="true"></i></button>
               <button type="button" class="rte-btn" title={t('Bullet list')} on:mousedown|preventDefault={() => exec(notesEl, 'insertUnorderedList')}><i class="fas fa-list-ul" aria-hidden="true"></i></button>
               <button type="button" class="rte-btn" title={t('Numbered list')} on:mousedown|preventDefault={() => exec(notesEl, 'insertOrderedList')}><i class="fas fa-list-ol" aria-hidden="true"></i></button>
-              <button type="button" class="rte-btn" title={t('Checklist item')} on:mousedown|preventDefault={() => insertChecklistItem(notesEl)}><i class="fas fa-square-check" aria-hidden="true"></i></button>
               <button type="button" class="rte-btn" title={t('Insert link')} on:mousedown|preventDefault={() => insertLink(notesEl)}><i class="fas fa-link" aria-hidden="true"></i></button>
               <button type="button" class="rte-btn" title={t('Clear formatting')} on:mousedown|preventDefault={() => exec(notesEl, 'removeFormat')}><i class="fas fa-eraser" aria-hidden="true"></i></button>
             </div>
@@ -897,8 +879,6 @@
               aria-multiline="true"
               aria-label={t('Notes')}
               bind:this={notesEl}
-              on:change={syncChecklistState}
-              on:keydown={(event) => handleChecklistKeydown(event, notesEl)}
             >{@html detailNotes}</div>
           </div>
         {:else}
@@ -962,8 +942,19 @@
             <ul class="pm-entity-link-list">
               {#each detailEntityLinks as link (link.id)}
                 <li class="pm-entity-link">
-                  <span class="badge badge-info mr-1">{entityTypeLabel(link.entity_type)}</span>
-                  <a class="mr-auto text-break" href={entityViewUrl(link)} target="_blank" rel="noreferrer noopener">{link.title}</a>
+                  {#if link.entity_type === 'weblink' && link.url && smbCore(link.url)}
+                    <i class="fas fa-server fa-fw mr-1" aria-hidden="true"></i>
+                    <span class="mr-auto text-break">{link.title}</span>
+                    <a class="btn-unstyled mr-1" href={link.url} title={t('Open on Mac (smb://)')} aria-label={t('Open on Mac')}>
+                      <i class="fab fa-apple fa-fw" aria-hidden="true"></i>
+                    </a>
+                    <button type="button" class="btn-unstyled mr-1" data-action="copy-unc-path" data-unc={uncPath(smbCore(link.url) ?? '')} title={t('Copy Windows path (paste into Explorer)')} aria-label={t('Copy Windows path')}>
+                      <i class="fab fa-windows fa-fw" aria-hidden="true"></i>
+                    </button>
+                  {:else}
+                    <span class="badge badge-info mr-1">{entityTypeLabel(link.entity_type)}</span>
+                    <a class="mr-auto text-break" href={entityViewUrl(link)} target="_blank" rel="noreferrer noopener">{link.title}</a>
+                  {/if}
                   <button type="button" class="btn-unstyled pm-comment-delete" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEntityLink(link)}>
                     <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
                   </button>
@@ -975,7 +966,7 @@
             <input
               type="url"
               class="form-control"
-              placeholder={t('https://…')}
+              placeholder={t('https://… or smb://…')}
               bind:value={weblinkUrl}
               aria-label={t('Web address')}
             />
@@ -987,6 +978,42 @@
               aria-label={t('Link label')}
             />
             <button type="button" class="btn btn-secondary ml-2" disabled={addingWeblink || !weblinkUrl.trim()} on:click={addWeblink}>{t('Add')}</button>
+          </div>
+        </div>
+
+        <div class="pm-dialog-field">
+          <span class="pm-label">{t('Steps')}</span>
+          {#if loadingSteps}
+            <p class="pm-muted small">{t('Loading')}…</p>
+          {:else if detailSteps.length === 0}
+            <p class="pm-muted small">{t('No steps yet.')}</p>
+          {:else}
+            <ul class="pm-step-list">
+              {#each detailSteps as step (step.id)}
+                <li class="pm-step" class:pm-step-done={step.finished}>
+                  <input
+                    type="checkbox"
+                    checked={step.finished}
+                    on:change={() => toggleStep(step)}
+                    aria-label={step.body}
+                  />
+                  <span class="pm-step-body">{step.body}</span>
+                  <button type="button" class="btn-unstyled pm-comment-delete" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeStep(step)}>
+                    <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          <div class="d-flex pm-dialog-row">
+            <input
+              type="text"
+              class="form-control"
+              placeholder={t('Add a step…')}
+              bind:value={newStepText}
+              on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void addStep(); } }}
+            />
+            <button type="button" class="btn btn-secondary ml-2" disabled={addingStep || !newStepText.trim()} on:click={addStep}>{t('Add')}</button>
           </div>
         </div>
 
