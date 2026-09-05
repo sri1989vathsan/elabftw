@@ -353,6 +353,9 @@ final class Teams extends AbstractRest
         $Status = new ExperimentsStatus($this);
         $Status->createDefault();
 
+        // create default project management board columns
+        TodolistColumns::createDefault((int) $newId);
+
         return $newId;
     }
 

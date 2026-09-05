@@ -159,6 +159,7 @@ enum Model {
   Team = 'teams',
   TeamGroup = 'teamgroups',
   Todolist = 'todolist',
+  TodolistColumns = 'todolist_columns',
   TodolistProjects = 'todolist_projects',
   UnfinishedSteps = 'unfinishedsteps',
   Upload = 'uploads',

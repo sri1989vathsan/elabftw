@@ -56,6 +56,8 @@ final class CustomMigrationRunner
         '030_labcollector_link.sql',
         '031_todolist_entity_links.sql',
         '032_todolist_steps.sql',
+        '033_todolist_status_priority.sql',
+        '034_todolist_columns.sql',
     );
 
     private Db $Db;

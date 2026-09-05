@@ -82,8 +82,13 @@ final class Todolist extends AbstractRest
         $assigneeUserids = $this->getAssigneeUserids($reqBody['assignee_userids'] ?? $reqBody['assigned_userid'] ?? null);
         $primaryAssignee = $assigneeUserids[0];
         $projectId = $this->getProjectId($reqBody['project_id'] ?? null);
-        $sql = 'INSERT INTO todolist (body, notes, description, deadline, reminder_minutes, userid, team, assigned_userid, project_id)
-            VALUES(:content, :notes, :description, :deadline, :reminder_minutes, :userid, :team, :assigned_userid, :project_id)';
+        $priority = $this->getPriority($reqBody['priority'] ?? null);
+        // A new task always starts in the team's "To do" column (whichever
+        // custom columns exist in between In progress and Done don't apply
+        // to brand-new work); moving it elsewhere is a separate patch.
+        $sql = "INSERT INTO todolist (body, notes, description, deadline, reminder_minutes, userid, team, assigned_userid, project_id, priority, column_id)
+            VALUES(:content, :notes, :description, :deadline, :reminder_minutes, :userid, :team, :assigned_userid, :project_id, :priority,
+                (SELECT id FROM todolist_columns WHERE team = :team_col AND kind = 'todo' LIMIT 1))";
         $req = $this->Db->prepare($sql);
         $req->bindValue(':content', $content);
         $req->bindValue(':notes', $notes, $notes === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
@@ -96,8 +101,10 @@ final class Todolist extends AbstractRest
         );
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $req->bindParam(':team_col', $this->team, PDO::PARAM_INT);
         $req->bindParam(':assigned_userid', $primaryAssignee, PDO::PARAM_INT);
         $req->bindValue(':project_id', $projectId, $projectId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindValue(':priority', $priority, $priority === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $this->Db->execute($req);
 
         $id = (int) $this->Db->lastInsertId();
@@ -149,7 +156,7 @@ final class Todolist extends AbstractRest
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
                 t.reminder_minutes,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
-                t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id,
+                t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id, t.in_progress, t.priority, t.column_id,
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
                 project.name AS project_name,
@@ -251,7 +258,7 @@ final class Todolist extends AbstractRest
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
                 t.reminder_minutes,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
-                t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id,
+                t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id, t.in_progress, t.priority, t.column_id,
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
                 project.name AS project_name,
@@ -289,6 +296,15 @@ final class Todolist extends AbstractRest
                 continue;
             }
             $this->update($key, $value);
+        }
+        // Whichever side of the status/column pair was actually touched
+        // drives the other, so a task's state stays consistent no matter
+        // which UI (this board's columns, or the sidebar's plain checkbox)
+        // changed it.
+        if (array_key_exists('column_id', $params)) {
+            $this->syncStatusFromColumn($this->getColumnId($params['column_id']));
+        } elseif (array_key_exists('completed', $params) || array_key_exists('in_progress', $params)) {
+            $this->syncColumnFromStatus();
         }
         $newAssignees = null;
         if (array_key_exists('assignee_userids', $params) || array_key_exists('assigned_userid', $params)) {
@@ -432,6 +448,7 @@ final class Todolist extends AbstractRest
     private function decodeAssignees(array $row): array
     {
         $row['assignees'] = json_decode((string) $row['assignees'], true, 512, JSON_THROW_ON_ERROR);
+        $row['in_progress'] = (bool) $row['in_progress'];
         return $row;
     }
 
@@ -461,6 +478,81 @@ final class Todolist extends AbstractRest
         return $projectId;
     }
 
+    private function getPriority(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (!in_array($value, array('low', 'medium', 'high'), true)) {
+            throw new ImproperActionException(_('Invalid priority.'));
+        }
+        return $value;
+    }
+
+    private function getColumnId(mixed $value): int
+    {
+        $columnId = filter_var($value, FILTER_VALIDATE_INT);
+        if ($columnId === false) {
+            throw new ImproperActionException(_('Invalid column.'));
+        }
+        $sql = 'SELECT COUNT(*) AS count FROM todolist_columns WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':id', $columnId, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        if ((int) $this->Db->fetch($req)['count'] === 0) {
+            throw new ImproperActionException(_('Column not found in this team.'));
+        }
+        return $columnId;
+    }
+
+    /**
+     * The column's kind (fixed for the three built-ins) determines what the
+     * legacy completed_at/in_progress fields should be, so the sidebar
+     * widget, calendar and notifications (which only know about those two
+     * fields) keep behaving correctly regardless of how many custom columns
+     * exist in between.
+     */
+    private function syncStatusFromColumn(int $columnId): void
+    {
+        $sql = 'SELECT kind FROM todolist_columns WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':id', $columnId, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $kind = $this->Db->fetch($req)['kind'] ?? 'custom';
+
+        $sql = 'UPDATE todolist SET completed_at = :completed_at, in_progress = :in_progress WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':completed_at', $kind === 'done' ? $this->getCompletedAt(true) : null, $kind === 'done' ? PDO::PARAM_STR : PDO::PARAM_NULL);
+        $req->bindValue(':in_progress', (int) ($kind === 'in_progress'), PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    /**
+     * The reverse sync: something patched the legacy completed_at/in_progress
+     * fields directly (e.g. the sidebar widget's own complete checkbox, which
+     * has no concept of columns) -- move the task into the matching built-in
+     * column so the project management board doesn't show it stuck wherever
+     * it happened to be.
+     */
+    private function syncColumnFromStatus(): void
+    {
+        $task = $this->readOne();
+        $kind = !empty($task['completed_at']) ? 'done' : ($task['in_progress'] ? 'in_progress' : 'todo');
+        $sql = 'UPDATE todolist AS t
+            INNER JOIN todolist_columns AS c ON c.team = t.team AND c.kind = :kind
+            SET t.column_id = c.id
+            WHERE t.id = :id AND t.team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':kind', $kind);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
     private function notifyAssignee(int $assignedUserid, string $title): void
     {
         (new TaskAssigned(
@@ -485,6 +577,9 @@ final class Todolist extends AbstractRest
             'completed' => array('completed_at', $this->getCompletedAt($value), PDO::PARAM_STR),
             'project_id' => array('project_id', $this->getProjectId($value), PDO::PARAM_INT),
             'description' => array('description', $this->getDescription($value), PDO::PARAM_STR),
+            'in_progress' => array('in_progress', (int) (bool) $value, PDO::PARAM_INT),
+            'priority' => array('priority', $this->getPriority($value), PDO::PARAM_STR),
+            'column_id' => array('column_id', $this->getColumnId($value), PDO::PARAM_INT),
             default => throw new ImproperActionException(_('Invalid to-do property.')),
         };
         $sql = sprintf(
