@@ -18,6 +18,7 @@
     id: number;
     body: string;
     notes: string | null;
+    description: string | null;
     deadline: string | null;
     reminder_minutes: number | null;
     creation_time: string;
@@ -56,6 +57,7 @@
     body: string;
     deadline: string | null;
     notes: string | null;
+    description: string | null;
     creationTime: string | null;
     ordering: number | null;
     entityId?: number;
@@ -76,10 +78,35 @@
     entries: SidebarEntry[];
   };
 
+  type EntityLinkType = 'experiments' | 'items' | 'experiments_templates' | 'items_types' | 'weblink';
+
+  type EntityLink = {
+    id: number;
+    entity_type: EntityLinkType;
+    entity_id: number | null;
+    url: string | null;
+    title: string | null;
+  };
+
+  type Step = {
+    id: number;
+    body: string;
+    ordering: number;
+    finished: boolean;
+  };
+
   type CompletedGroup = {
     key: string;
     label: string;
     items: Todo[];
+  };
+
+  type TaskComment = {
+    id: number;
+    body: string;
+    created_at: string;
+    userid: number;
+    author_fullname: string;
   };
 
   const t = i18next.t.bind(i18next);
@@ -122,14 +149,31 @@
   let reminderTime = '';
   let editingId: number | null = null;
   let detailEntry: SidebarEntry | null = null;
+  let detailEditing = false;
+  let detailNotesEl: HTMLDivElement;
+  let detailDescriptionEl: HTMLDivElement;
+  let detailComments: TaskComment[] = [];
+  let loadingComments = false;
+  let newCommentText = '';
+  let postingComment = false;
   let editTitle = '';
   let editNotes = '';
+  let editDescription = '';
   let editDeadlineDate = '';
   let editDeadlineTime = '';
   let editReminderChoice = '60';
   let editCustomReminder = 120;
   let editReminderDate = '';
   let editReminderTime = '';
+  let detailEntityLinks: EntityLink[] = [];
+  let loadingEntityLinks = false;
+  let weblinkUrl = '';
+  let weblinkLabel = '';
+  let addingWeblink = false;
+  let detailSteps: Step[] = [];
+  let loadingSteps = false;
+  let newStepText = '';
+  let addingStep = false;
   let draggedTaskId: number | null = null;
   let dragOverKey = '';
   let loading = true;
@@ -146,6 +190,7 @@
       body: item.body,
       deadline: item.deadline,
       notes: item.notes,
+      description: item.description,
       creationTime: item.creation_time,
       ordering: Number(item.ordering),
       creatorUserid: item.userid,
@@ -165,6 +210,7 @@
           body: step.body,
           deadline: step.deadline,
           notes: null,
+          description: null,
           creationTime: null,
           ordering: null,
           entityId: Number(entity.id),
@@ -441,6 +487,13 @@
     if (!reminderTime) reminderTime = reminder.slice(11, 16);
   }
 
+  function initials(fullname: string): string {
+    const parts = fullname.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
   function isAssignedByOther(entry: SidebarEntry): boolean {
     return entry.source === 'todo'
       && (entry.assignees ?? []).some(a => a.userid === core.currentUserid)
@@ -448,33 +501,12 @@
       && entry.creatorUserid !== core.currentUserid;
   }
 
-  function assigneeNames(entry: SidebarEntry): string {
-    return (entry.assignees ?? []).map(a => a.fullname).join(', ');
-  }
-
-  function openDetail(entry: SidebarEntry): void {
-    if (entry.source !== 'todo') return;
-    detailEntry = entry;
-  }
-
-  function closeDetail(): void {
-    detailEntry = null;
-  }
-
-  function editFromDetail(): void {
-    if (!detailEntry) return;
-    const entry = detailEntry;
-    closeDetail();
-    startEditing(entry);
-  }
-
-  function startEditing(entry: SidebarEntry): void {
-    if (entry.source !== 'todo') return;
+  function populateEditFields(entry: SidebarEntry): void {
     const task = items.find(item => Number(item.id) === entry.id);
     if (!task) return;
-    editingId = entry.id;
     editTitle = task.body;
     editNotes = task.notes ?? '';
+    editDescription = task.description ?? '';
     if (task.deadline) {
       const deadline = toLocalInput(new Date(task.deadline));
       editDeadlineDate = deadline.slice(0, 10);
@@ -484,6 +516,57 @@
       editDeadlineTime = '';
     }
     setEditReminder(task.reminder_minutes, task.deadline ? new Date(task.deadline) : null);
+  }
+
+  function openDetail(entry: SidebarEntry): void {
+    if (entry.source !== 'todo') return;
+    detailEntry = entry;
+    detailEditing = false;
+    weblinkUrl = '';
+    weblinkLabel = '';
+    populateEditFields(entry);
+    void loadEntityLinks(entry.id);
+    void loadComments(entry.id);
+    void loadSteps(entry.id);
+    window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: { id: entry.id, title: entry.body } }));
+  }
+
+  function closeDetail(): void {
+    detailEntry = null;
+    detailEditing = false;
+    detailEntityLinks = [];
+    detailComments = [];
+    newCommentText = '';
+    detailSteps = [];
+    newStepText = '';
+    window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: null }));
+  }
+
+  function startDetailEdit(): void {
+    detailEditing = true;
+  }
+
+  function cancelDetailEdit(): void {
+    if (!detailEntry) return;
+    populateEditFields(detailEntry);
+    detailEditing = false;
+  }
+
+  async function saveDetailEdit(): Promise<void> {
+    if (!detailEntry) return;
+    const id = detailEntry.id;
+    editNotes = detailNotesEl?.innerHTML ?? editNotes;
+    editDescription = detailDescriptionEl?.innerHTML ?? editDescription;
+    await saveEditing(id);
+    const refreshed = entries.find(e => e.source === 'todo' && e.id === id);
+    if (refreshed) detailEntry = refreshed;
+    detailEditing = false;
+  }
+
+  function startEditing(entry: SidebarEntry): void {
+    if (entry.source !== 'todo') return;
+    populateEditFields(entry);
+    editingId = entry.id;
   }
 
   async function saveEditing(id: number): Promise<void> {
@@ -520,12 +603,229 @@
     await ApiC.patch(`${Model.Todolist}/${id}`, {
       content,
       notes: editNotes.trim() || null,
+      description: editDescription.trim() || null,
       deadline: deadline?.toISOString() ?? null,
       reminder_minutes: reminderMinutes,
     });
     editingId = null;
     await load();
     window.dispatchEvent(new CustomEvent('todolist-changed'));
+  }
+
+  // A lightweight rich-text toolbar (contenteditable + execCommand), same
+  // approach as ProjectManagementBoard.svelte's Notes field.
+  function exec(el: HTMLElement | undefined, cmd: string, value?: string): void {
+    if (!el) return;
+    el.focus();
+    document.execCommand(cmd, false, value ?? '');
+  }
+
+  function insertLink(el: HTMLElement | undefined): void {
+    if (!el) return;
+    const input = window.prompt(t('Enter a URL'));
+    const url = input?.trim();
+    if (!url) return;
+    el.focus();
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed && selection.toString().trim() !== '') {
+      document.execCommand('createLink', false, url);
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noreferrer noopener';
+    link.textContent = url;
+    document.execCommand('insertHTML', false, link.outerHTML);
+  }
+
+  const ENTITY_TYPE_PAGES: Partial<Record<EntityLinkType, string>> = {
+    experiments: 'experiments.php',
+    items: 'database.php',
+    experiments_templates: 'templates.php',
+    items_types: 'resources-templates.php',
+  };
+
+  function entityViewUrl(link: EntityLink): string {
+    if (link.entity_type === 'weblink') return link.url ?? '#';
+    return `${ENTITY_TYPE_PAGES[link.entity_type]}?mode=view&id=${link.entity_id}`;
+  }
+
+  function entityTypeLabel(type: EntityLinkType): string {
+    return {
+      experiments: t('Experiment'),
+      items: t('Resource'),
+      experiments_templates: t('Template'),
+      items_types: t('Resource template'),
+      weblink: t('Link'),
+    }[type];
+  }
+
+  async function loadEntityLinks(taskId: number): Promise<void> {
+    loadingEntityLinks = true;
+    try {
+      const links = await ApiC.getJson(`${Model.Todolist}/${taskId}/entity_links`) as EntityLink[];
+      detailEntityLinks = links.filter(link => link.title !== null);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load linked items.');
+    } finally {
+      loadingEntityLinks = false;
+    }
+  }
+
+  function normalizeWeblinkUrl(input: string): string | null {
+    let candidate = input.trim();
+    if (!candidate) return null;
+    // A bare "\\server\share" (Windows UNC path notation) is a common way
+    // people write a network share -- accept it as shorthand for smb://.
+    if (/^\\\\/.test(candidate)) candidate = `smb://${candidate.slice(2).replace(/\\/g, '/')}`;
+    if (!/^[a-z][a-z\d+.-]*:/i.test(candidate)) candidate = `https://${candidate}`;
+    try {
+      const url = new URL(candidate);
+      return ['http:', 'https:', 'smb:'].includes(url.protocol) ? url.toString() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Same host/share/path convention as file-folder-references.ts and
+  // links.html's Data section, so a network share renders exactly the same
+  // way here: a real smb:// link for Mac, and a copy-to-clipboard \\UNC\path
+  // button for Windows (data-action="copy-unc-path" is a global handler
+  // already wired in common.ts, so it works here with no extra JS).
+  function smbCore(url: string): string | null {
+    return url.startsWith('smb://') ? url.slice('smb://'.length) : null;
+  }
+
+  function uncPath(core: string): string {
+    return `\\\\${core.replace(/\//g, '\\')}`;
+  }
+
+  async function addWeblink(): Promise<void> {
+    if (!detailEntry) return;
+    const url = normalizeWeblinkUrl(weblinkUrl);
+    if (!url) {
+      notify.error('Enter a valid web address.');
+      return;
+    }
+    addingWeblink = true;
+    try {
+      await ApiC.post(`${Model.Todolist}/${detailEntry.id}/entity_links`, {
+        entity_type: 'weblink',
+        url,
+        label: weblinkLabel.trim() || url,
+      });
+      weblinkUrl = '';
+      weblinkLabel = '';
+      await loadEntityLinks(detailEntry.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not add that link.');
+    } finally {
+      addingWeblink = false;
+    }
+  }
+
+  async function removeEntityLink(link: EntityLink): Promise<void> {
+    if (!detailEntry) return;
+    try {
+      await ApiC.delete(`${Model.Todolist}/${detailEntry.id}/entity_links/${link.id}`);
+      await loadEntityLinks(detailEntry.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not remove that link.');
+    }
+  }
+
+  async function loadSteps(taskId: number): Promise<void> {
+    loadingSteps = true;
+    try {
+      detailSteps = await ApiC.getJson(`${Model.Todolist}/${taskId}/steps`) as Step[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load steps.');
+    } finally {
+      loadingSteps = false;
+    }
+  }
+
+  async function addStep(): Promise<void> {
+    if (!detailEntry) return;
+    const body = newStepText.trim();
+    if (!body) return;
+    addingStep = true;
+    try {
+      await ApiC.post(`${Model.Todolist}/${detailEntry.id}/steps`, { body });
+      newStepText = '';
+      await loadSteps(detailEntry.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not add that step.');
+    } finally {
+      addingStep = false;
+    }
+  }
+
+  async function toggleStep(step: Step): Promise<void> {
+    if (!detailEntry) return;
+    try {
+      await ApiC.patch(`${Model.Todolist}/${detailEntry.id}/steps/${step.id}`, { finished: !step.finished });
+      await loadSteps(detailEntry.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update that step.');
+    }
+  }
+
+  async function removeStep(step: Step): Promise<void> {
+    if (!detailEntry) return;
+    try {
+      await ApiC.delete(`${Model.Todolist}/${detailEntry.id}/steps/${step.id}`);
+      await loadSteps(detailEntry.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not remove that step.');
+    }
+  }
+
+  function formatCommentTime(timestamp: string): string {
+    return new Date(timestamp).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  async function loadComments(taskId: number): Promise<void> {
+    loadingComments = true;
+    try {
+      detailComments = await ApiC.getJson(`${Model.Todolist}/${taskId}/${Model.Comment}`) as TaskComment[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load comments.');
+    } finally {
+      loadingComments = false;
+    }
+  }
+
+  async function postComment(): Promise<void> {
+    const body = newCommentText.trim();
+    if (!body || !detailEntry) return;
+    postingComment = true;
+    try {
+      await ApiC.post(`${Model.Todolist}/${detailEntry.id}/${Model.Comment}`, { body });
+      newCommentText = '';
+      await loadComments(detailEntry.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not post the comment.');
+    } finally {
+      postingComment = false;
+    }
+  }
+
+  async function deleteComment(comment: TaskComment): Promise<void> {
+    if (!detailEntry) return;
+    try {
+      await ApiC.delete(`${Model.Todolist}/${detailEntry.id}/${Model.Comment}/${comment.id}`);
+      await loadComments(detailEntry.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not delete the comment.');
+    }
   }
 
   async function create(): Promise<void> {
@@ -760,9 +1060,19 @@
     window.addEventListener('todolist-changed', reload);
     window.addEventListener('todolist-scope-changed', reload);
     void load();
+
+    // Lets the Search side panel offer a "Link to task" button on its
+    // results (see FavoriteFilters.class.ts) while this popup is open, the
+    // same way ProjectManagementBoard.svelte does.
+    const onEntityLinkAdded = (): void => {
+      if (detailEntry) void loadEntityLinks(detailEntry.id);
+    };
+    window.addEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
     return () => {
       window.removeEventListener('todolist-changed', reload);
       window.removeEventListener('todolist-scope-changed', reload);
+      window.removeEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
+      window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: null }));
     };
   });
 </script>
@@ -1146,37 +1456,252 @@
 {/if}
 
 {#if detailEntry}
-  <div class='todo-detail-overlay' role='presentation'>
+  <div class='todo-detail-overlay pm-overlay-task' role='presentation'>
     <div class='todo-detail-dialog' role='dialog' aria-modal='true' aria-labelledby='todoDetailTitle'>
       <div class='todo-detail-header'>
-        <h4 id='todoDetailTitle' class='mb-0'>{detailEntry.body}</h4>
+        <h4 id='todoDetailTitle' class='mb-0'>{detailEditing ? t('Edit task') : detailEntry.body}</h4>
+        {#if detailEntry.projectName}<span class='badge badge-info'>{detailEntry.projectName}</span>{/if}
         <button type='button' class='btn-unstyled todo-detail-close' on:click={closeDetail} aria-label={t('Close')}>&times;</button>
       </div>
       <div class='todo-detail-body'>
-        {#if detailEntry.projectName}
-          <div><span class='badge badge-info'>{detailEntry.projectName}</span></div>
-        {/if}
-        {#if detailEntry.deadline}
-          <div class='small'>
-            <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(detailEntry.deadline)}
+        {#if detailEditing}
+          <div class='pm-dialog-field'>
+            <label class='pm-label' for='todo-detail-title'>{t('Title')}</label>
+            <input id='todo-detail-title' type='text' class='form-control' bind:value={editTitle} />
+          </div>
+          <div class='d-flex pm-dialog-row'>
+            <div class='pm-dialog-field flex-grow-1'>
+              <label class='pm-label' for='todo-detail-deadline-date'>{t('Deadline date')}</label>
+              <input id='todo-detail-deadline-date' type='date' class='form-control' bind:value={editDeadlineDate} />
+            </div>
+            <div class='pm-dialog-field flex-grow-1'>
+              <label class='pm-label' for='todo-detail-deadline-time'>{t('Deadline time')}</label>
+              <select id='todo-detail-deadline-time' class='form-control' bind:value={editDeadlineTime}>
+                <option value=''>{t('None')}</option>
+                {#each timeOptions as timeOption (timeOption)}
+                  <option value={timeOption}>{timeOption}</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+        {:else}
+          {#if detailEntry.deadline}
+            <div class='small'>
+              <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(detailEntry.deadline)}
+            </div>
+          {/if}
+          <div class='small mb-1 d-flex align-items-center flex-wrap'>
+            {#if (detailEntry.assignees ?? []).length === 0}
+              <span class='badge badge-info mr-1'><i class='fas fa-user fa-fw mr-1' aria-hidden='true'></i>{t('Unassigned')}</span>
+            {:else}
+              <div class='pm-avatar-group mr-2'>
+                {#each detailEntry.assignees as assignee (assignee.userid)}
+                  <span class='pm-avatar' title={assignee.fullname}>{initials(assignee.fullname)}</span>
+                {/each}
+              </div>
+            {/if}
+            {#if isAssignedByOther(detailEntry)}<span class='pm-muted'>{t('Assigned by')} {detailEntry.creatorFullname}</span>{/if}
           </div>
         {/if}
-        {#if (detailEntry.assignees ?? []).length > 0}
-          <div class='small'>
-            <i class='fas fa-user fa-fw mr-1' aria-hidden='true'></i>{t('Assigned to')} {assigneeNames(detailEntry)}
-            {#if isAssignedByOther(detailEntry)} &middot; {t('Assigned by')} {detailEntry.creatorFullname}{/if}
+
+        <div class='pm-dialog-field'>
+          {#if detailEditing}
+            <div class='d-flex align-items-center justify-content-between'>
+              <span class='pm-label mb-0'>{t('Description')}</span>
+              <button type='button' class='btn-unstyled pm-field-edit-btn' title={t('Edit')} aria-label={t('Edit description')} on:mousedown|preventDefault={() => detailDescriptionEl?.focus()}>
+                <i class='fas fa-pen fa-fw' aria-hidden='true'></i>
+              </button>
+            </div>
+            <div
+              id='todo-detail-description-editor'
+              class='rte-content form-control'
+              contenteditable='true'
+              role='textbox'
+              aria-multiline='true'
+              aria-label={t('Description')}
+              bind:this={detailDescriptionEl}
+            >{@html editDescription}</div>
+          {:else}
+            <span class='pm-label'>{t('Description')}</span>
+            {#if detailEntry.description}
+              <div class='rte-content'>{@html detailEntry.description}</div>
+            {:else}
+              <p class='pm-muted small mb-0'>{t('No description yet.')}</p>
+            {/if}
+          {/if}
+        </div>
+
+        <div class='pm-dialog-field'>
+          <span class='pm-label'>{t('Notes')}</span>
+          {#if detailEditing}
+            <div class='rte-toolbar' role='toolbar' aria-label={t('Formatting')}>
+              <button type='button' class='rte-btn' title={t('Heading')} on:mousedown|preventDefault={() => exec(detailNotesEl, 'formatBlock', '<h4>')}><i class='fas fa-heading' aria-hidden='true'></i></button>
+              <button type='button' class='rte-btn' title={t('Bold')} on:mousedown|preventDefault={() => exec(detailNotesEl, 'bold')}><i class='fas fa-bold' aria-hidden='true'></i></button>
+              <button type='button' class='rte-btn' title={t('Italic')} on:mousedown|preventDefault={() => exec(detailNotesEl, 'italic')}><i class='fas fa-italic' aria-hidden='true'></i></button>
+              <button type='button' class='rte-btn' title={t('Bullet list')} on:mousedown|preventDefault={() => exec(detailNotesEl, 'insertUnorderedList')}><i class='fas fa-list-ul' aria-hidden='true'></i></button>
+              <button type='button' class='rte-btn' title={t('Numbered list')} on:mousedown|preventDefault={() => exec(detailNotesEl, 'insertOrderedList')}><i class='fas fa-list-ol' aria-hidden='true'></i></button>
+              <button type='button' class='rte-btn' title={t('Insert link')} on:mousedown|preventDefault={() => insertLink(detailNotesEl)}><i class='fas fa-link' aria-hidden='true'></i></button>
+              <button type='button' class='rte-btn' title={t('Clear formatting')} on:mousedown|preventDefault={() => exec(detailNotesEl, 'removeFormat')}><i class='fas fa-eraser' aria-hidden='true'></i></button>
+            </div>
+            <div
+              id='todo-detail-notes-editor'
+              class='rte-content form-control'
+              contenteditable='true'
+              role='textbox'
+              aria-multiline='true'
+              aria-label={t('Notes')}
+              bind:this={detailNotesEl}
+            >{@html editNotes}</div>
+          {:else if detailEntry.notes}
+            <div class='rte-content'>{@html detailEntry.notes}</div>
+          {:else}
+            <p class='pm-muted small mb-0'>{t('No notes yet.')}</p>
+          {/if}
+        </div>
+
+        <div class='pm-dialog-field'>
+          <div class='d-flex align-items-center justify-content-between'>
+            <span class='pm-label mb-0'>{t('Linked items')}</span>
+            <button
+              type='button'
+              class='btn btn-ghost btn-sm'
+              on:click={() => {
+                const panel = document.getElementById('favoritesPanel');
+                if (panel?.hasAttribute('hidden')) {
+                  (document.querySelector('[data-action="toggle-sidepanel"][data-target="favorites"]') as HTMLElement | null)?.click();
+                }
+              }}
+            >
+              <i class='fas fa-magnifying-glass fa-fw mr-1' aria-hidden='true'></i>{t('Open Search to link')}
+            </button>
           </div>
-        {/if}
-        {#if detailEntry.notes}
-          <div class='todo-detail-notes'>
-            <label class='small font-weight-bold mb-1'>{t('Notes')}</label>
-            <div>{detailEntry.notes}</div>
+          {#if loadingEntityLinks}
+            <p class='pm-muted small'>{t('Loading')}…</p>
+          {:else if detailEntityLinks.length === 0}
+            <p class='pm-muted small'>{t('No linked items yet.')}</p>
+          {:else}
+            <ul class='pm-entity-link-list'>
+              {#each detailEntityLinks as link (link.id)}
+                <li class='pm-entity-link'>
+                  {#if link.entity_type === 'weblink' && link.url && smbCore(link.url)}
+                    <i class='fas fa-server fa-fw mr-1' aria-hidden='true'></i>
+                    <span class='mr-auto text-break'>{link.title}</span>
+                    <a class='btn-unstyled mr-1' href={link.url} title={t('Open on Mac (smb://)')} aria-label={t('Open on Mac')}>
+                      <i class='fab fa-apple fa-fw' aria-hidden='true'></i>
+                    </a>
+                    <button type='button' class='btn-unstyled mr-1' data-action='copy-unc-path' data-unc={uncPath(smbCore(link.url) ?? '')} title={t('Copy Windows path (paste into Explorer)')} aria-label={t('Copy Windows path')}>
+                      <i class='fab fa-windows fa-fw' aria-hidden='true'></i>
+                    </button>
+                  {:else}
+                    <span class='badge badge-info mr-1'>{entityTypeLabel(link.entity_type)}</span>
+                    <a class='mr-auto text-break' href={entityViewUrl(link)} target='_blank' rel='noreferrer noopener'>{link.title}</a>
+                  {/if}
+                  <button type='button' class='btn-unstyled pm-comment-delete' title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEntityLink(link)}>
+                    <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          <div class='d-flex pm-dialog-row'>
+            <input
+              type='url'
+              class='form-control'
+              placeholder={t('https://… or smb://…')}
+              bind:value={weblinkUrl}
+              aria-label={t('Web address')}
+            />
+            <input
+              type='text'
+              class='form-control'
+              placeholder={t('Label (optional)')}
+              bind:value={weblinkLabel}
+              aria-label={t('Link label')}
+            />
+            <button type='button' class='btn btn-secondary ml-2' disabled={addingWeblink || !weblinkUrl.trim()} on:click={addWeblink}>{t('Add')}</button>
           </div>
-        {/if}
+        </div>
+
+        <div class='pm-dialog-field'>
+          <span class='pm-label'>{t('Steps')}</span>
+          {#if loadingSteps}
+            <p class='pm-muted small'>{t('Loading')}…</p>
+          {:else if detailSteps.length === 0}
+            <p class='pm-muted small'>{t('No steps yet.')}</p>
+          {:else}
+            <ul class='pm-step-list'>
+              {#each detailSteps as step (step.id)}
+                <li class='pm-step' class:pm-step-done={step.finished}>
+                  <input
+                    type='checkbox'
+                    checked={step.finished}
+                    on:change={() => toggleStep(step)}
+                    aria-label={step.body}
+                  />
+                  <span class='pm-step-body'>{step.body}</span>
+                  <button type='button' class='btn-unstyled pm-comment-delete' title={t('Remove')} aria-label={t('Remove')} on:click={() => removeStep(step)}>
+                    <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          <div class='d-flex pm-dialog-row'>
+            <input
+              type='text'
+              class='form-control'
+              placeholder={t('Add a step…')}
+              bind:value={newStepText}
+              on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void addStep(); } }}
+            />
+            <button type='button' class='btn btn-secondary ml-2' disabled={addingStep || !newStepText.trim()} on:click={addStep}>{t('Add')}</button>
+          </div>
+        </div>
+
+        <div class='pm-dialog-field'>
+          <span class='pm-label'>{t('Comments')}</span>
+          {#if loadingComments}
+            <p class='pm-muted small'>{t('Loading')}…</p>
+          {:else if detailComments.length === 0}
+            <p class='pm-muted small'>{t('No comments yet.')}</p>
+          {:else}
+            <ul class='pm-comment-list'>
+              {#each detailComments as comment (comment.id)}
+                <li class='pm-comment'>
+                  <div class='pm-comment-meta'>
+                    <strong>{comment.author_fullname}</strong>
+                    <span class='pm-muted'>{formatCommentTime(comment.created_at)}</span>
+                    {#if comment.userid === core.currentUserid}
+                      <button type='button' class='btn-unstyled pm-comment-delete' title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteComment(comment)}>
+                        <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
+                      </button>
+                    {/if}
+                  </div>
+                  <div class='pm-comment-body'>{comment.body}</div>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          <div class='d-flex pm-comment-form'>
+            <input
+              type='text'
+              class='form-control'
+              placeholder={t('Add a comment…')}
+              bind:value={newCommentText}
+              on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void postComment(); } }}
+            />
+            <button type='button' class='btn btn-secondary ml-2' disabled={postingComment || !newCommentText.trim()} on:click={postComment}>{t('Post')}</button>
+          </div>
+        </div>
       </div>
       <div class='todo-detail-footer'>
-        <button type='button' class='btn btn-ghost' on:click={closeDetail}>{t('Close')}</button>
-        <button type='button' class='btn btn-primary' on:click={editFromDetail}>{t('Edit')}</button>
+        {#if detailEditing}
+          <button type='button' class='btn btn-ghost' on:click={cancelDetailEdit}>{t('Cancel')}</button>
+          <button type='button' class='btn btn-primary' on:click={saveDetailEdit}>{t('Save')}</button>
+        {:else}
+          <button type='button' class='btn btn-ghost' on:click={closeDetail}>{t('Close')}</button>
+          <button type='button' class='btn btn-primary' on:click={startDetailEdit}>{t('Edit')}</button>
+        {/if}
       </div>
     </div>
   </div>

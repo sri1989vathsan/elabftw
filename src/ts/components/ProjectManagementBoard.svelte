@@ -22,6 +22,7 @@
     assigned_fullname: string | null;
     assignees: TeamMember[];
     project_name: string | null;
+    entity_links: EntityLink[];
   };
 
   type TeamMember = {
@@ -45,6 +46,23 @@
     author_fullname: string;
   };
 
+  type EntityLinkType = 'experiments' | 'items' | 'experiments_templates' | 'items_types' | 'weblink';
+
+  type EntityLink = {
+    id: number;
+    entity_type: EntityLinkType;
+    entity_id: number | null;
+    url: string | null;
+    title: string | null;
+  };
+
+  type Step = {
+    id: number;
+    body: string;
+    ordering: number;
+    finished: boolean;
+  };
+
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
 
@@ -63,6 +81,7 @@
   let newDeadline = '';
   let submitting = false;
   let detailTask: Task | null = null;
+  let detailEditing = false;
   let detailTitle = '';
   let detailDeadline = '';
   let detailAssignees: TeamMember[] = [];
@@ -75,6 +94,15 @@
   let postingComment = false;
   let descriptionEl: HTMLDivElement;
   let notesEl: HTMLDivElement;
+  let detailEntityLinks: EntityLink[] = [];
+  let loadingEntityLinks = false;
+  let weblinkUrl = '';
+  let weblinkLabel = '';
+  let addingWeblink = false;
+  let detailSteps: Step[] = [];
+  let loadingSteps = false;
+  let newStepText = '';
+  let addingStep = false;
 
   $: activeProject = projects.find(p => p.id === activeProjectId) ?? null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
@@ -120,6 +148,38 @@
     });
   }
 
+  // Strips rich-text HTML down to a short plain-text snippet for the card
+  // preview -- the full formatted version still shows in the detail dialog.
+  function plainPreview(html: string | null, maxLen = 140): string {
+    if (!html) return '';
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    const text = (div.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return text.length > maxLen ? `${text.slice(0, maxLen).trimEnd()}…` : text;
+  }
+
+  const ENTITY_TYPE_PAGES: Partial<Record<EntityLinkType, string>> = {
+    experiments: 'experiments.php',
+    items: 'database.php',
+    experiments_templates: 'templates.php',
+    items_types: 'resources-templates.php',
+  };
+
+  function entityViewUrl(link: EntityLink): string {
+    if (link.entity_type === 'weblink') return link.url ?? '#';
+    return `${ENTITY_TYPE_PAGES[link.entity_type]}?mode=view&id=${link.entity_id}`;
+  }
+
+  function entityTypeLabel(type: EntityLinkType): string {
+    return {
+      experiments: t('Experiment'),
+      items: t('Resource'),
+      experiments_templates: t('Template'),
+      items_types: t('Resource template'),
+      weblink: t('Link'),
+    }[type];
+  }
+
   async function loadTeamMembers(): Promise<void> {
     try {
       teamMembers = await ApiC.getJson('users?currentTeam=1') as TeamMember[];
@@ -158,6 +218,18 @@
     void loadTeamMembers();
     void loadProjects();
     void load();
+
+    // Lets the Search side panel offer a "Link to task" button on its
+    // results (see FavoriteFilters.class.ts) while a task's detail dialog is
+    // open, the same way it offers "Link" while editing an experiment.
+    const onEntityLinkAdded = (): void => {
+      if (detailTask) void loadEntityLinks(detailTask.id);
+    };
+    window.addEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
+    return () => {
+      window.removeEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
+      window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: null }));
+    };
   });
 
   function selectScope(next: 'assigned' | 'created' | 'all'): void {
@@ -219,18 +291,43 @@
 
   function openDetail(task: Task): void {
     detailTask = task;
+    detailEditing = false;
     detailTitle = task.body;
     detailDeadline = toDateInputValue(task.deadline);
     detailAssignees = [...task.assignees];
     detailDescription = task.description ?? '';
     detailNotes = task.notes ?? '';
     newCommentText = '';
+    weblinkUrl = '';
+    weblinkLabel = '';
     void loadComments(task.id);
+    void loadEntityLinks(task.id);
+    void loadSteps(task.id);
+    window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: { id: task.id, title: task.body } }));
   }
 
   function closeDetail(): void {
     detailTask = null;
+    detailEditing = false;
     detailComments = [];
+    detailEntityLinks = [];
+    detailSteps = [];
+    newStepText = '';
+    window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: null }));
+  }
+
+  function startEdit(): void {
+    detailEditing = true;
+  }
+
+  function cancelEdit(): void {
+    if (!detailTask) return;
+    detailTitle = detailTask.body;
+    detailDeadline = toDateInputValue(detailTask.deadline);
+    detailAssignees = [...detailTask.assignees];
+    detailDescription = detailTask.description ?? '';
+    detailNotes = detailTask.notes ?? '';
+    detailEditing = false;
   }
 
   async function saveDetail(): Promise<void> {
@@ -249,12 +346,137 @@
         description: descriptionEl?.innerHTML ?? detailDescription,
         notes: notesEl?.innerHTML ?? detailNotes,
       });
-      closeDetail();
+      const updated = await ApiC.getJson(`${Model.Todolist}/${detailTask.id}`) as Task;
+      detailTask = updated;
+      detailDescription = updated.description ?? '';
+      detailNotes = updated.notes ?? '';
+      detailEditing = false;
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not save the task.');
     } finally {
       savingDetail = false;
+    }
+  }
+
+  async function loadEntityLinks(taskId: number): Promise<void> {
+    loadingEntityLinks = true;
+    try {
+      const links = await ApiC.getJson(`${Model.Todolist}/${taskId}/entity_links`) as EntityLink[];
+      detailEntityLinks = links.filter(link => link.title !== null);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load linked items.');
+    } finally {
+      loadingEntityLinks = false;
+    }
+  }
+
+  function normalizeWeblinkUrl(input: string): string | null {
+    let candidate = input.trim();
+    if (!candidate) return null;
+    // A bare "\\server\share" (Windows UNC path notation) is a common way
+    // people write a network share -- accept it as shorthand for smb://.
+    if (/^\\\\/.test(candidate)) candidate = `smb://${candidate.slice(2).replace(/\\/g, '/')}`;
+    if (!/^[a-z][a-z\d+.-]*:/i.test(candidate)) candidate = `https://${candidate}`;
+    try {
+      const url = new URL(candidate);
+      return ['http:', 'https:', 'smb:'].includes(url.protocol) ? url.toString() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Same host/share/path convention as file-folder-references.ts and
+  // links.html's Data section, so a network share renders exactly the same
+  // way here: a real smb:// link for Mac, and a copy-to-clipboard \\UNC\path
+  // button for Windows (data-action="copy-unc-path" is a global handler
+  // already wired in common.ts, so it works here with no extra JS).
+  function smbCore(url: string): string | null {
+    return url.startsWith('smb://') ? url.slice('smb://'.length) : null;
+  }
+
+  function uncPath(core: string): string {
+    return `\\\\${core.replace(/\//g, '\\')}`;
+  }
+
+  async function addWeblink(): Promise<void> {
+    if (!detailTask) return;
+    const url = normalizeWeblinkUrl(weblinkUrl);
+    if (!url) {
+      notify.error('Enter a valid web address.');
+      return;
+    }
+    addingWeblink = true;
+    try {
+      await ApiC.post(`${Model.Todolist}/${detailTask.id}/entity_links`, {
+        entity_type: 'weblink',
+        url,
+        label: weblinkLabel.trim() || url,
+      });
+      weblinkUrl = '';
+      weblinkLabel = '';
+      await loadEntityLinks(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not add that link.');
+    } finally {
+      addingWeblink = false;
+    }
+  }
+
+  async function removeEntityLink(link: EntityLink): Promise<void> {
+    if (!detailTask) return;
+    try {
+      await ApiC.delete(`${Model.Todolist}/${detailTask.id}/entity_links/${link.id}`);
+      await loadEntityLinks(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not remove that link.');
+    }
+  }
+
+  async function loadSteps(taskId: number): Promise<void> {
+    loadingSteps = true;
+    try {
+      detailSteps = await ApiC.getJson(`${Model.Todolist}/${taskId}/steps`) as Step[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load steps.');
+    } finally {
+      loadingSteps = false;
+    }
+  }
+
+  async function addStep(): Promise<void> {
+    if (!detailTask) return;
+    const body = newStepText.trim();
+    if (!body) return;
+    addingStep = true;
+    try {
+      await ApiC.post(`${Model.Todolist}/${detailTask.id}/steps`, { body });
+      newStepText = '';
+      await loadSteps(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not add that step.');
+    } finally {
+      addingStep = false;
+    }
+  }
+
+  async function toggleStep(step: Step): Promise<void> {
+    if (!detailTask) return;
+    try {
+      await ApiC.patch(`${Model.Todolist}/${detailTask.id}/steps/${step.id}`, { finished: !step.finished });
+      await loadSteps(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update that step.');
+    }
+  }
+
+  async function removeStep(step: Step): Promise<void> {
+    if (!detailTask) return;
+    try {
+      await ApiC.delete(`${Model.Todolist}/${detailTask.id}/steps/${step.id}`);
+      await loadSteps(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not remove that step.');
     }
   }
 
@@ -301,6 +523,25 @@
     if (!el) return;
     el.focus();
     document.execCommand(cmd, false, value ?? '');
+  }
+
+  function insertLink(el: HTMLElement | undefined): void {
+    if (!el) return;
+    const input = window.prompt(t('Enter a URL'));
+    const url = input?.trim();
+    if (!url) return;
+    el.focus();
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed && selection.toString().trim() !== '') {
+      document.execCommand('createLink', false, url);
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noreferrer noopener';
+    link.textContent = url;
+    document.execCommand('insertHTML', false, link.outerHTML);
   }
 
   // project dialog: null = creating a new project; a project = editing it
@@ -382,8 +623,15 @@
     {/if}
     <button type="button" class="pm-project-tab-new" on:click={() => openProjectDialog(null)}>+ {t('New project')}</button>
   </div>
-  {#if activeProject?.description}
-    <p class="pm-muted pm-project-description">{activeProject.description}</p>
+  {#if activeProject}
+    <div class="pm-project-description">
+      <span class="pm-label mb-0">{t('Description')}</span>
+      {#if activeProject.description}
+        <p class="mb-0">{activeProject.description}</p>
+      {:else}
+        <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+      {/if}
+    </div>
   {/if}
 
   <div class="pm-card pm-new-card mb-3 mt-2">
@@ -475,6 +723,12 @@
             {#if task.deadline}
               <div class="pm-muted pm-task-meta"><i class="fas fa-calendar fa-fw mr-1" aria-hidden="true"></i>{formatDeadline(task.deadline)}</div>
             {/if}
+            {#if task.description}
+              <p class="pm-muted pm-task-preview">{plainPreview(task.description)}</p>
+            {/if}
+            {#if task.notes}
+              <p class="pm-muted pm-task-preview">{plainPreview(task.notes)}</p>
+            {/if}
             <div class="pm-task-meta d-flex align-items-center flex-wrap mt-1">
               {#if task.assignees.length === 0}
                 <span class="badge badge-info mr-1"><i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Unassigned')}</span>
@@ -516,6 +770,12 @@
                 </div>
               {/if}
             </div>
+            {#if task.description}
+              <p class="pm-muted pm-task-preview">{plainPreview(task.description)}</p>
+            {/if}
+            {#if task.notes}
+              <p class="pm-muted pm-task-preview">{plainPreview(task.notes)}</p>
+            {/if}
             <div class="pm-task-meta">
               {#if task.assignees.length === 0}
                 <span class="badge badge-info"><i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Unassigned')}</span>
@@ -535,92 +795,226 @@
 </div>
 
 {#if detailTask}
-  <div class="pm-overlay" role="presentation">
+  <div class="pm-overlay pm-overlay-task" role="presentation">
     <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmDetailTitle">
       <div class="pm-dialog-header">
-        <h4 id="pmDetailTitle" class="mb-0">{t('Task details')}</h4>
+        <h4 id="pmDetailTitle" class="mb-0">{detailEditing ? t('Edit task') : detailTask.body}</h4>
+        {#if detailTask.project_name}<span class="badge badge-info">{detailTask.project_name}</span>{/if}
         <button type="button" class="pm-close-btn" on:click={closeDetail} aria-label={t('Close')}>&times;</button>
       </div>
       <div class="pm-dialog-body">
-        {#if detailTask.project_name}<span class="badge badge-info mb-2">{detailTask.project_name}</span>{/if}
 
-        <div class="pm-dialog-field">
-          <label class="pm-label" for="pm-detail-title">{t('Title')}</label>
-          <input id="pm-detail-title" type="text" class="form-control" bind:value={detailTitle} />
-        </div>
-
-        <div class="d-flex pm-dialog-row">
-          <div class="pm-dialog-field flex-grow-1">
-            <label class="pm-label" for="pm-detail-deadline">{t('Deadline')}</label>
-            <input id="pm-detail-deadline" type="date" class="form-control" bind:value={detailDeadline} />
+        {#if detailEditing}
+          <div class="pm-dialog-field">
+            <label class="pm-label" for="pm-detail-title">{t('Title')}</label>
+            <input id="pm-detail-title" type="text" class="form-control" bind:value={detailTitle} />
           </div>
-          <div class="pm-dialog-field flex-grow-1">
-            <label class="pm-label" for="pm-detail-assignee">{t('Assigned to')}</label>
-            <div class="pm-chips">
-              {#each detailAssignees as member (member.userid)}
-                <span class="pm-chip">
-                  {member.fullname}
-                  <button type="button" aria-label={`${t('Remove')} ${member.fullname}`} on:click={() => detailAssignees = removeAssignee(detailAssignees, member.userid)}>&times;</button>
-                </span>
-              {/each}
+
+          <div class="d-flex pm-dialog-row">
+            <div class="pm-dialog-field flex-grow-1">
+              <label class="pm-label" for="pm-detail-deadline">{t('Deadline')}</label>
+              <input id="pm-detail-deadline" type="date" class="form-control" bind:value={detailDeadline} />
             </div>
-            <select
-              id="pm-detail-assignee"
-              class="form-control"
-              value=""
-              on:change={(event) => { const value = (event.target as HTMLSelectElement).value; if (value) detailAssignees = addAssignee(detailAssignees, Number(value), assignableMembers); (event.target as HTMLSelectElement).value = ''; }}
+            <div class="pm-dialog-field flex-grow-1">
+              <label class="pm-label" for="pm-detail-assignee">{t('Assigned to')}</label>
+              <div class="pm-chips">
+                {#each detailAssignees as member (member.userid)}
+                  <span class="pm-chip">
+                    {member.fullname}
+                    <button type="button" aria-label={`${t('Remove')} ${member.fullname}`} on:click={() => detailAssignees = removeAssignee(detailAssignees, member.userid)}>&times;</button>
+                  </span>
+                {/each}
+              </div>
+              <select
+                id="pm-detail-assignee"
+                class="form-control"
+                value=""
+                on:change={(event) => { const value = (event.target as HTMLSelectElement).value; if (value) detailAssignees = addAssignee(detailAssignees, Number(value), assignableMembers); (event.target as HTMLSelectElement).value = ''; }}
+              >
+                <option value="" disabled>{t('Yourself, if left empty')}</option>
+                {#each assignableMembers.filter(member => !detailAssignees.some(a => a.userid === member.userid)) as member (member.userid)}
+                  <option value={member.userid}>{member.userid === core.currentUserid ? t('Myself') : member.fullname}</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+          <div class="small pm-muted mb-2">
+            {t('Created by')} {detailTask.creator_fullname}
+          </div>
+
+          <div class="pm-dialog-field">
+            <div class="d-flex align-items-center justify-content-between">
+              <span class="pm-label mb-0">{t('Description')}</span>
+              <button type="button" class="btn-unstyled pm-field-edit-btn" title={t('Edit')} aria-label={t('Edit description')} on:mousedown|preventDefault={() => descriptionEl?.focus()}>
+                <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div
+              id="pm-detail-description"
+              class="rte-content form-control"
+              contenteditable="true"
+              role="textbox"
+              aria-multiline="true"
+              aria-label={t('Description')}
+              bind:this={descriptionEl}
+            >{@html detailDescription}</div>
+          </div>
+
+          <div class="pm-dialog-field">
+            <span class="pm-label">{t('Notes')}</span>
+            <div class="rte-toolbar" role="toolbar" aria-label={t('Formatting')}>
+              <button type="button" class="rte-btn" title={t('Heading')} on:mousedown|preventDefault={() => exec(notesEl, 'formatBlock', '<h4>')}><i class="fas fa-heading" aria-hidden="true"></i></button>
+              <button type="button" class="rte-btn" title={t('Bold')} on:mousedown|preventDefault={() => exec(notesEl, 'bold')}><i class="fas fa-bold" aria-hidden="true"></i></button>
+              <button type="button" class="rte-btn" title={t('Italic')} on:mousedown|preventDefault={() => exec(notesEl, 'italic')}><i class="fas fa-italic" aria-hidden="true"></i></button>
+              <button type="button" class="rte-btn" title={t('Bullet list')} on:mousedown|preventDefault={() => exec(notesEl, 'insertUnorderedList')}><i class="fas fa-list-ul" aria-hidden="true"></i></button>
+              <button type="button" class="rte-btn" title={t('Numbered list')} on:mousedown|preventDefault={() => exec(notesEl, 'insertOrderedList')}><i class="fas fa-list-ol" aria-hidden="true"></i></button>
+              <button type="button" class="rte-btn" title={t('Insert link')} on:mousedown|preventDefault={() => insertLink(notesEl)}><i class="fas fa-link" aria-hidden="true"></i></button>
+              <button type="button" class="rte-btn" title={t('Clear formatting')} on:mousedown|preventDefault={() => exec(notesEl, 'removeFormat')}><i class="fas fa-eraser" aria-hidden="true"></i></button>
+            </div>
+            <div
+              id="pm-detail-notes"
+              class="rte-content form-control"
+              contenteditable="true"
+              role="textbox"
+              aria-multiline="true"
+              aria-label={t('Notes')}
+              bind:this={notesEl}
+            >{@html detailNotes}</div>
+          </div>
+        {:else}
+          {#if detailTask.deadline}
+            <div class="small pm-muted mb-1"><i class="fas fa-calendar fa-fw mr-1" aria-hidden="true"></i>{formatDeadline(detailTask.deadline)}</div>
+          {/if}
+          <div class="small mb-1 d-flex align-items-center flex-wrap">
+            {#if detailTask.assignees.length === 0}
+              <span class="badge badge-info mr-1"><i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Unassigned')}</span>
+            {:else}
+              <div class="pm-avatar-group mr-2">
+                {#each detailTask.assignees as assignee (assignee.userid)}
+                  <span class="pm-avatar" title={assignee.fullname}>{initials(assignee.fullname)}</span>
+                {/each}
+              </div>
+            {/if}
+          </div>
+          <div class="small pm-muted mb-2">
+            {t('Created by')} {detailTask.creator_fullname}
+          </div>
+
+          <div class="pm-dialog-field">
+            <span class="pm-label">{t('Description')}</span>
+            {#if detailTask.description}
+              <div class="rte-content">{@html detailTask.description}</div>
+            {:else}
+              <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+            {/if}
+          </div>
+          <div class="pm-dialog-field">
+            <span class="pm-label">{t('Notes')}</span>
+            {#if detailTask.notes}
+              <div class="rte-content">{@html detailTask.notes}</div>
+            {:else}
+              <p class="pm-muted small mb-0">{t('No notes yet.')}</p>
+            {/if}
+          </div>
+        {/if}
+
+        <div class="pm-dialog-field">
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="pm-label mb-0">{t('Linked items')}</span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              on:click={() => {
+                const panel = document.getElementById('favoritesPanel');
+                if (panel?.hasAttribute('hidden')) {
+                  (document.querySelector('[data-action="toggle-sidepanel"][data-target="favorites"]') as HTMLElement | null)?.click();
+                }
+              }}
             >
-              <option value="" disabled>{t('Yourself, if left empty')}</option>
-              {#each assignableMembers.filter(member => !detailAssignees.some(a => a.userid === member.userid)) as member (member.userid)}
-                <option value={member.userid}>{member.userid === core.currentUserid ? t('Myself') : member.fullname}</option>
+              <i class="fas fa-magnifying-glass fa-fw mr-1" aria-hidden="true"></i>{t('Open Search to link')}
+            </button>
+          </div>
+          {#if loadingEntityLinks}
+            <p class="pm-muted small">{t('Loading')}…</p>
+          {:else if detailEntityLinks.length === 0}
+            <p class="pm-muted small">{t('No linked items yet.')}</p>
+          {:else}
+            <ul class="pm-entity-link-list">
+              {#each detailEntityLinks as link (link.id)}
+                <li class="pm-entity-link">
+                  {#if link.entity_type === 'weblink' && link.url && smbCore(link.url)}
+                    <i class="fas fa-server fa-fw mr-1" aria-hidden="true"></i>
+                    <span class="mr-auto text-break">{link.title}</span>
+                    <a class="btn-unstyled mr-1" href={link.url} title={t('Open on Mac (smb://)')} aria-label={t('Open on Mac')}>
+                      <i class="fab fa-apple fa-fw" aria-hidden="true"></i>
+                    </a>
+                    <button type="button" class="btn-unstyled mr-1" data-action="copy-unc-path" data-unc={uncPath(smbCore(link.url) ?? '')} title={t('Copy Windows path (paste into Explorer)')} aria-label={t('Copy Windows path')}>
+                      <i class="fab fa-windows fa-fw" aria-hidden="true"></i>
+                    </button>
+                  {:else}
+                    <span class="badge badge-info mr-1">{entityTypeLabel(link.entity_type)}</span>
+                    <a class="mr-auto text-break" href={entityViewUrl(link)} target="_blank" rel="noreferrer noopener">{link.title}</a>
+                  {/if}
+                  <button type="button" class="btn-unstyled pm-comment-delete" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEntityLink(link)}>
+                    <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                  </button>
+                </li>
               {/each}
-            </select>
+            </ul>
+          {/if}
+          <div class="d-flex pm-dialog-row">
+            <input
+              type="url"
+              class="form-control"
+              placeholder={t('https://… or smb://…')}
+              bind:value={weblinkUrl}
+              aria-label={t('Web address')}
+            />
+            <input
+              type="text"
+              class="form-control"
+              placeholder={t('Label (optional)')}
+              bind:value={weblinkLabel}
+              aria-label={t('Link label')}
+            />
+            <button type="button" class="btn btn-secondary ml-2" disabled={addingWeblink || !weblinkUrl.trim()} on:click={addWeblink}>{t('Add')}</button>
           </div>
-        </div>
-        <div class="small pm-muted mb-2">
-          {t('Created by')} {detailTask.creator_fullname}
         </div>
 
         <div class="pm-dialog-field">
-          <span class="pm-label">{t('Description')}</span>
-          <div class="rte-toolbar" role="toolbar" aria-label={t('Formatting')}>
-            <button type="button" class="rte-btn" title={t('Heading')} on:mousedown|preventDefault={() => exec(descriptionEl, 'formatBlock', 'H4')}><i class="fas fa-heading" aria-hidden="true"></i></button>
-            <button type="button" class="rte-btn" title={t('Bold')} on:mousedown|preventDefault={() => exec(descriptionEl, 'bold')}><i class="fas fa-bold" aria-hidden="true"></i></button>
-            <button type="button" class="rte-btn" title={t('Italic')} on:mousedown|preventDefault={() => exec(descriptionEl, 'italic')}><i class="fas fa-italic" aria-hidden="true"></i></button>
-            <button type="button" class="rte-btn" title={t('Bullet list')} on:mousedown|preventDefault={() => exec(descriptionEl, 'insertUnorderedList')}><i class="fas fa-list-ul" aria-hidden="true"></i></button>
-            <button type="button" class="rte-btn" title={t('Numbered list')} on:mousedown|preventDefault={() => exec(descriptionEl, 'insertOrderedList')}><i class="fas fa-list-ol" aria-hidden="true"></i></button>
-            <button type="button" class="rte-btn" title={t('Clear formatting')} on:mousedown|preventDefault={() => exec(descriptionEl, 'removeFormat')}><i class="fas fa-eraser" aria-hidden="true"></i></button>
+          <span class="pm-label">{t('Steps')}</span>
+          {#if loadingSteps}
+            <p class="pm-muted small">{t('Loading')}…</p>
+          {:else if detailSteps.length === 0}
+            <p class="pm-muted small">{t('No steps yet.')}</p>
+          {:else}
+            <ul class="pm-step-list">
+              {#each detailSteps as step (step.id)}
+                <li class="pm-step" class:pm-step-done={step.finished}>
+                  <input
+                    type="checkbox"
+                    checked={step.finished}
+                    on:change={() => toggleStep(step)}
+                    aria-label={step.body}
+                  />
+                  <span class="pm-step-body">{step.body}</span>
+                  <button type="button" class="btn-unstyled pm-comment-delete" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeStep(step)}>
+                    <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          <div class="d-flex pm-dialog-row">
+            <input
+              type="text"
+              class="form-control"
+              placeholder={t('Add a step…')}
+              bind:value={newStepText}
+              on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void addStep(); } }}
+            />
+            <button type="button" class="btn btn-secondary ml-2" disabled={addingStep || !newStepText.trim()} on:click={addStep}>{t('Add')}</button>
           </div>
-          <div
-            id="pm-detail-description"
-            class="rte-content form-control"
-            contenteditable="true"
-            role="textbox"
-            aria-multiline="true"
-            aria-label={t('Description')}
-            bind:this={descriptionEl}
-          >{@html detailDescription}</div>
-        </div>
-
-        <div class="pm-dialog-field">
-          <span class="pm-label">{t('Notes')}</span>
-          <div class="rte-toolbar" role="toolbar" aria-label={t('Formatting')}>
-            <button type="button" class="rte-btn" title={t('Heading')} on:mousedown|preventDefault={() => exec(notesEl, 'formatBlock', 'H4')}><i class="fas fa-heading" aria-hidden="true"></i></button>
-            <button type="button" class="rte-btn" title={t('Bold')} on:mousedown|preventDefault={() => exec(notesEl, 'bold')}><i class="fas fa-bold" aria-hidden="true"></i></button>
-            <button type="button" class="rte-btn" title={t('Italic')} on:mousedown|preventDefault={() => exec(notesEl, 'italic')}><i class="fas fa-italic" aria-hidden="true"></i></button>
-            <button type="button" class="rte-btn" title={t('Bullet list')} on:mousedown|preventDefault={() => exec(notesEl, 'insertUnorderedList')}><i class="fas fa-list-ul" aria-hidden="true"></i></button>
-            <button type="button" class="rte-btn" title={t('Numbered list')} on:mousedown|preventDefault={() => exec(notesEl, 'insertOrderedList')}><i class="fas fa-list-ol" aria-hidden="true"></i></button>
-            <button type="button" class="rte-btn" title={t('Clear formatting')} on:mousedown|preventDefault={() => exec(notesEl, 'removeFormat')}><i class="fas fa-eraser" aria-hidden="true"></i></button>
-          </div>
-          <div
-            id="pm-detail-notes"
-            class="rte-content form-control"
-            contenteditable="true"
-            role="textbox"
-            aria-multiline="true"
-            aria-label={t('Notes')}
-            bind:this={notesEl}
-          >{@html detailNotes}</div>
         </div>
 
         <div class="pm-dialog-field">
@@ -660,8 +1054,15 @@
         </div>
       </div>
       <div class="pm-dialog-footer">
-        <button type="button" class="btn btn-ghost" on:click={closeDetail}>{t('Close')}</button>
-        <button type="button" class="btn btn-primary" disabled={savingDetail} on:click={saveDetail}>{t('Save')}</button>
+        {#if detailEditing}
+          <button type="button" class="btn btn-ghost" on:click={cancelEdit}>{t('Cancel')}</button>
+          <button type="button" class="btn btn-primary" disabled={savingDetail} on:click={saveDetail}>{t('Save')}</button>
+        {:else}
+          <button type="button" class="btn btn-ghost" on:click={closeDetail}>{t('Close')}</button>
+          {#if canManage(detailTask)}
+            <button type="button" class="btn btn-primary" on:click={startEdit}>{t('Edit')}</button>
+          {/if}
+        {/if}
       </div>
     </div>
   </div>
@@ -680,8 +1081,8 @@
           <input id="pm-project-name" type="text" class="form-control" bind:value={dialogName} maxlength="255" />
         </div>
         <div class="pm-dialog-field">
-          <label class="pm-label" for="pm-project-desc">{t('Short description')}</label>
-          <input id="pm-project-desc" type="text" class="form-control" bind:value={dialogDescription} maxlength="500" />
+          <label class="pm-label" for="pm-project-desc">{t('Description')}</label>
+          <textarea id="pm-project-desc" class="form-control" rows="3" bind:value={dialogDescription} maxlength="500"></textarea>
         </div>
         <div class="pm-dialog-field">
           <label class="pm-label" for="pm-project-picker">{t('Team members on this project')}</label>

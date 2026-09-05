@@ -5,10 +5,24 @@
 import { ApiC } from './api';
 import { getEditor } from './Editor.class';
 import { entity } from './getEntity';
-import { Action, EntityType, LinkSubModel } from './interfaces';
+import { Action, EntityType, LinkSubModel, Model } from './interfaces';
 import { confirmLeaveEditing, escapeHTML, isEditingEntity, reloadElements } from './misc';
 import { notify } from './notify';
 import SidePanel from './SidePanel.class';
+
+// Set by ProjectManagementBoard.svelte while a task's detail dialog is open,
+// so this panel's search results can offer a "Link to task" button the same
+// way they offer "Link" while editing an experiment/resource -- module-level
+// (not per-instance) since FavoriteFilters is constructed more than once
+// (see the constructor's own comment on that) but they all share one panel.
+let activePmTask: { id: number; title: string } | null = null;
+
+const PM_TASK_ENTITY_TYPE: Partial<Record<FavoriteFilterTarget, string>> = {
+  experiments: 'experiments',
+  resources: 'items',
+  experiments_templates: 'experiments_templates',
+  items_types: 'items_types',
+};
 
 type FavoriteFilterTarget = 'all' | 'experiments' | 'resources' | 'experiments_templates' | 'items_types';
 // Templates share the same category/status tables as their parent entity
@@ -100,6 +114,18 @@ export default class FavoriteFilters extends SidePanel {
       }
     });
     this.bindOverlayToggles();
+    this.bindPmTaskLinkTarget();
+  }
+
+  // Same one-listener-total guard as bindOverlayToggles() above, for the
+  // same reason (multiple instances, one shared panel).
+  private bindPmTaskLinkTarget(): void {
+    if (document.body.dataset.favoritePmLinkBound === 'true') return;
+    document.body.dataset.favoritePmLinkBound = 'true';
+    window.addEventListener('elabftw:pm-task-link-target', (event: Event) => {
+      activePmTask = (event as CustomEvent<{ id: number; title: string } | null>).detail;
+      if (this.resultsLoaded) this.apply();
+    });
   }
 
   // Plain hidden-attribute toggling instead of Bootstrap's dropdown/Popper
@@ -449,6 +475,26 @@ export default class FavoriteFilters extends SidePanel {
       });
       heading.append(insertInText);
     }
+
+    const pmEntityType = activePmTask !== null ? PM_TASK_ENTITY_TYPE[target] : undefined;
+    if (pmEntityType) {
+      const pmLink = document.createElement('button');
+      pmLink.type = 'button';
+      pmLink.className = 'btn btn-sm btn-outline-primary favorite-filter-result-insert ml-1';
+      pmLink.title = `Link to task: ${activePmTask!.title}`;
+      pmLink.setAttribute('aria-label', pmLink.title);
+      const pmIcon = document.createElement('i');
+      pmIcon.className = 'fas fa-list-check fa-fw';
+      pmIcon.setAttribute('aria-hidden', 'true');
+      const pmLabel = document.createElement('span');
+      pmLabel.className = 'ml-1';
+      pmLabel.textContent = 'Link to task';
+      pmLink.append(pmIcon, pmLabel);
+      pmLink.addEventListener('click', () => {
+        void this.insertPmTaskLink(result, pmEntityType, pmLink);
+      });
+      heading.append(pmLink);
+    }
     item.append(heading);
 
     const metadata = [
@@ -536,6 +582,35 @@ export default class FavoriteFilters extends SidePanel {
       button.querySelector('i')?.classList.replace('fa-link', 'fa-check');
       const buttonLabel = button.querySelector<HTMLSpanElement>('span');
       if (buttonLabel) buttonLabel.textContent = target === 'experiments_templates' ? 'Linked' : 'Attached';
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  // Same idea as insertResultLink() above, but attaches the result to the
+  // to-do task currently open in Project Management (see
+  // ProjectManagementBoard.svelte's 'elabftw:pm-task-link-target' dispatch)
+  // instead of the entity being edited.
+  private async insertPmTaskLink(
+    result: FavoriteFilterResult,
+    entityType: string,
+    button: HTMLButtonElement,
+  ): Promise<void> {
+    if (!activePmTask) return;
+    button.disabled = true;
+    try {
+      await ApiC.post(`${Model.Todolist}/${activePmTask.id}/entity_links`, {
+        entity_type: entityType,
+        entity_id: result.id,
+      });
+      button.title = `Linked to task: ${activePmTask.title}`;
+      button.setAttribute('aria-label', button.title);
+      button.querySelector('i')?.classList.replace('fa-list-check', 'fa-check');
+      const buttonLabel = button.querySelector<HTMLSpanElement>('span');
+      if (buttonLabel) buttonLabel.textContent = 'Linked';
+      window.dispatchEvent(new CustomEvent('elabftw:pm-entity-link-added'));
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not link that item.');
     } finally {
       button.disabled = false;
     }
