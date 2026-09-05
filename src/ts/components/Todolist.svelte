@@ -613,39 +613,49 @@
     if (!selection || selection.rangeCount === 0) return;
     const range = selection.getRangeAt(0);
     const hasText = !range.collapsed && selection.toString().trim() !== '';
-    const text = hasText ? selection.toString() : '';
+    // A multi-line selection becomes one checklist item per line, same as
+    // clicking the bullet-list button would turn each line into its own
+    // bullet, rather than one item containing every line's text.
+    const lines = hasText
+      ? selection.toString().split('\n').map(line => line.trim()).filter(line => line !== '')
+      : [''];
     if (hasText) range.deleteContents();
 
     // Built via the DOM (not string interpolation), and inserted via the
     // Range API (not execCommand, whose own choice of where to leave the
     // caret afterwards is inconsistent across browsers and broke chaining
     // a second checklist item with Enter).
-    const item = document.createElement('span');
-    item.className = 'pm-check-item';
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    item.appendChild(checkbox);
-    const textNode = document.createTextNode(hasText ? ` ${text}` : '\u00A0');
-    item.appendChild(textNode);
+    const fragment = document.createDocumentFragment();
+    let lastTextNode: Text | null = null;
+    for (const line of lines) {
+      // A block-level <div> inserted mid-flow gets misplaced by the browser's
+      // HTML parser when the cursor isn't already at the start of a line (it
+      // can't nest inside inline content) -- an inline <span> preceded by an
+      // explicit <br> avoids that while still starting its own line.
+      fragment.appendChild(document.createElement('br'));
+      const item = document.createElement('span');
+      item.className = 'pm-check-item';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      item.appendChild(checkbox);
+      const textNode = document.createTextNode(line ? ` ${line}` : '\u00A0');
+      item.appendChild(textNode);
+      fragment.appendChild(item);
+      lastTextNode = textNode;
+    }
+    range.insertNode(fragment);
 
-    // A block-level <div> inserted mid-flow gets misplaced by the browser's
-    // HTML parser when the cursor isn't already at the start of a line (it
-    // can't nest inside inline content) -- an inline <span> preceded by an
-    // explicit <br> avoids that while still starting its own line.
-    const br = document.createElement('br');
-    range.insertNode(br);
-    range.setStartAfter(br);
-    range.collapse(true);
-    range.insertNode(item);
-
-    // Leave the caret inside the item's own text, right after the checkbox,
-    // so handleChecklistKeydown() below can find it as the current line's
-    // owner and typed text lands next to the checkbox rather than after it.
-    const caretRange = document.createRange();
-    caretRange.setStart(textNode, textNode.length);
-    caretRange.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(caretRange);
+    // Leave the caret inside the last item's own text, right after the
+    // checkbox, so handleChecklistKeydown() below can find it as the current
+    // line's owner and typed text lands next to the checkbox rather than
+    // after it.
+    if (lastTextNode) {
+      const caretRange = document.createRange();
+      caretRange.setStart(lastTextNode, lastTextNode.length);
+      caretRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(caretRange);
+    }
   }
 
   // Pressing Enter while on a checklist line should continue the list, like
