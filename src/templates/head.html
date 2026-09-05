@@ -159,9 +159,9 @@
               <div class='dropdown-menu'>
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='scheduler.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-calendar-days fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Scheduler'|trans }}</a>
                 <div class='dropdown-item d-flex align-items-center justify-content-between'>
-                  <a id='openirisLink' href='{{ App.Teams.teamArr.openiris_url|default('https://reservation-bsse.openiris.io/') }}' target='_blank' rel='noopener noreferrer'><i class='fas fa-arrow-up-right-from-square fa-fw mr-1'></i>OpenIRIS</a>
+                  <a id='openirisLink' href='{{ App.Teams.teamArr.openiris_url|default('https://reservation-bsse.openiris.io/#!/scheduler/timeline') }}' target='_blank' rel='noopener noreferrer'><i class='fas fa-arrow-up-right-from-square fa-fw mr-1'></i>OpenIRIS</a>
                   {% if App.Users.isAdmin %}
-                    <button type='button' class='btn btn-link p-0 ml-2' data-action='edit-openiris-link' data-current-url='{{ App.Teams.teamArr.openiris_url|default('https://reservation-bsse.openiris.io/') }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit OpenIRIS link'|trans }}'><i class='fas fa-pen fa-fw fa-xs' aria-hidden='true'></i></button>
+                    <button type='button' class='btn btn-link p-0 ml-2' data-action='edit-openiris-link' data-current-url='{{ App.Teams.teamArr.openiris_url|default('https://reservation-bsse.openiris.io/#!/scheduler/timeline') }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit OpenIRIS link'|trans }}'><i class='fas fa-pen fa-fw fa-xs' aria-hidden='true'></i></button>
                   {% endif %}
                 </div>
               </div>

@@ -4512,6 +4512,15 @@ div > .sticky-navbar {
   opacity: 0.7;
 }
 
+.pm-task-done-checkbox {
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.pm-show-older {
+  padding-left: 0;
+}
+
 .pm-task-title-btn {
   background: transparent;
   border: 0;

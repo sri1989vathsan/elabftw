@@ -84,8 +84,8 @@
   let teamMembers: TeamMember[] = [];
   let projects: Project[] = [];
   let columns: Column[] = [];
-  // null = the "Unfiled" bucket (tasks with no project)
-  let activeProjectId: number | null = null;
+  // null = the "Unfiled" bucket (tasks with no project); 'all' = every project combined
+  let activeProjectId: number | null | 'all' = null;
   let loading = true;
   // 'assigned' shows tasks assigned to me (by myself or someone else);
   // 'created' shows tasks I set up, whether for myself or someone else;
@@ -120,12 +120,15 @@
   let loadingSteps = false;
   let newStepText = '';
   let addingStep = false;
+  const COLUMN_TASK_LIMIT = 5;
+  let expandedColumns: Record<number, boolean> = {};
 
-  $: activeProject = projects.find(p => p.id === activeProjectId) ?? null;
+  $: activeProject = typeof activeProjectId === 'number' ? (projects.find(p => p.id === activeProjectId) ?? null) : null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
-  $: visibleTasks = tasks.filter(task => task.project_id === activeProjectId);
+  $: visibleTasks = activeProjectId === 'all' ? tasks : tasks.filter(task => task.project_id === activeProjectId);
   $: doneColumn = columns.find(c => c.kind === 'done') ?? null;
-  $: doneCount = doneColumn ? tasksInColumn(doneColumn.id).length : 0;
+  $: todoColumn = columns.find(c => c.kind === 'todo') ?? null;
+  $: doneCount = doneColumn ? visibleTasks.filter(task => task.column_id === doneColumn.id).length : 0;
   $: donePercent = visibleTasks.length === 0 ? 0 : Math.round((doneCount / visibleTasks.length) * 100);
 
   function canManage(task: Task): boolean {
@@ -241,6 +244,14 @@
   }
 
   onMount(() => {
+    const projectParam = new URLSearchParams(window.location.search).get('project');
+    if (projectParam === 'all') {
+      activeProjectId = 'all';
+    } else {
+      const numericParam = Number(projectParam);
+      if (Number.isInteger(numericParam) && numericParam > 0) activeProjectId = numericParam;
+    }
+
     void loadTeamMembers();
     void loadProjects();
     void loadColumns();
@@ -264,9 +275,9 @@
     void load();
   }
 
-  function selectProject(id: number | null): void {
+  function selectProject(id: number | null | 'all'): void {
     activeProjectId = id;
-    const project = projects.find(p => p.id === id);
+    const project = typeof id === 'number' ? projects.find(p => p.id === id) : undefined;
     if (project) {
       newAssignees = newAssignees.filter(a => project.members.some(m => m.userid === a.userid));
     }
@@ -280,7 +291,7 @@
         content: newTitle.trim(),
         assignee_userids: newAssignees.map(a => a.userid),
         deadline: newDeadline || null,
-        project_id: activeProjectId,
+        project_id: activeProjectId === 'all' ? null : activeProjectId,
       });
       newTitle = '';
       newDeadline = '';
@@ -301,10 +312,6 @@
     }
   }
 
-  function tasksInColumn(columnId: number): Task[] {
-    return visibleTasks.filter(task => task.column_id === columnId);
-  }
-
   function sortedColumns(list: Column[]): Column[] {
     return [...list].sort((a, b) => a.ordering - b.ordering);
   }
@@ -313,6 +320,10 @@
     const sorted = sortedColumns(columns);
     const idx = sorted.findIndex(c => c.id === column.id);
     return sorted[idx + direction] ?? null;
+  }
+
+  function toggleColumnExpanded(columnId: number): void {
+    expandedColumns = { ...expandedColumns, [columnId]: !expandedColumns[columnId] };
   }
 
   // Single entry point for every column-to-column transition, used by both
@@ -806,6 +817,9 @@
 
 <div class="pm-board">
   <div class="pm-project-row">
+    <button type="button" class="pm-project-tab" class:active={activeProjectId === 'all'} on:click={() => selectProject('all')}>
+      {t('All')}
+    </button>
     <button type="button" class="pm-project-tab" class:active={activeProjectId === null} on:click={() => selectProject(null)}>
       {t('Unfiled')}
     </button>
@@ -838,6 +852,7 @@
       <i class="fas fa-list-check fa-fw" aria-hidden="true"></i>
     </button>
   </div>
+
   {#if activeProject}
     <div class="pm-project-description">
       <span class="pm-label mb-0">{t('Description')}</span>
@@ -919,9 +934,12 @@
   {:else}
     <div class="pm-columns">
       {#each sortedColumns(columns) as column (column.id)}
-        {@const columnTasks = tasksInColumn(column.id)}
+        {@const columnTasks = visibleTasks.filter(task => task.column_id === column.id)}
         {@const prevCol = adjacentColumn(column, -1)}
         {@const nextCol = adjacentColumn(column, 1)}
+        {@const columnExpanded = !!expandedColumns[column.id]}
+        {@const shownTasks = columnExpanded ? columnTasks : columnTasks.slice(0, COLUMN_TASK_LIMIT)}
+        {@const hiddenCount = columnTasks.length - shownTasks.length}
         <div
           class="pm-column"
           class:pm-column-drag-over={dragOverColumn === column.id}
@@ -939,7 +957,7 @@
           {#if columnTasks.length === 0}
             <p class="pm-muted">{t('Nothing here.')}</p>
           {/if}
-          {#each columnTasks as task (task.id)}
+          {#each shownTasks as task (task.id)}
             <div
               class="pm-card pm-task"
               class:pm-task-done={column.kind === 'done'}
@@ -948,6 +966,16 @@
               on:dragend={finishTaskDrag}
             >
               <div class="d-flex align-items-start">
+                {#if doneColumn && canManage(task)}
+                  <input
+                    type="checkbox"
+                    class="pm-task-done-checkbox mr-2 mt-1"
+                    checked={column.kind === 'done'}
+                    on:change={() => moveTaskToColumn(task, column.kind === 'done' ? (todoColumn?.id ?? column.id) : doneColumn.id)}
+                    title={column.kind === 'done' ? t('Mark as not done') : t('Mark as done')}
+                    aria-label={column.kind === 'done' ? t('Mark as not done') : t('Mark as done')}
+                  />
+                {/if}
                 <button type="button" class="pm-task-title-btn flex-grow-1" on:click={() => openDetail(task)}>{task.body}</button>
                 {#if canManage(task)}
                   <div class="pm-task-actions">
@@ -970,6 +998,9 @@
                   </div>
                 {/if}
               </div>
+              {#if activeProjectId === 'all'}
+                <span class="badge badge-info mt-1">{task.project_name ?? t('Unfiled')}</span>
+              {/if}
               {#if task.priority}
                 <span class="badge pm-priority pm-priority-{task.priority} mt-1">{priorityLabel(task.priority)}</span>
               {/if}
@@ -998,6 +1029,11 @@
               </div>
             </div>
           {/each}
+          {#if hiddenCount > 0 || columnExpanded && columnTasks.length > COLUMN_TASK_LIMIT}
+            <button type="button" class="btn btn-link btn-sm pm-show-older" on:click={() => toggleColumnExpanded(column.id)}>
+              {columnExpanded ? t('Show less') : `${t('Show')} ${hiddenCount} ${t('older')}`}
+            </button>
+          {/if}
         </div>
       {/each}
     </div>

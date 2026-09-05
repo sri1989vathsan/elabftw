@@ -1274,7 +1274,7 @@
                       <button type='button' class='btn-unstyled todo-title-btn' on:click={() => openDetail(entry)}>{entry.body}</button>
                       {#if entry.projectName || isAssignedByOther(entry)}
                         <div class='small todo-secondary-text d-flex align-items-center flex-wrap' style='gap:0.3rem'>
-                          {#if entry.projectName}<span class='badge badge-info todo-project-badge'>{entry.projectName}</span>{/if}
+                          {#if entry.projectName}<a href={`projectmanagement.php?project=${entry.projectId}`} class='badge badge-info todo-project-badge' title={t('Open this project')}>{entry.projectName}</a>{/if}
                           {#if isAssignedByOther(entry)}<span>{t('Assigned by')} {entry.creatorFullname}</span>{/if}
                         </div>
                       {/if}
@@ -1490,7 +1490,7 @@
     <div class='todo-detail-dialog' role='dialog' aria-modal='true' aria-labelledby='todoDetailTitle'>
       <div class='todo-detail-header'>
         <h4 id='todoDetailTitle' class='mb-0'>{detailEditing ? t('Edit task') : detailEntry.body}</h4>
-        {#if detailEntry.projectName}<span class='badge badge-info'>{detailEntry.projectName}</span>{/if}
+        {#if detailEntry.projectName}<a href={`projectmanagement.php?project=${detailEntry.projectId}`} class='badge badge-info' title={t('Open this project')}>{detailEntry.projectName}</a>{/if}
         <button type='button' class='btn-unstyled todo-detail-close' on:click={closeDetail} aria-label={t('Close')}>&times;</button>
       </div>
       <div class='todo-detail-body'>
