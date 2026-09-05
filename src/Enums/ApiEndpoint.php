@@ -51,6 +51,8 @@ enum ApiEndpoint: string
     case TeamTags = 'team_tags';
     case Teams = 'teams';
     case Todolist = 'todolist';
+    case TodolistColumns = 'todolist_columns';
+
     case TodolistProjects = 'todolist_projects';
     case UnfinishedSteps = 'unfinished_steps';
     case Users = 'users';

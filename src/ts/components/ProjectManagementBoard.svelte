@@ -6,6 +6,17 @@
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
 
+  type Priority = 'low' | 'medium' | 'high';
+
+  type ColumnKind = 'todo' | 'in_progress' | 'done' | 'custom';
+
+  type Column = {
+    id: number;
+    name: string;
+    kind: ColumnKind;
+    ordering: number;
+  };
+
   type Task = {
     id: number;
     body: string;
@@ -13,6 +24,9 @@
     description: string | null;
     deadline: string | null;
     completed_at: string | null;
+    in_progress: boolean;
+    priority: Priority | null;
+    column_id: number | null;
     creation_time: string;
     userid: number;
     team: number;
@@ -69,6 +83,7 @@
   let tasks: Task[] = [];
   let teamMembers: TeamMember[] = [];
   let projects: Project[] = [];
+  let columns: Column[] = [];
   // null = the "Unfiled" bucket (tasks with no project)
   let activeProjectId: number | null = null;
   let loading = true;
@@ -85,6 +100,8 @@
   let detailTitle = '';
   let detailDeadline = '';
   let detailAssignees: TeamMember[] = [];
+  let detailPriority: Priority | '' = '';
+  let detailProjectId: number | null = null;
   let detailDescription = '';
   let detailNotes = '';
   let savingDetail = false;
@@ -107,8 +124,9 @@
   $: activeProject = projects.find(p => p.id === activeProjectId) ?? null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
   $: visibleTasks = tasks.filter(task => task.project_id === activeProjectId);
-  $: todoTasks = visibleTasks.filter(task => !task.completed_at);
-  $: doneTasks = visibleTasks.filter(task => task.completed_at);
+  $: doneColumn = columns.find(c => c.kind === 'done') ?? null;
+  $: doneCount = doneColumn ? tasksInColumn(doneColumn.id).length : 0;
+  $: donePercent = visibleTasks.length === 0 ? 0 : Math.round((doneCount / visibleTasks.length) * 100);
 
   function canManage(task: Task): boolean {
     return task.userid === core.currentUserid
@@ -131,6 +149,14 @@
 
   function removeAssignee(list: TeamMember[], userid: number): TeamMember[] {
     return list.filter(m => m.userid !== userid);
+  }
+
+  function priorityLabel(priority: Priority): string {
+    return {
+      low: t('Low'),
+      medium: t('Medium'),
+      high: t('High'),
+    }[priority];
   }
 
   function formatDeadline(deadline: string | null): string {
@@ -217,6 +243,7 @@
   onMount(() => {
     void loadTeamMembers();
     void loadProjects();
+    void loadColumns();
     void load();
 
     // Lets the Search side panel offer a "Link to task" button on its
@@ -266,12 +293,177 @@
     }
   }
 
-  async function toggleCompleted(task: Task): Promise<void> {
+  async function loadColumns(): Promise<void> {
     try {
-      await ApiC.patch(`${Model.Todolist}/${task.id}`, { completed: task.completed_at ? '0' : '1' });
+      columns = await ApiC.getJson(Model.TodolistColumns) as Column[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load columns.');
+    }
+  }
+
+  function tasksInColumn(columnId: number): Task[] {
+    return visibleTasks.filter(task => task.column_id === columnId);
+  }
+
+  function sortedColumns(list: Column[]): Column[] {
+    return [...list].sort((a, b) => a.ordering - b.ordering);
+  }
+
+  function adjacentColumn(column: Column, direction: -1 | 1): Column | null {
+    const sorted = sortedColumns(columns);
+    const idx = sorted.findIndex(c => c.id === column.id);
+    return sorted[idx + direction] ?? null;
+  }
+
+  // Single entry point for every column-to-column transition, used by both
+  // the move buttons and drag-and-drop below, so a task moved either way
+  // always ends up fully consistent (Todolist::patch() keeps completed_at/
+  // in_progress in sync with whichever column's "kind" the task lands in).
+  async function moveTaskToColumn(task: Task, columnId: number): Promise<void> {
+    if (task.column_id === columnId) return;
+    try {
+      await ApiC.patch(`${Model.Todolist}/${task.id}`, { column_id: columnId });
       await load();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not update the task.');
+      notify.error(error instanceof Error ? error.message : 'Could not move the task.');
+    }
+  }
+
+  let draggedTaskId: number | null = null;
+  let draggedColumnId: number | null = null;
+  let dragOverColumn: number | null = null;
+
+  function startTaskDrag(event: DragEvent, id: number): void {
+    draggedTaskId = id;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(id));
+    }
+  }
+
+  function finishTaskDrag(): void {
+    draggedTaskId = null;
+    dragOverColumn = null;
+  }
+
+  function startColumnDrag(event: DragEvent, id: number): void {
+    draggedColumnId = id;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', `column:${id}`);
+    }
+  }
+
+  function finishColumnDrag(): void {
+    draggedColumnId = null;
+    dragOverColumn = null;
+  }
+
+  function allowColumnDrop(event: DragEvent, columnId: number): void {
+    if (draggedTaskId === null && draggedColumnId === null) return;
+    event.preventDefault();
+    dragOverColumn = columnId;
+  }
+
+  // One drop target per column serves both drags: a task dropped there
+  // moves into that column; a column header dropped there swaps that
+  // column's whole position with the drop target's.
+  async function dropOnColumn(event: DragEvent, columnId: number): Promise<void> {
+    event.preventDefault();
+    if (draggedColumnId !== null) {
+      const sourceId = draggedColumnId;
+      finishColumnDrag();
+      if (sourceId === columnId) return;
+      await reorderColumn(sourceId, columnId);
+      return;
+    }
+    const taskId = draggedTaskId;
+    finishTaskDrag();
+    const task = taskId === null ? undefined : tasks.find(t => t.id === taskId);
+    if (task) await moveTaskToColumn(task, columnId);
+  }
+
+  async function reorderColumn(sourceId: number, targetId: number): Promise<void> {
+    const sorted = sortedColumns(columns);
+    const sourceIdx = sorted.findIndex(c => c.id === sourceId);
+    const targetIdx = sorted.findIndex(c => c.id === targetId);
+    if (sourceIdx === -1 || targetIdx === -1) return;
+    const reordered = [...sorted];
+    const [moved] = reordered.splice(sourceIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    try {
+      await Promise.all(
+        reordered
+          .map((column, index) => ({ column, index }))
+          .filter(({ column, index }) => column.ordering !== index)
+          .map(({ column, index }) => ApiC.patch(`${Model.TodolistColumns}/${column.id}`, { ordering: index })),
+      );
+      await loadColumns();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not reorder that column.');
+    }
+  }
+
+  let columnDialogOpen = false;
+  let newColumnName = '';
+  let addingColumn = false;
+
+  function openColumnDialog(): void {
+    columnDialogOpen = true;
+  }
+
+  function closeColumnDialog(): void {
+    columnDialogOpen = false;
+    newColumnName = '';
+  }
+
+  async function addColumn(): Promise<void> {
+    const name = newColumnName.trim();
+    if (!name) return;
+    addingColumn = true;
+    try {
+      await ApiC.post(Model.TodolistColumns, { name });
+      newColumnName = '';
+      await loadColumns();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not add that column.');
+    } finally {
+      addingColumn = false;
+    }
+  }
+
+  async function renameColumn(column: Column, name: string): Promise<void> {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === column.name) return;
+    try {
+      await ApiC.patch(`${Model.TodolistColumns}/${column.id}`, { name: trimmed });
+      await loadColumns();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not rename that column.');
+    }
+  }
+
+  async function deleteColumn(column: Column): Promise<void> {
+    if (!confirm(`Delete the "${column.name}" column? Any tasks in it move to To do.`)) return;
+    try {
+      await ApiC.delete(`${Model.TodolistColumns}/${column.id}`);
+      await Promise.all([loadColumns(), load()]);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not delete that column.');
+    }
+  }
+
+  async function moveColumn(column: Column, direction: -1 | 1): Promise<void> {
+    const swapWith = adjacentColumn(column, direction);
+    if (!swapWith) return;
+    try {
+      await Promise.all([
+        ApiC.patch(`${Model.TodolistColumns}/${column.id}`, { ordering: swapWith.ordering }),
+        ApiC.patch(`${Model.TodolistColumns}/${swapWith.id}`, { ordering: column.ordering }),
+      ]);
+      await loadColumns();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not reorder that column.');
     }
   }
 
@@ -295,6 +487,8 @@
     detailTitle = task.body;
     detailDeadline = toDateInputValue(task.deadline);
     detailAssignees = [...task.assignees];
+    detailPriority = task.priority ?? '';
+    detailProjectId = task.project_id;
     detailDescription = task.description ?? '';
     detailNotes = task.notes ?? '';
     newCommentText = '';
@@ -325,6 +519,8 @@
     detailTitle = detailTask.body;
     detailDeadline = toDateInputValue(detailTask.deadline);
     detailAssignees = [...detailTask.assignees];
+    detailPriority = detailTask.priority ?? '';
+    detailProjectId = detailTask.project_id;
     detailDescription = detailTask.description ?? '';
     detailNotes = detailTask.notes ?? '';
     detailEditing = false;
@@ -343,6 +539,8 @@
         content: title,
         deadline: detailDeadline || null,
         assignee_userids: detailAssignees.map(a => a.userid),
+        priority: detailPriority || null,
+        project_id: detailProjectId,
         description: descriptionEl?.innerHTML ?? detailDescription,
         notes: notesEl?.innerHTML ?? detailNotes,
       });
@@ -622,6 +820,23 @@
       </button>
     {/if}
     <button type="button" class="pm-project-tab-new" on:click={() => openProjectDialog(null)}>+ {t('New project')}</button>
+    <button type="button" class="pm-manage-btn ml-auto" title={t('Manage columns')} aria-label={t('Manage columns')} on:click={openColumnDialog}>
+      <i class="fas fa-table-columns fa-fw" aria-hidden="true"></i>
+    </button>
+    <button
+      type="button"
+      class="pm-manage-btn"
+      title={t('View my sidebar to-dos')}
+      aria-label={t('View my sidebar to-dos')}
+      on:click={() => {
+        const panel = document.getElementById('todolistPanel');
+        if (panel?.hasAttribute('hidden')) {
+          (document.querySelector('[data-action="toggle-sidepanel"][data-target="todolist"]') as HTMLElement | null)?.click();
+        }
+      }}
+    >
+      <i class="fas fa-list-check fa-fw" aria-hidden="true"></i>
+    </button>
   </div>
   {#if activeProject}
     <div class="pm-project-description">
@@ -631,6 +846,12 @@
       {:else}
         <p class="pm-muted small mb-0">{t('No description yet.')}</p>
       {/if}
+    </div>
+  {/if}
+  {#if visibleTasks.length > 0}
+    <div class="pm-progress mt-2" title={`${doneCount} / ${visibleTasks.length} ${t('done')}`}>
+      <div class="pm-progress-bar" style={`width: ${donePercent}%`}></div>
+      <span class="pm-progress-label">{donePercent}% {t('done')}</span>
     </div>
   {/if}
 
@@ -697,99 +918,88 @@
     <p class="pm-muted">{t('Loading')}…</p>
   {:else}
     <div class="pm-columns">
-      <div class="pm-column">
-        <h3 class="h6 pm-column-title">{t('To do')} <span class="badge badge-secondary">{todoTasks.length}</span></h3>
-        {#if todoTasks.length === 0}
-          <p class="pm-muted">{t('Nothing here.')}</p>
-        {/if}
-        {#each todoTasks as task (task.id)}
-          <div class="pm-card pm-task">
-            <div class="d-flex align-items-start">
-              <button type="button" class="pm-task-title-btn flex-grow-1" on:click={() => openDetail(task)}>{task.body}</button>
-              {#if canManage(task)}
-                <div class="pm-task-actions">
-                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task)}>
-                    <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
-                  </button>
-                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Mark as done')} aria-label={t('Mark as done')} on:click={() => toggleCompleted(task)}>
-                    <i class="fas fa-check fa-fw" aria-hidden="true"></i>
-                  </button>
-                  <button type="button" class="btn btn-danger-ghost btn-sm pm-icon-button" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteTask(task)}>
-                    <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
-                  </button>
-                </div>
+      {#each sortedColumns(columns) as column (column.id)}
+        {@const columnTasks = tasksInColumn(column.id)}
+        {@const prevCol = adjacentColumn(column, -1)}
+        {@const nextCol = adjacentColumn(column, 1)}
+        <div
+          class="pm-column"
+          class:pm-column-drag-over={dragOverColumn === column.id}
+          on:dragover={(event) => allowColumnDrop(event, column.id)}
+          on:dragleave={() => { if (dragOverColumn === column.id) dragOverColumn = null; }}
+          on:drop={(event) => dropOnColumn(event, column.id)}
+        >
+          <h3
+            class="h6 pm-column-title"
+            draggable="true"
+            title={t('Drag to reorder this column')}
+            on:dragstart={(event) => startColumnDrag(event, column.id)}
+            on:dragend={finishColumnDrag}
+          >{column.name} <span class="badge badge-secondary">{columnTasks.length}</span></h3>
+          {#if columnTasks.length === 0}
+            <p class="pm-muted">{t('Nothing here.')}</p>
+          {/if}
+          {#each columnTasks as task (task.id)}
+            <div
+              class="pm-card pm-task"
+              class:pm-task-done={column.kind === 'done'}
+              draggable={canManage(task)}
+              on:dragstart={(event) => startTaskDrag(event, task.id)}
+              on:dragend={finishTaskDrag}
+            >
+              <div class="d-flex align-items-start">
+                <button type="button" class="pm-task-title-btn flex-grow-1" on:click={() => openDetail(task)}>{task.body}</button>
+                {#if canManage(task)}
+                  <div class="pm-task-actions">
+                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task)}>
+                      <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+                    </button>
+                    {#if prevCol}
+                      <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={`${t('Move to')} ${prevCol.name}`} aria-label={`${t('Move to')} ${prevCol.name}`} on:click={() => moveTaskToColumn(task, prevCol.id)}>
+                        <i class="fas fa-arrow-left fa-fw" aria-hidden="true"></i>
+                      </button>
+                    {/if}
+                    {#if nextCol}
+                      <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={`${t('Move to')} ${nextCol.name}`} aria-label={`${t('Move to')} ${nextCol.name}`} on:click={() => moveTaskToColumn(task, nextCol.id)}>
+                        <i class="fas fa-arrow-right fa-fw" aria-hidden="true"></i>
+                      </button>
+                    {/if}
+                    <button type="button" class="btn btn-danger-ghost btn-sm pm-icon-button" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteTask(task)}>
+                      <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                {/if}
+              </div>
+              {#if task.priority}
+                <span class="badge pm-priority pm-priority-{task.priority} mt-1">{priorityLabel(task.priority)}</span>
               {/if}
+              {#if task.deadline}
+                <div class="pm-muted pm-task-meta"><i class="fas fa-calendar fa-fw mr-1" aria-hidden="true"></i>{formatDeadline(task.deadline)}</div>
+              {/if}
+              {#if task.description}
+                <p class="pm-muted pm-task-preview">{plainPreview(task.description)}</p>
+              {/if}
+              {#if task.notes}
+                <p class="pm-muted pm-task-preview">{plainPreview(task.notes)}</p>
+              {/if}
+              <div class="pm-task-meta d-flex align-items-center flex-wrap mt-1">
+                {#if task.assignees.length === 0}
+                  <span class="badge badge-info mr-1"><i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Unassigned')}</span>
+                {:else}
+                  <div class="pm-avatar-group">
+                    {#each task.assignees as assignee (assignee.userid)}
+                      <span class="pm-avatar" title={assignee.fullname}>{initials(assignee.fullname)}</span>
+                    {/each}
+                  </div>
+                {/if}
+                {#if scope === 'created' && !task.assignees.some(a => a.userid === task.userid)}
+                  <span class="pm-muted mr-1">{t('from')} {task.creator_fullname}</span>
+                {/if}
+              </div>
             </div>
-            {#if task.deadline}
-              <div class="pm-muted pm-task-meta"><i class="fas fa-calendar fa-fw mr-1" aria-hidden="true"></i>{formatDeadline(task.deadline)}</div>
-            {/if}
-            {#if task.description}
-              <p class="pm-muted pm-task-preview">{plainPreview(task.description)}</p>
-            {/if}
-            {#if task.notes}
-              <p class="pm-muted pm-task-preview">{plainPreview(task.notes)}</p>
-            {/if}
-            <div class="pm-task-meta d-flex align-items-center flex-wrap mt-1">
-              {#if task.assignees.length === 0}
-                <span class="badge badge-info mr-1"><i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Unassigned')}</span>
-              {:else}
-                <div class="pm-avatar-group">
-                  {#each task.assignees as assignee (assignee.userid)}
-                    <span class="pm-avatar" title={assignee.fullname}>{initials(assignee.fullname)}</span>
-                  {/each}
-                </div>
-              {/if}
-              {#if scope === 'created' && !task.assignees.some(a => a.userid === task.userid)}
-                <span class="pm-muted mr-1">{t('from')} {task.creator_fullname}</span>
-              {/if}
-            </div>
-          </div>
-        {/each}
-      </div>
-
-      <div class="pm-column">
-        <h3 class="h6 pm-column-title">{t('Done')} <span class="badge badge-secondary">{doneTasks.length}</span></h3>
-        {#if doneTasks.length === 0}
-          <p class="pm-muted">{t('Nothing here.')}</p>
-        {/if}
-        {#each doneTasks as task (task.id)}
-          <div class="pm-card pm-task pm-task-done">
-            <div class="d-flex align-items-start">
-              <button type="button" class="pm-task-title-btn flex-grow-1" on:click={() => openDetail(task)}>{task.body}</button>
-              {#if canManage(task)}
-                <div class="pm-task-actions">
-                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task)}>
-                    <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
-                  </button>
-                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Reopen')} aria-label={t('Reopen')} on:click={() => toggleCompleted(task)}>
-                    <i class="fas fa-rotate-left fa-fw" aria-hidden="true"></i>
-                  </button>
-                  <button type="button" class="btn btn-danger-ghost btn-sm pm-icon-button" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteTask(task)}>
-                    <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
-                  </button>
-                </div>
-              {/if}
-            </div>
-            {#if task.description}
-              <p class="pm-muted pm-task-preview">{plainPreview(task.description)}</p>
-            {/if}
-            {#if task.notes}
-              <p class="pm-muted pm-task-preview">{plainPreview(task.notes)}</p>
-            {/if}
-            <div class="pm-task-meta">
-              {#if task.assignees.length === 0}
-                <span class="badge badge-info"><i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Unassigned')}</span>
-              {:else}
-                <div class="pm-avatar-group">
-                  {#each task.assignees as assignee (assignee.userid)}
-                    <span class="pm-avatar" title={assignee.fullname}>{initials(assignee.fullname)}</span>
-                  {/each}
-                </div>
-              {/if}
-            </div>
-          </div>
-        {/each}
-      </div>
+          {/each}
+        </div>
+      {/each}
     </div>
   {/if}
 </div>
@@ -815,6 +1025,28 @@
               <label class="pm-label" for="pm-detail-deadline">{t('Deadline')}</label>
               <input id="pm-detail-deadline" type="date" class="form-control" bind:value={detailDeadline} />
             </div>
+            <div class="pm-dialog-field flex-grow-1">
+              <label class="pm-label" for="pm-detail-priority">{t('Priority')}</label>
+              <select id="pm-detail-priority" class="form-control" bind:value={detailPriority}>
+                <option value="">{t('None')}</option>
+                <option value="low">{t('Low')}</option>
+                <option value="medium">{t('Medium')}</option>
+                <option value="high">{t('High')}</option>
+              </select>
+            </div>
+          </div>
+          <div class="d-flex pm-dialog-row">
+            <div class="pm-dialog-field flex-grow-1">
+              <label class="pm-label" for="pm-detail-project">{t('Project')}</label>
+              <select id="pm-detail-project" class="form-control" bind:value={detailProjectId}>
+                <option value={null}>{t('Unfiled')}</option>
+                {#each projects as project (project.id)}
+                  <option value={project.id}>{project.name}</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+          <div class="d-flex pm-dialog-row">
             <div class="pm-dialog-field flex-grow-1">
               <label class="pm-label" for="pm-detail-assignee">{t('Assigned to')}</label>
               <div class="pm-chips">
@@ -882,6 +1114,9 @@
             >{@html detailNotes}</div>
           </div>
         {:else}
+          {#if detailTask.priority}
+            <span class="badge pm-priority pm-priority-{detailTask.priority} mb-1">{priorityLabel(detailTask.priority)}</span>
+          {/if}
           {#if detailTask.deadline}
             <div class="small pm-muted mb-1"><i class="fas fa-calendar fa-fw mr-1" aria-hidden="true"></i>{formatDeadline(detailTask.deadline)}</div>
           {/if}
@@ -1107,6 +1342,56 @@
         <button type="button" class="btn btn-primary" disabled={savingProject || dialogName.trim() === ''} on:click={saveProject}>
           {editingProject ? t('Save changes') : t('Create project')}
         </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if columnDialogOpen}
+  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeColumnDialog(); }}>
+    <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pmColumnDialogTitle">
+      <div class="pm-dialog-header">
+        <h4 id="pmColumnDialogTitle" class="mb-0">{t('Manage columns')}</h4>
+        <button type="button" class="pm-close-btn" on:click={closeColumnDialog} aria-label={t('Close')}>&times;</button>
+      </div>
+      <div class="pm-dialog-body">
+        <ul class="pm-column-manage-list">
+          {#each sortedColumns(columns) as column (column.id)}
+            <li class="pm-column-manage-row">
+              <input
+                type="text"
+                class="form-control"
+                value={column.name}
+                on:blur={(event) => renameColumn(column, (event.target as HTMLInputElement).value)}
+              />
+              <button type="button" class="btn-unstyled pm-icon-button" title={t('Move left')} aria-label={t('Move left')} disabled={!adjacentColumn(column, -1)} on:click={() => moveColumn(column, -1)}>
+                <i class="fas fa-arrow-left fa-fw" aria-hidden="true"></i>
+              </button>
+              <button type="button" class="btn-unstyled pm-icon-button" title={t('Move right')} aria-label={t('Move right')} disabled={!adjacentColumn(column, 1)} on:click={() => moveColumn(column, 1)}>
+                <i class="fas fa-arrow-right fa-fw" aria-hidden="true"></i>
+              </button>
+              {#if column.kind === 'custom'}
+                <button type="button" class="btn-unstyled pm-comment-delete" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteColumn(column)}>
+                  <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                </button>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+        <div class="d-flex pm-dialog-row">
+          <input
+            type="text"
+            class="form-control"
+            placeholder={t('New column name…')}
+            bind:value={newColumnName}
+            maxlength="100"
+            on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void addColumn(); } }}
+          />
+          <button type="button" class="btn btn-secondary ml-2" disabled={addingColumn || !newColumnName.trim()} on:click={addColumn}>{t('Add')}</button>
+        </div>
+      </div>
+      <div class="pm-dialog-footer">
+        <button type="button" class="btn btn-primary" on:click={closeColumnDialog}>{t('Done')}</button>
       </div>
     </div>
   </div>

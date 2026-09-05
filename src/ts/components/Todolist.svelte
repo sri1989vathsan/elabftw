@@ -95,6 +95,11 @@
     finished: boolean;
   };
 
+  type Project = {
+    id: number;
+    name: string;
+  };
+
   type CompletedGroup = {
     key: string;
     label: string;
@@ -133,6 +138,7 @@
   let items: Todo[] = [];
   let completedItems: Todo[] = [];
   let unfinished: UnfinishedResponse = { experiments: [], items: [] };
+  let projects: Project[] = [];
   let entries: SidebarEntry[] = [];
   let dueGroups: DueGroup[] = [];
   let completedGroups: CompletedGroup[] = [];
@@ -141,6 +147,7 @@
   let loadingCompleted = false;
   let draft = '';
   let draftNotes = '';
+  let draftProjectId: number | null = null;
   let deadlineDate = initialDeadlineDate;
   let deadlineTime = initialDeadlineTime;
   let reminderChoice = '60';
@@ -159,6 +166,7 @@
   let editTitle = '';
   let editNotes = '';
   let editDescription = '';
+  let editProjectId: number | null = null;
   let editDeadlineDate = '';
   let editDeadlineTime = '';
   let editReminderChoice = '60';
@@ -507,6 +515,7 @@
     editTitle = task.body;
     editNotes = task.notes ?? '';
     editDescription = task.description ?? '';
+    editProjectId = task.project_id ?? null;
     if (task.deadline) {
       const deadline = toLocalInput(new Date(task.deadline));
       editDeadlineDate = deadline.slice(0, 10);
@@ -606,6 +615,7 @@
       description: editDescription.trim() || null,
       deadline: deadline?.toISOString() ?? null,
       reminder_minutes: reminderMinutes,
+      project_id: editProjectId,
     });
     editingId = null;
     await load();
@@ -857,15 +867,25 @@
       notes: draftNotes.trim() || null,
       deadline: deadline?.toISOString() ?? null,
       reminder_minutes: reminderMinutes,
+      project_id: draftProjectId,
     });
     draft = '';
     draftNotes = '';
+    draftProjectId = null;
     reminderChoice = '60';
     customReminder = 120;
     reminderDate = '';
     reminderTime = '';
     await load();
     window.dispatchEvent(new CustomEvent('todolist-changed'));
+  }
+
+  async function loadProjects(): Promise<void> {
+    try {
+      projects = await ApiC.getJson(Model.TodolistProjects) as Project[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load projects.');
+    }
   }
 
   async function complete(id: number): Promise<void> {
@@ -1060,6 +1080,7 @@
     window.addEventListener('todolist-changed', reload);
     window.addEventListener('todolist-scope-changed', reload);
     void load();
+    void loadProjects();
 
     // Lets the Search side panel offer a "Link to task" button on its
     // results (see FavoriteFilters.class.ts) while this popup is open, the
@@ -1101,6 +1122,15 @@
     ></textarea>
   </label>
   <div class='todo-create-options'>
+    <label class='mb-0'>
+      <span class='small'>{t('Project')}</span>
+      <select class='form-control form-control-sm' bind:value={draftProjectId}>
+        <option value={null}>{t('Unfiled')}</option>
+        {#each projects as project (project.id)}
+          <option value={project.id}>{project.name}</option>
+        {/each}
+      </select>
+    </label>
     <div class='todo-date-time-row'>
       <label class='mb-0'>
         <span class='small'>{t('Date')}</span>
@@ -1468,6 +1498,15 @@
           <div class='pm-dialog-field'>
             <label class='pm-label' for='todo-detail-title'>{t('Title')}</label>
             <input id='todo-detail-title' type='text' class='form-control' bind:value={editTitle} />
+          </div>
+          <div class='pm-dialog-field'>
+            <label class='pm-label' for='todo-detail-project'>{t('Project')}</label>
+            <select id='todo-detail-project' class='form-control' bind:value={editProjectId}>
+              <option value={null}>{t('Unfiled')}</option>
+              {#each projects as project (project.id)}
+                <option value={project.id}>{project.name}</option>
+              {/each}
+            </select>
           </div>
           <div class='d-flex pm-dialog-row'>
             <div class='pm-dialog-field flex-grow-1'>

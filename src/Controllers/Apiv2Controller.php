@@ -78,6 +78,7 @@ use Elabftw\Models\TeamTags;
 use Elabftw\Models\Feedback;
 use Elabftw\Models\FeedbackComments;
 use Elabftw\Models\Todolist;
+use Elabftw\Models\TodolistColumns;
 use Elabftw\Models\TodolistComments;
 use Elabftw\Models\TodolistEntityLinks;
 use Elabftw\Models\TodolistSteps;
@@ -394,6 +395,7 @@ final class Apiv2Controller extends AbstractApiController
             ApiEndpoint::TeamTags => throw new ImproperActionException('Use api/v2/teams/current/tags endpoint instead.'),
             ApiEndpoint::Teams => new Teams($this->requester, $this->id),
             ApiEndpoint::Todolist => new Todolist($this->requester, $this->id),
+            ApiEndpoint::TodolistColumns => new TodolistColumns($this->requester, $this->id),
             ApiEndpoint::TodolistProjects => new TodolistProjects($this->requester, $this->id),
             ApiEndpoint::UnfinishedSteps => new UnfinishedSteps(
                 $this->requester,
