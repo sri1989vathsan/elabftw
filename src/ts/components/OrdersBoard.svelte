@@ -13,11 +13,17 @@
     title: string;
     notes: string | null;
     status: OrderStatus;
+    archived: boolean;
     created_at: string;
     userid: number;
     author_fullname: string;
     item_id: number | null;
     item_title: string | null;
+    // searchable blobs from the backend -- all comment bodies and all
+    // attachment filenames concatenated, so search can match them without
+    // a separate request per order
+    comments_text: string;
+    attachments_text: string;
   };
 
   type OrderComment = {
@@ -60,10 +66,13 @@
 
   let items: OrderItem[] = [];
   let loading = true;
-  let statusFilter: OrderStatus = 'requested';
+  let statusFilter: OrderStatus | 'archived' = 'requested';
+  let searchQuery = '';
+  let selectedIds = new Set<number>();
 
   let newTitle = '';
   let newNotes = '';
+  let newFiles: File[] = [];
   let submitting = false;
 
   // resource link on the new-order form: either search an existing one, or
@@ -110,11 +119,23 @@
     fullyExpandedComments = new Set(fullyExpandedComments).add(itemId);
   }
 
-  $: visibleItems = items.filter(item => item.status === statusFilter);
-  $: requestedCount = items.filter(item => item.status === 'requested').length;
-  $: orderedCount = items.filter(item => item.status === 'ordered').length;
-  $: receivedCount = items.filter(item => item.status === 'received').length;
-  $: cancelledCount = items.filter(item => item.status === 'cancelled').length;
+  function matchesSearch(item: OrderItem, query: string): boolean {
+    if (query === '') return true;
+    const haystack = [item.title, item.notes ?? '', item.item_title ?? '', item.author_fullname, item.comments_text, item.attachments_text]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(query);
+  }
+
+  $: normalizedSearch = searchQuery.trim().toLowerCase();
+  $: visibleItems = items
+    .filter(item => statusFilter === 'archived' ? item.archived : (!item.archived && item.status === statusFilter))
+    .filter(item => matchesSearch(item, normalizedSearch));
+  $: requestedCount = items.filter(item => !item.archived && item.status === 'requested').length;
+  $: orderedCount = items.filter(item => !item.archived && item.status === 'ordered').length;
+  $: receivedCount = items.filter(item => !item.archived && item.status === 'received').length;
+  $: cancelledCount = items.filter(item => !item.archived && item.status === 'cancelled').length;
+  $: archivedCount = items.filter(item => item.archived).length;
 
   async function load(): Promise<void> {
     loading = true;
@@ -175,13 +196,21 @@
       if (creatingNewResource && newResourceTitle.trim() !== '') {
         itemId = await ApiC.post2location(Model.Item, { title: newResourceTitle.trim() });
       }
-      await ApiC.post(Model.Order, {
+      const orderId = await ApiC.post2location(Model.Order, {
         title: newTitle.trim(),
         notes: newNotes.trim() === '' ? null : newNotes.trim(),
         item_id: itemId,
       });
+      for (const file of newFiles) {
+        try {
+          await uploadFileToOrder(orderId, file);
+        } catch (error) {
+          notify.error(error instanceof Error ? error.message : `Could not attach ${file.name}.`);
+        }
+      }
       newTitle = '';
       newNotes = '';
+      newFiles = [];
       selectedResource = null;
       creatingNewResource = false;
       newResourceTitle = '';
@@ -190,6 +219,38 @@
       notify.error(error instanceof Error ? error.message : 'Could not post this order.');
     } finally {
       submitting = false;
+    }
+  }
+
+  function onNewFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files) {
+      newFiles = [...newFiles, ...Array.from(input.files)];
+    }
+    input.value = '';
+  }
+
+  function removeNewFile(index: number): void {
+    newFiles = newFiles.filter((_, i) => i !== index);
+  }
+
+  let newFilesDragOver = false;
+
+  function onNewFilesDragOver(event: DragEvent): void {
+    event.preventDefault();
+    newFilesDragOver = true;
+  }
+
+  function onNewFilesDragLeave(): void {
+    newFilesDragOver = false;
+  }
+
+  function onNewFilesDropped(event: DragEvent): void {
+    event.preventDefault();
+    newFilesDragOver = false;
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      newFiles = [...newFiles, ...Array.from(files)];
     }
   }
 
@@ -297,6 +358,57 @@
     }
   }
 
+  async function setArchived(item: OrderItem, archived: boolean): Promise<void> {
+    try {
+      await ApiC.patch(`${Model.Order}/${item.id}`, { archived });
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update this order.');
+    }
+  }
+
+  function selectTab(next: OrderStatus | 'archived'): void {
+    statusFilter = next;
+    selectedIds = new Set();
+  }
+
+  function toggleSelect(id: number): void {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    selectedIds = next;
+  }
+
+  function toggleSelectAllVisible(): void {
+    const manageableIds = visibleItems.filter(canManage).map(i => i.id);
+    const allSelected = manageableIds.length > 0 && manageableIds.every(id => selectedIds.has(id));
+    selectedIds = allSelected ? new Set() : new Set(manageableIds);
+  }
+
+  async function bulkSetArchived(archived: boolean): Promise<void> {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    try {
+      await Promise.all(ids.map(id => ApiC.patch(`${Model.Order}/${id}`, { archived })));
+      selectedIds = new Set();
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update the selected orders.');
+    }
+  }
+
+  async function bulkDelete(): Promise<void> {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (!window.confirm(`${t('Delete')} ${ids.length} ${t('orders')}? ${t('This cannot be undone.')}`)) return;
+    try {
+      await Promise.all(ids.map(id => ApiC.delete(`${Model.Order}/${id}`)));
+      selectedIds = new Set();
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not delete the selected orders.');
+    }
+  }
+
   async function loadComments(itemId: number): Promise<void> {
     commentsLoading = new Set(commentsLoading).add(itemId);
     try {
@@ -364,12 +476,16 @@
     }
   }
 
+  async function uploadFileToOrder(orderId: number, file: File): Promise<void> {
+    const formData = new FormData();
+    formData.set('file', file);
+    await ApiC.post2location(`${Model.Order}/${orderId}/${Model.Upload}`, formData);
+  }
+
   async function uploadFile(item: OrderItem, file: File): Promise<void> {
     uploadingItem = new Set(uploadingItem).add(item.id);
     try {
-      const formData = new FormData();
-      formData.set('file', file);
-      await ApiC.post2location(`${Model.Order}/${item.id}/${Model.Upload}`, formData);
+      await uploadFileToOrder(item.id, file);
       await loadUploads(item.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not upload this file.');
@@ -507,6 +623,33 @@
         {/if}
       </div>
 
+      <div
+        class="orders-attachments mb-2"
+        class:orders-attachments-drag-over={newFilesDragOver}
+        on:dragover={onNewFilesDragOver}
+        on:dragleave={onNewFilesDragLeave}
+        on:drop={onNewFilesDropped}
+      >
+        <label class="btn btn-ghost btn-sm mb-0">
+          <i class="fas fa-paperclip fa-fw mr-1" aria-hidden="true"></i>{t('Attach files')}
+          <input type="file" class="orders-file-input" multiple on:change={onNewFilesSelected} />
+        </label>
+        <span class="orders-muted small ml-2">{t('or drag files here')}</span>
+        {#if newFiles.length > 0}
+          <ul class="orders-upload-list mt-1">
+            {#each newFiles as file, index (file.name + index)}
+              <li class="orders-upload">
+                <i class="fas fa-file fa-fw mr-1" aria-hidden="true"></i>
+                {file.name}
+                <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button ml-auto" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeNewFile(index)}>
+                  <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+
       <div class="d-flex align-items-center flex-wrap">
         <button type="submit" class="btn btn-primary btn-sm" disabled={submitting || newTitle.trim() === ''}>
           <i class="fas fa-cart-plus fa-fw mr-1" aria-hidden="true"></i>{t('Request order')}
@@ -515,28 +658,64 @@
     </form>
   </div>
 
-  <div class="d-flex flex-wrap align-items-center my-3">
+  <div class="d-flex flex-wrap align-items-center my-3" style="gap:0.5rem">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by status')}>
-      <button type="button" class={statusFilter === 'requested' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => statusFilter = 'requested'}>
+      <button type="button" class={statusFilter === 'requested' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('requested')}>
         {t('Requested')}{#if requestedCount > 0}<span class="badge badge-light ml-1">{requestedCount}</span>{/if}
       </button>
-      <button type="button" class={statusFilter === 'ordered' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => statusFilter = 'ordered'}>
+      <button type="button" class={statusFilter === 'ordered' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('ordered')}>
         {t('Ordered')}{#if orderedCount > 0}<span class="badge badge-light ml-1">{orderedCount}</span>{/if}
       </button>
-      <button type="button" class={statusFilter === 'received' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => statusFilter = 'received'}>
+      <button type="button" class={statusFilter === 'received' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('received')}>
         {t('Received')}{#if receivedCount > 0}<span class="badge badge-light ml-1">{receivedCount}</span>{/if}
       </button>
-      <button type="button" class={statusFilter === 'cancelled' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => statusFilter = 'cancelled'}>
+      <button type="button" class={statusFilter === 'cancelled' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('cancelled')}>
         {t('Cancelled')}{#if cancelledCount > 0}<span class="badge badge-light ml-1">{cancelledCount}</span>{/if}
       </button>
+      <button type="button" class={statusFilter === 'archived' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('archived')}>
+        <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archived')}{#if archivedCount > 0}<span class="badge badge-light ml-1">{archivedCount}</span>{/if}
+      </button>
+    </div>
+    <div class="orders-search flex-grow-1">
+      <input
+        class="form-control form-control-sm"
+        type="search"
+        placeholder={t('Search title, notes, comments, attachments…')}
+        bind:value={searchQuery}
+      />
     </div>
   </div>
+
+  {#if selectedIds.size > 0}
+    <div class="orders-bulk-bar d-flex align-items-center flex-wrap mb-2">
+      <span class="mr-2">{selectedIds.size} {t('selected')}</span>
+      {#if statusFilter === 'archived'}
+        <button type="button" class="btn btn-secondary btn-sm mr-2" on:click={() => bulkSetArchived(false)}>
+          <i class="fas fa-box-open fa-fw mr-1" aria-hidden="true"></i>{t('Unarchive')}
+        </button>
+      {:else}
+        <button type="button" class="btn btn-secondary btn-sm mr-2" on:click={() => bulkSetArchived(true)}>
+          <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archive')}
+        </button>
+      {/if}
+      <button type="button" class="btn btn-danger-ghost btn-sm mr-2" on:click={bulkDelete}>
+        <i class="fas fa-trash fa-fw mr-1" aria-hidden="true"></i>{t('Delete')}
+      </button>
+      <button type="button" class="btn btn-ghost btn-sm" on:click={() => selectedIds = new Set()}>{t('Clear selection')}</button>
+    </div>
+  {/if}
 
   {#if loading}
     <p class="orders-muted">{t('Loading')}…</p>
   {:else if visibleItems.length === 0}
     <p class="orders-muted">{t('No orders here.')}</p>
   {:else}
+    <div class="mb-1">
+      <label class="btn-unstyled d-inline-flex align-items-center orders-select-all">
+        <input type="checkbox" class="mr-1" checked={visibleItems.some(canManage) && visibleItems.filter(canManage).every(i => selectedIds.has(i.id))} on:change={toggleSelectAllVisible} />
+        {t('Select all')}
+      </label>
+    </div>
     <ul class="orders-list">
       {#each visibleItems as item (item.id)}
         <li class="orders-card orders-item">
@@ -615,6 +794,15 @@
               </div>
             {:else}
               <div class="orders-item-header">
+                {#if canManage(item)}
+                  <input
+                    type="checkbox"
+                    class="mr-1"
+                    checked={selectedIds.has(item.id)}
+                    on:change={() => toggleSelect(item.id)}
+                    aria-label={t('Select')}
+                  />
+                {/if}
                 <span class={`badge ${item.status === 'received' ? 'badge-success' : item.status === 'cancelled' ? 'badge-secondary' : item.status === 'ordered' ? 'badge-info' : 'badge-warning'}`}>
                   {statusLabel(item.status)}
                 </span>
@@ -642,6 +830,15 @@
                       on:click={() => startEdit(item)}
                     >
                       <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm orders-icon-button"
+                      title={item.archived ? t('Unarchive') : t('Archive')}
+                      aria-label={item.archived ? t('Unarchive') : t('Archive')}
+                      on:click={() => setArchived(item, !item.archived)}
+                    >
+                      <i class={`fas ${item.archived ? 'fa-box-open' : 'fa-box-archive'} fa-fw`} aria-hidden="true"></i>
                     </button>
                     <button
                       type="button"
@@ -792,6 +989,24 @@
 
   .orders-muted {
     color: var(--secondary);
+  }
+
+  .orders-search {
+    max-width: 20rem;
+    min-width: 12rem;
+  }
+
+  .orders-select-all {
+    color: var(--secondary);
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+
+  .orders-bulk-bar {
+    background: var(--mainbackground);
+    border: 1px solid var(--secondary);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.7rem;
   }
 
   .orders-resource-search {

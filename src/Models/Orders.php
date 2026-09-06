@@ -71,9 +71,19 @@ final class Orders extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
-        $sql = 'SELECT o.id, o.title, o.notes, o.status, o.created_at, o.userid, o.item_id,
+        $sql = 'SELECT o.id, o.title, o.notes, o.status, o.archived, o.created_at, o.userid, o.item_id,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname,
-                item.title AS item_title
+                item.title AS item_title,
+                COALESCE((
+                    SELECT GROUP_CONCAT(comment.body SEPARATOR " ")
+                    FROM custom_order_comments AS comment
+                    WHERE comment.order_id = o.id
+                ), "") AS comments_text,
+                COALESCE((
+                    SELECT GROUP_CONCAT(upload.real_name SEPARATOR " ")
+                    FROM custom_order_uploads AS upload
+                    WHERE upload.order_id = o.id
+                ), "") AS attachments_text
             FROM custom_orders AS o
             LEFT JOIN users AS author ON author.userid = o.userid
             LEFT JOIN items AS item ON item.id = o.item_id
@@ -88,6 +98,7 @@ final class Orders extends AbstractRest
             $order['id'] = (int) $order['id'];
             $order['userid'] = (int) $order['userid'];
             $order['item_id'] = $order['item_id'] !== null ? (int) $order['item_id'] : null;
+            $order['archived'] = (bool) $order['archived'];
         }
 
         return $result;
@@ -111,6 +122,9 @@ final class Orders extends AbstractRest
         $isOwner = $order['userid'] === $this->Users->userid;
         if (array_key_exists('status', $params)) {
             $this->updateStatus((string) $params['status']);
+        }
+        if (array_key_exists('archived', $params)) {
+            $this->updateArchived((bool) $params['archived']);
         }
         if (array_key_exists('title', $params) || array_key_exists('notes', $params) || array_key_exists('item_id', $params)) {
             if (!$isOwner && !$this->Users->isAdmin) {
@@ -148,6 +162,16 @@ final class Orders extends AbstractRest
         $sql = 'UPDATE custom_orders SET status = :status WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':status', $status);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    private function updateArchived(bool $archived): void
+    {
+        $sql = 'UPDATE custom_orders SET archived = :archived WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':archived', $archived, PDO::PARAM_INT);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
