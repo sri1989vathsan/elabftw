@@ -71,6 +71,9 @@ final class Orders extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
+        // default GROUP_CONCAT cap (1024 bytes) would silently truncate
+        // extracted PDF text well before it's useful for search
+        $this->Db->q('SET SESSION group_concat_max_len = 1000000');
         $sql = 'SELECT o.id, o.title, o.notes, o.status, o.archived, o.created_at, o.userid, o.item_id,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname,
                 item.title AS item_title,
@@ -80,7 +83,7 @@ final class Orders extends AbstractRest
                     WHERE comment.order_id = o.id
                 ), "") AS comments_text,
                 COALESCE((
-                    SELECT GROUP_CONCAT(upload.real_name SEPARATOR " ")
+                    SELECT GROUP_CONCAT(CONCAT(upload.real_name, " ", COALESCE(upload.extracted_text, "")) SEPARATOR " ")
                     FROM custom_order_uploads AS upload
                     WHERE upload.order_id = o.id
                 ), "") AS attachments_text

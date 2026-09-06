@@ -21,7 +21,9 @@ use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
 use RuntimeException;
+use Smalot\PdfParser\Parser as PdfParser;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Throwable;
 
 use function fclose;
 use function fopen;
@@ -32,6 +34,7 @@ use function rewind;
 use function sprintf;
 use function stream_copy_to_stream;
 use function stream_get_meta_data;
+use function trim;
 
 use const PATHINFO_EXTENSION;
 
@@ -72,6 +75,7 @@ final class OrderUploads extends AbstractRest
         }
         $realName = (string) ($reqBody['real_name'] ?? $file->getClientOriginalName());
         $ext = mb_strtolower(pathinfo($realName, PATHINFO_EXTENSION) ?: 'bin');
+        $extractedText = $ext === 'pdf' ? $this->extractPdfText($file->getPathname()) : null;
 
         $someRandomString = Tools::getUuidv4();
         $folder = mb_substr($someRandomString, 0, 2);
@@ -100,8 +104,8 @@ final class OrderUploads extends AbstractRest
         $storageFs->writeStream($longName, $inputStream);
         fclose($inputStream);
 
-        $sql = 'INSERT INTO custom_order_uploads (order_id, userid, real_name, long_name, storage, filesize)
-            VALUES (:order_id, :userid, :real_name, :long_name, :storage, :filesize)';
+        $sql = 'INSERT INTO custom_order_uploads (order_id, userid, real_name, long_name, storage, filesize, extracted_text)
+            VALUES (:order_id, :userid, :real_name, :long_name, :storage, :filesize, :extracted_text)';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':order_id', $this->Order->id, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
@@ -109,15 +113,32 @@ final class OrderUploads extends AbstractRest
         $req->bindValue(':long_name', $longName);
         $req->bindValue(':storage', $storageId, PDO::PARAM_INT);
         $req->bindValue(':filesize', $filesize, PDO::PARAM_INT);
+        $req->bindValue(':extracted_text', $extractedText, $extractedText === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $this->Db->execute($req);
 
         return (int) $this->Db->lastInsertId();
+    }
+
+    // Best-effort text extraction for search -- only works for PDFs that have
+    // an actual text layer (i.e. not scanned/image-only pages, which would
+    // need OCR -- deliberately out of scope for now). Any parse failure
+    // (encrypted, corrupted, image-only) is swallowed: the upload still
+    // succeeds, it just isn't searchable by content.
+    private function extractPdfText(string $path): ?string
+    {
+        try {
+            $text = trim((new PdfParser())->parseFile($path)->getText());
+            return $text === '' ? null : $text;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
         $sql = 'SELECT upload.id, upload.real_name, upload.long_name, upload.storage, upload.filesize, upload.created_at, upload.userid,
+                (upload.extracted_text IS NOT NULL) AS has_extracted_text,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname
             FROM custom_order_uploads AS upload
             INNER JOIN custom_orders AS o ON o.id = upload.order_id AND o.team = :team
@@ -134,6 +155,7 @@ final class OrderUploads extends AbstractRest
             $upload['id'] = (int) $upload['id'];
             $upload['userid'] = (int) $upload['userid'];
             $upload['storage'] = (int) $upload['storage'];
+            $upload['has_extracted_text'] = (bool) $upload['has_extracted_text'];
         }
 
         return $result;

@@ -45,6 +45,7 @@
     long_name: string;
     storage: number;
     filesize: number | null;
+    has_extracted_text: boolean;
     created_at: string;
     userid: number;
     author_fullname: string;
@@ -894,6 +895,9 @@
                         <i class="fas fa-file fa-fw mr-1" aria-hidden="true"></i>
                         <a href={downloadUrl(upload)} target="_blank" rel="noopener noreferrer">{upload.real_name}</a>
                         <span class="orders-muted ml-1">{formatFilesize(upload.filesize)}</span>
+                        {#if upload.has_extracted_text}
+                          <i class="fas fa-magnifying-glass fa-fw ml-1 orders-muted" title={t('Content is searchable')} aria-label={t('Content is searchable')}></i>
+                        {/if}
                         {#if canDeleteUpload(upload)}
                           <button
                             type="button"
