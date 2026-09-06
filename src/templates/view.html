@@ -158,7 +158,7 @@
 {% if formattedMetadata is not empty %}
   <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='extraFieldsDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Custom fields'|trans }}</h3>
   <div class='mt-2 col-md-8' id='extraFieldsDiv' data-save-hidden='extraFieldsDiv'>
-    {{ formattedMetadata }}
+    {{ formattedMetadata|raw }}
   </div>
   <hr>
 {% endif %}
