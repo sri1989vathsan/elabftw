@@ -127,10 +127,31 @@
   let addingStep = false;
   const COLUMN_TASK_LIMIT = 5;
   let expandedColumns: Record<number, boolean> = {};
+  let searchQuery = '';
+
+  function matchesSearch(task: Task, query: string): boolean {
+    if (query === '') return true;
+    const haystack = [
+      task.body,
+      task.notes ?? '',
+      task.description ?? '',
+      task.project_name ?? '',
+      task.creator_fullname,
+      task.assigned_fullname ?? '',
+      task.priority ?? '',
+      ...task.assignees.map(a => a.fullname),
+      ...task.entity_links.map(link => link.title ?? ''),
+    ]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(query);
+  }
 
   $: activeProject = typeof activeProjectId === 'number' ? (projects.find(p => p.id === activeProjectId) ?? null) : null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
-  $: visibleTasks = activeProjectId === 'all' ? tasks : tasks.filter(task => task.project_id === activeProjectId);
+  $: normalizedSearch = searchQuery.trim().toLowerCase();
+  $: visibleTasks = (activeProjectId === 'all' ? tasks : tasks.filter(task => task.project_id === activeProjectId))
+    .filter(task => matchesSearch(task, normalizedSearch));
   $: doneColumn = columns.find(c => c.kind === 'done') ?? null;
   $: todoColumn = columns.find(c => c.kind === 'todo') ?? null;
   $: doneCount = doneColumn ? visibleTasks.filter(task => task.column_id === doneColumn.id).length : 0;
@@ -879,6 +900,17 @@
     >
       <i class="fas fa-list-check fa-fw" aria-hidden="true"></i>
     </button>
+  </div>
+
+  <div class="pm-search mt-2">
+    <input
+      class="form-control form-control-sm"
+      type="search"
+      placeholder={t('Search tasks…')}
+      title={t('Searches title, notes, description, project, priority, people and linked items')}
+      bind:value={searchQuery}
+    />
+    <span class="pm-muted small">{t('Searches: title, notes, description, project, priority, people, links')}</span>
   </div>
 
   {#if activeProject}

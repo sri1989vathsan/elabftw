@@ -74,6 +74,7 @@
   let items: OrderItem[] = [];
   let loading = true;
   let statusFilter: OrderStatus | 'archived' = 'requested';
+  let ownerFilter: 'mine' | 'all' = 'all';
   let searchQuery = '';
   let selectedIds = new Set<number>();
 
@@ -142,7 +143,9 @@
   $: normalizedSearch = searchQuery.trim().toLowerCase();
   $: visibleItems = items
     .filter(item => statusFilter === 'archived' ? item.archived : (!item.archived && item.status === statusFilter))
+    .filter(item => ownerFilter === 'all' || item.userid === core.currentUserid)
     .filter(item => matchesSearch(item, normalizedSearch));
+  $: mineCount = items.filter(item => item.userid === core.currentUserid && (statusFilter === 'archived' ? item.archived : (!item.archived && item.status === statusFilter))).length;
   $: requestedCount = items.filter(item => !item.archived && item.status === 'requested').length;
   $: orderedCount = items.filter(item => !item.archived && item.status === 'ordered').length;
   $: receivedCount = items.filter(item => !item.archived && item.status === 'received').length;
@@ -727,13 +730,23 @@
         <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archived')}{#if archivedCount > 0}<span class="badge badge-light ml-1">{archivedCount}</span>{/if}
       </button>
     </div>
+    <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by owner')}>
+      <button type="button" class={ownerFilter === 'mine' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => ownerFilter = 'mine'}>
+        <i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('My orders')}{#if mineCount > 0}<span class="badge badge-light ml-1">{mineCount}</span>{/if}
+      </button>
+      <button type="button" class={ownerFilter === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => ownerFilter = 'all'}>
+        <i class="fas fa-users fa-fw mr-1" aria-hidden="true"></i>{t('Everyone')}
+      </button>
+    </div>
     <div class="orders-search flex-grow-1">
       <input
         class="form-control form-control-sm"
         type="search"
-        placeholder={t('Search title, notes, comments, attachments…')}
+        placeholder={t('Search orders…')}
+        title={t('Searches title, notes, linked resource, requester, comments and attachment names/content')}
         bind:value={searchQuery}
       />
+      <span class="orders-muted small">{t('Searches: title, notes, resource, requester, comments, attachments')}</span>
     </div>
   </div>
 
@@ -1060,6 +1073,11 @@
   .orders-search {
     max-width: 20rem;
     min-width: 12rem;
+  }
+
+  .orders-search span {
+    display: block;
+    margin-top: 0.15rem;
   }
 
   .orders-select-all {
