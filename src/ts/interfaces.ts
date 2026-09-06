@@ -150,6 +150,7 @@ enum Model {
   ItemsStatus = 'items_status',
   Link = 'links',
   Notification = 'notifications',
+  Order = 'orders',
   ExperimentsCategories = 'experiments_categories',
   ExperimentsStatus = 'experiments_status',
   ExtraFieldsKeys = 'extra_fields_keys',

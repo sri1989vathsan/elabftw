@@ -137,3 +137,10 @@ if (document.getElementById('projectManagementRoot')) {
     './projectmanagement'
   );
 }
+
+if (document.getElementById('ordersRoot')) {
+  void import(
+    /* webpackChunkName: 'orders' */
+    './orders'
+  );
+}

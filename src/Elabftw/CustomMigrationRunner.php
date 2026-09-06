@@ -58,6 +58,8 @@ final class CustomMigrationRunner
         '032_todolist_steps.sql',
         '033_todolist_status_priority.sql',
         '034_todolist_columns.sql',
+        '035_orders.sql',
+        '036_order_uploads.sql',
     );
 
     private Db $Db;

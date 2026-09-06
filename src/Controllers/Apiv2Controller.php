@@ -77,6 +77,9 @@ use Elabftw\Models\Teams2Rors;
 use Elabftw\Models\TeamTags;
 use Elabftw\Models\Feedback;
 use Elabftw\Models\FeedbackComments;
+use Elabftw\Models\Orders;
+use Elabftw\Models\OrderComments;
+use Elabftw\Models\OrderUploads;
 use Elabftw\Models\Todolist;
 use Elabftw\Models\TodolistColumns;
 use Elabftw\Models\TodolistComments;
@@ -231,7 +234,7 @@ final class Apiv2Controller extends AbstractApiController
     private function handlePost(): Response
     {
         // special case for POST/uploads where we get the information from the "files" attribute
-        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools) && $this->action === Action::Create) {
+        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools || $this->Model instanceof OrderUploads) && $this->action === Action::Create) {
             $file = $this->Request->files->get('file');
             // this was added to prevent: Uncaught Error: Call to a member function getClientOriginalName() on null
             // not sure what triggers it though
@@ -385,6 +388,7 @@ final class Apiv2Controller extends AbstractApiController
             ApiEndpoint::ExperimentsFolders => new ExperimentsFolders($this->requester, $this->id),
             ApiEndpoint::FavCategories => new FavCategories($this->requester, $this->id),
             ApiEndpoint::Feedback => new Feedback($this->requester, $this->id),
+            ApiEndpoint::Orders => new Orders($this->requester, $this->id),
             ApiEndpoint::FavFilters => new FavFilters($this->requester, $this->id),
             ApiEndpoint::FavTags => new FavTags($this->requester, $this->id),
             ApiEndpoint::Reports => new ReportsHandler($this->requester),
@@ -494,6 +498,13 @@ final class Apiv2Controller extends AbstractApiController
             return match ($submodel) {
                 ApiSubModels::Comments => new FeedbackComments($this->requester, $this->Model, $this->subId),
                 default => throw new InvalidApiSubModelException(ApiEndpoint::Feedback),
+            };
+        }
+        if ($this->Model instanceof Orders) {
+            return match ($submodel) {
+                ApiSubModels::Comments => new OrderComments($this->requester, $this->Model, $this->subId),
+                ApiSubModels::Uploads => new OrderUploads($this->requester, $this->Model, $this->subId),
+                default => throw new InvalidApiSubModelException(ApiEndpoint::Orders),
             };
         }
         if ($this->Model instanceof Todolist) {
