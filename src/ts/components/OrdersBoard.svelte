@@ -5,8 +5,14 @@
   import i18next from '../i18n';
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
+  import { applyMention, extractMentionQuery } from '../mentions';
 
   type OrderStatus = 'requested' | 'ordered' | 'received' | 'cancelled';
+
+  type TeamMember = {
+    userid: number;
+    fullname: string;
+  };
 
   type OrderItem = {
     id: number;
@@ -106,6 +112,11 @@
   let commentsByItem: Record<number, OrderComment[]> = {};
   let commentsLoading = new Set<number>();
   let commentDrafts: Record<number, string> = {};
+  let teamMembers: TeamMember[] = [];
+  // users @-mentioned in the comment currently being drafted, and the
+  // dropdown of matching team members while typing "@something"
+  let commentMentions: Record<number, TeamMember[]> = {};
+  let mentionCandidates: Record<number, TeamMember[]> = {};
 
   let uploadsByItem: Record<number, OrderUpload[]> = {};
   let uploadingItem = new Set<number>();
@@ -445,9 +456,14 @@
     const text = (commentDrafts[item.id] ?? '').trim();
     if (!text) return;
     try {
-      await ApiC.post(`${Model.Order}/${item.id}/${Model.Comment}`, { body: text });
+      const mentionedUserids = (commentMentions[item.id] ?? [])
+        .filter(m => text.includes(`@${m.fullname}`))
+        .map(m => m.userid);
+      await ApiC.post(`${Model.Order}/${item.id}/${Model.Comment}`, { body: text, mentioned_userids: mentionedUserids });
       commentDrafts[item.id] = '';
       commentDrafts = commentDrafts;
+      commentMentions[item.id] = [];
+      commentMentions = commentMentions;
       await loadComments(item.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not post this comment.');
@@ -551,8 +567,42 @@
     return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
   }
 
+  async function loadTeamMembers(): Promise<void> {
+    try {
+      teamMembers = await ApiC.getJson('users?currentTeam=1') as TeamMember[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load team members.');
+    }
+  }
+
+  function onCommentInput(itemId: number): void {
+    const query = extractMentionQuery(commentDrafts[itemId] ?? '');
+    if (query === null) {
+      mentionCandidates[itemId] = [];
+      mentionCandidates = mentionCandidates;
+      return;
+    }
+    const lower = query.toLowerCase();
+    mentionCandidates[itemId] = teamMembers.filter(m => m.fullname.toLowerCase().includes(lower)).slice(0, 5);
+    mentionCandidates = mentionCandidates;
+  }
+
+  function pickMention(itemId: number, member: TeamMember): void {
+    const text = commentDrafts[itemId] ?? '';
+    const query = extractMentionQuery(text) ?? '';
+    commentDrafts[itemId] = applyMention(text, query, member.fullname);
+    commentDrafts = commentDrafts;
+    if (!(commentMentions[itemId] ?? []).some(m => m.userid === member.userid)) {
+      commentMentions[itemId] = [...(commentMentions[itemId] ?? []), member];
+      commentMentions = commentMentions;
+    }
+    mentionCandidates[itemId] = [];
+    mentionCandidates = mentionCandidates;
+  }
+
   onMount(() => {
     void load();
+    void loadTeamMembers();
   });
 </script>
 
@@ -949,16 +999,28 @@
                       {/each}
                     </ul>
                   {/if}
-                  <form class="d-flex" on:submit|preventDefault={() => submitComment(item)}>
+                  <form class="d-flex orders-comment-form" on:submit|preventDefault={() => submitComment(item)}>
                     <label class="sr-only" for={`ordersComment-${item.id}`}>{t('Add a comment')}</label>
                     <input
                       id={`ordersComment-${item.id}`}
                       class="form-control form-control-sm mr-2"
                       type="text"
                       maxlength="5000"
-                      placeholder={t('Add a comment…')}
+                      placeholder={t('Add a comment… (type @ to mention someone)')}
                       bind:value={commentDrafts[item.id]}
+                      on:input={() => onCommentInput(item.id)}
                     />
+                    {#if (mentionCandidates[item.id] ?? []).length > 0}
+                      <ul class="orders-resource-results orders-mention-results">
+                        {#each mentionCandidates[item.id] as member (member.userid)}
+                          <li>
+                            <button type="button" class="btn-unstyled orders-resource-result" on:click={() => pickMention(item.id, member)}>
+                              {member.fullname}
+                            </button>
+                          </li>
+                        {/each}
+                      </ul>
+                    {/if}
                     <button type="submit" class="btn btn-primary btn-sm" disabled={!(commentDrafts[item.id] ?? '').trim()}>
                       {t('Post')}
                     </button>
@@ -1095,6 +1157,15 @@
 
   .orders-item-meta {
     font-size: 0.78rem;
+  }
+
+  .orders-comment-form {
+    position: relative;
+  }
+
+  .orders-mention-results {
+    top: auto;
+    bottom: 100%;
   }
 
   .orders-comments-toggle {

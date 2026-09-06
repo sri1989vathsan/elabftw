@@ -14,12 +14,15 @@ use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\QueryParamsInterface;
+use Elabftw\Models\Notifications\MentionedInTask;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\Filter;
 use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
 
+use function array_map;
+use function is_array;
 use function mb_strlen;
 use function sprintf;
 
@@ -98,8 +101,39 @@ final class TodolistComments extends AbstractRest
         if ($req->rowCount() === 0) {
             throw new ResourceNotFoundException();
         }
+        $commentId = (int) $this->Db->lastInsertId();
+        $this->notifyMentioned(is_array($reqBody['mentioned_userids'] ?? null) ? $reqBody['mentioned_userids'] : array());
 
-        return (int) $this->Db->lastInsertId();
+        return $commentId;
+    }
+
+    private function notifyMentioned(array $userids): void
+    {
+        if (empty($userids)) {
+            return;
+        }
+        $task = $this->Task->readOne();
+        foreach (array_map('intval', $userids) as $userid) {
+            if ($userid === $this->Users->userid || !$this->isTeamMember($userid)) {
+                continue;
+            }
+            (new MentionedInTask(
+                new Users($userid, $this->Users->team),
+                $this->Users,
+                (int) $this->Task->id,
+                (string) $task['body'],
+            ))->create();
+        }
+    }
+
+    private function isTeamMember(int $userid): bool
+    {
+        $sql = 'SELECT 1 FROM users2teams WHERE userid = :userid AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':userid', $userid, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return $req->fetch() !== false;
     }
 
     #[Override]

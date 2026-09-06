@@ -151,6 +151,28 @@ final class Transform
                     ),
                     $notif['created_at'],
                 ),
+            Notifications::MentionedInTask =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="projectmanagement.php">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    sprintf(
+                        _('%s mentioned you in a comment: %s'),
+                        $notif['body']['mentioner_fullname'],
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
+                    $notif['created_at'],
+                ),
+            Notifications::MentionedInOrder =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="orders.php">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    sprintf(
+                        _('%s mentioned you in a comment: %s'),
+                        $notif['body']['mentioner_fullname'],
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
+                    $notif['created_at'],
+                ),
             default => throw new ImproperActionException('Invalid notification type.'),
         };
     }

@@ -4762,6 +4762,34 @@ div > .sticky-navbar {
 
 .pm-comment-form {
   gap: 0.4rem;
+  position: relative;
+}
+
+.pm-mention-results {
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.35rem;
+  bottom: 100%;
+  left: 0;
+  list-style: none;
+  margin: 0 0 0.2rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  padding: 0;
+  position: absolute;
+  right: 0;
+  z-index: 5;
+}
+
+.pm-mention-result {
+  display: block;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  width: 100%;
+}
+
+.pm-mention-result:hover {
+  background: rgba(128, 128, 128, 0.15);
 }
 
 .pm-avatar-group {

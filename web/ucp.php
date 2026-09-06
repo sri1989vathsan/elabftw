@@ -66,6 +66,14 @@ try {
             'designation' => _('Step deadline'),
             'setting' => 'notif_step_deadline',
         ),
+        array(
+            'designation' => _('Mentioned in a to-do/project comment'),
+            'setting' => 'notif_mentioned_task',
+        ),
+        array(
+            'designation' => _('Mentioned in an order comment'),
+            'setting' => 'notif_mentioned_order',
+        ),
     );
 
     if ($App->Users->isAdmin) {

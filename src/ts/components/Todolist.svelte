@@ -13,6 +13,12 @@
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
   import { toRelative } from '../misc';
+  import { applyMention, extractMentionQuery } from '../mentions';
+
+  type TeamMember = {
+    userid: number;
+    fullname: string;
+  };
 
   type Todo = {
     id: number;
@@ -162,6 +168,11 @@
   let detailComments: TaskComment[] = [];
   let loadingComments = false;
   let newCommentText = '';
+  let teamMembers: TeamMember[] = [];
+  // users @-mentioned in the comment currently being drafted, and the
+  // dropdown of matching team members while typing "@something"
+  let commentMentions: TeamMember[] = [];
+  let mentionCandidates: TeamMember[] = [];
   let postingComment = false;
   let editTitle = '';
   let editNotes = '';
@@ -818,14 +829,45 @@
     if (!body || !detailEntry) return;
     postingComment = true;
     try {
-      await ApiC.post(`${Model.Todolist}/${detailEntry.id}/${Model.Comment}`, { body });
+      const mentionedUserids = commentMentions
+        .filter(m => body.includes(`@${m.fullname}`))
+        .map(m => m.userid);
+      await ApiC.post(`${Model.Todolist}/${detailEntry.id}/${Model.Comment}`, { body, mentioned_userids: mentionedUserids });
       newCommentText = '';
+      commentMentions = [];
       await loadComments(detailEntry.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not post the comment.');
     } finally {
       postingComment = false;
     }
+  }
+
+  async function loadTeamMembers(): Promise<void> {
+    try {
+      teamMembers = await ApiC.getJson('users?currentTeam=1') as TeamMember[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load team members.');
+    }
+  }
+
+  function onCommentInput(): void {
+    const query = extractMentionQuery(newCommentText);
+    if (query === null) {
+      mentionCandidates = [];
+      return;
+    }
+    const lower = query.toLowerCase();
+    mentionCandidates = teamMembers.filter(m => m.fullname.toLowerCase().includes(lower)).slice(0, 5);
+  }
+
+  function pickMention(member: TeamMember): void {
+    const query = extractMentionQuery(newCommentText) ?? '';
+    newCommentText = applyMention(newCommentText, query, member.fullname);
+    if (!commentMentions.some(m => m.userid === member.userid)) {
+      commentMentions = [...commentMentions, member];
+    }
+    mentionCandidates = [];
   }
 
   async function deleteComment(comment: TaskComment): Promise<void> {
@@ -1081,6 +1123,7 @@
     window.addEventListener('todolist-scope-changed', reload);
     void load();
     void loadProjects();
+    void loadTeamMembers();
 
     // Lets the Search side panel offer a "Link to task" button on its
     // results (see FavoriteFilters.class.ts) while this popup is open, the
@@ -1725,10 +1768,22 @@
             <input
               type='text'
               class='form-control'
-              placeholder={t('Add a comment…')}
+              placeholder={t('Add a comment… (type @ to mention someone)')}
               bind:value={newCommentText}
+              on:input={onCommentInput}
               on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void postComment(); } }}
             />
+            {#if mentionCandidates.length > 0}
+              <ul class='pm-mention-results'>
+                {#each mentionCandidates as member (member.userid)}
+                  <li>
+                    <button type='button' class='btn-unstyled pm-mention-result' on:click={() => pickMention(member)}>
+                      {member.fullname}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
             <button type='button' class='btn btn-secondary ml-2' disabled={postingComment || !newCommentText.trim()} on:click={postComment}>{t('Post')}</button>
           </div>
         </div>
