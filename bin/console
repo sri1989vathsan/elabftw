@@ -78,6 +78,7 @@ $Application->add(new CleanDatabase());
 $Application->add(new ClearNotifications());
 $Application->add(new FingerprintCompounds());
 $Application->add(new ExportCommand($exportsFs));
+$Application->add(new OrdersExtractPdfCommand());
 $Application->add(new ExportEln($exportsFs));
 $Application->add(new ImportEln($exportsFs));
 $Application->add(new ImportCompoundsCsv($exportsFs));

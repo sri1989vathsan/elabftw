@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace Elabftw\Models;
 
+use Elabftw\Elabftw\Db;
+use Elabftw\Elabftw\Invoker;
 use Elabftw\Elabftw\Tools;
 use Elabftw\Enums\Action;
 use Elabftw\Enums\Storage;
@@ -25,6 +27,8 @@ use Smalot\PdfParser\Parser as PdfParser;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Throwable;
 
+use function array_column;
+use function array_map;
 use function fclose;
 use function fopen;
 use function mb_strtolower;
@@ -75,7 +79,10 @@ final class OrderUploads extends AbstractRest
         }
         $realName = (string) ($reqBody['real_name'] ?? $file->getClientOriginalName());
         $ext = mb_strtolower(pathinfo($realName, PATHINFO_EXTENSION) ?: 'bin');
-        $extractedText = $ext === 'pdf' ? $this->extractPdfText($file->getPathname()) : null;
+        // Extraction runs out-of-band (see extractOne()) instead of inline
+        // here -- a large PDF could otherwise make the upload request slow
+        // or hit its time/memory limit.
+        $extractionStatus = $ext === 'pdf' ? 'pending' : 'none';
 
         $someRandomString = Tools::getUuidv4();
         $folder = mb_substr($someRandomString, 0, 2);
@@ -104,8 +111,8 @@ final class OrderUploads extends AbstractRest
         $storageFs->writeStream($longName, $inputStream);
         fclose($inputStream);
 
-        $sql = 'INSERT INTO custom_order_uploads (order_id, userid, real_name, long_name, storage, filesize, extracted_text)
-            VALUES (:order_id, :userid, :real_name, :long_name, :storage, :filesize, :extracted_text)';
+        $sql = 'INSERT INTO custom_order_uploads (order_id, userid, real_name, long_name, storage, filesize, extraction_status)
+            VALUES (:order_id, :userid, :real_name, :long_name, :storage, :filesize, :extraction_status)';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':order_id', $this->Order->id, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
@@ -113,25 +120,76 @@ final class OrderUploads extends AbstractRest
         $req->bindValue(':long_name', $longName);
         $req->bindValue(':storage', $storageId, PDO::PARAM_INT);
         $req->bindValue(':filesize', $filesize, PDO::PARAM_INT);
-        $req->bindValue(':extracted_text', $extractedText, $extractedText === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':extraction_status', $extractionStatus);
         $this->Db->execute($req);
+        $uploadId = (int) $this->Db->lastInsertId();
 
-        return (int) $this->Db->lastInsertId();
+        if ($extractionStatus === 'pending') {
+            // best-effort: if the invoker isn't reachable (e.g. in a test
+            // environment) the upload still succeeds, it just stays
+            // 'pending' until a catch-up sweep (orders:extract-pdf with no
+            // id) picks it up
+            try {
+                (new Invoker())->write(sprintf('orders:extract-pdf %d', $uploadId));
+            } catch (RuntimeException) {
+                // swallowed on purpose, see above
+            }
+        }
+
+        return $uploadId;
     }
 
-    // Best-effort text extraction for search -- only works for PDFs that have
-    // an actual text layer (i.e. not scanned/image-only pages, which would
-    // need OCR -- deliberately out of scope for now). Any parse failure
-    // (encrypted, corrupted, image-only) is swallowed: the upload still
-    // succeeds, it just isn't searchable by content.
-    private function extractPdfText(string $path): ?string
+    /**
+     * Run PDF text extraction for one upload. Called from the async
+     * orders:extract-pdf command (right after upload, or as a catch-up
+     * sweep), which runs outside of any HTTP request/team context -- so
+     * unlike the rest of this class, this doesn't go through readOne() or
+     * bind to a particular team.
+     */
+    public static function extractOne(int $uploadId): void
     {
-        try {
-            $text = trim((new PdfParser())->parseFile($path)->getText());
-            return $text === '' ? null : $text;
-        } catch (Throwable) {
-            return null;
+        $Db = Db::getConnection();
+        $sql = "SELECT id, long_name, storage FROM custom_order_uploads WHERE id = :id AND extraction_status = 'pending'";
+        $req = $Db->prepare($sql);
+        $req->bindValue(':id', $uploadId, PDO::PARAM_INT);
+        $Db->execute($req);
+        $upload = $req->fetch();
+        if ($upload === false) {
+            // already processed (or not pending in the first place) -- a
+            // catch-up sweep must not redo work a previous run finished
+            return;
         }
+
+        $status = 'failed';
+        $extractedText = null;
+        try {
+            $storageFs = Storage::from((int) $upload['storage'])->getStorage()->getFs();
+            $text = trim((new PdfParser())->parseContent($storageFs->read($upload['long_name']))->getText());
+            $extractedText = $text === '' ? null : $text;
+            // "done" covers both a found text layer and a genuinely empty
+            // one (e.g. scanned/image-only pages) -- either way, extraction
+            // ran to completion. Only a thrown exception below means failed.
+            $status = 'done';
+        } catch (Throwable) {
+            // encrypted, corrupted, or otherwise unparseable -- the upload
+            // itself already succeeded, it just isn't searchable by content
+        }
+
+        $sql = 'UPDATE custom_order_uploads SET extracted_text = :extracted_text, extraction_status = :status WHERE id = :id';
+        $req = $Db->prepare($sql);
+        $req->bindValue(':extracted_text', $extractedText, $extractedText === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':status', $status);
+        $req->bindValue(':id', $uploadId, PDO::PARAM_INT);
+        $Db->execute($req);
+    }
+
+    /** @return list<int> upload ids still waiting on extraction */
+    public static function pendingIds(): array
+    {
+        $Db = Db::getConnection();
+        $req = $Db->prepare("SELECT id FROM custom_order_uploads WHERE extraction_status = 'pending'");
+        $Db->execute($req);
+        return array_map('intval', array_column($req->fetchAll(), 'id'));
     }
 
     #[Override]
@@ -139,6 +197,7 @@ final class OrderUploads extends AbstractRest
     {
         $sql = 'SELECT upload.id, upload.real_name, upload.long_name, upload.storage, upload.filesize, upload.created_at, upload.userid,
                 (upload.extracted_text IS NOT NULL) AS has_extracted_text,
+                upload.extraction_status,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname
             FROM custom_order_uploads AS upload
             INNER JOIN custom_orders AS o ON o.id = upload.order_id AND o.team = :team

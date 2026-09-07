@@ -188,6 +188,7 @@ final class Orders extends AbstractRest
                         "storage", upload.storage,
                         "filesize", upload.filesize,
                         "has_extracted_text", (upload.extracted_text IS NOT NULL),
+                        "extraction_status", upload.extraction_status,
                         "created_at", upload.created_at,
                         "userid", upload.userid,
                         "author_fullname", (SELECT CONCAT(u2.firstname, " ", u2.lastname) FROM users AS u2 WHERE u2.userid = upload.userid)

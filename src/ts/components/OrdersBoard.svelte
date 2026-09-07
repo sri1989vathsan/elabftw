@@ -70,6 +70,10 @@
     storage: number;
     filesize: number | null;
     has_extracted_text: boolean;
+    // PDF text extraction runs in the background after upload (see
+    // OrderUploads::extractOne()) -- 'none' for non-PDFs, 'pending' until
+    // the async job runs, then 'done'/'failed'
+    extraction_status: 'none' | 'pending' | 'done' | 'failed';
     created_at: string;
     userid: number;
     author_fullname: string;
@@ -1142,6 +1146,8 @@
                       <span class="orders-muted ml-1">{formatFilesize(upload.filesize)}</span>
                       {#if upload.has_extracted_text}
                         <i class="fas fa-magnifying-glass fa-fw ml-1 orders-muted" title={t('Content is searchable')} aria-label={t('Content is searchable')}></i>
+                      {:else if upload.extraction_status === 'pending'}
+                        <i class="fas fa-spinner fa-spin fa-fw ml-1 orders-muted" title={t('Extracting text for search…')} aria-label={t('Extracting text for search')}></i>
                       {/if}
                       {#if canDeleteUpload(upload)}
                         <button
