@@ -271,7 +271,10 @@ export function getTinymceBaseConfig(page: string): object {
     // able to grow/shrink a plain table's total width.
     table_column_resizing: 'resizetable',
     table_resize_bars: true,
-    object_resizing: 'table',
+    // 'table' alone was silently disabling image resize handles too --
+    // restrict to what actually needs the custom table behavior, and let
+    // images keep their normal resize handles.
+    object_resizing: 'table,img',
     browser_spellcheck: true,
     // location of the skin directory
     skin_url: isDark ? '/assets/tinymce_skins_dark' : '/assets/tinymce_skins',
