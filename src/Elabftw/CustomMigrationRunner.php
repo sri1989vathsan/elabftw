@@ -9,13 +9,22 @@ declare(strict_types=1);
 
 namespace Elabftw\Elabftw;
 
+use Elabftw\Enums\Storage;
 use Elabftw\Exceptions\ImproperActionException;
 use League\Flysystem\FilesystemOperator;
 use PDO;
 use Symfony\Component\Console\Output\OutputInterface;
 
+use function date;
 use function hash;
+use function json_encode;
+use function pathinfo;
+use function preg_match;
 use function sprintf;
+
+use const JSON_PRETTY_PRINT;
+use const JSON_THROW_ON_ERROR;
+use const PATHINFO_FILENAME;
 
 /**
  * Apply fork-owned migrations without consuming upstream schema numbers.
@@ -104,6 +113,7 @@ final class CustomMigrationRunner
         $pending = $this->getPending();
         $Sql = new Sql($this->filesystem, $this->output);
         foreach ($pending as $migration) {
+            $this->backupIfDestructive($migration);
             $Sql->execFile($migration);
             $checksum = hash('sha256', $this->filesystem->read($migration));
             $req = $this->Db->prepare(
@@ -114,6 +124,42 @@ final class CustomMigrationRunner
             $this->Db->execute($req);
         }
         return count($pending);
+    }
+
+    /**
+     * A migration is not run inside a transaction (its DDL statements would
+     * auto-commit each one regardless -- MySQL has no transactional DDL),
+     * so there is nothing to roll back from a problem only discovered
+     * after the fact. As a safety net, before running any migration whose
+     * SQL contains DROP COLUMN/TABLE, dump every custom_* table's current
+     * full contents -- cheap, and it's the data those statements could
+     * make unrecoverable. This is not a substitute for a real `docker exec
+     * <mysql container> mysqldump ...` backup taken before a major
+     * upgrade, just a narrower, automatic last resort.
+     */
+    private function backupIfDestructive(string $migration): void
+    {
+        $sql = $this->filesystem->read($migration);
+        if (preg_match('/DROP\s+(COLUMN|TABLE)/i', $sql) !== 1) {
+            return;
+        }
+        $tables = $this->Db->q("SHOW TABLES LIKE 'custom\\_%'")->fetchAll(PDO::FETCH_COLUMN);
+        $dump = array();
+        foreach ($tables as $table) {
+            $dump[$table] = $this->Db->q(sprintf('SELECT * FROM `%s`', $table))->fetchAll(PDO::FETCH_ASSOC);
+        }
+        $backupFs = Storage::EXPORTS->getStorage()->getFs();
+        $filename = sprintf(
+            'pre-migration-backup_%s_%s.json',
+            date('Y-m-d_His'),
+            pathinfo($migration, PATHINFO_FILENAME),
+        );
+        $backupFs->write($filename, json_encode($dump, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+        $this->output?->writeln(sprintf(
+            '<comment>%s drops a column/table -- backed up custom_* tables to exports/%s first.</comment>',
+            $migration,
+            $filename,
+        ));
     }
 
     private function assertOfficialSchemaIsCurrent(): void
