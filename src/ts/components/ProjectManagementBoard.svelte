@@ -96,9 +96,13 @@
   let newAssignees: TeamMember[] = [];
   let newDeadline = '';
   let submitting = false;
-  let quickAddColumnId: number | null = null;
-  let quickAddText = '';
-  let quickAdding = false;
+  // set while the detail dialog is open for a task that doesn't exist yet
+  // (opened via a column's "+" button) -- saveDetail() posts a new task
+  // straight into that column instead of patching an existing one, and the
+  // steps/links/comments sections (which need a real task id) stay hidden
+  // until then
+  let creatingNewTask = false;
+  let newTaskColumnId: number | null = null;
   let detailTask: Task | null = null;
   let detailEditing = false;
   let detailTitle = '';
@@ -336,33 +340,38 @@
     }
   }
 
-  function openQuickAdd(columnId: number): void {
-    quickAddColumnId = columnId;
-    quickAddText = '';
-  }
-
-  function cancelQuickAdd(): void {
-    quickAddColumnId = null;
-    quickAddText = '';
-  }
-
-  async function submitQuickAdd(columnId: number): Promise<void> {
-    const content = quickAddText.trim();
-    if (!content) return;
-    quickAdding = true;
-    try {
-      await ApiC.post(Model.Todolist, {
-        content,
-        project_id: activeProjectId === 'all' ? null : activeProjectId,
-        column_id: columnId,
-      });
-      quickAddText = '';
-      await load();
-    } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not create the task.');
-    } finally {
-      quickAdding = false;
-    }
+  function openNewTaskInColumn(columnId: number): void {
+    creatingNewTask = true;
+    newTaskColumnId = columnId;
+    detailTask = {
+      id: 0,
+      body: '',
+      notes: null,
+      description: null,
+      deadline: null,
+      completed_at: null,
+      in_progress: false,
+      priority: null,
+      column_id: columnId,
+      creation_time: '',
+      userid: core.currentUserid,
+      team: 0,
+      assigned_userid: null,
+      project_id: typeof activeProjectId === 'number' ? activeProjectId : null,
+      creator_fullname: '',
+      assigned_fullname: null,
+      assignees: [],
+      project_name: null,
+      entity_links: [],
+    };
+    detailEditing = true;
+    detailTitle = '';
+    detailDeadline = '';
+    detailAssignees = [];
+    detailPriority = '';
+    detailProjectId = detailTask.project_id;
+    detailDescription = '';
+    detailNotes = '';
   }
 
   async function loadColumns(): Promise<void> {
@@ -579,6 +588,8 @@
   function closeDetail(): void {
     detailTask = null;
     detailEditing = false;
+    creatingNewTask = false;
+    newTaskColumnId = null;
     detailComments = [];
     detailEntityLinks = [];
     detailSteps = [];
@@ -592,6 +603,10 @@
 
   function cancelEdit(): void {
     if (!detailTask) return;
+    if (creatingNewTask) {
+      closeDetail();
+      return;
+    }
     detailTitle = detailTask.body;
     detailDeadline = toDateInputValue(detailTask.deadline);
     detailAssignees = [...detailTask.assignees];
@@ -611,6 +626,19 @@
     }
     savingDetail = true;
     try {
+      if (creatingNewTask) {
+        await ApiC.post(Model.Todolist, {
+          content: title,
+          deadline: detailDeadline || null,
+          assignee_userids: detailAssignees.map(a => a.userid),
+          priority: detailPriority || null,
+          project_id: detailProjectId,
+          column_id: newTaskColumnId,
+        });
+        closeDetail();
+        await load();
+        return;
+      }
       await ApiC.patch(`${Model.Todolist}/${detailTask.id}`, {
         content: title,
         deadline: detailDeadline || null,
@@ -1142,27 +1170,10 @@
               on:dragstart={(event) => startColumnDrag(event, column.id)}
               on:dragend={finishColumnDrag}
             >{column.name} <span class="badge badge-secondary">{columnTasks.length}</span></h3>
-            <button type="button" class="btn-unstyled pm-column-add-btn ml-auto" title={`${t('Add a task to')} ${column.name}`} aria-label={`${t('Add a task to')} ${column.name}`} on:click={() => openQuickAdd(column.id)}>
+            <button type="button" class="btn-unstyled pm-column-add-btn ml-auto" title={`${t('Add a task to')} ${column.name}`} aria-label={`${t('Add a task to')} ${column.name}`} on:click={() => openNewTaskInColumn(column.id)}>
               <i class="fas fa-plus fa-fw" aria-hidden="true"></i>
             </button>
           </div>
-          {#if quickAddColumnId === column.id}
-            <div class="d-flex pm-quick-add">
-              <input
-                type="text"
-                class="form-control form-control-sm mr-1"
-                placeholder={t('New task title…')}
-                bind:value={quickAddText}
-                autofocus
-                on:keydown={(event) => {
-                  if (event.key === 'Enter') { event.preventDefault(); void submitQuickAdd(column.id); }
-                  if (event.key === 'Escape') { event.preventDefault(); cancelQuickAdd(); }
-                }}
-              />
-              <button type="button" class="btn btn-primary btn-sm mr-1" disabled={quickAdding || !quickAddText.trim()} on:click={() => submitQuickAdd(column.id)}>{t('Add')}</button>
-              <button type="button" class="btn btn-ghost btn-sm" on:click={cancelQuickAdd}>{t('Cancel')}</button>
-            </div>
-          {/if}
           {#if columnTasks.length === 0}
             <p class="pm-muted">{t('Nothing here.')}</p>
           {/if}
@@ -1315,9 +1326,11 @@
               </select>
             </div>
           </div>
+          {#if !creatingNewTask}
           <div class="small pm-muted mb-2">
             {t('Created by')} {detailTask.creator_fullname}
           </div>
+          {/if}
 
           <div class="pm-dialog-field">
             <div class="d-flex align-items-center justify-content-between">
@@ -1398,6 +1411,7 @@
           </div>
         {/if}
 
+        {#if !creatingNewTask}
         <div class="pm-dialog-field">
           <div class="d-flex align-items-center justify-content-between">
             <span class="pm-label mb-0">{t('Linked items')}</span>
@@ -1605,6 +1619,7 @@
             <button type="button" class="btn btn-secondary ml-2" disabled={postingComment || !newCommentText.trim()} on:click={postComment}>{t('Post')}</button>
           </div>
         </div>
+        {/if}
       </div>
       <div class="pm-dialog-footer">
         {#if detailEditing}
