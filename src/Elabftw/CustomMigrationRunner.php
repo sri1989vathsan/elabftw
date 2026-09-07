@@ -139,9 +139,16 @@ final class CustomMigrationRunner
      * after the fact. As a safety net, before running any migration whose
      * SQL contains DROP COLUMN/TABLE, dump every custom_* table's current
      * full contents -- cheap, and it's the data those statements could
-     * make unrecoverable. This is not a substitute for a real `docker exec
-     * <mysql container> mysqldump ...` backup taken before a major
-     * upgrade, just a narrower, automatic last resort.
+     * make unrecoverable.
+     *
+     * This is not a substitute for a real backup before a major upgrade --
+     * the mysqldump binary lives in the mysql container, not this one:
+     *   docker exec <mysql container> mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" \
+     *     --databases elabftw --result-file=/tmp/pre-upgrade-backup.sql
+     *     && docker cp <mysql container>:/tmp/pre-upgrade-backup.sql .
+     * Take that before running `bin/console custom:db:update` for the
+     * first time after upgrading to a version with a new destructive
+     * migration -- this method is just a narrower, automatic last resort.
      */
     private function backupIfDestructive(string $migration): void
     {
