@@ -310,13 +310,15 @@ function SpreadsheetEditor() {
 // marks a real data cell, as opposed to a header/filter-row <td>) -- this
 // only touches the DOM text, not the underlying formula/data that getData()
 // reads back out, so saving and reloading the sheet still works normally.
+const DISPLAY_DECIMAL_PLACES = 2;
+
 function roundNumbersInRoot(root) {
   for (const cell of root.querySelectorAll('td[data-x][data-y]')) {
     const text = cell.textContent;
     if (text === '' || text === null) continue;
     const num = Number(text);
     if (Number.isNaN(num)) continue;
-    const rounded = Math.round(num * 100) / 100;
+    const rounded = Number(num.toFixed(DISPLAY_DECIMAL_PLACES));
     if (rounded !== num) {
       cell.textContent = String(rounded);
     }
