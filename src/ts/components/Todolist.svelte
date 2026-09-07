@@ -15,6 +15,23 @@
   import { toRelative } from '../misc';
   import { applyMention, extractMentionQuery } from '../mentions';
 
+  // Closes the @mention dropdown on any click outside its own container --
+  // it otherwise stayed open until a mention was picked, even after
+  // clicking elsewhere on the page.
+  function clickOutside(node: HTMLElement, onOutsideClick: () => void): { destroy(): void } {
+    const handleClick = (event: MouseEvent): void => {
+      if (event.target instanceof Node && !node.contains(event.target)) {
+        onOutsideClick();
+      }
+    };
+    document.addEventListener('click', handleClick, true);
+    return {
+      destroy(): void {
+        document.removeEventListener('click', handleClick, true);
+      },
+    };
+  }
+
   type TeamMember = {
     userid: number;
     fullname: string;
@@ -1905,7 +1922,7 @@
               {/each}
             </ul>
           {/if}
-          <div class='d-flex pm-comment-form'>
+          <div class='d-flex pm-comment-form' use:clickOutside={() => { mentionCandidates = []; }}>
             <input
               type='text'
               class='form-control'
