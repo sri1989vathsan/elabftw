@@ -176,13 +176,26 @@ function SpreadsheetEditor() {
     }
   };
 
+  // Above this many cells, an inline table starts to make the rich-text
+  // editor noticeably slower (the whole document DOM has to be kept and
+  // reprocessed on every keystroke/scroll) -- this is a soft warning, not a
+  // hard limit, since a sparse sheet can still be reasonable well past it.
+  const LARGE_INLINE_TABLE_CELLS = 2000;
+
   // Copy the current workbook into TinyMCE as formula-enabled inline tables.
   // The parent owns the editor instance and performs the HTML conversion so
   // this standalone bundle stays independent from the main editor modules.
   const insertInMainText = () => {
+    const currentWorksheets = getWorksheets();
+    const totalCells = currentWorksheets.reduce((sum, worksheet) => (
+      sum + worksheet.data.reduce((rowSum, row) => rowSum + row.length, 0)
+    ), 0);
+    if (totalCells > LARGE_INLINE_TABLE_CELLS) {
+      notify.warning('This sheet is quite large -- inserting it into the document can make the editor slow. Consider keeping it as an attached spreadsheet instead, with only a smaller summary table inline.');
+    }
     window.parent.postMessage({
       type: 'jss-insert-main-text',
-      detail: { worksheets: getWorksheets() },
+      detail: { worksheets: currentWorksheets },
     }, window.location.origin);
   };
 
