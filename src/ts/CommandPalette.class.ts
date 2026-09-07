@@ -166,7 +166,7 @@ export default class CommandPalette {
       });
     }));
     document.querySelectorAll<HTMLAnchorElement>('#foldersPanel a[href]').forEach(link => {
-      const label = link.textContent?.trim();
+      const label = link.querySelector('.folder-name')?.textContent?.trim();
       if (!label || !label.toLowerCase().includes(query)) return;
       entries.push({ label, description: 'Folder', icon: 'fa-folder', keywords: '', action: () => link.click() });
     });

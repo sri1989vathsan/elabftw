@@ -659,7 +659,7 @@ export default class FavoriteFilters extends SidePanel {
   private folderResults(query: string): ResultGroup {
     const items: ResultGroup['items'] = [];
     document.querySelectorAll<HTMLAnchorElement>('#foldersPanel a[href]').forEach(link => {
-      const label = link.textContent?.trim();
+      const label = link.querySelector('.folder-name')?.textContent?.trim();
       if (!label || !label.toLowerCase().includes(query) || items.length >= GROUPED_SEARCH_PER_GROUP_LIMIT) return;
       const star = link.closest('.folder-node')?.querySelector<HTMLButtonElement>('.favorite-folder-star');
       // Strip data-action/data-id from the clone: it gets its own dedicated
