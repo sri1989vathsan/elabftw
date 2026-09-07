@@ -58,6 +58,8 @@ final class CustomMigrationRunner
         '032_todolist_steps.sql',
         '033_todolist_status_priority.sql',
         '034_todolist_columns.sql',
+        '035_notif_mentioned.sql',
+        '036_notif_task_assigned.sql',
     );
 
     private Db $Db;

@@ -898,6 +898,17 @@ on('edit-openiris-link', (el: HTMLElement) => {
   }).catch((error: Error) => notify.error(error.message));
 });
 
+on('toggle-all-notif-settings', (el: HTMLElement) => {
+  const checkbox = el as HTMLInputElement;
+  const wantEmail = checkbox.dataset.suffix === '_email';
+  document.querySelectorAll<HTMLInputElement>('#notificationsSettings ~ div input[data-target^="notif_"]').forEach(input => {
+    const isEmail = input.dataset.target?.endsWith('_email') ?? false;
+    if (isEmail !== wantEmail || input.checked === checkbox.checked) return;
+    input.checked = checkbox.checked;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+});
+
 on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
   // this action might exist on a link: prevent jump to top
   event.preventDefault();

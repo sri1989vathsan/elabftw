@@ -5,6 +5,7 @@
   import i18next from '../i18n';
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
+  import { applyMention, extractMentionQuery } from '../mentions';
 
   type Priority = 'low' | 'medium' | 'high';
 
@@ -90,7 +91,7 @@
   // 'assigned' shows tasks assigned to me (by myself or someone else);
   // 'created' shows tasks I set up, whether for myself or someone else;
   // 'all' is the union of both -- never a view of everyone else's work
-  let scope: 'assigned' | 'created' | 'all' = 'assigned';
+  let scope: 'assigned' | 'created' | 'all' = 'all';
   let newTitle = '';
   let newAssignees: TeamMember[] = [];
   let newDeadline = '';
@@ -108,6 +109,10 @@
   let detailComments: TaskComment[] = [];
   let loadingComments = false;
   let newCommentText = '';
+  // users @-mentioned in the comment currently being drafted, and the
+  // dropdown of matching team members while typing "@something"
+  let commentMentions: TeamMember[] = [];
+  let mentionCandidates: TeamMember[] = [];
   let postingComment = false;
   let descriptionEl: HTMLDivElement;
   let notesEl: HTMLDivElement;
@@ -122,10 +127,31 @@
   let addingStep = false;
   const COLUMN_TASK_LIMIT = 5;
   let expandedColumns: Record<number, boolean> = {};
+  let searchQuery = '';
+
+  function matchesSearch(task: Task, query: string): boolean {
+    if (query === '') return true;
+    const haystack = [
+      task.body,
+      task.notes ?? '',
+      task.description ?? '',
+      task.project_name ?? '',
+      task.creator_fullname,
+      task.assigned_fullname ?? '',
+      task.priority ?? '',
+      ...task.assignees.map(a => a.fullname),
+      ...task.entity_links.map(link => link.title ?? ''),
+    ]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(query);
+  }
 
   $: activeProject = typeof activeProjectId === 'number' ? (projects.find(p => p.id === activeProjectId) ?? null) : null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
-  $: visibleTasks = activeProjectId === 'all' ? tasks : tasks.filter(task => task.project_id === activeProjectId);
+  $: normalizedSearch = searchQuery.trim().toLowerCase();
+  $: visibleTasks = (activeProjectId === 'all' ? tasks : tasks.filter(task => task.project_id === activeProjectId))
+    .filter(task => matchesSearch(task, normalizedSearch));
   $: doneColumn = columns.find(c => c.kind === 'done') ?? null;
   $: todoColumn = columns.find(c => c.kind === 'todo') ?? null;
   $: doneCount = doneColumn ? visibleTasks.filter(task => task.column_id === doneColumn.id).length : 0;
@@ -705,14 +731,37 @@
     if (!body || !detailTask) return;
     postingComment = true;
     try {
-      await ApiC.post(`${Model.Todolist}/${detailTask.id}/${Model.Comment}`, { body });
+      const mentionedUserids = commentMentions
+        .filter(m => body.includes(`@${m.fullname}`))
+        .map(m => m.userid);
+      await ApiC.post(`${Model.Todolist}/${detailTask.id}/${Model.Comment}`, { body, mentioned_userids: mentionedUserids });
       newCommentText = '';
+      commentMentions = [];
       await loadComments(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not post the comment.');
     } finally {
       postingComment = false;
     }
+  }
+
+  function onCommentInput(): void {
+    const query = extractMentionQuery(newCommentText);
+    if (query === null) {
+      mentionCandidates = [];
+      return;
+    }
+    const lower = query.toLowerCase();
+    mentionCandidates = teamMembers.filter(m => m.fullname.toLowerCase().includes(lower)).slice(0, 5);
+  }
+
+  function pickMention(member: TeamMember): void {
+    const query = extractMentionQuery(newCommentText) ?? '';
+    newCommentText = applyMention(newCommentText, query, member.fullname);
+    if (!commentMentions.some(m => m.userid === member.userid)) {
+      commentMentions = [...commentMentions, member];
+    }
+    mentionCandidates = [];
   }
 
   async function deleteComment(comment: TaskComment): Promise<void> {
@@ -853,6 +902,17 @@
     </button>
   </div>
 
+  <div class="pm-search mt-2">
+    <input
+      class="form-control form-control-sm"
+      type="search"
+      placeholder={t('Search tasks…')}
+      title={t('Searches title, notes, description, project, priority, people and linked items')}
+      bind:value={searchQuery}
+    />
+    <span class="pm-muted small">{t('Searches: title, notes, description, project, priority, people, links')}</span>
+  </div>
+
   {#if activeProject}
     <div class="pm-project-description">
       <span class="pm-label mb-0">{t('Description')}</span>
@@ -917,14 +977,14 @@
 
   <div class="d-flex align-items-center my-3">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Task view')}>
+      <button type="button" class={scope === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('all')}>
+        <i class="fas fa-list fa-fw mr-1" aria-hidden="true"></i>{t('All')}
+      </button>
       <button type="button" class={scope === 'assigned' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('assigned')}>
         <i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Assigned to me')}
       </button>
       <button type="button" class={scope === 'created' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('created')}>
         <i class="fas fa-pen-to-square fa-fw mr-1" aria-hidden="true"></i>{t('Created by me')}
-      </button>
-      <button type="button" class={scope === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('all')}>
-        <i class="fas fa-list fa-fw mr-1" aria-hidden="true"></i>{t('All')}
       </button>
     </div>
   </div>
@@ -1316,10 +1376,22 @@
             <input
               type="text"
               class="form-control"
-              placeholder={t('Add a comment…')}
+              placeholder={t('Add a comment… (type @ to mention someone)')}
               bind:value={newCommentText}
+              on:input={onCommentInput}
               on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void postComment(); } }}
             />
+            {#if mentionCandidates.length > 0}
+              <ul class="pm-mention-results">
+                {#each mentionCandidates as member (member.userid)}
+                  <li>
+                    <button type="button" class="btn-unstyled pm-mention-result" on:click={() => pickMention(member)}>
+                      {member.fullname}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
             <button type="button" class="btn btn-secondary ml-2" disabled={postingComment || !newCommentText.trim()} on:click={postComment}>{t('Post')}</button>
           </div>
         </div>

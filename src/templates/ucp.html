@@ -536,6 +536,26 @@
 <div data-tabcontent='4' hidden>
   <h2 class='p-2 pl-3 section-title mb-3' id='notificationsSettings'>{{ 'Notifications settings'|trans }}</h2>
   <div class='pl-3'>
+    <div class='d-flex justify-content-between'>
+      <label class='col-form-label font-weight-bold'>{{ 'All notifications'|trans }}</label>
+      <div class='d-flex flex-column align-items-end'>
+        <div class='d-flex align-self-center'>
+          <label class='col-form-label px-2' for='notifAllWeb'>{{ 'Web'|trans }}</label>
+          <label class='switch ucp-align'>
+            <input type='checkbox' id='notifAllWeb' data-action='toggle-all-notif-settings' data-suffix=''>
+            <span class='slider'></span>
+          </label>
+        </div>
+        <div class='d-flex align-self-center'>
+          <label class='col-form-label px-2' for='notifAllEmail'>{{ 'Email'|trans }}</label>
+          <label class='switch ucp-align'>
+            <input type='checkbox' id='notifAllEmail' data-action='toggle-all-notif-settings' data-suffix='_email'>
+            <span class='slider'></span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <hr>
     {% for notif in notificationsSettings %}
       <div class='d-flex justify-content-between'>
         <label class='col-form-label'>{{ notif.designation }}</label>
