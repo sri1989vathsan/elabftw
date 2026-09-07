@@ -301,17 +301,30 @@ function SpreadsheetEditor() {
     </>
   );
 }
-// Cap how many decimals a numeric cell shows -- without this, formula
-// results carry raw floating-point noise (e.g. 0.1*6 renders as
-// 0.6000000000000001 instead of 0.6). The mask only affects numeric-looking
-// values; text cells in the same column still display exactly as typed.
-function defaultColumns(width) {
-  return Array.from({ length: width }, () => ({ type: 'numeric', mask: '#.##', decimal: '.' }));
+// Cap how many decimals a numeric cell shows. jspreadsheet-ce's built-in
+// column mask/format system explicitly skips formula cells (only plain
+// typed values get formatted), so a formula result like 0.1*6 renders with
+// raw floating-point noise (0.6000000000000001) with no column config able
+// to fix it. Round it ourselves, on every value change (typed or
+// recalculated), and only touch the rendered cell text -- the underlying
+// data/formula that getData() reads back out is untouched, so saving and
+// reloading the sheet still works normally.
+function roundDisplayedNumbers(worksheet, records) {
+  for (const record of records) {
+    const num = Number(record.value);
+    if (record.value === '' || record.value === null || Number.isNaN(num)) continue;
+    const rounded = Math.round(num * 100) / 100;
+    if (rounded === num) continue;
+    const cell = worksheet.records?.[record.y]?.[record.x];
+    if (cell?.element) {
+      cell.element.innerHTML = String(rounded);
+    }
+  }
 }
 
 function SpreadsheetInner({ worksheets, buildToolbar, onSpreadsheetChange, onPasteStyles, spreadsheetRef }) {
   return (
-    <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange} onpaste={onPasteStyles}>
+    <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange} onpaste={onPasteStyles} onafterchanges={roundDisplayedNumbers}>
       {worksheets.map((worksheet, index) => {
         const width = Math.max(12, worksheet.data[0]?.length || 0);
         return (
@@ -320,7 +333,6 @@ function SpreadsheetInner({ worksheets, buildToolbar, onSpreadsheetChange, onPas
             data={worksheet.data}
             worksheetName={worksheet.name}
             minDimensions={[width, Math.max(12, worksheet.data.length)]}
-            columns={defaultColumns(width)}
           />
         );
       })}
