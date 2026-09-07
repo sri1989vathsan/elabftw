@@ -305,43 +305,38 @@ function SpreadsheetEditor() {
 // column mask/format system explicitly skips formula cells (only plain
 // typed values get formatted), so a formula result like 0.1*6 renders with
 // raw floating-point noise (0.6000000000000001) with no column config able
-// to fix it. Round it ourselves by scanning the rendered cell text directly
-// -- this only touches the DOM, not the underlying formula/data that
-// getData() reads back out, so saving and reloading the sheet still works
-// normally. Called after every live edit (onafterchanges) and once right
-// after a worksheet loads, since a formula that was already computed when
-// the sheet was saved never fires a "change" event on reload.
-function roundWorksheetNumbers(worksheet) {
-  if (!worksheet?.records) return;
-  for (const row of worksheet.records) {
-    for (const cell of row) {
-      if (!cell?.element) continue;
-      const text = cell.element.textContent;
-      if (text === '' || text === null) continue;
-      const num = Number(text);
-      if (Number.isNaN(num)) continue;
-      const rounded = Math.round(num * 100) / 100;
-      if (rounded !== num) {
-        cell.element.innerHTML = String(rounded);
-      }
+// to fix it. Round it ourselves by scanning the rendered <td> cells directly
+// via their data-x/data-y attributes (how jspreadsheet-ce's own createCell()
+// marks a real data cell, as opposed to a header/filter-row <td>) -- this
+// only touches the DOM text, not the underlying formula/data that getData()
+// reads back out, so saving and reloading the sheet still works normally.
+function roundNumbersInRoot(root) {
+  for (const cell of root.querySelectorAll('td[data-x][data-y]')) {
+    const text = cell.textContent;
+    if (text === '' || text === null) continue;
+    const num = Number(text);
+    if (Number.isNaN(num)) continue;
+    const rounded = Math.round(num * 100) / 100;
+    if (rounded !== num) {
+      cell.textContent = String(rounded);
     }
   }
 }
 
 function SpreadsheetInner({ worksheets, buildToolbar, onSpreadsheetChange, onPasteStyles, spreadsheetRef }) {
-  // Rely on the DOM itself rather than any specific jspreadsheet-ce event
-  // name/signature (onchange, onafterchanges, ...) actually firing the way
-  // its docs suggest -- a MutationObserver catches every cell update
-  // (typed, pasted, or recalculated) no matter which internal path produced
-  // it. Our own rounding writes also trigger it once more, but since the
-  // value is already rounded that rescan is a no-op, so it settles quickly.
+  // Rely on the rendered DOM directly -- jspreadsheet-ce's own createCell()
+  // marks a real data cell with both data-x and data-y, regardless of which
+  // internal event path (typed, pasted, or recalculated) produced it. A
+  // MutationObserver catches every one of those. Our own rounding writes
+  // also trigger it once more, but since the value is already rounded that
+  // rescan is a no-op, so it settles quickly.
   useEffect(() => {
     const root = document.getElementById('spreadsheetEditorRoot');
     if (!root) return undefined;
     let scheduled = false;
     const rescan = () => {
       scheduled = false;
-      (spreadsheetRef.current || []).forEach(roundWorksheetNumbers);
+      roundNumbersInRoot(root);
     };
     const observer = new MutationObserver(() => {
       if (scheduled) return;
@@ -351,7 +346,7 @@ function SpreadsheetInner({ worksheets, buildToolbar, onSpreadsheetChange, onPas
     observer.observe(root, { childList: true, subtree: true, characterData: true });
     rescan();
     return () => observer.disconnect();
-  }, [worksheets, spreadsheetRef]);
+  }, [worksheets]);
 
   return (
     <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange} onpaste={onPasteStyles}>
