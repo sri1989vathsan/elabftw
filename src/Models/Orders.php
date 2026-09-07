@@ -87,9 +87,41 @@ final class Orders extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
+        $queryParams ??= $this->getQueryParams();
+        $query = $queryParams->getQuery();
+
         // default GROUP_CONCAT cap (1024 bytes) would silently truncate
         // extracted PDF text well before it's useful for search
         $this->Db->q('SET SESSION group_concat_max_len = 1000000');
+
+        $conditions = array('o.team = :team');
+        $bind = array(':team' => array($this->Users->team, PDO::PARAM_INT));
+
+        $status = $query->getString('status');
+        if ($status === 'archived') {
+            $conditions[] = 'o.archived = 1';
+        } elseif (in_array($status, self::STATUSES, true)) {
+            $conditions[] = 'o.archived = 0';
+            $conditions[] = 'o.status = :status';
+            $bind[':status'] = array($status, PDO::PARAM_STR);
+        }
+
+        // admin-only "filter by a specific person" -- enforced here, not
+        // just hidden in the UI, so a non-admin can't just add the param
+        if ($this->Users->isAdmin) {
+            $userid = $query->getInt('userid');
+            if ($userid > 0) {
+                $conditions[] = 'o.userid = :userid';
+                $bind[':userid'] = array($userid, PDO::PARAM_INT);
+            }
+        }
+
+        $limit = $query->getInt('limit') ?: 0;
+        $offset = max(0, $query->getInt('offset'));
+        // ask for one extra row so the frontend can tell whether there's a
+        // next page without a separate COUNT query
+        $limitSql = $limit > 0 ? sprintf(' LIMIT %d OFFSET %d', $limit + 1, $offset) : '';
+
         $sql = 'SELECT o.id, o.title, o.notes, o.status, o.archived, o.created_at, o.userid,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname,
                 COALESCE((
@@ -110,16 +142,34 @@ final class Orders extends AbstractRest
                     WHERE comment.order_id = o.id
                 ), "") AS comments_text,
                 COALESCE((
-                    SELECT GROUP_CONCAT(CONCAT(upload.real_name, " ", COALESCE(upload.extracted_text, "")) SEPARATOR " ")
+                    SELECT JSON_ARRAYAGG(JSON_OBJECT(
+                        "id", upload.id,
+                        "real_name", upload.real_name,
+                        "long_name", upload.long_name,
+                        "storage", upload.storage,
+                        "filesize", upload.filesize,
+                        "has_extracted_text", (upload.extracted_text IS NOT NULL),
+                        "created_at", upload.created_at,
+                        "userid", upload.userid,
+                        "author_fullname", (SELECT CONCAT(u2.firstname, " ", u2.lastname) FROM users AS u2 WHERE u2.userid = upload.userid)
+                    ))
                     FROM custom_order_uploads AS upload
                     WHERE upload.order_id = o.id
+                ), JSON_ARRAY()) AS uploads,
+                COALESCE((
+                    SELECT GROUP_CONCAT(CONCAT(upload2.real_name, " ", COALESCE(upload2.extracted_text, "")) SEPARATOR " ")
+                    FROM custom_order_uploads AS upload2
+                    WHERE upload2.order_id = o.id
                 ), "") AS attachments_text
             FROM custom_orders AS o
             LEFT JOIN users AS author ON author.userid = o.userid
-            WHERE o.team = :team
-            ORDER BY o.created_at DESC';
+            WHERE ' . implode(' AND ', $conditions) . "
+            ORDER BY o.created_at DESC{$limitSql}";
         $req = $this->Db->prepare($sql);
-        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        foreach ($bind as $key => $valueAndType) {
+            [$value, $type] = $valueAndType;
+            $req->bindValue($key, $value, $type);
+        }
         $this->Db->execute($req);
 
         $result = $req->fetchAll();
@@ -128,7 +178,18 @@ final class Orders extends AbstractRest
             $order['userid'] = (int) $order['userid'];
             $order['archived'] = (bool) $order['archived'];
             $order['items'] = json_decode((string) $order['items'], true, 512, JSON_THROW_ON_ERROR);
+            $uploads = json_decode((string) $order['uploads'], true, 512, JSON_THROW_ON_ERROR);
+            foreach ($uploads as &$upload) {
+                $upload['id'] = (int) $upload['id'];
+                $upload['storage'] = (int) $upload['storage'];
+                $upload['userid'] = (int) $upload['userid'];
+                $upload['filesize'] = $upload['filesize'] !== null ? (int) $upload['filesize'] : null;
+                $upload['has_extracted_text'] = (bool) $upload['has_extracted_text'];
+            }
+            unset($upload);
+            $order['uploads'] = $uploads;
         }
+        unset($order);
 
         return $result;
     }

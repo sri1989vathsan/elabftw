@@ -21,6 +21,7 @@ use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
 
+use function array_key_exists;
 use function array_map;
 use function is_array;
 use function mb_strlen;
@@ -128,12 +129,30 @@ final class TodolistComments extends AbstractRest
 
     private function isTeamMember(int $userid): bool
     {
-        $sql = 'SELECT 1 FROM users2teams WHERE userid = :userid AND team = :team';
+        $sql = 'SELECT 1 FROM users2teams WHERE users_id = :userid AND teams_id = :team';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':userid', $userid, PDO::PARAM_INT);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
         return $req->fetch() !== false;
+    }
+
+    #[Override]
+    public function patch(Action $action, array $params): array
+    {
+        $comment = $this->readOne();
+        if ($comment['userid'] !== $this->Users->userid && !$this->Users->isAdmin) {
+            throw new ImproperActionException('Only the author or a team admin can edit this comment.');
+        }
+        if (array_key_exists('body', $params)) {
+            $sql = 'UPDATE custom_todolist_comments SET body = :body WHERE id = :id AND task_id = :task_id';
+            $req = $this->Db->prepare($sql);
+            $req->bindValue(':body', $this->getBody($params['body']));
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $req->bindValue(':task_id', $this->Task->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+        }
+        return $this->readOne();
     }
 
     #[Override]

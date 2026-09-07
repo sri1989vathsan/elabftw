@@ -128,6 +128,7 @@
   const COLUMN_TASK_LIMIT = 5;
   let expandedColumns: Record<number, boolean> = {};
   let searchQuery = '';
+  let priorityFilter: Priority | 'all' = 'all';
 
   function matchesSearch(task: Task, query: string): boolean {
     if (query === '') return true;
@@ -151,6 +152,7 @@
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
   $: normalizedSearch = searchQuery.trim().toLowerCase();
   $: visibleTasks = (activeProjectId === 'all' ? tasks : tasks.filter(task => task.project_id === activeProjectId))
+    .filter(task => priorityFilter === 'all' || task.priority === priorityFilter)
     .filter(task => matchesSearch(task, normalizedSearch));
   $: doneColumn = columns.find(c => c.kind === 'done') ?? null;
   $: todoColumn = columns.find(c => c.kind === 'todo') ?? null;
@@ -774,6 +776,31 @@
     }
   }
 
+  let editingCommentId: number | null = null;
+  let editCommentDraft = '';
+
+  function startEditComment(comment: TaskComment): void {
+    editingCommentId = comment.id;
+    editCommentDraft = comment.body;
+  }
+
+  function cancelEditComment(): void {
+    editingCommentId = null;
+  }
+
+  async function saveEditComment(comment: TaskComment): Promise<void> {
+    if (!detailTask) return;
+    const text = editCommentDraft.trim();
+    if (!text) return;
+    try {
+      await ApiC.patch(`${Model.Todolist}/${detailTask.id}/${Model.Comment}/${comment.id}`, { body: text });
+      editingCommentId = null;
+      await loadComments(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not save this comment.');
+    }
+  }
+
   // A lightweight rich-text toolbar (contenteditable + execCommand) rather
   // than wiring the full TinyMCE editor into a Svelte-managed dialog -- gives
   // headings/bullets/bold without the added integration risk.
@@ -902,15 +929,23 @@
     </button>
   </div>
 
-  <div class="pm-search mt-2">
-    <input
-      class="form-control form-control-sm"
-      type="search"
-      placeholder={t('Search tasks…')}
-      title={t('Searches title, notes, description, project, priority, people and linked items')}
-      bind:value={searchQuery}
-    />
-    <span class="pm-muted small">{t('Searches: title, notes, description, project, priority, people, links')}</span>
+  <div class="pm-search mt-2 d-flex align-items-start flex-wrap" style="gap:0.5rem">
+    <div class="flex-grow-1">
+      <input
+        class="form-control form-control-sm"
+        type="search"
+        placeholder={t('Search tasks…')}
+        title={t('Searches title, notes, description, project, priority, people and linked items')}
+        bind:value={searchQuery}
+      />
+      <span class="pm-muted small">{t('Searches: title, notes, description, project, priority, people, links')}</span>
+    </div>
+    <select class="form-control form-control-sm pm-priority-filter" bind:value={priorityFilter} aria-label={t('Filter by priority')}>
+      <option value="all">{t('All priorities')}</option>
+      <option value="low">{priorityLabel('low')}</option>
+      <option value="medium">{priorityLabel('medium')}</option>
+      <option value="high">{priorityLabel('high')}</option>
+    </select>
   </div>
 
   {#if activeProject}
@@ -1361,13 +1396,30 @@
                   <div class="pm-comment-meta">
                     <strong>{comment.author_fullname}</strong>
                     <span class="pm-muted">{formatCommentTime(comment.created_at)}</span>
-                    {#if comment.userid === core.currentUserid}
+                    {#if core.isAdmin || comment.userid === core.currentUserid}
+                      <button type="button" class="btn-unstyled pm-comment-delete" title={t('Edit')} aria-label={t('Edit')} on:click={() => startEditComment(comment)}>
+                        <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+                      </button>
                       <button type="button" class="btn-unstyled pm-comment-delete" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteComment(comment)}>
                         <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
                       </button>
                     {/if}
                   </div>
-                  <div class="pm-comment-body">{comment.body}</div>
+                  {#if editingCommentId === comment.id}
+                    <div class="d-flex">
+                      <input
+                        type="text"
+                        class="form-control form-control-sm mr-2"
+                        maxlength="5000"
+                        bind:value={editCommentDraft}
+                        on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void saveEditComment(comment); } }}
+                      />
+                      <button type="button" class="btn btn-primary btn-sm mr-1" disabled={!editCommentDraft.trim()} on:click={() => saveEditComment(comment)}>{t('Save')}</button>
+                      <button type="button" class="btn btn-ghost btn-sm" on:click={cancelEditComment}>{t('Cancel')}</button>
+                    </div>
+                  {:else}
+                    <div class="pm-comment-body">{comment.body}</div>
+                  {/if}
                 </li>
               {/each}
             </ul>

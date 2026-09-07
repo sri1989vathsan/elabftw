@@ -29,6 +29,7 @@
     userid: number;
     author_fullname: string;
     items: LinkedItem[];
+    uploads: OrderUpload[];
     // searchable blobs from the backend -- linked item titles, all comment
     // bodies and all attachment filenames concatenated, so search can match
     // them without a separate request per order
@@ -98,8 +99,16 @@
   let loading = true;
   let statusFilter: OrderStatus | 'archived' = 'requested';
   let ownerFilter: 'mine' | 'all' = 'all';
+  let selectedUserId: number | null = null;
   let searchQuery = '';
   let selectedIds = new Set<number>();
+
+  // pagination: the server is asked for pageSize+1 rows so hasNextPage can
+  // be known without a separate COUNT query
+  const PAGE_SIZES = [10, 25, 50, 100];
+  let pageSize = 25;
+  let pageOffset = 0;
+  let hasNextPage = false;
 
   let newTitle = '';
   let newNotes = '';
@@ -165,25 +174,34 @@
     return haystack.includes(query);
   }
 
+  // status/owner filtering and pagination now happen server-side (so the
+  // page stays fast regardless of how many orders exist); search still
+  // runs client-side, so it only matches within the currently loaded page
   $: normalizedSearch = searchQuery.trim().toLowerCase();
-  $: visibleItems = items
-    .filter(item => statusFilter === 'archived' ? item.archived : (!item.archived && item.status === statusFilter))
-    .filter(item => ownerFilter === 'all' || item.userid === core.currentUserid)
-    .filter(item => matchesSearch(item, normalizedSearch));
-  $: mineCount = items.filter(item => item.userid === core.currentUserid && (statusFilter === 'archived' ? item.archived : (!item.archived && item.status === statusFilter))).length;
-  $: requestedCount = items.filter(item => !item.archived && item.status === 'requested').length;
-  $: orderedCount = items.filter(item => !item.archived && item.status === 'ordered').length;
-  $: receivedCount = items.filter(item => !item.archived && item.status === 'received').length;
-  $: cancelledCount = items.filter(item => !item.archived && item.status === 'cancelled').length;
-  $: archivedCount = items.filter(item => item.archived).length;
+  $: visibleItems = items.filter(item => matchesSearch(item, normalizedSearch));
+
+  function currentEffectiveUserId(): number | null {
+    return selectedUserId ?? (ownerFilter === 'mine' ? core.currentUserid : null);
+  }
 
   async function load(): Promise<void> {
     loading = true;
     try {
-      items = await ApiC.getJson(Model.Order) as OrderItem[];
-      // attachments are always visible on the card, so load them all up
-      // front instead of lazily on the (comments-only) toggle
-      await Promise.all(items.map(item => loadUploads(item.id)));
+      const params: Record<string, string> = {
+        status: statusFilter,
+        limit: String(pageSize),
+        offset: String(pageOffset),
+      };
+      const effectiveUserId = currentEffectiveUserId();
+      if (effectiveUserId !== null) {
+        params.userid = String(effectiveUserId);
+      }
+      const fetched = await ApiC.getJson(Model.Order, params) as OrderItem[];
+      hasNextPage = fetched.length > pageSize;
+      items = fetched.slice(0, pageSize);
+      // attachments now come bundled with each order, so this is a single
+      // request instead of one per order
+      uploadsByItem = Object.fromEntries(items.map(item => [item.id, item.uploads]));
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load the orders board.');
     } finally {
@@ -437,6 +455,35 @@
   function selectTab(next: OrderStatus | 'archived'): void {
     statusFilter = next;
     selectedIds = new Set();
+    pageOffset = 0;
+    void load();
+  }
+
+  function setOwnerFilter(next: 'mine' | 'all'): void {
+    ownerFilter = next;
+    selectedUserId = null;
+    pageOffset = 0;
+    void load();
+  }
+
+  function onSelectedUserChange(): void {
+    pageOffset = 0;
+    void load();
+  }
+
+  function onPageSizeChange(): void {
+    pageOffset = 0;
+    void load();
+  }
+
+  function goToPrevPage(): void {
+    pageOffset = Math.max(0, pageOffset - pageSize);
+    void load();
+  }
+
+  function goToNextPage(): void {
+    pageOffset += pageSize;
+    void load();
   }
 
   function toggleSelect(id: number): void {
@@ -524,6 +571,30 @@
 
   function canDeleteComment(comment: OrderComment): boolean {
     return core.isAdmin || comment.userid === core.currentUserid;
+  }
+
+  let editingCommentId: number | null = null;
+  let editCommentDraft = '';
+
+  function startEditComment(comment: OrderComment): void {
+    editingCommentId = comment.id;
+    editCommentDraft = comment.body;
+  }
+
+  function cancelEditComment(): void {
+    editingCommentId = null;
+  }
+
+  async function saveEditComment(item: OrderItem, comment: OrderComment): Promise<void> {
+    const text = editCommentDraft.trim();
+    if (!text) return;
+    try {
+      await ApiC.patch(`${Model.Order}/${item.id}/${Model.Comment}/${comment.id}`, { body: text });
+      editingCommentId = null;
+      await loadComments(item.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not save this comment.');
+    }
   }
 
   async function deleteComment(item: OrderItem, comment: OrderComment): Promise<void> {
@@ -784,29 +855,37 @@
   <div class="d-flex flex-wrap align-items-center my-3" style="gap:0.5rem">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by status')}>
       <button type="button" class={statusFilter === 'requested' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('requested')}>
-        {t('Requested')}{#if requestedCount > 0}<span class="badge badge-light ml-1">{requestedCount}</span>{/if}
+        {t('Requested')}
       </button>
       <button type="button" class={statusFilter === 'ordered' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('ordered')}>
-        {t('Ordered')}{#if orderedCount > 0}<span class="badge badge-light ml-1">{orderedCount}</span>{/if}
+        {t('Ordered')}
       </button>
       <button type="button" class={statusFilter === 'received' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('received')}>
-        {t('Received')}{#if receivedCount > 0}<span class="badge badge-light ml-1">{receivedCount}</span>{/if}
+        {t('Received')}
       </button>
       <button type="button" class={statusFilter === 'cancelled' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('cancelled')}>
-        {t('Cancelled')}{#if cancelledCount > 0}<span class="badge badge-light ml-1">{cancelledCount}</span>{/if}
+        {t('Cancelled')}
       </button>
       <button type="button" class={statusFilter === 'archived' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('archived')}>
-        <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archived')}{#if archivedCount > 0}<span class="badge badge-light ml-1">{archivedCount}</span>{/if}
+        <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archived')}
       </button>
     </div>
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by owner')}>
-      <button type="button" class={ownerFilter === 'mine' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => ownerFilter = 'mine'}>
-        <i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('My orders')}{#if mineCount > 0}<span class="badge badge-light ml-1">{mineCount}</span>{/if}
+      <button type="button" class={ownerFilter === 'mine' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => setOwnerFilter('mine')}>
+        <i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('My orders')}
       </button>
-      <button type="button" class={ownerFilter === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => ownerFilter = 'all'}>
+      <button type="button" class={ownerFilter === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => setOwnerFilter('all')}>
         <i class="fas fa-users fa-fw mr-1" aria-hidden="true"></i>{t('Everyone')}
       </button>
     </div>
+    {#if core.isAdmin}
+      <select class="form-control form-control-sm orders-user-filter" style="width:auto" bind:value={selectedUserId} on:change={onSelectedUserChange} title={t('Filter by user')}>
+        <option value={null}>{t('All users')}</option>
+        {#each teamMembers as member (member.userid)}
+          <option value={member.userid}>{member.fullname}</option>
+        {/each}
+      </select>
+    {/if}
     <div class="orders-search flex-grow-1">
       <input
         class="form-control form-control-sm"
@@ -816,6 +895,19 @@
         bind:value={searchQuery}
       />
       <span class="orders-muted small">{t('Searches: title, notes, resource, requester, comments, attachments')}</span>
+    </div>
+    <select class="form-control form-control-sm" style="width:auto" bind:value={pageSize} on:change={onPageSizeChange} title={t('Items per page')}>
+      {#each PAGE_SIZES as size (size)}
+        <option value={size}>{size} {t('/ page')}</option>
+      {/each}
+    </select>
+    <div class="btn-group btn-group-sm" role="group" aria-label={t('Pagination')}>
+      <button type="button" class="btn btn-sm btn-ghost" disabled={pageOffset === 0} on:click={goToPrevPage}>
+        <i class="fas fa-chevron-left fa-fw" aria-hidden="true"></i>{t('Previous')}
+      </button>
+      <button type="button" class="btn btn-sm btn-ghost" disabled={!hasNextPage} on:click={goToNextPage}>
+        {t('Next')}<i class="fas fa-chevron-right fa-fw" aria-hidden="true"></i>
+      </button>
     </div>
   </div>
 
@@ -1083,18 +1175,43 @@
                             <strong>{comment.author_fullname}</strong>
                             <span class="orders-muted">{formatDate(comment.created_at)}</span>
                             {#if canDeleteComment(comment)}
-                              <button
-                                type="button"
-                                class="btn btn-danger-ghost btn-sm orders-icon-button ml-auto"
-                                title={t('Delete comment')}
-                                aria-label={t('Delete comment')}
-                                on:click={() => deleteComment(item, comment)}
-                              >
-                                <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
-                              </button>
+                              <div class="ml-auto d-flex">
+                                <button
+                                  type="button"
+                                  class="btn btn-ghost btn-sm orders-icon-button"
+                                  title={t('Edit comment')}
+                                  aria-label={t('Edit comment')}
+                                  on:click={() => startEditComment(comment)}
+                                >
+                                  <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+                                </button>
+                                <button
+                                  type="button"
+                                  class="btn btn-danger-ghost btn-sm orders-icon-button"
+                                  title={t('Delete comment')}
+                                  aria-label={t('Delete comment')}
+                                  on:click={() => deleteComment(item, comment)}
+                                >
+                                  <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                                </button>
+                              </div>
                             {/if}
                           </div>
-                          <p class="mb-0 orders-comment-body">{comment.body}</p>
+                          {#if editingCommentId === comment.id}
+                            <div class="d-flex">
+                              <input
+                                type="text"
+                                class="form-control form-control-sm mr-2"
+                                maxlength="5000"
+                                bind:value={editCommentDraft}
+                                on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void saveEditComment(item, comment); } }}
+                              />
+                              <button type="button" class="btn btn-primary btn-sm mr-1" disabled={!editCommentDraft.trim()} on:click={() => saveEditComment(item, comment)}>{t('Save')}</button>
+                              <button type="button" class="btn btn-ghost btn-sm" on:click={cancelEditComment}>{t('Cancel')}</button>
+                            </div>
+                          {:else}
+                            <p class="mb-0 orders-comment-body">{comment.body}</p>
+                          {/if}
                         </li>
                       {/each}
                     </ul>
