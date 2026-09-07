@@ -880,6 +880,31 @@
     }
   }
 
+  let editingCommentId: number | null = null;
+  let editCommentDraft = '';
+
+  function startEditComment(comment: TaskComment): void {
+    editingCommentId = comment.id;
+    editCommentDraft = comment.body;
+  }
+
+  function cancelEditComment(): void {
+    editingCommentId = null;
+  }
+
+  async function saveEditComment(comment: TaskComment): Promise<void> {
+    if (!detailEntry) return;
+    const text = editCommentDraft.trim();
+    if (!text) return;
+    try {
+      await ApiC.patch(`${Model.Todolist}/${detailEntry.id}/${Model.Comment}/${comment.id}`, { body: text });
+      editingCommentId = null;
+      await loadComments(detailEntry.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not save this comment.');
+    }
+  }
+
   async function create(): Promise<void> {
     const content = draft.trim();
     if (!content) return;
@@ -1753,13 +1778,30 @@
                   <div class='pm-comment-meta'>
                     <strong>{comment.author_fullname}</strong>
                     <span class='pm-muted'>{formatCommentTime(comment.created_at)}</span>
-                    {#if comment.userid === core.currentUserid}
+                    {#if core.isAdmin || comment.userid === core.currentUserid}
+                      <button type='button' class='btn-unstyled pm-comment-delete' title={t('Edit')} aria-label={t('Edit')} on:click={() => startEditComment(comment)}>
+                        <i class='fas fa-pen fa-fw' aria-hidden='true'></i>
+                      </button>
                       <button type='button' class='btn-unstyled pm-comment-delete' title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteComment(comment)}>
                         <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
                       </button>
                     {/if}
                   </div>
-                  <div class='pm-comment-body'>{comment.body}</div>
+                  {#if editingCommentId === comment.id}
+                    <div class='d-flex'>
+                      <input
+                        type='text'
+                        class='form-control form-control-sm mr-2'
+                        maxlength='5000'
+                        bind:value={editCommentDraft}
+                        on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void saveEditComment(comment); } }}
+                      />
+                      <button type='button' class='btn btn-primary btn-sm mr-1' disabled={!editCommentDraft.trim()} on:click={() => saveEditComment(comment)}>{t('Save')}</button>
+                      <button type='button' class='btn btn-ghost btn-sm' on:click={cancelEditComment}>{t('Cancel')}</button>
+                    </div>
+                  {:else}
+                    <div class='pm-comment-body'>{comment.body}</div>
+                  {/if}
                 </li>
               {/each}
             </ul>

@@ -4437,13 +4437,17 @@ div > .sticky-navbar {
   margin: 0.6rem 0 0;
 }
 
-.pm-search {
+.pm-search > div {
   max-width: 26rem;
 }
 
 .pm-search span {
   display: block;
   margin-top: 0.15rem;
+}
+
+.pm-priority-filter {
+  max-width: 10rem;
 }
 
 .pm-progress {
