@@ -1809,6 +1809,12 @@ function evaluateFormula(
   return undefined;
 }
 
+// Keep calculations at full JavaScript precision and round only what users
+// see. Converting the fixed value back to a number removes unnecessary
+// trailing zeroes (1.50 becomes 1.5) while capping noisy results at two
+// decimal places.
+const formatFormulaResult = (value: number): string => String(Number(value.toFixed(2)));
+
 function renderFormulaResults(container: HTMLElement, data: AOA): void {
   data.forEach((row, rowIndex) => {
     row.forEach((value, colIndex) => {
@@ -1822,7 +1828,7 @@ function renderFormulaResults(container: HTMLElement, data: AOA): void {
       // even though its input has already closed. The formula repaint only
       // runs after data/edition events, so updating the cell here does not
       // interfere with the active input and guarantees a visible result.
-      if (cell) cell.textContent = String(result);
+      if (cell) cell.textContent = formatFormulaResult(result);
     });
   });
 }
@@ -1838,7 +1844,7 @@ function applyFormulaResults(rawData: AOA, computedData: AOA): AOA {
     row.forEach((value, colIndex) => {
       if (typeof value !== 'string' || !value.trimStart().startsWith('=')) return;
       const result = evaluateFormula(value, rawData, colIndex, rowIndex);
-      if (result !== undefined) displayData[rowIndex][colIndex] = result;
+      if (result !== undefined) displayData[rowIndex][colIndex] = formatFormulaResult(result);
     });
   });
   return displayData;
@@ -4298,7 +4304,7 @@ export function openSpreadsheetModal(
       ui.formulaInput.value = formulaValue;
       ui.formulaStatus.textContent = result === undefined
         ? `${formulaDescription} → ${colLabel(targetCol)}${targetRow + 1}`
-        : `${formulaDescription} → ${colLabel(targetCol)}${targetRow + 1} = ${result}`;
+        : `${formulaDescription} → ${colLabel(targetCol)}${targetRow + 1} = ${formatFormulaResult(result)}`;
     };
     ui.formulaButtons.forEach(button => button.addEventListener('click', () => {
       const formulaName = button.dataset.formula;
@@ -4331,7 +4337,7 @@ export function openSpreadsheetModal(
       scheduleFormulaResultRender();
       const result = evaluateFormula(value, readRawData(), col, row);
       ui.formulaStatus.textContent = value.trimStart().startsWith('=') && result !== undefined
-        ? `${ui.formulaCellLabel.textContent} = ${result}`
+        ? `${ui.formulaCellLabel.textContent} = ${formatFormulaResult(result)}`
         : `${ui.formulaCellLabel.textContent} updated.`;
     };
     ui.formulaInput.addEventListener('keydown', event => {

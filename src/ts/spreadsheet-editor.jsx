@@ -176,13 +176,26 @@ function SpreadsheetEditor() {
     }
   };
 
+  // Above this many cells, an inline table starts to make the rich-text
+  // editor noticeably slower (the whole document DOM has to be kept and
+  // reprocessed on every keystroke/scroll) -- this is a soft warning, not a
+  // hard limit, since a sparse sheet can still be reasonable well past it.
+  const LARGE_INLINE_TABLE_CELLS = 2000;
+
   // Copy the current workbook into TinyMCE as formula-enabled inline tables.
   // The parent owns the editor instance and performs the HTML conversion so
   // this standalone bundle stays independent from the main editor modules.
   const insertInMainText = () => {
+    const currentWorksheets = getWorksheets();
+    const totalCells = currentWorksheets.reduce((sum, worksheet) => (
+      sum + worksheet.data.reduce((rowSum, row) => rowSum + row.length, 0)
+    ), 0);
+    if (totalCells > LARGE_INLINE_TABLE_CELLS) {
+      notify.warning('This sheet is quite large -- inserting it into the document can make the editor slow. Consider keeping it as an attached spreadsheet instead, with only a smaller summary table inline.');
+    }
     window.parent.postMessage({
       type: 'jss-insert-main-text',
-      detail: { worksheets: getWorksheets() },
+      detail: { worksheets: currentWorksheets },
     }, window.location.origin);
   };
 
@@ -305,26 +318,53 @@ function SpreadsheetEditor() {
 // column mask/format system explicitly skips formula cells (only plain
 // typed values get formatted), so a formula result like 0.1*6 renders with
 // raw floating-point noise (0.6000000000000001) with no column config able
-// to fix it. Round it ourselves, on every value change (typed or
-// recalculated), and only touch the rendered cell text -- the underlying
-// data/formula that getData() reads back out is untouched, so saving and
-// reloading the sheet still works normally.
-function roundDisplayedNumbers(worksheet, records) {
-  for (const record of records) {
-    const num = Number(record.value);
-    if (record.value === '' || record.value === null || Number.isNaN(num)) continue;
-    const rounded = Math.round(num * 100) / 100;
-    if (rounded === num) continue;
-    const cell = worksheet.records?.[record.y]?.[record.x];
-    if (cell?.element) {
-      cell.element.innerHTML = String(rounded);
+// to fix it. Round it ourselves by scanning the rendered <td> cells directly
+// via their data-x/data-y attributes (how jspreadsheet-ce's own createCell()
+// marks a real data cell, as opposed to a header/filter-row <td>) -- this
+// only touches the DOM text, not the underlying formula/data that getData()
+// reads back out, so saving and reloading the sheet still works normally.
+const DISPLAY_DECIMAL_PLACES = 2;
+
+function roundNumbersInRoot(root) {
+  for (const cell of root.querySelectorAll('td[data-x][data-y]')) {
+    const text = cell.textContent;
+    if (text === '' || text === null) continue;
+    const num = Number(text);
+    if (Number.isNaN(num)) continue;
+    const rounded = Number(num.toFixed(DISPLAY_DECIMAL_PLACES));
+    if (rounded !== num) {
+      cell.textContent = String(rounded);
     }
   }
 }
 
 function SpreadsheetInner({ worksheets, buildToolbar, onSpreadsheetChange, onPasteStyles, spreadsheetRef }) {
+  // Rely on the rendered DOM directly -- jspreadsheet-ce's own createCell()
+  // marks a real data cell with both data-x and data-y, regardless of which
+  // internal event path (typed, pasted, or recalculated) produced it. A
+  // MutationObserver catches every one of those. Our own rounding writes
+  // also trigger it once more, but since the value is already rounded that
+  // rescan is a no-op, so it settles quickly.
+  useEffect(() => {
+    const root = document.getElementById('spreadsheetEditorRoot');
+    if (!root) return undefined;
+    let scheduled = false;
+    const rescan = () => {
+      scheduled = false;
+      roundNumbersInRoot(root);
+    };
+    const observer = new MutationObserver(() => {
+      if (scheduled) return;
+      scheduled = true;
+      setTimeout(rescan, 0);
+    });
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    rescan();
+    return () => observer.disconnect();
+  }, [worksheets]);
+
   return (
-    <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange} onpaste={onPasteStyles} onafterchanges={roundDisplayedNumbers}>
+    <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange} onpaste={onPasteStyles}>
       {worksheets.map((worksheet, index) => {
         const width = Math.max(12, worksheet.data[0]?.length || 0);
         return (
