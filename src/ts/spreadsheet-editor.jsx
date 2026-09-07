@@ -305,26 +305,36 @@ function SpreadsheetEditor() {
 // column mask/format system explicitly skips formula cells (only plain
 // typed values get formatted), so a formula result like 0.1*6 renders with
 // raw floating-point noise (0.6000000000000001) with no column config able
-// to fix it. Round it ourselves, on every value change (typed or
-// recalculated), and only touch the rendered cell text -- the underlying
-// data/formula that getData() reads back out is untouched, so saving and
-// reloading the sheet still works normally.
-function roundDisplayedNumbers(worksheet, records) {
-  for (const record of records) {
-    const num = Number(record.value);
-    if (record.value === '' || record.value === null || Number.isNaN(num)) continue;
-    const rounded = Math.round(num * 100) / 100;
-    if (rounded === num) continue;
-    const cell = worksheet.records?.[record.y]?.[record.x];
-    if (cell?.element) {
-      cell.element.innerHTML = String(rounded);
+// to fix it. Round it ourselves by scanning the rendered cell text directly
+// -- this only touches the DOM, not the underlying formula/data that
+// getData() reads back out, so saving and reloading the sheet still works
+// normally. Called after every live edit (onafterchanges) and once right
+// after a worksheet loads, since a formula that was already computed when
+// the sheet was saved never fires a "change" event on reload.
+function roundWorksheetNumbers(worksheet) {
+  if (!worksheet?.records) return;
+  for (const row of worksheet.records) {
+    for (const cell of row) {
+      if (!cell?.element) continue;
+      const text = cell.element.textContent;
+      if (text === '' || text === null) continue;
+      const num = Number(text);
+      if (Number.isNaN(num)) continue;
+      const rounded = Math.round(num * 100) / 100;
+      if (rounded !== num) {
+        cell.element.innerHTML = String(rounded);
+      }
     }
   }
 }
 
 function SpreadsheetInner({ worksheets, buildToolbar, onSpreadsheetChange, onPasteStyles, spreadsheetRef }) {
+  useEffect(() => {
+    (spreadsheetRef.current || []).forEach(roundWorksheetNumbers);
+  }, [worksheets, spreadsheetRef]);
+
   return (
-    <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange} onpaste={onPasteStyles} onafterchanges={roundDisplayedNumbers}>
+    <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange} onpaste={onPasteStyles} onafterchanges={(worksheet) => roundWorksheetNumbers(worksheet)}>
       {worksheets.map((worksheet, index) => {
         const width = Math.max(12, worksheet.data[0]?.length || 0);
         return (
