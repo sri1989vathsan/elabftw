@@ -30,12 +30,6 @@
     author_fullname: string;
     items: LinkedItem[];
     uploads: OrderUpload[];
-    // searchable blobs from the backend -- linked item titles, all comment
-    // bodies and all attachment filenames concatenated, so search can match
-    // them without a separate request per order
-    items_text: string;
-    comments_text: string;
-    attachments_text: string;
   };
 
   type Category = {
@@ -101,6 +95,10 @@
   let ownerFilter: 'mine' | 'all' = 'all';
   let selectedUserId: number | null = null;
   let searchQuery = '';
+  // off by default: matching PDF-extracted text needs a per-order subquery
+  // against potentially large attachment text, so only pay for it when the
+  // user actually wants it
+  let searchPdf = false;
   let selectedIds = new Set<number>();
 
   // pagination: the server is asked for pageSize+1 rows so hasNextPage can
@@ -166,19 +164,26 @@
     fullyExpandedComments = new Set(fullyExpandedComments).add(itemId);
   }
 
-  function matchesSearch(item: OrderItem, query: string): boolean {
-    if (query === '') return true;
-    const haystack = [item.title, item.notes ?? '', item.items_text, item.author_fullname, item.comments_text, item.attachments_text]
-      .join(' ')
-      .toLowerCase();
-    return haystack.includes(query);
+  // status/owner/search filtering and pagination all happen server-side,
+  // so results stay correct (and fast) regardless of how many orders exist
+  // or which page a match happens to be on -- items is already exactly
+  // what should be shown.
+  $: visibleItems = items;
+
+  let searchDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function onSearchInput(): void {
+    if (searchDebounceTimeout) clearTimeout(searchDebounceTimeout);
+    searchDebounceTimeout = setTimeout(() => {
+      pageOffset = 0;
+      void load();
+    }, 300);
   }
 
-  // status/owner filtering and pagination now happen server-side (so the
-  // page stays fast regardless of how many orders exist); search still
-  // runs client-side, so it only matches within the currently loaded page
-  $: normalizedSearch = searchQuery.trim().toLowerCase();
-  $: visibleItems = items.filter(item => matchesSearch(item, normalizedSearch));
+  function onSearchPdfChange(): void {
+    pageOffset = 0;
+    void load();
+  }
 
   function currentEffectiveUserId(): number | null {
     return selectedUserId ?? (ownerFilter === 'mine' ? core.currentUserid : null);
@@ -195,6 +200,11 @@
       const effectiveUserId = currentEffectiveUserId();
       if (effectiveUserId !== null) {
         params.userid = String(effectiveUserId);
+      }
+      const trimmedSearch = searchQuery.trim();
+      if (trimmedSearch !== '') {
+        params.search = trimmedSearch;
+        if (searchPdf) params.search_pdf = '1';
       }
       const fetched = await ApiC.getJson(Model.Order, params) as OrderItem[];
       hasNextPage = fetched.length > pageSize;
@@ -891,10 +901,15 @@
         class="form-control form-control-sm"
         type="search"
         placeholder={t('Search orders…')}
-        title={t('Searches title, notes, linked resource, requester, comments and attachment names/content')}
+        title={t('Searches title, notes, linked resource, requester and comments; attachment content is optional (see checkbox)')}
         bind:value={searchQuery}
+        on:input={onSearchInput}
       />
-      <span class="orders-muted small">{t('Searches: title, notes, resource, requester, comments, attachments')}</span>
+      <label class="orders-muted small orders-search-pdf">
+        <input type="checkbox" bind:checked={searchPdf} on:change={onSearchPdfChange} />
+        {t('Also search inside PDF attachments (slower)')}
+      </label>
+      <span class="orders-muted small">{t('Searches: title, notes, resource, requester, comments, attachment names')}</span>
     </div>
     <select class="form-control form-control-sm" style="width:auto" bind:value={pageSize} on:change={onPageSizeChange} title={t('Items per page')}>
       {#each PAGE_SIZES as size (size)}
@@ -1282,6 +1297,13 @@
   .orders-search span {
     display: block;
     margin-top: 0.15rem;
+  }
+
+  .orders-search-pdf {
+    align-items: center;
+    display: flex;
+    gap: 0.3rem;
+    margin: 0.15rem 0 0;
   }
 
   .orders-select-all {

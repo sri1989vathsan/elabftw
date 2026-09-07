@@ -12,7 +12,6 @@ namespace Elabftw\Models;
 
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
-use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\Filter;
@@ -90,10 +89,6 @@ final class Orders extends AbstractRest
         $queryParams ??= $this->getQueryParams();
         $query = $queryParams->getQuery();
 
-        // default GROUP_CONCAT cap (1024 bytes) would silently truncate
-        // extracted PDF text well before it's useful for search
-        $this->Db->q('SET SESSION group_concat_max_len = 1000000');
-
         $conditions = array('o.team = :team');
         $bind = array(':team' => array($this->Users->team, PDO::PARAM_INT));
 
@@ -116,13 +111,68 @@ final class Orders extends AbstractRest
             }
         }
 
+        // server-side so a match on page 2 is found while looking at page 1
+        // (client-side search only ever covered the currently loaded page).
+        // Each place is its own EXISTS/LIKE rather than one pre-aggregated
+        // text blob, so a non-matching order never has to compute any of
+        // them; PDF-extracted text (potentially large) is opt-in via
+        // search_pdf, since scanning it for every order is the expensive
+        // part.
+        $search = trim($query->getString('search'));
+        if ($search !== '') {
+            $searchConditions = array(
+                'o.title LIKE :search_title',
+                'o.notes LIKE :search_notes',
+                'CONCAT(author.firstname, " ", author.lastname) LIKE :search_author',
+                'EXISTS (SELECT 1 FROM custom_order_items AS s_oi
+                    INNER JOIN items AS s_item ON s_item.id = s_oi.item_id
+                    WHERE s_oi.order_id = o.id AND s_item.title LIKE :search_item)',
+                'EXISTS (SELECT 1 FROM custom_order_comments AS s_comment
+                    WHERE s_comment.order_id = o.id AND s_comment.body LIKE :search_comment)',
+            );
+            $like = '%' . $search . '%';
+            $bind[':search_title'] = array($like, PDO::PARAM_STR);
+            $bind[':search_notes'] = array($like, PDO::PARAM_STR);
+            $bind[':search_author'] = array($like, PDO::PARAM_STR);
+            $bind[':search_item'] = array($like, PDO::PARAM_STR);
+            $bind[':search_comment'] = array($like, PDO::PARAM_STR);
+            if ($query->getBoolean('search_pdf')) {
+                $searchConditions[] = 'EXISTS (SELECT 1 FROM custom_order_uploads AS s_upload
+                    WHERE s_upload.order_id = o.id
+                    AND (s_upload.real_name LIKE :search_upload OR s_upload.extracted_text LIKE :search_upload_text))';
+                $bind[':search_upload'] = array($like, PDO::PARAM_STR);
+                $bind[':search_upload_text'] = array($like, PDO::PARAM_STR);
+            }
+            $conditions[] = '(' . implode(' OR ', $searchConditions) . ')';
+        }
+
         $limit = $query->getInt('limit') ?: 0;
         $offset = max(0, $query->getInt('offset'));
         // ask for one extra row so the frontend can tell whether there's a
         // next page without a separate COUNT query
         $limitSql = $limit > 0 ? sprintf(' LIMIT %d OFFSET %d', $limit + 1, $offset) : '';
 
-        $sql = 'SELECT o.id, o.title, o.notes, o.status, o.archived, o.created_at, o.userid,
+        $sql = self::selectSql() . '
+            WHERE ' . implode(' AND ', $conditions) . "
+            ORDER BY o.created_at DESC{$limitSql}";
+        $req = $this->Db->prepare($sql);
+        foreach ($bind as $key => $valueAndType) {
+            [$value, $type] = $valueAndType;
+            $req->bindValue($key, $value, $type);
+        }
+        $this->Db->execute($req);
+
+        return array_map($this->hydrate(...), $req->fetchAll());
+    }
+
+    /**
+     * The SELECT/FROM/JOIN shared by readAll() and readOne() -- only the
+     * WHERE clause differs, so both get the same shape (items, comments,
+     * uploads and extracted PDF text) without duplicating these subqueries.
+     */
+    private static function selectSql(): string
+    {
+        return 'SELECT o.id, o.title, o.notes, o.status, o.archived, o.created_at, o.userid,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT("id", oi_item.id, "title", oi_item.title))
@@ -130,17 +180,6 @@ final class Orders extends AbstractRest
                     INNER JOIN items AS oi_item ON oi_item.id = oi.item_id
                     WHERE oi.order_id = o.id
                 ), JSON_ARRAY()) AS items,
-                COALESCE((
-                    SELECT GROUP_CONCAT(oi_item2.title SEPARATOR " ")
-                    FROM custom_order_items AS oi2
-                    INNER JOIN items AS oi_item2 ON oi_item2.id = oi2.item_id
-                    WHERE oi2.order_id = o.id
-                ), "") AS items_text,
-                COALESCE((
-                    SELECT GROUP_CONCAT(comment.body SEPARATOR " ")
-                    FROM custom_order_comments AS comment
-                    WHERE comment.order_id = o.id
-                ), "") AS comments_text,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT(
                         "id", upload.id,
@@ -155,54 +194,43 @@ final class Orders extends AbstractRest
                     ))
                     FROM custom_order_uploads AS upload
                     WHERE upload.order_id = o.id
-                ), JSON_ARRAY()) AS uploads,
-                COALESCE((
-                    SELECT GROUP_CONCAT(CONCAT(upload2.real_name, " ", COALESCE(upload2.extracted_text, "")) SEPARATOR " ")
-                    FROM custom_order_uploads AS upload2
-                    WHERE upload2.order_id = o.id
-                ), "") AS attachments_text
+                ), JSON_ARRAY()) AS uploads
             FROM custom_orders AS o
-            LEFT JOIN users AS author ON author.userid = o.userid
-            WHERE ' . implode(' AND ', $conditions) . "
-            ORDER BY o.created_at DESC{$limitSql}";
-        $req = $this->Db->prepare($sql);
-        foreach ($bind as $key => $valueAndType) {
-            [$value, $type] = $valueAndType;
-            $req->bindValue($key, $value, $type);
-        }
-        $this->Db->execute($req);
+            LEFT JOIN users AS author ON author.userid = o.userid';
+    }
 
-        $result = $req->fetchAll();
-        foreach ($result as &$order) {
-            $order['id'] = (int) $order['id'];
-            $order['userid'] = (int) $order['userid'];
-            $order['archived'] = (bool) $order['archived'];
-            $order['items'] = json_decode((string) $order['items'], true, 512, JSON_THROW_ON_ERROR);
-            $uploads = json_decode((string) $order['uploads'], true, 512, JSON_THROW_ON_ERROR);
-            foreach ($uploads as &$upload) {
-                $upload['id'] = (int) $upload['id'];
-                $upload['storage'] = (int) $upload['storage'];
-                $upload['userid'] = (int) $upload['userid'];
-                $upload['filesize'] = $upload['filesize'] !== null ? (int) $upload['filesize'] : null;
-                $upload['has_extracted_text'] = (bool) $upload['has_extracted_text'];
-            }
-            unset($upload);
-            $order['uploads'] = $uploads;
+    /** Cast the raw DB row types and decode the JSON-aggregated columns. */
+    private function hydrate(array $order): array
+    {
+        $order['id'] = (int) $order['id'];
+        $order['userid'] = (int) $order['userid'];
+        $order['archived'] = (bool) $order['archived'];
+        $order['items'] = json_decode((string) $order['items'], true, 512, JSON_THROW_ON_ERROR);
+        $uploads = json_decode((string) $order['uploads'], true, 512, JSON_THROW_ON_ERROR);
+        foreach ($uploads as &$upload) {
+            $upload['id'] = (int) $upload['id'];
+            $upload['storage'] = (int) $upload['storage'];
+            $upload['userid'] = (int) $upload['userid'];
+            $upload['filesize'] = $upload['filesize'] !== null ? (int) $upload['filesize'] : null;
+            $upload['has_extracted_text'] = (bool) $upload['has_extracted_text'];
         }
-        unset($order);
+        unset($upload);
+        $order['uploads'] = $uploads;
 
-        return $result;
+        return $order;
     }
 
     #[Override]
     public function readOne(): array
     {
-        foreach ($this->readAll() as $order) {
-            if ($order['id'] === $this->id) {
-                return $order;
-            }
-        }
-        throw new ResourceNotFoundException();
+        $sql = self::selectSql() . ' WHERE o.id = :id AND o.team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $order = $this->Db->fetch($req);
+
+        return $this->hydrate($order);
     }
 
     #[Override]

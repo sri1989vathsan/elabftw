@@ -12,7 +12,6 @@ namespace Elabftw\Models;
 
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
-use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\Filter;
@@ -20,6 +19,7 @@ use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
 
+use function array_map;
 use function in_array;
 use function mb_strlen;
 use function trim;
@@ -75,7 +75,21 @@ final class Feedback extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
-        $sql = 'SELECT item.id, item.type, item.title, item.body, item.status, item.created_at,
+        $sql = self::selectSql() . '
+            WHERE item.team = :team
+            ORDER BY vote_count DESC, item.created_at DESC';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+
+        return array_map($this->hydrate(...), $req->fetchAll());
+    }
+
+    /** The SELECT/FROM/JOIN shared by readAll() and readOne(). */
+    private static function selectSql(): string
+    {
+        return 'SELECT item.id, item.type, item.title, item.body, item.status, item.created_at,
                 item.userid, CONCAT(author.firstname, " ", author.lastname) AS author_fullname,
                 COALESCE(votes.vote_count, 0) AS vote_count,
                 (my_vote.userid IS NOT NULL) AS has_voted
@@ -85,34 +99,31 @@ final class Feedback extends AbstractRest
                 SELECT item_id, COUNT(*) AS vote_count FROM custom_feedback_votes GROUP BY item_id
             ) AS votes ON votes.item_id = item.id
             LEFT JOIN custom_feedback_votes AS my_vote
-                ON my_vote.item_id = item.id AND my_vote.userid = :userid
-            WHERE item.team = :team
-            ORDER BY vote_count DESC, item.created_at DESC';
-        $req = $this->Db->prepare($sql);
-        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
-        $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
-        $this->Db->execute($req);
+                ON my_vote.item_id = item.id AND my_vote.userid = :userid';
+    }
 
-        $result = $req->fetchAll();
-        foreach ($result as &$item) {
-            $item['id'] = (int) $item['id'];
-            $item['userid'] = (int) $item['userid'];
-            $item['vote_count'] = (int) $item['vote_count'];
-            $item['has_voted'] = (bool) $item['has_voted'];
-        }
+    private function hydrate(array $item): array
+    {
+        $item['id'] = (int) $item['id'];
+        $item['userid'] = (int) $item['userid'];
+        $item['vote_count'] = (int) $item['vote_count'];
+        $item['has_voted'] = (bool) $item['has_voted'];
 
-        return $result;
+        return $item;
     }
 
     #[Override]
     public function readOne(): array
     {
-        foreach ($this->readAll() as $item) {
-            if ($item['id'] === $this->id) {
-                return $item;
-            }
-        }
-        throw new ResourceNotFoundException();
+        $sql = self::selectSql() . ' WHERE item.id = :id AND item.team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $item = $this->Db->fetch($req);
+
+        return $this->hydrate($item);
     }
 
     #[Override]
