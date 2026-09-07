@@ -329,12 +329,32 @@ function roundWorksheetNumbers(worksheet) {
 }
 
 function SpreadsheetInner({ worksheets, buildToolbar, onSpreadsheetChange, onPasteStyles, spreadsheetRef }) {
+  // Rely on the DOM itself rather than any specific jspreadsheet-ce event
+  // name/signature (onchange, onafterchanges, ...) actually firing the way
+  // its docs suggest -- a MutationObserver catches every cell update
+  // (typed, pasted, or recalculated) no matter which internal path produced
+  // it. Our own rounding writes also trigger it once more, but since the
+  // value is already rounded that rescan is a no-op, so it settles quickly.
   useEffect(() => {
-    (spreadsheetRef.current || []).forEach(roundWorksheetNumbers);
+    const root = document.getElementById('spreadsheetEditorRoot');
+    if (!root) return undefined;
+    let scheduled = false;
+    const rescan = () => {
+      scheduled = false;
+      (spreadsheetRef.current || []).forEach(roundWorksheetNumbers);
+    };
+    const observer = new MutationObserver(() => {
+      if (scheduled) return;
+      scheduled = true;
+      setTimeout(rescan, 0);
+    });
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    rescan();
+    return () => observer.disconnect();
   }, [worksheets, spreadsheetRef]);
 
   return (
-    <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange} onpaste={onPasteStyles} onafterchanges={(worksheet) => roundWorksheetNumbers(worksheet)}>
+    <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange} onpaste={onPasteStyles}>
       {worksheets.map((worksheet, index) => {
         const width = Math.max(12, worksheet.data[0]?.length || 0);
         return (
