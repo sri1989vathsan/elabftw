@@ -233,7 +233,7 @@
     resourceSearchTimeout = setTimeout(async () => {
       searchingResource = true;
       try {
-        resourceResults = await ApiC.getJson(`${Model.Item}?fastq=${encodeURIComponent(query)}&limit=8`) as ResourceResult[];
+        resourceResults = await ApiC.getJson(`${EntityType.Item}?fastq=${encodeURIComponent(query)}&limit=8`) as ResourceResult[];
       } catch (error) {
         notify.error(error instanceof Error ? error.message : 'Could not search resources.');
       } finally {
@@ -261,7 +261,7 @@
     const params: Record<string, unknown> = pending.template !== null
       ? { title: pending.title.trim(), template: pending.template }
       : { title: pending.title.trim(), category: pending.category };
-    return ApiC.post2location(Model.Item, params);
+    return ApiC.post2location(EntityType.Item, params);
   }
 
   function addPendingNewResource(): void {
@@ -382,7 +382,7 @@
     editResourceSearchTimeout = setTimeout(async () => {
       editSearchingResource = true;
       try {
-        editResourceResults = await ApiC.getJson(`${Model.Item}?fastq=${encodeURIComponent(query)}&limit=8`) as ResourceResult[];
+        editResourceResults = await ApiC.getJson(`${EntityType.Item}?fastq=${encodeURIComponent(query)}&limit=8`) as ResourceResult[];
       } catch (error) {
         notify.error(error instanceof Error ? error.message : 'Could not search resources.');
       } finally {
