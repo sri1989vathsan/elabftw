@@ -96,6 +96,15 @@
   let newAssignees: TeamMember[] = [];
   let newDeadline = '';
   let submitting = false;
+  // set while the detail dialog is open for a task that doesn't exist yet
+  // (opened via a column's "+" button) -- steps and links can still be
+  // added, buffered here since there's no task id to attach them to yet;
+  // saveDetail() posts the task first, then each buffered step/link, then
+  // closes. Comments stay hidden -- there's nothing to discuss yet.
+  let creatingNewTask = false;
+  let newTaskColumnId: number | null = null;
+  let draftSteps: string[] = [];
+  let draftLinks: { url: string; label: string }[] = [];
   let detailTask: Task | null = null;
   let detailEditing = false;
   let detailTitle = '';
@@ -333,6 +342,45 @@
     }
   }
 
+  function openNewTaskInColumn(columnId: number): void {
+    creatingNewTask = true;
+    newTaskColumnId = columnId;
+    draftSteps = [];
+    draftLinks = [];
+    newStepText = '';
+    weblinkUrl = '';
+    weblinkLabel = '';
+    detailTask = {
+      id: 0,
+      body: '',
+      notes: null,
+      description: null,
+      deadline: null,
+      completed_at: null,
+      in_progress: false,
+      priority: null,
+      column_id: columnId,
+      creation_time: '',
+      userid: core.currentUserid,
+      team: 0,
+      assigned_userid: null,
+      project_id: typeof activeProjectId === 'number' ? activeProjectId : null,
+      creator_fullname: '',
+      assigned_fullname: null,
+      assignees: [],
+      project_name: null,
+      entity_links: [],
+    };
+    detailEditing = true;
+    detailTitle = '';
+    detailDeadline = '';
+    detailAssignees = [];
+    detailPriority = '';
+    detailProjectId = detailTask.project_id;
+    detailDescription = '';
+    detailNotes = '';
+  }
+
   async function loadColumns(): Promise<void> {
     try {
       const params = typeof activeProjectId === 'number' ? { project_id: String(activeProjectId) } : {};
@@ -547,6 +595,10 @@
   function closeDetail(): void {
     detailTask = null;
     detailEditing = false;
+    creatingNewTask = false;
+    newTaskColumnId = null;
+    draftSteps = [];
+    draftLinks = [];
     detailComments = [];
     detailEntityLinks = [];
     detailSteps = [];
@@ -560,6 +612,10 @@
 
   function cancelEdit(): void {
     if (!detailTask) return;
+    if (creatingNewTask) {
+      closeDetail();
+      return;
+    }
     detailTitle = detailTask.body;
     detailDeadline = toDateInputValue(detailTask.deadline);
     detailAssignees = [...detailTask.assignees];
@@ -579,6 +635,29 @@
     }
     savingDetail = true;
     try {
+      if (creatingNewTask) {
+        const newId = await ApiC.post2location(Model.Todolist, {
+          content: title,
+          deadline: detailDeadline || null,
+          assignee_userids: detailAssignees.map(a => a.userid),
+          priority: detailPriority || null,
+          project_id: detailProjectId,
+          column_id: newTaskColumnId,
+        });
+        for (const body of draftSteps) {
+          await ApiC.post(`${Model.Todolist}/${newId}/steps`, { body });
+        }
+        for (const link of draftLinks) {
+          await ApiC.post(`${Model.Todolist}/${newId}/entity_links`, {
+            entity_type: 'weblink',
+            url: link.url,
+            label: link.label,
+          });
+        }
+        closeDetail();
+        await load();
+        return;
+      }
       await ApiC.patch(`${Model.Todolist}/${detailTask.id}`, {
         content: title,
         deadline: detailDeadline || null,
@@ -641,6 +720,10 @@
     return `\\\\${core.replace(/\//g, '\\')}`;
   }
 
+  function removeDraftLink(index: number): void {
+    draftLinks = draftLinks.filter((_, i) => i !== index);
+  }
+
   async function addWeblink(): Promise<void> {
     if (!detailTask) return;
     const url = normalizeWeblinkUrl(weblinkUrl);
@@ -648,12 +731,19 @@
       notify.error('Enter a valid web address.');
       return;
     }
+    const label = weblinkLabel.trim() || url;
+    if (creatingNewTask) {
+      draftLinks = [...draftLinks, { url, label }];
+      weblinkUrl = '';
+      weblinkLabel = '';
+      return;
+    }
     addingWeblink = true;
     try {
       await ApiC.post(`${Model.Todolist}/${detailTask.id}/entity_links`, {
         entity_type: 'weblink',
         url,
-        label: weblinkLabel.trim() || url,
+        label,
       });
       weblinkUrl = '';
       weblinkLabel = '';
@@ -716,10 +806,19 @@
     }
   }
 
+  function removeDraftStep(index: number): void {
+    draftSteps = draftSteps.filter((_, i) => i !== index);
+  }
+
   async function addStep(): Promise<void> {
     if (!detailTask) return;
     const body = newStepText.trim();
     if (!body) return;
+    if (creatingNewTask) {
+      draftSteps = [...draftSteps, body];
+      newStepText = '';
+      return;
+    }
     addingStep = true;
     try {
       await ApiC.post(`${Model.Todolist}/${detailTask.id}/steps`, { body });
@@ -1102,13 +1201,18 @@
           on:dragleave={() => { if (dragOverColumn === column.id) dragOverColumn = null; }}
           on:drop={(event) => dropOnColumn(event, column.id)}
         >
-          <h3
-            class="h6 pm-column-title"
-            draggable="true"
-            title={t('Drag to reorder this column')}
-            on:dragstart={(event) => startColumnDrag(event, column.id)}
-            on:dragend={finishColumnDrag}
-          >{column.name} <span class="badge badge-secondary">{columnTasks.length}</span></h3>
+          <div class="d-flex align-items-center pm-column-header">
+            <h3
+              class="h6 pm-column-title"
+              draggable="true"
+              title={t('Drag to reorder this column')}
+              on:dragstart={(event) => startColumnDrag(event, column.id)}
+              on:dragend={finishColumnDrag}
+            >{column.name} <span class="badge badge-secondary">{columnTasks.length}</span></h3>
+            <button type="button" class="btn-unstyled pm-column-add-btn ml-auto" title={`${t('Add a task to')} ${column.name}`} aria-label={`${t('Add a task to')} ${column.name}`} on:click={() => openNewTaskInColumn(column.id)}>
+              <i class="fas fa-plus fa-fw" aria-hidden="true"></i>
+            </button>
+          </div>
           {#if columnTasks.length === 0}
             <p class="pm-muted">{t('Nothing here.')}</p>
           {/if}
@@ -1261,9 +1365,11 @@
               </select>
             </div>
           </div>
+          {#if !creatingNewTask}
           <div class="small pm-muted mb-2">
             {t('Created by')} {detailTask.creator_fullname}
           </div>
+          {/if}
 
           <div class="pm-dialog-field">
             <div class="d-flex align-items-center justify-content-between">
@@ -1347,20 +1453,37 @@
         <div class="pm-dialog-field">
           <div class="d-flex align-items-center justify-content-between">
             <span class="pm-label mb-0">{t('Linked items')}</span>
-            <button
-              type="button"
-              class="btn btn-ghost btn-sm"
-              on:click={() => {
-                const panel = document.getElementById('favoritesPanel');
-                if (panel?.hasAttribute('hidden')) {
-                  (document.querySelector('[data-action="toggle-sidepanel"][data-target="favorites"]') as HTMLElement | null)?.click();
-                }
-              }}
-            >
-              <i class="fas fa-magnifying-glass fa-fw mr-1" aria-hidden="true"></i>{t('Open Search to link')}
-            </button>
+            {#if !creatingNewTask}
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                on:click={() => {
+                  const panel = document.getElementById('favoritesPanel');
+                  if (panel?.hasAttribute('hidden')) {
+                    (document.querySelector('[data-action="toggle-sidepanel"][data-target="favorites"]') as HTMLElement | null)?.click();
+                  }
+                }}
+              >
+                <i class="fas fa-magnifying-glass fa-fw mr-1" aria-hidden="true"></i>{t('Open Search to link')}
+              </button>
+            {/if}
           </div>
-          {#if loadingEntityLinks}
+          {#if creatingNewTask}
+            {#if draftLinks.length === 0}
+              <p class="pm-muted small">{t('No linked items yet.')}</p>
+            {:else}
+              <ul class="pm-entity-link-list">
+                {#each draftLinks as link, index (index)}
+                  <li class="pm-entity-link">
+                    <span class="mr-auto text-break">{link.label}</span>
+                    <button type="button" class="btn-unstyled pm-comment-delete" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeDraftLink(index)}>
+                      <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          {:else if loadingEntityLinks}
             <p class="pm-muted small">{t('Loading')}…</p>
           {:else if detailEntityLinks.length === 0}
             <p class="pm-muted small">{t('No linked items yet.')}</p>
@@ -1434,7 +1557,22 @@
 
         <div class="pm-dialog-field">
           <span class="pm-label">{t('Steps')}</span>
-          {#if loadingSteps}
+          {#if creatingNewTask}
+            {#if draftSteps.length === 0}
+              <p class="pm-muted small">{t('No steps yet.')}</p>
+            {:else}
+              <ul class="pm-step-list">
+                {#each draftSteps as step, index (index)}
+                  <li class="pm-step">
+                    <span class="pm-step-body">{step}</span>
+                    <button type="button" class="btn-unstyled pm-comment-delete" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeDraftStep(index)}>
+                      <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          {:else if loadingSteps}
             <p class="pm-muted small">{t('Loading')}…</p>
           {:else if detailSteps.length === 0}
             <p class="pm-muted small">{t('No steps yet.')}</p>
@@ -1485,6 +1623,7 @@
           </div>
         </div>
 
+        {#if !creatingNewTask}
         <div class="pm-dialog-field">
           <span class="pm-label">{t('Comments')}</span>
           {#if loadingComments}
@@ -1551,6 +1690,7 @@
             <button type="button" class="btn btn-secondary ml-2" disabled={postingComment || !newCommentText.trim()} on:click={postComment}>{t('Post')}</button>
           </div>
         </div>
+        {/if}
       </div>
       <div class="pm-dialog-footer">
         {#if detailEditing}

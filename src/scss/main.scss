@@ -4513,7 +4513,15 @@ div > .sticky-navbar {
 
 .pm-column-title {
   cursor: grab;
+  margin-bottom: 0;
+}
+
+.pm-column-header {
   margin-bottom: 0.6rem;
+}
+
+.pm-column-add-btn {
+  color: #495057;
 }
 
 .pm-task {
@@ -4766,6 +4774,21 @@ div > .sticky-navbar {
 .pm-comment-delete {
   color: #495057;
   margin-left: auto;
+}
+
+// wraps a pair of action buttons (e.g. edit + delete) so they sit flush
+// against each other at the right edge -- without this, two siblings each
+// using pm-comment-delete's margin-left: auto get spread apart, since auto
+// margins split the flex row's free space evenly between them
+.pm-item-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.pm-item-actions > .pm-comment-delete {
+  margin-left: 0;
 }
 
 .pm-comment-body {

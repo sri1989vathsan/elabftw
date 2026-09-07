@@ -746,6 +746,36 @@
     }
   }
 
+  let editingWeblinkId: number | null = null;
+  let editWeblinkUrl = '';
+  let editWeblinkLabel = '';
+
+  function startEditWeblink(link: EntityLink): void {
+    editingWeblinkId = link.id;
+    editWeblinkUrl = link.url ?? '';
+    editWeblinkLabel = link.title ?? '';
+  }
+
+  function cancelEditWeblink(): void {
+    editingWeblinkId = null;
+  }
+
+  async function saveEditWeblink(link: EntityLink): Promise<void> {
+    if (!detailEntry) return;
+    const url = editWeblinkUrl.trim();
+    if (!url) return;
+    try {
+      await ApiC.patch(`${Model.Todolist}/${detailEntry.id}/entity_links/${link.id}`, {
+        url,
+        label: editWeblinkLabel.trim(),
+      });
+      editingWeblinkId = null;
+      await loadEntityLinks(detailEntry.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not save that link.');
+    }
+  }
+
   async function removeEntityLink(link: EntityLink): Promise<void> {
     if (!detailEntry) return;
     try {
@@ -800,6 +830,31 @@
       await loadSteps(detailEntry.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not remove that step.');
+    }
+  }
+
+  let editingStepId: number | null = null;
+  let editStepDraft = '';
+
+  function startEditStep(step: Step): void {
+    editingStepId = step.id;
+    editStepDraft = step.body;
+  }
+
+  function cancelEditStep(): void {
+    editingStepId = null;
+  }
+
+  async function saveEditStep(step: Step): Promise<void> {
+    if (!detailEntry) return;
+    const body = editStepDraft.trim();
+    if (!body) return;
+    try {
+      await ApiC.patch(`${Model.Todolist}/${detailEntry.id}/steps/${step.id}`, { body });
+      editingStepId = null;
+      await loadSteps(detailEntry.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not save that step.');
     }
   }
 
@@ -1690,22 +1745,47 @@
             <ul class='pm-entity-link-list'>
               {#each detailEntityLinks as link (link.id)}
                 <li class='pm-entity-link'>
-                  {#if link.entity_type === 'weblink' && link.url && smbCore(link.url)}
-                    <i class='fas fa-server fa-fw mr-1' aria-hidden='true'></i>
-                    <span class='mr-auto text-break'>{link.title}</span>
-                    <a class='btn-unstyled mr-1' href={link.url} title={t('Open on Mac (smb://)')} aria-label={t('Open on Mac')}>
-                      <i class='fab fa-apple fa-fw' aria-hidden='true'></i>
-                    </a>
-                    <button type='button' class='btn-unstyled mr-1' data-action='copy-unc-path' data-unc={uncPath(smbCore(link.url) ?? '')} title={t('Copy Windows path (paste into Explorer)')} aria-label={t('Copy Windows path')}>
-                      <i class='fab fa-windows fa-fw' aria-hidden='true'></i>
-                    </button>
+                  {#if editingWeblinkId === link.id}
+                    <input
+                      type='url'
+                      class='form-control form-control-sm mr-1'
+                      bind:value={editWeblinkUrl}
+                      aria-label={t('Web address')}
+                    />
+                    <input
+                      type='text'
+                      class='form-control form-control-sm mr-1'
+                      bind:value={editWeblinkLabel}
+                      placeholder={t('Label (optional)')}
+                      aria-label={t('Link label')}
+                    />
+                    <button type='button' class='btn btn-primary btn-sm mr-1' disabled={!editWeblinkUrl.trim()} on:click={() => saveEditWeblink(link)}>{t('Save')}</button>
+                    <button type='button' class='btn btn-ghost btn-sm' on:click={cancelEditWeblink}>{t('Cancel')}</button>
                   {:else}
-                    <span class='badge badge-info mr-1'>{entityTypeLabel(link.entity_type)}</span>
-                    <a class='mr-auto text-break' href={entityViewUrl(link)} target='_blank' rel='noreferrer noopener'>{link.title}</a>
+                    {#if link.entity_type === 'weblink' && link.url && smbCore(link.url)}
+                      <i class='fas fa-server fa-fw mr-1' aria-hidden='true'></i>
+                      <span class='mr-auto text-break'>{link.title}</span>
+                      <a class='btn-unstyled mr-1' href={link.url} title={t('Open on Mac (smb://)')} aria-label={t('Open on Mac')}>
+                        <i class='fab fa-apple fa-fw' aria-hidden='true'></i>
+                      </a>
+                      <button type='button' class='btn-unstyled mr-1' data-action='copy-unc-path' data-unc={uncPath(smbCore(link.url) ?? '')} title={t('Copy Windows path (paste into Explorer)')} aria-label={t('Copy Windows path')}>
+                        <i class='fab fa-windows fa-fw' aria-hidden='true'></i>
+                      </button>
+                    {:else}
+                      <span class='badge badge-info mr-1'>{entityTypeLabel(link.entity_type)}</span>
+                      <a class='mr-auto text-break' href={entityViewUrl(link)} target='_blank' rel='noreferrer noopener'>{link.title}</a>
+                    {/if}
+                    <div class='pm-item-actions'>
+                      {#if link.entity_type === 'weblink'}
+                        <button type='button' class='btn-unstyled pm-comment-delete' title={t('Edit')} aria-label={t('Edit')} on:click={() => startEditWeblink(link)}>
+                          <i class='fas fa-pen fa-fw' aria-hidden='true'></i>
+                        </button>
+                      {/if}
+                      <button type='button' class='btn-unstyled pm-comment-delete' title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEntityLink(link)}>
+                        <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
+                      </button>
+                    </div>
                   {/if}
-                  <button type='button' class='btn-unstyled pm-comment-delete' title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEntityLink(link)}>
-                    <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
-                  </button>
                 </li>
               {/each}
             </ul>
@@ -1739,16 +1819,33 @@
             <ul class='pm-step-list'>
               {#each detailSteps as step (step.id)}
                 <li class='pm-step' class:pm-step-done={step.finished}>
-                  <input
-                    type='checkbox'
-                    checked={step.finished}
-                    on:change={() => toggleStep(step)}
-                    aria-label={step.body}
-                  />
-                  <span class='pm-step-body'>{step.body}</span>
-                  <button type='button' class='btn-unstyled pm-comment-delete' title={t('Remove')} aria-label={t('Remove')} on:click={() => removeStep(step)}>
-                    <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
-                  </button>
+                  {#if editingStepId === step.id}
+                    <input
+                      type='text'
+                      class='form-control form-control-sm mr-2'
+                      maxlength='500'
+                      bind:value={editStepDraft}
+                      on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void saveEditStep(step); } }}
+                    />
+                    <button type='button' class='btn btn-primary btn-sm mr-1' disabled={!editStepDraft.trim()} on:click={() => saveEditStep(step)}>{t('Save')}</button>
+                    <button type='button' class='btn btn-ghost btn-sm' on:click={cancelEditStep}>{t('Cancel')}</button>
+                  {:else}
+                    <input
+                      type='checkbox'
+                      checked={step.finished}
+                      on:change={() => toggleStep(step)}
+                      aria-label={step.body}
+                    />
+                    <span class='pm-step-body'>{step.body}</span>
+                    <div class='pm-item-actions'>
+                      <button type='button' class='btn-unstyled pm-comment-delete' title={t('Edit')} aria-label={t('Edit')} on:click={() => startEditStep(step)}>
+                        <i class='fas fa-pen fa-fw' aria-hidden='true'></i>
+                      </button>
+                      <button type='button' class='btn-unstyled pm-comment-delete' title={t('Remove')} aria-label={t('Remove')} on:click={() => removeStep(step)}>
+                        <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
+                      </button>
+                    </div>
+                  {/if}
                 </li>
               {/each}
             </ul>
@@ -1779,12 +1876,14 @@
                     <strong>{comment.author_fullname}</strong>
                     <span class='pm-muted'>{formatCommentTime(comment.created_at)}</span>
                     {#if core.isAdmin || comment.userid === core.currentUserid}
-                      <button type='button' class='btn-unstyled pm-comment-delete' title={t('Edit')} aria-label={t('Edit')} on:click={() => startEditComment(comment)}>
-                        <i class='fas fa-pen fa-fw' aria-hidden='true'></i>
-                      </button>
-                      <button type='button' class='btn-unstyled pm-comment-delete' title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteComment(comment)}>
-                        <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
-                      </button>
+                      <div class='pm-item-actions'>
+                        <button type='button' class='btn-unstyled pm-comment-delete' title={t('Edit')} aria-label={t('Edit')} on:click={() => startEditComment(comment)}>
+                          <i class='fas fa-pen fa-fw' aria-hidden='true'></i>
+                        </button>
+                        <button type='button' class='btn-unstyled pm-comment-delete' title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteComment(comment)}>
+                          <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
+                        </button>
+                      </div>
                     {/if}
                   </div>
                   {#if editingCommentId === comment.id}

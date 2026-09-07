@@ -9,6 +9,8 @@ import $ from 'jquery';
 import tinymce from 'tinymce/tinymce';
 import { getTinymceBaseConfig } from './tinymce';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import TurndownService from 'turndown';
 import type { MathJaxObject } from '@mathjax/src/js/components/startup.js';
 import { Target } from './interfaces';
 import type { Entity } from './interfaces';
@@ -25,91 +27,88 @@ interface EditorInterface {
   replaceContent(content: string): void;
 }
 
-// Convert the content along with the content_type in the same request:
-// computing "current" content server-side (from entityData at the start of
-// the request) is fragile against anything else that might also PATCH the
-// body around the same time, whereas the editor always knows its own
-// up-to-the-moment content directly.
-function elementToMarkdown(el: Element): string {
-  let out = '';
-  el.childNodes.forEach(node => {
-    out += nodeToMarkdown(node);
-  });
-  return out;
-}
-
-function listToMarkdown(list: Element, ordered: boolean): string {
-  let out = '';
-  let i = 1;
-  Array.from(list.children).forEach(child => {
-    if (child.tagName.toLowerCase() === 'li') {
-      const prefix = ordered ? `${i}. ` : '- ';
-      out += prefix + elementToMarkdown(child).trim() + '\n';
-      i++;
-    }
-  });
-  return out + '\n';
-}
-
-function nodeToMarkdown(node: ChildNode): string {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent ?? '';
-  }
-  if (node.nodeType !== Node.ELEMENT_NODE) {
-    return '';
-  }
-  const el = node as Element;
-  const tag = el.tagName.toLowerCase();
-  if (/^h[1-6]$/.test(tag)) {
-    return '#'.repeat(parseInt(tag[1], 10)) + ' ' + elementToMarkdown(el).trim() + '\n\n';
-  }
-  const inner = elementToMarkdown(el);
-  switch (tag) {
-    case 'br':
-      return '  \n';
-    case 'p':
-    case 'div':
-      return inner.trim() + '\n\n';
-    case 'strong':
-    case 'b':
-      return '**' + inner.trim() + '**';
-    case 'em':
-    case 'i':
-      return '_' + inner.trim() + '_';
-    case 'a':
-      return `[${inner.trim()}](${el.getAttribute('href') ?? ''})`;
-    case 'img':
-      return `![${el.getAttribute('alt') ?? ''}](${el.getAttribute('src') ?? ''})`;
-    case 'pre':
-      return '```\n' + inner.trim() + '\n```\n\n';
-    case 'code':
-      return el.parentElement?.tagName.toLowerCase() === 'pre' ? inner : '`' + inner.trim() + '`';
-    case 'blockquote':
-      return '> ' + inner.trim().replace(/\n/g, '\n> ') + '\n\n';
-    case 'ul':
-      return listToMarkdown(el, false);
-    case 'ol':
-      return listToMarkdown(el, true);
-    case 'li':
-      return inner.trim();
-    default:
-      return inner;
-  }
-}
-
-// only covers the formatting the markdown editor's own (restricted) toolbar
-// can produce -- bold, italic, headings, links, images, lists, code, quotes
-export function htmlToMarkdown(html: string): string {
-  if (html.trim() === '') {
-    return '';
-  }
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  return elementToMarkdown(doc.body).replace(/\n{3,}/g, '\n\n').trim();
-}
-
-class Editor {
+abstract class Editor {
   type: string;
   typeAsInt: number;
+  abstract getContent(): string;
+  switch(entity: Entity): Promise<Response> {
+    const switchingToMarkdown = this.type === 'tiny';
+    const currentBody = this.getContent();
+    const body = switchingToMarkdown
+      ? htmlToMarkdown(currentBody)
+      : markdownToHtml(currentBody);
+    return ApiC.patch(`${entity.type}/${entity.id}`, {
+      [Target.Body]: body,
+      [Target.ContentType]: switchingToMarkdown ? 2 : 1,
+    });
+  }
+}
+
+/**
+ * Convert normal rich text to readable Markdown while retaining eLabFTW's
+ * structured widgets as raw HTML. Markdown supports embedded HTML, so these
+ * blocks remain intact and become editable widgets again after switching
+ * back to TinyMCE instead of losing formula/style data in a lossy conversion.
+ */
+export function htmlToMarkdown(html: string): string {
+  const converter = new TurndownService({
+    bulletListMarker: '-',
+    codeBlockStyle: 'fenced',
+    emDelimiter: '*',
+    headingStyle: 'atx',
+    strongDelimiter: '**',
+  });
+  converter.keep(node => {
+    if (!(node instanceof HTMLElement)) return false;
+    return node.matches([
+      // Formula spreadsheets need their encoded data and inline appearance.
+      // Ordinary tables must not be kept here: retaining every <table>
+      // caused otherwise-normal editor content to appear as one large HTML
+      // embed after switching to Markdown.
+      'table.elabftw-spreadsheet',
+      '.elabftw-note-block',
+      '.elabftw-date-reference',
+      '[id^="experiment-title-"]',
+      'hr[class*="elabftw-"]',
+      'details',
+      'figure',
+      'audio',
+      'video',
+      'iframe',
+    ].join(','));
+  });
+  return converter.turndown(html).trim();
+}
+
+/** Render Markdown before changing the stored content type to HTML. */
+export function markdownToHtml(markdown: string): string {
+  const rendered = marked.parse(normalizeCompactHeadings(markdown)) as string;
+  return DOMPurify.sanitize(rendered, {
+    USE_PROFILES: { html: true },
+    ADD_ATTR: ['target'],
+  });
+}
+
+/**
+ * Accept compact ATX headings such as `####Heading` in addition to the
+ * CommonMark form `#### Heading`. Do not rewrite examples inside fenced code.
+ */
+export function normalizeCompactHeadings(markdown: string): string {
+  let fenceMarker = '';
+  return markdown.split('\n').map(line => {
+    const fence = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (fence) {
+      const marker = fence[1].charAt(0);
+      if (!fenceMarker) {
+        fenceMarker = marker;
+      } else if (fenceMarker === marker) {
+        fenceMarker = '';
+      }
+      return line;
+    }
+    if (fenceMarker) return line;
+    return line.replace(/^( {0,3}#{1,6})(?=[^#\s])/, '$1 ');
+  }).join('\n');
 }
 
 class TinyEditor extends Editor implements EditorInterface {
@@ -130,12 +129,6 @@ class TinyEditor extends Editor implements EditorInterface {
   replaceContent(content: string): void {
     tinymce.get(0).setContent(content);
   }
-  switch(entity: Entity): Promise<Response> {
-    const params = {};
-    params[Target.ContentType] = 2;
-    params[Target.Body] = htmlToMarkdown(this.getContent());
-    return ApiC.patch(`${entity.type}/${entity.id}`, params);
-  }
 }
 
 export class MdEditor extends Editor implements EditorInterface {
@@ -144,18 +137,12 @@ export class MdEditor extends Editor implements EditorInterface {
     this.type = 'md';
     this.typeAsInt = 2;
   }
-  switch(entity: Entity): Promise<Response> {
-    const params = {};
-    params[Target.ContentType] = 1;
-    params[Target.Body] = marked(this.getContent()) as string;
-    return ApiC.patch(`${entity.type}/${entity.id}`, params);
-  }
   init(): void {
     /* eslint-disable-next-line */
     ($('.markdown-textarea') as any).markdown({
       hiddenButtons: ['cmdPreview'],
       onPreview: ed => {
-        const html = marked(ed.$textarea.val()) as string;
+        const html = marked(normalizeCompactHeadings(ed.$textarea.val())) as string;
 
         window.setTimeout(() => {
           void MathJax.typesetPromise().catch(error => {
