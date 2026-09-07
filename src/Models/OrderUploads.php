@@ -16,7 +16,6 @@ use Elabftw\Elabftw\Tools;
 use Elabftw\Enums\Action;
 use Elabftw\Enums\Storage;
 use Elabftw\Exceptions\ImproperActionException;
-use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Users\Users;
 use Elabftw\Traits\SetIdTrait;
@@ -149,16 +148,26 @@ final class OrderUploads extends AbstractRest
     public static function extractOne(int $uploadId): void
     {
         $Db = Db::getConnection();
-        $sql = "SELECT id, long_name, storage FROM custom_order_uploads WHERE id = :id AND extraction_status = 'pending'";
+        // atomically claim it: an UPDATE that only matches while still
+        // 'pending' means at most one caller ever moves it to
+        // 'processing', so the invoker-dispatched run and a manual
+        // catch-up sweep racing each other can't both extract the same PDF
+        $claimReq = $Db->prepare(
+            "UPDATE custom_order_uploads SET extraction_status = 'processing' WHERE id = :id AND extraction_status = 'pending'",
+        );
+        $claimReq->bindValue(':id', $uploadId, PDO::PARAM_INT);
+        $Db->execute($claimReq);
+        if ($claimReq->rowCount() === 0) {
+            // already claimed/processed by another run, or not pending in
+            // the first place -- nothing to do
+            return;
+        }
+
+        $sql = 'SELECT id, long_name, storage FROM custom_order_uploads WHERE id = :id';
         $req = $Db->prepare($sql);
         $req->bindValue(':id', $uploadId, PDO::PARAM_INT);
         $Db->execute($req);
         $upload = $req->fetch();
-        if ($upload === false) {
-            // already processed (or not pending in the first place) -- a
-            // catch-up sweep must not redo work a previous run finished
-            return;
-        }
 
         $status = 'failed';
         $extractedText = null;
@@ -195,13 +204,7 @@ final class OrderUploads extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
-        $sql = 'SELECT upload.id, upload.real_name, upload.long_name, upload.storage, upload.filesize, upload.created_at, upload.userid,
-                (upload.extracted_text IS NOT NULL) AS has_extracted_text,
-                upload.extraction_status,
-                CONCAT(author.firstname, " ", author.lastname) AS author_fullname
-            FROM custom_order_uploads AS upload
-            INNER JOIN custom_orders AS o ON o.id = upload.order_id AND o.team = :team
-            LEFT JOIN users AS author ON author.userid = upload.userid
+        $sql = self::selectSql() . '
             WHERE upload.order_id = :order_id
             ORDER BY upload.created_at ASC';
         $req = $this->Db->prepare($sql);
@@ -209,26 +212,43 @@ final class OrderUploads extends AbstractRest
         $req->bindValue(':order_id', $this->Order->id, PDO::PARAM_INT);
         $this->Db->execute($req);
 
-        $result = $req->fetchAll();
-        foreach ($result as &$upload) {
-            $upload['id'] = (int) $upload['id'];
-            $upload['userid'] = (int) $upload['userid'];
-            $upload['storage'] = (int) $upload['storage'];
-            $upload['has_extracted_text'] = (bool) $upload['has_extracted_text'];
-        }
+        return array_map($this->hydrate(...), $req->fetchAll());
+    }
 
-        return $result;
+    /** The SELECT/FROM/JOIN shared by readAll() and readOne(). */
+    private static function selectSql(): string
+    {
+        return 'SELECT upload.id, upload.real_name, upload.long_name, upload.storage, upload.filesize, upload.created_at, upload.userid,
+                (upload.extracted_text IS NOT NULL) AS has_extracted_text,
+                upload.extraction_status,
+                CONCAT(author.firstname, " ", author.lastname) AS author_fullname
+            FROM custom_order_uploads AS upload
+            INNER JOIN custom_orders AS o ON o.id = upload.order_id AND o.team = :team
+            LEFT JOIN users AS author ON author.userid = upload.userid';
+    }
+
+    private function hydrate(array $upload): array
+    {
+        $upload['id'] = (int) $upload['id'];
+        $upload['userid'] = (int) $upload['userid'];
+        $upload['storage'] = (int) $upload['storage'];
+        $upload['has_extracted_text'] = (bool) $upload['has_extracted_text'];
+
+        return $upload;
     }
 
     #[Override]
     public function readOne(): array
     {
-        foreach ($this->readAll() as $upload) {
-            if ($upload['id'] === $this->id) {
-                return $upload;
-            }
-        }
-        throw new ResourceNotFoundException();
+        $sql = self::selectSql() . ' WHERE upload.id = :id AND upload.order_id = :order_id';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindValue(':order_id', $this->Order->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $upload = $this->Db->fetch($req);
+
+        return $this->hydrate($upload);
     }
 
     #[Override]

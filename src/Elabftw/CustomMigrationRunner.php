@@ -15,14 +15,19 @@ use League\Flysystem\FilesystemOperator;
 use PDO;
 use Symfony\Component\Console\Output\OutputInterface;
 
+use function array_unique;
+use function array_values;
 use function date;
+use function fclose;
+use function fopen;
+use function fwrite;
 use function hash;
 use function json_encode;
 use function pathinfo;
-use function preg_match;
+use function preg_match_all;
+use function rewind;
 use function sprintf;
 
-use const JSON_PRETTY_PRINT;
 use const JSON_THROW_ON_ERROR;
 use const PATHINFO_FILENAME;
 
@@ -76,6 +81,7 @@ final class CustomMigrationRunner
         '041_notif_task_assigned.sql',
         '042_todolist_columns_per_project.sql',
         '043_order_upload_extraction_status.sql',
+        '044_order_upload_extraction_processing.sql',
     );
 
     private Db $Db;
@@ -136,10 +142,14 @@ final class CustomMigrationRunner
      * A migration is not run inside a transaction (its DDL statements would
      * auto-commit each one regardless -- MySQL has no transactional DDL),
      * so there is nothing to roll back from a problem only discovered
-     * after the fact. As a safety net, before running any migration whose
-     * SQL contains DROP COLUMN/TABLE, dump every custom_* table's current
-     * full contents -- cheap, and it's the data those statements could
-     * make unrecoverable.
+     * after the fact. As a safety net, before running a migration that
+     * drops a column or table, dump that table's current full contents --
+     * cheap, and it's the data such a statement could make unrecoverable.
+     * Only the table(s) actually named in a DROP COLUMN/TABLE are dumped
+     * (not every custom_* table), and each is streamed straight from the
+     * result set to storage one row at a time rather than built up as one
+     * big in-memory array/JSON string, so this stays cheap even once
+     * calendar history, extracted PDF text, etc. have grown large.
      *
      * This is not a substitute for a real backup before a major upgrade --
      * the mysqldump binary lives in the mysql container, not this one:
@@ -153,26 +163,55 @@ final class CustomMigrationRunner
     private function backupIfDestructive(string $migration): void
     {
         $sql = $this->filesystem->read($migration);
-        if (preg_match('/DROP\s+(COLUMN|TABLE)/i', $sql) !== 1) {
+        $tables = $this->getDroppedFromTables($sql);
+        if ($tables === array()) {
             return;
         }
-        $tables = $this->Db->q("SHOW TABLES LIKE 'custom\\_%'")->fetchAll(PDO::FETCH_COLUMN);
-        $dump = array();
-        foreach ($tables as $table) {
-            $dump[$table] = $this->Db->q(sprintf('SELECT * FROM `%s`', $table))->fetchAll(PDO::FETCH_ASSOC);
-        }
         $backupFs = Storage::EXPORTS->getStorage()->getFs();
-        $filename = sprintf(
-            'pre-migration-backup_%s_%s.json',
-            date('Y-m-d_His'),
-            pathinfo($migration, PATHINFO_FILENAME),
-        );
-        $backupFs->write($filename, json_encode($dump, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
-        $this->output?->writeln(sprintf(
-            '<comment>%s drops a column/table -- backed up custom_* tables to exports/%s first.</comment>',
-            $migration,
-            $filename,
-        ));
+        $timestamp = date('Y-m-d_His');
+        $migrationName = pathinfo($migration, PATHINFO_FILENAME);
+        foreach ($tables as $table) {
+            $filename = sprintf('pre-migration-backup_%s_%s_%s.jsonl', $timestamp, $migrationName, $table);
+            $stream = fopen('php://temp', 'w+b');
+            if ($stream === false) {
+                continue; // best-effort safety net -- never block the migration itself on this
+            }
+            $req = $this->Db->q(sprintf('SELECT * FROM `%s`', $table));
+            while (($row = $req->fetch(PDO::FETCH_ASSOC)) !== false) {
+                fwrite($stream, json_encode($row, JSON_THROW_ON_ERROR) . "\n");
+            }
+            rewind($stream);
+            $backupFs->writeStream($filename, $stream);
+            fclose($stream);
+            $this->output?->writeln(sprintf(
+                '<comment>%s drops from `%s` -- backed it up to exports/%s first.</comment>',
+                $migration,
+                $table,
+                $filename,
+            ));
+        }
+    }
+
+    /**
+     * Best-effort: the table names a migration's DROP COLUMN/TABLE
+     * statements target. The dynamic guarded-ALTER pattern this codebase's
+     * migrations use embeds the real DDL as a single-quoted string
+     * literal (e.g. 'ALTER TABLE custom_orders DROP COLUMN item_id'), so
+     * matching stops at the closing quote rather than assuming any
+     * particular statement structure around it.
+     *
+     * @return list<string>
+     */
+    private function getDroppedFromTables(string $sql): array
+    {
+        $tables = array();
+        if (preg_match_all('/ALTER\s+TABLE\s+`?(\w+)`?[^\']*?DROP\s+(?:COLUMN|TABLE)/i', $sql, $matches)) {
+            $tables = array(...$tables, ...$matches[1]);
+        }
+        if (preg_match_all('/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?`?(\w+)`?/i', $sql, $matches)) {
+            $tables = array(...$tables, ...$matches[1]);
+        }
+        return array_values(array_unique($tables));
     }
 
     private function assertOfficialSchemaIsCurrent(): void
