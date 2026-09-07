@@ -20,6 +20,7 @@ use Override;
 use PDO;
 
 use function array_filter;
+use function array_key_exists;
 use function array_values;
 use function filter_var;
 use function in_array;
@@ -165,6 +166,47 @@ final class TodolistEntityLinks extends AbstractRest
         }
 
         return (int) $this->Db->lastInsertId();
+    }
+
+    #[Override]
+    public function patch(Action $action, array $params): array
+    {
+        $link = $this->readOne();
+        if ($link['entity_type'] !== self::WEBLINK_TYPE) {
+            throw new ImproperActionException('Only a web link can be edited; remove and re-add a linked item instead.');
+        }
+        $sets = array();
+        $bind = array(':id' => array($this->id, PDO::PARAM_INT), ':task_id' => array($this->Task->id, PDO::PARAM_INT));
+        if (array_key_exists('url', $params)) {
+            $url = (string) $params['url'];
+            if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+                throw new ImproperActionException('Enter a valid web address.');
+            }
+            if (mb_strlen($url) > 2000) {
+                throw new ImproperActionException('Web address must be shorter than 2000 characters.');
+            }
+            $sets[] = 'url = :url';
+            $bind[':url'] = array($url, PDO::PARAM_STR);
+        }
+        if (array_key_exists('label', $params)) {
+            $label = trim((string) $params['label']) ?: (string) ($params['url'] ?? $link['url']);
+            if (mb_strlen($label) > 500) {
+                throw new ImproperActionException('Link label must be shorter than 500 characters.');
+            }
+            $sets[] = 'label = :label';
+            $bind[':label'] = array($label, PDO::PARAM_STR);
+        }
+        if ($sets === array()) {
+            return $this->readOne();
+        }
+        $sql = 'UPDATE todolist_entity_links SET ' . implode(', ', $sets) . ' WHERE id = :id AND task_id = :task_id';
+        $req = $this->Db->prepare($sql);
+        foreach ($bind as $param => $valueAndType) {
+            $req->bindValue($param, $valueAndType[0], $valueAndType[1]);
+        }
+        $this->Db->execute($req);
+
+        return $this->readOne();
     }
 
     #[Override]
