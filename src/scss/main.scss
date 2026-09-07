@@ -4494,12 +4494,18 @@ div > .sticky-navbar {
 .pm-columns {
   display: flex;
   gap: 1.25rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
 }
 
 .pm-column {
   border-radius: 0.4rem;
-  flex: 1 1 0;
-  min-width: 0;
+  // grow to fill extra space when there's room, but never shrink below
+  // this width -- once too many columns to fit, the row scrolls
+  // horizontally (see .pm-columns) instead of every column getting
+  // squeezed narrower
+  flex: 1 0 16rem;
+  min-width: 16rem;
   transition: background-color 0.1s ease;
 }
 
