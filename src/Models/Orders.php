@@ -20,16 +20,27 @@ use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
 
+use function array_fill;
 use function array_key_exists;
+use function array_map;
+use function array_unique;
+use function array_values;
+use function count;
+use function implode;
 use function in_array;
+use function is_array;
+use function json_decode;
 use function mb_strlen;
 use function trim;
+
+use const JSON_THROW_ON_ERROR;
 
 /**
  * A team-scoped "please order this" board, replacing an external Trello
  * board. Unlike the native procurement_requests table, an order does not
- * require an existing procurable resource -- item_id is optional, and can
- * point at any Resources database item, not only ones marked procurable.
+ * require an existing procurable resource -- linked items are optional,
+ * and an order can link any number of Resources database items, not just
+ * ones marked procurable.
  */
 final class Orders extends AbstractRest
 {
@@ -54,18 +65,23 @@ final class Orders extends AbstractRest
     {
         $title = $this->getTitle($reqBody['title'] ?? '');
         $notes = $this->getNotes($reqBody['notes'] ?? null);
-        $itemId = $this->getItemId($reqBody['item_id'] ?? null);
-        $sql = 'INSERT INTO custom_orders (team, userid, title, notes, item_id)
-            VALUES (:team, :userid, :title, :notes, :item_id)';
+        $itemIds = $this->getItemIds($reqBody['item_ids'] ?? null);
+        $sql = 'INSERT INTO custom_orders (team, userid, title, notes)
+            VALUES (:team, :userid, :title, :notes)';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
         $req->bindValue(':title', $title);
         $req->bindValue(':notes', $notes, $notes === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
-        $req->bindValue(':item_id', $itemId, $itemId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $this->Db->execute($req);
+        $orderId = (int) $this->Db->lastInsertId();
 
-        return (int) $this->Db->lastInsertId();
+        if (!empty($itemIds)) {
+            $this->setId($orderId);
+            $this->replaceItems($itemIds);
+        }
+
+        return $orderId;
     }
 
     #[Override]
@@ -74,9 +90,20 @@ final class Orders extends AbstractRest
         // default GROUP_CONCAT cap (1024 bytes) would silently truncate
         // extracted PDF text well before it's useful for search
         $this->Db->q('SET SESSION group_concat_max_len = 1000000');
-        $sql = 'SELECT o.id, o.title, o.notes, o.status, o.archived, o.created_at, o.userid, o.item_id,
+        $sql = 'SELECT o.id, o.title, o.notes, o.status, o.archived, o.created_at, o.userid,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname,
-                item.title AS item_title,
+                COALESCE((
+                    SELECT JSON_ARRAYAGG(JSON_OBJECT("id", oi_item.id, "title", oi_item.title))
+                    FROM custom_order_items AS oi
+                    INNER JOIN items AS oi_item ON oi_item.id = oi.item_id
+                    WHERE oi.order_id = o.id
+                ), JSON_ARRAY()) AS items,
+                COALESCE((
+                    SELECT GROUP_CONCAT(oi_item2.title SEPARATOR " ")
+                    FROM custom_order_items AS oi2
+                    INNER JOIN items AS oi_item2 ON oi_item2.id = oi2.item_id
+                    WHERE oi2.order_id = o.id
+                ), "") AS items_text,
                 COALESCE((
                     SELECT GROUP_CONCAT(comment.body SEPARATOR " ")
                     FROM custom_order_comments AS comment
@@ -89,7 +116,6 @@ final class Orders extends AbstractRest
                 ), "") AS attachments_text
             FROM custom_orders AS o
             LEFT JOIN users AS author ON author.userid = o.userid
-            LEFT JOIN items AS item ON item.id = o.item_id
             WHERE o.team = :team
             ORDER BY o.created_at DESC';
         $req = $this->Db->prepare($sql);
@@ -100,8 +126,8 @@ final class Orders extends AbstractRest
         foreach ($result as &$order) {
             $order['id'] = (int) $order['id'];
             $order['userid'] = (int) $order['userid'];
-            $order['item_id'] = $order['item_id'] !== null ? (int) $order['item_id'] : null;
             $order['archived'] = (bool) $order['archived'];
+            $order['items'] = json_decode((string) $order['items'], true, 512, JSON_THROW_ON_ERROR);
         }
 
         return $result;
@@ -129,15 +155,20 @@ final class Orders extends AbstractRest
         if (array_key_exists('archived', $params)) {
             $this->updateArchived((bool) $params['archived']);
         }
-        if (array_key_exists('title', $params) || array_key_exists('notes', $params) || array_key_exists('item_id', $params)) {
+        if (array_key_exists('title', $params) || array_key_exists('notes', $params)) {
             if (!$isOwner && !$this->Users->isAdmin) {
                 throw new ImproperActionException('Only the author or a team admin can edit this order.');
             }
             $this->updateContent(
                 array_key_exists('title', $params) ? $this->getTitle($params['title']) : $order['title'],
                 array_key_exists('notes', $params) ? $this->getNotes($params['notes']) : $order['notes'],
-                array_key_exists('item_id', $params) ? $this->getItemId($params['item_id']) : $order['item_id'],
             );
+        }
+        if (array_key_exists('item_ids', $params)) {
+            if (!$isOwner && !$this->Users->isAdmin) {
+                throw new ImproperActionException('Only the author or a team admin can edit this order.');
+            }
+            $this->replaceItems($this->getItemIds($params['item_ids']));
         }
         return $this->readOne();
     }
@@ -180,16 +211,35 @@ final class Orders extends AbstractRest
         $this->Db->execute($req);
     }
 
-    private function updateContent(string $title, ?string $notes, ?int $itemId): void
+    private function updateContent(string $title, ?string $notes): void
     {
-        $sql = 'UPDATE custom_orders SET title = :title, notes = :notes, item_id = :item_id WHERE id = :id AND team = :team';
+        $sql = 'UPDATE custom_orders SET title = :title, notes = :notes WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':title', $title);
         $req->bindValue(':notes', $notes, $notes === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
-        $req->bindValue(':item_id', $itemId, $itemId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
+    }
+
+    // full-replace: whatever set of item ids is passed becomes the order's
+    // complete list of linked resources (same idea as the Share modal's
+    // canread/canwrite editors -- it shows the current set, Save replaces it)
+    private function replaceItems(array $itemIds): void
+    {
+        $delReq = $this->Db->prepare('DELETE FROM custom_order_items WHERE order_id = :order_id');
+        $delReq->bindParam(':order_id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($delReq);
+
+        if (empty($itemIds)) {
+            return;
+        }
+        $insReq = $this->Db->prepare('INSERT INTO custom_order_items (order_id, item_id) VALUES (:order_id, :item_id)');
+        foreach ($itemIds as $itemId) {
+            $insReq->bindParam(':order_id', $this->id, PDO::PARAM_INT);
+            $insReq->bindValue(':item_id', $itemId, PDO::PARAM_INT);
+            $this->Db->execute($insReq);
+        }
     }
 
     private function getTitle(mixed $value): string
@@ -213,23 +263,33 @@ final class Orders extends AbstractRest
         return $notes;
     }
 
-    private function getItemId(mixed $value): ?int
+    /** @return list<int> */
+    private function getItemIds(mixed $value): array
     {
-        if ($value === null || $value === '') {
-            return null;
+        if ($value === null) {
+            return array();
         }
-        $itemId = filter_var($value, FILTER_VALIDATE_INT);
-        if ($itemId === false) {
-            throw new ImproperActionException('Invalid resource.');
+        if (!is_array($value)) {
+            throw new ImproperActionException('Invalid resource list.');
         }
-        $sql = 'SELECT id FROM items WHERE id = :id AND team = :team';
+        $itemIds = array_values(array_unique(array_map(static function (mixed $v): int {
+            $itemId = filter_var($v, FILTER_VALIDATE_INT);
+            if ($itemId === false) {
+                throw new ImproperActionException('Invalid resource.');
+            }
+            return $itemId;
+        }, $value)));
+        if (empty($itemIds)) {
+            return array();
+        }
+        $placeholders = implode(',', array_fill(0, count($itemIds), '?'));
+        $sql = "SELECT id FROM items WHERE team = ? AND id IN ({$placeholders})";
         $req = $this->Db->prepare($sql);
-        $req->bindParam(':id', $itemId, PDO::PARAM_INT);
-        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
-        $this->Db->execute($req);
-        if ($req->fetch() === false) {
-            throw new ImproperActionException('Resource not found.');
+        $req->execute(array($this->Users->team, ...$itemIds));
+        $found = array_map(static fn(array $row): int => (int) $row['id'], $req->fetchAll());
+        if (count($found) !== count($itemIds)) {
+            throw new ImproperActionException('One or more resources could not be found.');
         }
-        return $itemId;
+        return $itemIds;
     }
 }

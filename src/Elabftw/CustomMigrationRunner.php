@@ -63,6 +63,8 @@ final class CustomMigrationRunner
         '037_order_archive.sql',
         '038_order_upload_text.sql',
         '039_notif_mentioned.sql',
+        '040_order_items.sql',
+        '041_notif_task_assigned.sql',
     );
 
     private Db $Db;

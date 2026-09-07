@@ -3,7 +3,7 @@
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
-  import { Model } from '../interfaces';
+  import { EntityType, Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
   import { applyMention, extractMentionQuery } from '../mentions';
 
@@ -12,6 +12,11 @@
   type TeamMember = {
     userid: number;
     fullname: string;
+  };
+
+  type LinkedItem = {
+    id: number;
+    title: string;
   };
 
   type OrderItem = {
@@ -23,13 +28,31 @@
     created_at: string;
     userid: number;
     author_fullname: string;
-    item_id: number | null;
-    item_title: string | null;
-    // searchable blobs from the backend -- all comment bodies and all
-    // attachment filenames concatenated, so search can match them without
-    // a separate request per order
+    items: LinkedItem[];
+    // searchable blobs from the backend -- linked item titles, all comment
+    // bodies and all attachment filenames concatenated, so search can match
+    // them without a separate request per order
+    items_text: string;
     comments_text: string;
     attachments_text: string;
+  };
+
+  type Category = {
+    id: number;
+    title: string;
+  };
+
+  type ResourceTemplate = {
+    id: number;
+    title: string;
+  };
+
+  type PendingResource = {
+    title: string;
+    category: number | null;
+    // when set, the new resource is created from this template instead of
+    // blank -- category is ignored in that case (the template supplies one)
+    template: number | null;
   };
 
   type OrderComment = {
@@ -83,14 +106,17 @@
   let newFiles: File[] = [];
   let submitting = false;
 
-  // resource link on the new-order form: either search an existing one, or
-  // create a brand new minimal resource on the fly (title only)
+  let categories: Category[] = [];
+  let templates: ResourceTemplate[] = [];
+
+  // resources linked on the new-order form: any number of existing
+  // resources (searched and picked), plus any number of brand new ones
+  // created on the fly (title + optional category)
   let resourceQuery = '';
   let resourceResults: ResourceResult[] = [];
   let searchingResource = false;
-  let selectedResource: ResourceResult | null = null;
-  let creatingNewResource = false;
-  let newResourceTitle = '';
+  let selectedResources: ResourceResult[] = [];
+  let pendingNewResources: PendingResource[] = [];
   let resourceSearchTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // editing an existing order: same resource-link idea as the new-order
@@ -101,9 +127,8 @@
   let editResourceQuery = '';
   let editResourceResults: ResourceResult[] = [];
   let editSearchingResource = false;
-  let editSelectedResource: ResourceResult | null = null;
-  let editCreatingNewResource = false;
-  let editNewResourceTitle = '';
+  let editSelectedResources: ResourceResult[] = [];
+  let editPendingNewResources: PendingResource[] = [];
   let editResourceSearchTimeout: ReturnType<typeof setTimeout> | null = null;
   let savingEdit = false;
 
@@ -134,7 +159,7 @@
 
   function matchesSearch(item: OrderItem, query: string): boolean {
     if (query === '') return true;
-    const haystack = [item.title, item.notes ?? '', item.item_title ?? '', item.author_fullname, item.comments_text, item.attachments_text]
+    const haystack = [item.title, item.notes ?? '', item.items_text, item.author_fullname, item.comments_text, item.attachments_text]
       .join(' ')
       .toLowerCase();
     return haystack.includes(query);
@@ -156,6 +181,9 @@
     loading = true;
     try {
       items = await ApiC.getJson(Model.Order) as OrderItem[];
+      // attachments are always visible on the card, so load them all up
+      // front instead of lazily on the (comments-only) toggle
+      await Promise.all(items.map(item => loadUploads(item.id)));
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load the orders board.');
     } finally {
@@ -183,23 +211,48 @@
   }
 
   function pickResource(resource: ResourceResult): void {
-    selectedResource = resource;
+    if (!selectedResources.some(r => r.id === resource.id)) {
+      selectedResources = [...selectedResources, resource];
+    }
     resourceQuery = '';
     resourceResults = [];
-    creatingNewResource = false;
   }
 
-  function clearResource(): void {
-    selectedResource = null;
+  function removeSelectedResource(id: number): void {
+    selectedResources = selectedResources.filter(r => r.id !== id);
   }
 
-  function toggleCreatingNewResource(): void {
-    creatingNewResource = !creatingNewResource;
-    if (creatingNewResource) {
-      resourceQuery = '';
-      resourceResults = [];
-    } else {
-      newResourceTitle = '';
+  // creates one pending resource: from a template when one is picked
+  // (category is then whatever the template itself carries), otherwise a
+  // blank resource with the chosen category (or none)
+  async function createPendingResource(pending: PendingResource): Promise<number> {
+    const params: Record<string, unknown> = pending.template !== null
+      ? { title: pending.title.trim(), template: pending.template }
+      : { title: pending.title.trim(), category: pending.category };
+    return ApiC.post2location(Model.Item, params);
+  }
+
+  function addPendingNewResource(): void {
+    pendingNewResources = [...pendingNewResources, { title: '', category: null, template: null }];
+  }
+
+  function removePendingNewResource(index: number): void {
+    pendingNewResources = pendingNewResources.filter((_, i) => i !== index);
+  }
+
+  async function loadCategories(): Promise<void> {
+    try {
+      categories = await ApiC.getJson(`${Model.Team}/current/resources_categories`) as Category[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load resource categories.');
+    }
+  }
+
+  async function loadTemplates(): Promise<void> {
+    try {
+      templates = await ApiC.getJson(`${EntityType.ItemType}/?fastq&scope=2`) as ResourceTemplate[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load resource templates.');
     }
   }
 
@@ -207,14 +260,15 @@
     if (newTitle.trim() === '') return;
     submitting = true;
     try {
-      let itemId: number | null = selectedResource?.id ?? null;
-      if (creatingNewResource && newResourceTitle.trim() !== '') {
-        itemId = await ApiC.post2location(Model.Item, { title: newResourceTitle.trim() });
+      const itemIds = selectedResources.map(r => r.id);
+      for (const pending of pendingNewResources) {
+        if (pending.title.trim() === '') continue;
+        itemIds.push(await createPendingResource(pending));
       }
       const orderId = await ApiC.post2location(Model.Order, {
         title: newTitle.trim(),
         notes: newNotes.trim() === '' ? null : newNotes.trim(),
-        item_id: itemId,
+        item_ids: itemIds,
       });
       for (const file of newFiles) {
         try {
@@ -226,9 +280,8 @@
       newTitle = '';
       newNotes = '';
       newFiles = [];
-      selectedResource = null;
-      creatingNewResource = false;
-      newResourceTitle = '';
+      selectedResources = [];
+      pendingNewResources = [];
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not post this order.');
@@ -279,9 +332,8 @@
     editNotes = item.notes ?? '';
     editResourceQuery = '';
     editResourceResults = [];
-    editCreatingNewResource = false;
-    editNewResourceTitle = '';
-    editSelectedResource = item.item_id !== null ? { id: item.item_id, title: item.item_title ?? '' } : null;
+    editPendingNewResources = [];
+    editSelectedResources = item.items.map(i => ({ id: i.id, title: i.title }));
   }
 
   function cancelEdit(): void {
@@ -308,38 +360,38 @@
   }
 
   function pickEditResource(resource: ResourceResult): void {
-    editSelectedResource = resource;
+    if (!editSelectedResources.some(r => r.id === resource.id)) {
+      editSelectedResources = [...editSelectedResources, resource];
+    }
     editResourceQuery = '';
     editResourceResults = [];
-    editCreatingNewResource = false;
   }
 
-  function clearEditResource(): void {
-    editSelectedResource = null;
+  function removeEditSelectedResource(id: number): void {
+    editSelectedResources = editSelectedResources.filter(r => r.id !== id);
   }
 
-  function toggleEditCreatingNewResource(): void {
-    editCreatingNewResource = !editCreatingNewResource;
-    if (editCreatingNewResource) {
-      editResourceQuery = '';
-      editResourceResults = [];
-    } else {
-      editNewResourceTitle = '';
-    }
+  function addEditPendingNewResource(): void {
+    editPendingNewResources = [...editPendingNewResources, { title: '', category: null, template: null }];
+  }
+
+  function removeEditPendingNewResource(index: number): void {
+    editPendingNewResources = editPendingNewResources.filter((_, i) => i !== index);
   }
 
   async function saveEdit(item: OrderItem): Promise<void> {
     if (editTitle.trim() === '') return;
     savingEdit = true;
     try {
-      let itemId: number | null = editSelectedResource?.id ?? null;
-      if (editCreatingNewResource && editNewResourceTitle.trim() !== '') {
-        itemId = await ApiC.post2location(Model.Item, { title: editNewResourceTitle.trim() });
+      const itemIds = editSelectedResources.map(r => r.id);
+      for (const pending of editPendingNewResources) {
+        if (pending.title.trim() === '') continue;
+        itemIds.push(await createPendingResource(pending));
       }
       await ApiC.patch(`${Model.Order}/${item.id}`, {
         title: editTitle.trim(),
         notes: editNotes.trim() === '' ? null : editNotes.trim(),
-        item_id: itemId,
+        item_ids: itemIds,
       });
       editingItemId = null;
       await load();
@@ -447,9 +499,6 @@
     }
     next.add(item.id);
     expandedComments = next;
-    if (!uploadsByItem[item.id]) {
-      await loadUploads(item.id);
-    }
     if (!commentsByItem[item.id]) {
       await loadComments(item.id);
     }
@@ -606,6 +655,8 @@
   onMount(() => {
     void load();
     void loadTeamMembers();
+    void loadCategories();
+    void loadTemplates();
   });
 </script>
 
@@ -632,49 +683,67 @@
       ></textarea>
 
       <div class="orders-resource-picker mb-2">
-        {#if selectedResource}
-          <span class="badge badge-info orders-resource-badge">
-            <i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{selectedResource.title}
-            <button type="button" class="btn-unstyled ml-1" title={t('Remove')} aria-label={t('Remove')} on:click={clearResource}>&times;</button>
-          </span>
-        {:else if creatingNewResource}
-          <div class="d-flex align-items-center">
+        {#if selectedResources.length > 0}
+          <div class="mb-1">
+            {#each selectedResources as resource (resource.id)}
+              <span class="badge badge-info orders-resource-badge mr-1">
+                <i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{resource.title}
+                <button type="button" class="btn-unstyled ml-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeSelectedResource(resource.id)}>&times;</button>
+              </span>
+            {/each}
+          </div>
+        {/if}
+        <div class="orders-resource-search">
+          <input
+            class="form-control form-control-sm"
+            type="text"
+            placeholder={t('Link an existing resource… (optional)')}
+            bind:value={resourceQuery}
+            on:input={searchResource}
+          />
+          {#if searchingResource}
+            <div class="orders-resource-results orders-muted small p-2">{t('Searching')}…</div>
+          {:else if resourceResults.length > 0}
+            <ul class="orders-resource-results">
+              {#each resourceResults as resource (resource.id)}
+                <li>
+                  <button type="button" class="btn-unstyled orders-resource-result" on:click={() => pickResource(resource)}>
+                    {resource.title}
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+        {#each pendingNewResources as pending, index (index)}
+          <div class="d-flex align-items-center mt-1 flex-wrap orders-pending-resource">
             <input
-              class="form-control form-control-sm mr-2"
+              class="form-control form-control-sm mr-2 mb-1"
               type="text"
               maxlength="255"
               placeholder={t('New resource title…')}
-              bind:value={newResourceTitle}
+              bind:value={pending.title}
             />
-            <button type="button" class="btn btn-ghost btn-sm" on:click={toggleCreatingNewResource}>{t('Cancel')}</button>
+            <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.template} title={t('Start from a template (optional)')}>
+              <option value={null}>{t('No template')}</option>
+              {#each templates as template (template.id)}
+                <option value={template.id}>{template.title}</option>
+              {/each}
+            </select>
+            <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.category} disabled={pending.template !== null} title={t('Category (ignored if a template is picked)')}>
+              <option value={null}>{t('No category')}</option>
+              {#each categories as category (category.id)}
+                <option value={category.id}>{category.title}</option>
+              {/each}
+            </select>
+            <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button mb-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removePendingNewResource(index)}>
+              <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+            </button>
           </div>
-        {:else}
-          <div class="orders-resource-search">
-            <input
-              class="form-control form-control-sm"
-              type="text"
-              placeholder={t('Link an existing resource… (optional)')}
-              bind:value={resourceQuery}
-              on:input={searchResource}
-            />
-            {#if searchingResource}
-              <div class="orders-resource-results orders-muted small p-2">{t('Searching')}…</div>
-            {:else if resourceResults.length > 0}
-              <ul class="orders-resource-results">
-                {#each resourceResults as resource (resource.id)}
-                  <li>
-                    <button type="button" class="btn-unstyled orders-resource-result" on:click={() => pickResource(resource)}>
-                      {resource.title}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          </div>
-          <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={toggleCreatingNewResource}>
-            <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add a new resource instead')}
-          </button>
-        {/if}
+        {/each}
+        <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={addPendingNewResource}>
+          <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add a new resource instead')}
+        </button>
       </div>
 
       <div
@@ -804,49 +873,67 @@
                 ></textarea>
 
                 <div class="orders-resource-picker mb-2">
-                  {#if editSelectedResource}
-                    <span class="badge badge-info orders-resource-badge">
-                      <i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{editSelectedResource.title}
-                      <button type="button" class="btn-unstyled ml-1" title={t('Remove')} aria-label={t('Remove')} on:click={clearEditResource}>&times;</button>
-                    </span>
-                  {:else if editCreatingNewResource}
-                    <div class="d-flex align-items-center">
+                  {#if editSelectedResources.length > 0}
+                    <div class="mb-1">
+                      {#each editSelectedResources as resource (resource.id)}
+                        <span class="badge badge-info orders-resource-badge mr-1">
+                          <i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{resource.title}
+                          <button type="button" class="btn-unstyled ml-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEditSelectedResource(resource.id)}>&times;</button>
+                        </span>
+                      {/each}
+                    </div>
+                  {/if}
+                  <div class="orders-resource-search">
+                    <input
+                      class="form-control form-control-sm"
+                      type="text"
+                      placeholder={t('Link an existing resource… (optional)')}
+                      bind:value={editResourceQuery}
+                      on:input={searchEditResource}
+                    />
+                    {#if editSearchingResource}
+                      <div class="orders-resource-results orders-muted small p-2">{t('Searching')}…</div>
+                    {:else if editResourceResults.length > 0}
+                      <ul class="orders-resource-results">
+                        {#each editResourceResults as resource (resource.id)}
+                          <li>
+                            <button type="button" class="btn-unstyled orders-resource-result" on:click={() => pickEditResource(resource)}>
+                              {resource.title}
+                            </button>
+                          </li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  </div>
+                  {#each editPendingNewResources as pending, index (index)}
+                    <div class="d-flex align-items-center mt-1 flex-wrap orders-pending-resource">
                       <input
-                        class="form-control form-control-sm mr-2"
+                        class="form-control form-control-sm mr-2 mb-1"
                         type="text"
                         maxlength="255"
                         placeholder={t('New resource title…')}
-                        bind:value={editNewResourceTitle}
+                        bind:value={pending.title}
                       />
-                      <button type="button" class="btn btn-ghost btn-sm" on:click={toggleEditCreatingNewResource}>{t('Cancel')}</button>
+                      <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.template} title={t('Start from a template (optional)')}>
+                        <option value={null}>{t('No template')}</option>
+                        {#each templates as template (template.id)}
+                          <option value={template.id}>{template.title}</option>
+                        {/each}
+                      </select>
+                      <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.category} disabled={pending.template !== null} title={t('Category (ignored if a template is picked)')}>
+                        <option value={null}>{t('No category')}</option>
+                        {#each categories as category (category.id)}
+                          <option value={category.id}>{category.title}</option>
+                        {/each}
+                      </select>
+                      <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button mb-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEditPendingNewResource(index)}>
+                        <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                      </button>
                     </div>
-                  {:else}
-                    <div class="orders-resource-search">
-                      <input
-                        class="form-control form-control-sm"
-                        type="text"
-                        placeholder={t('Link an existing resource… (optional)')}
-                        bind:value={editResourceQuery}
-                        on:input={searchEditResource}
-                      />
-                      {#if editSearchingResource}
-                        <div class="orders-resource-results orders-muted small p-2">{t('Searching')}…</div>
-                      {:else if editResourceResults.length > 0}
-                        <ul class="orders-resource-results">
-                          {#each editResourceResults as resource (resource.id)}
-                            <li>
-                              <button type="button" class="btn-unstyled orders-resource-result" on:click={() => pickEditResource(resource)}>
-                                {resource.title}
-                              </button>
-                            </li>
-                          {/each}
-                        </ul>
-                      {/if}
-                    </div>
-                    <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={toggleEditCreatingNewResource}>
-                      <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add a new resource instead')}
-                    </button>
-                  {/if}
+                  {/each}
+                  <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={addEditPendingNewResource}>
+                    <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add a new resource instead')}
+                  </button>
                 </div>
 
                 <div class="d-flex">
@@ -871,9 +958,9 @@
                   {statusLabel(item.status)}
                 </span>
                 <strong class="orders-item-title">{item.title}</strong>
-                {#if item.item_title}
-                  <span class="badge badge-info"><i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{item.item_title}</span>
-                {/if}
+                {#each item.items as linkedItem (linkedItem.id)}
+                  <span class="badge badge-info"><i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{linkedItem.title}</span>
+                {/each}
                 {#if canManage(item)}
                   <div class="orders-item-actions ml-auto">
                     <select
@@ -921,6 +1008,50 @@
                 {t('Requested by')} {item.author_fullname} · {formatDate(item.created_at)}
               </div>
             {/if}
+            <div
+              class="orders-attachments mt-1"
+              class:orders-attachments-drag-over={dragOverItem === item.id}
+              on:dragover={(event) => onDragOverAttachments(item.id, event)}
+              on:dragleave={() => onDragLeaveAttachments(item.id)}
+              on:drop={(event) => onFileDropped(item, event)}
+            >
+              <div class="d-flex align-items-center flex-wrap mb-1">
+                <strong class="orders-attachments-title">{t('Attachments')}</strong>
+                <label class="btn btn-ghost btn-sm ml-2 mb-0" class:disabled={uploadingItem.has(item.id)}>
+                  <i class="fas fa-paperclip fa-fw mr-1" aria-hidden="true"></i>
+                  {uploadingItem.has(item.id) ? t('Uploading') + '…' : t('Attach file')}
+                  <input type="file" class="orders-file-input" on:change={(event) => onFileSelected(item, event)} disabled={uploadingItem.has(item.id)} />
+                </label>
+                <span class="orders-muted small ml-2">{t('or drag a file here')}</span>
+              </div>
+              {#if (uploadsByItem[item.id] ?? []).length === 0}
+                <p class="orders-muted mb-2">{t('No attachments yet.')}</p>
+              {:else}
+                <ul class="orders-upload-list mb-2">
+                  {#each uploadsByItem[item.id] as upload (upload.id)}
+                    <li class="orders-upload">
+                      <i class="fas fa-file fa-fw mr-1" aria-hidden="true"></i>
+                      <a href={downloadUrl(upload)} target="_blank" rel="noopener noreferrer">{upload.real_name}</a>
+                      <span class="orders-muted ml-1">{formatFilesize(upload.filesize)}</span>
+                      {#if upload.has_extracted_text}
+                        <i class="fas fa-magnifying-glass fa-fw ml-1 orders-muted" title={t('Content is searchable')} aria-label={t('Content is searchable')}></i>
+                      {/if}
+                      {#if canDeleteUpload(upload)}
+                        <button
+                          type="button"
+                          class="btn btn-danger-ghost btn-sm orders-icon-button ml-auto"
+                          title={t('Delete')}
+                          aria-label={t('Delete')}
+                          on:click={() => deleteUpload(item, upload)}
+                        >
+                          <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                        </button>
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
             <button
               type="button"
               class="btn btn-ghost btn-sm orders-comments-toggle mt-1"
@@ -933,50 +1064,6 @@
                 : (commentsByItem[item.id] ? `${t('Comments')} (${commentsByItem[item.id].length})` : t('Comments'))}
             </button>
             {#if expandedComments.has(item.id)}
-              <div
-                class="orders-attachments"
-                class:orders-attachments-drag-over={dragOverItem === item.id}
-                on:dragover={(event) => onDragOverAttachments(item.id, event)}
-                on:dragleave={() => onDragLeaveAttachments(item.id)}
-                on:drop={(event) => onFileDropped(item, event)}
-              >
-                <div class="d-flex align-items-center flex-wrap mb-1">
-                  <strong class="orders-attachments-title">{t('Attachments')}</strong>
-                  <label class="btn btn-ghost btn-sm ml-2 mb-0" class:disabled={uploadingItem.has(item.id)}>
-                    <i class="fas fa-paperclip fa-fw mr-1" aria-hidden="true"></i>
-                    {uploadingItem.has(item.id) ? t('Uploading') + '…' : t('Attach file')}
-                    <input type="file" class="orders-file-input" on:change={(event) => onFileSelected(item, event)} disabled={uploadingItem.has(item.id)} />
-                  </label>
-                  <span class="orders-muted small ml-2">{t('or drag a file here')}</span>
-                </div>
-                {#if (uploadsByItem[item.id] ?? []).length === 0}
-                  <p class="orders-muted mb-2">{t('No attachments yet.')}</p>
-                {:else}
-                  <ul class="orders-upload-list mb-2">
-                    {#each uploadsByItem[item.id] as upload (upload.id)}
-                      <li class="orders-upload">
-                        <i class="fas fa-file fa-fw mr-1" aria-hidden="true"></i>
-                        <a href={downloadUrl(upload)} target="_blank" rel="noopener noreferrer">{upload.real_name}</a>
-                        <span class="orders-muted ml-1">{formatFilesize(upload.filesize)}</span>
-                        {#if upload.has_extracted_text}
-                          <i class="fas fa-magnifying-glass fa-fw ml-1 orders-muted" title={t('Content is searchable')} aria-label={t('Content is searchable')}></i>
-                        {/if}
-                        {#if canDeleteUpload(upload)}
-                          <button
-                            type="button"
-                            class="btn btn-danger-ghost btn-sm orders-icon-button ml-auto"
-                            title={t('Delete')}
-                            aria-label={t('Delete')}
-                            on:click={() => deleteUpload(item, upload)}
-                          >
-                            <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
-                          </button>
-                        {/if}
-                      </li>
-                    {/each}
-                  </ul>
-                {/if}
-              </div>
               <div class="orders-comments">
                 {#if commentsLoading.has(item.id)}
                   <p class="orders-muted mb-0">{t('Loading')}…</p>
@@ -1161,6 +1248,10 @@
 
   .orders-status-select {
     width: auto;
+  }
+
+  .orders-category-select {
+    max-width: 12rem;
   }
 
   .orders-icon-button {

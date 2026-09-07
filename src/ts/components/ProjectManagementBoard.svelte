@@ -91,7 +91,7 @@
   // 'assigned' shows tasks assigned to me (by myself or someone else);
   // 'created' shows tasks I set up, whether for myself or someone else;
   // 'all' is the union of both -- never a view of everyone else's work
-  let scope: 'assigned' | 'created' | 'all' = 'assigned';
+  let scope: 'assigned' | 'created' | 'all' = 'all';
   let newTitle = '';
   let newAssignees: TeamMember[] = [];
   let newDeadline = '';
@@ -977,14 +977,14 @@
 
   <div class="d-flex align-items-center my-3">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Task view')}>
+      <button type="button" class={scope === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('all')}>
+        <i class="fas fa-list fa-fw mr-1" aria-hidden="true"></i>{t('All')}
+      </button>
       <button type="button" class={scope === 'assigned' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('assigned')}>
         <i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Assigned to me')}
       </button>
       <button type="button" class={scope === 'created' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('created')}>
         <i class="fas fa-pen-to-square fa-fw mr-1" aria-hidden="true"></i>{t('Created by me')}
-      </button>
-      <button type="button" class={scope === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('all')}>
-        <i class="fas fa-list fa-fw mr-1" aria-hidden="true"></i>{t('All')}
       </button>
     </div>
   </div>

@@ -74,6 +74,10 @@ try {
             'designation' => _('Mentioned in an order comment'),
             'setting' => 'notif_mentioned_order',
         ),
+        array(
+            'designation' => _('Assigned a task'),
+            'setting' => 'notif_task_assigned',
+        ),
     );
 
     if ($App->Users->isAdmin) {
