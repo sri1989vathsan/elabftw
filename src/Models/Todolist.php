@@ -83,12 +83,23 @@ final class Todolist extends AbstractRest
         $primaryAssignee = $assigneeUserids[0];
         $projectId = $this->getProjectId($reqBody['project_id'] ?? null);
         $priority = $this->getPriority($reqBody['priority'] ?? null);
-        // A new task always starts in the team's "To do" column (whichever
-        // custom columns exist in between In progress and Done don't apply
-        // to brand-new work); moving it elsewhere is a separate patch.
+        // A task created from a specific column (the board's own "+" button)
+        // starts there directly; otherwise it always starts in its board's
+        // own "To do" column when one exists (falling back to the team-wide
+        // default for unfiled tasks, or a project whose board hasn't been
+        // opened yet) -- whichever custom columns exist in between In
+        // progress and Done don't apply to brand-new work either way; moving
+        // it elsewhere afterwards is a separate patch.
+        $columnId = array_key_exists('column_id', $reqBody) && $reqBody['column_id'] !== null
+            ? $this->getColumnId($reqBody['column_id'])
+            : null;
         $sql = "INSERT INTO todolist (body, notes, description, deadline, reminder_minutes, userid, team, assigned_userid, project_id, priority, column_id)
             VALUES(:content, :notes, :description, :deadline, :reminder_minutes, :userid, :team, :assigned_userid, :project_id, :priority,
-                (SELECT id FROM todolist_columns WHERE team = :team_col AND kind = 'todo' LIMIT 1))";
+                COALESCE(
+                    :column_id,
+                    (SELECT id FROM todolist_columns WHERE team = :team_col AND kind = 'todo' AND project_id = :project_id3 LIMIT 1),
+                    (SELECT id FROM todolist_columns WHERE team = :team_col2 AND kind = 'todo' AND project_id IS NULL LIMIT 1)
+                ))";
         $req = $this->Db->prepare($sql);
         $req->bindValue(':content', $content);
         $req->bindValue(':notes', $notes, $notes === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
@@ -102,8 +113,11 @@ final class Todolist extends AbstractRest
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $req->bindParam(':team_col', $this->team, PDO::PARAM_INT);
+        $req->bindParam(':team_col2', $this->team, PDO::PARAM_INT);
         $req->bindParam(':assigned_userid', $primaryAssignee, PDO::PARAM_INT);
         $req->bindValue(':project_id', $projectId, $projectId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindValue(':project_id3', $projectId, $projectId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindValue(':column_id', $columnId, $columnId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $req->bindValue(':priority', $priority, $priority === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $this->Db->execute($req);
 
@@ -544,6 +558,7 @@ final class Todolist extends AbstractRest
         $kind = !empty($task['completed_at']) ? 'done' : ($task['in_progress'] ? 'in_progress' : 'todo');
         $sql = 'UPDATE todolist AS t
             INNER JOIN todolist_columns AS c ON c.team = t.team AND c.kind = :kind
+                AND (c.project_id <=> t.project_id)
             SET t.column_id = c.id
             WHERE t.id = :id AND t.team = :team';
         $req = $this->Db->prepare($sql);
