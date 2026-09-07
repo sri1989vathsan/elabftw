@@ -30,6 +30,8 @@ use function in_array;
 use function is_array;
 use function json_decode;
 use function mb_strlen;
+use function preg_replace;
+use function preg_split;
 use function trim;
 
 use const JSON_THROW_ON_ERROR;
@@ -113,35 +115,49 @@ final class Orders extends AbstractRest
 
         // server-side so a match on page 2 is found while looking at page 1
         // (client-side search only ever covered the currently loaded page).
-        // Each place is its own EXISTS/LIKE rather than one pre-aggregated
-        // text blob, so a non-matching order never has to compute any of
-        // them; PDF-extracted text (potentially large) is opt-in via
-        // search_pdf, since scanning it for every order is the expensive
-        // part.
+        // Each place is its own EXISTS/MATCH/LIKE rather than one
+        // pre-aggregated text blob, so a non-matching order never has to
+        // compute any of them; PDF-extracted text (potentially large) is
+        // opt-in via search_pdf, since scanning it for every order is the
+        // expensive part.
+        // title/notes, comment bodies and extracted PDF text are matched via
+        // FULLTEXT (see migration 045) rather than LIKE '%term%', since none
+        // of those can use an ordinary index for a substring scan. Author
+        // name and item title stay LIKE -- short, low-cardinality fields
+        // where a table scan is cheap and FULLTEXT's word-tokenization would
+        // be a worse fit (e.g. a name typed as a substring of itself).
         $search = trim($query->getString('search'));
         if ($search !== '') {
+            $fulltext = self::toFulltextQuery($search);
+            $like = '%' . $search . '%';
             $searchConditions = array(
-                'o.title LIKE :search_title',
-                'o.notes LIKE :search_notes',
                 'CONCAT(author.firstname, " ", author.lastname) LIKE :search_author',
                 'EXISTS (SELECT 1 FROM custom_order_items AS s_oi
                     INNER JOIN items AS s_item ON s_item.id = s_oi.item_id
                     WHERE s_oi.order_id = o.id AND s_item.title LIKE :search_item)',
-                'EXISTS (SELECT 1 FROM custom_order_comments AS s_comment
-                    WHERE s_comment.order_id = o.id AND s_comment.body LIKE :search_comment)',
             );
-            $like = '%' . $search . '%';
-            $bind[':search_title'] = array($like, PDO::PARAM_STR);
-            $bind[':search_notes'] = array($like, PDO::PARAM_STR);
             $bind[':search_author'] = array($like, PDO::PARAM_STR);
             $bind[':search_item'] = array($like, PDO::PARAM_STR);
-            $bind[':search_comment'] = array($like, PDO::PARAM_STR);
-            if ($query->getBoolean('search_pdf')) {
+            if ($fulltext !== null) {
+                $searchConditions[] = 'MATCH(o.title, o.notes) AGAINST(:search_fulltext IN BOOLEAN MODE)';
+                $searchConditions[] = 'EXISTS (SELECT 1 FROM custom_order_comments AS s_comment
+                    WHERE s_comment.order_id = o.id
+                    AND MATCH(s_comment.body) AGAINST(:search_fulltext IN BOOLEAN MODE))';
+                $bind[':search_fulltext'] = array($fulltext, PDO::PARAM_STR);
+                if ($query->getBoolean('search_pdf')) {
+                    $searchConditions[] = 'EXISTS (SELECT 1 FROM custom_order_uploads AS s_upload
+                        WHERE s_upload.order_id = o.id
+                        AND (s_upload.real_name LIKE :search_upload
+                            OR MATCH(s_upload.extracted_text) AGAINST(:search_fulltext IN BOOLEAN MODE)))';
+                    $bind[':search_upload'] = array($like, PDO::PARAM_STR);
+                }
+            } elseif ($query->getBoolean('search_pdf')) {
+                // $search was made entirely of characters stripped by
+                // toFulltextQuery() (e.g. only punctuation) -- nothing left
+                // to MATCH against, but the filename can still be searched
                 $searchConditions[] = 'EXISTS (SELECT 1 FROM custom_order_uploads AS s_upload
-                    WHERE s_upload.order_id = o.id
-                    AND (s_upload.real_name LIKE :search_upload OR s_upload.extracted_text LIKE :search_upload_text))';
+                    WHERE s_upload.order_id = o.id AND s_upload.real_name LIKE :search_upload)';
                 $bind[':search_upload'] = array($like, PDO::PARAM_STR);
-                $bind[':search_upload_text'] = array($like, PDO::PARAM_STR);
             }
             $conditions[] = '(' . implode(' OR ', $searchConditions) . ')';
         }
@@ -163,6 +179,28 @@ final class Orders extends AbstractRest
         $this->Db->execute($req);
 
         return array_map($this->hydrate(...), $req->fetchAll());
+    }
+
+    /**
+     * Turn a raw search string into a MySQL BOOLEAN MODE full-text query, or
+     * null if nothing indexable survives. Boolean-mode operator characters
+     * (+ - > < ( ) ~ * : " @ \) are stripped rather than honored -- passed
+     * through, an unbalanced quote or stray operator from ordinary user
+     * input would make MySQL reject the whole query as invalid full-text
+     * syntax instead of just searching for it literally. A trailing '*' is
+     * appended to each remaining word for prefix matching, the closest
+     * full-text analog to the previous LIKE '%term%' substring behavior --
+     * though unlike LIKE, a word shorter than innodb_ft_min_token_size
+     * (server default: 3 characters) still won't match anything.
+     */
+    private static function toFulltextQuery(string $search): ?string
+    {
+        $sanitized = preg_replace('/[+\-><()~*:"@\\\\]+/', ' ', $search) ?? '';
+        $words = preg_split('/\s+/', trim($sanitized), -1, PREG_SPLIT_NO_EMPTY);
+        if ($words === array()) {
+            return null;
+        }
+        return implode(' ', array_map(static fn(string $word): string => $word . '*', $words));
     }
 
     /**

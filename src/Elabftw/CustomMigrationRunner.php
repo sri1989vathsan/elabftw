@@ -82,6 +82,7 @@ final class CustomMigrationRunner
         '042_todolist_columns_per_project.sql',
         '043_order_upload_extraction_status.sql',
         '044_order_upload_extraction_processing.sql',
+        '045_orders_fulltext_search.sql',
     );
 
     private Db $Db;
