@@ -7,6 +7,24 @@
   import { Notification as AppNotification } from '../Notifications.class';
   import { applyMention, extractMentionQuery } from '../mentions';
 
+  // Closes a results dropdown on any click outside its own container --
+  // none of the search-result/mention dropdowns below had this, so they
+  // stayed open until a result was picked, even after clicking elsewhere
+  // on the page.
+  function clickOutside(node: HTMLElement, onOutsideClick: () => void): { destroy(): void } {
+    const handleClick = (event: MouseEvent): void => {
+      if (event.target instanceof Node && !node.contains(event.target)) {
+        onOutsideClick();
+      }
+    };
+    document.addEventListener('click', handleClick, true);
+    return {
+      destroy(): void {
+        document.removeEventListener('click', handleClick, true);
+      },
+    };
+  }
+
   type OrderStatus = 'requested' | 'ordered' | 'received' | 'cancelled';
 
   type TeamMember = {
@@ -778,7 +796,7 @@
             {/each}
           </div>
         {/if}
-        <div class="orders-resource-search">
+        <div class="orders-resource-search" use:clickOutside={() => { resourceResults = []; }}>
           <input
             class="form-control form-control-sm"
             type="text"
@@ -994,7 +1012,7 @@
                       {/each}
                     </div>
                   {/if}
-                  <div class="orders-resource-search">
+                  <div class="orders-resource-search" use:clickOutside={() => { editResourceResults = []; }}>
                     <input
                       class="form-control form-control-sm"
                       type="text"
@@ -1237,7 +1255,11 @@
                       {/each}
                     </ul>
                   {/if}
-                  <form class="d-flex orders-comment-form" on:submit|preventDefault={() => submitComment(item)}>
+                  <form
+                    class="d-flex orders-comment-form"
+                    on:submit|preventDefault={() => submitComment(item)}
+                    use:clickOutside={() => { mentionCandidates[item.id] = []; mentionCandidates = mentionCandidates; }}
+                  >
                     <label class="sr-only" for={`ordersComment-${item.id}`}>{t('Add a comment')}</label>
                     <input
                       id={`ordersComment-${item.id}`}
