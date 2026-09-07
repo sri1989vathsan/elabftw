@@ -301,20 +301,29 @@ function SpreadsheetEditor() {
     </>
   );
 }
+// Cap how many decimals a numeric cell shows -- without this, formula
+// results carry raw floating-point noise (e.g. 0.1*6 renders as
+// 0.6000000000000001 instead of 0.6). The mask only affects numeric-looking
+// values; text cells in the same column still display exactly as typed.
+function defaultColumns(width) {
+  return Array.from({ length: width }, () => ({ type: 'numeric', mask: '#.##', decimal: '.' }));
+}
+
 function SpreadsheetInner({ worksheets, buildToolbar, onSpreadsheetChange, onPasteStyles, spreadsheetRef }) {
   return (
     <Spreadsheet ref={spreadsheetRef} tabs={true} toolbar={buildToolbar} onchange={onSpreadsheetChange} onpaste={onPasteStyles}>
-      {worksheets.map((worksheet, index) => (
-        <Worksheet
-          key={`${worksheet.name}-${index}`}
-          data={worksheet.data}
-          worksheetName={worksheet.name}
-          minDimensions={[
-            Math.max(12, worksheet.data[0]?.length || 0),
-            Math.max(12, worksheet.data.length),
-          ]}
-        />
-      ))}
+      {worksheets.map((worksheet, index) => {
+        const width = Math.max(12, worksheet.data[0]?.length || 0);
+        return (
+          <Worksheet
+            key={`${worksheet.name}-${index}`}
+            data={worksheet.data}
+            worksheetName={worksheet.name}
+            minDimensions={[width, Math.max(12, worksheet.data.length)]}
+            columns={defaultColumns(width)}
+          />
+        );
+      })}
     </Spreadsheet>
   );
 }
