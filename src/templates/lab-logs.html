@@ -7,7 +7,7 @@
 
 {% if logsByUser is empty %}
   <div class='alert alert-info'>
-    <i class='fas fa-info-circle mr-1'></i>{{ 'No logs found. Team members can create monthly logs from the Resources page using the "New Monthly Log" button.'|trans }}
+    <i class='fas fa-info-circle mr-1'></i>{{ 'No logs found.'|trans }}
   </div>
 {% else %}
   {% for fullname, logs in logsByUser %}

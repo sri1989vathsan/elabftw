@@ -1740,28 +1740,6 @@ on('create-entity', async (el: HTMLElement, event: Event) => {
   window.location.href = `${page}?mode=edit&id=${id}`;
 });
 
-// CREATE MONTHLY LOG: create a new resource item titled "YYYYMM-log-owner" or open existing one
-on('create-monthly-log', async () => {
-  const now = DateTime.now();
-  const user = await ApiC.getJson('users/me');
-  const owner = user.fullname.replace(/\s+/g, '-').toLowerCase();
-  const title = now.toFormat('yyyyMM') + '-log-' + owner;
-  // Check if a log for this month already exists
-  const existing = await ApiC.getJson(`items/?q="${title}"&scope=1`);
-  const match = existing.find(item => item.title === title);
-  if (match) {
-    window.location.href = `database.php?mode=edit&id=${match.id}`;
-    return;
-  }
-  // Create a new resource (items) with the monthly log title
-  const id = await ApiC.post2location('items', {title: title});
-  // Set initial body with a welcome entry
-  const timestamp = now.toFormat('yyyy-MM-dd HH:mm');
-  const body = `<h2>${title}</h2><hr><h3>${timestamp}</h3><p>&nbsp;</p>`;
-  await ApiC.patch(`items/${id}`, {body: body});
-  window.location.href = `database.php?mode=edit&id=${id}`;
-});
-
 on('report-bug', (el: HTMLElement, event: Event) => {
   event.preventDefault();
   el.querySelector('i').classList.add('moving-bug');
