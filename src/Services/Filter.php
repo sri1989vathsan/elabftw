@@ -265,6 +265,7 @@ final class Filter
             'elabftw-note-content',
             'elabftw-note-heading',
             'elabftw-table-indent',
+            'elabftw-link-preview',
             'spreadsheet-coordinate',
         ));
         // note: hyphens and word-break are not supported

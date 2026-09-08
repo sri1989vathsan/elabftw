@@ -4353,7 +4353,7 @@ div > .sticky-navbar {
 // above: this also loads via an async chunk, so its custom classes live
 // here instead of a scoped <style> block.
 .pm-board {
-  max-width: 90rem;
+  max-width: 100%;
 }
 
 .pm-card {
@@ -4786,18 +4786,17 @@ div > .sticky-navbar {
   outline: none;
 }
 
-.link-preview-badge {
-  align-items: center;
+.elabftw-link-preview {
   background: var(--thirdlevel);
+  border: 1px solid var(--secondary);
   border-radius: 0.3rem;
   color: inherit;
-  display: inline-flex;
-  gap: 0.3rem;
+  display: inline-block;
   padding: 0.1rem 0.5rem;
   text-decoration: none;
 }
 
-.link-preview-badge:hover {
+.elabftw-link-preview:hover {
   text-decoration: underline;
 }
 

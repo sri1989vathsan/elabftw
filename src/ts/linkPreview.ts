@@ -13,34 +13,41 @@ type LinkPreviewResponse = {
 };
 
 /**
- * A bare URL pasted into a rich-text field is turned into an
- * anchor badge showing "hostname: page title" (falling back to just the
- * hostname if the title couldn't be fetched, or the fetch fails outright
- * -- a link preview is a nicety, never something that should block a
- * paste). Callers insert the returned HTML at the current selection, e.g.
- * via `document.execCommand('insertHTML', false, html)`.
+ * A bare URL pasted into a rich-text field is turned into an anchor badge
+ * showing the page's title (most sites already bake their own name into
+ * it, e.g. "Addgene: pCALNL-GFP" -- prepending the hostname again would
+ * just repeat that), falling back to the hostname if no title could be
+ * fetched, or the fetch fails outright -- a link preview is a nicety,
+ * never something that should block a paste. Callers insert the returned
+ * HTML at the current selection, e.g. via
+ * `document.execCommand('insertHTML', false, html)`.
  */
 export async function buildLinkPreviewHtml(url: string): Promise<string> {
   const escapedUrl = escapeHTML(url);
   const fallback = `<a href="${escapedUrl}" target="_blank" rel="noreferrer noopener">${escapedUrl}</a>`;
   try {
     const preview = await ApiC.getJson(`${Model.LinkPreview}?url=${encodeURIComponent(url)}`) as LinkPreviewResponse;
-    const label = preview.title ? `${preview.hostname}: ${preview.title}` : preview.hostname;
-    return `<a href="${escapedUrl}" target="_blank" rel="noreferrer noopener" class="link-preview-badge"><i class="fas fa-link fa-fw" aria-hidden="true"></i>${escapeHTML(label)}</a>`;
+    const label = preview.title || preview.hostname;
+    // no icon: Filter::body()'s HTMLPurifier allowlist doesn't include a
+    // bare <i> element, so one here would just get silently stripped on
+    // save -- and elabftw-link-preview must stay in Filter::body()'s
+    // Attr.AllowedClasses (src/Services/Filter.php) or this class gets
+    // stripped too, leaving a plain unstyled link.
+    return `<a href="${escapedUrl}" target="_blank" rel="noreferrer noopener" class="elabftw-link-preview">${escapeHTML(label)}</a>`;
   } catch {
     return fallback;
   }
 }
 
 /**
- * Plain-text "hostname: page title" (or just the hostname, if no title
- * could be fetched) -- for a plain string field like a weblink's label,
- * not a rich-text one, so no HTML markup here.
+ * Plain-text page title (or the hostname, if no title could be fetched)
+ * -- for a plain string field like a weblink's label, not a rich-text
+ * one, so no HTML markup here.
  */
 export async function fetchLinkPreviewLabel(url: string): Promise<string> {
   try {
     const preview = await ApiC.getJson(`${Model.LinkPreview}?url=${encodeURIComponent(url)}`) as LinkPreviewResponse;
-    return preview.title ? `${preview.hostname}: ${preview.title}` : preview.hostname;
+    return preview.title || preview.hostname;
   } catch {
     return url;
   }
