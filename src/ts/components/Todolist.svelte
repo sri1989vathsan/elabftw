@@ -1622,7 +1622,7 @@
                       </div>
                     {/if}
                     {#if entry.notes}
-                      <div class='small todo-secondary-text todo-task-notes'>{entry.notes}</div>
+                      <div class='small todo-secondary-text todo-task-notes'>{@html entry.notes}</div>
                     {/if}
                     {#if entry.creationTime}
                       <div class='relative-moment small todo-secondary-text' title={entry.creationTime}>

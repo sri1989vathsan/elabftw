@@ -73,6 +73,10 @@ import { isDarkTheme } from './theme';
 import { registerCustomEditorExtensions } from './custom-editor';
 import { BARE_URL_PATTERN, buildLinkPreviewHtml } from './linkPreview';
 
+// tags each link-preview placeholder so paste_postprocess's async upgrade
+// can find the right one back in the live editor body (see paste_preprocess)
+let linkPreviewPendingCounter = 0;
+
 // AUTOSAVE
 const doneTypingInterval = 7000;  // time in ms between end of typing and save
 
@@ -354,6 +358,7 @@ export function getTinymceBaseConfig(page: string): object {
         const placeholder = document.createElement('span');
         placeholder.className = 'elabftw-link-preview-pending';
         placeholder.dataset.url = bareUrl;
+        placeholder.dataset.pendingId = String(linkPreviewPendingCounter++);
         placeholder.textContent = bareUrl;
         pasteContainer.replaceChildren(placeholder);
       }
@@ -362,12 +367,25 @@ export function getTinymceBaseConfig(page: string): object {
     // upgrades the placeholder(s) paste_preprocess left behind, if any, to a
     // real link-preview badge -- see linkPreview.ts. Also add
     // elabftw-link-preview to Filter.php's Attr.AllowedClasses.
+    //
+    // args.node is a pre-insertion snapshot that TinyMCE reads from
+    // synchronously right after this fires -- mutating it here has no
+    // effect on the editor once the (necessarily async) title fetch
+    // resolves, since TinyMCE has already used the original, unmutated
+    // content by then. So this only reads the pending URLs off args.node,
+    // and does the actual upgrade against the live editor body instead,
+    // matched back up by the pending id stamped on in paste_preprocess.
     paste_postprocess: function(plugin, args) {
-      args.node.querySelectorAll<HTMLElement>('span.elabftw-link-preview-pending').forEach(placeholder => {
-        const url = placeholder.dataset.url;
-        if (!url) return;
+      const editor = tinymce.activeEditor;
+      args.node.querySelectorAll<HTMLElement>('span.elabftw-link-preview-pending').forEach(snapshot => {
+        const url = snapshot.dataset.url;
+        const pendingId = snapshot.dataset.pendingId;
+        if (!url || !pendingId) return;
         void buildLinkPreviewHtml(url).then(html => {
-          placeholder.outerHTML = html;
+          const live = editor?.getBody()?.querySelector<HTMLElement>(
+            `span.elabftw-link-preview-pending[data-pending-id="${pendingId}"]`,
+          );
+          if (live) live.outerHTML = html;
         });
       });
     },
