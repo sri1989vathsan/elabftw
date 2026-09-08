@@ -192,6 +192,11 @@
   // or which page a match happens to be on -- items is already exactly
   // what should be shown.
   $: visibleItems = items;
+  // pinned orders get their own section (see markup below): to the left,
+  // under the request form, when there's room for the two-column layout;
+  // above the main list when the window is too narrow for that
+  $: pinnedItems = visibleItems.filter(item => item.pinned);
+  $: unpinnedItems = visibleItems.filter(item => !item.pinned);
 
   let searchDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -895,6 +900,16 @@
       </div>
     </form>
   </div>
+  {#if pinnedItems.length > 0}
+    <div class="orders-pinned-section">
+      <h2 class="h6 orders-pinned-heading"><i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Pinned')}</h2>
+      <ul class="orders-list">
+        {#each pinnedItems as item (item.id)}
+          {@render orderCard(item)}
+        {/each}
+      </ul>
+    </div>
+  {/if}
   </div>
 
   <div class="orders-list-column">
@@ -997,7 +1012,16 @@
       </label>
     </div>
     <ul class="orders-list">
-      {#each visibleItems as item (item.id)}
+      {#each unpinnedItems as item (item.id)}
+        {@render orderCard(item)}
+      {/each}
+    </ul>
+  {/if}
+  </div>
+</div>
+</div>
+
+{#snippet orderCard(item)}
         <li class="orders-card orders-item" class:orders-item-pinned={item.pinned}>
           <div class="orders-item-body">
             {#if editingItemId === item.id}
@@ -1318,12 +1342,7 @@
             {/if}
           </div>
         </li>
-      {/each}
-    </ul>
-  {/if}
-  </div>
-</div>
-</div>
+{/snippet}
 
 <style>
   /* Mirrors FeedbackBoard.svelte's styling approach: explicit background +
@@ -1347,6 +1366,15 @@
   .orders-list-column {
     flex: 3 1 32rem;
     min-width: 0;
+  }
+
+  .orders-pinned-section {
+    margin-top: 1rem;
+  }
+
+  .orders-pinned-heading {
+    color: var(--secondary);
+    margin-bottom: 0.5rem;
   }
 
   .orders-card {
