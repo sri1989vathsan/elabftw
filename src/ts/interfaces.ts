@@ -151,6 +151,7 @@ enum Model {
   Link = 'links',
   LinkPreview = 'link_preview',
   Notification = 'notifications',
+  Order = 'orders',
   ExperimentsCategories = 'experiments_categories',
   ExperimentsStatus = 'experiments_status',
   ExtraFieldsKeys = 'extra_fields_keys',

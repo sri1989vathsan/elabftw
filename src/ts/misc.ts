@@ -651,6 +651,32 @@ export function addAutocompleteToLinkInputs(): void {
       });
     }
   });
+
+  // Orders don't share the category/owner filter shape above (no
+  // category, no scope), so it gets its own simpler autocomplete instead
+  // of a third entry in the loop.
+  const ordersCache = {};
+  if (document.getElementById('addLinkOrdersInput')) {
+    $('#addLinkOrdersInput').autocomplete({
+      source: function(request: Record<string, string>, response: (data) => void): void {
+        const term = request.term;
+        const format = (order: { id: number; title: string }) => `${order.id} - ${order.title.substring(0, 60)}`;
+        if (term in ordersCache) {
+          response(ordersCache[term].map(format));
+          return;
+        }
+        ApiC.getJson(`${Model.Order}?status=all&search=${encodeURIComponent(term)}`).then(json => {
+          ordersCache[term] = json;
+          response(json.map(format));
+        });
+      },
+      select: function(event: Event, ui): boolean {
+        const inputEl = event.target as HTMLInputElement;
+        inputEl.value = ui.item.label;
+        return false;
+      },
+    });
+  }
 }
 
 export function addAutocompleteToTagInputs(): void {

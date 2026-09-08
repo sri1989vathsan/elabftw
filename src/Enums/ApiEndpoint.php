@@ -32,6 +32,7 @@ enum ApiEndpoint: string
     case Events = 'events';
     case FavCategories = 'favcategories';
     case Feedback = 'feedback';
+    case Orders = 'orders';
     case FavFilters = 'favfilters';
     case TemplateFavorites = 'templatefavorites';
     case TemplateVersions = 'templateversions';

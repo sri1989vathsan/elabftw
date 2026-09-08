@@ -72,10 +72,18 @@ final class CustomMigrationRunner
         '032_todolist_steps.sql',
         '033_todolist_status_priority.sql',
         '034_todolist_columns.sql',
-        '035_notif_mentioned.sql',
-        '036_notif_task_assigned.sql',
-        '037_todolist_columns_per_project.sql',
-        '038_project_details_and_pinning.sql',
+        '035_orders.sql',
+        '036_order_uploads.sql',
+        '037_order_archive.sql',
+        '038_order_upload_text.sql',
+        '039_notif_mentioned.sql',
+        '040_order_items.sql',
+        '041_notif_task_assigned.sql',
+        '042_todolist_columns_per_project.sql',
+        '043_order_upload_extraction_status.sql',
+        '044_order_upload_extraction_processing.sql',
+        '045_orders_fulltext_search.sql',
+        '046_project_details_and_pinning.sql',
     );
 
     private Db $Db;

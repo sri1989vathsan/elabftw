@@ -185,6 +185,12 @@
                 href='feedback.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-lightbulb mr-1'></i>{{ 'Feedback'|trans }}</a>
             {% endif %}
 
+            {% if not App.isAnonymous() %}
+            {% set isActive = scriptName == 'orders.php' %}
+            <a class='nav-item nav-link {{ isActive ? 'active' }}'
+                href='orders.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-cart-shopping mr-1'></i>{{ 'Orders'|trans }}</a>
+            {% endif %}
+
             <div class='nav-item dropdown'>
               {% if App.devMode -%}
                 <!-- [html-validate-disable-next prefer-native-element: using a button here will mess up the navbar] -->

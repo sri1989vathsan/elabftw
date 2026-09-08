@@ -32,6 +32,7 @@ use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\FavTags;
 use Elabftw\Models\ItemsStatus;
 use Elabftw\Models\ItemsTypes;
+use Elabftw\Models\EntityOrderLinks;
 use Elabftw\Models\EntityReviewDecisions;
 use Elabftw\Models\TodolistEntityLinks;
 use Elabftw\Models\RequestActions;
@@ -213,6 +214,7 @@ abstract class AbstractEntityController implements ControllerInterface
                 $this->Entity->entityType->value,
                 $this->Entity->id ?? 0,
             ),
+            'orderLinksArr' => new EntityOrderLinks($this->App->Users, $this->Entity)->readAll(),
             'templateVersionsArr' => $this->Entity->entityType === EntityType::Templates
                 ? TemplateVersions::readAllForEntity($this->Entity->id ?? 0)
                 : array(),
@@ -295,6 +297,7 @@ abstract class AbstractEntityController implements ControllerInterface
                 $this->Entity->entityType->value,
                 $this->Entity->id ?? 0,
             ),
+            'orderLinksArr' => new EntityOrderLinks($this->App->Users, $this->Entity)->readAll(),
             'templateVersionsArr' => $this->Entity->entityType === EntityType::Templates
                 ? TemplateVersions::readAllForEntity($this->Entity->id ?? 0)
                 : array(),

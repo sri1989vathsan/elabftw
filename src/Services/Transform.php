@@ -166,8 +166,9 @@ final class Transform
                 ),
             Notifications::MentionedInOrder =>
                 sprintf(
-                    '<span data-action="ack-notif" data-id="%d" data-href="orders.php">%s</span>' . $relativeMoment,
+                    '<span data-action="ack-notif" data-id="%d" data-href="orders.php?order=%d">%s</span>' . $relativeMoment,
                     (int) $notif['id'],
+                    (int) $notif['body']['order_id'],
                     sprintf(
                         _('%s mentioned you in a comment: %s'),
                         $notif['body']['mentioner_fullname'],
