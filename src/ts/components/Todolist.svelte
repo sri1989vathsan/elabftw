@@ -129,6 +129,14 @@
     items: Todo[];
   };
 
+  type CalendarCell = {
+    date: Date;
+    key: string;
+    inMonth: boolean;
+    isToday: boolean;
+    hasTasks: boolean;
+  };
+
   type TaskComment = {
     id: number;
     body: string;
@@ -171,12 +179,41 @@
   let draft = '';
   let draftNotes = '';
   let draftProjectId: number | null = null;
-  let deadlineDate = initialDeadlineDate;
-  let deadlineTime = initialDeadlineTime;
+  // last-picked date/time are remembered for the rest of the browser
+  // session (sessionStorage), so creating several tasks in a row doesn't
+  // mean re-picking the same date each time
+  const SESSION_DEADLINE_DATE_KEY = 'todolistLastDeadlineDate';
+  const SESSION_DEADLINE_TIME_KEY = 'todolistLastDeadlineTime';
+  function readSessionDefault(key: string, fallback: string): string {
+    try {
+      return sessionStorage.getItem(key) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  function persistDeadlineDefaults(): void {
+    try {
+      if (deadlineDate) sessionStorage.setItem(SESSION_DEADLINE_DATE_KEY, deadlineDate);
+      if (deadlineTime) sessionStorage.setItem(SESSION_DEADLINE_TIME_KEY, deadlineTime);
+    } catch {
+      // sessionStorage unavailable (private browsing, etc.) -- just skip persistence
+    }
+  }
+  let deadlineDate = readSessionDefault(SESSION_DEADLINE_DATE_KEY, initialDeadlineDate);
+  let deadlineTime = readSessionDefault(SESSION_DEADLINE_TIME_KEY, initialDeadlineTime);
   let reminderChoice = '60';
   let customReminder = 120;
   let reminderDate = '';
   let reminderTime = '';
+  // collapsed by default: only the quick-add title input + "+" are shown
+  // until the "+" is pressed, which reveals notes/project/date/time/reminder
+  let showFullCreateForm = false;
+  let panelView: 'list' | 'calendar' = 'list';
+  let calendarMonthCursor = new Date(initialDeadline.getFullYear(), initialDeadline.getMonth(), 1);
+  let selectedCalendarDate = initialDeadlineDate;
+  let calendarCompletedForDate: Todo[] = [];
+  let calendarCompletedLoadedFor = '';
+  let loadingCalendarCompleted = false;
   let editingId: number | null = null;
   let detailEntry: SidebarEntry | null = null;
   let detailEditing = false;
@@ -258,6 +295,16 @@
   ];
   $: dueGroups = buildDueGroups(entries);
   $: completedGroups = buildCompletedGroups(completedItems);
+  $: calendarCells = buildCalendarCells(calendarMonthCursor, entries);
+  $: selectedDateTasks = entries.filter(
+    entry => entry.source === 'todo' && entry.deadline !== null && dateKey(new Date(entry.deadline)) === selectedCalendarDate,
+  );
+  $: selectedDateLabel = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date(`${selectedCalendarDate}T00:00:00`));
 
   function dateKey(date: Date): string {
     const year = date.getFullYear();
@@ -360,6 +407,94 @@
       groups.set(key, group);
     });
     return Array.from(groups.values()).sort((left, right) => right.key.localeCompare(left.key));
+  }
+
+  // -- Calendar view: a compact month grid + the selected day's tasks,
+  // kept separate from the full activity calendar panel (CalendarTodolist)
+  // which mixes in experiment/resource activity -- this one is tasks only. --
+
+  function calendarGridStart(monthCursor: Date): Date {
+    const first = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+    const start = new Date(first);
+    start.setDate(first.getDate() - first.getDay());
+    return start;
+  }
+
+  function buildCalendarCells(monthCursor: Date, allEntries: SidebarEntry[]): CalendarCell[] {
+    const start = calendarGridStart(monthCursor);
+    const todayKey = dateKey(new Date());
+    // markers reflect currently-loaded active (incomplete) tasks only --
+    // cheap (no extra fetch), and matches what the day list below shows by
+    // default before the "Completed" disclosure is opened
+    const taskDates = new Set(
+      allEntries
+        .filter(entry => entry.source === 'todo' && entry.deadline !== null)
+        .map(entry => dateKey(new Date(entry.deadline as string))),
+    );
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + index);
+      const key = dateKey(date);
+      return {
+        date,
+        key,
+        inMonth: date.getMonth() === monthCursor.getMonth(),
+        isToday: key === todayKey,
+        hasTasks: taskDates.has(key),
+      };
+    });
+  }
+
+  function changeCalendarMonth(offset: number): void {
+    calendarMonthCursor = new Date(calendarMonthCursor.getFullYear(), calendarMonthCursor.getMonth() + offset, 1);
+  }
+
+  function goToToday(): void {
+    const now = new Date();
+    calendarMonthCursor = new Date(now.getFullYear(), now.getMonth(), 1);
+    selectedCalendarDate = dateKey(now);
+  }
+
+  function selectCalendarDate(key: string): void {
+    selectedCalendarDate = key;
+  }
+
+  // Opens the create form prefilled with the selected calendar date --
+  // pressing "+" is what actually reveals the form; clicking a date only
+  // selects it (and updates the day's task list below).
+  function openCreateFormForSelectedDate(): void {
+    if (!showFullCreateForm && panelView === 'calendar') {
+      deadlineDate = selectedCalendarDate;
+      if (!deadlineTime) deadlineTime = initialDeadlineTime;
+      persistDeadlineDefaults();
+    }
+    showFullCreateForm = !showFullCreateForm;
+  }
+
+  async function loadCalendarCompletedForDate(dateKeyValue: string): Promise<void> {
+    loadingCalendarCompleted = true;
+    try {
+      const since = new Date(`${dateKeyValue}T00:00:00`);
+      const page = await ApiC.getJson(
+        `${Model.Todolist}?completed=1&completed_since=${encodeURIComponent(since.toISOString())}&limit=100`,
+      ) as Todo[];
+      // completed_since is a floor, not a range -- filter client-side down
+      // to just this one day
+      calendarCompletedForDate = page.filter(
+        item => item.completed_at !== null && dateKey(new Date(item.completed_at)) === dateKeyValue,
+      );
+      calendarCompletedLoadedFor = dateKeyValue;
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load completed tasks.');
+    } finally {
+      loadingCalendarCompleted = false;
+    }
+  }
+
+  function toggleCalendarCompletedForDate(event: Event): void {
+    if ((event.currentTarget as HTMLDetailsElement).open && calendarCompletedLoadedFor !== selectedCalendarDate) {
+      void loadCalendarCompletedForDate(selectedCalendarDate);
+    }
   }
 
   async function loadCompleted(): Promise<void> {
@@ -1022,6 +1157,9 @@
     customReminder = 120;
     reminderDate = '';
     reminderTime = '';
+    // deadlineDate/deadlineTime are deliberately NOT reset here -- they're
+    // remembered (in sessionStorage) as the default for the next task
+    persistDeadlineDefaults();
     await load();
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
@@ -1245,6 +1383,15 @@
   });
 </script>
 
+<div class='btn-group btn-group-sm todo-view-toggle mb-2' role='group' aria-label={t('View')}>
+  <button type='button' class={panelView === 'list' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => panelView = 'list'}>
+    <i class='fas fa-list fa-fw mr-1' aria-hidden='true'></i>{t('Tasks')}
+  </button>
+  <button type='button' class={panelView === 'calendar' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => panelView = 'calendar'}>
+    <i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{t('Calendar')}
+  </button>
+</div>
+
 <section class='todo-create mb-3' aria-label={t('add-task')}>
   <div class='input-group mb-2'>
     <input
@@ -1254,114 +1401,131 @@
       placeholder={t('add-task')}
     />
     <div class='input-group-append'>
-      <button type='button' class='btn btn-primary' on:click={create} aria-label={t('add')}>
-        <i class='fas fa-plus fa-fw' title={t('add')}></i>
+      <button
+        type='button'
+        class='btn btn-primary'
+        on:click={openCreateFormForSelectedDate}
+        aria-label={showFullCreateForm ? t('Hide task details') : t('Add task details')}
+        title={showFullCreateForm ? t('Hide task details') : t('Add task details (notes, project, date, reminder)')}
+      >
+        <i class={showFullCreateForm ? 'fas fa-minus fa-fw' : 'fas fa-plus fa-fw'}></i>
       </button>
     </div>
   </div>
-  <label class='w-100 mb-2'>
-    <span class='small'>{t('Notes')}</span>
-    <textarea
-      class='form-control form-control-sm'
-      rows='2'
-      bind:value={draftNotes}
-      placeholder={t('Optional details')}
-    ></textarea>
-  </label>
-  <div class='todo-create-options'>
-    <label class='mb-0'>
-      <span class='small'>{t('Project')}</span>
-      <select class='form-control form-control-sm' bind:value={draftProjectId}>
-        <option value={null}>{t('Unfiled')}</option>
-        {#each projects as project (project.id)}
-          <option value={project.id}>{project.name}</option>
-        {/each}
-      </select>
+  {#if showFullCreateForm}
+    <label class='w-100 mb-2'>
+      <span class='small'>{t('Notes')}</span>
+      <textarea
+        class='form-control form-control-sm'
+        rows='2'
+        bind:value={draftNotes}
+        placeholder={t('Optional details')}
+        on:keydown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); void create(); } }}
+      ></textarea>
     </label>
-    <div class='todo-date-time-row'>
+    <div class='todo-create-options'>
       <label class='mb-0'>
-        <span class='small'>{t('Date')}</span>
-        <input
-          class='form-control form-control-sm'
-          type='date'
-          bind:value={deadlineDate}
-        />
-      </label>
-      <label class='mb-0'>
-        <span class='small'>{t('Time')}</span>
-        <select class='form-control form-control-sm' bind:value={deadlineTime}>
-          <option value=''>—</option>
-          {#each timeOptions as time}
-            <option value={time}>{time}</option>
+        <span class='small'>{t('Project')}</span>
+        <select class='form-control form-control-sm' bind:value={draftProjectId}>
+          <option value={null}>{t('Unfiled')}</option>
+          {#each projects as project (project.id)}
+            <option value={project.id}>{project.name}</option>
           {/each}
         </select>
       </label>
-    </div>
-    <label class='mb-0'>
-      <span class='small'>{t('Reminder')}</span>
-      <select
-        class='form-control form-control-sm'
-        bind:value={reminderChoice}
-        disabled={!deadlineDate || !deadlineTime}
-        title={!deadlineDate || !deadlineTime ? t('Choose a task date and time first') : undefined}
-        on:change={() => reminderChoice === 'specific' && initializeSpecificReminder()}
-      >
-        <option value='none'>{t('No reminder')}</option>
-        <option value='0'>{t('At deadline')}</option>
-        <option value='15'>{t('15 minutes before')}</option>
-        <option value='60'>{t('1 hour before')}</option>
-        <option value='1440'>{t('1 day before')}</option>
-        <option value='10080'>{t('1 week before')}</option>
-        <option value='custom'>{t('Custom minutes')}</option>
-        <option value='specific'>{t('Specific date and time')}</option>
-      </select>
-    </label>
-    {#if deadlineDate && deadlineTime && reminderChoice === 'custom'}
-      <label class='mb-0'>
-        <span class='small'>{t('Minutes before')}</span>
-        <input
-          class='form-control form-control-sm'
-          type='number'
-          min='0'
-          max='10080'
-          bind:value={customReminder}
-        />
-      </label>
-    {:else if deadlineDate && deadlineTime && reminderChoice === 'specific'}
       <div class='todo-date-time-row'>
         <label class='mb-0'>
-          <span class='small'>{t('Reminder date')}</span>
-          <input class='form-control form-control-sm' type='date' bind:value={reminderDate} />
+          <span class='small'>{t('Date')}</span>
+          <input
+            class='form-control form-control-sm'
+            type='date'
+            bind:value={deadlineDate}
+            on:change={persistDeadlineDefaults}
+          />
         </label>
         <label class='mb-0'>
-          <span class='small'>{t('Reminder time')}</span>
-          <select class='form-control form-control-sm' bind:value={reminderTime}>
+          <span class='small'>{t('Time')}</span>
+          <select class='form-control form-control-sm' bind:value={deadlineTime} on:change={persistDeadlineDefaults}>
             <option value=''>—</option>
             {#each timeOptions as time}
               <option value={time}>{time}</option>
             {/each}
           </select>
         </label>
+        <label class='mb-0'>
+          <span class='small'>{t('Reminder')}</span>
+          <select
+            class='form-control form-control-sm'
+            bind:value={reminderChoice}
+            disabled={!deadlineDate || !deadlineTime}
+            title={!deadlineDate || !deadlineTime ? t('Choose a task date and time first') : undefined}
+            on:change={() => reminderChoice === 'specific' && initializeSpecificReminder()}
+          >
+            <option value='none'>{t('No reminder')}</option>
+            <option value='0'>{t('At deadline')}</option>
+            <option value='15'>{t('15 minutes before')}</option>
+            <option value='60'>{t('1 hour before')}</option>
+            <option value='1440'>{t('1 day before')}</option>
+            <option value='10080'>{t('1 week before')}</option>
+            <option value='custom'>{t('Custom minutes')}</option>
+            <option value='specific'>{t('Specific date and time')}</option>
+          </select>
+        </label>
       </div>
-    {/if}
-    {#if deadlineDate || deadlineTime}
-      <button
-        type='button'
-        class='btn btn-sm btn-outline-secondary todo-clear-deadline'
-        on:click={() => {
-          deadlineDate = '';
-          deadlineTime = '';
-          reminderChoice = 'none';
-          reminderDate = '';
-          reminderTime = '';
-        }}
-      >
-        <i class='fas fa-xmark fa-fw mr-1' aria-hidden='true'></i>{t('Clear')}
-      </button>
-    {/if}
-  </div>
+      {#if deadlineDate && deadlineTime && reminderChoice === 'custom'}
+        <label class='mb-0'>
+          <span class='small'>{t('Minutes before')}</span>
+          <input
+            class='form-control form-control-sm'
+            type='number'
+            min='0'
+            max='10080'
+            bind:value={customReminder}
+          />
+        </label>
+      {:else if deadlineDate && deadlineTime && reminderChoice === 'specific'}
+        <div class='todo-date-time-row'>
+          <label class='mb-0'>
+            <span class='small'>{t('Reminder date')}</span>
+            <input class='form-control form-control-sm' type='date' bind:value={reminderDate} />
+          </label>
+          <label class='mb-0'>
+            <span class='small'>{t('Reminder time')}</span>
+            <select class='form-control form-control-sm' bind:value={reminderTime}>
+              <option value=''>—</option>
+              {#each timeOptions as time}
+                <option value={time}>{time}</option>
+              {/each}
+            </select>
+          </label>
+        </div>
+      {/if}
+      <div class='d-flex align-items-center flex-wrap' style='gap:0.5rem'>
+        <button type='button' class='btn btn-primary btn-sm' disabled={!draft.trim()} on:click={create}>
+          <i class='fas fa-plus fa-fw mr-1' aria-hidden='true'></i>{t('add-task')}
+        </button>
+        {#if deadlineDate || deadlineTime}
+          <button
+            type='button'
+            class='btn btn-sm btn-outline-secondary todo-clear-deadline'
+            on:click={() => {
+              deadlineDate = '';
+              deadlineTime = '';
+              reminderChoice = 'none';
+              reminderDate = '';
+              reminderTime = '';
+              persistDeadlineDefaults();
+            }}
+          >
+            <i class='fas fa-xmark fa-fw mr-1' aria-hidden='true'></i>{t('Clear')}
+          </button>
+        {/if}
+      </div>
+    </div>
+  {/if}
 </section>
 
+{#if panelView === 'list'}
 {#if loading}
   <p class='todo-secondary-text'>{t('Loading')}…</p>
 {:else}
@@ -1630,6 +1794,102 @@
       {/each}
     {/if}
   </details>
+{/if}
+{:else}
+  <div class='todo-calendar'>
+    <div class='d-flex align-items-center justify-content-between mb-2'>
+      <button type='button' class='btn btn-ghost btn-sm' on:click={() => changeCalendarMonth(-1)} aria-label={t('Previous month')}>
+        <i class='fas fa-chevron-left fa-fw' aria-hidden='true'></i>
+      </button>
+      <span class='font-weight-bold'>{new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long' }).format(calendarMonthCursor)}</span>
+      <button type='button' class='btn btn-ghost btn-sm' on:click={() => changeCalendarMonth(1)} aria-label={t('Next month')}>
+        <i class='fas fa-chevron-right fa-fw' aria-hidden='true'></i>
+      </button>
+    </div>
+    <button type='button' class='btn btn-sm btn-outline-secondary mb-2' on:click={goToToday}>
+      <i class='fas fa-location-crosshairs fa-fw mr-1' aria-hidden='true'></i>{t('Today')}
+    </button>
+    <div class='todo-calendar-grid'>
+      {#each [t('Sun'), t('Mon'), t('Tue'), t('Wed'), t('Thu'), t('Fri'), t('Sat')] as weekdayLabel (weekdayLabel)}
+        <div class='todo-calendar-weekday'>{weekdayLabel.slice(0, 1)}</div>
+      {/each}
+      {#each calendarCells as cell (cell.key)}
+        <button
+          type='button'
+          class='todo-calendar-cell'
+          class:todo-calendar-cell-outside={!cell.inMonth}
+          class:todo-calendar-cell-today={cell.isToday}
+          class:todo-calendar-cell-selected={cell.key === selectedCalendarDate}
+          on:click={() => selectCalendarDate(cell.key)}
+        >
+          <span>{cell.date.getDate()}</span>
+          {#if cell.hasTasks}<span class='todo-calendar-marker' aria-hidden='true'></span>{/if}
+        </button>
+      {/each}
+    </div>
+
+    <h4 class='h6 mt-3 mb-2'>{selectedDateLabel}</h4>
+    {#if selectedDateTasks.length === 0}
+      <p class='todo-secondary-text mb-2'>{t('no-tasks-yet')}</p>
+    {:else}
+      <ul class='list-group mb-2'>
+        {#each selectedDateTasks as entry (entry.key)}
+          <li class:todo-entry-overdue={isOverdue(entry)} class='list-group-item todo-group-entry'>
+            <div class='d-flex align-items-start'>
+              <div class='d-flex flex-column flex-grow-1 min-width-0'>
+                <button type='button' class='btn-unstyled todo-title-btn' on:click={() => openDetail(entry)}>{entry.body}</button>
+                {#if entry.deadline}
+                  <div class:font-weight-bold={isOverdue(entry)} class='small todo-item-deadline'>
+                    <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(entry.deadline)}
+                  </div>
+                {/if}
+              </div>
+              {#if entry.source === 'todo'}
+                <div class='btn-group btn-group-sm ml-2'>
+                  <button type='button' class='btn btn-ghost' on:click={() => openDetail(entry)} title={t('Edit')} aria-label={t('Edit')}>
+                    <i class='fas fa-pen' aria-hidden='true'></i>
+                  </button>
+                  <button type='button' class='btn btn-ghost' on:click={() => complete(entry.id)} title={t('done')} aria-label={t('done')}>
+                    <i class='fas fa-check' aria-hidden='true'></i>
+                  </button>
+                </div>
+              {/if}
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+
+    <details class='todo-completed-history' on:toggle={toggleCalendarCompletedForDate}>
+      <summary>
+        <span>{t('Completed')}</span>
+        {#if calendarCompletedLoadedFor === selectedCalendarDate}<span class='badge badge-secondary'>{calendarCompletedForDate.length}</span>{/if}
+      </summary>
+      {#if loadingCalendarCompleted}
+        <p class='todo-secondary-text mb-0'>{t('Loading')}…</p>
+      {:else if calendarCompletedForDate.length === 0}
+        <p class='todo-secondary-text mb-0'>{t('No completed tasks for this day.')}</p>
+      {:else}
+        <ul class='list-group'>
+          {#each calendarCompletedForDate as item (item.id)}
+            <li class='list-group-item todo-completed-entry'>
+              <div class='flex-grow-1 min-width-0'>
+                <div>{item.body}</div>
+                {#if item.completed_at}
+                  <div class='small todo-secondary-text'>{formatDeadline(item.completed_at)}</div>
+                {/if}
+              </div>
+              <div class='btn-group btn-group-sm ml-2'>
+                <button type='button' class='btn btn-ghost' on:click={() => restore(item.id)} title={t('Restore')} aria-label={t('Restore')}>
+                  <i class='fas fa-rotate-left' aria-hidden='true'></i>
+                </button>
+              </div>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </details>
+  </div>
 {/if}
 
 {#if detailEntry}
@@ -1981,13 +2241,17 @@
   }
 
   .todo-date-time-row {
-    display: grid;
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.45rem;
-    grid-template-columns: minmax(0, 1.35fr) minmax(5.75rem, 0.65fr);
     width: 100%;
   }
 
-  .todo-date-time-row label,
+  .todo-date-time-row label {
+    flex: 1 1 8rem;
+    min-width: 0;
+  }
+
   .todo-date-time-row .form-control {
     min-width: 0;
   }
@@ -1995,7 +2259,68 @@
   .todo-clear-deadline {
     border-color: var(--chrome-muted);
     color: var(--chrome-fg);
-    justify-self: start;
+  }
+
+  .todo-view-toggle {
+    display: flex;
+  }
+
+  .todo-calendar-grid {
+    display: grid;
+    gap: 0.15rem;
+    grid-template-columns: repeat(7, 1fr);
+  }
+
+  .todo-calendar-weekday {
+    color: var(--chrome-fg);
+    font-size: 0.72rem;
+    font-weight: 700;
+    opacity: 0.7;
+    text-align: center;
+  }
+
+  .todo-calendar-cell {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+    color: inherit;
+    cursor: pointer;
+    padding: 0.3rem 0;
+    position: relative;
+    text-align: center;
+  }
+
+  .todo-calendar-cell:hover {
+    background: var(--thirdlevel);
+  }
+
+  .todo-calendar-cell-outside {
+    opacity: 0.4;
+  }
+
+  .todo-calendar-cell-today {
+    border-color: var(--primary);
+  }
+
+  .todo-calendar-cell-selected {
+    background: var(--primary);
+    color: var(--primary-fg);
+  }
+
+  .todo-calendar-marker {
+    background: var(--primary);
+    border-radius: 999px;
+    bottom: 0.2rem;
+    display: block;
+    height: 0.3rem;
+    left: 50%;
+    position: absolute;
+    transform: translateX(-50%);
+    width: 0.3rem;
+  }
+
+  .todo-calendar-cell-selected .todo-calendar-marker {
+    background: var(--primary-fg);
   }
 
   .todo-due-group + .todo-due-group {
