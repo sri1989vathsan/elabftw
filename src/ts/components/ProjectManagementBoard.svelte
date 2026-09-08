@@ -309,7 +309,8 @@
   }
 
   onMount(() => {
-    const projectParam = new URLSearchParams(window.location.search).get('project');
+    const searchParams = new URLSearchParams(window.location.search);
+    const projectParam = searchParams.get('project');
     if (projectParam === 'all') {
       activeProjectId = 'all';
     } else {
@@ -317,10 +318,25 @@
       if (Number.isInteger(numericParam) && numericParam > 0) activeProjectId = numericParam;
     }
 
+    // a notification (task assignment, mention in a comment) links here
+    // with ?task=<id> -- make sure that task is actually visible (it may
+    // belong to a project/scope other than whatever's currently selected)
+    // and open its detail dialog once it's loaded
+    const taskParam = Number(searchParams.get('task'));
+    if (Number.isInteger(taskParam) && taskParam > 0) {
+      activeProjectId = 'all';
+      scope = 'all';
+    }
+
     void loadTeamMembers();
     void loadProjects();
     void loadColumns();
-    void load();
+    void load().then(() => {
+      if (Number.isInteger(taskParam) && taskParam > 0) {
+        const task = tasks.find(t => t.id === taskParam);
+        if (task) openDetail(task);
+      }
+    });
 
     // Lets the Search side panel offer a "Link to task" button on its
     // results (see FavoriteFilters.class.ts) while a task's detail dialog is

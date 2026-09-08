@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
@@ -801,7 +801,33 @@
   }
 
   onMount(() => {
-    void load();
+    // a notification (mention in a comment) links here with ?order=<id>
+    // -- make sure that order is actually visible (it may be in a
+    // different status tab, or not "mine") before opening its comments
+    const orderParam = Number(new URLSearchParams(window.location.search).get('order'));
+    const hasOrderParam = Number.isInteger(orderParam) && orderParam > 0;
+    if (hasOrderParam) {
+      statusFilter = 'all';
+      ownerFilter = 'all';
+    }
+    void load().then(async () => {
+      if (!hasOrderParam) return;
+      let item = items.find(i => i.id === orderParam);
+      if (!item) {
+        // not on the first page of results -- fetch it directly rather
+        // than making the user hunt for it, and pin it to the top of the
+        // currently-loaded list so it actually renders
+        try {
+          item = await ApiC.getJson(`${Model.Order}/${orderParam}`) as OrderItem;
+          items = [item, ...items];
+        } catch {
+          return;
+        }
+      }
+      void toggleComments(item);
+      await tick();
+      document.getElementById(`order-item-${orderParam}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
     void loadTeamMembers();
     void loadCategories();
     void loadTemplates();
@@ -1096,7 +1122,7 @@
 </div>
 
 {#snippet orderCard(item)}
-        <li class="orders-card orders-item" class:orders-item-pinned={item.pinned}>
+        <li id={`order-item-${item.id}`} class="orders-card orders-item" class:orders-item-pinned={item.pinned}>
           <div class="orders-item-body">
             {#if editingItemId === item.id}
               <div class="orders-edit-form">
