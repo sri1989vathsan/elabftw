@@ -186,6 +186,11 @@ final class Todolist extends AbstractRest
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
             WHERE t.team = :team AND t.completed_at {$completedFilter}{$completedSinceFilter}{$scopeFilter}
+                AND (
+                    t.project_id IS NULL
+                    OR project.userid = :requester3
+                    OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester4)
+                )
             ORDER BY {$order}{$limitSql}";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
@@ -195,6 +200,11 @@ final class Todolist extends AbstractRest
         if ($scope === 'all') {
             $req->bindParam(':requester2', $this->userid, PDO::PARAM_INT);
         }
+        // a task tied to a project is only visible to that project's
+        // creator/members, regardless of scope -- being removed from a
+        // project must hide its tasks from every tab, not just its own
+        $req->bindParam(':requester3', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
         if ($completedSince !== null) {
             $req->bindValue(':completed_since', $completedSince, PDO::PARAM_STR);
         }
@@ -287,10 +297,17 @@ final class Todolist extends AbstractRest
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
-            WHERE t.id = :id AND t.team = :team";
+            WHERE t.id = :id AND t.team = :team
+                AND (
+                    t.project_id IS NULL
+                    OR project.userid = :requester
+                    OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester2)
+                )";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $req->bindParam(':requester', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester2', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
 
         $task = $this->Db->fetch($req);
