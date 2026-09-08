@@ -4528,8 +4528,8 @@ div > .sticky-navbar {
   // this width -- once too many columns to fit, the row scrolls
   // horizontally (see .pm-columns) instead of every column getting
   // squeezed narrower
-  flex: 1 0 16rem;
-  min-width: 16rem;
+  flex: 1 0 24rem;
+  min-width: 24rem;
   transition: background-color 0.1s ease;
 }
 
@@ -4780,6 +4780,21 @@ div > .sticky-navbar {
 
 .rte-content:focus {
   outline: none;
+}
+
+.link-preview-badge {
+  align-items: center;
+  background: var(--thirdlevel);
+  border-radius: 0.3rem;
+  color: inherit;
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0.1rem 0.5rem;
+  text-decoration: none;
+}
+
+.link-preview-badge:hover {
+  text-decoration: underline;
 }
 
 .rte-content h4 {

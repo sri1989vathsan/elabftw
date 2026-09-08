@@ -57,6 +57,7 @@ use Elabftw\Models\HtmlTools;
 use Elabftw\Models\Instance;
 use Elabftw\Models\Instance2Rors;
 use Elabftw\Models\Items;
+use Elabftw\Models\LinkPreview;
 use Elabftw\Models\ItemsStatus;
 use Elabftw\Models\Notifications\EventDeleted;
 use Elabftw\Models\Notifications\UserNotifications;
@@ -361,6 +362,7 @@ final class Apiv2Controller extends AbstractApiController
             ApiEndpoint::IdpsSources => new IdpsSources($this->requester, $this->id),
             ApiEndpoint::HtmlTools => new HtmlTools($this->requester, $this->id),
             ApiEndpoint::Import => new ImportHandler($this->requester, App::getDefaultLogger()),
+            ApiEndpoint::LinkPreview => new LinkPreview($this->requester),
             ApiEndpoint::Info => new Info(),
             ApiEndpoint::Instance => new Instance($this->requester, $this->getEmail(), (bool) Config::getConfig()->configArr['email_send_grouped']),
             ApiEndpoint::Export => new Exports(App::getDefaultLogger(), $this->requester, Storage::EXPORTS->getStorage(), $this->id),

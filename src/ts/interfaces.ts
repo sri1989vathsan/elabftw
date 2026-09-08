@@ -149,6 +149,7 @@ enum Model {
   IdpsSources = 'idps_sources',
   ItemsStatus = 'items_status',
   Link = 'links',
+  LinkPreview = 'link_preview',
   Notification = 'notifications',
   ExperimentsCategories = 'experiments_categories',
   ExperimentsStatus = 'experiments_status',

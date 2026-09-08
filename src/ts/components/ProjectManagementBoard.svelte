@@ -6,6 +6,7 @@
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
   import { applyMention, extractMentionQuery } from '../mentions';
+  import { fetchLinkPreviewLabel, handleLinkPreviewPaste } from '../linkPreview';
 
   // Closes the @mention dropdown on any click outside its own container --
   // it otherwise stayed open until a mention was picked, even after
@@ -743,7 +744,7 @@
       notify.error('Enter a valid web address.');
       return;
     }
-    const label = weblinkLabel.trim() || url;
+    const label = weblinkLabel.trim() || await fetchLinkPreviewLabel(url);
     if (creatingNewTask) {
       draftLinks = [...draftLinks, { url, label }];
       weblinkUrl = '';
@@ -1401,6 +1402,7 @@
               aria-multiline="true"
               aria-label={t('Description')}
               bind:this={descriptionEl}
+              on:paste={(event) => handleLinkPreviewPaste(event, descriptionEl)}
             >{@html detailDescription}</div>
           </div>
 
@@ -1423,6 +1425,7 @@
               aria-multiline="true"
               aria-label={t('Notes')}
               bind:this={notesEl}
+              on:paste={(event) => handleLinkPreviewPaste(event, notesEl)}
             >{@html detailNotes}</div>
           </div>
         {:else}
@@ -1768,6 +1771,7 @@
             aria-multiline="true"
             aria-label={t('Goals / description')}
             bind:this={dialogDescriptionEl}
+            on:paste={(event) => handleLinkPreviewPaste(event, dialogDescriptionEl)}
           >{@html dialogDescription}</div>
         </div>
         <div class="pm-dialog-field">
