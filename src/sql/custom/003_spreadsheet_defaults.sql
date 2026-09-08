@@ -1,0 +1,26 @@
+-- Fork migration 003: user and notebook spreadsheet appearance defaults.
+SET @custom_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'spreadsheet_defaults');
+SET @custom_sql = IF(@custom_exists = 0, 'ALTER TABLE `users` ADD COLUMN `spreadsheet_defaults` JSON NULL DEFAULT NULL', 'SELECT 1');
+PREPARE custom_stmt FROM @custom_sql;
+EXECUTE custom_stmt;
+DEALLOCATE PREPARE custom_stmt;
+SET @custom_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'experiments' AND COLUMN_NAME = 'spreadsheet_defaults');
+SET @custom_sql = IF(@custom_exists = 0, 'ALTER TABLE `experiments` ADD COLUMN `spreadsheet_defaults` JSON NULL DEFAULT NULL', 'SELECT 1');
+PREPARE custom_stmt FROM @custom_sql;
+EXECUTE custom_stmt;
+DEALLOCATE PREPARE custom_stmt;
+SET @custom_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'experiments_templates' AND COLUMN_NAME = 'spreadsheet_defaults');
+SET @custom_sql = IF(@custom_exists = 0, 'ALTER TABLE `experiments_templates` ADD COLUMN `spreadsheet_defaults` JSON NULL DEFAULT NULL', 'SELECT 1');
+PREPARE custom_stmt FROM @custom_sql;
+EXECUTE custom_stmt;
+DEALLOCATE PREPARE custom_stmt;
+SET @custom_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'items' AND COLUMN_NAME = 'spreadsheet_defaults');
+SET @custom_sql = IF(@custom_exists = 0, 'ALTER TABLE `items` ADD COLUMN `spreadsheet_defaults` JSON NULL DEFAULT NULL', 'SELECT 1');
+PREPARE custom_stmt FROM @custom_sql;
+EXECUTE custom_stmt;
+DEALLOCATE PREPARE custom_stmt;
+SET @custom_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'items_types' AND COLUMN_NAME = 'spreadsheet_defaults');
+SET @custom_sql = IF(@custom_exists = 0, 'ALTER TABLE `items_types` ADD COLUMN `spreadsheet_defaults` JSON NULL DEFAULT NULL', 'SELECT 1');
+PREPARE custom_stmt FROM @custom_sql;
+EXECUTE custom_stmt;
+DEALLOCATE PREPARE custom_stmt;
