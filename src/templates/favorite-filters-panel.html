@@ -116,26 +116,22 @@
         {{ 'These favorites are saved only for your account.'|trans }}
       </p>
       <div id='favtagsTagsDiv'>
-        {% if App.favoriteTagsArr|length == 0 %}
-          <p class='small color-medium mb-0'>{{ 'No favorite tags are present. Add an existing tag below.'|trans }}</p>
-        {% else %}
-          {% for favtag in App.favoriteTagsArr %}
-            <div class='favorite-filter-option d-flex align-items-center'>
-              <input
-                class='mr-2'
-                id='favoriteTagFilter-{{ loop.index }}'
-                type='checkbox'
-                value='{{ favtag.tag|e('html_attr') }}'
-                data-favorite-filter-tag
-                {{ favtag.tag in activeTags ? 'checked' }}
-              >
-              <label class='flex-grow-1 mb-0' for='favoriteTagFilter-{{ loop.index }}'>{{ favtag.tag }}</label>
-              <button type='button' class='btn btn-sm btn-ghost' data-id='{{ favtag.tags_id }}' data-action='destroy-favtags' title='{{ 'Remove from favorites'|trans }}' aria-label='{{ 'Remove from favorites'|trans }}'>
-                <i class='fas fa-trash-alt fa-fw'></i>
-              </button>
-            </div>
-          {% endfor %}
-        {% endif %}
+        {% for favtag in App.favoriteTagsArr %}
+          <div class='favorite-filter-option d-flex align-items-center'>
+            <input
+              class='mr-2'
+              id='favoriteTagFilter-{{ loop.index }}'
+              type='checkbox'
+              value='{{ favtag.tag|e('html_attr') }}'
+              data-favorite-filter-tag
+              {{ favtag.tag in activeTags ? 'checked' }}
+            >
+            <label class='flex-grow-1 mb-0' for='favoriteTagFilter-{{ loop.index }}'>{{ favtag.tag }}</label>
+            <button type='button' class='btn btn-sm btn-ghost' data-id='{{ favtag.tags_id }}' data-action='destroy-favtags' title='{{ 'Remove from favorites'|trans }}' aria-label='{{ 'Remove from favorites'|trans }}'>
+              <i class='fas fa-trash-alt fa-fw'></i>
+            </button>
+          </div>
+        {% endfor %}
       </div>
       </div>
     </details>
