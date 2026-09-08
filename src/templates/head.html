@@ -173,10 +173,10 @@
                 href='team.php' {{ isActive ? 'aria-current="page"' }}>{{ 'Team'|trans }}</a>
             {% endif %}
 
-            {% if App.Users.isAdmin %}
-            {% set isActive = scriptName == 'lab-logs.php' %}
+            {% if not App.isAnonymous() %}
+            {% set isActive = scriptName == 'projectmanagement.php' %}
             <a class='nav-item nav-link {{ isActive ? 'active' }}'
-                href='lab-logs.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-book mr-1'></i>{{ 'Lab Logs'|trans }}</a>
+                href='projectmanagement.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-list-check mr-1'></i>{{ 'Project management'|trans }}</a>
             {% endif %}
 
             {% if not App.isAnonymous() %}
