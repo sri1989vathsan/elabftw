@@ -177,10 +177,15 @@ final class UserNotifications extends AbstractRest
      * Delete all notifications for that user
      */
     #[Override]
+    /**
+     * "Clear all" from the navbar bell -- acknowledges every notification
+     * rather than deleting it, so it drops out of the (unread-only) bell
+     * but is still there on the "All notifications" history page.
+     */
     public function destroy(): bool
     {
         $this->users->isSelfOrExplode();
-        $sql = 'DELETE FROM notifications WHERE userid = :userid';
+        $sql = 'UPDATE notifications SET is_ack = 1 WHERE userid = :userid';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         return $this->Db->execute($req);

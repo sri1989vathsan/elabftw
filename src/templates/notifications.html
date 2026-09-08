@@ -2,8 +2,6 @@
 
 {% block body %}
 <div class='container-fluid px-0'>
-  <h1 class='mb-3'><i class='far fa-bell mr-2'></i>{{ 'Notifications'|trans }}</h1>
-
   {% if notifs|length > 0 %}
     <div class='card'>
       {% for notif in notifs %}
