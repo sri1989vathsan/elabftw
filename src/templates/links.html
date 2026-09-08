@@ -1,6 +1,82 @@
 {# LINKS #}
-<h3 data-action='toggle-next' data-scroll-btn='fa-link' data-scroll-btn-label='{{ 'Links'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='linksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Links'|trans }}</h3>
-<div class='mt-2' data-save-hidden='linksDiv' id='linksDiv'>
+<h3 data-action='toggle-next' data-scroll-btn='fa-link' data-scroll-btn-label='{{ 'Links'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ mode == 'edit' ? 'true' : 'false' }}' aria-controls='linksDiv'><i class='fas {{ mode == 'edit' ? 'fa-caret-down' : 'fa-caret-right' }} mr-2 fa-fw'></i>{{ 'Links'|trans }}</h3>
+<div class='mt-2' {{ mode == 'edit' ? '' : 'hidden' }} data-save-hidden='linksDiv' id='linksDiv'>
+  {% set accessKey = App.Request.query.getString('access_key') %}
+  {% set allFileFolderReferences = Entity.entityData.metadata_decoded.elabftw.file_folder_references|default([]) %}
+  {# split by whether each reference is a real smb:// url or \\server\share
+     UNC path (network share -> its own "Data" section) vs. plain text
+     (stays under Files / folders alongside uploads) #}
+  {% set dataReferences = [] %}
+  {% set fileFolderReferences = [] %}
+  {% for reference in allFileFolderReferences %}
+    {% if reference.text starts with '\\\\' or reference.text starts with 'smb://' %}
+      {% set dataReferences = dataReferences|merge([reference]) %}
+    {% else %}
+      {% set fileFolderReferences = fileFolderReferences|merge([reference]) %}
+    {% endif %}
+  {% endfor %}
+  {% set filesFoldersLinksCount = (Entity.entityData.uploads|length) + (fileFolderReferences|length) %}
+
+  {# DATA: smb:// and \\server\share network paths, kept separate from plain
+     file/folder text references since they get real Mac/Windows open links.
+     Shown first since it's usually the fastest link people reach for. #}
+  <section id='dataLinksSection'>
+    <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='dataLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Data'|trans }} (<span id='dataLinksCount'>{{ dataReferences|length }}</span>)</h4>
+    <div id='dataLinksDiv' class='ml-4'>
+      {% for reference in dataReferences %}
+        {% set isSmbUnc = reference.text starts with '\\\\' %}
+        {% set displayText = reference.label|default(reference.text) %}
+        {# host/share/path core shared by both link forms below #}
+        {% set smbCore = isSmbUnc ? reference.text|slice(2)|replace({'\\': '/'}) : reference.text|slice(6) %}
+        {# raw \\host\share\path form: browsers can't navigate to a bare
+           backslash string and file://host/path drops the hostname
+           inconsistently (Firefox rewrites it to file:///path), so Windows
+           gets a copy-to-clipboard button instead of a clickable link --
+           paste it into Explorer's address bar #}
+        {% set uncPath = '\\\\' ~ smbCore|replace({'/': '\\'}) %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center' id='fileFolderReference_{{ reference.id }}'>
+          <span class='mr-auto text-break' title='{{ reference.label ? reference.text : '' }}'>
+            <i class='fas fa-server fa-fw mr-2' aria-hidden='true'></i>{{ displayText }}
+          </span>
+          <a class='btn btn-ghost btn-sm mr-1' href='smb://{{ smbCore|e('html_attr') }}' title='{{ 'Open on Mac (smb://)'|trans }}' aria-label='{{ 'Open on Mac'|trans }}'>
+            <i class='fab fa-apple fa-fw'></i>
+          </a>
+          <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='copy-unc-path' data-unc='{{ uncPath|e('html_attr') }}' title='{{ 'Copy Windows path (paste into Explorer)'|trans }}' aria-label='{{ 'Copy Windows path'|trans }}'>
+            <i class='fab fa-windows fa-fw'></i>
+          </button>
+          {% if mode == 'edit' %}
+            <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='insert-file-folder-reference' data-text='{{ reference.text|e('html_attr') }}' data-label='{{ reference.label|default('')|e('html_attr') }}' title='{{ 'Insert reference in main text'|trans }}' aria-label='{{ 'Insert reference in main text'|trans }}'>
+              <i class='fas fa-file-import fa-fw'></i>
+            </button>
+            <button type='button' class='btn btn-danger-ghost btn-sm' data-action='delete-file-folder-reference' data-referenceid='{{ reference.id|e('html_attr') }}' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}'>
+              <i class='fas fa-trash-alt fa-fw'></i>
+            </button>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% if mode == 'edit' %}
+        {# single-item add with an optional display label, e.g. a long smb://
+           path shown as "Raw data folder" instead of the full url #}
+        <form class='mt-3' id='addFileFolderReferenceForm'>
+          <div class='form-row'>
+            <div class='col-md-7 mb-2'>
+              <label class='sr-only' for='fileFolderReferenceTextInput'>{{ 'Network share path'|trans }}</label>
+              <input type='text' id='fileFolderReferenceTextInput' class='form-control' maxlength='1000' placeholder='{{ 'smb://server/share/folder or \\\\server\\share\\folder'|trans }}' aria-label='{{ 'Network share path'|trans }}' required>
+            </div>
+            <div class='col-md-3 mb-2'>
+              <label class='sr-only' for='fileFolderReferenceLabelInput'>{{ 'Display label'|trans }}</label>
+              <input type='text' id='fileFolderReferenceLabelInput' class='form-control' maxlength='200' placeholder='{{ 'Label (optional)'|trans }}' aria-label='{{ 'Display label'|trans }}'>
+            </div>
+            <div class='col-md-2 mb-2'>
+              <button type='submit' class='btn btn-primary btn-block' data-action='add-file-folder-reference'>{{ 'Add'|trans }}</button>
+            </div>
+          </div>
+        </form>
+      {% endif %}
+    </div>
+  </section>
+  <hr>
+
   {# EXPERIMENTS LINKS #}
   <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='experimentsLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Experiment links'|trans }} (<span id='experimentsLinksCount'>{{ Entity.entityData.experiments_links|length }}</span>)</h4>
   <div id='experimentsLinksDiv' class='ml-4'>
@@ -43,6 +119,10 @@
   </div>
   <hr>
 
+  {% if Entity.entityData.type == 'experiments' %}
+    {% include 'associated-templates.html' %}
+  {% endif %}
+
   <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='itemsLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Resource links'|trans }} (<span id='itemsLinksCount'>{{ Entity.entityData.items_links|length }}</span>)</h4>
   <div id='itemsLinksDiv' class='ml-4'>
     <div data-count-for='itemsLinksCount'>
@@ -82,6 +162,141 @@
       {% endif %}
     </div>
   </div>
+  <hr>
+
+  {# LINKED TASKS: to-do tasks linked to this entity from the Project
+     Management side (see TodolistEntityLinks::readAllForEntity()) --
+     read-only here; add/remove the link from the task's own detail
+     dialog instead. #}
+  <section id='linkedTasksSection'>
+    <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='linkedTasksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Linked tasks'|trans }} (<span id='linkedTasksCount'>{{ linkedTasksArr|length }}</span>)</h4>
+    <div id='linkedTasksDiv' class='ml-4'>
+      {% for task in linkedTasksArr %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center'>
+          <a class='mr-auto text-break' href='projectmanagement.php?task={{ task.task_id }}'>
+            <i class='fas fa-list-check fa-fw mr-2' aria-hidden='true'></i>{{ task.title }}
+          </a>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  <hr>
+
+  {# EXTERNAL WEB REFERENCES #}
+  {% set webLinks = Entity.entityData.metadata_decoded.elabftw.web_links|default([]) %}
+  <section id='webLinksSection'>
+    <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='webLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Web links'|trans }} (<span id='webLinksCount'>{{ webLinks|length }}</span>)</h4>
+    <div id='webLinksDiv' class='ml-4'>
+      {% for webLink in webLinks %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center' id='webLink_{{ webLink.id }}'>
+          <a class='mr-auto text-break' href='{{ webLink.url|e('html_attr') }}' target='_blank' rel='noreferrer noopener' title='{{ webLink.url|e('html_attr') }}'>
+            <i class='fas fa-globe fa-fw mr-2' aria-hidden='true'></i>{{ webLink.label }}
+          </a>
+          {% if mode == 'edit' %}
+            <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='insert-web-link' data-label='{{ webLink.label|e('html_attr') }}' data-url='{{ webLink.url|e('html_attr') }}' title='{{ 'Insert link in main text'|trans }}' aria-label='{{ 'Insert link in main text'|trans }}'>
+              <i class='fas fa-file-import fa-fw'></i>
+            </button>
+            <button type='button' class='btn btn-danger-ghost btn-sm' data-action='delete-web-link' data-linkid='{{ webLink.id|e('html_attr') }}' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}'>
+              <i class='fas fa-trash-alt fa-fw'></i>
+            </button>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% if mode == 'edit' %}
+        <form class='mt-3' id='addWebLinkForm'>
+          <div class='form-row'>
+            <div class='col-md-7 mb-2'>
+              <label class='sr-only' for='webLinkUrlInput'>{{ 'Web address'|trans }}</label>
+              <input type='url' id='webLinkUrlInput' class='form-control' maxlength='2000' placeholder='{{ 'https://github.com/… or a paper URL'|trans }}' aria-label='{{ 'Web address'|trans }}' required>
+            </div>
+            <div class='col-md-3 mb-2'>
+              <label class='sr-only' for='webLinkLabelInput'>{{ 'Link text'|trans }}</label>
+              <input type='text' id='webLinkLabelInput' class='form-control' maxlength='500' placeholder='{{ 'Label (optional)'|trans }}' aria-label='{{ 'Link text'|trans }}'>
+            </div>
+            <div class='col-md-2 mb-2'>
+              <button type='submit' class='btn btn-primary btn-block' data-action='add-web-link'>{{ 'Add'|trans }}</button>
+            </div>
+          </div>
+        </form>
+      {% endif %}
+    </div>
+  </section>
+  <hr>
+
+  {# LABCOLLECTOR LINKS: recorded here whenever one is created from the
+     TinyMCE Insert-menu dialog, the same way an inserted web link is
+     tracked above. #}
+  {% set labcollectorLinks = Entity.entityData.metadata_decoded.elabftw.labcollector_links|default([]) %}
+  <section id='labcollectorLinksSection'>
+    <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='labcollectorLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'LabCollector links'|trans }} (<span id='labcollectorLinksCount'>{{ labcollectorLinks|length }}</span>)</h4>
+    <div id='labcollectorLinksDiv' class='ml-4'>
+      {% for labcollectorLink in labcollectorLinks %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center' id='labcollectorLink_{{ labcollectorLink.id }}'>
+          <a class='mr-auto text-break' href='{{ labcollectorLink.url|e('html_attr') }}' target='_blank' rel='noreferrer noopener' title='{{ labcollectorLink.url|e('html_attr') }}'>
+            <i class='fas fa-flask fa-fw mr-2' aria-hidden='true'></i>{{ labcollectorLink.label }}
+          </a>
+          {% if mode == 'edit' %}
+            <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='insert-web-link' data-label='{{ labcollectorLink.label|e('html_attr') }}' data-url='{{ labcollectorLink.url|e('html_attr') }}' title='{{ 'Insert link in main text'|trans }}' aria-label='{{ 'Insert link in main text'|trans }}'>
+              <i class='fas fa-file-import fa-fw'></i>
+            </button>
+            <button type='button' class='btn btn-danger-ghost btn-sm' data-action='delete-labcollector-link' data-linkid='{{ labcollectorLink.id|e('html_attr') }}' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}'>
+              <i class='fas fa-trash-alt fa-fw'></i>
+            </button>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  <hr>
+
+  {# ATTACHED FILES AND PLAIN-TEXT FILE/FOLDER REFERENCES #}
+  <section id='filesFoldersLinksSection'>
+    <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='filesFoldersLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Files / folders'|trans }} (<span id='filesFoldersLinksCount'>{{ filesFoldersLinksCount }}</span>)</h4>
+    <div id='filesFoldersLinksDiv' class='ml-4'>
+      {% for reference in fileFolderReferences %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center' id='fileFolderReference_{{ reference.id }}'>
+          <span class='mr-auto text-break'>
+            <i class='fas fa-folder fa-fw mr-2' aria-hidden='true'></i>{{ reference.text }}
+          </span>
+          {% if mode == 'edit' %}
+            <button type='button' class='btn btn-ghost btn-sm mr-1' data-action='insert-file-folder-reference' data-text='{{ reference.text|e('html_attr') }}' title='{{ 'Insert reference in main text'|trans }}' aria-label='{{ 'Insert reference in main text'|trans }}'>
+              <i class='fas fa-file-import fa-fw'></i>
+            </button>
+            <button type='button' class='btn btn-danger-ghost btn-sm' data-action='delete-file-folder-reference' data-referenceid='{{ reference.id|e('html_attr') }}' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}'>
+              <i class='fas fa-trash-alt fa-fw'></i>
+            </button>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% for upload in Entity.entityData.uploads %}
+        {% set ext = upload.real_name|getExt %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center' id='fileFolderLink_{{ upload.id }}'>
+          <a class='mr-auto text-break' target='_blank' rel='noopener' href='app/download.php?f={{ upload.long_name|e('url') }}&amp;name={{ upload.real_name|e('url') }}&amp;storage={{ upload.storage }}{% if accessKey %}&amp;access_key={{ accessKey|e('url') }}{% endif %}'>
+            <i class='fas {{ ext2icon(ext) }} fa-fw mr-2' aria-hidden='true'></i>{{ upload.real_name }}
+          </a>
+          {% if mode == 'edit' %}
+            <button type='button' class='btn btn-ghost btn-sm' data-action='insert-upload-link' data-name='{{ upload.real_name|e('html_attr') }}' data-storage='{{ upload.storage }}' data-link='{{ upload.long_name|e('html_attr') }}' data-uploadid='{{ upload.id }}' title='{{ 'Insert file link in main text'|trans }}' aria-label='{{ 'Insert file link in main text'|trans }}'>
+              <i class='fas fa-fw fa-link'></i>
+            </button>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% if mode == 'edit' %}
+        <form class='mt-3' id='addFileFolderReferencesForm'>
+          <label for='fileFolderReferencesInput' class='sr-only'>{{ 'File or folder references'|trans }}</label>
+          <div class='input-group'>
+            <div class='input-group-prepend'>
+              <span class='input-group-text'><i class='fas fa-folder-plus fa-fw'></i></span>
+            </div>
+            <textarea id='fileFolderReferencesInput' class='form-control' rows='2' maxlength='100099' placeholder='{{ 'Paste one file or folder reference per line'|trans }}' aria-label='{{ 'File or folder references'|trans }}' required></textarea>
+            <div class='input-group-append'>
+              <button type='submit' class='btn btn-primary' data-action='add-file-folder-references'>{{ 'Add reference(s)'|trans }}</button>
+            </div>
+          </div>
+        </form>
+      {% endif %}
+    </div>
+  </section>
   <hr>
 
   {% include 'compounds-view-edit.html' %}

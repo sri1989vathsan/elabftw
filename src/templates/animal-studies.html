@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class='container-fluid px-0'>
+  <div class='d-flex flex-wrap align-items-center justify-content-between mb-3'>
+    <div>
+      <h1 class='mb-1'><i class='fas fa-paw mr-2'></i>{{ 'Animal Studies'|trans }}</h1>
+      <p class='text-muted mb-0'>{{ 'Browse PyRAT animals and cages without duplicating their canonical records in eLabFTW.'|trans }}</p>
+    </div>
+    <div class='mt-2 mt-md-0'>
+      {% if pyratStatus.connected %}
+        <span class='badge badge-success p-2'><i class='fas fa-circle mr-1'></i>{{ pyratStatus.demo ? 'PyRAT demo connected'|trans : 'PyRAT connected'|trans }}</span>
+      {% elseif pyratStatus.enabled %}
+        <span class='badge badge-warning p-2'><i class='fas fa-triangle-exclamation mr-1'></i>{{ 'PyRAT not connected'|trans }}</span>
+      {% else %}
+        <span class='badge badge-secondary p-2'>{{ 'PyRAT disabled'|trans }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if pyratStatus.demo %}
+    <div class='alert alert-info'>
+      <strong>{{ 'Demo mode'|trans }}:</strong> {{ 'The records below are example data. Configure the institutional PyRAT API in Instance settings when credentials/endpoints are available.'|trans }}
+    </div>
+  {% endif %}
+  {% if pyratError %}
+    <div class='alert alert-danger'><strong>{{ 'PyRAT error'|trans }}:</strong> {{ pyratError }}</div>
+  {% endif %}
+
+  <ul class='nav nav-tabs mb-3'>
+    <li class='nav-item'><a class='nav-link {{ tab == 'animals' ? 'active' }}' href='animal-studies.php?tab=animals'><i class='fas fa-paw mr-1'></i>{{ 'Animals'|trans }}</a></li>
+    <li class='nav-item'><a class='nav-link {{ tab == 'cages' ? 'active' }}' href='animal-studies.php?tab=cages'><i class='fas fa-border-all mr-1'></i>{{ 'Cages'|trans }}</a></li>
+    <li class='nav-item'><a class='nav-link {{ tab == 'links' ? 'active' }}' href='animal-studies.php?tab=links'><i class='fas fa-link mr-1'></i>{{ 'Experiment links'|trans }}</a></li>
+    <li class='nav-item'><a class='nav-link {{ tab == 'scoresheet' ? 'active' }}' href='animal-studies.php?tab=scoresheet'><i class='fas fa-clipboard-check mr-1'></i>{{ 'Scoresheet'|trans }}</a></li>
+  </ul>
+
+  {% if tab == 'animals' %}
+    <form class='card card-body mb-3' method='get' action='animal-studies.php'>
+      <input type='hidden' name='tab' value='animals'>
+      <div class='form-row align-items-end'>
+        <div class='col-md-6 mb-2'>
+          <label for='pyratAnimalSearch'>{{ 'Search animal, cage, strain, genotype or project'|trans }}</label>
+          <input id='pyratAnimalSearch' class='form-control' type='search' name='q' value='{{ App.Request.query.get('q') }}' placeholder='M1234 / C12 / C57BL/6J'>
+        </div>
+        <div class='col-md-2 mb-2'>
+          <label for='pyratCageFilter'>{{ 'Cage'|trans }}</label>
+          <input id='pyratCageFilter' class='form-control' name='cage' value='{{ App.Request.query.get('cage') }}' placeholder='C12'>
+        </div>
+        <div class='col-md-2 mb-2'>
+          <label for='pyratStatusFilter'>{{ 'Status'|trans }}</label>
+          <input id='pyratStatusFilter' class='form-control' name='status' value='{{ App.Request.query.get('status') }}' placeholder='Active'>
+        </div>
+        <div class='col-md-2 mb-2'>
+          <button class='btn btn-primary btn-block' type='submit'><i class='fas fa-search mr-1'></i>{{ 'Search'|trans }}</button>
+        </div>
+      </div>
+    </form>
+
+    <div class='table-responsive'>
+      <table class='table table-hover table-sm'>
+        <thead><tr>
+          <th>{{ 'Animal'|trans }}</th><th>{{ 'Cage'|trans }}</th><th>{{ 'Sex'|trans }}</th><th>{{ 'Strain'|trans }}</th><th>{{ 'Genotype'|trans }}</th><th>{{ 'DOB'|trans }}</th><th>{{ 'Project'|trans }}</th><th>{{ 'Location'|trans }}</th><th>{{ 'Status'|trans }}</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for animal in animals %}
+          <tr>
+            <td><strong>{{ animal.animal_id }}</strong><div class='small text-muted'>{{ animal.id }}</div></td>
+            <td>{{ animal.cage }}</td>
+            <td>{{ animal.sex }}</td>
+            <td>{{ animal.strain }}</td>
+            <td>{{ animal.genotype }}</td>
+            <td>{{ animal.dob }}</td>
+            <td>{{ animal.project }}</td>
+            <td><span title='{{ animal.room }} {{ animal.rack }} {{ animal.position }}'>{{ animal.room }}{% if animal.rack %} / {{ animal.rack }}{% endif %}</span></td>
+            <td><span class='badge badge-light'>{{ animal.status }}</span></td>
+            <td class='text-right'>
+              {% if animal.scoresheet_url %}<a class='btn btn-sm btn-outline-primary mr-1' href='{{ animal.scoresheet_url }}' target='_blank' rel='noopener'><i class='fas fa-clipboard-check mr-1'></i>{{ 'Scoresheet'|trans }}</a>{% endif %}
+              <button type='button' class='btn btn-sm btn-outline-secondary' data-toggle='collapse' data-target='#pyrat-animal-{{ loop.index }}' aria-expanded='false'>{{ 'Details'|trans }}</button>
+            </td>
+          </tr>
+          <tr class='collapse bg-light' id='pyrat-animal-{{ loop.index }}'>
+            <td colspan='10'>
+              <div class='row py-2'>
+                <div class='col-md-4'><strong>{{ 'Responsible'|trans }}</strong><br>{{ animal.responsible ?: '—' }}</div>
+                <div class='col-md-4'><strong>{{ 'Room / rack / position'|trans }}</strong><br>{{ animal.room ?: '—' }} / {{ animal.rack ?: '—' }} / {{ animal.position ?: '—' }}</div>
+                <div class='col-md-4'><strong>{{ 'PyRAT identifier'|trans }}</strong><br><code>{{ animal.id }}</code></div>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan='10' class='text-center text-muted py-4'>{{ pyratStatus.enabled ? 'No animals matched the current filters.'|trans : 'Enable PyRAT in Instance settings to browse animals.'|trans }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% elseif tab == 'cages' %}
+    <form class='card card-body mb-3' method='get' action='animal-studies.php'>
+      <input type='hidden' name='tab' value='cages'>
+      <div class='input-group'>
+        <input class='form-control' type='search' name='q' value='{{ App.Request.query.get('q') }}' placeholder='{{ 'Search cage, room, rack or project'|trans }}'>
+        <div class='input-group-append'><button class='btn btn-primary' type='submit'><i class='fas fa-search mr-1'></i>{{ 'Search'|trans }}</button></div>
+      </div>
+    </form>
+    <div class='table-responsive'>
+      <table class='table table-hover table-sm'>
+        <thead><tr><th>{{ 'Cage'|trans }}</th><th>{{ 'Room'|trans }}</th><th>{{ 'Rack'|trans }}</th><th>{{ 'Position'|trans }}</th><th>{{ 'Animals'|trans }}</th><th>{{ 'Project'|trans }}</th><th>{{ 'Status'|trans }}</th><th></th></tr></thead>
+        <tbody>
+        {% for cage in cages %}
+          <tr>
+            <td><strong>{{ cage.cage_id }}</strong></td><td>{{ cage.room }}</td><td>{{ cage.rack }}</td><td>{{ cage.position }}</td><td>{{ cage.animal_count }}</td><td>{{ cage.project }}</td><td><span class='badge badge-light'>{{ cage.status }}</span></td>
+            <td class='text-right'>
+              <a class='btn btn-sm btn-outline-primary mr-1' href='animal-studies.php?tab=animals&amp;cage={{ cage.cage_id|url_encode }}'>{{ 'View animals'|trans }}</a>
+              {% if cage.scoresheet_url %}<a class='btn btn-sm btn-outline-primary mr-1' href='{{ cage.scoresheet_url }}' target='_blank' rel='noopener'><i class='fas fa-clipboard-check mr-1'></i>{{ 'Scoresheet'|trans }}</a>{% endif %}
+              <button type='button' class='btn btn-sm btn-outline-secondary' data-toggle='collapse' data-target='#pyrat-cage-{{ loop.index }}' aria-expanded='false'>{{ 'Details'|trans }}</button>
+            </td>
+          </tr>
+          <tr class='collapse bg-light' id='pyrat-cage-{{ loop.index }}'>
+            <td colspan='8'>
+              <div class='row py-2'>
+                <div class='col-md-4'><strong>{{ 'Location'|trans }}</strong><br>{{ cage.room ?: '—' }} / {{ cage.rack ?: '—' }} / {{ cage.position ?: '—' }}</div>
+                <div class='col-md-4'><strong>{{ 'Project'|trans }}</strong><br>{{ cage.project ?: '—' }}</div>
+                <div class='col-md-4'><strong>{{ 'PyRAT identifier'|trans }}</strong><br><code>{{ cage.id }}</code></div>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan='8' class='text-center text-muted py-4'>{{ pyratStatus.enabled ? 'No cages matched the current filters.'|trans : 'Enable PyRAT in Instance settings to browse cages.'|trans }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% elseif tab == 'links' %}
+    <div class='alert alert-secondary'>{{ 'Only the PyRAT animal or cage identifier is stored in eLabFTW. Animal, cage and score data remain authoritative outside eLabFTW.'|trans }}</div>
+    <div class='table-responsive'>
+      <table class='table table-hover table-sm'>
+        <thead><tr><th>{{ 'Type'|trans }}</th><th>{{ 'PyRAT record'|trans }}</th><th>{{ 'Experiment'|trans }}</th><th>{{ 'Linked'|trans }}</th><th></th></tr></thead>
+        <tbody>
+        {% for link in pyratLinks %}
+          <tr>
+            <td><span class='badge badge-light'>{{ link.entity_type }}</span></td>
+            <td><strong>{{ link.pyrat_label ?: link.pyrat_entity_id }}</strong><div class='small text-muted'>{{ link.pyrat_entity_id }}</div></td>
+            <td><a href='experiments.php?mode=view&amp;id={{ link.experiment_id }}'>{{ link.experiment_title }}</a></td>
+            <td>{{ link.created_at }}</td>
+            <td class='text-right'>
+              <a class='btn btn-sm btn-outline-secondary mr-1' href='animal-studies.php?tab={{ link.entity_type == 'cage' ? 'cages' : 'animals' }}&amp;q={{ link.pyrat_entity_id|url_encode }}'>{{ 'Open'|trans }}</a>
+              {% if link.scoresheet_url %}<a class='btn btn-sm btn-outline-primary' href='{{ link.scoresheet_url }}' target='_blank' rel='noopener'>{{ 'Scoresheet'|trans }}</a>{% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan='5' class='text-center text-muted py-4'>{{ 'No PyRAT animals or cages are linked to accessible experiments yet.'|trans }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class='row'>
+      <div class='col-lg-7'>
+        <div class='card mb-3'>
+          <div class='card-body'>
+            <h3 class='h5'><i class='fas fa-tablet-screen-button mr-2'></i>{{ 'External scoresheet'|trans }}</h3>
+            <p>{{ 'The scoresheet is intentionally a separate service so it remains available on the local network even when eLabFTW is not reachable.'|trans }}</p>
+            {% if scoresheetUrl %}
+              <a class='btn btn-primary' href='{{ scoresheetUrl }}' target='_blank' rel='noopener'><i class='fas fa-arrow-up-right-from-square mr-1'></i>{{ 'Open scoresheet'|trans }}</a>
+            {% else %}
+              <p class='text-muted mb-0'>{{ 'Deploy the included pyrat-scoresheet service on a network-reachable host, then set its URL in Instance settings.'|trans }}</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class='col-lg-5'>
+        <div class='card mb-3'>
+          <div class='card-body'>
+            <h3 class='h5'>{{ 'Data ownership'|trans }}</h3>
+            <ul class='mb-0'>
+              <li>{{ 'PyRAT remains authoritative for animals, cages and welfare records.'|trans }}</li>
+              <li>{{ 'eLabFTW stores experiment-to-animal and experiment-to-cage identifiers only.'|trans }}</li>
+              <li>{{ 'The scoresheet talks directly to PyRAT using its own server-side service credential.'|trans }}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock body %}

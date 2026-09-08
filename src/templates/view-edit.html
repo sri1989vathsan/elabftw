@@ -50,6 +50,40 @@
     </ul>
   {% endif %}
 </div>
+{# REVIEW DECISIONS #}
+<div id='reviewDecisionsDiv'>
+  {% if entityReviewDecisionsArr %}
+    <ul class='list-group mt-2'>
+      {% for decision in entityReviewDecisionsArr %}
+        <li class='list-group-item'>
+          <i class='fas {{ decision.decision == "approved" ? "fa-check text-success" : "fa-xmark text-danger" }} mr-2'></i>
+          {{- (decision.decision == "approved" ? '%s approved this' : '%s rejected this')|trans|format(decision.reviewer_fullname) }}
+          <span title='{{ decision.reviewed_at }}' class='relative-moment text-nowrap smallgray ml-2'></span>
+          {% if decision.comment %}
+            <div class='mt-1 smallgray'>{{ decision.comment }}</div>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+{# EXPERIMENTS USING THIS TEMPLATE #}
+{% if templateUsedByArr %}
+  <div id='templateUsedByDiv'>
+    <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-scroll-btn='fa-file-invoice' data-scroll-btn-label='{{ 'Used in'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='templateUsedByContent'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Used in %d experiment(s)'|trans|format(templateUsedByArr|length) }}</h3>
+    <ul id='templateUsedByContent' class='list-group mt-2'>
+      {% for exp in templateUsedByArr %}
+        <li class='list-group-item'>
+          <a href='experiments.php?mode=view&id={{ exp.id }}'>{{ exp.title }}</a>
+          {% if exp.created_from_version %}
+            <span class='badge badge-secondary ml-1'>{{ 'Version %d'|trans|format(exp.created_from_version) }}</span>
+          {% endif %}
+          <span class='smallgray ml-2'>{{ exp.date }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
 {# PROCUREMENT REQUESTS #}
 <div id='procurementRequestsDiv'>
   {% if entityProcurementRequestsArr %}

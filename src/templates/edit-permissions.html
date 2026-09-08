@@ -1,5 +1,11 @@
 {# PERMISSIONS display block #}
 {# 'can' and 'can_base' vars are used in view-permissions-details.html #}
+{% include 'permissions-share-modal.html' %}
+<div class='d-flex mb-2 align-items-center'>
+  <button type='button' class='btn btn-ghost btn-sm mr-2' data-action='toggle-modal' data-target='permModal-share' title='{{ 'Share this entry'|trans }}'>
+    <i class='fas fa-share-nodes fa-fw mr-1' aria-hidden='true'></i>{{ 'Share'|trans }}
+  </button>
+</div>
 <div class='d-flex mb-2 align-items-center'>
   {# CANREAD #}
   {% include 'view-permissions.html' with {rw: 'canread', can_base: Entity.entityData.canread_base_human, can: Entity.entityData.canread|canToHuman} %}

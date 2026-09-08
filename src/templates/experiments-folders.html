@@ -1,0 +1,257 @@
+{# Shared experiment/resource folder tree - dedicated tab in the left sidebar. #}
+{% if experimentsFoldersTreeArr is defined %}
+{% set folderEntityType = Entity is defined and Entity.entityType.value == 'items' ? 'items' : 'experiments' %}
+{% set currentFolderId = App.Request.query.has('folder') ? App.Request.query.get('folder') : (Entity is defined ? Entity.entityData.folder_id|default('') : '') %}
+{% set folderPage = folderEntityType == 'items' ? 'database.php' : 'experiments.php' %}
+{% set folderBookmarkIds = favoriteFolderIds|default([]) %}
+{% set folderBookmarkRootIds = favoriteRootFolderIds|default([]) %}
+<div class='side-panel' id='foldersPanel' hidden>
+  <div
+    id='experimentsFoldersSidebar'
+    class='p-3'
+    data-favorite-folder-ids='{{ folderBookmarkIds|join(',') }}'
+    data-current-folder-id='{{ currentFolderId }}'
+    data-current-user-id='{{ App.Users.userData.userid }}'
+  >
+    <div class='d-flex align-items-center justify-content-between mb-3'>
+      <h3 class='mb-0'><i class='fas fa-folder-tree mr-2'></i>{{ 'Folders'|trans }}</h3>
+      <button type='button' data-action='toggle-sidepanel' data-target='folders' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn btn-sm'>
+        <i class='fas fa-xmark fa-2x'></i>
+      </button>
+    </div>
+
+    <div class='mb-2' data-active-entity-type='{{ folderEntityType }}'>
+      <select id='folderEntityTypeSelect' class='form-control form-control-sm' aria-label='{{ 'Folder content type'|trans }}'>
+        <option value='experiments' {{ folderEntityType == 'experiments' ? 'selected' }}>{{ 'Experiments'|trans }}</option>
+        <option value='items' {{ folderEntityType == 'items' ? 'selected' }}>{{ 'Resources'|trans }}</option>
+      </select>
+    </div>
+
+    <div class='mb-3'>
+      <select id='folderQuickLinkSelect' class='form-control form-control-sm' aria-label='{{ 'Quick folder link'|trans }}'>
+        <option
+          value='all'
+          data-experiments-href='experiments.php'
+          data-items-href='database.php'
+          data-experiments-label='{{ 'All experiments'|trans|e('html_attr') }}'
+          data-items-label='{{ 'All resources'|trans|e('html_attr') }}'
+          {{ currentFolderId is empty ? 'selected' }}
+        >{{ (folderEntityType == 'items' ? 'All resources' : 'All experiments')|trans }}</option>
+        <option
+          value='unfiled'
+          data-experiments-href='experiments.php?folder=0'
+          data-items-href='database.php?folder=0'
+          {{ App.Request.query.get('folder') == '0' ? 'selected' }}
+        >{{ 'Unfiled'|trans }}</option>
+      </select>
+    </div>
+
+    <ul class='nav nav-tabs nav-fill mb-3 folder-scope-tabs' role='tablist' aria-label='{{ 'Folder visibility'|trans }}'>
+      <li class='nav-item'>
+        <button type='button' class='nav-link active w-100' data-action='select-folder-scope' data-scope='mine' role='tab' aria-selected='true'>
+          <i class='fas fa-user fa-fw mr-1'></i>{{ 'My folders'|trans }}
+        </button>
+      </li>
+      <li class='nav-item'>
+        <button type='button' class='nav-link w-100' data-action='select-folder-scope' data-scope='all' role='tab' aria-selected='false'>
+          <i class='fas fa-users fa-fw mr-1'></i>{{ 'All folders'|trans }}
+        </button>
+      </li>
+    </ul>
+
+    <div id='experimentsFoldersContent'>
+      <div class='d-flex align-items-center justify-content-between mb-2'>
+        <h4 class='h6 mb-0'>{{ 'Folder tree'|trans }}</h4>
+      </div>
+
+      {# Render exactly one branch for each root folder. Children only exist inside their parent branch. #}
+      {% macro renderFolderBranch(folders, folder, depth, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) %}
+        <div
+          class='ml-{{ depth > 0 ? 3 : 0 }} mb-1 folder-node'
+          data-folder-id='{{ folder.id }}'
+          data-folder-root-id='{{ folder.root_id }}'
+          data-folder-depth='{{ depth }}'
+          data-folder-owner-id='{{ folder.userid }}'
+          data-folder-full-path='{{ folder.full_path|e('html_attr') }}'
+        >
+          <div class='d-flex align-items-center folder-row'>
+            {% if folder.children_count > 0 %}
+              <span class='folder-toggle mr-1' data-action='toggle-folder-children' data-folder-id='{{ folder.id }}' role='button' tabindex='0' title='{{ 'Toggle visibility'|trans }}' style='cursor:pointer;width:16px;text-align:center'>
+                <i class='fas fa-caret-right fa-fw fa-xs'></i>
+              </span>
+            {% else %}
+              <span class='mr-1' style='width:16px;display:inline-block'></span>
+            {% endif %}
+            <a
+              href='{{ folderPage }}?folder={{ folder.id }}'
+              data-folder-entity-link
+              data-experiments-href='experiments.php?folder={{ folder.id }}'
+              data-items-href='database.php?folder={{ folder.id }}'
+              data-experiments-count='{{ folder.experiments_count }}'
+              data-resources-count='{{ folder.resources_count }}'
+              title='{{ folder.full_path|e('html_attr') }}'
+              class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'
+            >
+              <i class='fas fa-folder fa-fw mr-1 folder-icon'></i><span class='folder-name'>{{ folder.name }}</span>
+              {% set entityCount = folderEntityType == 'items' ? folder.resources_count : folder.experiments_count %}
+              <span class='badge badge-secondary folder-entity-count' {{ entityCount > 0 ? '' : 'hidden' }}>{{ entityCount }}</span>
+            </a>
+            {% set isBookmarked = folder.id in folderBookmarkIds %}
+            <span class='folder-actions ml-auto' role='group' aria-label='{{ 'Folder actions'|trans }}'>
+              <button type='button' data-action='toggle-favorite-folder' data-id='{{ folder.id }}' class='folder-action-btn favorite-folder-star hl-hover-gray rounded' aria-label='{{ isBookmarked ? 'Remove bookmark' : 'Bookmark folder' }}' title='{{ isBookmarked ? 'Remove bookmark' : 'Bookmark folder' }}'>
+                <i class='{{ isBookmarked ? 'fas' : 'far' }} fa-star fa-xs' style='color:{{ isBookmarked ? '#f0ad4e' : '#999' }}'></i>
+              </button>
+              <button type='button' data-action='open-folder-readme' data-id='{{ folder.id }}' class='folder-action-btn hl-hover-gray rounded' aria-label='{{ 'Folder README'|trans }}' title='{{ 'Folder README'|trans }}'>
+                <i class='{{ folder.has_readme ? 'fas' : 'far' }} fa-file-lines fa-xs'></i>
+              </button>
+              <button type='button' data-action='toggle-folder-more-actions' data-id='{{ folder.id }}' class='folder-action-btn hl-hover-gray rounded' aria-label='{{ 'More folder actions'|trans }}' title='{{ 'More'|trans }}' aria-expanded='false'>
+                <i class='fas fa-ellipsis-v fa-xs'></i>
+              </button>
+            </span>
+          </div>
+          <div class='ml-4 pl-2 mt-1 folder-more-actions' data-folder-more-actions-for='{{ folder.id }}' hidden>
+            <button type='button' data-action='open-folder-export' data-id='{{ folder.id }}' data-name='{{ folder.full_path|e('html_attr') }}' class='btn btn-sm btn-secondary mr-1'>
+              <i class='fas fa-download fa-fw mr-1'></i>{{ 'Export'|trans }}
+            </button>
+            <button type='button' data-action='edit-folder' data-id='{{ folder.id }}' data-parent-id='{{ folder.parent_id }}' data-name='{{ folder.name|e('html_attr') }}' data-description='{{ folder.description|e('html_attr') }}' class='btn btn-sm btn-primary mr-1'>
+              <i class='fas fa-pencil fa-fw mr-1'></i>{{ 'Edit'|trans }}
+            </button>
+            <button type='button' data-action='delete-folder' data-id='{{ folder.id }}' class='btn btn-sm btn-outline-danger folder-action-delete'>
+              <i class='fas fa-trash-alt fa-fw mr-1'></i>{{ 'Delete'|trans }}
+            </button>
+          </div>
+          {% if folder.description %}
+            <div class='small color-medium text-truncate ml-4 pl-2 folder-description' title='{{ folder.description|e('html_attr') }}'>{{ folder.description }}</div>
+          {% endif %}
+          {% if folder.children_count > 0 %}
+            <div class='folder-children' data-parent-folder-id='{{ folder.id }}' style='display:none'>
+              {% if folders[folder.id] is defined %}
+                {% for child in folders[folder.id] %}
+                  {{ _self.renderFolderBranch(folders, child, depth + 1, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) }}
+                {% endfor %}
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+      {% endmacro %}
+
+      <div id='experimentsFoldersTree' class='folder-tree-list'>
+        {% if folderBookmarkRootIds is not empty %}
+          <section class='bookmarked-folders-section folder-tree-section mb-2'>
+            <div class='folder-tree-section-label small font-weight-bold mb-1'>
+              <i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked'|trans }}
+            </div>
+            <div class='bookmarked-folders-content'>
+              {% if experimentsFoldersTreeArr[''] is defined %}
+                {% for folder in experimentsFoldersTreeArr[''] %}
+                  {% if folder.id in folderBookmarkRootIds %}
+                    {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) }}
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            </div>
+          </section>
+        {% endif %}
+
+        <section class='other-folders-wrapper folder-tree-section'>
+          <button type='button' class='btn btn-sm btn-block text-left other-folders-header' data-action='toggle-other-folders' aria-expanded='false'>
+            <i class='fas fa-caret-right fa-fw fa-xs mr-1'></i>
+            <i class='fas fa-folder fa-fw mr-1'></i>
+            <span>{{ 'Other folders'|trans }}</span>
+          </button>
+          <div class='other-folders-content ml-2 mt-1' style='display:none'>
+            {% if experimentsFoldersTreeArr[''] is defined %}
+              {% for folder in experimentsFoldersTreeArr[''] %}
+                {% if folder.id not in folderBookmarkRootIds %}
+                  {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) }}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          </div>
+        </section>
+      </div>
+      <div id='myFoldersEmpty' class='small color-medium text-center border rounded p-3 mt-2' hidden>
+        <i class='fas fa-folder-open fa-fw mr-1'></i>{{ 'You have not created any folders yet.'|trans }}
+      </div>
+
+      {# Create new folder form #}
+      <div class='folder-create-section border-top mt-3 pt-3'>
+        <h4 class='h6 mb-2'><i class='fas fa-folder-plus fa-fw mr-1'></i>{{ 'New folder'|trans }}</h4>
+        <div class='form-group mb-2'>
+          <label class='small mb-1' for='newFolderName'>{{ 'Folder name'|trans }}</label>
+          <input type='text' id='newFolderName' class='form-control' placeholder='{{ 'New folder name'|trans }}' aria-label='{{ 'New folder name'|trans }}' />
+        </div>
+        <div class='form-group mb-2'>
+          <label class='small mb-1' for='newFolderParent'>{{ 'Parent folder'|trans }}</label>
+          <select id='newFolderParent' class='form-control' aria-label='{{ 'Parent folder'|trans }}'>
+            <option value=''>{{ 'Root (no parent)'|trans }}</option>
+            {% if experimentsFoldersTreeArr is iterable %}
+              {% for parentId, folders in experimentsFoldersTreeArr %}
+                {% for folder in folders %}
+                  <option value='{{ folder.id }}' data-folder-owner-id='{{ folder.userid }}'>{{ folder.full_path }}</option>
+                {% endfor %}
+              {% endfor %}
+            {% endif %}
+          </select>
+          <small class='form-text color-medium'>{{ 'The folder tabs also filter this parent list.'|trans }}</small>
+        </div>
+        <div class='form-group mb-2'>
+          <label class='small mb-1' for='newFolderDescription'>{{ 'Short description'|trans }} <span class='color-medium'>({{ 'optional'|trans }})</span></label>
+          <textarea id='newFolderDescription' class='form-control' rows='2' maxlength='500' placeholder='{{ 'Short description (optional)'|trans }}' aria-label='{{ 'Short description'|trans }}'></textarea>
+        </div>
+        <button class='btn btn-primary btn-sm btn-block' type='button' data-action='create-experiment-folder'>
+          <i class='fas fa-plus fa-fw mr-1'></i>{{ 'Create folder'|trans }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class='modal fade' id='editExperimentFolderModal' tabindex='-1' role='dialog' aria-labelledby='editExperimentFolderModalLabel' aria-hidden='true'>
+  <div class='modal-dialog' role='document'>
+    <div class='modal-content'>
+      <div class='modal-header'>
+        <h5 class='modal-title' id='editExperimentFolderModalLabel'><i class='fas fa-folder-pen fa-fw mr-1'></i>{{ 'Edit folder'|trans }}</h5>
+        <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'><span aria-hidden='true'>&times;</span></button>
+      </div>
+      <form id='editExperimentFolderForm'>
+        <div class='modal-body'>
+          <input type='hidden' id='editExperimentFolderId'>
+          <div class='form-group'>
+            <label for='editExperimentFolderName'>{{ 'Folder name'|trans }}</label>
+            <input type='text' class='form-control' id='editExperimentFolderName' required maxlength='255'>
+          </div>
+          <div class='form-group'>
+            <label for='editExperimentFolderParent'>{{ 'Parent folder'|trans }}</label>
+            <select id='editExperimentFolderParent' class='form-control' aria-label='{{ 'Parent folder'|trans }}'>
+              <option value=''>{{ 'Root (no parent)'|trans }}</option>
+              {% if experimentsFoldersTreeArr is iterable %}
+                {% for parentId, folders in experimentsFoldersTreeArr %}
+                  {% for folder in folders %}
+                    <option
+                      value='{{ folder.id }}'
+                      data-folder-parent-id='{{ folder.parent_id }}'
+                    >{{ folder.full_path }}</option>
+                  {% endfor %}
+                {% endfor %}
+              {% endif %}
+            </select>
+            <small class='form-text color-medium'>{{ 'A folder cannot be moved inside itself or one of its subfolders.'|trans }}</small>
+          </div>
+          <div class='form-group mb-0'>
+            <label for='editExperimentFolderDescription'>{{ 'Short description'|trans }}</label>
+            <textarea class='form-control' id='editExperimentFolderDescription' rows='4' maxlength='500' placeholder='{{ 'Optional summary of this folder'|trans }}'></textarea>
+            <small class='form-text color-medium'>{{ 'Up to 500 characters.'|trans }}</small>
+          </div>
+        </div>
+        <div class='modal-footer'>
+          <button type='button' class='btn btn-ghost' data-dismiss='modal'>{{ 'Cancel'|trans }}</button>
+          <button type='submit' class='btn btn-primary' data-action='save-folder-details'>{{ 'Save'|trans }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% include 'folder-export-modal.html' %}
+{% endif %}
