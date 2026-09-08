@@ -997,6 +997,22 @@
     }
   }
 
+  // a task tied to a project can only be usefully mentioned-at by that
+  // project's own members (plus its creator, who isn't always in the
+  // explicit member list) -- narrows the dropdown and matches who can
+  // actually see the task per Todolist's own visibility rules
+  function mentionPoolForTask(task: Task | null): TeamMember[] {
+    if (!task || task.project_id === null) return teamMembers;
+    const project = projects.find(p => p.id === task.project_id);
+    if (!project) return teamMembers;
+    const pool = [...project.members];
+    if (!pool.some(m => m.userid === project.userid)) {
+      const creator = teamMembers.find(m => m.userid === project.userid);
+      if (creator) pool.push(creator);
+    }
+    return pool;
+  }
+
   function onCommentInput(): void {
     const query = extractMentionQuery(newCommentText);
     if (query === null) {
@@ -1004,7 +1020,7 @@
       return;
     }
     const lower = query.toLowerCase();
-    mentionCandidates = teamMembers.filter(m => m.fullname.toLowerCase().includes(lower)).slice(0, 5);
+    mentionCandidates = mentionPoolForTask(detailTask).filter(m => m.fullname.toLowerCase().includes(lower)).slice(0, 5);
   }
 
   function pickMention(member: TeamMember): void {
