@@ -374,7 +374,9 @@ final class Todolist extends AbstractRest
     }
 
     /**
-     * A task can be managed by whoever created it, whoever it's assigned to, or a team admin
+     * A task can be managed by whoever created it, whoever it's assigned to,
+     * a team admin, or -- if it's in a project -- anyone who's a member of
+     * that project (the same people who can already see it there).
      */
     private function canWriteOrExplode(): void
     {
@@ -385,9 +387,24 @@ final class Todolist extends AbstractRest
         $isCreator = (int) $task['userid'] === $this->userid;
         $assigneeIds = array_map('intval', array_column($task['assignees'] ?? array(), 'userid'));
         $isAssignee = in_array($this->userid, $assigneeIds, true);
-        if (!$isCreator && !$isAssignee && !$this->requester->isAdmin) {
+        $isProjectMember = $task['project_id'] !== null && $this->isProjectMember((int) $task['project_id']);
+        if (!$isCreator && !$isAssignee && !$isProjectMember && !$this->requester->isAdmin) {
             throw new IllegalActionException('User tried to modify a task that is not theirs.');
         }
+    }
+
+    private function isProjectMember(int $projectId): bool
+    {
+        $sql = 'SELECT COUNT(*) AS count FROM todolist_projects AS p
+            LEFT JOIN todolist_project_members AS m ON m.project_id = p.id AND m.userid = :userid
+            WHERE p.id = :project_id AND p.team = :team AND (p.userid = :userid2 OR m.userid IS NOT NULL)';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':project_id', $projectId, PDO::PARAM_INT);
+        $req->bindValue(':team', $this->team, PDO::PARAM_INT);
+        $req->bindValue(':userid', $this->userid, PDO::PARAM_INT);
+        $req->bindValue(':userid2', $this->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return (int) $this->Db->fetch($req)['count'] > 0;
     }
 
     /**

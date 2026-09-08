@@ -22,7 +22,6 @@ use Override;
 use PDO;
 
 use function _;
-use function array_column;
 use function array_key_exists;
 use function array_map;
 use function array_unique;
@@ -91,8 +90,9 @@ final class TodolistProjects extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
-        // Visible to: the project's creator, an explicit member, or a team admin.
-        // Everyone else in the team is not automatically shown every project.
+        // Visible to: the project's creator or an explicit member -- not
+        // automatically to a team admin, who has to be added like anyone
+        // else to see or manage a project they're not part of.
         $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', u.userid, 'fullname', u.fullname))
@@ -103,14 +103,12 @@ final class TodolistProjects extends AbstractRest
             FROM todolist_projects AS p
             WHERE p.team = :team
                 AND (
-                    :is_admin = 1
-                    OR p.userid = :userid
+                    p.userid = :userid
                     OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = p.id AND pm.userid = :userid2)
                 )
             ORDER BY p.name ASC";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
-        $req->bindValue(':is_admin', $this->requester->isAdmin ? 1 : 0, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':userid2', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
@@ -130,14 +128,12 @@ final class TodolistProjects extends AbstractRest
             FROM todolist_projects AS p
             WHERE p.id = :id AND p.team = :team
                 AND (
-                    :is_admin = 1
-                    OR p.userid = :userid
+                    p.userid = :userid
                     OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = p.id AND pm.userid = :userid2)
                 )";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
-        $req->bindValue(':is_admin', $this->requester->isAdmin ? 1 : 0, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':userid2', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
@@ -213,10 +209,9 @@ final class TodolistProjects extends AbstractRest
         if (empty($project)) {
             throw new IllegalActionException('Project not found in this team.');
         }
-        $isMember = in_array($this->userid, array_column($project['members'], 'userid'), true);
-        if ((int) $project['userid'] !== $this->userid && !$isMember && !$this->requester->isAdmin) {
-            throw new IllegalActionException('User tried to modify a project they are not a member of.');
-        }
+        // readOne() above already only returns a project the requester is
+        // the creator of or a member of -- getting this far means they
+        // qualify, admin or not, so there's nothing further to check here.
     }
 
     /**
