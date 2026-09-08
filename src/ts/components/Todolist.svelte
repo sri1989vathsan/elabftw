@@ -493,7 +493,7 @@
     try {
       const since = new Date(`${dateKeyValue}T00:00:00`);
       const page = await ApiC.getJson(
-        `${Model.Todolist}?completed=1&completed_since=${encodeURIComponent(since.toISOString())}&limit=100`,
+        `${Model.Todolist}?scope=all&completed=1&completed_since=${encodeURIComponent(since.toISOString())}&limit=100`,
       ) as Todo[];
       // completed_since is a floor, not a range -- filter client-side down
       // to just this one day
@@ -520,7 +520,7 @@
     const since = new Date();
     since.setDate(since.getDate() - parseInt(completedWindow, 10));
     completedItems = await ApiC.getJson(
-      `${Model.Todolist}?completed=1&completed_since=${encodeURIComponent(since.toISOString())}&limit=100`,
+      `${Model.Todolist}?scope=all&completed=1&completed_since=${encodeURIComponent(since.toISOString())}&limit=100`,
     ) as Todo[];
     completedLoaded = true;
     loadingCompleted = false;
@@ -577,7 +577,7 @@
       loadMore.textContent = 'Loading…';
       try {
         const page = await ApiC.getJson(
-          `${Model.Todolist}?completed=1&limit=${pageSize}&offset=${offset}`,
+          `${Model.Todolist}?scope=all&completed=1&limit=${pageSize}&offset=${offset}`,
         ) as Todo[];
         page.forEach(item => {
           if (!item.completed_at) return;
@@ -1209,7 +1209,7 @@
     loading = true;
     const teamScope = localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
     const [todoResponse, unfinishedResponse] = await Promise.all([
-      ApiC.getJson(`${Model.Todolist}?limit=${pageSize}&offset=0`) as Promise<Todo[]>,
+      ApiC.getJson(`${Model.Todolist}?scope=all&limit=${pageSize}&offset=0`) as Promise<Todo[]>,
       ApiC.getJson(`unfinished_steps?scope=${teamScope ? 'team' : 'user'}&limit=${pageSize}&offset=0`) as Promise<UnfinishedResponse>,
     ]);
     items = todoResponse;
@@ -1233,7 +1233,7 @@
     loadingMore = true;
     const teamScope = localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
     const [todos, steps] = await Promise.all([
-      ApiC.getJson(`${Model.Todolist}?limit=${pageSize}&offset=${nextOffset}`) as Promise<Todo[]>,
+      ApiC.getJson(`${Model.Todolist}?scope=all&limit=${pageSize}&offset=${nextOffset}`) as Promise<Todo[]>,
       ApiC.getJson(`unfinished_steps?scope=${teamScope ? 'team' : 'user'}&limit=${pageSize}&offset=${nextOffset}`) as Promise<UnfinishedResponse>,
     ]);
     items = [...items, ...todos];

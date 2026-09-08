@@ -109,12 +109,15 @@
   let projects: Project[] = [];
   let columns: Column[] = [];
   // null = the "Unfiled" bucket (tasks with no project); 'all' = every project combined
-  let activeProjectId: number | null | 'all' = null;
+  let activeProjectId: number | null | 'all' = 'all';
   let loading = true;
   // 'assigned' shows tasks assigned to me (by myself or someone else);
   // 'created' shows tasks I set up, whether for myself or someone else;
   // 'all' is the union of both -- never a view of everyone else's work
-  let scope: 'assigned' | 'created' | 'all' = 'all';
+  // 'team' is the backend's actual "every task in the team" scope --
+  // confusingly, its 'all' means "created by me OR assigned to me", which
+  // is not what a board default should hide everything else behind
+  let scope: 'assigned' | 'created' | 'all' | 'team' = 'team';
   // set while the detail dialog is open for a task that doesn't exist yet
   // (opened via a column's "+" button) -- steps and links can still be
   // added, buffered here since there's no task id to attach them to yet;
@@ -325,17 +328,26 @@
     const taskParam = Number(searchParams.get('task'));
     if (Number.isInteger(taskParam) && taskParam > 0) {
       activeProjectId = 'all';
-      scope = 'all';
+      scope = 'team';
     }
 
     void loadTeamMembers();
     void loadProjects();
     void loadColumns();
-    void load().then(() => {
-      if (Number.isInteger(taskParam) && taskParam > 0) {
-        const task = tasks.find(t => t.id === taskParam);
-        if (task) openDetail(task);
+    void load().then(async () => {
+      if (!Number.isInteger(taskParam) || taskParam <= 0) return;
+      let task = tasks.find(t => t.id === taskParam);
+      if (!task) {
+        // not on the first page of results (readAll() caps at 100) --
+        // fetch it directly rather than making the user hunt for it
+        try {
+          task = await ApiC.getJson(`${Model.Todolist}/${taskParam}`) as Task;
+          tasks = [...tasks, task];
+        } catch {
+          return;
+        }
       }
+      openDetail(task);
     });
 
     // Lets the Search side panel offer a "Link to task" button on its
@@ -351,7 +363,7 @@
     };
   });
 
-  function selectScope(next: 'assigned' | 'created' | 'all'): void {
+  function selectScope(next: 'assigned' | 'created' | 'all' | 'team'): void {
     scope = next;
     void load();
   }
@@ -1221,7 +1233,7 @@
 
   <div class="d-flex align-items-center my-3">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Task view')}>
-      <button type="button" class={scope === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('all')}>
+      <button type="button" class={scope === 'team' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('team')}>
         <i class="fas fa-list fa-fw mr-1" aria-hidden="true"></i>{t('All')}
       </button>
       <button type="button" class={scope === 'assigned' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('assigned')}>
