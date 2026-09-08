@@ -1129,6 +1129,13 @@
     dialogTargetEndDate = toDateInputValue(project?.target_end_date ?? null);
     dialogStatus = project?.status ?? 'planning';
     dialogMembers = project ? [...project.members] : [];
+    // whoever's managing a project should always end up a member of it,
+    // whether that's by explicitly picking themselves (no longer possible,
+    // see the "Add a member" dropdown) or just opening the dialog
+    const self = teamMembers.find(m => m.userid === core.currentUserid);
+    if (self && !dialogMembers.some(m => m.userid === self.userid)) {
+      dialogMembers = [...dialogMembers, self];
+    }
     projectDialogOpen = true;
   }
 
@@ -1944,7 +1951,7 @@
           </div>
           <select id="pm-project-picker" class="form-control" on:change={(event) => { const value = (event.target as HTMLSelectElement).value; if (value) addDialogMember(Number(value)); (event.target as HTMLSelectElement).value = ''; }}>
             <option value="">+ {t('Add a member')}…</option>
-            {#each teamMembers.filter(member => !dialogMembers.some(m => m.userid === member.userid)) as member (member.userid)}
+            {#each teamMembers.filter(member => member.userid !== core.currentUserid && !dialogMembers.some(m => m.userid === member.userid)) as member (member.userid)}
               <option value={member.userid}>{member.fullname}</option>
             {/each}
           </select>
