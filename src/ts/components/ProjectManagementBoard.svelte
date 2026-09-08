@@ -74,6 +74,7 @@
     status: ProjectStatus;
     userid: number;
     members: TeamMember[];
+    archived: boolean;
   };
 
   type TaskComment = {
@@ -299,12 +300,19 @@
     }
   }
 
+  let showArchivedProjects = false;
+
   async function loadProjects(): Promise<void> {
     try {
-      projects = await ApiC.getJson(Model.TodolistProjects) as Project[];
+      projects = await ApiC.getJson(`${Model.TodolistProjects}?archived=${showArchivedProjects ? '1' : '0'}`) as Project[];
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load projects.');
     }
+  }
+
+  function toggleShowArchivedProjects(): void {
+    showArchivedProjects = !showArchivedProjects;
+    void loadProjects();
   }
 
   async function load(): Promise<void> {
@@ -1173,6 +1181,22 @@
       savingProject = false;
     }
   }
+
+  async function setProjectArchived(archived: boolean): Promise<void> {
+    if (!editingProject) return;
+    if (archived && !window.confirm(t('Archive this project? It disappears from the normal project list (its tasks are unaffected and stay visible), and can be restored later from "Show archived".'))) return;
+    savingProject = true;
+    try {
+      await ApiC.patch(`${Model.TodolistProjects}/${editingProject.id}`, { archived });
+      if (archived && activeProjectId === editingProject.id) activeProjectId = 'all';
+      closeProjectDialog();
+      await loadProjects();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update the project.');
+    } finally {
+      savingProject = false;
+    }
+  }
 </script>
 
 <div class="pm-board">
@@ -1194,6 +1218,9 @@
       </button>
     {/if}
     <button type="button" class="pm-project-tab-new" on:click={() => openProjectDialog(null)}>+ {t('New project')}</button>
+    <button type="button" class="pm-manage-btn" class:active={showArchivedProjects} title={showArchivedProjects ? t('Show active projects') : t('Show archived projects')} aria-label={showArchivedProjects ? t('Show active projects') : t('Show archived projects')} on:click={toggleShowArchivedProjects}>
+      <i class="fas fa-box-archive fa-fw" aria-hidden="true"></i>
+    </button>
     <button type="button" class="pm-manage-btn ml-auto" title={t('Manage columns')} aria-label={t('Manage columns')} on:click={openColumnDialog}>
       <i class="fas fa-table-columns fa-fw" aria-hidden="true"></i>
     </button>
@@ -1924,6 +1951,11 @@
         </div>
       </div>
       <div class="pm-dialog-footer">
+        {#if editingProject}
+          <button type="button" class="btn btn-danger-ghost mr-auto" disabled={savingProject} on:click={() => setProjectArchived(!editingProject.archived)}>
+            {editingProject.archived ? t('Unarchive project') : t('Archive project')}
+          </button>
+        {/if}
         <button type="button" class="btn btn-ghost" on:click={closeProjectDialog}>{t('Cancel')}</button>
         <button type="button" class="btn btn-primary" disabled={savingProject || dialogName.trim() === ''} on:click={saveProject}>
           {editingProject ? t('Save changes') : t('Create project')}
