@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 namespace Elabftw\Models;
 
+use DateTimeImmutable;
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
@@ -97,12 +98,25 @@ final class Orders extends AbstractRest
         $status = $query->getString('status');
         if ($status === 'archived') {
             $conditions[] = 'o.archived = 1';
+        } elseif ($status === 'all') {
+            $conditions[] = 'o.archived = 0';
         } elseif (in_array($status, self::STATUSES, true)) {
             $conditions[] = 'o.archived = 0';
             // pinned orders stay visible on every status tab, not just the
             // one matching their own status -- that's the point of pinning
             $conditions[] = '(o.status = :status OR o.pinned = 1)';
             $bind[':status'] = array($status, PDO::PARAM_STR);
+        }
+
+        $dateFrom = $this->parseFilterDate($query->getString('date_from'));
+        if ($dateFrom !== null) {
+            $conditions[] = 'o.created_at >= :date_from';
+            $bind[':date_from'] = array($dateFrom . ' 00:00:00', PDO::PARAM_STR);
+        }
+        $dateTo = $this->parseFilterDate($query->getString('date_to'));
+        if ($dateTo !== null) {
+            $conditions[] = 'o.created_at <= :date_to';
+            $bind[':date_to'] = array($dateTo . ' 23:59:59', PDO::PARAM_STR);
         }
 
         // everyone can filter down to their own orders ("Mine" tab); picking
@@ -180,6 +194,24 @@ final class Orders extends AbstractRest
         $this->Db->execute($req);
 
         return array_map($this->hydrate(...), $req->fetchAll());
+    }
+
+    /**
+     * Validate a date_from/date_to filter value (Y-m-d), or return null for
+     * an absent/blank one. An unparseable value is a client bug (the input
+     * is a native date picker), so it's rejected rather than silently
+     * ignored or passed through to a DATETIME comparison.
+     */
+    private function parseFilterDate(string $value): ?string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+        if (DateTimeImmutable::createFromFormat('Y-m-d', $value) === false) {
+            throw new ImproperActionException('Invalid date filter.');
+        }
+        return $value;
     }
 
     /**

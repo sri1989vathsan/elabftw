@@ -114,7 +114,7 @@
 
   let items: OrderItem[] = [];
   let loading = true;
-  let statusFilter: OrderStatus | 'archived' = 'requested';
+  let statusFilter: OrderStatus | 'archived' | 'all' = 'requested';
   let ownerFilter: 'mine' | 'all' = 'all';
   let selectedUserId: number | null = null;
   let searchQuery = '';
@@ -122,12 +122,14 @@
   // against potentially large attachment text, so only pay for it when the
   // user actually wants it
   let searchPdf = false;
+  let dateFrom = '';
+  let dateTo = '';
   let selectedIds = new Set<number>();
 
   // pagination: the server is asked for pageSize+1 rows so hasNextPage can
   // be known without a separate COUNT query
-  const PAGE_SIZES = [10, 25, 50, 100];
-  let pageSize = 25;
+  const PAGE_SIZES = [5, 10];
+  let pageSize = 10;
   let pageOffset = 0;
   let hasNextPage = false;
 
@@ -213,6 +215,11 @@
     void load();
   }
 
+  function onDateFilterChange(): void {
+    pageOffset = 0;
+    void load();
+  }
+
   function currentEffectiveUserId(): number | null {
     return selectedUserId ?? (ownerFilter === 'mine' ? core.currentUserid : null);
   }
@@ -234,6 +241,8 @@
         params.search = trimmedSearch;
         if (searchPdf) params.search_pdf = '1';
       }
+      if (dateFrom !== '') params.date_from = dateFrom;
+      if (dateTo !== '') params.date_to = dateTo;
       const fetched = await ApiC.getJson(Model.Order, params) as OrderItem[];
       hasNextPage = fetched.length > pageSize;
       items = fetched.slice(0, pageSize);
@@ -503,7 +512,7 @@
     }
   }
 
-  function selectTab(next: OrderStatus | 'archived'): void {
+  function selectTab(next: OrderStatus | 'archived' | 'all'): void {
     statusFilter = next;
     selectedIds = new Set();
     pageOffset = 0;
@@ -547,6 +556,18 @@
     const manageableIds = visibleItems.filter(canManage).map(i => i.id);
     const allSelected = manageableIds.length > 0 && manageableIds.every(id => selectedIds.has(id));
     selectedIds = allSelected ? new Set() : new Set(manageableIds);
+  }
+
+  async function bulkSetStatus(status: OrderStatus): Promise<void> {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    try {
+      await Promise.all(ids.map(id => ApiC.patch(`${Model.Order}/${id}`, { status })));
+      selectedIds = new Set();
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update the selected orders.');
+    }
   }
 
   async function bulkSetArchived(archived: boolean): Promise<void> {
@@ -921,6 +942,9 @@
   <div class="orders-list-column">
   <div class="d-flex flex-wrap align-items-center my-3 orders-toolbar-row" style="gap:0.5rem">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by status')}>
+      <button type="button" class={statusFilter === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('all')}>
+        {t('All')}
+      </button>
       <button type="button" class={statusFilter === 'requested' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('requested')}>
         {t('Requested')}
       </button>
@@ -971,6 +995,28 @@
       </label>
     </div>
     <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
+      <label class="orders-muted small mb-0" for="ordersDateFrom">{t('From')}</label>
+      <input
+        id="ordersDateFrom"
+        class="form-control form-control-sm"
+        style="width:auto"
+        type="date"
+        bind:value={dateFrom}
+        on:change={onDateFilterChange}
+        title={t('Requested on or after')}
+      />
+      <label class="orders-muted small mb-0" for="ordersDateTo">{t('To')}</label>
+      <input
+        id="ordersDateTo"
+        class="form-control form-control-sm"
+        style="width:auto"
+        type="date"
+        bind:value={dateTo}
+        on:change={onDateFilterChange}
+        title={t('Requested on or before')}
+      />
+    </div>
+    <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
       <select class="form-control form-control-sm" style="width:auto" bind:value={pageSize} on:change={onPageSizeChange} title={t('Items per page')}>
         {#each PAGE_SIZES as size (size)}
           <option value={size}>{size} {t('/ page')}</option>
@@ -990,6 +1036,22 @@
   {#if selectedIds.size > 0}
     <div class="orders-bulk-bar d-flex align-items-center flex-wrap mb-2">
       <span class="mr-2">{selectedIds.size} {t('selected')}</span>
+      <select
+        class="form-control form-control-sm mr-2"
+        style="width:auto"
+        value=""
+        on:change={(event) => {
+          const value = (event.target as HTMLSelectElement).value;
+          if (value !== '') void bulkSetStatus(value as OrderStatus);
+          (event.target as HTMLSelectElement).value = '';
+        }}
+        aria-label={t('Move to status')}
+      >
+        <option value="" disabled>{t('Move to status…')}</option>
+        {#each STATUSES as status (status)}
+          <option value={status}>{statusLabel(status)}</option>
+        {/each}
+      </select>
       {#if statusFilter === 'archived'}
         <button type="button" class="btn btn-secondary btn-sm mr-2" on:click={() => bulkSetArchived(false)}>
           <i class="fas fa-box-open fa-fw mr-1" aria-hidden="true"></i>{t('Unarchive')}
@@ -1501,19 +1563,25 @@
 
   .orders-status-select {
     width: auto;
-    border-left: 4px solid var(--warning);
+    font-weight: 700;
+    border: none;
+    color: #212529;
+    background-color: #ffc107;
   }
 
   .orders-status-select-ordered {
-    border-left-color: var(--info);
+    color: #fff;
+    background-color: #17a2b8;
   }
 
   .orders-status-select-received {
-    border-left-color: var(--success);
+    color: #fff;
+    background-color: #28a745;
   }
 
   .orders-status-select-cancelled {
-    border-left-color: var(--secondary);
+    color: #fff;
+    background-color: #4d4c4c;
   }
 
   .orders-category-select {
