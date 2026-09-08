@@ -90,6 +90,8 @@ final class TodolistProjects extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
+        // Visible to: the project's creator, an explicit member, or a team admin.
+        // Everyone else in the team is not automatically shown every project.
         $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', u.userid, 'fullname', u.fullname))
@@ -99,9 +101,17 @@ final class TodolistProjects extends AbstractRest
                 ), JSON_ARRAY()) AS members
             FROM todolist_projects AS p
             WHERE p.team = :team
+                AND (
+                    :is_admin = 1
+                    OR p.userid = :userid
+                    OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = p.id AND pm.userid = :userid2)
+                )
             ORDER BY p.name ASC";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $req->bindValue(':is_admin', $this->requester->isAdmin ? 1 : 0, PDO::PARAM_INT);
+        $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':userid2', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         return array_map(fn(array $row): array => $this->decodeMembers($row), $req->fetchAll());
     }
@@ -117,10 +127,18 @@ final class TodolistProjects extends AbstractRest
                     WHERE m.project_id = p.id
                 ), JSON_ARRAY()) AS members
             FROM todolist_projects AS p
-            WHERE p.id = :id AND p.team = :team";
+            WHERE p.id = :id AND p.team = :team
+                AND (
+                    :is_admin = 1
+                    OR p.userid = :userid
+                    OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = p.id AND pm.userid = :userid2)
+                )";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $req->bindValue(':is_admin', $this->requester->isAdmin ? 1 : 0, PDO::PARAM_INT);
+        $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':userid2', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         $row = $this->Db->fetch($req);
         if ($row === false) {
