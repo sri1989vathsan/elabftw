@@ -1,0 +1,345 @@
+/*
+ * Fork-specific content rendering shared by the normal page and TinyMCE's
+ * iframe. Keep this partial valid as plain CSS: the TinyMCE asset builder
+ * appends it directly after the upstream content stylesheet.
+ */
+
+/* Preserve a usable writing surface when the main text has no content. */
+body.mce-content-body {
+  box-sizing: border-box;
+  cursor: text;
+  min-height: 12rem;
+}
+
+/* Linkable note callouts. Their heading is intentionally a real h2-h6 so the
+ * existing Table of Contents, section search and permanent links all work. */
+:where(#body_view, body.mce-content-body) .elabftw-note-block {
+  background-color: var(--firstlevel, #eef2f5);
+  background-color: color-mix(in srgb, var(--primary, #167b85) 9%, var(--white, #fff));
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  border: 1px solid color-mix(in srgb, var(--primary, #167b85) 42%, var(--white, #fff));
+  border-left: 0.35rem solid var(--primary, #167b85);
+  border-radius: 0.35rem;
+  box-sizing: border-box;
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-note-heading {
+  color: var(--strongest, #343a40);
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.45rem;
+  padding: 0;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-note-heading::before {
+  color: var(--primary, #167b85);
+  content: '\270E';
+  display: inline-block;
+  margin-right: 0.45rem;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-note-content {
+  color: var(--strongest, #343a40);
+  min-height: 1.35em;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-note-content > :last-child {
+  margin-bottom: 0;
+}
+
+/* Repeat the decimal -> letter -> Roman cycle when ordered lists are nested. */
+:where(#body_view, body.mce-content-body) ol {
+  list-style-type: decimal;
+}
+
+:where(#body_view, body.mce-content-body) ol ol {
+  list-style-type: lower-alpha;
+}
+
+:where(#body_view, body.mce-content-body) ol ol ol {
+  list-style-type: lower-roman;
+}
+
+:where(#body_view, body.mce-content-body) ol ol ol ol {
+  list-style-type: decimal;
+}
+
+:where(#body_view, body.mce-content-body) ol ol ol ol ol {
+  list-style-type: lower-alpha;
+}
+
+:where(#body_view, body.mce-content-body) ol ol ol ol ol ol {
+  list-style-type: lower-roman;
+}
+
+:where(#body_view, body.mce-content-body) ol ol ol ol ol ol ol {
+  list-style-type: decimal;
+}
+
+:where(#body_view, body.mce-content-body) ol ol ol ol ol ol ol ol {
+  list-style-type: lower-alpha;
+}
+
+:where(#body_view, body.mce-content-body) ol ol ol ol ol ol ol ol ol {
+  list-style-type: lower-roman;
+}
+
+:where(#body_view, body.mce-content-body) ul.elabftw-checklist {
+  list-style: none;
+  padding-left: 1.25rem;
+}
+
+:where(#body_view, body.mce-content-body) ul.elabftw-checklist > li.elabftw-checklist-item {
+  list-style: none;
+  min-height: 1.4em;
+  padding-left: 1.55rem;
+  position: relative;
+}
+
+:where(#body_view, body.mce-content-body) ul.elabftw-checklist > li.elabftw-checklist-item::before {
+  color: var(--primary, #167b85);
+  content: '☐';
+  cursor: pointer;
+  font-family: Arial, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 400;
+  left: 0;
+  line-height: 1;
+  position: absolute;
+  top: 0;
+  width: 1.2rem;
+}
+
+:where(#body_view, body.mce-content-body) ul.elabftw-checklist > li.elabftw-checklist-item[data-checked='true']::before {
+  content: '☑';
+}
+
+:where(#body_view, body.mce-content-body) table > caption {
+  caption-side: top;
+  display: table-caption;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  text-align: left;
+}
+
+:where(#body_view, body.mce-content-body) a.elabftw-date-reference {
+  align-items: center;
+  background-color: var(--firstlevel, #eef2f5);
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  border-radius: 0.3rem;
+  color: var(--primary, #167b85);
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0.08rem 0.35rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+:where(#body_view, body.mce-content-body) a.elabftw-date-reference:hover {
+  background-color: var(--secondlevel, #e1e8ec);
+  text-decoration: underline;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-date-icon {
+  background-color: var(--white, #fff);
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  border-radius: 0.16rem;
+  display: inline-grid;
+  flex: 0 0 auto;
+  font-family: sans-serif;
+  grid-template-rows: 0.55rem 0.9rem;
+  height: 1.55rem;
+  line-height: 1;
+  overflow: hidden;
+  text-align: center;
+  width: 1.6rem;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-date-icon-month {
+  background-color: var(--primary, #167b85);
+  color: var(--white, #fff);
+  font-size: 0.42rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding-top: 0.08rem;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-date-icon-month::before {
+  content: attr(title);
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-date-icon-day {
+  color: var(--strongest, #343a40);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding-top: 0.1rem;
+}
+
+:where(#body_view, body.mce-content-body) .elabftw-date-icon-day::before {
+  content: attr(title);
+}
+
+:where(#body_view, body.mce-content-body) hr.elabftw-single-rule,
+:where(#body_view, body.mce-content-body) hr.elabftw-double-rule,
+:where(#body_view, body.mce-content-body) hr.elabftw-dashed-rule,
+:where(#body_view, body.mce-content-body) hr.elabftw-double-dashed-rule {
+  border: 0;
+  height: 0;
+  margin: 1rem 0;
+}
+
+:where(#body_view, body.mce-content-body) hr.elabftw-single-rule {
+  border-top: 1px solid var(--strongest, #343a40);
+}
+
+:where(#body_view, body.mce-content-body) hr.elabftw-dashed-rule {
+  border-top: 1px dashed var(--strongest, #343a40);
+}
+
+:where(#body_view, body.mce-content-body) hr.elabftw-double-rule {
+  background: linear-gradient(
+    to bottom,
+    var(--strongest, #343a40) 0,
+    var(--strongest, #343a40) 1px,
+    transparent 1px,
+    transparent 5px,
+    var(--strongest, #343a40) 5px,
+    var(--strongest, #343a40) 6px
+  );
+  height: 6px;
+}
+
+:where(#body_view, body.mce-content-body) hr.elabftw-double-dashed-rule {
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      var(--strongest, #343a40) 0,
+      var(--strongest, #343a40) 6px,
+      transparent 6px,
+      transparent 10px
+    ),
+    repeating-linear-gradient(
+      to right,
+      var(--strongest, #343a40) 0,
+      var(--strongest, #343a40) 6px,
+      transparent 6px,
+      transparent 10px
+    );
+  background-position: left top, left bottom;
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  height: 6px;
+}
+
+/* :not(.mce-clonedresizable) matters: TinyMCE's whole-table resize handle
+ * clones the table (same classes) into a dashed-outline "ghost" to preview
+ * the target size while dragging, setting height directly on that clone via
+ * inline style. No !important override can let that inline style win —
+ * !important always beats inline style regardless of its value — so the only
+ * way to keep this rule from also freezing the ghost's height is to make it
+ * not match the ghost at all. */
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet:not(.mce-clonedresizable) {
+  border-collapse: collapse;
+  font-size: 0.9em;
+  height: auto !important;
+  margin: 8px 0;
+  max-height: none !important;
+  max-width: 100%;
+  min-height: 0 !important;
+  width: max-content;
+}
+
+:where(#body_view, body.mce-content-body) table.elabftw-pasted-table {
+  max-width: 100%;
+  width: max-content;
+}
+
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet td,
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet th {
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  min-width: 2rem;
+  padding: 0.35rem 0.5rem;
+  white-space: pre-wrap;
+}
+
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet tr:nth-child(even) {
+  background-color: var(--zebrarow, rgba(0, 0, 0, 0.03));
+}
+
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet:hover {
+  cursor: pointer;
+  outline: 2px dashed var(--primary, #29aeb9);
+  outline-offset: 2px;
+}
+
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet .spreadsheet-coordinate {
+  background-color: var(--superlight, #f0f2f4);
+  color: var(--medium);
+  font-size: 0.85em;
+  min-width: 2rem;
+  text-align: center;
+}
+
+/* Coordinate headers are structural spreadsheet controls, not data cells.
+ * Keep their saved dimensions stable while the surrounding table, rows, or
+ * columns are resized. The values remain adjustable in Spreadsheet appearance. */
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet[style*='--spreadsheet-'] > thead > tr > .spreadsheet-coordinate {
+  height: var(--spreadsheet-column-index-height) !important;
+  max-height: var(--spreadsheet-column-index-height) !important;
+  min-height: var(--spreadsheet-column-index-height) !important;
+}
+
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet[style*='--spreadsheet-'] > thead > tr > .spreadsheet-coordinate:first-child,
+:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet[style*='--spreadsheet-'] > tbody > tr > .spreadsheet-coordinate:first-child {
+  box-sizing: border-box;
+  max-width: var(--spreadsheet-row-index-width) !important;
+  min-width: var(--spreadsheet-row-index-width) !important;
+  width: var(--spreadsheet-row-index-width) !important;
+}
+
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] {
+  border-collapse: separate;
+  border-spacing: 0;
+  max-width: 100%;
+}
+
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] > caption {
+  background-color: var(--superlight, #f0f2f4);
+  border: 1px solid var(--secondary-muted, #ccd2d8);
+  border-bottom: 0;
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+}
+
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] thead th {
+  background-color: var(--firstlevel, #e6eaed);
+  font-weight: 700;
+  text-align: left;
+}
+
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='well-plate'] {
+  max-width: 100%;
+}
+
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='well-plate'] td,
+:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='well-plate'] th {
+  min-width: 2.5rem;
+  padding: 0.3rem;
+  text-align: center;
+}
+
+:where(#body_view, body.mce-content-body) td[data-formula],
+:where(#body_view, body.mce-content-body) th[data-formula] {
+  background-color: color-mix(in srgb, var(--primary, #167b85) 8%, transparent);
+  box-shadow: inset 3px 0 var(--primary, #167b85);
+}
+
+:where(#body_view, body.mce-content-body) td[data-formula-state='error'],
+:where(#body_view, body.mce-content-body) th[data-formula-state='error'] {
+  background-color: color-mix(in srgb, var(--danger, #dc3545) 10%, transparent);
+  box-shadow: inset 3px 0 var(--danger, #dc3545);
+  color: var(--danger, #dc3545);
+  font-weight: 700;
+}

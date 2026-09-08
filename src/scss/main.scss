@@ -52,6 +52,7 @@
 @include meta.load-css('search-syntax-highlighting');
 @include meta.load-css('tom-select');
 @include meta.load-css('tinymce');
+@include meta.load-css('custom-editor');
 @include meta.load-css('prism');
 @include meta.load-css('skeletons');
 
@@ -105,6 +106,8 @@
 
 :root {
   --navbar-height: 0;
+  --sticky-header-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --sticky-header-speed: 260ms;
   --toolbar-height: 0;
 }
 
@@ -269,6 +272,93 @@ select.form-control {
 
 .dropdown-menu {
   background: var(--white);
+}
+
+// Self-controlled overlay (see FavoriteFilters.class.ts's
+// toggle-favorite-overlay handler): plain hidden-attribute toggling instead
+// of Bootstrap's dropdown/Popper component, so there's no per-button
+// transform positioning to fight -- both panels always anchor the same way,
+// flush left against the shared button row, regardless of which of the two
+// side-by-side buttons opened them.
+.favorite-filter-toolbar {
+  position: relative;
+}
+
+.favorite-filter-overlay-anchor {
+  position: relative;
+}
+
+// Deliberately NOT using the app's --white/--strongest theme variables here:
+// they carry sidebar-chrome-specific meaning (--white is the *text* color
+// meant for the panel's own dark chrome background, not literally "white
+// background") and differ across this app's several palettes, which is
+// exactly what produced unreadable text in more than one of them. A plain
+// self-contained light card with explicit colors is guaranteed readable
+// regardless of the active theme.
+.favorite-filter-overlay {
+  background: #ffffff;
+  border-radius: 0.6rem;
+  box-shadow: 0 0.6rem 1.5rem rgba(0, 0, 0, 0.3);
+  color: #23272b;
+  font-size: 0.8rem;
+  left: 0;
+  max-height: 65vh;
+  overflow-y: auto;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.3rem);
+  z-index: 40;
+
+  &[hidden] {
+    display: none;
+  }
+
+  // !important is required here: .side-panel { .color-medium, .text-muted
+  // { color: var(--chrome-muted) !important; } } (main.scss, ~line 1227)
+  // force-applies the sidebar's own pale muted-chrome color to any matching
+  // element inside it, including this white card -- a non-important
+  // override can never win against that regardless of specificity.
+  .favorite-filter-section-summary,
+  h3,
+  h4 {
+    color: #23272b !important;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  p,
+  .color-medium,
+  .smallgray,
+  .text-muted,
+  label {
+    color: #495057 !important;
+    font-size: 0.75rem;
+  }
+
+  .favorite-filter-option label {
+    color: #23272b !important;
+  }
+
+  // Same leak: .side-panel { .fas, .far, h3, h4, label { color:
+  // var(--chrome-fg); } } colors every icon for the dark sidebar chrome
+  // (invisible/wrong-colored against this white card) -- e.g. the trash
+  // icon on each "remove from favorites" button.
+  .fas,
+  .far {
+    color: #495057 !important;
+  }
+
+  .btn-primary .fas,
+  .btn-primary .far {
+    color: #ffffff !important;
+  }
+
+  .form-control,
+  .input-group-text,
+  .btn {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.55rem;
+  }
 }
 
 .dropdown-item {
@@ -636,6 +726,7 @@ tr:first-child td {
   tr {
     border: 1px solid var(--secondary-muted);
   }
+
 }
 
 /* required labels/input */
@@ -660,6 +751,13 @@ tr:first-child td {
     margin-left: 0;
     margin-right: 0.5rem;
   }
+}
+
+#topToolbar {
+  background-color: var(--white);
+  border-bottom: 1px solid var(--secondary);
+  box-shadow: 0 0.2rem 0.4rem rgba(0, 0, 0, 0.08);
+  padding: 0.35rem 0.25rem;
 }
 
 /* NOTIFICATIONS */
@@ -835,9 +933,23 @@ tr:first-child td {
 }
 
 /* SIDE PANEL */
+#sidepanel-buttons {
+  gap: 0.5rem;
+  left: 0;
+  max-height: calc(100vh - 7rem);
+  overflow-y: auto;
+  position: fixed;
+  top: 5.5rem;
+  // Stay below Bootstrap's modal backdrop (1040).
+  z-index: 1031;
+}
+
 .sidepanel-btn {
   border-radius: 0 5px 5px 0;
+  flex: 0 0 auto;
+  margin-top: 0 !important;
   padding: 10px 5px;
+  position: relative;
 
   &.sidepanel-closed {
     background-color: var(--firstlevel);
@@ -867,15 +979,246 @@ tr:first-child td {
   }
 }
 
+.sidepanel-reminder-badge {
+  font-size: 0.6rem;
+  min-width: 1rem;
+  padding: 0.15rem 0.25rem;
+  position: absolute;
+  right: -0.25rem;
+  top: -0.35rem;
+}
+
+.command-palette-overlay {
+  align-items: flex-start;
+  background: rgba(10, 18, 28, 0.48);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: min(14vh, 8rem) 1rem 1rem;
+  position: fixed;
+  z-index: 20050;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.command-palette {
+  background: var(--chrome-bg);
+  border: 1px solid var(--chrome-muted);
+  border-radius: 0.75rem;
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.32);
+  color: var(--chrome-fg);
+  max-height: min(70vh, 42rem);
+  max-width: 44rem;
+  overflow: hidden;
+  width: 100%;
+
+  footer {
+    border-top: 1px solid var(--chrome-muted);
+    color: var(--chrome-muted);
+    font-size: 0.75rem;
+    padding: 0.55rem 0.9rem;
+  }
+}
+
+.command-palette-header {
+  align-items: center;
+  border-bottom: 1px solid var(--chrome-muted);
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+
+  input {
+    background: transparent;
+    border: 0;
+    color: var(--chrome-fg);
+    flex: 1;
+    font-size: 1.05rem;
+    min-width: 0;
+    outline: 0;
+  }
+
+  kbd {
+    background: var(--secondlevel);
+    border: 1px solid var(--chrome-muted);
+    color: var(--chrome-muted);
+  }
+}
+
+.command-palette-results {
+  max-height: min(55vh, 34rem);
+  overflow-y: auto;
+  padding: 0.35rem;
+}
+
+.command-palette-section-title {
+  color: var(--chrome-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.45rem 0.65rem 0.25rem;
+  text-transform: uppercase;
+}
+
+.command-palette-result {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0.45rem;
+  color: var(--chrome-fg);
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  width: 100%;
+
+  &[aria-selected='true'],
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, var(--chrome-bg) 84%, var(--primary));
+    outline: 0;
+  }
+
+  > i {
+    color: var(--primary);
+    font-size: 1rem;
+  }
+
+  span {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  small {
+    color: var(--chrome-muted);
+  }
+}
+
+.command-palette-empty {
+  color: var(--chrome-muted);
+  margin: 1rem;
+  text-align: center;
+}
+
+.unified-search-group-title {
+  // Rendered directly on the sidebar's own dark chrome (not inside the white
+  // .favorite-filter-overlay card), so it needs the chrome's own muted-text
+  // variable -- var(--mediumstrong) is a light-background color and comes
+  // out barely visible here, same failure mode documented on
+  // .favorite-filter-overlay above.
+  color: var(--chrome-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin: 0.6rem 0 0.25rem;
+  padding: 0 0.25rem;
+  text-transform: uppercase;
+}
+
+.unified-search-result {
+  // Now rendered as a .favorite-filter-result card (dark sidebar chrome,
+  // same as the Experiments/Resources groups) rather than a white
+  // .list-group-item, so it inherits that class's colors -- nothing to
+  // override here beyond what's specific to tags/tasks/folders/headings
+  // entries: no per-selection insert buttons, just an optional click/link.
+  a {
+    color: inherit;
+    display: block;
+    text-decoration: none;
+  }
+}
+
+.favorite-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.favorite-filter-chip {
+  align-items: center;
+  background: color-mix(in srgb, var(--primary, #167b85) 12%, var(--white, #fff));
+  border: 1px solid color-mix(in srgb, var(--primary, #167b85) 35%, transparent);
+  border-radius: 1rem;
+  color: var(--strongest, #343a40);
+  display: inline-flex;
+  font-size: 0.78rem;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+
+  &:hover {
+    background: color-mix(in srgb, var(--primary, #167b85) 20%, var(--white, #fff));
+  }
+
+  i {
+    color: var(--primary, #167b85);
+  }
+}
+
+.entity-save-state {
+  align-items: center;
+  border-radius: 1rem;
+  color: var(--mediumstrong);
+  display: inline-flex;
+  font-size: 0.8rem;
+  gap: 0.2rem;
+  padding: 0.3rem 0.55rem;
+  white-space: nowrap;
+
+  &[data-state='saved'] {
+    color: var(--success);
+  }
+
+  &[data-state='offline'],
+  &[data-state='error'] {
+    background: var(--secondlevel);
+    color: var(--danger);
+  }
+}
+
+.todo-panel-view-tabs {
+  background: var(--chrome-bg);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+
+  .btn {
+    color: var(--chrome-fg);
+  }
+
+  .btn-outline-primary {
+    border-color: var(--chrome-muted);
+    color: var(--chrome-fg);
+
+    &:hover,
+    &:focus {
+      background-color: var(--primary);
+      border-color: var(--primary);
+      color: var(--chrome-fg);
+    }
+  }
+
+  .fas {
+    color: inherit;
+  }
+}
+
 .list-group-item {
   background-color: var(--white);
   border: 1px solid var(--thirdlevel);
 }
 
 .side-panel {
-  background: var(--mediumstrong);
+  --side-panel-danger: #ff8a7a;
+  --side-panel-warning: #ffd166;
+  background: var(--chrome-bg);
   box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
-  color: var(--white);
+  // `--white` is a surface color in the dark palette themes (and can be
+  // almost as dark as the panel itself). Sidebar chrome has its own stable
+  // foreground token, so unclassified prose and native controls must inherit
+  // that instead.
+  color: var(--chrome-fg);
   height: 100%;
   left: 0;
   overflow: hidden;
@@ -883,12 +1226,22 @@ tr:first-child td {
   padding-top: 10px;
   position: fixed;
   top: 0;
-  width: max(24%, 330px);
+  width: var(--side-panel-width, max(24%, 330px));
+  // Stay below Bootstrap's modal backdrop (1040).
+  z-index: 1030;
+
+  > .p-3,
+  > div > .p-3,
+  #experimentsFoldersSidebar {
+    padding-left: 3.25rem !important;
+  }
 
   .fas,
   .far,
-  h3 {
-    color: var(--white);
+  h3,
+  h4,
+  label {
+    color: var(--chrome-fg);
   }
 
   .btn-primary {
@@ -898,14 +1251,9 @@ tr:first-child td {
     }
   }
 
-  .list-group-item {
-    background-color: var(--white);
-    border: 1px solid var(--chrome-muted);
-    color: var(--mediumstrong);
-
-    .fas {
-      color: var(--mediumstrong);
-    }
+  .color-medium,
+  .text-muted {
+    color: var(--chrome-muted) !important;
   }
 
   .side-panel-item {
@@ -926,6 +1274,1747 @@ tr:first-child td {
   /* Make the titles that you can click on to toggle the steps visibly clickable */
   [data-action='toggle-next']:hover {
     background-color: var(--secondary);
+  }
+
+  .folder-scope-tabs {
+    border-bottom-color: var(--chrome-muted);
+
+    .nav-link {
+      background: transparent;
+      border-color: transparent;
+      color: var(--chrome-muted);
+
+      &:hover,
+      &:focus {
+        border-color: var(--chrome-muted);
+        color: var(--chrome-fg);
+      }
+
+      &.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: var(--primary-fg, #fff);
+
+        .fas {
+          color: inherit;
+        }
+      }
+    }
+  }
+
+  .folder-quick-links .btn {
+    color: var(--chrome-fg);
+
+    &.active,
+    &:hover,
+    &:focus {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--primary-fg, #fff);
+
+      .fas {
+        color: inherit;
+      }
+    }
+  }
+
+  .folder-tree-list {
+    max-height: min(46vh, 34rem);
+    min-height: 3rem;
+    overflow: auto;
+    padding-right: 0.25rem;
+  }
+
+  .folder-tree-section-label {
+    color: var(--chrome-muted);
+    letter-spacing: 0.02em;
+    padding: 0.25rem 0.35rem;
+    text-transform: uppercase;
+  }
+
+  .bookmarked-folders-section {
+    border-bottom: 1px solid var(--chrome-muted);
+    padding-bottom: 0.4rem;
+
+    .folder-tree-section-label .fas {
+      color: #f0ad4e;
+    }
+  }
+
+  .other-folders-header {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--chrome-muted);
+    display: flex;
+    padding: 0.35rem;
+
+    &:hover,
+    &:focus {
+      background: var(--disabled);
+      color: var(--chrome-fg);
+    }
+  }
+
+  .folder-scope-context > .folder-row,
+  .folder-scope-context > .folder-description {
+    opacity: 0.65;
+  }
+
+  .folder-create-section {
+    border-color: var(--chrome-muted) !important;
+  }
+
+  .folder-row > [data-folder-entity-link] {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-actions {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 0.1rem;
+    justify-content: flex-end;
+    padding-left: 0.35rem;
+  }
+}
+
+.folder-action-btn {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--medium);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 1.5rem;
+  height: 1.5rem;
+  justify-content: center;
+  padding: 0;
+  width: 1.5rem;
+
+  &:hover,
+  &:focus {
+    color: var(--strongest);
+  }
+}
+
+.folder-action-delete:hover,
+.folder-action-delete:focus {
+  color: var(--dangerred);
+}
+
+.folder-readme-panel {
+  background: var(--white);
+  border: 1px solid var(--secondlevel);
+  border-radius: 0.25rem;
+}
+
+.folder-readme-summary {
+  align-items: center;
+  color: var(--strongest);
+  cursor: pointer;
+  display: flex;
+  font-weight: 600;
+  padding: 0.65rem 0.8rem;
+}
+
+.folder-readme-content {
+  color: var(--strongest);
+  overflow-wrap: anywhere;
+
+  > :last-child {
+    margin-bottom: 0;
+  }
+}
+
+.side-panel-resizer {
+  background: transparent;
+  cursor: col-resize;
+  height: 100vh;
+  left: calc(var(--side-panel-width, max(24%, 330px)) - 4px);
+  outline: 0;
+  position: fixed;
+  top: 0;
+  touch-action: none;
+  width: 8px;
+  // Stay below Bootstrap's modal backdrop (1040).
+  z-index: 1032;
+
+  &::after {
+    background: var(--chrome-muted);
+    content: '';
+    height: 100%;
+    left: 3px;
+    opacity: 0.55;
+    position: absolute;
+    top: 0;
+    transition: opacity 120ms ease, width 120ms ease;
+    width: 1px;
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    background: var(--primary);
+    left: 2px;
+    opacity: 1;
+    width: 3px;
+  }
+}
+
+body.side-panel-resizing,
+body.side-panel-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+.html-tools-list {
+  color: var(--chrome-fg);
+  display: grid;
+  gap: 0.75rem;
+}
+
+.html-tool-card {
+  align-items: flex-start;
+  background: var(--chrome-bg);
+  border: 1px solid var(--secondary);
+  border-left: 3px solid var(--primary);
+  border-radius: 0.25rem;
+  color: var(--chrome-fg);
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  transition: background-color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    background: color-mix(in srgb, var(--chrome-bg) 86%, var(--primary));
+    border-color: var(--primary);
+  }
+}
+
+.html-tool-card-icon {
+  align-items: center;
+  background: var(--primary);
+  border-radius: 0.25rem;
+  color: #fff;
+  display: inline-flex;
+  flex: 0 0 2.25rem;
+  height: 2.25rem;
+  justify-content: center;
+
+  .fas {
+    color: inherit;
+  }
+}
+
+.html-tool-card-body {
+  min-width: 0;
+  width: 100%;
+}
+
+.html-tool-card-title {
+  color: var(--chrome-fg);
+  font-size: 1rem;
+  margin: 0 0 0.2rem;
+}
+
+.html-tool-card-description {
+  color: var(--chrome-muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+  margin: 0 0 0.5rem;
+}
+
+.html-tool-version {
+  background: color-mix(in srgb, var(--chrome-bg) 76%, var(--primary));
+  border: 1px solid var(--chrome-muted);
+  border-radius: 999px;
+  color: var(--chrome-fg);
+  display: inline-block;
+  font-size: 0.72rem;
+  margin-bottom: 0.55rem;
+  padding: 0.1rem 0.45rem;
+}
+
+.html-tool-card-actions {
+  display: flex;
+  gap: 0.4rem;
+
+  .btn-outline-secondary {
+    border-color: var(--chrome-muted);
+    color: var(--chrome-fg);
+
+    &:hover,
+    &:focus {
+      background-color: var(--primary);
+      border-color: var(--primary);
+      color: var(--chrome-fg);
+    }
+  }
+
+  .fas {
+    color: inherit;
+  }
+}
+
+#htmlToolsPanel {
+  .input-group-text,
+  .form-control {
+    background: var(--chrome-bg);
+    border-color: var(--chrome-muted);
+    color: var(--chrome-fg);
+  }
+
+  .form-control::placeholder {
+    color: var(--chrome-muted);
+    opacity: 1;
+  }
+
+  .form-control:focus {
+    background: var(--chrome-bg);
+    border-color: var(--primary);
+    color: var(--chrome-fg);
+  }
+}
+
+.html-tool-workspace {
+  background: var(--mainbackground);
+  border-left: 1px solid var(--chrome-muted);
+  box-shadow: -4px 0 18px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: var(--html-tool-workspace-width, 46vw);
+  z-index: 1034;
+
+  &[hidden] {
+    display: none;
+  }
+
+  iframe {
+    background: var(--white);
+    border: 0;
+    display: block;
+    height: 100%;
+    width: 100%;
+  }
+}
+
+.html-tool-workspace-header {
+  align-items: center;
+  background: var(--chrome-bg);
+  border-bottom: 1px solid var(--chrome-muted);
+  color: var(--chrome-fg);
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 3.5rem;
+  padding: 0.65rem 0.75rem 0.65rem 1rem;
+
+  h4 {
+    color: inherit;
+  }
+
+  .btn-outline-secondary {
+    border-color: var(--chrome-muted);
+    color: var(--chrome-fg);
+
+    &:hover,
+    &:focus {
+      background-color: var(--primary);
+      border-color: var(--primary);
+      color: var(--chrome-fg);
+    }
+  }
+
+  .fas {
+    color: inherit;
+  }
+}
+
+.html-tool-workspace-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.html-tool-workspace-resizer {
+  cursor: col-resize;
+  height: 100%;
+  left: -5px;
+  position: absolute;
+  top: 0;
+  touch-action: none;
+  width: 10px;
+  z-index: 1;
+
+  &::after {
+    background: var(--chrome-muted);
+    content: '';
+    height: 100%;
+    left: 4px;
+    opacity: 0.7;
+    position: absolute;
+    top: 0;
+    width: 1px;
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    background: var(--primary);
+    left: 3px;
+    opacity: 1;
+    width: 3px;
+  }
+}
+
+body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) #container {
+  box-sizing: border-box;
+  padding-right: var(--html-tool-workspace-width, 46vw);
+}
+
+.html-tool-workspace-maximized {
+  border-left: 0;
+  width: 100vw;
+  z-index: 1060;
+
+  .html-tool-workspace-resizer {
+    display: none;
+  }
+}
+
+body.html-tool-workspace-resizing,
+body.html-tool-workspace-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+.html-tool-admin-table {
+  td {
+    vertical-align: middle;
+  }
+
+  .html-tool-admin-description {
+    max-width: 32rem;
+    white-space: normal;
+  }
+}
+
+.category-color-dot {
+  background-color: var(--category-color);
+  border: 1px solid var(--chrome-muted);
+  border-radius: 50%;
+  display: inline-block;
+  flex: 0 0 0.75rem;
+  height: 0.75rem;
+  width: 0.75rem;
+}
+
+.favorite-filter-section {
+  border: 0;
+  border-bottom: 1px solid var(--secondary);
+
+  &:last-of-type {
+    border-bottom: 0;
+  }
+
+  &[open] {
+    .favorite-filter-section-chevron {
+      transform: rotate(90deg);
+    }
+  }
+
+  .favorite-filter-section-summary {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    list-style: none;
+    padding: 0.35rem 0.15rem;
+    user-select: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  .favorite-filter-section-chevron {
+    margin-right: 0.35rem;
+    transition: transform 0.15s ease;
+  }
+
+  .favorite-filter-section-body {
+    padding: 0 0.15rem 0.35rem;
+  }
+}
+
+.favorite-filter-option {
+  border-radius: 0.35rem;
+  min-height: 1.8rem;
+  padding: 0.15rem 0.3rem;
+
+  &:hover {
+    background: var(--superlight);
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--primary);
+    height: 1rem;
+    width: 1rem;
+  }
+}
+
+.favorite-filter-results-section {
+  border-top: 1px solid var(--secondary);
+  padding-top: 0.75rem;
+}
+
+.favorite-filter-results {
+  display: flex;
+  flex-direction: column;
+}
+
+.favorite-filter-result {
+  background-color: transparent;
+  border-bottom: 1px solid var(--secondary);
+  color: var(--chrome-fg);
+  padding: 0.35rem 0;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.favorite-filter-result-link {
+  color: var(--chrome-fg);
+  font-size: 0.93rem;
+  font-weight: 700;
+  line-height: 1.2;
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  &:hover,
+  &:focus {
+    color: var(--primary);
+  }
+}
+
+.favorite-filter-result-meta {
+  color: var(--chrome-muted);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  margin-top: 0.1rem;
+}
+
+.favorite-filter-result-insert {
+  background-color: transparent;
+  border-color: var(--chrome-muted);
+  color: var(--chrome-fg);
+  flex: 0 0 auto;
+  padding: 0.15rem 0.35rem;
+
+  &:hover,
+  &:focus {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: var(--chrome-fg);
+  }
+
+  .fas {
+    color: inherit;
+  }
+}
+
+#favoritesPanel {
+  .favorite-filter-text-group {
+    .input-group-text,
+    .form-control {
+      background-color: transparent;
+      border-color: var(--chrome-muted);
+      color: var(--chrome-fg);
+    }
+
+    .form-control::placeholder {
+      color: var(--chrome-muted);
+      opacity: 1;
+    }
+
+    .form-control:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--primary) 25%, transparent);
+    }
+  }
+
+  .ui-autocomplete {
+    background-color: var(--mainbackground);
+    border: 1px solid var(--secondary);
+    border-radius: 0.35rem;
+    box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.2);
+    color: var(--strongest);
+    max-height: 15rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0.25rem;
+    z-index: 1050;
+  }
+
+  .ui-menu-item-wrapper {
+    border: 0;
+    border-radius: 0.25rem;
+    color: var(--strongest);
+    padding: 0.45rem 0.6rem;
+  }
+
+  .ui-menu-item-wrapper.ui-state-active {
+    background-color: var(--primary);
+    color: var(--mainbackground);
+    margin: 0;
+  }
+}
+
+/* TABLE OF CONTENTS panel */
+.toc-items-container {
+  .toc-list {
+    margin: 0;
+    padding: 0;
+  }
+
+  .toc-item {
+    margin: 0;
+  }
+
+  .toc-entry {
+    min-width: 0;
+  }
+
+  .toc-link {
+    color: var(--chrome-fg);
+    font-size: 0.9em;
+    min-width: 0;
+    overflow: hidden;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    transition: background-color 0.15s ease;
+    white-space: nowrap;
+
+    &:hover {
+      background-color: var(--disabled);
+      color: var(--chrome-fg);
+      text-decoration: none;
+    }
+
+    &.active {
+      background-color: var(--primary);
+      color: var(--white);
+      font-weight: bold;
+    }
+  }
+
+  .toc-entry-action {
+    color: var(--muted);
+    flex: 0 0 auto;
+    line-height: 1;
+    padding: 0.3rem;
+
+    &:focus,
+    &:hover {
+      color: var(--primary);
+      text-decoration: none;
+    }
+  }
+}
+
+/* Brief highlight animation when scrolling to a heading */
+.toc-highlight {
+  animation: toc-flash 1.5s ease-out;
+}
+
+.toc-section-filter-hidden {
+  display: none !important;
+}
+
+.toc-search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-height: 1.5rem;
+}
+
+.toc-search-filter {
+  align-items: center;
+  display: inline-flex;
+  font-size: 0.78rem;
+  gap: 0.3rem;
+  max-width: 100%;
+
+  > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.toc-search-filter-remove {
+  background: none;
+  border: 0;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.toc-section-filter-picker {
+  border: 1px solid var(--secondary);
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+}
+
+.toc-section-filter-summary {
+  color: var(--chrome-fg);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  user-select: none;
+}
+
+#tocPanel {
+  .btn-outline-primary {
+    border-color: var(--chrome-muted);
+    color: var(--chrome-fg);
+
+    &:hover,
+    &:focus {
+      background-color: var(--primary);
+      border-color: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+
+    .fas,
+    .far {
+      color: inherit;
+    }
+  }
+}
+
+.toc-section-filter-tree {
+  border: 1px solid var(--secondary);
+  border-radius: 0.25rem;
+  height: 15rem;
+  max-height: 60vh;
+  min-height: 5rem;
+  overflow-y: auto;
+  resize: vertical;
+}
+
+.toc-section-filter-option {
+  align-items: center;
+  border-bottom: 1px solid var(--secondary);
+  display: flex;
+  gap: 0.25rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.35rem 0.25rem calc(0.35rem + var(--toc-section-indent));
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &.selected {
+    background-color: color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+
+  input[type='checkbox'] {
+    accent-color: var(--primary);
+    flex: 0 0 auto;
+  }
+}
+
+.toc-section-filter-toggle {
+  background: none;
+  border: 0;
+  color: var(--chrome-fg);
+  flex: 0 0 1.2rem;
+  padding: 0;
+
+  &:disabled {
+    opacity: 0;
+  }
+}
+
+.toc-section-filter-label {
+  color: var(--chrome-fg);
+  cursor: pointer;
+  flex: 1;
+  font-size: 0.78rem;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-section-filter-chip {
+  max-width: 100%;
+}
+
+@keyframes toc-flash {
+  0% { background-color: rgba(var(--primary-rgb, 0, 123, 255), 0.3); }
+  100% { background-color: transparent; }
+}
+
+.date-reference-overlay {
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.55);
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  left: 0;
+  padding: 1rem;
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 10060;
+}
+
+.date-reference-dialog {
+  background-color: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.65rem;
+  box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.35);
+  color: var(--strongest);
+  max-height: 90vh;
+  max-width: 38rem;
+  overflow: auto;
+  padding: 1.25rem;
+  width: 100%;
+}
+
+.date-reference-help {
+  color: var(--medium);
+  font-size: 0.9rem;
+}
+
+.date-reference-format-preview {
+  color: var(--medium);
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+.date-reference-heading-row {
+  align-items: center;
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 0.35rem;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, 12rem);
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.date-reference-heading-toggle {
+  align-items: center;
+  display: flex;
+  font-weight: 600;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.experiment-title-preset-row {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(9rem, 1fr) minmax(8rem, 1fr) auto auto;
+
+  .btn {
+    white-space: nowrap;
+  }
+}
+
+.experiment-title-dialog {
+  max-width: 62rem;
+  padding: 1rem;
+
+  .date-reference-help,
+  .date-reference-field,
+  .date-reference-heading-row,
+  .experiment-title-heading-preview {
+    margin-bottom: 0.65rem;
+  }
+}
+
+.experiment-title-typography-toolbar {
+  align-items: stretch;
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 0.45rem;
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+  overflow-x: auto;
+  padding: 0.4rem;
+  white-space: nowrap;
+}
+
+.experiment-title-icon-control {
+  align-items: center;
+  background-color: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.3rem;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.3rem;
+  min-height: 2rem;
+  padding-left: 0.45rem;
+
+  i {
+    color: var(--medium);
+    font-size: 0.82rem;
+    width: 0.9rem;
+  }
+
+  .form-control {
+    background-color: transparent;
+    border: 0;
+    box-shadow: none;
+    height: 1.9rem;
+    min-width: 0;
+    padding: 0 1.5rem 0 0;
+  }
+
+  select[aria-label='Heading level'] {
+    width: 3.8rem;
+  }
+
+  select[aria-label='Font family'] {
+    width: 8.5rem;
+  }
+
+  input[aria-label='Font size in points'] {
+    padding-right: 0.2rem;
+    width: 3.6rem;
+  }
+
+  select[aria-label='Text alignment'] {
+    width: 5.8rem;
+  }
+
+  select[aria-label='Background coverage'] {
+    width: 8.5rem;
+  }
+
+  input[aria-label='Choose date'] {
+    padding-right: 0.35rem;
+    width: 8.7rem;
+  }
+
+  select[aria-label='Date display format'] {
+    width: 14rem;
+  }
+
+  input[aria-label='Custom date label'] {
+    padding-right: 0.35rem;
+    width: 10rem;
+  }
+
+  select[aria-label='Date heading level'] {
+    width: 3.8rem;
+  }
+}
+
+.date-reference-editing-toolbar {
+  margin-bottom: 0.35rem;
+}
+
+.date-reference-editor-dialog {
+  max-width: 58rem;
+}
+
+.date-reference-dialog > .date-reference-format-preview {
+  display: block;
+  margin-bottom: 0.65rem;
+  padding-left: 0.15rem;
+}
+
+.experiment-title-emphasis-buttons {
+  align-items: center;
+  border-left: 1px solid var(--secondary);
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: 0.1rem;
+  padding-left: 0.45rem;
+}
+
+.experiment-title-option-toggle,
+.experiment-title-color-control {
+  cursor: pointer;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.experiment-title-option-toggle {
+  input {
+    height: 1px;
+    opacity: 0;
+    position: absolute;
+    width: 1px;
+  }
+
+  span {
+    align-items: center;
+    background-color: var(--mainbackground);
+    border: 1px solid var(--secondary);
+    border-radius: 0.3rem;
+    color: var(--medium);
+    display: inline-flex;
+    height: 2rem;
+    justify-content: center;
+    width: 2rem;
+  }
+
+  input:checked + span {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.18);
+  }
+
+  input:focus-visible + span {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+.experiment-title-color-control {
+  --selected-color: currentColor;
+
+  align-items: center;
+  background-color: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.3rem;
+  color: var(--strongest);
+  display: inline-flex;
+  height: 2rem;
+  justify-content: center;
+  position: relative;
+  width: 2.25rem;
+
+  &::after {
+    background-color: var(--selected-color);
+    bottom: 0.2rem;
+    content: '';
+    height: 0.18rem;
+    left: 0.35rem;
+    position: absolute;
+    right: 0.35rem;
+  }
+
+  input[type='color'] {
+    inset: 0;
+    opacity: 0;
+    position: absolute;
+    width: 100%;
+  }
+
+  &.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  &:focus-within {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+.date-title-format-row {
+  align-items: center;
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 0.4rem;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  padding: 0.45rem 0.6rem;
+}
+
+.date-title-format-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.date-title-format-buttons {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.date-title-format-toggle {
+  cursor: pointer;
+  margin: 0;
+
+  input {
+    height: 1px;
+    opacity: 0;
+    position: absolute;
+    width: 1px;
+  }
+
+  span {
+    align-items: center;
+    background-color: var(--mainbackground);
+    border: 1px solid var(--secondary);
+    border-radius: 0.3rem;
+    color: var(--strongest);
+    display: inline-flex;
+    font-family: serif;
+    font-size: 1rem;
+    font-weight: 700;
+    height: 2rem;
+    justify-content: center;
+    width: 2rem;
+  }
+
+  &:nth-child(2) span {
+    font-style: italic;
+  }
+
+  &:nth-child(3) span {
+    text-decoration: underline;
+  }
+
+  input:checked + span {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.18);
+  }
+
+  input:focus-visible + span {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .experiment-title-preset-row {
+    grid-template-columns: 1fr;
+  }
+
+  .experiment-title-preset-row {
+    .btn {
+      width: 100%;
+    }
+  }
+}
+
+.date-reference-field {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.date-reference-search-row {
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.date-reference-target-status {
+  color: var(--medium);
+  font-size: 0.82rem;
+  font-weight: 400;
+
+  &.is-selected {
+    color: var(--primary);
+    font-weight: 600;
+  }
+}
+
+.date-reference-search-results {
+  background-color: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.25rem;
+  max-height: 14rem;
+  overflow-y: auto;
+
+  &:empty {
+    border: 0;
+    margin: 0;
+  }
+}
+
+.date-reference-search-result {
+  background: var(--mainbackground);
+  border: 0;
+  border-bottom: 1px solid var(--secondary);
+  color: var(--strongest);
+  display: flex;
+  flex-direction: column;
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &:focus,
+  &:hover {
+    background-color: var(--firstlevel);
+    color: var(--strongest);
+  }
+
+  span {
+    color: var(--medium);
+    font-size: 0.78rem;
+  }
+}
+
+.date-reference-search-message {
+  color: var(--medium);
+  font-size: 0.85rem;
+  padding: 0.6rem 0.7rem;
+}
+
+.date-reference-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.experiment-title-heading-preview {
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 0.35rem;
+  margin-bottom: 1rem;
+  min-height: 3rem;
+  overflow-wrap: anywhere;
+  padding: 0.65rem 0.75rem;
+}
+
+/* INLINE SPREADSHEET */
+.inline-spreadsheet-overlay {
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  left: 0;
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 10050;
+}
+
+.inline-spreadsheet-dialog {
+  background-color: var(--mainbackground);
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  box-sizing: border-box;
+  color: var(--strongest);
+  display: flex;
+  flex-direction: column;
+  height: 90vh;
+  max-height: 90vh;
+  max-width: 1100px;
+  overflow: hidden;
+  padding: 0;
+  width: 90vw;
+}
+
+.inline-spreadsheet-dialog > h5 {
+  background-color: var(--firstlevel);
+  border-bottom: 1px solid var(--secondary);
+  margin: 0 !important;
+  padding: 0.7rem 0.9rem;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.inline-spreadsheet-settings {
+  align-items: end;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(12rem, 1fr) 5rem 5rem auto minmax(14rem, 2fr);
+  margin: 0.5rem 0.65rem;
+}
+
+.inline-spreadsheet-size-control {
+  align-items: stretch;
+  color: var(--medium);
+  font-size: 0.75rem;
+  gap: 0.15rem;
+}
+
+.inline-spreadsheet-size-actions {
+  display: flex;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.inline-spreadsheet-appearance {
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 4px;
+  margin: 0 0.65rem 0.4rem;
+  padding: 0.4rem 0.5rem;
+
+  summary {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+    min-height: 1.75rem;
+
+    &::marker {
+      color: var(--primary);
+    }
+  }
+
+  > strong {
+    color: var(--mediumstrong);
+    display: block;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    margin: 0.35rem 0 0.15rem;
+    text-transform: uppercase;
+  }
+}
+
+.inline-spreadsheet-appearance-grid {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.25rem;
+}
+
+.inline-spreadsheet-appearance-control {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.78rem;
+  gap: 0.2rem;
+  margin: 0;
+  white-space: nowrap;
+
+  input[type='checkbox'] {
+    height: 1.5rem;
+    width: 1.5rem;
+  }
+
+  input[type='color'] {
+    height: 2rem;
+    padding: 0.1rem;
+    width: 100%;
+  }
+}
+
+.inline-spreadsheet-compact-control {
+  align-items: center;
+  background-color: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.3rem;
+  flex-direction: row;
+  gap: 0.25rem;
+  min-height: 1.85rem;
+  padding: 0.12rem 0.28rem;
+
+  > span:first-child {
+    color: var(--mediumstrong);
+    display: inline-flex;
+    justify-content: center;
+    min-width: 1rem;
+  }
+
+  .form-control {
+    border: 0;
+    box-shadow: none;
+    height: 1.55rem;
+    min-width: 3rem;
+    padding: 0.05rem 0.2rem;
+  }
+
+  input[type='number'] {
+    width: 3.6rem;
+  }
+
+  input[type='color'] {
+    border: 0;
+    height: 1.45rem;
+    min-width: 1.9rem;
+    padding: 0;
+    width: 1.9rem;
+  }
+}
+
+.inline-spreadsheet-text-color-icon {
+  border-bottom: 3px solid currentColor;
+  font-family: serif;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.inline-spreadsheet-stepper {
+  align-items: center;
+  background-color: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.3rem;
+  display: inline-flex;
+  height: 1.85rem;
+
+  input[type='number'] {
+    appearance: textfield;
+    border: 0;
+    border-left: 1px solid var(--secondary);
+    border-radius: 0;
+    border-right: 1px solid var(--secondary);
+    height: 1.7rem;
+    padding: 0.1rem;
+    text-align: center;
+    width: 3.2rem;
+
+    // The +/- buttons already cover this input's stepping; the native
+    // browser spinner would just be a second, redundant way to do the same.
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      appearance: none;
+      margin: 0;
+    }
+  }
+
+  .inline-spreadsheet-icon-button {
+    border: 0;
+  }
+}
+
+.inline-spreadsheet-appearance-defaults {
+  align-items: center;
+  display: flex;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+
+  select {
+    max-width: 10rem;
+  }
+}
+
+.inline-spreadsheet-appearance-status {
+  color: var(--medium);
+  flex: 1;
+  font-size: 0.78rem;
+}
+
+.inline-spreadsheet-cell-format {
+  align-items: center;
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  margin: 0 0.65rem 0.35rem;
+  overflow-x: auto;
+  padding: 0.25rem 0.35rem;
+
+  .inline-spreadsheet-appearance-control {
+    flex-direction: row;
+    font-size: 0.72rem;
+    gap: 0.2rem;
+    min-width: 0;
+
+    > span {
+      color: var(--medium);
+    }
+
+    .form-control {
+      font-size: 0.78rem;
+      height: 1.75rem;
+      padding: 0.1rem 0.3rem;
+      width: auto;
+    }
+
+    input[type='number'] {
+      width: 3.75rem;
+    }
+
+    input[type='color'] {
+      height: 1.65rem;
+      min-width: 2.5rem;
+      width: 2.5rem;
+    }
+
+    input[type='checkbox'] {
+      height: 1.1rem;
+      width: 1.1rem;
+    }
+  }
+
+  .btn {
+    font-size: 0.78rem;
+    padding: 0.2rem 0.45rem;
+  }
+}
+
+.inline-spreadsheet-cell-format-row {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+
+  > strong {
+    align-self: center;
+    font-size: 0.82rem;
+    min-width: 2.25rem;
+  }
+}
+
+.inline-spreadsheet-icon-button,
+.inline-spreadsheet-icon-toggle {
+  align-items: center;
+  appearance: none;
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  color: var(--strongest);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.82rem;
+  height: 1.75rem;
+  justify-content: center;
+  margin: 0;
+  min-width: 1.75rem;
+  padding: 0.15rem 0.3rem;
+}
+
+.inline-spreadsheet-icon-button:hover,
+.inline-spreadsheet-icon-toggle:hover {
+  background-color: var(--secondlevel);
+  border-color: var(--secondary);
+}
+
+.inline-spreadsheet-icon-button[aria-pressed='true'],
+.inline-spreadsheet-icon-toggle:checked {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  color: var(--white);
+}
+
+.inline-spreadsheet-icon-toggle::before {
+  content: attr(data-icon);
+  font-weight: 700;
+}
+
+.inline-spreadsheet-icon-italic::before {
+  font-style: italic;
+}
+
+.inline-spreadsheet-icon-underline::before {
+  text-decoration: underline;
+}
+
+.inline-spreadsheet-alignment-buttons {
+  align-items: center;
+  display: inline-flex;
+  gap: 1px;
+}
+
+.inline-spreadsheet-cell-format-status {
+  color: var(--medium);
+  flex: 1 1 12rem;
+  font-size: 0.78rem;
+}
+
+.inline-spreadsheet-formula-bar {
+  align-items: center;
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin: 0 0.65rem 0.35rem;
+  min-height: 2rem;
+  padding: 0.15rem 0.25rem;
+
+  .btn {
+    align-items: center;
+    display: inline-flex;
+    font-size: 0.78rem;
+    height: 1.7rem;
+    justify-content: center;
+    min-width: 1.7rem;
+    padding: 0.1rem 0.3rem;
+  }
+
+  .inline-spreadsheet-formula-function-select {
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    height: 1.7rem;
+    max-width: 9rem;
+    padding: 0.1rem 0.3rem;
+  }
+
+  &.is-collapsed {
+    justify-content: flex-end;
+    min-height: 1.65rem;
+
+    > :not(.inline-spreadsheet-icon-button) {
+      display: none;
+    }
+  }
+}
+
+.inline-spreadsheet-formula-status {
+  color: var(--medium);
+  flex: 1 1 16rem;
+  font-size: 0.82rem;
+  margin-left: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-spreadsheet-formula-cell {
+  border-right: 1px solid var(--secondary);
+  color: var(--mediumstrong);
+  font-family: monospace;
+  font-size: 0.78rem;
+  min-width: 3.3rem;
+  padding: 0 0.35rem;
+  text-align: center;
+}
+
+.inline-spreadsheet-formula-input.form-control {
+  flex: 2 1 15rem;
+  font-family: monospace;
+  font-size: 0.82rem;
+  height: 1.7rem;
+  min-width: 10rem;
+  padding: 0.1rem 0.4rem;
+}
+
+.inline-spreadsheet-container {
+  --spreadsheet-column-index-height: 30px;
+  --spreadsheet-row-index-width: 42px;
+
+  flex: 1 1 220px;
+  height: 400px;
+  margin: 0 0.65rem 0.5rem;
+  max-height: 70vh;
+  max-width: 100%;
+  min-height: 220px;
+  min-width: min(320px, 100%);
+  overflow: auto;
+  resize: both;
+  width: 100%;
+}
+
+/* The library's own scroll viewport must follow the user-resizable host rather
+ * than retaining the fixed dimensions supplied when the sheet was mounted. */
+/* stylelint-disable selector-class-pattern */
+.inline-spreadsheet-container > .jss_container,
+.inline-spreadsheet-container .jss_content {
+  height: 100% !important;
+  max-height: none !important;
+  max-width: none !important;
+  width: 100% !important;
+}
+/* stylelint-enable selector-class-pattern */
+
+/* Keep jspreadsheet's coordinate headers stable when data is pasted or the
+ * grid dimensions change. The custom properties are updated by the appearance
+ * controls, so their fixed dimensions remain intentionally adjustable. */
+/* stylelint-disable selector-class-pattern */
+.inline-spreadsheet-container .jss_worksheet > thead > tr {
+  height: var(--spreadsheet-column-index-height) !important;
+  max-height: var(--spreadsheet-column-index-height) !important;
+  min-height: var(--spreadsheet-column-index-height) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet > thead > tr > * {
+  height: var(--spreadsheet-column-index-height) !important;
+  max-height: var(--spreadsheet-column-index-height) !important;
+  min-height: var(--spreadsheet-column-index-height) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet > colgroup > col:first-child {
+  max-width: var(--spreadsheet-row-index-width) !important;
+  min-width: var(--spreadsheet-row-index-width) !important;
+  width: var(--spreadsheet-row-index-width) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet > thead > tr > :first-child,
+.inline-spreadsheet-container .jss_worksheet > tbody > tr > :first-child,
+.inline-spreadsheet-container .jss_worksheet .jss_row,
+.inline-spreadsheet-container .jss_worksheet .jss_selectall {
+  max-width: var(--spreadsheet-row-index-width) !important;
+  min-width: var(--spreadsheet-row-index-width) !important;
+  width: var(--spreadsheet-row-index-width) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet td[data-x][data-y] {
+  white-space: pre-wrap;
+}
+/* stylelint-enable selector-class-pattern */
+
+.inline-spreadsheet-actions {
+  align-items: center;
+  background-color: var(--firstlevel);
+  border-top: 1px solid var(--secondary);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+  justify-content: space-between;
+  padding: 0.5rem 0.65rem;
+}
+
+.inline-spreadsheet-grid-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+/* Ensure jspreadsheet dropdown menus inside the overlay render on top */
+/* stylelint-disable-next-line selector-class-pattern */
+.jss_container {
+  z-index: 10051 !important;
+}
+
+@media (max-width: 767px) {
+  .inline-spreadsheet-settings {
+    grid-template-columns: 1fr 1fr;
+
+    select,
+    .inline-spreadsheet-caption-input,
+    .inline-spreadsheet-size-actions {
+      grid-column: 1 / -1;
+    }
+
+    .inline-spreadsheet-size-actions {
+      flex-wrap: wrap;
+    }
+  }
+
+  .inline-spreadsheet-appearance-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .inline-spreadsheet-appearance-defaults {
+    align-items: stretch;
+    flex-direction: column;
+
+    select {
+      max-width: none;
+    }
   }
 }
 
@@ -1236,8 +3325,66 @@ the form-control fails to do that so we do the border ourselves */
   background-color: var(--firstlevel);
 }
 
+#tocPrintSelectionDocument {
+  display: none;
+}
+
 /* print only the main div */
 @media print {
+  body.toc-print-selection-active {
+    background: #fff !important;
+  }
+
+  body.toc-print-selection-active > :not(#tocPrintSelectionDocument) {
+    display: none !important;
+  }
+
+  body.toc-print-selection-active #tocPrintSelectionDocument {
+    /* neutralize the account theme palette's own background variables
+       (e.g. .bg-firstlevel elements copied in from the note) without
+       touching a literal background-color a user picked directly on a
+       header or highlighted text -- those aren't theme-driven and still
+       print as authored */
+    --firstlevel: transparent;
+    --secondlevel: transparent;
+    background: #fff;
+    color: #111;
+    display: block !important;
+    font-size: 11pt;
+    line-height: 1.45;
+    margin: 0 auto;
+    max-width: 100%;
+  }
+
+  #tocPrintSelectionDocument .toc-print-title {
+    border-bottom: 2px solid #333;
+    color: #111;
+    font-size: 22pt;
+    margin: 0 0 0.3rem;
+    padding-bottom: 0.3rem;
+  }
+
+  #tocPrintSelectionDocument .toc-print-context {
+    color: #555;
+    font-size: 9pt;
+    margin: 0 0 1.5rem;
+    text-transform: uppercase;
+  }
+
+  #tocPrintSelectionDocument img,
+  #tocPrintSelectionDocument table {
+    max-width: 100% !important;
+  }
+
+  #tocPrintSelectionDocument table {
+    break-inside: auto;
+  }
+
+  #tocPrintSelectionDocument tr,
+  #tocPrintSelectionDocument img {
+    break-inside: avoid;
+  }
+
   /* overwrite bootstrap defaults
      * https://stackoverflow.com/a/53232790
      */
@@ -1439,6 +3586,13 @@ figure figcaption {
 /* make the markdown editor full width */
 .markdown-textarea {
   width: 100%;
+}
+
+/* bootstrap-markdown-fa5's hideButtons() adds this class, but Bootstrap 4
+   dropped the old .hidden utility (replaced by .d-none) so it has no effect
+   without this rule */
+.md-editor .hidden {
+  display: none !important;
 }
 
 /* styling TinyMCE preview */
@@ -2002,20 +4156,39 @@ input:user-invalid {
 }
 
 div > .sticky-navbar {
+  opacity: 1;
   position: sticky;
   top: 0;
-  transition: transform 0.2s ease;
+  transition:
+    opacity var(--sticky-header-speed) var(--sticky-header-easing),
+    transform var(--sticky-header-speed) var(--sticky-header-easing);
+  will-change: opacity, transform;
   width: 100%;
   z-index: 100;
 }
 
 .sticky-toolbar {
   background: var(--mainbackground);
+  opacity: 1;
   position: sticky;
   top: var(--navbar-height);
-  transition: top 0.2s ease;
+  transition:
+    opacity var(--sticky-header-speed) var(--sticky-header-easing),
+    top var(--sticky-header-speed) var(--sticky-header-easing),
+    transform var(--sticky-header-speed) var(--sticky-header-easing);
+  will-change: opacity, top, transform;
   width: 100%;
   z-index: 50;
+
+  > hr {
+    margin: 0.125rem 0;
+  }
+
+  &.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-100%);
+  }
 }
 
 /* chemical compounds danger (hazard pictograms) */
@@ -2027,5 +4200,847 @@ div > .sticky-navbar {
 }
 
 .sticky-navbar.hidden {
+  opacity: 0;
+  pointer-events: none;
   transform: translateY(-100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  div > .sticky-navbar,
+  .sticky-toolbar {
+    transition: none;
+  }
+
+  // Sidebar/dialog-adjacent transitions and animations gated the same way --
+  // matching each rule's own selector so specificity actually overrides it
+  // (a lower-specificity override here would silently lose to the original).
+  .side-panel-resizer::after,
+  .favorite-filter-section .favorite-filter-section-chevron,
+  .toc-items-container .toc-link,
+  .infotip-text,
+  .malleable::after {
+    transition: none;
+  }
+
+  .toc-highlight,
+  .state-indicator[data-state='5'] {
+    animation: none;
+  }
+}
+
+// Todolist.svelte (sidebar) task-detail dialog and project badge. Kept in
+// the global stylesheet rather than the component's own scoped <style>
+// block: that component loads via an async webpack chunk whose CSS file
+// isn't guaranteed fresh across rebuilds (see MiniCssExtractPlugin
+// chunkFilename note in builder.js), so anything here needs the
+// main.min.css load path, which every page already reliably has.
+.btn-unstyled {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.todo-title-btn {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.todo-title-btn:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.todo-project-badge {
+  background: var(--primary);
+  color: var(--chrome-fg);
+}
+
+// The detail dialog overlays the whole viewport (not just the sidebar),
+// so it uses the app's regular surface tokens rather than --chrome-*.
+.todo-detail-overlay {
+  align-items: flex-start;
+  background: rgba(20, 20, 20, 0.45);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 4rem 1rem;
+  position: fixed;
+  z-index: 1050;
+}
+
+.todo-detail-dialog {
+  background: #ffffff;
+  border-radius: 0.5rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  color: #343434;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  max-width: 40rem;
+  width: 100%;
+}
+
+.todo-detail-header {
+  align-items: flex-start;
+  border-bottom: 1px solid #d9d9d9;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.75rem;
+  padding: 1rem 1.2rem;
+}
+
+.todo-detail-header h4 {
+  color: #23272b;
+  flex: 1 1 auto;
+}
+
+.todo-detail-close {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.todo-detail-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.9rem;
+  overflow-y: auto;
+  padding: 1rem 1.2rem;
+}
+
+.todo-detail-body > .pm-dialog-field + .pm-dialog-field {
+  border-top: 1px solid #d9d9d9;
+  padding-top: 0.9rem;
+}
+
+.todo-detail-notes {
+  border-top: 1px solid #d9d9d9;
+  padding-top: 0.6rem;
+}
+
+.todo-detail-footer {
+  border-top: 1px solid #d9d9d9;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 0.8rem 1.2rem;
+}
+
+// The dialogs above render fine as a normal page overlay (ProjectManagementBoard),
+// but Todolist.svelte's copy is mounted inside the sidebar's .side-panel, whose
+// `.fas, .far, h3, h4, label { color: var(--chrome-fg); }` rule (meant for the
+// panel's own dark chrome) leaks into any white card nested inside it -- same
+// class of bug as .favorite-filter-overlay above, and its `--white`/`--mediumstrong`
+// warning applies here too, hence the hardcoded colors rather than theme variables.
+.todo-detail-dialog .fas,
+.todo-detail-dialog .far,
+.pm-dialog .fas,
+.pm-dialog .far {
+  color: inherit;
+}
+
+.todo-detail-dialog label,
+.pm-dialog label {
+  color: #23272b;
+}
+
+// ProjectManagementBoard.svelte -- same reasoning as the todo-detail-* block
+// above: this also loads via an async chunk, so its custom classes live
+// here instead of a scoped <style> block.
+.pm-board {
+  max-width: 100%;
+}
+
+.pm-card {
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.5rem;
+}
+
+.pm-label {
+  color: #23272b;
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+}
+
+.pm-muted {
+  color: #495057;
+}
+
+.pm-project-row {
+  align-items: center;
+  border-bottom: 1px solid var(--secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.pm-project-tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--secondary);
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin-bottom: -1px;
+  padding: 0.55rem 0.15rem;
+}
+
+.pm-project-tab + .pm-project-tab {
+  margin-left: 1rem;
+}
+
+.pm-project-tab.active {
+  border-bottom-color: var(--primary);
+  color: var(--primary);
+}
+
+.pm-manage-btn {
+  background: transparent;
+  border: 0;
+  color: var(--secondary);
+  margin-left: 0.4rem;
+  padding: 0.3rem;
+}
+
+.pm-manage-btn:hover {
+  color: var(--primary);
+}
+
+.pm-manage-btn.active {
+  color: var(--primary);
+}
+
+.pm-project-tab-new {
+  background: transparent;
+  border: 0;
+  color: var(--secondary);
+  font-weight: 700;
+  margin-left: 1rem;
+  padding: 0.55rem 0.15rem;
+}
+
+.pm-project-tab-new:hover {
+  color: var(--primary);
+}
+
+.pm-project-description {
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.5rem;
+  margin: 0.6rem 0 0;
+  padding: 0.85rem 1rem;
+}
+
+.pm-project-description-body {
+  margin: 0.4rem 0 0;
+}
+
+.pm-project-status {
+  display: inline-block;
+}
+
+.pm-project-status-planning {
+  background: #e2e3e5;
+  color: #41464b;
+}
+
+.pm-project-status-active {
+  background: #cfe2ff;
+  color: #084298;
+}
+
+.pm-project-status-on_hold {
+  background: #fff3cd;
+  color: #664d03;
+}
+
+.pm-project-status-done {
+  background: #d1e7dd;
+  color: #0f5132;
+}
+
+.pm-search > div {
+  max-width: 26rem;
+}
+
+.pm-search span {
+  display: block;
+  margin-top: 0.15rem;
+}
+
+.pm-priority-filter {
+  max-width: 10rem;
+}
+
+.pm-bulk-bar {
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.7rem;
+}
+
+.pm-progress {
+  background: #e9ecef;
+  border-radius: 999px;
+  height: 0.5rem;
+  margin: 0.6rem 0 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.pm-progress-bar {
+  background: var(--primary);
+  height: 100%;
+  transition: width 0.2s ease;
+}
+
+.pm-progress-label {
+  color: #495057;
+  display: block;
+  font-size: 0.72rem;
+  margin-top: 0.2rem;
+}
+
+.pm-priority {
+  display: inline-block;
+}
+
+.pm-priority-low {
+  background: #e2e3e5;
+  color: #41464b;
+}
+
+.pm-priority-medium {
+  background: #fff3cd;
+  color: #664d03;
+}
+
+.pm-priority-high {
+  background: #f8d7da;
+  color: #842029;
+}
+
+.pm-columns {
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.pm-column {
+  border-radius: 0.4rem;
+  // grow to fill extra space when there's room, but never shrink below
+  // this width -- once too many columns to fit, the row scrolls
+  // horizontally (see .pm-columns) instead of every column getting
+  // squeezed narrower
+  flex: 1 0 24rem;
+  min-width: 24rem;
+  transition: background-color 0.1s ease;
+}
+
+.pm-column-drag-over {
+  background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.pm-task[draggable='true'] {
+  cursor: grab;
+}
+
+.pm-column-title {
+  cursor: grab;
+  margin-bottom: 0;
+}
+
+.pm-column-header {
+  margin-bottom: 0.6rem;
+}
+
+.pm-column-add-btn {
+  color: #495057;
+}
+
+.pm-task {
+  margin-bottom: 0.6rem;
+  padding: 0.7rem;
+}
+
+.pm-task-done {
+  opacity: 0.7;
+}
+
+.pm-task-pinned {
+  background: color-mix(in srgb, var(--primary) 6%, var(--mainbackground));
+  border-color: var(--primary);
+}
+
+.pm-task-done-checkbox {
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.pm-show-older {
+  padding-left: 0;
+}
+
+.pm-task-title-btn {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  text-align: left;
+  word-break: break-word;
+}
+
+.pm-task-title-btn:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.pm-task-actions {
+  display: flex;
+  gap: 0.3rem;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+  // quieter by default so a task's title isn't fighting five buttons for
+  // room -- revealed on hover/focus so the actions stay fully reachable
+  // (including for keyboard users tabbing through the buttons)
+  opacity: 0.35;
+  transition: opacity 0.1s ease;
+}
+
+.pm-task:hover .pm-task-actions,
+.pm-task:focus-within .pm-task-actions {
+  opacity: 1;
+}
+
+.pm-icon-button {
+  height: 1.8rem;
+  padding: 0;
+  width: 1.8rem;
+}
+
+.pm-icon-button-active {
+  color: var(--primary);
+}
+
+.pm-task-meta {
+  font-size: 0.85rem;
+}
+
+.pm-reassign-select {
+  max-width: 10rem;
+  width: auto;
+}
+
+.pm-overlay {
+  align-items: flex-start;
+  background: rgba(20, 20, 20, 0.45);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 4rem 1rem;
+  position: fixed;
+  z-index: 1050;
+}
+
+.pm-dialog {
+  background: #ffffff;
+  border-radius: 0.5rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  color: #343434;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  max-width: 28rem;
+  width: 100%;
+}
+
+.pm-dialog-header {
+  align-items: flex-start;
+  border-bottom: 1px solid #d9d9d9;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.75rem;
+  padding: 1rem 1.2rem;
+}
+
+.pm-dialog-header h4 {
+  color: #23272b;
+  flex: 1 1 auto;
+}
+
+.pm-close-btn {
+  background: transparent;
+  border: 0;
+  color: #495057;
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0.1rem;
+}
+
+.pm-dialog-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.9rem;
+  overflow-y: auto;
+  padding: 1rem 1.2rem;
+}
+
+.pm-dialog-body > .pm-dialog-field + .pm-dialog-field {
+  border-top: 1px solid #d9d9d9;
+  padding-top: 0.9rem;
+}
+
+.pm-dialog-field textarea,
+.pm-dialog-field input:not([type='checkbox']) {
+  width: 100%;
+}
+
+.pm-dialog-footer {
+  border-top: 1px solid #d9d9d9;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 0.8rem 1.2rem;
+}
+
+.pm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+  min-height: 1.4rem;
+}
+
+.pm-chips:empty {
+  margin-bottom: 0;
+  min-height: 0;
+}
+
+.pm-chip {
+  align-items: center;
+  background: var(--primary);
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 0.8rem;
+  font-weight: 700;
+  gap: 0.3rem;
+  padding: 0.15rem 0.3rem 0.15rem 0.55rem;
+}
+
+.pm-chip button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  line-height: 1;
+  padding: 0 0.2rem;
+}
+
+.pm-dialog-wide {
+  max-width: 40rem;
+}
+
+.pm-dialog-row {
+  gap: 0.7rem;
+}
+
+.rte-toolbar {
+  background: #f2f2f2;
+  border: 1px solid #d9d9d9;
+  border-bottom: 0;
+  border-radius: 0.25rem 0.25rem 0 0;
+  display: flex;
+  gap: 0.15rem;
+  padding: 0.3rem;
+}
+
+.rte-btn {
+  background: transparent;
+  border: 0;
+  border-radius: 0.2rem;
+  color: #343434;
+  height: 1.8rem;
+  width: 1.8rem;
+}
+
+.rte-btn:hover {
+  background: #d9d9d9;
+  color: var(--primary);
+}
+
+.rte-content {
+  border-radius: 0 0 0.25rem 0.25rem;
+  height: auto;
+  min-height: 6rem;
+  overflow-y: auto;
+  padding: 0.5rem 0.7rem;
+}
+
+.rte-content:focus {
+  outline: none;
+}
+
+.elabftw-link-preview {
+  background: var(--thirdlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 0.3rem;
+  /* --thirdlevel is a mid-to-dark gray in every theme variant, so a fixed
+     light color is used here instead of the previous color: inherit,
+     which produced unreadable dark-on-dark text wherever the surrounding
+     context's own text color was already dark (e.g. an Orders card) */
+  color: #fff;
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  text-decoration: none;
+}
+
+.elabftw-link-preview:hover {
+  text-decoration: underline;
+}
+
+.elabftw-mention {
+  background: var(--primary);
+  border-radius: 999px;
+  color: var(--primary-fg);
+  font-weight: 700;
+  padding: 0.05rem 0.55rem;
+}
+
+.rte-content h4 {
+  font-size: 1rem;
+  margin: 0.4rem 0;
+}
+
+.rte-content ul,
+.rte-content ol {
+  margin: 0.3rem 0;
+  padding-left: 1.3rem;
+}
+
+.rte-content p {
+  margin: 0 0 0.4rem;
+}
+
+.pm-comment-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.pm-comment {
+  border-bottom: 1px solid #d9d9d9;
+  padding: 0.4rem 0;
+}
+
+.pm-comment:last-child {
+  border-bottom: 0;
+}
+
+.pm-comment-meta {
+  align-items: center;
+  display: flex;
+  font-size: 0.8rem;
+  gap: 0.4rem;
+}
+
+.pm-comment-delete {
+  color: #495057;
+  margin-left: auto;
+}
+
+// wraps a pair of action buttons (e.g. edit + delete) so they sit flush
+// against each other at the right edge -- without this, two siblings each
+// using pm-comment-delete's margin-left: auto get spread apart, since auto
+// margins split the flex row's free space evenly between them
+.pm-item-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.pm-item-actions > .pm-comment-delete {
+  margin-left: 0;
+}
+
+.pm-comment-body {
+  margin-top: 0.15rem;
+  white-space: pre-wrap;
+}
+
+.pm-comment-form {
+  gap: 0.4rem;
+  position: relative;
+}
+
+.pm-mention-results {
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.35rem;
+  bottom: 100%;
+  left: 0;
+  list-style: none;
+  margin: 0 0 0.2rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  padding: 0;
+  position: absolute;
+  right: 0;
+  z-index: 5;
+}
+
+.pm-mention-result {
+  display: block;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  width: 100%;
+}
+
+.pm-mention-result:hover {
+  background: rgba(128, 128, 128, 0.15);
+}
+
+.pm-avatar-group {
+  align-items: center;
+  display: flex;
+}
+
+.pm-avatar {
+  align-items: center;
+  background: var(--primary);
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  color: var(--primary-fg, #fff);
+  cursor: default;
+  display: inline-flex;
+  font-size: 0.7rem;
+  font-weight: 700;
+  height: 1.7rem;
+  justify-content: center;
+  margin-left: -0.5rem;
+  width: 1.7rem;
+}
+
+.pm-avatar:first-child {
+  margin-left: 0;
+}
+
+.pm-task-preview {
+  font-size: 0.8rem;
+  margin: 0.25rem 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-entity-link-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  max-height: 10rem;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.pm-column-manage-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+
+.pm-column-manage-row {
+  align-items: center;
+  border-bottom: 1px solid #d9d9d9;
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.35rem 0;
+}
+
+.pm-column-manage-row:last-child {
+  border-bottom: 0;
+}
+
+.pm-column-manage-row .form-control {
+  flex: 1 1 auto;
+}
+
+.pm-column-manage-row .pm-icon-button:disabled {
+  opacity: 0.3;
+}
+
+.pm-step-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.pm-step {
+  align-items: center;
+  border-bottom: 1px solid #d9d9d9;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+}
+
+.pm-step:last-child {
+  border-bottom: 0;
+}
+
+.pm-step-body {
+  flex: 1 1 auto;
+}
+
+.pm-step-done .pm-step-body {
+  color: #495057;
+  text-decoration: line-through;
+}
+
+.pm-entity-link {
+  align-items: center;
+  border-bottom: 1px solid #d9d9d9;
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.35rem 0;
+}
+
+.pm-entity-link:last-child {
+  border-bottom: 0;
+}
+
+
+.pm-field-edit-btn {
+  color: #495057;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.2rem;
+}
+
+.pm-field-edit-btn:hover {
+  color: var(--primary);
+}
+
+// Sits below the Search/Folders/etc. side panels (z-index 1030) so one can
+// be opened and used to link items to the open task without it being
+// hidden behind this dialog's dimming background.
+.pm-overlay-task {
+  z-index: 1020;
 }
