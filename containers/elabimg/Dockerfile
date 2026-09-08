@@ -354,6 +354,17 @@ RUN if [ "$BUILD_ALL" = "1" ]; then \
         fi \
         && rm -rf /run/elabftw/yarn /run/elabftw/cache /run/composer; \
     fi
+# Fork patch: smalot/pdfparser hardcodes iconv(..., 'UTF-8//TRANSLIT//IGNORE', ...)
+# to decode PDF font text. musl libc's iconv (this image's libc) doesn't
+# support the //TRANSLIT or //IGNORE modifiers at all -- every such call
+# just returns false, so PDF text extraction silently comes back empty for
+# any PDF using an affected font encoding (e.g. CP1252), breaking both
+# PDF full-text search and order procurement-tag extraction. Dropping the
+# modifiers falls back to plain iconv(), which actually works on musl.
+RUN if [ "$BUILD_ALL" = "1" ]; then \
+        find /elabftw/vendor/smalot/pdfparser -name Font.php -exec \
+            sed -i "s/UTF-8\/\/TRANSLIT\/\/IGNORE/UTF-8/g" {} +; \
+    fi
 # PHP: add php config after composer step so open_basedir is not an issue
 COPY ./containers/elabimg/php/php.ini /etc/php84/php.ini.tpl
 RUN rm -f /etc/php84/php.ini && ln -s /run/php/php.ini /etc/php84/php.ini

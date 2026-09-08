@@ -207,12 +207,20 @@ final class OrderUploads extends AbstractRest
      */
     private static function extractProcurementTags(Db $Db, int $orderId, string $text): void
     {
+        // ETH Zurich's form draws each value directly before its own label
+        // with no separator (e.g. "26036220Beschaffungs-ID"), not after it
+        // -- so that ordering is tried first, falling back to label-then-
+        // value in case some other supplier's PDF lays it out the other way.
         $procurementId = null;
         $orderNumber = null;
-        if (preg_match('/Beschaffungs-ID\s+(\S+)/i', $text, $matches) === 1) {
+        if (preg_match('/(\d+)\s{0,1}Beschaffungs-ID/i', $text, $matches) === 1
+            || preg_match('/Beschaffungs-ID\s+(\S+)/i', $text, $matches) === 1
+        ) {
             $procurementId = $matches[1];
         }
-        if (preg_match('/Bestellung\s*(?:Nr|No)\.?\s+(\S+)/i', $text, $matches) === 1) {
+        if (preg_match('/(\d+)\s{0,1}Bestellung\s*(?:Nr|No)\.?/i', $text, $matches) === 1
+            || preg_match('/Bestellung\s*(?:Nr|No)\.?\s+(\S+)/i', $text, $matches) === 1
+        ) {
             $orderNumber = $matches[1];
         }
         if ($procurementId === null && $orderNumber === null) {
