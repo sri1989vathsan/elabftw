@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class='container-fluid px-0'>
+  <h1 class='mb-3'><i class='far fa-bell mr-2'></i>{{ 'Notifications'|trans }}</h1>
+
+  {% if notifs|length > 0 %}
+    <div class='card'>
+      {% for notif in notifs %}
+        <div class='notification p-3' data-ack='{{ notif.is_ack }}'>{{ notif|notifWeb }}</div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class='text-muted'>{{ 'No notifications to show.'|trans }}</p>
+  {% endif %}
+
+  <div class='d-flex justify-content-between mt-3'>
+    <a
+      href='notifications.php?offset={{ max(0, notifOffset - notifPageSize) }}'
+      class='btn btn-sm btn-ghost {{ notifOffset == 0 ? 'disabled' }}'
+    ><i class='fas fa-chevron-left mr-1'></i>{{ 'Previous'|trans }}</a>
+    <a
+      href='notifications.php?offset={{ notifOffset + notifPageSize }}'
+      class='btn btn-sm btn-ghost {{ not notifHasNextPage ? 'disabled' }}'
+    >{{ 'Next'|trans }}<i class='fas fa-chevron-right ml-1'></i></a>
+  </div>
+</div>
+{% endblock body %}
