@@ -25,6 +25,7 @@ enum UsersColumn: string
     case CanManageUsers2teams = 'can_manage_users2teams';
     case CjkFonts = 'cjk_fonts';
     case ThemeVariant = 'theme_variant';
+    case ThemePalette = 'theme_palette';
     case DefaultRead = 'default_read';
     case DefaultWrite = 'default_write';
     case DefaultReadBase = 'default_read_base';
@@ -33,6 +34,7 @@ enum UsersColumn: string
     case DisplayMode = 'display_mode';
     case Email = 'email';
     case Entrypoint = 'entrypoint';
+    case EditorDefaults = 'editor_defaults';
     case Firstname = 'firstname';
     case IncFilesPdf = 'inc_files_pdf';
     case IsSysadmin = 'is_sysadmin';
@@ -46,6 +48,12 @@ enum UsersColumn: string
     case NotifEventDeletedEmail = 'notif_event_deleted_email';
     case NotifStepDeadline = 'notif_step_deadline';
     case NotifStepDeadlineEmail = 'notif_step_deadline_email';
+    case NotifMentionedTask = 'notif_mentioned_task';
+    case NotifMentionedTaskEmail = 'notif_mentioned_task_email';
+    case NotifMentionedOrder = 'notif_mentioned_order';
+    case NotifMentionedOrderEmail = 'notif_mentioned_order_email';
+    case NotifTaskAssigned = 'notif_task_assigned';
+    case NotifTaskAssignedEmail = 'notif_task_assigned_email';
     case NotifUserCreated = 'notif_user_created';
     case NotifUserCreatedEmail = 'notif_user_created_email';
     case NotifUserNeedValidation = 'notif_user_need_validation';
@@ -71,6 +79,7 @@ enum UsersColumn: string
     case ScTodo = 'sc_todo';
     case ShowWeekends = 'show_weekends';
     case Sort = 'sort';
+    case SpreadsheetDefaults = 'spreadsheet_defaults';
     case UseIsodate = 'use_isodate';
     case UploadsLayout = 'uploads_layout';
     case UseMarkdown = 'use_markdown';

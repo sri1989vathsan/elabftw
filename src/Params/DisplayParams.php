@@ -203,6 +203,16 @@ final class DisplayParams extends BaseQueryParams
         $this->filterSql .= $this->getSqlIn('entity.timestamped', $query->getString('timestamped'));
         // RATING FILTER
         $this->filterSql .= $this->getSqlIn('entity.rating', $query->getString('rating'));
+        // FOLDER FILTER (experiments and resources)
+        if (($this->entityType === EntityType::Experiments || $this->entityType === EntityType::Items)
+            && $query->has('folder')) {
+            $folderValue = $query->getString('folder');
+            if ($folderValue === '0') {
+                $this->filterSql .= ' AND entity.folder_id IS NULL';
+            } elseif (Check::id((int) $folderValue) !== false) {
+                $this->filterSql .= sprintf(' AND entity.folder_id = %d', (int) $folderValue);
+            }
+        }
     }
 
     /**

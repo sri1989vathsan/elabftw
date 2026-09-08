@@ -35,6 +35,8 @@ use Elabftw\Models\AbstractEntity;
 use Elabftw\Models\ApiKeys;
 use Elabftw\Models\Batch;
 use Elabftw\Models\Branding;
+use Elabftw\Models\CalendarActivity;
+use Elabftw\Models\CalendarFeed;
 use Elabftw\Models\Comments;
 use Elabftw\Models\Compounds;
 use Elabftw\Models\Config;
@@ -42,15 +44,20 @@ use Elabftw\Models\Dspace;
 use Elabftw\Models\ExperimentsCategories;
 use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\ExtraFieldsKeys;
+use Elabftw\Models\FavFilters;
 use Elabftw\Models\FavTags;
+use Elabftw\Models\TemplateFavorites;
+use Elabftw\Models\TemplateVersionsRest;
 use Elabftw\Models\Idps;
 use Elabftw\Models\IdpsCerts;
 use Elabftw\Models\IdpsEndpoints;
 use Elabftw\Models\IdpsSources;
 use Elabftw\Models\Info;
+use Elabftw\Models\HtmlTools;
 use Elabftw\Models\Instance;
 use Elabftw\Models\Instance2Rors;
 use Elabftw\Models\Items;
+use Elabftw\Models\LinkPreview;
 use Elabftw\Models\ItemsStatus;
 use Elabftw\Models\Notifications\EventDeleted;
 use Elabftw\Models\Notifications\UserNotifications;
@@ -58,6 +65,8 @@ use Elabftw\Models\ProcurementRequests;
 use Elabftw\Models\RequestActions;
 use Elabftw\Models\ResourcesCategories;
 use Elabftw\Models\Revisions;
+use Elabftw\Models\ExperimentsFolders;
+use Elabftw\Models\FavCategories;
 use Elabftw\Models\Scheduler;
 use Elabftw\Models\SigKeys;
 use Elabftw\Models\Steps;
@@ -67,7 +76,14 @@ use Elabftw\Models\TeamGroups;
 use Elabftw\Models\Teams;
 use Elabftw\Models\Teams2Rors;
 use Elabftw\Models\TeamTags;
+use Elabftw\Models\Feedback;
+use Elabftw\Models\FeedbackComments;
 use Elabftw\Models\Todolist;
+use Elabftw\Models\TodolistColumns;
+use Elabftw\Models\TodolistComments;
+use Elabftw\Models\TodolistEntityLinks;
+use Elabftw\Models\TodolistSteps;
+use Elabftw\Models\TodolistProjects;
 use Elabftw\Models\UnfinishedSteps;
 use Elabftw\Models\Uploads;
 use Elabftw\Models\UserRequestActions;
@@ -216,7 +232,7 @@ final class Apiv2Controller extends AbstractApiController
     private function handlePost(): Response
     {
         // special case for POST/uploads where we get the information from the "files" attribute
-        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler) && $this->action === Action::Create) {
+        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools) && $this->action === Action::Create) {
             $file = $this->Request->files->get('file');
             // this was added to prevent: Uncaught Error: Call to a member function getClientOriginalName() on null
             // not sure what triggers it though
@@ -227,6 +243,16 @@ final class Apiv2Controller extends AbstractApiController
             $this->reqBody['file'] = $file;
             $this->reqBody['target'] = $this->Request->request->getString('target');
             $this->reqBody['filePath'] = $file->getPathname();
+            if ($this->Model instanceof HtmlTools) {
+                $this->reqBody['name'] = $this->Request->request->getString('name');
+                $this->reqBody['description'] = $this->Request->request->getString('description');
+                return new Response('', Response::HTTP_CREATED, array('Location' => sprintf(
+                    '%s/%s%d',
+                    Env::asUrl('SITE_URL'),
+                    $this->Model->getApiPath(),
+                    $this->Model->postAction($this->action, $this->reqBody),
+                )));
+            }
             $this->reqBody['comment'] = $this->Request->request->get('comment');
             $this->reqBody['entity_type'] = $this->Request->request->get('entity_type'); // can be null
             $this->reqBody['category'] = $this->Request->request->get('category'); // can be null
@@ -305,6 +331,8 @@ final class Apiv2Controller extends AbstractApiController
         return match ($this->endpoint) {
             ApiEndpoint::ApiKeys => new ApiKeys($this->requester, $this->id),
             ApiEndpoint::Batch => new Batch($this->requester),
+            ApiEndpoint::CalendarActivity => new CalendarActivity($this->requester),
+            ApiEndpoint::CalendarFeed => new CalendarFeed($this->requester),
             ApiEndpoint::Compounds => (
                 function () {
                     $Config = Config::getConfig();
@@ -332,7 +360,9 @@ final class Apiv2Controller extends AbstractApiController
             )(),
             ApiEndpoint::Idps => new Idps($this->requester, $this->id),
             ApiEndpoint::IdpsSources => new IdpsSources($this->requester, $this->id),
+            ApiEndpoint::HtmlTools => new HtmlTools($this->requester, $this->id),
             ApiEndpoint::Import => new ImportHandler($this->requester, App::getDefaultLogger()),
+            ApiEndpoint::LinkPreview => new LinkPreview($this->requester),
             ApiEndpoint::Info => new Info(),
             ApiEndpoint::Instance => new Instance($this->requester, $this->getEmail(), (bool) Config::getConfig()->configArr['email_send_grouped']),
             ApiEndpoint::Export => new Exports(App::getDefaultLogger(), $this->requester, Storage::EXPORTS->getStorage(), $this->id),
@@ -354,13 +384,21 @@ final class Apiv2Controller extends AbstractApiController
                 trim($this->Request->query->getString('q')),
                 $this->Request->query->getInt('limit'),
             ),
+            ApiEndpoint::ExperimentsFolders => new ExperimentsFolders($this->requester, $this->id),
+            ApiEndpoint::FavCategories => new FavCategories($this->requester, $this->id),
+            ApiEndpoint::Feedback => new Feedback($this->requester, $this->id),
+            ApiEndpoint::FavFilters => new FavFilters($this->requester, $this->id),
             ApiEndpoint::FavTags => new FavTags($this->requester, $this->id),
             ApiEndpoint::Reports => new ReportsHandler($this->requester),
+            ApiEndpoint::TemplateFavorites => new TemplateFavorites($this->requester, $this->id),
+            ApiEndpoint::TemplateVersions => new TemplateVersionsRest($this->requester, $this->id),
             ApiEndpoint::StorageUnits => new StorageUnits($this->requester, Config::getConfig()->configArr['inventory_require_edit_rights'] === '1', $this->id),
             // Temporary informational endpoint, can be removed in 5.2
             ApiEndpoint::TeamTags => throw new ImproperActionException('Use api/v2/teams/current/tags endpoint instead.'),
             ApiEndpoint::Teams => new Teams($this->requester, $this->id),
-            ApiEndpoint::Todolist => new Todolist($this->requester->userData['userid'], $this->id),
+            ApiEndpoint::Todolist => new Todolist($this->requester, $this->id),
+            ApiEndpoint::TodolistColumns => new TodolistColumns($this->requester, $this->id),
+            ApiEndpoint::TodolistProjects => new TodolistProjects($this->requester, $this->id),
             ApiEndpoint::UnfinishedSteps => new UnfinishedSteps(
                 $this->requester,
                 $this->Request->query->get('scope') === 'team',
@@ -454,6 +492,20 @@ final class Apiv2Controller extends AbstractApiController
                 default => throw new InvalidApiSubModelException(ApiEndpoint::Instance),
             };
         }
+        if ($this->Model instanceof Feedback) {
+            return match ($submodel) {
+                ApiSubModels::Comments => new FeedbackComments($this->requester, $this->Model, $this->subId),
+                default => throw new InvalidApiSubModelException(ApiEndpoint::Feedback),
+            };
+        }
+        if ($this->Model instanceof Todolist) {
+            return match ($submodel) {
+                ApiSubModels::Comments => new TodolistComments($this->requester, $this->Model, $this->subId),
+                ApiSubModels::EntityLinks => new TodolistEntityLinks($this->requester, $this->Model, $this->subId),
+                ApiSubModels::Steps => new TodolistSteps($this->requester, $this->Model, $this->subId),
+                default => throw new InvalidApiSubModelException(ApiEndpoint::Todolist),
+            };
+        }
         throw new ImproperActionException('Incorrect endpoint.');
     }
 
@@ -461,6 +513,12 @@ final class Apiv2Controller extends AbstractApiController
     {
         if (($this->Model instanceof Config) && $this->requester->userData['is_sysadmin'] !== 1) {
             throw new IllegalActionException('Non sysadmin user tried to use a restricted api endpoint.');
+        }
+
+        if (($this->Model instanceof HtmlTools)
+            && $this->Request->getMethod() !== Request::METHOD_GET
+            && !$this->requester->isSysadmin()) {
+            throw new IllegalActionException('Only a sysadmin can manage HTML tools.');
         }
 
         $contentType = $this->Request->headers->get('content-type') ?? '';
@@ -474,7 +532,8 @@ final class Apiv2Controller extends AbstractApiController
             (
                 $this->Model instanceof Uploads ||
                 $this->Model instanceof ImportHandler ||
-                $this->Model instanceof Branding
+                $this->Model instanceof Branding ||
+                $this->Model instanceof HtmlTools
             )) {
             return;
         }

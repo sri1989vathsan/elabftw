@@ -21,8 +21,10 @@ use Elabftw\Models\Users\Users;
 use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
+use PDOStatement;
 
 use function json_decode;
+use function in_array;
 use function sprintf;
 
 /**
@@ -45,27 +47,93 @@ final class UserNotifications extends AbstractRest
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
         $this->users->isSelfOrExplode();
+        // the navbar bell only ever shows what's still unread -- once a
+        // notification is acknowledged (clicked, or "Clear all") it drops
+        // out here for good; see readHistory() for the full log
         $sql = 'SELECT id, category, body, is_ack, created_at, userid
             FROM notifications
             WHERE userid = :userid
-                AND ((category != :step_deadline AND category NOT IN (:need_validation, :is_validated, :onboarding_email))
-                     OR (category = :step_deadline AND DATE_ADD(NOW(), INTERVAL :notif_lead_time MINUTE) >= body->>"$.deadline"))
+                AND is_ack = 0
+                AND ' . $this->visibilityClause() . '
             ORDER BY created_at DESC
             LIMIT 10';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
+        $this->bindVisibilityParams($req);
+        $this->Db->execute($req);
+
+        return $this->hideDisabledStepDeadlines($req->fetchAll());
+    }
+
+    /**
+     * Every notification for this user, read or not, for the "All
+     * notifications" history page -- readAll() only ever shows the unread
+     * ones, capped at 10, for the navbar bell.
+     */
+    public function readHistory(int $limit = 30, int $offset = 0): array
+    {
+        $this->users->isSelfOrExplode();
+        $limitSql = sprintf(' LIMIT %d OFFSET %d', $limit, max(0, $offset));
+        $sql = 'SELECT id, category, body, is_ack, created_at, userid
+            FROM notifications
+            WHERE userid = :userid
+                AND ' . $this->visibilityClause() . '
+            ORDER BY created_at DESC' . $limitSql;
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
+        $this->bindVisibilityParams($req);
+        $this->Db->execute($req);
+
+        return $this->hideDisabledStepDeadlines($req->fetchAll());
+    }
+
+    /**
+     * Step/to-do deadline notifications only count as "visible" once
+     * they're actually due, or (deadline categories aside) always.
+     */
+    private function visibilityClause(): string
+    {
+        return '(
+            (category NOT IN (
+                :step_deadline,
+                :todo_deadline,
+                :need_validation,
+                :is_validated,
+                :onboarding_email
+            ))
+            OR (
+                category = :step_deadline
+                AND DATE_ADD(NOW(), INTERVAL :notif_lead_time MINUTE) >= body->>"$.deadline"
+            )
+            OR (
+                category = :todo_deadline
+                AND NOW() >= CAST(body->>"$.remind_at" AS DATETIME)
+            )
+        )';
+    }
+
+    private function bindVisibilityParams(PDOStatement $req): void
+    {
         $req->bindValue(':step_deadline', Notifications::StepDeadline->value, PDO::PARAM_INT);
+        $req->bindValue(':todo_deadline', Notifications::TodoDeadline->value, PDO::PARAM_INT);
         $req->bindValue(':need_validation', Notifications::SelfNeedValidation->value, PDO::PARAM_INT);
         $req->bindValue(':is_validated', Notifications::SelfIsValidated->value, PDO::PARAM_INT);
         $req->bindValue(':onboarding_email', Notifications::OnboardingEmail->value, PDO::PARAM_INT);
         $req->bindValue(':notif_lead_time', StepDeadline::NOTIFLEADTIME, PDO::PARAM_INT);
-        $this->Db->execute($req);
+    }
 
-        $notifs = $req->fetchAll();
+    private function hideDisabledStepDeadlines(array $notifs): array
+    {
         foreach ($notifs as $key => &$notif) {
             $notif['body'] = json_decode($notif['body'], true, 512, JSON_THROW_ON_ERROR);
             // remove the step deadline web notif if user doesn't want it shown
-            if ($this->users->userData['notif_step_deadline'] === 0 && ($notif['category']) === Notifications::StepDeadline->value) {
+            if ($this->users->userData['notif_step_deadline'] === 0
+                && in_array(
+                    $notif['category'],
+                    array(Notifications::StepDeadline->value, Notifications::TodoDeadline->value),
+                    true,
+                )
+            ) {
                 unset($notifs[$key]);
             }
         }
@@ -109,10 +177,15 @@ final class UserNotifications extends AbstractRest
      * Delete all notifications for that user
      */
     #[Override]
+    /**
+     * "Clear all" from the navbar bell -- acknowledges every notification
+     * rather than deleting it, so it drops out of the (unread-only) bell
+     * but is still there on the "All notifications" history page.
+     */
     public function destroy(): bool
     {
         $this->users->isSelfOrExplode();
-        $sql = 'DELETE FROM notifications WHERE userid = :userid';
+        $sql = 'UPDATE notifications SET is_ack = 1 WHERE userid = :userid';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         return $this->Db->execute($req);

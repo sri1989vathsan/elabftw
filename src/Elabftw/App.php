@@ -21,6 +21,11 @@ use Elabftw\Models\Users\AnonymousUser;
 use Elabftw\Models\Users\AuthenticatedUser;
 use Elabftw\Models\Config;
 use Elabftw\Models\ExperimentsCategories;
+use Elabftw\Models\ExperimentsStatus;
+use Elabftw\Models\FavCategories;
+use Elabftw\Models\FavFilters;
+use Elabftw\Models\FavTags;
+use Elabftw\Models\ItemsStatus;
 use Elabftw\Models\ResourcesCategories;
 use Elabftw\Models\Notifications\UserNotifications;
 use Elabftw\Models\Teams;
@@ -61,7 +66,19 @@ final class App
 
     public array $experimentsCategoryArr = array();
 
+    public array $experimentsStatusArr = array();
+
+    public array $favoriteCategoriesArr = array();
+
+    public array $favoriteFiltersArr = array();
+
+    public array $favoriteFilterUsersArr = array();
+
+    public array $favoriteTagsArr = array();
+
     public array $itemsCategoryArr = array();
+
+    public array $itemsStatusArr = array();
 
     public Teams $Teams;
 
@@ -141,6 +158,20 @@ final class App
             $this->experimentsCategoryArr = $ExperimentsCategory->readAll($ExperimentsCategory->getQueryParams(new InputBag(array('limit' => 9999))));
             $ResourcesCategory = new ResourcesCategories($this->Teams);
             $this->itemsCategoryArr = $ResourcesCategory->readAll($ResourcesCategory->getQueryParams(new InputBag(array('limit' => 9999))));
+            $ExperimentsStatus = new ExperimentsStatus($this->Teams);
+            $this->experimentsStatusArr = $ExperimentsStatus->readAll($ExperimentsStatus->getQueryParams(new InputBag(array('limit' => 9999))));
+            $ItemsStatus = new ItemsStatus($this->Teams);
+            $this->itemsStatusArr = $ItemsStatus->readAll($ItemsStatus->getQueryParams(new InputBag(array('limit' => 9999))));
+            if ($this->Session->has('is_auth') && !$this->Session->get('is_anon')) {
+                $this->favoriteCategoriesArr = new FavCategories($this->Users)->readAll();
+                $this->favoriteFiltersArr = new FavFilters($this->Users)->readAll();
+                // The complete team member list can be large. Load it only
+                // when the favorites panel explicitly requests its options.
+                if ($this->Request->query->getBoolean('load_filter_options')) {
+                    $this->favoriteFilterUsersArr = $this->Users->readAllActiveFromTeam();
+                }
+                $this->favoriteTagsArr = new FavTags($this->Users)->readAll();
+            }
         }
         $this->initi18n();
     }
@@ -157,14 +188,15 @@ final class App
     public function render(string $template, array $variables): string
     {
         try {
+            $globals = array(
+                'App' => $this,
+                'langsArr' => Language::getAllHuman(),
+                'sessionExpiresAt' => $this->sessionExpiresAt,
+            );
             return $this->getTwig($this->devMode)->render(
                 $template,
                 array_merge(
-                    array(
-                        'App' => $this,
-                        'langsArr' => Language::getAllHuman(),
-                        'sessionExpiresAt' => $this->sessionExpiresAt,
-                    ),
+                    $globals,
                     $variables,
                 )
             );

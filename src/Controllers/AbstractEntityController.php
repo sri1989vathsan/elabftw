@@ -27,14 +27,19 @@ use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\ControllerInterface;
 use Elabftw\Models\AbstractEntity;
 use Elabftw\Models\Config;
+use Elabftw\Models\Experiments;
 use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\FavTags;
 use Elabftw\Models\ItemsStatus;
 use Elabftw\Models\ItemsTypes;
+use Elabftw\Models\EntityReviewDecisions;
+use Elabftw\Models\TodolistEntityLinks;
 use Elabftw\Models\RequestActions;
+use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\StorageUnits;
 use Elabftw\Models\TeamGroups;
 use Elabftw\Models\TeamTags;
+use Elabftw\Models\TemplateVersions;
 use Elabftw\Models\Templates;
 use Elabftw\Models\UserRequestActions;
 use Elabftw\Params\DisplayParams;
@@ -92,12 +97,20 @@ abstract class AbstractEntityController implements ControllerInterface
     #[Override]
     public function getResponse(): Response
     {
-        return match ($this->App->Request->query->getAlpha('mode')) {
+        $Response = match ($this->App->Request->query->getAlpha('mode')) {
             'view' => $this->view(),
             'edit' => $this->edit(),
             'changelog' => $this->changelog(),
             default => $this->show(),
         };
+        // without this, a same-URL window.location.reload() (e.g. right
+        // after switching the editor mode, which flips content_type and
+        // converts the body server-side) can be served from the browser's
+        // HTTP cache instead of fetching the just-saved content, showing
+        // stale, unconverted body content until the user navigates away and
+        // back
+        $Response->headers->set('Cache-Control', 'no-store');
+        return $Response;
     }
 
     /**
@@ -136,10 +149,20 @@ abstract class AbstractEntityController implements ControllerInterface
         $template = 'show.html';
         $UserRequestActions = new UserRequestActions($this->App->Users);
 
+        $ExperimentsFolders = new ExperimentsFolders($this->App->Users);
+        $experimentsFoldersTreeArr = $ExperimentsFolders->readAllRecursive();
+        $experimentsFoldersCreateArr = $ExperimentsFolders->readHierarchyRows();
+        $favoriteFolderIds = $ExperimentsFolders->getFavoriteFolders();
+
         $renderArr = array(
             'DisplayParams' => $DisplayParams,
             'Entity' => $this->Entity,
             'categoryArr' => $this->categoryArr,
+            'experimentsFoldersArr' => $experimentsFoldersTreeArr,
+            'experimentsFoldersCreateArr' => $experimentsFoldersCreateArr,
+            'experimentsFoldersTreeArr' => $experimentsFoldersTreeArr,
+            'favoriteFolderIds' => $favoriteFolderIds,
+            'favoriteRootFolderIds' => $ExperimentsFolders->getFavoriteRootFolderIds(),
             'statusArr' => $this->statusArr,
             'favTagsArr' => $favTagsArr,
             'pageTitle' => $this->getPageTitle(),
@@ -171,6 +194,9 @@ abstract class AbstractEntityController implements ControllerInterface
     protected function view(): Response
     {
         $RequestActions = new RequestActions($this->App->Users, $this->Entity);
+        $ExperimentsFoldersView = new ExperimentsFolders($this->App->Users);
+        $experimentsFoldersViewArr = $ExperimentsFoldersView->readHierarchyRows();
+        $favoriteFolderIds = $ExperimentsFoldersView->getFavoriteFolders();
         // the mode parameter is for the uploads tpl
         $renderArr = array(
             'categoryArr' => $this->categoryArr,
@@ -179,6 +205,28 @@ abstract class AbstractEntityController implements ControllerInterface
             'Entity' => $this->Entity,
             'entityProcurementRequestsArr' => $this->getEntityProcurementRequestsArr(),
             'entityRequestActionsArr' => $RequestActions->readAllFull(),
+            'entityReviewDecisionsArr' => EntityReviewDecisions::readAllForEntity(
+                $this->Entity->entityType->value,
+                $this->Entity->id ?? 0,
+            ),
+            'linkedTasksArr' => TodolistEntityLinks::readAllForEntity(
+                $this->Entity->entityType->value,
+                $this->Entity->id ?? 0,
+            ),
+            'templateVersionsArr' => $this->Entity->entityType === EntityType::Templates
+                ? TemplateVersions::readAllForEntity($this->Entity->id ?? 0)
+                : array(),
+            'templateUsedByArr' => $this->Entity instanceof Templates
+                ? $this->Entity->readExperimentsUsingThis()
+                : array(),
+            'associatedTemplatesArr' => $this->Entity instanceof Experiments
+                ? $this->Entity->readAssociatedTemplates()
+                : array(),
+            'experimentsFoldersArr' => $experimentsFoldersViewArr,
+            'experimentsFoldersCreateArr' => $experimentsFoldersViewArr,
+            'experimentsFoldersTreeArr' => $ExperimentsFoldersView->readAllRecursive(),
+            'favoriteFolderIds' => $favoriteFolderIds,
+            'favoriteRootFolderIds' => $ExperimentsFoldersView->getFavoriteRootFolderIds(),
             'pageTitle' => $this->getPageTitle(),
             'mode' => 'view',
             'hideTitle' => true,
@@ -228,6 +276,10 @@ abstract class AbstractEntityController implements ControllerInterface
         $ItemsTypes = new ItemsTypes($this->App->Users);
         $DisplayParamsTemplates = new DisplayParams($this->App->Users, EntityType::Templates);
         $DisplayParamsItemsTypes = new DisplayParams($this->App->Users, EntityType::ItemsTypes);
+        $ExperimentsFoldersEdit = new ExperimentsFolders($this->App->Users);
+        $experimentsFoldersEditArr = $ExperimentsFoldersEdit->readHierarchyRows();
+        $favoriteFolderIds = $ExperimentsFoldersEdit->getFavoriteFolders();
+
         $renderArr = array(
             'categoryArr' => $this->categoryArr,
             'classificationArr' => $this->classificationArr,
@@ -235,6 +287,28 @@ abstract class AbstractEntityController implements ControllerInterface
             'Entity' => $this->Entity,
             'entityProcurementRequestsArr' => $this->getEntityProcurementRequestsArr(),
             'entityRequestActionsArr' => $RequestActions->readAllFull(),
+            'entityReviewDecisionsArr' => EntityReviewDecisions::readAllForEntity(
+                $this->Entity->entityType->value,
+                $this->Entity->id ?? 0,
+            ),
+            'linkedTasksArr' => TodolistEntityLinks::readAllForEntity(
+                $this->Entity->entityType->value,
+                $this->Entity->id ?? 0,
+            ),
+            'templateVersionsArr' => $this->Entity->entityType === EntityType::Templates
+                ? TemplateVersions::readAllForEntity($this->Entity->id ?? 0)
+                : array(),
+            'templateUsedByArr' => $this->Entity instanceof Templates
+                ? $this->Entity->readExperimentsUsingThis()
+                : array(),
+            'associatedTemplatesArr' => $this->Entity instanceof Experiments
+                ? $this->Entity->readAssociatedTemplates()
+                : array(),
+            'experimentsFoldersArr' => $experimentsFoldersEditArr,
+            'experimentsFoldersCreateArr' => $experimentsFoldersEditArr,
+            'experimentsFoldersTreeArr' => $ExperimentsFoldersEdit->readAllRecursive(),
+            'favoriteFolderIds' => $favoriteFolderIds,
+            'favoriteRootFolderIds' => $ExperimentsFoldersEdit->getFavoriteRootFolderIds(),
             'hideTitle' => true,
             'metadataGroups' => $Metadata->getGroups(),
             'mode' => 'edit',

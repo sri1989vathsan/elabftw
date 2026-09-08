@@ -20,6 +20,7 @@ use Elabftw\Enums\PdfFormat;
 use Elabftw\Enums\Scope;
 use Elabftw\Enums\Sort;
 use Elabftw\Enums\ThemeVariant;
+use Elabftw\Enums\ThemePalette;
 use Elabftw\Enums\UsersColumn;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Services\Check;
@@ -82,6 +83,12 @@ final class UserParams extends ContentParams
             UsersColumn::NotifEventDeleted->value,
             UsersColumn::NotifStepDeadlineEmail->value,
             UsersColumn::NotifStepDeadline->value,
+            UsersColumn::NotifMentionedTaskEmail->value,
+            UsersColumn::NotifMentionedTask->value,
+            UsersColumn::NotifMentionedOrderEmail->value,
+            UsersColumn::NotifMentionedOrder->value,
+            UsersColumn::NotifTaskAssignedEmail->value,
+            UsersColumn::NotifTaskAssigned->value,
             UsersColumn::NotifUserCreatedEmail->value,
             UsersColumn::NotifUserCreated->value,
             UsersColumn::NotifUserNeedValidationEmail->value,
@@ -96,6 +103,9 @@ final class UserParams extends ContentParams
             UsersColumn::PrimaryBg->value,
             UsersColumn::PrimaryFg->value => Filter::nullableHexColor($this->getNullableString()),
             UsersColumn::ThemeVariant->value => (ThemeVariant::tryFrom($this->asInt()) ?? ThemeVariant::Auto)->value,
+            UsersColumn::ThemePalette->value => (ThemePalette::tryFrom($this->asString()) ?? ThemePalette::Classic)->value,
+            UsersColumn::EditorDefaults->value => $this->getEditorDefaults(),
+            UsersColumn::SpreadsheetDefaults->value => $this->getSpreadsheetDefaults(),
             UsersColumn::MfaSecret->value => $this->getNullableString(),
             UsersColumn::Lang->value => (Language::tryFrom($this->content) ?? Language::EnglishGB)->value,
             UsersColumn::Entrypoint->value => (Entrypoint::tryFrom($this->asInt()) ?? Entrypoint::Dashboard)->value,

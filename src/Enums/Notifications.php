@@ -19,6 +19,10 @@ enum Notifications: int
     case UserNeedValidation = 12;
     case StepDeadline = 13;
     case EventDeleted = 14;
+    case TodoDeadline = 15;
+    case MentionedInTask = 16;
+    case MentionedInOrder = 17;
+    case TaskAssigned = 18;
     case SelfNeedValidation = 20;
     case SelfIsValidated = 30;
     case MathjaxFailed = 40;

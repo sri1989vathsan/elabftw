@@ -24,6 +24,7 @@ use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Hash\FileHash;
 use Elabftw\Models\AbstractEntity;
 use Elabftw\Models\Comments;
+use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\Steps;
 use Elabftw\Models\Tags;
 use Elabftw\Models\Changelog;
@@ -321,10 +322,28 @@ class Eln extends AbstractZip
             $categoryId = $this->getCategoryId($entityType, $categoryNode['name'], $categoryNode['color']);
         }
 
+        // FOLDER: recreate the folder path (if missing) so the entity lands back where it was exported from
+        $folderId = null;
+        if (isset($dataset['isPartOf']) && ($entityType === EntityType::Experiments || $entityType === EntityType::Items)) {
+            $folderNode = $this->getNodeFromId($dataset['isPartOf']['@id']);
+            if (!empty($folderNode['name'])) {
+                $folderId = new ExperimentsFolders($Author)->getIdFromPath($folderNode['name']);
+            }
+        }
+
         // CREATE ENTITY
         $entityId = $this->Entity->create();
         $this->Entity->setId($entityId);
         $this->logger->debug(sprintf('Created %s with id: %d', $this->Entity->entityType->value, $entityId));
+
+        if ($folderId !== null) {
+            $Folders = new ExperimentsFolders($Author);
+            if ($entityType === EntityType::Experiments) {
+                $Folders->assignExperiment($entityId, $folderId);
+            } else {
+                $Folders->assignResource($entityId, $folderId);
+            }
+        }
 
         // DATE
         $date = date('Y-m-d');

@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Elabftw\Models;
 
+use Elabftw\Exceptions\IllegalActionException;
+use Elabftw\Traits\CategoryDescriptionTrait;
 use Override;
 
 /**
@@ -19,11 +21,29 @@ use Override;
  */
 final class ResourcesCategories extends AbstractStatus
 {
+    use CategoryDescriptionTrait;
+
     protected string $table = 'items_categories';
+
+    protected function getDescriptionScope(): string
+    {
+        return CustomUiDescriptions::RESOURCE_CATEGORY;
+    }
 
     #[Override]
     protected function getUsersCanwriteName(): string
     {
         return 'resources_categories';
+    }
+
+    // categories are admin-only to write: everyone can view them (see
+    // web/resources-categories.php), but unlike statuses, there is no
+    // per-team "let regular users manage this" toggle for categories
+    #[Override]
+    protected function canWriteOrExplode(): void
+    {
+        if (!$this->Teams->Users->isAdmin) {
+            throw new IllegalActionException();
+        }
     }
 }

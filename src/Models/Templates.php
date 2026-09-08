@@ -93,6 +93,18 @@ final class Templates extends AbstractTemplateEntity
         $this->insertTags($tags, $newId);
         $this->addCreationToChangelog($newId, $createdFromType, $createdFromId);
 
+        // Capture v1 immediately, at creation, since "Publish new version"
+        // (see AbstractEntity::patch()) only ever snapshots the *new*
+        // version it creates (v2, v3, ...) -- without this, v1 itself never
+        // gets a permanent record and silently disappears from the version
+        // history/picker for any template that's since moved past it.
+        TemplateVersions::create(
+            entityId: $newId,
+            version: 1,
+            body: $body ?? '',
+            publishedBy: $this->Users->userid,
+        );
+
         return $newId;
     }
 
@@ -100,5 +112,20 @@ final class Templates extends AbstractTemplateEntity
     protected function getCreatePermissionKey(): string
     {
         return 'users_canwrite_experiments_templates';
+    }
+
+    /** Experiments created from this template (see created_from_type/created_from_id on experiments). */
+    public function readExperimentsUsingThis(): array
+    {
+        $sql = 'SELECT id, title, date, userid, created_from_version
+            FROM experiments
+            WHERE created_from_type = :created_from_type AND created_from_id = :created_from_id
+            ORDER BY date DESC';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':created_from_type', $this->entityType->toInt(), PDO::PARAM_INT);
+        $req->bindParam(':created_from_id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+
+        return $req->fetchAll();
     }
 }

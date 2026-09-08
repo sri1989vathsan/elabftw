@@ -32,14 +32,18 @@ enum Action: string
     case Finish = 'finish';
     case ForceLock = 'forcelock';
     case ForceUnlock = 'forceunlock';
+    case LinkTemplateSource = 'linktemplatesource';
+    case UnlinkTemplateSource = 'unlinktemplatesource';
     case Lock = 'lock';
     case Notif = 'notif';
     case NotifDestroy = 'notifdestroy';
     case PatchUser2Team = 'patchuser2team';
     case Pin = 'pin';
+    case PublishVersion = 'publishversion';
     case RemoveExclusiveEditMode = 'removeexclusiveeditmode';
     case Replace = 'replace';
     case Restore = 'restore';
+    case RestoreTemplateVersion = 'restoretemplateversion';
     case Review = 'review';
     case SendOnboardingEmails = 'sendonboardingemails';
     case SetCanRead = 'setcanread';
@@ -48,6 +52,7 @@ enum Action: string
     case Sign = 'sign';
     case Test = 'test';
     case Timestamp = 'timestamp';
+    case ToggleVote = 'togglevote';
     case Unarchive = 'unarchive';
     case Unreference = 'unreference';
     case Update = 'update';
@@ -56,4 +61,5 @@ enum Action: string
     case UpdatePassword = 'updatepassword';
     case UpdateTag = 'updatetag';
     case Validate = 'validate';
+    case Witness = 'witness';
 }

@@ -13,6 +13,8 @@ declare(strict_types=1);
 namespace Elabftw\Models;
 
 use Elabftw\AuditEvent\ActionRequested as AuditEventActionRequested;
+use Elabftw\Elabftw\Permissions;
+use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Action;
 use Elabftw\Enums\RequestableAction;
 use Elabftw\Enums\State;
@@ -97,9 +99,29 @@ final class RequestActions extends AbstractRest
         return $this->Db->fetch($req);
     }
 
+    /** Actions requestable with only read access to the entity; everything else needs write. */
+    private const array READ_ONLY_ACTIONS = array(RequestableAction::Sign, RequestableAction::Timestamp, RequestableAction::Witness);
+
     #[Override]
     public function postAction(Action $action, array $reqBody): int
     {
+        $requestedAction = RequestableAction::from((int) $reqBody['target_action']);
+        $targetUserId = (int) $reqBody['target_userid'];
+        $targetUser = new Users($targetUserId);
+
+        // A request the target user has no permission to actually carry out
+        // is a dead end: they get notified, click through, and hit a
+        // permission error. Check with the same permission model used to
+        // gate the action itself, just evaluated for the target user
+        // instead of the currently logged in one.
+        $requiredAccess = in_array($requestedAction, self::READ_ONLY_ACTIONS, true)
+            ? AccessType::Read
+            : AccessType::Write;
+        $targetPermissions = new Permissions($targetUser, $this->entity->entityData)->forEntity();
+        if (!$targetPermissions->fromCan($requiredAccess)) {
+            throw new ImproperActionException(_('This user does not have the required permission on this entity to perform that action.'));
+        }
+
         $sql = sprintf(
             'SELECT CAST(count(*) AS UNSIGNED) AS `count`
                 FROM  %s_request_actions
@@ -134,18 +156,14 @@ final class RequestActions extends AbstractRest
         $this->Db->execute($req);
         $actionId = $this->Db->lastInsertId();
 
-        $action = RequestableAction::from((int) $reqBody['target_action']);
-
-        $targetUserId = (int) $reqBody['target_userid'];
-        $targetUser = new Users($targetUserId);
         $Notifications = new ActionRequested(
             $targetUser,
             $this->requester,
-            $action,
+            $requestedAction,
             $this->entity,
         );
         $Notifications->create();
-        $event = new AuditEventActionRequested($this->requester->userData['userid'], (int) $reqBody['target_userid'], $this->entity->id, $this->entity->entityType, $action);
+        $event = new AuditEventActionRequested($this->requester->userData['userid'], (int) $reqBody['target_userid'], $this->entity->id, $this->entity->entityType, $requestedAction);
         AuditLogs::create($event);
         $changelogValue = sprintf('%s (target userid: %d)', $event->getBody(), (int) $reqBody['target_userid']);
         new Changelog($this->entity)->create(new ContentParams('action_requested', $changelogValue));

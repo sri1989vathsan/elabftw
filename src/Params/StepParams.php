@@ -30,8 +30,29 @@ final class StepParams extends ContentParams
             'body' => $this->getStep(),
             'is_immutable' => BinaryValue::from((int) $this->content)->value,
             'deadline', 'finished_time' => $this->getNullableString(),
+            'reagent' => $this->getReagent(),
+            'quantity' => $this->getQuantity(),
+            'duration_minutes' => $this->getPositiveIntOrNull(),
             default => throw new ImproperActionException('Incorrect parameter for steps.'),
         };
+    }
+
+    private function getReagent(): ?string
+    {
+        $content = $this->getNullableString();
+        if ($content !== null && mb_strlen($content) > 255) {
+            throw new ImproperActionException('Reagent name is too long (maximum: 255).');
+        }
+        return $content;
+    }
+
+    private function getQuantity(): ?string
+    {
+        $content = $this->getNullableString();
+        if ($content !== null && mb_strlen($content) > 64) {
+            throw new ImproperActionException('Quantity is too long (maximum: 64).');
+        }
+        return $content;
     }
 
     private function getStep(): string

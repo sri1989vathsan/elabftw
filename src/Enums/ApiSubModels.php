@@ -23,6 +23,7 @@ enum ApiSubModels: string
     case Comments = 'comments';
     case CompoundsLinks = 'compounds_links';
     case Containers = 'containers';
+    case EntityLinks = 'entity_links';
     case ExperimentsCategories = 'experiments_categories';
     case ExperimentsLinks = 'experiments_links';
     case ExperimentsStatus = 'experiments_status';

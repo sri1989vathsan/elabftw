@@ -19,6 +19,7 @@ use Elabftw\Exceptions\ImproperActionException;
 
 use function sprintf;
 use function _;
+use function htmlspecialchars;
 
 /**
  * When values need to be transformed before display
@@ -108,6 +109,17 @@ final class Transform
                     _('A step deadline is approaching.'),
                     $notif['created_at'],
                 ),
+            Notifications::TodoDeadline =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="dashboard.php?calendar=activity&amp;task=%d">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    (int) $notif['body']['task_id'],
+                    sprintf(
+                        _('To-do deadline approaching: %s'),
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
+                    $notif['created_at'],
+                ),
             Notifications::NewVersionInstalled =>
                 sprintf(
                     '<a class="text-white" href="%s" target="_blank">%s</a>' . $relativeMoment,
@@ -125,6 +137,41 @@ final class Transform
                         _('%s has requested %s from you.'),
                         $notif['body']['requester_fullname'],
                         $notif['body']['action'],
+                    ),
+                    $notif['created_at'],
+                ),
+            Notifications::TaskAssigned =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="projectmanagement.php?task=%d">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    (int) $notif['body']['task_id'],
+                    sprintf(
+                        _('%s assigned you a task: %s'),
+                        $notif['body']['assigner_fullname'],
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
+                    $notif['created_at'],
+                ),
+            Notifications::MentionedInTask =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="projectmanagement.php?task=%d">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    (int) $notif['body']['task_id'],
+                    sprintf(
+                        _('%s mentioned you in a comment: %s'),
+                        $notif['body']['mentioner_fullname'],
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
+                    $notif['created_at'],
+                ),
+            Notifications::MentionedInOrder =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="orders.php">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    sprintf(
+                        _('%s mentioned you in a comment: %s'),
+                        $notif['body']['mentioner_fullname'],
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
                     ),
                     $notif['created_at'],
                 ),

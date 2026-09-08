@@ -18,19 +18,29 @@ enum ApiEndpoint: string
 {
     case ApiKeys = 'apikeys';
     case Batch = 'batch';
+    case CalendarActivity = 'calendar_activity';
+    case CalendarFeed = 'calendar_feed';
     case Compounds = 'compounds';
     case Config = 'config';
     case Dspace = 'dspace';
     case Experiments = 'experiments';
+    case ExperimentsFolders = 'experiments_folders';
     case ExperimentsTemplates = 'experiments_templates';
     case Export = 'exports';
     case ExtraFieldsKeys = 'extra_fields_keys';
     case Event = 'event';
     case Events = 'events';
+    case FavCategories = 'favcategories';
+    case Feedback = 'feedback';
+    case FavFilters = 'favfilters';
+    case TemplateFavorites = 'templatefavorites';
+    case TemplateVersions = 'templateversions';
     case FavTags = 'favtags';
     case Idps = 'idps';
     case IdpsSources = 'idps_sources';
+    case HtmlTools = 'html_tools';
     case Import = 'import';
+    case LinkPreview = 'link_preview';
     case Info = 'info';
     case Instance = 'instance';
     case Items = 'items';
@@ -42,6 +52,9 @@ enum ApiEndpoint: string
     case TeamTags = 'team_tags';
     case Teams = 'teams';
     case Todolist = 'todolist';
+    case TodolistColumns = 'todolist_columns';
+
+    case TodolistProjects = 'todolist_projects';
     case UnfinishedSteps = 'unfinished_steps';
     case Users = 'users';
 

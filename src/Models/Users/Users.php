@@ -24,6 +24,7 @@ use Elabftw\Enums\Action;
 use Elabftw\Enums\BasePermissions;
 use Elabftw\Enums\BinaryValue;
 use Elabftw\Enums\Messages;
+use Elabftw\Enums\Notifications;
 use Elabftw\Enums\PasswordComplexity;
 use Elabftw\Enums\State;
 use Elabftw\Enums\Usergroup;
@@ -655,6 +656,13 @@ class Users extends AbstractRest
         $req->bindParam(':userid', $this->userData['userid'], PDO::PARAM_INT);
         $res = $this->Db->execute($req);
 
+        if ($res
+            && $column === UsersColumn::NotifStepDeadlineEmail
+            && (int) $content === 0
+        ) {
+            $this->cancelPendingDeadlineEmails();
+        }
+
         // create audit event
         $auditLoggableTargets = array(
             'can_manage_compounds',
@@ -680,6 +688,21 @@ class Users extends AbstractRest
             ));
         }
         return $res;
+    }
+
+    /** Stop queued step and personal-task reminder emails without hiding web reminders. */
+    private function cancelPendingDeadlineEmails(): void
+    {
+        $sql = 'UPDATE notifications
+            SET send_email = 0
+            WHERE userid = :userid
+                AND email_sent = 0
+                AND category IN (:step_deadline, :todo_deadline)';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':userid', $this->userData['userid'], PDO::PARAM_INT);
+        $req->bindValue(':step_deadline', Notifications::StepDeadline->value, PDO::PARAM_INT);
+        $req->bindValue(':todo_deadline', Notifications::TodoDeadline->value, PDO::PARAM_INT);
+        $this->Db->execute($req);
     }
 
     public function update(UserParams $params): bool

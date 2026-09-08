@@ -150,18 +150,21 @@ final class Steps extends AbstractRest
     {
         $sourceTable = $this->Entity->entityType->value;
         $targetTable = $targetEntity->entityType->value;
-        $stepsql = sprintf('SELECT body, ordering, is_immutable FROM %s_steps WHERE item_id = :id', $sourceTable);
+        $stepsql = sprintf('SELECT body, ordering, is_immutable, reagent, quantity, duration_minutes FROM %s_steps WHERE item_id = :id', $sourceTable);
         $stepreq = $this->Db->prepare($stepsql);
         $stepreq->bindParam(':id', $id, PDO::PARAM_INT);
         $this->Db->execute($stepreq);
 
-        $sql = sprintf('INSERT INTO %s_steps (item_id, body, ordering, is_immutable) VALUES (:item_id, :body, :ordering, :is_immutable)', $targetTable);
+        $sql = sprintf('INSERT INTO %s_steps (item_id, body, ordering, is_immutable, reagent, quantity, duration_minutes) VALUES (:item_id, :body, :ordering, :is_immutable, :reagent, :quantity, :duration_minutes)', $targetTable);
         $req = $this->Db->prepare($sql);
         $req->bindParam(':item_id', $newId, PDO::PARAM_INT);
         while ($step = $stepreq->fetch()) {
             $req->bindParam(':body', $step['body']);
             $req->bindParam(':ordering', $step['ordering'], PDO::PARAM_INT);
             $req->bindParam(':is_immutable', $step['is_immutable'], PDO::PARAM_INT);
+            $req->bindParam(':reagent', $step['reagent']);
+            $req->bindParam(':quantity', $step['quantity']);
+            $req->bindParam(':duration_minutes', $step['duration_minutes'], PDO::PARAM_INT);
             $this->Db->execute($req);
         }
     }
@@ -178,7 +181,7 @@ final class Steps extends AbstractRest
             Action::Update => (
                 function () use ($params) {
                     // prevent updates to protected fields on immutable steps
-                    $protected = array('body', 'ordering', 'is_immutable');
+                    $protected = array('body', 'ordering', 'is_immutable', 'reagent', 'quantity', 'duration_minutes');
                     $enforceImmutability = in_array($this->Entity->entityType->value, array('experiments', 'items'), true);
                     // if we're on experiments/items, prevent any change to is_immutable. It is only allowed on templates
                     if ($enforceImmutability && array_key_exists('is_immutable', $params)) {

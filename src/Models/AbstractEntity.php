@@ -261,7 +261,7 @@ abstract class AbstractEntity extends AbstractRest
                     $contentType = isset($reqBody['content_type'])
                         ? BodyContentType::from($reqBody['content_type'])
                         : ($useMarkdown ? BodyContentType::Markdown : BodyContentType::Html);
-                    return $this->create(
+                    $newId = $this->create(
                         title: $reqBody['title'] ?? null,
                         body: $reqBody['body'] ?? null,
                         canreadBase: $canreadBase,
@@ -276,6 +276,16 @@ abstract class AbstractEntity extends AbstractRest
                         metadata: $metadata,
                         contentType: $contentType,
                     );
+                    // Assign concrete experiments and resources to their shared folder tree.
+                    if (($this instanceof Experiments || $this instanceof Items) && !empty($reqBody['folder_id'])) {
+                        $Folders = new ExperimentsFolders($this->Users);
+                        if ($this instanceof Experiments) {
+                            $Folders->assignExperiment($newId, (int) $reqBody['folder_id']);
+                        } else {
+                            $Folders->assignResource($newId, (int) $reqBody['folder_id']);
+                        }
+                    }
+                    return $newId;
                 }
             )(),
             Action::Duplicate => $this->duplicate((bool) ($reqBody['copyFiles'] ?? false), (bool) ($reqBody['linkToOriginal'] ?? false)),
@@ -478,10 +488,202 @@ abstract class AbstractEntity extends AbstractRest
     #[Override]
     public function patch(Action $action, array $params): array
     {
-        // a Review action doesn't do anything: TODO leave a comment
         if ($action === Action::Review) {
+            $decision = $params['decision'] ?? null;
+            if ($decision !== 'approved' && $decision !== 'rejected') {
+                throw new ImproperActionException('A review decision (approved or rejected) is required.');
+            }
+            $comment = $params['comment'] ?? null;
+            $comment = is_string($comment) && trim($comment) !== '' ? trim($comment) : null;
+
+            // Find who asked for this review before the request row below gets
+            // closed out (RequestActions::remove() archives it, and this
+            // query would no longer see it as "pending" afterward).
+            $requestedBy = null;
+            $sql = sprintf(
+                'SELECT requester_userid FROM %s_request_actions
+                    WHERE entity_id = :entity_id AND action = :action AND state = :state
+                    ORDER BY created_at DESC LIMIT 1',
+                $this->entityType->value,
+            );
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':entity_id', $this->id, PDO::PARAM_INT);
+            $req->bindValue(':action', RequestableAction::Review->value, PDO::PARAM_INT);
+            $req->bindValue(':state', State::Normal->value, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $requesterRow = $req->fetch(PDO::FETCH_ASSOC);
+            if ($requesterRow) {
+                $requestedBy = (int) $requesterRow['requester_userid'];
+            }
+
+            EntityReviewDecisions::create(
+                entityType: $this->entityType->value,
+                entityId: $this->id,
+                decision: $decision,
+                comment: $comment,
+                // Ordinary revisions are pruned (max 10, dropped once
+                // superseded), so an "approved version" keeps its own
+                // permanent copy of the body rather than pointing at one.
+                approvedBody: $decision === 'approved' ? ($this->entityData['body'] ?? '') : null,
+                requestedBy: $requestedBy,
+                reviewedBy: (int) $this->Users->userData['userid'],
+            );
+
             $RequestActions = new RequestActions($this->Users, $this);
             $RequestActions->remove(RequestableAction::Review);
+            return $this->readOne();
+        }
+        // Explicit "Publish new version" action for templates: independent of
+        // the review workflow above, so teams that don't use formal review
+        // requests can still number and freeze a template revision.
+        if ($action === Action::PublishVersion) {
+            if ($this->entityType !== EntityType::Templates) {
+                throw new ImproperActionException('Publishing a version is only available for templates.');
+            }
+            $this->canOrExplode(AccessType::Write);
+            $newVersion = (int) ($this->entityData['version'] ?? 1) + 1;
+            $sql = 'UPDATE experiments_templates
+                SET version = :version, locked = 1, lockedby = :lockedby, locked_at = CURRENT_TIMESTAMP
+                WHERE id = :id';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':version', $newVersion, PDO::PARAM_INT);
+            $req->bindParam(':lockedby', $this->Users->userData['userid'], PDO::PARAM_INT);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            // permanent snapshot of what this version's body actually looked
+            // like -- the version column above is only a counter
+            TemplateVersions::create(
+                entityId: $this->id,
+                version: $newVersion,
+                body: $this->entityData['body'] ?? '',
+                publishedBy: (int) $this->Users->userData['userid'],
+            );
+            $Changelog = new Changelog($this);
+            $Changelog->create(new ContentParams('version_published', sprintf('Published version %d', $newVersion)));
+            return $this->readOne();
+        }
+        // Restore a template's body to what it looked like at a previously
+        // published version, replacing the current (draft or locked) content.
+        // Unlocks the template so the restored content can be reviewed and
+        // adjusted before being published again.
+        if ($action === Action::RestoreTemplateVersion) {
+            if ($this->entityType !== EntityType::Templates) {
+                throw new ImproperActionException('Restoring a version is only available for templates.');
+            }
+            $this->canOrExplode(AccessType::Write);
+            $versionId = (int) ($params['version_id'] ?? 0);
+            if ($versionId <= 0) {
+                throw new ImproperActionException('A version to restore is required.');
+            }
+            $sql = 'SELECT body, version FROM custom_template_versions WHERE id = :id AND entity_id = :entity_id';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':id', $versionId, PDO::PARAM_INT);
+            $req->bindParam(':entity_id', $this->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $versionRow = $req->fetch(PDO::FETCH_ASSOC);
+            if (!$versionRow) {
+                throw new ImproperActionException('This version does not exist.');
+            }
+            $sql = 'UPDATE experiments_templates
+                SET body = :body, locked = 0, lockedby = NULL, locked_at = NULL
+                WHERE id = :id';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':body', $versionRow['body']);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $Changelog = new Changelog($this);
+            $Changelog->create(new ContentParams('version_restored', sprintf('Restored content from version %d', $versionRow['version'])));
+            return $this->readOne();
+        }
+        // Record which template was pulled into this experiment via the
+        // "Insert template" editor button. Two separate things are tracked:
+        // created_from_type/id/version (upstream columns) reflect how the
+        // entity was actually created and are set at most once, the first
+        // time -- a later insert never overwrites them. experiment_template_
+        // inserts (custom migration 022) is a full repeatable audit trail:
+        // every insert gets its own row, so inserting the same template
+        // several times (or several different templates) is fully
+        // represented, which the single-value columns can't do.
+        if ($action === Action::LinkTemplateSource) {
+            if ($this->entityType !== EntityType::Experiments) {
+                throw new ImproperActionException('Linking a template source is only available for experiments.');
+            }
+            $this->canOrExplode(AccessType::Write);
+            $templateId = (int) ($params['template_id'] ?? 0);
+            if ($templateId <= 0) {
+                throw new ImproperActionException('A template id is required.');
+            }
+            // An explicit version means the user picked an older snapshot from
+            // the version-history picker (see TemplateInsertExtension.ts):
+            // record that historical version, not whatever the template
+            // currently is, so "Version %d" in the associated-templates list
+            // reflects what was actually inserted.
+            // Filter::intOrNull() only accepts string|int, not null -- guard
+            // the common case (no version param at all, i.e. "Latest") so it
+            // doesn't crash before ever reaching the function.
+            $requestedVersion = isset($params['version']) ? Filter::intOrNull($params['version']) : null;
+            if ($requestedVersion !== null) {
+                $sql = 'SELECT version FROM custom_template_versions WHERE entity_id = :template_id AND version = :version';
+                $req = $this->Db->prepare($sql);
+                $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
+                $req->bindParam(':version', $requestedVersion, PDO::PARAM_INT);
+                $this->Db->execute($req);
+                $templateVersion = $req->fetchColumn();
+                if ($templateVersion === false) {
+                    throw new ImproperActionException('This template version does not exist.');
+                }
+            } else {
+                $sql = 'SELECT version FROM experiments_templates WHERE id = :template_id';
+                $req = $this->Db->prepare($sql);
+                $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
+                $this->Db->execute($req);
+                $templateVersion = $req->fetchColumn();
+                if ($templateVersion === false) {
+                    throw new ImproperActionException('This template does not exist.');
+                }
+            }
+
+            if (($this->entityData['created_from_type'] ?? null) === null) {
+                $sql = sprintf(
+                    'UPDATE %s SET created_from_type = :type, created_from_id = :template_id, created_from_version = :version WHERE id = :id',
+                    $this->entityType->value,
+                );
+                $req = $this->Db->prepare($sql);
+                $req->bindValue(':type', EntityType::Templates->toInt(), PDO::PARAM_INT);
+                $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
+                $req->bindParam(':version', $templateVersion, PDO::PARAM_INT);
+                $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+                $this->Db->execute($req);
+            }
+
+            $sql = 'INSERT INTO experiment_template_inserts (experiment_id, template_id, version) VALUES (:experiment_id, :template_id, :version)';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':experiment_id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
+            $req->bindParam(':version', $templateVersion, PDO::PARAM_INT);
+            $this->Db->execute($req);
+
+            return $this->readOne();
+        }
+        // Removes every insert/link row for one template from this
+        // experiment (see the "Associated experimental templates" list in
+        // associated-templates.html) -- distinct from created_from_type/id,
+        // which reflects provenance and is left untouched.
+        if ($action === Action::UnlinkTemplateSource) {
+            if ($this->entityType !== EntityType::Experiments) {
+                throw new ImproperActionException('Unlinking a template source is only available for experiments.');
+            }
+            $this->canOrExplode(AccessType::Write);
+            $templateId = (int) ($params['template_id'] ?? 0);
+            if ($templateId <= 0) {
+                throw new ImproperActionException('A template id is required.');
+            }
+            $sql = 'DELETE FROM experiment_template_inserts WHERE experiment_id = :experiment_id AND template_id = :template_id';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':experiment_id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':template_id', $templateId, PDO::PARAM_INT);
+            $this->Db->execute($req);
+
             return $this->readOne();
         }
         // for deleted or archived entities, allow specific actions (Restore & Unarchive)
@@ -498,7 +700,7 @@ abstract class AbstractEntity extends AbstractRest
 
         $requiredAccess = AccessType::Write;
         // some actions only require read access even if they are using PATCH verb
-        $readAccessActions = array(Action::Pin, Action::Sign, Action::Timestamp, Action::Bloxberg);
+        $readAccessActions = array(Action::Pin, Action::Sign, Action::Timestamp, Action::Bloxberg, Action::Witness);
         if (in_array($action, $readAccessActions, true)) {
             $requiredAccess = AccessType::Read;
             // allow uploading a file to that entity too
@@ -553,6 +755,30 @@ abstract class AbstractEntity extends AbstractRest
                 function () use ($params) {
                     if (array_key_exists('userid', $params) || array_key_exists('team', $params)) {
                         throw new ImproperActionException("Use the 'action:updateowner' to transfer ownership.");
+                    }
+                    // switching editor mode (rich text <-> markdown) only ever
+                    // sends content_type, so the body is left as-is otherwise:
+                    // convert it here so switching doesn't leave literal,
+                    // unrendered markup/syntax behind
+                    if (array_key_exists('content_type', $params) && !array_key_exists('body', $params)) {
+                        $newContentType = (int) $params['content_type'];
+                        $currentContentType = (int) ($this->entityData['content_type'] ?? BodyContentType::Html->value);
+                        if ($newContentType !== $currentContentType) {
+                            $currentBody = (string) ($this->entityData['body'] ?? '');
+                            $params['body'] = $newContentType === BodyContentType::Markdown->value
+                                ? Tools::html2md($currentBody)
+                                : Tools::md2html($currentBody);
+                        }
+                    }
+                    // process content_type before body: update() decides
+                    // whether to purify the body as html based on
+                    // entityData['content_type'], so it must already
+                    // reflect the type being switched to, not the old one,
+                    // by the time body is processed below
+                    if (array_key_exists('content_type', $params)) {
+                        $this->update(new EntityParams('content_type', (string) $params['content_type']));
+                        $this->entityData['content_type'] = (int) $params['content_type'];
+                        unset($params['content_type']);
                     }
                     foreach ($params as $key => $value) {
                         $this->update(new EntityParams($key, (string) $value));
@@ -653,7 +879,21 @@ abstract class AbstractEntity extends AbstractRest
         }
         $exclusiveEditMode = $this->ExclusiveEditMode->readOne();
         $this->entityData['exclusive_edit_mode'] = empty($exclusiveEditMode) ? null : $exclusiveEditMode;
-        $this->entityData['created_from_type_human'] = EntityType::fromInt($this->entityData['created_from_type'])?->toGenre();
+        $createdFromSourceType = EntityType::fromInt($this->entityData['created_from_type']);
+        $this->entityData['created_from_type_human'] = $createdFromSourceType?->toGenre();
+        $this->entityData['created_from_title'] = null;
+        $this->entityData['created_from_page'] = null;
+        if ($createdFromSourceType !== null && !empty($this->entityData['created_from_id'])) {
+            $sql = sprintf('SELECT title FROM %s WHERE id = :id', $createdFromSourceType->value);
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':id', $this->entityData['created_from_id'], PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $sourceTitle = $req->fetchColumn();
+            if ($sourceTitle !== false) {
+                $this->entityData['created_from_title'] = $sourceTitle;
+                $this->entityData['created_from_page'] = $createdFromSourceType->toPage();
+            }
+        }
         $this->entityData['canread_base_human'] = BasePermissions::from($this->entityData['canread_base'])->toHuman();
         $this->entityData['canwrite_base_human'] = BasePermissions::from($this->entityData['canwrite_base'])->toHuman();
         if (isset($this->entityData['canbook_base'])) {
@@ -856,7 +1096,17 @@ abstract class AbstractEntity extends AbstractRest
     // Update an entity. The revision is saved before so it can easily compare old and new body.
     public function update(ContentParamsInterface $params): bool
     {
-        $content = $params->getContent();
+        $target = $params->getTarget();
+        if (($target === 'body' || $target === 'bodyappend')
+            && (int) ($this->entityData['content_type'] ?? BodyContentType::Html->value) === BodyContentType::Markdown->value
+        ) {
+            // a markdown entity's body is plain text, not html; the normal
+            // Filter::body() path runs it through HTMLPurifier, which
+            // otherwise mangles harmless markdown syntax (see Filter::body())
+            $content = Filter::body($params->getUnfilteredContent(), purify: false);
+        } else {
+            $content = $params->getContent();
+        }
         if ($params->getTarget() === 'bodyappend') {
             $content = $this->readColumn('body') . $content;
         }
@@ -1001,6 +1251,30 @@ abstract class AbstractEntity extends AbstractRest
         ), $overrideCreateParams);
 
         $newId = $this->create(...$createParams);
+
+        // Freeze which template version this was created from: the template
+        // row itself can keep changing (or be published again) after this,
+        // and created_from_id alone would then point at stale content.
+        if ($sourceEntity->entityType === EntityType::Templates
+            && $this->entityType === EntityType::Experiments
+            && isset($source['version'])
+        ) {
+            $sql = 'UPDATE experiments SET created_from_version = :version WHERE id = :id';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':version', $source['version'], PDO::PARAM_INT);
+            $req->bindParam(':id', $newId, PDO::PARAM_INT);
+            $this->Db->execute($req);
+
+            // Also counts as an "associated template" (see readAssociatedTemplates())
+            // so this new experiment's own creation template shows up in that
+            // list too, not just templates inserted afterward via the editor.
+            $sql = 'INSERT INTO experiment_template_inserts (experiment_id, template_id, version) VALUES (:experiment_id, :template_id, :version)';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':experiment_id', $newId, PDO::PARAM_INT);
+            $req->bindParam(':template_id', $sourceId, PDO::PARAM_INT);
+            $req->bindParam(':version', $source['version'], PDO::PARAM_INT);
+            $this->Db->execute($req);
+        }
 
         $fresh = new $this($this->Users, $newId);
 
