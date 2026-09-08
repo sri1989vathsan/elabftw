@@ -71,6 +71,7 @@ declare const MathJax: MathJaxObject;
 import { entity } from './getEntity';
 import { isDarkTheme } from './theme';
 import { registerCustomEditorExtensions } from './custom-editor';
+import { BARE_URL_PATTERN, buildLinkPreviewHtml } from './linkPreview';
 
 // AUTOSAVE
 const doneTypingInterval = 7000;  // time in ms between end of typing and save
@@ -344,7 +345,31 @@ export function getTinymceBaseConfig(page: string): object {
         table.classList.add('elabftw-pasted-table');
         if (!table.getAttribute('style')?.trim()) table.removeAttribute('style');
       });
+      // A paste whose entire text is just a bare http(s) URL becomes a
+      // placeholder here, upgraded to a link-preview badge in
+      // paste_postprocess below once the async title fetch resolves --
+      // this hook itself is synchronous and can't await anything.
+      const bareUrl = pasteContainer.textContent?.trim() ?? '';
+      if (!isElabftwRichSelection && BARE_URL_PATTERN.test(bareUrl)) {
+        const placeholder = document.createElement('span');
+        placeholder.className = 'elabftw-link-preview-pending';
+        placeholder.dataset.url = bareUrl;
+        placeholder.textContent = bareUrl;
+        pasteContainer.replaceChildren(placeholder);
+      }
       args.content = pasteContainer.innerHTML;
+    },
+    // upgrades the placeholder(s) paste_preprocess left behind, if any, to a
+    // real link-preview badge -- see linkPreview.ts. Also add
+    // elabftw-link-preview to Filter.php's Attr.AllowedClasses.
+    paste_postprocess: function(plugin, args) {
+      args.node.querySelectorAll<HTMLElement>('span.elabftw-link-preview-pending').forEach(placeholder => {
+        const url = placeholder.dataset.url;
+        if (!url) return;
+        void buildLinkPreviewHtml(url).then(html => {
+          placeholder.outerHTML = html;
+        });
+      });
     },
     // also add it to Filter.php in Attr.AllowedClasses
     codesample_languages: [
