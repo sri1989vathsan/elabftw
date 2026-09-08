@@ -164,6 +164,24 @@
   </div>
   <hr>
 
+  {# LINKED TASKS: to-do tasks linked to this entity from the Project
+     Management side (see TodolistEntityLinks::readAllForEntity()) --
+     read-only here; add/remove the link from the task's own detail
+     dialog instead. #}
+  <section id='linkedTasksSection'>
+    <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='linkedTasksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Linked tasks'|trans }} (<span id='linkedTasksCount'>{{ linkedTasksArr|length }}</span>)</h4>
+    <div id='linkedTasksDiv' class='ml-4'>
+      {% for task in linkedTasksArr %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center'>
+          <a class='mr-auto text-break' href='projectmanagement.php?task={{ task.task_id }}'>
+            <i class='fas fa-list-check fa-fw mr-2' aria-hidden='true'></i>{{ task.title }}
+          </a>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  <hr>
+
   {# EXTERNAL WEB REFERENCES #}
   {% set webLinks = Entity.entityData.metadata_decoded.elabftw.web_links|default([]) %}
   <section id='webLinksSection'>

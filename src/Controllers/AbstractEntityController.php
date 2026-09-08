@@ -33,6 +33,7 @@ use Elabftw\Models\FavTags;
 use Elabftw\Models\ItemsStatus;
 use Elabftw\Models\ItemsTypes;
 use Elabftw\Models\EntityReviewDecisions;
+use Elabftw\Models\TodolistEntityLinks;
 use Elabftw\Models\RequestActions;
 use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\StorageUnits;
@@ -208,6 +209,10 @@ abstract class AbstractEntityController implements ControllerInterface
                 $this->Entity->entityType->value,
                 $this->Entity->id ?? 0,
             ),
+            'linkedTasksArr' => TodolistEntityLinks::readAllForEntity(
+                $this->Entity->entityType->value,
+                $this->Entity->id ?? 0,
+            ),
             'templateVersionsArr' => $this->Entity->entityType === EntityType::Templates
                 ? TemplateVersions::readAllForEntity($this->Entity->id ?? 0)
                 : array(),
@@ -283,6 +288,10 @@ abstract class AbstractEntityController implements ControllerInterface
             'entityProcurementRequestsArr' => $this->getEntityProcurementRequestsArr(),
             'entityRequestActionsArr' => $RequestActions->readAllFull(),
             'entityReviewDecisionsArr' => EntityReviewDecisions::readAllForEntity(
+                $this->Entity->entityType->value,
+                $this->Entity->id ?? 0,
+            ),
+            'linkedTasksArr' => TodolistEntityLinks::readAllForEntity(
                 $this->Entity->entityType->value,
                 $this->Entity->id ?? 0,
             ),
