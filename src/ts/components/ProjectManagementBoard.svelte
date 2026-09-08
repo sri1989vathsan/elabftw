@@ -182,7 +182,21 @@
   $: activeProject = typeof activeProjectId === 'number' ? (projects.find(p => p.id === activeProjectId) ?? null) : null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
   $: normalizedSearch = searchQuery.trim().toLowerCase();
+  function matchesScope(task: Task): boolean {
+    switch (scope) {
+    case 'assigned':
+      return task.assignees.some(a => a.userid === core.currentUserid);
+    case 'created':
+      return task.userid === core.currentUserid;
+    case 'all':
+      return task.userid === core.currentUserid || task.assignees.some(a => a.userid === core.currentUserid);
+    default:
+      return true;
+    }
+  }
+
   $: visibleTasks = (activeProjectId === 'all' ? tasks : tasks.filter(task => task.project_id === activeProjectId))
+    .filter(matchesScope)
     .filter(task => priorityFilter === 'all' || task.priority === priorityFilter)
     .filter(task => matchesSearch(task, normalizedSearch));
   $: doneColumn = columns.find(c => c.kind === 'done') ?? null;
@@ -299,9 +313,14 @@
       // readAll() only returns either open or completed tasks per call
       // (the sidebar To-do widget relies on that split), so the board
       // fetches both and merges them to populate the To do/Done columns.
+      // Always fetched team-wide (scope=team): being a project member
+      // means seeing every task in it, regardless of who created or is
+      // assigned to it -- the Assigned/Created/All tabs below are a
+      // client-side filter on top of that, never a narrower fetch, so
+      // switching tabs can't hide a task a project membership should show.
       const [open, done] = await Promise.all([
-        ApiC.getJson(`${Model.Todolist}?scope=${scope}`) as Promise<Task[]>,
-        ApiC.getJson(`${Model.Todolist}?scope=${scope}&completed=1`) as Promise<Task[]>,
+        ApiC.getJson(`${Model.Todolist}?scope=team`) as Promise<Task[]>,
+        ApiC.getJson(`${Model.Todolist}?scope=team&completed=1`) as Promise<Task[]>,
       ]);
       tasks = [...open, ...done];
     } catch (error) {
