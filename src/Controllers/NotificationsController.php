@@ -31,7 +31,7 @@ final class NotificationsController extends AbstractHtmlController
     #[Override]
     protected function getPageTitle(): string
     {
-        return _('Notifications');
+        return _('Notification History');
     }
 
     #[Override]
