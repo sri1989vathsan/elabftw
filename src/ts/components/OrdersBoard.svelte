@@ -25,7 +25,7 @@
     };
   }
 
-  type OrderStatus = 'requested' | 'ordered' | 'received' | 'cancelled';
+  type OrderStatus = 'requested' | 'ordered' | 'received' | 'cancelled' | 'reference';
 
   type TeamMember = {
     userid: number;
@@ -109,6 +109,7 @@
       ordered: t('Ordered'),
       received: t('Received'),
       cancelled: t('Cancelled'),
+      reference: t('Reference'),
     }[status];
   }
 
@@ -957,6 +958,9 @@
       <button type="button" class={statusFilter === 'cancelled' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('cancelled')}>
         {t('Cancelled')}
       </button>
+      <button type="button" class={statusFilter === 'reference' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('reference')} title={t('Shared team references, visible to everyone regardless of the Mine/Everyone filter')}>
+        <i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Reference')}
+      </button>
       <button type="button" class={statusFilter === 'archived' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('archived')}>
         <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archived')}
       </button>
@@ -1365,6 +1369,9 @@
                               <button type="button" class="btn btn-primary btn-sm mr-1" disabled={!editCommentDraft.trim()} on:click={() => saveEditComment(item, comment)}>{t('Save')}</button>
                               <button type="button" class="btn btn-ghost btn-sm" on:click={cancelEditComment}>{t('Cancel')}</button>
                             </div>
+                            {#if wrapMentionsAsHtml(editCommentDraft, teamMembers).includes('elabftw-mention')}
+                              <div class="orders-mention-preview small orders-muted mt-1">{@html wrapMentionsAsHtml(editCommentDraft, teamMembers)}</div>
+                            {/if}
                           {:else}
                             <p class="mb-0 orders-comment-body">{@html comment.body}</p>
                           {/if}
@@ -1402,6 +1409,9 @@
                       {t('Post')}
                     </button>
                   </form>
+                  {#if wrapMentionsAsHtml(commentDrafts[item.id] ?? '', teamMembers).includes('elabftw-mention')}
+                    <div class="orders-mention-preview small orders-muted mt-1">{@html wrapMentionsAsHtml(commentDrafts[item.id] ?? '', teamMembers)}</div>
+                  {/if}
                 {/if}
               </div>
             {/if}
@@ -1582,6 +1592,11 @@
   .orders-status-select-cancelled {
     color: #fff;
     background-color: #4d4c4c;
+  }
+
+  .orders-status-select-reference {
+    color: #fff;
+    background-color: #6f42c1;
   }
 
   .orders-category-select {

@@ -48,7 +48,7 @@ final class Orders extends AbstractRest
 {
     use SetIdTrait;
 
-    private const array STATUSES = array('requested', 'ordered', 'received', 'cancelled');
+    private const array STATUSES = array('requested', 'ordered', 'received', 'cancelled', 'reference');
 
     public function __construct(private Users $Users, ?int $id = null)
     {
@@ -103,8 +103,11 @@ final class Orders extends AbstractRest
         } elseif (in_array($status, self::STATUSES, true)) {
             $conditions[] = 'o.archived = 0';
             // pinned orders stay visible on every status tab, not just the
-            // one matching their own status -- that's the point of pinning
-            $conditions[] = '(o.status = :status OR o.pinned = 1)';
+            // one matching their own status -- that's the point of pinning.
+            // Reference orders are the one exception: they live only on
+            // their own Reference tab (and All), never bleeding into the
+            // others just because they happen to be pinned too.
+            $conditions[] = "(o.status = :status OR (o.pinned = 1 AND o.status != 'reference'))";
             $bind[':status'] = array($status, PDO::PARAM_STR);
         }
 
@@ -121,10 +124,12 @@ final class Orders extends AbstractRest
 
         // everyone can filter down to their own orders ("Mine" tab); picking
         // someone else's id is an admin-only privilege, enforced here and
-        // not just hidden in the UI, so a non-admin can't just add the param
+        // not just hidden in the UI, so a non-admin can't just add the param.
+        // A reference order is a shared team reference, not a personal
+        // request, so it stays visible even while "Mine" is selected.
         $userid = $query->getInt('userid');
         if ($userid > 0 && ($userid === $this->Users->userid || $this->Users->isAdmin)) {
-            $conditions[] = 'o.userid = :userid';
+            $conditions[] = "(o.userid = :userid OR o.status = 'reference')";
             $bind[':userid'] = array($userid, PDO::PARAM_INT);
         }
 
