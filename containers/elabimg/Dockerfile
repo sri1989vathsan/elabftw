@@ -361,7 +361,7 @@ RUN if [ "$BUILD_ALL" = "1" ]; then \
 # any PDF using an affected font encoding (e.g. CP1252), breaking both
 # PDF full-text search and order procurement-tag extraction. Dropping the
 # modifiers falls back to plain iconv(), which actually works on musl.
-RUN if [ "$BUILD_ALL" = "1" ]; then \
+RUN if [ "$BUILD_ALL" = "1" ] && [ -d /elabftw/vendor/smalot/pdfparser ]; then \
         find /elabftw/vendor/smalot/pdfparser -name Font.php -exec \
             sed -i "s/UTF-8\/\/TRANSLIT\/\/IGNORE/UTF-8/g" {} +; \
     fi
