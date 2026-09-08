@@ -25,8 +25,8 @@
 <div id='filesDiv'>
   <div class='d-flex justify-content-between'>
     <div>{# necessary div for flex #}
-      <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-folder-open' data-scroll-btn-label='{{ 'Local files'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' data-toggle-target='uploadsDiv' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='uploadsDiv'>
-        <i class='fas fa-caret-down fa-fw mr-2'></i>{% trans %}Local file
+      <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-folder-open' data-scroll-btn-label='{{ 'Local files'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' data-toggle-target='uploadsDiv' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ mode == 'edit' ? 'true' : 'false' }}' aria-controls='uploadsDiv'>
+        <i class='fas {{ mode == 'edit' ? 'fa-caret-down' : 'fa-caret-right' }} fa-fw mr-2'></i>{% trans %}Local file
         {% plural Entity.entityData.uploads|length %}
         Local files
         {% endtrans %} (<span id='uploadsCount'>{{ Entity.entityData.uploads|length }}</span>)
@@ -44,7 +44,7 @@
     </div>
   </div>
 
-  <div class='row mt-2 mx-0' id='uploadsDiv' data-count-for='uploadsCount' data-save-hidden='uploadsDiv'>
+  <div class='row mt-2 mx-0' id='uploadsDiv' {{ mode == 'edit' ? '' : 'hidden' }} data-count-for='uploadsCount' data-save-hidden='uploadsDiv'>
     {# ADD NEW FILE #}
     {% if mode == 'edit' %}
       <div class='col-md-4 col-sm-6'>

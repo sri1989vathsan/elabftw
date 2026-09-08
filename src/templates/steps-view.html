@@ -2,8 +2,8 @@
 {% set entityPage = entityPage|default(App.Request.getScriptName|split('/')|last|replace({'.php': ''})) %}
 <div id='stepsDiv'>
 {% if Entity.entityData.steps %}
-  <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='stepsDivContent'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Steps'|trans }} ({{ Entity.entityData.steps|length }})</h3>
-  <div class='row mt-2' id='stepsDivContent' data-save-hidden='stepsDivContent'>
+  <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' aria-controls='stepsDivContent'><i class='fas fa-caret-right mr-2 fa-fw'></i>{{ 'Steps'|trans }} ({{ Entity.entityData.steps|length }})</h3>
+  <div class='row mt-2' id='stepsDivContent' hidden data-save-hidden='stepsDivContent'>
     <div class='ml-3 mt-3 col-md-12'>
       {% for step in Entity.entityData.steps %}
         <div id='step_view_{{ step.id }}' class='countable mb-2 rounded p-1 {{ step.finished ? 'finished' }} {{ App.Request.query.get('highlightstep') == step.id ? 'highlighted' }}'>
