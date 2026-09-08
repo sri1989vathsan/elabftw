@@ -5,7 +5,7 @@
   import i18next from '../i18n';
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
-  import { applyMention, extractMentionQuery } from '../mentions';
+  import { applyMention, extractMentionQuery, wrapMentionsAsHtml, stripMentionHtml } from '../mentions';
   import { fetchLinkPreviewLabel, handleLinkPreviewPaste } from '../linkPreview';
 
   // Closes the @mention dropdown on any click outside its own container --
@@ -908,7 +908,8 @@
       const mentionedUserids = commentMentions
         .filter(m => body.includes(`@${m.fullname}`))
         .map(m => m.userid);
-      await ApiC.post(`${Model.Todolist}/${detailTask.id}/${Model.Comment}`, { body, mentioned_userids: mentionedUserids });
+      const htmlBody = wrapMentionsAsHtml(body, teamMembers);
+      await ApiC.post(`${Model.Todolist}/${detailTask.id}/${Model.Comment}`, { body: htmlBody, mentioned_userids: mentionedUserids });
       newCommentText = '';
       commentMentions = [];
       await loadComments(detailTask.id);
@@ -953,7 +954,7 @@
 
   function startEditComment(comment: TaskComment): void {
     editingCommentId = comment.id;
-    editCommentDraft = comment.body;
+    editCommentDraft = stripMentionHtml(comment.body);
   }
 
   function cancelEditComment(): void {
@@ -965,7 +966,8 @@
     const text = editCommentDraft.trim();
     if (!text) return;
     try {
-      await ApiC.patch(`${Model.Todolist}/${detailTask.id}/${Model.Comment}/${comment.id}`, { body: text });
+      const body = wrapMentionsAsHtml(text, teamMembers);
+      await ApiC.patch(`${Model.Todolist}/${detailTask.id}/${Model.Comment}/${comment.id}`, { body });
       editingCommentId = null;
       await loadComments(detailTask.id);
     } catch (error) {
@@ -1679,7 +1681,7 @@
                       <button type="button" class="btn btn-ghost btn-sm" on:click={cancelEditComment}>{t('Cancel')}</button>
                     </div>
                   {:else}
-                    <div class="pm-comment-body">{comment.body}</div>
+                    <div class="pm-comment-body">{@html comment.body}</div>
                   {/if}
                 </li>
               {/each}

@@ -65,6 +65,25 @@ final class Filter
     }
 
     /**
+     * Comments (Todolist/Project Management tasks, Orders) stay plain text
+     * like toPureString(), except one thing is allowed through: the
+     * <span class="elabftw-mention"> the client wraps an @mentioned name
+     * in (see wrapMentionsAsHtml() in mentions.ts) so it can render as a
+     * pill instead of a bare "@Full Name". Nothing else -- not even other
+     * elabftw-* classes -- gets a pass here.
+     */
+    public static function commentBody(string $input): string
+    {
+        $config = HTMLPurifier_HTML5Config::createDefault();
+        $tmpDir = FsTools::getCacheFolder('purifier');
+        $config->set('Cache.SerializerPath', $tmpDir);
+        $config->set('HTML.Allowed', 'span[class]');
+        $config->set('Attr.AllowedClasses', array('elabftw-mention'));
+        $config->set('AutoFormat.RemoveEmpty', true);
+        return new HTMLPurifier($config)->purify(trim($input));
+    }
+
+    /**
      * Return 0 or 1 if input is on. Used for UCP.
      */
     public static function onToBinary(?string $input): int

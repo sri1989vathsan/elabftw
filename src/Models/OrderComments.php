@@ -169,7 +169,7 @@ final class OrderComments extends AbstractRest
 
     private function getBody(mixed $value): string
     {
-        $body = Filter::toPureString((string) $value);
+        $body = Filter::commentBody((string) $value);
         if ($body === '' || mb_strlen($body) > 5000) {
             throw new ImproperActionException('A comment is required and must be shorter than 5000 characters.');
         }
