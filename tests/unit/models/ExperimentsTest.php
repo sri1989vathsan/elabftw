@@ -30,12 +30,15 @@ use Elabftw\Services\Check;
 use Elabftw\Traits\TestsUtilsTrait;
 use Symfony\Component\HttpFoundation\InputBag;
 
+use function array_filter;
+use function array_values;
 use function bin2hex;
 use function count;
 use function is_array;
 use function json_decode;
 use function random_bytes;
 use function sprintf;
+use function str_repeat;
 
 class ExperimentsTest extends \PHPUnit\Framework\TestCase
 {
@@ -132,6 +135,109 @@ class ExperimentsTest extends \PHPUnit\Framework\TestCase
         $this->assertEquals('Untitled', $entityData['title']);
         $this->assertEquals('2016-07-29', $entityData['date']);
         $this->assertEquals('<p>Body</p>', $entityData['body']);
+    }
+
+    public function testExperimentGoal(): void
+    {
+        $title = 'Experiment goal test ' . bin2hex(random_bytes(6));
+        $new = $this->Experiments->create(title: $title);
+        $this->Experiments->setId($new);
+        $goal = 'Determine whether treatment improves recovery.';
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_goal' => $goal));
+        $this->assertSame($goal, $entityData['experiment_goal']);
+
+        $query = new InputBag(array('q' => $title));
+        $DisplayParams = new DisplayParams($this->Users, EntityType::Experiments, $query);
+        $listed = $this->Experiments->readAll($DisplayParams);
+        $matching = array_values(array_filter($listed, static fn(array $row): bool => (int) $row['id'] === $new));
+        $this->assertSame($goal, $matching[0]['experiment_goal']);
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_goal' => ''));
+        $this->assertSame('', $entityData['experiment_goal']);
+    }
+
+    public function testExperimentConclusion(): void
+    {
+        $title = 'Experiment conclusion test ' . bin2hex(random_bytes(6));
+        $new = $this->Experiments->create(title: $title);
+        $this->Experiments->setId($new);
+        $conclusion = 'Treatment improved recovery under the tested conditions.';
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_conclusion' => $conclusion));
+        $this->assertSame($conclusion, $entityData['experiment_conclusion']);
+
+        $query = new InputBag(array('q' => $title));
+        $DisplayParams = new DisplayParams($this->Users, EntityType::Experiments, $query);
+        $listed = $this->Experiments->readAll($DisplayParams);
+        $matching = array_values(array_filter($listed, static fn(array $row): bool => (int) $row['id'] === $new));
+        $this->assertSame($conclusion, $matching[0]['experiment_conclusion']);
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_conclusion' => ''));
+        $this->assertSame('', $entityData['experiment_conclusion']);
+    }
+
+    public function testExperimentConclusionLengthLimit(): void
+    {
+        $new = $this->Experiments->create();
+        $this->Experiments->setId($new);
+        $validConclusion = str_repeat('x', 1000);
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_conclusion' => $validConclusion));
+        $this->assertSame($validConclusion, $entityData['experiment_conclusion']);
+
+        $this->expectException(ImproperActionException::class);
+        $this->Experiments->patch(Action::Update, array(
+            'experiment_conclusion' => $validConclusion . 'x',
+        ));
+    }
+
+    public function testExperimentNotes(): void
+    {
+        $title = 'Experiment notes test ' . bin2hex(random_bytes(6));
+        $new = $this->Experiments->create(title: $title);
+        $this->Experiments->setId($new);
+        $notes = 'Repeat the measurement with a fresh reagent batch.';
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_notes' => $notes));
+        $this->assertSame($notes, $entityData['experiment_notes']);
+
+        $query = new InputBag(array('q' => $title));
+        $DisplayParams = new DisplayParams($this->Users, EntityType::Experiments, $query);
+        $listed = $this->Experiments->readAll($DisplayParams);
+        $matching = array_values(array_filter($listed, static fn(array $row): bool => (int) $row['id'] === $new));
+        $this->assertSame($notes, $matching[0]['experiment_notes']);
+
+        $duplicateId = $this->Experiments->duplicate();
+        $duplicate = new Experiments($this->Users, $duplicateId);
+        $this->assertSame($notes, $duplicate->entityData['experiment_notes']);
+
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_notes' => ''));
+        $this->assertSame('', $entityData['experiment_notes']);
+    }
+
+    public function testExperimentNotesOnCreate(): void
+    {
+        $notes = 'Created together with the experiment.';
+        $new = $this->Experiments->postAction(Action::Create, array(
+            'title' => 'Experiment notes creation test ' . bin2hex(random_bytes(6)),
+            'experiment_notes' => $notes,
+        ));
+        $created = new Experiments($this->Users, $new);
+        $this->assertSame($notes, $created->entityData['experiment_notes']);
+    }
+
+    public function testExperimentNotesLengthLimit(): void
+    {
+        $new = $this->Experiments->create();
+        $this->Experiments->setId($new);
+        $validNotes = str_repeat('x', 1000);
+        $entityData = $this->Experiments->patch(Action::Update, array('experiment_notes' => $validNotes));
+        $this->assertSame($validNotes, $entityData['experiment_notes']);
+
+        $this->expectException(ImproperActionException::class);
+        $this->Experiments->patch(Action::Update, array(
+            'experiment_notes' => $validNotes . 'x',
+        ));
     }
 
     public function testUpdateIncorrectState(): void

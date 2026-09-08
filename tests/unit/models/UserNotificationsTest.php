@@ -15,6 +15,7 @@ use Elabftw\Enums\Action;
 use Elabftw\Exceptions\IllegalActionException;
 use Elabftw\Models\Notifications\SelfIsValidated;
 use Elabftw\Models\Notifications\StepDeadline;
+use Elabftw\Models\Notifications\TodoDeadline;
 use Elabftw\Models\Notifications\UserNotifications;
 use Elabftw\Traits\TestsUtilsTrait;
 use Elabftw\Models\Users\Users;
@@ -50,6 +51,13 @@ class UserNotificationsTest extends \PHPUnit\Framework\TestCase
         // create one so we have something to read
         $Notif = new StepDeadline($this->Users, 1, 1, 'experiments', '2023-02-28 01:24:21');
         $Notif->create();
+        (new TodoDeadline(
+            $this->Users,
+            1,
+            'Review calendar task',
+            '2023-02-28 01:24:21',
+            60,
+        ))->create();
         // also remove this setting so we go in all code paths
         $this->Users->userData['notif_step_deadline'] = 0;
         $this->assertIsArray($this->UserNotifications->readAll());

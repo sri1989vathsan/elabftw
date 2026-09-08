@@ -12,8 +12,10 @@ declare(strict_types=1);
 namespace Elabftw\Models;
 
 use DateTimeImmutable;
+use Elabftw\Elabftw\Db;
 use Elabftw\Elabftw\NullLocalPassword;
 use Elabftw\Enums\Action;
+use Elabftw\Enums\Notifications;
 use Elabftw\Enums\Scope;
 use Elabftw\Enums\Usergroup;
 use Elabftw\Enums\Users2TeamsTargets;
@@ -24,6 +26,7 @@ use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Models\Users\Users;
 use Elabftw\Params\UserParams;
 use Elabftw\Traits\TestsUtilsTrait;
+use PDO;
 
 use function count;
 use function is_array;
@@ -166,6 +169,42 @@ class UsersTest extends \PHPUnit\Framework\TestCase
         );
         $result = $this->Users->patch(Action::Update, $prefsArr);
         $this->assertEquals(12, $result['limit_nb']);
+    }
+
+    public function testDisablingDeadlineEmailCancelsQueuedReminderEmails(): void
+    {
+        $user = $this->getRandomUserInTeam(1);
+        $Db = Db::getConnection();
+        $originalPreference = (int) $user->userData['notif_step_deadline_email'];
+        $user->rawUpdate(UsersColumn::NotifStepDeadlineEmail, 1);
+        $ids = array();
+        try {
+            $req = $Db->prepare(
+                'INSERT INTO notifications(userid, category, send_email, body, is_ack)
+                    VALUES(:userid, :category, 1, :body, 1)',
+            );
+            foreach (array(Notifications::StepDeadline, Notifications::TodoDeadline) as $category) {
+                $req->bindValue(':userid', $user->userid, PDO::PARAM_INT);
+                $req->bindValue(':category', $category->value, PDO::PARAM_INT);
+                $req->bindValue(':body', '{}');
+                $Db->execute($req);
+                $ids[] = $Db->lastInsertId();
+            }
+
+            $user->rawUpdate(UsersColumn::NotifStepDeadlineEmail, 0);
+            $req = $Db->prepare('SELECT send_email FROM notifications WHERE id IN (:first, :second) ORDER BY id');
+            $req->bindValue(':first', $ids[0], PDO::PARAM_INT);
+            $req->bindValue(':second', $ids[1], PDO::PARAM_INT);
+            $Db->execute($req);
+            $this->assertSame(array(0, 0), $req->fetchAll(PDO::FETCH_COLUMN));
+        } finally {
+            $req = $Db->prepare('DELETE FROM notifications WHERE id = :id');
+            foreach ($ids as $id) {
+                $req->bindValue(':id', $id, PDO::PARAM_INT);
+                $Db->execute($req);
+            }
+            $user->rawUpdate(UsersColumn::NotifStepDeadlineEmail, $originalPreference);
+        }
     }
 
     public function testUpdateCanManageUsers2TeamsAsUser(): void

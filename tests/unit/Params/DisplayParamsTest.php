@@ -33,5 +33,14 @@ class DisplayParamsTest extends \PHPUnit\Framework\TestCase
         // another one to get to the owner filter
         $params = new DisplayParams($user, EntityType::Experiments, new InputBag(array('scope' => 1, 'cat' => 'null')), skipOrderPinned: true);
         $this->assertStringContainsString('entity.userid', $params->filterSql);
+
+        $experimentFolderParams = new DisplayParams($user, EntityType::Experiments, new InputBag(array('folder' => '7')));
+        $this->assertStringContainsString('entity.folder_id = 7', $experimentFolderParams->filterSql);
+
+        $resourceFolderParams = new DisplayParams($user, EntityType::Items, new InputBag(array('folder' => '7')));
+        $this->assertStringContainsString('entity.folder_id = 7', $resourceFolderParams->filterSql);
+
+        $unfiledResourceParams = new DisplayParams($user, EntityType::Items, new InputBag(array('folder' => '0')));
+        $this->assertStringContainsString('entity.folder_id IS NULL', $unfiledResourceParams->filterSql);
     }
 }

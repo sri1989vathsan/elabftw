@@ -126,6 +126,56 @@ class ItemsTest extends \PHPUnit\Framework\TestCase
         $this->assertEquals('<p>Body</p>', $entityData['body']);
     }
 
+    public function testAssignResourceToFolderWhileEditing(): void
+    {
+        $Folders = new ExperimentsFolders($this->Items->Users);
+        $folderId = $Folders->create('Resource folder test');
+        $new = $this->Items->create();
+        $this->Items->setId($new);
+
+        $entityData = $this->Items->patch(Action::Update, array('folder_id' => $folderId));
+        $this->assertSame($folderId, $entityData['folder_id']);
+
+        $entityData = $this->Items->patch(Action::Update, array('folder_id' => ''));
+        $this->assertNull($entityData['folder_id']);
+
+        $this->Items->destroy();
+        $Folders->setId($folderId);
+        $this->assertTrue($Folders->destroy());
+    }
+
+    public function testMultipleFolderBookmarks(): void
+    {
+        $Folders = new ExperimentsFolders($this->Items->Users);
+        $firstFolderId = $Folders->create('First bookmarked folder');
+        $secondFolderId = $Folders->create('Second bookmarked folder');
+
+        $result = $Folders->patch(Action::Update, array(
+            'action' => 'toggle_favorite',
+            'folder_id' => $firstFolderId,
+        ));
+        $this->assertContains($firstFolderId, $result['favorite_experiment_folders']);
+
+        $result = $Folders->patch(Action::Update, array(
+            'action' => 'toggle_favorite',
+            'folder_id' => $secondFolderId,
+        ));
+        $this->assertContains($firstFolderId, $result['favorite_experiment_folders']);
+        $this->assertContains($secondFolderId, $result['favorite_experiment_folders']);
+
+        $result = $Folders->patch(Action::Update, array(
+            'action' => 'toggle_favorite',
+            'folder_id' => $firstFolderId,
+        ));
+        $this->assertNotContains($firstFolderId, $result['favorite_experiment_folders']);
+        $this->assertContains($secondFolderId, $result['favorite_experiment_folders']);
+
+        $Folders->setId($firstFolderId);
+        $this->assertTrue($Folders->destroy());
+        $Folders->setId($secondFolderId);
+        $this->assertTrue($Folders->destroy());
+    }
+
     public function testWrongActionOnUpdate(): void
     {
         $new = $this->Items->create();

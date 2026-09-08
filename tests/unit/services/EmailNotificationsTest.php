@@ -22,6 +22,7 @@ use Elabftw\Models\Notifications\PdfAppendmentFailed;
 use Elabftw\Models\Notifications\SelfIsValidated;
 use Elabftw\Models\Notifications\SelfNeedValidation;
 use Elabftw\Models\Notifications\StepDeadline;
+use Elabftw\Models\Notifications\TodoDeadline;
 use Elabftw\Models\Notifications\UserCreated;
 use Elabftw\Models\Notifications\UserNeedValidation;
 use Elabftw\Models\Users\Users;
@@ -110,6 +111,60 @@ class EmailNotificationsTest extends \PHPUnit\Framework\TestCase
 
         // Restore user archive status
         $this->updateArchiveStatus($targetUser->userid, 0);
+    }
+
+    public function testDeadlineEmailsHonorCurrentPreferenceAtSendTime(): void
+    {
+        $Db = Db::getConnection();
+        $targetUser = $this->getRandomUserInTeam(1);
+        $originalPreference = (int) $targetUser->userData['notif_step_deadline_email'];
+        $preferenceReq = $Db->prepare(
+            'UPDATE users SET notif_step_deadline_email = :preference WHERE userid = :userid',
+        );
+        $preferenceReq->bindValue(':preference', 1, PDO::PARAM_INT);
+        $preferenceReq->bindValue(':userid', $targetUser->userid, PDO::PARAM_INT);
+        $Db->execute($preferenceReq);
+        $targetUser = new Users($targetUser->userid);
+        $deadline = new DateTime('+5 minutes');
+        $stepNotification = new StepDeadline(
+            $targetUser,
+            900000 + $targetUser->userid,
+            1,
+            EntityType::Experiments->toPage(),
+            $deadline->format('Y-m-d H:i:s'),
+        );
+        $stepNotificationId = $stepNotification->create();
+        $todoNotification = new TodoDeadline(
+            $targetUser,
+            900000 + $targetUser->userid,
+            'Preference check',
+            $deadline->format('Y-m-d H:i:s'),
+            60,
+        );
+        $todoNotificationId = $todoNotification->create();
+        $this->assertGreaterThan(0, $stepNotificationId);
+        $this->assertGreaterThan(0, $todoNotificationId);
+
+        try {
+            // Deliberately bypass Users::rawUpdate so stale queued rows retain
+            // send_email=1 and exercise the dispatch-time safety check.
+            $preferenceReq->bindValue(':preference', 0, PDO::PARAM_INT);
+            $Db->execute($preferenceReq);
+            $this->stubEmail();
+
+            $req = $Db->prepare('SELECT email_sent FROM notifications WHERE id IN (:step, :todo) ORDER BY id');
+            $req->bindValue(':step', $stepNotificationId, PDO::PARAM_INT);
+            $req->bindValue(':todo', $todoNotificationId, PDO::PARAM_INT);
+            $Db->execute($req);
+            $this->assertSame(array(0, 0), $req->fetchAll(PDO::FETCH_COLUMN));
+        } finally {
+            $req = $Db->prepare('DELETE FROM notifications WHERE id IN (:step, :todo)');
+            $req->bindValue(':step', $stepNotificationId, PDO::PARAM_INT);
+            $req->bindValue(':todo', $todoNotificationId, PDO::PARAM_INT);
+            $Db->execute($req);
+            $preferenceReq->bindValue(':preference', $originalPreference, PDO::PARAM_INT);
+            $Db->execute($preferenceReq);
+        }
     }
 
     private function stubEmail(): void
