@@ -505,6 +505,12 @@
     }
     const taskId = draggedTaskId;
     finishTaskDrag();
+    // dragging a task that's part of a multi-selection moves the whole
+    // selection together, not just the one card that was dragged
+    if (taskId !== null && selectedTaskIds.size > 1 && selectedTaskIds.has(taskId)) {
+      await bulkMoveToColumn(columnId);
+      return;
+    }
     const task = taskId === null ? undefined : tasks.find(t => t.id === taskId);
     if (task) await moveTaskToColumn(task, columnId);
   }
@@ -1732,6 +1738,9 @@
                       <button type="button" class="btn btn-primary btn-sm mr-1" disabled={!editCommentDraft.trim()} on:click={() => saveEditComment(comment)}>{t('Save')}</button>
                       <button type="button" class="btn btn-ghost btn-sm" on:click={cancelEditComment}>{t('Cancel')}</button>
                     </div>
+                    {#if wrapMentionsAsHtml(editCommentDraft, teamMembers).includes('elabftw-mention')}
+                      <div class="pm-mention-preview small pm-muted mt-1">{@html wrapMentionsAsHtml(editCommentDraft, teamMembers)}</div>
+                    {/if}
                   {:else}
                     <div class="pm-comment-body">{@html comment.body}</div>
                   {/if}
@@ -1739,27 +1748,32 @@
               {/each}
             </ul>
           {/if}
-          <div class="d-flex pm-comment-form" use:clickOutside={() => { mentionCandidates = []; }}>
-            <input
-              type="text"
-              class="form-control"
-              placeholder={t('Add a comment… (type @ to mention someone)')}
-              bind:value={newCommentText}
-              on:input={onCommentInput}
-              on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void postComment(); } }}
-            />
-            {#if mentionCandidates.length > 0}
-              <ul class="pm-mention-results">
-                {#each mentionCandidates as member (member.userid)}
-                  <li>
-                    <button type="button" class="btn-unstyled pm-mention-result" on:click={() => pickMention(member)}>
-                      {member.fullname}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
+          <div use:clickOutside={() => { mentionCandidates = []; }}>
+            <div class="d-flex pm-comment-form">
+              <input
+                type="text"
+                class="form-control"
+                placeholder={t('Add a comment… (type @ to mention someone)')}
+                bind:value={newCommentText}
+                on:input={onCommentInput}
+                on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void postComment(); } }}
+              />
+              {#if mentionCandidates.length > 0}
+                <ul class="pm-mention-results">
+                  {#each mentionCandidates as member (member.userid)}
+                    <li>
+                      <button type="button" class="btn-unstyled pm-mention-result" on:click={() => pickMention(member)}>
+                        {member.fullname}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+              <button type="button" class="btn btn-secondary ml-2" disabled={postingComment || !newCommentText.trim()} on:click={postComment}>{t('Post')}</button>
+            </div>
+            {#if wrapMentionsAsHtml(newCommentText, teamMembers).includes('elabftw-mention')}
+              <div class="pm-mention-preview small pm-muted mt-1">{@html wrapMentionsAsHtml(newCommentText, teamMembers)}</div>
             {/if}
-            <button type="button" class="btn btn-secondary ml-2" disabled={postingComment || !newCommentText.trim()} on:click={postComment}>{t('Post')}</button>
           </div>
         </div>
         {/if}
