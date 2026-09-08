@@ -19,6 +19,24 @@ interface LabCollectorDialogData {
   labcollectorLookup: boolean;
 }
 
+// Mirrors the <select> options that used to live in the (now removed)
+// metadata-panel LabCollector helper box; this dialog is the sole entry
+// point for inserting a LabCollector link now.
+const LABCOLLECTOR_TYPE_OPTIONS = [
+  { text: 'Plasmid', value: 'plasmids' },
+  { text: 'Strain', value: 'strains' },
+  { text: 'Chemical', value: 'chemicals' },
+  { text: 'Sample', value: 'samples' },
+  { text: 'Antibody', value: 'antibodies' },
+  { text: 'Storage', value: 'storage' },
+];
+
+// Remembers the last-used values across dialog opens, like the removed
+// helper box's persisted inputs did.
+let lastLabCollectorType = LABCOLLECTOR_TYPE_OPTIONS[0].value;
+let lastLabCollectorId = '';
+let lastLabCollectorLookup = false;
+
 interface FileFolderReferenceDialogData {
   text: string;
   label: string;
@@ -251,17 +269,8 @@ export function registerLinkExtension(editor: Editor): void {
   };
 
   const openLabCollectorLinkDialog = (): void => {
-    const helperType = document.getElementById('labcollectorType') as HTMLSelectElement | null;
-    const helperId = document.getElementById('labcollectorId') as HTMLInputElement | null;
-    if (!helperType || !helperId) return;
     const bookmark = editor.selection.getBookmark(2, true);
     const hasSelection = !editor.selection.getRng().collapsed;
-    const typeItems = Array.from(helperType.options, option => ({
-      text: option.textContent ?? option.value,
-      value: option.value,
-    }));
-
-    const lookupCheckbox = document.getElementById('labcollectorLookup') as HTMLInputElement | null;
 
     editor.windowManager.open({
       title: 'Insert LabCollector link',
@@ -273,7 +282,7 @@ export function registerLinkExtension(editor: Editor): void {
             type: 'selectbox',
             name: 'labcollectorType',
             label: 'LabCollector type',
-            items: typeItems,
+            items: LABCOLLECTOR_TYPE_OPTIONS,
           },
           {
             type: 'input',
@@ -288,9 +297,9 @@ export function registerLinkExtension(editor: Editor): void {
         ],
       },
       initialData: {
-        labcollectorType: helperType.value,
-        labcollectorId: helperId.value,
-        labcollectorLookup: lookupCheckbox?.checked ?? false,
+        labcollectorType: lastLabCollectorType,
+        labcollectorId: lastLabCollectorId,
+        labcollectorLookup: lastLabCollectorLookup,
       },
       buttons: [
         { type: 'cancel', text: 'Cancel' },
@@ -311,9 +320,8 @@ export function registerLinkExtension(editor: Editor): void {
           return;
         }
 
-        const selectedType = Array.from(helperType.options)
-          .find(option => option.value === data.labcollectorType);
-        const typeLabel = selectedType?.textContent ?? data.labcollectorType;
+        const typeLabel = LABCOLLECTOR_TYPE_OPTIONS
+          .find(option => option.value === data.labcollectorType)?.text ?? data.labcollectorType;
         let label = `${typeLabel} #${id}`;
         if (data.labcollectorLookup) {
           api.block('Looking up record…');
@@ -323,9 +331,9 @@ export function registerLinkExtension(editor: Editor): void {
             label = `${typeLabel}: ${record.name}${record.storage ? ` (${record.storage})` : ''} #${id}`;
           }
         }
-        helperType.value = data.labcollectorType;
-        helperId.value = id;
-        if (lookupCheckbox) lookupCheckbox.checked = data.labcollectorLookup;
+        lastLabCollectorType = data.labcollectorType;
+        lastLabCollectorId = id;
+        lastLabCollectorLookup = data.labcollectorLookup;
         editor.focus();
         editor.selection.moveToBookmark(bookmark);
         editor.undoManager.transact(() => {
@@ -377,7 +385,7 @@ export function registerLinkExtension(editor: Editor): void {
           onAction: addAndInsertFileFolderReferences,
         });
       }
-      if (document.getElementById('labcollectorHelper')) {
+      if (entity.type === 'experiments') {
         items.push({
           type: 'menuitem' as const,
           text: 'LabCollector link…',
