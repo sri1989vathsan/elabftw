@@ -99,18 +99,19 @@ final class Orders extends AbstractRest
             $conditions[] = 'o.archived = 1';
         } elseif (in_array($status, self::STATUSES, true)) {
             $conditions[] = 'o.archived = 0';
-            $conditions[] = 'o.status = :status';
+            // pinned orders stay visible on every status tab, not just the
+            // one matching their own status -- that's the point of pinning
+            $conditions[] = '(o.status = :status OR o.pinned = 1)';
             $bind[':status'] = array($status, PDO::PARAM_STR);
         }
 
-        // admin-only "filter by a specific person" -- enforced here, not
-        // just hidden in the UI, so a non-admin can't just add the param
-        if ($this->Users->isAdmin) {
-            $userid = $query->getInt('userid');
-            if ($userid > 0) {
-                $conditions[] = 'o.userid = :userid';
-                $bind[':userid'] = array($userid, PDO::PARAM_INT);
-            }
+        // everyone can filter down to their own orders ("Mine" tab); picking
+        // someone else's id is an admin-only privilege, enforced here and
+        // not just hidden in the UI, so a non-admin can't just add the param
+        $userid = $query->getInt('userid');
+        if ($userid > 0 && ($userid === $this->Users->userid || $this->Users->isAdmin)) {
+            $conditions[] = 'o.userid = :userid';
+            $bind[':userid'] = array($userid, PDO::PARAM_INT);
         }
 
         // server-side so a match on page 2 is found while looking at page 1

@@ -464,6 +464,10 @@
     items = items;
     try {
       await ApiC.patch(`${Model.Order}/${item.id}`, { status });
+      // the current tab is filtered server-side by status, so an order that
+      // just moved to a different status needs a reload to drop out of (or
+      // into) the list being shown -- mirrors setArchived()/setPinned().
+      await load();
     } catch (error) {
       item.status = previous;
       items = items;
@@ -1127,25 +1131,22 @@
                     aria-label={t('Select')}
                   />
                 {/if}
-                <span class={`badge ${item.status === 'received' ? 'badge-success' : item.status === 'cancelled' ? 'badge-secondary' : item.status === 'ordered' ? 'badge-info' : 'badge-warning'}`}>
-                  {statusLabel(item.status)}
-                </span>
+                <select
+                  class={`form-control form-control-sm orders-status-select orders-status-select-${item.status}`}
+                  value={item.status}
+                  on:change={(event) => setStatus(item, (event.target as HTMLSelectElement).value as OrderStatus)}
+                  aria-label={t('Status')}
+                >
+                  {#each STATUSES as status (status)}
+                    <option value={status}>{statusLabel(status)}</option>
+                  {/each}
+                </select>
                 <strong class="orders-item-title">{item.title}</strong>
                 {#each item.items as linkedItem (linkedItem.id)}
                   <span class="badge badge-info"><i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{linkedItem.title}</span>
                 {/each}
                 {#if canManage(item)}
                   <div class="orders-item-actions ml-auto">
-                    <select
-                      class="form-control form-control-sm orders-status-select"
-                      value={item.status}
-                      on:change={(event) => setStatus(item, (event.target as HTMLSelectElement).value as OrderStatus)}
-                      aria-label={t('Status')}
-                    >
-                      {#each STATUSES as status (status)}
-                        <option value={status}>{statusLabel(status)}</option>
-                      {/each}
-                    </select>
                     <button
                       type="button"
                       class="btn btn-ghost btn-sm orders-icon-button"
@@ -1500,6 +1501,19 @@
 
   .orders-status-select {
     width: auto;
+    border-left: 4px solid var(--warning);
+  }
+
+  .orders-status-select-ordered {
+    border-left-color: var(--info);
+  }
+
+  .orders-status-select-received {
+    border-left-color: var(--success);
+  }
+
+  .orders-status-select-cancelled {
+    border-left-color: var(--secondary);
   }
 
   .orders-category-select {
