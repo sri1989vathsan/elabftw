@@ -4800,6 +4800,14 @@ div > .sticky-navbar {
   text-decoration: underline;
 }
 
+.elabftw-mention {
+  background: var(--primary);
+  border-radius: 999px;
+  color: var(--primary-fg);
+  font-weight: 700;
+  padding: 0.05rem 0.55rem;
+}
+
 .rte-content h4 {
   font-size: 1rem;
   margin: 0.4rem 0;
