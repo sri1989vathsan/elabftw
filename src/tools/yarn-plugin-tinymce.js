@@ -65,6 +65,7 @@ module.exports = {
             extractFile('tinymce/skins/ui/oxide-dark/', 'content.min.css', 'tinymce_content_dark.min.css');
             extractFile('tinymce/plugins/emoticons/js/', 'emojis.js', 'tinymce_emojis.js');
             appendFile('src/scss/_tinymce.scss', 'tinymce_content.min.css');
+            appendFile('src/scss/_custom-editor.scss', 'tinymce_content.min.css');
           },
         },
       },

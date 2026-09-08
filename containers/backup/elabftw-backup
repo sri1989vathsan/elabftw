@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+backup_root=/backups
+db_host=${DB_HOST:-mysql}
+db_port=${DB_PORT:-3306}
+db_name=${DB_NAME:-elabftw}
+db_user=${DB_USER:-elabftw}
+
+require_password() {
+    if [[ -z "${DB_PASSWORD:-}" ]]; then
+        echo 'DB_PASSWORD is required.' >&2
+        exit 2
+    fi
+    export MYSQL_PWD=$DB_PASSWORD
+}
+
+resolve_backup() {
+    local requested=${1:-}
+    if [[ -n "$requested" ]]; then
+        realpath "$requested"
+        return
+    fi
+    find "$backup_root" -mindepth 1 -maxdepth 1 -type d -name 'elabftw-*' -print | sort | tail -n 1
+}
+
+make_backup() {
+    require_password
+    local stamp destination
+    stamp=$(date -u +%Y%m%dT%H%M%SZ)
+    destination="$backup_root/elabftw-$stamp"
+    mkdir -p "$destination"
+
+    mysqldump \
+        --host="$db_host" \
+        --port="$db_port" \
+        --user="$db_user" \
+        --single-transaction \
+        --no-tablespaces \
+        --routines \
+        --triggers \
+        --set-gtid-purged=OFF \
+        "$db_name" | gzip -9 > "$destination/database.sql.gz"
+    tar -C /source -czf "$destination/uploads.tar.gz" uploads
+    tar -C /source -czf "$destination/exports.tar.gz" exports
+
+    local official_schema
+    official_schema=$(mysql --host="$db_host" --port="$db_port" --user="$db_user" --batch --skip-column-names "$db_name" -e "SELECT conf_value FROM config WHERE conf_name = 'schema'" 2>/dev/null || echo unknown)
+    mysql --host="$db_host" --port="$db_port" --user="$db_user" --batch --skip-column-names "$db_name" \
+        -e 'SELECT migration, checksum, applied_at FROM custom_schema_migrations ORDER BY migration' \
+        > "$destination/custom-migrations.tsv" 2>/dev/null || :
+
+    cat > "$destination/manifest.txt" <<EOF
+created_at=$stamp
+database=$db_name
+database_host=$db_host
+format_version=1
+official_schema=$official_schema
+source_commit=${SOURCE_COMMIT:-unknown}
+EOF
+    (cd "$destination" && sha256sum database.sql.gz uploads.tar.gz exports.tar.gz custom-migrations.tsv manifest.txt > checksums.sha256)
+    echo "Backup created: $destination"
+}
+
+verify_backup() {
+    local destination
+    destination=$(resolve_backup "${1:-}")
+    if [[ -z "$destination" || ! -d "$destination" ]]; then
+        echo 'No backup directory found.' >&2
+        exit 3
+    fi
+    (cd "$destination" && sha256sum -c checksums.sha256)
+    gzip -t "$destination/database.sql.gz"
+    tar -tzf "$destination/uploads.tar.gz" >/dev/null
+    tar -tzf "$destination/exports.tar.gz" >/dev/null
+    echo "Backup verified: $destination"
+}
+
+restore_backup() {
+    require_password
+    if [[ "${ALLOW_RESTORE:-no}" != 'yes' ]]; then
+        echo 'Restore refused. Set ALLOW_RESTORE=yes after verifying that the destination may be overwritten.' >&2
+        exit 4
+    fi
+    local destination
+    destination=$(resolve_backup "${1:-}")
+    verify_backup "$destination"
+    gzip -dc "$destination/database.sql.gz" | mysql \
+        --host="$db_host" \
+        --port="$db_port" \
+        --user="$db_user" \
+        "$db_name"
+    tar -C /source --no-same-owner --no-same-permissions --touch -xzf "$destination/uploads.tar.gz"
+    tar -C /source --no-same-owner --no-same-permissions --touch -xzf "$destination/exports.tar.gz"
+    echo "Backup restored: $destination"
+}
+
+case "${1:-backup}" in
+    backup) make_backup ;;
+    verify) verify_backup "${2:-}" ;;
+    restore) restore_backup "${2:-}" ;;
+    *)
+        echo 'Usage: elabftw-backup {backup|verify [directory]|restore [directory]}' >&2
+        exit 64
+        ;;
+esac

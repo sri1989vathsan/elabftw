@@ -1,0 +1,77 @@
+# Isolated local eLabFTW advanced spreadsheet and sidebar demo.
+# This intentionally uses separate containers and volumes from any existing stack.
+name: elabftw-formula-dev
+
+networks:
+  elabftw-formula-net:
+
+services:
+  web:
+    image: elabftw/elabimg:aemoor-sidebar-dev
+    container_name: elabftw-formula
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - FOWNER
+      - DAC_OVERRIDE
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=elabftw
+      - DB_USER=elabftw
+      - DB_PASSWORD=formula-dev
+      # Local demonstration key only; generate a unique key for real deployments.
+      - SECRET_KEY=def00000195a92432f2ebb86bf6e9b9646b45ea955cab7b8f2d96ba2259a85c9e09b04647078c425c5392cb631fa3d9816974bbe8e458d61e16f897ef36c0def362458fd
+      - SERVER_NAME=localhost
+      - DISABLE_HTTPS=false
+      - ENABLE_LETSENCRYPT=false
+      - SITE_URL=https://localhost:3149
+      - PHP_TIMEZONE=Europe/Zurich
+      - TZ=Europe/Zurich
+      - MAX_PHP_MEMORY=512M
+      - DEV_MODE=false
+    ports:
+      - "127.0.0.1:3149:443"
+    volumes:
+      - elabftw-formula-uploads:/elabftw/uploads
+    tmpfs:
+      - /elabftw/cache:uid=101,gid=101
+    networks:
+      - elabftw-formula-net
+
+  mysql:
+    image: mysql:8.4
+    container_name: mysql-formula
+    restart: unless-stopped
+    healthcheck:
+      test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute 'SHOW DATABASES;'"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    cap_drop:
+      - AUDIT_WRITE
+      - MKNOD
+      - SYS_CHROOT
+      - SETFCAP
+      - NET_RAW
+    environment:
+      - MYSQL_ROOT_PASSWORD=formula-dev-root
+      - MYSQL_DATABASE=elabftw
+      - MYSQL_USER=elabftw
+      - MYSQL_PASSWORD=formula-dev
+      - TZ=Europe/Zurich
+    volumes:
+      - elabftw-formula-mysql:/var/lib/mysql
+    networks:
+      - elabftw-formula-net
+
+volumes:
+  elabftw-formula-uploads:
+  elabftw-formula-mysql:

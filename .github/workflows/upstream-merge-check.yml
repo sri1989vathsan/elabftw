@@ -1,0 +1,47 @@
+name: Check upstream merge compatibility
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 03 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  merge-simulation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch official eLabFTW master
+        run: |
+          git remote add official https://github.com/elabftw/elabftw.git
+          git fetch --no-tags official master
+      - name: Compare conflict set
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          git merge-tree --write-tree --messages HEAD official/master > /tmp/merge-report.txt 2>&1
+          status=$?
+          set -e
+          sed -n 's/^CONFLICT ([^)]*): Merge conflict in //p' /tmp/merge-report.txt | sort -u > /tmp/actual-conflicts.txt
+          sort -u .github/upstream-known-conflicts.txt > /tmp/known-conflicts.txt
+          echo 'Current simulated merge conflicts:'
+          cat /tmp/actual-conflicts.txt
+          if ! diff -u /tmp/known-conflicts.txt /tmp/actual-conflicts.txt; then
+            echo 'The upstream conflict set changed and needs review.' >&2
+            exit 1
+          fi
+          if [[ $status -ne 0 && ! -s /tmp/actual-conflicts.txt ]]; then
+            cat /tmp/merge-report.txt >&2
+            exit "$status"
+          fi
+      - name: Upload merge report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-merge-report
+          path: /tmp/merge-report.txt

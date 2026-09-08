@@ -38,3 +38,5 @@ src/ts/langs/*.js
 /todo
 /ideas
 .yarn
+.DS_Store
+/.env

@@ -317,6 +317,9 @@ RUN mkdir -p /run/elabftw \
 # this allows to skip the (long) build in dev mode where /elabftw will be bind-mounted anyway
 # pass it to build command with --build-arg BUILD_ALL=0
 ARG BUILD_ALL=1
+# Limit the Node.js heap used while compiling frontend assets. This can be
+# overridden at build time without carrying NODE_OPTIONS into the final image.
+ARG NODE_MAX_OLD_SPACE_SIZE=4096
 # enable this in CI to skip brotli minification
 ARG CI=0
 # install php and js dependencies and build assets
@@ -339,7 +342,8 @@ RUN corepack enable
 # so in order for composer to take it into account, it must exist before we call the install command of composer.
 # in CI we use -o flag for composer because we will add other classes afterwards (tests)
 RUN if [ "$BUILD_ALL" = "1" ]; then \
-        yarn install --immutable \
+        export NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" \
+        && yarn install --immutable \
         && if [ "$CI" = "1" ]; then \
             yarn run buildall:ci \
             && /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer install --prefer-dist --no-cache --no-progress -o; \
@@ -349,6 +353,17 @@ RUN if [ "$BUILD_ALL" = "1" ]; then \
             && /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer install --prefer-dist --no-cache --no-progress --no-dev -a; \
         fi \
         && rm -rf /run/elabftw/yarn /run/elabftw/cache /run/composer; \
+    fi
+# Fork patch: smalot/pdfparser hardcodes iconv(..., 'UTF-8//TRANSLIT//IGNORE', ...)
+# to decode PDF font text. musl libc's iconv (this image's libc) doesn't
+# support the //TRANSLIT or //IGNORE modifiers at all -- every such call
+# just returns false, so PDF text extraction silently comes back empty for
+# any PDF using an affected font encoding (e.g. CP1252), breaking both
+# PDF full-text search and order procurement-tag extraction. Dropping the
+# modifiers falls back to plain iconv(), which actually works on musl.
+RUN if [ "$BUILD_ALL" = "1" ] && [ -d /elabftw/vendor/smalot/pdfparser ]; then \
+        find /elabftw/vendor/smalot/pdfparser -name Font.php -exec \
+            sed -i "s/UTF-8\/\/TRANSLIT\/\/IGNORE/UTF-8/g" {} +; \
     fi
 # PHP: add php config after composer step so open_basedir is not an issue
 COPY ./containers/elabimg/php/php.ini /etc/php84/php.ini.tpl

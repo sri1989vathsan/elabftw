@@ -32,6 +32,7 @@ module.exports = (env, argv) => {
       main: [
         './src/scss/main.scss',
         './src/ts/common.ts',
+        './src/ts/experiments-folders.ts',
         './src/ts/page-loader.ts',
         './src/ts/create-new.ts',
         './src/ts/i18n.ts',
@@ -40,6 +41,7 @@ module.exports = (env, argv) => {
         './src/ts/admin.ts',
         './src/ts/metadata.ts',
         './src/ts/show.ts',
+        './src/ts/pyrat.ts',
         'bootstrap/js/src/alert.js',
         'bootstrap/js/src/button.js',
         'bootstrap/js/src/collapse.js',
@@ -85,6 +87,10 @@ module.exports = (env, argv) => {
     mode,
     output: {
       filename: '[name].bundle.js',
+      // Async entry chunks (for example edit.ts/TinyMCE) must be immutable.
+      // A stable chunk filename lets a browser combine a newly versioned main
+      // bundle with an older cached edit bundle after a custom image rebuild.
+      chunkFilename: '[name].[contenthash:8].bundle.js',
       path: path.resolve(__dirname, 'web/assets')
     },
     optimization: {
@@ -113,7 +119,12 @@ module.exports = (env, argv) => {
       new MiniCssExtractPlugin(
         {
           filename: '[name].min.css',
-          chunkFilename: '[name].min.css',
+          // Content-hashed, matching chunkFilename in output above -- an
+          // async chunk's CSS must bust cache the same way its JS does, or a
+          // browser that already fetched an older chunk under this stable
+          // name (webpack chunk ids can stay stable across rebuilds) keeps
+          // serving that stale stylesheet forever (1-year cache-control).
+          chunkFilename: '[name].[contenthash:8].min.css',
           insert: function(linkTag) {
             var mainStylesheet = document.getElementById('main-stylesheet');
             if (mainStylesheet && mainStylesheet.parentNode) {
