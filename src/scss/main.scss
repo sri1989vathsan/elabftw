@@ -4801,7 +4801,11 @@ div > .sticky-navbar {
   background: var(--thirdlevel);
   border: 1px solid var(--secondary);
   border-radius: 0.3rem;
-  color: inherit;
+  /* --thirdlevel is a mid-to-dark gray in every theme variant, so a fixed
+     light color is used here instead of the previous color: inherit,
+     which produced unreadable dark-on-dark text wherever the surrounding
+     context's own text color was already dark (e.g. an Orders card) */
+  color: #fff;
   display: inline-block;
   padding: 0.1rem 0.5rem;
   text-decoration: none;
