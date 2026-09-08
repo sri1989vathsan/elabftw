@@ -14,21 +14,19 @@ namespace Elabftw\Elabftw;
 
 use Elabftw\Controllers\ExperimentsCategoriesController;
 use Elabftw\Exceptions\AppException;
-use Elabftw\Exceptions\ForbiddenException;
 use Exception;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Experiment categories
+ * Experiment categories. Any team member can view; only admins can
+ * create, edit, or delete (enforced both in the template, which hides
+ * those controls, and in the API models themselves).
  */
 require_once 'app/init.inc.php';
 
 $Response = new Response();
 
 try {
-    if ($App->Teams->teamArr['users_canwrite_experiments_categories'] === 0 && !$App->Users->isAdmin) {
-        throw new ForbiddenException();
-    }
     $Response = new ExperimentsCategoriesController($App)->getResponse();
 } catch (AppException $e) {
     $Response = $e->getResponseFromException($App);
