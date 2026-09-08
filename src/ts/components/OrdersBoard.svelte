@@ -6,6 +6,7 @@
   import { EntityType, Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
   import { applyMention, extractMentionQuery, wrapMentionsAsHtml, stripMentionHtml } from '../mentions';
+  import { handleLinkPreviewPaste } from '../linkPreview';
 
   // Closes a results dropdown on any click outside its own container --
   // none of the search-result/mention dropdowns below had this, so they
@@ -137,7 +138,11 @@
   let hasNextPage = false;
 
   let newTitle = '';
-  let newNotes = '';
+  // notes is a rich-text (contenteditable) field, not a bound string, so a
+  // pasted bare URL can render as a link-preview badge like it already does
+  // in Todolist's notes/description -- read via newNotesEl.innerHTML at
+  // submit time instead
+  let newNotesEl: HTMLElement;
   let newFiles: File[] = [];
   let submitting = false;
 
@@ -158,7 +163,11 @@
   // form, but kept in its own state so it never interferes with it
   let editingItemId: number | null = null;
   let editTitle = '';
-  let editNotes = '';
+  // same rich-text approach as newNotesEl: editNotesInitial only seeds the
+  // contenteditable's starting content, the live value is read from
+  // editNotesEl.innerHTML when saving
+  let editNotesInitial = '';
+  let editNotesEl: HTMLElement;
   let editResourceQuery = '';
   let editResourceResults: ResourceResult[] = [];
   let editSearchingResource = false;
@@ -333,9 +342,10 @@
         if (pending.title.trim() === '') continue;
         itemIds.push(await createPendingResource(pending));
       }
+      const notesHtml = (newNotesEl?.innerHTML ?? '').trim();
       const orderId = await ApiC.post2location(Model.Order, {
         title: newTitle.trim(),
-        notes: newNotes.trim() === '' ? null : newNotes.trim(),
+        notes: notesHtml === '' ? null : notesHtml,
         item_ids: itemIds,
       });
       for (const file of newFiles) {
@@ -346,7 +356,7 @@
         }
       }
       newTitle = '';
-      newNotes = '';
+      if (newNotesEl) newNotesEl.innerHTML = '';
       newFiles = [];
       selectedResources = [];
       pendingNewResources = [];
@@ -397,7 +407,7 @@
   function startEdit(item: OrderItem): void {
     editingItemId = item.id;
     editTitle = item.title;
-    editNotes = item.notes ?? '';
+    editNotesInitial = item.notes ?? '';
     editResourceQuery = '';
     editResourceResults = [];
     editPendingNewResources = [];
@@ -456,9 +466,10 @@
         if (pending.title.trim() === '') continue;
         itemIds.push(await createPendingResource(pending));
       }
+      const notesHtml = (editNotesEl?.innerHTML ?? '').trim();
       await ApiC.patch(`${Model.Order}/${item.id}`, {
         title: editTitle.trim(),
-        notes: editNotes.trim() === '' ? null : editNotes.trim(),
+        notes: notesHtml === '' ? null : notesHtml,
         item_ids: itemIds,
       });
       editingItemId = null;
@@ -850,13 +861,16 @@
         required
       />
       <label class="sr-only" for="ordersNewNotes">{t('Notes')}</label>
-      <textarea
+      <div
         id="ordersNewNotes"
-        class="form-control mb-2"
-        rows="2"
-        placeholder={t('Notes (quantity, supplier, link…) — optional')}
-        bind:value={newNotes}
-      ></textarea>
+        class="form-control mb-2 orders-notes-editor"
+        contenteditable="true"
+        role="textbox"
+        aria-multiline="true"
+        data-placeholder={t('Notes (quantity, supplier, link…) — optional')}
+        bind:this={newNotesEl}
+        on:paste={(event) => handleLinkPreviewPaste(event, newNotesEl)}
+      ></div>
 
       <div class="orders-resource-picker mb-2">
         {#if selectedResources.length > 0}
@@ -1136,12 +1150,15 @@
                   required
                 />
                 <label class="sr-only" for={`ordersEditNotes-${item.id}`}>{t('Notes')}</label>
-                <textarea
+                <div
                   id={`ordersEditNotes-${item.id}`}
-                  class="form-control form-control-sm mb-2"
-                  rows="2"
-                  bind:value={editNotes}
-                ></textarea>
+                  class="form-control form-control-sm mb-2 orders-notes-editor"
+                  contenteditable="true"
+                  role="textbox"
+                  aria-multiline="true"
+                  bind:this={editNotesEl}
+                  on:paste={(event) => handleLinkPreviewPaste(event, editNotesEl)}
+                >{@html editNotesInitial}</div>
 
                 <div class="orders-resource-picker mb-2">
                   {#if editSelectedResources.length > 0}
@@ -1235,6 +1252,7 @@
                     <option value={status}>{statusLabel(status)}</option>
                   {/each}
                 </select>
+                <span class="orders-muted orders-item-id" title={t('Order ID')}>#{item.id}</span>
                 <strong class="orders-item-title">{item.title}</strong>
                 {#each item.items as linkedItem (linkedItem.id)}
                   <span class="badge badge-info"><i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{linkedItem.title}</span>
@@ -1287,7 +1305,7 @@
                   </div>
                 {/if}
               </div>
-              {#if item.notes}<p class="orders-item-description mb-1">{item.notes}</p>{/if}
+              {#if item.notes}<div class="orders-item-description mb-1">{@html item.notes}</div>{/if}
               <div class="orders-muted orders-item-meta">
                 {t('Requested by')} {item.author_fullname} · {formatDate(item.created_at)}
               </div>
@@ -1644,7 +1662,25 @@
   .orders-item-description {
     margin: 0.35rem 0 0.2rem;
     overflow-wrap: anywhere;
-    white-space: pre-wrap;
+  }
+
+  .orders-notes-editor {
+    height: auto;
+    min-height: 4rem;
+    overflow-y: auto;
+  }
+
+  .orders-notes-editor:focus {
+    outline: none;
+  }
+
+  .orders-notes-editor:empty::before {
+    color: var(--secondary);
+    content: attr(data-placeholder);
+  }
+
+  .orders-item-id {
+    font-weight: 400;
   }
 
   .orders-item-meta {

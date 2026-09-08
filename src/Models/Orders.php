@@ -437,14 +437,16 @@ final class Orders extends AbstractRest
 
     private function getNotes(mixed $value): ?string
     {
-        if ($value === null || trim((string) $value) === '') {
+        $trimmed = trim((string) $value);
+        if ($value === null || $trimmed === '') {
             return null;
         }
-        $notes = Filter::toPureString((string) $value);
-        if (mb_strlen($notes) > 10000) {
+        if (mb_strlen($trimmed) > 10000) {
             throw new ImproperActionException('Notes must be shorter than 10000 characters.');
         }
-        return $notes;
+        // Filter::body() (not toPureString()) so a pasted link can render as
+        // a link-preview badge, same as Todolist's notes/description
+        return Filter::body($trimmed);
     }
 
     /** @return list<int> */
