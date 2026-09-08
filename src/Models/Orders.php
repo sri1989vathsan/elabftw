@@ -170,7 +170,7 @@ final class Orders extends AbstractRest
 
         $sql = self::selectSql() . '
             WHERE ' . implode(' AND ', $conditions) . "
-            ORDER BY o.created_at DESC{$limitSql}";
+            ORDER BY o.pinned DESC, o.created_at DESC{$limitSql}";
         $req = $this->Db->prepare($sql);
         foreach ($bind as $key => $valueAndType) {
             [$value, $type] = $valueAndType;
@@ -210,7 +210,7 @@ final class Orders extends AbstractRest
      */
     private static function selectSql(): string
     {
-        return 'SELECT o.id, o.title, o.notes, o.status, o.archived, o.created_at, o.userid,
+        return 'SELECT o.id, o.title, o.notes, o.status, o.archived, o.pinned, o.created_at, o.userid,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT("id", oi_item.id, "title", oi_item.title))
@@ -244,6 +244,7 @@ final class Orders extends AbstractRest
         $order['id'] = (int) $order['id'];
         $order['userid'] = (int) $order['userid'];
         $order['archived'] = (bool) $order['archived'];
+        $order['pinned'] = (bool) $order['pinned'];
         $order['items'] = json_decode((string) $order['items'], true, 512, JSON_THROW_ON_ERROR);
         $uploads = json_decode((string) $order['uploads'], true, 512, JSON_THROW_ON_ERROR);
         foreach ($uploads as &$upload) {
@@ -282,6 +283,9 @@ final class Orders extends AbstractRest
         }
         if (array_key_exists('archived', $params)) {
             $this->updateArchived((bool) $params['archived']);
+        }
+        if (array_key_exists('pinned', $params)) {
+            $this->updatePinned((bool) $params['pinned']);
         }
         if (array_key_exists('title', $params) || array_key_exists('notes', $params)) {
             if (!$isOwner && !$this->Users->isAdmin) {
@@ -334,6 +338,16 @@ final class Orders extends AbstractRest
         $sql = 'UPDATE custom_orders SET archived = :archived WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':archived', $archived, PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    private function updatePinned(bool $pinned): void
+    {
+        $sql = 'UPDATE custom_orders SET pinned = :pinned WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':pinned', $pinned, PDO::PARAM_INT);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);

@@ -43,6 +43,7 @@
     notes: string | null;
     status: OrderStatus;
     archived: boolean;
+    pinned: boolean;
     created_at: string;
     userid: number;
     author_fullname: string;
@@ -478,6 +479,15 @@
   async function setArchived(item: OrderItem, archived: boolean): Promise<void> {
     try {
       await ApiC.patch(`${Model.Order}/${item.id}`, { archived });
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update this order.');
+    }
+  }
+
+  async function setPinned(item: OrderItem, pinned: boolean): Promise<void> {
+    try {
+      await ApiC.patch(`${Model.Order}/${item.id}`, { pinned });
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not update this order.');
@@ -980,7 +990,7 @@
     </div>
     <ul class="orders-list">
       {#each visibleItems as item (item.id)}
-        <li class="orders-card orders-item">
+        <li class="orders-card orders-item" class:orders-item-pinned={item.pinned}>
           <div class="orders-item-body">
             {#if editingItemId === item.id}
               <div class="orders-edit-form">
@@ -1102,6 +1112,16 @@
                         <option value={status}>{statusLabel(status)}</option>
                       {/each}
                     </select>
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm orders-icon-button"
+                      class:orders-icon-button-active={item.pinned}
+                      title={item.pinned ? t('Unpin') : t('Pin to top')}
+                      aria-label={item.pinned ? t('Unpin') : t('Pin to top')}
+                      on:click={() => setPinned(item, !item.pinned)}
+                    >
+                      <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i>
+                    </button>
                     <button
                       type="button"
                       class="btn btn-ghost btn-sm orders-icon-button"
@@ -1300,7 +1320,7 @@
      border cards using the app's own real tokens/button classes, so this
      looks and themes exactly like the rest of eLabFTW, light or dark. */
   .orders-board {
-    max-width: 46rem;
+    max-width: 72rem;
   }
 
   .orders-card {
@@ -1384,16 +1404,31 @@
   }
 
   .orders-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 0.6rem;
+    grid-template-columns: repeat(2, 1fr);
     list-style: none;
     margin: 0;
     padding: 0;
   }
 
+  @media (max-width: 768px) {
+    .orders-list {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .orders-item {
     padding: 0.7rem;
+  }
+
+  .orders-item-pinned {
+    background: color-mix(in srgb, var(--primary) 6%, var(--mainbackground));
+    border-color: var(--primary);
+  }
+
+  .orders-icon-button-active {
+    color: var(--primary);
   }
 
   .orders-item-header {
