@@ -93,7 +93,8 @@ final class TodolistProjects extends AbstractRest
         // Visible to: the project's creator or an explicit member -- not
         // automatically to a team admin, who has to be added like anyone
         // else to see or manage a project they're not part of.
-        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at,
+        $showArchived = ($queryParams ?? $this->getQueryParams())->getQuery()->getBoolean('archived');
+        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at, p.archived,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', u.userid, 'fullname', u.fullname))
                     FROM todolist_project_members AS m
@@ -102,6 +103,7 @@ final class TodolistProjects extends AbstractRest
                 ), JSON_ARRAY()) AS members
             FROM todolist_projects AS p
             WHERE p.team = :team
+                AND p.archived = :archived
                 AND (
                     p.userid = :userid
                     OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = p.id AND pm.userid = :userid2)
@@ -109,6 +111,7 @@ final class TodolistProjects extends AbstractRest
             ORDER BY p.name ASC";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $req->bindValue(':archived', $showArchived ? 1 : 0, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':userid2', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
@@ -118,7 +121,10 @@ final class TodolistProjects extends AbstractRest
     #[Override]
     public function readOne(): array
     {
-        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at,
+        // unlike readAll(), not filtered by archived state -- a single
+        // project must stay reachable by id (e.g. to unarchive it) however
+        // the list happens to be filtered right now
+        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at, p.archived,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', u.userid, 'fullname', u.fullname))
                     FROM todolist_project_members AS m
@@ -178,6 +184,14 @@ final class TodolistProjects extends AbstractRest
             $sql = 'UPDATE todolist_projects SET status = :status WHERE id = :id AND team = :team';
             $req = $this->Db->prepare($sql);
             $req->bindValue(':status', $this->getStatus($params['status']));
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+            $this->Db->execute($req);
+        }
+        if (array_key_exists('archived', $params)) {
+            $sql = 'UPDATE todolist_projects SET archived = :archived WHERE id = :id AND team = :team';
+            $req = $this->Db->prepare($sql);
+            $req->bindValue(':archived', Filter::toBinary($params['archived']), PDO::PARAM_INT);
             $req->bindParam(':id', $this->id, PDO::PARAM_INT);
             $req->bindParam(':team', $this->team, PDO::PARAM_INT);
             $this->Db->execute($req);

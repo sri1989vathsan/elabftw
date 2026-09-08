@@ -4416,6 +4416,10 @@ div > .sticky-navbar {
   color: var(--primary);
 }
 
+.pm-manage-btn.active {
+  color: var(--primary);
+}
+
 .pm-project-tab-new {
   background: transparent;
   border: 0;
