@@ -22,6 +22,7 @@ use PDO;
 
 use function array_fill;
 use function array_key_exists;
+use function ctype_digit;
 use function array_map;
 use function array_unique;
 use function array_values;
@@ -162,6 +163,13 @@ final class Orders extends AbstractRest
             $bind[':search_item'] = array($like, PDO::PARAM_STR);
             $bind[':search_procurement_id'] = array($like, PDO::PARAM_STR);
             $bind[':search_order_number'] = array($like, PDO::PARAM_STR);
+            // a bare number searches the order's own id too -- nothing else
+            // above matches it (title/notes FULLTEXT ignores short tokens,
+            // and it isn't the procurement id/order number)
+            if (ctype_digit($search)) {
+                $searchConditions[] = 'o.id = :search_id';
+                $bind[':search_id'] = array((int) $search, PDO::PARAM_INT);
+            }
             if ($fulltext !== null) {
                 $searchConditions[] = 'MATCH(o.title, o.notes) AGAINST(:search_fulltext IN BOOLEAN MODE)';
                 $searchConditions[] = 'EXISTS (SELECT 1 FROM custom_order_comments AS s_comment
