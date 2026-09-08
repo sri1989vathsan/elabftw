@@ -4596,8 +4596,19 @@ div > .sticky-navbar {
 
 .pm-task-actions {
   display: flex;
-  flex: 0 0 auto;
-  gap: 0.15rem;
+  gap: 0.3rem;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+  // quieter by default so a task's title isn't fighting five buttons for
+  // room -- revealed on hover/focus so the actions stay fully reachable
+  // (including for keyboard users tabbing through the buttons)
+  opacity: 0.35;
+  transition: opacity 0.1s ease;
+}
+
+.pm-task:hover .pm-task-actions,
+.pm-task:focus-within .pm-task-actions {
+  opacity: 1;
 }
 
 .pm-icon-button {

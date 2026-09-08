@@ -979,6 +979,13 @@
     if (!el) return;
     el.focus();
     document.execCommand(cmd, false, value ?? '');
+    // execCommand('removeFormat') only strips inline styling (bold,
+    // italic, ...) -- it leaves block-level formatting (headings,
+    // blockquotes) untouched, so a heading stays a heading. Follow it
+    // with formatBlock to a plain paragraph to actually reset the block.
+    if (cmd === 'removeFormat') {
+      document.execCommand('formatBlock', false, '<p>');
+    }
   }
 
   function insertLink(el: HTMLElement | undefined): void {
@@ -1231,30 +1238,30 @@
                   />
                 {/if}
                 <button type="button" class="pm-task-title-btn flex-grow-1" on:click={() => openDetail(task)}>{task.body}</button>
-                {#if canManage(task)}
-                  <div class="pm-task-actions">
-                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" class:pm-icon-button-active={task.pinned} title={task.pinned ? t('Unpin') : t('Pin to top')} aria-label={task.pinned ? t('Unpin') : t('Pin to top')} on:click={() => togglePin(task)}>
-                      <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i>
-                    </button>
-                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task)}>
-                      <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
-                    </button>
-                    {#if prevCol}
-                      <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={`${t('Move to')} ${prevCol.name}`} aria-label={`${t('Move to')} ${prevCol.name}`} on:click={() => moveTaskToColumn(task, prevCol.id)}>
-                        <i class="fas fa-arrow-left fa-fw" aria-hidden="true"></i>
-                      </button>
-                    {/if}
-                    {#if nextCol}
-                      <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={`${t('Move to')} ${nextCol.name}`} aria-label={`${t('Move to')} ${nextCol.name}`} on:click={() => moveTaskToColumn(task, nextCol.id)}>
-                        <i class="fas fa-arrow-right fa-fw" aria-hidden="true"></i>
-                      </button>
-                    {/if}
-                    <button type="button" class="btn btn-danger-ghost btn-sm pm-icon-button" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteTask(task)}>
-                      <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
-                    </button>
-                  </div>
-                {/if}
               </div>
+              {#if canManage(task)}
+                <div class="pm-task-actions">
+                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" class:pm-icon-button-active={task.pinned} title={task.pinned ? t('Unpin') : t('Pin to top')} aria-label={task.pinned ? t('Unpin') : t('Pin to top')} on:click={() => togglePin(task)}>
+                    <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i>
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task)}>
+                    <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+                  </button>
+                  {#if prevCol}
+                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={`${t('Move to')} ${prevCol.name}`} aria-label={`${t('Move to')} ${prevCol.name}`} on:click={() => moveTaskToColumn(task, prevCol.id)}>
+                      <i class="fas fa-arrow-left fa-fw" aria-hidden="true"></i>
+                    </button>
+                  {/if}
+                  {#if nextCol}
+                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={`${t('Move to')} ${nextCol.name}`} aria-label={`${t('Move to')} ${nextCol.name}`} on:click={() => moveTaskToColumn(task, nextCol.id)}>
+                      <i class="fas fa-arrow-right fa-fw" aria-hidden="true"></i>
+                    </button>
+                  {/if}
+                  <button type="button" class="btn btn-danger-ghost btn-sm pm-icon-button" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteTask(task)}>
+                    <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                  </button>
+                </div>
+              {/if}
               {#if activeProjectId === 'all'}
                 <span class="badge badge-info mt-1">{task.project_name ?? t('Unfiled')}</span>
               {/if}
