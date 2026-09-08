@@ -4478,6 +4478,13 @@ div > .sticky-navbar {
   max-width: 10rem;
 }
 
+.pm-bulk-bar {
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.7rem;
+}
+
 .pm-progress {
   background: #e9ecef;
   border-radius: 999px;

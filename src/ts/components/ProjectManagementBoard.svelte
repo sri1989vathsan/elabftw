@@ -422,6 +422,30 @@
     }
   }
 
+  let selectedTaskIds = new Set<number>();
+
+  function toggleTaskSelect(taskId: number): void {
+    const next = new Set(selectedTaskIds);
+    if (next.has(taskId)) {
+      next.delete(taskId);
+    } else {
+      next.add(taskId);
+    }
+    selectedTaskIds = next;
+  }
+
+  async function bulkMoveToColumn(columnId: number): Promise<void> {
+    const ids = [...selectedTaskIds];
+    if (ids.length === 0) return;
+    try {
+      await Promise.all(ids.map(id => ApiC.patch(`${Model.Todolist}/${id}`, { column_id: columnId })));
+      selectedTaskIds = new Set();
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not move the selected tasks.');
+    }
+  }
+
   async function togglePin(task: Task): Promise<void> {
     try {
       await ApiC.patch(`${Model.Todolist}/${task.id}`, { pinned: !task.pinned });
@@ -1187,6 +1211,29 @@
     </div>
   </div>
 
+  {#if selectedTaskIds.size > 0}
+    <div class="pm-bulk-bar d-flex align-items-center flex-wrap mb-2">
+      <span class="mr-2">{selectedTaskIds.size} {t('selected')}</span>
+      <select
+        class="form-control form-control-sm mr-2"
+        style="width:auto"
+        value=""
+        on:change={(event) => {
+          const value = (event.target as HTMLSelectElement).value;
+          if (value !== '') void bulkMoveToColumn(Number(value));
+          (event.target as HTMLSelectElement).value = '';
+        }}
+        aria-label={t('Move to column')}
+      >
+        <option value="" disabled>{t('Move to column…')}</option>
+        {#each sortedColumns(columns) as column (column.id)}
+          <option value={column.id}>{column.name}</option>
+        {/each}
+      </select>
+      <button type="button" class="btn btn-ghost btn-sm" on:click={() => selectedTaskIds = new Set()}>{t('Clear selection')}</button>
+    </div>
+  {/if}
+
   {#if loading}
     <p class="pm-muted">{t('Loading')}…</p>
   {:else}
@@ -1230,20 +1277,25 @@
               on:dragend={finishTaskDrag}
             >
               <div class="d-flex align-items-start">
-                {#if doneColumn && canManage(task)}
+                {#if canManage(task)}
                   <input
                     type="checkbox"
-                    class="pm-task-done-checkbox mr-2 mt-1"
-                    checked={column.kind === 'done'}
-                    on:change={() => moveTaskToColumn(task, column.kind === 'done' ? (todoColumn?.id ?? column.id) : doneColumn.id)}
-                    title={column.kind === 'done' ? t('Mark as not done') : t('Mark as done')}
-                    aria-label={column.kind === 'done' ? t('Mark as not done') : t('Mark as done')}
+                    class="pm-task-select-checkbox mr-2 mt-1"
+                    checked={selectedTaskIds.has(task.id)}
+                    on:change={() => toggleTaskSelect(task.id)}
+                    title={t('Select')}
+                    aria-label={t('Select')}
                   />
                 {/if}
                 <button type="button" class="pm-task-title-btn flex-grow-1" on:click={() => openDetail(task)}>{task.body}</button>
               </div>
               {#if canManage(task)}
                 <div class="pm-task-actions">
+                  {#if doneColumn}
+                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" class:pm-icon-button-active={column.kind === 'done'} title={column.kind === 'done' ? t('Mark as not done') : t('Mark as done')} aria-label={column.kind === 'done' ? t('Mark as not done') : t('Mark as done')} on:click={() => moveTaskToColumn(task, column.kind === 'done' ? (todoColumn?.id ?? column.id) : doneColumn.id)}>
+                      <i class={`fas ${column.kind === 'done' ? 'fa-rotate-left' : 'fa-check'} fa-fw`} aria-hidden="true"></i>
+                    </button>
+                  {/if}
                   <button type="button" class="btn btn-ghost btn-sm pm-icon-button" class:pm-icon-button-active={task.pinned} title={task.pinned ? t('Unpin') : t('Pin to top')} aria-label={task.pinned ? t('Unpin') : t('Pin to top')} on:click={() => togglePin(task)}>
                     <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i>
                   </button>
