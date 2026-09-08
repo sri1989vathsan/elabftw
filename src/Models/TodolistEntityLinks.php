@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 namespace Elabftw\Models;
 
+use Elabftw\Elabftw\Db;
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
@@ -79,6 +80,28 @@ final class TodolistEntityLinks extends AbstractRest
         // a null title means the target was deleted, or somehow belongs to
         // another team -- drop it rather than show a broken reference
         return array_values(array_filter($req->fetchAll(), fn(array $row): bool => $row['title'] !== null));
+    }
+
+    /**
+     * Every to-do task linked to this experiment/resource -- the reverse of
+     * readAll(), which is task-centric. Used to show a read-only "Linked
+     * tasks" section on the entity's own view/edit page (see
+     * AbstractEntityController).
+     */
+    public static function readAllForEntity(string $entityType, int $entityId): array
+    {
+        $Db = Db::getConnection();
+        $sql = 'SELECT link.id, task.id AS task_id, task.body AS title, task.column_id
+                FROM todolist_entity_links AS link
+                INNER JOIN todolist AS task ON task.id = link.task_id
+                WHERE link.entity_type = :entity_type AND link.entity_id = :entity_id
+                ORDER BY link.created_at ASC';
+        $req = $Db->prepare($sql);
+        $req->bindValue(':entity_type', $entityType);
+        $req->bindValue(':entity_id', $entityId, PDO::PARAM_INT);
+        $Db->execute($req);
+
+        return $req->fetchAll();
     }
 
     #[Override]
