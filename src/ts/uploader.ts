@@ -30,7 +30,7 @@ export class Uploader
         // once all files are uploaded
         this.on('queuecomplete', function() {
           if (this.getUploadingFiles().length === 0 && this.getQueuedFiles().length === 0) {
-            reloadElements(['uploadsDiv']);
+            reloadElements(['uploadsDiv', 'filesFoldersLinksSection']);
           }
         });
       },

@@ -28,6 +28,9 @@
   interface EntityListItem {
     id: number;
     title: string | null;
+    experiment_goal?: string | null;
+    experiment_conclusion?: string | null;
+    experiment_notes?: string | null;
     state: StateValue;
     category?: string | null;
     category_title?: string | null;
@@ -56,6 +59,7 @@
 
   const t = i18next.t.bind(i18next);
   const SEARCH_DEBOUNCE_MS = 500;
+  const GOAL_COLLAPSE_LENGTH = 180;
 
   let {
     entityType = 'experiments',
@@ -94,7 +98,7 @@
   let isLoading = $state(false);
   let isLoadingMore = $state(false);
   let hasMore = $state(true);
-  let sentinelEl: HTMLDivElement | null = null;
+  let sentinelEl = $state<HTMLDivElement | null>(null);
   let currentQueryKey = '';
   let reloadVersion = $state(0);
   let debouncedSearchQuery = $state('');
@@ -126,6 +130,7 @@
     currentState: string;
     currentScope: string;
     currentBookable: string;
+    currentFolder: string;
     currentOrder: string;
     currentSort: string;
     currentRelated: number | null;
@@ -290,6 +295,7 @@
       currentState: getCurrentUrlParam('state'),
       currentScope: getCurrentUrlParam('scope'),
       currentBookable: getCurrentUrlParam('bookable'),
+      currentFolder: getCurrentUrlParam('folder'),
       currentOrder: getCurrentUrlParamOrFallback('order', order),
       currentSort: getCurrentUrlParamOrFallback('sort', sort),
       currentRelated: getCurrentUrlNumberParam('related'),
@@ -312,6 +318,7 @@
       context.currentState,
       context.currentScope,
       context.currentBookable,
+      context.currentFolder,
       context.currentOrder,
       context.currentSort,
       context.currentRelated,
@@ -334,6 +341,11 @@
     const currentReloadVersion = reloadVersion;
     const context = getEntityQueryContext();
     const nextQueryKey = getEntityQueryKey(context, currentReloadVersion);
+    // Reconnect the observer after every appended page. When the sentinel is
+    // still within rootMargin, IntersectionObserver does not necessarily emit
+    // a second transition after its position changes, which used to stop the
+    // list after one page on tall screens.
+    const currentEntityCount = entities.length;
 
     if (nextQueryKey !== currentQueryKey) {
       currentQueryKey = nextQueryKey;
@@ -354,13 +366,13 @@
           return;
         }
 
-        if (hasPendingQueryResults || isLoading || isLoadingMore || !hasMore || entities.length === 0) {
+        if (hasPendingQueryResults || isLoading || isLoadingMore || !hasMore || currentEntityCount === 0) {
           return;
         }
 
         void loadEntities(
           getEntityQueryContext(),
-          entities.length,
+          currentEntityCount,
           false,
         );
       },
@@ -393,6 +405,7 @@
       currentState,
       currentScope,
       currentBookable,
+      currentFolder,
       currentOrder,
       currentSort,
       currentRelated,
@@ -445,6 +458,13 @@
 
       if (currentBookable.length > 0) {
         params['bookable'] = currentBookable;
+      }
+
+      // Folder links reload the list page with ?folder=<id>. Keep that
+      // filter when the Svelte list fetches its rows from the API, including
+      // folder=0 for the Unfiled view.
+      if ((currentType === 'experiments' || currentType === 'items') && currentFolder.length > 0) {
+        params['folder'] = currentFolder;
       }
 
       if (currentOrder.length > 0) {
@@ -548,6 +568,13 @@
     }
 
     return date.toISOString().slice(0, 10);
+  }
+
+  function getSummaryPreview(summary: string): string {
+    const normalized = summary.replace(/\s+/g, ' ').trim();
+    return normalized.length > GOAL_COLLAPSE_LENGTH
+      ? `${normalized.slice(0, GOAL_COLLAPSE_LENGTH).trimEnd()}…`
+      : normalized;
   }
 
   function getLeftColor(entity: EntityListItem): string {
@@ -712,6 +739,31 @@
             </a>
           </div>
 
+          {#each [
+            { value: entity.experiment_goal, label: t('Goals'), icon: 'fa-bullseye', css: 'experiment-goal' },
+            { value: entity.experiment_conclusion, label: t('Conclusion'), icon: 'fa-clipboard-check', css: 'experiment-conclusion' },
+            { value: entity.experiment_notes, label: t('Notes'), icon: 'fa-file-lines', css: 'experiment-notes' },
+          ] as summary}
+            {#if entityType === 'experiments' && summary.value?.trim()}
+              {#if summary.value.trim().length > GOAL_COLLAPSE_LENGTH}
+                <details class={`${summary.css} experiment-summary border rounded px-2 py-1 mb-2`}>
+                  <summary class='experiment-summary-toggle'>
+                    <i class={`fas ${summary.icon} fa-fw mr-1 color-medium`} aria-hidden='true'></i>
+                    <span class='font-weight-bold'>{summary.label}:</span>
+                    <span class='experiment-summary-preview color-medium ml-1'>{getSummaryPreview(summary.value)}</span>
+                  </summary>
+                  <div class='experiment-summary-text breakable mt-2'>{summary.value.trim()}</div>
+                </details>
+              {:else}
+                <p class='experiment-summary-text breakable my-2'>
+                  <i class={`fas ${summary.icon} fa-fw mr-1 color-medium`} aria-hidden='true'></i>
+                  <span class='font-weight-bold'>{summary.label}:</span>
+                  {summary.value.trim()}
+                </p>
+              {/if}
+            {/if}
+          {/each}
+
           <div class='owner'>
             {#if entity.userid != null && currentUserId !== entity.userid && !isAnon}
               {t('by')}
@@ -860,3 +912,17 @@
     {/if}
   </div>
 {/if}
+
+<style>
+  .experiment-summary-toggle {
+    cursor: pointer;
+  }
+
+  .experiment-summary-text {
+    white-space: pre-wrap;
+  }
+
+  .experiment-summary[open] .experiment-summary-preview {
+    display: none;
+  }
+</style>

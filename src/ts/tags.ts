@@ -6,6 +6,7 @@
  * @package elabftw
  */
 import 'jquery-ui/ui/widgets/autocomplete';
+import $ from 'jquery';
 import { Malle } from '@deltablot/malle';
 import FavTag from './FavTag.class';
 import i18next from './i18n';
@@ -42,24 +43,29 @@ document.addEventListener('DOMContentLoaded', () => {
   // END CREATE TAG
 
   // CREATE FAVORITE TAG
+  let favoriteTagIsSaving = false;
   const createTagFavorite = (el: HTMLInputElement): void => {
-    if (!el.value) {
+    const tag = el.value.trim();
+    if (!tag || favoriteTagIsSaving) {
       return;
     }
-    (new FavTag()).create(el.value).then(() => {
+    favoriteTagIsSaving = true;
+    (new FavTag()).create(tag).then(() => {
       reloadElements(['favtagsTagsDiv']);
       el.value = '';
+    }).finally(() => {
+      favoriteTagIsSaving = false;
     });
   };
 
-  if (document.getElementById('createFavTagInput')) {
-    document.getElementById('createFavTagInput').addEventListener('blur', event => {
-      createTagFavorite(event.target as HTMLInputElement);
+  const favoriteTagInput = document.getElementById('createFavTagInput') as HTMLInputElement | null;
+  if (favoriteTagInput) {
+    document.getElementById('createFavTagButton')?.addEventListener('click', () => {
+      createTagFavorite(favoriteTagInput);
     });
-
-    document.getElementById('createFavTagInput').addEventListener('keyup', event => {
+    favoriteTagInput.addEventListener('keyup', event => {
       if ((event as KeyboardEvent).code === 'Enter') {
-        createTagFavorite(event.target as HTMLInputElement);
+        createTagFavorite(favoriteTagInput);
       }
     });
   }
@@ -67,9 +73,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // AUTOCOMPLETE
   addAutocompleteToTagInputs();
-  if (document.getElementById('favtagsPanel')) {
-    new MutationObserver(() => addAutocompleteToTagInputs())
-      .observe(document.getElementById('favtagsPanel'), {childList: true, subtree: true});
+  if (favoriteTagInput) {
+    $(favoriteTagInput).on('autocompleteselect', (event, ui) => {
+      event.preventDefault();
+      favoriteTagInput.value = ui.item.value;
+      createTagFavorite(favoriteTagInput);
+    });
+  }
+  const favoritesPanel = document.getElementById('favoritesPanel');
+  if (favoritesPanel) {
+    new MutationObserver(mutations => {
+      const hasNewTagInput = mutations.some(mutation => (
+        Array.from(mutation.addedNodes).some(node => (
+          node instanceof Element
+          && (
+            node.matches('[data-autocomplete="tags"]')
+            || node.querySelector('[data-autocomplete="tags"]') !== null
+          )
+        ))
+      ));
+      if (hasNewTagInput) {
+        addAutocompleteToTagInputs();
+      }
+    }).observe(favoritesPanel, {childList: true, subtree: true});
   }
 
   // make the tag editable (on admin page)

@@ -123,3 +123,17 @@ if (document.getElementById('todolistPanel') && !core.isAnon) {
     './todolist'
   );
 }
+
+if (document.getElementById('feedbackRoot')) {
+  void import(
+    /* webpackChunkName: 'feedback' */
+    './feedback'
+  );
+}
+
+if (document.getElementById('projectManagementRoot')) {
+  void import(
+    /* webpackChunkName: 'projectmanagement' */
+    './projectmanagement'
+  );
+}

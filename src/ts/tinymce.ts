@@ -7,7 +7,6 @@
  */
 import tinymce from 'tinymce/tinymce';
 import { Editor } from 'tinymce/tinymce';
-import { DateTime } from 'luxon';
 import i18next from './i18n';
 import type { DropzoneFile } from 'dropzone';
 import 'tinymce/models/dom';
@@ -65,37 +64,16 @@ import '../js/tinymce-langs/zh_CN.js';
 import '../js/tinymce-langs/zh_TW.js';
 import '../js/tinymce-plugins/mention/plugin.js';
 import { EntityType, Model } from './interfaces';
-import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPostRequest } from './misc';
+import { reloadElements, escapeExtendedQuery, updateEntityBody, getNewIdFromPostRequest, setEntitySaveState } from './misc';
 import { ApiC } from './api';
-import { isSortable } from './TableSorting.class';
 import type { MathJaxObject } from '@mathjax/src/js/components/startup.js';
 declare const MathJax: MathJaxObject;
 import { entity } from './getEntity';
 import { isDarkTheme } from './theme';
+import { registerCustomEditorExtensions } from './custom-editor';
 
 // AUTOSAVE
 const doneTypingInterval = 7000;  // time in ms between end of typing and save
-
-function getNow(): DateTime {
-  const locale = document.getElementById('user-prefs').dataset.jslang;
-  return DateTime.now().setLocale(locale);
-}
-
-function getDatetime(): string {
-  const useIso = document.getElementById('user-prefs').dataset.isodate;
-  if (useIso === '1') {
-    const fullDatetime = getNow().toISO({ includeOffset: false });
-    // now we remove the milliseconds from that string
-    // 2021-04-23T18:57:28.633  ->  2021-04-23T18:57:28
-    return fullDatetime.slice(0, -4);
-  }
-  return getNow().toLocaleString(DateTime.DATETIME_MED_WITH_WEEKDAY);
-}
-
-// ctrl-shift-D will add the date in the tinymce editor
-function addDatetimeOnCursor(): void {
-  tinymce.activeEditor.execCommand('mceInsertContent', false, `${getDatetime()} `);
-}
 
 function isOverCharLimit(): boolean {
   const body = tinymce.get(0).getBody();
@@ -196,22 +174,81 @@ const imagesUploadHandler = (blobInfo: TinyMCEBlobInfo) => new Promise((resolve,
   }
 });
 
+/**
+ * TinyMCE renders editable content in an iframe, so account palette variables
+ * do not inherit from the eLabFTW page. Copy the resolved application palette
+ * into the editor document to keep the writing surface coordinated too.
+ */
+function getEditorPaletteStyle(): string {
+  const rootStyle = getComputedStyle(document.documentElement);
+  const variableNames = [
+    '--white',
+    '--mainbackground',
+    '--highlighted',
+    '--superlight',
+    '--firstlevel',
+    '--secondlevel',
+    '--thirdlevel',
+    '--medium',
+    '--mediumstrong',
+    '--strongest',
+    '--primary',
+    '--secondary',
+    '--secondary-muted',
+    '--elabblue',
+    '--lightblue',
+    '--darkblue',
+  ];
+  const variables = variableNames
+    .map(name => `${name}:${rootStyle.getPropertyValue(name).trim()}`)
+    .join(';');
+  return `:root{${variables}}html,body{background-color:var(--white);color:var(--strongest)}a{color:var(--primary)}`;
+}
+
+function getAssetVersionQuery(): string {
+  const mainBundle = document.querySelector<HTMLScriptElement>('script[src*="/assets/main.bundle.js"]');
+  if (!mainBundle?.src) return '';
+  return new URL(mainBundle.src).search;
+}
+
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | superscript subscript | bullist numlist outdent indent | forecolor backcolor | charmap emoticons adddate | codesample | link | sort-table';
+  // Grouped by function: file/history, then all text/paragraph formatting
+  // together, then the standalone Insert-menu, then all individual insert
+  // actions (including table tools, since they act on what you just
+  // inserted) together, then everything else.
+  // Table alignment (outdent/indent) and sortable-table toggle live inside
+  // the insert-data-table dropdown itself (see SpreadsheetExtension.ts)
+  // rather than as their own toolbar buttons.
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough superscript subscript forecolor backcolor alignleft aligncenter alignright alignjustify bullist numlist checklist outdent indent format-painter remove-formatting | elabftw-insert-menu | insert-link adddate experiment-title horizontal-rule insert-note insert-data-table copy-table-or-selection | charmap emoticons codesample';
+  if (!document.getElementById('documentTitle')) {
+    toolbar1 = toolbar1.replace('experiment-title ', '');
+  }
   let removedMenuItems = 'newdocument, image, anchor';
   let fileMenuItems = 'preview | print';
   if (page === 'edit') {
     fileMenuItems = 'restoredraft | saveAndGoBack ' + fileMenuItems;
     plugins += ' autosave';
     // add Image button in toolbar
-    toolbar1 = toolbar1.replace('link |', 'link image |');
+    toolbar1 = toolbar1.replace('insert-link', 'insert-link image');
     // let Image in menu
     removedMenuItems = 'newdocument, anchor';
   }
+  // Keep the dedicated mouse action visible in experiment editors while the
+  // integration is dormant. MouseLinkExtension disables and greys the button
+  // unless the gated PyRAT experiment section is available.
+  if (page === 'edit' && entity.type === EntityType.Experiment) {
+    toolbar1 = toolbar1.replace('codesample', 'codesample insert-mouse');
+    // searchable/favouritable template picker, in addition to the stock
+    // Insert > Template… menu item still driven by the templates: callback below.
+    // Kept next to insert-data-table (links/date/title/divider/note/spreadsheet
+    // group) rather than off in the table-tools group.
+    toolbar1 = toolbar1.replace('insert-data-table', 'insert-data-table inserttemplate');
+  }
 
   const isDark = isDarkTheme();
+  const tinymceContentCss = `/assets/tinymce_content.min.css${getAssetVersionQuery()}`;
   const templateEndpoint = (entity.type === EntityType.Experiment || entity.type === EntityType.Template)
     ? EntityType.Template
     : EntityType.ItemType;
@@ -227,28 +264,45 @@ export function getTinymceBaseConfig(page: string): object {
     table_default_styles: {
       'min-width':'25%',
     },
-    // The table width is changed when manipulating columns, the size of other columns is maintained.
+    // Dragging a column boundary grows/shrinks the table itself instead of
+    // squeezing the neighbouring column to compensate — this matches how a
+    // spreadsheet is expected to behave (widen one column without visually
+    // shrinking every other one), at the cost of the same drag also being
+    // able to grow/shrink a plain table's total width.
     table_column_resizing: 'resizetable',
+    table_resize_bars: true,
+    // 'table' alone was silently disabling image resize handles too --
+    // restrict to what actually needs the custom table behavior, and let
+    // images keep their normal resize handles.
+    object_resizing: 'table,img',
     browser_spellcheck: true,
     // location of the skin directory
     skin_url: isDark ? '/assets/tinymce_skins_dark' : '/assets/tinymce_skins',
     skin: isDark ? 'oxide-dark' : 'oxide',
-    content_css: isDark ? ['/assets/tinymce_content_dark.min.css', '/assets/tinymce_content.min.css'] : ['/assets/tinymce_content.min.css'],
-    // Prevent inserted images from overflowing the editor. See #5050.
-    content_style: 'img { max-width: 100%; height: auto; }',
+    // TinyMCE loads content CSS inside its iframe, so carry over the main
+    // bundle's cache-buster to avoid stale custom editor styles.
+    content_css: isDark ? [`/assets/tinymce_content_dark.min.css${getAssetVersionQuery()}`, tinymceContentCss] : [tinymceContentCss],
+    // Keep an empty document large enough to click and place the caret. The
+    // autoresize plugin otherwise collapses a blank editor to an impractically
+    // small strip on some layouts.
+    content_style: `${getEditorPaletteStyle()}html{min-height:0!important}body.mce-content-body{box-sizing:border-box;min-height:12rem!important;cursor:text}img{max-width:100%;height:auto}`,
     emoticons_database_url: 'assets/tinymce_emojis.js',
     // remove the "Upgrade" button
     promotion: false,
-    autoresize_bottom_margin: 50,
+    autoresize_bottom_margin: 16,
     // autoresize plugin will disallow manually resizing, but setting resize to true will make the scrollbar disappear
     //resize: true,
     plugins: plugins,
+    // A custom handler below also supports paragraphs/headings and keeps focus
+    // inside the editor, so disable the lists plugin's overlapping Tab handler.
+    lists_indent_on_tab: false,
     pagebreak_split_block: true,
     pagebreak_separator: '<div class="page-break"></div>',
     toolbar1: toolbar1,
     // this addresses CVE-2024-29881, it defaults to true in 7.0, so can be removed in tiny 7.0 TODO
     convert_unsafe_embeds: true,
-    // disable automatic h1 when using #
+    // Keep TinyMCE's general heading/format text patterns disabled. Focused
+    // list shortcuts are implemented in setup() below.
     text_patterns: false,
     removed_menuitems: removedMenuItems,
     image_caption: true,
@@ -272,6 +326,25 @@ export function getTinymceBaseConfig(page: string): object {
     // use the preprocessing function on paste event to fix the bgcolor attribute from libreoffice into proper background-color style
     paste_preprocess: function(plugin, args) {
       args.content = args.content.replaceAll('bgcolor="', 'style="background-color:');
+      const pasteContainer = document.createElement('div');
+      pasteContainer.innerHTML = args.content;
+      const isElabftwRichSelection = Boolean(
+        pasteContainer.querySelector('[data-elabftw-rich-selection]'),
+      );
+      pasteContainer.querySelectorAll('[data-elabftw-rich-selection]').forEach(marker => {
+        marker.replaceWith(...Array.from(marker.childNodes));
+      });
+      pasteContainer.querySelectorAll<HTMLTableElement>('table').forEach(table => {
+        // Internal rich copies already contain the complete safe table style,
+        // spreadsheet data and display preset. Do not normalize them into a
+        // generic pasted table or discard their explicit dimensions.
+        if (isElabftwRichSelection) return;
+        table.removeAttribute('width');
+        table.style.removeProperty('width');
+        table.classList.add('elabftw-pasted-table');
+        if (!table.getAttribute('style')?.trim()) table.removeAttribute('style');
+      });
+      args.content = pasteContainer.innerHTML;
     },
     // also add it to Filter.php in Attr.AllowedClasses
     codesample_languages: [
@@ -311,7 +384,8 @@ export function getTinymceBaseConfig(page: string): object {
       [0x2702, 'black scissors'],
       [0x21BB, 'clockwise open circle arrow'],
     ],
-    height: '500',
+    height: 240,
+    min_height: 240,
     mentions: {
       // use # for autocompletion
       delimiter: ['#'],
@@ -341,12 +415,15 @@ export function getTinymceBaseConfig(page: string): object {
       plugins: [ 'autolink', 'image', 'link', 'lists', 'save', 'table', 'mention' ],
     },
     // use a custom function for the save button in toolbar
-    save_onsavecallback: (): Promise<void> => updateEntityBody(),
+    save_onsavecallback: async (): Promise<void> => {
+      await updateEntityBody();
+    },
     // keyboard shortcut to insert today's date at cursor in editor
     menu: {
       file: { title: 'File', items: fileMenuItems },
     },
     setup: (editor: Editor): void => {
+      registerCustomEditorExtensions(editor);
       // holds the timer setTimeout function
       let typingTimer;
       // use event SkinLoaded instead of init so we're sure skinNode is present
@@ -370,6 +447,21 @@ export function getTinymceBaseConfig(page: string): object {
         if (page !== 'admin' && page !== 'sysconfig') {
           editor.execCommand('lineheight', false, '1');
         }
+        // The link plugin's own default shortcut is the same Meta/Ctrl+K used
+        // app-wide for the command palette. Free it up so Cmd+K always opens
+        // the palette, everywhere, instead of doing something different
+        // depending on whether the cursor happens to be in the editor.
+        editor.shortcuts.remove('meta+k');
+        editor.addShortcut('meta+k', 'Search and commands', () => {
+          document.dispatchEvent(new CustomEvent('elabftw-open-command-palette'));
+        });
+        // The autoresize plugin computes its initial height before the
+        // toolbar (save-state indicator, insert menu, etc.) has finished
+        // settling into its final layout, so the editor renders far taller
+        // than its content until the next recompute -- which focus happens
+        // to trigger, making it "shrink" only once clicked into. Force one
+        // extra recompute once everything has actually settled.
+        window.setTimeout(() => editor.execCommand('mceAutoResize'), 100);
       });
       // Hook into the blur event - Finalize potential changes to images if user clicks outside of editor
       editor.on('blur', () => {
@@ -414,14 +506,6 @@ export function getTinymceBaseConfig(page: string): object {
       // floppy disk icon from COLLECTION: Zest Interface Icons LICENSE: MIT License AUTHOR: zest
       editor.ui.registry.addIcon('customSave', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M4 5a1 1 0 0 1 1-1h2v3a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V4h.172a1 1 0 0 1 .707.293l2.828 2.828a1 1 0 0 1 .293.707V19a1 1 0 0 1-1 1h-1v-7a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v7H5a1 1 0 0 1-1-1V5Zm4 15h8v-6H8v6Zm6-16H9v2h5V4ZM5 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7.828a3 3 0 0 0-.879-2.12l-2.828-2.83A3 3 0 0 0 16.172 2H5Z" /></svg>'), // eslint-disable-line
 
-      // add date+time button
-      editor.ui.registry.addButton('adddate', {
-        icon: 'insert-time',
-        tooltip: 'Insert timestamp',
-        onAction: function() {
-          editor.insertContent(`${getDatetime()} `);
-        },
-      });
       editor.ui.registry.addButton('custom-save', {
         icon: 'customSave',
         tooltip: 'Save',
@@ -434,18 +518,14 @@ export function getTinymceBaseConfig(page: string): object {
         text: i18next.t('save-and-go-back'),
         icon: 'customSave',
         onAction: () => {
-          const btn = document.querySelector('[data-action="update-entity-body"][data-redirect="view"]') as HTMLButtonElement;
+          const btn = document.querySelector('[data-action="update-entity-body"][data-redirect]') as HTMLButtonElement;
           // eslint-disable-next-line @typescript-eslint/no-unused-expressions
           btn ? btn.click() : editor.execCommand('mceSave');
         },
       });
-      // some shortcuts
-      editor.addShortcut('ctrl+shift+d', 'add date/time at cursor', addDatetimeOnCursor);
-      editor.addShortcut('ctrl+=', 'subscript', () => editor.execCommand('subscript'));
-      editor.addShortcut('ctrl+shift+=', 'superscript', () => editor.execCommand('superscript'));
-
       // on edit page there is an autosave triggered
       if (page === 'edit') {
+        editor.on('Dirty', () => setEntitySaveState('unsaved'));
         editor.on('keydown', () => clearTimeout(typingTimer));
         editor.on('keyup', () => {
           clearTimeout(typingTimer);
@@ -453,64 +533,6 @@ export function getTinymceBaseConfig(page: string): object {
         });
       }
 
-      // sort down icon from COLLECTION: Dazzle Line Icons LICENSE: CC Attribution License AUTHOR: Dazzle UI
-      editor.ui.registry.addIcon('sort-amount-down-alt', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 12h8m-8-4h8m-8 8h8M6 7v10m0 0-3-3m3 3 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'), // eslint-disable-line
-      // add toggle button for table sorting
-      editor.ui.registry.addToggleButton('sort-table', {
-        icon: 'sort-amount-down-alt',
-        tooltip: 'sortable table',
-        onAction: api => {
-          const table = editor.selection.getNode().closest('table');
-          if (table) {
-            if (api.isActive()) {
-              // unset sortable
-              delete table.dataset.tableSort;
-              api.setActive(false);
-            } else {
-              // show alert if table is not sortable
-              if (!isSortable(table, true)) {
-                editor.focus();
-                return;
-              }
-              // set sortable
-              table.dataset.tableSort = 'true';
-              // here the top row could be reformatted automatically td -> th
-              api.setActive(true);
-            }
-            editor.undoManager.add();
-          }
-          editor.focus();
-        },
-        onSetup: api => {
-          // button is enabled only if table is selected
-          // button is active (highlighted) only if table is set sortable
-          api.setEnabled(false);
-
-          const callback = event => {
-            const table = event.element.closest('table');
-            if (!table) {
-              api.setEnabled(false);
-              api.setActive(false);
-              return;
-            }
-
-            // table is selected, enable button
-            api.setEnabled(true);
-            if (table.dataset.tableSort === 'true') {
-              // table is set sortable, highlight button
-              api.setActive(true);
-              return;
-            }
-            api.setActive(false);
-          };
-
-          editor.on('NodeChange', callback);
-
-          return () => {
-            editor.off('NodeChange', callback);
-          };
-        },
-      });
     },
     style_formats_merge: true,
     style_formats: [
@@ -534,6 +556,31 @@ export function getTinymceBaseConfig(page: string): object {
     toolbar_sticky_offset: isToolbarSticky ? ((document.querySelector<HTMLElement>('.sticky-navbar')?.offsetHeight ?? 0) + (entityToolbar?.offsetHeight ?? 0)) : 0,
     // render MathJax for TinyMCE preview
     init_instance_callback: (editor) => {
+      // toolbar_sticky_offset above is only this instance's starting value.
+      // TinyMCE reads it fresh on every scroll/resize-triggered docking
+      // recalculation (it's a live option lookup, not cached at init), so
+      // keeping it in sync here is enough to track the navbar/entity
+      // toolbar's own show/hide state instead of going stale and causing a
+      // jump right as this toolbar reaches sticky range.
+      if (isToolbarSticky) {
+        const updateStickyOffset = (event: Event): void => {
+          const offset = (event as CustomEvent<{ offset: number }>).detail?.offset;
+          if (typeof offset === 'number') editor.options.set('toolbar_sticky_offset', offset);
+        };
+        window.addEventListener('elabftw-sticky-offset-changed', updateStickyOffset);
+        editor.on('remove', () => window.removeEventListener('elabftw-sticky-offset-changed', updateStickyOffset));
+      }
+      // Recalculate from the loaded document instead of retaining TinyMCE's
+      // provisional iframe height. Without this, edit mode can initially
+      // expose a long empty scrolling region until the editor receives focus.
+      window.requestAnimationFrame(() => editor.execCommand('mceAutoResize'));
+      // The frame above can still fire before the iframe's own fonts finish
+      // loading, so the initial height is measured against fallback-font
+      // metrics; TinyMCE only recalculates again on its next trigger (a
+      // click, which fires NodeChange), which is why the editor visibly
+      // shrinks the moment it's clicked. Recheck once those fonts are
+      // actually ready so the correct height shows up without needing focus.
+      editor.getDoc()?.fonts?.ready.then(() => editor.execCommand('mceAutoResize'));
       editor.on('ExecCommand', (e) => {
         if (e.command == 'mcePreview') {
           // declaration as iFrame element required to avoid errors with getting srcdoc property

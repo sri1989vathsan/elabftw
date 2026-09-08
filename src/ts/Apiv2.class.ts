@@ -19,14 +19,14 @@ export class Api {
   // 2. This bug: https://bugzilla.mozilla.org/show_bug.cgi?id=1926042
   keepalive = false;
 
-  get(query: string, params = {}): Promise<Response> {
-    return this.send(Method.GET, query, params);
+  get(query: string, params = {}, signal?: AbortSignal): Promise<Response> {
+    return this.send(Method.GET, query, params, signal);
   }
 
   // TODO remove any default type and type all calls to getJson
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getJson<T = any>(query: string, params = {}): Promise<T> {
-    return this.get(query, params).then(resp => resp.json());
+  async getJson<T = any>(query: string, params = {}, signal?: AbortSignal): Promise<T> {
+    return this.get(query, params, signal).then(resp => resp.json());
   }
 
   // fetch a binary file from a GET request, and make client download it
@@ -72,7 +72,7 @@ export class Api {
   }
 
   // private method: use patch/post/delete instead
-  private async send(method: Method, query: string, params: ApiParams = {}): Promise<Response> {
+  private async send(method: Method, query: string, params: ApiParams = {}, signal?: AbortSignal): Promise<Response> {
     const isFormData = params instanceof FormData;
 
 
@@ -107,6 +107,7 @@ export class Api {
       headers: headers,
       keepalive: this.keepalive,
     };
+    if (signal) options.signal = signal;
 
     if ([Method.POST, Method.PATCH].includes(method)) {
       options.body = isFormData ? params : JSON.stringify(params);

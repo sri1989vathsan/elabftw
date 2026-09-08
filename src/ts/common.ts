@@ -10,9 +10,14 @@ import { ApiC } from './api';
 import { Malle, InputType } from '@deltablot/malle';
 import type { SelectOptions } from '@deltablot/malle';
 import 'bootstrap/js/src/modal.js';
-import FavTag from './FavTag.class';
 import Heartbeat from './Heartbeat.class';
 import ScrollButtons from './ScrollButtons.class';
+import FavoriteFilters from './FavoriteFilters.class';
+import FoldersPanel from './FoldersPanel.class';
+import TocPanel from './TocPanel.class';
+import HtmlToolsPanel from './HtmlToolsPanel.class';
+import CalendarActivity from './CalendarActivity.class';
+import CommandPalette from './CommandPalette.class';
 import { clearLocalStorage, rememberLastSelected, selectLastSelected } from './localStorage';
 import {
   adjustHiddenState,
@@ -74,6 +79,7 @@ import Todolist from './Todolist.class';
 import { entity } from './getEntity';
 import { get, on } from './handlers';
 import Tab from './Tab.class';
+import { installRichContentCopy, removeLegacyTableCollapse } from './ClipboardContent';
 import { core } from './core';
 import { get as getFromSvelte } from 'svelte/store';
 import { writable } from 'svelte/store';
@@ -173,13 +179,49 @@ on('delete-selected-entities', async () => {
 // code to hide navbar on scroll down, and show it on scroll up.
 const root = document.documentElement;
 const navbar = document.getElementById('main-navbar');
+const entityStickyToolbar = document.getElementById('entityToolbar');
 
 if (navbar) {
-  const navbarHeight = `${navbar.offsetHeight}px`;
-  root.style.setProperty('--navbar-height', navbarHeight);
+  navbar.classList.toggle('has-entity-toolbar', Boolean(entityStickyToolbar));
+  let navbarHeight = navbar.offsetHeight;
+  let entityToolbarHeight = entityStickyToolbar?.offsetHeight ?? 0;
   let lastScroll = Math.max(0, window.scrollY);
+  let accumulatedScroll = 0;
   let ticking = false;
   let isNavbarHidden = false;
+  const directionThreshold = 8;
+
+  const applyStickyHeaderState = (): void => {
+    const visibleNavbarHeight = isNavbarHidden ? 0 : navbarHeight;
+    navbar.classList.toggle('hidden', isNavbarHidden);
+    // The entity save/back toolbar stays visible even while the plain navbar
+    // hides on scroll-down: losing one-click access to Save while reviewing
+    // a long document is worse than the vertical space it costs. It just
+    // docks higher — top: var(--navbar-height) on .sticky-toolbar already
+    // tracks that — instead of disappearing along with the navbar.
+    root.style.setProperty('--navbar-height', `${visibleNavbarHeight}px`);
+    root.style.setProperty('--sticky-navbar-height', `${visibleNavbarHeight}px`);
+    root.style.setProperty('--toolbar-height', `${entityToolbarHeight}px`);
+    // TinyMCE's own sticky toolbar offset (how far from the viewport top it
+    // docks) is otherwise computed once at editor init and never updated,
+    // so it goes stale the moment the navbar hides/shows and causes a jump
+    // right as the toolbar reaches sticky range. Let any active editor
+    // recompute it live.
+    window.dispatchEvent(new CustomEvent('elabftw-sticky-offset-changed', {
+      detail: { offset: visibleNavbarHeight + entityToolbarHeight },
+    }));
+  };
+
+  const measureStickyHeaders = (): void => {
+    navbarHeight = navbar.offsetHeight;
+    entityToolbarHeight = entityStickyToolbar?.offsetHeight ?? 0;
+    applyStickyHeaderState();
+  };
+
+  measureStickyHeaders();
+  const stickyHeaderObserver = new ResizeObserver(measureStickyHeaders);
+  stickyHeaderObserver.observe(navbar);
+  if (entityStickyToolbar) stickyHeaderObserver.observe(entityStickyToolbar);
 
   window.addEventListener('scroll', () => {
     if (ticking) {
@@ -190,12 +232,23 @@ if (navbar) {
 
     window.requestAnimationFrame(() => {
       const currentScroll = Math.max(0, window.scrollY);
-      const shouldHide = currentScroll > 0 && currentScroll > lastScroll;
+      const delta = currentScroll - lastScroll;
+      if ((delta > 0 && accumulatedScroll < 0) || (delta < 0 && accumulatedScroll > 0)) {
+        accumulatedScroll = 0;
+      }
+      accumulatedScroll += delta;
+
+      let shouldHide = isNavbarHidden;
+      if (currentScroll === 0 || accumulatedScroll <= -directionThreshold) {
+        shouldHide = false;
+      } else if (accumulatedScroll >= directionThreshold) {
+        shouldHide = true;
+      }
 
       if (shouldHide !== isNavbarHidden) {
-        navbar.classList.toggle('hidden', shouldHide);
-        root.style.setProperty('--navbar-height', shouldHide ? '0px' : navbarHeight);
         isNavbarHidden = shouldHide;
+        applyStickyHeaderState();
+        accumulatedScroll = 0;
       }
 
       lastScroll = currentScroll;
@@ -225,6 +278,24 @@ on('set-theme', (el: HTMLElement) => {
   });
 });
 
+on('edit-openiris-link', (el: HTMLElement) => {
+  const current = el.dataset.currentUrl ?? '';
+  // eslint-disable-next-line no-alert
+  const next = window.prompt(i18next.t('Enter the OpenIRIS booking URL'), current);
+  if (next === null || next.trim() === '' || next.trim() === current) {
+    return;
+  }
+  const url = next.trim();
+  ApiC.patch(`${Model.Team}/current`, { openiris_url: url }).then(() => {
+    el.dataset.currentUrl = url;
+    const link = document.getElementById('openirisLink') as HTMLAnchorElement | null;
+    if (link) {
+      link.href = url;
+    }
+    notify.success();
+  }).catch(() => notify.error('Please enter a valid URL.'));
+});
+
 const primaryColorPickerTarget = document.getElementById('primary-color-picker');
 
 if (primaryColorPickerTarget) {
@@ -240,8 +311,47 @@ if (core.isAuth) {
 // END HEARTBEAT
 
 
-const FavTagC = new FavTag();
+const FavoriteFiltersC = new FavoriteFilters();
+const FoldersPanelC = new FoldersPanel();
 const TodolistC = new Todolist();
+const CalendarActivityC = new CalendarActivity();
+const TocPanelC = new TocPanel();
+const HtmlToolsPanelC = new HtmlToolsPanel();
+new CommandPalette();
+const entitySaveState = document.getElementById('entitySaveState');
+document.addEventListener('elabftw-save-state', event => {
+  if (!entitySaveState) return;
+  const detail = (event as CustomEvent<{ state: string; detail?: string }>).detail;
+  const state = detail?.state ?? 'unsaved';
+  const labels: Record<string, string> = {
+    saved: 'Saved',
+    saving: 'Saving…',
+    unsaved: 'Unsaved changes',
+    offline: 'Offline — changes kept locally',
+    error: 'Save failed — retrying when online',
+  };
+  const icons: Record<string, string> = {
+    saved: 'fa-check-circle',
+    saving: 'fa-spinner fa-spin',
+    unsaved: 'fa-circle',
+    offline: 'fa-cloud-arrow-down',
+    error: 'fa-triangle-exclamation',
+  };
+  entitySaveState.dataset.state = state;
+  const icon = entitySaveState.querySelector<HTMLElement>('i');
+  const label = entitySaveState.querySelector<HTMLElement>('span');
+  if (icon) icon.className = `fas ${icons[state] ?? icons.unsaved} fa-fw`;
+  if (label) label.textContent = labels[state] ?? labels.unsaved;
+  if (detail?.detail) entitySaveState.title = detail.detail;
+});
+const renderedBody = document.getElementById('body_view');
+if (renderedBody) {
+  removeLegacyTableCollapse(renderedBody);
+  installRichContentCopy(renderedBody);
+}
+// Mount while hidden as well, so reminder badges continue to update even when
+// the user has not opened the standalone calendar during this page visit.
+CalendarActivityC.initialize();
 
 const TableSortingC = new TableSorting();
 // for searching inputs, allow specific triggers for East & South East Asian characters
@@ -276,11 +386,35 @@ if (userPrefs.scDisabled === '0') {
 
 // SIDE PANEL STATE
 const openedSidePanel = localStorage.getItem('opened-sidepanel');
-if (openedSidePanel === Model.FavTag) {
-  FavTagC.toggle();
+if (openedSidePanel === 'favorites'
+  || openedSidePanel === Model.FavTag
+  || openedSidePanel === Model.FavCategory
+) {
+  FavoriteFiltersC.toggle();
 }
-if (openedSidePanel === Model.Todolist) {
+if (openedSidePanel === 'folders') {
+  FoldersPanelC.toggle();
+}
+const legacyCalendarPanel = openedSidePanel === Model.Todolist
+  && localStorage.getItem('todolistView') === 'calendar';
+if (openedSidePanel === Model.Todolist && !legacyCalendarPanel) {
   TodolistC.toggle();
+}
+if (openedSidePanel === 'calendar-activity' || legacyCalendarPanel) {
+  localStorage.removeItem('todolistView');
+  CalendarActivityC.toggle();
+}
+if (openedSidePanel === 'toc') {
+  TocPanelC.toggle();
+}
+if (openedSidePanel === 'html-tools') {
+  HtmlToolsPanelC.toggle();
+}
+const requestedCalendar = new URLSearchParams(window.location.search);
+if (requestedCalendar.get('calendar') === 'activity'
+  || requestedCalendar.get('todo') === 'calendar'
+) {
+  CalendarActivityC.show();
 }
 
 // ACTIVATE REACTIVE COUNT OF .COUNTABLE ITEMS
@@ -645,6 +779,71 @@ on('destroy-favtags', (el: HTMLElement) => {
   }
 });
 
+on('create-favcategory', () => {
+  const select = document.getElementById('favoriteCategorySelect') as HTMLSelectElement | null;
+  if (!select?.value) return;
+  const [categoryType, categoryId] = select.value.split(':');
+  if (!categoryType || !categoryId) return;
+  ApiC.post(Model.FavCategory, {
+    category_type: categoryType,
+    category_id: parseInt(categoryId, 10),
+  }).then(() => FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']));
+});
+
+on('destroy-favcategory', (el: HTMLElement) => {
+  if (confirm(i18next.t('generic-delete-warning'))) {
+    ApiC.delete(`${Model.FavCategory}/${el.dataset.id}`)
+      .then(() => FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']));
+  }
+});
+
+on('create-and-favorite-category', async () => {
+  const input = document.getElementById('favoriteNewCategoryName') as HTMLInputElement | null;
+  const color = document.getElementById('favoriteNewCategoryColor') as HTMLInputElement | null;
+  const name = input?.value.trim() ?? '';
+  if (!input || !name) {
+    input?.setCustomValidity('Enter a category name.');
+    input?.reportValidity();
+    return;
+  }
+  input.setCustomValidity('');
+
+  const categoryType = FavoriteFiltersC.getTarget();
+  const endpoint = categoryType === 'experiments' ? 'experiments_categories' : 'resources_categories';
+  const categoryId = await ApiC.post2location(`${Model.Team}/current/${endpoint}`, {
+    name,
+    color: color?.value,
+  });
+  await ApiC.post(Model.FavCategory, {
+    category_type: categoryType,
+    category_id: categoryId,
+  });
+  input.value = '';
+  await FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']);
+});
+
+on('create-favfilter', () => {
+  const select = document.getElementById('favoriteFilterSelect') as HTMLSelectElement | null;
+  if (!select?.value) return;
+  const [filterType, targetType, targetId] = select.value.split(':');
+  if (!filterType || !targetType || !targetId) return;
+  ApiC.post(Model.FavFilter, {
+    filter_type: filterType,
+    target_type: targetType,
+    target_id: parseInt(targetId, 10),
+  }).then(() => FavoriteFiltersC.reloadSections(['favoriteStatusesDiv', 'favoriteOwnersDiv']));
+});
+
+on('destroy-favfilter', (el: HTMLElement) => {
+  if (confirm(i18next.t('generic-delete-warning'))) {
+    ApiC.delete(`${Model.FavFilter}/${el.dataset.id}`)
+      .then(() => FavoriteFiltersC.reloadSections(['favoriteStatusesDiv', 'favoriteOwnersDiv']));
+  }
+});
+
+on('apply-favorite-filters', () => FavoriteFiltersC.applyAndClose());
+on('clear-favorite-filters', () => FavoriteFiltersC.clear());
+
 on('insert-param-and-reload', async (el: HTMLElement) => {
   const params = new URLSearchParams(document.location.search.slice(1));
   const target = el.dataset.target;
@@ -681,14 +880,61 @@ on('scroll-top', () => {
   });
 });
 
+on('refresh-todolist', () => {
+  window.dispatchEvent(new CustomEvent('todolist-changed'));
+});
+
+on('edit-openiris-link', (el: HTMLElement) => {
+  const link = document.getElementById('openirisLink') as HTMLAnchorElement | null;
+  if (!link) return;
+  const currentUrl = el.dataset.currentUrl ?? link.href;
+  const nextUrl = window.prompt(i18next.t('Enter the OpenIRIS booking URL'), currentUrl);
+  if (nextUrl === null || nextUrl.trim() === '' || nextUrl.trim() === currentUrl) return;
+  const trimmed = nextUrl.trim();
+  ApiC.patch(`${Model.Team}/current`, {openiris_url: trimmed}).then(() => {
+    link.href = trimmed;
+    el.dataset.currentUrl = trimmed;
+    notify.success();
+  }).catch((error: Error) => notify.error(error.message));
+});
+
+on('toggle-all-notif-settings', (el: HTMLElement) => {
+  const checkbox = el as HTMLInputElement;
+  const wantEmail = checkbox.dataset.suffix === '_email';
+  document.querySelectorAll<HTMLInputElement>('#notificationsSettings ~ div input[data-target^="notif_"]').forEach(input => {
+    const isEmail = input.dataset.target?.endsWith('_email') ?? false;
+    if (isEmail !== wantEmail || input.checked === checkbox.checked) return;
+    input.checked = checkbox.checked;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+});
+
 on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
   // this action might exist on a link: prevent jump to top
   event.preventDefault();
-  const SidePanelC = el.dataset.target === Model.FavTag ? FavTagC : TodolistC;
+  let SidePanelC;
+  if (el.dataset.target === 'toc') {
+    SidePanelC = TocPanelC;
+  } else if (el.dataset.target === 'html-tools') {
+    SidePanelC = HtmlToolsPanelC;
+  } else if (el.dataset.target === 'folders') {
+    SidePanelC = FoldersPanelC;
+  } else if (el.dataset.target === 'favorites') {
+    SidePanelC = FavoriteFiltersC;
+  } else if (el.dataset.target === 'calendar-activity') {
+    SidePanelC = CalendarActivityC;
+  } else {
+    SidePanelC = TodolistC;
+  }
   if (el.dataset.purpose === 'hide') {
     return SidePanelC.hide();
   }
   SidePanelC.toggle();
+});
+
+// Refresh the TOC panel contents
+on('refresh-toc', () => {
+  TocPanelC.refresh();
 });
 
 on('toggle-pin', (el: HTMLElement) => {
@@ -807,6 +1053,95 @@ on('save-permissions-both', (el: HTMLElement) => {
   const baseSelect = getSafeElementById(`${el.dataset.identifier}_select_base`) as HTMLSelectElement;
   const params = {canread: permissions, canread_base: baseSelect.value, canwrite: permissions, canwrite_base: baseSelect.value};
   ApiC.patch(`${entity.type}/${entity.id}`, params).then(() => reloadElements(['canreadDiv', 'canwriteDiv']));
+});
+
+// merge newly selected teams/teamgroups/users into an existing canread or
+// canwrite permissions JSON, without touching whatever was already there
+function mergePermissionsJson(existing: string, extra: string[]): string {
+  let parsed: { teams?: number[]; teamgroups?: number[]; users?: number[] };
+  try {
+    parsed = JSON.parse(existing || '{}');
+  } catch {
+    parsed = {};
+  }
+  const addFrom = (prefix: string): number[] => extra
+    .filter(value => value.startsWith(prefix))
+    .map(value => parseInt(value.split(':')[1], 10));
+  return JSON.stringify({
+    teams: Array.from(new Set([...(parsed.teams ?? []), ...addFrom('team:')])),
+    teamgroups: Array.from(new Set([...(parsed.teamgroups ?? []), ...addFrom('teamgroup:')])),
+    users: Array.from(new Set([...(parsed.users ?? []), ...addFrom('user:')])),
+  });
+}
+
+// union of teams/teamgroups/users already granted read OR write access, so
+// the Share modal can show what's already shared instead of always opening empty
+function unionPermissionsJson(canread: string, canwrite: string): { teams: number[]; teamgroups: number[]; users: number[] } {
+  const parse = (json: string): { teams?: number[]; teamgroups?: number[]; users?: number[] } => {
+    try {
+      return JSON.parse(json || '{}');
+    } catch {
+      return {};
+    }
+  };
+  const read = parse(canread);
+  const write = parse(canwrite);
+  return {
+    teams: Array.from(new Set([...(read.teams ?? []), ...(write.teams ?? [])])),
+    teamgroups: Array.from(new Set([...(read.teamgroups ?? []), ...(write.teamgroups ?? [])])),
+    users: Array.from(new Set([...(read.users ?? []), ...(write.users ?? [])])),
+  };
+}
+
+// pre-fill the Share modal with whoever the entry is already shared with,
+// so reopening it shows the previous selection instead of starting empty
+$('#permModal-share').on('show.bs.modal', async () => {
+  const current = await ApiC.getJson(`${entity.type}/${entity.id}`);
+  const permissions = unionPermissionsJson(current.canread, current.canwrite);
+
+  const teamsSelect = document.getElementById('share_select_teams') as HTMLSelectElement & { tomselect?: { setValue: (v: string[]) => void } };
+  teamsSelect?.tomselect?.setValue(permissions.teams.map(id => `team:${id}`));
+
+  const teamgroupsSelect = document.getElementById('share_select_teamgroups') as HTMLSelectElement & { tomselect?: { setValue: (v: string[]) => void } };
+  teamgroupsSelect?.tomselect?.setValue(permissions.teamgroups.map(id => `teamgroup:${id}`));
+
+  const usersSelect = document.getElementById('share_select_users') as HTMLSelectElement & {
+    tomselect?: { addOption: (o: { value: string; text: string }) => void; setValue: (v: string[]) => void };
+  };
+  if (usersSelect?.tomselect && permissions.users.length > 0) {
+    const users = await Promise.all(permissions.users.map(id => ApiC.getJson(`users/${id}`)));
+    users.forEach(u => usersSelect.tomselect.addOption({value: `user:${u.userid}`, text: `${u.fullname} (${u.email})`}));
+    usersSelect.tomselect.setValue(permissions.users.map(id => `user:${id}`));
+  }
+
+  const baseSelect = document.getElementById('share_select_base') as HTMLSelectElement;
+  if (baseSelect) baseSelect.value = current.canread_base || current.canwrite_base || '';
+});
+
+// the "Share" modal: grant read-only or read & write access to whoever is
+// selected, on top of (never instead of) the existing lists -- unlike
+// save-permissions/save-permissions-both, which replace a list wholesale
+on('save-permissions-share', async (el: HTMLElement) => {
+  const selected = [
+    ...(($('#share_select_teams').val() as string[] | null) ?? []),
+    ...(($('#share_select_teamgroups').val() as string[] | null) ?? []),
+    ...(($('#share_select_users').val() as string[] | null) ?? []),
+  ];
+  const base = (document.getElementById('share_select_base') as HTMLSelectElement).value;
+  if (selected.length === 0 && !base) return;
+  const level = el.dataset.level;
+  const current = await ApiC.getJson(`${entity.type}/${entity.id}`);
+  const params: Record<string, string> = {};
+  if (selected.length > 0) params['canread'] = mergePermissionsJson(current.canread, selected);
+  if (base) params['canread_base'] = base;
+  if (level === 'both') {
+    if (selected.length > 0) params['canwrite'] = mergePermissionsJson(current.canwrite, selected);
+    if (base) params['canwrite_base'] = base;
+  }
+  await ApiC.patch(`${entity.type}/${entity.id}`, params);
+  await reloadElements(['canreadDiv', 'canwriteDiv']);
+  // the modal's show.bs.modal handler re-syncs the picker from the entity's
+  // current state next time it's opened, so nothing needs clearing here
 });
 
 on('select-lang', () => {
@@ -1149,12 +1484,16 @@ export function showModalAndFocusFirstInput(modalSelector: string) {
 }
 
 on('update-entity-body', async (el: HTMLElement) => {
-  const redirect = el.dataset.redirect === 'view';
-  await updateEntityBody(redirect);
-  // SAVE AND GO BACK BUTTON
-  if (redirect) {
+  const redirectTarget = el.dataset.redirect;
+  const shouldRedirect = redirectTarget === 'view' || redirectTarget === 'list';
+  const wasSaved = await updateEntityBody(shouldRedirect);
+  if (shouldRedirect && wasSaved) {
     sessionStorage.setItem('flash_saved', i18next.t('saved'));
-    window.location.replace('?mode=view&id=' + entity.id);
+    window.location.replace(
+      redirectTarget === 'list'
+        ? window.location.pathname
+        : '?mode=view&id=' + entity.id,
+    );
   }
 });
 
@@ -1422,16 +1761,20 @@ on('reload-color', (el: HTMLElement) => {
 // CREATE CATEGORY OR STATUS
 on('create-catstat', (el: HTMLElement, e: Event) => {
   e.preventDefault();
-  const modalId = 'createCatStatModal';
-  const form = document.getElementById(modalId);
+  // the same macro can be included more than once on one page (e.g. the
+  // admin panel's Category manager tab, experiments + resources side by
+  // side), so find this button's own modal/reload target instead of a
+  // hardcoded id that would always hit the first instance on the page
+  const modal = el.closest('.modal') as HTMLElement;
+  const reloadTarget = el.dataset.reloadTarget ?? 'catStatDiv';
   try {
-    const params = collectForm(form);
+    const params = collectForm(modal);
     ApiC.post(`${Model.Team}/current/${el.dataset.endpoint}`, params).then(() => {
-      $(`#${modalId}`).modal('toggle');
-      reloadElements(['catStatDiv']);
-      clearForm(form);
+      $(modal).modal('toggle');
+      reloadElements([reloadTarget]);
+      clearForm(modal);
       // assign a new random color after clearing the form
-      const colorInput = (form.querySelector('input[type="color"]') as HTMLInputElement);
+      const colorInput = (modal.querySelector('input[type="color"]') as HTMLInputElement);
       colorInput.value = getRandomColor();
     });
   } catch (e) {
@@ -1645,6 +1988,9 @@ on('scope-change', async (el: HTMLElement) => {
 /**
  * MAIN click listener on container
  */
+document.getElementById('favoriteFilterTarget')?.addEventListener('change', () => {
+  FavoriteFiltersC.updateTarget();
+});
 container.addEventListener('click', (event: Event) => {
   const rawTarget = event.target as HTMLElement | null;
   const el = rawTarget?.closest('[data-action]') as HTMLElement | null;

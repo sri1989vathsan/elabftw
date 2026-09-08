@@ -19,7 +19,6 @@ import i18next from './i18n';
 import { ApiC } from './api';
 import { notify } from './notify';
 import { entity } from './getEntity';
-import { mountEntitiesTable, unmountEntitiesTable } from './entities-table';
 import { get } from 'svelte/store';
 import { mount, unmount } from 'svelte';
 import { writable } from 'svelte/store';
@@ -29,6 +28,9 @@ import $ from 'jquery';
 import { core } from './core';
 import { selectedEntities } from './common';
 import { on } from './handlers';
+
+// Loaded on demand: the "table" view pulls in ag-grid, which most page loads never need.
+let entitiesTableModule: typeof import('./entities-table') | null = null;
 
 type TeamScopedTomSelect = TomSelectWithAllOptions & {
   _showAll?: boolean;
@@ -222,11 +224,15 @@ async function displayEntities(
   const rootEl = document.getElementById('entityList');
   if (mode === 'tb') {
     unmountEntityListSv();
-    mountEntitiesTable(rootEl, selectedEntities, order, sort, related, relatedOrigin);
+    entitiesTableModule ??= await import(
+      /* webpackChunkName: 'entities-table' */
+      './entities-table'
+    );
+    entitiesTableModule.mountEntitiesTable(rootEl, selectedEntities, order, sort, related, relatedOrigin);
     handleInitialLoadDone();
     return;
   }
-  unmountEntitiesTable();
+  entitiesTableModule?.unmountEntitiesTable();
   mountEntityListSv(rootEl, order, sort);
 }
 
@@ -688,24 +694,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // background color for selected entities
   const bgColor = 'var(--lightblue)';
-
-  if (document.getElementById('favtagsPanel')) {
-    document.getElementById('favtagsPanel').addEventListener('keyup', event => {
-      const el = (event.target as HTMLInputElement);
-      const query = el.value;
-      if (el.matches('[data-action="favtags-search"]')) {
-        // find all links that are endpoints
-        document.querySelectorAll('[data-action="add-tag-filter"]').forEach((el: HTMLElement) => {
-          // begin by showing all so they don't stay hidden
-          el.removeAttribute('hidden');
-          // now simply hide the ones that don't match the query
-          if (!el.innerText.toLowerCase().includes(query)) {
-            el.hidden = true;
-          }
-        });
-      }
-    });
-  }
 
   /////////////////////////////////////////
   // CHANGE LISTENER FOR SELECT ELEMENTS //

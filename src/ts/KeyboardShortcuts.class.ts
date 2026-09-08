@@ -8,7 +8,7 @@
 import Todolist from './Todolist.class';
 import { ApiC } from './api';
 import { EntityType } from './interfaces';
-import FavTag from './FavTag.class';
+import FavoriteFilters from './FavoriteFilters.class';
 import { assignKey } from './keymaster';
 
 export class KeyboardShortcuts {
@@ -20,7 +20,7 @@ export class KeyboardShortcuts {
   search: string;
   page: string;
   private todolist: Todolist;
-  private favTag: FavTag;
+  private favoriteFilters: FavoriteFilters;
 
   constructor(create: string, edit: string, todo: string, favorite: string, search: string) {
     this.create = create;
@@ -30,7 +30,7 @@ export class KeyboardShortcuts {
     this.search = search;
     this.page = document.location.pathname;
     this.todolist = new Todolist();
-    this.favTag = new FavTag();
+    this.favoriteFilters = new FavoriteFilters();
   }
 
   init() {
@@ -65,8 +65,8 @@ export class KeyboardShortcuts {
     // TODOLIST TOGGLE
     assignKey(this.todo, () => this.todolist.toggle());
 
-    // FAVORITE TAGS TOGGLE
-    assignKey(this.favorite, () => this.favTag.toggle());
+    // FAVORITE FILTERS TOGGLE
+    assignKey(this.favorite, () => this.favoriteFilters.toggle());
 
     // SEARCH BAR FOCUS
     assignKey(this.search, (event: Event) => {

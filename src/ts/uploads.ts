@@ -32,6 +32,7 @@ function processNewFilename(event, original: HTMLElement, parent: HTMLElement): 
       // change the link text with the new one
       original.textContent = newFilename;
       parent.prepend(original);
+      reloadElements(['filesFoldersLinksSection']);
     });
   }
 }
@@ -91,7 +92,7 @@ on('rename-upload', (el: HTMLElement) => {
 on('duplicate-upload', (el: HTMLElement) => {
   const uploadId = parseInt(el.dataset.uploadid, 10);
   ApiC.post(`${entity.type}/${entity.id}/${Model.Upload}/${uploadId}`, { action: Action.Duplicate })
-    .then(() => reloadElements(['uploadsDiv']));
+    .then(() => reloadElements(['uploadsDiv', 'filesFoldersLinksSection']));
 });
 
 on('toggle-uploads-layout', (el: HTMLElement) => {
@@ -141,7 +142,7 @@ on('save-mol-as-png', (el: HTMLElement) => {
     'content': (document.getElementById(el.dataset.canvasid) as HTMLCanvasElement).toDataURL(),
   };
   ApiC.post(`${entity.type}/${entity.id}/${Model.Upload}`, params)
-    .then(() => reloadElements(['uploadsDiv']));
+    .then(() => reloadElements(['uploadsDiv', 'filesFoldersLinksSection']));
 });
 
 // CHANGE 3DMOL FILES VISUALIZATION STYLE
@@ -166,7 +167,7 @@ on('xls-load-file', async (el: HTMLElement) => {
 on('archive-upload', (el: HTMLElement) => {
   const uploadid = parseInt(el.dataset.uploadid, 10);
   ApiC.patch(`${entity.type}/${entity.id}/${Model.Upload}/${uploadid}`, {action: Action.Archive})
-    .then(() => reloadElements(['uploadsDiv']));
+    .then(() => reloadElements(['uploadsDiv', 'filesFoldersLinksSection']));
 });
 
 // DESTROY UPLOAD
@@ -174,7 +175,7 @@ on('destroy-upload', (el: HTMLElement) => {
   const uploadid = parseInt(el.dataset.uploadid, 10);
   if (confirm(i18next.t('generic-delete-warning'))) {
     ApiC.delete(`${entity.type}/${entity.id}/${Model.Upload}/${uploadid}`)
-      .then(() => document.getElementById(`uploadDiv_${uploadid}`).remove());
+      .then(() => reloadElements(['uploadsDiv', 'filesFoldersLinksSection']));
   }
 });
 

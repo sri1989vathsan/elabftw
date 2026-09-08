@@ -23,8 +23,99 @@ import { Action, Target } from './interfaces';
 import { ApiC } from './api';
 import { entity } from './getEntity';
 import { on } from './handlers';
+import {
+  createFileFolderReference,
+  createFileFolderReferences,
+  deleteFileFolderReference,
+} from './file-folder-references';
+import { notify } from './notify';
+import { createWebLink, deleteWebLink } from './web-links';
+import { deleteLabCollectorLink } from './labcollector-link';
 
 addAutocompleteToLinkInputs();
+
+on('add-file-folder-references', async (_, event: Event) => {
+  event.preventDefault();
+  const input = document.getElementById('fileFolderReferencesInput') as HTMLTextAreaElement;
+  if (!input.value.trim()) {
+    input.focus();
+    return;
+  }
+  try {
+    await createFileFolderReferences(input.value);
+    input.value = '';
+  } catch (error) {
+    notify.error(error instanceof Error ? error.message : 'Unable to save file/folder references');
+  }
+});
+
+on('add-file-folder-reference', async (_, event: Event) => {
+  event.preventDefault();
+  const textInput = document.getElementById('fileFolderReferenceTextInput') as HTMLInputElement;
+  const labelInput = document.getElementById('fileFolderReferenceLabelInput') as HTMLInputElement;
+  if (!textInput.value.trim()) {
+    textInput.focus();
+    return;
+  }
+  try {
+    await createFileFolderReference(textInput.value, labelInput.value);
+    textInput.value = '';
+    labelInput.value = '';
+  } catch (error) {
+    notify.error(error instanceof Error ? error.message : 'Unable to save file/folder reference');
+  }
+});
+
+on('unlink-associated-template', async (el: HTMLElement) => {
+  if (!confirm('Remove this template association? This does not remove any content already inserted from it.')) return;
+  const templateId = parseInt(el.dataset.templateid, 10);
+  if (!templateId) return;
+  try {
+    await ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.UnlinkTemplateSource, template_id: templateId});
+    await reloadElements(['associatedTemplatesContent']);
+  } catch (error) {
+    notify.error(error instanceof Error ? error.message : 'Unable to remove template association.');
+  }
+});
+
+on('copy-unc-path', async (el: HTMLElement) => {
+  const unc = el.dataset.unc;
+  if (!unc) return;
+  try {
+    await navigator.clipboard.writeText(unc);
+    notify.success('Windows path copied to clipboard');
+  } catch {
+    notify.error('Could not copy to clipboard');
+  }
+});
+
+on('delete-file-folder-reference', async (el: HTMLElement) => {
+  if (!confirm('Delete this file/folder reference?')) return;
+  await deleteFileFolderReference(el.dataset.referenceid);
+});
+
+on('add-web-link', async (_, event: Event) => {
+  event.preventDefault();
+  const urlInput = document.getElementById('webLinkUrlInput') as HTMLInputElement;
+  const labelInput = document.getElementById('webLinkLabelInput') as HTMLInputElement;
+  try {
+    await createWebLink(urlInput.value, labelInput.value);
+    urlInput.value = '';
+    labelInput.value = '';
+  } catch (error) {
+    notify.error(error instanceof Error ? error.message : 'Unable to save web link');
+  }
+});
+
+on('delete-web-link', async (el: HTMLElement) => {
+  if (!confirm('Delete this web link?')) return;
+  await deleteWebLink(el.dataset.linkid);
+});
+
+on('delete-labcollector-link', async (el: HTMLElement) => {
+  if (!confirm('Delete this LabCollector link?')) return;
+  await deleteLabCollectorLink(el.dataset.linkid);
+});
 
 // FINISH: outside if stepsDiv because can be from Todolist panel
 $(document).on('click', 'input[type=checkbox].stepbox', function(e) {
@@ -53,6 +144,8 @@ $(document).on('click', 'input[type=checkbox].stepbox', function(e) {
       // keep to do list in sync
       $('#todo_step_' + stepId).prop('checked', $('.stepbox[data-stepid="' + stepId + '"]').prop('checked'));
     });
+    // Refresh both integrated to-do views and their notification badges.
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
   });
 });
 
@@ -69,6 +162,23 @@ on('create-step', (_, event: Event) => {
       (document.getElementById('addStepInput') as HTMLInputElement).focus();
     });
   });
+});
+
+async function createStepsSequentially(lines: string[]): Promise<void> {
+  // steps must be created in order, so requests are sent sequentially rather than in parallel
+  for (const line of lines) {
+    await StepC.create(line);
+  }
+}
+
+on('create-steps-bulk', (_, event: Event) => {
+  event.preventDefault();
+  const input = document.getElementById('bulkAddStepsInput') as HTMLTextAreaElement;
+  const lines = input.value.split('\n').map(line => line.trim()).filter(line => line !== '');
+  if (lines.length === 0) return;
+  createStepsSequentially(lines).then(() => reloadElements(['stepsDiv']).then(() => {
+    input.value = '';
+  }));
 });
 
 on('step-update-deadline', (el: HTMLElement) => {
@@ -133,10 +243,18 @@ const malleableStep = new Malle({
       .then(resp => resp.json())
       .then(json => original.dataset.target === Target.Body
         ? json.body
-        : json.deadline,
+        : json[original.dataset.target],
       );
   },
   listenOn: '.step.editable',
+  onEdit: (original, event, input) => {
+    // clear the "Click to add a ..." placeholder before editing starts
+    if (original.dataset.isempty === '1') {
+      (input as HTMLInputElement).value = '';
+      original.dataset.isempty = '0';
+      return true;
+    }
+  },
   returnedValueIsTrustedHtml: false,
   submit : i18next.t('save'),
   submitClasses: ['button', 'btn', 'btn-primary', 'mt-2'],

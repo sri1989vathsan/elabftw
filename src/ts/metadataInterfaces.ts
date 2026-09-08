@@ -50,6 +50,22 @@ export interface ExtraFieldProperties {
 
 export interface MetadataElabftw {
   extra_fields_groups?: Array<ExtraFieldsGroup>,
+  file_folder_references?: Array<FileFolderReference>,
+  web_links?: Array<WebLink>,
+  labcollector_links?: Array<WebLink>,
+  template_version_docs?: Record<string, {label: string, notes: string}>,
+}
+
+export interface FileFolderReference {
+  id: string,
+  text: string,
+  label?: string,
+}
+
+export interface WebLink {
+  id: string,
+  label: string,
+  url: string,
 }
 
 export interface ExtraFieldsGroup {

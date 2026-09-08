@@ -36,7 +36,11 @@ interface Todoitem {
 interface UnfinishedEntities {
   id: number;
   title: string;
-  steps: Array<string>;
+  steps: Array<{
+    id: number;
+    body: string;
+    deadline: string | null;
+  }>;
 }
 
 interface CheckableItem {
@@ -97,20 +101,25 @@ enum Action {
   Finish = 'finish',
   ForceLock = 'forcelock',
   ForceUnlock = 'forceunlock',
+  LinkTemplateSource = 'linktemplatesource',
+  UnlinkTemplateSource = 'unlinktemplatesource',
   Lock = 'lock',
   Notif = 'notif',
   NotifDestroy = 'notifdestroy',
   PatchUser2Team = 'patchuser2team',
   Pin = 'pin',
+  PublishVersion = 'publishversion',
   RemoveExclusiveEditMode = 'removeexclusiveeditmode',
   Replace = 'replace',
   Restore = 'restore',
+  RestoreTemplateVersion = 'restoretemplateversion',
   RequestAction = 'requestaction',
   Review = 'review',
   SendOnboardingEmails = 'sendonboardingemails',
   SetNextCustomId = 'setnextcustomid',
   Sign = 'sign',
   Timestamp = 'timestamp',
+  ToggleVote = 'togglevote',
   Unarchive = 'unarchive',
   Unreference = 'unreference',
   UpdateMetadataField = 'updatemetadatafield',
@@ -125,14 +134,22 @@ enum Action {
 
 enum Model {
   Apikey = 'apikeys',
+  CalendarActivity = 'calendar_activity',
+  CalendarFeed = 'calendar_feed',
   Comment = 'comments',
   Compounds = 'compounds',
   Config = 'config',
+  FavCategory = 'favcategories',
+  FavFilter = 'favfilters',
   FavTag = 'favtags',
+  Feedback = 'feedback',
+  TemplateFavorite = 'templatefavorites',
+  TemplateVersion = 'templateversions',
   Idp = 'idps',
   IdpsSources = 'idps_sources',
   ItemsStatus = 'items_status',
   Link = 'links',
+  LinkPreview = 'link_preview',
   Notification = 'notifications',
   ExperimentsCategories = 'experiments_categories',
   ExperimentsStatus = 'experiments_status',
@@ -143,6 +160,8 @@ enum Model {
   Team = 'teams',
   TeamGroup = 'teamgroups',
   Todolist = 'todolist',
+  TodolistColumns = 'todolist_columns',
+  TodolistProjects = 'todolist_projects',
   UnfinishedSteps = 'unfinishedsteps',
   Upload = 'uploads',
   User = 'users',
@@ -181,6 +200,7 @@ enum Target {
   Date = 'date',
   Deadline = 'deadline',
   DeadlineNotif = 'deadline_notif',
+  DurationMinutes = 'duration_minutes',
   Finished = 'finished',
   LinkedExperiments = 'experiments',
   LinkedItems = 'items',
@@ -189,7 +209,9 @@ enum Target {
   Metadata = 'metadata',
   MetadataField = 'metadatafield',
   Passphrase = 'passphrase',
+  Quantity = 'quantity',
   Rating = 'rating',
+  Reagent = 'reagent',
   RealName = 'real_name',
   Sigkey = 'sigkeys',
   State = 'state',

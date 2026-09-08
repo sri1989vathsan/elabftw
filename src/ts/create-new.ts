@@ -50,6 +50,15 @@ function setTypeRadio(type: EntityType, scope: string = '') {
       toggleCategoryList(type);
     });
   }
+  // Experiments and resources share the same folder tree.
+  const folderSection = document.getElementById('createNewFolderSection');
+  if (folderSection) {
+    if (type === EntityType.Experiment || type === EntityType.Item) {
+      folderSection.removeAttribute('hidden');
+    } else {
+      folderSection.setAttribute('hidden', 'hidden');
+    }
+  }
 }
 
 function toggleCategoryList(type: EntityType) {
@@ -133,6 +142,9 @@ on('toggle-create-modal', async (el: HTMLElement) => {
   // allow data-type to override selected type (for instance on dashboard)
   const entityType = el.dataset.type ? el.dataset.type as EntityType : getEntityTypeFromPage(window.location);
   setTypeRadio(entityType);
+  if (entityType === EntityType.Experiment || entityType === EntityType.Item) {
+    preselectCreateFolderFromContext();
+  }
   if (el.dataset.getCompoundIdFrom) {
     const compoundId = (document.getElementById(el.dataset.getCompoundIdFrom) as HTMLElement).dataset.compoundId;
     getInput('createNewCompoundInput').value = compoundId;
@@ -249,3 +261,141 @@ const scopeBtns = document.querySelectorAll<HTMLButtonElement>(
 scopeBtns.forEach(btn => {
   btn.addEventListener('click', onScopeChange);
 });
+
+// Inline folder creation in the create-new modal
+const createNewFolderBtn = document.getElementById('createNewFolderBtn');
+const createNewFolderInputDiv = document.getElementById('createNewFolderInputDiv');
+const createNewFolderInput = document.getElementById('createNewFolderInput') as HTMLInputElement;
+const createNewFolderSaveBtn = document.getElementById('createNewFolderSaveBtn');
+const createNewFolderCancelBtn = document.getElementById('createNewFolderCancelBtn');
+const createNewFolderSelect = document.getElementById('createNewFolderSelect') as HTMLSelectElement;
+const createNewFolderScopeButtons = document.querySelectorAll<HTMLButtonElement>('[data-create-folder-scope]');
+
+type CreateNewFolderScope = 'mine' | 'bookmarked' | 'all';
+
+function syncCreateFolderBookmarks(): void {
+  if (!createNewFolderSelect) return;
+  const favoriteIds = new Set(
+    (document.getElementById('experimentsFoldersSidebar')?.dataset.favoriteFolderIds ?? '')
+      .split(',')
+      .filter(Boolean),
+  );
+  Array.from(createNewFolderSelect.options).slice(1).forEach(option => {
+    option.dataset.folderBookmarked = String(favoriteIds.has(option.value));
+  });
+}
+
+function applyCreateNewFolderScope(scope: CreateNewFolderScope): void {
+  if (!createNewFolderSelect) return;
+  const currentUserId = createNewFolderSelect.dataset.currentUserId ?? '';
+  createNewFolderSelect.querySelectorAll('option').forEach((option, index) => {
+    if (index === 0) {
+      option.hidden = false;
+      option.disabled = false;
+      return;
+    }
+    const isVisible = scope === 'all'
+      || (scope === 'mine' && option.dataset.folderOwnerId === currentUserId)
+      || (scope === 'bookmarked' && option.dataset.folderBookmarked === 'true');
+    option.hidden = !isVisible;
+    option.disabled = !isVisible;
+  });
+  if (createNewFolderSelect.selectedOptions[0]?.disabled) {
+    createNewFolderSelect.value = '';
+  }
+
+  createNewFolderScopeButtons.forEach(button => {
+    const isActive = button.dataset.createFolderScope === scope;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+}
+
+function getContextFolderId(): string | null {
+  const query = new URLSearchParams(window.location.search);
+  if (query.has('folder')) {
+    const folderId = query.get('folder') ?? '';
+    return folderId === '0' ? '' : folderId;
+  }
+  const currentEditFolder = document.getElementById('folderSelect') as HTMLSelectElement | null;
+  if (currentEditFolder) return currentEditFolder.value;
+  const sidebarFolderId = document.getElementById('experimentsFoldersSidebar')?.dataset.currentFolderId;
+  if (sidebarFolderId !== undefined) return sidebarFolderId === '0' ? '' : sidebarFolderId;
+  return null;
+}
+
+function preselectCreateFolderFromContext(): void {
+  if (!createNewFolderSelect) return;
+  const folderId = getContextFolderId();
+  if (folderId === null) return;
+  const option = Array.from(createNewFolderSelect.options).find(candidate => candidate.value === folderId);
+  if (!option) return;
+
+  createNewFolderSelect.value = folderId;
+  let scope: CreateNewFolderScope = 'mine';
+  if (folderId && option.dataset.folderOwnerId !== createNewFolderSelect.dataset.currentUserId) {
+    scope = option.dataset.folderBookmarked === 'true' ? 'bookmarked' : 'all';
+  }
+  applyCreateNewFolderScope(scope);
+}
+
+createNewFolderScopeButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const scope = button.dataset.createFolderScope;
+    if (scope === 'mine' || scope === 'bookmarked' || scope === 'all') {
+      applyCreateNewFolderScope(scope);
+    }
+  });
+});
+
+document.addEventListener('elabftw:folders-refreshed', () => {
+  syncCreateFolderBookmarks();
+  const activeButton = document.querySelector<HTMLButtonElement>('[data-create-folder-scope].active');
+  const scope = activeButton?.dataset.createFolderScope;
+  applyCreateNewFolderScope(scope === 'bookmarked' || scope === 'all' ? scope : 'mine');
+});
+
+applyCreateNewFolderScope('mine');
+
+if (createNewFolderBtn && createNewFolderInputDiv) {
+  createNewFolderBtn.addEventListener('click', () => {
+    createNewFolderInputDiv.removeAttribute('hidden');
+    createNewFolderInput.value = '';
+    createNewFolderInput.focus();
+  });
+
+  createNewFolderCancelBtn?.addEventListener('click', () => {
+    createNewFolderInputDiv.setAttribute('hidden', 'hidden');
+  });
+
+  createNewFolderSaveBtn?.addEventListener('click', () => {
+    const name = createNewFolderInput.value.trim();
+    if (!name) return;
+    ApiC.post('experiments_folders', { name: name, parent_id: null }).then(resp => {
+      // Extract new folder id from Location header
+      const location = resp.headers.get('Location') || '';
+      const match = location.match(/\/(\d+)$/);
+      if (match) {
+        const newId = match[1];
+        // Add and select the new folder in the dropdown
+        const option = document.createElement('option');
+        option.value = newId;
+        option.textContent = name;
+        option.dataset.folderOwnerId = createNewFolderSelect.dataset.currentUserId ?? '';
+        option.dataset.folderBookmarked = 'false';
+        option.selected = true;
+        createNewFolderSelect.appendChild(option);
+        applyCreateNewFolderScope('mine');
+      }
+      createNewFolderInputDiv.setAttribute('hidden', 'hidden');
+      document.dispatchEvent(new CustomEvent('elabftw:folder-changed'));
+    });
+  });
+
+  createNewFolderInput?.addEventListener('keypress', (event: KeyboardEvent) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      createNewFolderSaveBtn?.click();
+    }
+  });
+}

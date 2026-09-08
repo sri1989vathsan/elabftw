@@ -1,0 +1,259 @@
+/** Fork-owned date, title and horizontal-rule tools for TinyMCE. */
+import { DateTime } from 'luxon';
+import { Editor } from 'tinymce/tinymce';
+import DateReferenceEditor, { formatTodayWithSavedDefaults } from '../DateReferenceEditor.class';
+import ExperimentTitleEditor from '../ExperimentTitleEditor.class';
+
+function getNow(): DateTime {
+  const locale = document.getElementById('user-prefs').dataset.jslang;
+  return DateTime.now().setLocale(locale);
+}
+
+function getDatetime(): string {
+  const useIso = document.getElementById('user-prefs').dataset.isodate;
+  if (useIso === '1') {
+    const fullDatetime = getNow().toISO({ includeOffset: false });
+    return fullDatetime.slice(0, -4);
+  }
+  return getNow().toLocaleString(DateTime.DATETIME_MED_WITH_WEEKDAY);
+}
+
+// Same date format the user picked for normal "Day" insertion, followed by
+// a hyphen and the current time -- for a quick "log entry" timestamp.
+function getLogEntryDatetime(): string {
+  const date = formatTodayWithSavedDefaults();
+  const time = getNow().toLocaleString(DateTime.TIME_SIMPLE);
+  return `${date} - ${time}`;
+}
+
+function insertHorizontalRule(
+  editor: Editor,
+  style: 'single' | 'double' | 'dashed' | 'double-dashed',
+): void {
+  editor.execCommand(
+    'mceInsertContent',
+    false,
+    `<hr class="elabftw-${style}-rule"><p><br data-mce-bogus="1"></p>`,
+  );
+}
+
+export function registerDateTitleExtension(editor: Editor): void {
+  const dateReferenceEditor = new DateReferenceEditor(editor);
+  const experimentTitleEditor = new ExperimentTitleEditor(editor);
+  editor.on('init', () => dateReferenceEditor.normalizeReferences());
+
+  // Keep date editing discoverable: the split-button menu is useful for
+  // insertion, but a selected date should also have an immediate edit action.
+  editor.ui.registry.addButton('edit-date-reference', {
+    icon: 'edit-block',
+    tooltip: 'Edit selected date (or double-click a date)',
+    enabled: false,
+    onAction: () => {
+      const selectedReference = dateReferenceEditor.getSelectedReference();
+      if (selectedReference) dateReferenceEditor.openCalendar(selectedReference);
+    },
+    onSetup: api => {
+      const updateEnabledState = (): void => {
+        api.setEnabled(Boolean(dateReferenceEditor.getSelectedReference()));
+      };
+      editor.on('NodeChange', updateEnabledState);
+      updateEnabledState();
+      return () => editor.off('NodeChange', updateEnabledState);
+    },
+  });
+
+  editor.ui.registry.addButton('delete-date-reference', {
+    icon: 'remove',
+    tooltip: 'Delete selected date (Undo restores it)',
+    enabled: false,
+    onAction: () => dateReferenceEditor.deleteReference(),
+    onSetup: api => {
+      const updateEnabledState = (): void => {
+        api.setEnabled(Boolean(dateReferenceEditor.getSelectedReference()));
+      };
+      editor.on('NodeChange', updateEnabledState);
+      updateEnabledState();
+      return () => editor.off('NodeChange', updateEnabledState);
+    },
+  });
+
+  editor.on('dblclick', event => {
+    const target = event.target as HTMLElement;
+    const reference = target.closest?.('a.elabftw-date-reference') as HTMLAnchorElement | null;
+    if (!reference) return;
+    event.preventDefault();
+    dateReferenceEditor.openCalendar(reference);
+  });
+
+  // Named commands so the command palette can invoke these directly instead
+  // of locating the toolbar button by its (English, wording-dependent)
+  // tooltip/aria-label -- see CommandPalette.class.ts.
+  editor.addCommand('elabftwInsertDateToday', () => dateReferenceEditor.insertToday());
+  editor.addCommand('elabftwInsertExperimentTitle', () => experimentTitleEditor.insertUsingDefaults());
+
+  editor.ui.registry.addSplitButton('adddate', {
+    icon: 'elabftw-calendar',
+    text: 'Day',
+    tooltip: 'Insert today using saved defaults; open the menu for date options',
+    onAction: () => dateReferenceEditor.insertToday(),
+    onItemAction: (_api, value) => {
+      switch (value) {
+      case 'today':
+        dateReferenceEditor.insertToday();
+        break;
+      case 'options':
+        dateReferenceEditor.openCalendar();
+        break;
+      case 'logentry':
+        editor.insertContent(`${getLogEntryDatetime()} `);
+        break;
+      case 'edit': {
+        const selectedReference = dateReferenceEditor.getSelectedReference();
+        if (selectedReference) dateReferenceEditor.openCalendar(selectedReference);
+        break;
+      }
+      case 'copy':
+        dateReferenceEditor.copySelectedReferenceLink();
+        break;
+      case 'delete':
+        dateReferenceEditor.deleteReference();
+        break;
+      }
+    },
+    fetch: callback => {
+      const items = [
+        {
+          type: 'choiceitem' as const,
+          text: 'Insert today',
+          value: 'today',
+          icon: 'elabftw-calendar',
+        },
+        {
+          type: 'choiceitem' as const,
+          text: 'Custom date…',
+          value: 'options',
+          icon: 'elabftw-calendar-options',
+        },
+        {
+          type: 'choiceitem' as const,
+          text: 'Log entry',
+          value: 'logentry',
+          icon: 'elabftw-clock',
+        },
+      ];
+      const selectedReference = dateReferenceEditor.getSelectedReference();
+      if (selectedReference) {
+        items.push({ type: 'separator' as const } as unknown as typeof items[number]);
+        items.push({
+          type: 'choiceitem' as const,
+          text: 'Edit date…',
+          value: 'edit',
+          icon: 'edit-block',
+        });
+        items.push({
+          type: 'choiceitem' as const,
+          text: 'Copy link',
+          value: 'copy',
+          icon: 'copy',
+        });
+        items.push({
+          type: 'choiceitem' as const,
+          text: 'Delete date',
+          value: 'delete',
+          icon: 'remove',
+        });
+      }
+      callback(items);
+    },
+  });
+
+  editor.ui.registry.addSplitButton('experiment-title', {
+    icon: 'elabftw-heading',
+    tooltip: 'Insert experiment title as a heading (Ctrl+Alt+T)',
+    onAction: () => experimentTitleEditor.insertUsingDefaults(),
+    onItemAction: (_api, value) => {
+      if (value === 'insert') {
+        experimentTitleEditor.insertUsingDefaults();
+      } else if (value === 'options') {
+        experimentTitleEditor.openDialog();
+      } else if (value.startsWith('preset:')) {
+        experimentTitleEditor.applySavedStyle(decodeURIComponent(value.slice(7)));
+      }
+    },
+    fetch: callback => {
+      const items = [
+        {
+          type: 'choiceitem' as const,
+          text: 'Insert title',
+          value: 'insert',
+        },
+        {
+          type: 'choiceitem' as const,
+          text: 'Title options…',
+          value: 'options',
+        },
+      ];
+      const presets = experimentTitleEditor.getSavedStyleNames();
+      if (presets.length > 0) {
+        items.push({ type: 'separator' as const } as unknown as typeof items[number]);
+        presets.forEach(name => items.push({
+          type: 'choiceitem' as const,
+          text: `Style: ${name}`,
+          value: `preset:${encodeURIComponent(name)}`,
+        }));
+      }
+      callback(items);
+    },
+  });
+
+  editor.ui.registry.addMenuButton('horizontal-rule', {
+    icon: 'horizontal-rule',
+    tooltip: 'Insert solid or dashed horizontal lines',
+    fetch: callback => callback([
+      {
+        type: 'menuitem',
+        text: 'Single solid line (Ctrl+Shift+H)',
+        onAction: () => insertHorizontalRule(editor, 'single'),
+      },
+      {
+        type: 'menuitem',
+        text: 'Double solid line (Ctrl+Alt+Shift+H)',
+        onAction: () => insertHorizontalRule(editor, 'double'),
+      },
+      { type: 'separator' },
+      {
+        type: 'menuitem',
+        text: 'Single dashed line',
+        onAction: () => insertHorizontalRule(editor, 'dashed'),
+      },
+      {
+        type: 'menuitem',
+        text: 'Double dashed line',
+        onAction: () => insertHorizontalRule(editor, 'double-dashed'),
+      },
+    ]),
+  });
+
+  editor.addShortcut(
+    'ctrl+shift+d',
+    'add date/time at cursor',
+    () => editor.execCommand('mceInsertContent', false, `${getDatetime()} `),
+  );
+  editor.addShortcut(
+    'ctrl+alt+t',
+    'insert experiment title as a heading',
+    () => experimentTitleEditor.insertUsingDefaults(),
+  );
+  editor.addShortcut(
+    'ctrl+shift+h',
+    'insert single horizontal line',
+    () => insertHorizontalRule(editor, 'single'),
+  );
+  editor.addShortcut(
+    'ctrl+alt+shift+h',
+    'insert double horizontal line',
+    () => insertHorizontalRule(editor, 'double'),
+  );
+  editor.addShortcut('ctrl+=', 'subscript', () => editor.execCommand('subscript'));
+  editor.addShortcut('ctrl+shift+=', 'superscript', () => editor.execCommand('superscript'));
+}

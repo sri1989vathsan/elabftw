@@ -17,9 +17,15 @@ import { getEditor } from './Editor.class';
 import DOMPurify from 'dompurify';
 import { ApiC } from './api';
 import { Uploader } from './uploader';
-import { clearLocalStorage } from './localStorage';
 import { entity } from './getEntity';
 import { on } from './handlers';
+import { platformSmbHref } from './file-folder-references';
+import { spreadsheetToHTML, SpreadsheetData } from './inline-spreadsheet';
+import {
+  clearRecoveryDraft,
+  isSameRecoveryContent,
+  readRecoveryDraft,
+} from './RecoveryDraft.class';
 
 // remove exclusive edit mode when leaving the page
 window.onbeforeunload = function() {
@@ -28,20 +34,144 @@ window.onbeforeunload = function() {
 };
 // Which editor are we using? md or tiny
 const editor = getEditor();
+// Capture the server-rendered value before TinyMCE replaces the textarea.
+const serverBody = (document.getElementById('body_area') as HTMLTextAreaElement | null)?.value ?? '';
 editor.init('edit');
+
+type WorkbookCell = string | number | boolean | null;
+interface WorkbookWorksheet {
+  data: WorkbookCell[][];
+  name: string;
+}
+
+function trimWorksheetData(data: WorkbookCell[][]): WorkbookCell[][] {
+  let lastRow = -1;
+  let lastColumn = -1;
+  data.forEach((row, rowIndex) => row.forEach((value, columnIndex) => {
+    if (value !== null && String(value).length > 0) {
+      lastRow = Math.max(lastRow, rowIndex);
+      lastColumn = Math.max(lastColumn, columnIndex);
+    }
+  }));
+  if (lastRow < 0 || lastColumn < 0) return [['']];
+  return data.slice(0, lastRow + 1).map(row => (
+    Array.from({ length: lastColumn + 1 }, (_unused, index) => row[index] ?? '')
+  ));
+}
+
+function workbookSheetToInlineSpreadsheet(
+  worksheet: WorkbookWorksheet,
+  includeCaption: boolean,
+): string {
+  const data = trimWorksheetData(worksheet.data);
+  const raw: SpreadsheetData = {
+    data,
+    rows: data.length,
+    cols: data.reduce((maximum, row) => Math.max(maximum, row.length), 1),
+    kind: 'standard',
+    caption: includeCaption ? worksheet.name : '',
+  };
+  // spreadsheetToHTML evaluates supported formulas for display and embeds
+  // the untouched formula data so reopening the inline editor restores it.
+  return spreadsheetToHTML(raw, data);
+}
+
+window.addEventListener('message', event => {
+  if (event.origin !== window.location.origin || event.data?.type !== 'jss-insert-main-text') return;
+  const spreadsheetIframe = document.getElementById('spreadsheetIframe') as HTMLIFrameElement | null;
+  if (!spreadsheetIframe || event.source !== spreadsheetIframe.contentWindow) return;
+  const worksheets = event.data.detail?.worksheets as WorkbookWorksheet[] | undefined;
+  if (!Array.isArray(worksheets) || worksheets.length === 0) return;
+  if (editor.type !== 'tiny') {
+    window.alert('Formula spreadsheets can only be inserted in the rich text editor.');
+    return;
+  }
+  const html = worksheets
+    .filter(worksheet => Array.isArray(worksheet?.data))
+    .map(worksheet => workbookSheetToInlineSpreadsheet(worksheet, worksheets.length > 1))
+    .join('<p><br></p>');
+  if (html) editor.setContent(html);
+});
 // initialize the file uploader
 (new Uploader()).init();
+
+type EditFolderScope = 'mine' | 'bookmarked' | 'all';
+
+const editFolderSelect = document.getElementById('folderSelect') as HTMLSelectElement | null;
+const editFolderScopeButtons = document.querySelectorAll<HTMLButtonElement>('[data-edit-folder-scope]');
+let activeEditFolderScope: EditFolderScope = 'mine';
+
+function syncEditFolderBookmarks(): void {
+  if (!editFolderSelect) return;
+  const favoriteIds = new Set(
+    (document.getElementById('experimentsFoldersSidebar')?.dataset.favoriteFolderIds ?? '')
+      .split(',')
+      .filter(Boolean),
+  );
+  Array.from(editFolderSelect.options).slice(1).forEach(option => {
+    option.dataset.folderBookmarked = String(favoriteIds.has(option.value));
+  });
+}
+
+function applyEditFolderScope(scope: EditFolderScope): void {
+  if (!editFolderSelect) return;
+  activeEditFolderScope = scope;
+  const currentUserId = editFolderSelect.dataset.currentUserId ?? '';
+  Array.from(editFolderSelect.options).forEach((option, index) => {
+    if (index === 0) {
+      option.hidden = false;
+      option.disabled = false;
+      return;
+    }
+    // Always retain the current assignment in the list. Changing which
+    // folders are displayed must never silently move the entity to Unfiled.
+    const isVisible = option.selected
+      || scope === 'all'
+      || (scope === 'mine' && option.dataset.folderOwnerId === currentUserId)
+      || (scope === 'bookmarked' && option.dataset.folderBookmarked === 'true');
+    option.hidden = !isVisible;
+    option.disabled = !isVisible;
+  });
+  editFolderScopeButtons.forEach(button => {
+    const isActive = button.dataset.editFolderScope === scope;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+}
+
+editFolderScopeButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const scope = button.dataset.editFolderScope;
+    if (scope === 'mine' || scope === 'bookmarked' || scope === 'all') {
+      applyEditFolderScope(scope);
+    }
+  });
+});
+
+editFolderSelect?.addEventListener('change', () => applyEditFolderScope(activeEditFolderScope));
+document.addEventListener('elabftw:folders-refreshed', () => {
+  syncEditFolderBookmarks();
+  applyEditFolderScope(activeEditFolderScope);
+});
+applyEditFolderScope('mine');
 
 ////////////////
 // DATA RECOVERY
 
-// check if there is some local data with this id to recover
-if ((localStorage.getItem('id') == String(entity.id)) && (localStorage.getItem('type') == entity.type)) {
-  const savedDate = localStorage.getItem('date') ?? '';
-  const savedBody = localStorage.getItem('body') ?? '';
+// Check whether a failed save left content for this entity to recover.
+const recoveryDraft = readRecoveryDraft(entity.type, entity.id);
+if (recoveryDraft && isSameRecoveryContent(recoveryDraft.body, serverBody)) {
+  // The server already contains this content, so prompting would be a false positive.
+  clearRecoveryDraft(entity.type, entity.id, recoveryDraft.body);
+} else if (recoveryDraft) {
+  const savedDate = recoveryDraft.savedAt;
+  const savedBody = recoveryDraft.body;
 
   const savedSpan = document.createElement('span');
-  savedSpan.innerText = savedDate;
+  const savedTimestamp = Date.parse(savedDate);
+  savedSpan.innerText = Number.isFinite(savedTimestamp)
+    ? new Date(savedTimestamp).toLocaleString()
+    : savedDate;
 
   const bodyRecovery = document.createElement('div');
   bodyRecovery.id = 'recoveryDiv';
@@ -80,23 +210,26 @@ if ((localStorage.getItem('id') == String(entity.id)) && (localStorage.getItem('
   );
 
   document.querySelector('#main_section').before(bodyRecovery);
+
 }
 
 // RECOVER YES
 on('recover-yes', () => {
   const params = {};
-  params[Target.Body] = localStorage.getItem('body');
+  const draft = readRecoveryDraft(entity.type, entity.id);
+  if (!draft) return;
+  params[Target.Body] = draft.body;
 
   ApiC.patch(`${entity.type}/${entity.id}`, params).then(() => {
-    editor.replaceContent(localStorage.getItem('body'));
-    clearLocalStorage();
+    editor.replaceContent(draft.body);
+    clearRecoveryDraft(entity.type, entity.id, draft.body);
     document.getElementById('recoveryDiv')?.remove();
   });
 });
 
 // RECOVER NO
 on('recover-no', () => {
-  clearLocalStorage();
+  clearRecoveryDraft(entity.type, entity.id);
   document.getElementById('recoveryDiv')?.remove();
 });
 // END DATA RECOVERY
@@ -214,6 +347,77 @@ const insertHandlers = new Map<string, (url: string) => void>([
 on('insert-in-body', (el: HTMLElement) => {
   const url = `app/download.php?name=${encodeURIComponent(el.dataset.name)}&f=${encodeURIComponent(el.dataset.link)}&storage=${encodeURIComponent(el.dataset.storage)}`;
   insertHandlers.get(el.dataset.ext.replace(/^\./, '').toLowerCase())?.(url);
+});
+
+// Insert a download link for any attached local file. Unlike insert-in-body,
+// this remains useful for file types that cannot be embedded in the editor.
+on('insert-upload-link', (el: HTMLElement) => {
+  const name = el.dataset.name ?? 'Attached file';
+  const storedName = el.dataset.link;
+  const storage = el.dataset.storage;
+  if (!storedName || !storage) return;
+  const params = new URLSearchParams({
+    name,
+    f: storedName,
+    storage,
+  });
+  const url = `app/download.php?${params.toString()}`;
+  if (editor.type === 'md') {
+    const markdownLabel = name.replace(/([\\[\]])/g, '\\$1');
+    editor.setContent(`[${markdownLabel}](${url})`);
+  } else {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = name;
+    editor.setContent(link.outerHTML);
+  }
+  updateEntityBody();
+});
+
+on('insert-file-folder-reference', (el: HTMLElement) => {
+  const text = el.dataset.text?.trim();
+  if (!text) return;
+  const label = el.dataset.label?.trim();
+  const smbHref = platformSmbHref(text);
+  const displayText = label || text;
+  if (editor.type === 'md') {
+    if (smbHref) {
+      const markdownLabel = displayText.replace(/([\\[\]])/g, '\\$1');
+      editor.setContent(`[${markdownLabel}](${smbHref})`);
+    } else {
+      editor.setContent(displayText);
+    }
+  } else if (smbHref) {
+    const link = document.createElement('a');
+    link.href = smbHref;
+    link.textContent = displayText;
+    editor.setContent(link.outerHTML);
+  } else {
+    const plainText = document.createElement('span');
+    plainText.textContent = displayText;
+    editor.setContent(plainText.innerHTML);
+  }
+  updateEntityBody();
+});
+
+on('insert-web-link', (el: HTMLElement) => {
+  const label = el.dataset.label?.trim();
+  const url = el.dataset.url?.trim();
+  if (!label || !url) return;
+  if (editor.type === 'md') {
+    const markdownLabel = label.replace(/([\\[\]])/g, '\\$1');
+    editor.setContent(`[${markdownLabel}](${url})`);
+  } else {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noreferrer noopener';
+    link.textContent = label;
+    editor.setContent(link.outerHTML);
+  }
+  updateEntityBody();
 });
 // END INSERT IN BODY
 

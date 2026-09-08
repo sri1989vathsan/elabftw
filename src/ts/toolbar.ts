@@ -107,8 +107,7 @@ on('do-requestable-action', (el: HTMLElement) => {
       .then(() => window.location.href = `?mode=view&id=${entity.id}`);
     break;
   case Action.Review:
-    ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.Review})
-      .then(() => window.location.href = `?mode=view&id=${entity.id}`);
+    $('#reviewDecisionModal').modal('toggle');
     break;
   case Action.Timestamp:
     $('#timestampModal').modal('toggle');
@@ -117,6 +116,31 @@ on('do-requestable-action', (el: HTMLElement) => {
     $('#addSignatureModal').modal('toggle');
     break;
   }
+});
+
+on('publish-template-version', () => {
+  if (!confirm(i18next.t('publish-version-warning'))) return;
+  // reload the page to update the version badge and lock icon
+  ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.PublishVersion})
+    .then(() => window.location.href = `?mode=view&id=${entity.id}`)
+    .catch(error => notify.error(error));
+});
+
+on('restore-template-version', (el: HTMLElement) => {
+  if (!confirm(i18next.t('restore-version-warning', {version: el.dataset.version}))) return;
+  ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.RestoreTemplateVersion, version_id: parseInt(el.dataset.versionid, 10)})
+    .then(() => window.location.href = `?mode=edit&id=${entity.id}`)
+    .catch(error => notify.error(error));
+});
+
+on('submit-review-decision', (el: HTMLElement) => {
+  const decision = el.dataset.decision;
+  if (decision !== 'approved' && decision !== 'rejected') return;
+  const comment = (document.getElementById('reviewDecisionComment') as HTMLTextAreaElement).value;
+  ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.Review, decision, comment}).then(() => {
+    $('#reviewDecisionModal').modal('hide');
+    reloadElements(['requestActionsDiv', 'reviewDecisionsDiv']);
+  }).catch(error => notify.error(error));
 });
 
 on(Action.CancelRequestableAction, (el: HTMLElement) => {

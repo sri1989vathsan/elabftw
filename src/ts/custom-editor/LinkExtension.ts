@@ -1,0 +1,398 @@
+/** Fork-owned link-menu additions. */
+import { Editor } from 'tinymce/tinymce';
+import { ApiC } from '../api';
+import { entity } from '../getEntity';
+import { createFileFolderReference, platformSmbHref } from '../file-folder-references';
+import { Model } from '../interfaces';
+import { buildLabCollectorUrl, createLabCollectorLink, lookupLabCollectorRecord } from '../labcollector-link';
+import { createWebLink, normalizeWebLinkUrl } from '../web-links';
+import {
+  escapeHTML,
+  getNewIdFromPostRequest,
+  reloadElements,
+  updateEntityBody,
+} from '../misc';
+
+interface LabCollectorDialogData {
+  labcollectorType: string;
+  labcollectorId: string;
+  labcollectorLookup: boolean;
+}
+
+// Mirrors the <select> options that used to live in the (now removed)
+// metadata-panel LabCollector helper box; this dialog is the sole entry
+// point for inserting a LabCollector link now.
+const LABCOLLECTOR_TYPE_OPTIONS = [
+  { text: 'Plasmid', value: 'plasmids' },
+  { text: 'Strain', value: 'strains' },
+  { text: 'Chemical', value: 'chemicals' },
+  { text: 'Sample', value: 'samples' },
+  { text: 'Antibody', value: 'antibodies' },
+  { text: 'Storage', value: 'storage' },
+];
+
+// Remembers the last-used values across dialog opens, like the removed
+// helper box's persisted inputs did.
+let lastLabCollectorType = LABCOLLECTOR_TYPE_OPTIONS[0].value;
+let lastLabCollectorId = '';
+let lastLabCollectorLookup = false;
+
+interface FileFolderReferenceDialogData {
+  text: string;
+  label: string;
+}
+
+interface WebLinkDialogData {
+  url: string;
+  label: string;
+  saveToReferences: boolean;
+}
+
+interface UploadedLocalFile {
+  long_name: string;
+  real_name: string;
+  storage: string | number;
+}
+
+function uploadedFileUrl(upload: UploadedLocalFile): string {
+  const params = new URLSearchParams({
+    name: upload.real_name,
+    f: upload.long_name,
+    storage: String(upload.storage),
+  });
+  return `app/download.php?${params.toString()}`;
+}
+
+export function registerLinkExtension(editor: Editor): void {
+  const openWebLinkDialog = (): void => {
+    const bookmark = editor.selection.getBookmark(2, true);
+    const selectedText = editor.selection.getContent({format: 'text'}).trim();
+    const selectedAnchor = editor.dom.getParent(editor.selection.getNode(), 'a[href]') as HTMLAnchorElement | null;
+    editor.windowManager.open({
+      title: 'Insert web link',
+      size: 'normal',
+      body: {
+        type: 'panel',
+        items: [
+          {type: 'input', name: 'url', label: 'Web address'},
+          {type: 'input', name: 'label', label: 'Link text'},
+          {
+            type: 'checkbox',
+            name: 'saveToReferences',
+            label: 'Also save under Web links',
+          },
+        ],
+      },
+      initialData: {
+        url: selectedAnchor?.getAttribute('href') ?? '',
+        label: selectedText || selectedAnchor?.textContent?.trim() || '',
+        saveToReferences: true,
+      },
+      buttons: [
+        {type: 'cancel', text: 'Cancel'},
+        {type: 'submit', text: 'Insert link', primary: true},
+      ],
+      onSubmit: async api => {
+        const data = api.getData() as WebLinkDialogData;
+        try {
+          const url = normalizeWebLinkUrl(data.url);
+          const label = data.label.trim() || url;
+          if (data.saveToReferences) await createWebLink(url, label);
+          editor.focus();
+          editor.selection.moveToBookmark(bookmark);
+          editor.undoManager.transact(() => {
+            const anchor = editor.dom.getParent(editor.selection.getNode(), 'a[href]') as HTMLAnchorElement | null;
+            if (anchor) {
+              editor.dom.setAttribs(anchor, {href: url, target: '_blank', rel: 'noreferrer noopener'});
+              anchor.textContent = label;
+              editor.selection.select(anchor);
+              return;
+            }
+            editor.execCommand(
+              'mceInsertContent',
+              false,
+              `<a href="${escapeHTML(url)}" target="_blank" rel="noreferrer noopener">${escapeHTML(label)}</a>`,
+            );
+          });
+          await updateEntityBody(false);
+          api.close();
+        } catch (error) {
+          editor.notificationManager.open({
+            text: error instanceof Error ? error.message : 'Unable to add web link',
+            type: 'error',
+            timeout: 3500,
+          });
+        }
+      },
+    });
+  };
+
+  const chooseAndLinkLocalFiles = (directory: boolean): void => {
+    const bookmark = editor.selection.getBookmark(2, true);
+    const hasSelection = !editor.selection.getRng().collapsed;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.hidden = true;
+    if (directory) {
+      input.multiple = true;
+      input.setAttribute('webkitdirectory', '');
+      input.setAttribute('directory', '');
+    }
+
+    input.addEventListener('cancel', () => input.remove(), { once: true });
+    input.addEventListener('change', async() => {
+      const files = Array.from(input.files ?? []);
+      input.remove();
+      if (files.length === 0) return;
+
+      try {
+        const uploaded: Array<{ upload: UploadedLocalFile; label: string }> = [];
+        // Upload sequentially so a large folder does not overwhelm the server
+        // and so the links retain the operating system's file order.
+        for (const file of files) {
+          const formData = new FormData();
+          formData.set('file', file);
+          formData.set('extraParam', 'noRedirect');
+          const response = await fetch(`api/v2/${entity.type}/${entity.id}/${Model.Upload}`, {
+            method: 'POST',
+            body: formData,
+          });
+          if (!response.ok) throw new Error(`Upload failed for ${file.name}`);
+          const uploadId = getNewIdFromPostRequest(response);
+          const upload = await ApiC.getJson<UploadedLocalFile>(
+            `${entity.type}/${entity.id}/${Model.Upload}/${uploadId}`,
+          );
+          uploaded.push({
+            upload,
+            label: file.webkitRelativePath || file.name,
+          });
+        }
+
+        await reloadElements(['uploadsDiv', 'filesFoldersLinksSection']);
+        editor.focus();
+        editor.selection.moveToBookmark(bookmark);
+        editor.undoManager.transact(() => {
+          if (uploaded.length === 1 && hasSelection) {
+            editor.execCommand('mceInsertLink', false, {
+              href: uploadedFileUrl(uploaded[0].upload),
+              target: '_blank',
+            });
+            return;
+          }
+
+          const anchors = uploaded.map(({ upload, label }) => (
+            `<a href="${escapeHTML(uploadedFileUrl(upload))}" target="_blank" rel="noopener">${escapeHTML(label)}</a>`
+          ));
+          const html = anchors.length === 1
+            ? anchors[0]
+            : `<ul>${anchors.map(anchor => `<li>${anchor}</li>`).join('')}</ul>`;
+          editor.execCommand('mceInsertContent', false, html);
+        });
+        updateEntityBody();
+        editor.notificationManager.open({
+          text: directory
+            ? `${uploaded.length} folder files attached and linked`
+            : 'Local file attached and linked',
+          type: 'success',
+          timeout: 2200,
+        });
+      } catch (error) {
+        editor.notificationManager.open({
+          text: error instanceof Error ? error.message : 'Unable to attach local file',
+          type: 'error',
+          timeout: 3500,
+        });
+      }
+    }, { once: true });
+
+    document.body.append(input);
+    input.click();
+  };
+
+  const addAndInsertFileFolderReferences = (): void => {
+    const bookmark = editor.selection.getBookmark(2, true);
+    const selectedText = editor.selection.getContent({ format: 'text' }).trim();
+    editor.windowManager.open({
+      title: 'Add a file/folder reference',
+      size: 'normal',
+      body: {
+        type: 'panel',
+        items: [
+          {
+            type: 'input',
+            name: 'text',
+            label: 'smb://server/share/folder or a plain-text reference',
+          },
+          {
+            type: 'input',
+            name: 'label',
+            label: 'Display label (optional)',
+          },
+        ],
+      },
+      initialData: { text: selectedText, label: '' },
+      buttons: [
+        { type: 'cancel', text: 'Cancel' },
+        { type: 'submit', text: 'Add and insert', primary: true },
+      ],
+      onSubmit: async api => {
+        try {
+          const data = api.getData() as FileFolderReferenceDialogData;
+          const reference = await createFileFolderReference(data.text, data.label);
+          editor.focus();
+          editor.selection.moveToBookmark(bookmark);
+          const smbHref = platformSmbHref(reference.text);
+          const displayText = reference.label || reference.text;
+          editor.undoManager.transact(() => {
+            if (smbHref) {
+              editor.execCommand(
+                'mceInsertContent',
+                false,
+                `<a href="${escapeHTML(smbHref)}">${escapeHTML(displayText)}</a>`,
+              );
+            } else {
+              editor.execCommand('mceInsertContent', false, escapeHTML(displayText));
+            }
+          });
+          await updateEntityBody(false);
+          api.close();
+          editor.notificationManager.open({ text: 'Reference added', type: 'success', timeout: 2200 });
+        } catch (error) {
+          editor.notificationManager.open({
+            text: error instanceof Error ? error.message : 'Unable to add file/folder reference',
+            type: 'error',
+            timeout: 3500,
+          });
+        }
+      },
+    });
+  };
+
+  const openLabCollectorLinkDialog = (): void => {
+    const bookmark = editor.selection.getBookmark(2, true);
+    const hasSelection = !editor.selection.getRng().collapsed;
+
+    editor.windowManager.open({
+      title: 'Insert LabCollector link',
+      size: 'normal',
+      body: {
+        type: 'panel',
+        items: [
+          {
+            type: 'selectbox',
+            name: 'labcollectorType',
+            label: 'LabCollector type',
+            items: LABCOLLECTOR_TYPE_OPTIONS,
+          },
+          {
+            type: 'input',
+            name: 'labcollectorId',
+            label: 'LabCollector ID',
+          },
+          {
+            type: 'checkbox',
+            name: 'labcollectorLookup',
+            label: 'Look up the name and storage location via the LabCollector API before inserting',
+          },
+        ],
+      },
+      initialData: {
+        labcollectorType: lastLabCollectorType,
+        labcollectorId: lastLabCollectorId,
+        labcollectorLookup: lastLabCollectorLookup,
+      },
+      buttons: [
+        { type: 'cancel', text: 'Cancel' },
+        { type: 'submit', text: 'Insert link', primary: true },
+      ],
+      onSubmit: async api => {
+        const data = api.getData() as LabCollectorDialogData;
+        const id = data.labcollectorId.trim();
+        let url: string;
+        try {
+          url = buildLabCollectorUrl(data.labcollectorType, id);
+        } catch {
+          editor.notificationManager.open({
+            text: 'Enter a valid positive LabCollector ID.',
+            type: 'error',
+            timeout: 2500,
+          });
+          return;
+        }
+
+        const typeLabel = LABCOLLECTOR_TYPE_OPTIONS
+          .find(option => option.value === data.labcollectorType)?.text ?? data.labcollectorType;
+        let label = `${typeLabel} #${id}`;
+        if (data.labcollectorLookup) {
+          api.block('Looking up record…');
+          const record = await lookupLabCollectorRecord(data.labcollectorType, id);
+          api.unblock();
+          if (record) {
+            label = `${typeLabel}: ${record.name}${record.storage ? ` (${record.storage})` : ''} #${id}`;
+          }
+        }
+        lastLabCollectorType = data.labcollectorType;
+        lastLabCollectorId = id;
+        lastLabCollectorLookup = data.labcollectorLookup;
+        editor.focus();
+        editor.selection.moveToBookmark(bookmark);
+        editor.undoManager.transact(() => {
+          if (hasSelection) {
+            editor.execCommand('mceInsertLink', false, { href: url, target: '_blank' });
+            return;
+          }
+          editor.execCommand(
+            'mceInsertContent',
+            false,
+            `<a href="${escapeHTML(url)}" target="_blank">${escapeHTML(label)}</a>`,
+          );
+        });
+        api.close();
+        void createLabCollectorLink(label, url);
+      },
+    });
+  };
+
+  // Named command so the command palette can jump straight to the web-link
+  // dialog instead of locating this menu button by its (English,
+  // wording-dependent) tooltip/aria-label and merely opening its dropdown --
+  // see CommandPalette.class.ts.
+  editor.addCommand('elabftwInsertWebLink', openWebLinkDialog);
+
+  editor.ui.registry.addMenuButton('insert-link', {
+    icon: 'link',
+    tooltip: 'Insert a web, uploaded file/folder, or LabCollector link',
+    fetch: callback => {
+      const items = [{
+        type: 'menuitem' as const,
+        text: 'Web link…',
+        onAction: openWebLinkDialog,
+      }];
+      if (document.getElementById('filesDiv')) {
+        items.push({
+          type: 'menuitem' as const,
+          text: 'Upload and link file…',
+          onAction: () => chooseAndLinkLocalFiles(false),
+        });
+        items.push({
+          type: 'menuitem' as const,
+          text: 'Upload and link folder…',
+          onAction: () => chooseAndLinkLocalFiles(true),
+        });
+        items.push({
+          type: 'menuitem' as const,
+          text: 'File/folder reference…',
+          onAction: addAndInsertFileFolderReferences,
+        });
+      }
+      if (entity.type === 'experiments') {
+        items.push({
+          type: 'menuitem' as const,
+          text: 'LabCollector link…',
+          onAction: openLabCollectorLinkDialog,
+        });
+      }
+      callback(items);
+    },
+  });
+}
