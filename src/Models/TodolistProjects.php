@@ -17,6 +17,7 @@ use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\Filter;
 use Elabftw\Traits\SetIdTrait;
+use DateTimeImmutable;
 use Override;
 use PDO;
 
@@ -25,6 +26,7 @@ use function array_key_exists;
 use function array_map;
 use function array_unique;
 use function array_values;
+use function in_array;
 use function is_array;
 use function json_decode;
 use function mb_strlen;
@@ -39,6 +41,8 @@ use const JSON_THROW_ON_ERROR;
 final class TodolistProjects extends AbstractRest
 {
     use SetIdTrait;
+
+    private const array STATUSES = array('planning', 'active', 'on_hold', 'done');
 
     private int $userid;
 
@@ -63,11 +67,16 @@ final class TodolistProjects extends AbstractRest
     {
         $name = $this->getName($reqBody['name'] ?? '');
         $description = $this->getDescription($reqBody['description'] ?? null);
-        $sql = 'INSERT INTO todolist_projects(team, name, description, userid) VALUES(:team, :name, :description, :userid)';
+        $targetEndDate = $this->getTargetEndDate($reqBody['target_end_date'] ?? null);
+        $status = $this->getStatus($reqBody['status'] ?? null);
+        $sql = 'INSERT INTO todolist_projects(team, name, description, target_end_date, status, userid)
+            VALUES(:team, :name, :description, :target_end_date, :status, :userid)';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $req->bindParam(':name', $name);
         $req->bindValue(':description', $description, $description === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':target_end_date', $targetEndDate, $targetEndDate === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':status', $status);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         $id = (int) $this->Db->lastInsertId();
@@ -81,7 +90,7 @@ final class TodolistProjects extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
-        $sql = "SELECT p.id, p.name, p.description, p.userid, p.created_at,
+        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', u.userid, 'fullname', u.fullname))
                     FROM todolist_project_members AS m
@@ -100,7 +109,7 @@ final class TodolistProjects extends AbstractRest
     #[Override]
     public function readOne(): array
     {
-        $sql = "SELECT p.id, p.name, p.description, p.userid, p.created_at,
+        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', u.userid, 'fullname', u.fullname))
                     FROM todolist_project_members AS m
@@ -137,6 +146,23 @@ final class TodolistProjects extends AbstractRest
             $req = $this->Db->prepare($sql);
             $description = $this->getDescription($params['description']);
             $req->bindValue(':description', $description, $description === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+            $this->Db->execute($req);
+        }
+        if (array_key_exists('target_end_date', $params)) {
+            $sql = 'UPDATE todolist_projects SET target_end_date = :target_end_date WHERE id = :id AND team = :team';
+            $req = $this->Db->prepare($sql);
+            $targetEndDate = $this->getTargetEndDate($params['target_end_date']);
+            $req->bindValue(':target_end_date', $targetEndDate, $targetEndDate === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+            $this->Db->execute($req);
+        }
+        if (array_key_exists('status', $params)) {
+            $sql = 'UPDATE todolist_projects SET status = :status WHERE id = :id AND team = :team';
+            $req = $this->Db->prepare($sql);
+            $req->bindValue(':status', $this->getStatus($params['status']));
             $req->bindParam(':id', $this->id, PDO::PARAM_INT);
             $req->bindParam(':team', $this->team, PDO::PARAM_INT);
             $this->Db->execute($req);
@@ -220,10 +246,36 @@ final class TodolistProjects extends AbstractRest
         if ($value === null || trim((string) $value) === '') {
             return null;
         }
-        $description = Filter::toPureString((string) $value);
-        if (mb_strlen($description) > 500) {
-            throw new ImproperActionException(_('Project description must be shorter than 500 characters.'));
+        // Filter::body() (not toPureString()) so the rich text editor's
+        // headings/lists/bold/etc. survive -- toPureString() strips all HTML.
+        $description = Filter::body((string) $value);
+        if (mb_strlen($description) > 10000) {
+            throw new ImproperActionException(_('Project goals/description must be shorter than 10000 characters.'));
         }
         return $description;
+    }
+
+    private function getTargetEndDate(mixed $value): ?string
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+        $date = (string) $value;
+        if (DateTimeImmutable::createFromFormat('Y-m-d', $date) === false) {
+            throw new ImproperActionException(_('Invalid target end date.'));
+        }
+        return $date;
+    }
+
+    private function getStatus(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return self::STATUSES[0];
+        }
+        $status = (string) $value;
+        if (!in_array($status, self::STATUSES, true)) {
+            throw new ImproperActionException(_('Invalid project status.'));
+        }
+        return $status;
     }
 }

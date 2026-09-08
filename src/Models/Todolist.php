@@ -156,7 +156,7 @@ final class Todolist extends AbstractRest
         };
         $completed = $query->getBoolean('completed');
         $completedFilter = $completed ? 'IS NOT NULL' : 'IS NULL';
-        $order = $completed ? 'completed_at DESC' : 'ordering ASC, creation_time DESC';
+        $order = $completed ? 'pinned DESC, completed_at DESC' : 'pinned DESC, ordering ASC, creation_time DESC';
         $completedSince = $completed && $query->has('completed_since')
             ? $this->getDeadline($query->getString('completed_since'))
             : null;
@@ -170,7 +170,7 @@ final class Todolist extends AbstractRest
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
                 t.reminder_minutes,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
-                t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id, t.in_progress, t.priority, t.column_id,
+                t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id, t.in_progress, t.priority, t.column_id, t.pinned,
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
                 project.name AS project_name,
@@ -272,7 +272,7 @@ final class Todolist extends AbstractRest
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
                 t.reminder_minutes,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
-                t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id, t.in_progress, t.priority, t.column_id,
+                t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id, t.in_progress, t.priority, t.column_id, t.pinned,
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
                 project.name AS project_name,
@@ -463,6 +463,7 @@ final class Todolist extends AbstractRest
     {
         $row['assignees'] = json_decode((string) $row['assignees'], true, 512, JSON_THROW_ON_ERROR);
         $row['in_progress'] = (bool) $row['in_progress'];
+        $row['pinned'] = (bool) $row['pinned'];
         return $row;
     }
 
@@ -595,6 +596,7 @@ final class Todolist extends AbstractRest
             'in_progress' => array('in_progress', (int) (bool) $value, PDO::PARAM_INT),
             'priority' => array('priority', $this->getPriority($value), PDO::PARAM_STR),
             'column_id' => array('column_id', $this->getColumnId($value), PDO::PARAM_INT),
+            'pinned' => array('pinned', Filter::toBinary($value), PDO::PARAM_INT),
             default => throw new ImproperActionException(_('Invalid to-do property.')),
         };
         $sql = sprintf(

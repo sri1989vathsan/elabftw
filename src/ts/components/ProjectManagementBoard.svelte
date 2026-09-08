@@ -43,6 +43,7 @@
     deadline: string | null;
     completed_at: string | null;
     in_progress: boolean;
+    pinned: boolean;
     priority: Priority | null;
     column_id: number | null;
     creation_time: string;
@@ -62,10 +63,14 @@
     fullname: string;
   };
 
+  type ProjectStatus = 'planning' | 'active' | 'on_hold' | 'done';
+
   type Project = {
     id: number;
     name: string;
     description: string | null;
+    target_end_date: string | null;
+    status: ProjectStatus;
     userid: number;
     members: TeamMember[];
   };
@@ -109,10 +114,6 @@
   // 'created' shows tasks I set up, whether for myself or someone else;
   // 'all' is the union of both -- never a view of everyone else's work
   let scope: 'assigned' | 'created' | 'all' = 'all';
-  let newTitle = '';
-  let newAssignees: TeamMember[] = [];
-  let newDeadline = '';
-  let submitting = false;
   // set while the detail dialog is open for a task that doesn't exist yet
   // (opened via a column's "+" button) -- steps and links can still be
   // added, buffered here since there's no task id to attach them to yet;
@@ -214,6 +215,15 @@
       medium: t('Medium'),
       high: t('High'),
     }[priority];
+  }
+
+  function projectStatusLabel(status: ProjectStatus): string {
+    return {
+      planning: t('Planning'),
+      active: t('Active'),
+      on_hold: t('On hold'),
+      done: t('Done'),
+    }[status];
   }
 
   function formatDeadline(deadline: string | null): string {
@@ -331,32 +341,7 @@
 
   function selectProject(id: number | null | 'all'): void {
     activeProjectId = id;
-    const project = typeof id === 'number' ? projects.find(p => p.id === id) : undefined;
-    if (project) {
-      newAssignees = newAssignees.filter(a => project.members.some(m => m.userid === a.userid));
-    }
     void loadColumns();
-  }
-
-  async function submitNewTask(): Promise<void> {
-    if (newTitle.trim() === '') return;
-    submitting = true;
-    try {
-      await ApiC.post(Model.Todolist, {
-        content: newTitle.trim(),
-        assignee_userids: newAssignees.map(a => a.userid),
-        deadline: newDeadline || null,
-        project_id: activeProjectId === 'all' ? null : activeProjectId,
-      });
-      newTitle = '';
-      newDeadline = '';
-      newAssignees = [];
-      await load();
-    } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not create the task.');
-    } finally {
-      submitting = false;
-    }
   }
 
   function openNewTaskInColumn(columnId: number): void {
@@ -375,6 +360,7 @@
       deadline: null,
       completed_at: null,
       in_progress: false,
+      pinned: false,
       priority: null,
       column_id: columnId,
       creation_time: '',
@@ -432,6 +418,15 @@
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not move the task.');
+    }
+  }
+
+  async function togglePin(task: Task): Promise<void> {
+    try {
+      await ApiC.patch(`${Model.Todolist}/${task.id}`, { pinned: !task.pinned });
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update the task.');
     }
   }
 
@@ -1010,6 +1005,9 @@
   let editingProject: Project | null = null;
   let dialogName = '';
   let dialogDescription = '';
+  let dialogDescriptionEl: HTMLDivElement;
+  let dialogTargetEndDate = '';
+  let dialogStatus: ProjectStatus = 'planning';
   let dialogMembers: TeamMember[] = [];
   let savingProject = false;
 
@@ -1017,6 +1015,8 @@
     editingProject = project;
     dialogName = project?.name ?? '';
     dialogDescription = project?.description ?? '';
+    dialogTargetEndDate = toDateInputValue(project?.target_end_date ?? null);
+    dialogStatus = project?.status ?? 'planning';
     dialogMembers = project ? [...project.members] : [];
     projectDialogOpen = true;
   }
@@ -1041,16 +1041,21 @@
     savingProject = true;
     try {
       const memberIds = dialogMembers.map(m => m.userid);
+      const description = dialogDescriptionEl?.innerHTML ?? dialogDescription;
       if (editingProject) {
         await ApiC.patch(`${Model.TodolistProjects}/${editingProject.id}`, {
           name,
-          description: dialogDescription.trim(),
+          description,
+          target_end_date: dialogTargetEndDate || null,
+          status: dialogStatus,
           members: memberIds,
         });
       } else {
         const response = await ApiC.post(Model.TodolistProjects, {
           name,
-          description: dialogDescription.trim(),
+          description,
+          target_end_date: dialogTargetEndDate || null,
+          status: dialogStatus,
           members: memberIds,
         });
         const location = response.headers.get('Location') ?? '';
@@ -1126,9 +1131,15 @@
 
   {#if activeProject}
     <div class="pm-project-description">
-      <span class="pm-label mb-0">{t('Description')}</span>
+      <div class="d-flex align-items-center flex-wrap" style="gap:0.4rem">
+        <span class="badge pm-project-status pm-project-status-{activeProject.status}">{projectStatusLabel(activeProject.status)}</span>
+        {#if activeProject.target_end_date}
+          <span class="pm-muted small"><i class="fas fa-flag-checkered fa-fw mr-1" aria-hidden="true"></i>{t('Target')}: {formatDeadline(activeProject.target_end_date)}</span>
+        {/if}
+      </div>
+      <span class="pm-label mb-0">{t('Goals / description')}</span>
       {#if activeProject.description}
-        <p class="mb-0">{activeProject.description}</p>
+        <div class="pm-project-description-body">{@html activeProject.description}</div>
       {:else}
         <p class="pm-muted small mb-0">{t('No description yet.')}</p>
       {/if}
@@ -1141,49 +1152,15 @@
     </div>
   {/if}
 
-  <div class="pm-card pm-new-card mb-3 mt-2">
-    <form on:submit|preventDefault={submitNewTask} class="d-flex flex-wrap align-items-end gap-2">
-      <div class="flex-grow-1">
-        <label class="pm-label" for="pm-new-title">{t('Task')}</label>
-        <input
-          id="pm-new-title"
-          type="text"
-          class="form-control"
-          placeholder={t('What needs to be done?')}
-          bind:value={newTitle}
-          maxlength="1000"
-        />
-      </div>
-      <div>
-        <label class="pm-label" for="pm-new-assignee">{t('Assign to')}</label>
-        <div class="pm-chips">
-          {#each newAssignees as member (member.userid)}
-            <span class="pm-chip">
-              {member.fullname}
-              <button type="button" aria-label={`${t('Remove')} ${member.fullname}`} on:click={() => newAssignees = removeAssignee(newAssignees, member.userid)}>&times;</button>
-            </span>
-          {/each}
-        </div>
-        <select
-          id="pm-new-assignee"
-          class="form-control"
-          value=""
-          on:change={(event) => { const value = (event.target as HTMLSelectElement).value; if (value) newAssignees = addAssignee(newAssignees, Number(value), assignableMembers); (event.target as HTMLSelectElement).value = ''; }}
-        >
-          <option value="" disabled>{t('Yourself, if left empty')}</option>
-          {#each assignableMembers.filter(member => !newAssignees.some(a => a.userid === member.userid)) as member (member.userid)}
-            <option value={member.userid}>{member.userid === core.currentUserid ? t('Myself') : member.fullname}</option>
-          {/each}
-        </select>
-      </div>
-      <div>
-        <label class="pm-label" for="pm-new-deadline">{t('Due date')}</label>
-        <input id="pm-new-deadline" type="date" class="form-control" bind:value={newDeadline} />
-      </div>
-      <button type="submit" class="btn btn-primary" disabled={submitting || newTitle.trim() === ''}>
-        <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add task')}
-      </button>
-    </form>
+  <div class="mb-3 mt-2">
+    <button
+      type="button"
+      class="btn btn-primary"
+      on:click={() => openNewTaskInColumn(todoColumn?.id ?? sortedColumns(columns)[0]?.id ?? 0)}
+      disabled={columns.length === 0}
+    >
+      <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add task')}
+    </button>
   </div>
 
   <div class="d-flex align-items-center my-3">
@@ -1237,6 +1214,7 @@
             <div
               class="pm-card pm-task"
               class:pm-task-done={column.kind === 'done'}
+              class:pm-task-pinned={task.pinned}
               draggable={canManage(task)}
               on:dragstart={(event) => startTaskDrag(event, task.id)}
               on:dragend={finishTaskDrag}
@@ -1255,6 +1233,9 @@
                 <button type="button" class="pm-task-title-btn flex-grow-1" on:click={() => openDetail(task)}>{task.body}</button>
                 {#if canManage(task)}
                   <div class="pm-task-actions">
+                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" class:pm-icon-button-active={task.pinned} title={task.pinned ? t('Unpin') : t('Pin to top')} aria-label={task.pinned ? t('Unpin') : t('Pin to top')} on:click={() => togglePin(task)}>
+                      <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i>
+                    </button>
                     <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task)}>
                       <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
                     </button>
@@ -1357,6 +1338,16 @@
                 {/each}
               </select>
             </div>
+            {#if creatingNewTask}
+              <div class="pm-dialog-field flex-grow-1">
+                <label class="pm-label" for="pm-detail-column">{t('Column')}</label>
+                <select id="pm-detail-column" class="form-control" bind:value={newTaskColumnId}>
+                  {#each sortedColumns(columns) as column (column.id)}
+                    <option value={column.id}>{column.name}</option>
+                  {/each}
+                </select>
+              </div>
+            {/if}
           </div>
           <div class="d-flex pm-dialog-row">
             <div class="pm-dialog-field flex-grow-1">
@@ -1726,7 +1717,7 @@
 
 {#if projectDialogOpen}
   <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeProjectDialog(); }}>
-    <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pmProjectDialogTitle">
+    <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmProjectDialogTitle">
       <div class="pm-dialog-header">
         <h4 id="pmProjectDialogTitle" class="mb-0">{editingProject ? t('Manage project') : t('New project')}</h4>
         <button type="button" class="pm-close-btn" on:click={closeProjectDialog} aria-label={t('Close')}>&times;</button>
@@ -1736,9 +1727,41 @@
           <label class="pm-label" for="pm-project-name">{t('Project name')}</label>
           <input id="pm-project-name" type="text" class="form-control" bind:value={dialogName} maxlength="255" />
         </div>
+        <div class="d-flex pm-dialog-row">
+          <div class="pm-dialog-field flex-grow-1">
+            <label class="pm-label" for="pm-project-target-end-date">{t('Target end date')}</label>
+            <input id="pm-project-target-end-date" type="date" class="form-control" bind:value={dialogTargetEndDate} />
+          </div>
+          <div class="pm-dialog-field flex-grow-1">
+            <label class="pm-label" for="pm-project-status">{t('Status')}</label>
+            <select id="pm-project-status" class="form-control" bind:value={dialogStatus}>
+              <option value="planning">{projectStatusLabel('planning')}</option>
+              <option value="active">{projectStatusLabel('active')}</option>
+              <option value="on_hold">{projectStatusLabel('on_hold')}</option>
+              <option value="done">{projectStatusLabel('done')}</option>
+            </select>
+          </div>
+        </div>
         <div class="pm-dialog-field">
-          <label class="pm-label" for="pm-project-desc">{t('Description')}</label>
-          <textarea id="pm-project-desc" class="form-control" rows="3" bind:value={dialogDescription} maxlength="500"></textarea>
+          <span class="pm-label">{t('Goals / description')}</span>
+          <div class="rte-toolbar" role="toolbar" aria-label={t('Formatting')}>
+            <button type="button" class="rte-btn" title={t('Heading')} on:mousedown|preventDefault={() => exec(dialogDescriptionEl, 'formatBlock', '<h4>')}><i class="fas fa-heading" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Bold')} on:mousedown|preventDefault={() => exec(dialogDescriptionEl, 'bold')}><i class="fas fa-bold" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Italic')} on:mousedown|preventDefault={() => exec(dialogDescriptionEl, 'italic')}><i class="fas fa-italic" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Bullet list')} on:mousedown|preventDefault={() => exec(dialogDescriptionEl, 'insertUnorderedList')}><i class="fas fa-list-ul" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Numbered list')} on:mousedown|preventDefault={() => exec(dialogDescriptionEl, 'insertOrderedList')}><i class="fas fa-list-ol" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Insert link')} on:mousedown|preventDefault={() => insertLink(dialogDescriptionEl)}><i class="fas fa-link" aria-hidden="true"></i></button>
+            <button type="button" class="rte-btn" title={t('Clear formatting')} on:mousedown|preventDefault={() => exec(dialogDescriptionEl, 'removeFormat')}><i class="fas fa-eraser" aria-hidden="true"></i></button>
+          </div>
+          <div
+            id="pm-project-desc"
+            class="rte-content form-control"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+            aria-label={t('Goals / description')}
+            bind:this={dialogDescriptionEl}
+          >{@html dialogDescription}</div>
         </div>
         <div class="pm-dialog-field">
           <label class="pm-label" for="pm-project-picker">{t('Team members on this project')}</label>
