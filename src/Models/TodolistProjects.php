@@ -22,6 +22,7 @@ use Override;
 use PDO;
 
 use function _;
+use function array_column;
 use function array_key_exists;
 use function array_map;
 use function array_unique;
@@ -212,8 +213,9 @@ final class TodolistProjects extends AbstractRest
         if (empty($project)) {
             throw new IllegalActionException('Project not found in this team.');
         }
-        if ((int) $project['userid'] !== $this->userid && !$this->requester->isAdmin) {
-            throw new IllegalActionException('User tried to modify a project they did not create.');
+        $isMember = in_array($this->userid, array_column($project['members'], 'userid'), true);
+        if ((int) $project['userid'] !== $this->userid && !$isMember && !$this->requester->isAdmin) {
+            throw new IllegalActionException('User tried to modify a project they are not a member of.');
         }
     }
 
