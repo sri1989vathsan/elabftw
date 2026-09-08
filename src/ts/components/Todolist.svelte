@@ -14,6 +14,7 @@
   import { Notification as AppNotification } from '../Notifications.class';
   import { toRelative } from '../misc';
   import { applyMention, extractMentionQuery } from '../mentions';
+  import { fetchLinkPreviewLabel, handleLinkPreviewPaste } from '../linkPreview';
 
   // Closes the @mention dropdown on any click outside its own container --
   // it otherwise stayed open until a mention was picked, even after
@@ -890,10 +891,11 @@
     }
     addingWeblink = true;
     try {
+      const label = weblinkLabel.trim() || await fetchLinkPreviewLabel(url);
       await ApiC.post(`${Model.Todolist}/${detailEntry.id}/entity_links`, {
         entity_type: 'weblink',
         url,
-        label: weblinkLabel.trim() || url,
+        label,
       });
       weblinkUrl = '';
       weblinkLabel = '';
@@ -1966,6 +1968,7 @@
               aria-multiline='true'
               aria-label={t('Description')}
               bind:this={detailDescriptionEl}
+              on:paste={(event) => handleLinkPreviewPaste(event, detailDescriptionEl)}
             >{@html editDescription}</div>
           {:else}
             <span class='pm-label'>{t('Description')}</span>
@@ -1997,6 +2000,7 @@
               aria-multiline='true'
               aria-label={t('Notes')}
               bind:this={detailNotesEl}
+              on:paste={(event) => handleLinkPreviewPaste(event, detailNotesEl)}
             >{@html editNotes}</div>
           {:else if detailEntry.notes}
             <div class='rte-content'>{@html detailEntry.notes}</div>

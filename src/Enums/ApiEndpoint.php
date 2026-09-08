@@ -41,6 +41,7 @@ enum ApiEndpoint: string
     case IdpsSources = 'idps_sources';
     case HtmlTools = 'html_tools';
     case Import = 'import';
+    case LinkPreview = 'link_preview';
     case Info = 'info';
     case Instance = 'instance';
     case Items = 'items';

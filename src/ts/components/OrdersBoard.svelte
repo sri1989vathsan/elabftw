@@ -944,7 +944,6 @@
         <input type="checkbox" bind:checked={searchPdf} on:change={onSearchPdfChange} />
         {t('Also search inside PDF attachments (slower)')}
       </label>
-      <span class="orders-muted small">{t('Searches: title, notes, resource, requester, comments, attachment names')}</span>
     </div>
     <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
       <select class="form-control form-control-sm" style="width:auto" bind:value={pageSize} on:change={onPageSizeChange} title={t('Items per page')}>
