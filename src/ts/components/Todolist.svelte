@@ -1623,6 +1623,9 @@
                         {formatDeadline(entry.deadline)}
                       </div>
                     {/if}
+                    {#if entry.description}
+                      <div class='small todo-secondary-text todo-task-notes'>{@html entry.description}</div>
+                    {/if}
                     {#if entry.notes}
                       <div class='small todo-secondary-text todo-task-notes'>{@html entry.notes}</div>
                     {/if}
