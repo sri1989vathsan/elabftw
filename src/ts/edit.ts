@@ -19,7 +19,6 @@ import { ApiC } from './api';
 import { Uploader } from './uploader';
 import { entity } from './getEntity';
 import { on } from './handlers';
-import { buildLabCollectorUrl, createLabCollectorLink, lookupLabCollectorRecord } from './labcollector-link';
 import { platformSmbHref } from './file-folder-references';
 import { spreadsheetToHTML, SpreadsheetData } from './inline-spreadsheet';
 import {
@@ -421,58 +420,6 @@ on('insert-web-link', (el: HTMLElement) => {
   updateEntityBody();
 });
 // END INSERT IN BODY
-
-async function getLabCollectorSelection(): Promise<{ id: string; label: string; url: string } | null> {
-  const typeSelect = document.getElementById('labcollectorType') as HTMLSelectElement | null;
-  const idInput = document.getElementById('labcollectorId') as HTMLInputElement | null;
-  if (!typeSelect || !idInput) return null;
-  const id = idInput.value.trim();
-  idInput.classList.toggle('is-invalid', !id);
-  if (!id) return null;
-  const typeLabel = typeSelect.selectedOptions[0]?.textContent ?? typeSelect.value;
-  const lookupEnabled = (document.getElementById('labcollectorLookup') as HTMLInputElement | null)?.checked ?? false;
-  const record = lookupEnabled ? await lookupLabCollectorRecord(typeSelect.value, id) : null;
-  // Callers append " #<id>" themselves, so the label here never repeats it.
-  const label = record
-    ? `${typeLabel}: ${record.name}${record.storage ? ` (${record.storage})` : ''}`
-    : typeLabel;
-  return {
-    id,
-    label,
-    url: buildLabCollectorUrl(typeSelect.value, id),
-  };
-}
-
-on('add-labcollector-link', async () => {
-  const selection = await getLabCollectorSelection();
-  if (!selection) return;
-  await createLabCollectorLink(`${selection.label} #${selection.id}`, selection.url);
-  const json = await ApiC.getJson(`${entity.type}/${entity.id}`);
-  const metadata = json.metadata ? JSON.parse(json.metadata) : {};
-  metadata.extra_fields ??= {};
-  const positions = Object.values(metadata.extra_fields)
-    .map((field: { position?: number }) => field.position ?? 0);
-  metadata.extra_fields[`${selection.label} #${selection.id}`] = {
-    type: 'url',
-    value: selection.url,
-    description: '',
-    position: positions.length > 0 ? Math.max(...positions) + 1 : 0,
-    group_id: null,
-  };
-  await ApiC.patch(`${entity.type}/${entity.id}`, { metadata: JSON.stringify(metadata) });
-  window.location.reload();
-});
-
-on('insert-labcollector-link', async () => {
-  const selection = await getLabCollectorSelection();
-  if (!selection) return;
-  const linkText = `${selection.label} #${selection.id}`;
-  editor.setContent(editor.type === 'md'
-    ? `[${linkText}](${selection.url})`
-    : `<a href="${selection.url}" target="_blank" rel="noreferrer noopener">${linkText}</a>`);
-  (document.getElementById('labcollectorId') as HTMLInputElement).value = '';
-  await createLabCollectorLink(linkText, selection.url);
-});
 
 
 // REPLACE UPLOADED FILE
