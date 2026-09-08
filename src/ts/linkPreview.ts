@@ -53,7 +53,7 @@ export async function fetchLinkPreviewLabel(url: string): Promise<string> {
   }
 }
 
-const BARE_URL_PATTERN = /^https?:\/\/\S+$/i;
+export const BARE_URL_PATTERN = /^https?:\/\/\S+$/i;
 
 /**
  * Paste handler for a rich-text (contenteditable) field: if what's on the
