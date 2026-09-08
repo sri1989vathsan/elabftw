@@ -4430,11 +4430,15 @@ div > .sticky-navbar {
 }
 
 .pm-project-description {
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.5rem;
   margin: 0.6rem 0 0;
+  padding: 0.85rem 1rem;
 }
 
 .pm-project-description-body {
-  margin: 0;
+  margin: 0.4rem 0 0;
 }
 
 .pm-project-status {

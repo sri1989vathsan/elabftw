@@ -1145,7 +1145,7 @@
           <span class="pm-muted small"><i class="fas fa-flag-checkered fa-fw mr-1" aria-hidden="true"></i>{t('Target')}: {formatDeadline(activeProject.target_end_date)}</span>
         {/if}
       </div>
-      <span class="pm-label mb-0">{t('Goals / description')}</span>
+      <span class="pm-label mb-0 mt-2 d-block">{t('Goals / description')}</span>
       {#if activeProject.description}
         <div class="pm-project-description-body">{@html activeProject.description}</div>
       {:else}
