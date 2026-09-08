@@ -894,7 +894,7 @@
     </form>
   </div>
 
-  <div class="d-flex flex-wrap align-items-center my-3" style="gap:0.5rem">
+  <div class="d-flex flex-wrap align-items-center my-3 orders-toolbar-row" style="gap:0.5rem">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by status')}>
       <button type="button" class={statusFilter === 'requested' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('requested')}>
         {t('Requested')}
@@ -928,6 +928,9 @@
         {/each}
       </select>
     {/if}
+  </div>
+
+  <div class="d-flex flex-wrap align-items-start mb-3 orders-toolbar-row" style="gap:0.75rem">
     <div class="orders-search flex-grow-1">
       <input
         class="form-control form-control-sm"
@@ -943,18 +946,20 @@
       </label>
       <span class="orders-muted small">{t('Searches: title, notes, resource, requester, comments, attachment names')}</span>
     </div>
-    <select class="form-control form-control-sm" style="width:auto" bind:value={pageSize} on:change={onPageSizeChange} title={t('Items per page')}>
-      {#each PAGE_SIZES as size (size)}
-        <option value={size}>{size} {t('/ page')}</option>
-      {/each}
-    </select>
-    <div class="btn-group btn-group-sm" role="group" aria-label={t('Pagination')}>
-      <button type="button" class="btn btn-sm btn-ghost" disabled={pageOffset === 0} on:click={goToPrevPage}>
-        <i class="fas fa-chevron-left fa-fw" aria-hidden="true"></i>{t('Previous')}
-      </button>
-      <button type="button" class="btn btn-sm btn-ghost" disabled={!hasNextPage} on:click={goToNextPage}>
-        {t('Next')}<i class="fas fa-chevron-right fa-fw" aria-hidden="true"></i>
-      </button>
+    <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
+      <select class="form-control form-control-sm" style="width:auto" bind:value={pageSize} on:change={onPageSizeChange} title={t('Items per page')}>
+        {#each PAGE_SIZES as size (size)}
+          <option value={size}>{size} {t('/ page')}</option>
+        {/each}
+      </select>
+      <div class="btn-group btn-group-sm" role="group" aria-label={t('Pagination')}>
+        <button type="button" class="btn btn-sm btn-ghost" disabled={pageOffset === 0} on:click={goToPrevPage}>
+          <i class="fas fa-chevron-left fa-fw" aria-hidden="true"></i>{t('Previous')}
+        </button>
+        <button type="button" class="btn btn-sm btn-ghost" disabled={!hasNextPage} on:click={goToNextPage}>
+          {t('Next')}<i class="fas fa-chevron-right fa-fw" aria-hidden="true"></i>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -1320,7 +1325,7 @@
      border cards using the app's own real tokens/button classes, so this
      looks and themes exactly like the rest of eLabFTW, light or dark. */
   .orders-board {
-    max-width: 72rem;
+    max-width: 46rem;
   }
 
   .orders-card {
@@ -1404,18 +1409,12 @@
   }
 
   .orders-list {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 0.6rem;
-    grid-template-columns: repeat(2, 1fr);
     list-style: none;
     margin: 0;
     padding: 0;
-  }
-
-  @media (max-width: 768px) {
-    .orders-list {
-      grid-template-columns: 1fr;
-    }
   }
 
   .orders-item {

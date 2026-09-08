@@ -656,6 +656,13 @@
     if (!el) return;
     el.focus();
     document.execCommand(cmd, false, value ?? '');
+    // execCommand('removeFormat') only strips inline styling (bold,
+    // italic, ...) -- it leaves block-level formatting (headings,
+    // blockquotes) untouched, so a heading stays a heading. Follow it
+    // with formatBlock to a plain paragraph to actually reset the block.
+    if (cmd === 'removeFormat') {
+      document.execCommand('formatBlock', false, '<p>');
+    }
   }
 
   function insertLink(el: HTMLElement | undefined): void {
