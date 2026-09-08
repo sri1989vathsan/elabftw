@@ -38,6 +38,7 @@ use Elabftw\Models\Branding;
 use Elabftw\Models\CalendarActivity;
 use Elabftw\Models\CalendarFeed;
 use Elabftw\Models\Comments;
+use Elabftw\Models\EntityOrderLinks;
 use Elabftw\Models\Compounds;
 use Elabftw\Models\Config;
 use Elabftw\Models\Dspace;
@@ -437,6 +438,7 @@ final class Apiv2Controller extends AbstractApiController
                 ApiSubModels::Events => new Scheduler($this->Model, $this->subId),
                 ApiSubModels::CompoundsLinks => LinksFactory::getCompoundsLinks($this->Model, $this->subId),
                 ApiSubModels::ItemsLinks => LinksFactory::getItemsLinks($this->Model, $this->subId),
+                ApiSubModels::OrderLinks => new EntityOrderLinks($this->requester, $this->Model, $this->subId),
                 ApiSubModels::RequestActions => new RequestActions($this->requester, $this->Model, $this->subId),
                 ApiSubModels::Revisions => new Revisions(
                     $this->Model,

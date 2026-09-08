@@ -34,6 +34,7 @@ enum ApiSubModels: string
     case ItemsLinks = 'items_links';
     case ItemsStatus = 'items_status';
     case Notifications = 'notifications';
+    case OrderLinks = 'order_links';
     case ProcurementRequests = 'procurement_requests';
     case RequestActions = 'request_actions';
     case Revisions = 'revisions';
@@ -70,6 +71,7 @@ enum ApiSubModels: string
                 self::ExperimentsLinks,
                 self::CompoundsLinks,
                 self::ItemsLinks,
+                self::OrderLinks,
                 self::RequestActions,
                 self::Revisions,
                 self::Steps,

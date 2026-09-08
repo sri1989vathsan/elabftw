@@ -164,6 +164,39 @@
   </div>
   <hr>
 
+  {# LINKED ORDERS: an Order this entity is for (see EntityOrderLinks.php) #}
+  <section id='orderLinksSection'>
+    <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='orderLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Linked orders'|trans }} (<span id='orderLinksCount'>{{ orderLinksArr|length }}</span>)</h4>
+    <div id='orderLinksDiv' class='ml-4'>
+      <div data-count-for='orderLinksCount'>
+        {% for link in orderLinksArr %}
+          <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center'>
+            <a class='mr-auto text-break' href='orders.php?order={{ link.id }}'>
+              <i class='fas fa-cart-shopping fa-fw mr-2' aria-hidden='true'></i>{{ link.title }}
+            </a>
+            {% if mode == 'edit' %}
+              <button type='button' data-action='destroy-link' data-endpoint='order_links' data-target='{{ link.id }}' aria-label='{{ 'Delete'|trans }}' title='{{ 'Delete'|trans }}' class='btn btn-danger-ghost btn-sm'>
+                <i class='fas fa-fw fa-trash-alt'></i>
+              </button>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      {% if mode == 'edit' %}
+        <div class='input-group mt-2'>
+          <div class='input-group-prepend'>
+            <span class='input-group-text'><i class='fas fa-magnifying-glass'></i></span>
+          </div>
+          <input aria-label='{{ 'Add a link'|trans }}' type='text' data-endpoint='order_links' id='addLinkOrdersInput' class='form-control linkinput' data-id='{{ Entity.id }}' placeholder='{{ 'Add link to an order'|trans }}' />
+          <div class='input-group-append'>
+            <button class='btn btn-primary' type='button' aria-label='{{ 'Add link to an order'|trans }}'>{{ 'Add'|trans }}</button>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+  <hr>
+
   {# LINKED TASKS: to-do tasks linked to this entity from the Project
      Management side (see TodolistEntityLinks::readAllForEntity()) --
      read-only here; add/remove the link from the task's own detail
