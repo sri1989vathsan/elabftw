@@ -216,7 +216,6 @@
   let calendarCompletedLoadedFor = '';
   let loadingCalendarCompleted = false;
   let calendarCompletedDetailsOpen = false;
-  let editingId: number | null = null;
   let detailEntry: SidebarEntry | null = null;
   let detailEditing = false;
   let detailNotesEl: HTMLDivElement;
@@ -709,10 +708,10 @@
     setEditReminder(task.reminder_minutes, task.deadline ? new Date(task.deadline) : null);
   }
 
-  function openDetail(entry: SidebarEntry): void {
+  function openDetail(entry: SidebarEntry, startInEditMode = false): void {
     if (entry.source !== 'todo') return;
     detailEntry = entry;
-    detailEditing = false;
+    detailEditing = startInEditMode;
     weblinkUrl = '';
     weblinkLabel = '';
     populateEditFields(entry);
@@ -754,12 +753,6 @@
     detailEditing = false;
   }
 
-  function startEditing(entry: SidebarEntry): void {
-    if (entry.source !== 'todo') return;
-    populateEditFields(entry);
-    editingId = entry.id;
-  }
-
   async function saveEditing(id: number): Promise<void> {
     const content = editTitle.trim();
     if (!content) {
@@ -799,7 +792,6 @@
       reminder_minutes: reminderMinutes,
       project_id: editProjectId,
     });
-    editingId = null;
     await load();
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
@@ -1643,7 +1635,7 @@
                       <button
                         type='button'
                         class='btn btn-ghost'
-                        on:click={() => startEditing(entry)}
+                        on:click={() => openDetail(entry, true)}
                         title={t('Edit')}
                         aria-label={t('Edit')}
                       >
@@ -1661,97 +1653,6 @@
                     </div>
                   {/if}
                 </div>
-                {#if entry.source === 'todo' && editingId === entry.id}
-                  <div class='todo-task-edit mt-2'>
-                    <label class='todo-edit-full mb-0'>
-                      <span class='small'>{t('Task')}</span>
-                      <input class='form-control form-control-sm' bind:value={editTitle} />
-                    </label>
-                    <label class='todo-edit-full mb-0'>
-                      <span class='small'>{t('Notes')}</span>
-                      <textarea class='form-control form-control-sm' rows='2' bind:value={editNotes}></textarea>
-                    </label>
-                    <div class='todo-edit-full todo-date-time-row'>
-                      <label class='mb-0'>
-                        <span class='small'>{t('Date')}</span>
-                        <input class='form-control form-control-sm' type='date' bind:value={editDeadlineDate} />
-                      </label>
-                      <label class='mb-0'>
-                        <span class='small'>{t('Time')}</span>
-                        <select class='form-control form-control-sm' bind:value={editDeadlineTime}>
-                          <option value=''>—</option>
-                          {#each timeOptions as time}
-                            <option value={time}>{time}</option>
-                          {/each}
-                        </select>
-                      </label>
-                    </div>
-                    <label class='todo-edit-full mb-0'>
-                      <span class='small'>{t('Reminder')}</span>
-                      <select
-                        class='form-control form-control-sm'
-                        bind:value={editReminderChoice}
-                        disabled={!editDeadlineDate || !editDeadlineTime}
-                        title={!editDeadlineDate || !editDeadlineTime ? t('Choose a task date and time first') : undefined}
-                        on:change={() => editReminderChoice === 'specific' && initializeSpecificReminder(true)}
-                      >
-                        <option value='none'>{t('No reminder')}</option>
-                        <option value='0'>{t('At deadline')}</option>
-                        <option value='15'>{t('15 minutes before')}</option>
-                        <option value='60'>{t('1 hour before')}</option>
-                        <option value='1440'>{t('1 day before')}</option>
-                        <option value='10080'>{t('1 week before')}</option>
-                        <option value='custom'>{t('Custom minutes')}</option>
-                        <option value='specific'>{t('Specific date and time')}</option>
-                      </select>
-                    </label>
-                    {#if editDeadlineDate && editDeadlineTime && editReminderChoice === 'custom'}
-                      <label class='todo-edit-full mb-0'>
-                        <span class='small'>{t('Minutes before')}</span>
-                        <input
-                          class='form-control form-control-sm'
-                          type='number'
-                          min='0'
-                          max='10080'
-                          bind:value={editCustomReminder}
-                        />
-                      </label>
-                    {:else if editDeadlineDate && editDeadlineTime && editReminderChoice === 'specific'}
-                      <div class='todo-edit-full todo-date-time-row'>
-                        <label class='mb-0'>
-                          <span class='small'>{t('Reminder date')}</span>
-                          <input class='form-control form-control-sm' type='date' bind:value={editReminderDate} />
-                        </label>
-                        <label class='mb-0'>
-                          <span class='small'>{t('Reminder time')}</span>
-                          <select class='form-control form-control-sm' bind:value={editReminderTime}>
-                            <option value=''>—</option>
-                            {#each timeOptions as time}
-                              <option value={time}>{time}</option>
-                            {/each}
-                          </select>
-                        </label>
-                      </div>
-                    {/if}
-                    <div class='todo-edit-full d-flex flex-wrap align-items-center'>
-                      <button type='button' class='btn btn-primary btn-sm mr-1' on:click={() => saveEditing(entry.id)}>{t('Save')}</button>
-                      <button type='button' class='btn btn-secondary btn-sm mr-1' on:click={() => editingId = null}>{t('Cancel')}</button>
-                      {#if editDeadlineDate || editDeadlineTime}
-                        <button
-                          type='button'
-                          class='btn btn-link btn-sm'
-                          on:click={() => {
-                            editDeadlineDate = '';
-                            editDeadlineTime = '';
-                            editReminderChoice = 'none';
-                            editReminderDate = '';
-                            editReminderTime = '';
-                          }}
-                        >{t('Clear deadline')}</button>
-                      {/if}
-                    </div>
-                  </div>
-                {/if}
               </li>
             {/each}
           </ul>
@@ -2410,20 +2311,6 @@
     border-left-color: var(--side-panel-danger, #ff8a7a);
   }
 
-  .todo-task-edit {
-    background: color-mix(in srgb, var(--chrome-bg) 82%, var(--primary));
-    border: 1px solid var(--secondary);
-    border-radius: 0.25rem;
-    display: grid;
-    gap: 0.45rem;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    padding: 0.55rem;
-  }
-
-  .todo-edit-full {
-    grid-column: 1 / -1;
-  }
-
   .todo-group-entry .btn-ghost {
     color: var(--chrome-fg);
   }
@@ -2529,11 +2416,5 @@
 
   .min-width-0 {
     min-width: 0;
-  }
-
-  @media (max-width: 480px) {
-    .todo-task-edit {
-      grid-template-columns: 1fr;
-    }
   }
 </style>
