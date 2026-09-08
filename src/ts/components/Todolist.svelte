@@ -215,6 +215,7 @@
   let calendarCompletedForDate: Todo[] = [];
   let calendarCompletedLoadedFor = '';
   let loadingCalendarCompleted = false;
+  let calendarCompletedDetailsOpen = false;
   let editingId: number | null = null;
   let detailEntry: SidebarEntry | null = null;
   let detailEditing = false;
@@ -472,6 +473,22 @@
     showFullCreateForm = !showFullCreateForm;
   }
 
+  // The quick-add fast path (title + Enter): while viewing the calendar,
+  // the whole point of having selected a day is that a task typed right
+  // there lands on it -- so target selectedCalendarDate directly, rather
+  // than whatever date happened to be remembered from earlier. Only when
+  // the fuller form isn't already open, though -- if it's open the date
+  // field is visible and editable, and a deliberate edit there shouldn't
+  // get silently overwritten back to the selected day.
+  function quickCreate(): void {
+    if (panelView === 'calendar' && !showFullCreateForm) {
+      deadlineDate = selectedCalendarDate;
+      if (!deadlineTime) deadlineTime = initialDeadlineTime;
+      persistDeadlineDefaults();
+    }
+    void create();
+  }
+
   async function loadCalendarCompletedForDate(dateKeyValue: string): Promise<void> {
     loadingCalendarCompleted = true;
     try {
@@ -493,7 +510,8 @@
   }
 
   function toggleCalendarCompletedForDate(event: Event): void {
-    if ((event.currentTarget as HTMLDetailsElement).open && calendarCompletedLoadedFor !== selectedCalendarDate) {
+    calendarCompletedDetailsOpen = (event.currentTarget as HTMLDetailsElement).open;
+    if (calendarCompletedDetailsOpen && calendarCompletedLoadedFor !== selectedCalendarDate) {
       void loadCalendarCompletedForDate(selectedCalendarDate);
     }
   }
@@ -1207,6 +1225,14 @@
       || unfinishedResponse.experiments.length === pageSize
       || unfinishedResponse.items.length === pageSize;
     loading = false;
+    // the calendar's "Completed" section is cached by date -- a plain
+    // date-based cache wouldn't otherwise notice a change made elsewhere
+    // (e.g. a task completed/restored, or a refresh), so invalidate it on
+    // every load() and, if it's currently open, refetch right away
+    calendarCompletedLoadedFor = '';
+    if (calendarCompletedDetailsOpen) {
+      void loadCalendarCompletedForDate(selectedCalendarDate);
+    }
   }
 
   async function loadMore(): Promise<void> {
@@ -1399,7 +1425,7 @@
     <input
       class='form-control'
       bind:value={draft}
-      on:keydown={(event) => event.key === 'Enter' && create()}
+      on:keydown={(event) => event.key === 'Enter' && quickCreate()}
       placeholder={t('add-task')}
     />
     <div class='input-group-append'>
