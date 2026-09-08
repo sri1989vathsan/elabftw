@@ -774,6 +774,8 @@
 </script>
 
 <div class="orders-board">
+<div class="orders-layout">
+  <div class="orders-form-column">
   <div class="orders-card orders-new-card">
     <form on:submit|preventDefault={submitNewItem}>
       <label class="sr-only" for="ordersNewTitle">{t('Title')}</label>
@@ -893,7 +895,9 @@
       </div>
     </form>
   </div>
+  </div>
 
+  <div class="orders-list-column">
   <div class="d-flex flex-wrap align-items-center my-3 orders-toolbar-row" style="gap:0.5rem">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by status')}>
       <button type="button" class={statusFilter === 'requested' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('requested')}>
@@ -1317,6 +1321,8 @@
       {/each}
     </ul>
   {/if}
+  </div>
+</div>
 </div>
 
 <style>
@@ -1324,7 +1330,23 @@
      border cards using the app's own real tokens/button classes, so this
      looks and themes exactly like the rest of eLabFTW, light or dark. */
   .orders-board {
-    max-width: 46rem;
+    max-width: 100%;
+  }
+
+  .orders-layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+  }
+
+  .orders-form-column {
+    flex: 1 1 22rem;
+    max-width: 28rem;
+  }
+
+  .orders-list-column {
+    flex: 3 1 32rem;
+    min-width: 0;
   }
 
   .orders-card {
