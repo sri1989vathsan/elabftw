@@ -155,9 +155,13 @@ final class Orders extends AbstractRest
                 'EXISTS (SELECT 1 FROM custom_order_items AS s_oi
                     INNER JOIN items AS s_item ON s_item.id = s_oi.item_id
                     WHERE s_oi.order_id = o.id AND s_item.title LIKE :search_item)',
+                'o.procurement_id LIKE :search_procurement_id',
+                'o.order_number LIKE :search_order_number',
             );
             $bind[':search_author'] = array($like, PDO::PARAM_STR);
             $bind[':search_item'] = array($like, PDO::PARAM_STR);
+            $bind[':search_procurement_id'] = array($like, PDO::PARAM_STR);
+            $bind[':search_order_number'] = array($like, PDO::PARAM_STR);
             if ($fulltext !== null) {
                 $searchConditions[] = 'MATCH(o.title, o.notes) AGAINST(:search_fulltext IN BOOLEAN MODE)';
                 $searchConditions[] = 'EXISTS (SELECT 1 FROM custom_order_comments AS s_comment
@@ -248,7 +252,7 @@ final class Orders extends AbstractRest
      */
     private static function selectSql(): string
     {
-        return 'SELECT o.id, o.title, o.notes, o.status, o.archived, o.pinned, o.created_at, o.userid,
+        return 'SELECT o.id, o.title, o.notes, o.procurement_id, o.order_number, o.status, o.archived, o.pinned, o.created_at, o.userid,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT("id", oi_item.id, "title", oi_item.title))

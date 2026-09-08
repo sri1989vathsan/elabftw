@@ -41,6 +41,8 @@
     id: number;
     title: string;
     notes: string | null;
+    procurement_id: string | null;
+    order_number: string | null;
     status: OrderStatus;
     archived: boolean;
     pinned: boolean;
@@ -1211,6 +1213,12 @@
                 {#each item.items as linkedItem (linkedItem.id)}
                   <span class="badge badge-info"><i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{linkedItem.title}</span>
                 {/each}
+                {#if item.procurement_id}
+                  <span class="badge badge-light" title={t('Beschaffungs-ID, extracted from an uploaded order confirmation PDF')}>{t('Procurement ID')}: {item.procurement_id}</span>
+                {/if}
+                {#if item.order_number}
+                  <span class="badge badge-light" title={t('Bestellung Nr., extracted from an uploaded order confirmation PDF')}>{t('Order #')}: {item.order_number}</span>
+                {/if}
                 {#if canManage(item)}
                   <div class="orders-item-actions ml-auto">
                     <button

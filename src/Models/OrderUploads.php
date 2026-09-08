@@ -33,6 +33,7 @@ use function fopen;
 use function mb_strtolower;
 use function mb_substr;
 use function pathinfo;
+use function preg_match;
 use function rewind;
 use function sprintf;
 use function stream_copy_to_stream;
@@ -163,7 +164,7 @@ final class OrderUploads extends AbstractRest
             return;
         }
 
-        $sql = 'SELECT id, long_name, storage FROM custom_order_uploads WHERE id = :id';
+        $sql = 'SELECT id, order_id, long_name, storage FROM custom_order_uploads WHERE id = :id';
         $req = $Db->prepare($sql);
         $req->bindValue(':id', $uploadId, PDO::PARAM_INT);
         $Db->execute($req);
@@ -189,6 +190,42 @@ final class OrderUploads extends AbstractRest
         $req->bindValue(':extracted_text', $extractedText, $extractedText === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':status', $status);
         $req->bindValue(':id', $uploadId, PDO::PARAM_INT);
+        $Db->execute($req);
+
+        if ($extractedText !== null) {
+            self::extractProcurementTags($Db, (int) $upload['order_id'], $extractedText);
+        }
+    }
+
+    /**
+     * A supplier/procurement order confirmation PDF (e.g. ETH Zurich's) has
+     * a "Beschaffungs-ID" (procurement id) and a "Bestellung Nr."
+     * (purchase order number) near the top -- pull those out and store them
+     * on the order so they show as tags and are searchable, without the
+     * user having to type them in by hand. Best-effort: a PDF that isn't in
+     * this format just leaves the fields unset.
+     */
+    private static function extractProcurementTags(Db $Db, int $orderId, string $text): void
+    {
+        $procurementId = null;
+        $orderNumber = null;
+        if (preg_match('/Beschaffungs-ID\s+(\S+)/i', $text, $matches) === 1) {
+            $procurementId = $matches[1];
+        }
+        if (preg_match('/Bestellung\s*(?:Nr|No)\.?\s+(\S+)/i', $text, $matches) === 1) {
+            $orderNumber = $matches[1];
+        }
+        if ($procurementId === null && $orderNumber === null) {
+            return;
+        }
+        $sql = 'UPDATE custom_orders SET
+                procurement_id = COALESCE(:procurement_id, procurement_id),
+                order_number = COALESCE(:order_number, order_number)
+            WHERE id = :order_id';
+        $req = $Db->prepare($sql);
+        $req->bindValue(':procurement_id', $procurementId, $procurementId === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':order_number', $orderNumber, $orderNumber === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':order_id', $orderId, PDO::PARAM_INT);
         $Db->execute($req);
     }
 
