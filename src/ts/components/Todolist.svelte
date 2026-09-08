@@ -1089,9 +1089,11 @@
     const project = projects.find(p => p.id === entry.projectId);
     if (!project) return teamMembers;
     const pool = [...project.members];
-    if (!pool.some(m => m.userid === project.userid)) {
-      const creator = teamMembers.find(m => m.userid === project.userid);
-      if (creator) pool.push(creator);
+    for (const userid of [project.userid, core.currentUserid]) {
+      if (!pool.some(m => m.userid === userid)) {
+        const member = teamMembers.find(m => m.userid === userid);
+        if (member) pool.push(member);
+      }
     }
     return pool;
   }
