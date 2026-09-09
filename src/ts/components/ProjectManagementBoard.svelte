@@ -371,6 +371,37 @@
     void loadProjects();
   }
 
+  // Scoped to activeProjectId so the percentage tracks whichever project
+  // tab is selected instead of always showing the whole team's -- see
+  // Todolist::readCounts(). Kept separate from load() so switching project
+  // tabs (selectProject(), which never re-fetches the task list itself --
+  // see its own comment) can still refresh just this, cheaply, instead of
+  // leaving stale numbers under a label that now claims to match the newly
+  // selected project.
+  async function loadCounts(): Promise<void> {
+    try {
+      const countsParam = typeof activeProjectId === 'number'
+        ? `&project_id=${activeProjectId}`
+        : activeProjectId === null ? '&unfiled=1' : '';
+      const counts = await ApiC.getJson(`${Model.Todolist}?scope=team&counts=1${countsParam}`) as Array<{
+        open_count: number;
+        done_count: number;
+        team_open_count: number;
+        team_done_count: number;
+      }>;
+      teamCounts = counts[0]
+        ? {
+          open: counts[0].open_count,
+          done: counts[0].done_count,
+          teamOpen: counts[0].team_open_count,
+          teamDone: counts[0].team_done_count,
+        }
+        : null;
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load task counts.');
+    }
+  }
+
   async function load(): Promise<void> {
     loading = true;
     try {
@@ -384,32 +415,13 @@
       // switching tabs can't hide a task a project membership should show.
       // The list fetches above stay capped (see readAll()'s $limit) --
       // counts is a separate, cheap aggregate query with no such cap, so
-      // the progress bar stays correct even past that page. Scoped to
-      // activeProjectId so the percentage tracks whichever project tab is
-      // selected instead of always showing the whole team's -- see
-      // Todolist::readCounts().
-      const countsParam = typeof activeProjectId === 'number'
-        ? `&project_id=${activeProjectId}`
-        : activeProjectId === null ? '&unfiled=1' : '';
-      const [open, done, counts] = await Promise.all([
+      // the progress bar stays correct even past that page.
+      const [open, done] = await Promise.all([
         ApiC.getJson(`${Model.Todolist}?scope=team&limit=${taskLimit}`) as Promise<Task[]>,
         ApiC.getJson(`${Model.Todolist}?scope=team&completed=1&limit=${taskLimit}`) as Promise<Task[]>,
-        ApiC.getJson(`${Model.Todolist}?scope=team&counts=1${countsParam}`) as Promise<Array<{
-          open_count: number;
-          done_count: number;
-          team_open_count: number;
-          team_done_count: number;
-        }>>,
+        loadCounts(),
       ]);
       tasks = [...open, ...done];
-      teamCounts = counts[0]
-        ? {
-          open: counts[0].open_count,
-          done: counts[0].done_count,
-          teamOpen: counts[0].team_open_count,
-          teamDone: counts[0].team_done_count,
-        }
-        : null;
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load tasks.');
     } finally {
@@ -464,8 +476,12 @@
         }
       }
       // now that we know which project the task actually belongs to,
-      // land on that project's tab instead of leaving "All" selected
+      // land on that project's tab instead of leaving "All" selected --
+      // load() above already resolved before this runs, so the counts it
+      // fetched are for whatever activeProjectId was at that point, not
+      // this one; refresh them to match
       activeProjectId = task.project_id ?? 'all';
+      void loadCounts();
       openDetail(task);
     });
 
@@ -490,6 +506,7 @@
   function selectProject(id: number | null | 'all'): void {
     activeProjectId = id;
     void loadColumns();
+    void loadCounts();
   }
 
   function openNewTaskInColumn(columnId: number): void {
@@ -1323,7 +1340,10 @@
         });
         const location = response.headers.get('Location') ?? '';
         const newId = Number(location.split('/').filter(Boolean).pop());
-        if (Number.isInteger(newId) && newId > 0) activeProjectId = newId;
+        if (Number.isInteger(newId) && newId > 0) {
+          activeProjectId = newId;
+          void loadCounts();
+        }
       }
       closeProjectDialog();
       await loadProjects();
@@ -1336,11 +1356,14 @@
 
   async function setProjectArchived(archived: boolean): Promise<void> {
     if (!editingProject) return;
-    if (archived && !window.confirm(t('Archive this project? It disappears from the normal project list (its tasks are unaffected and stay visible), and can be restored later from "Show archived".'))) return;
+    if (archived && !window.confirm(t('Archive this project? It disappears from the normal project list, and so do its tasks (from All, search and progress counts too) -- nothing is deleted, and it can be restored later from "Show archived".'))) return;
     savingProject = true;
     try {
       await ApiC.patch(`${Model.TodolistProjects}/${editingProject.id}`, { archived });
-      if (archived && activeProjectId === editingProject.id) activeProjectId = 'all';
+      if (archived && activeProjectId === editingProject.id) {
+        activeProjectId = 'all';
+        void loadCounts();
+      }
       closeProjectDialog();
       await loadProjects();
     } catch (error) {

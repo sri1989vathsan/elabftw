@@ -192,6 +192,11 @@ final class Todolist extends AbstractRest
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
             LEFT JOIN todolist_columns AS col ON col.id = t.column_id
             WHERE t.team = :team AND t.completed_at {$completedFilter}{$completedSinceFilter}{$scopeFilter}
+                -- archiving a project takes its tasks off the active board
+                -- entirely (All, search, counts) -- readOne() deliberately
+                -- doesn't apply this, so a direct link to one of them (e.g.
+                -- from an existing notification) still opens
+                AND (t.project_id IS NULL OR project.archived = 0)
                 AND (
                     t.project_id IS NULL
                     OR project.userid = :requester3
@@ -264,6 +269,7 @@ final class Todolist extends AbstractRest
             FROM todolist AS t
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
             WHERE t.team = :team{$scopeFilter}
+                AND (t.project_id IS NULL OR project.archived = 0)
                 AND (
                     t.project_id IS NULL
                     OR project.userid = :requester3
