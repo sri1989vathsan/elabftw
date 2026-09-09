@@ -391,6 +391,21 @@ document.addEventListener('DOMContentLoaded', () => {
       document.dispatchEvent(new CustomEvent('elabftw:folders-refreshed'));
     }
 
+    // Same idea for the Edit Folder modal's parent-folder dropdown -- it
+    // lives outside #foldersPanel (see FoldersPanel.class.ts) so replacing
+    // the panel above never touches it, and it would otherwise keep
+    // whatever folder list was there when the page (or the lazy panel
+    // fetch) first loaded, missing anything created/renamed/deleted since.
+    const editParentSelect = document.getElementById('editExperimentFolderParent') as HTMLSelectElement | null;
+    const freshEditParentSelect = freshDocument.getElementById('editExperimentFolderParent') as HTMLSelectElement | null;
+    if (editParentSelect && freshEditParentSelect) {
+      const selectedFolderId = editParentSelect.value;
+      editParentSelect.replaceChildren(...Array.from(freshEditParentSelect.options).map(option => option.cloneNode(true)));
+      if (editParentSelect.querySelector(`option[value="${selectedFolderId}"]`)) {
+        editParentSelect.value = selectedFolderId;
+      }
+    }
+
     freshPanel.hidden = panelWasHidden;
     currentPanel.replaceWith(freshPanel);
     const refreshedSidebar = document.getElementById('experimentsFoldersSidebar');
