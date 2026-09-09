@@ -3817,10 +3817,31 @@ input[type='color'] {
   height: 2rem;
   justify-content: center;
   margin-top: 0.1rem;
+  position: relative;
   width: 2rem;
 
   i {
     font-size: 0.85rem;
+  }
+
+  /* a tiny @ badge cut into the bottom-right corner of the base icon --
+     e.g. distinguishes "mentioned in an order" from "order status
+     changed" (both otherwise the same cart icon/tone family) without
+     relying on message text or color alone */
+  .notif-icon-badge {
+    align-items: center;
+    background: var(--white);
+    border-radius: 50%;
+    bottom: -3px;
+    box-shadow: 0 0 0 2px var(--white);
+    color: inherit;
+    display: flex;
+    font-size: 0.5rem;
+    height: 0.85rem;
+    justify-content: center;
+    position: absolute;
+    right: -3px;
+    width: 0.85rem;
   }
 }
 
