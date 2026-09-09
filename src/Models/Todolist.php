@@ -154,7 +154,9 @@ final class Todolist extends AbstractRest
             default => ' AND ' . sprintf($assignedExists, ':requester'),
         };
         if ($query->getBoolean('counts')) {
-            return array($this->readCounts($scope, $scopeFilter));
+            $projectId = $this->getProjectId($query->getInt('project_id') ?: null);
+            $unfiled = $query->getBoolean('unfiled');
+            return array($this->readCounts($scope, $scopeFilter, $projectId, $unfiled));
         }
         $completed = $query->getBoolean('completed');
         $completedFilter = $completed ? 'IS NOT NULL' : 'IS NULL';
@@ -218,25 +220,47 @@ final class Todolist extends AbstractRest
     }
 
     /**
-     * Team-wide open/done totals for the "% done" progress bar, independent
-     * of whatever page of the actual task list is currently loaded (the
+     * Open/done totals for the "% done" progress bar, independent of
+     * whatever page of the actual task list is currently loaded (the
      * board's own list fetch stays capped -- see readAll()'s $limit -- so
      * computing that percentage from however many rows happen to be loaded
      * would go quietly wrong past that cap, exactly the same way the count
-     * of visible tasks itself would). Deliberately ignores the client-side
-     * priority/search/project filters layered on top of the list in the
-     * board -- this is a stable "how much of the team's work is done"
-     * figure, not a live count of whatever's currently filtered into view.
+     * of visible tasks itself would).
+     *
+     * Scoped to $projectId (or to project_id IS NULL if $unfiled) when
+     * given, so the percentage tracks whichever project tab is selected --
+     * without that, switching from "All" to a specific project would keep
+     * showing the whole team's percentage, silently not matching what's
+     * actually on screen. Deliberately still ignores the client-side
+     * priority/search/Assigned-Created-All-tab filters layered on top in
+     * the board: those aren't reflected in team_open_count/team_done_count
+     * either, so the caller can label the figure accordingly rather than
+     * imply it's a live count of whatever's currently filtered into view.
+     *
+     * team_open_count/team_done_count are the unscoped team-wide totals
+     * regardless of $projectId/$unfiled, from the same query -- used to
+     * tell whether the (always team-wide, never project-scoped) task list
+     * fetch has more pages available, independent of which project is
+     * being viewed.
+     *
      * No assignee/entity-link subqueries, no LIMIT: this is one aggregate
      * query over indexed columns regardless of how much history exists.
      *
-     * @return array{open_count: int, done_count: int}
+     * @return array{open_count: int, done_count: int, team_open_count: int, team_done_count: int}
      */
-    private function readCounts(string $scope, string $scopeFilter): array
+    private function readCounts(string $scope, string $scopeFilter, ?int $projectId, bool $unfiled): array
     {
+        $scopedCase = '';
+        if ($projectId !== null) {
+            $scopedCase = ' AND t.project_id = :project_id';
+        } elseif ($unfiled) {
+            $scopedCase = ' AND t.project_id IS NULL';
+        }
         $sql = "SELECT
-                SUM(CASE WHEN t.completed_at IS NULL THEN 1 ELSE 0 END) AS open_count,
-                SUM(CASE WHEN t.completed_at IS NOT NULL THEN 1 ELSE 0 END) AS done_count
+                SUM(CASE WHEN t.completed_at IS NULL THEN 1 ELSE 0 END) AS team_open_count,
+                SUM(CASE WHEN t.completed_at IS NOT NULL THEN 1 ELSE 0 END) AS team_done_count,
+                SUM(CASE WHEN t.completed_at IS NULL{$scopedCase} THEN 1 ELSE 0 END) AS open_count,
+                SUM(CASE WHEN t.completed_at IS NOT NULL{$scopedCase} THEN 1 ELSE 0 END) AS done_count
             FROM todolist AS t
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
             WHERE t.team = :team{$scopeFilter}
@@ -253,6 +277,9 @@ final class Todolist extends AbstractRest
         if ($scope === 'all') {
             $req->bindParam(':requester2', $this->userid, PDO::PARAM_INT);
         }
+        if ($projectId !== null) {
+            $req->bindParam(':project_id', $projectId, PDO::PARAM_INT);
+        }
         $req->bindParam(':requester3', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
@@ -260,6 +287,8 @@ final class Todolist extends AbstractRest
         return array(
             'open_count' => (int) $row['open_count'],
             'done_count' => (int) $row['done_count'],
+            'team_open_count' => (int) $row['team_open_count'],
+            'team_done_count' => (int) $row['team_done_count'],
         );
     }
 
