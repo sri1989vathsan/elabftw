@@ -368,7 +368,7 @@
           if (upload) {
             notesHtml = notesHtml.replace(
               new RegExp(`<img[^>]*data-pending-image="${pending.placeholderId}"[^>]*>`),
-              `<img src="${downloadUrl(upload)}" alt="${pending.file.name}" style="max-width:100%">`,
+              `<img src="${downloadUrl(upload)}" alt="${pending.file.name}" class="orders-note-image">`,
             );
             notesChanged = true;
           }
@@ -753,7 +753,7 @@
       const upload = uploads.find(u => u.id === newId);
       if (!upload) return;
       el.focus();
-      document.execCommand('insertHTML', false, `<img src="${downloadUrl(upload)}" alt="${file.name}" style="max-width:100%">`);
+      document.execCommand('insertHTML', false, `<img src="${downloadUrl(upload)}" alt="${file.name}" class="orders-note-image">`);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : `Could not upload ${file.name}.`);
     }
@@ -773,7 +773,7 @@
     document.execCommand(
       'insertHTML',
       false,
-      `<img src="${URL.createObjectURL(file)}" data-pending-image="${placeholderId}" alt="${file.name}" style="max-width:100%">`,
+      `<img src="${URL.createObjectURL(file)}" data-pending-image="${placeholderId}" alt="${file.name}" class="orders-note-image">`,
     );
   }
 
@@ -952,12 +952,16 @@
         bind:value={newTitle}
         required
       />
-      <div class="form-check mb-2">
-        <input id="ordersNewIsReference" class="form-check-input" type="checkbox" bind:checked={newIsReference} />
-        <label class="form-check-label" for="ordersNewIsReference">
-          {t('This is a reference (catalog info, not an actual order)')}
-        </label>
-      </div>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm orders-reference-toggle mb-2"
+        class:active={newIsReference}
+        aria-pressed={newIsReference}
+        title={t('This is a reference (catalog info, not an actual order) — always stays pinned')}
+        on:click={() => newIsReference = !newIsReference}
+      >
+        <i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Reference')}
+      </button>
       <label class="sr-only" for="ordersNewNotes">{t('Notes')}</label>
       <div
         id="ordersNewNotes"
@@ -1371,8 +1375,9 @@
                       type="button"
                       class="btn btn-ghost btn-sm orders-icon-button"
                       class:orders-icon-button-active={item.pinned}
-                      title={item.pinned ? t('Unpin') : t('Pin to top')}
-                      aria-label={item.pinned ? t('Unpin') : t('Pin to top')}
+                      disabled={item.status === 'reference'}
+                      title={item.status === 'reference' ? t('A reference always stays pinned') : item.pinned ? t('Unpin') : t('Pin to top')}
+                      aria-label={item.status === 'reference' ? t('A reference always stays pinned') : item.pinned ? t('Unpin') : t('Pin to top')}
                       on:click={() => setPinned(item, !item.pinned)}
                     >
                       <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i>
@@ -1708,6 +1713,16 @@
     color: var(--primary);
   }
 
+  .orders-reference-toggle {
+    border: 1px solid var(--secondary);
+  }
+
+  .orders-reference-toggle.active {
+    background: color-mix(in srgb, var(--primary) 10%, var(--mainbackground));
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
   .orders-item-header {
     align-items: center;
     display: flex;
@@ -1764,6 +1779,19 @@
   .orders-item-description {
     margin: 0.35rem 0 0.2rem;
     overflow-wrap: anywhere;
+  }
+
+  /* an image pasted/dropped into notes shouldn't be able to blow the card
+     out to its own full size -- cap it to a fixed box (not a percentage of
+     the card, which has no width of its own and would just grow to match
+     the image instead of constraining it) and only ever shrink a bigger
+     image down to fit, never stretch a small one up to fill the box. */
+  .orders-note-image {
+    max-height: 18rem;
+    max-width: min(100%, 24rem);
+    width: auto;
+    height: auto;
+    object-fit: contain;
   }
 
   .orders-notes-editor {
