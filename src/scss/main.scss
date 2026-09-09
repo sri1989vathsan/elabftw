@@ -1283,8 +1283,13 @@ tr:first-child td {
       background: transparent;
       border-color: transparent;
       color: var(--chrome-muted);
-      padding-bottom: 0.35rem;
-      padding-top: 0.35rem;
+      // the navbar's own global .nav-link rule (_header.scss) leaks in here
+      // too since it's a bare selector, not scoped to .navbar -- its
+      // line-height/min-height/!important padding are what actually made
+      // this look tall, not anything set here before
+      line-height: 1.4;
+      min-height: 0;
+      padding: 0.35rem 0.75rem !important;
 
       &:hover,
       &:focus {
