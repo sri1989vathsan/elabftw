@@ -79,14 +79,21 @@ final class Orders extends AbstractRest
         if ($status !== null && !in_array($status, self::STATUSES, true)) {
             throw new ImproperActionException('Invalid order status.');
         }
-        $sql = 'INSERT INTO custom_orders (team, userid, title, notes, status)
-            VALUES (:team, :userid, :title, :notes, COALESCE(:status, \'requested\'))';
+        // a reference is a shared team lookup, not a request working through
+        // a lifecycle -- pin it immediately so it's not sitting invisible
+        // beside real, gone-once-fulfilled requests unless someone digs it
+        // out of the Reference tab. See also updateStatus() below, which
+        // keeps this true if a plain order is later marked reference.
+        $pinned = $status === 'reference' ? 1 : 0;
+        $sql = "INSERT INTO custom_orders (team, userid, title, notes, status, pinned)
+            VALUES (:team, :userid, :title, :notes, COALESCE(:status, 'requested'), :pinned)";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
         $req->bindValue(':title', $title);
         $req->bindValue(':notes', $notes, $notes === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':status', $status, $status === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':pinned', $pinned, PDO::PARAM_INT);
         $this->Db->execute($req);
         $orderId = (int) $this->Db->lastInsertId();
 
@@ -346,7 +353,13 @@ final class Orders extends AbstractRest
             $this->updateArchived((bool) $params['archived']);
         }
         if (array_key_exists('pinned', $params)) {
-            $this->updatePinned((bool) $params['pinned']);
+            // a reference stays pinned -- see updateStatus()/postAction() --
+            // so an explicit unpin is a no-op rather than an error while
+            // this order is (or is becoming, in this same request) one
+            $finalStatus = array_key_exists('status', $params) ? (string) $params['status'] : $order['status'];
+            if ((bool) $params['pinned'] || $finalStatus !== 'reference') {
+                $this->updatePinned((bool) $params['pinned']);
+            }
         }
         if (array_key_exists('title', $params) || array_key_exists('notes', $params)) {
             if (!$isOwner && !$this->Users->isAdmin) {
@@ -386,7 +399,12 @@ final class Orders extends AbstractRest
         if (!in_array($status, self::STATUSES, true)) {
             throw new ImproperActionException('Invalid order status.');
         }
-        $sql = 'UPDATE custom_orders SET status = :status WHERE id = :id AND team = :team';
+        // same "a reference stays pinned" rule postAction() applies at
+        // creation -- also enforced here so marking an existing order as
+        // reference later has the same effect
+        $sql = $status === 'reference'
+            ? 'UPDATE custom_orders SET status = :status, pinned = 1 WHERE id = :id AND team = :team'
+            : 'UPDATE custom_orders SET status = :status WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':status', $status);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
