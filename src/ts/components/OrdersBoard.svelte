@@ -1798,6 +1798,21 @@
     overflow-x: auto;
   }
 
+  /* a table pasted in from elsewhere usually carries its own inline
+     width from the source page (fixed pixels, ignoring the container
+     entirely -- hence not responding to the browser window being
+     resized either) rather than one of ours ever setting it -- CSS
+     wins over an HTML width="" attribute regardless, and !important
+     here additionally overrides an inline style="width: ...". Forces
+     it to actually fit the card instead of just being scrollable
+     inside it; table-layout: fixed keeps column widths proportional
+     (auto layout would otherwise still expand each cell to fit its
+     own content, defeating the width override). */
+  :global(.orders-item-description table) {
+    table-layout: fixed !important;
+    width: 100% !important;
+  }
+
   /* :global() because this class is set on an <img> inserted at runtime via
      document.execCommand('insertHTML', ...) when pasting/dropping an image
      into notes -- never through Svelte's own template, so it never gets
