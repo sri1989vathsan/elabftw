@@ -257,8 +257,14 @@
       if (dateFrom !== '') params.date_from = dateFrom;
       if (dateTo !== '') params.date_to = dateTo;
       const fetched = await ApiC.getJson(Model.Order, params) as OrderItem[];
-      hasNextPage = fetched.length > pageSize;
-      items = fetched.slice(0, pageSize);
+      // pinned rows are never paginated away (the backend always returns
+      // every matching one, regardless of limit/offset) -- only the
+      // unpinned rows are actually paged, so hasNextPage/slicing must look
+      // at those alone or a handful of pins would look like an extra page.
+      const pinnedFetched = fetched.filter(item => item.pinned);
+      const unpinnedFetched = fetched.filter(item => !item.pinned);
+      hasNextPage = unpinnedFetched.length > pageSize;
+      items = [...pinnedFetched, ...unpinnedFetched.slice(0, pageSize)];
       // attachments now come bundled with each order, so this is a single
       // request instead of one per order
       uploadsByItem = Object.fromEntries(items.map(item => [item.id, item.uploads]));
