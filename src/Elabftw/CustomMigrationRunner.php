@@ -15,6 +15,7 @@ use League\Flysystem\FilesystemOperator;
 use PDO;
 use Symfony\Component\Console\Output\OutputInterface;
 
+use function array_flip;
 use function array_unique;
 use function array_values;
 use function date;
@@ -101,12 +102,27 @@ final class CustomMigrationRunner
         $this->Db = Db::getConnection();
     }
 
-    /** @return list<string> */
+    /**
+     * Usability and Orders assign different filenames/numbers to a handful
+     * of otherwise-identical migrations (e.g. usability's
+     * 035_notif_mentioned.sql is byte-for-byte the same change as Orders'
+     * 039_notif_mentioned.sql). Tracking by filename alone means a database
+     * that moves from one branch to the other would see its own branch's
+     * filename as never having run and try the same schema change again --
+     * harmless for a guarded ALTER TABLE like these, but not guaranteed in
+     * general, and not something to rely on. If this exact migration's
+     * checksum already ran under some other filename, record it under this
+     * one too (so this branch's own future runs recognize it via a normal
+     * filename lookup) without re-executing the SQL.
+     *
+     * @return list<string>
+     */
     public function getPending(): array
     {
         $this->assertOfficialSchemaIsCurrent();
         $this->ensureLedger();
         $applied = $this->getApplied();
+        $appliedChecksums = array_flip($applied);
         $pending = array();
         foreach (self::MIGRATIONS as $migration) {
             if (!$this->filesystem->fileExists($migration)) {
@@ -120,6 +136,10 @@ final class CustomMigrationRunner
                         $migration,
                     ));
                 }
+                continue;
+            }
+            if (isset($appliedChecksums[$checksum])) {
+                $this->recordAppliedWithoutRunning($migration, $checksum);
                 continue;
             }
             $pending[] = $migration;
@@ -253,5 +273,15 @@ final class CustomMigrationRunner
             $applied[(string) $row['migration']] = (string) $row['checksum'];
         }
         return $applied;
+    }
+
+    private function recordAppliedWithoutRunning(string $migration, string $checksum): void
+    {
+        $req = $this->Db->prepare(
+            'INSERT INTO custom_schema_migrations (migration, checksum) VALUES (:migration, :checksum)',
+        );
+        $req->bindValue(':migration', $migration);
+        $req->bindValue(':checksum', $checksum);
+        $this->Db->execute($req);
     }
 }
