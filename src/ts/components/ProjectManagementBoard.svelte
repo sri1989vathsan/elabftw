@@ -111,6 +111,9 @@
   const notify = new AppNotification();
 
   let tasks: Task[] = [];
+  // team-wide open/done totals for the progress bar -- see load() and the
+  // doneCount/donePercent/totalCount reactive statements below
+  let teamCounts: { open: number; done: number } | null = null;
   let teamMembers: TeamMember[] = [];
   let projects: Project[] = [];
   let columns: Column[] = [];
@@ -224,8 +227,15 @@
       : list.filter(task => task.column_id === column.id);
   }
 
-  $: doneCount = doneColumn ? tasksInColumn(doneColumn, visibleTasks).length : 0;
-  $: donePercent = visibleTasks.length === 0 ? 0 : Math.round((doneCount / visibleTasks.length) * 100);
+  // team-wide totals from the server (see load()), independent of the
+  // list's own LIMIT and of whatever priority/search/project filter is
+  // currently applied -- computing this from visibleTasks.length instead
+  // would go quietly wrong the moment the team has more tasks than a
+  // single page of the list actually loads, exactly the same way the
+  // list itself would silently miss tasks past that same page.
+  $: totalCount = teamCounts ? teamCounts.open + teamCounts.done : visibleTasks.length;
+  $: doneCount = teamCounts ? teamCounts.done : (doneColumn ? tasksInColumn(doneColumn, visibleTasks).length : 0);
+  $: donePercent = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
 
   function canManage(task: Task): boolean {
     if (task.userid === core.currentUserid
@@ -357,11 +367,16 @@
       // assigned to it -- the Assigned/Created/All tabs below are a
       // client-side filter on top of that, never a narrower fetch, so
       // switching tabs can't hide a task a project membership should show.
-      const [open, done] = await Promise.all([
+      // The list fetches above stay capped (see readAll()'s $limit) --
+      // counts is a separate, cheap aggregate query with no such cap, so
+      // the progress bar stays correct even past that page.
+      const [open, done, counts] = await Promise.all([
         ApiC.getJson(`${Model.Todolist}?scope=team`) as Promise<Task[]>,
         ApiC.getJson(`${Model.Todolist}?scope=team&completed=1`) as Promise<Task[]>,
+        ApiC.getJson(`${Model.Todolist}?scope=team&counts=1`) as Promise<Array<{ open_count: number; done_count: number }>>,
       ]);
       tasks = [...open, ...done];
+      teamCounts = counts[0] ? { open: counts[0].open_count, done: counts[0].done_count } : null;
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load tasks.');
     } finally {
@@ -1382,7 +1397,7 @@
     </div>
   {/if}
   {#if visibleTasks.length > 0}
-    <div class="pm-progress mt-2" title={`${doneCount} / ${visibleTasks.length} ${t('done')}`}>
+    <div class="pm-progress mt-2" title={`${doneCount} / ${totalCount} ${t('done')}`}>
       <div class="pm-progress-bar" style={`width: ${donePercent}%`}></div>
       <span class="pm-progress-label">{donePercent}% {t('done')}</span>
     </div>

@@ -153,6 +153,9 @@ final class Todolist extends AbstractRest
             'all' => ' AND (t.userid = :requester OR ' . sprintf($assignedExists, ':requester2') . ')',
             default => ' AND ' . sprintf($assignedExists, ':requester'),
         };
+        if ($query->getBoolean('counts')) {
+            return array($this->readCounts($scope, $scopeFilter));
+        }
         $completed = $query->getBoolean('completed');
         $completedFilter = $completed ? 'IS NOT NULL' : 'IS NULL';
         $order = $completed ? 'pinned DESC, completed_at DESC' : 'pinned DESC, ordering ASC, creation_time DESC';
@@ -212,6 +215,52 @@ final class Todolist extends AbstractRest
         $this->Db->execute($req);
 
         return array_map(fn(array $row): array => $this->decodeEntityLinks($this->decodeAssignees($row)), $req->fetchAll());
+    }
+
+    /**
+     * Team-wide open/done totals for the "% done" progress bar, independent
+     * of whatever page of the actual task list is currently loaded (the
+     * board's own list fetch stays capped -- see readAll()'s $limit -- so
+     * computing that percentage from however many rows happen to be loaded
+     * would go quietly wrong past that cap, exactly the same way the count
+     * of visible tasks itself would). Deliberately ignores the client-side
+     * priority/search/project filters layered on top of the list in the
+     * board -- this is a stable "how much of the team's work is done"
+     * figure, not a live count of whatever's currently filtered into view.
+     * No assignee/entity-link subqueries, no LIMIT: this is one aggregate
+     * query over indexed columns regardless of how much history exists.
+     *
+     * @return array{open_count: int, done_count: int}
+     */
+    private function readCounts(string $scope, string $scopeFilter): array
+    {
+        $sql = "SELECT
+                SUM(CASE WHEN t.completed_at IS NULL THEN 1 ELSE 0 END) AS open_count,
+                SUM(CASE WHEN t.completed_at IS NOT NULL THEN 1 ELSE 0 END) AS done_count
+            FROM todolist AS t
+            LEFT JOIN todolist_projects AS project ON project.id = t.project_id
+            WHERE t.team = :team{$scopeFilter}
+                AND (
+                    t.project_id IS NULL
+                    OR project.userid = :requester3
+                    OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester4)
+                )";
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        if ($scope !== 'team') {
+            $req->bindParam(':requester', $this->userid, PDO::PARAM_INT);
+        }
+        if ($scope === 'all') {
+            $req->bindParam(':requester2', $this->userid, PDO::PARAM_INT);
+        }
+        $req->bindParam(':requester3', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $row = $this->Db->fetch($req);
+        return array(
+            'open_count' => (int) $row['open_count'],
+            'done_count' => (int) $row['done_count'],
+        );
     }
 
     /**
