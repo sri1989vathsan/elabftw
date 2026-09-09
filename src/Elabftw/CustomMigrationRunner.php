@@ -84,6 +84,10 @@ final class CustomMigrationRunner
         '044_order_upload_extraction_processing.sql',
         '045_orders_fulltext_search.sql',
         '046_project_details_and_pinning.sql',
+        '047_order_reference_status.sql',
+        '048_order_procurement_tags.sql',
+        '049_entity_order_links.sql',
+        '050_todolist_project_archive.sql',
     );
 
     private Db $Db;
