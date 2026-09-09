@@ -214,13 +214,42 @@ final class Orders extends AbstractRest
 
         $limit = $query->getInt('limit') ?: 0;
         $offset = max(0, $query->getInt('offset'));
+
+        if ($limit === 0) {
+            $sql = self::selectSql() . '
+                WHERE ' . implode(' AND ', $conditions) . '
+                ORDER BY o.pinned DESC, o.created_at DESC';
+
+            return array_map($this->hydrate(...), $this->fetchAllBound($sql, $bind));
+        }
+
+        // Pinned orders get their own always-visible section on the
+        // frontend rather than counting against the page size -- fetch
+        // every matching pinned row regardless of offset/limit, so a
+        // handful of pins can never squeeze unpinned orders off the
+        // requested page (e.g. 4 pinned + a 10-per-page setting used to mean
+        // only 6 unpinned orders were shown; now it's the full 10).
+        // Pagination itself then only walks the unpinned rows.
+        $pinnedSql = self::selectSql() . '
+            WHERE ' . implode(' AND ', $conditions) . '
+            AND o.pinned = 1
+            ORDER BY o.created_at DESC';
+        $pinnedRows = $this->fetchAllBound($pinnedSql, $bind);
+
         // ask for one extra row so the frontend can tell whether there's a
         // next page without a separate COUNT query
-        $limitSql = $limit > 0 ? sprintf(' LIMIT %d OFFSET %d', $limit + 1, $offset) : '';
-
-        $sql = self::selectSql() . '
+        $unpinnedSql = self::selectSql() . '
             WHERE ' . implode(' AND ', $conditions) . "
-            ORDER BY o.pinned DESC, o.created_at DESC{$limitSql}";
+            AND o.pinned = 0
+            ORDER BY o.created_at DESC LIMIT " . ($limit + 1) . " OFFSET {$offset}";
+        $unpinnedRows = $this->fetchAllBound($unpinnedSql, $bind);
+
+        return array_map($this->hydrate(...), array(...$pinnedRows, ...$unpinnedRows));
+    }
+
+    /** @param array<string, array{0: mixed, 1: int}> $bind */
+    private function fetchAllBound(string $sql, array $bind): array
+    {
         $req = $this->Db->prepare($sql);
         foreach ($bind as $key => $valueAndType) {
             [$value, $type] = $valueAndType;
@@ -228,7 +257,7 @@ final class Orders extends AbstractRest
         }
         $this->Db->execute($req);
 
-        return array_map($this->hydrate(...), $req->fetchAll());
+        return $req->fetchAll();
     }
 
     /**
