@@ -54,6 +54,8 @@ enum UsersColumn: string
     case NotifMentionedOrderEmail = 'notif_mentioned_order_email';
     case NotifTaskAssigned = 'notif_task_assigned';
     case NotifTaskAssignedEmail = 'notif_task_assigned_email';
+    case NotifOrderStatusChanged = 'notif_order_status_changed';
+    case NotifOrderStatusChangedEmail = 'notif_order_status_changed_email';
     case NotifUserCreated = 'notif_user_created';
     case NotifUserCreatedEmail = 'notif_user_created_email';
     case NotifUserNeedValidation = 'notif_user_need_validation';
