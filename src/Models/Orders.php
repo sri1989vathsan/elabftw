@@ -51,6 +51,11 @@ final class Orders extends AbstractRest
 
     private const array STATUSES = array('requested', 'ordered', 'received', 'cancelled', 'reference');
 
+    // default size of the pinned bucket in readAll() when the client
+    // doesn't ask for a different one -- see the comment there for why it
+    // must stay bounded at all
+    private const int DEFAULT_PINNED_LIMIT = 20;
+
     public function __construct(private Users $Users, ?int $id = null)
     {
         parent::__construct();
@@ -224,17 +229,29 @@ final class Orders extends AbstractRest
         }
 
         // Pinned orders get their own always-visible section on the
-        // frontend rather than counting against the page size -- fetch
-        // every matching pinned row regardless of offset/limit, so a
-        // handful of pins can never squeeze unpinned orders off the
-        // requested page (e.g. 4 pinned + a 10-per-page setting used to mean
-        // only 6 unpinned orders were shown; now it's the full 10).
-        // Pagination itself then only walks the unpinned rows.
+        // frontend rather than counting against the page size -- but
+        // bounded and paginated in its own right, not fetched in full:
+        // every Reference order is permanently force-pinned (see
+        // postAction()/updateStatus()/patch()), so an unbounded fetch here
+        // would mean a growing reference catalogue makes *every* status
+        // tab's response unbounded, defeating pagination entirely on the
+        // Reference tab in particular (where every matching row is
+        // pinned). Ask for one extra row, same as the unpinned query below,
+        // so the frontend can tell whether there's more to load without a
+        // separate COUNT query.
+        $pinnedLimit = $query->getInt('pinned_limit') ?: self::DEFAULT_PINNED_LIMIT;
+        $pinnedOffset = max(0, $query->getInt('pinned_offset'));
         $pinnedSql = self::selectSql() . '
             WHERE ' . implode(' AND ', $conditions) . '
             AND o.pinned = 1
-            ORDER BY o.created_at DESC';
+            ORDER BY o.created_at DESC LIMIT ' . ($pinnedLimit + 1) . " OFFSET {$pinnedOffset}";
         $pinnedRows = $this->fetchAllBound($pinnedSql, $bind);
+
+        // "load more pinned" only needs the next chunk of the pinned
+        // bucket -- skip running the unpinned query at all for that.
+        if ($query->getBoolean('pinned_only')) {
+            return array_map($this->hydrate(...), $pinnedRows);
+        }
 
         // ask for one extra row so the frontend can tell whether there's a
         // next page without a separate COUNT query
