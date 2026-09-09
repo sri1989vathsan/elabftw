@@ -206,9 +206,18 @@
   $: donePercent = visibleTasks.length === 0 ? 0 : Math.round((doneCount / visibleTasks.length) * 100);
 
   function canManage(task: Task): boolean {
-    return task.userid === core.currentUserid
+    if (task.userid === core.currentUserid
       || task.assignees.some(a => a.userid === core.currentUserid)
-      || core.isAdmin;
+      || core.isAdmin) {
+      return true;
+    }
+    // mirrors Todolist::canWriteOrExplode() server-side: a project member
+    // can manage any task in that project, not just their own/assigned ones
+    if (task.project_id === null) return false;
+    const project = projects.find(p => p.id === task.project_id);
+    if (!project) return false;
+    return project.userid === core.currentUserid
+      || project.members.some(m => m.userid === core.currentUserid);
   }
 
   function addAssignee(list: TeamMember[], userid: number, pool: TeamMember[]): TeamMember[] {
@@ -374,6 +383,9 @@
           return;
         }
       }
+      // now that we know which project the task actually belongs to,
+      // land on that project's tab instead of leaving "All" selected
+      activeProjectId = task.project_id ?? 'all';
       openDetail(task);
     });
 
