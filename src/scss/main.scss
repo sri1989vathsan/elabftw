@@ -3779,8 +3779,17 @@ input[type='color'] {
 
 /* notifications */
 .notification {
+  align-items: flex-start;
   border-top: 1px solid var(--mainbackground);
   color: var(--medium);
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background-color: color-mix(in srgb, var(--primary) 6%, transparent);
+  }
 
   span {
     color: var(--mediumstrong);
@@ -3790,13 +3799,59 @@ input[type='color'] {
     font-size: 80%;
   }
 
+  /* a soft tint + left accent reads as "new" without the old solid
+     full-row color fill, which drowned out the message text and forced a
+     separate light-text override just for this one state */
   &[data-ack='0'] {
-    background-color: var(--primary);
-
-    span {
-      color: var(--chrome-fg);
-    }
+    background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+    border-left: 3px solid var(--primary);
+    padding-left: calc(1rem - 3px);
   }
+}
+
+.notif-icon {
+  align-items: center;
+  border-radius: 50%;
+  display: flex;
+  flex-shrink: 0;
+  height: 2rem;
+  justify-content: center;
+  margin-top: 0.1rem;
+  width: 2rem;
+
+  i {
+    font-size: 0.85rem;
+  }
+}
+
+.notif-icon-info {
+  background: color-mix(in srgb, var(--elabblue) 18%, transparent);
+  color: var(--elabblue);
+}
+
+.notif-icon-success {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--green);
+}
+
+.notif-icon-warning {
+  background: color-mix(in srgb, var(--orange) 20%, transparent);
+  color: var(--orange);
+}
+
+.notif-icon-danger {
+  background: color-mix(in srgb, var(--dangerred) 18%, transparent);
+  color: var(--dangerred);
+}
+
+.notif-icon-neutral {
+  background: color-mix(in srgb, var(--secondary) 15%, transparent);
+  color: var(--secondary);
+}
+
+.notif-body {
+  flex: 1;
+  min-width: 0;
 }
 
 /* The switch - the box around the slider */
