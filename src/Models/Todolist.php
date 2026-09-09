@@ -412,22 +412,34 @@ final class Todolist extends AbstractRest
         $previousAssignees = array_map('intval', array_column($before['assignees'] ?? array(), 'userid'));
         $previousColumnKind = $before['column_kind'] ?? null;
         foreach ($params as $key => $value) {
-            if ($key === 'assignee_userids' || $key === 'assigned_userid') {
+            if ($key === 'assignee_userids' || $key === 'assigned_userid' || $key === 'column_id') {
                 continue;
             }
             $this->update($key, $value);
         }
         // Each project can have its own private copy of the columns (see
-        // TodolistColumns::ensureProjectColumns()), so a task's column_id
-        // almost certainly stops belonging to its column set the moment
-        // the task moves to a different project (or to/from no project at
-        // all) -- follow it to the equivalent column, by kind, over there.
-        // Skipped when the request already set column_id itself.
-        if (array_key_exists('project_id', $params) && $previousColumnKind !== null && !array_key_exists('column_id', $params)) {
-            $newProjectId = $params['project_id'] !== null && $params['project_id'] !== ''
-                ? (int) $params['project_id']
-                : null;
-            $matchingColumnId = $this->resolveColumnIdForKind($previousColumnKind, $newProjectId);
+        // TodolistColumns::ensureProjectColumns()), so an explicit
+        // column_id in the request isn't trusted as literally correct on
+        // its own -- same reasoning as postAction() for a brand-new task:
+        // it might belong to whatever column set the client happened to
+        // have loaded (e.g. the All tab's team-wide default columns, or a
+        // different project's board) rather than this task's own project.
+        // Resolves to the equivalent column, by kind, within the task's
+        // actual project -- its new one if project_id is also changing in
+        // this same request, otherwise whatever it already was.
+        $effectiveProjectId = array_key_exists('project_id', $params)
+            ? ($params['project_id'] !== null && $params['project_id'] !== '' ? (int) $params['project_id'] : null)
+            : ($before['project_id'] ?? null);
+        if (array_key_exists('column_id', $params)) {
+            $requestedKind = $this->getColumnKind($this->getColumnId($params['column_id'])) ?? $previousColumnKind;
+            if ($requestedKind !== null) {
+                $resolvedColumnId = $this->resolveColumnIdForKind($requestedKind, $effectiveProjectId);
+                if ($resolvedColumnId !== null) {
+                    $this->update('column_id', $resolvedColumnId);
+                }
+            }
+        } elseif (array_key_exists('project_id', $params) && $previousColumnKind !== null) {
+            $matchingColumnId = $this->resolveColumnIdForKind($previousColumnKind, $effectiveProjectId);
             if ($matchingColumnId !== null) {
                 $this->update('column_id', $matchingColumnId);
             }
