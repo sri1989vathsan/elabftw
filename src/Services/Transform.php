@@ -176,6 +176,19 @@ final class Transform
                     ),
                     $notif['created_at'],
                 ),
+            Notifications::OrderStatusChanged =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="orders.php?order=%d">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    (int) $notif['body']['order_id'],
+                    sprintf(
+                        _('%s changed the status of your order "%s" to %s.'),
+                        $notif['body']['changer_fullname'],
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                        htmlspecialchars($notif['body']['status_label'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
+                    $notif['created_at'],
+                ),
             default => throw new ImproperActionException('Invalid notification type.'),
         };
     }
