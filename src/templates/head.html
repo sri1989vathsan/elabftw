@@ -234,17 +234,48 @@
 
         {# Notification bell #}
         <div class='nav-item dropdown' id='navbarNotifDiv'>
-          {% set hasUnread = App.notifsArr|filter(n => n.is_ack == 0)|length > 0 %}
-          <button class='btn nav-link {{ hasUnread ? 'notif-active' }}' id='navbarNotifDropdown' type='button' aria-label='{{ 'Notifications'|trans }}' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'><i class='far fa-bell fa-2x'></i></button>
-          <div class='dropdown-menu dropdown-menu-right' id='navbar-notif-dropdown'><span class='dropdown-header'>{{ 'Notifications'|trans }}</span>
+          {% set unreadCount = App.notifsArr|filter(n => n.is_ack == 0)|length %}
+          {# category (Elabftw\Enums\Notifications backing int) -> icon/tone, purely presentational -- Transform::notif() still owns the actual message markup, this only decorates it #}
+          {% set notifIcons = {
+            10: {'icon': 'fa-comment', 'tone': 'info'},
+            11: {'icon': 'fa-user-plus', 'tone': 'neutral'},
+            12: {'icon': 'fa-user-check', 'tone': 'warning'},
+            13: {'icon': 'fa-clock', 'tone': 'warning'},
+            14: {'icon': 'fa-calendar-xmark', 'tone': 'danger'},
+            15: {'icon': 'fa-clock', 'tone': 'warning'},
+            16: {'icon': 'fa-at', 'tone': 'info'},
+            17: {'icon': 'fa-at', 'tone': 'info'},
+            18: {'icon': 'fa-list-check', 'tone': 'success'},
+            19: {'icon': 'fa-cart-shopping', 'tone': 'success'},
+            20: {'icon': 'fa-user-clock', 'tone': 'warning'},
+            30: {'icon': 'fa-user-check', 'tone': 'success'},
+            40: {'icon': 'fa-triangle-exclamation', 'tone': 'danger'},
+            50: {'icon': 'fa-file-circle-exclamation', 'tone': 'danger'},
+            60: {'icon': 'fa-file-circle-exclamation', 'tone': 'danger'},
+            70: {'icon': 'fa-arrow-up', 'tone': 'neutral'},
+            80: {'icon': 'fa-envelope', 'tone': 'neutral'},
+            90: {'icon': 'fa-hand', 'tone': 'info'},
+          } %}
+          <button class='btn nav-link {{ unreadCount > 0 ? 'notif-active' }}' id='navbarNotifDropdown' type='button' data-count='{{ unreadCount }}' aria-label='{{ 'Notifications'|trans }}' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'><i class='far fa-bell fa-2x'></i></button>
+          <div class='dropdown-menu dropdown-menu-right notif-dropdown' id='navbar-notif-dropdown'>
+            <div class='notif-dropdown-header'>
+              <span>{{ 'Notifications'|trans }}</span>
+              {% if unreadCount > 0 %}<span class='badge badge-primary notif-unread-badge'>{{ unreadCount }}</span>{% endif %}
+            </div>
             {% if App.notifsArr %}
-              {% for notif in App.notifsArr %}
-                <div class='notification p-3' data-ack='{{ notif.is_ack }}'>{{ notif|notifWeb }}</div>
-              {% endfor %}
+              <div class='notif-list'>
+                {% for notif in App.notifsArr %}
+                  {% set notifIcon = notifIcons[notif.category] ?? {'icon': 'fa-bell', 'tone': 'neutral'} %}
+                  <div class='notification' data-ack='{{ notif.is_ack }}'>
+                    <span class='notif-icon notif-icon-{{ notifIcon.tone }}'><i class='fas {{ notifIcon.icon }} fa-fw'></i></span>
+                    <span class='notif-body'>{{ notif|notifWeb }}</span>
+                  </div>
+                {% endfor %}
+              </div>
               <div class='dropdown-divider'></div>
               <button type='button' class='dropdown-item hover-danger' href='#' data-userid='{{ App.Users.userData.userid }}' data-action='destroy-notif'><i class='fas fa-trash-alt fa-fw' title='{{ 'Clear all'|trans }}'></i> {{ 'Clear all'|trans }}</button>
             {% else %}
-              <div class='notification p-3'>{{ 'No new notifications to show.'|trans }}</div>
+              <div class='notif-empty'><i class='far fa-bell-slash fa-2x mb-2'></i><div>{{ 'No new notifications to show.'|trans }}</div></div>
               <div class='dropdown-divider'></div>
             {% endif %}
             <a href='notifications.php' class='dropdown-item'><i class='fas fa-list fa-fw'></i> {{ 'Notification history'|trans }}</a>
