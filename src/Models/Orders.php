@@ -69,13 +69,24 @@ final class Orders extends AbstractRest
         $title = $this->getTitle($reqBody['title'] ?? '');
         $notes = $this->getNotes($reqBody['notes'] ?? null);
         $itemIds = $this->getItemIds($reqBody['item_ids'] ?? null);
-        $sql = 'INSERT INTO custom_orders (team, userid, title, notes)
-            VALUES (:team, :userid, :title, :notes)';
+        // status is optional -- a plain order starts 'requested' (the column
+        // default) same as always; the only other choice at creation time is
+        // marking it 'reference' up front, since that's known at the moment
+        // you're logging catalog info rather than placing a real request,
+        // not something you'd normally discover partway through the order's
+        // ordered/received/cancelled lifecycle.
+        $status = $reqBody['status'] ?? null;
+        if ($status !== null && !in_array($status, self::STATUSES, true)) {
+            throw new ImproperActionException('Invalid order status.');
+        }
+        $sql = 'INSERT INTO custom_orders (team, userid, title, notes, status)
+            VALUES (:team, :userid, :title, :notes, COALESCE(:status, \'requested\'))';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
         $req->bindValue(':title', $title);
         $req->bindValue(':notes', $notes, $notes === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':status', $status, $status === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $this->Db->execute($req);
         $orderId = (int) $this->Db->lastInsertId();
 

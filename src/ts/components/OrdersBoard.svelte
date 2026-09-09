@@ -144,6 +144,7 @@
   // submit time instead
   let newNotesEl: HTMLElement;
   let newFiles: File[] = [];
+  let newIsReference = false;
   let submitting = false;
 
   let categories: Category[] = [];
@@ -342,11 +343,14 @@
         if (pending.title.trim() === '') continue;
         itemIds.push(await createPendingResource(pending));
       }
-      const notesHtml = (newNotesEl?.innerHTML ?? '').trim();
+      let notesHtml = (newNotesEl?.innerHTML ?? '').trim();
       const orderId = await ApiC.post2location(Model.Order, {
         title: newTitle.trim(),
+        // pending images are still local blob: preview URLs at this point --
+        // fixed up right below once each one is actually uploaded
         notes: notesHtml === '' ? null : notesHtml,
         item_ids: itemIds,
+        status: newIsReference ? 'reference' : undefined,
       });
       for (const file of newFiles) {
         try {
@@ -355,11 +359,33 @@
           notify.error(error instanceof Error ? error.message : `Could not attach ${file.name}.`);
         }
       }
+      let notesChanged = false;
+      for (const pending of pendingNoteImages) {
+        try {
+          const newId = await uploadFileToOrder(orderId, pending.file);
+          const uploads = await ApiC.getJson(`${Model.Order}/${orderId}/${Model.Upload}`) as OrderUpload[];
+          const upload = uploads.find(u => u.id === newId);
+          if (upload) {
+            notesHtml = notesHtml.replace(
+              new RegExp(`<img[^>]*data-pending-image="${pending.placeholderId}"[^>]*>`),
+              `<img src="${downloadUrl(upload)}" alt="${pending.file.name}" style="max-width:100%">`,
+            );
+            notesChanged = true;
+          }
+        } catch (error) {
+          notify.error(error instanceof Error ? error.message : `Could not upload ${pending.file.name}.`);
+        }
+      }
+      if (notesChanged) {
+        await ApiC.patch(`${Model.Order}/${orderId}`, { notes: notesHtml });
+      }
       newTitle = '';
       if (newNotesEl) newNotesEl.innerHTML = '';
       newFiles = [];
+      newIsReference = false;
       selectedResources = [];
       pendingNewResources = [];
+      pendingNoteImages = [];
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not post this order.');
@@ -704,10 +730,76 @@
     }
   }
 
-  async function uploadFileToOrder(orderId: number, file: File): Promise<void> {
+  async function uploadFileToOrder(orderId: number, file: File): Promise<number> {
     const formData = new FormData();
     formData.set('file', file);
-    await ApiC.post2location(`${Model.Order}/${orderId}/${Model.Upload}`, formData);
+    return ApiC.post2location(`${Model.Order}/${orderId}/${Model.Upload}`, formData);
+  }
+
+  function isImageFile(file: File): boolean {
+    return file.type.startsWith('image/');
+  }
+
+  // Pasting/dropping an image straight into a plain contenteditable, left to
+  // the browser's own default handling, embeds it inline as a giant base64
+  // data: URI -- blowing straight through the notes length limit for
+  // anything but a tiny image. Upload it for real instead and insert a link
+  // to the persisted file, the same way an attached file already works, so
+  // it also renders inline on the card (see the {@html item.notes} above).
+  async function insertUploadedImage(file: File, orderId: number, el: HTMLElement): Promise<void> {
+    try {
+      const newId = await uploadFileToOrder(orderId, file);
+      const uploads = await ApiC.getJson(`${Model.Order}/${orderId}/${Model.Upload}`) as OrderUpload[];
+      const upload = uploads.find(u => u.id === newId);
+      if (!upload) return;
+      el.focus();
+      document.execCommand('insertHTML', false, `<img src="${downloadUrl(upload)}" alt="${file.name}" style="max-width:100%">`);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : `Could not upload ${file.name}.`);
+    }
+  }
+
+  // Before the order exists there's nowhere to upload to yet -- show a live
+  // local preview immediately (so pasting/dropping still feels instant) and
+  // queue the real upload for submitNewItem() to run once orderId exists,
+  // then swap the preview for the persisted file's real link.
+  type PendingNoteImage = { placeholderId: string; file: File };
+  let pendingNoteImages: PendingNoteImage[] = [];
+
+  function queueNoteImageForCreate(file: File, el: HTMLElement): void {
+    const placeholderId = `pending-image-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    pendingNoteImages = [...pendingNoteImages, { placeholderId, file }];
+    el.focus();
+    document.execCommand(
+      'insertHTML',
+      false,
+      `<img src="${URL.createObjectURL(file)}" data-pending-image="${placeholderId}" alt="${file.name}" style="max-width:100%">`,
+    );
+  }
+
+  function handleNotesPaste(event: ClipboardEvent, orderId: number | null, el: HTMLElement): void {
+    const imageFile = Array.from(event.clipboardData?.files ?? []).find(isImageFile);
+    if (imageFile) {
+      event.preventDefault();
+      if (orderId !== null) {
+        void insertUploadedImage(imageFile, orderId, el);
+      } else {
+        queueNoteImageForCreate(imageFile, el);
+      }
+      return;
+    }
+    handleLinkPreviewPaste(event, el);
+  }
+
+  function handleNotesDrop(event: DragEvent, orderId: number | null, el: HTMLElement): void {
+    const imageFile = Array.from(event.dataTransfer?.files ?? []).find(isImageFile);
+    if (!imageFile) return;
+    event.preventDefault();
+    if (orderId !== null) {
+      void insertUploadedImage(imageFile, orderId, el);
+    } else {
+      queueNoteImageForCreate(imageFile, el);
+    }
   }
 
   async function uploadFile(item: OrderItem, file: File): Promise<void> {
@@ -860,6 +952,12 @@
         bind:value={newTitle}
         required
       />
+      <div class="form-check mb-2">
+        <input id="ordersNewIsReference" class="form-check-input" type="checkbox" bind:checked={newIsReference} />
+        <label class="form-check-label" for="ordersNewIsReference">
+          {t('This is a reference (catalog info, not an actual order)')}
+        </label>
+      </div>
       <label class="sr-only" for="ordersNewNotes">{t('Notes')}</label>
       <div
         id="ordersNewNotes"
@@ -869,7 +967,9 @@
         aria-multiline="true"
         data-placeholder={t('Notes (quantity, supplier, link…) — optional')}
         bind:this={newNotesEl}
-        on:paste={(event) => handleLinkPreviewPaste(event, newNotesEl)}
+        on:paste={(event) => handleNotesPaste(event, null, newNotesEl)}
+        on:dragover|preventDefault
+        on:drop={(event) => handleNotesDrop(event, null, newNotesEl)}
       ></div>
 
       <div class="orders-resource-picker mb-2">
@@ -1157,7 +1257,9 @@
                   role="textbox"
                   aria-multiline="true"
                   bind:this={editNotesEl}
-                  on:paste={(event) => handleLinkPreviewPaste(event, editNotesEl)}
+                  on:paste={(event) => handleNotesPaste(event, item.id, editNotesEl)}
+                  on:dragover|preventDefault
+                  on:drop={(event) => handleNotesDrop(event, item.id, editNotesEl)}
                 >{@html editNotesInitial}</div>
 
                 <div class="orders-resource-picker mb-2">
