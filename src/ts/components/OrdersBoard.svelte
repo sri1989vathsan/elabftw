@@ -1615,6 +1615,13 @@
     background: var(--mainbackground);
     border: 1px solid var(--secondary);
     border-radius: 0.5rem;
+    /* a flex item's automatic minimum width defaults to its content's
+       intrinsic size, which for a big image ignores max-width entirely --
+       so without this, one oversized note image forces the whole card
+       (and everything stacked in the same flex column) wider to match,
+       instead of the image being capped to whatever width the card
+       actually ends up with. */
+    min-width: 0;
   }
 
   .orders-new-card {
@@ -1781,14 +1788,17 @@
     overflow-wrap: anywhere;
   }
 
-  /* an image pasted/dropped into notes shouldn't be able to blow the card
-     out to its own full size -- cap it to a fixed box (not a percentage of
-     the card, which has no width of its own and would just grow to match
-     the image instead of constraining it) and only ever shrink a bigger
-     image down to fit, never stretch a small one up to fill the box. */
+  /* relative to whatever box the card actually ends up being (the pinned
+     column and the main list aren't the same width, and the card's own
+     width already flexes with the layout -- see .orders-card's min-width
+     fix above, which is what makes 100% here actually mean something
+     instead of the card just growing to match the image). Height is still
+     capped to a fixed value since there's no equivalent "box height" to be
+     relative to. Only ever shrinks a bigger image down to fit -- never
+     stretches a small one up to fill the box. */
   .orders-note-image {
     max-height: 18rem;
-    max-width: min(100%, 24rem);
+    max-width: 100%;
     width: auto;
     height: auto;
     object-fit: contain;
