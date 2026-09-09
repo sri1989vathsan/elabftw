@@ -1786,9 +1786,25 @@
   .orders-item-description {
     margin: 0.35rem 0 0.2rem;
     overflow-wrap: anywhere;
+    /* notes can hold more than just a plain paragraph or an uploaded image
+       -- e.g. a table pasted in from elsewhere (a gel/digest grid, a
+       spreadsheet) has its own intrinsic column widths that don't shrink
+       to fit the way text or an image with max-width does. min-width: 0
+       on .orders-card keeps the card itself from being forced wide to
+       match; this makes content that's still too wide for the card
+       scroll horizontally inside its own box instead of spilling out
+       past the card's edge into whatever's next to it. */
+    max-width: 100%;
+    overflow-x: auto;
   }
 
-  /* relative to whatever box the card actually ends up being (the pinned
+  /* :global() because this class is set on an <img> inserted at runtime via
+     document.execCommand('insertHTML', ...) when pasting/dropping an image
+     into notes -- never through Svelte's own template, so it never gets
+     the component's scoped-CSS hash and a plain (scoped) .orders-note-image
+     rule here would silently never match it.
+
+     Relative to whatever box the card actually ends up being (the pinned
      column and the main list aren't the same width, and the card's own
      width already flexes with the layout -- see .orders-card's min-width
      fix above, which is what makes 100% here actually mean something
@@ -1796,7 +1812,7 @@
      capped to a fixed value since there's no equivalent "box height" to be
      relative to. Only ever shrinks a bigger image down to fit -- never
      stretches a small one up to fill the box. */
-  .orders-note-image {
+  :global(.orders-note-image) {
     max-height: 18rem;
     max-width: 100%;
     width: auto;
