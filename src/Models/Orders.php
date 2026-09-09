@@ -14,6 +14,7 @@ use DateTimeImmutable;
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
+use Elabftw\Models\Notifications\OrderStatusChanged;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\Filter;
 use Elabftw\Traits\SetIdTrait;
@@ -393,7 +394,7 @@ final class Orders extends AbstractRest
         $order = $this->readOne();
         $isOwner = $order['userid'] === $this->Users->userid;
         if (array_key_exists('status', $params)) {
-            $this->updateStatus((string) $params['status']);
+            $this->updateStatus((string) $params['status'], $order);
         }
         if (array_key_exists('archived', $params)) {
             $this->updateArchived((bool) $params['archived']);
@@ -440,7 +441,8 @@ final class Orders extends AbstractRest
         return $this->Db->execute($req);
     }
 
-    private function updateStatus(string $status): void
+    /** @param array<string, mixed> $previousOrder the order as it was before this status change, from patch()'s own readOne() */
+    private function updateStatus(string $status, array $previousOrder): void
     {
         if (!in_array($status, self::STATUSES, true)) {
             throw new ImproperActionException('Invalid order status.');
@@ -456,6 +458,19 @@ final class Orders extends AbstractRest
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
+
+        // notify the requester, unless they're the one making the change
+        // themselves, or the status didn't actually change (e.g. re-saving
+        // the same status alongside an unrelated field patch)
+        if ($status !== $previousOrder['status'] && (int) $previousOrder['userid'] !== $this->Users->userid) {
+            (new OrderStatusChanged(
+                new Users((int) $previousOrder['userid'], $this->Users->team),
+                $this->Users,
+                (int) $this->id,
+                (string) $previousOrder['title'],
+                $status,
+            ))->create();
+        }
     }
 
     private function updateArchived(bool $archived): void
