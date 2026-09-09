@@ -137,6 +137,20 @@
   let pageOffset = 0;
   let hasNextPage = false;
 
+  // Pinned orders (which includes every Reference order -- always
+  // force-pinned, see setPinned()/postAction()/updateStatus()) get their
+  // own bounded, separately-paginated bucket instead of being fetched in
+  // full: pinned rows bleed into every status tab, so an unbounded fetch
+  // here would mean a growing Reference catalogue makes every single tab's
+  // response unbounded too. Same pageSize+1 trick as the main list, own
+  // offset; "Load more pinned" instead of prev/next since this section
+  // only ever grows in place rather than being paged back and forth.
+  const PINNED_PAGE_SIZE = 20;
+  let pinnedItems: OrderItem[] = [];
+  let pinnedOffset = 0;
+  let hasMorePinned = false;
+  let loadingMorePinned = false;
+
   let newTitle = '';
   // notes is a rich-text (contenteditable) field, not a bound string, so a
   // pasted bare URL can render as a link-preview badge like it already does
@@ -205,13 +219,14 @@
   // status/owner/search filtering and pagination all happen server-side,
   // so results stay correct (and fast) regardless of how many orders exist
   // or which page a match happens to be on -- items is already exactly
-  // what should be shown.
-  $: visibleItems = items;
-  // pinned orders get their own section (see markup below): to the left,
-  // under the request form, when there's room for the two-column layout;
-  // above the main list when the window is too narrow for that
-  $: pinnedItems = visibleItems.filter(item => item.pinned);
-  $: unpinnedItems = visibleItems.filter(item => !item.pinned);
+  // what should be shown. items only ever holds the unpinned page;
+  // pinnedItems is its own separately-paginated bucket (see load()).
+  // Combined only where something genuinely needs the union (select-all,
+  // the empty-state check) -- pinned orders get their own section (see
+  // markup below): to the left, under the request form, when there's room
+  // for the two-column layout; above the main list when the window is too
+  // narrow for that.
+  $: visibleItems = [...pinnedItems, ...items];
 
   let searchDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -237,41 +252,73 @@
     return selectedUserId ?? (ownerFilter === 'mine' ? core.currentUserid : null);
   }
 
+  // status/userid/search/date filters shared by load() and loadMorePinned()
+  // -- everything except which bucket (pinned/unpinned) and what slice of
+  // it is being asked for.
+  function filterParams(): Record<string, string> {
+    const params: Record<string, string> = { status: statusFilter };
+    const effectiveUserId = currentEffectiveUserId();
+    if (effectiveUserId !== null) {
+      params.userid = String(effectiveUserId);
+    }
+    const trimmedSearch = searchQuery.trim();
+    if (trimmedSearch !== '') {
+      params.search = trimmedSearch;
+      if (searchPdf) params.search_pdf = '1';
+    }
+    if (dateFrom !== '') params.date_from = dateFrom;
+    if (dateTo !== '') params.date_to = dateTo;
+    return params;
+  }
+
   async function load(): Promise<void> {
     loading = true;
     try {
-      const params: Record<string, string> = {
-        status: statusFilter,
+      const fetched = await ApiC.getJson(Model.Order, {
+        ...filterParams(),
         limit: String(pageSize),
         offset: String(pageOffset),
-      };
-      const effectiveUserId = currentEffectiveUserId();
-      if (effectiveUserId !== null) {
-        params.userid = String(effectiveUserId);
-      }
-      const trimmedSearch = searchQuery.trim();
-      if (trimmedSearch !== '') {
-        params.search = trimmedSearch;
-        if (searchPdf) params.search_pdf = '1';
-      }
-      if (dateFrom !== '') params.date_from = dateFrom;
-      if (dateTo !== '') params.date_to = dateTo;
-      const fetched = await ApiC.getJson(Model.Order, params) as OrderItem[];
-      // pinned rows are never paginated away (the backend always returns
-      // every matching one, regardless of limit/offset) -- only the
-      // unpinned rows are actually paged, so hasNextPage/slicing must look
-      // at those alone or a handful of pins would look like an extra page.
+        pinned_limit: String(PINNED_PAGE_SIZE),
+        pinned_offset: '0',
+      }) as OrderItem[];
+      // pinned and unpinned are each their own bounded bucket now (see
+      // readAll()) -- filtering the combined response by .pinned is safe
+      // since a query-param change on one side never resizes the other.
       const pinnedFetched = fetched.filter(item => item.pinned);
       const unpinnedFetched = fetched.filter(item => !item.pinned);
       hasNextPage = unpinnedFetched.length > pageSize;
-      items = [...pinnedFetched, ...unpinnedFetched.slice(0, pageSize)];
+      hasMorePinned = pinnedFetched.length > PINNED_PAGE_SIZE;
+      pinnedOffset = 0;
+      pinnedItems = pinnedFetched.slice(0, PINNED_PAGE_SIZE);
+      items = unpinnedFetched.slice(0, pageSize);
       // attachments now come bundled with each order, so this is a single
       // request instead of one per order
-      uploadsByItem = Object.fromEntries(items.map(item => [item.id, item.uploads]));
+      uploadsByItem = Object.fromEntries([...pinnedItems, ...items].map(item => [item.id, item.uploads]));
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load the orders board.');
     } finally {
       loading = false;
+    }
+  }
+
+  async function loadMorePinned(): Promise<void> {
+    loadingMorePinned = true;
+    try {
+      const fetched = await ApiC.getJson(Model.Order, {
+        ...filterParams(),
+        pinned_only: '1',
+        pinned_limit: String(PINNED_PAGE_SIZE),
+        pinned_offset: String(pinnedOffset),
+      }) as OrderItem[];
+      hasMorePinned = fetched.length > PINNED_PAGE_SIZE;
+      const nextChunk = fetched.slice(0, PINNED_PAGE_SIZE);
+      pinnedItems = [...pinnedItems, ...nextChunk];
+      pinnedOffset += PINNED_PAGE_SIZE;
+      uploadsByItem = { ...uploadsByItem, ...Object.fromEntries(nextChunk.map(item => [item.id, item.uploads])) };
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load more pinned orders.');
+    } finally {
+      loadingMorePinned = false;
     }
   }
 
@@ -517,6 +564,7 @@
     const previous = item.status;
     item.status = status;
     items = items;
+    pinnedItems = pinnedItems;
     try {
       await ApiC.patch(`${Model.Order}/${item.id}`, { status });
       // the current tab is filtered server-side by status, so an order that
@@ -526,6 +574,7 @@
     } catch (error) {
       item.status = previous;
       items = items;
+      pinnedItems = pinnedItems;
       notify.error(error instanceof Error ? error.message : 'Could not update this order.');
     }
   }
@@ -535,6 +584,7 @@
     try {
       await ApiC.delete(`${Model.Order}/${item.id}`);
       items = items.filter(existing => existing.id !== item.id);
+      pinnedItems = pinnedItems.filter(existing => existing.id !== item.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not delete this order.');
     }
@@ -883,11 +933,13 @@
     const previous = item.notes;
     item.notes = stripped === '' ? null : stripped;
     items = items;
+    pinnedItems = pinnedItems;
     try {
       await ApiC.patch(`${Model.Order}/${item.id}`, { notes: item.notes });
     } catch {
       item.notes = previous;
       items = items;
+      pinnedItems = pinnedItems;
     }
   }
 
@@ -951,14 +1003,19 @@
     }
     void load().then(async () => {
       if (!hasOrderParam) return;
-      let item = items.find(i => i.id === orderParam);
+      let item = items.find(i => i.id === orderParam) ?? pinnedItems.find(i => i.id === orderParam);
       if (!item) {
         // not on the first page of results -- fetch it directly rather
-        // than making the user hunt for it, and pin it to the top of the
-        // currently-loaded list so it actually renders
+        // than making the user hunt for it, and add it to the top of
+        // whichever currently-loaded list it belongs in so it actually
+        // renders
         try {
           item = await ApiC.getJson(`${Model.Order}/${orderParam}`) as OrderItem;
-          items = [item, ...items];
+          if (item.pinned) {
+            pinnedItems = [item, ...pinnedItems];
+          } else {
+            items = [item, ...items];
+          }
         } catch {
           return;
         }
@@ -1118,6 +1175,11 @@
           {@render orderCard(item)}
         {/each}
       </ul>
+      {#if hasMorePinned}
+        <button type="button" class="btn btn-ghost btn-sm" disabled={loadingMorePinned} on:click={loadMorePinned}>
+          {loadingMorePinned ? t('Loading') + '…' : t('Load more pinned')}
+        </button>
+      {/if}
     </div>
   {/if}
   </div>
@@ -1266,7 +1328,7 @@
       </label>
     </div>
     <ul class="orders-list">
-      {#each unpinnedItems as item (item.id)}
+      {#each items as item (item.id)}
         {@render orderCard(item)}
       {/each}
     </ul>
