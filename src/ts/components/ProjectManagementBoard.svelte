@@ -112,8 +112,12 @@
 
   let tasks: Task[] = [];
   // team-wide open/done totals for the progress bar -- see load() and the
-  // doneCount/donePercent/totalCount reactive statements below
-  let teamCounts: { open: number; done: number } | null = null;
+  // doneCount/donePercent/totalCount reactive statements below. open/done
+  // are scoped to activeProjectId (see load()); teamOpen/teamDone are
+  // always the unscoped team-wide totals, from the same query.
+  let teamCounts: { open: number; done: number; teamOpen: number; teamDone: number } | null = null;
+  // how many open/done tasks each to ask for -- see load() and loadMoreTasks()
+  let taskLimit = 100;
   let teamMembers: TeamMember[] = [];
   let projects: Project[] = [];
   let columns: Column[] = [];
@@ -236,6 +240,17 @@
   $: totalCount = teamCounts ? teamCounts.open + teamCounts.done : visibleTasks.length;
   $: doneCount = teamCounts ? teamCounts.done : (doneColumn ? tasksInColumn(doneColumn, visibleTasks).length : 0);
   $: donePercent = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
+  // still doesn't reflect the priority/search/Assigned-Created-All-tab
+  // filters (see Todolist::readCounts()) -- labelled so that's not implied
+  $: progressScopeLabel = typeof activeProjectId === 'number'
+    ? t('project progress')
+    : activeProjectId === null
+      ? t('unfiled progress')
+      : t('team progress');
+  // the task list fetch is always team-wide and stays capped (see load()),
+  // independent of which project tab is selected -- teamOpen/teamDone (also
+  // always team-wide) is what tells us whether there's actually more to load
+  $: hasMoreTasks = teamCounts !== null && tasks.length < teamCounts.teamOpen + teamCounts.teamDone;
 
   function canManage(task: Task): boolean {
     if (task.userid === core.currentUserid
@@ -369,19 +384,47 @@
       // switching tabs can't hide a task a project membership should show.
       // The list fetches above stay capped (see readAll()'s $limit) --
       // counts is a separate, cheap aggregate query with no such cap, so
-      // the progress bar stays correct even past that page.
+      // the progress bar stays correct even past that page. Scoped to
+      // activeProjectId so the percentage tracks whichever project tab is
+      // selected instead of always showing the whole team's -- see
+      // Todolist::readCounts().
+      const countsParam = typeof activeProjectId === 'number'
+        ? `&project_id=${activeProjectId}`
+        : activeProjectId === null ? '&unfiled=1' : '';
       const [open, done, counts] = await Promise.all([
-        ApiC.getJson(`${Model.Todolist}?scope=team`) as Promise<Task[]>,
-        ApiC.getJson(`${Model.Todolist}?scope=team&completed=1`) as Promise<Task[]>,
-        ApiC.getJson(`${Model.Todolist}?scope=team&counts=1`) as Promise<Array<{ open_count: number; done_count: number }>>,
+        ApiC.getJson(`${Model.Todolist}?scope=team&limit=${taskLimit}`) as Promise<Task[]>,
+        ApiC.getJson(`${Model.Todolist}?scope=team&completed=1&limit=${taskLimit}`) as Promise<Task[]>,
+        ApiC.getJson(`${Model.Todolist}?scope=team&counts=1${countsParam}`) as Promise<Array<{
+          open_count: number;
+          done_count: number;
+          team_open_count: number;
+          team_done_count: number;
+        }>>,
       ]);
       tasks = [...open, ...done];
-      teamCounts = counts[0] ? { open: counts[0].open_count, done: counts[0].done_count } : null;
+      teamCounts = counts[0]
+        ? {
+          open: counts[0].open_count,
+          done: counts[0].done_count,
+          teamOpen: counts[0].team_open_count,
+          teamDone: counts[0].team_done_count,
+        }
+        : null;
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load tasks.');
     } finally {
       loading = false;
     }
+  }
+
+  // The task list stays a fixed page today rather than real pagination
+  // (offset-based paging with per-column virtualization is a bigger,
+  // separate change) -- this is the stopgap: grow the page and refetch
+  // once actually needed, signalled by hasMoreTasks, rather than silently
+  // missing tasks past the first page with no way to see more at all.
+  function loadMoreTasks(): void {
+    taskLimit += 100;
+    void load();
   }
 
   onMount(() => {
@@ -1397,10 +1440,15 @@
     </div>
   {/if}
   {#if visibleTasks.length > 0}
-    <div class="pm-progress mt-2" title={`${doneCount} / ${totalCount} ${t('done')}`}>
+    <div class="pm-progress mt-2" title={`${doneCount} / ${totalCount} ${progressScopeLabel}`}>
       <div class="pm-progress-bar" style={`width: ${donePercent}%`}></div>
-      <span class="pm-progress-label">{donePercent}% {t('done')}</span>
+      <span class="pm-progress-label">{donePercent}% {progressScopeLabel}</span>
     </div>
+  {/if}
+  {#if hasMoreTasks}
+    <button type="button" class="btn btn-link btn-sm pm-load-more" on:click={loadMoreTasks} disabled={loading}>
+      {t('Load more tasks')}
+    </button>
   {/if}
 
   <div class="mb-3 mt-2">
