@@ -41,20 +41,14 @@
       </p>
       <div id='tocSectionFilterTree' class='toc-section-filter-tree' role='tree' aria-label='{{ 'Document sections'|trans }}'></div>
       <p id='tocSectionFilterEmpty' class='small text-muted mb-0' hidden>{{ 'No matching sections.'|trans }}</p>
+      <button type='button' id='tocPrintSelection' class='btn btn-outline-primary btn-sm btn-block mt-2 mb-1'>
+        <i class='fas fa-print fa-fw mr-1' aria-hidden='true'></i>{{ 'Print selection'|trans }}
+      </button>
+      <button type='button' id='tocCopySelection' class='btn btn-outline-primary btn-sm btn-block mb-1'>
+        <i class='fas fa-copy fa-fw mr-1' aria-hidden='true'></i>{{ 'Copy filtered content'|trans }}
+      </button>
     </details>
     <div id='tocSectionFilters' class='toc-search-filters mb-2' aria-live='polite'></div>
-    <p class='small color-medium px-2'>
-      {{ 'Press Enter or + to add text filters. Section and text filters also subset the main text.'|trans }}
-    </p>
-    <button type='button' id='tocPrintSelection' class='btn btn-outline-primary btn-sm btn-block mb-3'>
-      <i class='fas fa-print fa-fw mr-1' aria-hidden='true'></i>{{ 'Print selection'|trans }}
-    </button>
-    <button type='button' id='tocCopySelection' class='btn btn-outline-primary btn-sm btn-block mb-2'>
-      <i class='fas fa-copy fa-fw mr-1' aria-hidden='true'></i>{{ 'Copy filtered content'|trans }}
-    </button>
-    <p class='small color-medium px-2'>
-      {{ 'Print or copy the selected or filtered sections. With no filter, the full main text is used.'|trans }}
-    </p>
     {# this will be filled with the TOC entries by TocPanel.class.ts #}
     <div id='tocItems' class='toc-items-container'></div>
     <p id='tocNoResults' class='text-muted px-2' hidden>No matching headings.</p>
