@@ -1863,11 +1863,20 @@
      capped to a fixed value since there's no equivalent "box height" to be
      relative to. Only ever shrinks a bigger image down to fit -- never
      stretches a small one up to fill the box. */
+  /* No width/height here: forcing both to "auto" also overwrote whatever
+     size a browser's own contenteditable image-resize handles set (Firefox
+     writes that as width/height *attributes* on the <img>, which any CSS
+     rule -- even one this unspecific -- outranks and silently reverts).
+     max-width/max-height alone still cap an oversized pasted image down to
+     the card on first insert (nothing sets width/height attributes at
+     insert time -- see insertUploadedImage()/queueNoteImageForCreate() --
+     so it renders at its natural size, never stretched up), while leaving
+     a later manual resize's attributes free to take effect up to that same
+     cap. object-fit: contain guards against distortion if a resize ever
+     sets a width/height pair that doesn't match the image's own ratio. */
   :global(.orders-note-image) {
     max-height: 18rem;
     max-width: 100%;
-    width: auto;
-    height: auto;
     object-fit: contain;
   }
 
