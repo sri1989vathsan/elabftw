@@ -1283,6 +1283,8 @@ tr:first-child td {
       background: transparent;
       border-color: transparent;
       color: var(--chrome-muted);
+      padding-bottom: 0.35rem;
+      padding-top: 0.35rem;
 
       &:hover,
       &:focus {
