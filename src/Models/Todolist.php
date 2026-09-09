@@ -83,23 +83,25 @@ final class Todolist extends AbstractRest
         $primaryAssignee = $assigneeUserids[0];
         $projectId = $this->getProjectId($reqBody['project_id'] ?? null);
         $priority = $this->getPriority($reqBody['priority'] ?? null);
-        // A task created from a specific column (the board's own "+" button)
-        // starts there directly; otherwise it always starts in its board's
-        // own "To do" column when one exists (falling back to the team-wide
-        // default for unfiled tasks, or a project whose board hasn't been
-        // opened yet) -- whichever custom columns exist in between In
-        // progress and Done don't apply to brand-new work either way; moving
-        // it elsewhere afterwards is a separate patch.
-        $columnId = array_key_exists('column_id', $reqBody) && $reqBody['column_id'] !== null
+        // Each project can have its own private copy of the columns (see
+        // TodolistColumns::ensureProjectColumns()), so an explicit column_id
+        // from the request (the board's own "+" button) isn't trusted as
+        // literally correct on its own -- it might belong to whatever
+        // column set the client happened to have loaded (e.g. the All tab's
+        // team-wide default) rather than the target project's own copy.
+        // Resolve to the equivalent column, by kind, within the actual
+        // target project (falling back to "todo" for a brand-new task with
+        // no column_id given at all); moving it to a different kind of
+        // column afterwards is a separate patch.
+        $explicitColumnId = array_key_exists('column_id', $reqBody) && $reqBody['column_id'] !== null
             ? $this->getColumnId($reqBody['column_id'])
             : null;
-        $sql = "INSERT INTO todolist (body, notes, description, deadline, reminder_minutes, userid, team, assigned_userid, project_id, priority, column_id)
-            VALUES(:content, :notes, :description, :deadline, :reminder_minutes, :userid, :team, :assigned_userid, :project_id, :priority,
-                COALESCE(
-                    :column_id,
-                    (SELECT id FROM todolist_columns WHERE team = :team_col AND kind = 'todo' AND project_id = :project_id3 LIMIT 1),
-                    (SELECT id FROM todolist_columns WHERE team = :team_col2 AND kind = 'todo' AND project_id IS NULL LIMIT 1)
-                ))";
+        $columnKind = $explicitColumnId !== null
+            ? ($this->getColumnKind($explicitColumnId) ?? 'todo')
+            : 'todo';
+        $columnId = $this->resolveColumnIdForKind($columnKind, $projectId) ?? $explicitColumnId;
+        $sql = 'INSERT INTO todolist (body, notes, description, deadline, reminder_minutes, userid, team, assigned_userid, project_id, priority, column_id)
+            VALUES(:content, :notes, :description, :deadline, :reminder_minutes, :userid, :team, :assigned_userid, :project_id, :priority, :column_id)';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':content', $content);
         $req->bindValue(':notes', $notes, $notes === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
@@ -112,11 +114,8 @@ final class Todolist extends AbstractRest
         );
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
-        $req->bindParam(':team_col', $this->team, PDO::PARAM_INT);
-        $req->bindParam(':team_col2', $this->team, PDO::PARAM_INT);
         $req->bindParam(':assigned_userid', $primaryAssignee, PDO::PARAM_INT);
         $req->bindValue(':project_id', $projectId, $projectId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
-        $req->bindValue(':project_id3', $projectId, $projectId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $req->bindValue(':column_id', $columnId, $columnId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $req->bindValue(':priority', $priority, $priority === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $this->Db->execute($req);
@@ -344,21 +343,9 @@ final class Todolist extends AbstractRest
             $newProjectId = $params['project_id'] !== null && $params['project_id'] !== ''
                 ? (int) $params['project_id']
                 : null;
-            if ($newProjectId !== null) {
-                (new TodolistColumns($this->requester))->ensureProjectColumns($newProjectId);
-            }
-            $sql = 'SELECT id FROM todolist_columns WHERE team = :team AND kind = :kind AND project_id '
-                . ($newProjectId !== null ? '= :project_id' : 'IS NULL');
-            $req = $this->Db->prepare($sql);
-            $req->bindParam(':team', $this->team, PDO::PARAM_INT);
-            $req->bindValue(':kind', $previousColumnKind);
-            if ($newProjectId !== null) {
-                $req->bindValue(':project_id', $newProjectId, PDO::PARAM_INT);
-            }
-            $this->Db->execute($req);
-            $matchingColumnId = $req->fetch()['id'] ?? null;
+            $matchingColumnId = $this->resolveColumnIdForKind($previousColumnKind, $newProjectId);
             if ($matchingColumnId !== null) {
-                $this->update('column_id', (int) $matchingColumnId);
+                $this->update('column_id', $matchingColumnId);
             }
         }
         // Whichever side of the status/column pair was actually touched
@@ -586,6 +573,43 @@ final class Todolist extends AbstractRest
             throw new ImproperActionException(_('Column not found in this team.'));
         }
         return $columnId;
+    }
+
+    private function getColumnKind(int $columnId): ?string
+    {
+        $sql = 'SELECT kind FROM todolist_columns WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':id', $columnId, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return $this->Db->fetch($req)['kind'] ?? null;
+    }
+
+    /**
+     * Each project can have its own private copy of the columns (see
+     * TodolistColumns::ensureProjectColumns(), which this calls to create
+     * that copy on first use), so a column id from one project's board --
+     * or the team-wide default set -- is never valid for another project's.
+     * Finds the equivalent column, by kind, within the given project scope
+     * (null for the team-wide default set), returning null only if that
+     * team somehow has no column of this kind at all.
+     */
+    private function resolveColumnIdForKind(string $kind, ?int $projectId): ?int
+    {
+        if ($projectId !== null) {
+            (new TodolistColumns($this->requester))->ensureProjectColumns($projectId);
+        }
+        $sql = 'SELECT id FROM todolist_columns WHERE team = :team AND kind = :kind AND project_id '
+            . ($projectId !== null ? '= :project_id' : 'IS NULL');
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $req->bindValue(':kind', $kind);
+        if ($projectId !== null) {
+            $req->bindValue(':project_id', $projectId, PDO::PARAM_INT);
+        }
+        $this->Db->execute($req);
+        $result = $req->fetch()['id'] ?? null;
+        return $result !== null ? (int) $result : null;
     }
 
     /**
