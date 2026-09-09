@@ -179,12 +179,6 @@
                 href='projectmanagement.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-list-check mr-1'></i>{{ 'Project management'|trans }}</a>
             {% endif %}
 
-            {% if not App.isAnonymous() %}
-            {% set isActive = scriptName == 'feedback.php' %}
-            <a class='nav-item nav-link {{ isActive ? 'active' }}'
-                href='feedback.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-lightbulb mr-1'></i>{{ 'Feedback'|trans }}</a>
-            {% endif %}
-
             <div class='nav-item dropdown'>
               {% if App.devMode -%}
                 <!-- [html-validate-disable-next prefer-native-element: using a button here will mess up the navbar] -->
@@ -213,6 +207,12 @@
                 {% endif %}
               </div>
             </div>
+
+            {% if not App.isAnonymous() %}
+            {% set isActive = scriptName == 'feedback.php' %}
+            <a class='nav-item nav-link {{ isActive ? 'active' }}'
+                href='feedback.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-lightbulb mr-1'></i>{{ 'Feedback'|trans }}</a>
+            {% endif %}
         </div>
 
         {# Notification bell #}
@@ -237,8 +237,8 @@
             13: {'icon': 'fa-clock', 'tone': 'warning'},
             14: {'icon': 'fa-calendar-xmark', 'tone': 'danger'},
             15: {'icon': 'fa-clock', 'tone': 'warning'},
-            16: {'icon': 'fa-list-check', 'tone': 'info'},
-            17: {'icon': 'fa-cart-shopping', 'tone': 'info'},
+            16: {'icon': 'fa-list-check', 'tone': 'info', 'badge': 'fa-at'},
+            17: {'icon': 'fa-cart-shopping', 'tone': 'info', 'badge': 'fa-at'},
             18: {'icon': 'fa-list-check', 'tone': 'success'},
             19: {'icon': 'fa-cart-shopping', 'tone': 'success'},
             20: {'icon': 'fa-user-clock', 'tone': 'warning'},
@@ -261,7 +261,10 @@
                 {% for notif in App.notifsArr %}
                   {% set notifIcon = notifIcons[notif.category] ?? {'icon': 'fa-bell', 'tone': 'neutral'} %}
                   <div class='notification' data-ack='{{ notif.is_ack }}'>
-                    <span class='notif-icon notif-icon-{{ notifIcon.tone }}'><i class='fas {{ notifIcon.icon }} fa-fw'></i></span>
+                    <span class='notif-icon notif-icon-{{ notifIcon.tone }}'>
+                      <i class='fas {{ notifIcon.icon }} fa-fw'></i>
+                      {% if notifIcon.badge is defined %}<i class='fas {{ notifIcon.badge }} notif-icon-badge' aria-hidden='true'></i>{% endif %}
+                    </span>
                     <span class='notif-body'>{{ notif|notifWeb }}</span>
                   </div>
                 {% endfor %}
