@@ -894,67 +894,70 @@
       </div>
     {/if}
   {/if}
-  <div class='calendar-month-header'>
-    <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(-1)} aria-label={t('Previous month')}>
-      <i class='fas fa-chevron-left' aria-hidden='true'></i>
-    </button>
-    <div class='calendar-month-copy'>
-      <span class='calendar-month-eyebrow'>{t('Lab activity')}</span>
-      <div class='calendar-month-title'>
-        <strong>{calendarMonthLabel}</strong>
-        <span>{visibleMonthActivityCount} {t('entries')}</span>
-      </div>
-    </div>
-    <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(1)} aria-label={t('Next month')}>
-      <i class='fas fa-chevron-right' aria-hidden='true'></i>
-    </button>
-  </div>
-  <div class='calendar-todo-weekdays' aria-hidden='true'>
-    {#each weekdayLabels() as weekday}
-      <span>{weekday}</span>
-    {/each}
-  </div>
-  <div class='calendar-todo-grid'>
-    {#each calendarCells as cell (cell.key)}
-      <button
-        type='button'
-        class:outside={!cell.inMonth}
-        class:today={cell.isToday}
-        class:selected={isCellSelected(cell.key)}
-        class:has-overdue={cell.overdue}
-        class:calendar-day-drag-over={dragOverDate === cell.key}
-        class='calendar-todo-day'
-        on:click={() => selectDay(cell)}
-        on:mousedown={() => beginRangeSelect(cell)}
-        on:mouseenter={() => extendRangeSelect(cell)}
-        on:dragover={(event) => allowDayDrop(event, cell.key)}
-        on:drop={(event) => void dropTaskOnDay(event, cell)}
-        aria-label={`${cell.key}, ${cell.count} ${t('calendar entries')}`}
-        aria-pressed={isCellSelected(cell.key)}
-      >
-        <span class='calendar-day-number'>{cell.day}</span>
-        {#if cell.count > 0}
-          <span class='calendar-day-type-dots' aria-hidden='true'>
-            {#if cell.taskCount > 0}<i class='calendar-type-dot calendar-type-task'></i>{/if}
-            {#if cell.experimentCount > 0}<i class='calendar-type-dot calendar-type-experiment'></i>{/if}
-            {#if cell.resourceCount > 0}<i class='calendar-type-dot calendar-type-resource'></i>{/if}
-          </span>
-        {/if}
-        {#if cell.count > 0}
-          <small
-            class={`calendar-day-count calendar-day-count-${cell.taskTone}`}
-            aria-label={`${cell.count} ${t('calendar entries')}`}
-          >{cell.count}</small>
-        {/if}
+  <details class='calendar-activity-picker mb-2' open>
+    <summary class='calendar-activity-summary'>{t('Calendar')}</summary>
+    <div class='calendar-month-header'>
+      <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(-1)} aria-label={t('Previous month')}>
+        <i class='fas fa-chevron-left' aria-hidden='true'></i>
       </button>
-    {/each}
-  </div>
-  <div class='calendar-legend'>
-    <span><i class='calendar-legend-dot task-dot'></i>{t('Tasks')}</span>
-    <span><i class='calendar-legend-dot experiment-dot'></i>{t('Experiments')}</span>
-    <span><i class='calendar-legend-dot resource-dot'></i>{t('Resources')}</span>
-    <span><i class='calendar-legend-dot overdue-dot'></i>{t('Overdue')}</span>
-  </div>
+      <div class='calendar-month-copy'>
+        <span class='calendar-month-eyebrow'>{t('Lab activity')}</span>
+        <div class='calendar-month-title'>
+          <strong>{calendarMonthLabel}</strong>
+          <span>{visibleMonthActivityCount} {t('entries')}</span>
+        </div>
+      </div>
+      <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(1)} aria-label={t('Next month')}>
+        <i class='fas fa-chevron-right' aria-hidden='true'></i>
+      </button>
+    </div>
+    <div class='calendar-todo-weekdays' aria-hidden='true'>
+      {#each weekdayLabels() as weekday}
+        <span>{weekday}</span>
+      {/each}
+    </div>
+    <div class='calendar-todo-grid'>
+      {#each calendarCells as cell (cell.key)}
+        <button
+          type='button'
+          class:outside={!cell.inMonth}
+          class:today={cell.isToday}
+          class:selected={isCellSelected(cell.key)}
+          class:has-overdue={cell.overdue}
+          class:calendar-day-drag-over={dragOverDate === cell.key}
+          class='calendar-todo-day'
+          on:click={() => selectDay(cell)}
+          on:mousedown={() => beginRangeSelect(cell)}
+          on:mouseenter={() => extendRangeSelect(cell)}
+          on:dragover={(event) => allowDayDrop(event, cell.key)}
+          on:drop={(event) => void dropTaskOnDay(event, cell)}
+          aria-label={`${cell.key}, ${cell.count} ${t('calendar entries')}`}
+          aria-pressed={isCellSelected(cell.key)}
+        >
+          <span class='calendar-day-number'>{cell.day}</span>
+          {#if cell.count > 0}
+            <span class='calendar-day-type-dots' aria-hidden='true'>
+              {#if cell.taskCount > 0}<i class='calendar-type-dot calendar-type-task'></i>{/if}
+              {#if cell.experimentCount > 0}<i class='calendar-type-dot calendar-type-experiment'></i>{/if}
+              {#if cell.resourceCount > 0}<i class='calendar-type-dot calendar-type-resource'></i>{/if}
+            </span>
+          {/if}
+          {#if cell.count > 0}
+            <small
+              class={`calendar-day-count calendar-day-count-${cell.taskTone}`}
+              aria-label={`${cell.count} ${t('calendar entries')}`}
+            >{cell.count}</small>
+          {/if}
+        </button>
+      {/each}
+    </div>
+    <div class='calendar-legend'>
+      <span><i class='calendar-legend-dot task-dot'></i>{t('Tasks')}</span>
+      <span><i class='calendar-legend-dot experiment-dot'></i>{t('Experiments')}</span>
+      <span><i class='calendar-legend-dot resource-dot'></i>{t('Resources')}</span>
+      <span><i class='calendar-legend-dot overdue-dot'></i>{t('Overdue')}</span>
+    </div>
+  </details>
   <div class='d-flex calendar-month-actions'>
     <button
       type='button'
@@ -1307,6 +1310,24 @@
   .calendar-todo-month .fas,
   .calendar-todo-agenda .fas {
     color: inherit;
+  }
+
+  /* mirrors .toc-section-filter-picker/-summary in main.scss (the ToC
+     panel's own collapsible) so the disclosure look stays consistent
+     across side panels */
+  .calendar-activity-picker {
+    border: 1px solid var(--secondary);
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+  }
+
+  .calendar-activity-summary {
+    color: var(--chrome-fg);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+    user-select: none;
   }
 
   .calendar-month-header {
