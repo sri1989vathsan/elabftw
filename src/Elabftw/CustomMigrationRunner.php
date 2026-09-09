@@ -90,6 +90,7 @@ final class CustomMigrationRunner
         '049_entity_order_links.sql',
         '050_todolist_project_archive.sql',
         '051_todolist_project_ordering.sql',
+        '052_notif_order_status_changed.sql',
     );
 
     private Db $Db;
