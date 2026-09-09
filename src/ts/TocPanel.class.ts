@@ -249,6 +249,7 @@ export default class TocPanel extends SidePanel {
    */
   private setupSearchControls(): void {
     const input = document.getElementById('tocSearchInput') as HTMLInputElement | null;
+    const submit = document.getElementById('tocSearchSubmit') as HTMLButtonElement | null;
     const add = document.getElementById('tocSearchAdd') as HTMLButtonElement | null;
     const clear = document.getElementById('tocSearchClear') as HTMLButtonElement | null;
     const mode = document.getElementById('tocSearchMode') as HTMLSelectElement | null;
@@ -264,6 +265,7 @@ export default class TocPanel extends SidePanel {
       event.preventDefault();
       this.addSearchFilter(input);
     });
+    submit?.addEventListener('click', () => this.addSearchFilter(input));
     add.addEventListener('click', () => this.addSearchFilter(input));
     mode.addEventListener('change', () => this.filterEntries());
     clear.addEventListener('click', () => {
