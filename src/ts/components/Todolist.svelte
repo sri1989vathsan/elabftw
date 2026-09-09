@@ -469,6 +469,14 @@
 
   function selectCalendarDate(key: string): void {
     selectedCalendarDate = key;
+    // keep the visible date field in sync while the create form is open --
+    // if it were closed, openCreateFormForSelectedDate() handles the sync
+    // at the moment it's opened instead
+    if (showFullCreateForm) {
+      deadlineDate = key;
+      if (!deadlineTime) deadlineTime = initialDeadlineTime;
+      persistDeadlineDefaults();
+    }
   }
 
   // Opens the create form prefilled with the selected calendar date --
