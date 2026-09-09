@@ -79,6 +79,7 @@
     userid: number;
     members: TeamMember[];
     archived: boolean;
+    ordering: number;
   };
 
   type TaskComment = {
@@ -622,6 +623,56 @@
       await loadColumns();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not reorder that column.');
+    }
+  }
+
+  let draggedProjectId: number | null = null;
+  let dragOverProjectId: number | null = null;
+
+  function startProjectDrag(event: DragEvent, id: number): void {
+    draggedProjectId = id;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', `project:${id}`);
+    }
+  }
+
+  function finishProjectDrag(): void {
+    draggedProjectId = null;
+    dragOverProjectId = null;
+  }
+
+  function allowProjectDrop(event: DragEvent, projectId: number): void {
+    if (draggedProjectId === null) return;
+    event.preventDefault();
+    dragOverProjectId = projectId;
+  }
+
+  async function dropOnProjectTab(event: DragEvent, projectId: number): Promise<void> {
+    event.preventDefault();
+    const sourceId = draggedProjectId;
+    finishProjectDrag();
+    if (sourceId === null || sourceId === projectId) return;
+    await reorderProject(sourceId, projectId);
+  }
+
+  async function reorderProject(sourceId: number, targetId: number): Promise<void> {
+    const sourceIdx = projects.findIndex(p => p.id === sourceId);
+    const targetIdx = projects.findIndex(p => p.id === targetId);
+    if (sourceIdx === -1 || targetIdx === -1) return;
+    const reordered = [...projects];
+    const [moved] = reordered.splice(sourceIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    try {
+      await Promise.all(
+        reordered
+          .map((project, index) => ({ project, index }))
+          .filter(({ project, index }) => project.ordering !== index)
+          .map(({ project, index }) => ApiC.patch(`${Model.TodolistProjects}/${project.id}`, { ordering: index })),
+      );
+      await loadProjects();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not reorder that project.');
     }
   }
 
@@ -1244,17 +1295,29 @@
 
 <div class="pm-board">
   <div class="pm-project-row">
+    {#each projects as project (project.id)}
+      <button
+        type="button"
+        class="pm-project-tab"
+        class:active={activeProjectId === project.id}
+        class:pm-project-tab-drag-over={dragOverProjectId === project.id}
+        draggable="true"
+        on:click={() => selectProject(project.id)}
+        on:dragstart={(event) => startProjectDrag(event, project.id)}
+        on:dragend={finishProjectDrag}
+        on:dragover={(event) => allowProjectDrop(event, project.id)}
+        on:dragleave={() => { if (dragOverProjectId === project.id) dragOverProjectId = null; }}
+        on:drop={(event) => dropOnProjectTab(event, project.id)}
+      >
+        {project.name}
+      </button>
+    {/each}
     <button type="button" class="pm-project-tab" class:active={activeProjectId === 'all'} on:click={() => selectProject('all')}>
       {t('All')}
     </button>
     <button type="button" class="pm-project-tab" class:active={activeProjectId === null} on:click={() => selectProject(null)}>
       {t('Unfiled')}
     </button>
-    {#each projects as project (project.id)}
-      <button type="button" class="pm-project-tab" class:active={activeProjectId === project.id} on:click={() => selectProject(project.id)}>
-        {project.name}
-      </button>
-    {/each}
     {#if activeProject}
       <button type="button" class="pm-manage-btn" title={t('Manage this project')} aria-label={t('Manage this project')} on:click={() => openProjectDialog(activeProject)}>
         <i class="fas fa-pen fa-fw" aria-hidden="true"></i>

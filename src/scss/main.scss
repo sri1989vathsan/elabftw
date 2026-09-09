@@ -4404,6 +4404,14 @@ div > .sticky-navbar {
   color: var(--primary);
 }
 
+.pm-project-tab[draggable='true'] {
+  cursor: grab;
+}
+
+.pm-project-tab-drag-over {
+  background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
 .pm-manage-btn {
   background: transparent;
   border: 0;
