@@ -845,6 +845,23 @@
     return core.isAdmin || upload.userid === core.currentUserid;
   }
 
+  function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // A pasted/dropped image gets uploaded as a real attachment and embedded
+  // inline in notes as <img src="...long_name...">. Deleting that same file
+  // from the Attachments list would otherwise leave that <img> pointing at a
+  // now-404ing download URL -- a broken image sitting in the notes forever.
+  // Match on long_name rather than the full downloadUrl() string since the
+  // browser may have re-escaped "&" to "&amp;" when it serialized the
+  // contenteditable's innerHTML.
+  function stripUploadImageFromNotes(notes: string, upload: OrderUpload): string | null {
+    const pattern = new RegExp(`<img[^>]*src="[^"]*${escapeRegExp(upload.long_name)}[^"]*"[^>]*>`, 'gi');
+    if (!pattern.test(notes)) return null;
+    return notes.replace(pattern, '');
+  }
+
   async function deleteUpload(item: OrderItem, upload: OrderUpload): Promise<void> {
     if (!window.confirm(t('Delete this attachment?'))) return;
     try {
@@ -852,6 +869,19 @@
       await loadUploads(item.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not delete this attachment.');
+      return;
+    }
+    if (!item.notes) return;
+    const stripped = stripUploadImageFromNotes(item.notes, upload);
+    if (stripped === null) return;
+    const previous = item.notes;
+    item.notes = stripped === '' ? null : stripped;
+    items = items;
+    try {
+      await ApiC.patch(`${Model.Order}/${item.id}`, { notes: item.notes });
+    } catch {
+      item.notes = previous;
+      items = items;
     }
   }
 
