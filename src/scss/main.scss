@@ -3873,6 +3873,12 @@ input[type='color'] {
 .notif-body {
   flex: 1;
   min-width: 0;
+  // force-wrap regardless of whatever nowrap the message span (built by
+  // Transform::notif(), not this stylesheet) may have inherited -- without
+  // this the message just runs past the dropdown's edge instead of
+  // wrapping to a second line
+  overflow-wrap: break-word;
+  white-space: normal !important;
 }
 
 /* The switch - the box around the slider */
