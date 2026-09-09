@@ -517,16 +517,23 @@
     }).format(new Date(value));
   }
 
-  function agendaLabel(): string {
-    if (!activeRange) return t('All visible dates');
-    if (activeRange.start === activeRange.end) {
+  function formatAgendaLabel(range: typeof activeRange): string {
+    if (!range) return t('All visible dates');
+    if (range.start === range.end) {
       return new Intl.DateTimeFormat(locale, {
         dateStyle: 'full',
-      }).format(new Date(`${activeRange.start}T12:00:00`));
+      }).format(new Date(`${range.start}T12:00:00`));
     }
     const formatter = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
-    return `${formatter.format(new Date(`${activeRange.start}T12:00:00`))} – ${formatter.format(new Date(`${activeRange.end}T12:00:00`))}`;
+    return `${formatter.format(new Date(`${range.start}T12:00:00`))} – ${formatter.format(new Date(`${range.end}T12:00:00`))}`;
   }
+  // a plain function call in the template (the old {agendaLabel()}) only
+  // reactively updates for template expressions that directly reference a
+  // reactive variable -- Svelte's compiler only sees the function name
+  // itself here, not activeRange inside its body, so clicking Today (which
+  // only reassigns selectedDate/activeRange) never re-rendered this text.
+  // A $: declaration reads activeRange directly, so it's tracked properly.
+  $: agendaLabel = formatAgendaLabel(activeRange);
 
   function isCellSelected(key: string): boolean {
     return activeRange !== null && key >= activeRange.start && key <= activeRange.end;
@@ -957,28 +964,28 @@
       <span><i class='calendar-legend-dot resource-dot'></i>{t('Resources')}</span>
       <span><i class='calendar-legend-dot overdue-dot'></i>{t('Overdue')}</span>
     </div>
+    <div class='d-flex calendar-month-actions'>
+      <button
+        type='button'
+        class:active={!selectedDate}
+        class='btn btn-sm btn-outline-primary mr-2'
+        aria-pressed={!selectedDate}
+        on:click={selectAllVisibleDates}
+      >
+        <i class='fas fa-layer-group fa-fw mr-1' aria-hidden='true'></i>{t('All visible dates')}
+      </button>
+      <button type='button' class='btn btn-sm btn-outline-primary mr-2' on:click={selectToday}>
+        <i class='fas fa-location-crosshairs fa-fw mr-1' aria-hidden='true'></i>{t('Today')}
+      </button>
+    </div>
   </details>
-  <div class='d-flex calendar-month-actions'>
-    <button
-      type='button'
-      class:active={!selectedDate}
-      class='btn btn-sm btn-outline-primary mr-2'
-      aria-pressed={!selectedDate}
-      on:click={selectAllVisibleDates}
-    >
-      <i class='fas fa-layer-group fa-fw mr-1' aria-hidden='true'></i>{t('All visible dates')}
-    </button>
-    <button type='button' class='btn btn-sm btn-outline-primary mr-2' on:click={selectToday}>
-      <i class='fas fa-location-crosshairs fa-fw mr-1' aria-hidden='true'></i>{t('Today')}
-    </button>
-  </div>
 </section>
 
 <section class='calendar-todo-agenda mt-3' aria-labelledby='calendarTodoAgendaHeading'>
   <div class='calendar-agenda-header'>
     <div>
       <span class='calendar-agenda-eyebrow'>{t('Agenda')}</span>
-      <h4 id='calendarTodoAgendaHeading' class='h5 mb-0'>{agendaLabel()}</h4>
+      <h4 id='calendarTodoAgendaHeading' class='h5 mb-0'>{agendaLabel}</h4>
     </div>
     <span class='badge badge-primary'>{agendaCount}</span>
   </div>
