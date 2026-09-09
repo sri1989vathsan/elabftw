@@ -120,8 +120,11 @@ export class Api {
 
     return fetch(`api/v2/${query}${urlParams}`, options).then(async response => {
       if (response.status !== this.getOkStatusFromMethod(method)) {
-        return response.json().then(json => {
-          const error = new Error(json.message || json.description) as Error & { status?: number };
+        // An empty or non-JSON body (e.g. an uncaught server error with no
+        // response body at all) would otherwise surface as a confusing raw
+        // "unexpected end of data" SyntaxError instead of a useful message.
+        return response.json().catch(() => ({})).then(json => {
+          const error = new Error(json.message || json.description || `Request failed with status ${response.status}`) as Error & { status?: number };
           error.status = response.status;
           throw error;
         });
