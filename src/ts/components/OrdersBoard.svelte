@@ -288,8 +288,11 @@
       const unpinnedFetched = fetched.filter(item => !item.pinned);
       hasNextPage = unpinnedFetched.length > pageSize;
       hasMorePinned = pinnedFetched.length > PINNED_PAGE_SIZE;
-      pinnedOffset = 0;
       pinnedItems = pinnedFetched.slice(0, PINNED_PAGE_SIZE);
+      // must match how many pinned rows are actually showing (i.e.
+      // pinnedItems.length), not 0 -- otherwise the first "Load more
+      // pinned" click re-requests offset 0 and duplicates this same page
+      pinnedOffset = pinnedItems.length;
       items = unpinnedFetched.slice(0, pageSize);
       // attachments now come bundled with each order, so this is a single
       // request instead of one per order
@@ -920,26 +923,34 @@
 
   async function deleteUpload(item: OrderItem, upload: OrderUpload): Promise<void> {
     if (!window.confirm(t('Delete this attachment?'))) return;
+    // strip any note-embedded reference to this file BEFORE deleting the
+    // upload itself. Deleting first (the old order) could leave the
+    // attachment permanently gone -- unrecoverable from the UI -- while
+    // the notes patch meant to clean up its reference failed right after;
+    // this order aborts before anything irreversible happens instead.
+    if (item.notes) {
+      const stripped = stripUploadImageFromNotes(item.notes, upload);
+      if (stripped !== null) {
+        const previous = item.notes;
+        item.notes = stripped === '' ? null : stripped;
+        items = items;
+        pinnedItems = pinnedItems;
+        try {
+          await ApiC.patch(`${Model.Order}/${item.id}`, { notes: item.notes });
+        } catch (error) {
+          item.notes = previous;
+          items = items;
+          pinnedItems = pinnedItems;
+          notify.error(error instanceof Error ? error.message : 'Could not update notes before deleting this attachment.');
+          return;
+        }
+      }
+    }
     try {
       await ApiC.delete(`${Model.Order}/${item.id}/${Model.Upload}/${upload.id}`);
       await loadUploads(item.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not delete this attachment.');
-      return;
-    }
-    if (!item.notes) return;
-    const stripped = stripUploadImageFromNotes(item.notes, upload);
-    if (stripped === null) return;
-    const previous = item.notes;
-    item.notes = stripped === '' ? null : stripped;
-    items = items;
-    pinnedItems = pinnedItems;
-    try {
-      await ApiC.patch(`${Model.Order}/${item.id}`, { notes: item.notes });
-    } catch {
-      item.notes = previous;
-      items = items;
-      pinnedItems = pinnedItems;
     }
   }
 
