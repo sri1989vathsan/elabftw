@@ -69,10 +69,12 @@ final class TodolistProjects extends AbstractRest
         $description = $this->getDescription($reqBody['description'] ?? null);
         $targetEndDate = $this->getTargetEndDate($reqBody['target_end_date'] ?? null);
         $status = $this->getStatus($reqBody['status'] ?? null);
-        $sql = 'INSERT INTO todolist_projects(team, name, description, target_end_date, status, userid)
-            VALUES(:team, :name, :description, :target_end_date, :status, :userid)';
+        $sql = 'INSERT INTO todolist_projects(team, name, description, target_end_date, status, userid, ordering)
+            SELECT :team, :name, :description, :target_end_date, :status, :userid, COALESCE(MAX(ordering), -1) + 1
+            FROM todolist_projects WHERE team = :team2';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $req->bindParam(':team2', $this->team, PDO::PARAM_INT);
         $req->bindParam(':name', $name);
         $req->bindValue(':description', $description, $description === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':target_end_date', $targetEndDate, $targetEndDate === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
@@ -94,7 +96,7 @@ final class TodolistProjects extends AbstractRest
         // automatically to a team admin, who has to be added like anyone
         // else to see or manage a project they're not part of.
         $showArchived = ($queryParams ?? $this->getQueryParams())->getQuery()->getBoolean('archived');
-        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at, p.archived,
+        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at, p.archived, p.ordering,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', u.userid, 'fullname', u.fullname))
                     FROM todolist_project_members AS m
@@ -108,7 +110,7 @@ final class TodolistProjects extends AbstractRest
                     p.userid = :userid
                     OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = p.id AND pm.userid = :userid2)
                 )
-            ORDER BY p.name ASC";
+            ORDER BY p.ordering ASC, p.id ASC";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $req->bindValue(':archived', $showArchived ? 1 : 0, PDO::PARAM_INT);
@@ -124,7 +126,7 @@ final class TodolistProjects extends AbstractRest
         // unlike readAll(), not filtered by archived state -- a single
         // project must stay reachable by id (e.g. to unarchive it) however
         // the list happens to be filtered right now
-        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at, p.archived,
+        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at, p.archived, p.ordering,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', u.userid, 'fullname', u.fullname))
                     FROM todolist_project_members AS m
@@ -192,6 +194,14 @@ final class TodolistProjects extends AbstractRest
             $sql = 'UPDATE todolist_projects SET archived = :archived WHERE id = :id AND team = :team';
             $req = $this->Db->prepare($sql);
             $req->bindValue(':archived', Filter::toBinary($params['archived']), PDO::PARAM_INT);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+            $this->Db->execute($req);
+        }
+        if (array_key_exists('ordering', $params)) {
+            $sql = 'UPDATE todolist_projects SET ordering = :ordering WHERE id = :id AND team = :team';
+            $req = $this->Db->prepare($sql);
+            $req->bindValue(':ordering', (int) $params['ordering'], PDO::PARAM_INT);
             $req->bindParam(':id', $this->id, PDO::PARAM_INT);
             $req->bindParam(':team', $this->team, PDO::PARAM_INT);
             $this->Db->execute($req);

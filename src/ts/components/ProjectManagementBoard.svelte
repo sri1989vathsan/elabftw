@@ -47,6 +47,10 @@
     pinned: boolean;
     priority: Priority | null;
     column_id: number | null;
+    // the kind of task.column_id's own column -- present even when that
+    // column belongs to a different project's private copy than whatever
+    // is in `columns` right now (see tasksInColumn() below)
+    column_kind: ColumnKind | null;
     creation_time: string;
     userid: number;
     team: number;
@@ -75,6 +79,7 @@
     userid: number;
     members: TeamMember[];
     archived: boolean;
+    ordering: number;
   };
 
   type TaskComment = {
@@ -202,13 +207,39 @@
     .filter(task => matchesSearch(task, normalizedSearch));
   $: doneColumn = columns.find(c => c.kind === 'done') ?? null;
   $: todoColumn = columns.find(c => c.kind === 'todo') ?? null;
-  $: doneCount = doneColumn ? visibleTasks.filter(task => task.column_id === doneColumn.id).length : 0;
+
+  // `columns` only ever holds ONE project's column set at a time (see
+  // loadColumns()) -- but in "All" scope, visibleTasks spans every project,
+  // and each project gets its own private copy of column ids the first
+  // time its board is opened (TodolistColumns::ensureProjectColumns()).
+  // Matching by raw column_id would silently drop any task whose column
+  // belongs to a project other than whichever one `columns` happens to be
+  // scoped to right now, so match by column "kind" instead in that case --
+  // it's the one thing every project's copy of a built-in column shares.
+  // A single project's own tab keeps matching by exact id, since multiple
+  // custom columns there can share kind 'custom' and must stay distinct.
+  function tasksInColumn(column: Column, list: Task[]): Task[] {
+    return activeProjectId === 'all'
+      ? list.filter(task => task.column_kind === column.kind)
+      : list.filter(task => task.column_id === column.id);
+  }
+
+  $: doneCount = doneColumn ? tasksInColumn(doneColumn, visibleTasks).length : 0;
   $: donePercent = visibleTasks.length === 0 ? 0 : Math.round((doneCount / visibleTasks.length) * 100);
 
   function canManage(task: Task): boolean {
-    return task.userid === core.currentUserid
+    if (task.userid === core.currentUserid
       || task.assignees.some(a => a.userid === core.currentUserid)
-      || core.isAdmin;
+      || core.isAdmin) {
+      return true;
+    }
+    // mirrors Todolist::canWriteOrExplode() server-side: a project member
+    // can manage any task in that project, not just their own/assigned ones
+    if (task.project_id === null) return false;
+    const project = projects.find(p => p.id === task.project_id);
+    if (!project) return false;
+    return project.userid === core.currentUserid
+      || project.members.some(m => m.userid === core.currentUserid);
   }
 
   function addAssignee(list: TeamMember[], userid: number, pool: TeamMember[]): TeamMember[] {
@@ -374,6 +405,9 @@
           return;
         }
       }
+      // now that we know which project the task actually belongs to,
+      // land on that project's tab instead of leaving "All" selected
+      activeProjectId = task.project_id ?? 'all';
       openDetail(task);
     });
 
@@ -419,6 +453,7 @@
       pinned: false,
       priority: null,
       column_id: columnId,
+      column_kind: columns.find(c => c.id === columnId)?.kind ?? null,
       creation_time: '',
       userid: core.currentUserid,
       team: 0,
@@ -588,6 +623,56 @@
       await loadColumns();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not reorder that column.');
+    }
+  }
+
+  let draggedProjectId: number | null = null;
+  let dragOverProjectId: number | null = null;
+
+  function startProjectDrag(event: DragEvent, id: number): void {
+    draggedProjectId = id;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', `project:${id}`);
+    }
+  }
+
+  function finishProjectDrag(): void {
+    draggedProjectId = null;
+    dragOverProjectId = null;
+  }
+
+  function allowProjectDrop(event: DragEvent, projectId: number): void {
+    if (draggedProjectId === null) return;
+    event.preventDefault();
+    dragOverProjectId = projectId;
+  }
+
+  async function dropOnProjectTab(event: DragEvent, projectId: number): Promise<void> {
+    event.preventDefault();
+    const sourceId = draggedProjectId;
+    finishProjectDrag();
+    if (sourceId === null || sourceId === projectId) return;
+    await reorderProject(sourceId, projectId);
+  }
+
+  async function reorderProject(sourceId: number, targetId: number): Promise<void> {
+    const sourceIdx = projects.findIndex(p => p.id === sourceId);
+    const targetIdx = projects.findIndex(p => p.id === targetId);
+    if (sourceIdx === -1 || targetIdx === -1) return;
+    const reordered = [...projects];
+    const [moved] = reordered.splice(sourceIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    try {
+      await Promise.all(
+        reordered
+          .map((project, index) => ({ project, index }))
+          .filter(({ project, index }) => project.ordering !== index)
+          .map(({ project, index }) => ApiC.patch(`${Model.TodolistProjects}/${project.id}`, { ordering: index })),
+      );
+      await loadProjects();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not reorder that project.');
     }
   }
 
@@ -1210,17 +1295,29 @@
 
 <div class="pm-board">
   <div class="pm-project-row">
+    {#each projects as project (project.id)}
+      <button
+        type="button"
+        class="pm-project-tab"
+        class:active={activeProjectId === project.id}
+        class:pm-project-tab-drag-over={dragOverProjectId === project.id}
+        draggable="true"
+        on:click={() => selectProject(project.id)}
+        on:dragstart={(event) => startProjectDrag(event, project.id)}
+        on:dragend={finishProjectDrag}
+        on:dragover={(event) => allowProjectDrop(event, project.id)}
+        on:dragleave={() => { if (dragOverProjectId === project.id) dragOverProjectId = null; }}
+        on:drop={(event) => dropOnProjectTab(event, project.id)}
+      >
+        {project.name}
+      </button>
+    {/each}
     <button type="button" class="pm-project-tab" class:active={activeProjectId === 'all'} on:click={() => selectProject('all')}>
       {t('All')}
     </button>
     <button type="button" class="pm-project-tab" class:active={activeProjectId === null} on:click={() => selectProject(null)}>
       {t('Unfiled')}
     </button>
-    {#each projects as project (project.id)}
-      <button type="button" class="pm-project-tab" class:active={activeProjectId === project.id} on:click={() => selectProject(project.id)}>
-        {project.name}
-      </button>
-    {/each}
     {#if activeProject}
       <button type="button" class="pm-manage-btn" title={t('Manage this project')} aria-label={t('Manage this project')} on:click={() => openProjectDialog(activeProject)}>
         <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
@@ -1344,7 +1441,7 @@
   {:else}
     <div class="pm-columns">
       {#each sortedColumns(columns) as column (column.id)}
-        {@const columnTasks = visibleTasks.filter(task => task.column_id === column.id)}
+        {@const columnTasks = tasksInColumn(column, visibleTasks)}
         {@const prevCol = adjacentColumn(column, -1)}
         {@const nextCol = adjacentColumn(column, 1)}
         {@const columnExpanded = !!expandedColumns[column.id]}
