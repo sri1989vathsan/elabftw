@@ -23,6 +23,7 @@ enum Notifications: int
     case MentionedInTask = 16;
     case MentionedInOrder = 17;
     case TaskAssigned = 18;
+    case OrderStatusChanged = 19;
     case SelfNeedValidation = 20;
     case SelfIsValidated = 30;
     case MathjaxFailed = 40;
