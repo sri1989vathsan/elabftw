@@ -174,6 +174,7 @@ final class Todolist extends AbstractRest
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
                 project.name AS project_name,
+                col.kind AS column_kind,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', au.userid, 'fullname', au.fullname))
                     FROM todolist_task_assignees AS ta
@@ -185,6 +186,7 @@ final class Todolist extends AbstractRest
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
+            LEFT JOIN todolist_columns AS col ON col.id = t.column_id
             WHERE t.team = :team AND t.completed_at {$completedFilter}{$completedSinceFilter}{$scopeFilter}
                 AND (
                     t.project_id IS NULL
@@ -286,6 +288,7 @@ final class Todolist extends AbstractRest
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
                 project.name AS project_name,
+                col.kind AS column_kind,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', au.userid, 'fullname', au.fullname))
                     FROM todolist_task_assignees AS ta
@@ -297,6 +300,7 @@ final class Todolist extends AbstractRest
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
+            LEFT JOIN todolist_columns AS col ON col.id = t.column_id
             WHERE t.id = :id AND t.team = :team
                 AND (
                     t.project_id IS NULL
@@ -321,12 +325,41 @@ final class Todolist extends AbstractRest
     public function patch(Action $action, array $params): array
     {
         $this->canWriteOrExplode();
-        $previousAssignees = array_map('intval', array_column($this->readOne()['assignees'] ?? array(), 'userid'));
+        $before = $this->readOne();
+        $previousAssignees = array_map('intval', array_column($before['assignees'] ?? array(), 'userid'));
+        $previousColumnKind = $before['column_kind'] ?? null;
         foreach ($params as $key => $value) {
             if ($key === 'assignee_userids' || $key === 'assigned_userid') {
                 continue;
             }
             $this->update($key, $value);
+        }
+        // Each project can have its own private copy of the columns (see
+        // TodolistColumns::ensureProjectColumns()), so a task's column_id
+        // almost certainly stops belonging to its column set the moment
+        // the task moves to a different project (or to/from no project at
+        // all) -- follow it to the equivalent column, by kind, over there.
+        // Skipped when the request already set column_id itself.
+        if (array_key_exists('project_id', $params) && $previousColumnKind !== null && !array_key_exists('column_id', $params)) {
+            $newProjectId = $params['project_id'] !== null && $params['project_id'] !== ''
+                ? (int) $params['project_id']
+                : null;
+            if ($newProjectId !== null) {
+                (new TodolistColumns($this->requester))->ensureProjectColumns($newProjectId);
+            }
+            $sql = 'SELECT id FROM todolist_columns WHERE team = :team AND kind = :kind AND project_id '
+                . ($newProjectId !== null ? '= :project_id' : 'IS NULL');
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+            $req->bindValue(':kind', $previousColumnKind);
+            if ($newProjectId !== null) {
+                $req->bindValue(':project_id', $newProjectId, PDO::PARAM_INT);
+            }
+            $this->Db->execute($req);
+            $matchingColumnId = $req->fetch()['id'] ?? null;
+            if ($matchingColumnId !== null) {
+                $this->update('column_id', (int) $matchingColumnId);
+            }
         }
         // Whichever side of the status/column pair was actually touched
         // drives the other, so a task's state stays consistent no matter

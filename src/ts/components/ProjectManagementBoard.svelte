@@ -47,6 +47,10 @@
     pinned: boolean;
     priority: Priority | null;
     column_id: number | null;
+    // the kind of task.column_id's own column -- present even when that
+    // column belongs to a different project's private copy than whatever
+    // is in `columns` right now (see tasksInColumn() below)
+    column_kind: ColumnKind | null;
     creation_time: string;
     userid: number;
     team: number;
@@ -202,7 +206,24 @@
     .filter(task => matchesSearch(task, normalizedSearch));
   $: doneColumn = columns.find(c => c.kind === 'done') ?? null;
   $: todoColumn = columns.find(c => c.kind === 'todo') ?? null;
-  $: doneCount = doneColumn ? visibleTasks.filter(task => task.column_id === doneColumn.id).length : 0;
+
+  // `columns` only ever holds ONE project's column set at a time (see
+  // loadColumns()) -- but in "All" scope, visibleTasks spans every project,
+  // and each project gets its own private copy of column ids the first
+  // time its board is opened (TodolistColumns::ensureProjectColumns()).
+  // Matching by raw column_id would silently drop any task whose column
+  // belongs to a project other than whichever one `columns` happens to be
+  // scoped to right now, so match by column "kind" instead in that case --
+  // it's the one thing every project's copy of a built-in column shares.
+  // A single project's own tab keeps matching by exact id, since multiple
+  // custom columns there can share kind 'custom' and must stay distinct.
+  function tasksInColumn(column: Column, list: Task[]): Task[] {
+    return activeProjectId === 'all'
+      ? list.filter(task => task.column_kind === column.kind)
+      : list.filter(task => task.column_id === column.id);
+  }
+
+  $: doneCount = doneColumn ? tasksInColumn(doneColumn, visibleTasks).length : 0;
   $: donePercent = visibleTasks.length === 0 ? 0 : Math.round((doneCount / visibleTasks.length) * 100);
 
   function canManage(task: Task): boolean {
@@ -431,6 +452,7 @@
       pinned: false,
       priority: null,
       column_id: columnId,
+      column_kind: columns.find(c => c.id === columnId)?.kind ?? null,
       creation_time: '',
       userid: core.currentUserid,
       team: 0,
@@ -1356,7 +1378,7 @@
   {:else}
     <div class="pm-columns">
       {#each sortedColumns(columns) as column (column.id)}
-        {@const columnTasks = visibleTasks.filter(task => task.column_id === column.id)}
+        {@const columnTasks = tasksInColumn(column, visibleTasks)}
         {@const prevCol = adjacentColumn(column, -1)}
         {@const nextCol = adjacentColumn(column, 1)}
         {@const columnExpanded = !!expandedColumns[column.id]}

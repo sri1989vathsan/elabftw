@@ -137,8 +137,10 @@ final class TodolistColumns extends AbstractRest
     /**
      * A project's board gets its own copy of the columns the first time it
      * is opened, seeded from the team's defaults -- a no-op once it has any.
+     * Also called from Todolist::patch() when a task is assigned to a
+     * project it didn't already belong to, so its column_id can follow it.
      */
-    private function ensureProjectColumns(int $projectId): void
+    public function ensureProjectColumns(int $projectId): void
     {
         $sql = 'SELECT COUNT(*) AS count FROM todolist_columns WHERE team = :team AND project_id = :project_id';
         $req = $this->Db->prepare($sql);
