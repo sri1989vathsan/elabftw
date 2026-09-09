@@ -83,12 +83,20 @@ final class CustomMigrationRunner
 
     private Db $Db;
 
+    /** @param list<string>|null $migrationsOverride only ever set by tests -- production always uses self::MIGRATIONS */
     public function __construct(
         private readonly int $officialSchema,
         private readonly FilesystemOperator $filesystem,
         private readonly ?OutputInterface $output = null,
+        private readonly ?array $migrationsOverride = null,
     ) {
         $this->Db = Db::getConnection();
+    }
+
+    /** @return list<string> */
+    private function migrationList(): array
+    {
+        return $this->migrationsOverride ?? self::MIGRATIONS;
     }
 
     /**
@@ -113,7 +121,7 @@ final class CustomMigrationRunner
         $applied = $this->getApplied();
         $appliedChecksums = array_flip($applied);
         $pending = array();
-        foreach (self::MIGRATIONS as $migration) {
+        foreach ($this->migrationList() as $migration) {
             if (!$this->filesystem->fileExists($migration)) {
                 throw new ImproperActionException(sprintf('Custom migration file is missing: %s', $migration));
             }
