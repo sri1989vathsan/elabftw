@@ -573,7 +573,11 @@ export default class TocPanel extends SidePanel {
     }
 
     if (noResults) {
-      noResults.hidden = items.length === 0 || matches > 0;
+      // matches stays 0 whenever no filter/section-selection is active
+      // (matchingRoots only ever returns entries when one of those is set)
+      // -- without the !filterActive check this showed on every plain,
+      // unfiltered open of the panel as long as there were headings at all
+      noResults.hidden = !filterActive || items.length === 0 || matches > 0;
     }
 
     this.currentFilterActive = filterActive;
