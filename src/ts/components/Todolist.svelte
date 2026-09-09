@@ -1569,15 +1569,17 @@
         </select>
       </label>
       <div class='todo-date-time-row'>
-        <label class='mb-0'>
-          <span class='small'>{t('Date')}</span>
-          <input
-            class='form-control form-control-sm'
-            type='date'
-            bind:value={deadlineDate}
-            on:change={persistDeadlineDefaults}
-          />
-        </label>
+        {#if panelView !== 'calendar'}
+          <label class='mb-0'>
+            <span class='small'>{t('Date')}</span>
+            <input
+              class='form-control form-control-sm'
+              type='date'
+              bind:value={deadlineDate}
+              on:change={persistDeadlineDefaults}
+            />
+          </label>
+        {/if}
         <label class='mb-0'>
           <span class='small'>{t('Time')}</span>
           <select class='form-control form-control-sm' bind:value={deadlineTime} on:change={persistDeadlineDefaults}>
