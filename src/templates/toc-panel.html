@@ -11,7 +11,9 @@
     <div class='input-group input-group-sm mb-2'>
       <label class='sr-only' for='tocSearchInput'>{{ 'Search'|trans }} {{ 'Table of Contents'|trans }}</label>
       <div class='input-group-prepend'>
-        <span class='input-group-text'><i class='fas fa-search fa-fw' aria-hidden='true'></i></span>
+        <button type='button' id='tocSearchSubmit' class='btn btn-outline-secondary' title='{{ 'Add filter'|trans }}' aria-label='{{ 'Add filter'|trans }}'>
+          <i class='fas fa-search fa-fw' aria-hidden='true'></i>
+        </button>
       </div>
       <input type='search' id='tocSearchInput' class='form-control' placeholder='{{ 'Add heading filter'|trans }}' autocomplete='off'>
       <div class='input-group-append'>
