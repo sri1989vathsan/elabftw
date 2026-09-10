@@ -110,6 +110,17 @@
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
 
+  // Offset-based pages aren't a stable snapshot: a task created, completed,
+  // or reordered between two "Load more" clicks can shift the underlying
+  // ordering enough that the same row reappears in a later page. Cheap
+  // insurance against a duplicate id ending up in `tasks` twice, applied at
+  // every append site rather than trusting the server's page boundaries to
+  // never overlap.
+  function appendUnique(existing: Task[], incoming: Task[]): Task[] {
+    const seenIds = new Set(existing.map(task => task.id));
+    return [...existing, ...incoming.filter(task => !seenIds.has(task.id))];
+  }
+
   let tasks: Task[] = [];
   // team-wide open/done totals for the progress bar -- see load() and the
   // doneCount/donePercent/totalCount reactive statements below. open/done
@@ -459,7 +470,7 @@
           const page = await ApiC.getJson(
             `${Model.Todolist}?scope=${scope}&limit=${PAGE_SIZE}&offset=${openOffset}${filterParams}`,
           ) as Task[];
-          tasks = [...tasks, ...page];
+          tasks = appendUnique(tasks, page);
           openOffset += page.length;
           hasMoreOpen = page.length === PAGE_SIZE;
         })());
@@ -469,7 +480,7 @@
           const page = await ApiC.getJson(
             `${Model.Todolist}?scope=${scope}&completed=1&limit=${PAGE_SIZE}&offset=${completedOffset}${filterParams}`,
           ) as Task[];
-          tasks = [...tasks, ...page];
+          tasks = appendUnique(tasks, page);
           completedOffset += page.length;
           hasMoreCompleted = page.length === PAGE_SIZE;
         })());
