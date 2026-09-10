@@ -187,24 +187,21 @@
 
   $: activeProject = typeof activeProjectId === 'number' ? (projects.find(p => p.id === activeProjectId) ?? null) : null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
-  function matchesScope(task: Task): boolean {
-    switch (scope) {
-    case 'assigned':
-      return task.assignees.some(a => a.userid === core.currentUserid);
-    case 'created':
-      return task.userid === core.currentUserid;
-    case 'all':
-      return task.userid === core.currentUserid || task.assignees.some(a => a.userid === core.currentUserid);
-    default:
-      return true;
-    }
-  }
 
-  // project/priority/search are all applied server-side now (see load()'s
-  // taskFilterParams()) -- tasks is already exactly the right set, so this
-  // only ever needs the one filter that stays deliberately client-side
-  // (matchesScope, see its own comment)
-  $: visibleTasks = tasks.filter(matchesScope);
+  // project/priority/search/scope are all applied server-side now (see
+  // load()'s taskFilterParams() and its own scope=${scope}) -- tasks is
+  // already exactly the right set, page by page, so there's nothing left
+  // to filter here. Scope used to be client-side only, re-filtering
+  // whatever team-wide page happened to already be loaded -- correct while
+  // everything fit on one page, but with more tasks than that, the
+  // current user's own assigned/created tasks could easily fall outside
+  // the loaded page entirely while still existing further in, showing as
+  // empty or incomplete. Sending scope to the backend doesn't risk hiding
+  // anything a project member should see either: that visibility is
+  // already enforced unconditionally in readAll()'s WHERE clause,
+  // regardless of scope -- scope only ever narrows within what's already
+  // visible.
+  $: visibleTasks = tasks;
   $: doneColumn = columns.find(c => c.kind === 'done') ?? null;
   $: todoColumn = columns.find(c => c.kind === 'todo') ?? null;
 
@@ -422,20 +419,19 @@
       // readAll() only returns either open or completed tasks per call
       // (the sidebar To-do widget relies on that split), so the board
       // fetches both and merges them to populate the To do/Done columns.
-      // Always fetched team-wide (scope=team): being a project member
-      // means seeing every task in it, regardless of who created or is
-      // assigned to it -- the Assigned/Created/All tabs below are a
-      // client-side filter on top of that, never a narrower fetch, so
-      // switching tabs can't hide a task a project membership should show.
-      // project/priority/search DO narrow this fetch (taskFilterParams()) --
-      // counts is a separate, cheap aggregate query, deliberately left
-      // unfiltered by these three (see its own comment), so the progress
-      // bar still means "whole project", not "whatever's currently filtered
-      // into view".
+      // scope is sent as-is (Assigned/Created/All/Team) -- readAll()'s
+      // project-membership visibility check is unconditional regardless of
+      // scope, so narrowing the fetch by scope can't hide a task a member
+      // should see; it only narrows which of the tasks already visible to
+      // them get returned. project/priority/search also narrow this fetch
+      // (taskFilterParams()) -- counts is a separate, cheap aggregate
+      // query, deliberately left unfiltered by scope/priority/search/project
+      // (see its own comment), so the progress bar still means "whole
+      // project", not "whatever's currently filtered into view".
       const filterParams = taskFilterParams();
       const [open, done] = await Promise.all([
-        ApiC.getJson(`${Model.Todolist}?scope=team&limit=${PAGE_SIZE}&offset=0${filterParams}`) as Promise<Task[]>,
-        ApiC.getJson(`${Model.Todolist}?scope=team&completed=1&limit=${PAGE_SIZE}&offset=0${filterParams}`) as Promise<Task[]>,
+        ApiC.getJson(`${Model.Todolist}?scope=${scope}&limit=${PAGE_SIZE}&offset=0${filterParams}`) as Promise<Task[]>,
+        ApiC.getJson(`${Model.Todolist}?scope=${scope}&completed=1&limit=${PAGE_SIZE}&offset=0${filterParams}`) as Promise<Task[]>,
         loadCounts(),
       ]);
       tasks = [...open, ...done];
@@ -461,7 +457,7 @@
       if (hasMoreOpen) {
         requests.push((async () => {
           const page = await ApiC.getJson(
-            `${Model.Todolist}?scope=team&limit=${PAGE_SIZE}&offset=${openOffset}${filterParams}`,
+            `${Model.Todolist}?scope=${scope}&limit=${PAGE_SIZE}&offset=${openOffset}${filterParams}`,
           ) as Task[];
           tasks = [...tasks, ...page];
           openOffset += page.length;
@@ -471,7 +467,7 @@
       if (hasMoreCompleted) {
         requests.push((async () => {
           const page = await ApiC.getJson(
-            `${Model.Todolist}?scope=team&completed=1&limit=${PAGE_SIZE}&offset=${completedOffset}${filterParams}`,
+            `${Model.Todolist}?scope=${scope}&completed=1&limit=${PAGE_SIZE}&offset=${completedOffset}${filterParams}`,
           ) as Task[];
           tasks = [...tasks, ...page];
           completedOffset += page.length;
