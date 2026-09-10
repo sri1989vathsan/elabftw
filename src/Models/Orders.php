@@ -11,6 +11,7 @@ declare(strict_types=1);
 namespace Elabftw\Models;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
@@ -18,6 +19,7 @@ use Elabftw\Models\Notifications\OrderStatusChanged;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\Filter;
 use Elabftw\Traits\SetIdTrait;
+use Exception;
 use Override;
 use PDO;
 
@@ -51,6 +53,12 @@ final class Orders extends AbstractRest
     use SetIdTrait;
 
     private const array STATUSES = array('backlogged', 'requested', 'ordered', 'received', 'cancelled', 'reference');
+
+    // same module list/URL scheme as the LabCollector link already
+    // insertable into an entity's body -- see buildLabCollectorUrl() in
+    // src/ts/labcollector-link.ts and LABCOLLECTOR_TYPE_OPTIONS in
+    // src/ts/custom-editor/LinkExtension.ts
+    private const array LABCOLLECTOR_TYPES = array('plasmids', 'strains', 'chemicals', 'samples', 'antibodies', 'storage');
 
     // default size of the pinned bucket in readAll() when the client
     // doesn't ask for a different one -- see the comment there for why it
@@ -156,6 +164,13 @@ final class Orders extends AbstractRest
         if ($userid > 0 && ($userid === $this->Users->userid || $this->Users->isAdmin)) {
             $conditions[] = "(o.userid = :userid OR o.status = 'reference')";
             $bind[':userid'] = array($userid, PDO::PARAM_INT);
+        }
+
+        $labcollector = $query->getString('labcollector');
+        if ($labcollector === 'registered') {
+            $conditions[] = 'o.labcollector_type IS NOT NULL';
+        } elseif ($labcollector === 'unregistered') {
+            $conditions[] = 'o.labcollector_type IS NULL';
         }
 
         // server-side so a match on page 2 is found while looking at page 1
@@ -326,6 +341,8 @@ final class Orders extends AbstractRest
     private static function selectSql(): string
     {
         return 'SELECT o.id, o.title, o.notes, o.procurement_id, o.order_number, o.status, o.archived, o.pinned, o.created_at, o.userid,
+                o.labcollector_type, o.labcollector_id,
+                DATE_FORMAT(o.reminder_at, "%Y-%m-%dT%H:%i:%sZ") AS reminder_at,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT("id", oi_item.id, "title", oi_item.title))
@@ -423,6 +440,21 @@ final class Orders extends AbstractRest
             }
             $this->replaceItems($this->getItemIds($params['item_ids']));
         }
+        if (array_key_exists('labcollector_type', $params) || array_key_exists('labcollector_id', $params)) {
+            if (!$isOwner && !$this->Users->isAdmin) {
+                throw new ImproperActionException('Only the author or a team admin can edit this order.');
+            }
+            $this->updateLabCollectorLink(
+                array_key_exists('labcollector_type', $params) ? $this->getLabCollectorType($params['labcollector_type']) : $order['labcollector_type'],
+                array_key_exists('labcollector_id', $params) ? $this->getLabCollectorId($params['labcollector_id']) : $order['labcollector_id'],
+            );
+        }
+        if (array_key_exists('reminder_at', $params)) {
+            if (!$isOwner && !$this->Users->isAdmin) {
+                throw new ImproperActionException('Only the author or a team admin can edit this order.');
+            }
+            $this->updateReminderAt($this->getReminderAt($params['reminder_at']));
+        }
         return $this->readOne();
     }
 
@@ -493,6 +525,34 @@ final class Orders extends AbstractRest
         $this->Db->execute($req);
     }
 
+    // the id is optional -- an order can be marked as registered on
+    // LabCollector (type only) before its record id is known, added later.
+    // What's not allowed is an id without a type, since the id alone can't
+    // build a LabCollector URL (see buildLabCollectorUrl()).
+    private function updateLabCollectorLink(?string $type, ?string $id): void
+    {
+        if ($type === null && $id !== null) {
+            throw new ImproperActionException('A LabCollector id needs an item type.');
+        }
+        $sql = 'UPDATE custom_orders SET labcollector_type = :labcollector_type, labcollector_id = :labcollector_id WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':labcollector_type', $type, $type === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':labcollector_id', $id, $id === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    private function updateReminderAt(?string $reminderAt): void
+    {
+        $sql = 'UPDATE custom_orders SET reminder_at = :reminder_at WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':reminder_at', $reminderAt, $reminderAt === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
     private function updateContent(string $title, ?string $notes): void
     {
         $sql = 'UPDATE custom_orders SET title = :title, notes = :notes WHERE id = :id AND team = :team';
@@ -521,6 +581,52 @@ final class Orders extends AbstractRest
             $insReq->bindParam(':order_id', $this->id, PDO::PARAM_INT);
             $insReq->bindValue(':item_id', $itemId, PDO::PARAM_INT);
             $this->Db->execute($insReq);
+        }
+    }
+
+    private function getLabCollectorType(mixed $value): ?string
+    {
+        $type = trim((string) $value);
+        if ($value === null || $type === '') {
+            return null;
+        }
+        if (!in_array($type, self::LABCOLLECTOR_TYPES, true)) {
+            throw new ImproperActionException('Invalid LabCollector item type.');
+        }
+        return $type;
+    }
+
+    private function getLabCollectorId(mixed $value): ?string
+    {
+        $id = trim((string) $value);
+        if ($value === null || $id === '') {
+            return null;
+        }
+        // matches LABCOLLECTOR_LINK_ID_PATTERN's own id half in
+        // src/ts/labcollector-link.ts: a plain positive integer, since
+        // that's what LabCollector's by_id search param expects
+        if (!preg_match('/^[1-9]\d*$/', $id)) {
+            throw new ImproperActionException('Invalid LabCollector id.');
+        }
+        return $id;
+    }
+
+    // same convention as Todolist::getDeadline(): the client turns its
+    // local datetime-local input into a Date and sends toISOString(), this
+    // converts that to UTC before storing -- so the value read back by
+    // AccountCalendarFeed's render() (which treats the stored string as
+    // already UTC) is correct regardless of the requester's timezone
+    private function getReminderAt(mixed $value): ?string
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+        try {
+            return (new DateTimeImmutable((string) $value))
+                ->setTimezone(new DateTimeZone('UTC'))
+                ->format('Y-m-d H:i:s');
+        } catch (Exception) {
+            throw new ImproperActionException('Invalid reminder date.');
         }
     }
 

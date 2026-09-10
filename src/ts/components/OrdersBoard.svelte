@@ -7,6 +7,7 @@
   import { Notification as AppNotification } from '../Notifications.class';
   import { applyMention, extractMentionQuery, wrapMentionsAsHtml, stripMentionHtml } from '../mentions';
   import { handleLinkPreviewPaste } from '../linkPreview';
+  import { buildLabCollectorUrl } from '../labcollector-link';
 
   // Closes a results dropdown on any click outside its own container --
   // none of the search-result/mention dropdowns below had this, so they
@@ -52,7 +53,40 @@
     author_fullname: string;
     items: LinkedItem[];
     uploads: OrderUpload[];
+    labcollector_type: string | null;
+    labcollector_id: string | null;
+    reminder_at: string | null;
   };
+
+  // same module list/URL scheme as the LabCollector link already
+  // insertable into an entity's body -- see LABCOLLECTOR_TYPE_OPTIONS in
+  // src/ts/custom-editor/LinkExtension.ts
+  const LABCOLLECTOR_TYPE_OPTIONS: Array<{ text: string; value: string }> = [
+    { text: 'Plasmid', value: 'plasmids' },
+    { text: 'Strain', value: 'strains' },
+    { text: 'Chemical', value: 'chemicals' },
+    { text: 'Sample', value: 'samples' },
+    { text: 'Antibody', value: 'antibodies' },
+    { text: 'Storage', value: 'storage' },
+  ];
+
+  function labcollectorTypeLabel(type: string): string {
+    return LABCOLLECTOR_TYPE_OPTIONS.find(option => option.value === type)?.text ?? type;
+  }
+
+  // datetime-local <input> <-> the ISO string the API sends/expects.
+  // Mirrors toLocalInput()/new Date(`${date}T${time}`) in Todolist.svelte:
+  // read as local wall-clock time, converted to UTC (toISOString()) only
+  // when actually sending to the server.
+  function toLocalInputValue(iso: string): string {
+    const date = new Date(iso);
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function formatReminder(iso: string): string {
+    return new Date(iso).toLocaleString();
+  }
 
   type Category = {
     id: number;
@@ -132,6 +166,7 @@
   let statusFilter: OrderStatus | 'archived' | 'all' = 'all';
   let ownerFilter: 'mine' | 'all' = 'mine';
   let selectedUserId: number | null = null;
+  let labcollectorFilter: 'all' | 'registered' | 'unregistered' = 'all';
   let searchQuery = '';
   // off by default: matching PDF-extracted text needs a per-order subquery
   // against potentially large attachment text, so only pay for it when the
@@ -218,6 +253,140 @@
   let uploadingItem = new Set<number>();
   let dragOverItem: number | null = null;
 
+  // "Add on LabCollector" modal
+  let labcollectorModalItem: OrderItem | null = null;
+  let labcollectorDraftType = LABCOLLECTOR_TYPE_OPTIONS[0].value;
+  let labcollectorDraftId = '';
+  let savingLabcollector = false;
+
+  function openLabcollectorModal(item: OrderItem): void {
+    labcollectorModalItem = item;
+    labcollectorDraftType = item.labcollector_type ?? LABCOLLECTOR_TYPE_OPTIONS[0].value;
+    labcollectorDraftId = item.labcollector_id ?? '';
+  }
+
+  function closeLabcollectorModal(): void {
+    labcollectorModalItem = null;
+  }
+
+  async function saveLabcollectorLink(): Promise<void> {
+    const item = labcollectorModalItem;
+    if (item === null) return;
+    // the id is optional -- an order can be marked "on LabCollector" by
+    // type alone, with the record id filled in later once known
+    const id = labcollectorDraftId.trim();
+    if (id !== '' && !/^[1-9]\d*$/.test(id)) {
+      notify.error(t('Enter a valid LabCollector id (a positive number), or leave it blank.'));
+      return;
+    }
+    savingLabcollector = true;
+    try {
+      await ApiC.patch(`${Model.Order}/${item.id}`, {
+        labcollector_type: labcollectorDraftType,
+        labcollector_id: id === '' ? null : id,
+      });
+      item.labcollector_type = labcollectorDraftType;
+      item.labcollector_id = id === '' ? null : id;
+      items = items;
+      pinnedItems = pinnedItems;
+      closeLabcollectorModal();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not save the LabCollector link.');
+    } finally {
+      savingLabcollector = false;
+    }
+  }
+
+  // the plain yes/no toggle on the card itself: turning it on marks the
+  // order as registered under a default item type (refine which type, or
+  // add the record id, via the edit button's popup); turning it off clears
+  // both fields, same as removeLabcollectorLink().
+  async function toggleLabcollectorRegistered(item: OrderItem): Promise<void> {
+    const turningOn = !item.labcollector_type;
+    const type = turningOn ? (item.labcollector_type ?? LABCOLLECTOR_TYPE_OPTIONS[0].value) : null;
+    const id = turningOn ? item.labcollector_id : null;
+    try {
+      await ApiC.patch(`${Model.Order}/${item.id}`, { labcollector_type: type, labcollector_id: id });
+      item.labcollector_type = type;
+      item.labcollector_id = id;
+      items = items;
+      pinnedItems = pinnedItems;
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update the LabCollector status.');
+    }
+  }
+
+  async function removeLabcollectorLink(): Promise<void> {
+    const item = labcollectorModalItem;
+    if (item === null) return;
+    savingLabcollector = true;
+    try {
+      await ApiC.patch(`${Model.Order}/${item.id}`, { labcollector_type: null, labcollector_id: null });
+      item.labcollector_type = null;
+      item.labcollector_id = null;
+      items = items;
+      pinnedItems = pinnedItems;
+      closeLabcollectorModal();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not remove the LabCollector link.');
+    } finally {
+      savingLabcollector = false;
+    }
+  }
+
+  // reminder modal
+  let reminderModalItem: OrderItem | null = null;
+  let reminderDraft = '';
+  let savingReminder = false;
+
+  function openReminderModal(item: OrderItem): void {
+    reminderModalItem = item;
+    reminderDraft = item.reminder_at ? toLocalInputValue(item.reminder_at) : '';
+  }
+
+  function closeReminderModal(): void {
+    reminderModalItem = null;
+  }
+
+  async function saveReminder(): Promise<void> {
+    const item = reminderModalItem;
+    if (item === null) return;
+    if (!reminderDraft) {
+      notify.error(t('Choose a reminder date and time.'));
+      return;
+    }
+    const reminderAt = new Date(reminderDraft).toISOString();
+    savingReminder = true;
+    try {
+      await ApiC.patch(`${Model.Order}/${item.id}`, { reminder_at: reminderAt });
+      item.reminder_at = reminderAt;
+      items = items;
+      pinnedItems = pinnedItems;
+      closeReminderModal();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not save the reminder.');
+    } finally {
+      savingReminder = false;
+    }
+  }
+
+  async function removeReminder(): Promise<void> {
+    const item = reminderModalItem;
+    if (item === null) return;
+    savingReminder = true;
+    try {
+      await ApiC.patch(`${Model.Order}/${item.id}`, { reminder_at: null });
+      item.reminder_at = null;
+      items = items;
+      pinnedItems = pinnedItems;
+      closeReminderModal();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not remove the reminder.');
+    } finally {
+      savingReminder = false;
+    }
+  }
+
   function visibleComments(itemId: number): OrderComment[] {
     const all = commentsByItem[itemId] ?? [];
     return fullyExpandedComments.has(itemId) ? all : all.slice(-COMMENT_PAGE_SIZE);
@@ -279,7 +448,13 @@
     }
     if (dateFrom !== '') params.date_from = dateFrom;
     if (dateTo !== '') params.date_to = dateTo;
+    if (labcollectorFilter !== 'all') params.labcollector = labcollectorFilter;
     return params;
+  }
+
+  function onLabCollectorFilterChange(): void {
+    pageOffset = 0;
+    void load();
   }
 
   async function load(): Promise<void> {
@@ -1250,6 +1425,11 @@
         {/each}
       </select>
     {/if}
+    <select class="form-control form-control-sm" style="width:auto" bind:value={labcollectorFilter} on:change={onLabCollectorFilterChange} title={t('Filter by LabCollector registration')}>
+      <option value="all">{t('LabCollector: all')}</option>
+      <option value="registered">{t('LabCollector: registered')}</option>
+      <option value="unregistered">{t('LabCollector: not registered')}</option>
+    </select>
   </div>
 
   <div class="d-flex flex-wrap align-items-start mb-3 orders-toolbar-row" style="gap:0.75rem">
@@ -1492,6 +1672,30 @@
                 {#if item.order_number}
                   <span class="badge badge-light" title={t('Bestellung Nr., extracted from an uploaded order confirmation PDF')}>{t('Order #')}: {item.order_number}</span>
                 {/if}
+                {#if item.labcollector_type || canManage(item)}
+                  <span class="orders-labcollector-toggle">
+                    <button
+                      type="button"
+                      class="orders-labcollector-pill"
+                      class:orders-labcollector-pill-on={!!item.labcollector_type}
+                      disabled={!canManage(item)}
+                      title={item.labcollector_type ? t('On LabCollector — click to unmark') : t('Not on LabCollector — click to mark as registered')}
+                      on:click={() => toggleLabcollectorRegistered(item)}
+                    >
+                      <i class={`fas ${item.labcollector_type ? 'fa-check' : 'fa-vial'} fa-fw`} aria-hidden="true"></i>{t('On LabCollector')}
+                    </button>
+                    {#if canManage(item)}
+                      <button type="button" class="btn btn-ghost btn-sm orders-icon-button" title={t('Edit LabCollector details')} aria-label={t('Edit LabCollector details')} on:click={() => openLabcollectorModal(item)}>
+                        <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+                      </button>
+                    {/if}
+                    {#if item.labcollector_type && item.labcollector_id}
+                      <a href={buildLabCollectorUrl(item.labcollector_type, item.labcollector_id)} target="_blank" rel="noopener noreferrer" class="orders-labcollector-id-link" title={t('Open in LabCollector')}>
+                        #{item.labcollector_id}<i class="fas fa-arrow-up-right-from-square fa-fw ml-1" aria-hidden="true"></i>
+                      </a>
+                    {/if}
+                  </span>
+                {/if}
                 {#if canManage(item)}
                   <div class="orders-item-actions ml-auto">
                     <button
@@ -1504,6 +1708,16 @@
                       on:click={() => setPinned(item, !item.pinned)}
                     >
                       <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm orders-icon-button"
+                      class:orders-icon-button-active={!!item.reminder_at}
+                      title={item.reminder_at ? `${t('Reminder')}: ${formatReminder(item.reminder_at)}` : t('Set reminder')}
+                      aria-label={item.reminder_at ? t('Change reminder') : t('Set reminder')}
+                      on:click={() => openReminderModal(item)}
+                    >
+                      <i class="fas fa-bell fa-fw" aria-hidden="true"></i>
                     </button>
                     <button
                       type="button"
@@ -1701,6 +1915,71 @@
         </li>
 {/snippet}
 
+{#if labcollectorModalItem}
+  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeLabcollectorModal(); }}>
+    <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="ordersLabcollectorDialogTitle">
+      <div class="pm-dialog-header">
+        <h4 id="ordersLabcollectorDialogTitle" class="mb-0">{t('Add on LabCollector')}</h4>
+        <button type="button" class="pm-close-btn" on:click={closeLabcollectorModal} aria-label={t('Close')}>&times;</button>
+      </div>
+      <div class="pm-dialog-body">
+        <div class="pm-dialog-field">
+          <label for="ordersLabcollectorType">{t('Item type')}</label>
+          <select id="ordersLabcollectorType" class="form-control" bind:value={labcollectorDraftType}>
+            {#each LABCOLLECTOR_TYPE_OPTIONS as option (option.value)}
+              <option value={option.value}>{option.text}</option>
+            {/each}
+          </select>
+        </div>
+        <div class="pm-dialog-field">
+          <label for="ordersLabcollectorId">{t('LabCollector id')} <span class="pm-muted">({t('optional')})</span></label>
+          <input
+            id="ordersLabcollectorId"
+            type="number"
+            min="1"
+            step="1"
+            class="form-control"
+            placeholder={t('e.g. 123 — leave blank if not known yet')}
+            bind:value={labcollectorDraftId}
+          />
+        </div>
+      </div>
+      <div class="pm-dialog-footer">
+        {#if labcollectorModalItem.labcollector_type}
+          <button type="button" class="btn btn-danger-ghost mr-auto" disabled={savingLabcollector} on:click={removeLabcollectorLink}>{t('Remove')}</button>
+        {/if}
+        <button type="button" class="btn btn-secondary" disabled={savingLabcollector} on:click={closeLabcollectorModal}>{t('Cancel')}</button>
+        <button type="button" class="btn btn-primary" disabled={savingLabcollector} on:click={saveLabcollectorLink}>{t('Save')}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if reminderModalItem}
+  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeReminderModal(); }}>
+    <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="ordersReminderDialogTitle">
+      <div class="pm-dialog-header">
+        <h4 id="ordersReminderDialogTitle" class="mb-0">{t('Set reminder')}</h4>
+        <button type="button" class="pm-close-btn" on:click={closeReminderModal} aria-label={t('Close')}>&times;</button>
+      </div>
+      <div class="pm-dialog-body">
+        <div class="pm-dialog-field">
+          <label for="ordersReminderAt">{t('Remind me on')}</label>
+          <input id="ordersReminderAt" type="datetime-local" class="form-control" bind:value={reminderDraft} />
+        </div>
+        <p class="pm-muted small mb-0">{t('Shows up as an event in your personal calendar feed, same as Todolist deadlines.')}</p>
+      </div>
+      <div class="pm-dialog-footer">
+        {#if reminderModalItem.reminder_at}
+          <button type="button" class="btn btn-danger-ghost mr-auto" disabled={savingReminder} on:click={removeReminder}>{t('Remove')}</button>
+        {/if}
+        <button type="button" class="btn btn-secondary" disabled={savingReminder} on:click={closeReminderModal}>{t('Cancel')}</button>
+        <button type="button" class="btn btn-primary" disabled={savingReminder || !reminderDraft} on:click={saveReminder}>{t('Save')}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   /* Mirrors FeedbackBoard.svelte's styling approach: explicit background +
      border cards using the app's own real tokens/button classes, so this
@@ -1841,6 +2120,42 @@
 
   .orders-icon-button-active {
     color: var(--primary);
+  }
+
+  .orders-labcollector-toggle {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.25rem;
+  }
+
+  .orders-labcollector-pill {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--secondary);
+    border-radius: 999px;
+    color: var(--gray-500, currentColor);
+    display: inline-flex;
+    font-size: 0.8rem;
+    gap: 0.3rem;
+    padding: 0.2rem 0.6rem;
+  }
+
+  .orders-labcollector-pill-on {
+    background: var(--success);
+    border-color: var(--success);
+    color: #ffffff;
+  }
+
+  .orders-labcollector-id-link {
+    align-items: center;
+    color: var(--success);
+    display: inline-flex;
+    font-size: 0.8rem;
+    gap: 0.2rem;
+  }
+
+  .orders-labcollector-id-link:hover {
+    text-decoration: underline;
   }
 
   .orders-reference-toggle {

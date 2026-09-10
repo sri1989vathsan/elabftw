@@ -95,7 +95,7 @@ final class AccountCalendarFeed
 
     private function getEntries(): array
     {
-        return array_merge($this->getTodos(), $this->getStepDeadlines('experiments'), $this->getStepDeadlines('items'));
+        return array_merge($this->getTodos(), $this->getOrders(), $this->getStepDeadlines('experiments'), $this->getStepDeadlines('items'));
     }
 
     private function getTodos(): array
@@ -116,6 +116,28 @@ final class AccountCalendarFeed
                 'deadline' => $row['deadline'],
                 'reminder_minutes' => $row['reminder_minutes'],
                 'url' => rtrim($this->siteUrl, '/') . '/?task=' . $row['id'],
+            );
+        }, $req->fetchAll());
+    }
+
+    private function getOrders(): array
+    {
+        $sql = 'SELECT id, title, reminder_at
+            FROM custom_orders
+            WHERE userid = :userid AND reminder_at IS NOT NULL
+            ORDER BY reminder_at ASC';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':userid', $this->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return array_map(function (array $row): array {
+            return array(
+                'key' => 'order-' . $row['id'],
+                'summary' => $this->plainText($row['title']),
+                'description' => 'eLabFTW order reminder',
+                'notes' => null,
+                'deadline' => $row['reminder_at'],
+                'reminder_minutes' => 0,
+                'url' => rtrim($this->siteUrl, '/') . '/orders.php',
             );
         }, $req->fetchAll());
     }
