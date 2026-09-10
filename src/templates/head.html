@@ -142,6 +142,14 @@
                 {% set isActive = scriptName == 'resources-status.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }} {{ not App.Teams.teamArr.users_canwrite_resources_status and not App.Users.isAdmin ? 'disabled' }}' href='resources-status.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-list-check fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Resource status'|trans }}</a>
                 <div class='dropdown-divider'></div>
+                {% set labcollectorInventoryUrl = App.Teams.teamArr.labcollector_url|default('http://bs-labcollect01.ethz.ch/moor/index.php') %}
+                <div class='dropdown-item d-flex align-items-center justify-content-between'>
+                  <a id='labcollectorInventoryLink' href='{{ labcollectorInventoryUrl }}' target='_blank' rel='noopener noreferrer'><i class='fas fa-arrow-up-right-from-square fa-fw mr-1'></i>{{ 'LabCollector Inventory'|trans }}</a>
+                  {% if App.Users.isAdmin %}
+                    <button type='button' class='btn btn-link p-0 ml-2' data-action='edit-labcollector-inventory-link' data-current-url='{{ labcollectorInventoryUrl }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit LabCollector Inventory link'|trans }}'><i class='fas fa-pen fa-fw fa-xs' aria-hidden='true'></i></button>
+                  {% endif %}
+                </div>
+                <div class='dropdown-divider'></div>
                 {% for entity in App.itemsCategoryArr|filter(c => c.is_current_team == 1) %}
                   {% set isActive = scriptName == 'database.php' and App.Request.query.get('category') == entity.id %}
                   <a class='dropdown-item {{ isActive ? 'active' }}' href='database.php?category={{ entity.id }}' {{ isActive ? 'aria-current="page"' }}><span class='round-spot mr-1' style='background-color: #{{ entity.color }}'></span>{{ entity.title }}</a>
