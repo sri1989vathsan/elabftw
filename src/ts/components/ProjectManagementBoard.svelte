@@ -116,8 +116,15 @@
   // are scoped to activeProjectId (see load()); teamOpen/teamDone are
   // always the unscoped team-wide totals, from the same query.
   let teamCounts: { open: number; done: number; teamOpen: number; teamDone: number } | null = null;
-  // how many open/done tasks each to ask for -- see load() and loadMoreTasks()
-  let taskLimit = 100;
+  // open and done tasks each page through their own offset -- see load()
+  // and loadMoreTasks() -- rather than the list re-fetching from scratch
+  // with an ever-larger LIMIT every time more is needed
+  const PAGE_SIZE = 100;
+  let openOffset = 0;
+  let completedOffset = 0;
+  let hasMoreOpen = false;
+  let hasMoreCompleted = false;
+  let loadingMore = false;
   let teamMembers: TeamMember[] = [];
   let projects: Project[] = [];
   let columns: Column[] = [];
@@ -171,30 +178,15 @@
   let addingStep = false;
   const COLUMN_TASK_LIMIT = 5;
   let expandedColumns: Record<number, boolean> = {};
+  // search/priority now narrow the list server-side (see load()); a
+  // debounced call there re-fetches rather than this re-filtering an
+  // already-loaded array, so results stay correct past whatever page is
+  // actually loaded -- same reasoning as Orders' own search box
   let searchQuery = '';
   let priorityFilter: Priority | 'all' = 'all';
 
-  function matchesSearch(task: Task, query: string): boolean {
-    if (query === '') return true;
-    const haystack = [
-      task.body,
-      task.notes ?? '',
-      task.description ?? '',
-      task.project_name ?? '',
-      task.creator_fullname,
-      task.assigned_fullname ?? '',
-      task.priority ?? '',
-      ...task.assignees.map(a => a.fullname),
-      ...task.entity_links.map(link => link.title ?? ''),
-    ]
-      .join(' ')
-      .toLowerCase();
-    return haystack.includes(query);
-  }
-
   $: activeProject = typeof activeProjectId === 'number' ? (projects.find(p => p.id === activeProjectId) ?? null) : null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
-  $: normalizedSearch = searchQuery.trim().toLowerCase();
   function matchesScope(task: Task): boolean {
     switch (scope) {
     case 'assigned':
@@ -208,10 +200,11 @@
     }
   }
 
-  $: visibleTasks = (activeProjectId === 'all' ? tasks : tasks.filter(task => task.project_id === activeProjectId))
-    .filter(matchesScope)
-    .filter(task => priorityFilter === 'all' || task.priority === priorityFilter)
-    .filter(task => matchesSearch(task, normalizedSearch));
+  // project/priority/search are all applied server-side now (see load()'s
+  // taskFilterParams()) -- tasks is already exactly the right set, so this
+  // only ever needs the one filter that stays deliberately client-side
+  // (matchesScope, see its own comment)
+  $: visibleTasks = tasks.filter(matchesScope);
   $: doneColumn = columns.find(c => c.kind === 'done') ?? null;
   $: todoColumn = columns.find(c => c.kind === 'todo') ?? null;
 
@@ -247,10 +240,11 @@
     : activeProjectId === null
       ? t('unfiled progress')
       : t('team progress');
-  // the task list fetch is always team-wide and stays capped (see load()),
-  // independent of which project tab is selected -- teamOpen/teamDone (also
-  // always team-wide) is what tells us whether there's actually more to load
-  $: hasMoreTasks = teamCounts !== null && tasks.length < teamCounts.teamOpen + teamCounts.teamDone;
+  // true, self-correcting cursor pagination signal (mirrors Todolist.svelte's
+  // own canLoadMore): a page came back short of PAGE_SIZE, so there's
+  // nothing more for that cursor, regardless of what the (deliberately
+  // unfiltered, see loadCounts()) aggregate counts say
+  $: hasMoreTasks = hasMoreOpen || hasMoreCompleted;
 
   function canManage(task: Task): boolean {
     if (task.userid === core.currentUserid
@@ -402,6 +396,26 @@
     }
   }
 
+  // project/unfiled + priority + search, shared by load() and
+  // loadMoreTasks() -- everything that narrows *which* tasks match, as
+  // opposed to which page of them. Scope stays deliberately unsent (see
+  // load()'s own comment) -- project/priority/search all just narrow which
+  // rows qualify regardless of who can see them, but scope decides which
+  // slice of a project's own visible tasks to show, and the "team" fetch
+  // has to keep seeing all of them for that slicing to stay correct.
+  function taskFilterParams(): string {
+    let params = '';
+    if (typeof activeProjectId === 'number') {
+      params += `&project_id=${activeProjectId}`;
+    } else if (activeProjectId === null) {
+      params += '&unfiled=1';
+    }
+    if (priorityFilter !== 'all') params += `&priority=${priorityFilter}`;
+    const trimmedSearch = searchQuery.trim();
+    if (trimmedSearch !== '') params += `&search=${encodeURIComponent(trimmedSearch)}`;
+    return params;
+  }
+
   async function load(): Promise<void> {
     loading = true;
     try {
@@ -413,15 +427,22 @@
       // assigned to it -- the Assigned/Created/All tabs below are a
       // client-side filter on top of that, never a narrower fetch, so
       // switching tabs can't hide a task a project membership should show.
-      // The list fetches above stay capped (see readAll()'s $limit) --
-      // counts is a separate, cheap aggregate query with no such cap, so
-      // the progress bar stays correct even past that page.
+      // project/priority/search DO narrow this fetch (taskFilterParams()) --
+      // counts is a separate, cheap aggregate query, deliberately left
+      // unfiltered by these three (see its own comment), so the progress
+      // bar still means "whole project", not "whatever's currently filtered
+      // into view".
+      const filterParams = taskFilterParams();
       const [open, done] = await Promise.all([
-        ApiC.getJson(`${Model.Todolist}?scope=team&limit=${taskLimit}`) as Promise<Task[]>,
-        ApiC.getJson(`${Model.Todolist}?scope=team&completed=1&limit=${taskLimit}`) as Promise<Task[]>,
+        ApiC.getJson(`${Model.Todolist}?scope=team&limit=${PAGE_SIZE}&offset=0${filterParams}`) as Promise<Task[]>,
+        ApiC.getJson(`${Model.Todolist}?scope=team&completed=1&limit=${PAGE_SIZE}&offset=0${filterParams}`) as Promise<Task[]>,
         loadCounts(),
       ]);
       tasks = [...open, ...done];
+      openOffset = open.length;
+      completedOffset = done.length;
+      hasMoreOpen = open.length === PAGE_SIZE;
+      hasMoreCompleted = done.length === PAGE_SIZE;
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load tasks.');
     } finally {
@@ -429,13 +450,50 @@
     }
   }
 
-  // The task list stays a fixed page today rather than real pagination
-  // (offset-based paging with per-column virtualization is a bigger,
-  // separate change) -- this is the stopgap: grow the page and refetch
-  // once actually needed, signalled by hasMoreTasks, rather than silently
-  // missing tasks past the first page with no way to see more at all.
-  function loadMoreTasks(): void {
-    taskLimit += 100;
+  // Appends only the next page for whichever cursor(s) still have more,
+  // rather than the old approach of growing a single LIMIT and re-fetching
+  // (and thus re-transferring) everything already loaded on every click.
+  async function loadMoreTasks(): Promise<void> {
+    loadingMore = true;
+    try {
+      const filterParams = taskFilterParams();
+      const requests: Promise<void>[] = [];
+      if (hasMoreOpen) {
+        requests.push((async () => {
+          const page = await ApiC.getJson(
+            `${Model.Todolist}?scope=team&limit=${PAGE_SIZE}&offset=${openOffset}${filterParams}`,
+          ) as Task[];
+          tasks = [...tasks, ...page];
+          openOffset += page.length;
+          hasMoreOpen = page.length === PAGE_SIZE;
+        })());
+      }
+      if (hasMoreCompleted) {
+        requests.push((async () => {
+          const page = await ApiC.getJson(
+            `${Model.Todolist}?scope=team&completed=1&limit=${PAGE_SIZE}&offset=${completedOffset}${filterParams}`,
+          ) as Task[];
+          tasks = [...tasks, ...page];
+          completedOffset += page.length;
+          hasMoreCompleted = page.length === PAGE_SIZE;
+        })());
+      }
+      await Promise.all(requests);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load more tasks.');
+    } finally {
+      loadingMore = false;
+    }
+  }
+
+  let searchDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function onSearchInput(): void {
+    if (searchDebounceTimeout) clearTimeout(searchDebounceTimeout);
+    searchDebounceTimeout = setTimeout(() => void load(), 300);
+  }
+
+  function onPriorityFilterChange(): void {
     void load();
   }
 
@@ -505,8 +563,11 @@
 
   function selectProject(id: number | null | 'all'): void {
     activeProjectId = id;
+    // project is now sent to load() itself (see taskFilterParams()) --
+    // switching tabs has to re-fetch the list, not just columns/counts,
+    // now that the list is actually scoped by it
     void loadColumns();
-    void loadCounts();
+    void load();
   }
 
   function openNewTaskInColumn(columnId: number): void {
@@ -1435,10 +1496,11 @@
         placeholder={t('Search tasks…')}
         title={t('Searches title, notes, description, project, priority, people and linked items')}
         bind:value={searchQuery}
+        on:input={onSearchInput}
       />
       <span class="pm-muted small">{t('Searches: title, notes, description, project, priority, people, links')}</span>
     </div>
-    <select class="form-control form-control-sm pm-priority-filter" bind:value={priorityFilter} aria-label={t('Filter by priority')}>
+    <select class="form-control form-control-sm pm-priority-filter" bind:value={priorityFilter} on:change={onPriorityFilterChange} aria-label={t('Filter by priority')}>
       <option value="all">{t('All priorities')}</option>
       <option value="low">{priorityLabel('low')}</option>
       <option value="medium">{priorityLabel('medium')}</option>
@@ -1469,8 +1531,8 @@
     </div>
   {/if}
   {#if hasMoreTasks}
-    <button type="button" class="btn btn-link btn-sm pm-load-more" on:click={loadMoreTasks} disabled={loading}>
-      {t('Load more tasks')}
+    <button type="button" class="btn btn-link btn-sm pm-load-more" on:click={loadMoreTasks} disabled={loadingMore}>
+      {loadingMore ? t('Loading') + '…' : t('Load more tasks')}
     </button>
   {/if}
 
