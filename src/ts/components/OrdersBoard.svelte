@@ -1382,7 +1382,7 @@
   </div>
 
   <div class="orders-list-column">
-  <div class="d-flex flex-wrap align-items-center my-3 orders-toolbar-row" style="gap:0.5rem">
+  <div class="d-flex flex-wrap align-items-center mt-3 orders-toolbar-row" style="gap:0.5rem">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by status')}>
       <button type="button" class={statusFilter === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('all')}>
         {t('All')}
@@ -1409,6 +1409,9 @@
         <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archived')}
       </button>
     </div>
+  </div>
+
+  <div class="d-flex flex-wrap align-items-center mt-2 mb-3 orders-toolbar-row" style="gap:0.5rem">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by owner')}>
       <button type="button" class={ownerFilter === 'mine' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => setOwnerFilter('mine')}>
         <i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('My orders')}
@@ -1425,6 +1428,7 @@
         {/each}
       </select>
     {/if}
+    <span class="orders-toolbar-divider" aria-hidden="true"></span>
     <select class="form-control form-control-sm" style="width:auto" bind:value={labcollectorFilter} on:change={onLabCollectorFilterChange} title={t('Filter by LabCollector registration')}>
       <option value="all">{t('LabCollector: all')}</option>
       <option value="registered">{t('LabCollector: registered')}</option>
@@ -1935,9 +1939,9 @@
           <label for="ordersLabcollectorId">{t('LabCollector id')} <span class="pm-muted">({t('optional')})</span></label>
           <input
             id="ordersLabcollectorId"
-            type="number"
-            min="1"
-            step="1"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
             class="form-control"
             placeholder={t('e.g. 123 — leave blank if not known yet')}
             bind:value={labcollectorDraftId}
@@ -2032,6 +2036,13 @@
 
   .orders-muted {
     color: var(--secondary);
+  }
+
+  .orders-toolbar-divider {
+    align-self: stretch;
+    border-left: 1px solid var(--gray-300, var(--secondary));
+    margin: 0 0.15rem;
+    opacity: 0.5;
   }
 
   .orders-search {
