@@ -74,6 +74,7 @@ final class OrderStatusChanged extends AbstractNotifications implements Mailable
     private static function statusLabel(string $status): string
     {
         return match ($status) {
+            'backlogged' => _('Backlogged'),
             'requested' => _('Requested'),
             'ordered' => _('Ordered'),
             'received' => _('Received'),

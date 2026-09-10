@@ -26,7 +26,7 @@
     };
   }
 
-  type OrderStatus = 'requested' | 'ordered' | 'received' | 'cancelled' | 'reference';
+  type OrderStatus = 'backlogged' | 'requested' | 'ordered' | 'received' | 'cancelled' | 'reference';
 
   type TeamMember = {
     userid: number;
@@ -114,10 +114,11 @@
     return [...existing, ...incoming.filter(item => !seenIds.has(item.id))];
   }
 
-  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'cancelled'];
+  const STATUSES: OrderStatus[] = ['backlogged', 'requested', 'ordered', 'received', 'cancelled'];
 
   function statusLabel(status: OrderStatus): string {
     return {
+      backlogged: t('Backlogged'),
       requested: t('Requested'),
       ordered: t('Ordered'),
       received: t('Received'),
