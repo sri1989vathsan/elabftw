@@ -128,7 +128,7 @@
 
   let items: OrderItem[] = [];
   let loading = true;
-  let statusFilter: OrderStatus | 'archived' | 'all' = 'requested';
+  let statusFilter: OrderStatus | 'archived' | 'all' = 'all';
   let ownerFilter: 'mine' | 'all' = 'all';
   let selectedUserId: number | null = null;
   let searchQuery = '';
