@@ -104,6 +104,16 @@
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
 
+  // Offset-based pages aren't a stable snapshot: a pinned order created,
+  // unpinned, or reordered between two "Load more pinned" clicks can shift
+  // the underlying ordering enough for the same row to reappear in a later
+  // page. Cheap insurance against a duplicate id ending up in pinnedItems
+  // twice.
+  function appendUniqueOrders(existing: OrderItem[], incoming: OrderItem[]): OrderItem[] {
+    const seenIds = new Set(existing.map(item => item.id));
+    return [...existing, ...incoming.filter(item => !seenIds.has(item.id))];
+  }
+
   const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'cancelled'];
 
   function statusLabel(status: OrderStatus): string {
@@ -315,7 +325,7 @@
       }) as OrderItem[];
       hasMorePinned = fetched.length > PINNED_PAGE_SIZE;
       const nextChunk = fetched.slice(0, PINNED_PAGE_SIZE);
-      pinnedItems = [...pinnedItems, ...nextChunk];
+      pinnedItems = appendUniqueOrders(pinnedItems, nextChunk);
       pinnedOffset += PINNED_PAGE_SIZE;
       uploadsByItem = { ...uploadsByItem, ...Object.fromEntries(nextChunk.map(item => [item.id, item.uploads])) };
     } catch (error) {
