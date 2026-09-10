@@ -165,6 +165,73 @@ final class Todolist extends AbstractRest
             ? $this->getDeadline($query->getString('completed_since'))
             : null;
         $completedSinceFilter = $completedSince === null ? '' : ' AND completed_at >= :completed_since';
+
+        // Board-side filters (project/unfiled, priority, search) narrow the
+        // list itself server-side, same as scope/completed above -- the
+        // client used to fetch everything team-wide and filter these three
+        // in memory, which doesn't scale once a team has more tasks than a
+        // single page. Counts (readCounts()) deliberately stay untouched by
+        // these -- see its own docblock -- keeping that aggregate a cheap,
+        // separate concern from whatever page of the list is loaded.
+        $projectId = $this->getProjectId($query->getInt('project_id') ?: null);
+        $unfiled = $query->getBoolean('unfiled');
+        $projectFilter = '';
+        if ($projectId !== null) {
+            $projectFilter = ' AND t.project_id = :filter_project_id';
+        } elseif ($unfiled) {
+            $projectFilter = ' AND t.project_id IS NULL';
+        }
+
+        $priority = $query->getString('priority');
+        $priorityFilter = '';
+        if (in_array($priority, array('low', 'medium', 'high'), true)) {
+            $priorityFilter = ' AND t.priority = :priority';
+        }
+
+        // each condition gets its own placeholder name bound to the same
+        // $like value (rather than reusing one :search placeholder several
+        // times), matching Orders::readAll()'s own search -- established
+        // here as the safe convention regardless of PDO's prepare mode
+        $search = trim($query->getString('search'));
+        $searchFilter = '';
+        $searchBind = array();
+        if ($search !== '') {
+            $like = '%' . $search . '%';
+            $searchConditions = array(
+                't.body LIKE :search_body',
+                't.notes LIKE :search_notes',
+                't.description LIKE :search_description',
+                't.priority LIKE :search_priority',
+                'project.name LIKE :search_project',
+                'CONCAT(creator.firstname, " ", creator.lastname) LIKE :search_creator',
+                'CONCAT(assignee.firstname, " ", assignee.lastname) LIKE :search_assignee',
+                // the multi-assignee list (todolist_task_assignees), distinct
+                // from the single legacy assigned_userid joined above as "assignee"
+                'EXISTS (SELECT 1 FROM todolist_task_assignees AS s_ta
+                    INNER JOIN users AS s_au ON s_au.userid = s_ta.userid
+                    WHERE s_ta.task_id = t.id AND CONCAT(s_au.firstname, " ", s_au.lastname) LIKE :search_multi_assignee)',
+                // linked experiments/resources/templates/weblinks -- mirrors
+                // entityLinksSubquery()'s own per-entity-type title lookup
+                'EXISTS (SELECT 1 FROM todolist_entity_links AS s_tel
+                    WHERE s_tel.task_id = t.id AND (
+                        s_tel.label LIKE :search_link_label
+                        OR (s_tel.entity_type = "experiments" AND EXISTS (SELECT 1 FROM experiments WHERE id = s_tel.entity_id AND title LIKE :search_link_experiments))
+                        OR (s_tel.entity_type = "items" AND EXISTS (SELECT 1 FROM items WHERE id = s_tel.entity_id AND title LIKE :search_link_items))
+                        OR (s_tel.entity_type = "experiments_templates" AND EXISTS (SELECT 1 FROM experiments_templates WHERE id = s_tel.entity_id AND title LIKE :search_link_exp_templates))
+                        OR (s_tel.entity_type = "items_types" AND EXISTS (SELECT 1 FROM items_types WHERE id = s_tel.entity_id AND title LIKE :search_link_item_types))
+                    ))',
+            );
+            $searchFilter = ' AND (' . implode(' OR ', $searchConditions) . ')';
+            foreach (array(
+                'search_body', 'search_notes', 'search_description', 'search_priority',
+                'search_project', 'search_creator', 'search_assignee', 'search_multi_assignee',
+                'search_link_label', 'search_link_experiments', 'search_link_items',
+                'search_link_exp_templates', 'search_link_item_types',
+            ) as $name) {
+                $searchBind[$name] = $like;
+            }
+        }
+
         // Keep sidebar payloads bounded for long-lived accounts. Clients can
         // request subsequent pages with offset.
         $limit = $queryParams->getLimit() ?: 100;
@@ -191,7 +258,7 @@ final class Todolist extends AbstractRest
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
             LEFT JOIN todolist_columns AS col ON col.id = t.column_id
-            WHERE t.team = :team AND t.completed_at {$completedFilter}{$completedSinceFilter}{$scopeFilter}
+            WHERE t.team = :team AND t.completed_at {$completedFilter}{$completedSinceFilter}{$scopeFilter}{$projectFilter}{$priorityFilter}{$searchFilter}
                 -- archiving a project takes its tasks off the active board
                 -- entirely (All, search, counts) -- readOne() deliberately
                 -- doesn't apply this, so a direct link to one of them (e.g.
@@ -218,6 +285,15 @@ final class Todolist extends AbstractRest
         $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
         if ($completedSince !== null) {
             $req->bindValue(':completed_since', $completedSince, PDO::PARAM_STR);
+        }
+        if ($projectId !== null) {
+            $req->bindParam(':filter_project_id', $projectId, PDO::PARAM_INT);
+        }
+        if ($priorityFilter !== '') {
+            $req->bindValue(':priority', $priority, PDO::PARAM_STR);
+        }
+        foreach ($searchBind as $name => $value) {
+            $req->bindValue(':' . $name, $value, PDO::PARAM_STR);
         }
         $this->Db->execute($req);
 
