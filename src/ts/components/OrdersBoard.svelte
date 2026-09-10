@@ -1212,6 +1212,9 @@
       <button type="button" class={statusFilter === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('all')}>
         {t('All')}
       </button>
+      <button type="button" class={statusFilter === 'backlogged' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('backlogged')}>
+        {t('Backlogged')}
+      </button>
       <button type="button" class={statusFilter === 'requested' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('requested')}>
         {t('Requested')}
       </button>
