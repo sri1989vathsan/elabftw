@@ -507,11 +507,16 @@
   onMount(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const projectParam = searchParams.get('project');
+    let explicitProjectSelection = false;
     if (projectParam === 'all') {
       activeProjectId = 'all';
+      explicitProjectSelection = true;
     } else {
       const numericParam = Number(projectParam);
-      if (Number.isInteger(numericParam) && numericParam > 0) activeProjectId = numericParam;
+      if (Number.isInteger(numericParam) && numericParam > 0) {
+        activeProjectId = numericParam;
+        explicitProjectSelection = true;
+      }
     }
 
     // a notification (task assignment, mention in a comment) links here
@@ -522,32 +527,41 @@
     if (Number.isInteger(taskParam) && taskParam > 0) {
       activeProjectId = 'all';
       scope = 'team';
+      explicitProjectSelection = true;
     }
 
     void loadTeamMembers();
-    void loadProjects();
-    void loadColumns();
-    void load().then(async () => {
-      if (!Number.isInteger(taskParam) || taskParam <= 0) return;
-      let task = tasks.find(t => t.id === taskParam);
-      if (!task) {
-        // not on the first page of results (readAll() caps at 100) --
-        // fetch it directly rather than making the user hunt for it
-        try {
-          task = await ApiC.getJson(`${Model.Todolist}/${taskParam}`) as Task;
-          tasks = [...tasks, task];
-        } catch {
-          return;
-        }
+    void loadProjects().then(() => {
+      // default to the left-most project tab (same order the tabs render
+      // in) rather than "All", unless the URL already asked for something
+      // specific -- loadColumns()/load() both need the right
+      // activeProjectId before they run, hence waiting on this first
+      if (!explicitProjectSelection && projects.length > 0) {
+        activeProjectId = projects[0].id;
       }
-      // now that we know which project the task actually belongs to,
-      // land on that project's tab instead of leaving "All" selected --
-      // load() above already resolved before this runs, so the counts it
-      // fetched are for whatever activeProjectId was at that point, not
-      // this one; refresh them to match
-      activeProjectId = task.project_id ?? 'all';
-      void loadCounts();
-      openDetail(task);
+      void loadColumns();
+      void load().then(async () => {
+        if (!Number.isInteger(taskParam) || taskParam <= 0) return;
+        let task = tasks.find(t => t.id === taskParam);
+        if (!task) {
+          // not on the first page of results (readAll() caps at 100) --
+          // fetch it directly rather than making the user hunt for it
+          try {
+            task = await ApiC.getJson(`${Model.Todolist}/${taskParam}`) as Task;
+            tasks = [...tasks, task];
+          } catch {
+            return;
+          }
+        }
+        // now that we know which project the task actually belongs to,
+        // land on that project's tab instead of leaving "All" selected --
+        // load() above already resolved before this runs, so the counts it
+        // fetched are for whatever activeProjectId was at that point, not
+        // this one; refresh them to match
+        activeProjectId = task.project_id ?? 'all';
+        void loadCounts();
+        openDetail(task);
+      });
     });
 
     // Lets the Search side panel offer a "Link to task" button on its
