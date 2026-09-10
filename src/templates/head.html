@@ -176,8 +176,7 @@
                 <a class='dropdown-item {{ not envAsBool('USE_OPENCLONING') ? 'disabled' }} {{ isActive ? 'active' }}' href='syc.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-dna fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'OpenCloning'|trans }}</a>
                 {% set isActive = scriptName == 'inventory.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='inventory.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-warehouse fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Inventory'|trans }}</a>
-                {% set isActive = scriptName == 'labcollector.php' %}
-                <a class='dropdown-item {{ isActive ? 'active' }}' href='labcollector.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-vial fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'LabCollector'|trans }}</a>
+                <span class='dropdown-item disabled' aria-disabled='true' title='{{ 'LabCollector integration is not ready yet.'|trans }}'><i class='fas fa-vial fa-fw mr-1'></i>{{ 'LabCollector'|trans }}</span>
                 {% set animalStudiesReady = constant('Elabftw\\Elabftw\\FeatureFlags::ANIMAL_STUDIES') %}
                 {% set pyratAllowedTeams = App.Config.configArr.pyrat_allowed_teams|default('')|replace({' ': ''})|split(',') %}
                 {% if not animalStudiesReady %}
