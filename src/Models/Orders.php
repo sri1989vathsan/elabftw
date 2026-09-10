@@ -50,7 +50,7 @@ final class Orders extends AbstractRest
 {
     use SetIdTrait;
 
-    private const array STATUSES = array('requested', 'ordered', 'received', 'cancelled', 'reference');
+    private const array STATUSES = array('backlogged', 'requested', 'ordered', 'received', 'cancelled', 'reference');
 
     // default size of the pinned bucket in readAll() when the client
     // doesn't ask for a different one -- see the comment there for why it
