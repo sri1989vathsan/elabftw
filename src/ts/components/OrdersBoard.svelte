@@ -129,7 +129,7 @@
   let items: OrderItem[] = [];
   let loading = true;
   let statusFilter: OrderStatus | 'archived' | 'all' = 'all';
-  let ownerFilter: 'mine' | 'all' = 'all';
+  let ownerFilter: 'mine' | 'all' = 'mine';
   let selectedUserId: number | null = null;
   let searchQuery = '';
   // off by default: matching PDF-extracted text needs a per-order subquery
