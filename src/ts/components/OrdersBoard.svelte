@@ -1695,7 +1695,7 @@
                     {/if}
                     {#if item.labcollector_type && item.labcollector_id}
                       <a href={buildLabCollectorUrl(item.labcollector_type, item.labcollector_id)} target="_blank" rel="noopener noreferrer" class="orders-labcollector-id-link" title={t('Open in LabCollector')}>
-                        #{item.labcollector_id}<i class="fas fa-arrow-up-right-from-square fa-fw ml-1" aria-hidden="true"></i>
+                        {labcollectorTypeLabel(item.labcollector_type)} #{item.labcollector_id}<i class="fas fa-arrow-up-right-from-square fa-fw ml-1" aria-hidden="true"></i>
                       </a>
                     {/if}
                   </span>
