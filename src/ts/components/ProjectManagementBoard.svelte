@@ -1509,7 +1509,10 @@
     try {
       await ApiC.patch(`${Model.TodolistProjects}/${editingProject.id}`, { archived });
       if (archived && activeProjectId === editingProject.id) {
-        activeProjectId = 'all';
+        // archiving a subproject stays on its parent (still viewing it,
+        // combined with whatever subprojects are left) instead of jumping
+        // all the way out to the global "All" tab
+        selectProject(editingProject.parent_id ?? 'all');
         void loadCounts();
       }
       closeProjectDialog();
