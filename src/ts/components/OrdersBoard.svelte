@@ -1691,7 +1691,7 @@
                     {#if canManage(item)}
                       <button type="button" class="btn btn-ghost btn-sm orders-icon-button" title={t('Edit LabCollector details')} aria-label={t('Edit LabCollector details')} on:click={() => openLabcollectorModal(item)}>
                         <span class="orders-labcollector-edit-icon">
-                          LC
+                          <i class="fas fa-flask" aria-hidden="true"></i>
                           <i class="fas fa-pen orders-labcollector-edit-pencil" aria-hidden="true"></i>
                         </span>
                       </button>
@@ -2174,17 +2174,17 @@
 
   .orders-labcollector-edit-icon {
     display: inline-block;
-    font-size: 0.65rem;
-    font-weight: 700;
     line-height: 1;
     position: relative;
   }
 
   .orders-labcollector-edit-pencil {
-    bottom: -0.3rem;
-    font-size: 0.5rem;
+    background: var(--mainbackground);
+    border-radius: 50%;
+    bottom: -0.25rem;
+    font-size: 0.55rem;
     position: absolute;
-    right: -0.4rem;
+    right: -0.3rem;
   }
 
   .orders-reference-toggle {
