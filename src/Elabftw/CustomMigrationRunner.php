@@ -94,6 +94,8 @@ final class CustomMigrationRunner
         '053_order_backlogged_status.sql',
         '054_order_labcollector_link.sql',
         '055_order_reminder.sql',
+        '056_todolist_subprojects.sql',
+        '057_todolist_column_visibility.sql',
     );
 
     private Db $Db;
