@@ -79,6 +79,8 @@ final class CustomMigrationRunner
         '038_project_details_and_pinning.sql',
         '050_todolist_project_archive.sql',
         '051_todolist_project_ordering.sql',
+        '052_todolist_subprojects.sql',
+        '053_todolist_column_visibility.sql',
     );
 
     private Db $Db;

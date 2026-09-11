@@ -69,9 +69,13 @@ final class TodolistProjects extends AbstractRest
         $description = $this->getDescription($reqBody['description'] ?? null);
         $targetEndDate = $this->getTargetEndDate($reqBody['target_end_date'] ?? null);
         $status = $this->getStatus($reqBody['status'] ?? null);
-        $sql = 'INSERT INTO todolist_projects(team, name, description, target_end_date, status, userid, ordering)
-            SELECT :team, :name, :description, :target_end_date, :status, :userid, COALESCE(MAX(ordering), -1) + 1
-            FROM todolist_projects WHERE team = :team2';
+        $parentId = $this->getParentId($reqBody['parent_id'] ?? null);
+        // ordering is scoped per parent (NULL <=> NULL matches top-level
+        // projects against each other) so a subproject's position among its
+        // siblings doesn't collide with unrelated top-level projects
+        $sql = 'INSERT INTO todolist_projects(team, name, description, target_end_date, status, userid, parent_id, ordering)
+            SELECT :team, :name, :description, :target_end_date, :status, :userid, :parent_id, COALESCE(MAX(ordering), -1) + 1
+            FROM todolist_projects WHERE team = :team2 AND (parent_id <=> :parent_id2)';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $req->bindParam(':team2', $this->team, PDO::PARAM_INT);
@@ -80,6 +84,8 @@ final class TodolistProjects extends AbstractRest
         $req->bindValue(':target_end_date', $targetEndDate, $targetEndDate === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':status', $status);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
+        $req->bindValue(':parent_id', $parentId, $parentId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindValue(':parent_id2', $parentId, $parentId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $this->Db->execute($req);
         $id = (int) $this->Db->lastInsertId();
         $this->setId($id);
@@ -96,7 +102,7 @@ final class TodolistProjects extends AbstractRest
         // automatically to a team admin, who has to be added like anyone
         // else to see or manage a project they're not part of.
         $showArchived = ($queryParams ?? $this->getQueryParams())->getQuery()->getBoolean('archived');
-        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at, p.archived, p.ordering,
+        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at, p.archived, p.ordering, p.parent_id,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', u.userid, 'fullname', u.fullname))
                     FROM todolist_project_members AS m
@@ -126,7 +132,7 @@ final class TodolistProjects extends AbstractRest
         // unlike readAll(), not filtered by archived state -- a single
         // project must stay reachable by id (e.g. to unarchive it) however
         // the list happens to be filtered right now
-        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at, p.archived, p.ordering,
+        $sql = "SELECT p.id, p.name, p.description, p.target_end_date, p.status, p.userid, p.created_at, p.archived, p.ordering, p.parent_id,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', u.userid, 'fullname', u.fullname))
                     FROM todolist_project_members AS m
@@ -304,6 +310,38 @@ final class TodolistProjects extends AbstractRest
             throw new ImproperActionException(_('Invalid target end date.'));
         }
         return $date;
+    }
+
+    // subprojects are only one level deep: the referenced parent must
+    // itself be top-level (its own parent_id NULL), and must be a project
+    // this requester can already see (creator or member) -- same rule
+    // readOne()/readAll() already apply to every project.
+    private function getParentId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $parentId = (int) $value;
+        $sql = 'SELECT parent_id FROM todolist_projects AS p
+            WHERE p.id = :id AND p.team = :team
+                AND (
+                    p.userid = :userid
+                    OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = p.id AND pm.userid = :userid2)
+                )';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':id', $parentId, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':userid2', $this->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $parent = $this->Db->fetch($req);
+        if ($parent === false) {
+            throw new ImproperActionException(_('Parent project not found.'));
+        }
+        if ($parent['parent_id'] !== null) {
+            throw new ImproperActionException(_('A subproject cannot itself have a subproject.'));
+        }
+        return $parentId;
     }
 
     private function getStatus(mixed $value): string
