@@ -153,10 +153,15 @@ final class Todolist extends AbstractRest
             'all' => ' AND (t.userid = :requester OR ' . sprintf($assignedExists, ':requester2') . ')',
             default => ' AND ' . sprintf($assignedExists, ':requester'),
         };
+        // "All" within a project (as opposed to one specific subproject)
+        // rolls its subprojects' tasks in too -- a subproject's tasks would
+        // otherwise vanish from the project's own combined view, visible
+        // only under their own separate tab
+        $includeSubprojects = $query->getBoolean('include_subprojects');
         if ($query->getBoolean('counts')) {
             $projectId = $this->getProjectId($query->getInt('project_id') ?: null);
             $unfiled = $query->getBoolean('unfiled');
-            return array($this->readCounts($scope, $scopeFilter, $projectId, $unfiled));
+            return array($this->readCounts($scope, $scopeFilter, $projectId, $unfiled, $includeSubprojects));
         }
         $completed = $query->getBoolean('completed');
         $completedFilter = $completed ? 'IS NOT NULL' : 'IS NULL';
@@ -176,7 +181,9 @@ final class Todolist extends AbstractRest
         $projectId = $this->getProjectId($query->getInt('project_id') ?: null);
         $unfiled = $query->getBoolean('unfiled');
         $projectFilter = '';
-        if ($projectId !== null) {
+        if ($projectId !== null && $includeSubprojects) {
+            $projectFilter = ' AND (t.project_id = :filter_project_id OR t.project_id IN (SELECT id FROM todolist_projects WHERE parent_id = :filter_project_id_subprojects))';
+        } elseif ($projectId !== null) {
             $projectFilter = ' AND t.project_id = :filter_project_id';
         } elseif ($unfiled) {
             $projectFilter = ' AND t.project_id IS NULL';
@@ -245,6 +252,7 @@ final class Todolist extends AbstractRest
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
                 project.name AS project_name,
+                parent_project.name AS project_parent_name,
                 col.kind AS column_kind,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', au.userid, 'fullname', au.fullname))
@@ -257,6 +265,7 @@ final class Todolist extends AbstractRest
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
+            LEFT JOIN todolist_projects AS parent_project ON parent_project.id = project.parent_id
             LEFT JOIN todolist_columns AS col ON col.id = t.column_id
             WHERE t.team = :team AND t.completed_at {$completedFilter}{$completedSinceFilter}{$scopeFilter}{$projectFilter}{$priorityFilter}{$searchFilter}
                 -- archiving a project takes its tasks off the active board
@@ -288,6 +297,9 @@ final class Todolist extends AbstractRest
         }
         if ($projectId !== null) {
             $req->bindParam(':filter_project_id', $projectId, PDO::PARAM_INT);
+            if ($includeSubprojects) {
+                $req->bindParam(':filter_project_id_subprojects', $projectId, PDO::PARAM_INT);
+            }
         }
         if ($priorityFilter !== '') {
             $req->bindValue(':priority', $priority, PDO::PARAM_STR);
@@ -329,10 +341,12 @@ final class Todolist extends AbstractRest
      *
      * @return array{open_count: int, done_count: int, team_open_count: int, team_done_count: int}
      */
-    private function readCounts(string $scope, string $scopeFilter, ?int $projectId, bool $unfiled): array
+    private function readCounts(string $scope, string $scopeFilter, ?int $projectId, bool $unfiled, bool $includeSubprojects = false): array
     {
         $scopedCase = '';
-        if ($projectId !== null) {
+        if ($projectId !== null && $includeSubprojects) {
+            $scopedCase = ' AND (t.project_id = :project_id OR t.project_id IN (SELECT id FROM todolist_projects WHERE parent_id = :project_id_subprojects))';
+        } elseif ($projectId !== null) {
             $scopedCase = ' AND t.project_id = :project_id';
         } elseif ($unfiled) {
             $scopedCase = ' AND t.project_id IS NULL';
@@ -361,6 +375,9 @@ final class Todolist extends AbstractRest
         }
         if ($projectId !== null) {
             $req->bindParam(':project_id', $projectId, PDO::PARAM_INT);
+            if ($includeSubprojects) {
+                $req->bindParam(':project_id_subprojects', $projectId, PDO::PARAM_INT);
+            }
         }
         $req->bindParam(':requester3', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
@@ -447,6 +464,7 @@ final class Todolist extends AbstractRest
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
                 project.name AS project_name,
+                parent_project.name AS project_parent_name,
                 col.kind AS column_kind,
                 COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT('userid', au.userid, 'fullname', au.fullname))
@@ -459,6 +477,7 @@ final class Todolist extends AbstractRest
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
+            LEFT JOIN todolist_projects AS parent_project ON parent_project.id = project.parent_id
             LEFT JOIN todolist_columns AS col ON col.id = t.column_id
             WHERE t.id = :id AND t.team = :team
                 AND (

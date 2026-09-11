@@ -34,6 +34,7 @@
     name: string;
     kind: ColumnKind;
     ordering: number;
+    hidden: boolean;
   };
 
   type Task = {
@@ -80,6 +81,7 @@
     members: TeamMember[];
     archived: boolean;
     ordering: number;
+    parent_id: number | null;
   };
 
   type TaskComment = {
@@ -199,6 +201,35 @@
   $: activeProject = typeof activeProjectId === 'number' ? (projects.find(p => p.id === activeProjectId) ?? null) : null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
 
+  // Subprojects (parent_id set) never get their own top-level tab -- only
+  // topLevelProjects do. Viewing one is reached through its parent's own
+  // dropdown instead (see subprojectsOfActive below), which just switches
+  // activeProjectId to the subproject's id like any other project switch.
+  $: topLevelProjects = projects.filter(project => project.parent_id === null);
+  // flat list for a plain <select> (a task's project picker, "Parent
+  // project" when creating one), ordered so each subproject follows
+  // directly after its own parent rather than wherever it sorts on its own
+  $: projectPickerOptions = topLevelProjects.flatMap(project => [
+    project,
+    ...projects.filter(candidate => candidate.parent_id === project.id),
+  ]);
+  // whichever top-level tab should show as active -- itself, if a
+  // top-level project (or "all"/unfiled/nothing) is active, or its parent's
+  // if a subproject is
+  $: effectiveTopLevelId = typeof activeProjectId === 'number'
+    ? (activeProject?.parent_id ?? activeProjectId)
+    : activeProjectId;
+  $: subprojectsOfActive = typeof effectiveTopLevelId === 'number'
+    ? projects.filter(project => project.parent_id === effectiveTopLevelId)
+    : [];
+  // viewing the top-level project "as itself" (rather than one specific
+  // subproject picked from the dropdown) always means every one of its
+  // subprojects' tasks roll in too -- there's no separate "just the
+  // parent's own tasks, nothing from subprojects" view
+  $: viewingAllSubprojects = typeof activeProjectId === 'number'
+    && activeProjectId === effectiveTopLevelId
+    && subprojectsOfActive.length > 0;
+
   // project/priority/search/scope are all applied server-side now (see
   // load()'s taskFilterParams() and its own scope=${scope}) -- tasks is
   // already exactly the right set, page by page, so there's nothing left
@@ -227,7 +258,10 @@
   // A single project's own tab keeps matching by exact id, since multiple
   // custom columns there can share kind 'custom' and must stay distinct.
   function tasksInColumn(column: Column, list: Task[]): Task[] {
-    return activeProjectId === 'all'
+    // same reasoning as the "all" case above: viewing a top-level project
+    // combined with its subprojects mixes in tasks whose column_id belongs
+    // to each subproject's own private copy of the columns, not this one
+    return activeProjectId === 'all' || viewingAllSubprojects
       ? list.filter(task => task.column_kind === column.kind)
       : list.filter(task => task.column_id === column.id);
   }
@@ -383,7 +417,7 @@
   async function loadCounts(): Promise<void> {
     try {
       const countsParam = typeof activeProjectId === 'number'
-        ? `&project_id=${activeProjectId}`
+        ? `&project_id=${activeProjectId}${viewingAllSubprojects ? '&include_subprojects=1' : ''}`
         : activeProjectId === null ? '&unfiled=1' : '';
       const counts = await ApiC.getJson(`${Model.Todolist}?scope=team&counts=1${countsParam}`) as Array<{
         open_count: number;
@@ -415,6 +449,7 @@
     let params = '';
     if (typeof activeProjectId === 'number') {
       params += `&project_id=${activeProjectId}`;
+      if (viewingAllSubprojects) params += '&include_subprojects=1';
     } else if (activeProjectId === null) {
       params += '&unfiled=1';
     }
@@ -645,6 +680,24 @@
     return [...list].sort((a, b) => a.ordering - b.ordering);
   }
 
+  // the board itself (and anywhere a task gets assigned a column) only
+  // ever shows non-hidden columns -- Manage columns is the one place that
+  // still lists every column, hidden ones included, so they can be shown
+  // again
+  function visibleColumns(list: Column[]): Column[] {
+    return sortedColumns(list).filter(column => !column.hidden);
+  }
+
+  async function toggleColumnHidden(column: Column): Promise<void> {
+    try {
+      await ApiC.patch(`${Model.TodolistColumns}/${column.id}`, { hidden: !column.hidden });
+      column.hidden = !column.hidden;
+      columns = columns;
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update this column.');
+    }
+  }
+
   function adjacentColumn(column: Column, direction: -1 | 1): Column | null {
     const sorted = sortedColumns(columns);
     const idx = sorted.findIndex(c => c.id === column.id);
@@ -813,11 +866,16 @@
     await reorderProject(sourceId, projectId);
   }
 
+  // Only reorders among topLevelProjects -- the tab bar only lets a
+  // top-level project be dragged in the first place, but reordering over
+  // the full `projects` list (subprojects mixed in) would reassign every
+  // subproject's ordering to its position in that interleaved list too,
+  // scrambling the per-parent ordering scope postAction() maintains.
   async function reorderProject(sourceId: number, targetId: number): Promise<void> {
-    const sourceIdx = projects.findIndex(p => p.id === sourceId);
-    const targetIdx = projects.findIndex(p => p.id === targetId);
+    const sourceIdx = topLevelProjects.findIndex(p => p.id === sourceId);
+    const targetIdx = topLevelProjects.findIndex(p => p.id === targetId);
     if (sourceIdx === -1 || targetIdx === -1) return;
-    const reordered = [...projects];
+    const reordered = [...topLevelProjects];
     const [moved] = reordered.splice(sourceIdx, 1);
     reordered.splice(targetIdx, 0, moved);
     try {
@@ -876,7 +934,7 @@
   }
 
   async function deleteColumn(column: Column): Promise<void> {
-    if (!confirm(`Delete the "${column.name}" column? Any tasks in it move to To do.`)) return;
+    if (!confirm(`Delete the "${column.name}" column? Any tasks in it move to whichever column is now first.`)) return;
     try {
       await ApiC.delete(`${Model.TodolistColumns}/${column.id}`);
       await Promise.all([loadColumns(), load()]);
@@ -1364,15 +1422,22 @@
   let dialogTargetEndDate = '';
   let dialogStatus: ProjectStatus = 'planning';
   let dialogMembers: TeamMember[] = [];
+  let dialogParentId: number | null = null;
   let savingProject = false;
 
-  function openProjectDialog(project: Project | null): void {
+  // initialParentId only applies when creating a brand-new project (e.g.
+  // the "Add subproject" button next to a project's own subproject
+  // dropdown) -- re-parenting an existing project isn't supported (a
+  // subproject that already has its own subprojects would break the
+  // one-level-deep rule), so editing one leaves its parent as read-only
+  function openProjectDialog(project: Project | null, initialParentId: number | null = null): void {
     editingProject = project;
     dialogName = project?.name ?? '';
     dialogDescription = project?.description ?? '';
     dialogTargetEndDate = toDateInputValue(project?.target_end_date ?? null);
     dialogStatus = project?.status ?? 'planning';
     dialogMembers = project ? [...project.members] : [];
+    dialogParentId = project ? project.parent_id : initialParentId;
     // whoever's managing a project should always end up a member of it,
     // whether that's by explicitly picking themselves (no longer possible,
     // see the "Add a member" dropdown) or just opening the dialog
@@ -1419,11 +1484,12 @@
           target_end_date: dialogTargetEndDate || null,
           status: dialogStatus,
           members: memberIds,
+          parent_id: dialogParentId,
         });
         const location = response.headers.get('Location') ?? '';
         const newId = Number(location.split('/').filter(Boolean).pop());
         if (Number.isInteger(newId) && newId > 0) {
-          activeProjectId = newId;
+          selectProject(newId);
           void loadCounts();
         }
       }
@@ -1458,11 +1524,11 @@
 
 <div class="pm-board">
   <div class="pm-project-row">
-    {#each projects as project (project.id)}
+    {#each topLevelProjects as project (project.id)}
       <button
         type="button"
         class="pm-project-tab"
-        class:active={activeProjectId === project.id}
+        class:active={effectiveTopLevelId === project.id}
         class:pm-project-tab-drag-over={dragOverProjectId === project.id}
         draggable="true"
         on:click={() => selectProject(project.id)}
@@ -1508,6 +1574,28 @@
       <i class="fas fa-list-check fa-fw" aria-hidden="true"></i>
     </button>
   </div>
+
+  {#if typeof effectiveTopLevelId === 'number'}
+    <div class="d-flex align-items-center mt-2" style="gap:0.5rem">
+      {#if subprojectsOfActive.length > 0}
+        <select
+          class="form-control form-control-sm"
+          style="width:auto"
+          value={activeProjectId}
+          on:change={(event) => selectProject(Number((event.target as HTMLSelectElement).value))}
+          title={t('Filter by subproject')}
+        >
+          <option value={effectiveTopLevelId}>{t('All')}</option>
+          {#each subprojectsOfActive as subproject (subproject.id)}
+            <option value={subproject.id}>{subproject.name}</option>
+          {/each}
+        </select>
+      {/if}
+      <button type="button" class="btn btn-ghost btn-sm" on:click={() => openProjectDialog(null, effectiveTopLevelId)}>
+        <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add subproject')}
+      </button>
+    </div>
+  {/if}
 
   <div class="pm-search mt-2 d-flex align-items-start flex-wrap" style="gap:0.5rem">
     <div class="flex-grow-1">
@@ -1561,7 +1649,7 @@
     <button
       type="button"
       class="btn btn-primary"
-      on:click={() => openNewTaskInColumn(todoColumn?.id ?? sortedColumns(columns)[0]?.id ?? 0)}
+      on:click={() => openNewTaskInColumn(todoColumn?.id ?? visibleColumns(columns)[0]?.id ?? 0)}
       disabled={columns.length === 0}
     >
       <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add task')}
@@ -1597,7 +1685,7 @@
         aria-label={t('Move to column')}
       >
         <option value="" disabled>{t('Move to column…')}</option>
-        {#each sortedColumns(columns) as column (column.id)}
+        {#each visibleColumns(columns) as column (column.id)}
           <option value={column.id}>{column.name}</option>
         {/each}
       </select>
@@ -1609,7 +1697,7 @@
     <p class="pm-muted">{t('Loading')}…</p>
   {:else}
     <div class="pm-columns">
-      {#each sortedColumns(columns) as column (column.id)}
+      {#each visibleColumns(columns) as column (column.id)}
         {@const columnTasks = tasksInColumn(column, visibleTasks)}
         {@const prevCol = adjacentColumn(column, -1)}
         {@const nextCol = adjacentColumn(column, 1)}
@@ -1766,8 +1854,8 @@
               <label class="pm-label" for="pm-detail-project">{t('Project')}</label>
               <select id="pm-detail-project" class="form-control" bind:value={detailProjectId}>
                 <option value={null}>{t('Unfiled')}</option>
-                {#each projects as project (project.id)}
-                  <option value={project.id}>{project.name}</option>
+                {#each projectPickerOptions as project (project.id)}
+                  <option value={project.id}>{project.parent_id !== null ? `— ${project.name}` : project.name}</option>
                 {/each}
               </select>
             </div>
@@ -1775,7 +1863,7 @@
               <div class="pm-dialog-field flex-grow-1">
                 <label class="pm-label" for="pm-detail-column">{t('Column')}</label>
                 <select id="pm-detail-column" class="form-control" bind:value={newTaskColumnId}>
-                  {#each sortedColumns(columns) as column (column.id)}
+                  {#each visibleColumns(columns) as column (column.id)}
                     <option value={column.id}>{column.name}</option>
                   {/each}
                 </select>
@@ -2170,6 +2258,21 @@
           <label class="pm-label" for="pm-project-name">{t('Project name')}</label>
           <input id="pm-project-name" type="text" class="form-control" bind:value={dialogName} maxlength="255" />
         </div>
+        {#if !editingProject}
+          <div class="pm-dialog-field">
+            <label class="pm-label" for="pm-project-parent">{t('Parent project')}</label>
+            <select id="pm-project-parent" class="form-control" bind:value={dialogParentId}>
+              <option value={null}>{t('None (top-level project)')}</option>
+              {#each topLevelProjects as project (project.id)}
+                <option value={project.id}>{project.name}</option>
+              {/each}
+            </select>
+          </div>
+        {:else if editingProject.parent_id !== null}
+          <p class="pm-muted small">
+            {t('Subproject of')} {projects.find(p => p.id === editingProject?.parent_id)?.name ?? ''}
+          </p>
+        {/if}
         <div class="d-flex pm-dialog-row">
           <div class="pm-dialog-field flex-grow-1">
             <label class="pm-label" for="pm-project-target-end-date">{t('Target end date')}</label>
@@ -2253,7 +2356,7 @@
         </p>
         <ul class="pm-column-manage-list">
           {#each sortedColumns(columns) as column (column.id)}
-            <li class="pm-column-manage-row">
+            <li class="pm-column-manage-row" class:pm-column-manage-row-hidden={column.hidden}>
               <input
                 type="text"
                 class="form-control"
@@ -2266,11 +2369,12 @@
               <button type="button" class="btn-unstyled pm-icon-button" title={t('Move right')} aria-label={t('Move right')} disabled={!adjacentColumn(column, 1)} on:click={() => moveColumn(column, 1)}>
                 <i class="fas fa-arrow-right fa-fw" aria-hidden="true"></i>
               </button>
-              {#if column.kind === 'custom'}
-                <button type="button" class="btn-unstyled pm-comment-delete" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteColumn(column)}>
-                  <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
-                </button>
-              {/if}
+              <button type="button" class="btn-unstyled pm-icon-button" title={column.hidden ? t('Show on the board') : t('Hide from the board')} aria-label={column.hidden ? t('Show on the board') : t('Hide from the board')} on:click={() => toggleColumnHidden(column)}>
+                <i class={`fas ${column.hidden ? 'fa-eye-slash' : 'fa-eye'} fa-fw`} aria-hidden="true"></i>
+              </button>
+              <button type="button" class="btn-unstyled pm-comment-delete" title={t('Delete')} aria-label={t('Delete')} disabled={columns.length <= 1} on:click={() => deleteColumn(column)}>
+                <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+              </button>
             </li>
           {/each}
         </ul>
