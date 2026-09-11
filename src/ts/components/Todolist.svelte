@@ -55,6 +55,7 @@
     assignees?: { userid: number; fullname: string }[];
     project_id?: number | null;
     project_name?: string | null;
+    project_parent_name?: string | null;
   };
 
   type UnfinishedStep = {
@@ -94,6 +95,7 @@
     assignees?: { userid: number; fullname: string }[];
     projectId?: number | null;
     projectName?: string | null;
+    projectParentName?: string | null;
   };
 
   type DueGroup = {
@@ -285,6 +287,7 @@
       assignees: item.assignees ?? [],
       projectId: item.project_id,
       projectName: item.project_name,
+      projectParentName: item.project_parent_name,
     })),
     ...(['experiments', 'items'] as const).flatMap(entityType => (
       unfinished[entityType].flatMap(entity => (
@@ -1722,6 +1725,7 @@
                       <button type='button' class='btn-unstyled todo-title-btn' on:click={() => openDetail(entry)}>{entry.body}</button>
                       {#if entry.projectName || isAssignedByOther(entry)}
                         <div class='small todo-secondary-text d-flex align-items-center flex-wrap' style='gap:0.3rem'>
+                          {#if entry.projectParentName}<span class='badge badge-light todo-project-badge' title={t('Parent project')}>{entry.projectParentName}</span>{/if}
                           {#if entry.projectName}<a href={`projectmanagement.php?project=${entry.projectId}`} class='badge badge-info todo-project-badge' title={t('Open this project')}>{entry.projectName}</a>{/if}
                           {#if isAssignedByOther(entry)}<span>{t('Assigned by')} {entry.creatorFullname}</span>{/if}
                         </div>
@@ -2031,6 +2035,7 @@
     <div class='todo-detail-dialog' role='dialog' aria-modal='true' aria-labelledby='todoDetailTitle'>
       <div class='todo-detail-header'>
         <h4 id='todoDetailTitle' class='mb-0'>{detailEditing ? t('Edit task') : detailEntry.body}</h4>
+        {#if detailEntry.projectParentName}<span class='badge badge-light' title={t('Parent project')}>{detailEntry.projectParentName}</span>{/if}
         {#if detailEntry.projectName}<a href={`projectmanagement.php?project=${detailEntry.projectId}`} class='badge badge-info' title={t('Open this project')}>{detailEntry.projectName}</a>{/if}
         <button type='button' class='btn-unstyled todo-detail-close' on:click={closeDetail} aria-label={t('Close')}>&times;</button>
       </div>
