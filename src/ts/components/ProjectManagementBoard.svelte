@@ -1547,7 +1547,7 @@
     <button type="button" class="pm-project-tab" class:active={activeProjectId === null} on:click={() => selectProject(null)}>
       {t('Unfiled')}
     </button>
-    {#if activeProject}
+    {#if activeProject && activeProject.parent_id === null}
       <button type="button" class="pm-manage-btn" title={t('Manage this project')} aria-label={t('Manage this project')} on:click={() => openProjectDialog(activeProject)}>
         <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
       </button>
@@ -1590,6 +1590,11 @@
             <option value={subproject.id}>{subproject.name}</option>
           {/each}
         </select>
+        {#if !viewingAllSubprojects && activeProject}
+          <button type="button" class="pm-manage-btn" title={t('Manage this subproject')} aria-label={t('Manage this subproject')} on:click={() => openProjectDialog(activeProject)}>
+            <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+          </button>
+        {/if}
       {/if}
       <button type="button" class="btn btn-ghost btn-sm" on:click={() => openProjectDialog(null, effectiveTopLevelId)}>
         <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add subproject')}
