@@ -277,6 +277,10 @@ final class Todolist extends AbstractRest
                     t.project_id IS NULL
                     OR project.userid = :requester3
                     OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester4)
+                    OR (project.parent_id IS NOT NULL AND (
+                        EXISTS (SELECT 1 FROM todolist_projects AS pp WHERE pp.id = project.parent_id AND pp.userid = :requester5)
+                        OR EXISTS (SELECT 1 FROM todolist_project_members AS pm2 WHERE pm2.project_id = project.parent_id AND pm2.userid = :requester6)
+                    ))
                 )
             ORDER BY {$order}{$limitSql}";
         $req = $this->Db->prepare($sql);
@@ -288,10 +292,12 @@ final class Todolist extends AbstractRest
             $req->bindParam(':requester2', $this->userid, PDO::PARAM_INT);
         }
         // a task tied to a project is only visible to that project's
-        // creator/members, regardless of scope -- being removed from a
-        // project must hide its tasks from every tab, not just its own
+        // creator/members (or the parent project's creator/members for
+        // subproject tasks), regardless of scope
         $req->bindParam(':requester3', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester5', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester6', $this->userid, PDO::PARAM_INT);
         if ($completedSince !== null) {
             $req->bindValue(':completed_since', $completedSince, PDO::PARAM_STR);
         }
@@ -364,6 +370,10 @@ final class Todolist extends AbstractRest
                     t.project_id IS NULL
                     OR project.userid = :requester3
                     OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester4)
+                    OR (project.parent_id IS NOT NULL AND (
+                        EXISTS (SELECT 1 FROM todolist_projects AS pp WHERE pp.id = project.parent_id AND pp.userid = :requester5)
+                        OR EXISTS (SELECT 1 FROM todolist_project_members AS pm2 WHERE pm2.project_id = project.parent_id AND pm2.userid = :requester6)
+                    ))
                 )";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
@@ -381,6 +391,8 @@ final class Todolist extends AbstractRest
         }
         $req->bindParam(':requester3', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester5', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester6', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         $row = $this->Db->fetch($req);
         return array(
