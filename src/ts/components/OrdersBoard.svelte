@@ -27,7 +27,7 @@
     };
   }
 
-  type OrderStatus = 'backlogged' | 'requested' | 'ordered' | 'received' | 'cancelled' | 'reference';
+  type OrderStatus = 'requested' | 'ordered' | 'received' | 'backlogged' | 'cancelled' | 'reference';
 
   type TeamMember = {
     userid: number;
@@ -148,7 +148,7 @@
     return [...existing, ...incoming.filter(item => !seenIds.has(item.id))];
   }
 
-  const STATUSES: OrderStatus[] = ['backlogged', 'requested', 'ordered', 'received', 'cancelled'];
+  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'backlogged', 'cancelled'];
 
   function statusLabel(status: OrderStatus): string {
     return {
@@ -1387,9 +1387,6 @@
       <button type="button" class={statusFilter === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('all')}>
         {t('All')}
       </button>
-      <button type="button" class={statusFilter === 'backlogged' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('backlogged')}>
-        {t('Backlogged')}
-      </button>
       <button type="button" class={statusFilter === 'requested' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('requested')}>
         {t('Requested')}
       </button>
@@ -1398,6 +1395,9 @@
       </button>
       <button type="button" class={statusFilter === 'received' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('received')}>
         {t('Received')}
+      </button>
+      <button type="button" class={statusFilter === 'backlogged' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('backlogged')}>
+        {t('Backlogged')}
       </button>
       <button type="button" class={statusFilter === 'cancelled' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('cancelled')}>
         {t('Cancelled')}
