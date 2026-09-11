@@ -52,7 +52,7 @@ final class Orders extends AbstractRest
 {
     use SetIdTrait;
 
-    private const array STATUSES = array('backlogged', 'requested', 'ordered', 'received', 'cancelled', 'reference');
+    private const array STATUSES = array('requested', 'ordered', 'received', 'backlogged', 'cancelled', 'reference');
 
     // same module list/URL scheme as the LabCollector link already
     // insertable into an entity's body -- see buildLabCollectorUrl() in
