@@ -1576,6 +1576,24 @@
   </div>
 
   {#if typeof effectiveTopLevelId === 'number'}
+    {@const topLevelProject = projects.find(p => p.id === effectiveTopLevelId) ?? null}
+    {#if topLevelProject}
+      <div class="pm-project-description mt-2">
+        <div class="d-flex align-items-center flex-wrap" style="gap:0.4rem">
+          <strong class="pm-project-name-heading">{topLevelProject.name}</strong>
+          {#if topLevelProject.target_end_date}
+            <span class="pm-muted small"><i class="fas fa-flag-checkered fa-fw mr-1" aria-hidden="true"></i>{t('Target')}: {formatDeadline(topLevelProject.target_end_date)}</span>
+          {/if}
+        </div>
+        <span class="pm-label mb-0 mt-2 d-block">{t('Goals / description')}</span>
+        {#if topLevelProject.description}
+          <div class="pm-project-description-body">{@html topLevelProject.description}</div>
+        {:else}
+          <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+        {/if}
+      </div>
+    {/if}
+
     <div class="d-flex align-items-center mt-2" style="gap:0.5rem">
       {#if subprojectsOfActive.length > 0}
         <select
@@ -1600,6 +1618,23 @@
         <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add subproject')}
       </button>
     </div>
+
+    {#if !viewingAllSubprojects && activeProject}
+      <div class="pm-project-description mt-2">
+        <div class="d-flex align-items-center flex-wrap" style="gap:0.4rem">
+          <strong class="pm-project-name-heading">{activeProject.name}</strong>
+          {#if activeProject.target_end_date}
+            <span class="pm-muted small"><i class="fas fa-flag-checkered fa-fw mr-1" aria-hidden="true"></i>{t('Target')}: {formatDeadline(activeProject.target_end_date)}</span>
+          {/if}
+        </div>
+        <span class="pm-label mb-0 mt-2 d-block">{t('Goals / description')}</span>
+        {#if activeProject.description}
+          <div class="pm-project-description-body">{@html activeProject.description}</div>
+        {:else}
+          <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+        {/if}
+      </div>
+    {/if}
   {/if}
 
   <div class="pm-search mt-2 d-flex align-items-start flex-wrap" style="gap:0.5rem">
@@ -1621,23 +1656,6 @@
       <option value="high">{priorityLabel('high')}</option>
     </select>
   </div>
-
-  {#if activeProject}
-    <div class="pm-project-description">
-      <div class="d-flex align-items-center flex-wrap" style="gap:0.4rem">
-        <span class="badge pm-project-status pm-project-status-{activeProject.status}">{projectStatusLabel(activeProject.status)}</span>
-        {#if activeProject.target_end_date}
-          <span class="pm-muted small"><i class="fas fa-flag-checkered fa-fw mr-1" aria-hidden="true"></i>{t('Target')}: {formatDeadline(activeProject.target_end_date)}</span>
-        {/if}
-      </div>
-      <span class="pm-label mb-0 mt-2 d-block">{t('Goals / description')}</span>
-      {#if activeProject.description}
-        <div class="pm-project-description-body">{@html activeProject.description}</div>
-      {:else}
-        <p class="pm-muted small mb-0">{t('No description yet.')}</p>
-      {/if}
-    </div>
-  {/if}
   {#if visibleTasks.length > 0}
     <div class="pm-progress mt-2" title={`${doneCount} / ${totalCount} ${progressScopeLabel}`}>
       <div class="pm-progress-bar" style={`width: ${donePercent}%`}></div>
