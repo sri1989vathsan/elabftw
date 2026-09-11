@@ -1619,7 +1619,7 @@
       </button>
     </div>
 
-    {#if !viewingAllSubprojects && activeProject}
+    {#if subprojectsOfActive.length > 0 && !viewingAllSubprojects && activeProject}
       <div class="pm-project-description mt-2">
         <div class="d-flex align-items-center flex-wrap" style="gap:0.4rem">
           <strong class="pm-project-name-heading">{activeProject.name}</strong>
