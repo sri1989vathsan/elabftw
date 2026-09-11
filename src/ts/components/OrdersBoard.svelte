@@ -148,7 +148,11 @@
     return [...existing, ...incoming.filter(item => !seenIds.has(item.id))];
   }
 
-  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'backlogged', 'cancelled'];
+  // 'reference' is included so an order accidentally moved off it (e.g. via
+  // this same select) can always be moved back -- previously only settable
+  // at creation time via the new-order form's own toggle, with no way back
+  // once it was gone.
+  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'backlogged', 'cancelled', 'reference'];
 
   function statusLabel(status: OrderStatus): string {
     return {
