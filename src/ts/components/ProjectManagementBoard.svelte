@@ -231,6 +231,21 @@
     && activeProjectId === effectiveTopLevelId
     && subprojectsOfActive.length > 0;
 
+  // Plain (non-reactive) re-derivation of viewingAllSubprojects, for
+  // taskFilterParams()/loadCounts() to call right after activeProjectId is
+  // reassigned (selectProject(), onMount()) -- both run synchronously and
+  // call load()/loadCounts() in that same tick, before Svelte flushes the
+  // $: statements above on a microtask. Reading the reactive
+  // viewingAllSubprojects there would still see its value from *before*
+  // this switch, silently dropping include_subprojects=1 on the fetch that
+  // actually matters (the one triggered by the switch itself).
+  function computeViewingAllSubprojects(id: number | null | 'all'): boolean {
+    if (typeof id !== 'number') return false;
+    const project = projects.find(p => p.id === id) ?? null;
+    const topLevelId = project?.parent_id ?? id;
+    return id === topLevelId && projects.some(p => p.parent_id === topLevelId);
+  }
+
   // project/priority/search/scope are all applied server-side now (see
   // load()'s taskFilterParams() and its own scope=${scope}) -- tasks is
   // already exactly the right set, page by page, so there's nothing left
@@ -418,7 +433,7 @@
   async function loadCounts(): Promise<void> {
     try {
       const countsParam = typeof activeProjectId === 'number'
-        ? `&project_id=${activeProjectId}${viewingAllSubprojects ? '&include_subprojects=1' : ''}`
+        ? `&project_id=${activeProjectId}${computeViewingAllSubprojects(activeProjectId) ? '&include_subprojects=1' : ''}`
         : activeProjectId === null ? '&unfiled=1' : '';
       const counts = await ApiC.getJson(`${Model.Todolist}?scope=team&counts=1${countsParam}`) as Array<{
         open_count: number;
@@ -450,7 +465,7 @@
     let params = '';
     if (typeof activeProjectId === 'number') {
       params += `&project_id=${activeProjectId}`;
-      if (viewingAllSubprojects) params += '&include_subprojects=1';
+      if (computeViewingAllSubprojects(activeProjectId)) params += '&include_subprojects=1';
     } else if (activeProjectId === null) {
       params += '&unfiled=1';
     }
