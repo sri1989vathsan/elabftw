@@ -4542,28 +4542,8 @@ div > .sticky-navbar {
   margin: 0.4rem 0 0;
 }
 
-.pm-project-status {
-  display: inline-block;
-}
-
-.pm-project-status-planning {
-  background: #e2e3e5;
-  color: #41464b;
-}
-
-.pm-project-status-active {
-  background: #cfe2ff;
-  color: #084298;
-}
-
-.pm-project-status-on_hold {
-  background: #fff3cd;
-  color: #664d03;
-}
-
-.pm-project-status-done {
-  background: #d1e7dd;
-  color: #0f5132;
+.pm-project-name-heading {
+  font-size: 1.05rem;
 }
 
 .pm-search > div {
