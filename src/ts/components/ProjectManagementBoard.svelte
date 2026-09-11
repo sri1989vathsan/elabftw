@@ -61,6 +61,7 @@
     assigned_fullname: string | null;
     assignees: TeamMember[];
     project_name: string | null;
+    project_parent_name: string | null;
     entity_links: EntityLink[];
   };
 
@@ -655,6 +656,7 @@
       assigned_fullname: null,
       assignees: [],
       project_name: null,
+      project_parent_name: null,
       entity_links: [],
     };
     detailEditing = true;
@@ -1849,7 +1851,9 @@
     <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmDetailTitle">
       <div class="pm-dialog-header">
         <h4 id="pmDetailTitle" class="mb-0">{detailEditing ? t('Edit task') : detailTask.body}</h4>
-        {#if detailTask.project_name}<span class="badge badge-info">{detailTask.project_name}</span>{/if}
+        {#if detailTask.project_name}
+          <span class="badge badge-info">{#if detailTask.project_parent_name}{detailTask.project_parent_name} / {/if}{detailTask.project_name}</span>
+        {/if}
         <button type="button" class="pm-close-btn" on:click={closeDetail} aria-label={t('Close')}>&times;</button>
       </div>
       <div class="pm-dialog-body">
