@@ -88,7 +88,7 @@ final class UserNotifications extends AbstractRest
     }
 
     /**
-     * Step/to-do deadline notifications only count as "visible" once
+     * Step/to-do/order deadline notifications only count as "visible" once
      * they're actually due, or (deadline categories aside) always.
      */
     private function visibilityClause(): string
@@ -97,6 +97,7 @@ final class UserNotifications extends AbstractRest
             (category NOT IN (
                 :step_deadline,
                 :todo_deadline,
+                :order_reminder,
                 :need_validation,
                 :is_validated,
                 :onboarding_email
@@ -109,6 +110,10 @@ final class UserNotifications extends AbstractRest
                 category = :todo_deadline
                 AND NOW() >= CAST(body->>"$.remind_at" AS DATETIME)
             )
+            OR (
+                category = :order_reminder
+                AND NOW() >= CAST(body->>"$.remind_at" AS DATETIME)
+            )
         )';
     }
 
@@ -116,6 +121,7 @@ final class UserNotifications extends AbstractRest
     {
         $req->bindValue(':step_deadline', Notifications::StepDeadline->value, PDO::PARAM_INT);
         $req->bindValue(':todo_deadline', Notifications::TodoDeadline->value, PDO::PARAM_INT);
+        $req->bindValue(':order_reminder', Notifications::OrderReminder->value, PDO::PARAM_INT);
         $req->bindValue(':need_validation', Notifications::SelfNeedValidation->value, PDO::PARAM_INT);
         $req->bindValue(':is_validated', Notifications::SelfIsValidated->value, PDO::PARAM_INT);
         $req->bindValue(':onboarding_email', Notifications::OnboardingEmail->value, PDO::PARAM_INT);

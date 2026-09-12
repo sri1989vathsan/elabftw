@@ -343,9 +343,22 @@
   let reminderDraft = '';
   let savingReminder = false;
 
+  // No existing reminder to prefill from -- default the time to 9 AM
+  // (today, or tomorrow if 9 AM already passed) so setting one is a single
+  // date pick rather than also having to type a time every time.
+  const DEFAULT_REMINDER_HOUR = 9;
+
+  function defaultReminderDraft(): string {
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    const now = new Date();
+    const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), DEFAULT_REMINDER_HOUR, 0);
+    if (candidate <= now) candidate.setDate(candidate.getDate() + 1);
+    return `${candidate.getFullYear()}-${pad(candidate.getMonth() + 1)}-${pad(candidate.getDate())}T${pad(candidate.getHours())}:${pad(candidate.getMinutes())}`;
+  }
+
   function openReminderModal(item: OrderItem): void {
     reminderModalItem = item;
-    reminderDraft = item.reminder_at ? toLocalInputValue(item.reminder_at) : '';
+    reminderDraft = item.reminder_at ? toLocalInputValue(item.reminder_at) : defaultReminderDraft();
   }
 
   function closeReminderModal(): void {

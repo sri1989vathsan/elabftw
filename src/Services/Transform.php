@@ -189,6 +189,17 @@ final class Transform
                     ),
                     $notif['created_at'],
                 ),
+            Notifications::OrderReminder =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="orders.php?order=%d">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    (int) $notif['body']['order_id'],
+                    sprintf(
+                        _('Order reminder: %s'),
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
+                    $notif['created_at'],
+                ),
             default => throw new ImproperActionException('Invalid notification type.'),
         };
     }
