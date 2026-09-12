@@ -22,6 +22,7 @@ use Elabftw\Models\Notifications\ActionRequested;
 use Elabftw\Models\Notifications\CommentCreated;
 use Elabftw\Models\Notifications\EventDeleted;
 use Elabftw\Models\Notifications\OnboardingEmail;
+use Elabftw\Models\Notifications\OrderReminder;
 use Elabftw\Models\Notifications\SelfIsValidated;
 use Elabftw\Models\Notifications\SelfNeedValidation;
 use Elabftw\Models\Notifications\StepDeadline;
@@ -71,6 +72,12 @@ final class NotificationsFactory
                 new Users($this->body['assigner_userid']),
                 (int) $this->body['task_id'],
                 (string) $this->body['title'],
+            ),
+            Notifications::OrderReminder => new OrderReminder(
+                $this->targetUser,
+                (int) $this->body['order_id'],
+                (string) $this->body['title'],
+                (string) $this->body['remind_at'],
             ),
             default => throw new ImproperActionException(sprintf('This notification (%d) is not mailable.', $this->category)),
         };

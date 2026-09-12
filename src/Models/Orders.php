@@ -15,6 +15,7 @@ use DateTimeZone;
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
+use Elabftw\Models\Notifications\OrderReminder;
 use Elabftw\Models\Notifications\OrderStatusChanged;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\Filter;
@@ -551,6 +552,26 @@ final class Orders extends AbstractRest
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
+        $this->syncReminderNotification($reminderAt);
+    }
+
+    // mirrors Todolist::syncDeadlineNotification()/destroyDeadlineNotification():
+    // a notification row is created right away (so it's queued), but stays
+    // hidden from the bell/email until it's actually due -- see
+    // UserNotifications::visibilityClause() and
+    // EmailNotifications::getNotificationsToSend(). OrderReminder::create()
+    // destroys any previous row for this order first, so clearing then
+    // re-setting a reminder can't leave a stale one behind.
+    private function syncReminderNotification(?string $reminderAt): void
+    {
+        $order = $this->readOne();
+        $targetUser = new Users((int) $order['userid'], $this->Users->team);
+        $title = (string) $order['title'];
+        if ($reminderAt === null) {
+            (new OrderReminder($targetUser, (int) $this->id, $title, ''))->destroy();
+            return;
+        }
+        (new OrderReminder($targetUser, (int) $this->id, $title, $reminderAt))->create();
     }
 
     private function updateContent(string $title, ?string $notes): void
