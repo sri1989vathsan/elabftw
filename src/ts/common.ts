@@ -1703,7 +1703,13 @@ if (logoutMessageDiv  && localStorage.getItem('logout_msg')) {
 }
 
 on('ack-notif', (el: HTMLElement) => {
-  if (el.parentElement.dataset.ack === '0') {
+  // the element carrying data-ack isn't always the immediate parent -- the
+  // navbar bell dropdown (head.html) wraps notifWeb's own markup in an
+  // extra <span class="notif-body"> for its icon layout, unlike the plain
+  // "notification history" page (notifications.html), so el.parentElement
+  // alone would miss it there and silently skip marking the click as read
+  const ackHost = el.closest('[data-ack]') as HTMLElement | null;
+  if (ackHost && ackHost.dataset.ack === '0') {
     ApiC.patch(`${Model.User}/me/${Model.Notification}/${el.dataset.id}`).then(() => {
       if (el.dataset.href) {
         window.location.href = el.dataset.href;
