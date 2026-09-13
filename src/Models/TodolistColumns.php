@@ -186,7 +186,7 @@ final class TodolistColumns extends AbstractRest
         }
         $projectId = filter_var($value, FILTER_VALIDATE_INT);
         if ($projectId === false || $projectId <= 0) {
-            throw new ImproperActionException('Invalid project id.');
+            throw new ImproperActionException(_('Invalid project id.'));
         }
         $this->assertProjectAccess((int) $projectId);
 
@@ -218,7 +218,7 @@ final class TodolistColumns extends AbstractRest
         $req->bindParam(':userid4', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         if ((int) $this->Db->fetch($req)['count'] === 0) {
-            throw new ImproperActionException('Project not found or access denied.');
+            throw new ImproperActionException(_('Project not found or access denied.'));
         }
     }
 
@@ -245,7 +245,7 @@ final class TodolistColumns extends AbstractRest
     public function patch(Action $action, array $params): array
     {
         if (empty($this->readOne())) {
-            throw new ImproperActionException('Column not found.');
+            throw new ImproperActionException(_('Column not found.'));
         }
         if (array_key_exists('name', $params)) {
             $sql = 'UPDATE todolist_columns SET name = :name WHERE id = :id AND team = :team';
