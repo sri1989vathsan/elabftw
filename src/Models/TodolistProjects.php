@@ -115,6 +115,14 @@ final class TodolistProjects extends AbstractRest
                 AND (
                     p.userid = :userid
                     OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = p.id AND pm.userid = :userid2)
+                    OR (p.parent_id IS NOT NULL AND EXISTS (
+                        SELECT 1 FROM todolist_projects AS parent
+                        WHERE parent.id = p.parent_id
+                            AND (
+                                parent.userid = :userid3
+                                OR EXISTS (SELECT 1 FROM todolist_project_members AS ppm WHERE ppm.project_id = parent.id AND ppm.userid = :userid4)
+                            )
+                    ))
                 )
             ORDER BY p.ordering ASC, p.id ASC";
         $req = $this->Db->prepare($sql);
@@ -122,6 +130,8 @@ final class TodolistProjects extends AbstractRest
         $req->bindValue(':archived', $showArchived ? 1 : 0, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':userid2', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':userid3', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':userid4', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         return array_map(fn(array $row): array => $this->decodeMembers($row), $req->fetchAll());
     }
@@ -144,12 +154,22 @@ final class TodolistProjects extends AbstractRest
                 AND (
                     p.userid = :userid
                     OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = p.id AND pm.userid = :userid2)
+                    OR (p.parent_id IS NOT NULL AND EXISTS (
+                        SELECT 1 FROM todolist_projects AS parent
+                        WHERE parent.id = p.parent_id
+                            AND (
+                                parent.userid = :userid3
+                                OR EXISTS (SELECT 1 FROM todolist_project_members AS ppm WHERE ppm.project_id = parent.id AND ppm.userid = :userid4)
+                            )
+                    ))
                 )";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':userid2', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':userid3', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':userid4', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         $row = $this->Db->fetch($req);
         if ($row === false) {
@@ -222,6 +242,14 @@ final class TodolistProjects extends AbstractRest
     public function destroy(): bool
     {
         $this->canWriteOrExplode();
+        $sql = 'SELECT COUNT(*) AS count FROM todolist_projects WHERE parent_id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        if ((int) $this->Db->fetch($req)['count'] > 0) {
+            throw new ImproperActionException(_('A project with subprojects cannot be deleted. Move or delete its subprojects first.'));
+        }
         $sql = 'DELETE FROM todolist_projects WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
