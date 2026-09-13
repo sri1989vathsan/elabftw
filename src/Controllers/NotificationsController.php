@@ -38,10 +38,11 @@ final class NotificationsController extends AbstractHtmlController
     protected function getData(): array
     {
         $offset = max(0, $this->app->Request->query->getInt('offset'));
+        $search = trim($this->app->Request->query->getString('search'));
         $UserNotifications = new UserNotifications($this->app->Users);
         // ask for one extra row so the template can tell whether there's a
         // next page without a separate COUNT query
-        $notifs = $UserNotifications->readHistory(self::PAGE_SIZE + 1, $offset);
+        $notifs = $UserNotifications->readHistory(self::PAGE_SIZE + 1, $offset, $search !== '' ? $search : null);
         $hasNextPage = count($notifs) > self::PAGE_SIZE;
         if ($hasNextPage) {
             array_pop($notifs);
@@ -52,6 +53,7 @@ final class NotificationsController extends AbstractHtmlController
             'notifOffset' => $offset,
             'notifPageSize' => self::PAGE_SIZE,
             'notifHasNextPage' => $hasNextPage,
+            'notifSearch' => $search,
         ));
     }
 }
