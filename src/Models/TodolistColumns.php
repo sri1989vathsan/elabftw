@@ -19,6 +19,7 @@ use Elabftw\Services\Filter;
 use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
+use Throwable;
 
 use function _;
 use function array_key_exists;
@@ -44,10 +45,13 @@ final class TodolistColumns extends AbstractRest
 
     private int $team;
 
+    private int $userid;
+
     public function __construct(private Users $requester, ?int $id = null)
     {
         parent::__construct();
         $this->team = (int) $this->requester->userData['team'];
+        $this->userid = (int) $this->requester->userData['userid'];
         $this->setId($id);
     }
 
@@ -182,18 +186,40 @@ final class TodolistColumns extends AbstractRest
         }
         $projectId = filter_var($value, FILTER_VALIDATE_INT);
         if ($projectId === false || $projectId <= 0) {
-            return null;
+            throw new ImproperActionException('Invalid project id.');
         }
-        $sql = 'SELECT COUNT(*) AS count FROM todolist_projects WHERE id = :id AND team = :team';
+        $this->assertProjectAccess((int) $projectId);
+
+        return (int) $projectId;
+    }
+
+    private function assertProjectAccess(int $projectId): void
+    {
+        $sql = 'SELECT COUNT(*) AS count FROM todolist_projects AS p
+            WHERE p.id = :id AND p.team = :team
+                AND (
+                    p.userid = :userid
+                    OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = p.id AND pm.userid = :userid2)
+                    OR (p.parent_id IS NOT NULL AND EXISTS (
+                        SELECT 1 FROM todolist_projects AS parent
+                        WHERE parent.id = p.parent_id
+                            AND (
+                                parent.userid = :userid3
+                                OR EXISTS (SELECT 1 FROM todolist_project_members AS ppm WHERE ppm.project_id = parent.id AND ppm.userid = :userid4)
+                            )
+                    ))
+                )';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':id', $projectId, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':userid2', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':userid3', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':userid4', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         if ((int) $this->Db->fetch($req)['count'] === 0) {
-            return null;
+            throw new ImproperActionException('Project not found or access denied.');
         }
-
-        return $projectId;
     }
 
     #[Override]
@@ -208,6 +234,9 @@ final class TodolistColumns extends AbstractRest
         if ($row === false) {
             return array();
         }
+        if ($row['project_id'] !== null) {
+            $this->assertProjectAccess((int) $row['project_id']);
+        }
         $row['hidden'] = (bool) $row['hidden'];
         return $row;
     }
@@ -215,6 +244,9 @@ final class TodolistColumns extends AbstractRest
     #[Override]
     public function patch(Action $action, array $params): array
     {
+        if (empty($this->readOne())) {
+            throw new ImproperActionException('Column not found.');
+        }
         if (array_key_exists('name', $params)) {
             $sql = 'UPDATE todolist_columns SET name = :name WHERE id = :id AND team = :team';
             $req = $this->Db->prepare($sql);
@@ -258,46 +290,54 @@ final class TodolistColumns extends AbstractRest
         }
         $projectId = $column['project_id'] !== null ? (int) $column['project_id'] : null;
 
-        // the fallback target: whichever remaining column on this same
-        // board (team-wide, or this project's own set) sorts first --
-        // arbitrary but deterministic, and doesn't assume a "todo" column
-        // still exists the way the old custom-only version could
-        $sql = 'SELECT id, kind FROM todolist_columns
-            WHERE team = :team AND (project_id <=> :project_id) AND id != :id
-            ORDER BY ordering ASC LIMIT 1';
-        $req = $this->Db->prepare($sql);
-        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
-        $req->bindValue(':project_id', $projectId, $projectId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
-        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
-        $this->Db->execute($req);
-        $target = $this->Db->fetch($req);
-        if ($target === false) {
-            throw new ImproperActionException('At least one column must remain on this board.');
+        $this->Db->beginTransaction();
+        try {
+            // the fallback target: whichever remaining column on this same
+            // board (team-wide, or this project's own set) sorts first --
+            // arbitrary but deterministic, and doesn't assume a "todo" column
+            // still exists the way the old custom-only version could
+            $sql = 'SELECT id, kind FROM todolist_columns
+                WHERE team = :team AND (project_id <=> :project_id) AND id != :id
+                ORDER BY ordering ASC LIMIT 1 FOR UPDATE';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+            $req->bindValue(':project_id', $projectId, $projectId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $target = $req->fetch();
+            if ($target === false) {
+                throw new ImproperActionException('At least one column must remain on this board.');
+            }
+
+            // move any tasks out of the column being removed into that target,
+            // keeping the legacy completed_at/in_progress fields in sync with
+            // wherever they land -- same rule Todolist::syncStatusFromColumn()
+            // applies whenever a task is moved between columns directly
+            $sql = 'UPDATE todolist SET
+                    column_id = :target_id,
+                    completed_at = CASE WHEN :target_kind = "done" THEN COALESCE(completed_at, UTC_TIMESTAMP()) ELSE NULL END,
+                    in_progress = :in_progress
+                WHERE column_id = :id AND team = :team';
+            $req = $this->Db->prepare($sql);
+            $req->bindValue(':target_id', $target['id'], PDO::PARAM_INT);
+            $req->bindValue(':target_kind', $target['kind']);
+            $req->bindValue(':in_progress', $target['kind'] === 'in_progress', PDO::PARAM_INT);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+            $this->Db->execute($req);
+
+            $sql = 'DELETE FROM todolist_columns WHERE id = :id AND team = :team';
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+
+            $result = $this->Db->execute($req);
+            $this->Db->commit();
+            return $result;
+        } catch (Throwable $e) {
+            $this->Db->rollBack();
+            throw $e;
         }
-
-        // move any tasks out of the column being removed into that target,
-        // keeping the legacy completed_at/in_progress fields in sync with
-        // wherever they land -- same rule Todolist::syncStatusFromColumn()
-        // applies whenever a task is moved between columns directly
-        $sql = 'UPDATE todolist SET
-                column_id = :target_id,
-                completed_at = CASE WHEN :target_kind = "done" THEN COALESCE(completed_at, UTC_TIMESTAMP()) ELSE NULL END,
-                in_progress = :in_progress
-            WHERE column_id = :id AND team = :team';
-        $req = $this->Db->prepare($sql);
-        $req->bindValue(':target_id', $target['id'], PDO::PARAM_INT);
-        $req->bindValue(':target_kind', $target['kind']);
-        $req->bindValue(':in_progress', $target['kind'] === 'in_progress', PDO::PARAM_INT);
-        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
-        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
-        $this->Db->execute($req);
-
-        $sql = 'DELETE FROM todolist_columns WHERE id = :id AND team = :team';
-        $req = $this->Db->prepare($sql);
-        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
-        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
-
-        return $this->Db->execute($req);
     }
 
     private function getName(mixed $value): string
