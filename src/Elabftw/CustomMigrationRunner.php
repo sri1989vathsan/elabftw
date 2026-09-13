@@ -96,6 +96,7 @@ final class CustomMigrationRunner
         '055_order_reminder.sql',
         '056_todolist_subprojects.sql',
         '057_todolist_column_visibility.sql',
+        '058_order_reminder_index.sql',
     );
 
     private Db $Db;
