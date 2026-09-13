@@ -1117,9 +1117,14 @@
   // now-404ing download URL -- a broken image sitting in the notes forever.
   // Match on long_name rather than the full downloadUrl() string since the
   // browser may have re-escaped "&" to "&amp;" when it serialized the
-  // contenteditable's innerHTML.
+  // contenteditable's innerHTML. long_name itself must go through the same
+  // encodeURIComponent() downloadUrl() used to build that src in the first
+  // place -- long_name is a "<2-char-shard>/<uuid>.<ext>" storage path (see
+  // Uploads model), so its "/" is stored as a literal %2F in the actual
+  // notes HTML, never as "/"; searching for the raw long_name here never
+  // matched a real embedded image, silently leaving it (now broken) behind.
   function stripUploadImageFromNotes(notes: string, upload: OrderUpload): string | null {
-    const pattern = new RegExp(`<img[^>]*src="[^"]*${escapeRegExp(upload.long_name)}[^"]*"[^>]*>`, 'gi');
+    const pattern = new RegExp(`<img[^>]*src="[^"]*${escapeRegExp(encodeURIComponent(upload.long_name))}[^"]*"[^>]*>`, 'gi');
     if (!pattern.test(notes)) return null;
     return notes.replace(pattern, '');
   }
