@@ -1731,6 +1731,15 @@ on('ack-notif', (el: HTMLElement) => {
 
 on('destroy-notif', () => ApiC.delete(`${Model.User}/me/${Model.Notification}`).then(() => reloadElements(['navbarNotifDiv'])));
 
+// "Mark as unread" button on the notification history page (notifications.html)
+// -- that page is plain server-rendered, not a fragment kept in sync like
+// navbarNotifDiv, so a full reload is the simplest way to reflect the change
+on('unack-notif', (el: HTMLElement) => {
+  ApiC.patch(`${Model.User}/me/${Model.Notification}/${el.dataset.id}`, { is_ack: 0 }).then(() => {
+    window.location.reload();
+  });
+});
+
 // CREATE EXPERIMENT, TEMPLATE or DATABASE item: main create button in top right
 on('create-entity', async (el: HTMLElement, event: Event) => {
   event.preventDefault();
