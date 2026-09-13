@@ -157,7 +157,16 @@ final class UserNotifications extends AbstractRest
     public function patch(Action $action, array $params): array
     {
         $this->users->isSelfOrExplode();
-        $is_ack = BinaryValue::tryFrom((int) $params['is_ack']) ?? BinaryValue::True;
+        // BinaryValue::tryFrom(0) resolves to BinaryValue::False (a valid
+        // case, not null), so relying on ?? BinaryValue::True to cover a
+        // missing/omitted is_ack never actually triggers for that common
+        // case -- (int) null casts to 0, which tryFrom() happily matches.
+        // Check the key's presence explicitly instead: the click-to-ack
+        // path (see common.ts's 'ack-notif' handler) omits is_ack entirely
+        // and expects this to default to marking the notification read.
+        $is_ack = array_key_exists('is_ack', $params)
+            ? (BinaryValue::tryFrom((int) $params['is_ack']) ?? BinaryValue::True)
+            : BinaryValue::True;
         $sql = 'UPDATE notifications SET is_ack = :is_ack WHERE id = :id AND userid = :userid';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
