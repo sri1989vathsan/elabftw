@@ -1710,7 +1710,12 @@ on('ack-notif', (el: HTMLElement) => {
   // alone would miss it there and silently skip marking the click as read
   const ackHost = el.closest('[data-ack]') as HTMLElement | null;
   if (ackHost && ackHost.dataset.ack === '0') {
-    ApiC.patch(`${Model.User}/me/${Model.Notification}/${el.dataset.id}`).then(() => {
+    // is_ack must be sent explicitly -- UserNotifications::patch() used to
+    // rely on a missing/omitted is_ack defaulting to true server-side, but
+    // BinaryValue::tryFrom(0) resolves to a valid BinaryValue::False rather
+    // than null, so that fallback never actually triggered and every click
+    // here silently re-set is_ack back to 0 (still unread) no matter what.
+    ApiC.patch(`${Model.User}/me/${Model.Notification}/${el.dataset.id}`, { is_ack: 1 }).then(() => {
       if (el.dataset.href) {
         window.location.href = el.dataset.href;
       } else {
