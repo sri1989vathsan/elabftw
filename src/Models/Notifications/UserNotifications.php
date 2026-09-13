@@ -69,19 +69,34 @@ final class UserNotifications extends AbstractRest
      * Every notification for this user, read or not, for the "All
      * notifications" history page -- readAll() only ever shows the unread
      * ones, capped at 10, for the navbar bell.
+     *
+     * $search matches against the raw JSON body rather than any single
+     * field -- notification categories don't share a common "title"-like
+     * key (a CommentCreated's body has no readable text at all, others use
+     * different key names), so a per-category field list would either miss
+     * categories or need constant upkeep as new ones are added. A LIKE over
+     * the JSON text can occasionally match a key name rather than its
+     * value, but in practice search terms are real words, not schema keys.
      */
-    public function readHistory(int $limit = 30, int $offset = 0): array
+    public function readHistory(int $limit = 30, int $offset = 0, ?string $search = null): array
     {
         $this->users->isSelfOrExplode();
         $limitSql = sprintf(' LIMIT %d OFFSET %d', $limit, max(0, $offset));
+        $searchFilter = '';
+        if ($search !== null && $search !== '') {
+            $searchFilter = ' AND body LIKE :search';
+        }
         $sql = 'SELECT id, category, body, is_ack, created_at, userid
             FROM notifications
             WHERE userid = :userid
-                AND ' . $this->visibilityClause() . '
+                AND ' . $this->visibilityClause() . $searchFilter . '
             ORDER BY created_at DESC' . $limitSql;
         $req = $this->Db->prepare($sql);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $this->bindVisibilityParams($req);
+        if ($searchFilter !== '') {
+            $req->bindValue(':search', '%' . $search . '%', PDO::PARAM_STR);
+        }
         $this->Db->execute($req);
 
         return $this->hideDisabledStepDeadlines($req->fetchAll());
