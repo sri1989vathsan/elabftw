@@ -172,7 +172,9 @@ final class Todolist extends AbstractRest
         // for any project with more tasks than fit on one page.
         if ($query->getBoolean('links_summary')) {
             $projectId = $this->getProjectId($query->getInt('project_id') ?: null);
-            return $this->readEntityLinksSummary($projectId, $includeSubprojects);
+            $linksLimit = $queryParams->getLimit() ?: 100;
+            $linksOffset = max(0, $query->getInt('offset'));
+            return array($this->readEntityLinksSummary($projectId, $includeSubprojects, $linksLimit, $linksOffset));
         }
         $completed = $query->getBoolean('completed');
         $completedFilter = $completed ? 'IS NOT NULL' : 'IS NULL';
@@ -421,16 +423,26 @@ final class Todolist extends AbstractRest
      * popup. Mirrors readAll()'s own project-membership visibility rule
      * (see its own comment for why the parent-project branch is there) so
      * this never surfaces a task the requester couldn't otherwise see.
+     *
+     * Paginated the same way readAll() paginates tasks -- a project with a
+     * large number of links would otherwise mean one unbounded query and an
+     * unbounded DOM list on every open of the popup. Requests one extra raw
+     * row so has_next_page can be determined before the deleted-target
+     * filter below runs; filtering first and comparing the filtered count
+     * to $limit would under-report on any page that happens to contain a
+     * deleted-target link, since that page would then come back shorter
+     * than $limit even with more real pages still to load.
      */
-    private function readEntityLinksSummary(?int $projectId, bool $includeSubprojects): array
+    private function readEntityLinksSummary(?int $projectId, bool $includeSubprojects, int $limit, int $offset): array
     {
         if ($projectId === null) {
-            return array();
+            return array('items' => array(), 'has_next_page' => false);
         }
         $projectFilter = $includeSubprojects
             ? ' AND (t.project_id = :filter_project_id OR t.project_id IN (SELECT id FROM todolist_projects WHERE parent_id = :filter_project_id_subprojects))'
             : ' AND t.project_id = :filter_project_id';
-        $sql = "SELECT t.id AS task_id, t.body AS task_body, t.project_id,
+        $limitSql = sprintf(' LIMIT %d OFFSET %d', $limit + 1, max(0, $offset));
+        $sql = "SELECT tel.id AS link_id, t.id AS task_id, t.body AS task_body, t.project_id,
                 tel.entity_type, tel.entity_id, tel.url,
                 CASE tel.entity_type
                     WHEN 'weblink' THEN tel.label
@@ -453,7 +465,7 @@ final class Todolist extends AbstractRest
                         OR EXISTS (SELECT 1 FROM todolist_project_members AS pm2 WHERE pm2.project_id = project.parent_id AND pm2.userid = :requester6)
                     ))
                 )
-            ORDER BY t.body ASC, tel.id ASC";
+            ORDER BY t.body ASC, tel.id ASC{$limitSql}";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $req->bindValue(':filter_project_id', $projectId, PDO::PARAM_INT);
@@ -466,11 +478,17 @@ final class Todolist extends AbstractRest
         $req->bindParam(':requester6', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
 
+        $rows = $req->fetchAll();
+        $hasNextPage = count($rows) > $limit;
+        if ($hasNextPage) {
+            array_pop($rows);
+        }
         // drop links whose target was deleted, same as entityLinksSubquery()
-        return array_values(array_filter(
-            $req->fetchAll(),
+        $items = array_values(array_filter(
+            $rows,
             fn(array $row): bool => $row['title'] !== null,
         ));
+        return array('items' => $items, 'has_next_page' => $hasNextPage);
     }
 
     /**
