@@ -2048,20 +2048,20 @@ function applySpreadsheetColWidths(
     if (!Number.isInteger(col) || !Number.isFinite(width)) return;
     const colElement = dataCols[col];
     if (!colElement) return;
-    // Deliberately DOM-only -- no worksheet.setWidth() call. That API also
-    // pushes an undo-history entry and dispatches onresizecolumn every time
-    // it runs, and this function is invoked repeatedly (mount, every
-    // hydration retry) purely to *restore* a previously-saved size, not to
-    // record a fresh user action. Routing a restore through the same
-    // stateful API a real drag-resize uses was left jspreadsheet's internal
-    // resize bookkeeping disrupted, so a subsequent genuine user drag
-    // silently failed to start. Writing the width attribute/style directly
-    // (see setWidth()'s own implementation: colElement.setAttribute("width",
-    // ...)) leaves that internal state untouched. Also no style.minWidth/
-    // maxWidth -- pinning those would permanently lock the column via CSS,
-    // since jspreadsheet's own resize-drag only ever updates the attribute.
+    // Attribute-ONLY, deliberately no style.width. jspreadsheet-ce's own
+    // setWidth() (used by the real mouse-drag) only ever does
+    // colElement.setAttribute("width", ...) -- it never touches style.width.
+    // A CSS width always wins over the legacy HTML width attribute for
+    // rendering, so setting style.width here (as earlier versions of this
+    // function did) permanently froze the column at that pixel size: every
+    // later attribute-only update from a genuine user drag kept landing on
+    // the DOM, but the browser kept rendering the stale CSS value forever,
+    // making the drag look like it silently did nothing. No worksheet.
+    // setWidth() call either -- that API also pushes an undo-history entry
+    // and dispatches onresizecolumn every time it runs, and this function
+    // is invoked repeatedly (mount, every hydration retry) purely to
+    // *restore* a previously-saved size, not to record a fresh user action.
     colElement.setAttribute('width', String(width));
-    colElement.style.width = `${width}px`;
   });
 }
 
