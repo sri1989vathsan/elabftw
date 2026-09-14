@@ -2051,10 +2051,15 @@ function applySpreadsheetColWidths(
     }
     const colElement = dataCols[col];
     if (!colElement) return;
+    // Only set the width attribute/style jspreadsheet itself uses (see
+    // setWidth() in its source: colElement.setAttribute("width", ...)).
+    // Pinning style.minWidth/maxWidth here would permanently lock the
+    // column at this exact pixel size via CSS -- jspreadsheet's own
+    // resize-drag only ever updates the width attribute afterward, so a
+    // fixed min/max-width would silently block every future manual resize
+    // once this enforcement runs (on mount, hydration retries, etc).
     colElement.setAttribute('width', String(width));
     colElement.style.width = `${width}px`;
-    colElement.style.minWidth = `${width}px`;
-    colElement.style.maxWidth = `${width}px`;
   });
 }
 
