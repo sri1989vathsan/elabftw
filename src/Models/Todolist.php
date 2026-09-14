@@ -31,6 +31,7 @@ use PDO;
 
 use function _;
 use function array_column;
+use function array_filter;
 use function array_key_exists;
 use function array_map;
 use function array_unique;
@@ -162,6 +163,16 @@ final class Todolist extends AbstractRest
             $projectId = $this->getProjectId($query->getInt('project_id') ?: null);
             $unfiled = $query->getBoolean('unfiled');
             return array($this->readCounts($scope, $scopeFilter, $projectId, $unfiled, $includeSubprojects));
+        }
+        // One row per linked entity across every task in a project (and,
+        // when include_subprojects is set, its subprojects too), for the
+        // board's "All links in this project" summary popup -- deliberately
+        // its own query rather than reusing readAll()'s own paginated list:
+        // that caps at $limit, which would silently truncate the summary
+        // for any project with more tasks than fit on one page.
+        if ($query->getBoolean('links_summary')) {
+            $projectId = $this->getProjectId($query->getInt('project_id') ?: null);
+            return $this->readEntityLinksSummary($projectId, $includeSubprojects);
         }
         $completed = $query->getBoolean('completed');
         $completedFilter = $completed ? 'IS NOT NULL' : 'IS NULL';
@@ -401,6 +412,65 @@ final class Todolist extends AbstractRest
             'team_open_count' => (int) $row['team_open_count'],
             'team_done_count' => (int) $row['team_done_count'],
         );
+    }
+
+    /**
+     * One row per linked entity (experiment/resource/template/weblink)
+     * across every task in $projectId, and its subprojects too when
+     * $includeSubprojects -- for the "All links in this project" summary
+     * popup. Mirrors readAll()'s own project-membership visibility rule
+     * (see its own comment for why the parent-project branch is there) so
+     * this never surfaces a task the requester couldn't otherwise see.
+     */
+    private function readEntityLinksSummary(?int $projectId, bool $includeSubprojects): array
+    {
+        if ($projectId === null) {
+            return array();
+        }
+        $projectFilter = $includeSubprojects
+            ? ' AND (t.project_id = :filter_project_id OR t.project_id IN (SELECT id FROM todolist_projects WHERE parent_id = :filter_project_id_subprojects))'
+            : ' AND t.project_id = :filter_project_id';
+        $sql = "SELECT t.id AS task_id, t.body AS task_body, t.project_id,
+                tel.entity_type, tel.entity_id, tel.url,
+                CASE tel.entity_type
+                    WHEN 'weblink' THEN tel.label
+                    WHEN 'experiments' THEN (SELECT title FROM experiments WHERE id = tel.entity_id)
+                    WHEN 'items' THEN (SELECT title FROM items WHERE id = tel.entity_id)
+                    WHEN 'experiments_templates' THEN (SELECT title FROM experiments_templates WHERE id = tel.entity_id)
+                    WHEN 'items_types' THEN (SELECT title FROM items_types WHERE id = tel.entity_id)
+                END AS title
+            FROM todolist AS t
+            INNER JOIN todolist_entity_links AS tel ON tel.task_id = t.id
+            LEFT JOIN todolist_projects AS project ON project.id = t.project_id
+            WHERE t.team = :team{$projectFilter}
+                AND (t.project_id IS NULL OR project.archived = 0)
+                AND (
+                    t.project_id IS NULL
+                    OR project.userid = :requester3
+                    OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester4)
+                    OR (project.parent_id IS NOT NULL AND (
+                        EXISTS (SELECT 1 FROM todolist_projects AS pp WHERE pp.id = project.parent_id AND pp.userid = :requester5)
+                        OR EXISTS (SELECT 1 FROM todolist_project_members AS pm2 WHERE pm2.project_id = project.parent_id AND pm2.userid = :requester6)
+                    ))
+                )
+            ORDER BY t.body ASC, tel.id ASC";
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $req->bindValue(':filter_project_id', $projectId, PDO::PARAM_INT);
+        if ($includeSubprojects) {
+            $req->bindValue(':filter_project_id_subprojects', $projectId, PDO::PARAM_INT);
+        }
+        $req->bindParam(':requester3', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester5', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester6', $this->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+
+        // drop links whose target was deleted, same as entityLinksSubquery()
+        return array_values(array_filter(
+            $req->fetchAll(),
+            fn(array $row): bool => $row['title'] !== null,
+        ));
     }
 
     /**
