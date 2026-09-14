@@ -103,6 +103,21 @@
     title: string | null;
   };
 
+  // One row per linked entity across every task in a project (see
+  // Todolist::readEntityLinksSummary()) -- reuses entityViewUrl()'s own
+  // EntityLink shape (just id-less, since a summary row IS one link, not a
+  // list of them on a single task) so the "All links" popup can render each
+  // row with the exact same badge/link markup as a task's own link list.
+  type LinkSummaryItem = {
+    task_id: number;
+    task_body: string;
+    project_id: number | null;
+    entity_type: EntityLinkType;
+    entity_id: number | null;
+    url: string | null;
+    title: string;
+  };
+
   type Step = {
     id: number;
     body: string;
@@ -161,6 +176,10 @@
   let newTaskColumnId: number | null = null;
   let draftSteps: string[] = [];
   let draftLinks: { url: string; label: string }[] = [];
+  let linksSummaryOpen = false;
+  let linksSummaryItems: LinkSummaryItem[] = [];
+  let loadingLinksSummary = false;
+
   let detailTask: Task | null = null;
   let detailEditing = false;
   let detailTitle = '';
@@ -385,7 +404,10 @@
     items_types: 'resources-templates.php',
   };
 
-  function entityViewUrl(link: EntityLink): string {
+  // Widened past EntityLink itself (rather than that exact type) so
+  // LinkSummaryItem -- the "All links in this project" popup's own row
+  // shape, which has no "id" of its own -- can reuse this unchanged too.
+  function entityViewUrl(link: Pick<EntityLink, 'entity_type' | 'entity_id' | 'url'>): string {
     if (link.entity_type === 'weblink') return link.url ?? '#';
     return `${ENTITY_TYPE_PAGES[link.entity_type]}?mode=view&id=${link.entity_id}`;
   }
@@ -1000,6 +1022,50 @@
     const date = new Date(deadline);
     const pad = (n: number): string => String(n).padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  // Fetches every linked entity across every task in the current top-level
+  // project (and its subprojects -- always, unlike the board's own task
+  // list, since there's no per-subproject-tab equivalent of this summary)
+  // via readEntityLinksSummary(), not the paginated task list already in
+  // `tasks`: that's capped at PAGE_SIZE and, on the "All" tab, isn't even
+  // scoped to one project to begin with.
+  async function openLinksSummary(): Promise<void> {
+    if (typeof effectiveTopLevelId !== 'number') return;
+    linksSummaryOpen = true;
+    loadingLinksSummary = true;
+    try {
+      linksSummaryItems = await ApiC.getJson(
+        `${Model.Todolist}?project_id=${effectiveTopLevelId}&include_subprojects=1&links_summary=1`,
+      ) as LinkSummaryItem[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load links for this project.');
+    } finally {
+      loadingLinksSummary = false;
+    }
+  }
+
+  function closeLinksSummary(): void {
+    linksSummaryOpen = false;
+    linksSummaryItems = [];
+  }
+
+  // Opens a task referenced from the links summary popup, fetching it
+  // directly if it's not among the board's own currently-loaded (and
+  // possibly differently-filtered/paginated) task list -- same fallback
+  // onMount() already uses for a notification's own ?task= link.
+  async function openTaskFromSummary(taskId: number): Promise<void> {
+    closeLinksSummary();
+    let task = tasks.find(t => t.id === taskId);
+    if (!task) {
+      try {
+        task = await ApiC.getJson(`${Model.Todolist}/${taskId}`) as Task;
+      } catch (error) {
+        notify.error(error instanceof Error ? error.message : 'Could not open this task.');
+        return;
+      }
+    }
+    openDetail(task);
   }
 
   function openDetail(task: Task): void {
@@ -1650,6 +1716,9 @@
       {/if}
       <button type="button" class="btn btn-ghost btn-sm" on:click={() => openProjectDialog(null, effectiveTopLevelId)}>
         <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add subproject')}
+      </button>
+      <button type="button" class="btn btn-ghost btn-sm" on:click={openLinksSummary}>
+        <i class="fas fa-link fa-fw mr-1" aria-hidden="true"></i>{t('All links')}
       </button>
     </div>
 
@@ -2397,6 +2466,36 @@
         <button type="button" class="btn btn-primary" disabled={savingProject || dialogName.trim() === ''} on:click={saveProject}>
           {editingProject ? t('Save changes') : t('Create project')}
         </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if linksSummaryOpen}
+  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeLinksSummary(); }}>
+    <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmLinksSummaryTitle">
+      <div class="pm-dialog-header">
+        <h4 id="pmLinksSummaryTitle" class="mb-0">{t('All links in this project')}</h4>
+        <button type="button" class="pm-close-btn" on:click={closeLinksSummary} aria-label={t('Close')}>&times;</button>
+      </div>
+      <div class="pm-dialog-body">
+        {#if loadingLinksSummary}
+          <p class="pm-muted small mb-0">{t('Loading')}…</p>
+        {:else if linksSummaryItems.length === 0}
+          <p class="pm-muted small mb-0">{t('No links yet in this project or its subprojects.')}</p>
+        {:else}
+          <ul class="pm-entity-link-list">
+            {#each linksSummaryItems as item (item.task_id + '-' + item.entity_type + '-' + (item.entity_id ?? item.url))}
+              <li class="pm-entity-link">
+                <span class="badge badge-info mr-1">{entityTypeLabel(item.entity_type)}</span>
+                <a class="mr-auto text-break" href={entityViewUrl(item)} target="_blank" rel="noreferrer noopener">{item.title}</a>
+                <button type="button" class="btn btn-ghost btn-sm ml-2" on:click={() => openTaskFromSummary(item.task_id)}>
+                  <i class="fas fa-list-check fa-fw mr-1" aria-hidden="true"></i>{item.task_body}
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
       </div>
     </div>
   </div>
