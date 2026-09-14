@@ -4802,14 +4802,27 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
           cols,
         )
         : extractedCellStyles,
-      rowHeights: normalizeRowHeights({
-        ...(decoded.rowHeights ?? {}),
-        ...(extractedRowHeights ?? {}),
-      }, rows),
-      colWidths: normalizeColWidths({
-        ...(decoded.colWidths ?? {}),
-        ...(extractedColWidths ?? {}),
-      }, cols),
+      // The popup's own last-saved sizes (embedded in this data-spreadsheet
+      // blob) are authoritative and take priority over the *rendered*
+      // colgroup/rows, which reflect whatever the main TinyMCE table
+      // currently looks like -- including a resize done natively in TinyMCE,
+      // independent of the popup. Falling back to the rendered DOM only
+      // when the blob has no sizes of its own (older spreadsheets saved
+      // before colWidths/rowHeights existed) keeps the popup and the main
+      // table's own resizing functionally separate, each conserving only
+      // the changes made in that view.
+      rowHeights: normalizeRowHeights(
+        decoded.rowHeights && Object.keys(decoded.rowHeights).length > 0
+          ? decoded.rowHeights
+          : (extractedRowHeights ?? {}),
+        rows,
+      ),
+      colWidths: normalizeColWidths(
+        decoded.colWidths && Object.keys(decoded.colWidths).length > 0
+          ? decoded.colWidths
+          : (extractedColWidths ?? {}),
+        cols,
+      ),
       tableStyle: appearance
         ? stripAppearanceTableStyle(extractedTableStyle, appearance)
         : extractedTableStyle,
