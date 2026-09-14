@@ -426,12 +426,13 @@ final class Todolist extends AbstractRest
      *
      * Paginated the same way readAll() paginates tasks -- a project with a
      * large number of links would otherwise mean one unbounded query and an
-     * unbounded DOM list on every open of the popup. Requests one extra raw
-     * row so has_next_page can be determined before the deleted-target
-     * filter below runs; filtering first and comparing the filtered count
-     * to $limit would under-report on any page that happens to contain a
-     * deleted-target link, since that page would then come back shorter
-     * than $limit even with more real pages still to load.
+     * unbounded DOM list on every open of the popup. The deleted-target
+     * filter (title IS NOT NULL) runs in an inner derived table, *before*
+     * LIMIT/OFFSET on the outer query -- filtering after paginating would
+     * make the frontend's own offset (which advances by however many items
+     * a page actually returned) drift from the raw row count the database
+     * paged through, re-fetching (and re-showing) rows on the next page
+     * whenever a deleted-target link fell within the current one.
      */
     private function readEntityLinksSummary(?int $projectId, bool $includeSubprojects, int $limit, int $offset): array
     {
@@ -442,30 +443,33 @@ final class Todolist extends AbstractRest
             ? ' AND (t.project_id = :filter_project_id OR t.project_id IN (SELECT id FROM todolist_projects WHERE parent_id = :filter_project_id_subprojects))'
             : ' AND t.project_id = :filter_project_id';
         $limitSql = sprintf(' LIMIT %d OFFSET %d', $limit + 1, max(0, $offset));
-        $sql = "SELECT tel.id AS link_id, t.id AS task_id, t.body AS task_body, t.project_id,
-                tel.entity_type, tel.entity_id, tel.url,
-                CASE tel.entity_type
-                    WHEN 'weblink' THEN tel.label
-                    WHEN 'experiments' THEN (SELECT title FROM experiments WHERE id = tel.entity_id)
-                    WHEN 'items' THEN (SELECT title FROM items WHERE id = tel.entity_id)
-                    WHEN 'experiments_templates' THEN (SELECT title FROM experiments_templates WHERE id = tel.entity_id)
-                    WHEN 'items_types' THEN (SELECT title FROM items_types WHERE id = tel.entity_id)
-                END AS title
-            FROM todolist AS t
-            INNER JOIN todolist_entity_links AS tel ON tel.task_id = t.id
-            LEFT JOIN todolist_projects AS project ON project.id = t.project_id
-            WHERE t.team = :team{$projectFilter}
-                AND (t.project_id IS NULL OR project.archived = 0)
-                AND (
-                    t.project_id IS NULL
-                    OR project.userid = :requester3
-                    OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester4)
-                    OR (project.parent_id IS NOT NULL AND (
-                        EXISTS (SELECT 1 FROM todolist_projects AS pp WHERE pp.id = project.parent_id AND pp.userid = :requester5)
-                        OR EXISTS (SELECT 1 FROM todolist_project_members AS pm2 WHERE pm2.project_id = project.parent_id AND pm2.userid = :requester6)
-                    ))
-                )
-            ORDER BY t.body ASC, tel.id ASC{$limitSql}";
+        $sql = "SELECT * FROM (
+                SELECT tel.id AS link_id, t.id AS task_id, t.body AS task_body, t.project_id,
+                    tel.entity_type, tel.entity_id, tel.url,
+                    CASE tel.entity_type
+                        WHEN 'weblink' THEN tel.label
+                        WHEN 'experiments' THEN (SELECT title FROM experiments WHERE id = tel.entity_id)
+                        WHEN 'items' THEN (SELECT title FROM items WHERE id = tel.entity_id)
+                        WHEN 'experiments_templates' THEN (SELECT title FROM experiments_templates WHERE id = tel.entity_id)
+                        WHEN 'items_types' THEN (SELECT title FROM items_types WHERE id = tel.entity_id)
+                    END AS title
+                FROM todolist AS t
+                INNER JOIN todolist_entity_links AS tel ON tel.task_id = t.id
+                LEFT JOIN todolist_projects AS project ON project.id = t.project_id
+                WHERE t.team = :team{$projectFilter}
+                    AND (t.project_id IS NULL OR project.archived = 0)
+                    AND (
+                        t.project_id IS NULL
+                        OR project.userid = :requester3
+                        OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester4)
+                        OR (project.parent_id IS NOT NULL AND (
+                            EXISTS (SELECT 1 FROM todolist_projects AS pp WHERE pp.id = project.parent_id AND pp.userid = :requester5)
+                            OR EXISTS (SELECT 1 FROM todolist_project_members AS pm2 WHERE pm2.project_id = project.parent_id AND pm2.userid = :requester6)
+                        ))
+                    )
+            ) AS links
+            WHERE links.title IS NOT NULL
+            ORDER BY links.task_body ASC, links.link_id ASC{$limitSql}";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $req->bindValue(':filter_project_id', $projectId, PDO::PARAM_INT);
@@ -478,16 +482,11 @@ final class Todolist extends AbstractRest
         $req->bindParam(':requester6', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
 
-        $rows = $req->fetchAll();
-        $hasNextPage = count($rows) > $limit;
+        $items = $req->fetchAll();
+        $hasNextPage = count($items) > $limit;
         if ($hasNextPage) {
-            array_pop($rows);
+            array_pop($items);
         }
-        // drop links whose target was deleted, same as entityLinksSubquery()
-        $items = array_values(array_filter(
-            $rows,
-            fn(array $row): bool => $row['title'] !== null,
-        ));
         return array('items' => $items, 'has_next_page' => $hasNextPage);
     }
 
