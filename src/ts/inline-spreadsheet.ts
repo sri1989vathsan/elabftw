@@ -4522,7 +4522,20 @@ export function openSpreadsheetModal(
       // consistent with the buttons it replaced, not a persistent choice.
       ui.formulaFunctionSelect.value = '';
     });
-    const commitFormulaInput = (): void => {
+    const commitFormulaInput = (event?: Event): void => {
+      // A mousedown that starts a column/row resize drag reaches this
+      // capture-phase listener before jspreadsheet's own delegated resize
+      // hit-test runs on the same event. Committing here calls
+      // worksheet.setValueFromCoords(), which can re-render (replace) the
+      // very <th>/<td> the user just pressed down on; jspreadsheet's resize
+      // hit-test then measures a now-detached node's getBoundingClientRect()
+      // (all zeroes), so the drag silently never starts. Resize handles
+      // live in the header/gutter, never inside an editable data cell, so
+      // skipping the commit there is safe -- the blur listener below still
+      // catches the eventual focus loss.
+      if (event?.target instanceof Element && event.target.closest('thead, .jss_worksheet > tbody > tr > td:first-child')) {
+        return;
+      }
       if (!formulaInputTarget) return;
       const { col, row } = formulaInputTarget;
       let value = ui.formulaInput.value;
