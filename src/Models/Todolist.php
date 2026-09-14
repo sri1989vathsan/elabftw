@@ -633,16 +633,31 @@ final class Todolist extends AbstractRest
         }
     }
 
+    // A member of a subproject's *parent* project can already see this
+    // task -- see readAll()'s own visibility clause -- so they must also be
+    // able to manage it; checking only direct membership of $projectId
+    // itself (the task's own project) let them view a subproject's tasks
+    // but never edit them.
     private function isProjectMember(int $projectId): bool
     {
         $sql = 'SELECT COUNT(*) AS count FROM todolist_projects AS p
             LEFT JOIN todolist_project_members AS m ON m.project_id = p.id AND m.userid = :userid
-            WHERE p.id = :project_id AND p.team = :team AND (p.userid = :userid2 OR m.userid IS NOT NULL)';
+            LEFT JOIN todolist_projects AS parent ON parent.id = p.parent_id
+            LEFT JOIN todolist_project_members AS pm ON pm.project_id = parent.id AND pm.userid = :userid3
+            WHERE p.id = :project_id AND p.team = :team
+                AND (
+                    p.userid = :userid2
+                    OR m.userid IS NOT NULL
+                    OR parent.userid = :userid4
+                    OR pm.userid IS NOT NULL
+                )';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':project_id', $projectId, PDO::PARAM_INT);
         $req->bindValue(':team', $this->team, PDO::PARAM_INT);
         $req->bindValue(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindValue(':userid2', $this->userid, PDO::PARAM_INT);
+        $req->bindValue(':userid3', $this->userid, PDO::PARAM_INT);
+        $req->bindValue(':userid4', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         return (int) $this->Db->fetch($req)['count'] > 0;
     }
