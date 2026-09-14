@@ -444,6 +444,7 @@ final class Todolist extends AbstractRest
         $limitSql = sprintf(' LIMIT %d OFFSET %d', $limit + 1, max(0, $offset));
         $sql = "SELECT * FROM (
                 SELECT tel.id AS link_id, t.id AS task_id, t.body AS task_body, t.project_id,
+                    project.name AS project_name, parent_project.name AS project_parent_name,
                     tel.entity_type, tel.entity_id, tel.url,
                     CASE tel.entity_type
                         WHEN 'weblink' THEN tel.label
@@ -455,6 +456,7 @@ final class Todolist extends AbstractRest
                 FROM todolist AS t
                 INNER JOIN todolist_entity_links AS tel ON tel.task_id = t.id
                 LEFT JOIN todolist_projects AS project ON project.id = t.project_id
+                LEFT JOIN todolist_projects AS parent_project ON parent_project.id = project.parent_id
                 WHERE t.team = :team{$projectFilter}
                     AND (t.project_id IS NULL OR project.archived = 0)
                     AND (
