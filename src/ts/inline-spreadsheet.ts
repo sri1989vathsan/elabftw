@@ -1958,6 +1958,51 @@ function applyCoordinateHeaderDimensions(
   });
 }
 
+/**
+ * Read each data row's *currently rendered* height straight from the DOM,
+ * keyed by its current position -- the source-of-truth counterpart to
+ * applySpreadsheetRowHeights() just below (that one pushes stored sizes
+ * into the DOM; this one pulls the DOM's own sizes back out). Needed
+ * anywhere a remount or an insert/delete is about to happen: stored
+ * RowHeights/ColWidths are keyed by index, but inserting or deleting a row
+ * shifts every later row's *position* without ever renumbering those
+ * stored keys, and a resize the user just made via jspreadsheet's own
+ * native drag handles may not have reached the stored data at all yet.
+ * Reading directly from the DOM -- which jspreadsheet itself always keeps
+ * correctly positioned -- sidesteps both problems at once instead of
+ * needing each caller to reindex stored keys by hand.
+ */
+function readRenderedRowHeights(container: HTMLElement): RowHeights | undefined {
+  const rowHeights: RowHeights = {};
+  container.querySelectorAll<HTMLTableRowElement>('.jss_worksheet > tbody > tr')
+    .forEach((row, rowIndex) => {
+      const height = Number.parseFloat(row.style.height || row.getAttribute('height') || '');
+      if (!Number.isFinite(height)) return;
+      rowHeights[String(rowIndex)] = Math.max(
+        MIN_DATA_ROW_HEIGHT,
+        Math.min(MAX_DATA_ROW_HEIGHT, Math.round(height)),
+      );
+    });
+  return Object.keys(rowHeights).length > 0 ? rowHeights : undefined;
+}
+
+/** Column-width counterpart of readRenderedRowHeights() just above. */
+function readRenderedColWidths(container: HTMLElement): ColWidths | undefined {
+  const dataCols = Array.from(
+    container.querySelectorAll<HTMLTableColElement>('.jss_worksheet > colgroup > col'),
+  ).slice(1);
+  const colWidths: ColWidths = {};
+  dataCols.forEach((col, colIndex) => {
+    const width = Number.parseFloat(col.style.width || col.getAttribute('width') || '');
+    if (!Number.isFinite(width)) return;
+    colWidths[String(colIndex)] = Math.max(
+      MIN_DATA_COL_WIDTH,
+      Math.min(MAX_DATA_COL_WIDTH, Math.round(width)),
+    );
+  });
+  return Object.keys(colWidths).length > 0 ? colWidths : undefined;
+}
+
 /** Reapply saved data-row heights after jspreadsheet rebuilds its worksheet DOM. */
 function applySpreadsheetRowHeights(
   container: HTMLElement,
@@ -3151,20 +3196,11 @@ export function openSpreadsheetModal(
 
     const captureRenderedRowHeights = (): void => {
       if (!sheetContainer) return;
-      const rowHeights: RowHeights = { ...(working.rowHeights ?? {}) };
-      sheetContainer.querySelectorAll<HTMLTableRowElement>('.jss_worksheet > tbody > tr')
-        .forEach((row, rowIndex) => {
-          const height = Number.parseFloat(row.style.height || row.getAttribute('height') || '');
-          if (!Number.isFinite(height)) return;
-          rowHeights[String(rowIndex)] = Math.max(
-            MIN_DATA_ROW_HEIGHT,
-            Math.min(MAX_DATA_ROW_HEIGHT, Math.round(height)),
-          );
-        });
+      const liveRowHeights = readRenderedRowHeights(sheetContainer);
       working = normalizeSpreadsheetData({
         ...working,
         data: readRawData(),
-        rowHeights,
+        rowHeights: { ...(working.rowHeights ?? {}), ...(liveRowHeights ?? {}) },
       });
     };
 
@@ -3538,6 +3574,28 @@ export function openSpreadsheetModal(
 
     const mountSpreadsheet = (spreadsheet: SpreadsheetData): void => {
       if (sheetContainer) {
+        // Every caller here (applying a font/fill/alignment change, table
+        // appearance, dimensions, undo, ...) destroys and recreates the
+        // whole jspreadsheet instance, passing only the fields it actually
+        // means to change spread over the previous `working` -- but a
+        // manual row/column resize the user just made via jspreadsheet's
+        // own native drag handles doesn't necessarily reach `working` (see
+        // onresizerow/onresizecolumn) before some *other* action triggers a
+        // remount first, and the caller's own spread would otherwise
+        // silently revert it back to whatever `working` had before that
+        // drag. Reading current sizes straight from the about-to-be-
+        // destroyed DOM -- the one place they're always still correct --
+        // and folding them in here, once, covers every remount trigger
+        // instead of each one needing its own resync.
+        const liveRowHeights = readRenderedRowHeights(sheetContainer);
+        const liveColWidths = readRenderedColWidths(sheetContainer);
+        if (liveRowHeights || liveColWidths) {
+          spreadsheet = {
+            ...spreadsheet,
+            rowHeights: { ...(spreadsheet.rowHeights ?? {}), ...(liveRowHeights ?? {}) },
+            colWidths: { ...(spreadsheet.colWidths ?? {}), ...(liveColWidths ?? {}) },
+          };
+        }
         const destroy = (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy;
         destroy?.(sheetContainer);
       }
@@ -3656,6 +3714,18 @@ export function openSpreadsheetModal(
           rawDataMirror = resizeData(currentData, rows, cols);
           const changedPlateSize = working.kind === 'well-plate'
             && (rows !== mountedRows || cols !== mountedCols);
+          // Re-read sizes from the live DOM rather than trusting
+          // working.rowHeights/colWidths's still-old-index-keyed values:
+          // jspreadsheet has already correctly shifted every row/column
+          // past the insertion/deletion point in its own DOM by the time
+          // this callback runs, but the *stored* keys were never
+          // renumbered to match. Reusing the stale, now-misaligned values
+          // here would make scheduleCoordinateDimensionEnforcement() below
+          // reapply what used to be row/column N's size onto whatever
+          // row/column now sits at that same index -- visibly resizing
+          // pre-existing rows/columns that were never touched.
+          const liveRowHeights = readRenderedRowHeights(mountedContainer);
+          const liveColWidths = readRenderedColWidths(mountedContainer);
           working = normalizeSpreadsheetData({
             ...working,
             data: rawDataMirror,
@@ -3664,6 +3734,8 @@ export function openSpreadsheetModal(
             kind: changedPlateSize ? 'standard' : working.kind,
             plateSize: changedPlateSize ? undefined : working.plateSize,
             cellStyles: readCellStyles(rows, cols),
+            rowHeights: liveRowHeights ?? working.rowHeights,
+            colWidths: liveColWidths ?? working.colWidths,
           });
           if (changedPlateSize) ui.presetSelect.value = 'custom';
           updateSizeControls(rows, cols);
