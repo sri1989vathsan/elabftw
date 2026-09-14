@@ -108,7 +108,13 @@
   // EntityLink shape (just id-less, since a summary row IS one link, not a
   // list of them on a single task) so the "All links" popup can render each
   // row with the exact same badge/link markup as a task's own link list.
+  // link_id is todolist_entity_links' own primary key -- needed as the
+  // Svelte #each key since (task_id, entity_type, entity_id/url) can
+  // collide: weblinks have no entity_id (always NULL), and the table's own
+  // unique constraint doesn't dedupe on NULL, so one task can hold two
+  // weblink rows with the same URL.
   type LinkSummaryItem = {
+    link_id: number;
     task_id: number;
     task_body: string;
     project_id: number | null;
@@ -179,6 +185,9 @@
   let linksSummaryOpen = false;
   let linksSummaryItems: LinkSummaryItem[] = [];
   let loadingLinksSummary = false;
+  let loadingMoreLinksSummary = false;
+  let linksSummaryOffset = 0;
+  let linksSummaryHasMore = false;
 
   let detailTask: Task | null = null;
   let detailEditing = false;
@@ -1024,20 +1033,31 @@
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
 
+  type LinksSummaryPage = { items: LinkSummaryItem[]; has_next_page: boolean };
+
   // Fetches every linked entity across every task in the current top-level
   // project (and its subprojects -- always, unlike the board's own task
   // list, since there's no per-subproject-tab equivalent of this summary)
   // via readEntityLinksSummary(), not the paginated task list already in
   // `tasks`: that's capped at PAGE_SIZE and, on the "All" tab, isn't even
-  // scoped to one project to begin with.
+  // scoped to one project to begin with. Paginated itself (PAGE_SIZE per
+  // page, "Load more" below) rather than fetched all at once -- a project
+  // with a large number of links would otherwise mean one unbounded query
+  // and an unbounded DOM list every time this popup opens.
   async function openLinksSummary(): Promise<void> {
     if (typeof effectiveTopLevelId !== 'number') return;
     linksSummaryOpen = true;
+    linksSummaryItems = [];
+    linksSummaryOffset = 0;
+    linksSummaryHasMore = false;
     loadingLinksSummary = true;
     try {
-      linksSummaryItems = await ApiC.getJson(
-        `${Model.Todolist}?project_id=${effectiveTopLevelId}&include_subprojects=1&links_summary=1`,
-      ) as LinkSummaryItem[];
+      const [page] = await ApiC.getJson(
+        `${Model.Todolist}?project_id=${effectiveTopLevelId}&include_subprojects=1&links_summary=1&limit=${PAGE_SIZE}&offset=0`,
+      ) as LinksSummaryPage[];
+      linksSummaryItems = page.items;
+      linksSummaryOffset = page.items.length;
+      linksSummaryHasMore = page.has_next_page;
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load links for this project.');
     } finally {
@@ -1045,9 +1065,28 @@
     }
   }
 
+  async function loadMoreLinksSummary(): Promise<void> {
+    if (typeof effectiveTopLevelId !== 'number') return;
+    loadingMoreLinksSummary = true;
+    try {
+      const [page] = await ApiC.getJson(
+        `${Model.Todolist}?project_id=${effectiveTopLevelId}&include_subprojects=1&links_summary=1&limit=${PAGE_SIZE}&offset=${linksSummaryOffset}`,
+      ) as LinksSummaryPage[];
+      linksSummaryItems = [...linksSummaryItems, ...page.items];
+      linksSummaryOffset += page.items.length;
+      linksSummaryHasMore = page.has_next_page;
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load more links.');
+    } finally {
+      loadingMoreLinksSummary = false;
+    }
+  }
+
   function closeLinksSummary(): void {
     linksSummaryOpen = false;
     linksSummaryItems = [];
+    linksSummaryOffset = 0;
+    linksSummaryHasMore = false;
   }
 
   // Opens a task referenced from the links summary popup, fetching it
@@ -2485,7 +2524,7 @@
           <p class="pm-muted small mb-0">{t('No links yet in this project or its subprojects.')}</p>
         {:else}
           <ul class="pm-entity-link-list">
-            {#each linksSummaryItems as item (item.task_id + '-' + item.entity_type + '-' + (item.entity_id ?? item.url))}
+            {#each linksSummaryItems as item (item.link_id)}
               <li class="pm-entity-link">
                 <span class="badge badge-info mr-1">{entityTypeLabel(item.entity_type)}</span>
                 <a class="mr-auto text-break" href={entityViewUrl(item)} target="_blank" rel="noreferrer noopener">{item.title}</a>
@@ -2495,6 +2534,11 @@
               </li>
             {/each}
           </ul>
+          {#if linksSummaryHasMore}
+            <button type="button" class="btn btn-link btn-sm pm-load-more" on:click={loadMoreLinksSummary} disabled={loadingMoreLinksSummary}>
+              {loadingMoreLinksSummary ? t('Loading') + '…' : t('Load more links')}
+            </button>
+          {/if}
         {/if}
       </div>
     </div>
