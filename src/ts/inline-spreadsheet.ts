@@ -2016,11 +2016,13 @@ function applySpreadsheetRowHeights(
   Object.entries(rowHeights).forEach(([rowKey, height]) => {
     const row = Number.parseInt(rowKey, 10);
     if (!Number.isInteger(row) || !Number.isFinite(height)) return;
-    try {
-      worksheet?.setHeight?.(row, height);
-    } catch {
-      // Keep the DOM fallback below for jspreadsheet builds without setHeight.
-    }
+    // Deliberately DOM-only: worksheet.setHeight() also pushes an undo-
+    // history entry and dispatches onresizerow every time it runs, and this
+    // function gets called repeatedly (mount, every hydration retry) purely
+    // to *restore* a size, not to record a fresh user action. Going through
+    // the stateful API there was disrupting jspreadsheet's own resize-drag
+    // handling later -- writing the height directly leaves its internal
+    // state untouched.
     if (bodyRows[row]) bodyRows[row].style.height = `${height}px`;
   });
 }
@@ -2044,20 +2046,20 @@ function applySpreadsheetColWidths(
   Object.entries(colWidths).forEach(([colKey, width]) => {
     const col = Number.parseInt(colKey, 10);
     if (!Number.isInteger(col) || !Number.isFinite(width)) return;
-    try {
-      worksheet?.setWidth?.(col, width);
-    } catch {
-      // Keep the DOM fallback below for jspreadsheet builds without setWidth.
-    }
     const colElement = dataCols[col];
     if (!colElement) return;
-    // Only set the width attribute/style jspreadsheet itself uses (see
-    // setWidth() in its source: colElement.setAttribute("width", ...)).
-    // Pinning style.minWidth/maxWidth here would permanently lock the
-    // column at this exact pixel size via CSS -- jspreadsheet's own
-    // resize-drag only ever updates the width attribute afterward, so a
-    // fixed min/max-width would silently block every future manual resize
-    // once this enforcement runs (on mount, hydration retries, etc).
+    // Deliberately DOM-only -- no worksheet.setWidth() call. That API also
+    // pushes an undo-history entry and dispatches onresizecolumn every time
+    // it runs, and this function is invoked repeatedly (mount, every
+    // hydration retry) purely to *restore* a previously-saved size, not to
+    // record a fresh user action. Routing a restore through the same
+    // stateful API a real drag-resize uses was left jspreadsheet's internal
+    // resize bookkeeping disrupted, so a subsequent genuine user drag
+    // silently failed to start. Writing the width attribute/style directly
+    // (see setWidth()'s own implementation: colElement.setAttribute("width",
+    // ...)) leaves that internal state untouched. Also no style.minWidth/
+    // maxWidth -- pinning those would permanently lock the column via CSS,
+    // since jspreadsheet's own resize-drag only ever updates the attribute.
     colElement.setAttribute('width', String(width));
     colElement.style.width = `${width}px`;
   });
