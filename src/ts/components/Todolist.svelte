@@ -33,6 +33,41 @@
     };
   }
 
+  // The task detail dialog is styled to overlay the whole viewport (fixed,
+  // inset: 0, see .todo-detail-overlay in main.scss), same as
+  // ProjectManagementBoard.svelte's own task popup -- but unlike that one,
+  // this component is itself mounted inside one of the app's side panels
+  // (#todolistPanel), and SidePanel.show() hides every *other* side panel
+  // (a shared one-visible-at-a-time viewport) by setting [hidden] on it.
+  // [hidden] forces display: none regardless of this dialog's own fixed
+  // positioning/z-index, so switching to another panel -- e.g. Search, to
+  // find an experiment/resource to link to the open task -- silently hid
+  // the whole dialog behind it, indistinguishable from it having closed,
+  // even though its state (and the "Link to task" target it publishes via
+  // elabftw:pm-task-link-target) was still very much alive underneath.
+  //
+  // Moving the dialog's actual DOM node up to #container (the app's main
+  // content wrapper, an ancestor of #todolistPanel -- see
+  // base.html's {% include 'todolist-panel.html' %}) on mount takes it out
+  // of #todolistPanel entirely, so it stays visible across panel switches,
+  // matching how the equivalent dialog already behaves on the full Project
+  // Management page. #container specifically, rather than <body>: some of
+  // this dialog's own buttons (e.g. the Windows-path copy button on a
+  // linked entity, data-action="copy-unc-path") go through common.ts's
+  // global delegated click handler, which only ever dispatches to elements
+  // inside #container (container.contains(el)) -- portalling past that
+  // boundary would silently break them the same way this bug silently hid
+  // the dialog.
+  function portalToContainer(node: HTMLElement): { destroy(): void } {
+    const container = document.getElementById('container') ?? document.body;
+    container.appendChild(node);
+    return {
+      destroy(): void {
+        node.remove();
+      },
+    };
+  }
+
   type TeamMember = {
     userid: number;
     fullname: string;
@@ -2031,7 +2066,7 @@
 {/if}
 
 {#if detailEntry}
-  <div class='todo-detail-overlay pm-overlay-task' role='presentation'>
+  <div class='todo-detail-overlay pm-overlay-task' role='presentation' use:portalToContainer>
     <div class='todo-detail-dialog' role='dialog' aria-modal='true' aria-labelledby='todoDetailTitle'>
       <div class='todo-detail-header'>
         <h4 id='todoDetailTitle' class='mb-0'>{detailEditing ? t('Edit task') : detailEntry.body}</h4>
