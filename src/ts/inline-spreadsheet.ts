@@ -19,6 +19,7 @@ type AOA = CellValue[][];
 type SpreadsheetKind = 'standard' | 'notebook' | 'well-plate';
 type CellStyles = Record<string, string>;
 type RowHeights = Record<string, number>;
+type ColWidths = Record<string, number>;
 type AppearanceScope = 'user' | 'notebook';
 type CellRange = [number, number, number, number];
 
@@ -117,6 +118,8 @@ export interface SpreadsheetData {
   cellStyles?: CellStyles;
   /** Explicit data-row heights in pixels, keyed by zero-based row index. */
   rowHeights?: RowHeights;
+  /** Explicit data-column widths in pixels, keyed by zero-based column index. */
+  colWidths?: ColWidths;
   /** Preserved TinyMCE formatting on the generated table and caption. */
   tableStyle?: string;
   captionStyle?: string;
@@ -146,6 +149,8 @@ const MAX_DIMENSION = 50;
 const MAX_TABLE_BORDER = 20;
 const MIN_DATA_ROW_HEIGHT = 20;
 const MAX_DATA_ROW_HEIGHT = 500;
+const MIN_DATA_COL_WIDTH = 40;
+const MAX_DATA_COL_WIDTH = 800;
 const MIN_ROW_INDEX_WIDTH = 28;
 const MAX_ROW_INDEX_WIDTH = 120;
 const MIN_COLUMN_INDEX_HEIGHT = 24;
@@ -530,6 +535,7 @@ function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): Spreadsh
       : undefined,
     cellStyles: normalizeCellStyles(candidate.cellStyles, rows, cols),
     rowHeights: normalizeRowHeights(candidate.rowHeights, rows),
+    colWidths: normalizeColWidths(candidate.colWidths, cols),
     tableStyle: sanitizeStyle(candidate.tableStyle, PRESERVED_TABLE_STYLE_PROPERTIES),
     captionStyle: sanitizeStyle(candidate.captionStyle, PRESERVED_STYLE_PROPERTIES),
     tableBorder: Number.isInteger(candidate.tableBorder)
@@ -554,6 +560,24 @@ function normalizeRowHeights(
     normalized[String(row)] = Math.max(
       MIN_DATA_ROW_HEIGHT,
       Math.min(MAX_DATA_ROW_HEIGHT, Math.round(height)),
+    );
+  });
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeColWidths(
+  candidate: ColWidths | undefined,
+  cols: number,
+): ColWidths | undefined {
+  if (!candidate || typeof candidate !== 'object') return undefined;
+  const normalized: ColWidths = {};
+  Object.entries(candidate).forEach(([colKey, value]) => {
+    const col = Number.parseInt(colKey, 10);
+    const width = Number(value);
+    if (!Number.isInteger(col) || col < 0 || col >= cols || !Number.isFinite(width)) return;
+    normalized[String(col)] = Math.max(
+      MIN_DATA_COL_WIDTH,
+      Math.min(MAX_DATA_COL_WIDTH, Math.round(width)),
     );
   });
   return Object.keys(normalized).length > 0 ? normalized : undefined;
@@ -1956,6 +1980,39 @@ function applySpreadsheetRowHeights(
   });
 }
 
+/**
+ * Reapply saved data-column widths after jspreadsheet rebuilds its worksheet
+ * DOM -- the column-width equivalent of applySpreadsheetRowHeights() just
+ * above. jspreadsheet renders its own <colgroup><col> inside .jss_worksheet;
+ * the first <col> there is the row-index gutter (sized separately by
+ * applyCoordinateHeaderDimensions()), so data columns start at index 1.
+ */
+function applySpreadsheetColWidths(
+  container: HTMLElement,
+  worksheet: JssInstance,
+  colWidths: ColWidths | undefined,
+): void {
+  if (!colWidths) return;
+  const dataCols = Array.from(
+    container.querySelectorAll<HTMLTableColElement>('.jss_worksheet > colgroup > col'),
+  ).slice(1);
+  Object.entries(colWidths).forEach(([colKey, width]) => {
+    const col = Number.parseInt(colKey, 10);
+    if (!Number.isInteger(col) || !Number.isFinite(width)) return;
+    try {
+      worksheet?.setWidth?.(col, width);
+    } catch {
+      // Keep the DOM fallback below for jspreadsheet builds without setWidth.
+    }
+    const colElement = dataCols[col];
+    if (!colElement) return;
+    colElement.setAttribute('width', String(width));
+    colElement.style.width = `${width}px`;
+    colElement.style.minWidth = `${width}px`;
+    colElement.style.maxWidth = `${width}px`;
+  });
+}
+
 function getComputedDataFromDOM(container: HTMLElement): AOA {
   const result: AOA = [];
   const tbody = container.querySelector('.jss_worksheet tbody, table.jss tbody, table.jexcel tbody');
@@ -3155,7 +3212,7 @@ export function openSpreadsheetModal(
       return selectedRange;
     };
 
-    const updateSelectionStatus = (range: CellRange): void => {
+    const updateSelectionStatus = (range: CellRange, forceSyncFormulaBar = false): void => {
       const startCol = Math.min(range[0], range[2]);
       const startRow = Math.min(range[1], range[3]);
       const endCol = Math.max(range[0], range[2]);
@@ -3163,7 +3220,26 @@ export function openSpreadsheetModal(
       const cellCount = (endCol - startCol + 1) * (endRow - startRow + 1);
       const rangeLabel = `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
       ui.cellFormatStatus.textContent = `${rangeLabel} selected (${cellCount} cell${cellCount === 1 ? '' : 's'}).`;
-      const selectingForFormulaBar = formulaSelectionDrag?.input === ui.formulaInput;
+      // Also skip the overwrite below while the formula bar itself has
+      // focus, not just during an active formula-reference drag: clicking a
+      // different cell while typing an ordinary (non-formula) value there
+      // still changes the grid's selected cell (via jspreadsheet's own
+      // click handling, never intercepted for that case -- see
+      // onFormulaSelectionStart's expectsCellReference check just below,
+      // which only claims the click when a cell reference is actually
+      // expected), which used to blow away whatever the user was mid-typing
+      // by replacing it with the newly-clicked cell's own value. Formula
+      // building (expectsCellReference true) is unaffected: that path
+      // already sets formulaSelectionDrag before this ever runs.
+      // forceSyncFormulaBar overrides this for the one case that genuinely
+      // wants the sync to happen despite focus never leaving the formula
+      // bar: pressing Enter there to commit and advance to the next row
+      // (see that handler) -- by that point the previous cell's value is
+      // already committed, so there is nothing left to protect, and the bar
+      // should reflect the newly-selected cell same as any other move.
+      const selectingForFormulaBar = !forceSyncFormulaBar
+        && (formulaSelectionDrag?.input === ui.formulaInput
+          || document.activeElement === ui.formulaInput);
       if (!selectingForFormulaBar) {
         ui.formulaCellLabel.textContent = cellCount === 1
           ? `${colLabel(startCol)}${startRow + 1}`
@@ -3486,6 +3562,7 @@ export function openSpreadsheetModal(
       const mountedRows = working.rows;
       const mountedCols = working.cols;
       const initialRowHeights = normalizeRowHeights(working.rowHeights, mountedRows);
+      const initialColWidths = normalizeColWidths(working.colWidths, mountedCols);
       const mountedData = resizeData(working.data, mountedRows, mountedCols);
       rawDataMirror = resizeData(mountedData, mountedRows, mountedCols);
       const mountedStyles = mergeCellStyles(
@@ -3501,6 +3578,11 @@ export function openSpreadsheetModal(
           mountedContainer,
           worksheet,
           normalizeRowHeights(working.rowHeights, mountedRows),
+        );
+        applySpreadsheetColWidths(
+          mountedContainer,
+          worksheet,
+          normalizeColWidths(working.colWidths, mountedCols),
         );
       };
       const scheduleCoordinateDimensionEnforcement = (): void => {
@@ -3597,6 +3679,13 @@ export function openSpreadsheetModal(
             ? Array.from({ length: mountedRows }, (_, row) => (
               initialRowHeights[String(row)]
                 ? { height: initialRowHeights[String(row)] }
+                : {}
+            ))
+            : undefined,
+          columns: initialColWidths
+            ? Array.from({ length: mountedCols }, (_, col) => (
+              initialColWidths[String(col)]
+                ? { width: initialColWidths[String(col)] }
                 : {}
             ))
             : undefined,
@@ -3708,6 +3797,43 @@ export function openSpreadsheetModal(
             ...working,
             data: readRawData(),
             rowHeights,
+          });
+        },
+        // Column-width counterpart of onresizerow just above -- captures a
+        // user's drag-resize of a data column (jspreadsheet's own native
+        // resize handles already do this visually; nothing previously
+        // persisted the result) into working.colWidths, the same shape
+        // saveSpreadsheet() later encodes into the exported table's
+        // colgroup (see getColGroupHtml()).
+        onresizecolumn: (
+          changedWorksheet: JssInstance,
+          column: number | number[],
+          width: number | number[],
+        ): void => {
+          const changedCols = Array.isArray(column) ? column : [column];
+          const changedWidths = Array.isArray(width) ? width : [width];
+          const colWidths: ColWidths = { ...(working.colWidths ?? {}) };
+          changedCols.forEach((changedCol, index) => {
+            const safeCol = Number(changedCol);
+            const rawWidth = changedWidths[index] ?? changedWidths[0];
+            const safeWidth = Math.max(
+              MIN_DATA_COL_WIDTH,
+              Math.min(MAX_DATA_COL_WIDTH, Math.round(Number(rawWidth))),
+            );
+            if (!Number.isInteger(safeCol)
+              || safeCol < 0
+              || safeCol >= working.cols
+              || !Number.isFinite(safeWidth)
+            ) {
+              return;
+            }
+            colWidths[String(safeCol)] = safeWidth;
+          });
+          worksheet = changedWorksheet;
+          working = normalizeSpreadsheetData({
+            ...working,
+            data: readRawData(),
+            colWidths,
           });
         },
         onselection: (
@@ -4347,7 +4473,23 @@ export function openSpreadsheetModal(
         return;
       }
       event.preventDefault();
+      const { col, row } = formulaInputTarget;
       commitFormulaInput();
+      // Same row/column-advance convention as Excel/Sheets' own formula
+      // bar: commit, then move down one row in the same column so entering
+      // a column of values top-to-bottom doesn't need a click between each
+      // one. commitFormulaInput() above already re-selects (col, row) --
+      // this only overrides that when there's actually a next row to move
+      // to (last row: no-op, matching those tools' own behavior of just
+      // staying put rather than growing the sheet).
+      const nextRow = Math.min(row + 1, working.rows - 1);
+      if (nextRow !== row) {
+        const nextRange: CellRange = [col, nextRow, col, nextRow];
+        selectedRange = nextRange;
+        worksheet?.updateSelectionFromCoords?.(col, nextRow, col, nextRow);
+        updateSelectionStatus(nextRange, true);
+        ui.formulaInput.focus();
+      }
     });
     // Clicking a different cell (or any other control) blurs the formula
     // input without ever firing Enter. That alone isn't enough though: a
@@ -4406,6 +4548,7 @@ export function openSpreadsheetModal(
         plateSize: working.kind === 'well-plate' ? working.plateSize : undefined,
         cellStyles: readCellStyles(rows, cols),
         rowHeights: normalizeRowHeights(working.rowHeights, rows),
+        colWidths: normalizeColWidths(working.colWidths, cols),
         tableStyle: working.tableStyle,
         captionStyle: working.captionStyle,
         tableBorder: working.tableBorder,
@@ -4467,6 +4610,7 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
       : '';
     html += `<caption${captionStyle}>${escapeHTML(raw.caption)}</caption>`;
   }
+  html += getColGroupHtml(raw.colWidths, kind, raw.cols);
 
   if (kind === 'notebook') {
     html += `<thead><tr${getRowHeightAttribute(raw.rowHeights, 0)}>`;
@@ -4546,6 +4690,7 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
       cols,
     );
     const extractedRowHeights = extractRowHeights(tableElement, kind, rows);
+    const extractedColWidths = extractColWidths(tableElement, kind, cols);
     const extractedTableStyle = stripFixedTableHeight(
       tableElement.getAttribute('style') ?? undefined,
     );
@@ -4569,6 +4714,10 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
         ...(decoded.rowHeights ?? {}),
         ...(extractedRowHeights ?? {}),
       }, rows),
+      colWidths: normalizeColWidths({
+        ...(decoded.colWidths ?? {}),
+        ...(extractedColWidths ?? {}),
+      }, cols),
       tableStyle: appearance
         ? stripAppearanceTableStyle(extractedTableStyle, appearance)
         : extractedTableStyle,
@@ -4594,6 +4743,7 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
       : undefined,
     cellStyles: extractCellStyles(tableElement, kind, rows, cols),
     rowHeights: extractRowHeights(tableElement, kind, rows),
+    colWidths: extractColWidths(tableElement, kind, cols),
     tableStyle: stripFixedTableHeight(
       tableElement.getAttribute('style') ?? undefined,
     ),
@@ -4622,6 +4772,32 @@ function extractRowHeights(
     );
   });
   return Object.keys(rowHeights).length > 0 ? rowHeights : undefined;
+}
+
+// Column widths are stored as <col style="width:Xpx"> entries in a
+// <colgroup> written by spreadsheetToHTML() -- unlike row heights (set
+// directly on each <tr>), a plain HTML table has no per-row equivalent
+// element to hang a per-column width off other than <col>. The kind's
+// leading coordinate-gutter <col> (present for 'standard'/'well-plate',
+// absent for 'notebook' -- see spreadsheetToHTML()) is skipped so indices
+// line up with data columns, not the table's own raw column count.
+function extractColWidths(
+  tableElement: HTMLTableElement,
+  kind: SpreadsheetKind,
+  cols: number,
+): ColWidths | undefined {
+  const allCols = Array.from(tableElement.querySelectorAll<HTMLTableColElement>('colgroup > col'));
+  const dataCols = kind === 'notebook' ? allCols : allCols.slice(1);
+  const colWidths: ColWidths = {};
+  dataCols.slice(0, cols).forEach((col, colIndex) => {
+    const width = Number.parseFloat(col.style.width);
+    if (!Number.isFinite(width)) return;
+    colWidths[String(colIndex)] = Math.max(
+      MIN_DATA_COL_WIDTH,
+      Math.min(MAX_DATA_COL_WIDTH, Math.round(width)),
+    );
+  });
+  return Object.keys(colWidths).length > 0 ? colWidths : undefined;
 }
 
 function extractVisibleTableData(
@@ -4662,6 +4838,29 @@ function getCellStyleAttribute(
 function getRowHeightAttribute(rowHeights: RowHeights | undefined, row: number): string {
   const height = rowHeights?.[String(row)];
   return Number.isFinite(height) ? ` style="height:${height}px"` : '';
+}
+
+// A plain HTML table has no per-column element equivalent to a <tr> to hang
+// a width off (unlike rows, sized directly via getRowHeightAttribute()) --
+// <colgroup><col> is the standard mechanism instead. Emitted only when at
+// least one column has actually been resized, to keep the common (never
+// touched) case free of markup; skipping it entirely when empty is valid
+// HTML, colgroup is optional. Must cover every column the *table* actually
+// has, including the leading coordinate-gutter column for
+// 'standard'/'well-plate' (absent for 'notebook') -- see spreadsheetToHTML()
+// -- with a bare, unstyled <col> for that one and for any data column with
+// no explicit width, or the browser would misalign col N's width onto the
+// wrong physical column.
+function getColGroupHtml(colWidths: ColWidths | undefined, kind: SpreadsheetKind, cols: number): string {
+  if (!colWidths || Object.keys(colWidths).length === 0) return '';
+  let html = '<colgroup>';
+  if (kind !== 'notebook') html += '<col>';
+  for (let col = 0; col < cols; col++) {
+    const width = colWidths[String(col)];
+    html += Number.isFinite(width) ? `<col style="width:${width}px">` : '<col>';
+  }
+  html += '</colgroup>';
+  return html;
 }
 
 function getCoordinateStyleAttribute(
