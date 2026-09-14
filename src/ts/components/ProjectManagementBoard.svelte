@@ -983,9 +983,23 @@
     }
   }
 
+  // Naively slicing the stored UTC string's first 10 characters used to
+  // shift the date shown here by a day for any requester not in UTC+0:
+  // getDeadline() (server-side) interprets a plain "YYYY-MM-DD" as
+  // *local* midnight before converting to UTC for storage, so e.g. a
+  // Zurich (UTC+2) user picking 2026-09-20 gets it stored as
+  // 2026-09-19T22:00:00Z -- slicing that string gives back 09-19, one day
+  // earlier than what was actually picked. Since that (wrong) value is
+  // bound straight into the edit form and always resubmitted on save, every
+  // edit silently shifted the deadline back a day, even ones that never
+  // touched it. Parsing into a Date and reading its *local* getters instead
+  // reverses the server's local-midnight interpretation correctly -- same
+  // approach as OrdersBoard.svelte's own toLocalInputValue().
   function toDateInputValue(deadline: string | null): string {
     if (!deadline) return '';
-    return deadline.slice(0, 10);
+    const date = new Date(deadline);
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
 
   function openDetail(task: Task): void {
