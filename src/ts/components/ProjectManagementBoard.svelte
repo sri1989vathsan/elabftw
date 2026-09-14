@@ -118,6 +118,8 @@
     task_id: number;
     task_body: string;
     project_id: number | null;
+    project_name: string | null;
+    project_parent_name: string | null;
     entity_type: EntityLinkType;
     entity_id: number | null;
     url: string | null;
@@ -1035,25 +1037,36 @@
 
   type LinksSummaryPage = { items: LinkSummaryItem[]; has_next_page: boolean };
 
-  // Fetches every linked entity across every task in the current top-level
-  // project (and its subprojects -- always, unlike the board's own task
-  // list, since there's no per-subproject-tab equivalent of this summary)
-  // via readEntityLinksSummary(), not the paginated task list already in
+  // Which project this popup is currently scoped to, captured once when it
+  // opens (rather than re-read from activeProjectId on every "Load more")
+  // so paging in stays consistent even if the user switches tabs behind it.
+  let linksSummaryProjectId: number | null = null;
+  let linksSummaryIncludeSubprojects = false;
+
+  // Fetches every linked entity across every task in the active project --
+  // the whole subtree (parent + every subproject) when viewing a top-level
+  // project "as itself", same as the board's own task list does, but just
+  // that one subproject's own links when a specific subproject tab is
+  // active (computeViewingAllSubprojects() mirrors taskFilterParams()'s own
+  // rule for exactly this reason). Not the paginated task list already in
   // `tasks`: that's capped at PAGE_SIZE and, on the "All" tab, isn't even
   // scoped to one project to begin with. Paginated itself (PAGE_SIZE per
   // page, "Load more" below) rather than fetched all at once -- a project
   // with a large number of links would otherwise mean one unbounded query
   // and an unbounded DOM list every time this popup opens.
   async function openLinksSummary(): Promise<void> {
-    if (typeof effectiveTopLevelId !== 'number') return;
+    if (typeof activeProjectId !== 'number') return;
+    linksSummaryProjectId = activeProjectId;
+    linksSummaryIncludeSubprojects = computeViewingAllSubprojects(activeProjectId);
     linksSummaryOpen = true;
     linksSummaryItems = [];
     linksSummaryOffset = 0;
     linksSummaryHasMore = false;
     loadingLinksSummary = true;
     try {
+      const subprojectsParam = linksSummaryIncludeSubprojects ? '&include_subprojects=1' : '';
       const [page] = await ApiC.getJson(
-        `${Model.Todolist}?project_id=${effectiveTopLevelId}&include_subprojects=1&links_summary=1&limit=${PAGE_SIZE}&offset=0`,
+        `${Model.Todolist}?project_id=${linksSummaryProjectId}${subprojectsParam}&links_summary=1&limit=${PAGE_SIZE}&offset=0`,
       ) as LinksSummaryPage[];
       linksSummaryItems = page.items;
       linksSummaryOffset = page.items.length;
@@ -1066,11 +1079,12 @@
   }
 
   async function loadMoreLinksSummary(): Promise<void> {
-    if (typeof effectiveTopLevelId !== 'number') return;
+    if (linksSummaryProjectId === null) return;
     loadingMoreLinksSummary = true;
     try {
+      const subprojectsParam = linksSummaryIncludeSubprojects ? '&include_subprojects=1' : '';
       const [page] = await ApiC.getJson(
-        `${Model.Todolist}?project_id=${effectiveTopLevelId}&include_subprojects=1&links_summary=1&limit=${PAGE_SIZE}&offset=${linksSummaryOffset}`,
+        `${Model.Todolist}?project_id=${linksSummaryProjectId}${subprojectsParam}&links_summary=1&limit=${PAGE_SIZE}&offset=${linksSummaryOffset}`,
       ) as LinksSummaryPage[];
       linksSummaryItems = [...linksSummaryItems, ...page.items];
       linksSummaryOffset += page.items.length;
@@ -1087,6 +1101,7 @@
     linksSummaryItems = [];
     linksSummaryOffset = 0;
     linksSummaryHasMore = false;
+    linksSummaryProjectId = null;
   }
 
   // Opens a task referenced from the links summary popup, fetching it
@@ -2514,20 +2529,32 @@
   <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeLinksSummary(); }}>
     <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmLinksSummaryTitle">
       <div class="pm-dialog-header">
-        <h4 id="pmLinksSummaryTitle" class="mb-0">{t('All links in this project')}</h4>
+        <h4 id="pmLinksSummaryTitle" class="mb-0">
+          {linksSummaryIncludeSubprojects ? t('All links in') : t('Links in')}
+          {projects.find(p => p.id === linksSummaryProjectId)?.name ?? ''}
+        </h4>
         <button type="button" class="pm-close-btn" on:click={closeLinksSummary} aria-label={t('Close')}>&times;</button>
       </div>
       <div class="pm-dialog-body">
         {#if loadingLinksSummary}
           <p class="pm-muted small mb-0">{t('Loading')}…</p>
         {:else if linksSummaryItems.length === 0}
-          <p class="pm-muted small mb-0">{t('No links yet in this project or its subprojects.')}</p>
+          <p class="pm-muted small mb-0">
+            {linksSummaryIncludeSubprojects
+              ? t('No links yet in this project or its subprojects.')
+              : t('No links yet in this subproject.')}
+          </p>
         {:else}
           <ul class="pm-entity-link-list">
             {#each linksSummaryItems as item (item.link_id)}
               <li class="pm-entity-link">
                 <span class="badge badge-info mr-1">{entityTypeLabel(item.entity_type)}</span>
                 <a class="mr-auto text-break" href={entityViewUrl(item)} target="_blank" rel="noreferrer noopener">{item.title}</a>
+                {#if item.project_name}
+                  <span class="badge badge-light ml-2" title={t('Project')}>
+                    {#if item.project_parent_name}{item.project_parent_name} / {/if}{item.project_name}
+                  </span>
+                {/if}
                 <button type="button" class="btn btn-ghost btn-sm ml-2" on:click={() => openTaskFromSummary(item.task_id)}>
                   <i class="fas fa-list-check fa-fw mr-1" aria-hidden="true"></i>{item.task_body}
                 </button>
