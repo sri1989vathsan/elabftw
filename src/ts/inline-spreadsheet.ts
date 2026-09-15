@@ -2531,9 +2531,16 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   fontAppearanceGrid.append(
     createIconControl('<i class="fas fa-font"></i>', 'Default font family', defaultFontFamilySelect),
     createStepperControl(defaultFontSizeInput, 'default font size'),
-    createIconControl('<b>B</b>', 'Bold by default', defaultFontBoldInput),
-    createIconControl('<i>I</i>', 'Italic by default', defaultFontItalicInput),
-    createIconControl('<u>U</u>', 'Underline by default', defaultFontUnderlineInput),
+    // No icon glyph here: the checkbox itself (.inline-spreadsheet-icon-toggle,
+    // data-icon="B"/"I"/"U") already renders its own B/I/U via CSS. Passing
+    // the same letter as the icon-span's content duplicated it visually --
+    // the empty string still gets its own icon-span (createIconControl()
+    // always prepends one) purely to keep this row's grid-column alignment
+    // consistent with every other row here, matching how the cell-level
+    // format toolbar's equivalent controls already do this correctly.
+    createIconControl('', 'Bold by default', defaultFontBoldInput),
+    createIconControl('', 'Italic by default', defaultFontItalicInput),
+    createIconControl('', 'Underline by default', defaultFontUnderlineInput),
     createIconControl('<span class="inline-spreadsheet-text-color-icon">A</span>', 'Default text color', defaultFontTextColorInput),
     createIconControl('<i class="fas fa-ban"></i>', 'No default text color', defaultFontNoTextColorInput),
     createIconControl('<i class="fas fa-align-left"></i>', 'Default horizontal alignment', defaultFontTextAlignSelect),
@@ -4625,11 +4632,35 @@ export function openSpreadsheetModal(
       reject(new Error('cancelled'));
     };
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      // Escape is easy to hit out of habit. Unlike the explicit Cancel button,
-      // guard it the same way backdrop clicks already are: don't silently
-      // discard a fully-formatted spreadsheet.
-      cancel();
+      if (event.key === 'Escape') {
+        // Escape is easy to hit out of habit. Unlike the explicit Cancel
+        // button, guard it the same way backdrop clicks already are: don't
+        // silently discard a fully-formatted spreadsheet.
+        cancel();
+        return;
+      }
+      // jspreadsheet's own Ctrl/Cmd+Z handling keys off a *global* "current
+      // instance" reference that it resets to null on any mousedown outside
+      // its own worksheet DOM. Our formula bar, toolbar and appearance
+      // panel all live outside that DOM (they're siblings in this dialog,
+      // not descendants of .jss_worksheet), so clicking any of them --
+      // completely normal while formatting a sheet -- silently broke undo/
+      // redo from then on. worksheet.undo()/redo() are plain instance
+      // methods with no dependency on that global tracker; call them
+      // directly using the worksheet reference this module already keeps
+      // in sync, bypassing the broken global lookup entirely.
+      const key = event.key.toLowerCase();
+      if (!(event.ctrlKey || event.metaKey) || key !== 'z') return;
+      // Our own formula/caption inputs are plain text fields, not
+      // jspreadsheet's own cell editor -- let the browser's native text-undo
+      // handle those rather than hijacking it into a grid-level undo.
+      if (event.target === ui.formulaInput || event.target === ui.captionInput) return;
+      event.preventDefault();
+      if (event.shiftKey) {
+        worksheet?.redo?.();
+      } else {
+        worksheet?.undo?.();
+      }
     };
 
     ui.insertBtn.addEventListener('click', () => {
