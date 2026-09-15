@@ -1587,7 +1587,16 @@
     dialogDescription = project?.description ?? '';
     dialogTargetEndDate = toDateInputValue(project?.target_end_date ?? null);
     dialogStatus = project?.status ?? 'planning';
-    dialogMembers = project ? [...project.members] : [];
+    // A brand-new subproject defaults to its parent's own member list --
+    // the two stay independent from then on (editing either one's members
+    // afterward never touches the other), this only seeds the starting
+    // point so members don't have to be picked again from scratch.
+    const parentProject = !project && initialParentId !== null
+      ? projects.find(p => p.id === initialParentId) ?? null
+      : null;
+    dialogMembers = project
+      ? [...project.members]
+      : (parentProject ? [...parentProject.members] : []);
     dialogParentId = project ? project.parent_id : initialParentId;
     // whoever's managing a project should always end up a member of it,
     // whether that's by explicitly picking themselves (no longer possible,

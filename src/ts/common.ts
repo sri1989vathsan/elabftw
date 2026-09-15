@@ -315,6 +315,13 @@ const FavoriteFiltersC = new FavoriteFilters();
 const FoldersPanelC = new FoldersPanel();
 const TodolistC = new Todolist();
 const CalendarActivityC = new CalendarActivity();
+// Deadline reminders (the grouped top-right banner) live inside this
+// component and only ever ran once the Activity Calendar side panel had
+// been manually opened at least once -- initializing eagerly here mounts
+// it (and starts its reminder-checking) on every page load instead, so
+// reminders surface proactively without the user needing to open that
+// panel first.
+CalendarActivityC.initialize();
 const TocPanelC = new TocPanel();
 const HtmlToolsPanelC = new HtmlToolsPanel();
 new CommandPalette();
