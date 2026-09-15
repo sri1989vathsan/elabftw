@@ -271,6 +271,15 @@ export function getTinymceBaseConfig(page: string): object {
     // able to grow/shrink a plain table's total width.
     table_column_resizing: 'resizetable',
     table_resize_bars: true,
+    // Without this, TinyMCE's default 'auto' mode writes column widths as
+    // percentages whenever the table's own width is itself relative (%) --
+    // which it usually is, from resizing the table itself via its corner
+    // handles. Percentage widths get recalculated relative to the table's
+    // available width on every reflow, so editing a cell's text (even just
+    // Backspace) can visibly resize *other*, untouched columns. 'fixed'
+    // makes TinyMCE always write pixel widths instead, which stay put
+    // regardless of content changes.
+    table_sizing_mode: 'fixed',
     // 'table' alone was silently disabling image resize handles too --
     // restrict to what actually needs the custom table behavior, and let
     // images keep their normal resize handles.
