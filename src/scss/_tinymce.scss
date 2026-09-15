@@ -9,6 +9,23 @@ figure {
   text-align: center;
 }
 
+/* Under the normal table-layout:auto a table uses, a column can never
+ * shrink below the width of its widest *unbreakable* piece of content --
+ * dragging it smaller than that can't actually shrink the column, but
+ * table_column_resizing:'resizetable' still grows the table's own total
+ * width by the dragged delta regardless, so the table visibly grows while
+ * the column itself stays pinned. Letting long text actually wrap inside
+ * cells (rather than only breaking at existing spaces) shrinks that
+ * minimum down to the longest individual word instead of the whole
+ * string, so columns can shrink much further without ever needing to
+ * touch table-layout itself (which fights TinyMCE's own resize math --
+ * see the reverted table-layout:fixed attempt). */
+.mce-content-body table td,
+.mce-content-body table th {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .tox-tinymce--toolbar-sticky-on .tox-editor-header {
   top: calc(var(--navbar-height) + var(--toolbar-height)) !important;
   transition: top var(--sticky-header-speed) var(--sticky-header-easing);
