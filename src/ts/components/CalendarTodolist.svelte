@@ -118,6 +118,8 @@
   let entityActivities: EntityActivity[] = [];
   let entries: CalendarEntry[] = [];
   let reminderEntries: CalendarEntry[] = [];
+  let bannerEntries: { key: string; body: string; deadlineLabel: string; overdue: boolean }[] = [];
+  let bannerCollapsed = false;
   let calendarCells: CalendarCell[] = [];
   let agendaEntries: CalendarEntry[] = [];
   let agendaExperiments: AgendaEntityActivity[] = [];
@@ -724,18 +726,39 @@
 
   function checkReminders(): void {
     const now = Date.now();
+    const newEntries: typeof bannerEntries = [];
     reminderEntries.forEach(entry => {
       if (entry.reminderMinutes === null) return;
       const deadline = new Date(entry.deadline).getTime();
       const remindAt = deadline - entry.reminderMinutes * 60000;
       if (now < remindAt) return;
+      // Same one-shot-per-session dedup the individual toasts this banner
+      // replaced used: once an entry has been surfaced, it stays flagged so
+      // it never reappears (even after the banner itself is dismissed and a
+      // later poll picks up other, genuinely new due entries).
       const storageKey = `todo-reminder-${entry.key}-${entry.deadline}`;
       if (sessionStorage.getItem(storageKey)) return;
-      const prefix = deadline < now ? t('Overdue') : t('Deadline approaching');
-      notify.warning(`${prefix}: ${entry.body} — ${formatDeadline(entry.deadline)}`);
+      newEntries.push({
+        key: entry.key,
+        body: entry.body,
+        deadlineLabel: formatDeadline(entry.deadline),
+        overdue: deadline < now,
+      });
       sessionStorage.setItem(storageKey, '1');
     });
+    if (newEntries.length > 0) {
+      bannerEntries = [...bannerEntries, ...newEntries];
+      bannerCollapsed = false;
+    }
     updateUrgentBadges(reminderEntries, now);
+  }
+
+  function dismissReminderBanner(): void {
+    bannerEntries = [];
+  }
+
+  function toggleReminderBanner(): void {
+    bannerCollapsed = !bannerCollapsed;
   }
 
   function updateUrgentBadges(
@@ -799,6 +822,51 @@
     if (reminderTimer !== undefined) window.clearInterval(reminderTimer);
   });
 </script>
+
+{#if bannerEntries.length > 0}
+  <div class='reminder-banner' role='status'>
+    <button type='button' class='reminder-banner-header' on:click={toggleReminderBanner} aria-expanded={!bannerCollapsed}>
+      <i class='fas fa-clock fa-fw reminder-banner-icon' aria-hidden='true'></i>
+      <span class='reminder-banner-summary'>
+        <span class='reminder-banner-title'>
+          {bannerEntries.length === 1
+            ? t('1 task due soon')
+            : t('{{count}} tasks due soon', { count: bannerEntries.length })}
+        </span>
+        <span class='reminder-banner-subtitle'>{t('Deadlines approaching')}</span>
+      </span>
+      <i class='fas fa-fw reminder-banner-chevron' class:fa-chevron-up={!bannerCollapsed} class:fa-chevron-down={bannerCollapsed} aria-hidden='true'></i>
+      <span
+        class='reminder-banner-dismiss'
+        role='button'
+        tabindex='0'
+        aria-label={t('Dismiss')}
+        on:click|stopPropagation={dismissReminderBanner}
+        on:keydown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            dismissReminderBanner();
+          }
+        }}
+      >
+        <i class='fas fa-xmark' aria-hidden='true'></i>
+      </span>
+    </button>
+    {#if !bannerCollapsed}
+      <ul class='reminder-banner-list'>
+        {#each bannerEntries as entry (entry.key)}
+          <li class='reminder-banner-item'>
+            <i class='fas fa-list-check fa-fw' aria-hidden='true'></i>
+            <span class='reminder-banner-item-body'>{entry.body}</span>
+            <span class='reminder-banner-item-when' class:reminder-banner-item-overdue={entry.overdue}>
+              {entry.overdue ? t('Overdue') : entry.deadlineLabel}
+            </span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
+{/if}
 
 <section class='calendar-todo-month' aria-label={t('Activity calendar')}>
   {#if core.isAdmin}
@@ -1050,6 +1118,121 @@
 
 
 <style>
+  /* Sits fixed top-right, just under the sticky main navbar (56px is its
+     rendered height), distinct from the generic top-left save/error toast
+     stack in #overlay-container -- this is specifically for grouped
+     deadline reminders, replacing what used to be one warning toast per
+     due task. z-index above regular content but below modals. */
+  .reminder-banner {
+    background: var(--lightgold);
+    border-radius: 0.4rem;
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.25);
+    max-width: 340px;
+    position: fixed;
+    right: 1rem;
+    top: 66px;
+    width: 100%;
+    z-index: 1030;
+  }
+
+  .reminder-banner-header {
+    align-items: flex-start;
+    background: transparent;
+    border: 0;
+    display: flex;
+    gap: 0.6rem;
+    padding: 0.7rem 0.8rem;
+    text-align: left;
+    width: 100%;
+  }
+
+  .reminder-banner-icon {
+    color: var(--strongest);
+    margin-top: 0.15rem;
+  }
+
+  .reminder-banner-summary {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .reminder-banner-title {
+    color: var(--strongest);
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+
+  .reminder-banner-subtitle {
+    color: var(--strongest);
+    font-size: 0.75rem;
+    opacity: 0.8;
+  }
+
+  .reminder-banner-chevron {
+    color: var(--strongest);
+    margin-top: 0.2rem;
+    opacity: 0.7;
+  }
+
+  .reminder-banner-dismiss {
+    align-items: center;
+    color: var(--strongest);
+    cursor: pointer;
+    display: flex;
+    height: 1.4rem;
+    justify-content: center;
+    opacity: 0.7;
+    width: 1.4rem;
+  }
+
+  .reminder-banner-dismiss:hover {
+    opacity: 1;
+  }
+
+  .reminder-banner-list {
+    border-top: 1px solid rgba(0, 0, 0, 0.15);
+    list-style: none;
+    margin: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  .reminder-banner-item {
+    align-items: center;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    color: var(--strongest);
+    display: flex;
+    font-size: 0.8rem;
+    gap: 0.5rem;
+    padding: 0.5rem 0.8rem;
+  }
+
+  .reminder-banner-item:last-child {
+    border-bottom: 0;
+  }
+
+  .reminder-banner-item-body {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .reminder-banner-item-when {
+    font-size: 0.72rem;
+    opacity: 0.85;
+    white-space: nowrap;
+  }
+
+  .reminder-banner-item-overdue {
+    font-weight: 700;
+    opacity: 1;
+  }
+
   .calendar-todo-month,
   .calendar-todo-agenda {
     --calendar-count-overdue: #b91c1c;
