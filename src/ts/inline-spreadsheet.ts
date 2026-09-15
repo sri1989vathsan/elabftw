@@ -4622,7 +4622,7 @@ export function openSpreadsheetModal(
       document.removeEventListener('mouseup', onRowResizePointerUp, true);
       ui.sheetHost.removeEventListener('copy', onSpreadsheetCopy, true);
       ui.sheetHost.removeEventListener('paste', onSpreadsheetPaste, true);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey, true);
       ui.overlay.remove();
       restoreFocus(openerFocus);
     };
@@ -4656,6 +4656,14 @@ export function openSpreadsheetModal(
       // handle those rather than hijacking it into a grid-level undo.
       if (event.target === ui.formulaInput || event.target === ui.captionInput) return;
       event.preventDefault();
+      // Registered on the capture phase specifically so this runs BEFORE
+      // jspreadsheet's own bubble-phase document keydown listener gets a
+      // chance to fire. Without stopping it here, both handlers process the
+      // same keystroke whenever the library's global "current" happens to
+      // still be valid (e.g. right after a plain cell click, with no
+      // intervening click on our own chrome) -- undoing two steps for one
+      // Ctrl+Z press instead of one.
+      event.stopImmediatePropagation();
       if (event.shiftKey) {
         worksheet?.redo?.();
       } else {
@@ -4699,7 +4707,7 @@ export function openSpreadsheetModal(
       // large sheet. Keep the dialog open so it cannot silently discard work.
       ui.formulaStatus.textContent = 'Spreadsheet is still open. Use Insert / Update to save your changes, or Cancel to discard them.';
     });
-    document.addEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, true);
   });
 }
 
