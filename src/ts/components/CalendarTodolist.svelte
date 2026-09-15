@@ -6,6 +6,28 @@
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
 
+  // This whole component mounts inside the Activity Calendar side panel
+  // (#calendarActivity), which carries the [hidden] attribute whenever that
+  // panel isn't open. [hidden] collapses every descendant regardless of its
+  // own CSS -- the reminder banner below is deliberately position:fixed so
+  // it floats free of the panel's own layout, but a fixed position does
+  // nothing against an ancestor's display:none; it still gets collapsed to
+  // zero size (confirmed live: clientHeight/offsetHeight both 0 despite the
+  // node's content and classes being correct). Portal it out to #container,
+  // the same fix already used for Todolist.svelte's own detail dialog for
+  // the identical reason. Only the banner is portalled, not the whole
+  // component -- the sidebar calendar below is fine staying hidden while
+  // its own panel is closed.
+  function portalToContainer(node: HTMLElement): { destroy(): void } {
+    const container = document.getElementById('container') ?? document.body;
+    container.appendChild(node);
+    return {
+      destroy(): void {
+        node.remove();
+      },
+    };
+  }
+
   type Todo = {
     id: number;
     body: string;
@@ -824,7 +846,7 @@
 </script>
 
 {#if bannerEntries.length > 0}
-  <div class='reminder-banner' role='status'>
+  <div class='reminder-banner' role='status' use:portalToContainer>
     <button type='button' class='reminder-banner-header' on:click={toggleReminderBanner} aria-expanded={!bannerCollapsed}>
       <i class='fas fa-clock fa-fw reminder-banner-icon' aria-hidden='true'></i>
       <span class='reminder-banner-summary'>
