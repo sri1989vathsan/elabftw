@@ -1470,6 +1470,14 @@ function getAppearanceCellStyle(
 
 function getAppearanceTableStyle(appearance: SpreadsheetAppearance): string {
   const declarations = [
+    // Without this, the browser's default auto layout recomputes every
+    // column's width from its cells' current content on each edit -- so
+    // typing or deleting text in one cell can visibly resize *other*,
+    // untouched columns as the table reflows. Fixed layout makes column
+    // widths depend only on the colgroup (see getColGroupHtml(), which
+    // gives every column an explicit width) and the table's own width,
+    // never on cell content.
+    'table-layout:fixed',
     `--spreadsheet-row-index-width:${appearance.rowIndexWidth}px`,
     `--spreadsheet-column-index-height:${appearance.columnIndexHeight}px`,
     appearance.tableBorderStyle === 'none' || appearance.tableBorderWidth === 0
