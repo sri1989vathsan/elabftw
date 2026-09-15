@@ -521,11 +521,33 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   ): void => {
     const bookmark = editor.selection.getBookmark(2, true);
     openSpreadsheetModal(initial, existingTable !== null).then(({ raw, computed }) => {
-      const html = spreadsheetToHTML(raw, computed);
+      // A marker attribute (stripped right after) reliably identifies the
+      // table this specific insert placed, regardless of where TinyMCE
+      // leaves the selection afterward -- more robust than trying to read
+      // it back from editor.selection.getNode().
+      const html = spreadsheetToHTML(raw, computed).replace(
+        '<table class="elabftw-spreadsheet"',
+        '<table class="elabftw-spreadsheet" data-just-inserted="1"',
+      );
       editor.focus();
       editor.selection.moveToBookmark(bookmark);
       if (existingTable) editor.selection.select(existingTable);
       editor.execCommand('mceInsertContent', false, html);
+      // A table with nothing after it leaves no click target below itself --
+      // clicking in the empty space under a trailing table does nothing,
+      // since there's no element there for the cursor to land in. Only when
+      // it has no following sibling, add an empty paragraph after it so a
+      // click there always has somewhere to put the cursor.
+      const insertedTable = editor.dom.select('table[data-just-inserted="1"]')[0] as
+        | HTMLTableElement
+        | undefined;
+      if (insertedTable) {
+        insertedTable.removeAttribute('data-just-inserted');
+        if (!insertedTable.nextElementSibling) {
+          const paragraph = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
+          insertedTable.parentNode?.insertBefore(paragraph, insertedTable.nextSibling);
+        }
+      }
       editor.undoManager.add();
     }).catch(() => {
       // User cancelled.
