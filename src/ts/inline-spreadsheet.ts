@@ -151,6 +151,7 @@ const MIN_DATA_ROW_HEIGHT = 20;
 const MAX_DATA_ROW_HEIGHT = 500;
 const MIN_DATA_COL_WIDTH = 40;
 const MAX_DATA_COL_WIDTH = 800;
+const DEFAULT_DATA_COL_WIDTH = 100;
 const MIN_ROW_INDEX_WIDTH = 28;
 const MAX_ROW_INDEX_WIDTH = 120;
 const MIN_COLUMN_INDEX_HEIGHT = 24;
@@ -3616,8 +3617,155 @@ export function openSpreadsheetModal(
       }
     };
 
+    const measureNaturalCellWidth = (cell: HTMLElement): number => {
+      const computedStyle = window.getComputedStyle(cell);
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (!context) return cell.scrollWidth;
+      context.font = [
+        computedStyle.fontStyle,
+        computedStyle.fontVariant,
+        computedStyle.fontWeight,
+        computedStyle.fontSize,
+        computedStyle.fontFamily,
+      ].join(' ');
+      const textWidth = (cell.textContent ?? '')
+        .split(/\r?\n/)
+        .reduce((maximum, line) => Math.max(maximum, context.measureText(line).width), 0);
+      const horizontalChrome = Number.parseFloat(computedStyle.paddingLeft)
+        + Number.parseFloat(computedStyle.paddingRight)
+        + Number.parseFloat(computedStyle.borderLeftWidth)
+        + Number.parseFloat(computedStyle.borderRightWidth);
+      // A little breathing room keeps the fitted value from touching the
+      // resize handle and accommodates the header's own sort/menu affordance.
+      return Math.ceil(textWidth + horizontalChrome + 12);
+    };
+
+    const measureNaturalCellHeight = (cell: HTMLElement): number => {
+      const computedStyle = window.getComputedStyle(cell);
+      const probe = document.createElement('div');
+      probe.textContent = cell.textContent ?? '';
+      Object.assign(probe.style, {
+        position: 'fixed',
+        visibility: 'hidden',
+        pointerEvents: 'none',
+        left: '-10000px',
+        top: '0',
+        boxSizing: 'border-box',
+        width: `${cell.getBoundingClientRect().width}px`,
+        height: 'auto',
+        minHeight: '0',
+        padding: computedStyle.padding,
+        border: computedStyle.border,
+        font: computedStyle.font,
+        lineHeight: computedStyle.lineHeight,
+        letterSpacing: computedStyle.letterSpacing,
+        whiteSpace: computedStyle.whiteSpace,
+        overflowWrap: computedStyle.overflowWrap,
+        wordBreak: computedStyle.wordBreak,
+      });
+      document.body.append(probe);
+      const height = probe.getBoundingClientRect().height;
+      probe.remove();
+      return Math.ceil(height);
+    };
+
+    const onColumnBoundaryDoubleClick = (event: MouseEvent): void => {
+      if (event.button !== 0 || !sheetContainer) return;
+      const header = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > thead [data-x]')
+        : null;
+      if (!header || !sheetContainer.contains(header)) return;
+      const headerRect = header.getBoundingClientRect();
+      const edgeTolerance = 7;
+      const distanceFromLeft = event.clientX - headerRect.left;
+      const distanceFromRight = headerRect.right - event.clientX;
+      let col = Number.parseInt(header.dataset.x ?? '', 10);
+      if (!Number.isInteger(col)) return;
+      if (distanceFromLeft <= edgeTolerance) {
+        col -= 1;
+      } else if (distanceFromRight > edgeTolerance) {
+        return;
+      }
+      if (col < 0 || col >= working.cols) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const cells = Array.from(sheetContainer.querySelectorAll<HTMLElement>(
+        `.jss_worksheet > thead [data-x="${col}"], .jss_worksheet > tbody td[data-x="${col}"][data-y]`,
+      ));
+      const naturalWidth = cells.reduce(
+        (maximum, cell) => Math.max(maximum, measureNaturalCellWidth(cell)),
+        MIN_DATA_COL_WIDTH,
+      );
+      const fittedWidth = Math.max(
+        MIN_DATA_COL_WIDTH,
+        Math.min(MAX_DATA_COL_WIDTH, naturalWidth),
+      );
+      const colWidths: ColWidths = {
+        ...(working.colWidths ?? {}),
+        [String(col)]: fittedWidth,
+      };
+      working = normalizeSpreadsheetData({
+        ...working,
+        data: readRawData(),
+        colWidths,
+      });
+      worksheet?.setWidth?.(col, fittedWidth);
+      applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
+      hasChanges = true;
+    };
+
+    const onRowBoundaryDoubleClick = (event: MouseEvent): void => {
+      if (event.button !== 0 || !sheetContainer) return;
+      const rowHeader = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > tbody .jss_row[data-y]')
+        : null;
+      if (!rowHeader || !sheetContainer.contains(rowHeader)) return;
+      const headerRect = rowHeader.getBoundingClientRect();
+      const edgeTolerance = 7;
+      const distanceFromTop = event.clientY - headerRect.top;
+      const distanceFromBottom = headerRect.bottom - event.clientY;
+      let row = Number.parseInt(rowHeader.dataset.y ?? '', 10);
+      if (!Number.isInteger(row)) return;
+      if (distanceFromTop <= edgeTolerance) {
+        row -= 1;
+      } else if (distanceFromBottom > edgeTolerance) {
+        return;
+      }
+      if (row < 0 || row >= working.rows) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const cells = Array.from(sheetContainer.querySelectorAll<HTMLElement>(
+        `.jss_worksheet > tbody td[data-y="${row}"]`,
+      ));
+      const naturalHeight = cells.reduce(
+        (maximum, cell) => Math.max(maximum, measureNaturalCellHeight(cell)),
+        MIN_DATA_ROW_HEIGHT,
+      );
+      const fittedHeight = Math.max(
+        MIN_DATA_ROW_HEIGHT,
+        Math.min(MAX_DATA_ROW_HEIGHT, Math.ceil(naturalHeight)),
+      );
+      const rowHeights: RowHeights = {
+        ...(working.rowHeights ?? {}),
+        [String(row)]: fittedHeight,
+      };
+      working = normalizeSpreadsheetData({
+        ...working,
+        data: readRawData(),
+        rowHeights,
+      });
+      worksheet?.setHeight?.(row, fittedHeight);
+      applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights, working.rows);
+      hasChanges = true;
+    };
+
     ui.sheetHost.addEventListener('mousedown', onFormulaSelectionStart, true);
     ui.sheetHost.addEventListener('keydown', onCellEditorKeydown, true);
+    ui.sheetHost.addEventListener('dblclick', onColumnBoundaryDoubleClick, true);
+    ui.sheetHost.addEventListener('dblclick', onRowBoundaryDoubleClick, true);
 
     const updateSizeControls = (rows: number, cols: number): void => {
       ui.rowsInput.value = String(rows);
@@ -4656,6 +4804,8 @@ export function openSpreadsheetModal(
       document.removeEventListener('mouseup', onRowResizePointerUp, true);
       ui.sheetHost.removeEventListener('copy', onSpreadsheetCopy, true);
       ui.sheetHost.removeEventListener('paste', onSpreadsheetPaste, true);
+      ui.sheetHost.removeEventListener('dblclick', onColumnBoundaryDoubleClick, true);
+      ui.sheetHost.removeEventListener('dblclick', onRowBoundaryDoubleClick, true);
       document.removeEventListener('keydown', onKey, true);
       ui.overlay.remove();
       restoreFocus(openerFocus);
@@ -4771,6 +4921,22 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
   let tableStyle = stripFixedTableHeight(
     `${getAppearanceTableStyle(appearance)};${raw.tableStyle ?? DEFAULT_TABLE_STYLE}`,
   ) ?? DEFAULT_TABLE_STYLE;
+  // CSS fixed table layout only becomes deterministic when the table has an
+  // explicit width. A newly-created spreadsheet has no saved colWidths yet
+  // and tableWidth=0, so it previously rendered with width:auto: typing or
+  // backspacing in TinyMCE could still make the browser expand a column even
+  // though table-layout:fixed was present. Give that untouched initial state
+  // a natural pixel width matching the explicit default <col> widths emitted
+  // below. User-resized/imported tables keep their own persisted width.
+  if (appearance.tableWidth === 0
+    && !/(?:^|;)\s*width\s*:/i.test(raw.tableStyle ?? '')
+  ) {
+    const coordinateWidth = kind === 'notebook' ? 0 : appearance.rowIndexWidth;
+    const dataWidth = Array.from({ length: raw.cols }, (_, col) => (
+      raw.colWidths?.[String(col)] ?? DEFAULT_DATA_COL_WIDTH
+    )).reduce((sum, width) => sum + width, 0);
+    tableStyle = `${tableStyle};width:${coordinateWidth + dataWidth}px`;
+  }
   if (raw.tableBorder !== undefined
     && !/(?:^|;)border(?!-(?:collapse|spacing)\b)(?:-[a-z-]+)?\s*:/i.test(raw.tableStyle ?? '')
   ) {
@@ -4783,7 +4949,7 @@ export function spreadsheetToHTML(rawData: SpreadsheetData, computed: AOA): stri
       : '';
     html += `<caption${captionStyle}>${escapeHTML(raw.caption)}</caption>`;
   }
-  html += getColGroupHtml(raw.colWidths, kind, raw.cols);
+  html += getColGroupHtml(raw.colWidths, kind, raw.cols, appearance.rowIndexWidth);
 
   if (kind === 'notebook') {
     html += `<thead><tr${getRowHeightAttribute(raw.rowHeights, 0)}>`;
@@ -5028,22 +5194,24 @@ function getRowHeightAttribute(rowHeights: RowHeights | undefined, row: number):
 
 // A plain HTML table has no per-column element equivalent to a <tr> to hang
 // a width off (unlike rows, sized directly via getRowHeightAttribute()) --
-// <colgroup><col> is the standard mechanism instead. Emitted only when at
-// least one column has actually been resized, to keep the common (never
-// touched) case free of markup; skipping it entirely when empty is valid
-// HTML, colgroup is optional. Must cover every column the *table* actually
-// has, including the leading coordinate-gutter column for
-// 'standard'/'well-plate' (absent for 'notebook') -- see spreadsheetToHTML()
-// -- with a bare, unstyled <col> for that one and for any data column with
-// no explicit width, or the browser would misalign col N's width onto the
-// wrong physical column.
-function getColGroupHtml(colWidths: ColWidths | undefined, kind: SpreadsheetKind, cols: number): string {
-  if (!colWidths || Object.keys(colWidths).length === 0) return '';
+// <colgroup><col> is the standard mechanism instead. Emit it even before a
+// user resizes anything: fixed table layout needs concrete initial column
+// widths to remain stable while text is edited in TinyMCE. It must cover
+// every column the *table* actually has, including the leading coordinate
+// gutter for 'standard'/'well-plate' (absent for 'notebook') -- see
+// spreadsheetToHTML() -- or the browser would misalign data-column widths
+// onto the wrong physical columns.
+function getColGroupHtml(
+  colWidths: ColWidths | undefined,
+  kind: SpreadsheetKind,
+  cols: number,
+  rowIndexWidth: number,
+): string {
   let html = '<colgroup>';
-  if (kind !== 'notebook') html += '<col>';
+  if (kind !== 'notebook') html += `<col style="width:${rowIndexWidth}px">`;
   for (let col = 0; col < cols; col++) {
-    const width = colWidths[String(col)];
-    html += Number.isFinite(width) ? `<col style="width:${width}px">` : '<col>';
+    const width = colWidths?.[String(col)] ?? DEFAULT_DATA_COL_WIDTH;
+    html += `<col style="width:${width}px">`;
   }
   html += '</colgroup>';
   return html;
