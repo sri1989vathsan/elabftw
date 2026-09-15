@@ -6,7 +6,7 @@
    * @license AGPL-3.0
    * @package elabftw
    */
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
@@ -1535,7 +1535,32 @@
     };
     window.addEventListener('todolist-changed', reload);
     window.addEventListener('todolist-scope-changed', reload);
-    void load();
+    // Deep-linked from a to-do deadline notification (?open=todolist&task=ID,
+    // wired up in common.ts/Transform.php): open that task's own detail
+    // dialog once it's loaded, rather than leaving the reminder pointing at
+    // a bare, unopened sidebar. Only finds tasks already on the first
+    // loaded page (see load()'s own pagination) -- covers the common case
+    // (a reminder is for a task due soon, so it's normally recent/near the
+    // top of the assigned list) without needing a separate single-task
+    // fetch-and-inject path for the rare task far down the list.
+    const requestedTaskId = Number.parseInt(
+      new URLSearchParams(window.location.search).get('task') ?? '',
+      10,
+    );
+    const initialLoad = load();
+    if (Number.isInteger(requestedTaskId)) {
+      // load() resolving doesn't guarantee the reactive `entries` block
+      // (derived from the items/unfinished state load() just set) has
+      // actually recomputed yet -- Svelte flushes reactive statements on
+      // their own microtask, which a .then() callback isn't guaranteed to
+      // run after. tick() explicitly waits for that flush.
+      void initialLoad.then(() => tick()).then(() => {
+        const entry = entries.find(candidate => candidate.source === 'todo' && candidate.id === requestedTaskId);
+        if (entry) openDetail(entry);
+      });
+    } else {
+      void initialLoad;
+    }
     void loadProjects();
     void loadTeamMembers();
     void loadCalendarFeedStatus();
