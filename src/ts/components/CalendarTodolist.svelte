@@ -706,29 +706,59 @@
     }
   }
 
-  async function load(): Promise<void> {
-    const requestSequence = ++loadSequence;
-    loading = true;
-    const [calendarResponse, activeResponse, stepResponse, activityResponse] = await Promise.all([
-      ApiC.getJson(calendarTaskQuery()) as Promise<Todo[]>,
+  // Only the pieces reminderEntries is actually built from (active todos +
+  // unfinished step deadlines) -- this runs on every page load regardless
+  // of whether the Activity Calendar panel has ever been opened (see the
+  // eager CalendarActivityC.initialize() call in common.ts, which exists
+  // so reminder badges/the banner keep working while the panel stays
+  // closed). The other two requests (the full month grid, entity activity
+  // feed) only matter for the calendar/agenda UI itself, so there's no
+  // reason to pay for them on every single page for every user just to
+  // check reminders -- loadCalendarExtras() below covers those, and only
+  // runs once the panel is actually opened.
+  async function loadReminderData(): Promise<void> {
+    const [activeResponse, stepResponse] = await Promise.all([
       ApiC.getJson(Model.Todolist) as Promise<Todo[]>,
       ApiC.getJson(`unfinished_steps?scope=${teamScope ? 'team' : 'user'}`) as Promise<{
         calendar?: StepDeadline[];
       }>,
-      ApiC.getJson(calendarActivityQuery()) as Promise<ActivityResponse>,
     ]);
-    // Month navigation can start another request before this one completes.
-    // Never let an older month overwrite the latest selected month.
-    if (requestSequence !== loadSequence) return;
-    calendarTasks = calendarResponse;
     activeTasks = activeResponse;
     stepDeadlines = stepResponse.calendar ?? [];
+    window.setTimeout(checkReminders, 0);
+  }
+
+  async function loadCalendarExtras(expectedSequence: number): Promise<void> {
+    const [calendarResponse, activityResponse] = await Promise.all([
+      ApiC.getJson(calendarTaskQuery()) as Promise<Todo[]>,
+      ApiC.getJson(calendarActivityQuery()) as Promise<ActivityResponse>,
+    ]);
+    // A newer request (e.g. the user navigated to a different month before
+    // this one resolved) already won -- don't let this now-stale response
+    // overwrite it.
+    if (expectedSequence !== loadSequence) return;
+    calendarTasks = calendarResponse;
     entityActivities = [
       ...(activityResponse.experiments ?? []),
       ...(activityResponse.items ?? []),
     ];
+  }
+
+  function isPanelOpen(): boolean {
+    return document.getElementById('calendarActivityPanel')?.hasAttribute('hidden') === false;
+  }
+
+  async function load(): Promise<void> {
+    const requestSequence = ++loadSequence;
+    loading = true;
+    const panelOpen = isPanelOpen();
+    await (panelOpen
+      ? Promise.all([loadReminderData(), loadCalendarExtras(requestSequence)])
+      : loadReminderData());
+    // Month navigation can start another request before this one completes.
+    // Never let an older month overwrite the latest selected month.
+    if (requestSequence !== loadSequence) return;
     loading = false;
-    window.setTimeout(checkReminders, 0);
   }
 
   async function refreshCalendarSidebar(): Promise<void> {
@@ -836,12 +866,33 @@
     window.addEventListener('mouseup', endRangeSelect);
     reminderTimer = window.setInterval(checkReminders, 30000);
     void load();
+    // load() only fetches the calendar/agenda data (loadCalendarExtras)
+    // when the panel is already open at call time -- on eager mount that's
+    // essentially never true, since the panel stays closed until the user
+    // opens it. Watch for that open transition and fetch the deferred
+    // extras then, once, so opening the panel for the first time in a page
+    // visit doesn't show an empty calendar.
+    let calendarExtrasLoaded = false;
+    const panel = document.getElementById('calendarActivityPanel');
+    const panelObserver = panel
+      ? new MutationObserver(() => {
+        if (calendarExtrasLoaded || panel.hasAttribute('hidden')) return;
+        calendarExtrasLoaded = true;
+        // Same stale-response guard load() uses: if the user opens the
+        // panel and immediately navigates to a different month before this
+        // resolves, don't let this now-outdated fetch clobber that newer
+        // month's data.
+        void loadCalendarExtras(++loadSequence);
+      })
+      : null;
+    panelObserver?.observe(panel as Node, { attributeFilter: ['hidden'] });
     return () => {
       window.removeEventListener('todolist-changed', reload);
       window.removeEventListener('todolist-scope-changed', reloadScope);
       document.removeEventListener('visibilitychange', checkReminders);
       window.removeEventListener('mouseup', endRangeSelect);
       refreshButton?.removeEventListener('click', refresh);
+      panelObserver?.disconnect();
     };
   });
 
