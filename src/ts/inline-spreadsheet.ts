@@ -1387,6 +1387,30 @@ function hasUnsafeCssValue(value: string): boolean {
   return /(?:expression\s*\(|javascript\s*:|url\s*\(|@import|behavior\s*:)/i.test(value);
 }
 
+/**
+ * "Apply appearance" is meant to make the table's/appearance's own colors
+ * (including alternating-row striping) the single source of truth -- a
+ * manually-set per-cell background color would otherwise keep winning over
+ * it, since getCellStyleAttribute() concatenates the appearance-generated
+ * style first and each cell's explicit style after, and a later CSS
+ * declaration for the same property always wins. Drop just
+ * background-color from each cell's explicit style before folding the
+ * freshly-applied appearance back in, so its own background (the
+ * alternating stripe or the plain default) actually takes effect; every
+ * other per-cell override (alignment, font, borders, etc.) is untouched.
+ */
+function stripCellBackgroundOverrides(styles: CellStyles | undefined): CellStyles | undefined {
+  if (!styles) return undefined;
+  const result: CellStyles = {};
+  Object.entries(styles).forEach(([cellName, style]) => {
+    const element = document.createElement('span');
+    element.setAttribute('style', style);
+    element.style.removeProperty('background-color');
+    if (element.getAttribute('style')) result[cellName] = element.getAttribute('style') as string;
+  });
+  return result;
+}
+
 function normalizeCellStyles(
   candidate: CellStyles | undefined,
   rows: number,
@@ -4236,7 +4260,7 @@ export function openSpreadsheetModal(
       const updated: SpreadsheetData = {
         ...working,
         data: resizeData(readRawData(), working.rows, working.cols),
-        cellStyles: readCellStyles(),
+        cellStyles: stripCellBackgroundOverrides(readCellStyles()),
         appearance,
       };
       mountSpreadsheet(updated);
@@ -4247,7 +4271,7 @@ export function openSpreadsheetModal(
       const updated: SpreadsheetData = {
         ...working,
         data: resizeData(readRawData(), working.rows, working.cols),
-        cellStyles: readCellStyles(),
+        cellStyles: stripCellBackgroundOverrides(readCellStyles()),
         appearance,
       };
       mountSpreadsheet(updated);
