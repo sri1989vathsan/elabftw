@@ -9,6 +9,19 @@ figure {
   text-align: center;
 }
 
+/* Browsers default to table-layout:auto, which recomputes every column's
+ * width from its cells' current content on every edit -- typing or
+ * deleting text in one cell reflows the whole table, visibly resizing
+ * other, untouched columns. This affects any plain table inserted via
+ * TinyMCE's own "Insert table" (not just the elabftw-spreadsheet tables,
+ * which already carry their own table-layout:fixed inline -- see
+ * getAppearanceTableStyle() in inline-spreadsheet.ts -- for the identical
+ * reason). Fixed layout makes column widths depend only on the table's
+ * colgroup/first-row cell widths and its own width, never on content. */
+.mce-content-body table {
+  table-layout: fixed;
+}
+
 .tox-tinymce--toolbar-sticky-on .tox-editor-header {
   top: calc(var(--navbar-height) + var(--toolbar-height)) !important;
   transition: top var(--sticky-header-speed) var(--sticky-header-easing);
