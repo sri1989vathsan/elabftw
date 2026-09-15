@@ -304,8 +304,11 @@
   let canLoadMore = false;
   let loadingMore = false;
 
-  $: entries = [
-    ...items.map(item => ({
+  // Shared with the deep-link fallback below (a task requested by a
+  // notification but not present on the first loaded page) so both build
+  // the exact same SidebarEntry shape from a Todo.
+  function mapTodoToEntry(item: Todo): SidebarEntry {
+    return {
       key: `todo-${item.id}`,
       source: 'todo' as const,
       id: Number(item.id),
@@ -323,7 +326,11 @@
       projectId: item.project_id,
       projectName: item.project_name,
       projectParentName: item.project_parent_name,
-    })),
+    };
+  }
+
+  $: entries = [
+    ...items.map(mapTodoToEntry),
     ...(['experiments', 'items'] as const).flatMap(entityType => (
       unfinished[entityType].flatMap(entity => (
         entity.steps.map(step => ({
@@ -1538,11 +1545,7 @@
     // Deep-linked from a to-do deadline notification (?open=todolist&task=ID,
     // wired up in common.ts/Transform.php): open that task's own detail
     // dialog once it's loaded, rather than leaving the reminder pointing at
-    // a bare, unopened sidebar. Only finds tasks already on the first
-    // loaded page (see load()'s own pagination) -- covers the common case
-    // (a reminder is for a task due soon, so it's normally recent/near the
-    // top of the assigned list) without needing a separate single-task
-    // fetch-and-inject path for the rare task far down the list.
+    // a bare, unopened sidebar.
     const requestedTaskId = Number.parseInt(
       new URLSearchParams(window.location.search).get('task') ?? '',
       10,
@@ -1554,9 +1557,23 @@
       // actually recomputed yet -- Svelte flushes reactive statements on
       // their own microtask, which a .then() callback isn't guaranteed to
       // run after. tick() explicitly waits for that flush.
-      void initialLoad.then(() => tick()).then(() => {
+      void initialLoad.then(() => tick()).then(async () => {
         const entry = entries.find(candidate => candidate.source === 'todo' && candidate.id === requestedTaskId);
-        if (entry) openDetail(entry);
+        if (entry) {
+          openDetail(entry);
+          return;
+        }
+        // Not on the first loaded page (see load()'s own pagination) --
+        // fall back to fetching that one task directly. readOne()
+        // (Todolist.php) already enforces the same project-visibility
+        // rule as the list endpoint, so this can't surface a task the
+        // requester couldn't otherwise see.
+        try {
+          const task = await ApiC.getJson(`${Model.Todolist}/${requestedTaskId}`) as Todo;
+          openDetail(mapTodoToEntry(task));
+        } catch (error) {
+          notify.error(error instanceof Error ? error.message : 'Could not open that task.');
+        }
       });
     } else {
       void initialLoad;
