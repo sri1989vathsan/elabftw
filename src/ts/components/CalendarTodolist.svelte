@@ -38,6 +38,17 @@
     completed_at: string | null;
   };
 
+  // What readActiveReminders() (Todolist.php) actually returns -- only
+  // incomplete, assigned-to-me tasks that have both a deadline and a
+  // reminder set, with none of the extra columns/joins the full Todo type
+  // above carries.
+  type ReminderTask = {
+    id: number;
+    body: string;
+    deadline: string;
+    reminder_minutes: number;
+  };
+
   type StepDeadline = {
     entity_type: 'experiments' | 'items';
     entity_page: string;
@@ -135,7 +146,7 @@
   );
   let locale = 'en-gb';
   let calendarTasks: Todo[] = [];
-  let activeTasks: Todo[] = [];
+  let activeTasks: ReminderTask[] = [];
   let stepDeadlines: StepDeadline[] = [];
   let entityActivities: EntityActivity[] = [];
   let entries: CalendarEntry[] = [];
@@ -208,22 +219,21 @@
     })),
   ].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
   $: reminderEntries = [
-    ...activeTasks
-      .filter(task => Boolean(task.deadline))
-      .map(task => ({
-        key: `todo-${task.id}`,
-        source: 'todo' as const,
-        id: Number(task.id),
-        body: task.body,
-        notes: task.notes,
-        deadline: task.deadline as string,
-        reminderMinutes: task.reminder_minutes === null
-          ? null
-          : Number(task.reminder_minutes),
-        completedAt: null,
-        userid: core.currentUserid,
-        ownerFullname: '',
-      })),
+    // readActiveReminders() already filters to incomplete, assigned,
+    // deadline+reminder_minutes-set tasks server-side -- no further
+    // filtering or null-handling needed here.
+    ...activeTasks.map(task => ({
+      key: `todo-${task.id}`,
+      source: 'todo' as const,
+      id: Number(task.id),
+      body: task.body,
+      notes: null,
+      deadline: task.deadline,
+      reminderMinutes: Number(task.reminder_minutes),
+      completedAt: null,
+      userid: core.currentUserid,
+      ownerFullname: '',
+    })),
     ...stepDeadlines.map(step => ({
       key: `step-${step.entity_type}-${step.step_id}`,
       source: 'step' as const,
@@ -717,8 +727,11 @@
   // check reminders -- loadCalendarExtras() below covers those, and only
   // runs once the panel is actually opened.
   async function loadReminderData(): Promise<void> {
+    // readActiveReminders() (Todolist.php), not readAll()'s own paginated
+    // list -- that caps at 100 rows, which would silently miss reminders
+    // past the first page for any account with more open tasks than that.
     const [activeResponse, stepResponse] = await Promise.all([
-      ApiC.getJson(Model.Todolist) as Promise<Todo[]>,
+      ApiC.getJson(`${Model.Todolist}?reminders=1`) as Promise<ReminderTask[]>,
       ApiC.getJson(`unfinished_steps?scope=${teamScope ? 'team' : 'user'}`) as Promise<{
         calendar?: StepDeadline[];
       }>,

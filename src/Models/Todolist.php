@@ -163,6 +163,17 @@ final class Todolist extends AbstractRest
             $unfiled = $query->getBoolean('unfiled');
             return array($this->readCounts($scope, $scopeFilter, $projectId, $unfiled, $includeSubprojects));
         }
+        // Deadline-reminder checking (the sidebar's grouped banner) only
+        // ever needs id/body/deadline/reminder_minutes for tasks assigned
+        // to the requester -- deliberately its own query rather than
+        // reusing readAll()'s own paginated list: that caps at $limit (see
+        // above), which would silently miss reminders for any task past
+        // the first 100 for an account with more open tasks than that. No
+        // assignee/entity-link/project-name joins either, since none of
+        // that is ever shown in the reminder banner.
+        if ($query->getBoolean('reminders')) {
+            return $this->readActiveReminders();
+        }
         // One row per linked entity across every task in a project (and,
         // when include_subprojects is set, its subprojects too), for the
         // board's "All links in this project" summary popup -- deliberately
@@ -412,6 +423,60 @@ final class Todolist extends AbstractRest
             'done_count' => (int) $row['done_count'],
             'team_open_count' => (int) $row['team_open_count'],
             'team_done_count' => (int) $row['team_done_count'],
+        );
+    }
+
+    /**
+     * The minimal columns the sidebar reminder banner is built from, for
+     * every incomplete task assigned to the requester with both a deadline
+     * and a reminder set -- regardless of how many open tasks exist. No
+     * LIMIT (see readAll()'s own $limit, capped for the paginated task
+     * list), and no assignee/creator/project-name/entity-link joins, since
+     * none of that is ever shown in the reminder banner.
+     *
+     * @return array<int, array{id: int, body: string, deadline: string, reminder_minutes: int}>
+     */
+    private function readActiveReminders(): array
+    {
+        // Matches readAll()'s own default 'assigned' scope: tasks assigned
+        // to the requester via the multi-assignee table, same as what the
+        // banner used to (indirectly) source its reminders from.
+        $sql = 'SELECT t.id, t.body,
+                DATE_FORMAT(t.deadline, \'%Y-%m-%dT%H:%i:%sZ\') AS deadline,
+                t.reminder_minutes
+            FROM todolist AS t
+            LEFT JOIN todolist_projects AS project ON project.id = t.project_id
+            WHERE t.team = :team
+                AND EXISTS (SELECT 1 FROM todolist_task_assignees AS ta2 WHERE ta2.task_id = t.id AND ta2.userid = :requester)
+                AND t.completed_at IS NULL
+                AND t.deadline IS NOT NULL
+                AND t.reminder_minutes IS NOT NULL
+                AND (t.project_id IS NULL OR project.archived = 0)
+                AND (
+                    t.project_id IS NULL
+                    OR project.userid = :requester2
+                    OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester3)
+                    OR (project.parent_id IS NOT NULL AND (
+                        EXISTS (SELECT 1 FROM todolist_projects AS pp WHERE pp.id = project.parent_id AND pp.userid = :requester4)
+                        OR EXISTS (SELECT 1 FROM todolist_project_members AS pm2 WHERE pm2.project_id = project.parent_id AND pm2.userid = :requester5)
+                    ))
+                )';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $req->bindParam(':requester', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester2', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester3', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester5', $this->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return array_map(
+            fn(array $row): array => array(
+                'id' => (int) $row['id'],
+                'body' => (string) $row['body'],
+                'deadline' => (string) $row['deadline'],
+                'reminder_minutes' => (int) $row['reminder_minutes'],
+            ),
+            $req->fetchAll(),
         );
     }
 
