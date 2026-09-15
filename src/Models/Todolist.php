@@ -428,29 +428,45 @@ final class Todolist extends AbstractRest
 
     /**
      * The minimal columns the sidebar reminder banner is built from, for
-     * every incomplete task assigned to the requester with both a deadline
-     * and a reminder set -- regardless of how many open tasks exist. No
-     * LIMIT (see readAll()'s own $limit, capped for the paginated task
-     * list), and no assignee/creator/project-name/entity-link joins, since
-     * none of that is ever shown in the reminder banner.
+     * every incomplete task assigned to the requester whose reminder is
+     * already due (deadline minus reminder_minutes has already passed) --
+     * regardless of how many open tasks exist. No LIMIT (see readAll()'s
+     * own $limit, capped for the paginated task list), and no assignee/
+     * creator/project-name/entity-link joins, since none of that is ever
+     * shown in the reminder banner.
+     *
+     * Filtering to already-due reminders server-side (rather than every
+     * future one, letting the client decide which are due) keeps the
+     * result bounded by how many reminders are *currently* relevant,
+     * independent of how many upcoming tasks with a reminder set pile up
+     * over time. checkReminders() (CalendarTodolist.svelte) still repeats
+     * this same check client-side, harmlessly, since it also covers step
+     * deadlines from a separate endpoint this filter doesn't touch.
+     *
+     * Driven from todolist_task_assignees (indexed on userid via its own
+     * FK constraint) rather than an EXISTS correlated on the outer
+     * todolist row: EXPLAIN on the EXISTS form showed MySQL scanning every
+     * one of the team's incomplete-with-deadline tasks before checking
+     * assignment, a full table scan; joining this way instead lets the
+     * optimizer start from the requester's own (normally far smaller) set
+     * of assigned tasks.
      *
      * @return array<int, array{id: int, body: string, deadline: string, reminder_minutes: int}>
      */
     private function readActiveReminders(): array
     {
-        // Matches readAll()'s own default 'assigned' scope: tasks assigned
-        // to the requester via the multi-assignee table, same as what the
-        // banner used to (indirectly) source its reminders from.
         $sql = 'SELECT t.id, t.body,
                 DATE_FORMAT(t.deadline, \'%Y-%m-%dT%H:%i:%sZ\') AS deadline,
                 t.reminder_minutes
-            FROM todolist AS t
+            FROM todolist_task_assignees AS ta
+            INNER JOIN todolist AS t ON t.id = ta.task_id
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
-            WHERE t.team = :team
-                AND EXISTS (SELECT 1 FROM todolist_task_assignees AS ta2 WHERE ta2.task_id = t.id AND ta2.userid = :requester)
+            WHERE ta.userid = :requester
+                AND t.team = :team
                 AND t.completed_at IS NULL
                 AND t.deadline IS NOT NULL
                 AND t.reminder_minutes IS NOT NULL
+                AND t.deadline <= DATE_ADD(UTC_TIMESTAMP(), INTERVAL t.reminder_minutes MINUTE)
                 AND (t.project_id IS NULL OR project.archived = 0)
                 AND (
                     t.project_id IS NULL
