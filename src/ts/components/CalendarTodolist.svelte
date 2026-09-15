@@ -140,7 +140,7 @@
   let entityActivities: EntityActivity[] = [];
   let entries: CalendarEntry[] = [];
   let reminderEntries: CalendarEntry[] = [];
-  let bannerEntries: { key: string; body: string; deadlineLabel: string; overdue: boolean }[] = [];
+  let bannerEntries: { key: string; deadline: string; body: string; deadlineLabel: string; overdue: boolean }[] = [];
   let bannerCollapsed = false;
   let calendarCells: CalendarCell[] = [];
   let agendaEntries: CalendarEntry[] = [];
@@ -748,34 +748,41 @@
 
   function checkReminders(): void {
     const now = Date.now();
-    const newEntries: typeof bannerEntries = [];
-    reminderEntries.forEach(entry => {
-      if (entry.reminderMinutes === null) return;
+    // Every full page navigation remounts this component from scratch, so
+    // a one-shot "have I ever shown this" flag (what the individual toasts
+    // this banner replaced used) would mean an item silently never
+    // reappears on the next page once it's been shown once -- the banner
+    // would look like it "disappeared" while the task is still just as
+    // overdue. A persistent status banner should instead keep reflecting
+    // whatever is currently due on every page, and only stop showing an
+    // entry once the user actually dismisses it. Track dismissal (not
+    // one-time display) per entry, still in sessionStorage so a dismissal
+    // holds for the rest of this browser session/tab.
+    const wasEmpty = bannerEntries.length === 0;
+    bannerEntries = reminderEntries.reduce<typeof bannerEntries>((accumulator, entry) => {
+      if (entry.reminderMinutes === null) return accumulator;
       const deadline = new Date(entry.deadline).getTime();
       const remindAt = deadline - entry.reminderMinutes * 60000;
-      if (now < remindAt) return;
-      // Same one-shot-per-session dedup the individual toasts this banner
-      // replaced used: once an entry has been surfaced, it stays flagged so
-      // it never reappears (even after the banner itself is dismissed and a
-      // later poll picks up other, genuinely new due entries).
-      const storageKey = `todo-reminder-${entry.key}-${entry.deadline}`;
-      if (sessionStorage.getItem(storageKey)) return;
-      newEntries.push({
+      if (now < remindAt) return accumulator;
+      const dismissKey = `todo-reminder-dismissed-${entry.key}-${entry.deadline}`;
+      if (sessionStorage.getItem(dismissKey)) return accumulator;
+      accumulator.push({
         key: entry.key,
+        deadline: entry.deadline,
         body: entry.body,
         deadlineLabel: formatDeadline(entry.deadline),
         overdue: deadline < now,
       });
-      sessionStorage.setItem(storageKey, '1');
-    });
-    if (newEntries.length > 0) {
-      bannerEntries = [...bannerEntries, ...newEntries];
-      bannerCollapsed = false;
-    }
+      return accumulator;
+    }, []);
+    if (wasEmpty && bannerEntries.length > 0) bannerCollapsed = false;
     updateUrgentBadges(reminderEntries, now);
   }
 
   function dismissReminderBanner(): void {
+    bannerEntries.forEach(entry => {
+      sessionStorage.setItem(`todo-reminder-dismissed-${entry.key}-${entry.deadline}`, '1');
+    });
     bannerEntries = [];
   }
 
