@@ -141,7 +141,7 @@
   let entries: CalendarEntry[] = [];
   let reminderEntries: CalendarEntry[] = [];
   let bannerEntries: { key: string; deadline: string; body: string; deadlineLabel: string; overdue: boolean }[] = [];
-  let bannerCollapsed = false;
+  let bannerCollapsed = true;
   let calendarCells: CalendarCell[] = [];
   let agendaEntries: CalendarEntry[] = [];
   let agendaExperiments: AgendaEntityActivity[] = [];
@@ -758,7 +758,6 @@
     // entry once the user actually dismisses it. Track dismissal (not
     // one-time display) per entry, still in sessionStorage so a dismissal
     // holds for the rest of this browser session/tab.
-    const wasEmpty = bannerEntries.length === 0;
     bannerEntries = reminderEntries.reduce<typeof bannerEntries>((accumulator, entry) => {
       if (entry.reminderMinutes === null) return accumulator;
       const deadline = new Date(entry.deadline).getTime();
@@ -775,7 +774,6 @@
       });
       return accumulator;
     }, []);
-    if (wasEmpty && bannerEntries.length > 0) bannerCollapsed = false;
     updateUrgentBadges(reminderEntries, now);
   }
 
@@ -854,33 +852,28 @@
 
 {#if bannerEntries.length > 0}
   <div class='reminder-banner' role='status' use:portalToContainer>
-    <button type='button' class='reminder-banner-header' on:click={toggleReminderBanner} aria-expanded={!bannerCollapsed}>
-      <i class='fas fa-clock fa-fw reminder-banner-icon' aria-hidden='true'></i>
-      <span class='reminder-banner-summary'>
-        <span class='reminder-banner-title'>
-          {bannerEntries.length === 1
-            ? t('1 task due soon')
-            : t('{{count}} tasks due soon', { count: bannerEntries.length })}
+    <div class='reminder-banner-header'>
+      <button type='button' class='reminder-banner-toggle' on:click={toggleReminderBanner} aria-expanded={!bannerCollapsed}>
+        <i class='fas fa-clock fa-fw reminder-banner-icon' aria-hidden='true'></i>
+        <span class='reminder-banner-summary'>
+          <span class='reminder-banner-title'>
+            {bannerEntries.length === 1
+              ? t('1 task due soon')
+              : t('{{count}} tasks due soon', { count: bannerEntries.length })}
+          </span>
+          <span class='reminder-banner-subtitle'>{t('Deadlines approaching')}</span>
         </span>
-        <span class='reminder-banner-subtitle'>{t('Deadlines approaching')}</span>
-      </span>
-      <i class='fas fa-fw reminder-banner-chevron' class:fa-chevron-up={!bannerCollapsed} class:fa-chevron-down={bannerCollapsed} aria-hidden='true'></i>
-      <span
+        <i class='fas fa-fw reminder-banner-chevron' class:fa-chevron-up={!bannerCollapsed} class:fa-chevron-down={bannerCollapsed} aria-hidden='true'></i>
+      </button>
+      <button
+        type='button'
         class='reminder-banner-dismiss'
-        role='button'
-        tabindex='0'
         aria-label={t('Dismiss')}
-        on:click|stopPropagation={dismissReminderBanner}
-        on:keydown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            dismissReminderBanner();
-          }
-        }}
+        on:click={dismissReminderBanner}
       >
         <i class='fas fa-xmark' aria-hidden='true'></i>
-      </span>
-    </button>
+      </button>
+    </div>
     {#if !bannerCollapsed}
       <ul class='reminder-banner-list'>
         {#each bannerEntries as entry (entry.key)}
@@ -1166,13 +1159,21 @@
 
   .reminder-banner-header {
     align-items: flex-start;
+    display: flex;
+    gap: 0.3rem;
+    padding: 0.7rem 0.6rem 0.7rem 0.8rem;
+  }
+
+  .reminder-banner-toggle {
+    align-items: flex-start;
     background: transparent;
     border: 0;
     display: flex;
+    flex: 1;
     gap: 0.6rem;
-    padding: 0.7rem 0.8rem;
+    min-width: 0;
+    padding: 0;
     text-align: left;
-    width: 100%;
   }
 
   .reminder-banner-icon {
@@ -1207,12 +1208,16 @@
 
   .reminder-banner-dismiss {
     align-items: center;
+    background: transparent;
+    border: 0;
     color: var(--strongest);
     cursor: pointer;
     display: flex;
     height: 1.4rem;
     justify-content: center;
+    margin-top: 0.15rem;
     opacity: 0.7;
+    padding: 0;
     width: 1.4rem;
   }
 
