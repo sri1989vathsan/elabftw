@@ -416,6 +416,20 @@ if (requestedCalendar.get('calendar') === 'activity'
 ) {
   CalendarActivityC.show();
 }
+// A to-do deadline notification links here with ?open=todolist&task=ID
+// (see Transform.php/TodoDeadline.php) -- unlike CalendarActivityC, the
+// Todolist panel doesn't eagerly mount on every page load, so show()
+// alone (which only clears the hidden attribute) would reveal an empty,
+// never-initialized container. toggle() also calls initialize(), matching
+// the existing openedSidePanel-restore case just above; only call it when
+// the panel isn't already open (open + already-initialized needs nothing
+// further here -- Todolist.svelte's own onMount reads the task param).
+if (requestedCalendar.get('open') === 'todolist') {
+  const todolistPanel = document.getElementById('todolistPanel');
+  if (todolistPanel?.hasAttribute('hidden') !== false) {
+    TodolistC.toggle();
+  }
+}
 
 // ACTIVATE REACTIVE COUNT OF .COUNTABLE ITEMS
 document.querySelectorAll('[data-count-for]').forEach((container: HTMLElement) => new Counter(container));
