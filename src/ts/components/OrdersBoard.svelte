@@ -3,7 +3,7 @@
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
-  import { Action, EntityType, Model } from '../interfaces';
+  import { EntityType, Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
   import { applyMention, extractMentionQuery, wrapMentionsAsHtml, stripMentionHtml } from '../mentions';
   import { handleLinkPreviewPaste } from '../linkPreview';
@@ -842,20 +842,23 @@
     }
   }
 
-  let duplicatingItemId: number | null = null;
   let openMenuItemId: number | null = null;
 
+  // "Duplicate" prefills the request-an-order form at the top with this
+  // order's data instead of silently creating a copy in the background --
+  // that way it's a starting point to tweak (a different quantity, an
+  // extra item) before actually placing the new request, rather than an
+  // instant, easy-to-miss clone.
   async function duplicateItem(item: OrderItem): Promise<void> {
-    duplicatingItemId = item.id;
-    try {
-      await ApiC.post2location(`${Model.Order}/${item.id}`, { action: Action.Duplicate });
-      notify.success(t('Order duplicated as a new request.'));
-      await load();
-    } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not duplicate this order.');
-    } finally {
-      duplicatingItemId = null;
-    }
+    newTitle = item.title;
+    if (newNotesEl) newNotesEl.innerHTML = item.notes ?? '';
+    selectedResources = item.items.map(linkedItem => ({ id: linkedItem.id, title: linkedItem.title }));
+    newIsCommon = item.common;
+    newIsReference = false;
+    newForUserid = null;
+    await tick();
+    document.getElementById('ordersNewTitle')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('ordersNewTitle')?.focus();
   }
 
   function selectTab(next: OrderStatus | 'archived' | 'all'): void {
@@ -1812,9 +1815,8 @@
                   <button
                     type="button"
                     class="btn btn-ghost btn-sm orders-icon-button"
-                    disabled={duplicatingItemId === item.id}
-                    title={t('Duplicate as a new request')}
-                    aria-label={t('Duplicate as a new request')}
+                    title={t('Copy into the request form above')}
+                    aria-label={t('Copy into the request form above')}
                     on:click={() => duplicateItem(item)}
                   >
                     <i class="fas fa-clone fa-fw" aria-hidden="true"></i>
