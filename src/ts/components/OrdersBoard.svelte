@@ -222,6 +222,10 @@
   let newIsCommon = false;
   // place the order for a teammate instead of themself
   let newForUserid: number | null = null;
+  // no manual field for this in the form -- only ever set by Duplicate,
+  // carrying over the source order's own LabCollector link
+  let newLabcollectorType: string | null = null;
+  let newLabcollectorId: string | null = null;
   let submitting = false;
 
   let categories: Category[] = [];
@@ -627,6 +631,8 @@
         status: newIsReference ? 'reference' : undefined,
         userid: newForUserid ?? undefined,
         common: newIsCommon,
+        labcollector_type: newLabcollectorType ?? undefined,
+        labcollector_id: newLabcollectorId ?? undefined,
       });
       for (const file of newFiles) {
         try {
@@ -661,6 +667,8 @@
       newIsReference = false;
       newIsCommon = false;
       newForUserid = null;
+      newLabcollectorType = null;
+      newLabcollectorId = null;
       selectedResources = [];
       pendingNewResources = [];
       pendingNoteImages = [];
@@ -856,6 +864,8 @@
     newIsCommon = item.common;
     newIsReference = false;
     newForUserid = null;
+    newLabcollectorType = item.labcollector_type;
+    newLabcollectorId = item.labcollector_id;
     await tick();
     document.getElementById('ordersNewTitle')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     document.getElementById('ordersNewTitle')?.focus();
@@ -1338,6 +1348,12 @@
           <option value={member.userid}>{member.fullname}</option>
         {/each}
       </select>
+      {#if newLabcollectorType}
+        <span class="badge badge-info mb-2" title={t('Carried over from the duplicated order')}>
+          <i class="fas fa-flask fa-fw mr-1" aria-hidden="true"></i>{labcollectorTypeLabel(newLabcollectorType)} #{newLabcollectorId}
+          <button type="button" class="btn-unstyled ml-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => { newLabcollectorType = null; newLabcollectorId = null; }}>&times;</button>
+        </span>
+      {/if}
       <label class="sr-only" for="ordersNewNotes">{t('Notes')}</label>
       <div
         id="ordersNewNotes"
