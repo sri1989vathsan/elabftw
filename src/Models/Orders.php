@@ -126,9 +126,21 @@ final class Orders extends AbstractRest
         $this->Db->execute($req);
         $orderId = (int) $this->Db->lastInsertId();
 
-        if (!empty($itemIds)) {
+        // set at creation only when Duplicate carried it over from the
+        // source order's own LabCollector link -- there's no manual field
+        // for it in the request form itself, registration normally happens
+        // afterwards via the helper box on the order
+        $labcollectorType = $this->getLabCollectorType($reqBody['labcollector_type'] ?? null);
+        $labcollectorId = $this->getLabCollectorId($reqBody['labcollector_id'] ?? null);
+
+        if (!empty($itemIds) || $labcollectorType !== null) {
             $this->setId($orderId);
-            $this->replaceItems($itemIds);
+            if (!empty($itemIds)) {
+                $this->replaceItems($itemIds);
+            }
+            if ($labcollectorType !== null) {
+                $this->updateLabCollectorLink($labcollectorType, $labcollectorId);
+            }
         }
 
         return $orderId;
@@ -159,9 +171,14 @@ final class Orders extends AbstractRest
         $newId = (int) $this->Db->lastInsertId();
 
         $itemIds = array_map(static fn(array $item): int => (int) $item['id'], $source['items']);
-        if (!empty($itemIds)) {
+        if (!empty($itemIds) || $source['labcollector_type'] !== null) {
             $this->setId($newId);
-            $this->replaceItems($itemIds);
+            if (!empty($itemIds)) {
+                $this->replaceItems($itemIds);
+            }
+            if ($source['labcollector_type'] !== null) {
+                $this->updateLabCollectorLink($source['labcollector_type'], $source['labcollector_id']);
+            }
         }
 
         return $newId;
