@@ -151,6 +151,10 @@
   let calendarTasks: Todo[] = [];
   let activeTasks: ReminderTask[] = [];
   let stepDeadlines: StepDeadline[] = [];
+  // due-only, unbounded -- separate from stepDeadlines above, which is
+  // capped at 100 rows and feeds the full calendar grid's day markers, not
+  // the reminder check (see loadReminderData()'s own comment)
+  let activeStepReminders: StepDeadline[] = [];
   let entityActivities: EntityActivity[] = [];
   let entries: CalendarEntry[] = [];
   let reminderEntries: CalendarEntry[] = [];
@@ -242,7 +246,7 @@
       userid: core.currentUserid,
       ownerFullname: '',
     })),
-    ...stepDeadlines.map(step => ({
+    ...activeStepReminders.map(step => ({
       key: `step-${step.entity_type}-${step.step_id}`,
       source: 'step' as const,
       id: Number(step.step_id),
@@ -873,17 +877,26 @@
   // check reminders -- loadCalendarExtras() below covers those, and only
   // runs once the panel is actually opened.
   async function loadReminderData(): Promise<void> {
-    // readActiveReminders() (Todolist.php), not readAll()'s own paginated
-    // list -- that caps at 100 rows, which would silently miss reminders
-    // past the first page for any account with more open tasks than that.
-    const [activeResponse, stepResponse] = await Promise.all([
+    // readActiveReminders() (Todolist.php) for tasks, and a parallel
+    // unfinished_steps?reminders=1 for steps, rather than reusing either
+    // endpoint's own paginated list (capped at 100 rows) for the reminder
+    // check -- that would silently miss a due reminder past the first page
+    // for any account/team with more open tasks or step deadlines than
+    // that. The plain (non-reminders) unfinished_steps call below is kept
+    // as-is: it still feeds the full calendar grid's day markers, which
+    // need every upcoming step, not just ones due right now.
+    const [activeResponse, stepResponse, activeStepResponse] = await Promise.all([
       ApiC.getJson(`${Model.Todolist}?reminders=1`) as Promise<ReminderTask[]>,
       ApiC.getJson(`unfinished_steps?scope=${teamScope ? 'team' : 'user'}`) as Promise<{
+        calendar?: StepDeadline[];
+      }>,
+      ApiC.getJson(`unfinished_steps?reminders=1&scope=${teamScope ? 'team' : 'user'}`) as Promise<{
         calendar?: StepDeadline[];
       }>,
     ]);
     activeTasks = activeResponse;
     stepDeadlines = stepResponse.calendar ?? [];
+    activeStepReminders = activeStepResponse.calendar ?? [];
     window.setTimeout(checkReminders, 0);
   }
 

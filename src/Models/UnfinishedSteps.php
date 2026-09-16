@@ -48,6 +48,17 @@ final class UnfinishedSteps extends AbstractRest
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
         $queryParams ??= $this->getQueryParams();
+        // The sidebar's reminder check only ever needs steps that are
+        // actually due soon -- deliberately its own query rather than
+        // reusing the calendar feed below, which caps at $limit (see next),
+        // silently missing a due step past the first page for any team/user
+        // with more open step deadlines than that.
+        if ($queryParams->getQuery()->getBoolean('reminders')) {
+            return array('calendar' => array_merge(
+                $this->getActiveReminderSteps(EntityType::Experiments),
+                $this->getActiveReminderSteps(EntityType::Items),
+            ));
+        }
         $limit = $queryParams->getLimit() ?: 100;
         $offset = max(0, $queryParams->getQuery()->getInt('offset'));
         $experimentsSteps = $this->cleanUpResult($this->getSteps(EntityType::Experiments, $limit, $offset));
@@ -94,6 +105,54 @@ final class UnfinishedSteps extends AbstractRest
         $req->bindParam(':teamid', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
 
+        return $req->fetchAll();
+    }
+
+    /**
+     * Same shape as getDeadlineSteps(), but unbounded and filtered
+     * server-side to steps whose deadline reminder is actually due (has
+     * deadline_notif set, and its fixed 30-minute-before window has been
+     * reached) -- this is the whole reminder list, not a page of it, since
+     * it's meant to stay small on its own by construction.
+     */
+    private function getActiveReminderSteps(EntityType $model): array
+    {
+        $sql = sprintf(
+            "SELECT '%s' AS entity_type,
+                '%s' AS entity_page,
+                entity.id AS entity_id,
+                entity.title AS entity_title,
+                entity.userid AS entity_userid,
+                CONCAT(owner.firstname, ' ', owner.lastname) AS owner_fullname,
+                entity_steps.id AS step_id,
+                entity_steps.body AS step_body,
+                DATE_FORMAT(entity_steps.deadline, '%%Y-%%m-%%dT%%H:%%i:%%sZ') AS deadline,
+                entity_steps.deadline_notif
+            FROM %s AS entity
+            INNER JOIN %s_steps AS entity_steps
+                ON entity_steps.item_id = entity.id
+            LEFT JOIN users AS owner ON owner.userid = entity.userid
+            JOIN users2teams
+                ON users2teams.users_id = entity.userid
+                AND users2teams.teams_id = :teamid
+            WHERE %s
+                AND entity.state = %d
+                AND entity_steps.finished = 0
+                AND entity_steps.deadline IS NOT NULL
+                AND entity_steps.deadline_notif = 1
+                AND entity_steps.deadline <= DATE_ADD(UTC_TIMESTAMP(), INTERVAL 30 MINUTE)
+            ORDER BY entity_steps.deadline ASC, entity_steps.ordering ASC",
+            $model->value,
+            $model->toPage(),
+            $model->value,
+            $model->value,
+            $this->teamScoped ? $this->getTeamWhereClause($model) : 'entity.userid = :userid',
+            State::Normal->value,
+        );
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':userid', $this->Users->userData['userid'], PDO::PARAM_INT);
+        $req->bindParam(':teamid', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
         return $req->fetchAll();
     }
 
