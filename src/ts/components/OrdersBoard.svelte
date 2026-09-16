@@ -3,7 +3,7 @@
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
-  import { EntityType, Model } from '../interfaces';
+  import { Action, EntityType, Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
   import { applyMention, extractMentionQuery, wrapMentionsAsHtml, stripMentionHtml } from '../mentions';
   import { handleLinkPreviewPaste } from '../linkPreview';
@@ -48,6 +48,7 @@
     status: OrderStatus;
     archived: boolean;
     pinned: boolean;
+    common: boolean;
     created_at: string;
     userid: number;
     author_fullname: string;
@@ -170,7 +171,10 @@
   let statusFilter: OrderStatus | 'archived' | 'all' = 'all';
   let ownerFilter: 'mine' | 'all' = 'mine';
   let selectedUserId: number | null = null;
-  let labcollectorFilter: 'all' | 'registered' | 'unregistered' = 'all';
+  // one dropdown for miscellaneous filter terms, so adding another one later
+  // (beyond LabCollector registration and the Common tag) just means
+  // another option here rather than another standalone control
+  let quickFilter: 'all' | 'labcollector:registered' | 'labcollector:unregistered' | 'common' = 'all';
   let searchQuery = '';
   // off by default: matching PDF-extracted text needs a per-order subquery
   // against potentially large attachment text, so only pay for it when the
@@ -182,7 +186,7 @@
 
   // pagination: the server is asked for pageSize+1 rows so hasNextPage can
   // be known without a separate COUNT query
-  const PAGE_SIZES = [5, 10];
+  const PAGE_SIZES = [5, 10, 20];
   let pageSize = 10;
   let pageOffset = 0;
   let hasNextPage = false;
@@ -200,6 +204,12 @@
   let pinnedOffset = 0;
   let hasMorePinned = false;
   let loadingMorePinned = false;
+  let pinnedCollapsed = localStorage.getItem('ordersPinnedCollapsed') === '1';
+
+  function togglePinnedCollapsed(): void {
+    pinnedCollapsed = !pinnedCollapsed;
+    localStorage.setItem('ordersPinnedCollapsed', pinnedCollapsed ? '1' : '0');
+  }
 
   let newTitle = '';
   // notes is a rich-text (contenteditable) field, not a bound string, so a
@@ -209,6 +219,9 @@
   let newNotesEl: HTMLElement;
   let newFiles: File[] = [];
   let newIsReference = false;
+  let newIsCommon = false;
+  // place the order for a teammate instead of themself
+  let newForUserid: number | null = null;
   let submitting = false;
 
   let categories: Category[] = [];
@@ -465,11 +478,13 @@
     }
     if (dateFrom !== '') params.date_from = dateFrom;
     if (dateTo !== '') params.date_to = dateTo;
-    if (labcollectorFilter !== 'all') params.labcollector = labcollectorFilter;
+    if (quickFilter === 'labcollector:registered') params.labcollector = 'registered';
+    else if (quickFilter === 'labcollector:unregistered') params.labcollector = 'unregistered';
+    else if (quickFilter === 'common') params.common = '1';
     return params;
   }
 
-  function onLabCollectorFilterChange(): void {
+  function onQuickFilterChange(): void {
     pageOffset = 0;
     void load();
   }
@@ -610,6 +625,8 @@
         notes: notesHtml === '' ? null : notesHtml,
         item_ids: itemIds,
         status: newIsReference ? 'reference' : undefined,
+        userid: newForUserid ?? undefined,
+        common: newIsCommon,
       });
       for (const file of newFiles) {
         try {
@@ -642,6 +659,8 @@
       if (newNotesEl) newNotesEl.innerHTML = '';
       newFiles = [];
       newIsReference = false;
+      newIsCommon = false;
+      newForUserid = null;
       selectedResources = [];
       pendingNewResources = [];
       pendingNoteImages = [];
@@ -811,6 +830,31 @@
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not update this order.');
+    }
+  }
+
+  async function setCommon(item: OrderItem, common: boolean): Promise<void> {
+    try {
+      await ApiC.patch(`${Model.Order}/${item.id}`, { common });
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update this order.');
+    }
+  }
+
+  let duplicatingItemId: number | null = null;
+  let openMenuItemId: number | null = null;
+
+  async function duplicateItem(item: OrderItem): Promise<void> {
+    duplicatingItemId = item.id;
+    try {
+      await ApiC.post2location(`${Model.Order}/${item.id}`, { action: Action.Duplicate });
+      notify.success(t('Order duplicated as a new request.'));
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not duplicate this order.');
+    } finally {
+      duplicatingItemId = null;
     }
   }
 
@@ -1274,6 +1318,23 @@
       >
         <i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Reference')}
       </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm orders-reference-toggle mb-2"
+        class:active={newIsCommon}
+        aria-pressed={newIsCommon}
+        title={t('Commonly ordered lab supply (e.g. gloves, tips) — just a label, still a normal order')}
+        on:click={() => newIsCommon = !newIsCommon}
+      >
+        <i class="fas fa-tag fa-fw mr-1" aria-hidden="true"></i>{t('Common')}
+      </button>
+      <label class="sr-only" for="ordersNewForUser">{t('Place this order for')}</label>
+      <select id="ordersNewForUser" class="form-control form-control-sm mb-2" bind:value={newForUserid} title={t('Place this order for')}>
+        <option value={null}>{t('Myself')}</option>
+        {#each teamMembers as member (member.userid)}
+          <option value={member.userid}>{member.fullname}</option>
+        {/each}
+      </select>
       <label class="sr-only" for="ordersNewNotes">{t('Notes')}</label>
       <div
         id="ordersNewNotes"
@@ -1388,16 +1449,28 @@
   </div>
   {#if pinnedItems.length > 0}
     <div class="orders-pinned-section">
-      <h2 class="h6 orders-pinned-heading"><i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Pinned')}</h2>
-      <ul class="orders-list">
-        {#each pinnedItems as item (item.id)}
-          {@render orderCard(item)}
-        {/each}
-      </ul>
-      {#if hasMorePinned}
-        <button type="button" class="btn btn-ghost btn-sm" disabled={loadingMorePinned} on:click={loadMorePinned}>
-          {loadingMorePinned ? t('Loading') + '…' : t('Load more pinned')}
-        </button>
+      <h2
+        class="h6 orders-pinned-heading orders-pinned-heading-toggle"
+        role="button"
+        tabindex="0"
+        aria-expanded={!pinnedCollapsed}
+        on:click={togglePinnedCollapsed}
+        on:keydown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); togglePinnedCollapsed(); } }}
+      >
+        <i class={`fas ${pinnedCollapsed ? 'fa-caret-right' : 'fa-caret-down'} fa-fw mr-1`} aria-hidden="true"></i>
+        <i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Pinned')} ({pinnedItems.length})
+      </h2>
+      {#if !pinnedCollapsed}
+        <ul class="orders-list">
+          {#each pinnedItems as item (item.id)}
+            {@render orderCard(item)}
+          {/each}
+        </ul>
+        {#if hasMorePinned}
+          <button type="button" class="btn btn-ghost btn-sm" disabled={loadingMorePinned} on:click={loadMorePinned}>
+            {loadingMorePinned ? t('Loading') + '…' : t('Load more pinned')}
+          </button>
+        {/if}
       {/if}
     </div>
   {/if}
@@ -1451,10 +1524,15 @@
       </select>
     {/if}
     <span class="orders-toolbar-divider" aria-hidden="true"></span>
-    <select class="form-control form-control-sm" style="width:auto" bind:value={labcollectorFilter} on:change={onLabCollectorFilterChange} title={t('Filter by LabCollector registration')}>
-      <option value="all">{t('LabCollector: all')}</option>
-      <option value="registered">{t('LabCollector: registered')}</option>
-      <option value="unregistered">{t('LabCollector: not registered')}</option>
+    <select class="form-control form-control-sm" style="width:auto" bind:value={quickFilter} on:change={onQuickFilterChange} title={t('Filter')}>
+      <option value="all">{t('Filter: none')}</option>
+      <optgroup label={t('LabCollector')}>
+        <option value="labcollector:registered">{t('Registered')}</option>
+        <option value="labcollector:unregistered">{t('Not registered')}</option>
+      </optgroup>
+      <optgroup label={t('Tags')}>
+        <option value="common">{t('Common')}</option>
+      </optgroup>
     </select>
   </div>
 
@@ -1689,6 +1767,11 @@
                 </select>
                 <span class="orders-muted orders-item-id" title={t('Order ID')}>#{item.id}</span>
                 <strong class="orders-item-title">{item.title}</strong>
+                {#if item.common}
+                  <span class="badge badge-warning orders-common-badge" title={t('Commonly ordered lab supply')}>
+                    <i class="fas fa-tag fa-fw mr-1" aria-hidden="true"></i>{t('Common')}
+                  </span>
+                {/if}
                 {#each item.items as linkedItem (linkedItem.id)}
                   <span class="badge badge-info"><i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{linkedItem.title}</span>
                 {/each}
@@ -1725,29 +1808,18 @@
                     {/if}
                   </span>
                 {/if}
-                {#if canManage(item)}
-                  <div class="orders-item-actions ml-auto">
-                    <button
-                      type="button"
-                      class="btn btn-ghost btn-sm orders-icon-button"
-                      class:orders-icon-button-active={item.pinned}
-                      disabled={item.status === 'reference'}
-                      title={item.status === 'reference' ? t('A reference always stays pinned') : item.pinned ? t('Unpin') : t('Pin to top')}
-                      aria-label={item.status === 'reference' ? t('A reference always stays pinned') : item.pinned ? t('Unpin') : t('Pin to top')}
-                      on:click={() => setPinned(item, !item.pinned)}
-                    >
-                      <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i>
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-ghost btn-sm orders-icon-button"
-                      class:orders-icon-button-active={!!item.reminder_at}
-                      title={item.reminder_at ? `${t('Reminder')}: ${formatReminder(item.reminder_at)}` : t('Set reminder')}
-                      aria-label={item.reminder_at ? t('Change reminder') : t('Set reminder')}
-                      on:click={() => openReminderModal(item)}
-                    >
-                      <i class="fas fa-bell fa-fw" aria-hidden="true"></i>
-                    </button>
+                <div class="orders-item-actions ml-auto">
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm orders-icon-button"
+                    disabled={duplicatingItemId === item.id}
+                    title={t('Duplicate as a new request')}
+                    aria-label={t('Duplicate as a new request')}
+                    on:click={() => duplicateItem(item)}
+                  >
+                    <i class="fas fa-clone fa-fw" aria-hidden="true"></i>
+                  </button>
+                  {#if canManage(item)}
                     <button
                       type="button"
                       class="btn btn-ghost btn-sm orders-icon-button"
@@ -1766,17 +1838,63 @@
                     >
                       <i class={`fas ${item.archived ? 'fa-box-open' : 'fa-box-archive'} fa-fw`} aria-hidden="true"></i>
                     </button>
+                  {/if}
+                  <div class="orders-more-menu" use:clickOutside={() => { if (openMenuItemId === item.id) openMenuItemId = null; }}>
                     <button
                       type="button"
-                      class="btn btn-danger-ghost btn-sm orders-icon-button"
-                      title={t('Delete')}
-                      aria-label={t('Delete')}
-                      on:click={() => deleteItem(item)}
+                      class="btn btn-ghost btn-sm orders-icon-button"
+                      title={t('More actions')}
+                      aria-label={t('More actions')}
+                      aria-expanded={openMenuItemId === item.id}
+                      on:click={() => openMenuItemId = openMenuItemId === item.id ? null : item.id}
                     >
-                      <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                      <i class="fas fa-ellipsis-vertical fa-fw" aria-hidden="true"></i>
                     </button>
+                    {#if openMenuItemId === item.id}
+                      <div class="orders-more-dropdown">
+                        <button
+                          type="button"
+                          class="orders-more-dropdown-item"
+                          class:orders-more-dropdown-item-active={item.common}
+                          on:click={() => { setCommon(item, !item.common); openMenuItemId = null; }}
+                        >
+                          <i class="fas fa-tag fa-fw mr-2" aria-hidden="true"></i>
+                          {item.common ? t('Remove the "commonly ordered" tag') : t('Tag as a commonly ordered lab supply')}
+                        </button>
+                        {#if canManage(item)}
+                          <button
+                            type="button"
+                            class="orders-more-dropdown-item"
+                            class:orders-more-dropdown-item-active={item.pinned}
+                            disabled={item.status === 'reference'}
+                            title={item.status === 'reference' ? t('A reference always stays pinned') : ''}
+                            on:click={() => { setPinned(item, !item.pinned); openMenuItemId = null; }}
+                          >
+                            <i class="fas fa-thumbtack fa-fw mr-2" aria-hidden="true"></i>
+                            {item.pinned ? t('Unpin') : t('Pin to top')}
+                          </button>
+                          <button
+                            type="button"
+                            class="orders-more-dropdown-item"
+                            class:orders-more-dropdown-item-active={!!item.reminder_at}
+                            on:click={() => { openReminderModal(item); openMenuItemId = null; }}
+                          >
+                            <i class="fas fa-bell fa-fw mr-2" aria-hidden="true"></i>
+                            {item.reminder_at ? `${t('Reminder')}: ${formatReminder(item.reminder_at)}` : t('Set reminder')}
+                          </button>
+                          <button
+                            type="button"
+                            class="orders-more-dropdown-item orders-more-dropdown-item-danger"
+                            on:click={() => { openMenuItemId = null; deleteItem(item); }}
+                          >
+                            <i class="fas fa-trash fa-fw mr-2" aria-hidden="true"></i>
+                            {t('Delete')}
+                          </button>
+                        {/if}
+                      </div>
+                    {/if}
                   </div>
-                {/if}
+                </div>
               </div>
               {#if item.notes}<div class="orders-item-description mb-1">{@html item.notes}</div>{/if}
               <div class="orders-muted orders-item-meta">
@@ -2042,6 +2160,11 @@
     margin-bottom: 0.5rem;
   }
 
+  .orders-pinned-heading-toggle {
+    cursor: pointer;
+    user-select: none;
+  }
+
   .orders-card {
     background: var(--mainbackground);
     border: 1px solid var(--secondary);
@@ -2134,6 +2257,14 @@
   .orders-resource-badge {
     align-items: center;
     display: inline-flex;
+  }
+
+  .orders-common-badge {
+    align-items: center;
+    border-radius: 999px;
+    display: inline-flex;
+    letter-spacing: 0.02em;
+    padding: 0.32em 0.7em;
   }
 
   .orders-list {
@@ -2233,7 +2364,9 @@
   .orders-item-actions {
     align-items: center;
     display: flex;
+    flex-basis: 100%;
     gap: 0.3rem;
+    justify-content: flex-end;
   }
 
   .orders-status-select {
@@ -2270,6 +2403,47 @@
 
   .orders-icon-button {
     padding: 0.15rem 0.4rem;
+  }
+
+  .orders-more-menu {
+    position: relative;
+  }
+
+  .orders-more-dropdown {
+    background: var(--mainbackground);
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    border-radius: 0.35rem;
+    box-shadow: 0 0.3rem 0.75rem rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    min-width: 13rem;
+    padding: 0.3rem;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.2rem);
+    z-index: 20;
+  }
+
+  .orders-more-dropdown-item {
+    background: transparent;
+    border: 0;
+    border-radius: 0.3rem;
+    padding: 0.4rem 0.5rem;
+    text-align: left;
+    white-space: nowrap;
+    width: 100%;
+  }
+
+  .orders-more-dropdown-item:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.15));
+  }
+
+  .orders-more-dropdown-item-active {
+    color: var(--primary);
+  }
+
+  .orders-more-dropdown-item-danger {
+    color: #dc3545;
   }
 
   .orders-item-description {

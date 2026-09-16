@@ -75,6 +75,14 @@ try {
             'setting' => 'notif_mentioned_order',
         ),
         array(
+            'designation' => _('Status of my order changed'),
+            'setting' => 'notif_order_status_changed',
+        ),
+        array(
+            'designation' => _('My order was updated (edited, a file attached, or commented on)'),
+            'setting' => 'notif_order_changed',
+        ),
+        array(
             'designation' => _('Assigned a task'),
             'setting' => 'notif_task_assigned',
         ),

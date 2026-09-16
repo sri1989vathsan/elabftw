@@ -15,6 +15,7 @@ use DateTimeZone;
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
+use Elabftw\Models\Notifications\OrderChanged;
 use Elabftw\Models\Notifications\OrderReminder;
 use Elabftw\Models\Notifications\OrderStatusChanged;
 use Elabftw\Models\Users\Users;
@@ -27,6 +28,7 @@ use PDO;
 use function array_fill;
 use function array_key_exists;
 use function ctype_digit;
+use function filter_var;
 use function array_map;
 use function array_unique;
 use function array_values;
@@ -81,6 +83,10 @@ final class Orders extends AbstractRest
     #[Override]
     public function postAction(Action $action, array $reqBody): int
     {
+        if ($action === Action::Duplicate) {
+            return $this->duplicate();
+        }
+
         $title = $this->getTitle($reqBody['title'] ?? '');
         $notes = $this->getNotes($reqBody['notes'] ?? null);
         $itemIds = $this->getItemIds($reqBody['item_ids'] ?? null);
@@ -100,15 +106,23 @@ final class Orders extends AbstractRest
         // out of the Reference tab. See also updateStatus() below, which
         // keeps this true if a plain order is later marked reference.
         $pinned = $status === 'reference' ? 1 : 0;
-        $sql = "INSERT INTO custom_orders (team, userid, title, notes, status, pinned)
-            VALUES (:team, :userid, :title, :notes, COALESCE(:status, 'requested'), :pinned)";
+        // anyone can place an order on behalf of a teammate; leaving userid
+        // out (the common case) just gets the requester themself as owner
+        $userid = $this->getOwnerUserid($reqBody['userid'] ?? null);
+        // "common" is a plain tag (commonly-ordered lab supplies), separate
+        // from the status lifecycle -- unlike 'reference' it doesn't force
+        // pinning or skip the requested/ordered/received workflow
+        $common = !empty($reqBody['common']) ? 1 : 0;
+        $sql = "INSERT INTO custom_orders (team, userid, title, notes, status, pinned, common)
+            VALUES (:team, :userid, :title, :notes, COALESCE(:status, 'requested'), :pinned, :common)";
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
-        $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $req->bindParam(':userid', $userid, PDO::PARAM_INT);
         $req->bindValue(':title', $title);
         $req->bindValue(':notes', $notes, $notes === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':status', $status, $status === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':pinned', $pinned, PDO::PARAM_INT);
+        $req->bindValue(':common', $common, PDO::PARAM_INT);
         $this->Db->execute($req);
         $orderId = (int) $this->Db->lastInsertId();
 
@@ -118,6 +132,68 @@ final class Orders extends AbstractRest
         }
 
         return $orderId;
+    }
+
+    /**
+     * Create a new order copying this one's title, notes and linked items.
+     * Available to any team member, not just the source order's owner --
+     * duplicating is really "start a new request from a template", not an
+     * edit of the original. The new order always starts fresh: owned by the
+     * duplicating user and back at the 'requested' status regardless of
+     * where the source order currently sits in its lifecycle, since placing
+     * a new request is the whole point (a cancelled/received order is a
+     * common thing to duplicate to reorder the same items).
+     */
+    private function duplicate(): int
+    {
+        $source = $this->readOne();
+        $sql = "INSERT INTO custom_orders (team, userid, title, notes, status, pinned, common)
+            VALUES (:team, :userid, :title, :notes, 'requested', 0, :common)";
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $req->bindValue(':title', $source['title']);
+        $req->bindValue(':notes', $source['notes'], $source['notes'] === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':common', $source['common'] ? 1 : 0, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $newId = (int) $this->Db->lastInsertId();
+
+        $itemIds = array_map(static fn(array $item): int => (int) $item['id'], $source['items']);
+        if (!empty($itemIds)) {
+            $this->setId($newId);
+            $this->replaceItems($itemIds);
+        }
+
+        return $newId;
+    }
+
+    /**
+     * Anyone can set someone else as the owner of a newly created order
+     * (placing an order "for" a teammate); leaving userid out gets the
+     * requester themself. The target still has to be a member of the
+     * current team, same rule as assigning a to-do task to someone.
+     */
+    private function getOwnerUserid(mixed $value): int
+    {
+        if ($value === null || $value === '') {
+            return $this->Users->userid;
+        }
+        $requestedUserid = filter_var($value, FILTER_VALIDATE_INT);
+        if ($requestedUserid === false) {
+            throw new ImproperActionException('Invalid user.');
+        }
+        if ($requestedUserid === $this->Users->userid) {
+            return $requestedUserid;
+        }
+        $sql = 'SELECT COUNT(*) AS count FROM users2teams WHERE users_id = :userid AND teams_id = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':userid', $requestedUserid, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        if ((int) $this->Db->fetch($req)['count'] === 0) {
+            throw new ImproperActionException('You can only place an order for a member of your team.');
+        }
+        return $requestedUserid;
     }
 
     #[Override]
@@ -172,6 +248,10 @@ final class Orders extends AbstractRest
             $conditions[] = 'o.labcollector_type IS NOT NULL';
         } elseif ($labcollector === 'unregistered') {
             $conditions[] = 'o.labcollector_type IS NULL';
+        }
+
+        if ($query->getBoolean('common')) {
+            $conditions[] = 'o.common = 1';
         }
 
         // server-side so a match on page 2 is found while looking at page 1
@@ -341,7 +421,7 @@ final class Orders extends AbstractRest
      */
     private static function selectSql(): string
     {
-        return 'SELECT o.id, o.title, o.notes, o.procurement_id, o.order_number, o.status, o.archived, o.pinned, o.created_at, o.userid,
+        return 'SELECT o.id, o.title, o.notes, o.procurement_id, o.order_number, o.status, o.archived, o.pinned, o.common, o.created_at, o.userid,
                 o.labcollector_type, o.labcollector_id,
                 DATE_FORMAT(o.reminder_at, "%Y-%m-%dT%H:%i:%sZ") AS reminder_at,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname,
@@ -378,6 +458,7 @@ final class Orders extends AbstractRest
         $order['userid'] = (int) $order['userid'];
         $order['archived'] = (bool) $order['archived'];
         $order['pinned'] = (bool) $order['pinned'];
+        $order['common'] = (bool) $order['common'];
         $order['items'] = json_decode((string) $order['items'], true, 512, JSON_THROW_ON_ERROR);
         $uploads = json_decode((string) $order['uploads'], true, 512, JSON_THROW_ON_ERROR);
         foreach ($uploads as &$upload) {
@@ -426,14 +507,27 @@ final class Orders extends AbstractRest
                 $this->updatePinned((bool) $params['pinned']);
             }
         }
+        if (array_key_exists('common', $params)) {
+            $this->updateCommon((bool) $params['common']);
+        }
         if (array_key_exists('title', $params) || array_key_exists('notes', $params)) {
             if (!$isOwner && !$this->Users->isAdmin) {
                 throw new ImproperActionException('Only the author or a team admin can edit this order.');
             }
+            $newTitle = array_key_exists('title', $params) ? $this->getTitle($params['title']) : $order['title'];
             $this->updateContent(
-                array_key_exists('title', $params) ? $this->getTitle($params['title']) : $order['title'],
+                $newTitle,
                 array_key_exists('notes', $params) ? $this->getNotes($params['notes']) : $order['notes'],
             );
+            if (!$isOwner) {
+                (new OrderChanged(
+                    new Users((int) $order['userid'], $this->Users->team),
+                    $this->Users,
+                    (int) $this->id,
+                    $newTitle,
+                    'content',
+                ))->create();
+            }
         }
         if (array_key_exists('item_ids', $params)) {
             if (!$isOwner && !$this->Users->isAdmin) {
@@ -521,6 +615,16 @@ final class Orders extends AbstractRest
         $sql = 'UPDATE custom_orders SET pinned = :pinned WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':pinned', $pinned, PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    private function updateCommon(bool $common): void
+    {
+        $sql = 'UPDATE custom_orders SET common = :common WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':common', $common, PDO::PARAM_INT);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
