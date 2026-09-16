@@ -257,10 +257,6 @@
   let panelView: 'list' | 'calendar' = 'list';
   let calendarMonthCursor = new Date(initialDeadline.getFullYear(), initialDeadline.getMonth(), 1);
   let selectedCalendarDate = initialDeadlineDate;
-  const calendarViewModeKey = 'todo-calendar-view-mode';
-  let calendarViewMode: 'day' | 'week' | 'month' = isCalendarViewMode(sessionStorage.getItem(calendarViewModeKey))
-    ? (sessionStorage.getItem(calendarViewModeKey) as 'day' | 'week' | 'month')
-    : 'month';
   let calendarCompletedForDate: Todo[] = [];
   let calendarCompletedLoadedFor = '';
   let loadingCalendarCompleted = false;
@@ -357,11 +353,6 @@
   $: dueGroups = buildDueGroups(entries);
   $: completedGroups = buildCompletedGroups(completedItems);
   $: calendarCells = buildCalendarCells(calendarMonthCursor, entries);
-  $: displayedCalendarCells = calendarViewMode === 'month'
-    ? calendarCells
-    : calendarViewMode === 'week'
-      ? calendarWeekSlice(calendarCells, selectedCalendarDate)
-      : calendarDaySlice(calendarCells, selectedCalendarDate);
   $: selectedDateTasks = entries.filter(
     entry => entry.source === 'todo' && entry.deadline !== null && dateKey(new Date(entry.deadline)) === selectedCalendarDate,
   );
@@ -521,84 +512,6 @@
 
   function changeCalendarMonth(offset: number): void {
     calendarMonthCursor = new Date(calendarMonthCursor.getFullYear(), calendarMonthCursor.getMonth() + offset, 1);
-  }
-
-  function isCalendarViewMode(value: string | null): boolean {
-    return value === 'day' || value === 'week' || value === 'month';
-  }
-
-  function setCalendarViewMode(mode: 'day' | 'week' | 'month'): void {
-    calendarViewMode = mode;
-    sessionStorage.setItem(calendarViewModeKey, mode);
-  }
-
-  // this grid starts on Sunday (see calendarGridStart) -- mirrors it here
-  // for finding the week containing a given date
-  function sundayOfWeek(key: string): string {
-    const date = new Date(`${key}T12:00:00`);
-    date.setDate(date.getDate() - date.getDay());
-    return dateKey(date);
-  }
-
-  function calendarWeekSlice(cells: CalendarCell[], anchorKey: string): CalendarCell[] {
-    const sundayKey = sundayOfWeek(anchorKey);
-    const startIndex = cells.findIndex(cell => cell.key === sundayKey);
-    if (startIndex === -1) return cells.slice(0, 7);
-    return cells.slice(startIndex, startIndex + 7);
-  }
-
-  function calendarDaySlice(cells: CalendarCell[], anchorKey: string): CalendarCell[] {
-    const match = cells.find(cell => cell.key === anchorKey);
-    return match ? [match] : [];
-  }
-
-  // Navigating with the prev/next arrows shifts by a month/week/day
-  // depending on the current view, always keeping selectedCalendarDate (and
-  // thus the day's task list below the grid) in sync with wherever
-  // navigation lands -- reusing selectCalendarDate() rather than assigning
-  // it directly keeps that in sync with the create-form date field too.
-  function shiftCalendarPeriod(direction: number): void {
-    if (calendarViewMode === 'month') {
-      changeCalendarMonth(direction);
-      return;
-    }
-    const days = calendarViewMode === 'week' ? 7 : 1;
-    const next = new Date(`${selectedCalendarDate}T12:00:00`);
-    next.setDate(next.getDate() + days * direction);
-    selectCalendarDate(dateKey(next));
-    const nextMonthStart = new Date(next.getFullYear(), next.getMonth(), 1);
-    if (nextMonthStart.getTime() !== calendarMonthCursor.getTime()) {
-      calendarMonthCursor = nextMonthStart;
-    }
-  }
-
-  function calendarPeriodLabel(
-    mode: 'day' | 'week' | 'month',
-    month: Date,
-    anchorKey: string,
-    cells: CalendarCell[],
-    activeLocale: string,
-  ): string {
-    if (mode === 'month') {
-      return new Intl.DateTimeFormat(activeLocale, { year: 'numeric', month: 'long' }).format(month);
-    }
-    if (mode === 'day') {
-      return new Intl.DateTimeFormat(activeLocale, {
-        weekday: 'long',
-        month: 'short',
-        day: 'numeric',
-      }).format(new Date(`${anchorKey}T12:00:00`));
-    }
-    const weekCells = calendarWeekSlice(cells, anchorKey);
-    if (weekCells.length === 0) return '';
-    const first = weekCells[0].date;
-    const last = weekCells[weekCells.length - 1].date;
-    const dayFmt = new Intl.DateTimeFormat(activeLocale, { day: 'numeric' });
-    const monthFmt = new Intl.DateTimeFormat(activeLocale, { month: 'short' });
-    const yearFmt = new Intl.DateTimeFormat(activeLocale, { year: 'numeric' });
-    const sameMonth = first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear();
-    const startLabel = sameMonth ? dayFmt.format(first) : `${monthFmt.format(first)} ${dayFmt.format(first)}`;
-    return `${startLabel}–${monthFmt.format(last)} ${dayFmt.format(last)}, ${yearFmt.format(last)}`;
   }
 
   function goToToday(): void {
@@ -2022,30 +1935,23 @@
 {/if}
 {:else}
   <div class='todo-calendar'>
-    <div class='todo-calendar-view-toggle mb-2' role='group' aria-label={t('Calendar view')}>
-      <button type='button' class:active={calendarViewMode === 'day'} on:click={() => setCalendarViewMode('day')}>{t('Day')}</button>
-      <button type='button' class:active={calendarViewMode === 'week'} on:click={() => setCalendarViewMode('week')}>{t('Week')}</button>
-      <button type='button' class:active={calendarViewMode === 'month'} on:click={() => setCalendarViewMode('month')}>{t('Month')}</button>
-    </div>
     <div class='d-flex align-items-center justify-content-between mb-2'>
-      <button type='button' class='btn btn-ghost btn-sm' on:click={() => shiftCalendarPeriod(-1)} aria-label={t('Previous')}>
+      <button type='button' class='btn btn-ghost btn-sm' on:click={() => changeCalendarMonth(-1)} aria-label={t('Previous month')}>
         <i class='fas fa-chevron-left fa-fw' aria-hidden='true'></i>
       </button>
-      <span class='font-weight-bold'>{calendarPeriodLabel(calendarViewMode, calendarMonthCursor, selectedCalendarDate, calendarCells, locale)}</span>
-      <button type='button' class='btn btn-ghost btn-sm' on:click={() => shiftCalendarPeriod(1)} aria-label={t('Next')}>
+      <span class='font-weight-bold'>{new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long' }).format(calendarMonthCursor)}</span>
+      <button type='button' class='btn btn-ghost btn-sm' on:click={() => changeCalendarMonth(1)} aria-label={t('Next month')}>
         <i class='fas fa-chevron-right fa-fw' aria-hidden='true'></i>
       </button>
     </div>
     <button type='button' class='btn btn-sm btn-outline-secondary mb-2' on:click={goToToday}>
       <i class='fas fa-location-crosshairs fa-fw mr-1' aria-hidden='true'></i>{t('Today')}
     </button>
-    <div class='todo-calendar-grid' style={calendarViewMode === 'day' ? 'grid-template-columns: 1fr' : ''}>
-      {#if calendarViewMode !== 'day'}
-        {#each [t('Sun'), t('Mon'), t('Tue'), t('Wed'), t('Thu'), t('Fri'), t('Sat')] as weekdayLabel (weekdayLabel)}
-          <div class='todo-calendar-weekday'>{weekdayLabel.slice(0, 1)}</div>
-        {/each}
-      {/if}
-      {#each displayedCalendarCells as cell (cell.key)}
+    <div class='todo-calendar-grid'>
+      {#each [t('Sun'), t('Mon'), t('Tue'), t('Wed'), t('Thu'), t('Fri'), t('Sat')] as weekdayLabel (weekdayLabel)}
+        <div class='todo-calendar-weekday'>{weekdayLabel.slice(0, 1)}</div>
+      {/each}
+      {#each calendarCells as cell (cell.key)}
         <button
           type='button'
           class='todo-calendar-cell'
@@ -2591,27 +2497,6 @@
 
   .todo-view-toggle {
     display: flex;
-  }
-
-  .todo-calendar-view-toggle {
-    display: flex;
-    gap: 0.25rem;
-  }
-
-  .todo-calendar-view-toggle button {
-    background: transparent;
-    border: 1px solid var(--secondary);
-    border-radius: 0.35rem;
-    flex: 1 1 0;
-    font-size: 0.72rem;
-    padding: 0.2rem 0.4rem;
-  }
-
-  .todo-calendar-view-toggle button.active {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: #fff;
-    font-weight: 700;
   }
 
   .todo-calendar-grid {
