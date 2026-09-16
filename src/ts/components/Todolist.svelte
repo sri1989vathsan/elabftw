@@ -392,15 +392,23 @@
 
     [...allEntries]
       .sort((a, b) => {
-        if (a.source === 'todo' && b.source === 'todo') {
-          return (a.ordering ?? 0) - (b.ordering ?? 0);
+        // Entries with a deadline are ordered chronologically by date AND
+        // time, taking priority over manual drag order -- this is what lets
+        // same-day tasks with different due times land in due-time order
+        // instead of drag order.
+        if (a.deadline !== null && b.deadline !== null) {
+          const diff = new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+          if (diff !== 0) return diff;
         }
         if (a.deadline === null && b.deadline === null) {
+          if (a.source === 'todo' && b.source === 'todo') {
+            return (a.ordering ?? 0) - (b.ordering ?? 0);
+          }
           return (a.creationTime ?? '').localeCompare(b.creationTime ?? '');
         }
         if (a.deadline === null) return 1;
         if (b.deadline === null) return -1;
-        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+        return 0;
       })
       .forEach(entry => {
         let key = 'undated';
