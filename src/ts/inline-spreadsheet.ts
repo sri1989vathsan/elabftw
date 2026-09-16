@@ -2659,7 +2659,11 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
       defaultFontTextColorInput,
       () => defaultFontTextColorInput.dispatchEvent(new Event('change')),
     ),
-    createIconControl('', 'No default text color', defaultFontNoTextColorInput),
+    (() => {
+      const noTextColorControl = createIconControl('', 'No default text color', defaultFontNoTextColorInput);
+      noTextColorControl.classList.add('inline-spreadsheet-bold-italic-underline-control');
+      return noTextColorControl;
+    })(),
     defaultHorizontalAlignmentButtons,
     defaultVerticalAlignmentButtons,
   );
