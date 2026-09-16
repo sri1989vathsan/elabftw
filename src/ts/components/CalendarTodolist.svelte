@@ -140,6 +140,9 @@
   const selectedDateStorageKey = 'activity-calendar-selected-date';
   const selectedRangeEndStorageKey = 'activity-calendar-selected-range-end';
   const monthStorageKey = 'activity-calendar-month';
+  const viewModeStorageKey = 'activity-calendar-view-mode';
+  const periodAnchorStorageKey = 'activity-calendar-period-anchor';
+  const showWeekendsStorageKey = 'activity-calendar-show-weekends';
   const highlightedTaskId = parseInt(
     new URLSearchParams(window.location.search).get('task') ?? '',
     10,
@@ -184,6 +187,11 @@
   let calendarMonthLabel = '';
   let visibleMonthActivityCount = 0;
   let loadSequence = 0;
+  let viewMode: 'day' | 'week' | 'month' = isViewMode(sessionStorage.getItem(viewModeStorageKey))
+    ? (sessionStorage.getItem(viewModeStorageKey) as 'day' | 'week' | 'month')
+    : 'month';
+  let periodAnchor = sessionStorage.getItem(periodAnchorStorageKey) ?? dateKey(new Date());
+  let showWeekends = localStorage.getItem(showWeekendsStorageKey) !== '0';
 
   $: entries = [
     ...calendarTasks
@@ -279,6 +287,121 @@
   $: calendarMonthLabel = formatMonthLabel(monthCursor, locale);
   $: visibleMonthActivityCount = countMonthActivity(monthCursor, filteredEntries, filteredActivities);
   $: updateUrgentBadges(reminderEntries);
+  $: sessionStorage.setItem(viewModeStorageKey, viewMode);
+  $: sessionStorage.setItem(periodAnchorStorageKey, periodAnchor);
+  $: localStorage.setItem(showWeekendsStorageKey, showWeekends ? '1' : '0');
+  $: periodCells = viewMode === 'month'
+    ? calendarCells
+    : viewMode === 'week'
+      ? weekSlice(calendarCells, periodAnchor)
+      : daySlice(calendarCells, periodAnchor);
+  $: displayedCells = viewMode === 'day' || showWeekends
+    ? periodCells
+    : periodCells.filter(cell => cell.date.getDay() !== 0 && cell.date.getDay() !== 6);
+  $: columnCount = viewMode === 'day' ? 1 : (showWeekends ? 7 : 5);
+  $: periodLabel = viewMode === 'month'
+    ? calendarMonthLabel
+    : viewMode === 'week'
+      ? formatWeekLabel(periodCells, locale)
+      : formatDayLabel(periodAnchor, locale);
+  $: periodCount = viewMode === 'month'
+    ? visibleMonthActivityCount
+    : displayedCells.reduce((sum, cell) => sum + cell.count, 0);
+
+  function isViewMode(value: string | null): boolean {
+    return value === 'day' || value === 'week' || value === 'month';
+  }
+
+  function setViewMode(mode: 'day' | 'week' | 'month'): void {
+    if (viewMode === mode) return;
+    viewMode = mode;
+    if (mode !== 'month') {
+      periodAnchor = selectedDate || periodAnchor || dateKey(new Date());
+    }
+    syncSelectionToPeriod();
+  }
+
+  // Keeps the agenda (task/step/experiment/resource list below the grid)
+  // scoped to whatever date range is currently visible, so navigating with
+  // the prev/next arrows or switching Day/Week/Month updates the agenda
+  // list and its label automatically instead of leaving a stale selection.
+  function syncSelectionToPeriod(): void {
+    if (viewMode === 'month') {
+      selectedDate = '';
+      selectedRangeEnd = '';
+      sessionStorage.removeItem(selectedDateStorageKey);
+      sessionStorage.removeItem(selectedRangeEndStorageKey);
+      return;
+    }
+    if (viewMode === 'day') {
+      selectedDate = periodAnchor;
+      selectedRangeEnd = periodAnchor;
+    } else {
+      const mondayKey = mondayOfWeek(periodAnchor);
+      const sunday = new Date(`${mondayKey}T12:00:00`);
+      sunday.setDate(sunday.getDate() + 6);
+      selectedDate = mondayKey;
+      selectedRangeEnd = dateKey(sunday);
+    }
+    persistSelection();
+  }
+
+  function mondayOfWeek(key: string): string {
+    const date = new Date(`${key}T12:00:00`);
+    const offset = (date.getDay() + 6) % 7;
+    date.setDate(date.getDate() - offset);
+    return dateKey(date);
+  }
+
+  function weekSlice(cells: CalendarCell[], anchorKey: string): CalendarCell[] {
+    const mondayKey = mondayOfWeek(anchorKey);
+    const startIndex = cells.findIndex(cell => cell.key === mondayKey);
+    if (startIndex === -1) return cells.slice(0, 7);
+    return cells.slice(startIndex, startIndex + 7);
+  }
+
+  function daySlice(cells: CalendarCell[], anchorKey: string): CalendarCell[] {
+    const match = cells.find(cell => cell.key === anchorKey);
+    return match ? [match] : [];
+  }
+
+  function formatWeekLabel(cells: CalendarCell[], activeLocale: string): string {
+    if (cells.length === 0) return '';
+    const first = cells[0].date;
+    const last = cells[cells.length - 1].date;
+    const dayFmt = new Intl.DateTimeFormat(activeLocale, { day: 'numeric' });
+    const monthFmt = new Intl.DateTimeFormat(activeLocale, { month: 'short' });
+    const yearFmt = new Intl.DateTimeFormat(activeLocale, { year: 'numeric' });
+    const sameMonth = first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear();
+    const startLabel = sameMonth ? dayFmt.format(first) : `${monthFmt.format(first)} ${dayFmt.format(first)}`;
+    return `${startLabel}–${monthFmt.format(last)} ${dayFmt.format(last)}, ${yearFmt.format(last)}`;
+  }
+
+  function formatDayLabel(key: string, activeLocale: string): string {
+    return new Intl.DateTimeFormat(activeLocale, {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+    }).format(new Date(`${key}T12:00:00`));
+  }
+
+  function shiftPeriod(direction: number): void {
+    if (viewMode === 'month') {
+      changeMonth(direction);
+      return;
+    }
+    const days = viewMode === 'week' ? 7 : 1;
+    const next = new Date(`${periodAnchor}T12:00:00`);
+    next.setDate(next.getDate() + days * direction);
+    periodAnchor = dateKey(next);
+    const nextMonthStart = new Date(next.getFullYear(), next.getMonth(), 1);
+    if (nextMonthStart.getTime() !== monthCursor.getTime()) {
+      monthCursor = nextMonthStart;
+      sessionStorage.setItem(monthStorageKey, dateKey(monthCursor));
+      void load();
+    }
+    syncSelectionToPeriod();
+  }
 
   function dateKey(date: Date): string {
     const year = date.getFullYear();
@@ -528,11 +651,12 @@
 
   function weekdayLabels(): string[] {
     const monday = new Date(2026, 0, 5);
-    return Array.from({ length: 7 }, (_, index) => {
+    const labels = Array.from({ length: 7 }, (_, index) => {
       const date = new Date(monday);
       date.setDate(monday.getDate() + index);
       return new Intl.DateTimeFormat(locale, { weekday: 'narrow' }).format(date);
     });
+    return showWeekends ? labels : labels.slice(0, 5);
   }
 
   function formatDeadline(value: string): string {
@@ -576,6 +700,7 @@
   function selectDay(cell: CalendarCell): void {
     selectedDate = cell.key;
     selectedRangeEnd = cell.key;
+    periodAnchor = cell.key;
     persistSelection();
     if (!cell.inMonth) {
       monthCursor = new Date(cell.date.getFullYear(), cell.date.getMonth(), 1);
@@ -620,6 +745,7 @@
     monthCursor = new Date(today.getFullYear(), today.getMonth(), 1);
     selectedDate = dateKey(today);
     selectedRangeEnd = selectedDate;
+    periodAnchor = selectedDate;
     sessionStorage.setItem(monthStorageKey, dateKey(monthCursor));
     persistSelection();
     void load();
@@ -858,6 +984,7 @@
 
   onMount(() => {
     locale = document.getElementById('user-prefs')?.dataset?.jslang || 'en-gb';
+    if (viewMode !== 'month') syncSelectionToPeriod();
     const refreshButton = document.getElementById('calendarActivityRefresh');
     const reload = (): void => {
       void load();
@@ -990,28 +1117,41 @@
   {/if}
   <details class='calendar-activity-picker mb-2' open>
     <summary class='calendar-activity-summary'>{t('Calendar')}</summary>
+    <div class='calendar-view-controls'>
+      <div class='calendar-view-toggle' role='group' aria-label={t('Calendar view')}>
+        <button type='button' class:active={viewMode === 'day'} on:click={() => setViewMode('day')}>{t('Day')}</button>
+        <button type='button' class:active={viewMode === 'week'} on:click={() => setViewMode('week')}>{t('Week')}</button>
+        <button type='button' class:active={viewMode === 'month'} on:click={() => setViewMode('month')}>{t('Month')}</button>
+      </div>
+      <label class='calendar-weekend-toggle'>
+        <input type='checkbox' bind:checked={showWeekends} />
+        {t('Show weekends')}
+      </label>
+    </div>
     <div class='calendar-month-header'>
-      <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(-1)} aria-label={t('Previous month')}>
+      <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => shiftPeriod(-1)} aria-label={t('Previous')}>
         <i class='fas fa-chevron-left' aria-hidden='true'></i>
       </button>
       <div class='calendar-month-copy'>
         <span class='calendar-month-eyebrow'>{t('Lab activity')}</span>
         <div class='calendar-month-title'>
-          <strong>{calendarMonthLabel}</strong>
-          <span>{visibleMonthActivityCount} {t('entries')}</span>
+          <strong>{periodLabel}</strong>
+          <span>{periodCount} {t('entries')}</span>
         </div>
       </div>
-      <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => changeMonth(1)} aria-label={t('Next month')}>
+      <button type='button' class='btn btn-sm calendar-month-nav' on:click={() => shiftPeriod(1)} aria-label={t('Next')}>
         <i class='fas fa-chevron-right' aria-hidden='true'></i>
       </button>
     </div>
-    <div class='calendar-todo-weekdays' aria-hidden='true'>
-      {#each weekdayLabels() as weekday}
-        <span>{weekday}</span>
-      {/each}
-    </div>
-    <div class='calendar-todo-grid'>
-      {#each calendarCells as cell (cell.key)}
+    {#if viewMode !== 'day'}
+      <div class='calendar-todo-weekdays' aria-hidden='true' style={`grid-template-columns: repeat(${columnCount}, minmax(0, 1fr))`}>
+        {#each weekdayLabels() as weekday}
+          <span>{weekday}</span>
+        {/each}
+      </div>
+    {/if}
+    <div class='calendar-todo-grid' style={`grid-template-columns: repeat(${columnCount}, minmax(0, 1fr))`}>
+      {#each displayedCells as cell (cell.key)}
         <button
           type='button'
           class:outside={!cell.inMonth}
@@ -1019,6 +1159,7 @@
           class:selected={isCellSelected(cell.key)}
           class:has-overdue={cell.overdue}
           class:calendar-day-drag-over={dragOverDate === cell.key}
+          class:single-day={viewMode === 'day'}
           class='calendar-todo-day'
           on:click={() => selectDay(cell)}
           on:mousedown={() => beginRangeSelect(cell)}
@@ -1475,11 +1616,49 @@
     transform: scale(1.05);
   }
 
+  .calendar-view-controls {
+    align-items: center;
+    display: flex;
+    gap: 0.6rem;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+
+  .calendar-view-toggle {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .calendar-view-toggle button {
+    background: var(--chrome-bg);
+    border: 1px solid var(--chrome-muted);
+    border-radius: 0.35rem;
+    color: var(--chrome-fg);
+    font-size: 0.7rem;
+    padding: 0.2rem 0.55rem;
+  }
+
+  .calendar-view-toggle button.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    font-weight: 700;
+  }
+
+  .calendar-weekend-toggle {
+    align-items: center;
+    color: var(--chrome-fg);
+    display: flex;
+    font-size: 0.7rem;
+    gap: 0.3rem;
+    margin: 0;
+    white-space: nowrap;
+  }
+
   .calendar-todo-weekdays,
   .calendar-todo-grid {
     display: grid;
     gap: 0.32rem;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
   .calendar-todo-weekdays {
@@ -1555,6 +1734,11 @@
   .calendar-todo-day.outside {
     background: transparent;
     opacity: 0.32;
+  }
+
+  .calendar-todo-day.single-day {
+    aspect-ratio: auto;
+    min-height: 3.4rem;
   }
 
   .calendar-day-number {
