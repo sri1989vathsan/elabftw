@@ -1250,7 +1250,9 @@
       return;
     }
     const lower = query.toLowerCase();
-    mentionCandidates[itemId] = teamMembers.filter(m => m.fullname.toLowerCase().includes(lower)).slice(0, 5);
+    mentionCandidates[itemId] = teamMembers
+      .filter(m => m.userid !== core.currentUserid && m.fullname.toLowerCase().includes(lower))
+      .slice(0, 5);
     mentionCandidates = mentionCandidates;
   }
 
