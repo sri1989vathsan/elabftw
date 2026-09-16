@@ -2,7 +2,7 @@
 -- instead of running it synchronously inside the upload request (a large
 -- PDF could make the upload slow or hit the request time/memory limit).
 -- 'none' = not a PDF, nothing to extract. 'pending' = queued, not run yet.
--- 'done'/'failed' = ran; 'failed' covers encrypted/corrupted/unparseable
+-- 'done'/'failed' = ran; 'failed' covers encrypted/corrupted/unparsable
 -- files (still uploaded successfully, just not searchable by content).
 SET @custom_exists = (
     SELECT COUNT(*) FROM information_schema.COLUMNS
