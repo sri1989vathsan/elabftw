@@ -2588,9 +2588,27 @@ body.html-tool-workspace-resizing * {
     margin-bottom: 0.35rem;
     min-height: 1.75rem;
 
-    &::marker {
-      color: var(--primary);
+    // list-style:none + an explicit ::after chevron instead of relying on
+    // the native ::marker triangle -- most browsers stop rendering that
+    // marker once `display` on <summary> is anything but its default
+    // `list-item` (flex, here, for the icon+text layout), so the &::marker
+    // rule below was never actually visible.
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
     }
+
+    &::after {
+      color: var(--primary);
+      content: '\25B8';
+      margin-left: auto;
+      padding-left: 0.5rem;
+    }
+  }
+
+  &[open] summary::after {
+    content: '\25BE';
   }
 
   > strong {
@@ -2632,6 +2650,16 @@ body.html-tool-workspace-resizing * {
   }
 }
 
+.inline-spreadsheet-bold-italic-underline-control {
+  padding-left: 0.15rem;
+  padding-right: 0.15rem;
+
+  > span:first-child {
+    min-width: 0;
+    width: 0;
+  }
+}
+
 .inline-spreadsheet-compact-control {
   align-items: center;
   background-color: var(--mainbackground);
@@ -2647,6 +2675,27 @@ body.html-tool-workspace-resizing * {
     display: inline-flex;
     justify-content: center;
     min-width: 1rem;
+  }
+
+  // color swatches' icon renders as a real button (clicking it re-applies
+  // the already-selected color instead of opening the picker) -- reset it
+  // back to look like the plain span above
+  > button.inline-spreadsheet-control-icon-button:first-child {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--mediumstrong);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    justify-content: center;
+    margin: 0;
+    min-width: 1rem;
+    padding: 0;
+  }
+
+  > button.inline-spreadsheet-control-icon-button:first-child:hover {
+    color: var(--strongest);
   }
 
   .form-control {
