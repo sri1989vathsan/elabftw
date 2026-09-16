@@ -192,7 +192,7 @@ final class OrderUploads extends AbstractRest
             // ran to completion. Only a thrown exception below means failed.
             $status = 'done';
         } catch (Throwable) {
-            // encrypted, corrupted, or otherwise unparseable -- the upload
+            // encrypted, corrupted, or otherwise unparsable -- the upload
             // itself already succeeded, it just isn't searchable by content
         }
 

@@ -393,7 +393,7 @@ final class Orders extends AbstractRest
 
     /**
      * Validate a date_from/date_to filter value (Y-m-d), or return null for
-     * an absent/blank one. An unparseable value is a client bug (the input
+     * an absent/blank one. An unparsable value is a client bug (the input
      * is a native date picker), so it's rejected rather than silently
      * ignored or passed through to a DATETIME comparison.
      */
