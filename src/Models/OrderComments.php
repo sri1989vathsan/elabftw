@@ -15,6 +15,7 @@ use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Notifications\MentionedInOrder;
+use Elabftw\Models\Notifications\OrderChanged;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\Filter;
 use Elabftw\Traits\SetIdTrait;
@@ -23,6 +24,7 @@ use PDO;
 
 use function array_key_exists;
 use function array_map;
+use function in_array;
 use function is_array;
 use function mb_strlen;
 use function sprintf;
@@ -100,7 +102,9 @@ final class OrderComments extends AbstractRest
             throw new ResourceNotFoundException();
         }
         $commentId = (int) $this->Db->lastInsertId();
-        $this->notifyMentioned(is_array($reqBody['mentioned_userids'] ?? null) ? $reqBody['mentioned_userids'] : array());
+        $mentionedUserids = is_array($reqBody['mentioned_userids'] ?? null) ? $reqBody['mentioned_userids'] : array();
+        $this->notifyMentioned($mentionedUserids);
+        $this->notifyOwner($mentionedUserids);
 
         return $commentId;
     }
@@ -122,6 +126,28 @@ final class OrderComments extends AbstractRest
                 (string) $order['title'],
             ))->create();
         }
+    }
+
+    /**
+     * The order's requester gets notified of every new comment on their
+     * order, not just ones that @-mention them -- unless they're the one
+     * commenting, or they were already just notified as a mention above
+     * (avoids a duplicate notification for the same comment).
+     */
+    private function notifyOwner(array $alreadyMentionedUserids): void
+    {
+        $order = $this->Order->readOne();
+        $ownerUserid = (int) $order['userid'];
+        if ($ownerUserid === $this->Users->userid || in_array($ownerUserid, array_map('intval', $alreadyMentionedUserids), true)) {
+            return;
+        }
+        (new OrderChanged(
+            new Users($ownerUserid, $this->Users->team),
+            $this->Users,
+            (int) $this->Order->id,
+            (string) $order['title'],
+            'comment',
+        ))->create();
     }
 
     private function isTeamMember(int $userid): bool

@@ -17,6 +17,7 @@ use Elabftw\Enums\Action;
 use Elabftw\Enums\Storage;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
+use Elabftw\Models\Notifications\OrderChanged;
 use Elabftw\Models\Users\Users;
 use Elabftw\Traits\SetIdTrait;
 use Override;
@@ -71,7 +72,7 @@ final class OrderUploads extends AbstractRest
             throw new ImproperActionException('Invalid action for order upload creation.');
         }
         // make sure the order actually belongs to our team before writing anything
-        $this->Order->readOne();
+        $order = $this->Order->readOne();
 
         $file = $reqBody['file'] ?? null;
         if (!$file instanceof UploadedFile) {
@@ -123,6 +124,16 @@ final class OrderUploads extends AbstractRest
         $req->bindValue(':extraction_status', $extractionStatus);
         $this->Db->execute($req);
         $uploadId = (int) $this->Db->lastInsertId();
+
+        if ((int) $order['userid'] !== $this->Users->userid) {
+            (new OrderChanged(
+                new Users((int) $order['userid'], $this->Users->team),
+                $this->Users,
+                (int) $this->Order->id,
+                (string) $order['title'],
+                'file',
+            ))->create();
+        }
 
         if ($extractionStatus === 'pending') {
             // best-effort: if the invoker isn't reachable (e.g. in a test

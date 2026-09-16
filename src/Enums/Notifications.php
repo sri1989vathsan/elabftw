@@ -33,4 +33,5 @@ enum Notifications: int
     case OnboardingEmail = 80;
     case ActionRequested = 90;
     case OrderReminder = 100;
+    case OrderChanged = 101;
 }
