@@ -104,7 +104,7 @@ function getDateInsertDefaults(): DateInsertDefaults {
     customLabel: '',
     asHeading: true,
     headingLevel: 1,
-    bold: false,
+    bold: true,
     italic: false,
     underline: false,
   };
