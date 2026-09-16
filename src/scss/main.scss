@@ -2190,6 +2190,13 @@ body.html-tool-workspace-resizing * {
     padding: 0 1.5rem 0 0;
   }
 
+  .date-reference-today-btn {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    margin: 0 0.35rem 0 0;
+    padding: 0.15rem 0.5rem;
+  }
+
   select[aria-label='Heading level'] {
     width: 3.8rem;
   }

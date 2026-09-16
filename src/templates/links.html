@@ -1,28 +1,26 @@
-{# LINKS #}
-<h3 data-action='toggle-next' data-scroll-btn='fa-link' data-scroll-btn-label='{{ 'Links'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ mode == 'edit' ? 'true' : 'false' }}' aria-controls='linksDiv'><i class='fas {{ mode == 'edit' ? 'fa-caret-down' : 'fa-caret-right' }} mr-2 fa-fw'></i>{{ 'Links'|trans }}</h3>
-<div class='mt-2' {{ mode == 'edit' ? '' : 'hidden' }} data-save-hidden='linksDiv' id='linksDiv'>
-  {% set accessKey = App.Request.query.getString('access_key') %}
-  {% set allFileFolderReferences = Entity.entityData.metadata_decoded.elabftw.file_folder_references|default([]) %}
-  {# split by whether each reference is a real smb:// url or \\server\share
-     UNC path (network share -> its own "Data" section) vs. plain text
-     (stays under Files / folders alongside uploads) #}
-  {% set dataReferences = [] %}
-  {% set fileFolderReferences = [] %}
-  {% for reference in allFileFolderReferences %}
-    {% if reference.text starts with '\\\\' or reference.text starts with 'smb://' %}
-      {% set dataReferences = dataReferences|merge([reference]) %}
-    {% else %}
-      {% set fileFolderReferences = fileFolderReferences|merge([reference]) %}
-    {% endif %}
-  {% endfor %}
-  {% set filesFoldersLinksCount = (Entity.entityData.uploads|length) + (fileFolderReferences|length) %}
+{% set accessKey = App.Request.query.getString('access_key') %}
+{% set allFileFolderReferences = Entity.entityData.metadata_decoded.elabftw.file_folder_references|default([]) %}
+{# split by whether each reference is a real smb:// url or \\server\share
+   UNC path (network share -> its own "Data" section) vs. plain text
+   (stays under Files / folders alongside uploads) #}
+{% set dataReferences = [] %}
+{% set fileFolderReferences = [] %}
+{% for reference in allFileFolderReferences %}
+  {% if reference.text starts with '\\\\' or reference.text starts with 'smb://' %}
+    {% set dataReferences = dataReferences|merge([reference]) %}
+  {% else %}
+    {% set fileFolderReferences = fileFolderReferences|merge([reference]) %}
+  {% endif %}
+{% endfor %}
+{% set filesFoldersLinksCount = (Entity.entityData.uploads|length) + (fileFolderReferences|length) %}
 
-  {# DATA: smb:// and \\server\share network paths, kept separate from plain
-     file/folder text references since they get real Mac/Windows open links.
-     Shown first since it's usually the fastest link people reach for. #}
+{# DATA: smb:// and \\server\share network paths. Kept as its own top-level
+   section (not nested inside Links) since it's usually the fastest link
+   people reach for, so it gets a direct sidebar button of its own. #}
+<h3 data-action='toggle-next' data-scroll-btn='fa-server' data-scroll-btn-label='{{ 'Data'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ mode == 'edit' ? 'true' : 'false' }}' aria-controls='dataSectionDiv'><i class='fas {{ mode == 'edit' ? 'fa-caret-down' : 'fa-caret-right' }} mr-2 fa-fw'></i>{{ 'Data'|trans }} (<span id='dataLinksCount'>{{ dataReferences|length }}</span>)</h3>
+<div class='mt-2' {{ mode == 'edit' ? '' : 'hidden' }} data-save-hidden='dataSectionDiv' id='dataSectionDiv'>
   <section id='dataLinksSection'>
-    <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='dataLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Data'|trans }} (<span id='dataLinksCount'>{{ dataReferences|length }}</span>)</h4>
-    <div id='dataLinksDiv' class='ml-4'>
+    <div id='dataLinksDiv'>
       {% for reference in dataReferences %}
         {% set isSmbUnc = reference.text starts with '\\\\' %}
         {% set displayText = reference.label|default(reference.text) %}
@@ -75,8 +73,12 @@
       {% endif %}
     </div>
   </section>
-  <hr>
+</div>
+<hr>
 
+{# LINKS #}
+<h3 data-action='toggle-next' data-scroll-btn='fa-link' data-scroll-btn-label='{{ 'Links'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ mode == 'edit' ? 'true' : 'false' }}' aria-controls='linksDiv'><i class='fas {{ mode == 'edit' ? 'fa-caret-down' : 'fa-caret-right' }} mr-2 fa-fw'></i>{{ 'Links'|trans }}</h3>
+<div class='mt-2' {{ mode == 'edit' ? '' : 'hidden' }} data-save-hidden='linksDiv' id='linksDiv'>
   {# EXPERIMENTS LINKS #}
   <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='experimentsLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Experiment links'|trans }} (<span id='experimentsLinksCount'>{{ Entity.entityData.experiments_links|length }}</span>)</h4>
   <div id='experimentsLinksDiv' class='ml-4'>
