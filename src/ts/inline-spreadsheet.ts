@@ -2206,7 +2206,6 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   formulaInput: HTMLInputElement;
   formulaStatus: HTMLSpanElement;
   formulaBar: HTMLDivElement;
-  formulaCollapseBtn: HTMLButtonElement;
   borderWidthInput: HTMLInputElement;
   borderColorInput: HTMLInputElement;
   cellColorInput: HTMLInputElement;
@@ -2870,14 +2869,6 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   formulaStatus.className = 'inline-spreadsheet-formula-status';
   formulaStatus.textContent = 'Enter applies the value or formula to the selected cell.';
   formulaBar.appendChild(formulaStatus);
-  const formulaCollapseBtn = document.createElement('button');
-  formulaCollapseBtn.type = 'button';
-  formulaCollapseBtn.className = 'inline-spreadsheet-icon-button ml-auto';
-  formulaCollapseBtn.title = 'Collapse formula toolbar';
-  formulaCollapseBtn.setAttribute('aria-label', 'Collapse formula toolbar');
-  formulaCollapseBtn.setAttribute('aria-expanded', 'true');
-  formulaCollapseBtn.innerHTML = '<i class="fas fa-chevron-up" aria-hidden="true"></i>';
-  formulaBar.appendChild(formulaCollapseBtn);
   dialog.appendChild(formulaBar);
 
   const sheetHost = document.createElement('div');
@@ -2928,7 +2919,6 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     formulaInput,
     formulaStatus,
     formulaBar,
-    formulaCollapseBtn,
     borderWidthInput,
     borderColorInput,
     cellColorInput,
@@ -3812,7 +3802,6 @@ export function openSpreadsheetModal(
       applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
       applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights, working.rows);
       hasChanges = true;
-      ui.cellFormatStatus.textContent = 'Auto-fit every row and column to its content.';
     };
     ui.autofitAllBtn.addEventListener('click', autofitAllColumnsAndRows);
 
@@ -4391,20 +4380,6 @@ export function openSpreadsheetModal(
     };
 
     mountSpreadsheet(working);
-    ui.formulaCollapseBtn.addEventListener('click', () => {
-      const collapsed = ui.formulaBar.classList.toggle('is-collapsed');
-      ui.formulaCollapseBtn.setAttribute('aria-expanded', String(!collapsed));
-      ui.formulaCollapseBtn.setAttribute(
-        'aria-label',
-        collapsed ? 'Expand formula toolbar' : 'Collapse formula toolbar',
-      );
-      ui.formulaCollapseBtn.title = collapsed
-        ? 'Expand formula toolbar'
-        : 'Collapse formula toolbar';
-      ui.formulaCollapseBtn.innerHTML = collapsed
-        ? '<i class="fas fa-chevron-down" aria-hidden="true"></i>'
-        : '<i class="fas fa-chevron-up" aria-hidden="true"></i>';
-    });
     ui.sheetHost.addEventListener('mousedown', onRowResizePointerDown, true);
     document.addEventListener('mouseup', onRowResizePointerUp, true);
     ui.sheetHost.addEventListener('copy', onSpreadsheetCopy, true);
