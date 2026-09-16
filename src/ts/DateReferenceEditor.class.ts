@@ -41,6 +41,8 @@ type DateDisplayFormat =
   | 'month-long-day'
   | 'weekday-day-first'
   | 'weekday-month-first'
+  | 'weekday-iso'
+  | 'weekday-compact'
   | 'month-year'
   | 'custom';
 
@@ -76,6 +78,8 @@ const DATE_FORMAT_CHOICES: DateFormatChoice[] = [
   { value: 'month-long-day', label: 'Full month + day' },
   { value: 'weekday-day-first', label: 'Weekday + day first' },
   { value: 'weekday-month-first', label: 'Weekday + month first' },
+  { value: 'weekday-iso', label: 'Weekday + ISO (year-month-day)' },
+  { value: 'weekday-compact', label: 'Weekday + compact (YYYYMMDD)' },
   { value: 'month-year', label: 'Month and year only' },
   { value: 'custom', label: 'Custom label' },
 ];
@@ -270,6 +274,10 @@ function formatDate(
     return parsed.toFormat('cccc, d LLLL yyyy');
   case 'weekday-month-first':
     return parsed.toFormat('cccc, LLLL d, yyyy');
+  case 'weekday-iso':
+    return parsed.toFormat('cccc, yyyy-LL-dd');
+  case 'weekday-compact':
+    return parsed.toFormat('cccc, yyyyLLdd');
   case 'month-year':
     return parsed.toFormat('LLLL yyyy');
   case 'custom':
