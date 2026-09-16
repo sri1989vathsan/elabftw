@@ -1875,7 +1875,7 @@
                             on:click={() => { setCommon(item, !item.common); openMenuItemId = null; }}
                           >
                             <i class="fas fa-tag fa-fw mr-2" aria-hidden="true"></i>
-                            {item.common ? t('Remove common tag') : t('Add common tag')}
+                            {t('Common')}
                           </button>
                           <button
                             type="button"
@@ -1886,7 +1886,7 @@
                             on:click={() => { setPinned(item, !item.pinned); openMenuItemId = null; }}
                           >
                             <i class="fas fa-thumbtack fa-fw mr-2" aria-hidden="true"></i>
-                            {item.pinned ? t('Unpin') : t('Pin to top')}
+                            {item.pinned ? t('Unpin') : t('Pin')}
                           </button>
                           <button
                             type="button"
