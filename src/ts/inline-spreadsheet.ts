@@ -2794,7 +2794,6 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   autofitAllBtn.setAttribute('aria-label', 'Auto-fit every row and column to its content');
   const cellFormatStatus = document.createElement('span');
   cellFormatStatus.className = 'inline-spreadsheet-cell-format-status';
-  cellFormatStatus.textContent = 'Select cells, then change a property to apply it immediately.';
   cellFormatBar.append(
     cellStyleRow,
     clearCellFormatBtn,
@@ -2867,7 +2866,6 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   });
   const formulaStatus = document.createElement('span');
   formulaStatus.className = 'inline-spreadsheet-formula-status';
-  formulaStatus.textContent = 'Enter applies the value or formula to the selected cell.';
   formulaBar.appendChild(formulaStatus);
   dialog.appendChild(formulaBar);
 
