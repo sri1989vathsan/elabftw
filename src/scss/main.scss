@@ -2878,14 +2878,6 @@ body.html-tool-workspace-resizing * {
     padding: 0.1rem 0.3rem;
   }
 
-  &.is-collapsed {
-    justify-content: flex-end;
-    min-height: 1.65rem;
-
-    > :not(.inline-spreadsheet-icon-button) {
-      display: none;
-    }
-  }
 }
 
 .inline-spreadsheet-formula-status {
