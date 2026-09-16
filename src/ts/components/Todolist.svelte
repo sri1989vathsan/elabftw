@@ -1617,6 +1617,18 @@
 
 <section class='todo-create mb-3' aria-label={t('add-task')}>
   <div class='input-group mb-2'>
+    <div class='input-group-prepend'>
+      <button
+        type='button'
+        class='btn btn-outline-secondary'
+        on:click={openCreateFormForSelectedDate}
+        aria-label={showFullCreateForm ? t('Hide task details') : t('Show task details')}
+        title={showFullCreateForm ? t('Hide task details') : t('Show task details (notes, project, date, reminder)')}
+        aria-expanded={showFullCreateForm}
+      >
+        <i class={showFullCreateForm ? 'fas fa-chevron-down fa-fw' : 'fas fa-chevron-right fa-fw'} aria-hidden='true'></i>
+      </button>
+    </div>
     <input
       class='form-control'
       bind:value={draft}
@@ -1627,11 +1639,12 @@
       <button
         type='button'
         class='btn btn-primary'
-        on:click={openCreateFormForSelectedDate}
-        aria-label={showFullCreateForm ? t('Hide task details') : t('Add task details')}
-        title={showFullCreateForm ? t('Hide task details') : t('Add task details (notes, project, date, reminder)')}
+        disabled={!draft.trim()}
+        on:click={quickCreate}
+        aria-label={t('add-task')}
+        title={t('add-task')}
       >
-        <i class={showFullCreateForm ? 'fas fa-minus fa-fw' : 'fas fa-plus fa-fw'}></i>
+        <i class='fas fa-plus fa-fw' aria-hidden='true'></i>
       </button>
     </div>
   </div>
