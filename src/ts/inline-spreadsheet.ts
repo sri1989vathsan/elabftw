@@ -2787,12 +2787,19 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   clearCellFormatBtn.innerHTML = '<i class="fas fa-eraser" aria-hidden="true"></i>';
   clearCellFormatBtn.title = 'Clear all formatting from selected cells';
   clearCellFormatBtn.setAttribute('aria-label', 'Clear all formatting from selected cells');
+  const autofitAllBtn = document.createElement('button');
+  autofitAllBtn.type = 'button';
+  autofitAllBtn.className = 'btn btn-sm btn-outline-secondary';
+  autofitAllBtn.innerHTML = '<i class="fas fa-expand" aria-hidden="true"></i>';
+  autofitAllBtn.title = 'Auto-fit every row and column to its content';
+  autofitAllBtn.setAttribute('aria-label', 'Auto-fit every row and column to its content');
   const cellFormatStatus = document.createElement('span');
   cellFormatStatus.className = 'inline-spreadsheet-cell-format-status';
   cellFormatStatus.textContent = 'Select cells, then change a property to apply it immediately.';
   cellFormatBar.append(
     cellStyleRow,
     clearCellFormatBtn,
+    autofitAllBtn,
     cellFormatStatus,
   );
   dialog.appendChild(cellFormatBar);
@@ -2969,6 +2976,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     cellFormatVerticalAlignSelect,
     rowHeightInput,
     clearCellFormatBtn,
+    autofitAllBtn,
     cellFormatStatus,
     cellFormatNoColorInput,
     cellFormatNoTextColorInput,
@@ -3761,6 +3769,52 @@ export function openSpreadsheetModal(
       applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights, working.rows);
       hasChanges = true;
     };
+
+    // Same fit-to-content measurement as the per-column/per-row double-click
+    // shortcuts above, just applied to every column and row at once. DOM-
+    // only (no worksheet.setWidth()/setHeight() calls in the loop) -- with
+    // dozens of columns and rows that would mean dozens of separate
+    // undo-history entries and resize events for what's really one action;
+    // the DOM write alone is enough since jspreadsheet's own resize-drag
+    // already reads the width attribute as its source of truth (see
+    // applySpreadsheetColWidths()'s comment) and the saved data-spreadsheet
+    // blob is read back from the live DOM on close regardless.
+    const autofitAllColumnsAndRows = (): void => {
+      if (!sheetContainer) return;
+      const colWidths: ColWidths = { ...(working.colWidths ?? {}) };
+      for (let col = 0; col < working.cols; col++) {
+        const cells = Array.from(sheetContainer.querySelectorAll<HTMLElement>(
+          `.jss_worksheet > thead [data-x="${col}"], .jss_worksheet > tbody td[data-x="${col}"][data-y]`,
+        ));
+        const naturalWidth = cells.reduce(
+          (maximum, cell) => Math.max(maximum, measureNaturalCellWidth(cell)),
+          MIN_DATA_COL_WIDTH,
+        );
+        colWidths[String(col)] = Math.max(MIN_DATA_COL_WIDTH, Math.min(MAX_DATA_COL_WIDTH, naturalWidth));
+      }
+      const rowHeights: RowHeights = { ...(working.rowHeights ?? {}) };
+      for (let row = 0; row < working.rows; row++) {
+        const cells = Array.from(sheetContainer.querySelectorAll<HTMLElement>(
+          `.jss_worksheet > tbody td[data-y="${row}"]`,
+        ));
+        const naturalHeight = cells.reduce(
+          (maximum, cell) => Math.max(maximum, measureNaturalCellHeight(cell)),
+          MIN_DATA_ROW_HEIGHT,
+        );
+        rowHeights[String(row)] = Math.max(MIN_DATA_ROW_HEIGHT, Math.min(MAX_DATA_ROW_HEIGHT, Math.ceil(naturalHeight)));
+      }
+      working = normalizeSpreadsheetData({
+        ...working,
+        data: readRawData(),
+        colWidths,
+        rowHeights,
+      });
+      applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
+      applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights, working.rows);
+      hasChanges = true;
+      ui.cellFormatStatus.textContent = 'Auto-fit every row and column to its content.';
+    };
+    ui.autofitAllBtn.addEventListener('click', autofitAllColumnsAndRows);
 
     ui.sheetHost.addEventListener('mousedown', onFormulaSelectionStart, true);
     ui.sheetHost.addEventListener('keydown', onCellEditorKeydown, true);
