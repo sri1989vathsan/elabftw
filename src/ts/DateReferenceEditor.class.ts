@@ -465,6 +465,18 @@ export default class DateReferenceEditor {
     dateInput.required = true;
     dateInput.value = existingDate;
     const dateControl = createDateIconControl('fas fa-calendar-alt', 'Choose date', dateInput);
+    // The browser's own native <input type=date> picker has no "today"
+    // shortcut of its own (and isn't ours to customize), so offer one
+    // alongside the field instead.
+    const todayButton = document.createElement('button');
+    todayButton.type = 'button';
+    todayButton.className = 'btn btn-sm btn-outline-secondary date-reference-today-btn';
+    todayButton.textContent = 'Today';
+    todayButton.addEventListener('click', () => {
+      dateInput.value = getToday();
+      updateFormatControls();
+    });
+    dateControl.append(todayButton);
 
     const formatSelect = document.createElement('select');
     formatSelect.className = 'form-control';

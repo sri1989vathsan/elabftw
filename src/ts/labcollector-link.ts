@@ -60,6 +60,8 @@ export async function createLabCollectorLink(label: string, url: string): Promis
   metadata.extra_fields ??= {};
   metadata.elabftw ??= {};
   metadata.elabftw.labcollector_links ??= [];
+  const existing = metadata.elabftw.labcollector_links.find(link => link.url === url);
+  if (existing) return existing;
   const link = {id: crypto.randomUUID(), label, url};
   metadata.elabftw.labcollector_links.push(link);
   await ApiC.patch(`${entity.type}/${entity.id}`, { metadata: JSON.stringify(metadata) });
