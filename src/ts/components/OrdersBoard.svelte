@@ -1879,7 +1879,7 @@
                           on:click={() => { setCommon(item, !item.common); openMenuItemId = null; }}
                         >
                           <i class="fas fa-tag fa-fw mr-2" aria-hidden="true"></i>
-                          {item.common ? t('Remove the "commonly ordered" tag') : t('Tag as a commonly ordered lab supply')}
+                          {item.common ? t('Remove common tag') : t('Add common tag')}
                         </button>
                         {#if canManage(item)}
                           <button
