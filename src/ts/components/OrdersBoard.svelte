@@ -1344,7 +1344,7 @@
       <label class="sr-only" for="ordersNewForUser">{t('Place this order for')}</label>
       <select id="ordersNewForUser" class="form-control form-control-sm mb-2" bind:value={newForUserid} title={t('Place this order for')}>
         <option value={null}>{t('Myself')}</option>
-        {#each teamMembers as member (member.userid)}
+        {#each teamMembers.filter(member => member.userid !== core.currentUserid) as member (member.userid)}
           <option value={member.userid}>{member.fullname}</option>
         {/each}
       </select>
