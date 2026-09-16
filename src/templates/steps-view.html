@@ -1,8 +1,9 @@
 {# STEPS #}
 {% set entityPage = entityPage|default(App.Request.getScriptName|split('/')|last|replace({'.php': ''})) %}
 <div id='stepsDiv'>
-{% if Entity.entityData.steps %}
-  <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' aria-controls='stepsDivContent'><i class='fas fa-caret-right mr-2 fa-fw'></i>{{ 'Steps'|trans }} ({{ Entity.entityData.steps|length }})</h3>
+{% set linkedTasksArr = linkedTasksArr|default([]) %}
+{% if Entity.entityData.steps or linkedTasksArr %}
+  <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' aria-controls='stepsDivContent'><i class='fas fa-caret-right mr-2 fa-fw'></i>{{ 'Steps and tasks'|trans }} ({{ Entity.entityData.steps|length + linkedTasksArr|length }})</h3>
   <div class='row mt-2' id='stepsDivContent' hidden data-save-hidden='stepsDivContent'>
     <div class='ml-3 mt-3 col-md-12'>
       {% for step in Entity.entityData.steps %}
@@ -30,6 +31,22 @@
         {% endif %}
         </div>
       {% endfor %}
+      {% if linkedTasksArr %}
+        {# LINKED TASKS: to-do tasks linked to this entity from the Project
+           Management side (see TodolistEntityLinks::readAllForEntity()) --
+           read-only here; add/remove the link from the task's own detail
+           dialog instead. #}
+        <div class='{{ Entity.entityData.steps ? 'mt-3' }}' id='linkedTasksSection'>
+          {% if Entity.entityData.steps %}<h5 class='small text-muted'>{{ 'Tasks'|trans }}</h5>{% endif %}
+          {% for task in linkedTasksArr %}
+            <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center'>
+              <a class='mr-auto text-break' href='projectmanagement.php?task={{ task.task_id }}'>
+                <i class='fas fa-list-check fa-fw mr-2' aria-hidden='true'></i>{{ task.title }}
+              </a>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
     </div>
   </div>
   <hr>

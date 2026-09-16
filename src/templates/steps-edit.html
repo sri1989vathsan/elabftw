@@ -1,5 +1,6 @@
 {# STEPS #}
-<h3 data-action='toggle-next' data-scroll-btn='fa-list-check' data-scroll-btn-label='{{ 'Steps'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' aria-controls='stepsDiv'><i class='fas fa-caret-right mr-2 fa-fw'></i> {{ 'Steps'|trans }} (<span id='stepsCount'>{{ Entity.entityData.steps|length }}</span>)</h3>
+{% set linkedTasksArr = linkedTasksArr|default([]) %}
+<h3 data-action='toggle-next' data-scroll-btn='fa-list-check' data-scroll-btn-label='{{ 'Steps and tasks'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' aria-controls='stepsDiv'><i class='fas fa-caret-right mr-2 fa-fw'></i> {{ 'Steps and tasks'|trans }} (<span id='stepsCount'>{{ Entity.entityData.steps|length + linkedTasksArr|length }}</span>)</h3>
 <div id='stepsDiv' class='mt-2' hidden data-count-for='stepsCount' data-save-hidden='stepsDiv'>
   <div class='sortable' id='steps_div_{{ Entity.id }}' data-axis='y' data-table='{{ Entity.entityType.value }}_steps'>
     {# LOCK ALL STEPS #}
@@ -124,5 +125,21 @@
       <button class='btn btn-primary mt-2' data-action='create-steps-bulk' type='submit'>{{ 'Add steps'|trans }}</button>
     </form>
   </div>
+  {% if linkedTasksArr %}
+    {# LINKED TASKS: to-do tasks linked to this entity from the Project
+       Management side (see TodolistEntityLinks::readAllForEntity()) --
+       read-only here; add/remove the link from the task's own detail
+       dialog instead. #}
+    <div class='mt-3' id='linkedTasksSection'>
+      <h5 class='small text-muted'>{{ 'Tasks'|trans }}</h5>
+      {% for task in linkedTasksArr %}
+        <div class='mt-2 hl-hover-superlight p-2 rounded d-flex align-items-center'>
+          <a class='mr-auto text-break' href='projectmanagement.php?task={{ task.task_id }}'>
+            <i class='fas fa-list-check fa-fw mr-2' aria-hidden='true'></i>{{ task.title }}
+          </a>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
 </div>
 <hr>
