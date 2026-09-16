@@ -81,12 +81,17 @@ export function parseFileFolderReferences(input: string): string[] {
 
 export async function createFileFolderReferences(input: string): Promise<FileFolderReference[]> {
   const metadata = await readMetadata();
-  const references = parseFileFolderReferences(input).map(text => ({
-    id: crypto.randomUUID(),
-    text,
-  }));
-  metadata.elabftw.file_folder_references.push(...references);
-  await saveMetadata(metadata);
+  const seenTexts = new Set(metadata.elabftw.file_folder_references.map(reference => reference.text));
+  const references: FileFolderReference[] = [];
+  for (const text of parseFileFolderReferences(input)) {
+    if (seenTexts.has(text)) continue;
+    seenTexts.add(text);
+    references.push({id: crypto.randomUUID(), text});
+  }
+  if (references.length > 0) {
+    metadata.elabftw.file_folder_references.push(...references);
+    await saveMetadata(metadata);
+  }
   return references;
 }
 
@@ -102,6 +107,8 @@ export async function createFileFolderReference(text: string, label: string): Pr
     throw new Error(`The label must be ${MAX_LABEL_LENGTH} characters or fewer`);
   }
   const metadata = await readMetadata();
+  const existing = metadata.elabftw.file_folder_references.find(reference => reference.text === trimmedText);
+  if (existing) return existing;
   const reference: FileFolderReference = {
     id: crypto.randomUUID(),
     text: trimmedText,
