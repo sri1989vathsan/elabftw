@@ -273,15 +273,15 @@
   $: activeRange = selectionRange(selectedDate, selectedRangeEnd);
   $: agendaEntries = showTasks
     ? filteredEntries.filter(entry => (
-      matchesAgendaDate(dateKey(new Date(entry.deadline)), activeRange, monthCursor)
+      matchesAgendaDate(dateKey(new Date(entry.deadline)), activeRange, monthCursor, showWeekends, viewMode)
         && matchesSearch(`${entry.body} ${entry.notes ?? ''} ${entry.entityTitle ?? ''}`, activitySearch)
     ))
     : [];
   $: agendaExperiments = showExperiments
-    ? buildAgendaEntities('experiments', filteredActivities, activeRange, monthCursor, activitySearch)
+    ? buildAgendaEntities('experiments', filteredActivities, activeRange, monthCursor, activitySearch, showWeekends, viewMode)
     : [];
   $: agendaResources = showResources
-    ? buildAgendaEntities('items', filteredActivities, activeRange, monthCursor, activitySearch)
+    ? buildAgendaEntities('items', filteredActivities, activeRange, monthCursor, activitySearch, showWeekends, viewMode)
     : [];
   $: agendaCount = agendaEntries.length + agendaExperiments.length + agendaResources.length;
   $: calendarMonthLabel = formatMonthLabel(monthCursor, locale);
@@ -546,7 +546,25 @@
     return start <= rangeEnd ? { start, end: rangeEnd } : { start: rangeEnd, end: start };
   }
 
-  function matchesAgendaDate(date: string, range: { start: string; end: string } | null, month: Date): boolean {
+  function isWeekend(key: string): boolean {
+    const day = new Date(`${key}T12:00:00`).getDay();
+    return day === 0 || day === 6;
+  }
+
+  // weekendsVisible/mode are passed in explicitly (rather than read from the
+  // component's own showWeekends/viewMode) so that every $: block calling
+  // this function references them directly -- Svelte's reactivity only
+  // tracks identifiers appearing in the reactive statement itself, not ones
+  // read inside a called function's body, so closing over them here would
+  // silently fail to re-run the agenda filters when the toggle/view changes.
+  function matchesAgendaDate(
+    date: string,
+    range: { start: string; end: string } | null,
+    month: Date,
+    weekendsVisible: boolean,
+    mode: 'day' | 'week' | 'month',
+  ): boolean {
+    if (!weekendsVisible && mode !== 'day' && isWeekend(date)) return false;
     if (range) return date >= range.start && date <= range.end;
     const start = calendarStart(month);
     const end = new Date(start);
@@ -560,17 +578,19 @@
     range: { start: string; end: string } | null,
     month: Date,
     search: string,
+    weekendsVisible: boolean,
+    mode: 'day' | 'week' | 'month',
   ): AgendaEntityActivity[] {
     const result: AgendaEntityActivity[] = [];
     const normalizedSearch = search.trim().toLocaleLowerCase();
     activities
       .filter(activity => activity.entity_type === type
-        && [...activityDates(activity)].some(date => matchesAgendaDate(date, range, month)))
+        && [...activityDates(activity)].some(date => matchesAgendaDate(date, range, month, weekendsVisible, mode)))
       .forEach(activity => {
         const byIndex = new Map(activity.headings.map(heading => [heading.index, heading]));
         const included = new Set<number>();
         activity.headings
-          .filter(heading => matchesAgendaDate(heading.date, range, month))
+          .filter(heading => matchesAgendaDate(heading.date, range, month, weekendsVisible, mode))
           .forEach(heading => {
             included.add(heading.index);
             let parentIndex = heading.parent_index;
@@ -592,7 +612,7 @@
             return {
               ...heading,
               depth,
-              contextual: !matchesAgendaDate(heading.date, range, month),
+              contextual: !matchesAgendaDate(heading.date, range, month, weekendsVisible, mode),
             };
           });
 
