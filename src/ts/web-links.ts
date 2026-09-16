@@ -52,6 +52,8 @@ export async function createWebLink(urlInput: string, labelInput = ''): Promise<
   }
 
   const metadata = await readMetadata();
+  const existing = metadata.elabftw.web_links.find(link => link.url === url);
+  if (existing) return existing;
   const webLink = {id: crypto.randomUUID(), label, url};
   metadata.elabftw.web_links.push(webLink);
   await saveMetadata(metadata);
