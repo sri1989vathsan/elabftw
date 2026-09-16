@@ -2659,11 +2659,11 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
       defaultFontTextColorInput,
       () => defaultFontTextColorInput.dispatchEvent(new Event('change')),
     ),
-    (() => {
-      const noTextColorControl = createIconControl('', 'No default text color', defaultFontNoTextColorInput);
-      noTextColorControl.classList.add('inline-spreadsheet-bold-italic-underline-control');
-      return noTextColorControl;
-    })(),
+    createIconControl(
+      '<span class="inline-spreadsheet-text-color-icon">A</span>',
+      'No default text color',
+      defaultFontNoTextColorInput,
+    ),
     defaultHorizontalAlignmentButtons,
     defaultVerticalAlignmentButtons,
   );
@@ -2745,7 +2745,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
       cellFormatColorInput,
       () => cellFormatColorInput.dispatchEvent(new Event('change')),
     ),
-    createIconControl('', 'Remove cell background color', cellFormatNoColorInput),
+    createIconControl('<i class="fas fa-fill-drip"></i>', 'Remove cell background color', cellFormatNoColorInput),
   );
 
   const fontStyleRow = cellStyleRow;
@@ -2844,7 +2844,11 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
       cellFormatTextColorInput,
       () => cellFormatTextColorInput.dispatchEvent(new Event('change')),
     ),
-    createIconControl('', 'Remove text color', cellFormatNoTextColorInput),
+    createIconControl(
+      '<span class="inline-spreadsheet-text-color-icon">A</span>',
+      'Remove text color',
+      cellFormatNoTextColorInput,
+    ),
     horizontalAlignmentButtons,
   );
 
