@@ -1802,33 +1802,28 @@
                 {#if item.order_number}
                   <span class="badge badge-light" title={t('Bestellung Nr., extracted from an uploaded order confirmation PDF')}>{t('Order #')}: {item.order_number}</span>
                 {/if}
-                {#if item.labcollector_type || canManage(item)}
-                  <span class="orders-labcollector-toggle">
-                    <button
-                      type="button"
-                      class="orders-labcollector-pill"
-                      class:orders-labcollector-pill-on={!!item.labcollector_type}
-                      disabled={!canManage(item)}
-                      title={item.labcollector_type ? t('On LabCollector — click to unmark') : t('Not on LabCollector — click to mark as registered')}
-                      on:click={() => toggleLabcollectorRegistered(item)}
-                    >
-                      <i class={`fas ${item.labcollector_type ? 'fa-check' : 'fa-vial'} fa-fw`} aria-hidden="true"></i>{t('On LabCollector')}
-                    </button>
-                    {#if canManage(item)}
-                      <button type="button" class="btn btn-ghost btn-sm orders-icon-button" title={t('Edit LabCollector details')} aria-label={t('Edit LabCollector details')} on:click={() => openLabcollectorModal(item)}>
-                        <span class="orders-labcollector-edit-icon">
-                          <i class="fas fa-flask" aria-hidden="true"></i>
-                          <i class="fas fa-pen orders-labcollector-edit-pencil" aria-hidden="true"></i>
-                        </span>
-                      </button>
-                    {/if}
-                    {#if item.labcollector_type && item.labcollector_id}
-                      <a href={buildLabCollectorUrl(item.labcollector_type, item.labcollector_id)} target="_blank" rel="noopener noreferrer" class="orders-labcollector-id-link" title={t('Open in LabCollector')}>
-                        {labcollectorTypeLabel(item.labcollector_type)} #{item.labcollector_id}<i class="fas fa-arrow-up-right-from-square fa-fw ml-1" aria-hidden="true"></i>
-                      </a>
-                    {/if}
-                  </span>
-                {/if}
+                <span class="orders-labcollector-toggle">
+                  <button
+                    type="button"
+                    class="orders-labcollector-pill"
+                    class:orders-labcollector-pill-on={!!item.labcollector_type}
+                    title={item.labcollector_type ? t('On LabCollector — click to unmark') : t('Not on LabCollector — click to mark as registered')}
+                    on:click={() => toggleLabcollectorRegistered(item)}
+                  >
+                    <i class={`fas ${item.labcollector_type ? 'fa-check' : 'fa-vial'} fa-fw`} aria-hidden="true"></i>{t('On LabCollector')}
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm orders-icon-button" title={t('Edit LabCollector details')} aria-label={t('Edit LabCollector details')} on:click={() => openLabcollectorModal(item)}>
+                    <span class="orders-labcollector-edit-icon">
+                      <i class="fas fa-flask" aria-hidden="true"></i>
+                      <i class="fas fa-pen orders-labcollector-edit-pencil" aria-hidden="true"></i>
+                    </span>
+                  </button>
+                  {#if item.labcollector_type && item.labcollector_id}
+                    <a href={buildLabCollectorUrl(item.labcollector_type, item.labcollector_id)} target="_blank" rel="noopener noreferrer" class="orders-labcollector-id-link" title={t('Open in LabCollector')}>
+                      {labcollectorTypeLabel(item.labcollector_type)} #{item.labcollector_id}<i class="fas fa-arrow-up-right-from-square fa-fw ml-1" aria-hidden="true"></i>
+                    </a>
+                  {/if}
+                </span>
                 <div class="orders-item-actions ml-auto">
                   <button
                     type="button"
@@ -1860,28 +1855,28 @@
                     </button>
                   {/if}
                   <div class="orders-more-menu" use:clickOutside={() => { if (openMenuItemId === item.id) openMenuItemId = null; }}>
-                    <button
-                      type="button"
-                      class="btn btn-ghost btn-sm orders-icon-button"
-                      title={t('More actions')}
-                      aria-label={t('More actions')}
-                      aria-expanded={openMenuItemId === item.id}
-                      on:click={() => openMenuItemId = openMenuItemId === item.id ? null : item.id}
-                    >
-                      <i class="fas fa-ellipsis-vertical fa-fw" aria-hidden="true"></i>
-                    </button>
-                    {#if openMenuItemId === item.id}
-                      <div class="orders-more-dropdown">
-                        <button
-                          type="button"
-                          class="orders-more-dropdown-item"
-                          class:orders-more-dropdown-item-active={item.common}
-                          on:click={() => { setCommon(item, !item.common); openMenuItemId = null; }}
-                        >
-                          <i class="fas fa-tag fa-fw mr-2" aria-hidden="true"></i>
-                          {item.common ? t('Remove common tag') : t('Add common tag')}
-                        </button>
-                        {#if canManage(item)}
+                    {#if canManage(item)}
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-sm orders-icon-button"
+                        title={t('More actions')}
+                        aria-label={t('More actions')}
+                        aria-expanded={openMenuItemId === item.id}
+                        on:click={() => openMenuItemId = openMenuItemId === item.id ? null : item.id}
+                      >
+                        <i class="fas fa-ellipsis-vertical fa-fw" aria-hidden="true"></i>
+                      </button>
+                      {#if openMenuItemId === item.id}
+                        <div class="orders-more-dropdown">
+                          <button
+                            type="button"
+                            class="orders-more-dropdown-item"
+                            class:orders-more-dropdown-item-active={item.common}
+                            on:click={() => { setCommon(item, !item.common); openMenuItemId = null; }}
+                          >
+                            <i class="fas fa-tag fa-fw mr-2" aria-hidden="true"></i>
+                            {item.common ? t('Remove common tag') : t('Add common tag')}
+                          </button>
                           <button
                             type="button"
                             class="orders-more-dropdown-item"
@@ -1910,8 +1905,8 @@
                             <i class="fas fa-trash fa-fw mr-2" aria-hidden="true"></i>
                             {t('Delete')}
                           </button>
-                        {/if}
-                      </div>
+                        </div>
+                      {/if}
                     {/if}
                   </div>
                 </div>

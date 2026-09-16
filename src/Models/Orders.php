@@ -525,6 +525,9 @@ final class Orders extends AbstractRest
             }
         }
         if (array_key_exists('common', $params)) {
+            if (!$isOwner && !$this->Users->isAdmin) {
+                throw new ImproperActionException('Only the author or a team admin can edit this order.');
+            }
             $this->updateCommon((bool) $params['common']);
         }
         if (array_key_exists('title', $params) || array_key_exists('notes', $params)) {
@@ -553,9 +556,10 @@ final class Orders extends AbstractRest
             $this->replaceItems($this->getItemIds($params['item_ids']));
         }
         if (array_key_exists('labcollector_type', $params) || array_key_exists('labcollector_id', $params)) {
-            if (!$isOwner && !$this->Users->isAdmin) {
-                throw new ImproperActionException('Only the author or a team admin can edit this order.');
-            }
+            // anyone on the team can register/link an order to LabCollector,
+            // not just its owner or an admin -- unlike the other fields
+            // here, this isn't really "editing someone else's order", it's
+            // recording where the item already lives in LabCollector
             $this->updateLabCollectorLink(
                 array_key_exists('labcollector_type', $params) ? $this->getLabCollectorType($params['labcollector_type']) : $order['labcollector_type'],
                 array_key_exists('labcollector_id', $params) ? $this->getLabCollectorId($params['labcollector_id']) : $order['labcollector_id'],
