@@ -2650,16 +2650,6 @@ body.html-tool-workspace-resizing * {
   }
 }
 
-.inline-spreadsheet-bold-italic-underline-control {
-  padding-left: 0.15rem;
-  padding-right: 0.15rem;
-
-  > span:first-child {
-    min-width: 0;
-    width: 0;
-  }
-}
-
 .inline-spreadsheet-compact-control {
   align-items: center;
   background-color: var(--mainbackground);
@@ -2716,6 +2706,27 @@ body.html-tool-workspace-resizing * {
     min-width: 1.9rem;
     padding: 0;
     width: 1.9rem;
+  }
+}
+
+// narrower B/I/U-by-default toggles, with room to breathe from the
+// font-size stepper before them -- the combined selector (rather than just
+// .inline-spreadsheet-bold-italic-underline-control alone) is needed to
+// outweigh .inline-spreadsheet-compact-control's own same-element rules
+// above, since both classes land on the same label and appear in the same
+// cascade otherwise decided by source order alone.
+.inline-spreadsheet-compact-control.inline-spreadsheet-bold-italic-underline-control {
+  padding-left: 0.1rem;
+  padding-right: 0.1rem;
+
+  > span:first-child {
+    min-width: 0;
+    width: 0;
+  }
+
+  .inline-spreadsheet-icon-toggle {
+    height: 1.5rem;
+    min-width: 1.5rem;
   }
 }
 
