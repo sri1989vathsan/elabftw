@@ -2141,19 +2141,40 @@ function createLabeledControl(labelText: string, control: HTMLElement): HTMLLabe
   return label;
 }
 
+// onIconClick is only passed for color swatches: clicking the swatch itself
+// still opens the native color picker (the <label>'s default behavior for
+// its wrapped <input>), but clicking the icon re-applies whatever color is
+// already selected instead of also opening that picker -- preventDefault/
+// stopPropagation here is what stops the label from forwarding the click
+// to the input the way it normally would.
 function createIconControl(
   icon: string,
   labelText: string,
   control: HTMLElement,
+  onIconClick?: (event: MouseEvent) => void,
 ): HTMLLabelElement {
   const label = createLabeledControl('', control);
   label.classList.add('inline-spreadsheet-compact-control');
   label.title = labelText;
-  const iconElement = document.createElement('span');
-  iconElement.className = 'inline-spreadsheet-control-icon';
-  iconElement.innerHTML = icon;
-  iconElement.setAttribute('aria-hidden', 'true');
-  label.prepend(iconElement);
+  if (onIconClick) {
+    const iconButton = document.createElement('button');
+    iconButton.type = 'button';
+    iconButton.className = 'inline-spreadsheet-control-icon inline-spreadsheet-control-icon-button';
+    iconButton.innerHTML = icon;
+    iconButton.setAttribute('aria-label', labelText);
+    iconButton.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      onIconClick(event);
+    });
+    label.prepend(iconButton);
+  } else {
+    const iconElement = document.createElement('span');
+    iconElement.className = 'inline-spreadsheet-control-icon';
+    iconElement.innerHTML = icon;
+    iconElement.setAttribute('aria-hidden', 'true');
+    label.prepend(iconElement);
+  }
   return label;
 }
 
@@ -2479,7 +2500,12 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     createIconControl('<i class="fas fa-border-all"></i>', 'Default cell border width', borderWidthInput),
     createIconControl('<i class="fas fa-square"></i>', 'Default cell border color', borderColorInput),
     createIconControl('<i class="fas fa-border-style"></i>', 'Default cell border style', defaultCellBorderStyleSelect),
-    createIconControl('<i class="fas fa-fill-drip"></i>', 'Default cell color', cellColorInput),
+    createIconControl(
+      '<i class="fas fa-fill-drip"></i>',
+      'Default cell color',
+      cellColorInput,
+      () => cellColorInput.dispatchEvent(new Event('change')),
+    ),
     createIconControl('<i class="fas fa-ban"></i>', 'No default cell color', defaultCellNoColorInput),
     createIconControl('<i class="fas fa-grip-lines"></i>', 'Use alternating row color', alternateRowsInput),
     createIconControl('<i class="fas fa-fill-drip"></i>', 'Alternating row color', alternateRowColorInput),
@@ -2562,6 +2588,46 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     <option value="bottom">Bottom</option>
   `;
   defaultFontVerticalAlignSelect.value = savedCellDefaults?.verticalAlign ?? '';
+  const createAlignmentButtons = (
+    select: HTMLSelectElement,
+    options: Array<{ value: string; label: string; icon: string }>,
+  ): HTMLDivElement => {
+    const group = document.createElement('div');
+    group.className = 'inline-spreadsheet-alignment-buttons';
+    select.classList.add('d-none');
+    group.appendChild(select);
+    const buttons = options.map(option => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'inline-spreadsheet-icon-button';
+      button.title = option.label;
+      button.setAttribute('aria-label', option.label);
+      button.setAttribute('aria-pressed', String(select.value === option.value));
+      button.innerHTML = option.icon;
+      button.addEventListener('click', () => {
+        select.value = option.value;
+        buttons.forEach(candidate => candidate.setAttribute(
+          'aria-pressed',
+          String(candidate === button),
+        ));
+        select.dispatchEvent(new Event('change'));
+      });
+      return button;
+    });
+    group.append(...buttons);
+    return group;
+  };
+  const defaultHorizontalAlignmentButtons = createAlignmentButtons(defaultFontTextAlignSelect, [
+    { value: 'left', label: 'Align left', icon: '<i class="fas fa-align-left" aria-hidden="true"></i>' },
+    { value: 'center', label: 'Align center', icon: '<i class="fas fa-align-center" aria-hidden="true"></i>' },
+    { value: 'right', label: 'Align right', icon: '<i class="fas fa-align-right" aria-hidden="true"></i>' },
+    { value: 'justify', label: 'Justify', icon: '<i class="fas fa-align-justify" aria-hidden="true"></i>' },
+  ]);
+  const defaultVerticalAlignmentButtons = createAlignmentButtons(defaultFontVerticalAlignSelect, [
+    { value: 'top', label: 'Align top', icon: '<i class="fas fa-align-left fa-rotate-90" aria-hidden="true"></i>' },
+    { value: 'middle', label: 'Align middle', icon: '<i class="fas fa-align-center fa-rotate-90" aria-hidden="true"></i>' },
+    { value: 'bottom', label: 'Align bottom', icon: '<i class="fas fa-align-right fa-rotate-90" aria-hidden="true"></i>' },
+  ]);
   fontAppearanceGrid.append(
     createIconControl('<i class="fas fa-font"></i>', 'Default font family', defaultFontFamilySelect),
     createStepperControl(defaultFontSizeInput, 'default font size'),
@@ -2572,13 +2638,30 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     // always prepends one) purely to keep this row's grid-column alignment
     // consistent with every other row here, matching how the cell-level
     // format toolbar's equivalent controls already do this correctly.
-    createIconControl('', 'Bold by default', defaultFontBoldInput),
-    createIconControl('', 'Italic by default', defaultFontItalicInput),
-    createIconControl('', 'Underline by default', defaultFontUnderlineInput),
-    createIconControl('<span class="inline-spreadsheet-text-color-icon">A</span>', 'Default text color', defaultFontTextColorInput),
-    createIconControl('<i class="fas fa-ban"></i>', 'No default text color', defaultFontNoTextColorInput),
-    createIconControl('<i class="fas fa-align-left"></i>', 'Default horizontal alignment', defaultFontTextAlignSelect),
-    createIconControl('<i class="fas fa-arrows-alt-v"></i>', 'Default vertical alignment', defaultFontVerticalAlignSelect),
+    (() => {
+      const boldControl = createIconControl('', 'Bold by default', defaultFontBoldInput);
+      boldControl.classList.add('inline-spreadsheet-bold-italic-underline-control', 'ml-2');
+      return boldControl;
+    })(),
+    (() => {
+      const italicControl = createIconControl('', 'Italic by default', defaultFontItalicInput);
+      italicControl.classList.add('inline-spreadsheet-bold-italic-underline-control');
+      return italicControl;
+    })(),
+    (() => {
+      const underlineControl = createIconControl('', 'Underline by default', defaultFontUnderlineInput);
+      underlineControl.classList.add('inline-spreadsheet-bold-italic-underline-control');
+      return underlineControl;
+    })(),
+    createIconControl(
+      '<span class="inline-spreadsheet-text-color-icon">A</span>',
+      'Default text color',
+      defaultFontTextColorInput,
+      () => defaultFontTextColorInput.dispatchEvent(new Event('change')),
+    ),
+    createIconControl('', 'No default text color', defaultFontNoTextColorInput),
+    defaultHorizontalAlignmentButtons,
+    defaultVerticalAlignmentButtons,
   );
   appearancePanel.append(fontAppearanceLabel, fontAppearanceGrid);
 
@@ -2652,8 +2735,13 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   cellFormatBorderWidthInput.min = '0';
   cellFormatBorderWidthInput.max = String(MAX_TABLE_BORDER);
   cellStyleRow.append(
-    createIconControl('<i class="fas fa-fill-drip"></i>', 'Cell background color', cellFormatColorInput),
-    createIconControl('<i class="fas fa-ban"></i>', 'Remove cell background color', cellFormatNoColorInput),
+    createIconControl(
+      '<i class="fas fa-fill-drip"></i>',
+      'Cell background color',
+      cellFormatColorInput,
+      () => cellFormatColorInput.dispatchEvent(new Event('change')),
+    ),
+    createIconControl('', 'Remove cell background color', cellFormatNoColorInput),
   );
 
   const fontStyleRow = cellStyleRow;
@@ -2727,35 +2815,6 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     <option value="bottom">Bottom</option>
   `;
   cellFormatVerticalAlignSelect.value = savedCellDefaults?.verticalAlign ?? '';
-  const createAlignmentButtons = (
-    select: HTMLSelectElement,
-    options: Array<{ value: string; label: string; icon: string }>,
-  ): HTMLDivElement => {
-    const group = document.createElement('div');
-    group.className = 'inline-spreadsheet-alignment-buttons';
-    select.classList.add('d-none');
-    group.appendChild(select);
-    const buttons = options.map(option => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'inline-spreadsheet-icon-button';
-      button.title = option.label;
-      button.setAttribute('aria-label', option.label);
-      button.setAttribute('aria-pressed', String(select.value === option.value));
-      button.innerHTML = option.icon;
-      button.addEventListener('click', () => {
-        select.value = option.value;
-        buttons.forEach(candidate => candidate.setAttribute(
-          'aria-pressed',
-          String(candidate === button),
-        ));
-        select.dispatchEvent(new Event('change'));
-      });
-      return button;
-    });
-    group.append(...buttons);
-    return group;
-  };
   const horizontalAlignmentButtons = createAlignmentButtons(cellFormatTextAlignSelect, [
     { value: 'left', label: 'Align left', icon: '<i class="fas fa-align-left" aria-hidden="true"></i>' },
     { value: 'center', label: 'Align center', icon: '<i class="fas fa-align-center" aria-hidden="true"></i>' },
@@ -2775,8 +2834,13 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     createLabeledControl('', cellFormatBoldInput),
     createLabeledControl('', cellFormatItalicInput),
     createLabeledControl('', cellFormatUnderlineInput),
-    createIconControl('<span class="inline-spreadsheet-text-color-icon">A</span>', 'Text color', cellFormatTextColorInput),
-    createIconControl('<i class="fas fa-ban"></i>', 'Remove text color', cellFormatNoTextColorInput),
+    createIconControl(
+      '<span class="inline-spreadsheet-text-color-icon">A</span>',
+      'Text color',
+      cellFormatTextColorInput,
+      () => cellFormatTextColorInput.dispatchEvent(new Event('change')),
+    ),
+    createIconControl('', 'Remove text color', cellFormatNoTextColorInput),
     horizontalAlignmentButtons,
   );
 
