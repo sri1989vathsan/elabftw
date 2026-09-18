@@ -800,7 +800,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   });
 
   // Read-only jspreadsheet-ce overlay for spreadsheet tables while editing --
-  // matches mountReadOnlySpreadsheetGrid()'s fix to the view page, but the
+  // matches activateLazySpreadsheetViews()'s fix to the view page, but the
   // table living inside TinyMCE's content can never be replaced or mutated
   // directly here: whatever is in that DOM is exactly what editor.getContent()
   // serializes and saves. So the real table is left completely untouched
@@ -810,15 +810,25 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // document, tracked to the table's on-screen rect every animation frame.
   // Double-clicking the overlay opens the same edit modal as the dblclick
   // handler above -- it needs its own listener for that (see enhanceTable()).
-  const spreadsheetOverlays = new Map<HTMLTableElement, HTMLElement>();
+  const spreadsheetOverlays = new Map<HTMLTableElement, { el: HTMLElement; destroy: () => void }>();
   const enhancedTables = new WeakSet<HTMLTableElement>();
   let overlaySyncRunning = false;
 
   const getEditorIframe = (): HTMLIFrameElement | null =>
     document.getElementById(`${editor.id}_ifr`) as HTMLIFrameElement | null;
 
+  // Tears down the jspreadsheet-ce instance and removes its overlay, but
+  // leaves the table under intersectionObserver's watch (see below) so it
+  // gets a fresh overlay again if scrolled back into view -- a long
+  // document with many spreadsheets otherwise keeps every one of them
+  // live (and re-measured every animation frame, see syncOverlayPositions)
+  // for the rest of the editing session regardless of whether any of them
+  // are still on screen.
   const removeOverlay = (table: HTMLTableElement): void => {
-    spreadsheetOverlays.get(table)?.remove();
+    const entry = spreadsheetOverlays.get(table);
+    if (!entry) return;
+    entry.destroy();
+    entry.el.remove();
     spreadsheetOverlays.delete(table);
     enhancedTables.delete(table);
   };
@@ -830,7 +840,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       return;
     }
     const iframeRect = iframe.getBoundingClientRect();
-    Array.from(spreadsheetOverlays.entries()).forEach(([table, overlay]) => {
+    Array.from(spreadsheetOverlays.entries()).forEach(([table, { el: overlay }]) => {
       if (!table.isConnected || !editor.getBody().contains(table)) {
         removeOverlay(table);
         return;
@@ -848,7 +858,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       const toggleBarEl = overlay.querySelector('.elabftw-spreadsheet-readonly-toggle') as HTMLElement | null;
       const gridEl = overlay.querySelector('.elabftw-spreadsheet-readonly-grid') as HTMLElement | null;
       const naturalContentHeight = worksheetEl?.scrollHeight ?? tableRect.height;
-      const naturalContentWidth = worksheetEl?.scrollWidth ?? tableRect.width;
+      // jspreadsheet-ce's own live rendering can land on a slightly
+      // different width than the saved column widths (view mode's own
+      // static rendering) would -- cap at whichever of the two is
+      // smaller, in addition to the editor's own content column width,
+      // rather than whatever jspreadsheet happens to render at.
+      const viewModeWidth = Number.parseFloat(overlay.dataset.viewModeWidth ?? '');
+      const naturalContentWidth = Math.min(
+        worksheetEl?.scrollWidth ?? tableRect.width,
+        Number.isFinite(viewModeWidth) ? viewModeWidth : Infinity,
+      );
       const maxContentWidth = editor.getBody().getBoundingClientRect().width;
       overlay.style.width = `${Math.min(naturalContentWidth, maxContentWidth)}px`;
       // A horizontal scrollbar (overflow-x:auto on the grid area, needed
@@ -904,7 +923,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // would conflict with it -- the popup (formulas, appearance panel,
     // whole-row/column tools) is reachable via the small icon in the
     // toggle bar instead.
-    const overlay = buildReadOnlySpreadsheetHost(extractFromTable(table), {
+    const { host: overlay, destroy } = buildReadOnlySpreadsheetHost(extractFromTable(table), {
       editable: true,
       onChange: data => commitOverlayChange(table, data),
       onOpenFullEditor: () => openInlineSpreadsheet(extractFromTable(table), table),
@@ -922,17 +941,39 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       tableIndentation.trackSelectedTable(table);
     });
     document.body.appendChild(overlay);
-    spreadsheetOverlays.set(table, overlay);
+    spreadsheetOverlays.set(table, { el: overlay, destroy });
     ensureSyncLoop();
   };
 
+  // Only tables actually near the viewport get a live overlay (and join
+  // the per-frame position sync above) -- one that scrolls out gets torn
+  // down (removeOverlay) rather than left running forever, so a long
+  // document with many spreadsheets costs roughly what's on screen, not
+  // what's in the whole document.
+  const observedTables = new WeakSet<HTMLTableElement>();
+  const tableVisibility = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      const table = entry.target as HTMLTableElement;
+      if (entry.isIntersecting) {
+        enhanceTable(table);
+      } else {
+        removeOverlay(table);
+      }
+    });
+  }, { rootMargin: '400px 0px' });
+
   const enhanceAllTables = (): void => {
     Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
-      .forEach(enhanceTable);
+      .forEach(table => {
+        if (observedTables.has(table)) return;
+        observedTables.add(table);
+        tableVisibility.observe(table);
+      });
   };
 
   editor.on('SetContent NodeChange', enhanceAllTables);
   editor.on('remove', () => {
+    tableVisibility.disconnect();
     Array.from(spreadsheetOverlays.keys()).forEach(removeOverlay);
   });
 

@@ -67,7 +67,10 @@ if (!core.isAnon) {
 }
 
 // Upgrade any saved spreadsheet in the main text from its static HTML
-// rendering to a real (read-only) jspreadsheet-ce grid, so viewing matches
-// the editing popup's own rendering exactly -- see mountReadOnlySpreadsheetGrid().
+// rendering to a real (read-only) jspreadsheet-ce grid as it scrolls into
+// view (and back to static HTML once scrolled back out), so viewing
+// matches the editing popup's own rendering exactly without every
+// spreadsheet in a long document staying mounted for the rest of the
+// page's life -- see activateLazySpreadsheetViews().
 const bodyView = document.getElementById('body_view');
 if (bodyView) activateLazySpreadsheetViews(bodyView);

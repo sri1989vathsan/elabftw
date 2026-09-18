@@ -5229,19 +5229,13 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
 }
 
 /**
- * Replace a static, JS-free rendering of a saved spreadsheet (an ordinary
- * <table>, produced by spreadsheetToHTML()) with a real, read-only
- * jspreadsheet-ce grid -- so a view page matches the editing popup's own
- * rendering pixel-for-pixel (identical column/row sizing, cell styling,
- * fixed coordinate gutter) instead of a second, hand-rolled CSS
- * approximation that can drift out of sync with it. Intended to be called
- * lazily (see activateLazySpreadsheetViews below), not for every table on
- * page load at once.
- */
-/**
  * Build a standalone, read-only jspreadsheet-ce grid (a plain <div>, not yet
- * attached anywhere) from a saved spreadsheet's data -- the shared core
- * behind mountReadOnlySpreadsheetGrid() (view pages: replaces the table in
+ * attached anywhere) from a saved spreadsheet's data -- so a view page
+ * matches the editing popup's own rendering pixel-for-pixel (identical
+ * column/row sizing, cell styling, fixed coordinate gutter) instead of a
+ * second, hand-rolled CSS approximation that can drift out of sync with it.
+ * The shared core behind activateLazySpreadsheetViews() (view pages: swaps
+ * the table in and out of the document as it scrolls in and out of view
  * place) and the TinyMCE editor's own overlay (SpreadsheetExtension.ts:
  * mounts this in the main document on top of the -- otherwise untouched --
  * table inside the editor's iframe, so the live editor content never has to
@@ -5267,10 +5261,16 @@ export interface SpreadsheetHostOptions {
   onOpenFullEditor?: () => void;
 }
 
+export interface SpreadsheetHostHandle {
+  host: HTMLDivElement;
+  /** Properly tears down the jspreadsheet-ce instance; call before discarding the host. */
+  destroy: () => void;
+}
+
 export function buildReadOnlySpreadsheetHost(
   extracted: SpreadsheetData,
   options: SpreadsheetHostOptions = {},
-): HTMLDivElement {
+): SpreadsheetHostHandle {
   const editable = options.editable ?? false;
   const rows = Math.max(1, extracted.rows);
   const cols = Math.max(1, extracted.cols);
@@ -5286,9 +5286,19 @@ export function buildReadOnlySpreadsheetHost(
   const styles = mergeCellStyles(extracted.cellStyles, appearance, rows, cols);
   const rowHeights = normalizeRowHeights(extracted.rowHeights, rows) ?? {};
   const colWidths = normalizeColWidths(extracted.colWidths, cols) ?? {};
+  // How wide this table renders in view mode / the static HTML fallback
+  // (spreadsheetToHTML's own colgroup width sum) -- exposed via a data
+  // attribute so the TinyMCE editor overlay can cap its own width at this
+  // (in addition to the editor's content column width), rather than
+  // whatever width jspreadsheet-ce's live grid happens to render at,
+  // which can differ from the saved column widths.
+  const naturalTableWidth = (extracted.kind === 'notebook' ? 0 : appearance.rowIndexWidth)
+    + Array.from({ length: cols }, (_, col) => colWidths[String(col)] ?? DEFAULT_DATA_COL_WIDTH)
+      .reduce((sum, width) => sum + width, 0);
 
   const host = document.createElement('div');
   host.className = 'elabftw-spreadsheet-readonly-view';
+  host.dataset.viewModeWidth = String(naturalTableWidth);
   // Only width/alignment carry over from the saved table style -- border,
   // background and table-layout are meaningless (or actively wrong: an
   // extra outer box on top of jspreadsheet's own cell borders) on this
@@ -5314,13 +5324,17 @@ export function buildReadOnlySpreadsheetHost(
   // <button> (invalid HTML -- browsers silently hoist it back out, breaking
   // the layout and the click target).
   const toggleBar = document.createElement('div');
-  toggleBar.setAttribute('role', 'button');
-  toggleBar.setAttribute('tabindex', '0');
   toggleBar.className = 'elabftw-spreadsheet-readonly-toggle';
   const toggleIcon = document.createElement('i');
-  toggleIcon.className = 'fas fa-chevron-down';
   toggleIcon.setAttribute('aria-hidden', 'true');
-  toggleBar.appendChild(toggleIcon);
+  if (!editable) {
+    // Only a real, collapsible toggle shows the chevron / is keyboard-
+    // reachable -- see the (non-)collapse wiring below.
+    toggleBar.setAttribute('role', 'button');
+    toggleBar.setAttribute('tabindex', '0');
+    toggleIcon.className = 'fas fa-chevron-down';
+    toggleBar.appendChild(toggleIcon);
+  }
   if (extracted.caption) {
     const captionLabel = document.createElement('span');
     captionLabel.textContent = extracted.caption;
@@ -5348,17 +5362,28 @@ export function buildReadOnlySpreadsheetHost(
   const sheetContainer = document.createElement('div');
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   host.appendChild(sheetContainer);
-  const toggleCollapsed = (): void => {
-    const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
-    toggleIcon.className = collapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-  };
-  toggleBar.addEventListener('click', toggleCollapsed);
-  toggleBar.addEventListener('keydown', event => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      toggleCollapsed();
-    }
-  });
+  // Collapsing only makes sense where this host *is* the table (view
+  // pages: activateLazySpreadsheetViews() replaced it outright). In the
+  // TinyMCE editor overlay, the real table is merely hidden behind this,
+  // still reserving its own full height in the document's normal flow --
+  // shrinking just the overlay would leave a blank gap the same size
+  // below a now-much-shorter bar, looking like the table vanished, since
+  // nothing here can also resize the real table it's standing in for.
+  if (!editable) {
+    const toggleCollapsed = (): void => {
+      const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
+      toggleIcon.className = collapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+    };
+    toggleBar.addEventListener('click', toggleCollapsed);
+    toggleBar.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleCollapsed();
+      }
+    });
+  } else {
+    toggleBar.style.cursor = 'default';
+  }
 
   // jspreadsheet-ce v5 creates worksheets asynchronously: onload can fire
   // before the `data` supplied above has actually been rendered into the
@@ -5479,13 +5504,18 @@ export function buildReadOnlySpreadsheetHost(
     } : {}),
   });
 
-  return host;
+  return {
+    host,
+    // Properly tears down the jspreadsheet-ce instance (not just removing
+    // the DOM) -- needed by callers that mount/unmount this repeatedly as
+    // a table scrolls in and out of view, rather than once per page load.
+    destroy: (): void => {
+      if (changeTimer) window.clearTimeout(changeTimer);
+      (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
+    },
+  };
 }
 
-export function mountReadOnlySpreadsheetGrid(table: HTMLTableElement): void {
-  const host = buildReadOnlySpreadsheetHost(extractFromTable(table));
-  table.replaceWith(host);
-}
 
 /**
  * Lazily upgrade every saved spreadsheet table under `root` (a view page's
@@ -5497,13 +5527,44 @@ export function mountReadOnlySpreadsheetGrid(table: HTMLTableElement): void {
 export function activateLazySpreadsheetViews(root: ParentNode): void {
   const tables = root.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet');
   if (tables.length === 0) return;
+  // Keyed by whichever element is currently observed for a given
+  // spreadsheet (the static <table> while unmounted, its live host while
+  // mounted) -- lets a scroll back out of view tear the jspreadsheet-ce
+  // instance down and restore the cheap static markup, instead of every
+  // spreadsheet ever visited staying mounted (and costing memory/CPU) for
+  // the rest of the page's life. A long document with many spreadsheets is
+  // the case this matters for; scrolling back in re-mounts from the exact
+  // same saved markup.
+  const savedHtml = new WeakMap<HTMLElement, string>();
+  const destroyers = new WeakMap<HTMLElement, () => void>();
   const observer = new IntersectionObserver(entries => {
     entries.forEach(entry => {
-      if (!entry.isIntersecting) return;
-      observer.unobserve(entry.target);
-      mountReadOnlySpreadsheetGrid(entry.target as HTMLTableElement);
+      const el = entry.target as HTMLElement;
+      if (entry.isIntersecting) {
+        if (!(el instanceof HTMLTableElement)) return; // already mounted
+        const html = el.outerHTML;
+        const { host, destroy } = buildReadOnlySpreadsheetHost(extractFromTable(el));
+        el.replaceWith(host);
+        savedHtml.set(host, html);
+        destroyers.set(host, destroy);
+        observer.unobserve(el);
+        observer.observe(host);
+      } else {
+        const html = savedHtml.get(el);
+        if (html === undefined) return; // still the static table -- nothing mounted to tear down
+        destroyers.get(el)?.();
+        savedHtml.delete(el);
+        destroyers.delete(el);
+        const parsed = document.createElement('div');
+        parsed.innerHTML = html;
+        const table = parsed.querySelector('table.elabftw-spreadsheet');
+        if (!table) return;
+        el.replaceWith(table);
+        observer.unobserve(el);
+        observer.observe(table);
+      }
     });
-  }, { rootMargin: '200px 0px' });
+  }, { rootMargin: '400px 0px' });
   tables.forEach(table => observer.observe(table));
 }
 
