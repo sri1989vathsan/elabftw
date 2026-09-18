@@ -5427,6 +5427,12 @@ export function buildReadOnlySpreadsheetHost(
   // text while editing, only resolving to a value once the debounced
   // onChange eventually lands.
   let changeTimer: ReturnType<typeof setTimeout> | null = null;
+  // The most recently computed (not yet committed) state, so destroy()
+  // below can flush it synchronously instead of just cancelling the
+  // pending timeout -- otherwise scrolling away (tearing this grid down
+  // for virtualization, see SpreadsheetExtension.ts) within the 500ms
+  // debounce window would silently drop the last edit.
+  let pendingChange: SpreadsheetData | null = null;
   const notifyChange = (changedWorksheet: JssInstance): void => {
     const data = changedWorksheet?.getData?.();
     if (!Array.isArray(data)) return;
@@ -5455,8 +5461,13 @@ export function buildReadOnlySpreadsheetHost(
       rowHeights: { ...(extracted.rowHeights ?? {}), ...(liveRowHeights ?? {}) },
       colWidths: { ...(extracted.colWidths ?? {}), ...(liveColWidths ?? {}) },
     });
+    pendingChange = next;
     if (changeTimer) window.clearTimeout(changeTimer);
-    changeTimer = window.setTimeout(() => options.onChange?.(next), 500);
+    changeTimer = window.setTimeout(() => {
+      changeTimer = null;
+      pendingChange = null;
+      options.onChange?.(next);
+    }, 500);
   };
 
   (jspreadsheet as unknown as JssFactory)(sheetContainer, {
@@ -5510,7 +5521,16 @@ export function buildReadOnlySpreadsheetHost(
     // the DOM) -- needed by callers that mount/unmount this repeatedly as
     // a table scrolls in and out of view, rather than once per page load.
     destroy: (): void => {
-      if (changeTimer) window.clearTimeout(changeTimer);
+      // Flush, don't just cancel: a pending edit not yet committed (still
+      // inside the 500ms debounce above) would otherwise be silently lost
+      // when this grid is torn down for virtualization -- e.g. scrolling
+      // away immediately after typing into a cell.
+      if (changeTimer) {
+        window.clearTimeout(changeTimer);
+        changeTimer = null;
+        if (pendingChange) options.onChange?.(pendingChange);
+        pendingChange = null;
+      }
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
     },
   };
