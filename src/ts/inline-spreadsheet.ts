@@ -5301,13 +5301,17 @@ export function buildReadOnlySpreadsheetHost(
   // (in addition to the editor's content column width), rather than
   // whatever width jspreadsheet-ce's live grid happens to render at,
   // which can differ from the saved column widths.
-  const naturalTableWidth = (extracted.kind === 'notebook' ? 0 : appearance.rowIndexWidth)
-    + Array.from({ length: cols }, (_, col) => colWidths[String(col)] ?? DEFAULT_DATA_COL_WIDTH)
+  const computeNaturalTableWidth = (
+    forCols: number,
+    forColWidths: Record<string, number>,
+    rowIndexWidth: number,
+  ): number => (extracted.kind === 'notebook' ? 0 : rowIndexWidth)
+    + Array.from({ length: forCols }, (_, col) => forColWidths[String(col)] ?? DEFAULT_DATA_COL_WIDTH)
       .reduce((sum, width) => sum + width, 0);
 
   const host = document.createElement('div');
   host.className = 'elabftw-spreadsheet-readonly-view';
-  host.dataset.viewModeWidth = String(naturalTableWidth);
+  host.dataset.viewModeWidth = String(computeNaturalTableWidth(cols, colWidths, appearance.rowIndexWidth));
   spreadsheetHostData.set(host, extracted);
   // Only width/alignment carry over from the saved table style -- border,
   // background and table-layout are meaningless (or actively wrong: an
@@ -5428,6 +5432,16 @@ export function buildReadOnlySpreadsheetHost(
       awaitingReferenceReplacement = false;
     });
     formulaInputEl.addEventListener('keydown', event => {
+      // jspreadsheet-ce listens for keydown on `document` itself (not the
+      // grid container) to drive its own keyboard shortcuts and type-to-
+      // edit-the-selected-cell behavior -- it still sees every keystroke
+      // typed in this input as it bubbles up, selected-cell state and all,
+      // and jumps in ahead of (i.e. instead of) this input's own default
+      // typing behavior: a closing ")" while composing a formula was
+      // landing in the grid's selected cell rather than in this input.
+      // Stopping it from ever reaching document leaves the browser's
+      // normal text-input behavior as the only thing handling the key.
+      event.stopPropagation();
       if (event.key !== 'Enter') return;
       event.preventDefault();
       formulaInputEl?.blur();
@@ -5565,6 +5579,17 @@ export function buildReadOnlySpreadsheetHost(
       rowHeights: { ...(extracted.rowHeights ?? {}), ...(liveRowHeights ?? {}) },
       colWidths: { ...(extracted.colWidths ?? {}), ...(liveColWidths ?? {}) },
     });
+    // The overlay's own width is capped at this on every animation frame
+    // (see syncOverlayPositions in SpreadsheetExtension.ts) -- computed
+    // once at mount from the *original* column count/widths, it never
+    // grew to admit a column inserted afterward, capping the overlay back
+    // down to its old width instead of "instantly" widening for it. Keep
+    // it in step with whatever the grid's columns currently are.
+    if (editable) {
+      host.dataset.viewModeWidth = String(
+        computeNaturalTableWidth(next.cols ?? nextCols, next.colWidths ?? {}, appearance.rowIndexWidth),
+      );
+    }
     pendingChange = next;
     if (changeTimer) window.clearTimeout(changeTimer);
     changeTimer = window.setTimeout(() => {
