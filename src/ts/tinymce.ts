@@ -286,8 +286,13 @@ export function getTinymceBaseConfig(page: string): object {
     table_sizing_mode: 'fixed',
     // 'table' alone was silently disabling image resize handles too --
     // restrict to what actually needs the custom table behavior, and let
-    // images keep their normal resize handles.
-    object_resizing: 'table,img',
+    // images keep their normal resize handles. A spreadsheet table is
+    // excluded: it's visually hidden behind its own live editor overlay
+    // (see SpreadsheetExtension.ts), and TinyMCE's own resize handles were
+    // still drawing/interactive around it underneath -- a click landing on
+    // one instead of the overlay could shrink the (invisible) real table
+    // to nothing, which then hides the overlay standing in for it too.
+    object_resizing: 'table:not(.elabftw-spreadsheet),img',
     browser_spellcheck: true,
     // location of the skin directory
     skin_url: isDark ? '/assets/tinymce_skins_dark' : '/assets/tinymce_skins',

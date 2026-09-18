@@ -5405,7 +5405,17 @@ export function buildReadOnlySpreadsheetHost(
   const notifyChange = (changedWorksheet: JssInstance): void => {
     const data = changedWorksheet?.getData?.();
     if (!Array.isArray(data)) return;
-    window.requestAnimationFrame(() => renderFormulaResults(sheetContainer, data));
+    // jspreadsheet repaints the cell itself asynchronously after onchange
+    // (e.g. when its own edit box closes) -- a single immediate repaint
+    // here can get overwritten right back to the raw "=..." text by that
+    // later repaint. Match openSpreadsheetModal's own staggered retries.
+    const repaint = (): void => renderFormulaResults(sheetContainer, data);
+    window.requestAnimationFrame(() => {
+      repaint();
+      window.setTimeout(repaint, 0);
+      window.setTimeout(repaint, 120);
+      window.setTimeout(repaint, 400);
+    });
     if (!options.onChange) return;
     const nextRows = data.length;
     const nextCols = data.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
