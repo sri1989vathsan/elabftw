@@ -13,6 +13,7 @@ import { on } from './handlers';
 import i18next from './i18n';
 import { Action, Model } from './interfaces';
 import { reloadElements } from './misc';
+import { activateLazySpreadsheetViews } from './inline-spreadsheet';
 
 // UPDATE MALLEABLE COMMENT
 const malleableComments = new Malle({
@@ -64,3 +65,9 @@ if (!core.isAnon) {
   // listen on existing comments
   malleableComments.listen();
 }
+
+// Upgrade any saved spreadsheet in the main text from its static HTML
+// rendering to a real (read-only) jspreadsheet-ce grid, so viewing matches
+// the editing popup's own rendering exactly -- see mountReadOnlySpreadsheetGrid().
+const bodyView = document.getElementById('body_view');
+if (bodyView) activateLazySpreadsheetViews(bodyView);

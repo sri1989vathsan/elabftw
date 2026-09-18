@@ -3033,6 +3033,59 @@ body.html-tool-workspace-resizing * {
 }
 /* stylelint-enable selector-class-pattern */
 
+/* Read-only jspreadsheet-ce grid mounted in place of a saved spreadsheet's
+ * static HTML on a view page (see mountReadOnlySpreadsheetGrid() in
+ * inline-spreadsheet.ts). Unlike .inline-spreadsheet-container above (the
+ * editing popup's own host, deliberately a fixed/resizable/scrollable box),
+ * this sits inline in flowing document text and should size to its content. */
+.elabftw-spreadsheet-readonly-view {
+  --spreadsheet-column-index-height: 30px;
+  --spreadsheet-row-index-width: 42px;
+
+  margin: 0 0 0.5rem;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* stylelint-disable selector-class-pattern */
+.elabftw-spreadsheet-readonly-view .jss_worksheet > thead > tr {
+  height: var(--spreadsheet-column-index-height) !important;
+  max-height: var(--spreadsheet-column-index-height) !important;
+  min-height: var(--spreadsheet-column-index-height) !important;
+}
+
+.elabftw-spreadsheet-readonly-view .jss_worksheet > thead > tr > * {
+  height: var(--spreadsheet-column-index-height) !important;
+  max-height: var(--spreadsheet-column-index-height) !important;
+  min-height: var(--spreadsheet-column-index-height) !important;
+}
+
+.elabftw-spreadsheet-readonly-view .jss_worksheet > colgroup > col:first-child {
+  max-width: var(--spreadsheet-row-index-width) !important;
+  min-width: var(--spreadsheet-row-index-width) !important;
+  width: var(--spreadsheet-row-index-width) !important;
+}
+
+.elabftw-spreadsheet-readonly-view .jss_worksheet > thead > tr > :first-child,
+.elabftw-spreadsheet-readonly-view .jss_worksheet > tbody > tr > :first-child,
+.elabftw-spreadsheet-readonly-view .jss_worksheet .jss_row,
+.elabftw-spreadsheet-readonly-view .jss_worksheet .jss_selectall {
+  max-width: var(--spreadsheet-row-index-width) !important;
+  min-width: var(--spreadsheet-row-index-width) !important;
+  width: var(--spreadsheet-row-index-width) !important;
+}
+
+.elabftw-spreadsheet-readonly-view .jss_worksheet td[data-x][data-y] {
+  white-space: pre-wrap;
+}
+
+/* No editing chrome makes sense on a read-only grid. */
+.elabftw-spreadsheet-readonly-view .jss_toolbar,
+.elabftw-spreadsheet-readonly-view .jss_pagination {
+  display: none !important;
+}
+/* stylelint-enable selector-class-pattern */
+
 .inline-spreadsheet-actions {
   align-items: center;
   background-color: var(--firstlevel);

@@ -5206,6 +5206,98 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
   });
 }
 
+/**
+ * Replace a static, JS-free rendering of a saved spreadsheet (an ordinary
+ * <table>, produced by spreadsheetToHTML()) with a real, read-only
+ * jspreadsheet-ce grid -- so a view page matches the editing popup's own
+ * rendering pixel-for-pixel (identical column/row sizing, cell styling,
+ * fixed coordinate gutter) instead of a second, hand-rolled CSS
+ * approximation that can drift out of sync with it. Intended to be called
+ * lazily (see activateLazySpreadsheetViews below), not for every table on
+ * page load at once.
+ */
+export function mountReadOnlySpreadsheetGrid(table: HTMLTableElement): void {
+  const extracted = extractFromTable(table);
+  const rows = Math.max(1, extracted.rows);
+  const cols = Math.max(1, extracted.cols);
+  const appearance = normalizeAppearance(extracted.appearance);
+  // The values currently rendered in the HTML (formula results included) --
+  // not the raw formulas themselves, which parseFormulas:false below would
+  // otherwise show verbatim as "=SUM(...)" text instead of its result.
+  const displayValues = resizeData(
+    extracted.displayData && extracted.displayData.length > 0 ? extracted.displayData : extracted.data,
+    rows,
+    cols,
+  );
+  const styles = mergeCellStyles(extracted.cellStyles, appearance, rows, cols);
+  const rowHeights = normalizeRowHeights(extracted.rowHeights, rows) ?? {};
+  const colWidths = normalizeColWidths(extracted.colWidths, cols) ?? {};
+
+  const host = document.createElement('div');
+  host.className = 'elabftw-spreadsheet-readonly-view';
+  // setProperty() below must come after this: setAttribute('style', ...)
+  // replaces the whole attribute, which would otherwise wipe out the two
+  // custom properties again.
+  host.setAttribute('style', `${getAppearanceTableStyle(appearance)};max-width:100%`);
+  host.style.setProperty('--spreadsheet-row-index-width', `${appearance.rowIndexWidth}px`);
+  host.style.setProperty('--spreadsheet-column-index-height', `${appearance.columnIndexHeight}px`);
+  const sheetContainer = document.createElement('div');
+  host.appendChild(sheetContainer);
+  table.replaceWith(host);
+
+  (jspreadsheet as unknown as JssFactory)(sheetContainer, {
+    worksheets: [{
+      data: displayValues,
+      minDimensions: [cols, rows],
+      rows: Array.from({ length: rows }, (_, row) => (
+        rowHeights[String(row)] ? { height: rowHeights[String(row)] } : {}
+      )),
+      columns: Array.from({ length: cols }, (_, col) => (
+        colWidths[String(col)] ? { width: colWidths[String(col)] } : {}
+      )),
+      style: styles,
+      tableOverflow: true,
+      tableWidth: '100%',
+      tableHeight: '100%',
+      editable: false,
+      allowInsertRow: false,
+      allowInsertColumn: false,
+      allowDeleteRow: false,
+      allowDeleteColumn: false,
+      rowResize: false,
+      columnSorting: false,
+      selectionCopy: true,
+      allowUndo: false,
+    }],
+    parseFormulas: false,
+    onload: (mountedWorksheet: JssInstance): void => {
+      applyCoordinateHeaderDimensions(sheetContainer, appearance);
+      applySpreadsheetRowHeights(sheetContainer, mountedWorksheet, rowHeights);
+      applySpreadsheetColWidths(sheetContainer, mountedWorksheet, colWidths);
+    },
+  });
+}
+
+/**
+ * Lazily upgrade every saved spreadsheet table under `root` (a view page's
+ * rendered entity body, typically) to a real jspreadsheet-ce grid once it
+ * scrolls into view, instead of mounting every one on page load -- a page
+ * with many/large spreadsheets stays cheap until the reader actually
+ * scrolls to one.
+ */
+export function activateLazySpreadsheetViews(root: ParentNode): void {
+  const tables = root.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet');
+  if (tables.length === 0) return;
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      observer.unobserve(entry.target);
+      mountReadOnlySpreadsheetGrid(entry.target as HTMLTableElement);
+    });
+  }, { rootMargin: '200px 0px' });
+  tables.forEach(table => observer.observe(table));
+}
+
 function extractRowHeights(
   tableElement: HTMLTableElement,
   kind: SpreadsheetKind,
