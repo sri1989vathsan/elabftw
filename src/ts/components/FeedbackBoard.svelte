@@ -117,6 +117,35 @@
     return core.isAdmin || item.userid === core.currentUserid;
   }
 
+  let editingItemId: number | null = null;
+  let editItemTitle = '';
+  let editItemBody = '';
+
+  function startEditItem(item: FeedbackItem): void {
+    editingItemId = item.id;
+    editItemTitle = item.title;
+    editItemBody = item.body ?? '';
+  }
+
+  function cancelEditItem(): void {
+    editingItemId = null;
+  }
+
+  async function saveEditItem(item: FeedbackItem): Promise<void> {
+    const title = editItemTitle.trim();
+    if (!title) return;
+    try {
+      const body = editItemBody.trim() === '' ? null : editItemBody.trim();
+      await ApiC.patch(`${Model.Feedback}/${item.id}`, { title, body });
+      item.title = title;
+      item.body = body;
+      items = items;
+      editingItemId = null;
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not save this item.');
+    }
+  }
+
   async function toggleFinished(item: FeedbackItem): Promise<void> {
     const nextStatus = item.status === 'done' ? 'open' : 'done';
     try {
@@ -296,9 +325,20 @@
               {:else if item.status !== 'open'}
                 <span class='badge badge-secondary ml-1'>{item.status}</span>
               {/if}
-              <strong class='feedback-item-title'>{item.title}</strong>
+              {#if editingItemId !== item.id}<strong class='feedback-item-title'>{item.title}</strong>{/if}
               {#if canManage(item)}
                 <div class='feedback-item-actions ml-auto'>
+                  {#if editingItemId !== item.id}
+                    <button
+                      type='button'
+                      class='btn btn-ghost btn-sm feedback-icon-button'
+                      title={t('Edit')}
+                      aria-label={t('Edit')}
+                      on:click={() => startEditItem(item)}
+                    >
+                      <i class='fas fa-pen fa-fw' aria-hidden='true'></i>
+                    </button>
+                  {/if}
                   <button
                     type='button'
                     class='btn btn-ghost btn-sm feedback-icon-button'
@@ -320,7 +360,32 @@
                 </div>
               {/if}
             </div>
-            {#if item.body}<p class='feedback-item-description mb-1'>{item.body}</p>{/if}
+            {#if editingItemId === item.id}
+              <form class='feedback-edit-item-form mt-1' on:submit|preventDefault={() => saveEditItem(item)}>
+                <label class='sr-only' for={`feedbackEditTitle-${item.id}`}>{t('Title')}</label>
+                <input
+                  id={`feedbackEditTitle-${item.id}`}
+                  class='form-control form-control-sm mb-1'
+                  type='text'
+                  maxlength='255'
+                  bind:value={editItemTitle}
+                  required
+                />
+                <label class='sr-only' for={`feedbackEditBody-${item.id}`}>{t('Description')}</label>
+                <textarea
+                  id={`feedbackEditBody-${item.id}`}
+                  class='form-control form-control-sm mb-1'
+                  rows='2'
+                  bind:value={editItemBody}
+                ></textarea>
+                <div class='d-flex'>
+                  <button type='submit' class='btn btn-primary btn-sm' disabled={editItemTitle.trim() === ''}>{t('Save')}</button>
+                  <button type='button' class='btn btn-ghost btn-sm ml-2' on:click={cancelEditItem}>{t('Cancel')}</button>
+                </div>
+              </form>
+            {:else}
+              {#if item.body}<p class='feedback-item-description mb-1'>{item.body}</p>{/if}
+            {/if}
             <div class='feedback-muted feedback-item-meta'>
               {t('Posted by')} {item.author_fullname} · {formatDate(item.created_at)}
             </div>
