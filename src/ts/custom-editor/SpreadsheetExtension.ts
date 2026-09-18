@@ -845,22 +845,42 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     window.requestAnimationFrame(syncOverlayPositions);
   };
 
+  // Writes an in-overlay edit back into the real (hidden) table, in place --
+  // regenerates its markup from the edited data via spreadsheetToHTML() and
+  // copies that onto the SAME table node (never replacing it), so neither
+  // this table's identity nor the overlay tracking it needs to change.
+  // Only the table's own attributes/innerHTML are touched, which is exactly
+  // what editor.getContent() serializes -- correct by construction.
+  const commitOverlayChange = (table: HTMLTableElement, data: SpreadsheetData): void => {
+    const html = spreadsheetToHTML(data, data.displayData ?? data.data);
+    const parsed = document.createElement('div');
+    parsed.innerHTML = html;
+    const freshTable = parsed.querySelector('table.elabftw-spreadsheet');
+    if (!freshTable) return;
+    Array.from(table.attributes).forEach(attr => table.removeAttribute(attr.name));
+    Array.from(freshTable.attributes).forEach(attr => table.setAttribute(attr.name, attr.value));
+    table.innerHTML = freshTable.innerHTML;
+    editor.undoManager.add();
+    editor.setDirty(true);
+  };
+
   const enhanceTable = (table: HTMLTableElement): void => {
     if (enhancedTables.has(table)) return;
     enhancedTables.add(table);
-    const overlay = buildReadOnlySpreadsheetHost(extractFromTable(table));
+    // Editable in place (typing, insert/delete row/column, drag-resize a
+    // column/row border) -- the same jspreadsheet-ce engine and event
+    // hooks the popup itself uses, just live instead of commit-on-close.
+    // Double-click is left to jspreadsheet's own default (start editing
+    // the cell under the cursor) rather than opening the popup, which
+    // would conflict with it -- the popup (formulas, appearance panel,
+    // whole-row/column tools) is reachable via the small icon in the
+    // toggle bar instead.
+    const overlay = buildReadOnlySpreadsheetHost(extractFromTable(table), {
+      editable: true,
+      onChange: data => commitOverlayChange(table, data),
+      onOpenFullEditor: () => openInlineSpreadsheet(extractFromTable(table), table),
+    });
     overlay.classList.add('elabftw-spreadsheet-editor-overlay');
-    overlay.title = 'Double-click to edit';
-    // The overlay lives in the main document, outside TinyMCE's iframe --
-    // the existing editor.on('dblclick', ...) handler above (bound inside
-    // the iframe) can never see a click on it, so it needs its own listener
-    // that opens the exact same edit modal directly. One known tradeoff:
-    // TinyMCE's native "drag the table's own corner to resize" handles
-    // (ObjectResizeStart/ObjectResized above) also require clicking the
-    // real table inside the iframe, which this overlay now sits in front
-    // of -- that specific interaction is unreachable while a table shows
-    // as this overlay. Resizing via the edit popup itself is unaffected.
-    overlay.addEventListener('dblclick', () => openInlineSpreadsheet(extractFromTable(table), table));
     document.body.appendChild(overlay);
     spreadsheetOverlays.set(table, overlay);
     ensureSyncLoop();

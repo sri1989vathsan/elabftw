@@ -3082,6 +3082,23 @@ body.html-tool-workspace-resizing * {
   background: var(--secondlevel);
 }
 
+.elabftw-spreadsheet-readonly-toggle span {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.elabftw-spreadsheet-readonly-open-editor {
+  background: none;
+  border: none;
+  color: var(--medium);
+  margin-left: auto;
+  padding: 0.15rem 0.3rem;
+}
+
+.elabftw-spreadsheet-readonly-open-editor:hover {
+  color: var(--primary);
+}
+
 /* The grid area itself scrolls internally if it doesn't fit the space
  * given to it (mainly relevant to the editor overlay variant below, whose
  * total height is pinned to the real table's own measured rect -- the

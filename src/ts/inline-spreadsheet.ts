@@ -5247,7 +5247,31 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
  * table inside the editor's iframe, so the live editor content never has to
  * be mutated).
  */
-export function buildReadOnlySpreadsheetHost(extracted: SpreadsheetData): HTMLDivElement {
+export interface SpreadsheetHostOptions {
+  /** When true, the grid accepts edits (typing, insert/delete row/column, row/column resize) instead of being read-only. */
+  editable?: boolean;
+  /**
+   * Called (debounced) after any edit, with the grid's current state --
+   * used by the TinyMCE editor overlay to keep the real (hidden) table's
+   * saved markup in sync with what's being typed here, without ever
+   * rebuilding this grid itself (which would drop the user's focus/cursor
+   * mid-edit). Ignored when `editable` is not set.
+   */
+  onChange?: (data: SpreadsheetData) => void;
+  /**
+   * When provided, adds a small button to the toggle bar that opens the
+   * full popup editor (formulas, row/col insert, appearance panel) --
+   * separate from `editable`'s own inline cell editing, since jspreadsheet
+   * itself already uses double-click to start editing a cell in place.
+   */
+  onOpenFullEditor?: () => void;
+}
+
+export function buildReadOnlySpreadsheetHost(
+  extracted: SpreadsheetData,
+  options: SpreadsheetHostOptions = {},
+): HTMLDivElement {
+  const editable = options.editable ?? false;
   const rows = Math.max(1, extracted.rows);
   const cols = Math.max(1, extracted.cols);
   const appearance = normalizeAppearance(extracted.appearance);
@@ -5285,8 +5309,13 @@ export function buildReadOnlySpreadsheetHost(extracted: SpreadsheetData): HTMLDi
   // A small collapsible header bar -- lets a large spreadsheet be tucked
   // away without deleting it, matching the "collapse table" affordance the
   // static HTML table doesn't have a good equivalent for.
-  const toggleBar = document.createElement('button');
-  toggleBar.type = 'button';
+  // A <div>, not a <button>: it needs to contain the "open full editor"
+  // button below, and a <button> cannot contain another interactive
+  // <button> (invalid HTML -- browsers silently hoist it back out, breaking
+  // the layout and the click target).
+  const toggleBar = document.createElement('div');
+  toggleBar.setAttribute('role', 'button');
+  toggleBar.setAttribute('tabindex', '0');
   toggleBar.className = 'elabftw-spreadsheet-readonly-toggle';
   const toggleIcon = document.createElement('i');
   toggleIcon.className = 'fas fa-chevron-down';
@@ -5299,12 +5328,36 @@ export function buildReadOnlySpreadsheetHost(extracted: SpreadsheetData): HTMLDi
   }
   host.appendChild(toggleBar);
 
+  if (options.onOpenFullEditor) {
+    const openFullEditorButton = document.createElement('button');
+    openFullEditorButton.type = 'button';
+    openFullEditorButton.className = 'elabftw-spreadsheet-readonly-open-editor';
+    openFullEditorButton.title = 'Open full editor (formulas, rows/columns, appearance)';
+    openFullEditorButton.setAttribute('aria-label', 'Open full editor');
+    const openFullEditorIcon = document.createElement('i');
+    openFullEditorIcon.className = 'fas fa-up-right-and-down-left-from-center';
+    openFullEditorIcon.setAttribute('aria-hidden', 'true');
+    openFullEditorButton.appendChild(openFullEditorIcon);
+    openFullEditorButton.addEventListener('click', event => {
+      event.stopPropagation();
+      options.onOpenFullEditor?.();
+    });
+    toggleBar.appendChild(openFullEditorButton);
+  }
+
   const sheetContainer = document.createElement('div');
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   host.appendChild(sheetContainer);
-  toggleBar.addEventListener('click', () => {
+  const toggleCollapsed = (): void => {
     const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
     toggleIcon.className = collapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+  };
+  toggleBar.addEventListener('click', toggleCollapsed);
+  toggleBar.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleCollapsed();
+    }
   });
 
   // jspreadsheet-ce v5 creates worksheets asynchronously: onload can fire
@@ -5339,6 +5392,31 @@ export function buildReadOnlySpreadsheetHost(extracted: SpreadsheetData): HTMLDi
     window.setTimeout(() => hydrateUntilReady(worksheet, attempt + 1), Math.min(250, 15 + (attempt * 10)));
   };
 
+  // Debounced: onChange can fire on every keystroke (onchange) or drag
+  // frame (onresizerow/onresizecolumn) -- only the settled result after a
+  // short pause is worth reacting to (e.g. rewriting the real table).
+  let changeTimer: ReturnType<typeof setTimeout> | null = null;
+  const notifyChange = (changedWorksheet: JssInstance): void => {
+    if (!options.onChange) return;
+    const data = changedWorksheet?.getData?.();
+    if (!Array.isArray(data)) return;
+    const nextRows = data.length;
+    const nextCols = data.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
+    const liveRowHeights = readRenderedRowHeights(sheetContainer);
+    const liveColWidths = readRenderedColWidths(sheetContainer);
+    const next = normalizeSpreadsheetData({
+      ...extracted,
+      data,
+      displayData: data,
+      rows: nextRows,
+      cols: nextCols,
+      rowHeights: { ...(extracted.rowHeights ?? {}), ...(liveRowHeights ?? {}) },
+      colWidths: { ...(extracted.colWidths ?? {}), ...(liveColWidths ?? {}) },
+    });
+    if (changeTimer) window.clearTimeout(changeTimer);
+    changeTimer = window.setTimeout(() => options.onChange?.(next), 500);
+  };
+
   (jspreadsheet as unknown as JssFactory)(sheetContainer, {
     worksheets: [{
       data: displayValues,
@@ -5353,20 +5431,29 @@ export function buildReadOnlySpreadsheetHost(extracted: SpreadsheetData): HTMLDi
       tableOverflow: true,
       tableWidth: '100%',
       tableHeight: '100%',
-      editable: false,
-      allowInsertRow: false,
-      allowInsertColumn: false,
-      allowDeleteRow: false,
-      allowDeleteColumn: false,
-      rowResize: false,
+      editable,
+      allowInsertRow: editable,
+      allowInsertColumn: editable,
+      allowDeleteRow: editable,
+      allowDeleteColumn: editable,
+      rowResize: editable,
       columnSorting: false,
       selectionCopy: true,
-      allowUndo: false,
+      allowUndo: editable,
     }],
     parseFormulas: false,
     onload: (instance: JssInstance): void => {
       hydrateUntilReady(getMountedWorksheet(sheetContainer, instance));
     },
+    ...(editable ? {
+      onchange: notifyChange,
+      oninsertrow: notifyChange,
+      oninsertcolumn: notifyChange,
+      ondeleterow: notifyChange,
+      ondeletecolumn: notifyChange,
+      onresizerow: notifyChange,
+      onresizecolumn: notifyChange,
+    } : {}),
   });
 
   return host;
