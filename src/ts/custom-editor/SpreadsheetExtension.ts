@@ -1107,8 +1107,38 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     };
     editorDocument.addEventListener('mousedown', relayMousedownToCloseMenus);
+    // jspreadsheet-ce also tracks an active column/row resize drag via its
+    // own mousemove/mouseup listeners on that same outer `document` (see
+    // mouseMoveControls/mouseUpControls in jspreadsheet-ce's source) --
+    // dragging a column border wider is a drag that starts on the overlay
+    // (outer document) but, since the overlay's own width only grows to
+    // fit *after* the fact (see syncOverlayPositions), a fast drag can
+    // outrun it and cross onto the iframe surface sitting right behind/
+    // around the overlay. From there the mousemove fires in this iframe's
+    // own separate document and never reaches jspreadsheet's listener at
+    // all, silently ending the drag -- reported as widening a column past
+    // wherever the overlay's edge still was simply stopping.
+    // clientX/Y in an iframe's own event are relative to *that* document;
+    // translating by the iframe's current rect is what jspreadsheet's own
+    // e.pageX-based resize math actually needs from the outer document's
+    // perspective.
+    const relayMouseMoveForActiveDrag = (event: MouseEvent): void => {
+      if (event.buttons === 0) return;
+      const iframeRect = getEditorIframe()?.getBoundingClientRect();
+      if (!iframeRect) return;
+      document.dispatchEvent(new MouseEvent(event.type, {
+        bubbles: true,
+        clientX: iframeRect.left + event.clientX,
+        clientY: iframeRect.top + event.clientY,
+        buttons: event.buttons,
+      }));
+    };
+    editorDocument.addEventListener('mousemove', relayMouseMoveForActiveDrag);
+    editorDocument.addEventListener('mouseup', relayMouseMoveForActiveDrag);
     editor.on('remove', () => {
       editorDocument.removeEventListener('mousedown', relayMousedownToCloseMenus);
+      editorDocument.removeEventListener('mousemove', relayMouseMoveForActiveDrag);
+      editorDocument.removeEventListener('mouseup', relayMouseMoveForActiveDrag);
     });
     const spreadsheetPasteHandler = (event: ClipboardEvent): void => {
       const clipboard = event.clipboardData;
