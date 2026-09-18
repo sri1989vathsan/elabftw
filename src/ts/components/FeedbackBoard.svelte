@@ -5,6 +5,29 @@
   import i18next from '../i18n';
   import { Action, Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
+  import { applyMention, extractMentionQuery, stripMentionHtml, wrapMentionsAsHtml } from '../mentions';
+
+  // Closes an @mention dropdown on any click outside its own container --
+  // it otherwise stays open until a mention is picked, even after
+  // clicking elsewhere on the page.
+  function clickOutside(node: HTMLElement, onOutsideClick: () => void): { destroy(): void } {
+    const handleClick = (event: MouseEvent): void => {
+      if (event.target instanceof Node && !node.contains(event.target)) {
+        onOutsideClick();
+      }
+    };
+    document.addEventListener('click', handleClick, true);
+    return {
+      destroy(): void {
+        document.removeEventListener('click', handleClick, true);
+      },
+    };
+  }
+
+  type TeamMember = {
+    userid: number;
+    fullname: string;
+  };
 
   type FeedbackType = 'bug' | 'feature';
 
@@ -59,6 +82,14 @@
   let commentsByItem: Record<number, FeedbackComment[]> = {};
   let commentsLoading = new Set<number>();
   let commentDrafts: Record<number, string> = {};
+  let teamMembers: TeamMember[] = [];
+  // users @-mentioned in the comment currently being drafted for a given
+  // item, and the live autocomplete matches for that item's draft -- keyed
+  // per item since several items' comment sections can be open at once
+  let commentMentionsByItem: Record<number, TeamMember[]> = {};
+  let mentionCandidatesByItem: Record<number, TeamMember[]> = {};
+  let editingCommentId: number | null = null;
+  let editCommentDraft = '';
 
   $: visibleItems = items
     .filter(item => showFinished ? item.status === 'done' : item.status !== 'done')
@@ -195,21 +226,89 @@
     }
   }
 
+  async function loadTeamMembers(): Promise<void> {
+    try {
+      teamMembers = await ApiC.getJson('users?currentTeam=1') as TeamMember[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load team members.');
+    }
+  }
+
+  function onCommentInput(itemId: number): void {
+    const query = extractMentionQuery(commentDrafts[itemId] ?? '');
+    if (query === null) {
+      const next = { ...mentionCandidatesByItem };
+      delete next[itemId];
+      mentionCandidatesByItem = next;
+      return;
+    }
+    const lower = query.toLowerCase();
+    mentionCandidatesByItem = {
+      ...mentionCandidatesByItem,
+      [itemId]: teamMembers.filter(m => m.fullname.toLowerCase().includes(lower)).slice(0, 5),
+    };
+  }
+
+  function clearMentionCandidates(itemId: number): void {
+    const next = { ...mentionCandidatesByItem };
+    delete next[itemId];
+    mentionCandidatesByItem = next;
+  }
+
+  function pickMention(itemId: number, member: TeamMember): void {
+    const query = extractMentionQuery(commentDrafts[itemId] ?? '') ?? '';
+    commentDrafts[itemId] = applyMention(commentDrafts[itemId] ?? '', query, member.fullname);
+    commentDrafts = commentDrafts;
+    const existing = commentMentionsByItem[itemId] ?? [];
+    if (!existing.some(m => m.userid === member.userid)) {
+      commentMentionsByItem = { ...commentMentionsByItem, [itemId]: [...existing, member] };
+    }
+    clearMentionCandidates(itemId);
+  }
+
   async function submitComment(item: FeedbackItem): Promise<void> {
     const text = (commentDrafts[item.id] ?? '').trim();
     if (!text) return;
     try {
-      await ApiC.post(`${Model.Feedback}/${item.id}/${Model.Comment}`, { body: text });
+      const mentioned = commentMentionsByItem[item.id] ?? [];
+      const mentionedUserids = mentioned.filter(m => text.includes(`@${m.fullname}`)).map(m => m.userid);
+      const htmlBody = wrapMentionsAsHtml(text, teamMembers);
+      await ApiC.post(`${Model.Feedback}/${item.id}/${Model.Comment}`, { body: htmlBody, mentioned_userids: mentionedUserids });
       commentDrafts[item.id] = '';
       commentDrafts = commentDrafts;
+      const next = { ...commentMentionsByItem };
+      delete next[item.id];
+      commentMentionsByItem = next;
       await loadComments(item.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not post this comment.');
     }
   }
 
-  function canDeleteComment(comment: FeedbackComment): boolean {
+  function canManageComment(comment: FeedbackComment): boolean {
     return core.isAdmin || comment.userid === core.currentUserid;
+  }
+
+  function startEditComment(comment: FeedbackComment): void {
+    editingCommentId = comment.id;
+    editCommentDraft = stripMentionHtml(comment.body);
+  }
+
+  function cancelEditComment(): void {
+    editingCommentId = null;
+  }
+
+  async function saveEditComment(item: FeedbackItem, comment: FeedbackComment): Promise<void> {
+    const text = editCommentDraft.trim();
+    if (!text) return;
+    try {
+      const body = wrapMentionsAsHtml(text, teamMembers);
+      await ApiC.patch(`${Model.Feedback}/${item.id}/${Model.Comment}/${comment.id}`, { body });
+      editingCommentId = null;
+      await loadComments(item.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not save this comment.');
+    }
   }
 
   async function deleteComment(item: FeedbackItem, comment: FeedbackComment): Promise<void> {
@@ -228,6 +327,7 @@
 
   onMount(() => {
     void load();
+    void loadTeamMembers();
   });
 </script>
 
@@ -419,37 +519,82 @@
                           <div class='feedback-comment-header'>
                             <strong>{comment.author_fullname}</strong>
                             <span class='feedback-muted'>{formatDate(comment.created_at)}</span>
-                            {#if canDeleteComment(comment)}
-                              <button
-                                type='button'
-                                class='btn btn-danger-ghost btn-sm feedback-icon-button ml-auto'
-                                title={t('Delete comment')}
-                                aria-label={t('Delete comment')}
-                                on:click={() => deleteComment(item, comment)}
-                              >
-                                <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
-                              </button>
+                            {#if canManageComment(comment)}
+                              <div class='pm-item-actions ml-auto'>
+                                <button
+                                  type='button'
+                                  class='btn btn-ghost btn-sm feedback-icon-button'
+                                  title={t('Edit')}
+                                  aria-label={t('Edit')}
+                                  on:click={() => startEditComment(comment)}
+                                >
+                                  <i class='fas fa-pen fa-fw' aria-hidden='true'></i>
+                                </button>
+                                <button
+                                  type='button'
+                                  class='btn btn-danger-ghost btn-sm feedback-icon-button'
+                                  title={t('Delete comment')}
+                                  aria-label={t('Delete comment')}
+                                  on:click={() => deleteComment(item, comment)}
+                                >
+                                  <i class='fas fa-trash fa-fw' aria-hidden='true'></i>
+                                </button>
+                              </div>
                             {/if}
                           </div>
-                          <p class='mb-0 feedback-comment-body'>{comment.body}</p>
+                          {#if editingCommentId === comment.id}
+                            <div class='d-flex'>
+                              <input
+                                type='text'
+                                class='form-control form-control-sm mr-2'
+                                maxlength='5000'
+                                bind:value={editCommentDraft}
+                                on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void saveEditComment(item, comment); } }}
+                              />
+                              <button type='button' class='btn btn-primary btn-sm mr-1' disabled={!editCommentDraft.trim()} on:click={() => saveEditComment(item, comment)}>{t('Save')}</button>
+                              <button type='button' class='btn btn-ghost btn-sm' on:click={cancelEditComment}>{t('Cancel')}</button>
+                            </div>
+                            {#if wrapMentionsAsHtml(editCommentDraft, teamMembers).includes('elabftw-mention')}
+                              <div class='pm-mention-preview small pm-muted mt-1'>{@html wrapMentionsAsHtml(editCommentDraft, teamMembers)}</div>
+                            {/if}
+                          {:else}
+                            <p class='mb-0 feedback-comment-body'>{@html comment.body}</p>
+                          {/if}
                         </li>
                       {/each}
                     </ul>
                   {/if}
-                  <form class='d-flex' on:submit|preventDefault={() => submitComment(item)}>
-                    <label class='sr-only' for={`feedbackComment-${item.id}`}>{t('Add a comment')}</label>
-                    <input
-                      id={`feedbackComment-${item.id}`}
-                      class='form-control form-control-sm mr-2'
-                      type='text'
-                      maxlength='5000'
-                      placeholder={t('Add a comment…')}
-                      bind:value={commentDrafts[item.id]}
-                    />
-                    <button type='submit' class='btn btn-primary btn-sm' disabled={!(commentDrafts[item.id] ?? '').trim()}>
-                      {t('Post')}
-                    </button>
-                  </form>
+                  <div use:clickOutside={() => clearMentionCandidates(item.id)}>
+                    <form class='d-flex pm-comment-form' on:submit|preventDefault={() => submitComment(item)}>
+                      <label class='sr-only' for={`feedbackComment-${item.id}`}>{t('Add a comment')}</label>
+                      <input
+                        id={`feedbackComment-${item.id}`}
+                        class='form-control form-control-sm mr-2'
+                        type='text'
+                        maxlength='5000'
+                        placeholder={t('Add a comment… (type @ to mention someone)')}
+                        bind:value={commentDrafts[item.id]}
+                        on:input={() => onCommentInput(item.id)}
+                      />
+                      {#if (mentionCandidatesByItem[item.id] ?? []).length > 0}
+                        <ul class='pm-mention-results'>
+                          {#each mentionCandidatesByItem[item.id] as member (member.userid)}
+                            <li>
+                              <button type='button' class='btn-unstyled pm-mention-result' on:click={() => pickMention(item.id, member)}>
+                                {member.fullname}
+                              </button>
+                            </li>
+                          {/each}
+                        </ul>
+                      {/if}
+                      <button type='submit' class='btn btn-primary btn-sm' disabled={!(commentDrafts[item.id] ?? '').trim()}>
+                        {t('Post')}
+                      </button>
+                    </form>
+                    {#if wrapMentionsAsHtml(commentDrafts[item.id] ?? '', teamMembers).includes('elabftw-mention')}
+                      <div class='pm-mention-preview small pm-muted mt-1'>{@html wrapMentionsAsHtml(commentDrafts[item.id] ?? '', teamMembers)}</div>
+                    {/if}
+                  </div>
                 {/if}
               </div>
             {/if}
