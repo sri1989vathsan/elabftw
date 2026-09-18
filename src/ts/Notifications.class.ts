@@ -85,29 +85,123 @@ export class Notification {
       document.body.appendChild(container);
     }
 
+    // Success is transient and auto-dismissing -- rarely piles up, and
+    // stays its own toast. Errors/warnings persist until dismissed, and
+    // several in a row (e.g. a bulk operation with multiple failures)
+    // used to stack up as separate cards -- grouped into one panel
+    // instead, matching how task-deadline reminders combine into one
+    // reminder-banner card rather than one toast per reminder.
+    if (type !== NotificationType.Success) {
+      this.notifyGrouped(container, message);
+      return;
+    }
+
     // create overlay
     const overlay = document.createElement('div');
     overlay.classList.add('overlay', `overlay-${type}`);
-    const closeEl = document.createElement('span');
-    const closeIcon = document.createElement('i');
-    if (type === NotificationType.Success) {
-      // success gets removed on animation end
-      overlay.addEventListener('animationend', () => {
-        overlay.remove();
-      });
-    } else { // warning and error get a button to close them
-      closeEl.classList.add('clickable', 'ml-3', 'float-right');
-      closeIcon.classList.add('fas', 'fa-xmark');
-      closeEl.append(closeIcon);
-      closeEl.addEventListener('click', () => overlay.remove());
-    }
+    // success gets removed on animation end
+    overlay.addEventListener('animationend', () => {
+      overlay.remove();
+    });
     // create overlay content
     const p = document.createElement('p');
     // "status" role: see WCAG2.1 4.1.3
     p.role = 'status';
     p.innerText = message;
     overlay.appendChild(p);
-    p.appendChild(closeEl);
     container.appendChild(overlay);
+  }
+
+  private notifyGrouped(container: HTMLElement, message: string): void {
+    let panel = document.getElementById('notification-issues-panel');
+    let list: HTMLUListElement;
+    let title: HTMLElement;
+    if (panel) {
+      list = panel.querySelector('.issues-panel-list') as HTMLUListElement;
+      title = panel.querySelector('.issues-panel-title') as HTMLElement;
+    } else {
+      panel = document.createElement('div');
+      panel.id = 'notification-issues-panel';
+      panel.className = 'issues-panel';
+      panel.setAttribute('role', 'alert');
+
+      const header = document.createElement('div');
+      header.className = 'issues-panel-header';
+      header.setAttribute('role', 'button');
+      header.setAttribute('tabindex', '0');
+
+      const icon = document.createElement('i');
+      icon.className = 'fas fa-triangle-exclamation';
+      icon.setAttribute('aria-hidden', 'true');
+
+      title = document.createElement('strong');
+      title.className = 'issues-panel-title';
+
+      const chevron = document.createElement('i');
+      chevron.className = 'fas fa-chevron-down issues-panel-chevron';
+      chevron.setAttribute('aria-hidden', 'true');
+
+      const dismissAll = document.createElement('button');
+      dismissAll.type = 'button';
+      dismissAll.className = 'clickable';
+      dismissAll.setAttribute('aria-label', 'Dismiss all');
+      const dismissAllIcon = document.createElement('i');
+      dismissAllIcon.className = 'fas fa-xmark';
+      dismissAllIcon.setAttribute('aria-hidden', 'true');
+      dismissAll.appendChild(dismissAllIcon);
+      dismissAll.addEventListener('click', event => {
+        event.stopPropagation();
+        panel?.remove();
+      });
+
+      const toggleCollapsed = (): void => {
+        list.hidden = !list.hidden;
+        chevron.className = list.hidden ? 'fas fa-chevron-right issues-panel-chevron' : 'fas fa-chevron-down issues-panel-chevron';
+      };
+      header.addEventListener('click', toggleCollapsed);
+      header.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggleCollapsed();
+        }
+      });
+
+      list = document.createElement('ul');
+      list.className = 'issues-panel-list';
+
+      header.append(icon, title, chevron, dismissAll);
+      panel.append(header, list);
+      container.appendChild(panel);
+    }
+
+    const item = document.createElement('li');
+    item.className = 'issues-panel-item';
+    const text = document.createElement('p');
+    // "status" role: see WCAG2.1 4.1.3
+    text.role = 'status';
+    text.innerText = message;
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'clickable';
+    dismiss.setAttribute('aria-label', 'Dismiss');
+    const dismissIcon = document.createElement('i');
+    dismissIcon.className = 'fas fa-xmark';
+    dismissIcon.setAttribute('aria-hidden', 'true');
+    dismiss.appendChild(dismissIcon);
+    const updateTitle = (): void => {
+      const count = list.children.length;
+      title.textContent = `${count} ${count === 1 ? 'issue' : 'issues'}`;
+    };
+    dismiss.addEventListener('click', () => {
+      item.remove();
+      if (list.children.length === 0) {
+        panel?.remove();
+        return;
+      }
+      updateTitle();
+    });
+    item.append(text, dismiss);
+    list.appendChild(item);
+    updateTitle();
   }
 }

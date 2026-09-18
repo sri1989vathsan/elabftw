@@ -829,6 +829,71 @@ tr:first-child td {
   color: var(--strongest);
 }
 
+// Groups error/warning notifications into one panel (list of dismissible
+// items under one header) instead of one stacked toast per message --
+// same corner/shape/shadow as the toasts and the reminder-banner, which
+// this mirrors: one card that lists everything, not N floating cards.
+.issues-panel {
+  background-color: var(--lightred);
+  border-radius: 0.4rem;
+  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.25);
+  color: var(--strongest);
+  max-width: 340px;
+  width: 100%;
+}
+
+.issues-panel-header {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+}
+
+.issues-panel-title {
+  flex: 1 1 auto;
+}
+
+.issues-panel-chevron {
+  color: var(--strongest);
+}
+
+.issues-panel-list {
+  border-top: 1px solid rgba(0, 0, 0, 0.15);
+  list-style: none;
+  margin: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.issues-panel-item {
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+}
+
+.issues-panel-item:last-child {
+  border-bottom: none;
+}
+
+.issues-panel-item p {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+  white-space: pre-wrap;
+}
+
+.issues-panel-header button.clickable,
+.issues-panel-item button.clickable {
+  background: none;
+  border: none;
+  color: inherit;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
 .opacity-8 {
   opacity: 0.8;
 }
