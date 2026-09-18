@@ -986,20 +986,113 @@ export function endEntitySave(state: 'saved' | 'offline' | 'error', detail = '')
   }
 }
 
+// Capped-backoff retry for a genuinely failed save, in addition to the
+// online-event retry below -- covers a transient server/API error where the
+// browser never actually goes offline, so 'online' would never fire.
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryDelayMs = 3000;
+const MAX_RETRY_DELAY_MS = 30000;
+
+function scheduleSaveRetry(): void {
+  if (retryTimer !== null) {
+    return;
+  }
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void updateEntityBody(false);
+  }, retryDelayMs);
+  retryDelayMs = Math.min(MAX_RETRY_DELAY_MS, retryDelayMs * 2);
+}
+
+function clearSaveRetry(): void {
+  if (retryTimer !== null) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  retryDelayMs = 3000;
+}
+
 window.addEventListener('online', () => {
   if (!retrySaveWhenOnline) return;
   retrySaveWhenOnline = false;
+  clearSaveRetry();
   void updateEntityBody(false);
 });
 
+// Serializes saves so an older, slower request can never overwrite a newer
+// one: a call made while a save is already in flight doesn't fire a second
+// concurrent request, it just queues a follow-up save (reading the editor's
+// content fresh once it actually runs, so it always saves the latest text).
+// Multiple calls queued during the same in-flight save are coalesced into a
+// single follow-up, but each caller still gets that follow-up's own result
+// (and its own redirect intent is preserved) rather than the earlier save's.
+let saveInFlight = false;
+let queuedRedirect = false;
+let queuedWaiters: Array<(result: boolean) => void> = [];
+
 export async function updateEntityBody(redirect = true): Promise<boolean> {
+  if (saveInFlight) {
+    queuedRedirect = queuedRedirect || redirect;
+    return new Promise(resolve => queuedWaiters.push(resolve));
+  }
+  return runEntitySave(redirect);
+}
+
+async function runEntitySave(redirect: boolean): Promise<boolean> {
+  saveInFlight = true;
+  const result = await performEntitySave(redirect);
+  saveInFlight = false;
+
+  if (queuedWaiters.length > 0) {
+    const redirectForNext = queuedRedirect;
+    const waiters = queuedWaiters;
+    queuedWaiters = [];
+    queuedRedirect = false;
+    const nextResult = await runEntitySave(redirectForNext);
+    waiters.forEach(resolve => resolve(nextResult));
+  }
+  return result;
+}
+
+async function performEntitySave(redirect: boolean): Promise<boolean> {
   const editor = getEditor();
   const entity = getEntity();
   const body = editor.getContent();
   const saveStartedAt = Date.now();
   beginEntitySave();
 
-  return ApiC.patch(`${entity.type}/${entity.id}`, {body, notifOnSaved: redirect ? 0 : 1}).then(response => response.json()).then(json => {
+  let json: { modified_at?: string };
+  try {
+    const response = await ApiC.patch(`${entity.type}/${entity.id}`, {body, notifOnSaved: redirect ? 0 : 1});
+    try {
+      json = await response.json();
+    } catch {
+      // The PATCH itself already succeeded (ApiC.patch throws on any
+      // non-2xx before we get here) -- a malformed/empty response body is a
+      // UI-side hiccup, not a failed save.
+      json = {};
+    }
+  } catch (error) {
+    // Preserve failed saves per entity. A later successful save clears only
+    // the matching draft, so an older request cannot erase newer work.
+    saveRecoveryDraft(entity.type, entity.id, body);
+    const status = (error as Error & { status?: number }).status;
+    if (status === 401 || status === 403) {
+      location.reload();
+    } else {
+      // Temporary disconnects (including sleep/wake) should not force a reload.
+      // Retry both on the browser's online event and on a capped backoff timer,
+      // since a real HTTP/server failure never fires 'online'.
+      retrySaveWhenOnline = true;
+      endEntitySave(navigator.onLine ? 'error' : 'offline');
+      scheduleSaveRetry();
+    }
+    return false;
+  }
+
+  // The save itself succeeded -- any error in this follow-up UI bookkeeping
+  // must never be reported as a failed save.
+  try {
     if (editor.type === 'tiny') {
       // set the editor as non dirty so we can navigate out without a warning to clear
       tinymce.activeEditor.setDirty(false);
@@ -1007,28 +1100,19 @@ export async function updateEntityBody(redirect = true): Promise<boolean> {
     if (!redirect) {
       const lastSavedAt = document.getElementById('lastSavedAt');
       if (lastSavedAt) {
-        lastSavedAt.title = json.modified_at;
+        lastSavedAt.title = json.modified_at ?? '';
         reloadElements(['lastSavedAt']);
       }
     }
-    clearRecoveryDraft(entity.type, entity.id, body, saveStartedAt);
-    retrySaveWhenOnline = false;
-    endEntitySave('saved', json.modified_at ?? '');
-    return true;
-  }).catch((error: Error & { status?: number }) => {
-    // Preserve failed saves per entity. A later successful save clears only
-    // the matching draft, so an older request cannot erase newer work.
-    saveRecoveryDraft(entity.type, entity.id, body);
-    if (error.status === 401 || error.status === 403) {
-      location.reload();
-    } else {
-      // Temporary disconnects (including sleep/wake) should not force a reload.
-      // The browser's online event retries the most recent editor content.
-      retrySaveWhenOnline = true;
-      endEntitySave(navigator.onLine ? 'error' : 'offline');
-    }
-    return false;
-  });
+  } catch (uiError) {
+    console.error('Post-save UI update failed (the save itself succeeded):', uiError);
+  }
+
+  clearRecoveryDraft(entity.type, entity.id, body, saveStartedAt);
+  retrySaveWhenOnline = false;
+  clearSaveRetry();
+  endEntitySave('saved', json.modified_at ?? '');
+  return true;
 }
 
 // bind used plugins to TomSelect

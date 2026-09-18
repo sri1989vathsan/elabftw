@@ -213,6 +213,10 @@ function getAssetVersionQuery(): string {
 
 // options for tinymce to pass to tinymce.init()
 export function getTinymceBaseConfig(page: string): object {
+  // Shared between the autosave keydown/keyup handlers in setup() and the
+  // manual save_onsavecallback below, so a manual save can cancel a pending
+  // autosave instead of racing it.
+  let typingTimer;
   let plugins = 'accordion advlist anchor autolink autoresize table searchreplace code fullscreen insertdatetime charmap lists save image media link pagebreak codesample template mention visualblocks visualchars emoticons preview';
   // Grouped by function: file/history, then all text/paragraph formatting
   // together, then the standalone Insert-menu, then all individual insert
@@ -425,6 +429,9 @@ export function getTinymceBaseConfig(page: string): object {
     },
     // use a custom function for the save button in toolbar
     save_onsavecallback: async (): Promise<void> => {
+      // Cancel any pending autosave -- otherwise it can fire right after
+      // this manual save and race it with stale content.
+      clearTimeout(typingTimer);
       await updateEntityBody();
     },
     // keyboard shortcut to insert today's date at cursor in editor
@@ -433,8 +440,6 @@ export function getTinymceBaseConfig(page: string): object {
     },
     setup: (editor: Editor): void => {
       registerCustomEditorExtensions(editor);
-      // holds the timer setTimeout function
-      let typingTimer;
       // use event SkinLoaded instead of init so we're sure skinNode is present
       editor.on('SkinLoaded', () => {
         // prevent skin.min.css from changing appearance of .mce-preview-body element
