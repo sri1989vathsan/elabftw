@@ -5216,8 +5216,16 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
  * lazily (see activateLazySpreadsheetViews below), not for every table on
  * page load at once.
  */
-export function mountReadOnlySpreadsheetGrid(table: HTMLTableElement): void {
-  const extracted = extractFromTable(table);
+/**
+ * Build a standalone, read-only jspreadsheet-ce grid (a plain <div>, not yet
+ * attached anywhere) from a saved spreadsheet's data -- the shared core
+ * behind mountReadOnlySpreadsheetGrid() (view pages: replaces the table in
+ * place) and the TinyMCE editor's own overlay (SpreadsheetExtension.ts:
+ * mounts this in the main document on top of the -- otherwise untouched --
+ * table inside the editor's iframe, so the live editor content never has to
+ * be mutated).
+ */
+export function buildReadOnlySpreadsheetHost(extracted: SpreadsheetData): HTMLDivElement {
   const rows = Math.max(1, extracted.rows);
   const cols = Math.max(1, extracted.cols);
   const appearance = normalizeAppearance(extracted.appearance);
@@ -5243,7 +5251,6 @@ export function mountReadOnlySpreadsheetGrid(table: HTMLTableElement): void {
   host.style.setProperty('--spreadsheet-column-index-height', `${appearance.columnIndexHeight}px`);
   const sheetContainer = document.createElement('div');
   host.appendChild(sheetContainer);
-  table.replaceWith(host);
 
   // jspreadsheet-ce v5 creates worksheets asynchronously: onload can fire
   // before the `data` supplied above has actually been rendered into the
@@ -5305,6 +5312,13 @@ export function mountReadOnlySpreadsheetGrid(table: HTMLTableElement): void {
       hydrateUntilReady(getMountedWorksheet(sheetContainer, instance));
     },
   });
+
+  return host;
+}
+
+export function mountReadOnlySpreadsheetGrid(table: HTMLTableElement): void {
+  const host = buildReadOnlySpreadsheetHost(extractFromTable(table));
+  table.replaceWith(host);
 }
 
 /**
