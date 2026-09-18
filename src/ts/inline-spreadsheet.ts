@@ -5245,6 +5245,37 @@ export function mountReadOnlySpreadsheetGrid(table: HTMLTableElement): void {
   host.appendChild(sheetContainer);
   table.replaceWith(host);
 
+  // jspreadsheet-ce v5 creates worksheets asynchronously: onload can fire
+  // before the `data` supplied above has actually been rendered into the
+  // DOM (see the identical caveat/retry loop in openSpreadsheetModal's own
+  // mount code). Without retrying, this grid can render fully empty --
+  // visually indistinguishable from the table having just vanished.
+  const firstValue = String(displayValues[0]?.[0] ?? '');
+  const looksHydrated = (): boolean => {
+    if (!sheetContainer.isConnected) return true; // replaced/removed meanwhile -- stop retrying
+    const bodyRows = sheetContainer.querySelectorAll('.jss_worksheet tbody tr').length;
+    if (bodyRows < rows) return false;
+    if (firstValue === '') return true;
+    const firstCell = sheetContainer.querySelector('.jss_worksheet tbody tr td[data-x][data-y]');
+    return (firstCell?.textContent ?? '') === firstValue;
+  };
+  const hydrateUntilReady = (worksheet: JssInstance, attempt = 0): void => {
+    if (!sheetContainer.isConnected) return;
+    if (looksHydrated() || attempt >= 30) {
+      applyCoordinateHeaderDimensions(sheetContainer, appearance);
+      applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights);
+      applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
+      return;
+    }
+    try {
+      worksheet?.setData?.(displayValues);
+      worksheet?.setStyle?.(styles);
+    } catch {
+      // fall through to retry below
+    }
+    window.setTimeout(() => hydrateUntilReady(worksheet, attempt + 1), Math.min(250, 15 + (attempt * 10)));
+  };
+
   (jspreadsheet as unknown as JssFactory)(sheetContainer, {
     worksheets: [{
       data: displayValues,
@@ -5270,10 +5301,8 @@ export function mountReadOnlySpreadsheetGrid(table: HTMLTableElement): void {
       allowUndo: false,
     }],
     parseFormulas: false,
-    onload: (mountedWorksheet: JssInstance): void => {
-      applyCoordinateHeaderDimensions(sheetContainer, appearance);
-      applySpreadsheetRowHeights(sheetContainer, mountedWorksheet, rowHeights);
-      applySpreadsheetColWidths(sheetContainer, mountedWorksheet, colWidths);
+    onload: (instance: JssInstance): void => {
+      hydrateUntilReady(getMountedWorksheet(sheetContainer, instance));
     },
   });
 }
