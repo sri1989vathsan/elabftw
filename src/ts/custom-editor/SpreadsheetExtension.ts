@@ -539,6 +539,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         if (applySpreadsheetHtmlToTable(existingTable, spreadsheetToHTML(raw, computed))) {
           editor.undoManager.add();
           editor.setDirty(true);
+          // See the identical comment on commitOverlayChange -- the popup
+          // is also outside the editor body, so this save needs to reset
+          // the same autosave timer itself.
+          editor.dispatch('keyup');
           refreshTableOverlay(existingTable);
         }
         return;
@@ -931,6 +935,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     if (!applySpreadsheetHtmlToTable(table, spreadsheetToHTML(data, data.displayData ?? data.data))) return;
     editor.undoManager.add();
     editor.setDirty(true);
+    // The editor's own 7-second autosave (tinymce.ts) resets its timer on
+    // native keyup/keydown against the editor body -- typing into this
+    // overlay (outside that body entirely; a position:fixed div in the
+    // main document, not the iframe) never fires those, so autosave never
+    // saw this edit at all. 'keyup' is what that timer actually listens
+    // for; dispatching it programmatically resets the same timer as if
+    // this had been typed directly into the editor.
+    editor.dispatch('keyup');
   };
 
   // Tears down and rebuilds the live overlay for a table whose underlying
