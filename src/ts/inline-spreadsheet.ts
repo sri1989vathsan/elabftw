@@ -5303,6 +5303,15 @@ export function buildReadOnlySpreadsheetHost(
   const styles = mergeCellStyles(extracted.cellStyles, appearance, rows, cols);
   const rowHeights = normalizeRowHeights(extracted.rowHeights, rows) ?? {};
   const colWidths = normalizeColWidths(extracted.colWidths, cols) ?? {};
+  // jspreadsheet-ce can quietly replace a formula cell's own raw text with
+  // its computed result inside its *internal* data model after the edit
+  // that typed it commits (parseFormulas:false stops it from evaluating
+  // the formula, not from this) -- getData() then returns that computed
+  // value back, with the formula itself gone for good. openSpreadsheetModal
+  // works around the very same thing with its own rawDataMirror; mirrored
+  // here so a formula survives being edited live instead of only through
+  // the popup.
+  let rawDataMirror = resizeData(extracted.data, rows, cols);
   // How wide this table renders in view mode / the static HTML fallback
   // (spreadsheetToHTML's own colgroup width sum) -- exposed via a data
   // attribute so the TinyMCE editor overlay can cap its own width at this
@@ -5570,9 +5579,44 @@ export function buildReadOnlySpreadsheetHost(
   // for virtualization, see SpreadsheetExtension.ts) within the 500ms
   // debounce window would silently drop the last edit.
   let pendingChange: SpreadsheetData | null = null;
-  const notifyChange = (changedWorksheet: JssInstance): void => {
-    const data = changedWorksheet?.getData?.();
-    if (!Array.isArray(data)) return;
+  // Mirrors openSpreadsheetModal's own updateRawDataMirrorCell(): jspreadsheet
+  // reports a cell's change twice (onbeforechange with the value about to
+  // be applied, then onchange after it's applied), and can quietly repaint
+  // a formula cell to its own computed result shortly after -- which would
+  // otherwise arrive here indistinguishable from a genuine edit replacing
+  // the formula with that same plain value. preserveRenderedFormula skips
+  // exactly that: a write that looks like nothing more than the current
+  // formula's own computed result reappearing, while still a cell's
+  // *first* value (typed while still in the "editor" class, before
+  // anything could have been computed yet) or any value that doesn't match
+  // go through untouched.
+  const updateRawDataMirrorCell = (
+    col: number,
+    row: number,
+    value: CellValue,
+    preserveRenderedFormula = true,
+  ): void => {
+    if (!Number.isInteger(col) || !Number.isInteger(row) || col < 0 || row < 0) return;
+    const mirrorRows = Math.max(rawDataMirror.length, row + 1);
+    const mirrorCols = Math.max(
+      rawDataMirror.reduce((max, r) => Math.max(max, r.length), 0),
+      col + 1,
+    );
+    rawDataMirror = resizeData(rawDataMirror, mirrorRows, mirrorCols);
+    const currentValue = rawDataMirror[row][col];
+    if (preserveRenderedFormula
+      && typeof currentValue === 'string'
+      && currentValue.trimStart().startsWith('=')
+      && !(typeof value === 'string' && value.trimStart().startsWith('='))
+    ) {
+      const result = evaluateFormula(currentValue, rawDataMirror, col, row);
+      if (value === '#ERROR' || (result !== undefined && String(value) === String(result))) return;
+    }
+    rawDataMirror[row][col] = value;
+  };
+
+  const notifyFromMirror = (): void => {
+    const data = rawDataMirror;
     // jspreadsheet repaints the cell itself asynchronously after onchange
     // (e.g. when its own edit box closes) -- a single immediate repaint
     // here can get overwritten right back to the raw "=..." text by that
@@ -5618,6 +5662,34 @@ export function buildReadOnlySpreadsheetHost(
     }, 500);
   };
 
+  // A cell commit: onbeforechange below has already run first (with the
+  // *proposed* value, and the guard off while still actively editing) --
+  // updateRawDataMirrorCell here (guard on, its default) is what actually
+  // catches jspreadsheet reporting a formula's own computed result as if
+  // it were a fresh edit replacing the formula.
+  const notifyChange = (
+    _changedWorksheet: JssInstance,
+    _cell: HTMLElement,
+    changedCol: number,
+    changedRow: number,
+    newValue: CellValue,
+  ): void => {
+    updateRawDataMirrorCell(changedCol, changedRow, newValue);
+    notifyFromMirror();
+  };
+  // Row/column insert, delete and resize: no single cell/value to reconcile
+  // against the mirror -- jspreadsheet's own model is trusted wholesale for
+  // the new shape, same as openSpreadsheetModal's syncMountedDimensions.
+  const notifyStructuralChange = (changedWorksheet: JssInstance): void => {
+    const liveData = changedWorksheet?.getData?.();
+    if (Array.isArray(liveData)) {
+      const rows = liveData.length;
+      const cols = liveData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
+      rawDataMirror = resizeData(liveData, rows, cols);
+    }
+    notifyFromMirror();
+  };
+
   (jspreadsheet as unknown as JssFactory)(sheetContainer, {
     worksheets: [{
       data: displayValues,
@@ -5653,13 +5725,23 @@ export function buildReadOnlySpreadsheetHost(
       hydrateUntilReady(getMountedWorksheet(sheetContainer, instance));
     },
     ...(editable ? {
+      onbeforechange: (
+        _changedWorksheet: JssInstance,
+        cell: HTMLElement,
+        changedCol: number,
+        changedRow: number,
+        value: CellValue,
+      ): CellValue => {
+        updateRawDataMirrorCell(changedCol, changedRow, value, !cell?.classList?.contains('editor'));
+        return value;
+      },
       onchange: notifyChange,
-      oninsertrow: notifyChange,
-      oninsertcolumn: notifyChange,
-      ondeleterow: notifyChange,
-      ondeletecolumn: notifyChange,
-      onresizerow: notifyChange,
-      onresizecolumn: notifyChange,
+      oninsertrow: notifyStructuralChange,
+      oninsertcolumn: notifyStructuralChange,
+      ondeleterow: notifyStructuralChange,
+      ondeletecolumn: notifyStructuralChange,
+      onresizerow: notifyStructuralChange,
+      onresizecolumn: notifyStructuralChange,
       onselection: (
         selectedWorksheet: JssInstance,
         startCol: number,
@@ -5668,15 +5750,23 @@ export function buildReadOnlySpreadsheetHost(
         endRow: number,
       ): void => {
         if (!formulaInputEl || ![startCol, startRow, endCol, endRow].every(Number.isInteger)) return;
-        if (composingFormula) {
-          // Mid-composing (the formula bar has focus): insert this
-          // selection's reference at the cursor, then keep typing there --
-          // the mousedown handler above already stopped focus from
-          // actually leaving it. If the previous action was itself a
-          // click/drag insertion with nothing typed since, replace that
-          // same reference instead of appending next to it (as in
-          // Excel/Sheets: clicking a different cell means "this one
-          // instead", not "this one too", until you type an operator).
+        // Only an in-progress formula (the bar's own text starts with "=")
+        // treats a further cell click as "insert a reference into this" --
+        // otherwise the bar merely has focus (e.g. the user clicked into
+        // it just to look, without starting to type anything), and
+        // clicking a different cell means "show me that one instead", not
+        // "add it to what's already here". Without this check, clicking
+        // around while the bar happened to have focus kept appending cell
+        // references onto whatever plain value/old formula was showing.
+        if (composingFormula && formulaInputEl.value.trimStart().startsWith('=')) {
+          // Mid-composing: insert this selection's reference at the
+          // cursor, then keep typing there -- the mousedown handler above
+          // already stopped focus from actually leaving it. If the
+          // previous action was itself a click/drag insertion with
+          // nothing typed since, replace that same reference instead of
+          // appending next to it (as in Excel/Sheets: clicking a
+          // different cell means "this one instead", not "this one too",
+          // until you type an operator).
           const reference = (startCol === endCol && startRow === endRow)
             ? `${colLabel(startCol)}${startRow + 1}`
             : `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
@@ -5703,8 +5793,13 @@ export function buildReadOnlySpreadsheetHost(
           return;
         }
         formulaEditingCell = { col: startCol, row: startRow };
-        const currentData = selectedWorksheet?.getData?.();
-        const rawValue = Array.isArray(currentData) ? currentData[startRow]?.[startCol] : '';
+        // rawDataMirror, not selectedWorksheet.getData() directly -- by
+        // the time a formula cell is re-selected, jspreadsheet's own
+        // model may already hold its computed result instead of the
+        // formula itself (see rawDataMirror's own comment above), which
+        // would otherwise show up here in place of the formula it
+        // actually is.
+        const rawValue = rawDataMirror[startRow]?.[startCol];
         formulaInputEl.disabled = false;
         formulaInputEl.value = String(rawValue ?? '');
       },

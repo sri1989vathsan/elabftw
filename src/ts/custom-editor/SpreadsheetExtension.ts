@@ -871,16 +871,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       const toggleBarEl = overlay.querySelector('.elabftw-spreadsheet-readonly-toggle') as HTMLElement | null;
       const gridEl = overlay.querySelector('.elabftw-spreadsheet-readonly-grid') as HTMLElement | null;
       const naturalContentHeight = worksheetEl?.scrollHeight ?? tableRect.height;
-      // jspreadsheet-ce's own live rendering can land on a slightly
-      // different width than the saved column widths (view mode's own
-      // static rendering) would -- cap at whichever of the two is
-      // smaller, in addition to the editor's own content column width,
-      // rather than whatever jspreadsheet happens to render at.
-      const viewModeWidth = Number.parseFloat(overlay.dataset.viewModeWidth ?? '');
-      const naturalContentWidth = Math.min(
-        worksheetEl?.scrollWidth ?? tableRect.width,
-        Number.isFinite(viewModeWidth) ? viewModeWidth : Infinity,
-      );
+      // Just the grid's own live scrollWidth, capped only by the editor's
+      // content column below -- dragging a column border to widen it
+      // updates scrollWidth continuously during the drag itself, well
+      // before notifyChange's onresizecolumn (and the dataset cap it
+      // used to keep in step) ever fires. Capping at that stale, commit-
+      // only value here as well as there clipped the drag's own live
+      // feedback: widening a column past whatever the cap still
+      // remembered visibly did nothing until well after mouseup, if at
+      // all -- looking like the resize simply didn't work.
+      const naturalContentWidth = worksheetEl?.scrollWidth ?? tableRect.width;
       const maxContentWidth = editor.getBody().getBoundingClientRect().width;
       overlay.style.width = `${Math.min(naturalContentWidth, maxContentWidth)}px`;
       // A horizontal scrollbar (overflow-x:auto on the grid area, needed

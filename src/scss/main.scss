@@ -3302,9 +3302,20 @@ body.html-tool-workspace-resizing * {
 
 /* Ensure jspreadsheet dropdown menus inside the overlay render on top */
 /* stylelint-disable-next-line selector-class-pattern */
-.jss_container,
-.jss_contextmenu {
+.jss_container {
   z-index: 10051 !important;
+}
+
+/* A right-click context menu specifically must always win, even against
+ * another table's own .jss_container overlay at the very same z-index --
+ * multiple editable tables on the page each carry that same 10051, so
+ * ties are broken by DOM order instead (position:fixed overlays are
+ * appended in document order): whichever table sits *later* in the page
+ * stacks on top, regardless of which table's menu is actually open. Give
+ * the context menu a strictly higher value so it always wins outright. */
+/* stylelint-disable-next-line selector-class-pattern */
+.jss_contextmenu {
+  z-index: 10052 !important;
 }
 
 @media (max-width: 767px) {
