@@ -14,15 +14,18 @@ use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\QueryParamsInterface;
+use Elabftw\Models\Notifications\MentionedInFeedback;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\Filter;
 use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
 
+use function array_key_exists;
+use function array_map;
+use function is_array;
 use function mb_strlen;
 use function sprintf;
-use function trim;
 
 /**
  * Comments on a feedback board item. Anyone on the team can comment, same
@@ -97,8 +100,57 @@ final class FeedbackComments extends AbstractRest
         if ($req->rowCount() === 0) {
             throw new ResourceNotFoundException();
         }
+        $commentId = (int) $this->Db->lastInsertId();
+        $this->notifyMentioned(is_array($reqBody['mentioned_userids'] ?? null) ? $reqBody['mentioned_userids'] : array());
 
-        return (int) $this->Db->lastInsertId();
+        return $commentId;
+    }
+
+    private function notifyMentioned(array $userids): void
+    {
+        if (empty($userids)) {
+            return;
+        }
+        $item = $this->Item->readOne();
+        foreach (array_map('intval', $userids) as $userid) {
+            if ($userid === $this->Users->userid || !$this->isTeamMember($userid)) {
+                continue;
+            }
+            (new MentionedInFeedback(
+                new Users($userid, $this->Users->team),
+                $this->Users,
+                (int) $this->Item->id,
+                (string) $item['title'],
+            ))->create();
+        }
+    }
+
+    private function isTeamMember(int $userid): bool
+    {
+        $sql = 'SELECT 1 FROM users2teams WHERE users_id = :userid AND teams_id = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':userid', $userid, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return $req->fetch() !== false;
+    }
+
+    #[Override]
+    public function patch(Action $action, array $params): array
+    {
+        $comment = $this->readOne();
+        if ($comment['userid'] !== $this->Users->userid && !$this->Users->isAdmin) {
+            throw new ImproperActionException('Only the author or a team admin can edit this comment.');
+        }
+        if (array_key_exists('body', $params)) {
+            $sql = 'UPDATE custom_feedback_comments SET body = :body WHERE id = :id AND item_id = :item_id';
+            $req = $this->Db->prepare($sql);
+            $req->bindValue(':body', $this->getBody($params['body']));
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $req->bindValue(':item_id', $this->Item->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+        }
+        return $this->readOne();
     }
 
     #[Override]
@@ -118,7 +170,7 @@ final class FeedbackComments extends AbstractRest
 
     private function getBody(mixed $value): string
     {
-        $body = Filter::toPureString((string) $value);
+        $body = Filter::commentBody((string) $value);
         if ($body === '' || mb_strlen($body) > 5000) {
             throw new ImproperActionException('A comment is required and must be shorter than 5000 characters.');
         }

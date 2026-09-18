@@ -176,6 +176,17 @@ final class Transform
                     ),
                     $notif['created_at'],
                 ),
+            Notifications::MentionedInFeedback =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="feedback.php">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    sprintf(
+                        _('%s mentioned you in a comment: %s'),
+                        $notif['body']['mentioner_fullname'],
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
+                    $notif['created_at'],
+                ),
             Notifications::OrderStatusChanged =>
                 sprintf(
                     '<span data-action="ack-notif" data-id="%d" data-href="orders.php?order=%d">%s</span>' . $relativeMoment,

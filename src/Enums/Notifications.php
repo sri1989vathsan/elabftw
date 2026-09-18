@@ -34,4 +34,5 @@ enum Notifications: int
     case ActionRequested = 90;
     case OrderReminder = 100;
     case OrderChanged = 101;
+    case MentionedInFeedback = 102;
 }
