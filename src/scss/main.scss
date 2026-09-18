@@ -3156,10 +3156,19 @@ body.html-tool-workspace-resizing * {
 .elabftw-spreadsheet-editor-overlay {
   cursor: pointer;
   margin: 0;
+  // Height is fit to the grid's own natural content size continuously (see
+  // syncOverlayPositions in SpreadsheetExtension.ts) rather than fixed --
+  // width is capped at the editor's own content column width, so only an
+  // actually-too-wide table scrolls horizontally instead of overflowing it.
   overflow: hidden;
   // Below TinyMCE's own toolbar (.tox-editor-header, z-index:2) so a table
   // scrolled up near the sticky toolbar renders behind it, not on top.
   z-index: 1;
+}
+
+.elabftw-spreadsheet-editor-overlay .elabftw-spreadsheet-readonly-grid {
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .inline-spreadsheet-actions {

@@ -839,8 +839,18 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       overlay.style.position = 'fixed';
       overlay.style.left = `${iframeRect.left + tableRect.left}px`;
       overlay.style.top = `${iframeRect.top + tableRect.top}px`;
-      overlay.style.width = `${tableRect.width}px`;
-      overlay.style.height = `${tableRect.height}px`;
+      // Height follows the grid's own current content (rows/columns can
+      // change live as the user edits, well before the debounced commit
+      // catches the -- until then stale -- real table's own rect up) --
+      // width is capped at the editor's readable content column, so a
+      // wide table scrolls horizontally instead of overflowing it.
+      const worksheetEl = overlay.querySelector('.jss_worksheet') as HTMLElement | null;
+      const toggleBarEl = overlay.querySelector('.elabftw-spreadsheet-readonly-toggle') as HTMLElement | null;
+      const naturalContentHeight = worksheetEl?.scrollHeight ?? tableRect.height;
+      const naturalContentWidth = worksheetEl?.scrollWidth ?? tableRect.width;
+      const maxContentWidth = editor.getBody().getBoundingClientRect().width;
+      overlay.style.height = `${naturalContentHeight + (toggleBarEl?.offsetHeight ?? 0)}px`;
+      overlay.style.width = `${Math.min(naturalContentWidth, maxContentWidth)}px`;
       // A zero-size rect means the real table isn't actually visible right
       // now (e.g. inside a collapsed <details>) -- hide the overlay rather
       // than pin it to a stale, meaningless position.
@@ -894,7 +904,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // Passive bookkeeping only (never steals focus, unlike editor.selection.
     // select() would) -- lets table-scoped actions like indent/outdent find
     // this table via lastActiveSpreadsheetTable above.
-    overlay.addEventListener('mousedown', () => { lastActiveSpreadsheetTable = table; });
+    overlay.addEventListener('mousedown', () => {
+      lastActiveSpreadsheetTable = table;
+      // indentSelectedTable()/outdentSelectedTable() (below) read their own
+      // separate internal lastSelectedTable, not the menu-display check
+      // above -- both need tracking, or the menu item can show while
+      // clicking it still silently does nothing.
+      tableIndentation.trackSelectedTable(table);
+    });
     document.body.appendChild(overlay);
     spreadsheetOverlays.set(table, overlay);
     ensureSyncLoop();

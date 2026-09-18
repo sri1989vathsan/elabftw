@@ -5394,12 +5394,19 @@ export function buildReadOnlySpreadsheetHost(
 
   // Debounced: onChange can fire on every keystroke (onchange) or drag
   // frame (onresizerow/onresizecolumn) -- only the settled result after a
-  // short pause is worth reacting to (e.g. rewriting the real table).
+  // short pause is worth reacting to (e.g. rewriting the real table). The
+  // formula repaint below is NOT debounced -- jspreadsheet itself never
+  // evaluates "=SUM(...)" (parseFormulas:false; this module computes
+  // formulas itself elsewhere too, see spreadsheetToHTML), so without an
+  // immediate repaint here a formula cell would just show its own raw
+  // text while editing, only resolving to a value once the debounced
+  // onChange eventually lands.
   let changeTimer: ReturnType<typeof setTimeout> | null = null;
   const notifyChange = (changedWorksheet: JssInstance): void => {
-    if (!options.onChange) return;
     const data = changedWorksheet?.getData?.();
     if (!Array.isArray(data)) return;
+    window.requestAnimationFrame(() => renderFormulaResults(sheetContainer, data));
+    if (!options.onChange) return;
     const nextRows = data.length;
     const nextCols = data.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
     const liveRowHeights = readRenderedRowHeights(sheetContainer);
@@ -5407,7 +5414,7 @@ export function buildReadOnlySpreadsheetHost(
     const next = normalizeSpreadsheetData({
       ...extracted,
       data,
-      displayData: data,
+      displayData: applyFormulaResults(data, data),
       rows: nextRows,
       cols: nextCols,
       rowHeights: { ...(extracted.rowHeights ?? {}), ...(liveRowHeights ?? {}) },
@@ -5428,9 +5435,15 @@ export function buildReadOnlySpreadsheetHost(
         colWidths[String(col)] ? { width: colWidths[String(col)] } : {}
       )),
       style: styles,
-      tableOverflow: true,
-      tableWidth: '100%',
-      tableHeight: '100%',
+      // A read-only view (view page) fills whatever CSS space it's given --
+      // '100%' of its container is correct there. An editable overlay
+      // (TinyMCE editor) is sized *from* its own natural content instead
+      // (see syncOverlayPositions in SpreadsheetExtension.ts, which reads
+      // scrollWidth/scrollHeight every frame), so forcing a percentage
+      // here would just have it fill whatever transient size the
+      // container happened to have at mount, defeating that measurement.
+      tableOverflow: !editable,
+      ...(editable ? {} : { tableWidth: '100%', tableHeight: '100%' }),
       editable,
       allowInsertRow: editable,
       allowInsertColumn: editable,
