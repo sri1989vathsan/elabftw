@@ -5371,9 +5371,65 @@ export function buildReadOnlySpreadsheetHost(
     toggleBar.appendChild(openFullEditorButton);
   }
 
+  // A small formula bar, mirroring the popup's own (a separate input, not
+  // jspreadsheet-ce's in-cell editor -- there's no documented way to
+  // safely intercept clicks against that instead) -- select a cell to see
+  // its value/formula here, then click other cells while this input has
+  // focus to insert their reference at the cursor, same as the popup.
+  let formulaInputEl: HTMLInputElement | null = null;
+  let formulaEditingCell: { col: number; row: number } | null = null;
+  let composingFormula = false;
+  if (editable) {
+    const formulaBarEl = document.createElement('div');
+    formulaBarEl.className = 'elabftw-spreadsheet-formula-bar';
+    const formulaLabel = document.createElement('span');
+    formulaLabel.className = 'elabftw-spreadsheet-formula-bar-label';
+    formulaLabel.textContent = 'fx';
+    formulaLabel.setAttribute('aria-hidden', 'true');
+    formulaInputEl = document.createElement('input');
+    formulaInputEl.type = 'text';
+    formulaInputEl.className = 'elabftw-spreadsheet-formula-bar-input';
+    formulaInputEl.disabled = true;
+    formulaInputEl.spellcheck = false;
+    formulaInputEl.placeholder = 'Select a cell to view or edit its value/formula';
+    formulaInputEl.setAttribute('aria-label', 'Selected cell value or formula');
+    formulaBarEl.append(formulaLabel, formulaInputEl);
+    host.appendChild(formulaBarEl);
+
+    formulaInputEl.addEventListener('focus', () => { composingFormula = true; });
+    formulaInputEl.addEventListener('blur', () => {
+      composingFormula = false;
+      commitFormulaInput();
+    });
+    formulaInputEl.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      formulaInputEl?.blur();
+    });
+  }
+
+  // Commits the formula bar's current value into whichever cell was
+  // selected when it was last enabled -- called on Enter/blur.
+  function commitFormulaInput(): void {
+    if (!formulaEditingCell || !formulaInputEl) return;
+    const targetWorksheet = getMountedWorksheet(sheetContainer);
+    const cellName = `${colLabel(formulaEditingCell.col)}${formulaEditingCell.row + 1}`;
+    targetWorksheet?.setValue?.(cellName, formulaInputEl.value);
+  }
+
   const sheetContainer = document.createElement('div');
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   host.appendChild(sheetContainer);
+  if (editable) {
+    // Clicking a cell to insert its reference into the formula bar must
+    // not steal focus away from it -- preventDefault() on mousedown blocks
+    // the browser's default focus-shift while still letting jspreadsheet's
+    // own click-driven selection (and the onselection callback below) run
+    // normally, since this never calls stopPropagation().
+    sheetContainer.addEventListener('mousedown', event => {
+      if (composingFormula) event.preventDefault();
+    });
+  }
   if (!editable) {
     const toggleCollapsed = (): void => {
       const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
@@ -5517,6 +5573,44 @@ export function buildReadOnlySpreadsheetHost(
       ondeletecolumn: notifyChange,
       onresizerow: notifyChange,
       onresizecolumn: notifyChange,
+      onselection: (
+        selectedWorksheet: JssInstance,
+        startCol: number,
+        startRow: number,
+        endCol: number,
+        endRow: number,
+      ): void => {
+        if (!formulaInputEl || ![startCol, startRow, endCol, endRow].every(Number.isInteger)) return;
+        if (composingFormula) {
+          // Mid-composing (the formula bar has focus): insert this
+          // selection's reference at the cursor instead of replacing the
+          // whole draft, then keep typing there -- the mousedown handler
+          // above already stopped focus from actually leaving it.
+          const reference = (startCol === endCol && startRow === endRow)
+            ? `${colLabel(startCol)}${startRow + 1}`
+            : `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
+          const start = formulaInputEl.selectionStart ?? formulaInputEl.value.length;
+          const end = formulaInputEl.selectionEnd ?? formulaInputEl.value.length;
+          formulaInputEl.value = formulaInputEl.value.slice(0, start) + reference + formulaInputEl.value.slice(end);
+          const cursor = start + reference.length;
+          formulaInputEl.setSelectionRange(cursor, cursor);
+          formulaInputEl.focus();
+          return;
+        }
+        // A plain new selection: show that cell's current raw value/formula,
+        // ready to edit here -- only for a single cell, matching the popup.
+        if (startCol !== endCol || startRow !== endRow) {
+          formulaEditingCell = null;
+          formulaInputEl.disabled = true;
+          formulaInputEl.value = '';
+          return;
+        }
+        formulaEditingCell = { col: startCol, row: startRow };
+        const currentData = selectedWorksheet?.getData?.();
+        const rawValue = Array.isArray(currentData) ? currentData[startRow]?.[startCol] : '';
+        formulaInputEl.disabled = false;
+        formulaInputEl.value = String(rawValue ?? '');
+      },
     } : {}),
   });
 

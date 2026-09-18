@@ -3164,6 +3164,45 @@ body.html-tool-workspace-resizing * {
   color: var(--primary);
 }
 
+// Formula bar for the inline editor overlay -- select a cell to see its
+// value/formula here, then click other cells while this has focus to
+// insert their reference, mirroring .inline-spreadsheet-formula-bar in
+// the popup (a simplified version: no function picker, one cell at a time).
+.elabftw-spreadsheet-formula-bar {
+  align-items: center;
+  background: var(--secondlevel);
+  border-bottom: 1px solid var(--secondary);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.4rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.elabftw-spreadsheet-formula-bar-label {
+  color: var(--medium);
+  flex: 0 0 auto;
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.elabftw-spreadsheet-formula-bar-input {
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 0.25rem;
+  color: var(--strongest);
+  flex: 1 1 auto;
+  font-family: monospace;
+  font-size: 0.8rem;
+  min-width: 0;
+  padding: 0.15rem 0.4rem;
+}
+
+.elabftw-spreadsheet-formula-bar-input:disabled {
+  background: var(--secondlevel);
+  color: var(--medium);
+}
+
 /* The grid area itself scrolls internally if it doesn't fit the space
  * given to it (mainly relevant to the editor overlay variant below, whose
  * total height is pinned to the real table's own measured rect -- the
@@ -3176,6 +3215,15 @@ body.html-tool-workspace-resizing * {
 }
 
 /* stylelint-disable selector-class-pattern */
+/* jspreadsheet-ce ships border-collapse:initial on its own <table>, which
+ * resolves to the browser default (separate, 2px border-spacing) unless a
+ * page-wide table reset overrides it -- this page has none, so the grid
+ * lines render much wider than the library's own 1px cell borders intend. */
+.elabftw-spreadsheet-readonly-view .jss_worksheet {
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+}
+
 .elabftw-spreadsheet-readonly-view .jss_worksheet > thead > tr {
   height: var(--spreadsheet-column-index-height) !important;
   max-height: var(--spreadsheet-column-index-height) !important;
