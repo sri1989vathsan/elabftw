@@ -245,7 +245,10 @@
     const lower = query.toLowerCase();
     mentionCandidatesByItem = {
       ...mentionCandidatesByItem,
-      [itemId]: teamMembers.filter(m => m.fullname.toLowerCase().includes(lower)).slice(0, 5),
+      // Mentioning yourself is never useful -- don't suggest your own name.
+      [itemId]: teamMembers
+        .filter(m => m.userid !== core.currentUserid && m.fullname.toLowerCase().includes(lower))
+        .slice(0, 5),
     };
   }
 
