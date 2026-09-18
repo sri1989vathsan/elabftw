@@ -5439,6 +5439,23 @@ export function buildReadOnlySpreadsheetHost(
       }
     });
   }
+  // jspreadsheet-ce grabs focus onto its own internal, hidden editing
+  // element as part of handling a cell click/selection -- preventDefault()
+  // on mousedown above stops the browser's *own* default focus-shift, but
+  // not that programmatic grab, which still lands after onselection's own
+  // formulaInputEl.focus() call above. Left alone, the next keystroke (e.g.
+  // the ")" closing a SUM(...)) types into that cell instead of the
+  // formula bar. Reassert focus on the input whenever it loses it while
+  // still composing, regardless of what stole it or when.
+  let reclaimFocusHandler: ((event: FocusEvent) => void) | null = null;
+  if (editable) {
+    reclaimFocusHandler = (event: FocusEvent): void => {
+      if (composingFormula && formulaInputEl && event.target !== formulaInputEl) {
+        formulaInputEl.focus();
+      }
+    };
+    document.addEventListener('focusin', reclaimFocusHandler);
+  }
   if (!editable) {
     const toggleCollapsed = (): void => {
       const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
@@ -5644,6 +5661,7 @@ export function buildReadOnlySpreadsheetHost(
         if (pendingChange) options.onChange?.(pendingChange);
         pendingChange = null;
       }
+      if (reclaimFocusHandler) document.removeEventListener('focusin', reclaimFocusHandler);
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
     },
   };
