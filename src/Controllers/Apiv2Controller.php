@@ -88,6 +88,7 @@ use Elabftw\Models\TodolistComments;
 use Elabftw\Models\TodolistEntityLinks;
 use Elabftw\Models\TodolistSteps;
 use Elabftw\Models\TodolistProjects;
+use Elabftw\Models\TodolistProjectEntityLinks;
 use Elabftw\Models\UnfinishedSteps;
 use Elabftw\Models\Uploads;
 use Elabftw\Models\UserRequestActions;
@@ -517,6 +518,12 @@ final class Apiv2Controller extends AbstractApiController
                 ApiSubModels::EntityLinks => new TodolistEntityLinks($this->requester, $this->Model, $this->subId),
                 ApiSubModels::Steps => new TodolistSteps($this->requester, $this->Model, $this->subId),
                 default => throw new InvalidApiSubModelException(ApiEndpoint::Todolist),
+            };
+        }
+        if ($this->Model instanceof TodolistProjects) {
+            return match ($submodel) {
+                ApiSubModels::EntityLinks => new TodolistProjectEntityLinks($this->requester, $this->Model, $this->subId),
+                default => throw new InvalidApiSubModelException(ApiEndpoint::TodolistProjects),
             };
         }
         throw new ImproperActionException('Incorrect endpoint.');
