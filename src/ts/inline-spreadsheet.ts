@@ -2002,6 +2002,28 @@ function applyCoordinateHeaderDimensions(
 }
 
 /**
+ * jspreadsheet's own coordinate header (column letters, row numbers, the
+ * corner cell) renders with its default skin -- none of the saved
+ * appearance's header border/padding/font settings that
+ * getCoordinateStyleAttribute() bakes into the static HTML's <th> cells.
+ * Applies the same declarations here via setProperty() (not
+ * setAttribute('style', ...), which would wipe out the width/height
+ * declarations applyCoordinateHeaderDimensions() sets, regardless of call
+ * order) so a read-only grid's header actually matches.
+ */
+function applyCoordinateHeaderStyle(container: HTMLElement, appearance: SpreadsheetAppearance): void {
+  const declarations = getAppearanceCellStyle(appearance, 0, 0, false)
+    .split(';')
+    .map(declaration => declaration.split(':'))
+    .filter((pair): pair is [string, string] => pair.length === 2 && pair[0].trim() !== '');
+  container.querySelectorAll<HTMLElement>(
+    '.jss_worksheet > thead > tr > *, .jss_worksheet .jss_row',
+  ).forEach(cell => {
+    declarations.forEach(([property, value]) => cell.style.setProperty(property.trim(), value.trim()));
+  });
+}
+
+/**
  * Read each data row's *currently rendered* height straight from the DOM,
  * keyed by its current position -- the source-of-truth counterpart to
  * applySpreadsheetRowHeights() just below (that one pushes stored sizes
@@ -5243,14 +5265,47 @@ export function buildReadOnlySpreadsheetHost(extracted: SpreadsheetData): HTMLDi
 
   const host = document.createElement('div');
   host.className = 'elabftw-spreadsheet-readonly-view';
+  // Only width/alignment carry over from the saved table style -- border,
+  // background and table-layout are meaningless (or actively wrong: an
+  // extra outer box on top of jspreadsheet's own cell borders) on this
+  // wrapping <div>, unlike on the real <table> spreadsheetToHTML() builds.
+  const alignmentStyle = appearance.tableAlignment === 'center'
+    ? 'margin-left:auto;margin-right:auto'
+    : appearance.tableAlignment === 'right'
+      ? 'margin-left:auto;margin-right:0'
+      : 'margin-left:0;margin-right:auto';
+  const widthStyle = appearance.tableWidth > 0 ? `width:${appearance.tableWidth}%;` : '';
   // setProperty() below must come after this: setAttribute('style', ...)
   // replaces the whole attribute, which would otherwise wipe out the two
   // custom properties again.
-  host.setAttribute('style', `${getAppearanceTableStyle(appearance)};max-width:100%`);
+  host.setAttribute('style', `${widthStyle}${alignmentStyle};max-width:100%`);
   host.style.setProperty('--spreadsheet-row-index-width', `${appearance.rowIndexWidth}px`);
   host.style.setProperty('--spreadsheet-column-index-height', `${appearance.columnIndexHeight}px`);
+
+  // A small collapsible header bar -- lets a large spreadsheet be tucked
+  // away without deleting it, matching the "collapse table" affordance the
+  // static HTML table doesn't have a good equivalent for.
+  const toggleBar = document.createElement('button');
+  toggleBar.type = 'button';
+  toggleBar.className = 'elabftw-spreadsheet-readonly-toggle';
+  const toggleIcon = document.createElement('i');
+  toggleIcon.className = 'fas fa-chevron-down';
+  toggleIcon.setAttribute('aria-hidden', 'true');
+  toggleBar.appendChild(toggleIcon);
+  if (extracted.caption) {
+    const captionLabel = document.createElement('span');
+    captionLabel.textContent = extracted.caption;
+    toggleBar.appendChild(captionLabel);
+  }
+  host.appendChild(toggleBar);
+
   const sheetContainer = document.createElement('div');
+  sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   host.appendChild(sheetContainer);
+  toggleBar.addEventListener('click', () => {
+    const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
+    toggleIcon.className = collapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+  });
 
   // jspreadsheet-ce v5 creates worksheets asynchronously: onload can fire
   // before the `data` supplied above has actually been rendered into the
@@ -5270,6 +5325,7 @@ export function buildReadOnlySpreadsheetHost(extracted: SpreadsheetData): HTMLDi
     if (!sheetContainer.isConnected) return;
     if (looksHydrated() || attempt >= 30) {
       applyCoordinateHeaderDimensions(sheetContainer, appearance);
+      applyCoordinateHeaderStyle(sheetContainer, appearance);
       applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights);
       applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
       return;

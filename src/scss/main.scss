@@ -3046,9 +3046,40 @@ body.html-tool-workspace-resizing * {
   --spreadsheet-column-index-height: 30px;
   --spreadsheet-row-index-width: 42px;
 
+  display: flex;
+  flex-direction: column;
   margin: 0 0 0.5rem;
   max-width: 100%;
-  overflow-x: auto;
+}
+
+.elabftw-spreadsheet-readonly-toggle {
+  align-items: center;
+  background: var(--firstlevel);
+  border: none;
+  border-bottom: 1px solid var(--secondary);
+  color: var(--strongest);
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  gap: 0.4rem;
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  width: 100%;
+}
+
+.elabftw-spreadsheet-readonly-toggle:hover {
+  background: var(--secondlevel);
+}
+
+/* The grid area itself scrolls internally if it doesn't fit the space
+ * given to it (mainly relevant to the editor overlay variant below, whose
+ * total height is pinned to the real table's own measured rect -- the
+ * toggle bar above takes a slice out of that budget instead of adding to
+ * it, so the overlay never grows taller than the table it stands in for). */
+.elabftw-spreadsheet-readonly-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 /* stylelint-disable selector-class-pattern */
@@ -3098,7 +3129,9 @@ body.html-tool-workspace-resizing * {
   cursor: pointer;
   margin: 0;
   overflow: hidden;
-  z-index: 40;
+  // Below TinyMCE's own toolbar (.tox-editor-header, z-index:2) so a table
+  // scrolled up near the sticky toolbar renders behind it, not on top.
+  z-index: 1;
 }
 
 .inline-spreadsheet-actions {
