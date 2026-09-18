@@ -2607,7 +2607,21 @@
         </div>
         {#if editingProject}
           <div class="pm-dialog-field">
-            <span class="pm-label mb-0">{t('Linked items')}</span>
+            <div class="d-flex align-items-center justify-content-between">
+              <span class="pm-label mb-0">{t('Linked items')}</span>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                on:click={() => {
+                  const panel = document.getElementById('favoritesPanel');
+                  if (panel?.hasAttribute('hidden')) {
+                    (document.querySelector('[data-action="toggle-sidepanel"][data-target="favorites"]') as HTMLElement | null)?.click();
+                  }
+                }}
+              >
+                <i class="fas fa-magnifying-glass fa-fw mr-1" aria-hidden="true"></i>{t('Open Search to link')}
+              </button>
+            </div>
             {#if loadingProjectEntityLinks}
               <p class="pm-muted small">{t('Loading')}…</p>
             {:else if projectEntityLinks.length === 0}
