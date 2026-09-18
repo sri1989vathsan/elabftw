@@ -2615,6 +2615,17 @@ body.html-tool-workspace-resizing * {
     content: '\25BE';
   }
 
+  // A flex item's automatic minimum size is its content size unless it has
+  // overflow other than visible -- without this, this panel's own content
+  // (tall once expanded) forced the whole .inline-spreadsheet-dialog flex
+  // column past its fixed height, pushing .inline-spreadsheet-actions (the
+  // Update/Cancel footer) out of view with no way to scroll back to it.
+  &[open] {
+    max-height: 45vh;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
   > strong {
     color: var(--mediumstrong);
     display: block;
