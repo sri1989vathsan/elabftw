@@ -846,11 +846,20 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       // wide table scrolls horizontally instead of overflowing it.
       const worksheetEl = overlay.querySelector('.jss_worksheet') as HTMLElement | null;
       const toggleBarEl = overlay.querySelector('.elabftw-spreadsheet-readonly-toggle') as HTMLElement | null;
+      const gridEl = overlay.querySelector('.elabftw-spreadsheet-readonly-grid') as HTMLElement | null;
       const naturalContentHeight = worksheetEl?.scrollHeight ?? tableRect.height;
       const naturalContentWidth = worksheetEl?.scrollWidth ?? tableRect.width;
       const maxContentWidth = editor.getBody().getBoundingClientRect().width;
-      overlay.style.height = `${naturalContentHeight + (toggleBarEl?.offsetHeight ?? 0)}px`;
       overlay.style.width = `${Math.min(naturalContentWidth, maxContentWidth)}px`;
+      // A horizontal scrollbar (overflow-x:auto on the grid area, needed
+      // whenever the table is wider than maxContentWidth) takes up its own
+      // slice of vertical space that scrollHeight above doesn't know
+      // about -- measured directly (0 when no scrollbar is showing)
+      // rather than guessed, since its thickness varies by OS/browser.
+      // Forces a reflow, but only once per frame and only for spreadsheet
+      // overlays, so the cost is negligible.
+      const scrollbarHeight = gridEl ? gridEl.offsetHeight - gridEl.clientHeight : 0;
+      overlay.style.height = `${naturalContentHeight + scrollbarHeight + (toggleBarEl?.offsetHeight ?? 0)}px`;
       // A zero-size rect means the real table isn't actually visible right
       // now (e.g. inside a collapsed <details>) -- hide the overlay rather
       // than pin it to a stale, meaningless position.
