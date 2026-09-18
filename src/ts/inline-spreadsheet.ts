@@ -5309,9 +5309,10 @@ export function buildReadOnlySpreadsheetHost(
     + Array.from({ length: forCols }, (_, col) => forColWidths[String(col)] ?? DEFAULT_DATA_COL_WIDTH)
       .reduce((sum, width) => sum + width, 0);
 
+  const naturalTableWidth = computeNaturalTableWidth(cols, colWidths, appearance.rowIndexWidth);
   const host = document.createElement('div');
   host.className = 'elabftw-spreadsheet-readonly-view';
-  host.dataset.viewModeWidth = String(computeNaturalTableWidth(cols, colWidths, appearance.rowIndexWidth));
+  host.dataset.viewModeWidth = String(naturalTableWidth);
   spreadsheetHostData.set(host, extracted);
   // Only width/alignment carry over from the saved table style -- border,
   // background and table-layout are meaningless (or actively wrong: an
@@ -5322,7 +5323,17 @@ export function buildReadOnlySpreadsheetHost(
     : appearance.tableAlignment === 'right'
       ? 'margin-left:auto;margin-right:0'
       : 'margin-left:0;margin-right:auto';
-  const widthStyle = appearance.tableWidth > 0 ? `width:${appearance.tableWidth}%;` : '';
+  // In view mode, appearance.tableWidth is frequently a leftover "fill the
+  // editor" percentage (often 100%) rather than the table's own size --
+  // trusting it here left the toggle bar and border box spanning the full
+  // width of the surrounding text even when the actual grid content is
+  // much narrower, i.e. the border box didn't match the table's own size.
+  // The editable overlay ignores this entirely (its width/position are
+  // driven every animation frame from the real table's own measured rect
+  // in SpreadsheetExtension.ts), so this only needs to matter here.
+  const widthStyle = editable
+    ? (appearance.tableWidth > 0 ? `width:${appearance.tableWidth}%;` : '')
+    : `width:${naturalTableWidth}px;`;
   // setProperty() below must come after this: setAttribute('style', ...)
   // replaces the whole attribute, which would otherwise wipe out the two
   // custom properties again.
