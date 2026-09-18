@@ -2068,6 +2068,66 @@ function readRenderedColWidths(container: HTMLElement): ColWidths | undefined {
   return Object.keys(colWidths).length > 0 ? colWidths : undefined;
 }
 
+// Measures how wide a cell's own text actually is (canvas-based, so it
+// doesn't depend on the cell's current layout at all) -- shared by
+// openSpreadsheetModal's and buildReadOnlySpreadsheetHost's own double-
+// click-a-column-border-to-autofit gesture, matching Excel/Sheets.
+function measureNaturalCellWidth(cell: HTMLElement): number {
+  const computedStyle = window.getComputedStyle(cell);
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) return cell.scrollWidth;
+  context.font = [
+    computedStyle.fontStyle,
+    computedStyle.fontVariant,
+    computedStyle.fontWeight,
+    computedStyle.fontSize,
+    computedStyle.fontFamily,
+  ].join(' ');
+  const textWidth = (cell.textContent ?? '')
+    .split(/\r?\n/)
+    .reduce((maximum, line) => Math.max(maximum, context.measureText(line).width), 0);
+  const horizontalChrome = Number.parseFloat(computedStyle.paddingLeft)
+    + Number.parseFloat(computedStyle.paddingRight)
+    + Number.parseFloat(computedStyle.borderLeftWidth)
+    + Number.parseFloat(computedStyle.borderRightWidth);
+  // A little breathing room keeps the fitted value from touching the
+  // resize handle and accommodates the header's own sort/menu affordance.
+  return Math.ceil(textWidth + horizontalChrome + 12);
+}
+
+// Row-height equivalent of measureNaturalCellWidth() above: an offscreen
+// probe laid out at the cell's own current width, since text height
+// depends on where it wraps.
+function measureNaturalCellHeight(cell: HTMLElement): number {
+  const computedStyle = window.getComputedStyle(cell);
+  const probe = document.createElement('div');
+  probe.textContent = cell.textContent ?? '';
+  Object.assign(probe.style, {
+    position: 'fixed',
+    visibility: 'hidden',
+    pointerEvents: 'none',
+    left: '-10000px',
+    top: '0',
+    boxSizing: 'border-box',
+    width: `${cell.getBoundingClientRect().width}px`,
+    height: 'auto',
+    minHeight: '0',
+    padding: computedStyle.padding,
+    border: computedStyle.border,
+    font: computedStyle.font,
+    lineHeight: computedStyle.lineHeight,
+    letterSpacing: computedStyle.letterSpacing,
+    whiteSpace: computedStyle.whiteSpace,
+    overflowWrap: computedStyle.overflowWrap,
+    wordBreak: computedStyle.wordBreak,
+  });
+  document.body.append(probe);
+  const height = probe.getBoundingClientRect().height;
+  probe.remove();
+  return Math.ceil(height);
+}
+
 /** Reapply saved data-row heights after jspreadsheet rebuilds its worksheet DOM. */
 function applySpreadsheetRowHeights(
   container: HTMLElement,
@@ -3705,59 +3765,6 @@ export function openSpreadsheetModal(
           ? `Formula applied in ${colLabel(editedCol)}${editedRow + 1}.`
           : `Formula applied in ${colLabel(editedCol)}${editedRow + 1}: ${result}.`;
       }
-    };
-
-    const measureNaturalCellWidth = (cell: HTMLElement): number => {
-      const computedStyle = window.getComputedStyle(cell);
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      if (!context) return cell.scrollWidth;
-      context.font = [
-        computedStyle.fontStyle,
-        computedStyle.fontVariant,
-        computedStyle.fontWeight,
-        computedStyle.fontSize,
-        computedStyle.fontFamily,
-      ].join(' ');
-      const textWidth = (cell.textContent ?? '')
-        .split(/\r?\n/)
-        .reduce((maximum, line) => Math.max(maximum, context.measureText(line).width), 0);
-      const horizontalChrome = Number.parseFloat(computedStyle.paddingLeft)
-        + Number.parseFloat(computedStyle.paddingRight)
-        + Number.parseFloat(computedStyle.borderLeftWidth)
-        + Number.parseFloat(computedStyle.borderRightWidth);
-      // A little breathing room keeps the fitted value from touching the
-      // resize handle and accommodates the header's own sort/menu affordance.
-      return Math.ceil(textWidth + horizontalChrome + 12);
-    };
-
-    const measureNaturalCellHeight = (cell: HTMLElement): number => {
-      const computedStyle = window.getComputedStyle(cell);
-      const probe = document.createElement('div');
-      probe.textContent = cell.textContent ?? '';
-      Object.assign(probe.style, {
-        position: 'fixed',
-        visibility: 'hidden',
-        pointerEvents: 'none',
-        left: '-10000px',
-        top: '0',
-        boxSizing: 'border-box',
-        width: `${cell.getBoundingClientRect().width}px`,
-        height: 'auto',
-        minHeight: '0',
-        padding: computedStyle.padding,
-        border: computedStyle.border,
-        font: computedStyle.font,
-        lineHeight: computedStyle.lineHeight,
-        letterSpacing: computedStyle.letterSpacing,
-        whiteSpace: computedStyle.whiteSpace,
-        overflowWrap: computedStyle.overflowWrap,
-        wordBreak: computedStyle.wordBreak,
-      });
-      document.body.append(probe);
-      const height = probe.getBoundingClientRect().height;
-      probe.remove();
-      return Math.ceil(height);
     };
 
     const onColumnBoundaryDoubleClick = (event: MouseEvent): void => {
@@ -5532,6 +5539,76 @@ export function buildReadOnlySpreadsheetHost(
     sheetContainer.addEventListener('mousedown', event => {
       if (composingFormula) event.preventDefault();
     });
+    // Double-click a column/row border to fit it to its content, same
+    // gesture (and same edge-tolerance/measurement code) as
+    // openSpreadsheetModal's onColumnBoundaryDoubleClick/
+    // onRowBoundaryDoubleClick -- capture phase, ahead of jspreadsheet's
+    // own dblclick handling (which would otherwise start editing whatever
+    // cell happens to be under the same pixels).
+    sheetContainer.addEventListener('dblclick', event => {
+      if (event.button !== 0) return;
+      const header = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > thead [data-x]')
+        : null;
+      if (!header) return;
+      const headerRect = header.getBoundingClientRect();
+      const edgeTolerance = 7;
+      const distanceFromLeft = event.clientX - headerRect.left;
+      const distanceFromRight = headerRect.right - event.clientX;
+      let col = Number.parseInt(header.dataset.x ?? '', 10);
+      if (!Number.isInteger(col)) return;
+      if (distanceFromLeft <= edgeTolerance) {
+        col -= 1;
+      } else if (distanceFromRight > edgeTolerance) {
+        return;
+      }
+      if (col < 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const cells = Array.from(sheetContainer.querySelectorAll<HTMLElement>(
+        `.jss_worksheet > thead [data-x="${col}"], .jss_worksheet > tbody td[data-x="${col}"][data-y]`,
+      ));
+      const naturalWidth = cells.reduce(
+        (maximum, cell) => Math.max(maximum, measureNaturalCellWidth(cell)),
+        MIN_DATA_COL_WIDTH,
+      );
+      const fittedWidth = Math.max(MIN_DATA_COL_WIDTH, Math.min(MAX_DATA_COL_WIDTH, naturalWidth));
+      const targetWorksheet = getMountedWorksheet(sheetContainer);
+      targetWorksheet?.setWidth?.(col, fittedWidth);
+      notifyStructuralChange(targetWorksheet);
+    }, true);
+    sheetContainer.addEventListener('dblclick', event => {
+      if (event.button !== 0) return;
+      const rowHeader = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > tbody .jss_row[data-y]')
+        : null;
+      if (!rowHeader) return;
+      const headerRect = rowHeader.getBoundingClientRect();
+      const edgeTolerance = 7;
+      const distanceFromTop = event.clientY - headerRect.top;
+      const distanceFromBottom = headerRect.bottom - event.clientY;
+      let row = Number.parseInt(rowHeader.dataset.y ?? '', 10);
+      if (!Number.isInteger(row)) return;
+      if (distanceFromTop <= edgeTolerance) {
+        row -= 1;
+      } else if (distanceFromBottom > edgeTolerance) {
+        return;
+      }
+      if (row < 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const cells = Array.from(sheetContainer.querySelectorAll<HTMLElement>(
+        `.jss_worksheet > tbody td[data-y="${row}"]`,
+      ));
+      const naturalHeight = cells.reduce(
+        (maximum, cell) => Math.max(maximum, measureNaturalCellHeight(cell)),
+        MIN_DATA_ROW_HEIGHT,
+      );
+      const fittedHeight = Math.max(MIN_DATA_ROW_HEIGHT, Math.min(MAX_DATA_ROW_HEIGHT, Math.ceil(naturalHeight)));
+      const targetWorksheet = getMountedWorksheet(sheetContainer);
+      targetWorksheet?.setHeight?.(row, fittedHeight);
+      notifyStructuralChange(targetWorksheet);
+    }, true);
   }
   // jspreadsheet-ce grabs focus onto its own internal, hidden editing
   // element as part of handling a cell click/selection -- preventDefault()

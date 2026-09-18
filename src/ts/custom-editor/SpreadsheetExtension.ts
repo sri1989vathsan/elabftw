@@ -1194,12 +1194,27 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // `document` reaches this too, so a click in the main text or a
     // scroll on either side already covers it without extra wiring.
     document.addEventListener('mousedown', closeAnyOpenContextMenuOverlay);
+    // The is-active-table outline (see setActiveSpreadsheetTable) only
+    // ever gets turned ON, by a table's own overlay's mousedown handler --
+    // nothing turned it back off for a click that lands anywhere else,
+    // including the relayed synthetic mousedown above for a click in the
+    // main text, so it stayed showing on whichever table was clicked last
+    // no matter where the user clicked afterward. Re-derives "was this
+    // actually on a spreadsheet overlay" itself rather than depending on
+    // event ordering against the overlay's own listener.
+    const clearActiveTableUnlessClickedOnOne = (event: MouseEvent): void => {
+      const clickedOverlay = event.target instanceof Element
+        && !!event.target.closest('.elabftw-spreadsheet-editor-overlay');
+      if (!clickedOverlay) setActiveSpreadsheetTable(null);
+    };
+    document.addEventListener('mousedown', clearActiveTableUnlessClickedOnOne);
     editor.on('remove', () => {
       editorDocument.removeEventListener('mousedown', relayMousedownToCloseMenus);
       editorDocument.removeEventListener('mousemove', relayMouseMoveForActiveDrag);
       editorDocument.removeEventListener('mouseup', relayMouseMoveForActiveDrag);
       window.removeEventListener('scroll', relayMousedownToCloseMenus, { capture: true });
       editorDocument.removeEventListener('scroll', relayMousedownToCloseMenus, { capture: true });
+      document.removeEventListener('mousedown', clearActiveTableUnlessClickedOnOne);
       document.removeEventListener('mousedown', closeAnyOpenContextMenuOverlay);
     });
     const spreadsheetPasteHandler = (event: ClipboardEvent): void => {
