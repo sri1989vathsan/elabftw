@@ -3090,6 +3090,17 @@ body.html-tool-workspace-resizing * {
 }
 /* stylelint-enable selector-class-pattern */
 
+/* The same read-only grid, but positioned (via JS, see
+ * SpreadsheetExtension.ts) as a fixed overlay standing in for a spreadsheet
+ * table while it's hidden inside the TinyMCE editor -- margin:0 since its
+ * position is set precisely from the real table's own measured rect. */
+.elabftw-spreadsheet-editor-overlay {
+  cursor: pointer;
+  margin: 0;
+  overflow: hidden;
+  z-index: 40;
+}
+
 .inline-spreadsheet-actions {
   align-items: center;
   background-color: var(--firstlevel);

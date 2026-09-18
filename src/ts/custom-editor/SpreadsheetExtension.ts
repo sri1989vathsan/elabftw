@@ -1,6 +1,7 @@
 /** Fork-owned inline spreadsheet insertion, editing and clipboard handling. */
 import { Editor } from 'tinymce/tinymce';
 import {
+  buildReadOnlySpreadsheetHost,
   createNotebookSpreadsheetData,
   createWellPlateSpreadsheetData,
   emptySpreadsheetData,
@@ -788,6 +789,93 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     if (target) openInlineSpreadsheet(extractFromTable(target), target);
   });
 
+  // Read-only jspreadsheet-ce overlay for spreadsheet tables while editing --
+  // matches mountReadOnlySpreadsheetGrid()'s fix to the view page, but the
+  // table living inside TinyMCE's content can never be replaced or mutated
+  // directly here: whatever is in that DOM is exactly what editor.getContent()
+  // serializes and saves. So the real table is left completely untouched
+  // (only hidden via a stylesheet rule scoped to the editor's own iframe
+  // document, never touching the table's own attributes) while a live,
+  // read-only grid renders as a plain overlay positioned in the MAIN
+  // document, tracked to the table's on-screen rect every animation frame.
+  // Double-clicking the overlay opens the same edit modal as the dblclick
+  // handler above -- it needs its own listener for that (see enhanceTable()).
+  const spreadsheetOverlays = new Map<HTMLTableElement, HTMLElement>();
+  const enhancedTables = new WeakSet<HTMLTableElement>();
+  let overlaySyncRunning = false;
+
+  const getEditorIframe = (): HTMLIFrameElement | null =>
+    document.getElementById(`${editor.id}_ifr`) as HTMLIFrameElement | null;
+
+  const removeOverlay = (table: HTMLTableElement): void => {
+    spreadsheetOverlays.get(table)?.remove();
+    spreadsheetOverlays.delete(table);
+    enhancedTables.delete(table);
+  };
+
+  const syncOverlayPositions = (): void => {
+    const iframe = getEditorIframe();
+    if (!iframe || spreadsheetOverlays.size === 0) {
+      overlaySyncRunning = false;
+      return;
+    }
+    const iframeRect = iframe.getBoundingClientRect();
+    Array.from(spreadsheetOverlays.entries()).forEach(([table, overlay]) => {
+      if (!table.isConnected || !editor.getBody().contains(table)) {
+        removeOverlay(table);
+        return;
+      }
+      const tableRect = table.getBoundingClientRect();
+      overlay.style.position = 'fixed';
+      overlay.style.left = `${iframeRect.left + tableRect.left}px`;
+      overlay.style.top = `${iframeRect.top + tableRect.top}px`;
+      overlay.style.width = `${tableRect.width}px`;
+      overlay.style.height = `${tableRect.height}px`;
+      // A zero-size rect means the real table isn't actually visible right
+      // now (e.g. inside a collapsed <details>) -- hide the overlay rather
+      // than pin it to a stale, meaningless position.
+      overlay.style.display = (tableRect.width === 0 && tableRect.height === 0) ? 'none' : '';
+    });
+    window.requestAnimationFrame(syncOverlayPositions);
+  };
+
+  const ensureSyncLoop = (): void => {
+    if (overlaySyncRunning) return;
+    overlaySyncRunning = true;
+    window.requestAnimationFrame(syncOverlayPositions);
+  };
+
+  const enhanceTable = (table: HTMLTableElement): void => {
+    if (enhancedTables.has(table)) return;
+    enhancedTables.add(table);
+    const overlay = buildReadOnlySpreadsheetHost(extractFromTable(table));
+    overlay.classList.add('elabftw-spreadsheet-editor-overlay');
+    overlay.title = 'Double-click to edit';
+    // The overlay lives in the main document, outside TinyMCE's iframe --
+    // the existing editor.on('dblclick', ...) handler above (bound inside
+    // the iframe) can never see a click on it, so it needs its own listener
+    // that opens the exact same edit modal directly. One known tradeoff:
+    // TinyMCE's native "drag the table's own corner to resize" handles
+    // (ObjectResizeStart/ObjectResized above) also require clicking the
+    // real table inside the iframe, which this overlay now sits in front
+    // of -- that specific interaction is unreachable while a table shows
+    // as this overlay. Resizing via the edit popup itself is unaffected.
+    overlay.addEventListener('dblclick', () => openInlineSpreadsheet(extractFromTable(table), table));
+    document.body.appendChild(overlay);
+    spreadsheetOverlays.set(table, overlay);
+    ensureSyncLoop();
+  };
+
+  const enhanceAllTables = (): void => {
+    Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
+      .forEach(enhanceTable);
+  };
+
+  editor.on('SetContent NodeChange', enhanceAllTables);
+  editor.on('remove', () => {
+    Array.from(spreadsheetOverlays.keys()).forEach(removeOverlay);
+  });
+
   editor.on('ObjectResizeStart', event => {
     const resizing = event as unknown as { height?: number; width?: number; target?: Element };
     if (resizing.target && Number.isFinite(resizing.height)) {
@@ -843,6 +931,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
 
   editor.on('init', () => {
     const editorDocument = editor.getDoc();
+    // Hides the real table this editor overlay stands in for -- a
+    // stylesheet rule scoped to the iframe's own document, so it never
+    // touches the table's own class/style attributes (which would
+    // otherwise get serialized into the saved content).
+    const hideSpreadsheetTablesStyle = editorDocument.createElement('style');
+    hideSpreadsheetTablesStyle.textContent = 'table.elabftw-spreadsheet { visibility: hidden; }';
+    editorDocument.head.appendChild(hideSpreadsheetTablesStyle);
+    editor.on('remove', () => hideSpreadsheetTablesStyle.remove());
     const spreadsheetPasteHandler = (event: ClipboardEvent): void => {
       const clipboard = event.clipboardData;
       if (!clipboard) return;
