@@ -5442,10 +5442,18 @@ export function buildReadOnlySpreadsheetHost(
     formulaBarEl.append(formulaLabel, formulaInputEl);
     host.appendChild(formulaBarEl);
 
+    // Does NOT reset activeReferenceRange/awaitingReferenceReplacement --
+    // reclaimFocusHandler below re-focuses this input every time
+    // jspreadsheet steals it back (which it does on every single cell
+    // click), and that refocus fires this same genuine 'focus' event.
+    // Resetting the replacement-tracking state here undid it right after
+    // every click, so only ever the "insert fresh" path ran and every
+    // click appended a reference next to the last one instead of
+    // replacing it. The correct place to reset is where a cell is newly
+    // selected to browse/edit from scratch (see the "plain new selection"
+    // branch below), not merely whenever this input receives focus.
     formulaInputEl.addEventListener('focus', () => {
       composingFormula = true;
-      activeReferenceRange = null;
-      awaitingReferenceReplacement = false;
     });
     formulaInputEl.addEventListener('blur', () => {
       composingFormula = false;
@@ -5736,6 +5744,14 @@ export function buildReadOnlySpreadsheetHost(
         return value;
       },
       onchange: notifyChange,
+      // openSpreadsheetModal wires this too, alongside onchange, not as a
+      // pure duplicate: it's what fires when the native double-click-to-
+      // edit-a-cell editor actually closes, an extra, later repaint pass
+      // this needed just as much for a formula typed directly into a
+      // cell (rather than through the formula bar's own setValue() call)
+      // to reliably still show its computed result instead of the raw
+      // "=..." text.
+      oneditionend: notifyChange,
       oninsertrow: notifyStructuralChange,
       oninsertcolumn: notifyStructuralChange,
       ondeleterow: notifyStructuralChange,
@@ -5786,6 +5802,11 @@ export function buildReadOnlySpreadsheetHost(
         }
         // A plain new selection: show that cell's current raw value/formula,
         // ready to edit here -- only for a single cell, matching the popup.
+        // This is the actual "starting fresh" point -- any reference a
+        // previous click/drag inserted is done being composed once the
+        // bar shows a different cell's own value instead.
+        activeReferenceRange = null;
+        awaitingReferenceReplacement = false;
         if (startCol !== endCol || startRow !== endRow) {
           formulaEditingCell = null;
           formulaInputEl.disabled = true;
