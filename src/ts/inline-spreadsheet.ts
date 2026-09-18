@@ -5265,6 +5265,14 @@ export interface SpreadsheetHostHandle {
   host: HTMLDivElement;
   /** Properly tears down the jspreadsheet-ce instance; call before discarding the host. */
   destroy: () => void;
+  /**
+   * Immediately commits any edit still waiting out the debounce below,
+   * without tearing anything down. Call before reading the real table
+   * this host stands in for from anywhere else (e.g. extractFromTable()
+   * for the "open full editor" popup) -- otherwise a change made less
+   * than 500ms ago can still be missing from it.
+   */
+  flush: () => void;
 }
 
 // The SpreadsheetData a mounted host was built from -- lets
@@ -5703,8 +5711,17 @@ export function buildReadOnlySpreadsheetHost(
     } : {}),
   });
 
+  const flush = (): void => {
+    if (!changeTimer) return;
+    window.clearTimeout(changeTimer);
+    changeTimer = null;
+    if (pendingChange) options.onChange?.(pendingChange);
+    pendingChange = null;
+  };
+
   return {
     host,
+    flush,
     // Properly tears down the jspreadsheet-ce instance (not just removing
     // the DOM) -- needed by callers that mount/unmount this repeatedly as
     // a table scrolls in and out of view, rather than once per page load.
@@ -5713,12 +5730,7 @@ export function buildReadOnlySpreadsheetHost(
       // inside the 500ms debounce above) would otherwise be silently lost
       // when this grid is torn down for virtualization -- e.g. scrolling
       // away immediately after typing into a cell.
-      if (changeTimer) {
-        window.clearTimeout(changeTimer);
-        changeTimer = null;
-        if (pendingChange) options.onChange?.(pendingChange);
-        pendingChange = null;
-      }
+      flush();
       if (reclaimFocusHandler) document.removeEventListener('focusin', reclaimFocusHandler);
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
     },

@@ -3302,7 +3302,8 @@ body.html-tool-workspace-resizing * {
 
 /* Ensure jspreadsheet dropdown menus inside the overlay render on top */
 /* stylelint-disable-next-line selector-class-pattern */
-.jss_container {
+.jss_container,
+.jss_contextmenu {
   z-index: 10051 !important;
 }
 

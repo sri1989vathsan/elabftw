@@ -954,11 +954,23 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // would conflict with it -- the popup (formulas, appearance panel,
     // whole-row/column tools) is reachable via the small icon in the
     // toggle bar instead.
-    const { host: overlay, destroy } = buildReadOnlySpreadsheetHost(extractFromTable(table), {
+    // Set once buildReadOnlySpreadsheetHost returns below -- referenced
+    // from inside onOpenFullEditor, one of the very options passed to it.
+    let flushOverlay: (() => void) | null = null;
+    const { host: overlay, flush, destroy } = buildReadOnlySpreadsheetHost(extractFromTable(table), {
       editable: true,
       onChange: data => commitOverlayChange(table, data),
-      onOpenFullEditor: () => openInlineSpreadsheet(extractFromTable(table), table),
+      onOpenFullEditor: () => {
+        // A cell committed less than 500ms ago can still be waiting out
+        // notifyChange's debounce -- extractFromTable(table) below reads
+        // the real table this overlay stands in for, which that debounce
+        // hasn't written to yet, silently dropping whatever was just
+        // typed (e.g. a formula) from what the popup opens with.
+        flushOverlay?.();
+        openInlineSpreadsheet(extractFromTable(table), table);
+      },
     });
+    flushOverlay = flush;
     overlay.classList.add('elabftw-spreadsheet-editor-overlay');
     // Passive bookkeeping only (never steals focus, unlike editor.selection.
     // select() would) -- lets table-scoped actions like indent/outdent find
@@ -1071,6 +1083,21 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     hideSpreadsheetTablesStyle.textContent = 'table.elabftw-spreadsheet { visibility: hidden; }';
     editorDocument.head.appendChild(hideSpreadsheetTablesStyle);
     editor.on('remove', () => hideSpreadsheetTablesStyle.remove());
+    // jspreadsheet-ce closes its own context menu (and clears its own
+    // selection) on mousedown against `document` -- but that's the
+    // *outer* page document the overlay itself lives in, not this
+    // editor's own iframe document, which is a separate document object
+    // with its own independent event propagation. A click on the main
+    // text inside the editor never reaches that outer listener, so a
+    // context menu opened on an overlay's grid stayed open forever once
+    // the user clicked back into the text. Relay it manually.
+    const relayMousedownToCloseMenus = (): void => {
+      document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    };
+    editorDocument.addEventListener('mousedown', relayMousedownToCloseMenus);
+    editor.on('remove', () => {
+      editorDocument.removeEventListener('mousedown', relayMousedownToCloseMenus);
+    });
     const spreadsheetPasteHandler = (event: ClipboardEvent): void => {
       const clipboard = event.clipboardData;
       if (!clipboard) return;
