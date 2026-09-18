@@ -1605,11 +1605,98 @@
     if (self && !dialogMembers.some(m => m.userid === self.userid)) {
       dialogMembers = [...dialogMembers, self];
     }
+    projectEntityLinks = [];
+    cancelEditProjectWeblink();
+    projectWeblinkUrl = '';
+    projectWeblinkLabel = '';
+    if (project) void loadProjectEntityLinks(project.id);
     projectDialogOpen = true;
   }
 
   function closeProjectDialog(): void {
     projectDialogOpen = false;
+  }
+
+  let projectEntityLinks: EntityLink[] = [];
+  let loadingProjectEntityLinks = false;
+  let projectWeblinkUrl = '';
+  let projectWeblinkLabel = '';
+  let addingProjectWeblink = false;
+  let editingProjectWeblinkId: number | null = null;
+  let editProjectWeblinkUrl = '';
+  let editProjectWeblinkLabel = '';
+
+  async function loadProjectEntityLinks(projectId: number): Promise<void> {
+    loadingProjectEntityLinks = true;
+    try {
+      const links = await ApiC.getJson(`${Model.TodolistProjects}/${projectId}/entity_links`) as EntityLink[];
+      projectEntityLinks = links.filter(link => link.title !== null);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load linked items.');
+    } finally {
+      loadingProjectEntityLinks = false;
+    }
+  }
+
+  async function addProjectWeblink(): Promise<void> {
+    if (!editingProject) return;
+    const url = normalizeWeblinkUrl(projectWeblinkUrl);
+    if (!url) {
+      notify.error('Enter a valid web address.');
+      return;
+    }
+    const label = projectWeblinkLabel.trim() || await fetchLinkPreviewLabel(url);
+    addingProjectWeblink = true;
+    try {
+      await ApiC.post(`${Model.TodolistProjects}/${editingProject.id}/entity_links`, {
+        entity_type: 'weblink',
+        url,
+        label,
+      });
+      projectWeblinkUrl = '';
+      projectWeblinkLabel = '';
+      await loadProjectEntityLinks(editingProject.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not add that link.');
+    } finally {
+      addingProjectWeblink = false;
+    }
+  }
+
+  function startEditProjectWeblink(link: EntityLink): void {
+    editingProjectWeblinkId = link.id;
+    editProjectWeblinkUrl = link.url ?? '';
+    editProjectWeblinkLabel = link.title ?? '';
+  }
+
+  function cancelEditProjectWeblink(): void {
+    editingProjectWeblinkId = null;
+  }
+
+  async function saveEditProjectWeblink(link: EntityLink): Promise<void> {
+    if (!editingProject) return;
+    const url = editProjectWeblinkUrl.trim();
+    if (!url) return;
+    try {
+      await ApiC.patch(`${Model.TodolistProjects}/${editingProject.id}/entity_links/${link.id}`, {
+        url,
+        label: editProjectWeblinkLabel.trim(),
+      });
+      editingProjectWeblinkId = null;
+      await loadProjectEntityLinks(editingProject.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not save that link.');
+    }
+  }
+
+  async function removeProjectEntityLink(link: EntityLink): Promise<void> {
+    if (!editingProject) return;
+    try {
+      await ApiC.delete(`${Model.TodolistProjects}/${editingProject.id}/entity_links/${link.id}`);
+      await loadProjectEntityLinks(editingProject.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not remove that link.');
+    }
   }
 
   function addDialogMember(userid: number): void {
@@ -2518,6 +2605,81 @@
             {/each}
           </select>
         </div>
+        {#if editingProject}
+          <div class="pm-dialog-field">
+            <span class="pm-label mb-0">{t('Linked items')}</span>
+            {#if loadingProjectEntityLinks}
+              <p class="pm-muted small">{t('Loading')}…</p>
+            {:else if projectEntityLinks.length === 0}
+              <p class="pm-muted small">{t('No linked items yet.')}</p>
+            {:else}
+              <ul class="pm-entity-link-list">
+                {#each projectEntityLinks as link (link.id)}
+                  <li class="pm-entity-link">
+                    {#if editingProjectWeblinkId === link.id}
+                      <input
+                        type="url"
+                        class="form-control form-control-sm mr-1"
+                        bind:value={editProjectWeblinkUrl}
+                        aria-label={t('Web address')}
+                      />
+                      <input
+                        type="text"
+                        class="form-control form-control-sm mr-1"
+                        bind:value={editProjectWeblinkLabel}
+                        placeholder={t('Label (optional)')}
+                        aria-label={t('Link label')}
+                      />
+                      <button type="button" class="btn btn-primary btn-sm mr-1" disabled={!editProjectWeblinkUrl.trim()} on:click={() => saveEditProjectWeblink(link)}>{t('Save')}</button>
+                      <button type="button" class="btn btn-ghost btn-sm" on:click={cancelEditProjectWeblink}>{t('Cancel')}</button>
+                    {:else}
+                      {#if link.entity_type === 'weblink' && link.url && smbCore(link.url)}
+                        <i class="fas fa-server fa-fw mr-1" aria-hidden="true"></i>
+                        <span class="mr-auto text-break">{link.title}</span>
+                        <a class="btn-unstyled mr-1" href={link.url} title={t('Open on Mac (smb://)')} aria-label={t('Open on Mac')}>
+                          <i class="fab fa-apple fa-fw" aria-hidden="true"></i>
+                        </a>
+                        <button type="button" class="btn-unstyled mr-1" data-action="copy-unc-path" data-unc={uncPath(smbCore(link.url) ?? '')} title={t('Copy Windows path (paste into Explorer)')} aria-label={t('Copy Windows path')}>
+                          <i class="fab fa-windows fa-fw" aria-hidden="true"></i>
+                        </button>
+                      {:else}
+                        <span class="badge badge-info mr-1">{entityTypeLabel(link.entity_type)}</span>
+                        <a class="mr-auto text-break" href={entityViewUrl(link)} target="_blank" rel="noreferrer noopener">{link.title}</a>
+                      {/if}
+                      <div class="pm-item-actions">
+                        {#if link.entity_type === 'weblink'}
+                          <button type="button" class="btn-unstyled pm-comment-delete" title={t('Edit')} aria-label={t('Edit')} on:click={() => startEditProjectWeblink(link)}>
+                            <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
+                          </button>
+                        {/if}
+                        <button type="button" class="btn-unstyled pm-comment-delete" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeProjectEntityLink(link)}>
+                          <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                        </button>
+                      </div>
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+            <div class="d-flex pm-dialog-row">
+              <input
+                type="url"
+                class="form-control"
+                placeholder={t('https://… or smb://…')}
+                bind:value={projectWeblinkUrl}
+                aria-label={t('Web address')}
+              />
+              <input
+                type="text"
+                class="form-control ml-2"
+                placeholder={t('Label (optional)')}
+                bind:value={projectWeblinkLabel}
+                aria-label={t('Link label')}
+              />
+              <button type="button" class="btn btn-secondary ml-2" disabled={addingProjectWeblink || !projectWeblinkUrl.trim()} on:click={addProjectWeblink}>{t('Add')}</button>
+            </div>
+          </div>
+        {/if}
       </div>
       <div class="pm-dialog-footer">
         {#if editingProject}
