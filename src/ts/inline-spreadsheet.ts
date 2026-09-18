@@ -5379,12 +5379,20 @@ export function buildReadOnlySpreadsheetHost(
   let formulaInputEl: HTMLInputElement | null = null;
   let formulaEditingCell: { col: number; row: number } | null = null;
   let composingFormula = false;
-  // While dragging out a range, onselection fires once per cell the drag
-  // passes over (A1, then A1:A2, then A1:A3, ...) -- this tracks where in
-  // the input the reference from the current drag was last written, so
-  // each new firing replaces it in place instead of inserting another
-  // copy alongside it. Reset on mousedown, when a new drag begins.
+  // Tracks where in the input the most recently click/drag-inserted
+  // reference sits, so a further click can replace it in place instead of
+  // piling another reference on top -- both because a single drag fires
+  // onselection once per cell it passes over (A1, then A1:A2, then
+  // A1:A3, ...), and because clicking a *different* cell right after,
+  // with nothing typed in between, means "no, I meant this cell" (as in
+  // Excel/Sheets) rather than "also this cell too".
   let activeReferenceRange: { start: number; end: number } | null = null;
+  // Sticky until the user actually types a character: a click/drag right
+  // after a click/drag keeps replacing the same span above. Only genuine
+  // typing (the 'input' listener below) breaks that chain, so the next
+  // click after typing "," or "+" starts a fresh reference instead of
+  // overwriting what was just typed.
+  let awaitingReferenceReplacement = false;
   if (editable) {
     const formulaBarEl = document.createElement('div');
     formulaBarEl.className = 'elabftw-spreadsheet-formula-bar';
@@ -5402,10 +5410,22 @@ export function buildReadOnlySpreadsheetHost(
     formulaBarEl.append(formulaLabel, formulaInputEl);
     host.appendChild(formulaBarEl);
 
-    formulaInputEl.addEventListener('focus', () => { composingFormula = true; });
+    formulaInputEl.addEventListener('focus', () => {
+      composingFormula = true;
+      activeReferenceRange = null;
+      awaitingReferenceReplacement = false;
+    });
     formulaInputEl.addEventListener('blur', () => {
       composingFormula = false;
       commitFormulaInput();
+    });
+    // A genuine keystroke -- as opposed to the programmatic value changes
+    // onselection makes below -- means the user has moved on from the
+    // reference a click/drag just inserted (e.g. typed "," or "+" to add
+    // another one), so the next click should insert fresh rather than
+    // keep overwriting it. Setting .value in JS does not fire 'input'.
+    formulaInputEl.addEventListener('input', () => {
+      awaitingReferenceReplacement = false;
     });
     formulaInputEl.addEventListener('keydown', event => {
       if (event.key !== 'Enter') return;
@@ -5433,10 +5453,7 @@ export function buildReadOnlySpreadsheetHost(
     // own click-driven selection (and the onselection callback below) run
     // normally, since this never calls stopPropagation().
     sheetContainer.addEventListener('mousedown', event => {
-      if (composingFormula) {
-        event.preventDefault();
-        activeReferenceRange = null;
-      }
+      if (composingFormula) event.preventDefault();
     });
   }
   // jspreadsheet-ce grabs focus onto its own internal, hidden editing
@@ -5609,16 +5626,20 @@ export function buildReadOnlySpreadsheetHost(
         if (!formulaInputEl || ![startCol, startRow, endCol, endRow].every(Number.isInteger)) return;
         if (composingFormula) {
           // Mid-composing (the formula bar has focus): insert this
-          // selection's reference at the cursor instead of replacing the
-          // whole draft, then keep typing there -- the mousedown handler
-          // above already stopped focus from actually leaving it.
+          // selection's reference at the cursor, then keep typing there --
+          // the mousedown handler above already stopped focus from
+          // actually leaving it. If the previous action was itself a
+          // click/drag insertion with nothing typed since, replace that
+          // same reference instead of appending next to it (as in
+          // Excel/Sheets: clicking a different cell means "this one
+          // instead", not "this one too", until you type an operator).
           const reference = (startCol === endCol && startRow === endRow)
             ? `${colLabel(startCol)}${startRow + 1}`
             : `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
-          const start = activeReferenceRange
+          const start = awaitingReferenceReplacement && activeReferenceRange
             ? activeReferenceRange.start
             : formulaInputEl.selectionStart ?? formulaInputEl.value.length;
-          const end = activeReferenceRange
+          const end = awaitingReferenceReplacement && activeReferenceRange
             ? activeReferenceRange.end
             : formulaInputEl.selectionEnd ?? formulaInputEl.value.length;
           formulaInputEl.value = formulaInputEl.value.slice(0, start) + reference + formulaInputEl.value.slice(end);
@@ -5626,6 +5647,7 @@ export function buildReadOnlySpreadsheetHost(
           formulaInputEl.setSelectionRange(cursor, cursor);
           formulaInputEl.focus();
           activeReferenceRange = { start, end: cursor };
+          awaitingReferenceReplacement = true;
           return;
         }
         // A plain new selection: show that cell's current raw value/formula,

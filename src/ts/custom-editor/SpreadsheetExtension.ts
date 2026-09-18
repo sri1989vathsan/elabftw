@@ -529,6 +529,20 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   ): void => {
     const bookmark = editor.selection.getBookmark(2, true);
     openSpreadsheetModal(initial, existingTable !== null).then(({ raw, computed }) => {
+      // Saving over a table that's already in the document: update that
+      // SAME node in place (like the inline overlay's own edits do)
+      // rather than replacing it with a freshly-parsed one. Replacing it
+      // used to orphan the live overlay -- built and keyed on the old
+      // node -- leaving it showing stale content indefinitely, since
+      // nothing pointed it at the new node afterward.
+      if (existingTable && existingTable.isConnected) {
+        if (applySpreadsheetHtmlToTable(existingTable, spreadsheetToHTML(raw, computed))) {
+          editor.undoManager.add();
+          editor.setDirty(true);
+          refreshTableOverlay(existingTable);
+        }
+        return;
+      }
       // A marker attribute (stripped right after) reliably identifies the
       // table this specific insert placed, regardless of where TinyMCE
       // leaves the selection afterward -- more robust than trying to read
@@ -539,7 +553,6 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       );
       editor.focus();
       editor.selection.moveToBookmark(bookmark);
-      if (existingTable) editor.selection.select(existingTable);
       editor.execCommand('mceInsertContent', false, html);
       // A table with nothing after it leaves no click target below itself --
       // clicking in the empty space under a trailing table does nothing,
@@ -893,23 +906,41 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     window.requestAnimationFrame(syncOverlayPositions);
   };
 
-  // Writes an in-overlay edit back into the real (hidden) table, in place --
-  // regenerates its markup from the edited data via spreadsheetToHTML() and
-  // copies that onto the SAME table node (never replacing it), so neither
-  // this table's identity nor the overlay tracking it needs to change.
-  // Only the table's own attributes/innerHTML are touched, which is exactly
-  // what editor.getContent() serializes -- correct by construction.
-  const commitOverlayChange = (table: HTMLTableElement, data: SpreadsheetData): void => {
-    const html = spreadsheetToHTML(data, data.displayData ?? data.data);
+  // Applies freshly-generated spreadsheet HTML onto an existing table node
+  // in place (attributes + innerHTML only, never replacing the node
+  // itself), so neither the table's identity nor anything keyed on it
+  // (the overlay tracking Maps, a closure capturing this exact element)
+  // needs to change -- used by both the inline overlay's own edits and
+  // the popup editor's save, so the two paths can never drift apart from
+  // writing the same logical table two different ways.
+  const applySpreadsheetHtmlToTable = (table: HTMLTableElement, html: string): boolean => {
     const parsed = document.createElement('div');
     parsed.innerHTML = html;
     const freshTable = parsed.querySelector('table.elabftw-spreadsheet');
-    if (!freshTable) return;
+    if (!freshTable) return false;
     Array.from(table.attributes).forEach(attr => table.removeAttribute(attr.name));
     Array.from(freshTable.attributes).forEach(attr => table.setAttribute(attr.name, attr.value));
     table.innerHTML = freshTable.innerHTML;
+    return true;
+  };
+
+  // Writes an in-overlay edit back into the real (hidden) table, in place.
+  // Only the table's own attributes/innerHTML are touched, which is exactly
+  // what editor.getContent() serializes -- correct by construction.
+  const commitOverlayChange = (table: HTMLTableElement, data: SpreadsheetData): void => {
+    if (!applySpreadsheetHtmlToTable(table, spreadsheetToHTML(data, data.displayData ?? data.data))) return;
     editor.undoManager.add();
     editor.setDirty(true);
+  };
+
+  // Tears down and rebuilds the live overlay for a table whose underlying
+  // data just changed from outside the overlay itself (the popup editor
+  // saving over it) -- otherwise the overlay keeps showing whatever it had
+  // extracted at mount time, silently stale until the table next scrolls
+  // out and back into view (or the page reloads).
+  const refreshTableOverlay = (table: HTMLTableElement): void => {
+    removeOverlay(table);
+    enhanceTable(table);
   };
 
   const enhanceTable = (table: HTMLTableElement): void => {
