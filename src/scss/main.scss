@@ -3164,6 +3164,17 @@ body.html-tool-workspace-resizing * {
   color: var(--primary);
 }
 
+.elabftw-spreadsheet-readonly-delete {
+  background: none;
+  border: none;
+  color: var(--medium);
+  padding: 0.15rem 0.3rem;
+}
+
+.elabftw-spreadsheet-readonly-delete:hover {
+  color: var(--dangerred);
+}
+
 // Formula bar for the inline editor overlay -- select a cell to see its
 // value/formula here, then click other cells while this has focus to
 // insert their reference, mirroring .inline-spreadsheet-formula-bar in
@@ -3277,6 +3288,28 @@ body.html-tool-workspace-resizing * {
   // Below TinyMCE's own toolbar (.tox-editor-header, z-index:2) so a table
   // scrolled up near the sticky toolbar renders behind it, not on top.
   z-index: 1;
+}
+
+// The real (hidden) table this overlay stands in for is what TinyMCE's own
+// table-selected outline would normally draw on -- invisible along with the
+// table itself. Toggled in JS onto whichever table was last clicked into
+// (lastActiveSpreadsheetTable in SpreadsheetExtension.ts), the same one
+// row/column indent-outdent already act on, so there's some visible sign
+// of which spreadsheet a toolbar action or keystroke will actually affect.
+.elabftw-spreadsheet-editor-overlay.is-active-table {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+
+// jspreadsheet-ce's context menu is appended as a child of this overlay,
+// which is its own stacking context (deliberately kept below the editor's
+// sticky toolbar, z-index:1 vs .tox-editor-header's 2) -- no z-index on the
+// menu itself can escape that ancestor's own place in the outer stacking
+// order, so the whole overlay is bumped instead, only while a menu opened
+// from it is actually open (see openContextMenuOverlay in
+// SpreadsheetExtension.ts).
+.elabftw-spreadsheet-editor-overlay.has-open-context-menu {
+  z-index: 10053 !important;
 }
 
 .elabftw-spreadsheet-editor-overlay .elabftw-spreadsheet-readonly-grid {

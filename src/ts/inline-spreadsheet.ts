@@ -5259,6 +5259,14 @@ export interface SpreadsheetHostOptions {
    * itself already uses double-click to start editing a cell in place.
    */
   onOpenFullEditor?: () => void;
+  /**
+   * When provided, adds a small delete button to the toggle bar -- the
+   * real table sits hidden behind this overlay entirely (visibility:
+   * hidden, see SpreadsheetExtension.ts), so there's otherwise no click
+   * target for the normal "select the table as a block and press
+   * Delete" gesture editors usually rely on.
+   */
+  onDelete?: () => void;
 }
 
 export interface SpreadsheetHostHandle {
@@ -5401,6 +5409,25 @@ export function buildReadOnlySpreadsheetHost(
       options.onOpenFullEditor?.();
     });
     toggleBar.appendChild(openFullEditorButton);
+  }
+
+  if (options.onDelete) {
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'elabftw-spreadsheet-readonly-delete';
+    deleteButton.title = 'Delete this spreadsheet';
+    deleteButton.setAttribute('aria-label', 'Delete this spreadsheet');
+    const deleteIcon = document.createElement('i');
+    deleteIcon.className = 'fas fa-trash';
+    deleteIcon.setAttribute('aria-hidden', 'true');
+    deleteButton.appendChild(deleteIcon);
+    deleteButton.addEventListener('click', event => {
+      event.stopPropagation();
+      if (window.confirm('Delete this spreadsheet? This cannot be undone.')) {
+        options.onDelete?.();
+      }
+    });
+    toggleBar.appendChild(deleteButton);
   }
 
   // A small formula bar, mirroring the popup's own (a separate input, not

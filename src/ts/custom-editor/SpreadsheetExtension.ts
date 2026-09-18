@@ -499,6 +499,32 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // ordinary table -- table-scoped actions like indent/outdent that derive
   // their target from editor.selection.getNode() fall back to this instead.
   let lastActiveSpreadsheetTable: HTMLTableElement | null = null;
+  // The real table has no visible selected-state of its own to show (it's
+  // hidden entirely behind its overlay) -- toggled onto whichever
+  // overlay's table is now lastActiveSpreadsheetTable, so clicking a
+  // spreadsheet's own toggle bar or grid gives some visible sign of which
+  // one a toolbar action or keystroke will actually affect, the way
+  // clicking an ordinary table would visibly select it.
+  const setActiveSpreadsheetTable = (table: HTMLTableElement | null): void => {
+    lastActiveSpreadsheetTable = table;
+    spreadsheetOverlays.forEach(({ el }, otherTable) => {
+      el.classList.toggle('is-active-table', otherTable === table);
+    });
+  };
+  // jspreadsheet-ce appends its context menu as a child of its own root
+  // element -- itself nested inside .elabftw-spreadsheet-editor-overlay,
+  // which is deliberately kept *below* TinyMCE's sticky toolbar
+  // (z-index:1 vs .tox-editor-header's 2) so a table scrolled up near it
+  // renders behind it, not on top. That overlay is its own stacking
+  // context, though: no z-index on the menu itself, however high, can
+  // ever escape above an element outside that context -- the menu was
+  // stuck behind the toolbar right along with it. Bumped only while a
+  // menu is actually open, on whichever overlay it belongs to.
+  let openContextMenuOverlay: HTMLElement | null = null;
+  const closeAnyOpenContextMenuOverlay = (): void => {
+    openContextMenuOverlay?.classList.remove('has-open-context-menu');
+    openContextMenuOverlay = null;
+  };
   const openStandardTableDialog = (): void => {
     editor.windowManager.open({
       title: 'Insert table',
@@ -981,6 +1007,17 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         flushOverlay?.();
         openInlineSpreadsheet(extractFromTable(table), table);
       },
+      onDelete: () => {
+        if (lastActiveSpreadsheetTable === table) setActiveSpreadsheetTable(null);
+        removeOverlay(table);
+        // Undo needs the real removal to go through the editor's own
+        // dom/undo manager, not a plain table.remove() -- otherwise Ctrl+Z
+        // has nothing of its own to restore.
+        editor.dom.remove(table);
+        editor.undoManager.add();
+        editor.setDirty(true);
+        editor.dispatch('keyup');
+      },
     });
     flushOverlay = flush;
     overlay.classList.add('elabftw-spreadsheet-editor-overlay');
@@ -988,12 +1025,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // select() would) -- lets table-scoped actions like indent/outdent find
     // this table via lastActiveSpreadsheetTable above.
     overlay.addEventListener('mousedown', () => {
-      lastActiveSpreadsheetTable = table;
+      setActiveSpreadsheetTable(table);
       // indentSelectedTable()/outdentSelectedTable() (below) read their own
       // separate internal lastSelectedTable, not the menu-display check
       // above -- both need tracking, or the menu item can show while
       // clicking it still silently does nothing.
       tableIndentation.trackSelectedTable(table);
+    });
+    overlay.addEventListener('contextmenu', () => {
+      openContextMenuOverlay = overlay;
+      overlay.classList.add('has-open-context-menu');
     });
     document.body.appendChild(overlay);
     spreadsheetOverlays.set(table, { el: overlay, destroy });
@@ -1135,10 +1176,31 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     };
     editorDocument.addEventListener('mousemove', relayMouseMoveForActiveDrag);
     editorDocument.addEventListener('mouseup', relayMouseMoveForActiveDrag);
+    // jspreadsheet-ce's context menu is positioned once, at the viewport
+    // coordinates of the click that opened it -- it has no reason to know
+    // about the *table's* own position updating every frame in
+    // syncOverlayPositions as the page scrolls (the menu isn't part of
+    // that table's own overlay positioning, it's appended standalone), so
+    // a scroll leaves the menu visually pinned to where the cursor *was*
+    // relative to the content that has since moved underneath it, i.e.
+    // it looks like it's tracking the mouse across the scrolled page.
+    // Simplest correct behavior: just close it, same as any other
+    // "something happened elsewhere" dismissal already wired above.
+    window.addEventListener('scroll', relayMousedownToCloseMenus, { capture: true, passive: true });
+    editorDocument.addEventListener('scroll', relayMousedownToCloseMenus, { capture: true, passive: true });
+    // Drops the z-index bump (see closeAnyOpenContextMenuOverlay's own
+    // comment) on every one of the same "close the menu" triggers above --
+    // the synthetic mousedown relayMousedownToCloseMenus dispatches on
+    // `document` reaches this too, so a click in the main text or a
+    // scroll on either side already covers it without extra wiring.
+    document.addEventListener('mousedown', closeAnyOpenContextMenuOverlay);
     editor.on('remove', () => {
       editorDocument.removeEventListener('mousedown', relayMousedownToCloseMenus);
       editorDocument.removeEventListener('mousemove', relayMouseMoveForActiveDrag);
       editorDocument.removeEventListener('mouseup', relayMouseMoveForActiveDrag);
+      window.removeEventListener('scroll', relayMousedownToCloseMenus, { capture: true });
+      editorDocument.removeEventListener('scroll', relayMousedownToCloseMenus, { capture: true });
+      document.removeEventListener('mousedown', closeAnyOpenContextMenuOverlay);
     });
     const spreadsheetPasteHandler = (event: ClipboardEvent): void => {
       const clipboard = event.clipboardData;
