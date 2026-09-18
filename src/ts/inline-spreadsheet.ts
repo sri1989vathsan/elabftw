@@ -5793,15 +5793,25 @@ export function buildReadOnlySpreadsheetHost(
         endRow: number,
       ): void => {
         if (!formulaInputEl || ![startCol, startRow, endCol, endRow].every(Number.isInteger)) return;
-        // Only an in-progress formula (the bar's own text starts with "=")
-        // treats a further cell click as "insert a reference into this" --
-        // otherwise the bar merely has focus (e.g. the user clicked into
-        // it just to look, without starting to type anything), and
-        // clicking a different cell means "show me that one instead", not
-        // "add it to what's already here". Without this check, clicking
-        // around while the bar happened to have focus kept appending cell
-        // references onto whatever plain value/old formula was showing.
-        if (composingFormula && formulaInputEl.value.trimStart().startsWith('=')) {
+        // Same rule openSpreadsheetModal's own onFormulaSelectionStart uses
+        // to decide whether a click is even about inserting a cell
+        // reference at all: only right after "=" itself, or right after
+        // one of +-*/(,; -- i.e. only where a formula genuinely expects an
+        // operand next. A click right after "=SUM(A1:A3)" (a *complete*
+        // expression -- last character ")") no more expects a reference
+        // there than a click made before any formula was started, and
+        // falls through to the plain-selection branch below the same way.
+        // awaitingReferenceReplacement is this module's own addition, not
+        // the popup's: it lets a still-continuing drag (onselection firing
+        // again for the same drag, cursor now sitting right after a digit
+        // from the reference just inserted) keep replacing that reference
+        // even though the character before the cursor no longer looks
+        // like it's expecting one.
+        const cursorPos = formulaInputEl.selectionStart ?? formulaInputEl.value.length;
+        const formulaBeforeCaret = formulaInputEl.value.slice(0, cursorPos).trimStart();
+        const expectsCellReference = /^=\s*$/.test(formulaBeforeCaret)
+          || /[+\-*/(,;]\s*$/.test(formulaBeforeCaret);
+        if (composingFormula && (awaitingReferenceReplacement || expectsCellReference)) {
           // Mid-composing: insert this selection's reference at the
           // cursor, then keep typing there -- the mousedown handler above
           // already stopped focus from actually leaving it. If the
