@@ -5730,8 +5730,20 @@ export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clon
     const html = spreadsheetToHTML(current, current.displayData ?? current.data);
     const parsed = document.createElement('div');
     parsed.innerHTML = html;
-    const table = parsed.querySelector('table.elabftw-spreadsheet');
-    if (table) clone.replaceWith(table);
+    const table = parsed.querySelector<HTMLTableElement>('table.elabftw-spreadsheet');
+    if (!table) return;
+    // spreadsheetToHTML() sizes the table from the saved appearance, which
+    // for many spreadsheets is a leftover "fill the editor" width (e.g.
+    // 100%) rather than the compact size actually shown in view mode --
+    // the view page's own CSS auto-fits the host to its content instead
+    // of trusting that saved width. Match what print produces to what the
+    // reader already saw on the page rather than the saved value.
+    const viewModeWidth = Number.parseFloat(originalHost.dataset.viewModeWidth ?? '');
+    if (Number.isFinite(viewModeWidth) && viewModeWidth > 0) {
+      table.style.width = `${viewModeWidth}px`;
+      table.style.maxWidth = '100%';
+    }
+    clone.replaceWith(table);
   });
 }
 
