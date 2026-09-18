@@ -10,8 +10,9 @@
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
-  import { Model } from '../interfaces';
+  import { EntityType, Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
+  import StepModel from '../Step.class';
   import { toRelative } from '../misc';
   import { applyMention, extractMentionQuery, wrapMentionsAsHtml, stripMentionHtml } from '../mentions';
   import { fetchLinkPreviewLabel, handleLinkPreviewPaste } from '../linkPreview';
@@ -1358,6 +1359,25 @@
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
 
+  // Unlike complete() above, there is no un-finish action here: this sidebar
+  // only ever lists unfinished steps, so once one is marked finished it just
+  // drops out of the list rather than toggling.
+  async function finishStep(entry: SidebarEntry): Promise<void> {
+    const entityType = entry.entityType;
+    const entityId = entry.entityId;
+    if (!entityType || entityId === undefined) return;
+    await new StepModel({ type: entityType as EntityType, id: entityId }).finish(entry.id);
+    unfinished = {
+      ...unfinished,
+      [entityType]: unfinished[entityType]
+        .map(unfinishedEntity => (unfinishedEntity.id === entityId
+          ? { ...unfinishedEntity, steps: unfinishedEntity.steps.filter(step => step.id !== entry.id) }
+          : unfinishedEntity))
+        .filter(unfinishedEntity => unfinishedEntity.steps.length > 0),
+    };
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
+  }
+
   async function restore(id: number): Promise<void> {
     await ApiC.patch(`${Model.Todolist}/${id}`, { completed: false });
     completedItems = completedItems.filter(item => Number(item.id) !== id);
@@ -1795,15 +1815,17 @@
               >
                 <div class='d-flex align-items-start'>
                   {#if entry.source === 'step'}
-                    <input
-                      type='checkbox'
-                      class='stepbox mr-2 mt-1'
-                      id={`todo_step_${entry.id}`}
-                      data-id={entry.entityId}
-                      data-type={entry.entityType}
-                      data-stepid={entry.id}
-                      aria-label={t('Mark experiment step complete')}
-                    />
+                    <button
+                      type='button'
+                      class='btn btn-ghost btn-sm todo-drag-handle mr-1'
+                      style='visibility:hidden'
+                      disabled
+                      tabindex='-1'
+                      aria-hidden='true'
+                    >
+                      <i class='fas fa-grip-vertical' aria-hidden='true'></i>
+                    </button>
+                    <i class='fas fa-list-check color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>
                   {:else}
                     <button
                       type='button'
@@ -1869,6 +1891,18 @@
                         on:click={() => complete(entry.id)}
                         title={t('done')}
                         aria-label={t('done')}
+                      >
+                        <i class='fas fa-check' aria-hidden='true'></i>
+                      </button>
+                    </div>
+                  {:else}
+                    <div class='btn-group btn-group-sm ml-2'>
+                      <button
+                        type='button'
+                        class='btn btn-ghost'
+                        on:click={() => void finishStep(entry)}
+                        title={t('done')}
+                        aria-label={t('Mark experiment step complete')}
                       >
                         <i class='fas fa-check' aria-hidden='true'></i>
                       </button>

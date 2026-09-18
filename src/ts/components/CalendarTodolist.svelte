@@ -3,8 +3,9 @@
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
-  import { Model } from '../interfaces';
+  import { EntityType, Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
+  import StepModel from '../Step.class';
 
   // This whole component mounts inside the Activity Calendar side panel
   // (#calendarActivity), which carries the [hidden] attribute whenever that
@@ -866,6 +867,19 @@
     }
   }
 
+  async function completeStep(entry: { id: number; entityId?: number; entityType?: string }): Promise<void> {
+    const entityType = entry.entityType;
+    const entityId = entry.entityId;
+    if (!entityType || entityId === undefined) return;
+    try {
+      await new StepModel({ type: entityType as EntityType, id: entityId }).finish(entry.id);
+      await load();
+      window.dispatchEvent(new CustomEvent('todolist-changed'));
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'The step could not be marked done.');
+    }
+  }
+
   // Only the pieces reminderEntries is actually built from (active todos +
   // unfinished step deadlines) -- this runs on every page load regardless
   // of whether the Activity Calendar panel has ever been opened (see the
@@ -1300,7 +1314,12 @@
                 {#if entry.completedAt}
                   <i class='fas fa-circle-check calendar-completed-icon fa-fw mr-2 mt-1' aria-hidden='true'></i>
                 {:else if entry.source === 'step'}
-                  <i class='fas fa-list-check color-medium fa-fw mr-2 mt-1' aria-hidden='true'></i>
+                  <button type='button' class='btn btn-ghost btn-sm calendar-task-drag-handle mr-1' style='visibility:hidden' disabled tabindex='-1' aria-hidden='true'>
+                    <i class='fas fa-grip-vertical' aria-hidden='true'></i>
+                  </button>
+                  <button type='button' class='btn btn-ghost btn-sm mr-1' on:click={() => completeStep(entry)} title={t('done')} aria-label={t('Mark experiment step complete')}>
+                    <i class='fas fa-check' aria-hidden='true'></i>
+                  </button>
                 {:else}
                   <button type='button' class='btn btn-ghost btn-sm calendar-task-drag-handle mr-1' draggable='true' on:dragstart={(event) => startTaskDrag(event, entry)} on:dragend={finishTaskDrag} title={t('Drag to another calendar day')} aria-label={t('Drag to another calendar day')}>
                     <i class='fas fa-grip-vertical' aria-hidden='true'></i>
