@@ -492,6 +492,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   );
   const resizeStartHeights = new WeakMap<Element, number>();
   const resizeStartWidths = new WeakMap<Element, number>();
+  // The spreadsheet table the user last interacted with via its editor
+  // overlay (see enhanceTable() below). Clicking/typing there happens in
+  // the main document, outside TinyMCE's iframe, so editor.selection never
+  // naturally points at that (hidden) table the way it would for an
+  // ordinary table -- table-scoped actions like indent/outdent that derive
+  // their target from editor.selection.getNode() fall back to this instead.
+  let lastActiveSpreadsheetTable: HTMLTableElement | null = null;
   const openStandardTableDialog = (): void => {
     editor.windowManager.open({
       title: 'Insert table',
@@ -653,9 +660,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     fetch: callback => {
       const selectedNode = editor.selection.getNode();
       const selectedCell = selectedNode.closest('td,th') as HTMLTableCellElement | null;
-      const selectedTable = selectedNode.closest('table') as HTMLTableElement | null;
-      const existingTable = selectedNode
-        .closest('table.elabftw-spreadsheet') as HTMLTableElement | null;
+      const activeSpreadsheetTable = lastActiveSpreadsheetTable && editor.getBody().contains(lastActiveSpreadsheetTable)
+        ? lastActiveSpreadsheetTable
+        : null;
+      const selectedTable = (selectedNode.closest('table') as HTMLTableElement | null) ?? activeSpreadsheetTable;
+      const existingTable = (selectedNode.closest('table.elabftw-spreadsheet') as HTMLTableElement | null)
+        ?? activeSpreadsheetTable;
       const items = [];
       if (existingTable) {
         items.push({
@@ -881,6 +891,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       onOpenFullEditor: () => openInlineSpreadsheet(extractFromTable(table), table),
     });
     overlay.classList.add('elabftw-spreadsheet-editor-overlay');
+    // Passive bookkeeping only (never steals focus, unlike editor.selection.
+    // select() would) -- lets table-scoped actions like indent/outdent find
+    // this table via lastActiveSpreadsheetTable above.
+    overlay.addEventListener('mousedown', () => { lastActiveSpreadsheetTable = table; });
     document.body.appendChild(overlay);
     spreadsheetOverlays.set(table, overlay);
     ensureSyncLoop();
