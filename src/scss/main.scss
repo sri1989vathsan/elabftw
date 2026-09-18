@@ -762,20 +762,24 @@ tr:first-child td {
 
 /* NOTIFICATIONS */
 
-/* container for notifications in top left of screen */
+/* container for notifications in top right of screen -- matches the
+   reminder-banner's own corner and offset (see CalendarTodolist.svelte) so
+   every floating notification in the app now shares one consistent corner. */
 #overlay-container {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  left: 10px;
   position: fixed;
-  top: 10px;
+  right: 1rem;
+  top: 66px;
   z-index: 19850;
 }
 
-/* class for a single notification */
+/* class for a single notification -- rounded corners and drop shadow match
+   the reminder-banner's own look (CalendarTodolist.svelte's .reminder-banner). */
 .overlay {
-  border-radius: 5px;
+  border-radius: 0.4rem;
+  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.25);
   display: flex;
   line-height: 50px;
   opacity: 0.9;

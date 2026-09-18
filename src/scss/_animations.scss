@@ -82,11 +82,13 @@
   animation: bounce-right 250ms;
 }
 
-/* OVERLAY notifications animation */
+/* OVERLAY notifications animation -- slides in from the right, since the
+   notification container itself now sits in the top-right corner (see
+   #overlay-container in main.scss) rather than top-left. */
 @keyframes slideInOut {
   0% {
     opacity: 0;
-    transform: translateX(-100%);
+    transform: translateX(100%);
   }
 
   10% {
@@ -101,14 +103,14 @@
 
   100% {
     opacity: 0;
-    transform: translateX(-100%);
+    transform: translateX(100%);
   }
 }
 /* only slide in */
 @keyframes slideIn {
   0% {
     opacity: 0;
-    transform: translateX(-100%);
+    transform: translateX(100%);
   }
 
   10% {
