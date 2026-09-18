@@ -5259,16 +5259,6 @@ export interface SpreadsheetHostOptions {
    * itself already uses double-click to start editing a cell in place.
    */
   onOpenFullEditor?: () => void;
-  /**
-   * Called whenever the collapse toggle is clicked, with the new collapsed
-   * state. In the TinyMCE editor overlay case, the real table this host
-   * stands in for still reserves its own full height in the document's
-   * normal flow regardless of this host's own (much shorter, once
-   * collapsed) size -- the caller uses this to also shrink that table's
-   * reserved space (see commitOverlayChange in SpreadsheetExtension.ts),
-   * or the result is a blank gap where the table used to be.
-   */
-  onToggleCollapse?: (collapsed: boolean) => void;
 }
 
 export interface SpreadsheetHostHandle {
@@ -5276,6 +5266,15 @@ export interface SpreadsheetHostHandle {
   /** Properly tears down the jspreadsheet-ce instance; call before discarding the host. */
   destroy: () => void;
 }
+
+// The SpreadsheetData a mounted host was built from -- lets
+// restoreStaticSpreadsheetsForPrint() (used before printing/copying a
+// section, see TocPanel.class.ts) regenerate clean static markup for a
+// *cloned* mounted grid, without depending on virtualization's own
+// internal bookkeeping (activateLazySpreadsheetViews' own saved-HTML map
+// is private to that function, and a clone's jspreadsheet DOM isn't a
+// live instance getData() can be called on).
+const spreadsheetHostData = new WeakMap<HTMLElement, SpreadsheetData>();
 
 export function buildReadOnlySpreadsheetHost(
   extracted: SpreadsheetData,
@@ -5309,6 +5308,7 @@ export function buildReadOnlySpreadsheetHost(
   const host = document.createElement('div');
   host.className = 'elabftw-spreadsheet-readonly-view';
   host.dataset.viewModeWidth = String(naturalTableWidth);
+  spreadsheetHostData.set(host, extracted);
   // Only width/alignment carry over from the saved table style -- border,
   // background and table-layout are meaningless (or actively wrong: an
   // extra outer box on top of jspreadsheet's own cell borders) on this
@@ -5335,12 +5335,18 @@ export function buildReadOnlySpreadsheetHost(
   // the layout and the click target).
   const toggleBar = document.createElement('div');
   toggleBar.className = 'elabftw-spreadsheet-readonly-toggle';
-  toggleBar.setAttribute('role', 'button');
-  toggleBar.setAttribute('tabindex', '0');
   const toggleIcon = document.createElement('i');
-  toggleIcon.className = 'fas fa-chevron-down';
   toggleIcon.setAttribute('aria-hidden', 'true');
-  toggleBar.appendChild(toggleIcon);
+  if (!editable) {
+    // Collapsing only in view mode: attempts to also shrink the real
+    // table's reserved space to match, for the TinyMCE editor overlay
+    // case, haven't held up -- disabled there rather than risk the
+    // "collapsing looks like the table vanished" bug resurfacing.
+    toggleBar.setAttribute('role', 'button');
+    toggleBar.setAttribute('tabindex', '0');
+    toggleIcon.className = 'fas fa-chevron-down';
+    toggleBar.appendChild(toggleIcon);
+  }
   if (extracted.caption) {
     const captionLabel = document.createElement('span');
     captionLabel.textContent = extracted.caption;
@@ -5368,25 +5374,21 @@ export function buildReadOnlySpreadsheetHost(
   const sheetContainer = document.createElement('div');
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   host.appendChild(sheetContainer);
-  // In the TinyMCE editor overlay case, the real table this host stands
-  // in for still reserves its own full height in the document's normal
-  // flow regardless of this host's own size -- onToggleCollapse (see
-  // SpreadsheetHostOptions) lets the caller also shrink that table's
-  // reserved space (SpreadsheetExtension.ts does, via the same safe
-  // in-place mutation used for edits), so collapsing here doesn't leave
-  // a blank gap the same size as the (still full-height) hidden table.
-  const toggleCollapsed = (): void => {
-    const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
-    toggleIcon.className = collapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-    options.onToggleCollapse?.(collapsed);
-  };
-  toggleBar.addEventListener('click', toggleCollapsed);
-  toggleBar.addEventListener('keydown', event => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      toggleCollapsed();
-    }
-  });
+  if (!editable) {
+    const toggleCollapsed = (): void => {
+      const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
+      toggleIcon.className = collapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+    };
+    toggleBar.addEventListener('click', toggleCollapsed);
+    toggleBar.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleCollapsed();
+      }
+    });
+  } else {
+    toggleBar.style.cursor = 'default';
+  }
 
   // jspreadsheet-ce v5 creates worksheets asynchronously: onload can fire
   // before the `data` supplied above has actually been rendered into the
@@ -5589,6 +5591,40 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
     });
   }, { rootMargin: '400px 0px' });
   tables.forEach(table => observer.observe(table));
+}
+
+/**
+ * Regenerates clean static <table> markup for any mounted spreadsheet grid
+ * found in `clonedRoot`, using data stashed (spreadsheetHostData) when each
+ * corresponding host in `originalRoot` was built -- needed before printing
+ * or copying a cloned section (see TocPanel.class.ts): a mounted grid's own
+ * scroll container only ever contains whatever rows/columns are currently
+ * scrolled into view, so cloning it verbatim silently drops the rest.
+ * `originalRoot` and `clonedRoot` must have identical structure (i.e.
+ * `clonedRoot` came from `originalRoot.cloneNode(true)`), since hosts are
+ * matched up by their position among all matches, not by identity --
+ * cloneNode() produces new node objects the WeakMap was never keyed on.
+ */
+export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clonedRoot: ParentNode): void {
+  const originals = Array.from(originalRoot.querySelectorAll<HTMLElement>('.elabftw-spreadsheet-readonly-view'));
+  const clones = Array.from(clonedRoot.querySelectorAll<HTMLElement>('.elabftw-spreadsheet-readonly-view'));
+  originals.forEach((originalHost, index) => {
+    const clone = clones[index];
+    const extracted = spreadsheetHostData.get(originalHost);
+    if (!clone || !extracted) return;
+    // View-mode grids are read-only, so this never actually differs from
+    // the stashed snapshot -- reading it live anyway keeps this correct
+    // rather than relying on that always being true.
+    const sheetContainer = originalHost.querySelector('.elabftw-spreadsheet-readonly-grid') as HTMLElement | null;
+    const worksheet = sheetContainer ? getMountedWorksheet(sheetContainer) : null;
+    const liveData = worksheet?.getData?.();
+    const current = Array.isArray(liveData) ? { ...extracted, data: liveData, displayData: liveData } : extracted;
+    const html = spreadsheetToHTML(current, current.displayData ?? current.data);
+    const parsed = document.createElement('div');
+    parsed.innerHTML = html;
+    const table = parsed.querySelector('table.elabftw-spreadsheet');
+    if (table) clone.replaceWith(table);
+  });
 }
 
 function extractRowHeights(

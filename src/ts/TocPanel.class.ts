@@ -13,6 +13,7 @@ import {
   RICH_SELECTION_ATTRIBUTE,
   writeRichClipboard,
 } from './ClipboardContent';
+import { restoreStaticSpreadsheetsForPrint } from './inline-spreadsheet';
 
 // We don't register this in the Model enum because TOC is purely client-side
 // and doesn't correspond to any API endpoint.
@@ -625,6 +626,10 @@ export default class TocPanel extends SidePanel {
 
     const content = source.cloneNode(true) as HTMLElement;
     content.id = 'tocPrintSelectionBody';
+    // A mounted spreadsheet grid's own scroll container only ever holds
+    // whatever's currently scrolled into view -- cloning it verbatim would
+    // silently drop the rest of the table instead of printing all of it.
+    restoreStaticSpreadsheetsForPrint(source, content);
     // In edit mode `source` is the live TinyMCE editor body itself
     // (class 'mce-content-body'), and the account theme's note/date-reference
     // styling in _custom-editor.scss is scoped to match that class directly
@@ -665,6 +670,9 @@ export default class TocPanel extends SidePanel {
 
     const content = source.cloneNode(true) as HTMLElement;
     content.removeAttribute('id');
+    // Same reasoning as printSelection() above -- a mounted grid's scroll
+    // container would otherwise only copy whatever's currently visible.
+    restoreStaticSpreadsheetsForPrint(source, content);
     content.querySelectorAll(`.${FILTER_HIDDEN_CLASS}`).forEach(element => {
       element.classList.remove(FILTER_HIDDEN_CLASS);
     });
