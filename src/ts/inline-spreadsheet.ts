@@ -5379,6 +5379,12 @@ export function buildReadOnlySpreadsheetHost(
   let formulaInputEl: HTMLInputElement | null = null;
   let formulaEditingCell: { col: number; row: number } | null = null;
   let composingFormula = false;
+  // While dragging out a range, onselection fires once per cell the drag
+  // passes over (A1, then A1:A2, then A1:A3, ...) -- this tracks where in
+  // the input the reference from the current drag was last written, so
+  // each new firing replaces it in place instead of inserting another
+  // copy alongside it. Reset on mousedown, when a new drag begins.
+  let activeReferenceRange: { start: number; end: number } | null = null;
   if (editable) {
     const formulaBarEl = document.createElement('div');
     formulaBarEl.className = 'elabftw-spreadsheet-formula-bar';
@@ -5427,7 +5433,10 @@ export function buildReadOnlySpreadsheetHost(
     // own click-driven selection (and the onselection callback below) run
     // normally, since this never calls stopPropagation().
     sheetContainer.addEventListener('mousedown', event => {
-      if (composingFormula) event.preventDefault();
+      if (composingFormula) {
+        event.preventDefault();
+        activeReferenceRange = null;
+      }
     });
   }
   if (!editable) {
@@ -5589,12 +5598,17 @@ export function buildReadOnlySpreadsheetHost(
           const reference = (startCol === endCol && startRow === endRow)
             ? `${colLabel(startCol)}${startRow + 1}`
             : `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
-          const start = formulaInputEl.selectionStart ?? formulaInputEl.value.length;
-          const end = formulaInputEl.selectionEnd ?? formulaInputEl.value.length;
+          const start = activeReferenceRange
+            ? activeReferenceRange.start
+            : formulaInputEl.selectionStart ?? formulaInputEl.value.length;
+          const end = activeReferenceRange
+            ? activeReferenceRange.end
+            : formulaInputEl.selectionEnd ?? formulaInputEl.value.length;
           formulaInputEl.value = formulaInputEl.value.slice(0, start) + reference + formulaInputEl.value.slice(end);
           const cursor = start + reference.length;
           formulaInputEl.setSelectionRange(cursor, cursor);
           formulaInputEl.focus();
+          activeReferenceRange = { start, end: cursor };
           return;
         }
         // A plain new selection: show that cell's current raw value/formula,
