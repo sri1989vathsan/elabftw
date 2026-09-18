@@ -99,6 +99,8 @@ final class CustomMigrationRunner
         '058_order_reminder_index.sql',
         '059_order_common_flag.sql',
         '060_order_changed_notification.sql',
+        '061_notif_mentioned_feedback.sql',
+        '062_todolist_project_entity_links.sql',
     );
 
     private Db $Db;
