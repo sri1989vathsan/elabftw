@@ -5259,6 +5259,16 @@ export interface SpreadsheetHostOptions {
    * itself already uses double-click to start editing a cell in place.
    */
   onOpenFullEditor?: () => void;
+  /**
+   * Called whenever the collapse toggle is clicked, with the new collapsed
+   * state. In the TinyMCE editor overlay case, the real table this host
+   * stands in for still reserves its own full height in the document's
+   * normal flow regardless of this host's own (much shorter, once
+   * collapsed) size -- the caller uses this to also shrink that table's
+   * reserved space (see commitOverlayChange in SpreadsheetExtension.ts),
+   * or the result is a blank gap where the table used to be.
+   */
+  onToggleCollapse?: (collapsed: boolean) => void;
 }
 
 export interface SpreadsheetHostHandle {
@@ -5325,16 +5335,12 @@ export function buildReadOnlySpreadsheetHost(
   // the layout and the click target).
   const toggleBar = document.createElement('div');
   toggleBar.className = 'elabftw-spreadsheet-readonly-toggle';
+  toggleBar.setAttribute('role', 'button');
+  toggleBar.setAttribute('tabindex', '0');
   const toggleIcon = document.createElement('i');
+  toggleIcon.className = 'fas fa-chevron-down';
   toggleIcon.setAttribute('aria-hidden', 'true');
-  if (!editable) {
-    // Only a real, collapsible toggle shows the chevron / is keyboard-
-    // reachable -- see the (non-)collapse wiring below.
-    toggleBar.setAttribute('role', 'button');
-    toggleBar.setAttribute('tabindex', '0');
-    toggleIcon.className = 'fas fa-chevron-down';
-    toggleBar.appendChild(toggleIcon);
-  }
+  toggleBar.appendChild(toggleIcon);
   if (extracted.caption) {
     const captionLabel = document.createElement('span');
     captionLabel.textContent = extracted.caption;
@@ -5362,28 +5368,25 @@ export function buildReadOnlySpreadsheetHost(
   const sheetContainer = document.createElement('div');
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   host.appendChild(sheetContainer);
-  // Collapsing only makes sense where this host *is* the table (view
-  // pages: activateLazySpreadsheetViews() replaced it outright). In the
-  // TinyMCE editor overlay, the real table is merely hidden behind this,
-  // still reserving its own full height in the document's normal flow --
-  // shrinking just the overlay would leave a blank gap the same size
-  // below a now-much-shorter bar, looking like the table vanished, since
-  // nothing here can also resize the real table it's standing in for.
-  if (!editable) {
-    const toggleCollapsed = (): void => {
-      const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
-      toggleIcon.className = collapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
-    };
-    toggleBar.addEventListener('click', toggleCollapsed);
-    toggleBar.addEventListener('keydown', event => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        toggleCollapsed();
-      }
-    });
-  } else {
-    toggleBar.style.cursor = 'default';
-  }
+  // In the TinyMCE editor overlay case, the real table this host stands
+  // in for still reserves its own full height in the document's normal
+  // flow regardless of this host's own size -- onToggleCollapse (see
+  // SpreadsheetHostOptions) lets the caller also shrink that table's
+  // reserved space (SpreadsheetExtension.ts does, via the same safe
+  // in-place mutation used for edits), so collapsing here doesn't leave
+  // a blank gap the same size as the (still full-height) hidden table.
+  const toggleCollapsed = (): void => {
+    const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
+    toggleIcon.className = collapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down';
+    options.onToggleCollapse?.(collapsed);
+  };
+  toggleBar.addEventListener('click', toggleCollapsed);
+  toggleBar.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleCollapsed();
+    }
+  });
 
   // jspreadsheet-ce v5 creates worksheets asynchronously: onload can fire
   // before the `data` supplied above has actually been rendered into the

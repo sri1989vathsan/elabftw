@@ -927,6 +927,22 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       editable: true,
       onChange: data => commitOverlayChange(table, data),
       onOpenFullEditor: () => openInlineSpreadsheet(extractFromTable(table), table),
+      // The overlay collapsing on its own would leave a blank gap: the
+      // real table underneath still reserves its own full height in the
+      // document's normal flow. Shrink that reserved space to match by
+      // directly setting the table's own max-height/overflow (a simple,
+      // easily-reversed style tweak -- not a full commitOverlayChange()
+      // regeneration, which isn't needed just to change how tall it
+      // renders) rather than trying to keep them independently in sync.
+      onToggleCollapse: collapsed => {
+        if (collapsed) {
+          table.style.setProperty('max-height', '2.4rem');
+          table.style.setProperty('overflow', 'hidden');
+        } else {
+          table.style.removeProperty('max-height');
+          table.style.removeProperty('overflow');
+        }
+      },
     });
     overlay.classList.add('elabftw-spreadsheet-editor-overlay');
     // Passive bookkeeping only (never steals focus, unlike editor.selection.
