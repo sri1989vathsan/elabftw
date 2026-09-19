@@ -5657,6 +5657,26 @@ export function buildReadOnlySpreadsheetHost(
     const firstCell = sheetContainer.querySelector('.jss_worksheet tbody tr td[data-x][data-y]');
     return (firstCell?.textContent ?? '') === firstValue;
   };
+  // jspreadsheet-ce's own tableOverflow wrapper (.jss_content, used here
+  // since view mode passes tableHeight/tableWidth: '100%') sets its own
+  // max-height inline to that exact percentage -- with no allowance for a
+  // horizontal scrollbar it ends up needing, which then renders over the
+  // last row's own bottom edge rather than the box growing to fit it.
+  // Converts that percentage into the equivalent pixel figure (via
+  // getBoundingClientRect(), the actual rendered size) and grows it by
+  // the scrollbar's own measured thickness -- a CSS-only fix (e.g. extra
+  // padding) can't help here since max-height caps the *total*, silently
+  // absorbing anything added alongside it.
+  const reserveRoomForHorizontalScrollbar = (): void => {
+    if (editable) return;
+    const jssContent = sheetContainer.querySelector('.jss_content') as HTMLElement | null;
+    if (!jssContent) return;
+    const scrollbarHeight = jssContent.offsetHeight - jssContent.clientHeight;
+    if (scrollbarHeight <= 0) return;
+    const currentHeight = jssContent.getBoundingClientRect().height;
+    jssContent.style.maxHeight = `${currentHeight + scrollbarHeight}px`;
+  };
+
   const hydrateUntilReady = (worksheet: JssInstance, attempt = 0): void => {
     if (!sheetContainer.isConnected) return;
     if (looksHydrated() || attempt >= 30) {
@@ -5664,6 +5684,7 @@ export function buildReadOnlySpreadsheetHost(
       applyCoordinateHeaderStyle(sheetContainer, appearance);
       applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights);
       applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
+      window.requestAnimationFrame(reserveRoomForHorizontalScrollbar);
       return;
     }
     try {
