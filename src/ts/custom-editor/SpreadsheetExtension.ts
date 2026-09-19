@@ -882,52 +882,70 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       overlaySyncRunning = false;
       return;
     }
-    const iframeRect = iframe.getBoundingClientRect();
-    Array.from(spreadsheetOverlays.entries()).forEach(([table, { el: overlay }]) => {
-      if (!table.isConnected || !editor.getBody().contains(table)) {
-        removeOverlay(table);
-        return;
-      }
-      const tableRect = table.getBoundingClientRect();
-      overlay.style.position = 'fixed';
-      overlay.style.left = `${iframeRect.left + tableRect.left}px`;
-      overlay.style.top = `${iframeRect.top + tableRect.top}px`;
-      // Height follows the grid's own current content (rows/columns can
-      // change live as the user edits, well before the debounced commit
-      // catches the -- until then stale -- real table's own rect up) --
-      // width is capped at the editor's readable content column, so a
-      // wide table scrolls horizontally instead of overflowing it.
-      const worksheetEl = overlay.querySelector('.jss_worksheet') as HTMLElement | null;
-      const toggleBarEl = overlay.querySelector('.elabftw-spreadsheet-readonly-toggle') as HTMLElement | null;
-      const gridEl = overlay.querySelector('.elabftw-spreadsheet-readonly-grid') as HTMLElement | null;
-      const naturalContentHeight = worksheetEl?.scrollHeight ?? tableRect.height;
-      // Just the grid's own live scrollWidth, capped only by the editor's
-      // content column below -- dragging a column border to widen it
-      // updates scrollWidth continuously during the drag itself, well
-      // before notifyChange's onresizecolumn (and the dataset cap it
-      // used to keep in step) ever fires. Capping at that stale, commit-
-      // only value here as well as there clipped the drag's own live
-      // feedback: widening a column past whatever the cap still
-      // remembered visibly did nothing until well after mouseup, if at
-      // all -- looking like the resize simply didn't work.
-      const naturalContentWidth = worksheetEl?.scrollWidth ?? tableRect.width;
-      const maxContentWidth = editor.getBody().getBoundingClientRect().width;
-      overlay.style.width = `${Math.min(naturalContentWidth, maxContentWidth)}px`;
-      // A horizontal scrollbar (overflow-x:auto on the grid area, needed
-      // whenever the table is wider than maxContentWidth) takes up its own
-      // slice of vertical space that scrollHeight above doesn't know
-      // about -- measured directly (0 when no scrollbar is showing)
-      // rather than guessed, since its thickness varies by OS/browser.
-      // Forces a reflow, but only once per frame and only for spreadsheet
-      // overlays, so the cost is negligible.
-      const scrollbarHeight = gridEl ? gridEl.offsetHeight - gridEl.clientHeight : 0;
-      overlay.style.height = `${naturalContentHeight + scrollbarHeight + (toggleBarEl?.offsetHeight ?? 0)}px`;
-      // A zero-size rect means the real table isn't actually visible right
-      // now (e.g. inside a collapsed <details>) -- hide the overlay rather
-      // than pin it to a stale, meaningless position.
-      overlay.style.display = (tableRect.width === 0 && tableRect.height === 0) ? 'none' : '';
-    });
-    window.requestAnimationFrame(syncOverlayPositions);
+    // The requestAnimationFrame reschedule below is in a `finally` so this
+    // loop can never permanently die from one bad frame -- previously, any
+    // uncaught exception here (e.g. a transient zero-size/detached rect
+    // right when a table sits at an awkward scroll position) broke the
+    // self-scheduling chain for good, since nothing else ever calls
+    // ensureSyncLoop() again for tables that are already enhanced.
+    // overlaySyncRunning would stay stuck at true forever too, blocking
+    // ensureSyncLoop()'s own guard from ever restarting it -- every
+    // existing overlay on the page would freeze in whatever position it
+    // last had, unresponsive to further scrolling or resizing, exactly as
+    // reported.
+    try {
+      const iframeRect = iframe.getBoundingClientRect();
+      Array.from(spreadsheetOverlays.entries()).forEach(([table, { el: overlay }]) => {
+        try {
+          if (!table.isConnected || !editor.getBody().contains(table)) {
+            removeOverlay(table);
+            return;
+          }
+          const tableRect = table.getBoundingClientRect();
+          overlay.style.position = 'fixed';
+          overlay.style.left = `${iframeRect.left + tableRect.left}px`;
+          overlay.style.top = `${iframeRect.top + tableRect.top}px`;
+          // Height follows the grid's own current content (rows/columns can
+          // change live as the user edits, well before the debounced commit
+          // catches the -- until then stale -- real table's own rect up) --
+          // width is capped at the editor's readable content column, so a
+          // wide table scrolls horizontally instead of overflowing it.
+          const worksheetEl = overlay.querySelector('.jss_worksheet') as HTMLElement | null;
+          const toggleBarEl = overlay.querySelector('.elabftw-spreadsheet-readonly-toggle') as HTMLElement | null;
+          const gridEl = overlay.querySelector('.elabftw-spreadsheet-readonly-grid') as HTMLElement | null;
+          const naturalContentHeight = worksheetEl?.scrollHeight ?? tableRect.height;
+          // Just the grid's own live scrollWidth, capped only by the editor's
+          // content column below -- dragging a column border to widen it
+          // updates scrollWidth continuously during the drag itself, well
+          // before notifyChange's onresizecolumn (and the dataset cap it
+          // used to keep in step) ever fires. Capping at that stale, commit-
+          // only value here as well as there clipped the drag's own live
+          // feedback: widening a column past whatever the cap still
+          // remembered visibly did nothing until well after mouseup, if at
+          // all -- looking like the resize simply didn't work.
+          const naturalContentWidth = worksheetEl?.scrollWidth ?? tableRect.width;
+          const maxContentWidth = editor.getBody().getBoundingClientRect().width;
+          overlay.style.width = `${Math.min(naturalContentWidth, maxContentWidth)}px`;
+          // A horizontal scrollbar (overflow-x:auto on the grid area, needed
+          // whenever the table is wider than maxContentWidth) takes up its own
+          // slice of vertical space that scrollHeight above doesn't know
+          // about -- measured directly (0 when no scrollbar is showing)
+          // rather than guessed, since its thickness varies by OS/browser.
+          // Forces a reflow, but only once per frame and only for spreadsheet
+          // overlays, so the cost is negligible.
+          const scrollbarHeight = gridEl ? gridEl.offsetHeight - gridEl.clientHeight : 0;
+          overlay.style.height = `${naturalContentHeight + scrollbarHeight + (toggleBarEl?.offsetHeight ?? 0)}px`;
+          // A zero-size rect means the real table isn't actually visible right
+          // now (e.g. inside a collapsed <details>) -- hide the overlay rather
+          // than pin it to a stale, meaningless position.
+          overlay.style.display = (tableRect.width === 0 && tableRect.height === 0) ? 'none' : '';
+        } catch (error) {
+          console.error('Failed to sync a spreadsheet overlay\'s position', error);
+        }
+      });
+    } finally {
+      window.requestAnimationFrame(syncOverlayPositions);
+    }
   };
 
   const ensureSyncLoop = (): void => {
