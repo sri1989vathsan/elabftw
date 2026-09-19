@@ -3235,6 +3235,17 @@ body.html-tool-workspace-resizing * {
   border-spacing: 0 !important;
 }
 
+/* jspreadsheet-ce's own internal scroll wrapper (tableOverflow:true, used
+ * by the read-only view -- the editable overlay scrolls via its own outer
+ * .elabftw-spreadsheet-readonly-grid instead) sizes itself to exactly the
+ * table's own content height, with no allowance for a horizontal
+ * scrollbar it may end up showing -- that scrollbar then renders over the
+ * last row's own bottom edge instead of the table growing to make room
+ * for it. Padding the wrapper's own bottom reserves that room instead. */
+.elabftw-spreadsheet-readonly-view .jss_content {
+  padding-bottom: 16px;
+}
+
 .elabftw-spreadsheet-readonly-view .jss_worksheet > thead > tr {
   height: var(--spreadsheet-column-index-height) !important;
   max-height: var(--spreadsheet-column-index-height) !important;

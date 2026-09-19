@@ -913,7 +913,6 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           const worksheetEl = overlay.querySelector('.jss_worksheet') as HTMLElement | null;
           const toggleBarEl = overlay.querySelector('.elabftw-spreadsheet-readonly-toggle') as HTMLElement | null;
           const gridEl = overlay.querySelector('.elabftw-spreadsheet-readonly-grid') as HTMLElement | null;
-          const naturalContentHeight = worksheetEl?.scrollHeight ?? tableRect.height;
           // Just the grid's own live scrollWidth, capped only by the editor's
           // content column below -- dragging a column border to widen it
           // updates scrollWidth continuously during the drag itself, well
@@ -926,6 +925,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           const naturalContentWidth = worksheetEl?.scrollWidth ?? tableRect.width;
           const maxContentWidth = editor.getBody().getBoundingClientRect().width;
           overlay.style.width = `${Math.min(naturalContentWidth, maxContentWidth)}px`;
+          // Read AFTER the width above is applied, not before: setting a
+          // narrower width can itself toggle the horizontal scrollbar on,
+          // which changes both of these -- reading naturalContentHeight
+          // beforehand measured the *previous* frame's layout while
+          // scrollbarHeight already reflected the new one, occasionally
+          // under-counting the scrollbar's own height by a frame and
+          // leaving it overlapping the last row.
+          const naturalContentHeight = worksheetEl?.scrollHeight ?? tableRect.height;
           // A horizontal scrollbar (overflow-x:auto on the grid area, needed
           // whenever the table is wider than maxContentWidth) takes up its own
           // slice of vertical space that scrollHeight above doesn't know
