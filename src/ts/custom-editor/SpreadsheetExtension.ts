@@ -1042,13 +1042,28 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // Passive bookkeeping only (never steals focus, unlike editor.selection.
     // select() would) -- lets table-scoped actions like indent/outdent find
     // this table via lastActiveSpreadsheetTable above.
-    overlay.addEventListener('mousedown', () => {
+    overlay.addEventListener('mousedown', event => {
       setActiveSpreadsheetTable(table);
       // indentSelectedTable()/outdentSelectedTable() (below) read their own
       // separate internal lastSelectedTable, not the menu-display check
       // above -- both need tracking, or the menu item can show while
       // clicking it still silently does nothing.
       tableIndentation.trackSelectedTable(table);
+      // Clicking the toggle bar itself (not a cell in the grid, which
+      // needs its own click to reach jspreadsheet/the formula bar
+      // untouched) also selects the real table in the editor's own
+      // selection model -- invisible along with the table, but real as
+      // far as copy/paste is concerned, so Ctrl+C now has something to
+      // actually copy while the is-active-table outline is showing,
+      // matching how selecting an ordinary table or image works.
+      if (event.target instanceof Element && event.target.closest('.elabftw-spreadsheet-readonly-toggle')) {
+        editor.selection.select(table);
+        // The click landed on the overlay (outside the iframe entirely),
+        // so nothing moved the browser's own focus into the editor body --
+        // without it, Ctrl+C copies from wherever focus already was
+        // (nothing selectable, most likely) rather than this selection.
+        editor.focus();
+      }
     });
     overlay.addEventListener('contextmenu', () => {
       openContextMenuOverlay = overlay;
