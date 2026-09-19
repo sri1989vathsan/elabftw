@@ -1163,7 +1163,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // context menu opened on an overlay's grid stayed open forever once
     // the user clicked back into the text. Relay it manually.
     const relayMousedownToCloseMenus = (): void => {
-      document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      // Dispatched on document.body, not `document` itself: jspreadsheet-
+      // ce's own mouseDownControls reads e.target.classList without
+      // checking it exists first, and a Document object (which is what
+      // e.target becomes for an event dispatched directly on `document`)
+      // has no classList at all -- throwing a TypeError on every single
+      // relay (every click in the main text, every scroll event on either
+      // side) that corrupted jspreadsheet's own mouse-tracking state
+      // machine partway through, symptoms including an overlay frozen in
+      // place no longer responding to further scrolling or resizing.
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     };
     editorDocument.addEventListener('mousedown', relayMousedownToCloseMenus);
     // jspreadsheet-ce also tracks an active column/row resize drag via its
@@ -1185,7 +1194,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       if (event.buttons === 0) return;
       const iframeRect = getEditorIframe()?.getBoundingClientRect();
       if (!iframeRect) return;
-      document.dispatchEvent(new MouseEvent(event.type, {
+      // Same document.body target as relayMousedownToCloseMenus above, and
+      // for the same reason -- dispatching directly on `document` gives
+      // jspreadsheet-ce's own mouseMoveControls/mouseUpControls a Document
+      // as e.target, which has no classList.
+      document.body.dispatchEvent(new MouseEvent(event.type, {
         bubbles: true,
         clientX: iframeRect.left + event.clientX,
         clientY: iframeRect.top + event.clientY,
