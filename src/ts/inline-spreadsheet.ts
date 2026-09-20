@@ -5609,6 +5609,123 @@ export function buildReadOnlySpreadsheetHost(
       targetWorksheet?.setHeight?.(row, fittedHeight);
       notifyStructuralChange(targetWorksheet);
     }, true);
+
+    // Click-a-cell-to-insert-its-reference, ported from openSpreadsheetModal's
+    // own onFormulaSelectionStart/Move/End -- the formula bar's own click-to-
+    // insert (in the onselection handler below) only ever covers that one
+    // input; typing "=SUM(" directly into a cell via jspreadsheet's own
+    // native double-click editor is a completely separate, undocumented
+    // internal element this module never had a hook into for the same
+    // click-interception. This intercepts in the capture phase, ahead of
+    // jspreadsheet's own click handling, so a click that would otherwise
+    // just navigate away from the cell being edited inserts a reference
+    // into it instead, whenever the cursor sits somewhere a formula
+    // actually expects one (same expectsCellReference rule as the formula
+    // bar).
+    let formulaSelectionDrag: {
+      input: HTMLInputElement | HTMLTextAreaElement;
+      startRange: CellRange;
+      insertionStart: number;
+      insertionEnd: number;
+      formulaCol: number;
+      formulaRow: number;
+      allowRange: boolean;
+    } | null = null;
+
+    const getGridRangeFromTarget = (target: EventTarget | null): CellRange | null => {
+      if (!(target instanceof Element) || !sheetContainer.contains(target)) return null;
+      const coordinateElement = target.closest<HTMLElement>('td[data-x][data-y]');
+      if (!coordinateElement) return null;
+      const col = Number.parseInt(coordinateElement.dataset.x ?? '', 10);
+      const row = Number.parseInt(coordinateElement.dataset.y ?? '', 10);
+      if (!Number.isInteger(col) || !Number.isInteger(row) || col < 0 || row < 0) return null;
+      return [col, row, col, row];
+    };
+
+    const rangeLabel = (range: CellRange): string => {
+      const startCol = Math.min(range[0], range[2]);
+      const startRow = Math.min(range[1], range[3]);
+      const endCol = Math.max(range[0], range[2]);
+      const endRow = Math.max(range[1], range[3]);
+      const start = `${colLabel(startCol)}${startRow + 1}`;
+      const end = `${colLabel(endCol)}${endRow + 1}`;
+      return start === end ? start : `${start}:${end}`;
+    };
+
+    const updateFormulaDragSelection = (range: CellRange): void => {
+      if (!formulaSelectionDrag) return;
+      const label = rangeLabel(range);
+      formulaSelectionDrag.input.setRangeText(
+        label,
+        formulaSelectionDrag.insertionStart,
+        formulaSelectionDrag.insertionEnd,
+        'end',
+      );
+      formulaSelectionDrag.insertionEnd = formulaSelectionDrag.insertionStart + label.length;
+      const targetWorksheetForDrag = getMountedWorksheet(sheetContainer);
+      targetWorksheetForDrag?.updateSelectionFromCoords?.(...range);
+    };
+
+    const finishFormulaDragSelection = (): void => {
+      if (!formulaSelectionDrag) return;
+      const { input, insertionEnd } = formulaSelectionDrag;
+      formulaSelectionDrag = null;
+      document.removeEventListener('mousemove', onFormulaDragMove, true);
+      document.removeEventListener('mouseup', onFormulaDragEnd, true);
+      window.setTimeout(() => {
+        input.focus();
+        input.setSelectionRange(insertionEnd, insertionEnd);
+      }, 0);
+    };
+
+    function onFormulaDragMove(event: MouseEvent): void {
+      if (!formulaSelectionDrag) return;
+      const endRange = getGridRangeFromTarget(event.target);
+      if (!endRange) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      updateFormulaDragSelection(formulaSelectionDrag.allowRange
+        ? [formulaSelectionDrag.startRange[0], formulaSelectionDrag.startRange[1], endRange[2], endRange[3]]
+        : endRange);
+    }
+
+    function onFormulaDragEnd(event: MouseEvent): void {
+      if (!formulaSelectionDrag) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      finishFormulaDragSelection();
+    }
+
+    const onFormulaSelectionStart = (event: MouseEvent): void => {
+      if (event.button !== 0) return;
+      const input = sheetContainer.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        'td.editor[data-x][data-y] > input, td.editor[data-x][data-y] > textarea',
+      );
+      if (!input || event.target === input) return;
+      const formulaCell = input.closest<HTMLElement>('td.editor[data-x][data-y]');
+      const formulaCol = Number.parseInt(formulaCell?.dataset.x ?? '', 10);
+      const formulaRow = Number.parseInt(formulaCell?.dataset.y ?? '', 10);
+      if (!Number.isInteger(formulaCol) || !Number.isInteger(formulaRow)) return;
+      const startRange = getGridRangeFromTarget(event.target);
+      if (!startRange) return;
+      const selectionStart = input.selectionStart ?? input.value.length;
+      const selectionEnd = input.selectionEnd ?? selectionStart;
+      const formulaBeforeCaret = input.value.slice(0, selectionStart).trimStart();
+      const expectsCellReference = /^=\s*$/.test(formulaBeforeCaret)
+        || /[+\-*/(,;]\s*$/.test(formulaBeforeCaret);
+      if (!expectsCellReference) return;
+      const allowRange = /(SUM|AVERAGE|COUNT|MIN|MAX)\s*\([^)]*$/i.test(formulaBeforeCaret);
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      formulaSelectionDrag = {
+        input, startRange, insertionStart: selectionStart, insertionEnd: selectionEnd, formulaCol, formulaRow, allowRange,
+      };
+      updateFormulaDragSelection(startRange);
+      document.addEventListener('mousemove', onFormulaDragMove, true);
+      document.addEventListener('mouseup', onFormulaDragEnd, true);
+    };
+    sheetContainer.addEventListener('mousedown', onFormulaSelectionStart, true);
   }
   // jspreadsheet-ce grabs focus onto its own internal, hidden editing
   // element as part of handling a cell click/selection -- preventDefault()
