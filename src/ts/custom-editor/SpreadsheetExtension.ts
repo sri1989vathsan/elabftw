@@ -912,6 +912,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // wide table scrolls horizontally instead of overflowing it.
           const worksheetEl = overlay.querySelector('.jss_worksheet') as HTMLElement | null;
           const toggleBarEl = overlay.querySelector('.elabftw-spreadsheet-readonly-toggle') as HTMLElement | null;
+          const formulaBarEl = overlay.querySelector('.elabftw-spreadsheet-formula-bar') as HTMLElement | null;
           const gridEl = overlay.querySelector('.elabftw-spreadsheet-readonly-grid') as HTMLElement | null;
           // Just the grid's own live scrollWidth, capped only by the editor's
           // content column below -- dragging a column border to widen it
@@ -941,7 +942,19 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // Forces a reflow, but only once per frame and only for spreadsheet
           // overlays, so the cost is negligible.
           const scrollbarHeight = gridEl ? gridEl.offsetHeight - gridEl.clientHeight : 0;
-          overlay.style.height = `${naturalContentHeight + scrollbarHeight + (toggleBarEl?.offsetHeight ?? 0)}px`;
+          // toggleBarEl and formulaBarEl are both fixed-height flex items
+          // in the same column as gridEl (flex:1 1 auto, taking whatever
+          // is left over) -- this total was written before the formula
+          // bar existed and never grew to include it, so gridEl's actual
+          // share of the box was short by exactly the formula bar's own
+          // height, cutting off that much content: hiding the first row
+          // (scrolled area starting short) and leaving the horizontal
+          // scrollbar overlapping the last one (visible area ending
+          // short), at once.
+          overlay.style.height = `${
+            naturalContentHeight + scrollbarHeight
+            + (toggleBarEl?.offsetHeight ?? 0) + (formulaBarEl?.offsetHeight ?? 0)
+          }px`;
           // A zero-size rect means the real table isn't actually visible right
           // now (e.g. inside a collapsed <details>) -- hide the overlay rather
           // than pin it to a stale, meaningless position.
