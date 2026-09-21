@@ -251,6 +251,17 @@ body::before {
   border-color: var(--primary);
 }
 
+/* instant local preview of the picked/dropped file (or the announcement's
+ * already-attached image, if editing one) -- see
+ * showAnnouncementImagePreview() in admin.ts. */
+.announcement-image-dropzone-preview {
+  border-radius: 0.3rem;
+  flex: 0 0 auto;
+  height: 2.5rem;
+  object-fit: cover;
+  width: 2.5rem;
+}
+
 .announcement-tweet-avatar {
   align-items: center;
   background: var(--primary);

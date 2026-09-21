@@ -24,6 +24,7 @@
     <input type='url' name='image_url' id='announcement_edit_image_url_{{ idPrefix }}{{ announcement.id }}' class='form-control' placeholder='https://…' value='{{ announcement.image_url }}' data-allow-empty='1'>
     <small class='smallgray d-block mt-1'>{{ 'Or attach an image file below -- uploading one takes effect immediately, same as an order attachment.'|trans }}</small>
     <div class='announcement-image-dropzone mt-1' data-id='{{ announcement.id }}'>
+      <img class='announcement-image-dropzone-preview' {{ announcement.image_url ? '' : 'hidden' }} src='{{ announcement.image_url }}' alt=''>
       <input type='file' accept='image/*' class='form-control-file' data-ignore='1' data-change-action='upload-announcement-image' data-id='{{ announcement.id }}' id='announcement_edit_image_file_{{ idPrefix }}{{ announcement.id }}'>
       <span class='smallgray'>{{ 'or drag and drop an image here'|trans }}</span>
     </div>

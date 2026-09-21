@@ -207,7 +207,19 @@ function uploadAnnouncementImage(announcementId: string, file: File): void {
     })
     .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi));
 }
+// instant feedback, independent of the upload/PATCH round-trip: a local
+// object URL for the picked/dropped file itself, same idea as Orders
+// inserting a live <img> as soon as one is pasted/dropped into notes.
+function showAnnouncementImagePreview(zone: HTMLElement, file: File): void {
+  const preview = zone.querySelector<HTMLImageElement>('.announcement-image-dropzone-preview');
+  if (!preview) return;
+  preview.src = URL.createObjectURL(file);
+  preview.hidden = false;
+}
 on('upload-announcement-image', (el: HTMLElement) => {
+  // preview itself is handled by the plain 'change' listener bound in
+  // bindAnnouncementImageDropzones() (also covers the create form, which
+  // has no data-change-action of its own) -- this one only uploads.
   const input = el as HTMLInputElement;
   const file = input.files?.[0];
   if (!file || !input.dataset.id) return;
@@ -216,12 +228,26 @@ on('upload-announcement-image', (el: HTMLElement) => {
 
 // drag-and-drop onto the dropzone wrapping that same file input -- mirrors
 // OrdersBoard.svelte's own attachments dropzone. Bound directly (not via
-// data-action/data-change-action, neither of which cover drag events) from
-// refreshAnnouncementUi() above, once per element.
+// data-action/data-change-action, neither of which cover drag events, or
+// for the plain 'change' listener below, since the create form's own file
+// input intentionally has no data-change-action -- picking a file there
+// only stages it, see create-announcement) from refreshAnnouncementUi()
+// above, once per element.
 export function bindAnnouncementImageDropzones(): void {
   document.querySelectorAll<HTMLElement>('.announcement-image-dropzone').forEach(zone => {
     if (zone.dataset.dropzoneBound) return;
     zone.dataset.dropzoneBound = '1';
+
+    // preview covers both the create form (stage-only, no data-id) and the
+    // edit form (data-change-action='upload-announcement-image' handles the
+    // actual upload separately) -- this listener only ever updates the
+    // thumbnail, never uploads anything itself.
+    const input = zone.querySelector<HTMLInputElement>('input[type="file"]');
+    input?.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (file) showAnnouncementImagePreview(zone, file);
+    });
+
     zone.addEventListener('dragover', event => {
       event.preventDefault();
       zone.classList.add('announcement-image-dropzone-over');
@@ -232,6 +258,7 @@ export function bindAnnouncementImageDropzones(): void {
       zone.classList.remove('announcement-image-dropzone-over');
       const file = event.dataTransfer?.files?.[0];
       if (!file) return;
+      showAnnouncementImagePreview(zone, file);
       if (zone.dataset.id) {
         uploadAnnouncementImage(zone.dataset.id, file);
         return;
@@ -240,7 +267,6 @@ export function bindAnnouncementImageDropzones(): void {
       // dropped file on its paired file input the same way choosing one
       // by hand would -- create-announcement reads it from there once the
       // announcement actually exists.
-      const input = zone.querySelector('input[type="file"]') as HTMLInputElement | null;
       if (!input) return;
       const transfer = new DataTransfer();
       transfer.items.add(file);

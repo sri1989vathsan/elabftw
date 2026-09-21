@@ -718,6 +718,7 @@
       <input type='url' name='image_url' id='announcement_image_url' class='form-control' placeholder='https://…' data-allow-empty='1'>
       <small class='smallgray d-block mt-1'>{{ 'Or attach an image file below -- uploaded once you publish.'|trans }}</small>
       <div class='announcement-image-dropzone mt-1' id='createAnnouncementImageDropzone'>
+        <img class='announcement-image-dropzone-preview' hidden alt=''>
         <input type='file' accept='image/*' class='form-control-file' data-ignore='1' id='createAnnouncementImageFile'>
         <span class='smallgray'>{{ 'or drag and drop an image here'|trans }}</span>
       </div>
