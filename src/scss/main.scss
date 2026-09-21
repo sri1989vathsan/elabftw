@@ -285,8 +285,12 @@ body::before {
 }
 
 /* the full emoji set, tucked behind that trigger instead of sitting in the
- * card as a permanent row of a dozen buttons */
-.announcement-reaction-menu {
+ * card as a permanent row of a dozen buttons. display: grid only once
+ * bootstrap's own dropdown.js has added .show -- an unconditional `display`
+ * here would win over .dropdown-menu's own default `display: none` (same
+ * specificity, this rule loads later) and leave the menu permanently open,
+ * regardless of which trigger was clicked or clicked away from. */
+.announcement-reaction-menu.show {
   display: grid;
   gap: 0.2rem;
   grid-template-columns: repeat(6, auto);
