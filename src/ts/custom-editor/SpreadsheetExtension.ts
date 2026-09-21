@@ -926,7 +926,32 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // all -- looking like the resize simply didn't work.
           const naturalContentWidth = worksheetEl?.scrollWidth ?? tableRect.width;
           const maxContentWidth = editor.getBody().getBoundingClientRect().width;
-          overlay.style.width = `${Math.min(naturalContentWidth, maxContentWidth)}px`;
+          // A narrow table (few/short columns) can be narrower than the
+          // toolbar bars above it -- formatBarEl has many controls and
+          // wraps onto a second line once its own container is narrower
+          // than its natural single-line width, which grows the overlay's
+          // *height* unexpectedly (measured further below, after this
+          // width is applied) and, worse, can leave the wrapped-in row of
+          // controls visually overlapping whatever sits below this table
+          // in the document. Measured with flex-wrap temporarily forced
+          // off (its natural, unwrapped width) so the overlay is never
+          // narrower than that, same as maxContentWidth is still an upper
+          // bound -- a toolbar wider than the editor's own content column
+          // still wraps, but that's the editor's real width limit, not a
+          // layout bug.
+          const measureUnwrappedWidth = (el: HTMLElement | null): number => {
+            if (!el) return 0;
+            const previousWrap = el.style.flexWrap;
+            el.style.flexWrap = 'nowrap';
+            const width = el.scrollWidth;
+            el.style.flexWrap = previousWrap;
+            return width;
+          };
+          const toolbarMinWidth = Math.max(
+            measureUnwrappedWidth(formatBarEl),
+            measureUnwrappedWidth(formulaBarEl),
+          );
+          overlay.style.width = `${Math.min(Math.max(naturalContentWidth, toolbarMinWidth), maxContentWidth)}px`;
           // Read AFTER the width above is applied, not before: setting a
           // narrower width can itself toggle the horizontal scrollbar on,
           // which changes both of these -- reading naturalContentHeight
