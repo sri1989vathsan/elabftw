@@ -214,7 +214,19 @@ const PRESERVED_STYLE_PROPERTIES = new Set([
   'padding-right',
   'padding-top',
   'text-align',
+  // text-decoration is a shorthand -- CSSStyleDeclaration.item() (used by
+  // sanitizeStyle below) enumerates it back as its own longhand
+  // sub-properties, not the shorthand name itself, once it's been set via
+  // style.setProperty('text-decoration', ...) (as updateQuickStyleProperty
+  // does for the underline toggle). Without these also allow-listed,
+  // sanitizeStyle silently dropped every one of them, stripping the
+  // underline back out right after applying it -- bold/italic have no such
+  // shorthand-vs-longhand split and were never affected.
   'text-decoration',
+  'text-decoration-line',
+  'text-decoration-style',
+  'text-decoration-color',
+  'text-decoration-thickness',
   'vertical-align',
   'white-space',
   'width',
@@ -258,6 +270,10 @@ const PRESERVED_PDF_TEXT_STYLE_PROPERTIES = new Set([
   'line-height',
   'text-align',
   'text-decoration',
+  'text-decoration-line',
+  'text-decoration-style',
+  'text-decoration-color',
+  'text-decoration-thickness',
   'vertical-align',
 ]);
 
