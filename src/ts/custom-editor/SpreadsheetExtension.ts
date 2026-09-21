@@ -990,10 +990,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // much content: hiding the first row (scrolled area starting
           // short) and leaving the horizontal scrollbar overlapping the
           // last one (visible area ending short), at once.
-          overlay.style.height = `${
-            naturalContentHeight + scrollbarHeight
-            + (toggleBarEl?.offsetHeight ?? 0) + (formulaBarEl?.offsetHeight ?? 0) + (formatBarEl?.offsetHeight ?? 0)
-          }px`;
+          const overlayHeight = naturalContentHeight + scrollbarHeight
+            + (toggleBarEl?.offsetHeight ?? 0) + (formulaBarEl?.offsetHeight ?? 0) + (formatBarEl?.offsetHeight ?? 0);
+          overlay.style.height = `${overlayHeight}px`;
           // The real table -- hidden, but still in normal document flow --
           // only ever reserves space for its own rows; it has no idea the
           // overlay standing in for it is taller by the toggle/formula/
@@ -1010,8 +1009,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // the DOM, never in saved output" -- the same technique already
           // used just below for the empty paragraph after a trailing
           // table, reused here for the same reason.
-          const chromeHeight = (toggleBarEl?.offsetHeight ?? 0)
-            + (formulaBarEl?.offsetHeight ?? 0) + (formatBarEl?.offsetHeight ?? 0);
+          //
+          // Sized as (overlay height - the real table's own current flow
+          // height), not just the three bars' combined height on its own:
+          // the real table's own row rendering doesn't necessarily match
+          // jspreadsheet's grid pixel-for-pixel (different cell padding/
+          // font metrics), so assuming its flow height equals the grid's
+          // naturalContentHeight alone double-counted that mismatch on top
+          // of the bars, reserving more than was actually needed.
           let spacer = spreadsheetSpacers.get(table);
           if (!spacer || !spacer.isConnected) {
             spacer = editor.dom.create('div', { 'data-mce-bogus': '1', 'data-elabftw-spreadsheet-spacer': '1' });
@@ -1021,7 +1026,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // sibling: .after() on a node already there is a no-op move,
           // cheap, and guarantees it can never drift or duplicate.
           table.after(spacer);
-          spacer.style.height = `${chromeHeight}px`;
+          spacer.style.height = `${Math.max(0, overlayHeight - tableRect.height)}px`;
           // A zero-size rect means the real table isn't actually visible right
           // now (e.g. inside a collapsed <details>) -- hide the overlay rather
           // than pin it to a stale, meaningless position.
