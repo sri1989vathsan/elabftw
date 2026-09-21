@@ -70,6 +70,8 @@ interface DateSizeChoice {
 const DATE_SIZE_CHOICES: DateSizeChoice[] = [
   { value: 'inherit', label: 'Normal' },
   { value: '0.85em', label: 'Small' },
+  { value: '0.7em', label: 'X-Small' },
+  { value: '0.55em', label: 'XX-Small' },
   { value: '1.15em', label: 'Large' },
   { value: '1.5em', label: 'X-Large' },
   { value: '2em', label: 'XX-Large' },
