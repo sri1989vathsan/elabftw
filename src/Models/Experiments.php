@@ -251,6 +251,13 @@ final class Experiments extends AbstractConcreteEntity
             copyFiles: $copyFiles,
         );
 
+        // keep the copy in the same folder as the original instead of
+        // dropping it back at the root of the folder tree
+        $folderId = $this->getCurrentFolderId();
+        if ($folderId !== null) {
+            new ExperimentsFolders($this->Users)->assignExperiment($newId, $folderId);
+        }
+
         if ($linkToOriginal) {
             $fresh = new self($this->Users, $newId);
             $ExperimentsLinks = new Experiments2ExperimentsLinks($fresh);
@@ -278,6 +285,15 @@ final class Experiments extends AbstractConcreteEntity
     protected function getCreatePermissionKey(): string
     {
         return 'users_canwrite_experiments';
+    }
+
+    private function getCurrentFolderId(): ?int
+    {
+        $req = $this->Db->prepare('SELECT folder_id FROM experiments WHERE id = :id');
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $folderId = $req->fetchColumn();
+        return $folderId !== null ? (int) $folderId : null;
     }
 
     private function getSummaryStore(): CustomUiDescriptions

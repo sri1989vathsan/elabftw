@@ -181,8 +181,20 @@ on('create-steps-bulk', (_, event: Event) => {
   }));
 });
 
+// the deadline select's last option is a plain marker value ("custom")
+// rather than an already-computed datetime like the others -- picking it
+// reveals the adjacent datetime-local input instead of an offset from now
+on('toggle-step-custom-deadline', (el: HTMLElement) => {
+  const select = el as HTMLSelectElement;
+  const input = document.getElementById('stepCustomDeadline_' + select.dataset.stepid) as HTMLInputElement;
+  input.hidden = select.value !== 'custom';
+});
+
 on('step-update-deadline', (el: HTMLElement) => {
-  const value = (document.getElementById('stepSelectDeadline_' + el.dataset.stepid) as HTMLSelectElement).value;
+  const select = document.getElementById('stepSelectDeadline_' + el.dataset.stepid) as HTMLSelectElement;
+  const value = select.value === 'custom'
+    ? (document.getElementById('stepCustomDeadline_' + el.dataset.stepid) as HTMLInputElement).value
+    : select.value;
   const stepid = parseInt(el.dataset.stepid, 10);
   StepC.update(stepid, value, Target.Deadline).then(() => {
     StepC.notif(stepid).then(() => reloadElements(['stepsDiv']));

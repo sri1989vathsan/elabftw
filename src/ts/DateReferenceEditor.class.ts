@@ -59,6 +59,24 @@ interface DateInsertDefaults {
   bold: boolean;
   italic: boolean;
   underline: boolean;
+  fontSize: string;
+}
+
+interface DateSizeChoice {
+  value: string;
+  label: string;
+}
+
+const DATE_SIZE_CHOICES: DateSizeChoice[] = [
+  { value: 'inherit', label: 'Normal' },
+  { value: '0.85em', label: 'Small' },
+  { value: '1.15em', label: 'Large' },
+  { value: '1.5em', label: 'X-Large' },
+  { value: '2em', label: 'XX-Large' },
+];
+
+function isDateSizeValue(value: string): boolean {
+  return DATE_SIZE_CHOICES.some(choice => choice.value === value);
 }
 
 const DATE_REFERENCE_SELECTOR = 'a.elabftw-date-reference';
@@ -111,6 +129,7 @@ function getDateInsertDefaults(): DateInsertDefaults {
     bold: true,
     italic: false,
     underline: false,
+    fontSize: 'inherit',
   };
   const accountDefault = getAccountEditorDefault<DateInsertDefaults>('date');
   if (accountDefault) {
@@ -148,6 +167,9 @@ function normalizeDateInsertDefaults(
     bold: parsed.bold === true,
     italic: parsed.italic === true,
     underline: parsed.underline === true,
+    fontSize: typeof parsed.fontSize === 'string' && isDateSizeValue(parsed.fontSize)
+      ? parsed.fontSize
+      : fallback.fontSize,
   };
 }
 
@@ -210,13 +232,15 @@ function createDateIconToggle(
 function getReferenceEmphasis(
   reference: HTMLAnchorElement | null,
   defaults: DateInsertDefaults,
-): Pick<DateInsertDefaults, 'bold' | 'italic' | 'underline'> {
+): Pick<DateInsertDefaults, 'bold' | 'italic' | 'underline' | 'fontSize'> {
   if (!reference) return defaults;
+  const fontSize = reference.style.fontSize;
   return {
     bold: reference.style.fontWeight === 'bold' || Number(reference.style.fontWeight) >= 600,
     italic: reference.style.fontStyle === 'italic',
     underline: reference.style.textDecorationLine.includes('underline')
       || reference.style.textDecoration.includes('underline'),
+    fontSize: fontSize && isDateSizeValue(fontSize) ? fontSize : 'inherit',
   };
 }
 
@@ -225,10 +249,12 @@ function applyReferenceEmphasis(
   bold: boolean,
   italic: boolean,
   underline: boolean,
+  fontSize: string,
 ): void {
   reference.style.fontWeight = bold ? 'bold' : 'normal';
   reference.style.fontStyle = italic ? 'italic' : 'normal';
   reference.style.textDecoration = underline ? 'underline' : 'none';
+  reference.style.fontSize = fontSize === 'inherit' ? '' : fontSize;
 }
 
 async function saveDateInsertDefaults(defaults: DateInsertDefaults): Promise<void> {
@@ -428,6 +454,7 @@ export default class DateReferenceEditor {
       defaults.bold,
       defaults.italic,
       defaults.underline,
+      defaults.fontSize,
     );
   }
 
@@ -567,6 +594,22 @@ export default class DateReferenceEditor {
     const underline = createEmphasisToggle('Underline', 'U', emphasis.underline);
     emphasisButtons.append(bold.label, italic.label, underline.label);
 
+    const sizeSelect = document.createElement('select');
+    sizeSelect.className = 'form-control';
+    sizeSelect.setAttribute('aria-label', 'Date font size');
+    DATE_SIZE_CHOICES.forEach(choice => {
+      const option = document.createElement('option');
+      option.value = choice.value;
+      option.textContent = choice.label;
+      sizeSelect.appendChild(option);
+    });
+    sizeSelect.value = emphasis.fontSize;
+    const sizeControl = createDateIconControl(
+      'fas fa-text-height',
+      'Date font size',
+      sizeSelect,
+    );
+
     const editingToolbar = document.createElement('div');
     editingToolbar.className = 'experiment-title-typography-toolbar date-reference-editing-toolbar';
     editingToolbar.append(
@@ -576,6 +619,7 @@ export default class DateReferenceEditor {
       heading.label,
       headingLevelControl,
       emphasisButtons,
+      sizeControl,
     );
 
     const linkGroup = document.createElement('div');
@@ -773,6 +817,7 @@ export default class DateReferenceEditor {
           bold: bold.input.checked,
           italic: italic.input.checked,
           underline: underline.input.checked,
+          fontSize: sizeSelect.value,
         });
         this.editor.notificationManager.open({
           text: 'Date defaults saved for your account',
@@ -818,6 +863,7 @@ export default class DateReferenceEditor {
           bold.input.checked,
           italic.input.checked,
           underline.input.checked,
+          sizeSelect.value,
         );
         return;
       }
@@ -838,6 +884,7 @@ export default class DateReferenceEditor {
         bold.input.checked,
         italic.input.checked,
         underline.input.checked,
+        sizeSelect.value,
       );
     });
     deleteButton?.addEventListener('click', () => {
@@ -902,6 +949,7 @@ export default class DateReferenceEditor {
     bold: boolean,
     italic: boolean,
     underline: boolean,
+    fontSize: string,
   ): void {
     const anchorId = getReferenceAnchorId(reference) || generateAnchorId(date);
     const label = formatDate(date, format, customLabel);
@@ -918,7 +966,7 @@ export default class DateReferenceEditor {
         target ? getExperimentHref(target.id) : getEntityViewHref(anchorId),
       );
       reference.setAttribute('title', title);
-      applyReferenceEmphasis(reference, bold, italic, underline);
+      applyReferenceEmphasis(reference, bold, italic, underline, fontSize);
       const time = reference.querySelector('time') ?? document.createElement('time');
       time.setAttribute('datetime', date);
       time.textContent = label;
@@ -945,6 +993,7 @@ export default class DateReferenceEditor {
     bold = false,
     italic = false,
     underline = false,
+    fontSize = 'inherit',
   ): void {
     const anchorId = existingAnchorId || generateAnchorId(date);
     const href = target ? getExperimentHref(target.id) : getEntityViewHref(anchorId);
@@ -958,7 +1007,7 @@ export default class DateReferenceEditor {
     const anchorHtml = [
       `<a${asHeading ? '' : ` id="${escapeHTML(anchorId)}"`}`,
       ' class="elabftw-date-reference"',
-      ` style="font-weight:${bold ? 'bold' : 'normal'};font-style:${italic ? 'italic' : 'normal'};text-decoration:${underline ? 'underline' : 'none'}"`,
+      ` style="font-weight:${bold ? 'bold' : 'normal'};font-style:${italic ? 'italic' : 'normal'};text-decoration:${underline ? 'underline' : 'none'}${fontSize !== 'inherit' ? `;font-size:${escapeHTML(fontSize)}` : ''}"`,
       ` href="${escapeHTML(href)}" title="${escapeHTML(title)}">`,
       '<span class="elabftw-date-icon">',
       `<span class="elabftw-date-icon-month" title="${escapeHTML(iconMonth)}">&#8203;</span>`,
