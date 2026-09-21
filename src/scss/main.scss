@@ -3213,7 +3213,7 @@ body.html-tool-workspace-resizing * {
 
 .inline-spreadsheet-formula-bar {
   align-items: center;
-  background-color: var(--firstlevel);
+  background-color: var(--mainbackground);
   border: 1px solid var(--secondary);
   border-radius: 4px;
   display: flex;
@@ -3351,9 +3351,16 @@ body.html-tool-workspace-resizing * {
   max-width: 100%;
 }
 
+// --firstlevel/--secondlevel carry sidebar-chrome-specific meaning (see the
+// .favorite-filter-overlay/.announcement-card notes elsewhere in this file)
+// and read as a muddy, low-contrast fill against --strongest text (that
+// pairing calibrated for --mainbackground, not the sidebar's own tones)
+// once used as a toolbar background instead of a sliver of dark chrome --
+// most visible in the green palette. var(--mainbackground) plus a plain
+// border/color-mix() tint is what these three toolbars use instead.
 .elabftw-spreadsheet-readonly-toggle {
   align-items: center;
-  background: var(--firstlevel);
+  background: var(--mainbackground);
   border: none;
   border-bottom: 1px solid var(--secondary);
   color: var(--strongest);
@@ -3367,7 +3374,7 @@ body.html-tool-workspace-resizing * {
 }
 
 .elabftw-spreadsheet-readonly-toggle:hover {
-  background: var(--secondlevel);
+  background: color-mix(in srgb, var(--secondary-muted) 45%, var(--mainbackground));
 }
 
 .elabftw-spreadsheet-readonly-toggle span {
@@ -3404,7 +3411,7 @@ body.html-tool-workspace-resizing * {
 // the popup (a simplified version: no function picker, one cell at a time).
 .elabftw-spreadsheet-formula-bar {
   align-items: center;
-  background: var(--secondlevel);
+  background: var(--mainbackground);
   border-bottom: 1px solid var(--secondary);
   display: flex;
   flex: 0 0 auto;
@@ -3433,7 +3440,7 @@ body.html-tool-workspace-resizing * {
 }
 
 .elabftw-spreadsheet-formula-bar-input:disabled {
-  background: var(--secondlevel);
+  background: color-mix(in srgb, var(--secondary-muted) 45%, var(--mainbackground));
   color: var(--medium);
 }
 
@@ -3443,7 +3450,7 @@ body.html-tool-workspace-resizing * {
 // pieces, styled here only for what's new to this bar.
 .elabftw-spreadsheet-format-bar {
   align-items: center;
-  background: var(--secondlevel);
+  background: var(--mainbackground);
   border-bottom: 1px solid var(--secondary);
   display: flex;
   flex: 0 0 auto;
@@ -3467,7 +3474,7 @@ body.html-tool-workspace-resizing * {
 }
 
 .elabftw-spreadsheet-format-bar-icon-btn:hover {
-  background: var(--firstlevel);
+  background: color-mix(in srgb, var(--secondary-muted) 45%, var(--mainbackground));
   border-color: var(--secondary);
 }
 
