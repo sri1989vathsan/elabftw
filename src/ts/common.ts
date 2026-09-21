@@ -500,19 +500,21 @@ export function refreshAnnouncementWidgets(): void {
     }
   });
 
-  // dashboard announcement feed: highlight a card as "New" only the first
-  // time this reader's browser has rendered it -- reuses the same
-  // dismiss_announcement_<id> localStorage key the (now-removed) banner
-  // dropdown used, since it's the same underlying "has this reader seen
-  // it yet" concept. Marked seen immediately (not on some later dismiss
-  // action) so the highlight naturally never reappears on a later visit.
-  document.querySelectorAll<HTMLElement>('[data-announcement-id]').forEach((card) => {
-    const key = `dismiss_announcement_${card.dataset.announcementId}`;
-    if (localStorage.getItem(key) !== '1') {
-      card.classList.add('announcement-card--new');
-      card.querySelector('.announcement-card-new-badge')?.removeAttribute('hidden');
-      localStorage.setItem(key, '1');
+  // dashboard announcement feed: a card is rendered as "New" (see
+  // DashboardController's notifIdByAnnouncementId) exactly while its
+  // AnnouncementPublished notification for this user is still
+  // unacknowledged -- the same read/unread signal the bell dropdown and
+  // notification history use, not a separate tracked-on-the-client flag.
+  // Acking it here (once, per card, per page load) is what makes the
+  // highlight not come back on a later visit: the next render simply won't
+  // find an unacked notification for it any more.
+  document.querySelectorAll<HTMLElement>('[data-announcement-notif-id]').forEach((card) => {
+    const notifId = card.dataset.announcementNotifId;
+    if (!notifId || card.dataset.announcementNotifAcked) {
+      return;
     }
+    card.dataset.announcementNotifAcked = '1';
+    ApiC.patch(`${Model.User}/me/${Model.Notification}/${notifId}`, { is_ack: 1 });
   });
 
   // dashboard announcement feed: only show the "Read more…" link for an

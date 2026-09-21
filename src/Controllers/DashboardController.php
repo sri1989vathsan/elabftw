@@ -15,6 +15,7 @@ namespace Elabftw\Controllers;
 use DateTimeImmutable;
 use Elabftw\Elabftw\PermissionsHelper;
 use Elabftw\Enums\EntityType;
+use Elabftw\Enums\Notifications;
 use Elabftw\Enums\Orderby;
 use Elabftw\Models\Announcements;
 use Elabftw\Models\Experiments;
@@ -23,6 +24,7 @@ use Elabftw\Models\FavTags;
 use Elabftw\Models\Items;
 use Elabftw\Models\ItemsStatus;
 use Elabftw\Models\ItemsTypes;
+use Elabftw\Models\Notifications\UserNotifications;
 use Elabftw\Models\Scheduler;
 use Elabftw\Models\Templates;
 use Elabftw\Models\UserRequestActions;
@@ -30,6 +32,7 @@ use Elabftw\Params\DisplayParams;
 use Override;
 use Symfony\Component\HttpFoundation\InputBag;
 
+use function array_filter;
 use function array_merge;
 use function _;
 
@@ -86,10 +89,31 @@ final class DashboardController extends AbstractHtmlController
         $FavTags = new FavTags($this->app->Users);
         $favTagsArr = $FavTags->readAll();
 
+        // "New" on the dashboard feed is the same signal as the bell's own
+        // unread state, not a separate localStorage-tracked flag -- an
+        // announcement.id shows up here only while its AnnouncementPublished
+        // notification for this user is still unacknowledged, and the JS
+        // (see refreshAnnouncementWidgets() in common.ts) acks it the same
+        // way the bell dropdown does once the card has actually been seen.
+        $UserNotifications = new UserNotifications($this->app->Users);
+        $unackedAnnouncementNotifs = array_filter(
+            $UserNotifications->readByCategory(Notifications::AnnouncementPublished, 50),
+            static fn(array $notif): bool => !$notif['is_ack'],
+        );
+        // announcement_id is nested inside 'body', out of reach for
+        // array_column()'s own index-by-column argument, so map it by hand;
+        // the resulting keys (announcement.id) are also what Twig checks to
+        // know whether to show the "New" badge at all.
+        $notifIdByAnnouncementId = array();
+        foreach ($unackedAnnouncementNotifs as $notif) {
+            $notifIdByAnnouncementId[(int) $notif['body']['announcement_id']] = (int) $notif['id'];
+        }
+
         return array_merge(
             parent::getData(),
             array(
                 'announcementsArr' => $Announcements->readActive(),
+                'notifIdByAnnouncementId' => $notifIdByAnnouncementId,
                 'bookingsArr' => $Scheduler->readAll(),
                 'itemsStatusArr' => $ItemsStatus->readAll(),
                 'experimentsArr' => $Experiments->readShow($DisplayParamsExp),
