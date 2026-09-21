@@ -227,7 +227,9 @@ body::before {
 }
 
 .announcement-reactions {
+  align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.3rem;
 }
 
@@ -251,6 +253,40 @@ body::before {
 .announcement-reaction-count {
   color: var(--medium);
   margin-left: 0.2rem;
+}
+
+/* the "add a reaction" trigger -- a plain smiley plus a small superscript
+ * "+", not a 13th emoji-shaped button, so it doesn't read as just another
+ * reaction to pick */
+.announcement-reaction-add {
+  position: relative;
+}
+
+.announcement-reaction-add-plus {
+  background: var(--primary);
+  border-radius: 50%;
+  bottom: -0.15rem;
+  color: var(--white);
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.05rem 0.2rem;
+  position: absolute;
+  right: -0.3rem;
+}
+
+/* the full emoji set, tucked behind that trigger instead of sitting in the
+ * card as a permanent row of a dozen buttons */
+.announcement-reaction-menu {
+  display: grid;
+  gap: 0.2rem;
+  grid-template-columns: repeat(6, auto);
+  min-width: auto;
+}
+
+.announcement-reaction-menu .announcement-reaction-btn {
+  font-size: 1rem;
+  padding: 0.25rem;
 }
 
 /* briefly highlight the announcement a notification/feed link points to on

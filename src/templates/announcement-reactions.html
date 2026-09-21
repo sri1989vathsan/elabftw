@@ -1,20 +1,51 @@
-{# Reaction bar for one announcement -- a small fixed set of emoji (see
-   Announcements::REACTIONS), any number of which a reader can pick at
-   once, toggled individually by clicking. Expects `announcement` in scope. #}
+{# Reaction bar for one announcement. Reactions already picked by anyone
+   show as compact pills with their count, always visible; the rest of the
+   fixed emoji set (Announcements::REACTIONS) lives behind a single "add a
+   reaction" dropdown instead of a permanent row of a dozen buttons. Any
+   number of these a reader can pick at once, toggled individually by
+   clicking (in the pill or in the dropdown -- both fire the same action).
+   Expects `announcement` in scope. #}
 <div class='announcement-reactions mt-1'>
-  {% for emoji in ['👍', '👎', '❤️', '🎉', '😂', '😮', '😢', '👏', '🔥', '🙌', '🤔', '👀'] %}
+  {% for emoji, count in announcement.reactions %}
+    {% if count > 0 %}
+      <button
+        type='button'
+        class='announcement-reaction-btn {{ emoji in announcement.my_reactions ? 'active' : '' }}'
+        data-action='react-to-announcement'
+        data-id='{{ announcement.id }}'
+        data-emoji='{{ emoji }}'
+        title='{{ emoji }}'
+      >
+        <span aria-hidden='true'>{{ emoji }}</span>
+        <span class='announcement-reaction-count'>{{ count }}</span>
+      </button>
+    {% endif %}
+  {% endfor %}
+  <div class='dropdown d-inline-block'>
     <button
       type='button'
-      class='announcement-reaction-btn {{ emoji in announcement.my_reactions ? 'active' : '' }}'
-      data-action='react-to-announcement'
-      data-id='{{ announcement.id }}'
-      data-emoji='{{ emoji }}'
-      title='{{ emoji }}'
+      class='announcement-reaction-btn announcement-reaction-add'
+      data-toggle='dropdown'
+      aria-haspopup='true'
+      aria-expanded='false'
+      title='{{ 'Add a reaction'|trans }}'
+      aria-label='{{ 'Add a reaction'|trans }}'
     >
-      <span aria-hidden='true'>{{ emoji }}</span>
-      {% if announcement.reactions[emoji] is defined and announcement.reactions[emoji] > 0 %}
-        <span class='announcement-reaction-count'>{{ announcement.reactions[emoji] }}</span>
-      {% endif %}
+      <span aria-hidden='true'>🙂</span><span class='announcement-reaction-add-plus' aria-hidden='true'>+</span>
     </button>
-  {% endfor %}
+    <div class='dropdown-menu p-1 announcement-reaction-menu'>
+      {% for emoji in ['👍', '👎', '❤️', '🎉', '😂', '😮', '😢', '👏', '🔥', '🙌', '🤔', '👀'] %}
+        <button
+          type='button'
+          class='announcement-reaction-btn {{ emoji in announcement.my_reactions ? 'active' : '' }}'
+          data-action='react-to-announcement'
+          data-id='{{ announcement.id }}'
+          data-emoji='{{ emoji }}'
+          title='{{ emoji }}'
+        >
+          <span aria-hidden='true'>{{ emoji }}</span>
+        </button>
+      {% endfor %}
+    </div>
+  </div>
 </div>
