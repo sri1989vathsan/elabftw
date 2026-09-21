@@ -230,8 +230,9 @@ final class Transform
                 ),
             Notifications::AnnouncementPublished =>
                 sprintf(
-                    '<span data-action="ack-notif" data-id="%d" data-href="dashboard.php">%s</span>' . $relativeMoment,
+                    '<span data-action="ack-notif" data-id="%d" data-href="announcements.php#announcement-%d">%s</span>' . $relativeMoment,
                     (int) $notif['id'],
+                    (int) $notif['body']['announcement_id'],
                     sprintf(
                         _('%s published a new announcement: %s'),
                         $notif['body']['author_fullname'],

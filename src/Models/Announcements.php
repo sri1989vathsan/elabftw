@@ -83,7 +83,7 @@ final class Announcements extends AbstractRest
     {
         $sql = self::selectSql() . '
             WHERE announcement.team = :team
-            ORDER BY announcement.created_at DESC';
+            ORDER BY announcement.pinned DESC, announcement.created_at DESC';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
@@ -100,7 +100,7 @@ final class Announcements extends AbstractRest
         $sql = self::selectSql() . '
             WHERE announcement.team = :team
                 AND (announcement.expires_at IS NULL OR announcement.expires_at > UTC_TIMESTAMP())
-            ORDER BY announcement.created_at DESC';
+            ORDER BY announcement.pinned DESC, announcement.created_at DESC';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
@@ -129,6 +129,11 @@ final class Announcements extends AbstractRest
 
         if ($action === Action::Expire) {
             $this->updateExpiresAt((new DateTimeImmutable())->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'));
+            return $this->readOne();
+        }
+
+        if ($action === Action::Pin) {
+            $this->togglePinned(!$announcement['pinned']);
             return $this->readOne();
         }
 
@@ -191,7 +196,7 @@ final class Announcements extends AbstractRest
     private static function selectSql(): string
     {
         return 'SELECT announcement.id, announcement.title, announcement.body, announcement.severity,
-                announcement.userid, announcement.created_at,
+                announcement.pinned, announcement.userid, announcement.created_at,
                 DATE_FORMAT(announcement.expires_at, "%Y-%m-%dT%H:%i:%sZ") AS expires_at,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname
             FROM custom_announcements AS announcement
@@ -202,6 +207,7 @@ final class Announcements extends AbstractRest
     {
         $announcement['id'] = (int) $announcement['id'];
         $announcement['userid'] = (int) $announcement['userid'];
+        $announcement['pinned'] = (bool) $announcement['pinned'];
 
         return $announcement;
     }
@@ -211,6 +217,16 @@ final class Announcements extends AbstractRest
         $sql = 'UPDATE custom_announcements SET expires_at = :expires_at WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':expires_at', $expiresAt);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    private function togglePinned(bool $pinned): void
+    {
+        $sql = 'UPDATE custom_announcements SET pinned = :pinned WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':pinned', $pinned, PDO::PARAM_BOOL);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);

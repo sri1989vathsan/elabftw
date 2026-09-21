@@ -15,7 +15,6 @@ namespace Elabftw\Controllers;
 use DateTimeImmutable;
 use Elabftw\Elabftw\PermissionsHelper;
 use Elabftw\Enums\EntityType;
-use Elabftw\Enums\Notifications;
 use Elabftw\Enums\Orderby;
 use Elabftw\Models\Announcements;
 use Elabftw\Models\Experiments;
@@ -25,7 +24,6 @@ use Elabftw\Models\Items;
 use Elabftw\Models\ItemsStatus;
 use Elabftw\Models\ItemsTypes;
 use Elabftw\Models\Scheduler;
-use Elabftw\Models\Notifications\UserNotifications;
 use Elabftw\Models\Templates;
 use Elabftw\Models\UserRequestActions;
 use Elabftw\Params\DisplayParams;
@@ -81,7 +79,6 @@ final class DashboardController extends AbstractHtmlController
         $ItemsStatus = new ItemsStatus($this->app->Teams);
         $UserRequestActions = new UserRequestActions($this->app->Users);
         $Announcements = new Announcements($this->app->Users);
-        $UserNotifications = new UserNotifications($this->app->Users);
 
         $DisplayParamsTemplates = new DisplayParams($this->app->Users, EntityType::Templates);
         $DisplayParamsItemsTypes = new DisplayParams($this->app->Users, EntityType::ItemsTypes);
@@ -93,7 +90,6 @@ final class DashboardController extends AbstractHtmlController
             parent::getData(),
             array(
                 'announcementsArr' => $Announcements->readActive(),
-                'announcementNotifsArr' => $UserNotifications->readByCategory(Notifications::AnnouncementPublished),
                 'bookingsArr' => $Scheduler->readAll(),
                 'itemsStatusArr' => $ItemsStatus->readAll(),
                 'experimentsArr' => $Experiments->readShow($DisplayParamsExp),

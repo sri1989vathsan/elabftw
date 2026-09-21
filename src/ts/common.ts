@@ -488,12 +488,47 @@ if (isSafari() && !isDismissedSafari) {
 }
 // END SAFARI DETECTION
 
-// generic announcement/admin announcement messages
-document.querySelectorAll('[data-dismiss-key]').forEach((msg: HTMLElement) => {
-  if (localStorage.getItem(`dismiss_${msg.dataset.dismissKey}`) !== '1') {
-    msg.parentElement.removeAttribute('hidden');
+// generic announcement/admin announcement messages, plus the dashboard's own
+// announcement dropdown and feed (announcements-show.html/dashboard.html) --
+// re-run after those are swapped in by reloadElements() (see admin.ts's
+// announcement handlers), since a fresh server-rendered fragment always
+// starts from the "nothing dismissed yet, nothing measured yet" state.
+export function refreshAnnouncementWidgets(): void {
+  document.querySelectorAll<HTMLElement>('[data-dismiss-key]').forEach((msg) => {
+    if (localStorage.getItem(`dismiss_${msg.dataset.dismissKey}`) !== '1') {
+      msg.parentElement.removeAttribute('hidden');
+    }
+  });
+
+  // dashboard announcement dropdown: only show the dropdown trigger, and
+  // only keep its count badge accurate, once we know how many of the
+  // announcements inside actually survived the dismiss-key check above --
+  // and again every time the reader dismisses one (bootstrap's alert.js
+  // removes the dismissed .alert from the DOM on close).
+  const announcementBannerDropdown = document.getElementById('announcementBannerDropdown');
+  if (announcementBannerDropdown) {
+    const updateAnnouncementBannerCount = (): void => {
+      const visible = announcementBannerDropdown.querySelectorAll('[data-announcement-banner-item]:not([hidden])').length;
+      announcementBannerDropdown.toggleAttribute('hidden', visible === 0);
+      const countBadge = document.getElementById('announcementBannerCount');
+      if (countBadge) {
+        countBadge.textContent = String(visible);
+      }
+    };
+    updateAnnouncementBannerCount();
+    new MutationObserver(updateAnnouncementBannerCount).observe(announcementBannerDropdown, { childList: true, subtree: true });
   }
-});
+
+  // dashboard announcement feed: only show the "Read more…" link for an
+  // entry whose body text actually got clamped, not every entry
+  document.querySelectorAll<HTMLElement>('[data-announcement-body]').forEach((body) => {
+    body.nextElementSibling?.classList.add('d-none');
+    if (body.scrollHeight > body.clientHeight + 1) {
+      body.nextElementSibling?.classList.remove('d-none');
+    }
+  });
+}
+refreshAnnouncementWidgets();
 
 makeMalleableColumnsGreatAgain();
 

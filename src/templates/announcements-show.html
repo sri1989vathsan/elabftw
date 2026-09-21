@@ -1,11 +1,33 @@
-{# team announcements, dismissible per-user via localStorage, same mechanism as #safariWarning/the msg filter #}
-{% if announcementsArr %}
-  {% for announcement in announcementsArr %}
-    <div role='status' hidden class='alert alert-{{ announcement.severity == 'warning' ? 'warning' : 'info' }}'>
-      <i class='fa-fw fas {{ announcement.severity == 'warning' ? 'fa-triangle-exclamation' : 'fa-info-circle' }} color-{{ announcement.severity == 'warning' ? 'warning' : 'info' }}'></i>
-      <a href='#' class='close' data-dismiss='alert' data-action='save-dismiss' data-dismiss-key='announcement_{{ announcement.id }}'>&times;</a>
-      <strong>{{ announcement.title|raw }}</strong>
-      {% if announcement.body %}<div class='mt-1'>{{ announcement.body|raw }}</div>{% endif %}
+{# team announcements: a single dropdown trigger instead of a stack of full
+   banners, so several active announcements don't push the rest of the
+   dashboard down. Each entry stays individually dismissible per-user via
+   localStorage, same mechanism as #safariWarning/the msg filter. #}
+<div id='announcementBanner'>
+  {% if announcementsArr %}
+    <div class='dropdown mb-2' id='announcementBannerDropdown' hidden>
+      <button class='btn btn-secondary dropdown-toggle' type='button' id='announcementBannerToggle' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>
+        <i class='fas fa-bullhorn mr-1'></i>{{ 'Announcements'|trans }}
+        <span class='badge badge-light ml-1' id='announcementBannerCount'></span>
+      </button>
+      <div class='dropdown-menu p-2' aria-labelledby='announcementBannerToggle' style='min-width: 320px; max-width: min(90vw, 480px);'>
+        {% for announcement in announcementsArr %}
+          <div role='status' hidden class='alert alert-{{ announcement.severity == 'warning' ? 'warning' : 'info' }} mb-2' data-announcement-banner-item>
+            {% if announcement.pinned %}<i class='fas fa-thumbtack fa-fw color-warning' title='{{ 'Pinned'|trans }}'></i>{% endif %}
+            <i class='fa-fw fas {{ announcement.severity == 'warning' ? 'fa-triangle-exclamation' : 'fa-info-circle' }} color-{{ announcement.severity == 'warning' ? 'warning' : 'info' }}'></i>
+            <a href='#' class='close' data-dismiss='alert' data-action='save-dismiss' data-dismiss-key='announcement_{{ announcement.id }}'>&times;</a>
+            <strong>{{ announcement.title|raw }}</strong>
+            {% if announcement.body %}<div class='mt-1'>{{ announcement.body|raw }}</div>{% endif %}
+            {% if App.Users.isAdmin %}
+              <div class='mt-1'>
+                <a href='#' data-action='toggle-next' data-toggle-target='announcementEditForm-{{ announcement.id }}' aria-expanded='false' aria-controls='announcementEditForm-{{ announcement.id }}'>{{ 'Edit'|trans }}</a>
+                &middot;
+                <a href='#' data-action='toggle-pin-announcement' data-id='{{ announcement.id }}'>{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}</a>
+              </div>
+              {% include 'announcement-edit-form.html' %}
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
     </div>
-  {% endfor %}
-{% endif %}
+  {% endif %}
+</div>

@@ -147,6 +147,32 @@ body::before {
   padding: 0;
 }
 
+/* dashboard "Announcements" feed: clamp long bodies to a few lines instead
+ * of letting one long announcement push everything else out of view; the
+ * "Read more…" link (toggled in JS once we know the text actually overflows)
+ * takes the reader to the full text on the history page. */
+.announcement-feed-body-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+/* briefly highlight the announcement a notification/feed link points to on
+ * the history page, so it's obvious which one the reader was sent for */
+[data-announcement-anchor]:target {
+  animation: announcement-highlight-fade 2.5s ease-out;
+}
+
+@keyframes announcement-highlight-fade {
+  from {
+    background: var(--yellow-highlight, #fff3cd);
+  }
+  to {
+    background: transparent;
+  }
+}
+
 /* holds the main content */
 .real-container {
   margin: auto;

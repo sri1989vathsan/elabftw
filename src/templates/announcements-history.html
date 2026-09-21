@@ -7,9 +7,10 @@
   {% if announcements|length > 0 %}
     <div class='card mt-3'>
       {% for announcement in announcements %}
-        <div class='p-3 d-flex align-items-start justify-content-between {{ not loop.last ? 'border-bottom' }}'>
+        <div id='announcement-{{ announcement.id }}' class='p-3 d-flex align-items-start justify-content-between {{ not loop.last ? 'border-bottom' }}' data-announcement-anchor>
           <div class='flex-grow-1'>
             <strong>
+              {% if announcement.pinned %}<i class='fas fa-thumbtack color-warning mr-1' title='{{ 'Pinned'|trans }}'></i>{% endif %}
               {% if announcement.severity == 'warning' %}
                 <i class='fas fa-triangle-exclamation color-warning mr-1' title='{{ 'Warning'|trans }}'></i>
               {% else %}

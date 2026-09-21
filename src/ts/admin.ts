@@ -14,6 +14,7 @@ import {
   reloadElements,
   TomSelect,
 } from './misc';
+import { refreshAnnouncementWidgets } from './common';
 import $ from 'jquery';
 import { Malle } from '@deltablot/malle';
 import i18next from './i18n';
@@ -137,12 +138,18 @@ on('destroy-teamgroup', (el: HTMLElement) => {
   }
 });
 
+// managing an announcement is possible both from the admin panel
+// (announcementsAdminDiv) and inline from the dashboard (announcementBanner,
+// announcementFeed) -- reloadElements() silently skips whichever of these
+// isn't present on the current page, so the same handlers work from both.
+const ANNOUNCEMENT_RELOAD_TARGETS = ['announcementsAdminDiv', 'announcementBanner', 'announcementFeed'];
+
 on('create-announcement', (_, event: Event) => {
   event.preventDefault();
   const form = document.getElementById('createAnnouncementForm') as HTMLFormElement;
   const params = collectForm(form);
   ApiC.post(Model.Announcement, params).then(() => {
-    reloadElements(['announcementsAdminDiv']);
+    reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets);
     form.reset();
   });
 });
@@ -151,17 +158,21 @@ on('save-announcement', (el: HTMLElement, event: Event) => {
   event.preventDefault();
   const form = document.getElementById(`announcementEditForm-${el.dataset.id}`) as HTMLFormElement;
   const params = collectForm(form);
-  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, params).then(() => reloadElements(['announcementsAdminDiv']));
+  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, params).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
+});
+
+on('toggle-pin-announcement', (el: HTMLElement) => {
+  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.Pin}).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
 });
 
 on('expire-announcement', (el: HTMLElement) => {
-  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.Expire}).then(() => reloadElements(['announcementsAdminDiv']));
+  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.Expire}).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
 });
 
 on('destroy-announcement', (el: HTMLElement) => {
   if (confirm(i18next.t('generic-delete-warning'))) {
     ApiC.delete(`${Model.Announcement}/${el.dataset.id}`)
-      .then(() => reloadElements(['announcementsAdminDiv']));
+      .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
   }
 });
 
