@@ -9,7 +9,7 @@
 {% include 'request-actions-show.html' %}
 <hr>
 <div class='row'>
-  <div class='col-md-6'>
+  <div class='col-md-4'>
     <div class='d-flex justify-content-between'>
       <h3><a href='experiments.php'><i class='fas fa-flask mr-2'></i>{% trans %}Experiment{% plural 2 %}Experiments{% endtrans %}</a></h3>
       <div>
@@ -107,7 +107,7 @@
       {% endfor %}
     </div>
   </div>
-  <div class='col-md-4 mt-2 mt-md-0'>
+  <div class='col-md-4 mt-2 mt-md-0' hidden>
     <div class='d-flex justify-content-between'>
       <h3><a href='scheduler.php'><i class='far fa-calendar-alt mr-2'></i>{{ 'Scheduled bookings'|trans }}</a></h3>
       <div>
@@ -124,6 +124,23 @@
           {% endif %}
           {{ booking.title }} <span title='{{ booking.start|date('Y-m-d H:i:s') }}' class='relative-moment text-nowrap smallgray'></span>
         </a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class='col-md-4 mt-2 mt-md-0'>
+    <div class='d-flex justify-content-between'>
+      <h3><i class='fas fa-bullhorn mr-2'></i>{{ 'Feed'|trans }}</h3>
+    </div>
+    <hr>
+    <div class='list-group mt-1' id='announcementFeed' style='max-height: 300px; overflow-y: auto;'>
+      {% for notif in announcementNotifsArr %}
+        <div class='list-group-item breakable'>
+          <strong>{{ notif.body.title|raw }}</strong>
+          <div class='smallgray'>{{ '%s published this announcement'|trans|format(notif.body.author_fullname) }}</div>
+          <span title='{{ notif.created_at }}' class='relative-moment text-nowrap smallgray'></span>
+        </div>
+      {% else %}
+        <p class='smallgray'>{{ 'No announcements yet.'|trans }}</p>
       {% endfor %}
     </div>
   </div>

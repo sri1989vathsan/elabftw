@@ -103,6 +103,35 @@ final class UserNotifications extends AbstractRest
     }
 
     /**
+     * This user's notifications of a single category, most recent first --
+     * e.g. the dashboard's "Feed" column, which only ever wants
+     * AnnouncementPublished rows rather than the full mixed history.
+     * Read or not: unlike readAll() (the navbar bell) this isn't limited
+     * to unread notifications, since the feed is a history/log, not an
+     * inbox.
+     */
+    public function readByCategory(Notifications $category, int $limit = 10): array
+    {
+        $this->users->isSelfOrExplode();
+        $sql = 'SELECT id, category, body, is_ack, created_at, userid
+            FROM notifications
+            WHERE userid = :userid
+                AND category = :category
+            ORDER BY created_at DESC
+            LIMIT ' . max(0, $limit);
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
+        $req->bindValue(':category', $category->value, PDO::PARAM_INT);
+        $this->Db->execute($req);
+
+        $notifs = $req->fetchAll();
+        foreach ($notifs as &$notif) {
+            $notif['body'] = json_decode($notif['body'], true, 512, JSON_THROW_ON_ERROR);
+        }
+        return $notifs;
+    }
+
+    /**
      * Step/to-do/order deadline notifications only count as "visible" once
      * they're actually due, or (deadline categories aside) always.
      */
