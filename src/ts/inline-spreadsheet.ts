@@ -5445,6 +5445,14 @@ export function buildReadOnlySpreadsheetHost(
   let formulaInputEl: HTMLInputElement | null = null;
   let formulaEditingCell: { col: number; row: number } | null = null;
   let composingFormula = false;
+  // jspreadsheet-ce's own document-level mousedown handler calls
+  // resetSelection() on the worksheet whenever a click lands outside it
+  // (see mouseDownControls in its source) -- clicking any formatting
+  // toolbar button is exactly such a click, so by the time that button's
+  // own handler ran, getSelection() already came back empty. Tracked
+  // independently here via onselection below (already wired, for the
+  // formula bar) instead of queried on demand.
+  let lastKnownSelection: CellRange | null = null;
   // Tracks where in the input the most recently click/drag-inserted
   // reference sits, so a further click can replace it in place instead of
   // piling another reference on top -- both because a single drag fires
@@ -5490,13 +5498,8 @@ export function buildReadOnlySpreadsheetHost(
       updateStyle: (style: string | undefined) => string | undefined,
     ): void => {
       const targetWorksheet = getMountedWorksheet(sheetContainer);
-      const selection = targetWorksheet?.getSelection?.();
-      if (!Array.isArray(selection) || selection.length < 4
-        || !selection.slice(0, 4).every((value: unknown) => Number.isInteger(value))
-      ) {
-        return;
-      }
-      const [c1, r1, c2, r2] = selection as [number, number, number, number];
+      if (!lastKnownSelection) return;
+      const [c1, r1, c2, r2] = lastKnownSelection;
       const startCol = Math.min(c1, c2);
       const startRow = Math.min(r1, r2);
       const endCol = Math.max(c1, c2);
@@ -5560,12 +5563,10 @@ export function buildReadOnlySpreadsheetHost(
     // toolbar toggles read/write the active selection instead of tracking
     // a separate on/off state of their own.
     const currentStyleOfFirstSelectedCell = (): string | undefined => {
-      const targetWorksheet = getMountedWorksheet(sheetContainer);
-      const selection = targetWorksheet?.getSelection?.();
-      if (!Array.isArray(selection) || selection.length < 4) return undefined;
-      const [c1, r1, c2, r2] = selection as [number, number, number, number];
+      if (!lastKnownSelection) return undefined;
+      const [c1, r1, c2, r2] = lastKnownSelection;
       const cellName = `${colLabel(Math.min(c1, c2))}${Math.min(r1, r2) + 1}`;
-      return (targetWorksheet?.getStyle?.() as CellStyles | undefined)?.[cellName];
+      return (getMountedWorksheet(sheetContainer)?.getStyle?.() as CellStyles | undefined)?.[cellName];
     };
     const makeFontToggleButton = (
       icon: string,
@@ -6187,6 +6188,9 @@ export function buildReadOnlySpreadsheetHost(
         endCol: number,
         endRow: number,
       ): void => {
+        if ([startCol, startRow, endCol, endRow].every(Number.isInteger)) {
+          lastKnownSelection = [startCol, startRow, endCol, endRow];
+        }
         if (!formulaInputEl || ![startCol, startRow, endCol, endRow].every(Number.isInteger)) return;
         // Same rule openSpreadsheetModal's own onFormulaSelectionStart uses
         // to decide whether a click is even about inserting a cell
