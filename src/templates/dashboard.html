@@ -129,14 +129,13 @@
   </div>
   <div class='col-md-4 mt-2 mt-md-0'>
     <div class='d-flex justify-content-between'>
-      <h3><i class='fas fa-bullhorn mr-2'></i>{{ 'Feed'|trans }}</h3>
+      <h3><i class='fas fa-bullhorn mr-2'></i>{{ 'Announcements'|trans }}</h3>
     </div>
     <hr>
     <div class='list-group mt-1' id='announcementFeed' style='max-height: 300px; overflow-y: auto;'>
       {% for notif in announcementNotifsArr %}
         <div class='list-group-item breakable'>
           <strong>{{ notif.body.title|raw }}</strong>
-          <div class='smallgray'>{{ '%s published this announcement'|trans|format(notif.body.author_fullname) }}</div>
           <span title='{{ notif.created_at }}' class='relative-moment text-nowrap smallgray'></span>
         </div>
       {% else %}
