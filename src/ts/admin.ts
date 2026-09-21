@@ -146,12 +146,23 @@ on('destroy-teamgroup', (el: HTMLElement) => {
 // handlers work from all of them.
 const ANNOUNCEMENT_RELOAD_TARGETS = ['announcementsAdminDiv', 'announcementFeed', 'announcementsHistoryList'];
 
+// refreshAnnouncementWidgets() (dismiss-key/read-more/etc) plus (re)binding
+// drag-and-drop on any dropzone the just-reloaded fragment brought in --
+// bindAnnouncementImageDropzones() is declared further down but hoisted,
+// same module.
+function refreshAnnouncementUi(): void {
+  refreshAnnouncementWidgets();
+  bindAnnouncementImageDropzones();
+}
+// bind whatever dropzones are already in the initial server-rendered page
+bindAnnouncementImageDropzones();
+
 on('create-announcement', (_, event: Event) => {
   event.preventDefault();
   const form = document.getElementById('createAnnouncementForm') as HTMLFormElement;
   const params = collectForm(form);
   ApiC.post(Model.Announcement, params).then(() => {
-    reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets);
+    reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi);
     form.reset();
   });
 });
@@ -165,33 +176,60 @@ on('save-announcement', (el: HTMLElement, event: Event) => {
   // that was actually submitted.
   const form = el.closest('form') as HTMLFormElement;
   const params = collectForm(form);
-  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, params).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
+  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, params).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi));
 });
 
 // attaching an image is immediate, like an order attachment -- no separate
-// "Save" click needed: upload the file, then point image_url at it
+// "Save" click needed: upload the file, then point image_url at it. Shared
+// between the plain file input (change) and the dropzone (drop) below.
 interface AnnouncementUpload {
   long_name: string;
   storage: number;
   real_name: string;
 }
+function uploadAnnouncementImage(announcementId: string, file: File): void {
+  const formData = new FormData();
+  formData.set('file', file);
+  ApiC.post2location(`${Model.Announcement}/${announcementId}/${Model.Upload}`, formData)
+    .then(uploadId => ApiC.getJson<AnnouncementUpload>(`${Model.Announcement}/${announcementId}/${Model.Upload}/${uploadId}`))
+    .then(upload => {
+      const imageUrl = `app/download.php?f=${encodeURIComponent(upload.long_name)}&storage=${upload.storage}&name=${encodeURIComponent(upload.real_name)}`;
+      return ApiC.patch(`${Model.Announcement}/${announcementId}`, { image_url: imageUrl });
+    })
+    .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi));
+}
 on('upload-announcement-image', (el: HTMLElement) => {
   const input = el as HTMLInputElement;
   const file = input.files?.[0];
-  if (!file) return;
-  const formData = new FormData();
-  formData.set('file', file);
-  ApiC.post2location(`${Model.Announcement}/${input.dataset.id}/${Model.Upload}`, formData)
-    .then(uploadId => ApiC.getJson<AnnouncementUpload>(`${Model.Announcement}/${input.dataset.id}/${Model.Upload}/${uploadId}`))
-    .then(upload => {
-      const imageUrl = `app/download.php?f=${encodeURIComponent(upload.long_name)}&storage=${upload.storage}&name=${encodeURIComponent(upload.real_name)}`;
-      return ApiC.patch(`${Model.Announcement}/${input.dataset.id}`, { image_url: imageUrl });
-    })
-    .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
+  if (!file || !input.dataset.id) return;
+  uploadAnnouncementImage(input.dataset.id, file);
 });
 
+// drag-and-drop onto the dropzone wrapping that same file input -- mirrors
+// OrdersBoard.svelte's own attachments dropzone. Bound directly (not via
+// data-action/data-change-action, neither of which cover drag events) from
+// refreshAnnouncementUi() above, once per element.
+export function bindAnnouncementImageDropzones(): void {
+  document.querySelectorAll<HTMLElement>('.announcement-image-dropzone').forEach(zone => {
+    if (zone.dataset.dropzoneBound) return;
+    zone.dataset.dropzoneBound = '1';
+    zone.addEventListener('dragover', event => {
+      event.preventDefault();
+      zone.classList.add('announcement-image-dropzone-over');
+    });
+    zone.addEventListener('dragleave', () => zone.classList.remove('announcement-image-dropzone-over'));
+    zone.addEventListener('drop', event => {
+      event.preventDefault();
+      zone.classList.remove('announcement-image-dropzone-over');
+      const file = event.dataTransfer?.files?.[0];
+      if (!file || !zone.dataset.id) return;
+      uploadAnnouncementImage(zone.dataset.id, file);
+    });
+  });
+}
+
 on('toggle-pin-announcement', (el: HTMLElement) => {
-  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.Pin}).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
+  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.Pin}).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi));
 });
 
 // reacting is open to any team member, not just an admin -- unlike the
@@ -199,17 +237,17 @@ on('toggle-pin-announcement', (el: HTMLElement) => {
 // this one behind canWriteOrExplode()
 on('react-to-announcement', (el: HTMLElement) => {
   ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.React, emoji: el.dataset.emoji})
-    .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
+    .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi));
 });
 
 on('expire-announcement', (el: HTMLElement) => {
-  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.Expire}).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
+  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.Expire}).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi));
 });
 
 on('destroy-announcement', (el: HTMLElement) => {
   if (confirm(i18next.t('generic-delete-warning'))) {
     ApiC.delete(`${Model.Announcement}/${el.dataset.id}`)
-      .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
+      .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi));
   }
 });
 

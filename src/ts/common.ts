@@ -2089,6 +2089,32 @@ container.addEventListener('click', (event: Event) => {
   });
 });
 
+// Same dispatch as the click listener above, but for 'change' -- a
+// deliberately separate data-change-action attribute rather than reusing
+// data-action, since an element can be both clicked (its own data-action)
+// and changed (e.g. a checkbox fires both), and conflating the two would
+// fire a click-only handler a second time on every change. Needed for
+// controls where "click" isn't the natural trigger, like a <select> or a
+// plain <input type=file> (data-trigger='change' looks similar but is a
+// wholly different, unrelated mechanism -- see triggerHandler() in
+// misc.ts, built for inline-editable data-model/data-target fields, not
+// data-action handlers; using it here silently calls the wrong code).
+container.addEventListener('change', (event: Event) => {
+  const rawTarget = event.target as HTMLElement | null;
+  const el = rawTarget?.closest('[data-change-action]') as HTMLElement | null;
+  if (!el || !container.contains(el)) return;
+  const set = get(el.dataset.changeAction);
+  if (!set) return;
+  set.forEach(fn => {
+    try {
+      fn(el, event);
+    } catch (err) {
+      console.error('Handler error for change-action:', el.dataset.changeAction, err);
+      notify.error(err);
+    }
+  });
+});
+
 function bindMoreFiltersOutsideClick(): void {
   document.querySelectorAll<HTMLElement>('[class*="-popover"]').forEach(popover => {
     const details = popover.closest('details');

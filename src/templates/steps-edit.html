@@ -86,7 +86,7 @@
             {% else %}
               <button data-action='replace-with-next' type='button' class='btn btn-sm btn-secondary'>{{ 'Add a deadline'|trans }}</button>
               <div hidden class='input-group'>
-                <select class='custom-select col-md-3' id='stepSelectDeadline_{{ step.id }}' data-trigger='change' data-action='toggle-step-custom-deadline' data-stepid='{{ step.id }}'>
+                <select class='custom-select col-md-3' id='stepSelectDeadline_{{ step.id }}' data-change-action='toggle-step-custom-deadline' data-stepid='{{ step.id }}'>
                   <option disabled selected>{{ 'Set deadline in'|trans }}</option>
                   <option value='{{ '+1 hour'|toDatetime }}'>{{ '%d hour'|trans|format(1) }}</option>
                   <option value='{{ '+1 day'|toDatetime }}'>{{ '%d day'|trans|format(1) }}</option>

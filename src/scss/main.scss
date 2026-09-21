@@ -234,6 +234,23 @@ body::before {
   gap: 0.4rem;
 }
 
+/* the edit form's image-attach control: a plain file input plus a drop
+ * target around it (see bindAnnouncementImageDropzones() in admin.ts),
+ * mirroring Orders' own attachments dropzone. */
+.announcement-image-dropzone {
+  align-items: center;
+  border: 1px dashed var(--secondary-muted);
+  border-radius: 0.4rem;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.announcement-image-dropzone-over {
+  background: color-mix(in srgb, var(--primary) 8%, var(--mainbackground));
+  border-color: var(--primary);
+}
+
 .announcement-tweet-avatar {
   align-items: center;
   background: var(--primary);
