@@ -5497,26 +5497,38 @@ export function buildReadOnlySpreadsheetHost(
     const applySelectedCellStyle = (
       updateStyle: (style: string | undefined) => string | undefined,
     ): void => {
-      const targetWorksheet = getMountedWorksheet(sheetContainer);
       if (!lastKnownSelection) return;
       const [c1, r1, c2, r2] = lastKnownSelection;
       const startCol = Math.min(c1, c2);
       const startRow = Math.min(r1, r2);
       const endCol = Math.max(c1, c2);
       const endRow = Math.max(r1, r2);
-      const styles: CellStyles = { ...(targetWorksheet?.getStyle?.() ?? {}) };
+      // Deliberately NOT worksheet.setStyle(): its object form re-applies
+      // every property in the combined style string one at a time
+      // internally, and its per-property setter toggles a property OFF
+      // instead of setting it when the new value equals what's already on
+      // the cell -- a second, unrelated property change (e.g. italic)
+      // that happens to re-send an unchanged one from the first click
+      // (e.g. bold, still "font-weight:bold") silently cleared that
+      // first one right back off. Only the most recently *changed*
+      // property ever stuck. Written straight to each cell's own style
+      // attribute instead, bypassing that toggle entirely -- the same
+      // "DOM-only" workaround applySpreadsheetColWidths() already uses
+      // for an analogous jspreadsheet-ce quirk with setWidth().
       for (let row = startRow; row <= endRow; row++) {
         for (let col = startCol; col <= endCol; col++) {
-          const cellName = `${colLabel(col)}${row + 1}`;
-          const style = updateStyle(styles[cellName]);
+          const cell = sheetContainer.querySelector<HTMLElement>(
+            `td[data-x="${col}"][data-y="${row}"]`,
+          );
+          if (!cell) continue;
+          const style = updateStyle(cell.getAttribute('style') ?? undefined);
           if (style) {
-            styles[cellName] = style;
+            cell.setAttribute('style', style);
           } else {
-            delete styles[cellName];
+            cell.removeAttribute('style');
           }
         }
       }
-      targetWorksheet?.setStyle?.(styles);
       notifyFromMirror();
     };
     const applySelectedStyleProperty = (property: string, value: string): void => {
@@ -5647,7 +5659,12 @@ export function buildReadOnlySpreadsheetHost(
       clearFormatButton,
       openFullEditorFromFormatBar,
     );
-    host.appendChild(formatBarEl);
+    // Above the formula bar, not below it: formatBarEl was originally
+    // built after formulaBarEl and just appended after it too, but the
+    // formatting toolbar reads better as the first "actions" row, with
+    // the formula bar (the one text input in this whole header) right
+    // above the grid it edits into.
+    host.insertBefore(formatBarEl, formulaBarEl);
 
     // Does NOT reset activeReferenceRange/awaitingReferenceReplacement --
     // reclaimFocusHandler below re-focuses this input every time

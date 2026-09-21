@@ -956,6 +956,30 @@ export function registerSpreadsheetExtension(editor: Editor): void {
             naturalContentHeight + scrollbarHeight
             + (toggleBarEl?.offsetHeight ?? 0) + (formulaBarEl?.offsetHeight ?? 0) + (formatBarEl?.offsetHeight ?? 0)
           }px`;
+          // The real table -- hidden, but still in normal document flow --
+          // only ever reserves space for its own rows; it has no idea the
+          // overlay standing in for it is taller by the toggle/formula/
+          // format bars' combined height. Whatever follows the table in
+          // the document (the next paragraph, a date heading) sat right
+          // where the table's own flow ended, which the overlay's own
+          // extra chrome then visibly overlapped.
+          //
+          // Fixed with a dedicated spacer element instead of a margin on
+          // the table itself: the table is what editor.getContent()
+          // actually serializes on save, so a style set directly on it
+          // would get saved as part of the entry's own content. This
+          // spacer is data-mce-bogus="1" -- TinyMCE's own marker for "in
+          // the DOM, never in saved output" -- the same technique already
+          // used just below for the empty paragraph after a trailing
+          // table, reused here for the same reason.
+          const chromeHeight = (toggleBarEl?.offsetHeight ?? 0)
+            + (formulaBarEl?.offsetHeight ?? 0) + (formatBarEl?.offsetHeight ?? 0);
+          let spacer = table.nextElementSibling as HTMLElement | null;
+          if (!spacer?.hasAttribute('data-elabftw-spreadsheet-spacer')) {
+            spacer = editor.dom.create('div', { 'data-mce-bogus': '1', 'data-elabftw-spreadsheet-spacer': '1' });
+            table.after(spacer);
+          }
+          spacer.style.height = `${chromeHeight}px`;
           // A zero-size rect means the real table isn't actually visible right
           // now (e.g. inside a collapsed <details>) -- hide the overlay rather
           // than pin it to a stale, meaningless position.
