@@ -72,9 +72,13 @@ final class Announcements extends AbstractRest
         $body = $this->getBody($reqBody['body'] ?? null);
         $imageUrl = $this->getImageUrl($reqBody['image_url'] ?? null);
         $expiresAt = $this->getExpiresAt($reqBody['expires_at'] ?? null);
+        // a checkbox's collectForm() value is the string 'on'/'off', not a
+        // real boolean -- (bool) 'off' is true in PHP, same trap
+        // Filter::toBinary() already exists to avoid.
+        $pinned = (bool) Filter::toBinary($reqBody['pinned'] ?? false);
 
-        $sql = 'INSERT INTO custom_announcements (team, userid, title, body, image_url, severity, expires_at)
-            VALUES (:team, :userid, :title, :body, :image_url, :severity, :expires_at)';
+        $sql = 'INSERT INTO custom_announcements (team, userid, title, body, image_url, severity, expires_at, pinned)
+            VALUES (:team, :userid, :title, :body, :image_url, :severity, :expires_at, :pinned)';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
@@ -83,6 +87,7 @@ final class Announcements extends AbstractRest
         $req->bindValue(':image_url', $imageUrl, $imageUrl === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':severity', $severity);
         $req->bindValue(':expires_at', $expiresAt, $expiresAt === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':pinned', $pinned, PDO::PARAM_BOOL);
         $this->Db->execute($req);
         $id = (int) $this->Db->lastInsertId();
         $this->setId($id);

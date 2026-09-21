@@ -76,10 +76,24 @@ export class Api {
     const isFormData = params instanceof FormData;
 
 
-    // allow toggle notifs off by sending notifOn(Saved|Error)=0 as param
+    // allow toggle notifs off by sending notifOn(Saved|Error)=0 as param --
+    // FormData has no bracket property access (params['x'] is always
+    // undefined on it), so a plain multipart upload could never actually
+    // suppress its own "Saved" toast even when explicitly asked to; use
+    // FormData's own get()/delete() for that case instead.
     let notifOnSaved = true;
     let notifOnError = true;
-    if (!isFormData) {
+    if (isFormData) {
+      if (params.get('notifOnSaved') === '0') {
+        notifOnSaved = false;
+      }
+      params.delete('notifOnSaved');
+
+      if (params.get('notifOnError') === '0') {
+        notifOnError = false;
+      }
+      params.delete('notifOnError');
+    } else {
       if (params['notifOnSaved'] === 0) {
         notifOnSaved = false;
       }

@@ -160,13 +160,21 @@ bindAnnouncementImageDropzones();
 on('create-announcement', (_, event: Event) => {
   event.preventDefault();
   const form = document.getElementById('createAnnouncementForm') as HTMLFormElement;
-  const params = collectForm(form);
+  const params = collectForm(form) as Record<string, unknown>;
   // staged before the announcement exists (chosen or dropped into
   // createAnnouncementImageDropzone) -- uploaded right after, same as
   // Orders stages new-item attachments and uploads them once the order
   // itself has been created.
   const imageInput = document.getElementById('createAnnouncementImageFile') as HTMLInputElement | null;
   const stagedFile = imageInput?.files?.[0];
+  // publishing + uploading a staged image is two API calls (soon to be
+  // three, with the follow-up image_url PATCH) for what the user
+  // experiences as one action ("add an announcement") -- suppress this
+  // one's own toast and let uploadAnnouncementImage() show the single
+  // final one once everything (including the image) has actually landed.
+  if (stagedFile) {
+    params.notifOnSaved = 0;
+  }
   ApiC.post2location(Model.Announcement, params).then(newId => {
     reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi);
     form.reset();
@@ -197,15 +205,21 @@ interface AnnouncementUpload {
   real_name: string;
 }
 function uploadAnnouncementImage(announcementId: string, file: File): void {
+  // the upload (multipart) and the follow-up image_url PATCH each default
+  // to their own "Saved" toast -- suppressed here so attaching an image is
+  // one visible confirmation, not two (or three, stacked with
+  // create-announcement's own, when publishing with an image attached).
   const formData = new FormData();
   formData.set('file', file);
+  formData.set('notifOnSaved', '0');
   ApiC.post2location(`${Model.Announcement}/${announcementId}/${Model.Upload}`, formData)
     .then(uploadId => ApiC.getJson<AnnouncementUpload>(`${Model.Announcement}/${announcementId}/${Model.Upload}/${uploadId}`))
     .then(upload => {
       const imageUrl = `app/download.php?f=${encodeURIComponent(upload.long_name)}&storage=${upload.storage}&name=${encodeURIComponent(upload.real_name)}`;
-      return ApiC.patch(`${Model.Announcement}/${announcementId}`, { image_url: imageUrl });
+      return ApiC.patch(`${Model.Announcement}/${announcementId}`, { image_url: imageUrl, notifOnSaved: 0 });
     })
-    .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi));
+    .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi))
+    .then(() => notify.success());
 }
 // instant feedback, independent of the upload/PATCH round-trip: a local
 // object URL for the picked/dropped file itself, same idea as Orders

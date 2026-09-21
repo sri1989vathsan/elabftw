@@ -736,6 +736,12 @@
         <input type='datetime-local' name='expires_at' id='announcement_expires_at' class='form-control' data-allow-empty='1'>
       </div>
     </div>
+    <div class='form-check mb-3'>
+      <input type='checkbox' name='pinned' id='announcement_pinned' class='form-check-input' data-allow-empty='1'>
+      <label class='form-check-label' for='announcement_pinned'>
+        <i class='fas fa-thumbtack fa-fw color-warning'></i> {{ 'Pin to top'|trans }}
+      </label>
+    </div>
     <button class='btn btn-primary' data-action='create-announcement' type='submit'>{{ 'Publish'|trans }}</button>
   </form>
 
