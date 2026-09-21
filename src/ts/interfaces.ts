@@ -98,6 +98,7 @@ enum Action {
   Duplicate = 'duplicate',
   EmailBookers = 'emailbookers',
   EmailTeam = 'emailteam',
+  Expire = 'expire',
   Finish = 'finish',
   ForceLock = 'forcelock',
   ForceUnlock = 'forceunlock',
@@ -133,6 +134,7 @@ enum Action {
 }
 
 enum Model {
+  Announcement = 'announcements',
   Apikey = 'apikeys',
   CalendarActivity = 'calendar_activity',
   CalendarFeed = 'calendar_feed',

@@ -32,6 +32,7 @@ use Elabftw\Interfaces\RestInterface;
 use Elabftw\Make\ReportsHandler;
 use Elabftw\Make\Exports;
 use Elabftw\Models\AbstractEntity;
+use Elabftw\Models\Announcements;
 use Elabftw\Models\ApiKeys;
 use Elabftw\Models\Batch;
 use Elabftw\Models\Branding;
@@ -334,6 +335,7 @@ final class Apiv2Controller extends AbstractApiController
     private function getModel(): RestInterface
     {
         return match ($this->endpoint) {
+            ApiEndpoint::Announcements => new Announcements($this->requester, $this->id),
             ApiEndpoint::ApiKeys => new ApiKeys($this->requester, $this->id),
             ApiEndpoint::Batch => new Batch($this->requester),
             ApiEndpoint::CalendarActivity => new CalendarActivity($this->requester),

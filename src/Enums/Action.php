@@ -29,6 +29,7 @@ enum Action: string
     case Email = 'email';
     case EmailBookers = 'emailbookers';
     case EmailTeam = 'emailteam';
+    case Expire = 'expire';
     case Finish = 'finish';
     case ForceLock = 'forcelock';
     case ForceUnlock = 'forceunlock';

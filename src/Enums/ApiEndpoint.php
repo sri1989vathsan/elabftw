@@ -16,6 +16,7 @@ use function array_map;
 
 enum ApiEndpoint: string
 {
+    case Announcements = 'announcements';
     case ApiKeys = 'apikeys';
     case Batch = 'batch';
     case CalendarActivity = 'calendar_activity';
