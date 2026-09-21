@@ -168,6 +168,28 @@ on('save-announcement', (el: HTMLElement, event: Event) => {
   ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, params).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
 });
 
+// attaching an image is immediate, like an order attachment -- no separate
+// "Save" click needed: upload the file, then point image_url at it
+interface AnnouncementUpload {
+  long_name: string;
+  storage: number;
+  real_name: string;
+}
+on('upload-announcement-image', (el: HTMLElement) => {
+  const input = el as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.set('file', file);
+  ApiC.post2location(`${Model.Announcement}/${input.dataset.id}/${Model.Upload}`, formData)
+    .then(uploadId => ApiC.getJson<AnnouncementUpload>(`${Model.Announcement}/${input.dataset.id}/${Model.Upload}/${uploadId}`))
+    .then(upload => {
+      const imageUrl = `app/download.php?f=${encodeURIComponent(upload.long_name)}&storage=${upload.storage}&name=${encodeURIComponent(upload.real_name)}`;
+      return ApiC.patch(`${Model.Announcement}/${input.dataset.id}`, { image_url: imageUrl });
+    })
+    .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
+});
+
 on('toggle-pin-announcement', (el: HTMLElement) => {
   ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.Pin}).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
 });

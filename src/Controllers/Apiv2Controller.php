@@ -33,6 +33,7 @@ use Elabftw\Make\ReportsHandler;
 use Elabftw\Make\Exports;
 use Elabftw\Models\AbstractEntity;
 use Elabftw\Models\Announcements;
+use Elabftw\Models\AnnouncementUploads;
 use Elabftw\Models\ApiKeys;
 use Elabftw\Models\Batch;
 use Elabftw\Models\Branding;
@@ -238,7 +239,7 @@ final class Apiv2Controller extends AbstractApiController
     private function handlePost(): Response
     {
         // special case for POST/uploads where we get the information from the "files" attribute
-        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools || $this->Model instanceof OrderUploads) && $this->action === Action::Create) {
+        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools || $this->Model instanceof OrderUploads || $this->Model instanceof AnnouncementUploads) && $this->action === Action::Create) {
             $file = $this->Request->files->get('file');
             // this was added to prevent: Uncaught Error: Call to a member function getClientOriginalName() on null
             // not sure what triggers it though
@@ -514,6 +515,12 @@ final class Apiv2Controller extends AbstractApiController
                 default => throw new InvalidApiSubModelException(ApiEndpoint::Orders),
             };
         }
+        if ($this->Model instanceof Announcements) {
+            return match ($submodel) {
+                ApiSubModels::Uploads => new AnnouncementUploads($this->requester, $this->Model, $this->subId),
+                default => throw new InvalidApiSubModelException(ApiEndpoint::Announcements),
+            };
+        }
         if ($this->Model instanceof Todolist) {
             return match ($submodel) {
                 ApiSubModels::Comments => new TodolistComments($this->requester, $this->Model, $this->subId),
@@ -556,7 +563,8 @@ final class Apiv2Controller extends AbstractApiController
                 $this->Model instanceof ImportHandler ||
                 $this->Model instanceof Branding ||
                 $this->Model instanceof HtmlTools ||
-                $this->Model instanceof OrderUploads
+                $this->Model instanceof OrderUploads ||
+                $this->Model instanceof AnnouncementUploads
             )) {
             return;
         }

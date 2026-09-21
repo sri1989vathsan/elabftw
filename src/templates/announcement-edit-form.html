@@ -22,6 +22,8 @@
   <div class='form-group'>
     <label for='announcement_edit_image_url_{{ idPrefix }}{{ announcement.id }}'>{{ 'Image URL (optional)'|trans }}</label>
     <input type='url' name='image_url' id='announcement_edit_image_url_{{ idPrefix }}{{ announcement.id }}' class='form-control' placeholder='https://…' value='{{ announcement.image_url }}' data-allow-empty='1'>
+    <small class='smallgray d-block mt-1'>{{ 'Or attach an image file -- uploading one takes effect immediately, same as an order attachment.'|trans }}</small>
+    <input type='file' accept='image/*' class='form-control-file mt-1' data-ignore='1' data-trigger='change' data-action='upload-announcement-image' data-id='{{ announcement.id }}' id='announcement_edit_image_file_{{ idPrefix }}{{ announcement.id }}'>
   </div>
   <div class='d-flex flex-wrap'>
     <div class='form-group col-md-4 pl-0'>

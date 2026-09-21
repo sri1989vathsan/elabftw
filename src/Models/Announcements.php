@@ -362,7 +362,16 @@ final class Announcements extends AbstractRest
             return null;
         }
         $url = trim((string) $value);
-        if (mb_strlen($url) > 2048 || filter_var($url, FILTER_VALIDATE_URL) === false || !str_starts_with($url, 'http')) {
+        if (mb_strlen($url) > 2048) {
+            throw new ImproperActionException('Invalid image URL.');
+        }
+        // Either a normal http(s) URL (pasted in by hand), or our own
+        // app/download.php?... link (AnnouncementUploads sets this after a
+        // real file upload -- see upload-announcement-image in admin.ts):
+        // site-relative, so it never passes FILTER_VALIDATE_URL/str_starts_with('http').
+        $isHttpUrl = filter_var($url, FILTER_VALIDATE_URL) !== false && str_starts_with($url, 'http');
+        $isOwnDownloadLink = str_starts_with($url, 'app/download.php?');
+        if (!$isHttpUrl && !$isOwnDownloadLink) {
             throw new ImproperActionException('Invalid image URL.');
         }
         return $url;
