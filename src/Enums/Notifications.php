@@ -35,4 +35,5 @@ enum Notifications: int
     case OrderReminder = 100;
     case OrderChanged = 101;
     case MentionedInFeedback = 102;
+    case AnnouncementPublished = 103;
 }

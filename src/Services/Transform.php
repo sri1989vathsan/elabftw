@@ -228,6 +228,17 @@ final class Transform
                     ),
                     $notif['created_at'],
                 ),
+            Notifications::AnnouncementPublished =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="dashboard.php">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    sprintf(
+                        _('%s published a new announcement: %s'),
+                        $notif['body']['author_fullname'],
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
+                    $notif['created_at'],
+                ),
             default => throw new ImproperActionException('Invalid notification type.'),
         };
     }
