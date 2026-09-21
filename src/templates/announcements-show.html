@@ -10,12 +10,12 @@
         <span class='badge badge-light ml-1' id='announcementBannerCount'></span>
       </button>
       <div class='dropdown-menu p-2' aria-labelledby='announcementBannerToggle' style='min-width: 320px; max-width: min(90vw, 480px);'>
-        {% for announcement in announcementsArr %}
+        {% for announcement in announcementsArr|slice(0, 5) %}
           <div role='status' hidden class='alert alert-{{ announcement.severity == 'warning' ? 'warning' : 'info' }} mb-2' data-announcement-banner-item>
             {% if announcement.pinned %}<i class='fas fa-thumbtack fa-fw color-warning' title='{{ 'Pinned'|trans }}'></i>{% endif %}
             <i class='fa-fw fas {{ announcement.severity == 'warning' ? 'fa-triangle-exclamation' : 'fa-info-circle' }} color-{{ announcement.severity == 'warning' ? 'warning' : 'info' }}'></i>
             <a href='#' class='close' data-dismiss='alert' data-action='save-dismiss' data-dismiss-key='announcement_{{ announcement.id }}'>&times;</a>
-            <strong>{{ announcement.title|raw }}</strong>
+            <strong><a href='announcements.php#announcement-{{ announcement.id }}'>{{ announcement.title|raw }}</a></strong>
             {% if announcement.body %}<div class='mt-1'>{{ announcement.body_html|raw }}</div>{% endif %}
             {% if announcement.image_url %}<img class='announcement-tweet-image mt-2' src='{{ announcement.image_url }}' alt=''>{% endif %}
             {% include 'announcement-reactions.html' %}
