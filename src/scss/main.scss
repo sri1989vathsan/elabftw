@@ -114,6 +114,17 @@
 body {
   background: var(--mainbackground);
   color: var(--mediumstrong);
+  // An experiment/resource page with an inline spreadsheet table can end
+  // up wider than the viewport (root cause not fully pinned down -- ruled
+  // out the hidden real table itself, since it's inside TinyMCE's own
+  // iframe and an iframe's box can't grow from its internal content; ruled
+  // out the position:fixed overlay having a transformed containing-block
+  // ancestor too), which drags the whole page sideways on scroll,
+  // including "sticky" chrome like TinyMCE's own toolbar that's only ever
+  // pinned vertically. Blocking horizontal overflow at the document level
+  // is the robust fix regardless of the exact contributor -- overflow-y is
+  // left alone, so vertical scroll/position:sticky elsewhere is unaffected.
+  overflow-x: hidden;
 }
 
 /* little shadow on top of the screen for no reasons */
