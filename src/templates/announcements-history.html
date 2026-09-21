@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class='container-fluid px-0'>
+  <h1>{{ 'Announcements'|trans }}</h1>
+
+  {% if announcements|length > 0 %}
+    <div class='card mt-3'>
+      {% for announcement in announcements %}
+        <div class='p-3 d-flex align-items-start justify-content-between {{ not loop.last ? 'border-bottom' }}'>
+          <div class='flex-grow-1'>
+            <strong>
+              {% if announcement.severity == 'warning' %}
+                <i class='fas fa-triangle-exclamation color-warning mr-1' title='{{ 'Warning'|trans }}'></i>
+              {% else %}
+                <i class='fas fa-circle-info text-primary mr-1' title='{{ 'Info'|trans }}'></i>
+              {% endif %}
+              {{ announcement.title }}
+            </strong>
+            {% if announcement.body %}
+              <div class='breakable mt-1'>{{ announcement.body }}</div>
+            {% endif %}
+            <div class='smallgray mt-1'>
+              {{ 'by %s'|trans|format(announcement.author_fullname) }}
+              &middot;
+              <span title='{{ announcement.created_at }}' class='relative-moment'></span>
+              {% if announcement.expires_at %}
+                &middot;
+                {% if announcement.expires_at < 'now'|date('Y-m-d\\TH:i:s\\Z') %}
+                  {{ 'Expired'|trans }} <span title='{{ announcement.expires_at }}' class='relative-moment'></span>
+                {% else %}
+                  {{ 'Expires'|trans }} <span title='{{ announcement.expires_at }}' class='relative-moment'></span>
+                {% endif %}
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class='text-muted mt-3'>{{ 'No announcements yet.'|trans }}</p>
+  {% endif %}
+</div>
+{% endblock body %}

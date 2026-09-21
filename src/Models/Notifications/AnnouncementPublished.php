@@ -28,6 +28,7 @@ final class AnnouncementPublished extends WebOnlyNotifications
         private Users $author,
         private int $announcementId,
         private string $title,
+        private ?string $body,
         private string $severity,
     ) {
         parent::__construct($targetUser);
@@ -39,6 +40,7 @@ final class AnnouncementPublished extends WebOnlyNotifications
         return array(
             'announcement_id' => $this->announcementId,
             'title' => $this->title,
+            'body' => $this->body,
             'severity' => $this->severity,
             'author_fullname' => $this->author->userData['fullname'],
         );

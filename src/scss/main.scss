@@ -158,10 +158,13 @@ body::before {
   }
 }
 
-/* only on large viewports */
+/* only on large viewports -- a flat 1280px cap left a growing amount of
+ * unused space on genuinely wide windows instead of scaling with them;
+ * this still caps extreme ultra-wide displays for readability, just at a
+ * much more generous, viewport-relative point. */
 @media (min-width: 1280px) {
   .max-width-70 {
-    max-width: 1280px;
+    max-width: min(1800px, 95vw);
   }
 }
 

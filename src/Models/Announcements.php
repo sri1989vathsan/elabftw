@@ -73,7 +73,7 @@ final class Announcements extends AbstractRest
         $id = (int) $this->Db->lastInsertId();
         $this->setId($id);
 
-        $this->notifyTeam($id, $title, $severity);
+        $this->notifyTeam($id, $title, $body, $severity);
 
         return $id;
     }
@@ -173,7 +173,7 @@ final class Announcements extends AbstractRest
         }
     }
 
-    private function notifyTeam(int $announcementId, string $title, string $severity): void
+    private function notifyTeam(int $announcementId, string $title, ?string $body, string $severity): void
     {
         foreach ($this->Users->readAllActiveFromTeam() as $teamUser) {
             (new AnnouncementPublished(
@@ -181,6 +181,7 @@ final class Announcements extends AbstractRest
                 $this->Users,
                 $announcementId,
                 $title,
+                $body,
                 $severity,
             ))->create();
         }

@@ -856,6 +856,19 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const spreadsheetOverlays = new Map<HTMLTableElement, { el: HTMLElement; destroy: () => void }>();
   const enhancedTables = new WeakSet<HTMLTableElement>();
   let overlaySyncRunning = false;
+  // One persistent spacer per table, reserving room below it for the
+  // overlay's own extra chrome (see syncOverlayPositions). Tracked here
+  // instead of re-detected each frame by "is my next sibling already a
+  // spacer": typing a new paragraph (e.g. pressing Enter) right after the
+  // table inserts it *between* the table and that spacer, so the next
+  // frame's sibling check no longer found it, created a whole new one
+  // in its place, and never cleaned up the original -- now orphaned,
+  // sitting wherever it ended up, permanently taking up space. Each one
+  // more Enter press added another. Node.after() on an element already
+  // in the DOM *moves* it rather than duplicating it, so reusing the
+  // same tracked node and just repositioning it every frame is self-
+  // healing regardless of what got typed around it.
+  const spreadsheetSpacers = new WeakMap<HTMLTableElement, HTMLElement>();
 
   const getEditorIframe = (): HTMLIFrameElement | null =>
     document.getElementById(`${editor.id}_ifr`) as HTMLIFrameElement | null;
@@ -999,11 +1012,15 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // table, reused here for the same reason.
           const chromeHeight = (toggleBarEl?.offsetHeight ?? 0)
             + (formulaBarEl?.offsetHeight ?? 0) + (formatBarEl?.offsetHeight ?? 0);
-          let spacer = table.nextElementSibling as HTMLElement | null;
-          if (!spacer?.hasAttribute('data-elabftw-spreadsheet-spacer')) {
+          let spacer = spreadsheetSpacers.get(table);
+          if (!spacer || !spacer.isConnected) {
             spacer = editor.dom.create('div', { 'data-mce-bogus': '1', 'data-elabftw-spreadsheet-spacer': '1' });
-            table.after(spacer);
+            spreadsheetSpacers.set(table, spacer);
           }
+          // Always reposition, even when it was already the very next
+          // sibling: .after() on a node already there is a no-op move,
+          // cheap, and guarantees it can never drift or duplicate.
+          table.after(spacer);
           spacer.style.height = `${chromeHeight}px`;
           // A zero-size rect means the real table isn't actually visible right
           // now (e.g. inside a collapsed <details>) -- hide the overlay rather
@@ -1098,6 +1115,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       onDelete: () => {
         if (lastActiveSpreadsheetTable === table) setActiveSpreadsheetTable(null);
         removeOverlay(table);
+        // The spacer reserving room below this table for its overlay's
+        // chrome has no purpose once the table itself is gone -- unlike
+        // the overlay div, it isn't rebuilt from scratch next time
+        // (there won't be one), so it has to be removed explicitly here.
+        spreadsheetSpacers.get(table)?.remove();
         // Undo needs the real removal to go through the editor's own
         // dom/undo manager, not a plain table.remove() -- otherwise Ctrl+Z
         // has nothing of its own to restore.
