@@ -3214,6 +3214,58 @@ body.html-tool-workspace-resizing * {
   color: var(--medium);
 }
 
+// Cell formatting toolbar (fill/text color, font, bold/italic/underline,
+// align, clear formatting) -- reuses the popup's own .inline-spreadsheet-*
+// control classes (icon-button, stepper, compact-control) for the shared
+// pieces, styled here only for what's new to this bar.
+.elabftw-spreadsheet-format-bar {
+  align-items: center;
+  background: var(--secondlevel);
+  border-bottom: 1px solid var(--secondary);
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.elabftw-spreadsheet-format-bar-icon-btn {
+  align-items: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  color: var(--strongest);
+  display: inline-flex;
+  font-size: 0.85rem;
+  height: 1.8rem;
+  justify-content: center;
+  position: relative;
+  width: 1.8rem;
+}
+
+.elabftw-spreadsheet-format-bar-icon-btn:hover {
+  background: var(--firstlevel);
+  border-color: var(--secondary);
+}
+
+.elabftw-spreadsheet-format-bar-select {
+  height: 1.8rem;
+  max-width: 9rem;
+  padding: 0 0.3rem;
+}
+
+.elabftw-spreadsheet-format-bar-none {
+  bottom: -0.2rem;
+  color: var(--dangerred);
+  font-size: 0.6rem;
+  position: absolute;
+  right: -0.2rem;
+}
+
+.elabftw-spreadsheet-format-bar-text-a {
+  font-weight: 700;
+}
+
 /* The grid area itself scrolls internally if it doesn't fit the space
  * given to it (mainly relevant to the editor overlay variant below, whose
  * total height is pinned to the real table's own measured rect -- the

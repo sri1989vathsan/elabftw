@@ -5476,6 +5476,178 @@ export function buildReadOnlySpreadsheetHost(
     formulaBarEl.append(formulaLabel, formulaInputEl);
     host.appendChild(formulaBarEl);
 
+    // Cell formatting toolbar, mirroring the popup's own cellFormatBar
+    // (fill/text color, font family/size, bold/italic/underline, align,
+    // clear formatting) -- reusing its exact style-mutation helpers
+    // (updateQuickStyleProperty/updateQuickFontStyle, module-level) and
+    // UI-control builders (createIconControl/createStepperControl,
+    // likewise module-level), but applied live via jspreadsheet-ce's own
+    // getSelection()/getStyle()/setStyle() instead of the popup's
+    // mountSpreadsheet() full remount -- this host has no equivalent to
+    // remount into, and doesn't need one: setStyle() alone already
+    // repaints the affected cells.
+    const applySelectedCellStyle = (
+      updateStyle: (style: string | undefined) => string | undefined,
+    ): void => {
+      const targetWorksheet = getMountedWorksheet(sheetContainer);
+      const selection = targetWorksheet?.getSelection?.();
+      if (!Array.isArray(selection) || selection.length < 4
+        || !selection.slice(0, 4).every((value: unknown) => Number.isInteger(value))
+      ) {
+        return;
+      }
+      const [c1, r1, c2, r2] = selection as [number, number, number, number];
+      const startCol = Math.min(c1, c2);
+      const startRow = Math.min(r1, r2);
+      const endCol = Math.max(c1, c2);
+      const endRow = Math.max(r1, r2);
+      const styles: CellStyles = { ...(targetWorksheet?.getStyle?.() ?? {}) };
+      for (let row = startRow; row <= endRow; row++) {
+        for (let col = startCol; col <= endCol; col++) {
+          const cellName = `${colLabel(col)}${row + 1}`;
+          const style = updateStyle(styles[cellName]);
+          if (style) {
+            styles[cellName] = style;
+          } else {
+            delete styles[cellName];
+          }
+        }
+      }
+      targetWorksheet?.setStyle?.(styles);
+      notifyFromMirror();
+    };
+    const applySelectedStyleProperty = (property: string, value: string): void => {
+      applySelectedCellStyle(style => updateQuickStyleProperty(style, property, value));
+    };
+
+    const formatBarEl = document.createElement('div');
+    formatBarEl.className = 'elabftw-spreadsheet-format-bar';
+
+    const fillColorInput = createInput('color', '#ffffff', 'Selected cell background color');
+    const noFillButton = document.createElement('button');
+    noFillButton.type = 'button';
+    noFillButton.className = 'elabftw-spreadsheet-format-bar-icon-btn';
+    noFillButton.innerHTML = '<i class="fas fa-fill-drip"></i><span class="elabftw-spreadsheet-format-bar-none">∅</span>';
+    noFillButton.title = 'Remove fill color';
+    noFillButton.setAttribute('aria-label', 'Remove fill color');
+    fillColorInput.addEventListener('input', () => applySelectedStyleProperty('background-color', fillColorInput.value));
+    noFillButton.addEventListener('click', () => applySelectedStyleProperty('background-color', ''));
+
+    const fontFamilySelect = document.createElement('select');
+    fontFamilySelect.className = 'form-control form-control-sm elabftw-spreadsheet-format-bar-select';
+    fontFamilySelect.setAttribute('aria-label', 'Selected cell font family');
+    fontFamilySelect.innerHTML = `
+      <option value="">Default font</option>
+      <option value="Arial, sans-serif">Arial</option>
+      <option value="Verdana, sans-serif">Verdana</option>
+      <option value="Georgia, serif">Georgia</option>
+      <option value="'Times New Roman', serif">Times New Roman</option>
+      <option value="'Courier New', monospace">Courier New</option>
+    `;
+    fontFamilySelect.addEventListener('change', () => applySelectedStyleProperty('font-family', fontFamilySelect.value));
+
+    const fontSizeInput = createInput('number', '12', 'Selected cell font size in points');
+    fontSizeInput.min = '6';
+    fontSizeInput.max = '72';
+    const applyFontSize = (): void => {
+      const size = Number.parseInt(fontSizeInput.value, 10);
+      if (Number.isFinite(size) && size > 0) applySelectedStyleProperty('font-size', `${size}pt`);
+    };
+    fontSizeInput.addEventListener('change', applyFontSize);
+
+    // Bold/italic/underline toggle off whatever the FIRST selected cell's
+    // own current style already has, matching how a word processor's own
+    // toolbar toggles read/write the active selection instead of tracking
+    // a separate on/off state of their own.
+    const currentStyleOfFirstSelectedCell = (): string | undefined => {
+      const targetWorksheet = getMountedWorksheet(sheetContainer);
+      const selection = targetWorksheet?.getSelection?.();
+      if (!Array.isArray(selection) || selection.length < 4) return undefined;
+      const [c1, r1, c2, r2] = selection as [number, number, number, number];
+      const cellName = `${colLabel(Math.min(c1, c2))}${Math.min(r1, r2) + 1}`;
+      return (targetWorksheet?.getStyle?.() as CellStyles | undefined)?.[cellName];
+    };
+    const makeFontToggleButton = (
+      icon: string,
+      label: string,
+      property: 'font-weight' | 'font-style' | 'text-decoration',
+      activeValue: string,
+    ): HTMLButtonElement => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'elabftw-spreadsheet-format-bar-icon-btn';
+      button.innerHTML = icon;
+      button.title = label;
+      button.setAttribute('aria-label', label);
+      button.addEventListener('click', () => {
+        const current = currentStyleOfFirstSelectedCell();
+        const probe = document.createElement('span');
+        if (current) probe.setAttribute('style', current);
+        const isActive = probe.style.getPropertyValue(property) === activeValue;
+        applySelectedStyleProperty(property, isActive ? '' : activeValue);
+      });
+      return button;
+    };
+    const boldButton = makeFontToggleButton('<b>B</b>', 'Bold', 'font-weight', 'bold');
+    const italicButton = makeFontToggleButton('<i>I</i>', 'Italic', 'font-style', 'italic');
+    const underlineButton = makeFontToggleButton('<u>U</u>', 'Underline', 'text-decoration', 'underline');
+
+    const textColorInput = createInput('color', '#212529', 'Selected cell text color');
+    const noTextColorButton = document.createElement('button');
+    noTextColorButton.type = 'button';
+    noTextColorButton.className = 'elabftw-spreadsheet-format-bar-icon-btn';
+    noTextColorButton.innerHTML = '<span class="elabftw-spreadsheet-format-bar-text-a">A</span><span class="elabftw-spreadsheet-format-bar-none">∅</span>';
+    noTextColorButton.title = 'Remove text color';
+    noTextColorButton.setAttribute('aria-label', 'Remove text color');
+    textColorInput.addEventListener('input', () => applySelectedStyleProperty('color', textColorInput.value));
+    noTextColorButton.addEventListener('click', () => applySelectedStyleProperty('color', ''));
+
+    const makeAlignButton = (icon: string, label: string, value: string): HTMLButtonElement => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'elabftw-spreadsheet-format-bar-icon-btn';
+      button.innerHTML = icon;
+      button.title = label;
+      button.setAttribute('aria-label', label);
+      button.addEventListener('click', () => applySelectedStyleProperty('text-align', value));
+      return button;
+    };
+
+    const clearFormatButton = document.createElement('button');
+    clearFormatButton.type = 'button';
+    clearFormatButton.className = 'elabftw-spreadsheet-format-bar-icon-btn';
+    clearFormatButton.innerHTML = '<i class="fas fa-eraser" aria-hidden="true"></i>';
+    clearFormatButton.title = 'Clear all formatting from selected cells';
+    clearFormatButton.setAttribute('aria-label', 'Clear all formatting from selected cells');
+    clearFormatButton.addEventListener('click', () => applySelectedCellStyle(() => undefined));
+
+    const openFullEditorFromFormatBar = document.createElement('button');
+    openFullEditorFromFormatBar.type = 'button';
+    openFullEditorFromFormatBar.className = 'elabftw-spreadsheet-format-bar-icon-btn';
+    openFullEditorFromFormatBar.innerHTML = '<i class="fas fa-up-right-and-down-left-from-center" aria-hidden="true"></i>';
+    openFullEditorFromFormatBar.title = 'Open full editor';
+    openFullEditorFromFormatBar.setAttribute('aria-label', 'Open full editor');
+    openFullEditorFromFormatBar.addEventListener('click', () => options.onOpenFullEditor?.());
+
+    formatBarEl.append(
+      createIconControl('<i class="fas fa-fill-drip"></i>', 'Fill color', fillColorInput),
+      noFillButton,
+      fontFamilySelect,
+      createStepperControl(fontSizeInput, 'font size'),
+      boldButton,
+      italicButton,
+      underlineButton,
+      createIconControl('<span class="elabftw-spreadsheet-format-bar-text-a">A</span>', 'Text color', textColorInput),
+      noTextColorButton,
+      makeAlignButton('<i class="fas fa-align-left" aria-hidden="true"></i>', 'Align left', 'left'),
+      makeAlignButton('<i class="fas fa-align-center" aria-hidden="true"></i>', 'Align center', 'center'),
+      makeAlignButton('<i class="fas fa-align-right" aria-hidden="true"></i>', 'Align right', 'right'),
+      makeAlignButton('<i class="fas fa-align-justify" aria-hidden="true"></i>', 'Justify', 'justify'),
+      clearFormatButton,
+      openFullEditorFromFormatBar,
+    );
+    host.appendChild(formatBarEl);
+
     // Does NOT reset activeReferenceRange/awaitingReferenceReplacement --
     // reclaimFocusHandler below re-focuses this input every time
     // jspreadsheet steals it back (which it does on every single cell
@@ -5883,6 +6055,13 @@ export function buildReadOnlySpreadsheetHost(
     const nextCols = data.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
     const liveRowHeights = readRenderedRowHeights(sheetContainer);
     const liveColWidths = readRenderedColWidths(sheetContainer);
+    // getStyle() is jspreadsheet-ce's own live cellName->style map, kept
+    // up to date by the cell-format toolbar's setStyle() calls below --
+    // without reading it back here, any of those changes would be
+    // silently dropped from what actually gets committed/saved, since
+    // this object would otherwise still only ever carry the *original*
+    // cellStyles this host was first built with.
+    const liveCellStyles = getMountedWorksheet(sheetContainer)?.getStyle?.() as CellStyles | undefined;
     const next = normalizeSpreadsheetData({
       ...extracted,
       data,
@@ -5891,6 +6070,7 @@ export function buildReadOnlySpreadsheetHost(
       cols: nextCols,
       rowHeights: { ...(extracted.rowHeights ?? {}), ...(liveRowHeights ?? {}) },
       colWidths: { ...(extracted.colWidths ?? {}), ...(liveColWidths ?? {}) },
+      cellStyles: liveCellStyles ?? extracted.cellStyles,
     });
     // The overlay's own width is capped at this on every animation frame
     // (see syncOverlayPositions in SpreadsheetExtension.ts) -- computed
