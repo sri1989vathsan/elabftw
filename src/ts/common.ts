@@ -511,12 +511,26 @@ export function refreshAnnouncementWidgets(): void {
       const visible = announcementBannerDropdown.querySelectorAll('[data-announcement-banner-item]:not([hidden])').length;
       announcementBannerDropdown.toggleAttribute('hidden', visible === 0);
       const countBadge = document.getElementById('announcementBannerCount');
-      if (countBadge) {
+      // Only write when the value actually changed -- countBadge lives
+      // inside the observed subtree below, and unconditionally setting
+      // .textContent replaces its text node (a childList mutation) even
+      // when the string is identical, which re-triggered this same
+      // observer callback forever: a busy MutationObserver <-> textContent
+      // feedback loop pegging a CPU core for as long as the page stayed
+      // open, which is almost certainly what was slowing the browser down.
+      if (countBadge && countBadge.textContent !== String(visible)) {
         countBadge.textContent = String(visible);
       }
     };
     updateAnnouncementBannerCount();
-    new MutationObserver(updateAnnouncementBannerCount).observe(announcementBannerDropdown, { childList: true, subtree: true });
+    // refreshAnnouncementWidgets() re-runs after every announcement action
+    // (see admin.ts) -- guard against attaching a second/third/... observer
+    // on top of ones from earlier runs, each of which would otherwise keep
+    // firing (and being reattached) for the rest of the page's lifetime.
+    if (!announcementBannerDropdown.dataset.observed) {
+      announcementBannerDropdown.dataset.observed = '1';
+      new MutationObserver(updateAnnouncementBannerCount).observe(announcementBannerDropdown, { childList: true, subtree: true });
+    }
   }
 
   // dashboard announcement feed: only show the "Read more…" link for an
