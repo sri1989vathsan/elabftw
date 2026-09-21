@@ -711,10 +711,15 @@
     <div class='form-group'>
       <label for='announcement_body'>{{ 'Message'|trans }}</label>
       <textarea name='body' id='announcement_body' class='form-control' rows='3' data-allow-empty='1'></textarea>
+      <small class='smallgray'>{{ 'Links (https://…) are shown as clickable text automatically.'|trans }}</small>
+    </div>
+    <div class='form-group'>
+      <label for='announcement_image_url'>{{ 'Image URL (optional)'|trans }}</label>
+      <input type='url' name='image_url' id='announcement_image_url' class='form-control' placeholder='https://…' data-allow-empty='1'>
     </div>
     <div class='d-flex flex-wrap'>
       <div class='form-group col-md-4 pl-0'>
-        <label for='announcement_severity'>{{ 'Severity'|trans }}</label>
+        <label for='announcement_severity'>{{ 'Type'|trans }}</label>
         <select name='severity' id='announcement_severity' class='form-control'>
           <option value='info'>{{ 'Info'|trans }}</option>
           <option value='warning'>{{ 'Warning'|trans }}</option>

@@ -110,6 +110,7 @@ enum Action {
   PatchUser2Team = 'patchuser2team',
   Pin = 'pin',
   PublishVersion = 'publishversion',
+  React = 'react',
   RemoveExclusiveEditMode = 'removeexclusiveeditmode',
   Replace = 'replace',
   Restore = 'restore',

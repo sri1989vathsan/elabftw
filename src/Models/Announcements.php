@@ -23,9 +23,14 @@ use Exception;
 use Override;
 use PDO;
 
+use function array_column;
 use function array_key_exists;
+use function filter_var;
+use function htmlspecialchars;
+use function implode;
 use function in_array;
 use function mb_strlen;
+use function str_starts_with;
 use function trim;
 
 /**
@@ -38,6 +43,9 @@ final class Announcements extends AbstractRest
     use SetIdTrait;
 
     private const array SEVERITIES = array('info', 'warning');
+
+    /** The only emoji a reaction can be -- keeps the reaction bar a fixed, predictable row instead of a full picker. */
+    private const array REACTIONS = array('👍', '👎', '❤️', '🎉');
 
     public function __construct(private Users $Users, ?int $id = null)
     {
@@ -58,15 +66,17 @@ final class Announcements extends AbstractRest
         $severity = $this->getSeverity($reqBody['severity'] ?? null);
         $title = $this->getTitle($reqBody['title'] ?? '');
         $body = $this->getBody($reqBody['body'] ?? null);
+        $imageUrl = $this->getImageUrl($reqBody['image_url'] ?? null);
         $expiresAt = $this->getExpiresAt($reqBody['expires_at'] ?? null);
 
-        $sql = 'INSERT INTO custom_announcements (team, userid, title, body, severity, expires_at)
-            VALUES (:team, :userid, :title, :body, :severity, :expires_at)';
+        $sql = 'INSERT INTO custom_announcements (team, userid, title, body, image_url, severity, expires_at)
+            VALUES (:team, :userid, :title, :body, :image_url, :severity, :expires_at)';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
         $req->bindValue(':title', $title);
         $req->bindValue(':body', $body, $body === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':image_url', $imageUrl, $imageUrl === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':severity', $severity);
         $req->bindValue(':expires_at', $expiresAt, $expiresAt === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $this->Db->execute($req);
@@ -88,7 +98,7 @@ final class Announcements extends AbstractRest
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
 
-        return array_map($this->hydrate(...), $req->fetchAll());
+        return $this->attachReactions(array_map($this->hydrate(...), $req->fetchAll()));
     }
 
     /**
@@ -105,7 +115,7 @@ final class Announcements extends AbstractRest
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
 
-        return array_map($this->hydrate(...), $req->fetchAll());
+        return $this->attachReactions(array_map($this->hydrate(...), $req->fetchAll()));
     }
 
     #[Override]
@@ -118,12 +128,19 @@ final class Announcements extends AbstractRest
         $this->Db->execute($req);
         $announcement = $this->Db->fetch($req);
 
-        return $this->hydrate($announcement);
+        return $this->attachReactions(array($this->hydrate($announcement)))[0];
     }
 
     #[Override]
     public function patch(Action $action, array $params): array
     {
+        // reacting is the one action any team member can do, not just an admin
+        if ($action === Action::React) {
+            $this->readOne();
+            $this->toggleReaction($this->getEmoji($params['emoji'] ?? null));
+            return $this->readOne();
+        }
+
         $this->canWriteOrExplode();
         $announcement = $this->readOne();
 
@@ -139,14 +156,16 @@ final class Announcements extends AbstractRest
 
         $title = array_key_exists('title', $params) ? $this->getTitle($params['title']) : $announcement['title'];
         $body = array_key_exists('body', $params) ? $this->getBody($params['body']) : $announcement['body'];
+        $imageUrl = array_key_exists('image_url', $params) ? $this->getImageUrl($params['image_url']) : $announcement['image_url'];
         $severity = array_key_exists('severity', $params) ? $this->getSeverity($params['severity']) : $announcement['severity'];
         $expiresAt = array_key_exists('expires_at', $params) ? $this->getExpiresAt($params['expires_at']) : $announcement['expires_at'];
 
-        $sql = 'UPDATE custom_announcements SET title = :title, body = :body, severity = :severity, expires_at = :expires_at
+        $sql = 'UPDATE custom_announcements SET title = :title, body = :body, image_url = :image_url, severity = :severity, expires_at = :expires_at
             WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':title', $title);
         $req->bindValue(':body', $body, $body === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':image_url', $imageUrl, $imageUrl === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':severity', $severity);
         $req->bindValue(':expires_at', $expiresAt, $expiresAt === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
@@ -195,7 +214,7 @@ final class Announcements extends AbstractRest
     /** The SELECT/FROM shared by readAll()/readActive()/readOne(). */
     private static function selectSql(): string
     {
-        return 'SELECT announcement.id, announcement.title, announcement.body, announcement.severity,
+        return 'SELECT announcement.id, announcement.title, announcement.body, announcement.image_url, announcement.severity,
                 announcement.pinned, announcement.userid, announcement.created_at,
                 DATE_FORMAT(announcement.expires_at, "%Y-%m-%dT%H:%i:%sZ") AS expires_at,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname
@@ -208,8 +227,82 @@ final class Announcements extends AbstractRest
         $announcement['id'] = (int) $announcement['id'];
         $announcement['userid'] = (int) $announcement['userid'];
         $announcement['pinned'] = (bool) $announcement['pinned'];
+        // the textarea is stored as plain text (toPureString()); bare URLs
+        // are only turned into clickable links here, at render time
+        $announcement['body_html'] = $announcement['body'] !== null
+            ? Filter::linkify(htmlspecialchars($announcement['body'], ENT_QUOTES, 'UTF-8'))
+            : null;
 
         return $announcement;
+    }
+
+    /**
+     * Add each announcement's reaction counts (emoji => how many) and the
+     * current user's own reaction (or null), in one extra query per list
+     * instead of one per row.
+     */
+    private function attachReactions(array $announcements): array
+    {
+        if ($announcements === array()) {
+            return $announcements;
+        }
+        $ids = implode(',', array_column($announcements, 'id'));
+
+        $counts = array();
+        $req = $this->Db->q("SELECT announcement_id, emoji, COUNT(*) AS reaction_count
+            FROM custom_announcement_reactions
+            WHERE announcement_id IN ($ids)
+            GROUP BY announcement_id, emoji");
+        while ($row = $req->fetch(PDO::FETCH_ASSOC)) {
+            $counts[(int) $row['announcement_id']][(string) $row['emoji']] = (int) $row['reaction_count'];
+        }
+
+        $mine = array();
+        $sqlMine = "SELECT announcement_id, emoji FROM custom_announcement_reactions
+            WHERE announcement_id IN ($ids) AND userid = :userid";
+        $reqMine = $this->Db->prepare($sqlMine);
+        $reqMine->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $this->Db->execute($reqMine);
+        while ($row = $reqMine->fetch(PDO::FETCH_ASSOC)) {
+            $mine[(int) $row['announcement_id']] = (string) $row['emoji'];
+        }
+
+        foreach ($announcements as &$announcement) {
+            $announcement['reactions'] = $counts[$announcement['id']] ?? array();
+            $announcement['my_reaction'] = $mine[$announcement['id']] ?? null;
+        }
+        unset($announcement);
+
+        return $announcements;
+    }
+
+    /**
+     * Picking a reaction you already have removes it; picking a different
+     * one replaces it -- one reaction per user per announcement, like a
+     * quick "how do I feel about this" rather than a full emoji picker.
+     */
+    private function toggleReaction(string $emoji): void
+    {
+        $req = $this->Db->prepare('SELECT emoji FROM custom_announcement_reactions WHERE announcement_id = :id AND userid = :userid');
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $current = $req->fetch(PDO::FETCH_COLUMN);
+
+        $delete = $this->Db->prepare('DELETE FROM custom_announcement_reactions WHERE announcement_id = :id AND userid = :userid');
+        $delete->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $delete->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $this->Db->execute($delete);
+
+        if ($current === $emoji) {
+            return;
+        }
+
+        $insert = $this->Db->prepare('INSERT INTO custom_announcement_reactions (announcement_id, userid, emoji) VALUES (:id, :userid, :emoji)');
+        $insert->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $insert->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $insert->bindValue(':emoji', $emoji);
+        $this->Db->execute($insert);
     }
 
     private function updateExpiresAt(string $expiresAt): void
@@ -256,6 +349,26 @@ final class Announcements extends AbstractRest
             throw new ImproperActionException('Announcement text must be shorter than 10000 characters.');
         }
         return $body;
+    }
+
+    private function getImageUrl(mixed $value): ?string
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+        $url = trim((string) $value);
+        if (mb_strlen($url) > 2048 || filter_var($url, FILTER_VALIDATE_URL) === false || !str_starts_with($url, 'http')) {
+            throw new ImproperActionException('Invalid image URL.');
+        }
+        return $url;
+    }
+
+    private function getEmoji(mixed $value): string
+    {
+        if (!in_array($value, self::REACTIONS, true)) {
+            throw new ImproperActionException('Invalid reaction.');
+        }
+        return $value;
     }
 
     private function getExpiresAt(mixed $value): ?string

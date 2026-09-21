@@ -84,6 +84,21 @@ final class Filter
     }
 
     /**
+     * Turn bare http(s) URLs in an already-plain-text, already-escaped
+     * string into clickable links. Used for announcement bodies: the
+     * textarea stays plain text (toPureString()), so this is applied only
+     * at render time rather than baked into what's stored.
+     */
+    public static function linkify(string $escapedInput): string
+    {
+        return (string) preg_replace(
+            '/(https?:\/\/[^\s<]+)/i',
+            '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
+            $escapedInput,
+        );
+    }
+
+    /**
      * Return 0 or 1 if input is on. Used for UCP.
      */
     public static function onToBinary(?string $input): int

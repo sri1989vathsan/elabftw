@@ -16,7 +16,9 @@
             <i class='fa-fw fas {{ announcement.severity == 'warning' ? 'fa-triangle-exclamation' : 'fa-info-circle' }} color-{{ announcement.severity == 'warning' ? 'warning' : 'info' }}'></i>
             <a href='#' class='close' data-dismiss='alert' data-action='save-dismiss' data-dismiss-key='announcement_{{ announcement.id }}'>&times;</a>
             <strong>{{ announcement.title|raw }}</strong>
-            {% if announcement.body %}<div class='mt-1'>{{ announcement.body|raw }}</div>{% endif %}
+            {% if announcement.body %}<div class='mt-1'>{{ announcement.body_html|raw }}</div>{% endif %}
+            {% if announcement.image_url %}<img class='announcement-tweet-image mt-2' src='{{ announcement.image_url }}' alt=''>{% endif %}
+            {% include 'announcement-reactions.html' %}
             {% if App.Users.isAdmin %}
               <div class='mt-1'>
                 <a href='#' data-action='toggle-next' data-toggle-target='announcementEditForm-{{ announcement.id }}' aria-expanded='false' aria-controls='announcementEditForm-{{ announcement.id }}'>{{ 'Edit'|trans }}</a>

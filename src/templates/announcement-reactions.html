@@ -1,0 +1,20 @@
+{# Reaction bar for one announcement -- a small fixed set of emoji (see
+   Announcements::REACTIONS), one pick per user per announcement, toggled by
+   clicking the same one again. Expects `announcement` in scope. #}
+<div class='announcement-reactions mt-1'>
+  {% for emoji in ['👍', '👎', '❤️', '🎉'] %}
+    <button
+      type='button'
+      class='announcement-reaction-btn {{ announcement.my_reaction == emoji ? 'active' : '' }}'
+      data-action='react-to-announcement'
+      data-id='{{ announcement.id }}'
+      data-emoji='{{ emoji }}'
+      title='{{ emoji }}'
+    >
+      <span aria-hidden='true'>{{ emoji }}</span>
+      {% if announcement.reactions[emoji] is defined and announcement.reactions[emoji] > 0 %}
+        <span class='announcement-reaction-count'>{{ announcement.reactions[emoji] }}</span>
+      {% endif %}
+    </button>
+  {% endfor %}
+</div>

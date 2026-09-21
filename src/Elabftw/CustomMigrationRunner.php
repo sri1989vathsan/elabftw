@@ -103,6 +103,7 @@ final class CustomMigrationRunner
         '062_todolist_project_entity_links.sql',
         '063_announcements.sql',
         '064_announcement_pinned.sql',
+        '065_announcement_image_and_reactions.sql',
     );
 
     private Db $Db;

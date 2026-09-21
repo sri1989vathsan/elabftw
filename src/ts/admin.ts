@@ -138,11 +138,13 @@ on('destroy-teamgroup', (el: HTMLElement) => {
   }
 });
 
-// managing an announcement is possible both from the admin panel
-// (announcementsAdminDiv) and inline from the dashboard (announcementBanner,
-// announcementFeed) -- reloadElements() silently skips whichever of these
-// isn't present on the current page, so the same handlers work from both.
-const ANNOUNCEMENT_RELOAD_TARGETS = ['announcementsAdminDiv', 'announcementBanner', 'announcementFeed'];
+// managing an announcement is possible from the admin panel
+// (announcementsAdminDiv), inline from the dashboard (announcementBanner,
+// announcementFeed), and reacting to one from the history page
+// (announcementsHistoryList) too -- reloadElements() silently skips
+// whichever of these isn't present on the current page, so the same
+// handlers work from all of them.
+const ANNOUNCEMENT_RELOAD_TARGETS = ['announcementsAdminDiv', 'announcementBanner', 'announcementFeed', 'announcementsHistoryList'];
 
 on('create-announcement', (_, event: Event) => {
   event.preventDefault();
@@ -163,6 +165,14 @@ on('save-announcement', (el: HTMLElement, event: Event) => {
 
 on('toggle-pin-announcement', (el: HTMLElement) => {
   ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.Pin}).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
+});
+
+// reacting is open to any team member, not just an admin -- unlike the
+// other announcement actions above, Announcements::patch() doesn't gate
+// this one behind canWriteOrExplode()
+on('react-to-announcement', (el: HTMLElement) => {
+  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.React, emoji: el.dataset.emoji})
+    .then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
 });
 
 on('expire-announcement', (el: HTMLElement) => {

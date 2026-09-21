@@ -134,34 +134,44 @@
     <hr>
     <div class='list-group mt-1' id='announcementFeed' style='max-height: min(70vh, 600px); overflow-y: auto;'>
       {% for announcement in announcementsArr|slice(0, 10) %}
-        <div class='list-group-item breakable'>
-          <div class='d-flex justify-content-between align-items-start'>
-            <strong>
-              {% if announcement.pinned %}<i class='fas fa-thumbtack fa-fw color-warning' title='{{ 'Pinned'|trans }}'></i>{% endif %}
-              {% if announcement.severity == 'warning' %}
-                <i class='fas fa-triangle-exclamation color-warning mr-1' title='{{ 'Warning'|trans }}'></i>
-              {% else %}
-                <i class='fas fa-circle-info text-primary mr-1' title='{{ 'Info'|trans }}'></i>
-              {% endif %}
-              <a href='announcements.php#announcement-{{ announcement.id }}'>{{ announcement.title|raw }}</a>
-            </strong>
-            <span title='{{ announcement.created_at }}' class='relative-moment text-nowrap smallgray'></span>
-          </div>
-          {% if announcement.body %}
-            <div class='smallgray mt-1 announcement-feed-body-clamp' data-announcement-body>{{ announcement.body }}</div>
-            <a href='announcements.php#announcement-{{ announcement.id }}' class='smallgray d-none' data-announcement-readmore>{{ 'Read more…'|trans }}</a>
-          {% endif %}
-          {% if App.Users.isAdmin %}
-            <div class='mt-1'>
-              <button type='button' class='btn btn-sm btn-link p-0' data-action='toggle-next' data-toggle-target='announcementEditForm-{{ announcement.id }}' aria-expanded='false' aria-controls='announcementEditForm-{{ announcement.id }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit'|trans }}'>
-                <i class='fas fa-edit'></i>
-              </button>
-              <button type='button' class='btn btn-sm btn-link p-0 ml-2' data-action='toggle-pin-announcement' data-id='{{ announcement.id }}' title='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}' aria-label='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}'>
-                <i class='fas fa-thumbtack'></i>
-              </button>
+        <div class='list-group-item breakable announcement-tweet'>
+          <div class='announcement-tweet-avatar' aria-hidden='true'>{{ announcement.author_fullname|first|upper }}</div>
+          <div class='announcement-tweet-main'>
+            <div class='d-flex justify-content-between align-items-start'>
+              <div>
+                <strong>{{ announcement.author_fullname }}</strong>
+                {% if announcement.pinned %}<i class='fas fa-thumbtack fa-fw color-warning ml-1' title='{{ 'Pinned'|trans }}'></i>{% endif %}
+                {% if announcement.severity == 'warning' %}
+                  <i class='fas fa-triangle-exclamation color-warning ml-1' title='{{ 'Warning'|trans }}'></i>
+                {% else %}
+                  <i class='fas fa-circle-info text-primary ml-1' title='{{ 'Info'|trans }}'></i>
+                {% endif %}
+              </div>
+              <span title='{{ announcement.created_at }}' class='relative-moment text-nowrap smallgray'></span>
             </div>
-            {% include 'announcement-edit-form.html' %}
-          {% endif %}
+            <a class='announcement-tweet-title d-block' href='announcements.php#announcement-{{ announcement.id }}'>{{ announcement.title|raw }}</a>
+            {% if announcement.body %}
+              <div class='mt-1 announcement-feed-body-clamp' data-announcement-body>{{ announcement.body_html|raw }}</div>
+              <a href='announcements.php#announcement-{{ announcement.id }}' class='smallgray d-none' data-announcement-readmore>{{ 'Read more…'|trans }}</a>
+            {% endif %}
+            {% if announcement.image_url %}
+              <a href='announcements.php#announcement-{{ announcement.id }}'>
+                <img class='announcement-tweet-image mt-2' src='{{ announcement.image_url }}' alt=''>
+              </a>
+            {% endif %}
+            {% include 'announcement-reactions.html' %}
+            {% if App.Users.isAdmin %}
+              <div class='mt-1'>
+                <button type='button' class='btn btn-sm btn-link p-0' data-action='toggle-next' data-toggle-target='announcementEditForm-{{ announcement.id }}' aria-expanded='false' aria-controls='announcementEditForm-{{ announcement.id }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit'|trans }}'>
+                  <i class='fas fa-edit'></i>
+                </button>
+                <button type='button' class='btn btn-sm btn-link p-0 ml-2' data-action='toggle-pin-announcement' data-id='{{ announcement.id }}' title='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}' aria-label='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}'>
+                  <i class='fas fa-thumbtack'></i>
+                </button>
+              </div>
+              {% include 'announcement-edit-form.html' %}
+            {% endif %}
+          </div>
         </div>
       {% else %}
         <p class='smallgray'>{{ 'No announcements yet.'|trans }}</p>

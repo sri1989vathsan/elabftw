@@ -158,6 +158,71 @@ body::before {
   overflow: hidden;
 }
 
+/* dashboard feed entry laid out like a tweet: a round avatar (author's
+ * initial) to the left, everything else -- author, timestamp, title, body,
+ * optional photo, reactions -- stacked to its right. */
+.announcement-tweet {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.announcement-tweet-avatar {
+  align-items: center;
+  background: var(--primary);
+  border-radius: 50%;
+  color: var(--white);
+  display: flex;
+  flex: 0 0 auto;
+  font-weight: 700;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+
+.announcement-tweet-main {
+  min-width: 0;
+}
+
+.announcement-tweet-title {
+  font-weight: 700;
+}
+
+.announcement-tweet-image {
+  border: 1px solid var(--secondary);
+  border-radius: 0.5rem;
+  display: block;
+  max-height: 240px;
+  max-width: 100%;
+  object-fit: cover;
+}
+
+.announcement-reactions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.announcement-reaction-btn {
+  background: var(--secondlevel);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 0.2rem 0.5rem;
+}
+
+.announcement-reaction-btn:hover {
+  background: var(--firstlevel);
+}
+
+.announcement-reaction-btn.active {
+  border-color: var(--primary);
+}
+
+.announcement-reaction-count {
+  color: var(--medium);
+  margin-left: 0.2rem;
+}
+
 /* briefly highlight the announcement a notification/feed link points to on
  * the history page, so it's obvious which one the reader was sent for */
 [data-announcement-anchor]:target {

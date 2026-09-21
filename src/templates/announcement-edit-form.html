@@ -9,10 +9,15 @@
   <div class='form-group'>
     <label for='announcement_edit_body_{{ announcement.id }}'>{{ 'Message'|trans }}</label>
     <textarea name='body' id='announcement_edit_body_{{ announcement.id }}' class='form-control' rows='3' data-allow-empty='1'>{{ announcement.body }}</textarea>
+    <small class='smallgray'>{{ 'Links (https://…) are shown as clickable text automatically.'|trans }}</small>
+  </div>
+  <div class='form-group'>
+    <label for='announcement_edit_image_url_{{ announcement.id }}'>{{ 'Image URL (optional)'|trans }}</label>
+    <input type='url' name='image_url' id='announcement_edit_image_url_{{ announcement.id }}' class='form-control' placeholder='https://…' value='{{ announcement.image_url }}' data-allow-empty='1'>
   </div>
   <div class='d-flex flex-wrap'>
     <div class='form-group col-md-4 pl-0'>
-      <label for='announcement_edit_severity_{{ announcement.id }}'>{{ 'Severity'|trans }}</label>
+      <label for='announcement_edit_severity_{{ announcement.id }}'>{{ 'Type'|trans }}</label>
       <select name='severity' id='announcement_edit_severity_{{ announcement.id }}' class='form-control'>
         <option value='info' {{ announcement.severity == 'info' ? 'selected' : '' }}>{{ 'Info'|trans }}</option>
         <option value='warning' {{ announcement.severity == 'warning' ? 'selected' : '' }}>{{ 'Warning'|trans }}</option>

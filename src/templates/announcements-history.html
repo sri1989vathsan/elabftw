@@ -5,7 +5,7 @@
   <h1>{{ 'Announcements'|trans }}</h1>
 
   {% if announcements|length > 0 %}
-    <div class='card mt-3'>
+    <div class='card mt-3' id='announcementsHistoryList'>
       {% for announcement in announcements %}
         <div id='announcement-{{ announcement.id }}' class='p-3 d-flex align-items-start justify-content-between {{ not loop.last ? 'border-bottom' }}' data-announcement-anchor>
           <div class='flex-grow-1'>
@@ -19,7 +19,10 @@
               {{ announcement.title }}
             </strong>
             {% if announcement.body %}
-              <div class='breakable mt-1'>{{ announcement.body }}</div>
+              <div class='breakable mt-1'>{{ announcement.body_html|raw }}</div>
+            {% endif %}
+            {% if announcement.image_url %}
+              <img class='announcement-tweet-image mt-2' src='{{ announcement.image_url }}' alt=''>
             {% endif %}
             <div class='smallgray mt-1'>
               {{ 'by %s'|trans|format(announcement.author_fullname) }}
@@ -34,6 +37,7 @@
                 {% endif %}
               {% endif %}
             </div>
+            {% include 'announcement-reactions.html' %}
           </div>
         </div>
       {% endfor %}
