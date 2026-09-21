@@ -17,6 +17,7 @@ use Elabftw\Enums\AccessType;
 use Elabftw\Exceptions\AppException;
 use Elabftw\Exceptions\IllegalActionException;
 use Elabftw\Factories\LinksFactory;
+use Elabftw\Models\Announcements;
 use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\FavTags;
@@ -50,6 +51,7 @@ try {
     }
 
     $ItemsTypes = new ItemsTypes($App->Users, Filter::intOrNull($Request->query->getInt('templateid')));
+    $Announcements = new Announcements($App->Users);
     $Status = new ExperimentsStatus($App->Teams);
     $ItemsStatus = new ItemsStatus($App->Teams);
     $TeamTags = new TeamTags($App->Users);
@@ -112,6 +114,7 @@ try {
     $template = 'admin.html';
     $renderArr = array(
         'allTeamUsersArr' => $allTeamUsersArr,
+        'announcementsAdminArr' => $Announcements->readAll(),
         'experimentsFoldersArr' => $experimentsFoldersArr,
         'tagsArr' => $TeamTags->readAll(),
         'metadataGroups' => $metadataGroups,

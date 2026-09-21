@@ -137,6 +137,34 @@ on('destroy-teamgroup', (el: HTMLElement) => {
   }
 });
 
+on('create-announcement', (_, event: Event) => {
+  event.preventDefault();
+  const form = document.getElementById('createAnnouncementForm') as HTMLFormElement;
+  const params = collectForm(form);
+  ApiC.post(Model.Announcement, params).then(() => {
+    reloadElements(['announcementsAdminDiv']);
+    form.reset();
+  });
+});
+
+on('save-announcement', (el: HTMLElement, event: Event) => {
+  event.preventDefault();
+  const form = document.getElementById(`announcementEditForm-${el.dataset.id}`) as HTMLFormElement;
+  const params = collectForm(form);
+  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, params).then(() => reloadElements(['announcementsAdminDiv']));
+});
+
+on('expire-announcement', (el: HTMLElement) => {
+  ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, {action: Action.Expire}).then(() => reloadElements(['announcementsAdminDiv']));
+});
+
+on('destroy-announcement', (el: HTMLElement) => {
+  if (confirm(i18next.t('generic-delete-warning'))) {
+    ApiC.delete(`${Model.Announcement}/${el.dataset.id}`)
+      .then(() => reloadElements(['announcementsAdminDiv']));
+  }
+});
+
 // show the "inside the ZIP, save each entry as" picker only when a zip format is selected
 function toggleZipEntityFormat(formatSelectId: string, wrapperId: string): void {
   const formatSelect = document.getElementById(formatSelectId) as HTMLSelectElement;
