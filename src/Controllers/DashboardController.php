@@ -16,6 +16,7 @@ use DateTimeImmutable;
 use Elabftw\Elabftw\PermissionsHelper;
 use Elabftw\Enums\EntityType;
 use Elabftw\Enums\Orderby;
+use Elabftw\Models\Announcements;
 use Elabftw\Models\Experiments;
 use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\FavTags;
@@ -77,6 +78,7 @@ final class DashboardController extends AbstractHtmlController
         $ExperimentsStatus = new ExperimentsStatus($this->app->Teams);
         $ItemsStatus = new ItemsStatus($this->app->Teams);
         $UserRequestActions = new UserRequestActions($this->app->Users);
+        $Announcements = new Announcements($this->app->Users);
 
         $DisplayParamsTemplates = new DisplayParams($this->app->Users, EntityType::Templates);
         $DisplayParamsItemsTypes = new DisplayParams($this->app->Users, EntityType::ItemsTypes);
@@ -87,6 +89,7 @@ final class DashboardController extends AbstractHtmlController
         return array_merge(
             parent::getData(),
             array(
+                'announcementsArr' => $Announcements->readActive(),
                 'bookingsArr' => $Scheduler->readAll(),
                 'itemsStatusArr' => $ItemsStatus->readAll(),
                 'experimentsArr' => $Experiments->readShow($DisplayParamsExp),

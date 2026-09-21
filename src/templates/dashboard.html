@@ -5,10 +5,11 @@
 {% include 'show-view-edit.html' %}
 <h2>{{ 'Welcome %s'|trans|format(App.Users.userData.firstname) }}</h2>
 
+{% include 'announcements-show.html' %}
 {% include 'request-actions-show.html' %}
 <hr>
 <div class='row'>
-  <div class='col-md-4'>
+  <div class='col-md-6'>
     <div class='d-flex justify-content-between'>
       <h3><a href='experiments.php'><i class='fas fa-flask mr-2'></i>{% trans %}Experiment{% plural 2 %}Experiments{% endtrans %}</a></h3>
       <div>

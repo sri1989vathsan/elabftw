@@ -1,0 +1,11 @@
+{# team announcements, dismissible per-user via localStorage, same mechanism as #safariWarning/the msg filter #}
+{% if announcementsArr %}
+  {% for announcement in announcementsArr %}
+    <div role='status' hidden class='alert alert-{{ announcement.severity == 'warning' ? 'warning' : 'info' }}'>
+      <i class='fa-fw fas {{ announcement.severity == 'warning' ? 'fa-triangle-exclamation' : 'fa-info-circle' }} color-{{ announcement.severity == 'warning' ? 'warning' : 'info' }}'></i>
+      <a href='#' class='close' data-dismiss='alert' data-action='save-dismiss' data-dismiss-key='announcement_{{ announcement.id }}'>&times;</a>
+      <strong>{{ announcement.title|raw }}</strong>
+      {% if announcement.body %}<div class='mt-1'>{{ announcement.body|raw }}</div>{% endif %}
+    </div>
+  {% endfor %}
+{% endif %}
