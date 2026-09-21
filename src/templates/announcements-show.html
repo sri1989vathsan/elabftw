@@ -21,11 +21,11 @@
             {% include 'announcement-reactions.html' %}
             {% if App.Users.isAdmin %}
               <div class='mt-1'>
-                <a href='#' data-action='toggle-next' data-toggle-target='announcementEditForm-{{ announcement.id }}' aria-expanded='false' aria-controls='announcementEditForm-{{ announcement.id }}'>{{ 'Edit'|trans }}</a>
+                <a href='#' data-action='toggle-next' data-toggle-target='announcementEditForm-banner-{{ announcement.id }}' aria-expanded='false' aria-controls='announcementEditForm-banner-{{ announcement.id }}'>{{ 'Edit'|trans }}</a>
                 &middot;
                 <a href='#' data-action='toggle-pin-announcement' data-id='{{ announcement.id }}'>{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}</a>
               </div>
-              {% include 'announcement-edit-form.html' %}
+              {% include 'announcement-edit-form.html' with {'idPrefix': 'banner-'} %}
             {% endif %}
           </div>
         {% endfor %}

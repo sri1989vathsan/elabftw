@@ -44,8 +44,12 @@ final class Announcements extends AbstractRest
 
     private const array SEVERITIES = array('info', 'warning');
 
-    /** The only emoji a reaction can be -- keeps the reaction bar a fixed, predictable row instead of a full picker. */
-    private const array REACTIONS = array('👍', '👎', '❤️', '🎉');
+    /**
+     * The only emoji a reaction can be -- keeps the reaction bar a fixed,
+     * predictable row instead of a full picker. A reader can pick more
+     * than one of these on the same announcement (see toggleReaction()).
+     */
+    private const array REACTIONS = array('👍', '👎', '❤️', '🎉', '😂', '😮', '😢', '👏', '🔥', '🙌', '🤔', '👀');
 
     public function __construct(private Users $Users, ?int $id = null)
     {
@@ -238,8 +242,8 @@ final class Announcements extends AbstractRest
 
     /**
      * Add each announcement's reaction counts (emoji => how many) and the
-     * current user's own reaction (or null), in one extra query per list
-     * instead of one per row.
+     * current user's own reactions (a list, possibly more than one), in
+     * one extra query per list instead of one per row.
      */
     private function attachReactions(array $announcements): array
     {
@@ -264,12 +268,12 @@ final class Announcements extends AbstractRest
         $reqMine->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
         $this->Db->execute($reqMine);
         while ($row = $reqMine->fetch(PDO::FETCH_ASSOC)) {
-            $mine[(int) $row['announcement_id']] = (string) $row['emoji'];
+            $mine[(int) $row['announcement_id']][] = (string) $row['emoji'];
         }
 
         foreach ($announcements as &$announcement) {
             $announcement['reactions'] = $counts[$announcement['id']] ?? array();
-            $announcement['my_reaction'] = $mine[$announcement['id']] ?? null;
+            $announcement['my_reactions'] = $mine[$announcement['id']] ?? array();
         }
         unset($announcement);
 
@@ -277,24 +281,25 @@ final class Announcements extends AbstractRest
     }
 
     /**
-     * Picking a reaction you already have removes it; picking a different
-     * one replaces it -- one reaction per user per announcement, like a
-     * quick "how do I feel about this" rather than a full emoji picker.
+     * Picking a reaction you already have removes it; picking one you
+     * don't have adds it alongside any others you've already picked on
+     * this same announcement -- more than one reaction per user is fine,
+     * just not the same one twice.
      */
     private function toggleReaction(string $emoji): void
     {
-        $req = $this->Db->prepare('SELECT emoji FROM custom_announcement_reactions WHERE announcement_id = :id AND userid = :userid');
+        $req = $this->Db->prepare('SELECT 1 FROM custom_announcement_reactions WHERE announcement_id = :id AND userid = :userid AND emoji = :emoji');
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $req->bindValue(':emoji', $emoji);
         $this->Db->execute($req);
-        $current = $req->fetch(PDO::FETCH_COLUMN);
 
-        $delete = $this->Db->prepare('DELETE FROM custom_announcement_reactions WHERE announcement_id = :id AND userid = :userid');
-        $delete->bindParam(':id', $this->id, PDO::PARAM_INT);
-        $delete->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
-        $this->Db->execute($delete);
-
-        if ($current === $emoji) {
+        if ($req->fetch(PDO::FETCH_COLUMN) !== false) {
+            $delete = $this->Db->prepare('DELETE FROM custom_announcement_reactions WHERE announcement_id = :id AND userid = :userid AND emoji = :emoji');
+            $delete->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $delete->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
+            $delete->bindValue(':emoji', $emoji);
+            $this->Db->execute($delete);
             return;
         }
 

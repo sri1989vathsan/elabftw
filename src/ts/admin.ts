@@ -158,7 +158,12 @@ on('create-announcement', (_, event: Event) => {
 
 on('save-announcement', (el: HTMLElement, event: Event) => {
   event.preventDefault();
-  const form = document.getElementById(`announcementEditForm-${el.dataset.id}`) as HTMLFormElement;
+  // el.closest('form'), not getElementById(`announcementEditForm-${id}`):
+  // the same announcement can have more than one edit form on the page at
+  // once (the dashboard's banner dropdown and feed both render one for
+  // every active announcement), so the id alone doesn't pick out the one
+  // that was actually submitted.
+  const form = el.closest('form') as HTMLFormElement;
   const params = collectForm(form);
   ApiC.patch(`${Model.Announcement}/${el.dataset.id}`, params).then(() => reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementWidgets));
 });

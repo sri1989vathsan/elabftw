@@ -1,31 +1,39 @@
-{# Edit form for one announcement. Expects `announcement` in scope. Shared
-   between the admin Announcements tab and the dashboard's own inline admin
-   controls so both edit an announcement the same way. #}
-<form class='mt-3' id='announcementEditForm-{{ announcement.id }}' hidden aria-label='{{ 'Edit announcement'|trans }} {{ announcement.title }}'>
+{# Edit form for one announcement. Expects `announcement` in scope, and
+   `idPrefix` (a short string unique to the surface including this partial
+   -- 'admin-', 'feed-', 'banner-' -- since the same announcement.id can be
+   rendered by more than one of these on the same page at once, e.g. the
+   dashboard's banner dropdown and feed both loop over every active
+   announcement; without a distinct prefix their form/field ids collide and
+   the *first* one in the DOM -- not necessarily the one actually clicked --
+   is the one getElementById()/the "Edit" toggle button actually reaches).
+   Shared between the admin Announcements tab, the dashboard banner and
+   feed, and the history page so they all edit an announcement the same
+   way. #}
+<form class='mt-3' id='announcementEditForm-{{ idPrefix }}{{ announcement.id }}' hidden aria-label='{{ 'Edit announcement'|trans }} {{ announcement.title }}'>
   <div class='form-group'>
-    <label for='announcement_edit_title_{{ announcement.id }}'>{{ 'Title'|trans }}</label>
-    <input type='text' required name='title' id='announcement_edit_title_{{ announcement.id }}' class='form-control' value='{{ announcement.title }}' maxlength='255'>
+    <label for='announcement_edit_title_{{ idPrefix }}{{ announcement.id }}'>{{ 'Title'|trans }}</label>
+    <input type='text' required name='title' id='announcement_edit_title_{{ idPrefix }}{{ announcement.id }}' class='form-control' value='{{ announcement.title }}' maxlength='255'>
   </div>
   <div class='form-group'>
-    <label for='announcement_edit_body_{{ announcement.id }}'>{{ 'Message'|trans }}</label>
-    <textarea name='body' id='announcement_edit_body_{{ announcement.id }}' class='form-control' rows='3' data-allow-empty='1'>{{ announcement.body }}</textarea>
+    <label for='announcement_edit_body_{{ idPrefix }}{{ announcement.id }}'>{{ 'Message'|trans }}</label>
+    <textarea name='body' id='announcement_edit_body_{{ idPrefix }}{{ announcement.id }}' class='form-control' rows='3' data-allow-empty='1'>{{ announcement.body }}</textarea>
     <small class='smallgray'>{{ 'Links (https://…) are shown as clickable text automatically.'|trans }}</small>
   </div>
   <div class='form-group'>
-    <label for='announcement_edit_image_url_{{ announcement.id }}'>{{ 'Image URL (optional)'|trans }}</label>
-    <input type='url' name='image_url' id='announcement_edit_image_url_{{ announcement.id }}' class='form-control' placeholder='https://…' value='{{ announcement.image_url }}' data-allow-empty='1'>
+    <label for='announcement_edit_image_url_{{ idPrefix }}{{ announcement.id }}'>{{ 'Image URL (optional)'|trans }}</label>
+    <input type='url' name='image_url' id='announcement_edit_image_url_{{ idPrefix }}{{ announcement.id }}' class='form-control' placeholder='https://…' value='{{ announcement.image_url }}' data-allow-empty='1'>
   </div>
   <div class='d-flex flex-wrap'>
     <div class='form-group col-md-4 pl-0'>
-      <label for='announcement_edit_severity_{{ announcement.id }}'>{{ 'Type'|trans }}</label>
-      <select name='severity' id='announcement_edit_severity_{{ announcement.id }}' class='form-control'>
+      <label for='announcement_edit_severity_{{ idPrefix }}{{ announcement.id }}'>{{ 'Type'|trans }}</label>
+      <select name='severity' id='announcement_edit_severity_{{ idPrefix }}{{ announcement.id }}' class='form-control'>
         <option value='info' {{ announcement.severity == 'info' ? 'selected' : '' }}>{{ 'Info'|trans }}</option>
         <option value='warning' {{ announcement.severity == 'warning' ? 'selected' : '' }}>{{ 'Warning'|trans }}</option>
       </select>
     </div>
     <div class='form-group col-md-4'>
-      <label for='announcement_edit_expires_at_{{ announcement.id }}'>{{ 'Expires on (optional)'|trans }}</label>
-      <input type='datetime-local' name='expires_at' id='announcement_edit_expires_at_{{ announcement.id }}' class='form-control' value='{{ announcement.expires_at ? announcement.expires_at|slice(0, 16) : '' }}' data-allow-empty='1'>
+      <label for='announcement_edit_expires_at_{{ idPrefix }}{{ announcement.id }}'>{{ 'Expires on (optional)'|trans }}</label>
+      <input type='datetime-local' name='expires_at' id='announcement_edit_expires_at_{{ idPrefix }}{{ announcement.id }}' class='form-control' value='{{ announcement.expires_at ? announcement.expires_at|slice(0, 16) : '' }}' data-allow-empty='1'>
     </div>
   </div>
   <button class='btn btn-primary' type='submit' data-action='save-announcement' data-id='{{ announcement.id }}'>{{ 'Save'|trans }}</button>

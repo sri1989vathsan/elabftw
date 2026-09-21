@@ -748,7 +748,7 @@
               <i class='fas fa-fw {{ announcement.severity == 'warning' ? 'fa-triangle-exclamation' : 'fa-info-circle' }}'></i> {{ announcement.title|raw }}
             </h3>
             <div>
-              <button type='button' class='btn btn-neutral' data-action='toggle-next' data-toggle-target='announcementEditForm-{{ announcement.id }}' aria-expanded='false' aria-controls='announcementEditForm-{{ announcement.id }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit'|trans }}'>
+              <button type='button' class='btn btn-neutral' data-action='toggle-next' data-toggle-target='announcementEditForm-admin-{{ announcement.id }}' aria-expanded='false' aria-controls='announcementEditForm-admin-{{ announcement.id }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit'|trans }}'>
                 <i class='fas fa-edit'></i>
               </button>
               <button type='button' class='btn btn-neutral {{ announcement.pinned ? 'active' : '' }}' data-action='toggle-pin-announcement' data-id='{{ announcement.id }}' title='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}' aria-label='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}'>
@@ -772,7 +772,7 @@
           </p>
 
           {# EDIT (hidden until the Edit button toggles it) #}
-          {% include 'announcement-edit-form.html' %}
+          {% include 'announcement-edit-form.html' with {'idPrefix': 'admin-'} %}
         </div>
       {% endfor %}
     </div>

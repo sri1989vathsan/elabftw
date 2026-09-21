@@ -158,12 +158,49 @@ body::before {
   overflow: hidden;
 }
 
-/* dashboard feed entry laid out like a tweet: a round avatar (author's
- * initial) to the left, everything else -- author, timestamp, title, body,
- * optional photo, reactions -- stacked to its right. */
-.announcement-tweet {
+/* dashboard feed: a stack of individual cards, not a plain list -- gap
+ * between them (instead of list-group's hairline dividers) is what actually
+ * reads as "separate items" rather than one continuous block. */
+.announcement-card-list {
   display: flex;
+  flex-direction: column;
   gap: 0.6rem;
+}
+
+.announcement-card {
+  background: var(--secondlevel);
+  border: 1px solid var(--secondary);
+  border-radius: 0.6rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.announcement-card-header {
+  align-items: baseline;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.announcement-card-title {
+  font-weight: 700;
+}
+
+/* the message is the point of the card -- a tinted, left-accented block
+ * makes it the thing the eye lands on first, ahead of who posted it and
+ * when (pushed down to a quiet footer instead). */
+.announcement-card-body {
+  background: var(--firstlevel);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 0.35rem 0.35rem 0;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.7rem;
+}
+
+.announcement-card-footer {
+  align-items: center;
+  display: flex;
+  gap: 0.4rem;
 }
 
 .announcement-tweet-avatar {
@@ -173,18 +210,11 @@ body::before {
   color: var(--white);
   display: flex;
   flex: 0 0 auto;
+  font-size: 0.7rem;
   font-weight: 700;
-  height: 2.25rem;
+  height: 1.5rem;
   justify-content: center;
-  width: 2.25rem;
-}
-
-.announcement-tweet-main {
-  min-width: 0;
-}
-
-.announcement-tweet-title {
-  font-weight: 700;
+  width: 1.5rem;
 }
 
 .announcement-tweet-image {
