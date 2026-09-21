@@ -167,10 +167,17 @@ body::before {
   gap: 0.6rem;
 }
 
+/* --firstlevel/--secondlevel carry sidebar-chrome-specific meaning (see the
+ * .favorite-filter-overlay note above) and read as a muddy, over-saturated
+ * fill in some palettes (the green one, for one) when used as a big card
+ * background instead of a sliver of dark chrome -- var(--mainbackground)
+ * plus a plain border is what .box (the admin panel's own card-ish
+ * container) already uses for exactly this reason, so cards match it. */
 .announcement-card {
-  background: var(--secondlevel);
-  border: 1px solid var(--secondary);
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary-muted);
   border-radius: 0.6rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   padding: 0.75rem 0.9rem;
 }
 
@@ -186,9 +193,11 @@ body::before {
 
 /* the message is the point of the card -- a tinted, left-accented block
  * makes it the thing the eye lands on first, ahead of who posted it and
- * when (pushed down to a quiet footer instead). */
+ * when (pushed down to a quiet footer instead). A light color-mix() tint of
+ * the palette's own --primary rather than --firstlevel, so it stays a pale
+ * accent in every palette instead of inheriting sidebar-chrome darkness. */
 .announcement-card-body {
-  background: var(--firstlevel);
+  background: color-mix(in srgb, var(--primary) 10%, var(--mainbackground));
   border-left: 3px solid var(--primary);
   border-radius: 0 0.35rem 0.35rem 0;
   font-size: 1.05rem;
@@ -234,7 +243,7 @@ body::before {
 }
 
 .announcement-reaction-btn {
-  background: var(--secondlevel);
+  background: color-mix(in srgb, var(--secondary-muted) 55%, var(--mainbackground));
   border: 1px solid transparent;
   border-radius: 999px;
   font-size: 0.8rem;
@@ -243,7 +252,7 @@ body::before {
 }
 
 .announcement-reaction-btn:hover {
-  background: var(--firstlevel);
+  background: color-mix(in srgb, var(--secondary-muted) 85%, var(--mainbackground));
 }
 
 .announcement-reaction-btn.active {
