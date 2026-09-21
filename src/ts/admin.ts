@@ -139,12 +139,12 @@ on('destroy-teamgroup', (el: HTMLElement) => {
 });
 
 // managing an announcement is possible from the admin panel
-// (announcementsAdminDiv), inline from the dashboard (announcementBanner,
-// announcementFeed), and reacting to one from the history page
+// (announcementsAdminDiv), inline from the dashboard feed
+// (announcementFeed), and reacting to one from the history page
 // (announcementsHistoryList) too -- reloadElements() silently skips
 // whichever of these isn't present on the current page, so the same
 // handlers work from all of them.
-const ANNOUNCEMENT_RELOAD_TARGETS = ['announcementsAdminDiv', 'announcementBanner', 'announcementFeed', 'announcementsHistoryList'];
+const ANNOUNCEMENT_RELOAD_TARGETS = ['announcementsAdminDiv', 'announcementFeed', 'announcementsHistoryList'];
 
 on('create-announcement', (_, event: Event) => {
   event.preventDefault();

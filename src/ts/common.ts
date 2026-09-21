@@ -489,10 +489,10 @@ if (isSafari() && !isDismissedSafari) {
 // END SAFARI DETECTION
 
 // generic announcement/admin announcement messages, plus the dashboard's own
-// announcement dropdown and feed (announcements-show.html/dashboard.html) --
-// re-run after those are swapped in by reloadElements() (see admin.ts's
-// announcement handlers), since a fresh server-rendered fragment always
-// starts from the "nothing dismissed yet, nothing measured yet" state.
+// announcement feed (dashboard.html) -- re-run after that's swapped in by
+// reloadElements() (see admin.ts's announcement handlers), since a fresh
+// server-rendered fragment always starts from the "nothing dismissed yet,
+// nothing measured yet" state.
 export function refreshAnnouncementWidgets(): void {
   document.querySelectorAll<HTMLElement>('[data-dismiss-key]').forEach((msg) => {
     if (localStorage.getItem(`dismiss_${msg.dataset.dismissKey}`) !== '1') {
@@ -500,38 +500,20 @@ export function refreshAnnouncementWidgets(): void {
     }
   });
 
-  // dashboard announcement dropdown: only show the dropdown trigger, and
-  // only keep its count badge accurate, once we know how many of the
-  // announcements inside actually survived the dismiss-key check above --
-  // and again every time the reader dismisses one (bootstrap's alert.js
-  // removes the dismissed .alert from the DOM on close).
-  const announcementBannerDropdown = document.getElementById('announcementBannerDropdown');
-  if (announcementBannerDropdown) {
-    const updateAnnouncementBannerCount = (): void => {
-      const visible = announcementBannerDropdown.querySelectorAll('[data-announcement-banner-item]:not([hidden])').length;
-      announcementBannerDropdown.toggleAttribute('hidden', visible === 0);
-      const countBadge = document.getElementById('announcementBannerCount');
-      // Only write when the value actually changed -- countBadge lives
-      // inside the observed subtree below, and unconditionally setting
-      // .textContent replaces its text node (a childList mutation) even
-      // when the string is identical, which re-triggered this same
-      // observer callback forever: a busy MutationObserver <-> textContent
-      // feedback loop pegging a CPU core for as long as the page stayed
-      // open, which is almost certainly what was slowing the browser down.
-      if (countBadge && countBadge.textContent !== String(visible)) {
-        countBadge.textContent = String(visible);
-      }
-    };
-    updateAnnouncementBannerCount();
-    // refreshAnnouncementWidgets() re-runs after every announcement action
-    // (see admin.ts) -- guard against attaching a second/third/... observer
-    // on top of ones from earlier runs, each of which would otherwise keep
-    // firing (and being reattached) for the rest of the page's lifetime.
-    if (!announcementBannerDropdown.dataset.observed) {
-      announcementBannerDropdown.dataset.observed = '1';
-      new MutationObserver(updateAnnouncementBannerCount).observe(announcementBannerDropdown, { childList: true, subtree: true });
+  // dashboard announcement feed: highlight a card as "New" only the first
+  // time this reader's browser has rendered it -- reuses the same
+  // dismiss_announcement_<id> localStorage key the (now-removed) banner
+  // dropdown used, since it's the same underlying "has this reader seen
+  // it yet" concept. Marked seen immediately (not on some later dismiss
+  // action) so the highlight naturally never reappears on a later visit.
+  document.querySelectorAll<HTMLElement>('[data-announcement-id]').forEach((card) => {
+    const key = `dismiss_announcement_${card.dataset.announcementId}`;
+    if (localStorage.getItem(key) !== '1') {
+      card.classList.add('announcement-card--new');
+      card.querySelector('.announcement-card-new-badge')?.removeAttribute('hidden');
+      localStorage.setItem(key, '1');
     }
-  }
+  });
 
   // dashboard announcement feed: only show the "Read more…" link for an
   // entry whose body text actually got clamped, not every entry

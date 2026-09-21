@@ -191,6 +191,28 @@ body::before {
   font-weight: 700;
 }
 
+/* highlighted only the first time this reader's browser has rendered it
+ * (see refreshAnnouncementWidgets() in common.ts) -- a stronger accent
+ * border plus a small "New" badge, not a permanent decoration. */
+.announcement-card--new {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.announcement-card-new-badge {
+  background: var(--primary);
+  border-radius: 999px;
+  /* --white carries sidebar-chrome-specific meaning and is near-black in
+   * several dark palettes -- --primary-fg is the token actually meant for
+   * text sitting on a --primary background (see .beta/.folder-quick-links
+   * .btn.active above for the established pattern). */
+  color: var(--primary-fg, #fff);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.05rem 0.4rem;
+  text-transform: uppercase;
+}
+
 /* the message is the point of the card -- a tinted, left-accented block
  * makes it the thing the eye lands on first, ahead of who posted it and
  * when (pushed down to a quiet footer instead). A light color-mix() tint of
@@ -216,7 +238,7 @@ body::before {
   align-items: center;
   background: var(--primary);
   border-radius: 50%;
-  color: var(--white);
+  color: var(--primary-fg, #fff);
   display: flex;
   flex: 0 0 auto;
   font-size: 0.7rem;

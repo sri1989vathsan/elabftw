@@ -5,7 +5,6 @@
 {% include 'show-view-edit.html' %}
 <h2>{{ 'Welcome %s'|trans|format(App.Users.userData.firstname) }}</h2>
 
-{% include 'announcements-show.html' %}
 {% include 'request-actions-show.html' %}
 <hr>
 <div class='row'>
@@ -134,7 +133,7 @@
     <hr>
     <div class='announcement-card-list' id='announcementFeed' style='max-height: min(70vh, 600px); overflow-y: auto;'>
       {% for announcement in announcementsArr|slice(0, 10) %}
-        <div class='breakable announcement-card'>
+        <div class='breakable announcement-card' data-announcement-id='{{ announcement.id }}'>
           <div class='announcement-card-header'>
             {% if announcement.pinned %}<i class='fas fa-thumbtack fa-fw color-warning' title='{{ 'Pinned'|trans }}'></i>{% endif %}
             {% if announcement.severity == 'warning' %}
@@ -143,6 +142,7 @@
               <i class='fas fa-circle-info text-primary' title='{{ 'Info'|trans }}'></i>
             {% endif %}
             <a class='announcement-card-title' href='announcements.php#announcement-{{ announcement.id }}'>{{ announcement.title|raw }}</a>
+            <span class='announcement-card-new-badge' hidden>{{ 'New'|trans }}</span>
           </div>
           {% if announcement.body %}
             <div class='announcement-card-body announcement-feed-body-clamp' data-announcement-body>{{ announcement.body_html|raw }}</div>
