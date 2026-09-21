@@ -189,4 +189,14 @@
     background-color: var(--firstlevel);
     color: var(--mediumstrong);
   }
+
+  /* .active (not :active) marks a toggled-on state (e.g. the "pinned"
+   * announcement button) -- without its own rule here this fell through to
+   * Bootstrap's generic .btn.active default, a heavy solid-dark block that
+   * reads more like an error state than "currently pinned". */
+  &.active {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-fg, #fff);
+  }
 }

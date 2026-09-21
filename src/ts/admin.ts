@@ -161,9 +161,18 @@ on('create-announcement', (_, event: Event) => {
   event.preventDefault();
   const form = document.getElementById('createAnnouncementForm') as HTMLFormElement;
   const params = collectForm(form);
-  ApiC.post(Model.Announcement, params).then(() => {
+  // staged before the announcement exists (chosen or dropped into
+  // createAnnouncementImageDropzone) -- uploaded right after, same as
+  // Orders stages new-item attachments and uploads them once the order
+  // itself has been created.
+  const imageInput = document.getElementById('createAnnouncementImageFile') as HTMLInputElement | null;
+  const stagedFile = imageInput?.files?.[0];
+  ApiC.post2location(Model.Announcement, params).then(newId => {
     reloadElements(ANNOUNCEMENT_RELOAD_TARGETS).then(refreshAnnouncementUi);
     form.reset();
+    if (stagedFile) {
+      uploadAnnouncementImage(String(newId), stagedFile);
+    }
   });
 });
 
@@ -222,8 +231,20 @@ export function bindAnnouncementImageDropzones(): void {
       event.preventDefault();
       zone.classList.remove('announcement-image-dropzone-over');
       const file = event.dataTransfer?.files?.[0];
-      if (!file || !zone.dataset.id) return;
-      uploadAnnouncementImage(zone.dataset.id, file);
+      if (!file) return;
+      if (zone.dataset.id) {
+        uploadAnnouncementImage(zone.dataset.id, file);
+        return;
+      }
+      // the create form's dropzone: no announcement id yet, so stage the
+      // dropped file on its paired file input the same way choosing one
+      // by hand would -- create-announcement reads it from there once the
+      // announcement actually exists.
+      const input = zone.querySelector('input[type="file"]') as HTMLInputElement | null;
+      if (!input) return;
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
     });
   });
 }
