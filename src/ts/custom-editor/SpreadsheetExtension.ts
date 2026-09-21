@@ -1263,7 +1263,17 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // touches the table's own class/style attributes (which would
     // otherwise get serialized into the saved content).
     const hideSpreadsheetTablesStyle = editorDocument.createElement('style');
-    hideSpreadsheetTablesStyle.textContent = 'table.elabftw-spreadsheet { visibility: hidden; }';
+    // max-width too, not just visibility: hidden -- a many-column table
+    // still lays out at its own full natural width even while invisible,
+    // which can push the editor body (and the outer page around it) wider
+    // than the viewport on its own, well past what the visible overlay
+    // (capped to the content column's own width, see maxContentWidth in
+    // syncOverlayPositions) ever shows. That extra page-level horizontal
+    // scroll room is what let TinyMCE's own sticky toolbar -- positioned
+    // to track the editor's live horizontal offset -- visibly drift off
+    // to one side while scrolling, instead of the editor simply staying
+    // put because there was nothing wider than the viewport to scroll to.
+    hideSpreadsheetTablesStyle.textContent = 'table.elabftw-spreadsheet { visibility: hidden; max-width: 100%; }';
     editorDocument.head.appendChild(hideSpreadsheetTablesStyle);
     editor.on('remove', () => hideSpreadsheetTablesStyle.remove());
     // jspreadsheet-ce closes its own context menu (and clears its own
