@@ -737,6 +737,9 @@ final class Todolist extends AbstractRest
         }
         $this->syncDeadlineNotification();
         $task = $this->readOne();
+        if (array_key_exists('column_id', $params) || array_key_exists('completed', $params)) {
+            $this->syncLinkedStepFromCompletion(!empty($task['completed_at']));
+        }
         if ($newAssignees !== null) {
             foreach ($newAssignees as $assignedUserid) {
                 if ($assignedUserid !== $this->userid && !in_array($assignedUserid, $previousAssignees, true)) {
@@ -747,10 +750,79 @@ final class Todolist extends AbstractRest
         return $task;
     }
 
+    /**
+     * The reverse of Steps::syncLinkedTodo()/toggleFinished(): completing
+     * or reopening a to-do that reflects a step's deadline (via the kanban
+     * board's columns, or the sidebar checkbox) marks that step finished
+     * or unfinished to match, so the two stay in sync regardless of which
+     * side the user actually acted on.
+     */
+    private function syncLinkedStepFromCompletion(bool $completed): void
+    {
+        $link = StepTodolistLinks::findStepForTodolist((int) $this->id);
+        if ($link === null) {
+            return;
+        }
+        // entity_type only ever gets into custom_step_todolist_links via
+        // Steps::syncLinkedTodo(), itself constrained to EntityType's own
+        // values -- re-checked here anyway before it's used as a table
+        // name fragment, since this table name can never be a bind param.
+        if (!in_array($link['entity_type'], array('experiments', 'items', 'experiments_templates', 'items_types'), true)) {
+            return;
+        }
+        $sql = sprintf(
+            'UPDATE %s_steps SET finished = :finished, finished_time = :finished_time WHERE id = :id',
+            $link['entity_type'],
+        );
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':finished', (int) $completed, PDO::PARAM_INT);
+        $req->bindValue(
+            ':finished_time',
+            $completed ? (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d H:i:s') : null,
+            $completed ? PDO::PARAM_STR : PDO::PARAM_NULL,
+        );
+        $req->bindValue(':id', $link['step_id'], PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    /**
+     * A step's own deadline is reflected here as a linked to-do (see
+     * Steps::syncLinkedTodo()/toggleFinished()) -- content/deadline/
+     * completed updates driven by that sync, not by the user directly
+     * editing this specific task. Skips patch()'s own canWriteOrExplode()
+     * (creator/assignee/project-member/admin only) on purpose: the real
+     * authorization boundary already happened in Steps::patch()/destroy(),
+     * checking write access to the entity the step belongs to, and a step
+     * can legitimately be finished by a team member who isn't the to-do's
+     * own creator or assignee.
+     */
+    public function syncFromLinkedStep(array $params): array
+    {
+        foreach ($params as $key => $value) {
+            $this->update($key, $value);
+        }
+        if (array_key_exists('completed', $params)) {
+            $this->syncColumnFromStatus();
+        }
+        $this->syncDeadlineNotification();
+        return $this->readOne();
+    }
+
     #[Override]
     public function destroy(): bool
     {
         $this->canWriteOrExplode();
+        return $this->destroyWithoutPermissionCheck();
+    }
+
+    /** Same as destroy(), for Steps::destroy() removing a step's linked to-do -- see syncFromLinkedStep()'s docblock for why the check is skipped. */
+    public function destroyAsLinkedStep(): bool
+    {
+        return $this->destroyWithoutPermissionCheck();
+    }
+
+    private function destroyWithoutPermissionCheck(): bool
+    {
         $this->destroyDeadlineNotification();
         $sql = 'DELETE FROM todolist WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);

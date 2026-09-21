@@ -195,6 +195,9 @@ final class Steps extends AbstractRest
                         // value can be null with deadline removal
                         $this->update(new StepParams($key, $value ?? ''));
                     }
+                    if (array_key_exists('deadline', $params)) {
+                        $this->syncLinkedTodo();
+                    }
                 }
             )(),
             Action::ForceLock => $this->setImmutable(1),
@@ -229,6 +232,11 @@ final class Steps extends AbstractRest
         $Changelog->create(new ContentParams('steps', sprintf('Removed step with id: %d', $this->id)));
 
         $this->getStepDeadline()->destroy();
+
+        $linkedTodolistId = StepTodolistLinks::unlink($this->Entity->entityType->value, (int) $this->id);
+        if ($linkedTodolistId !== null) {
+            new Todolist($this->Entity->Users, $linkedTodolistId)->destroyAsLinkedStep();
+        }
 
         $sql = 'DELETE FROM ' . $this->Entity->entityType->value . '_steps WHERE id = :id AND item_id = :item_id';
         $req = $this->Db->prepare($sql);
@@ -298,8 +306,18 @@ final class Steps extends AbstractRest
         $res = $this->Db->execute($req);
 
         // delete potential notification if step is finished
-        if ($this->readOne()['finished'] === 1) {
+        $finished = $this->readOne()['finished'] === 1;
+        if ($finished) {
             $this->getStepDeadline()->destroy();
+        }
+
+        // keep a linked to-do (if any) in sync: this step's own deadline
+        // column was just cleared above (toggling either way), but the
+        // reflected to-do stays around as a record -- just marked done or
+        // reopened to match.
+        $linkedTodolistId = StepTodolistLinks::findTodolistId($this->Entity->entityType->value, (int) $this->id);
+        if ($linkedTodolistId !== null) {
+            new Todolist($this->Entity->Users, $linkedTodolistId)->syncFromLinkedStep(array('completed' => $finished));
         }
 
         return $res;
@@ -333,6 +351,50 @@ final class Steps extends AbstractRest
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
         return $this->Db->execute($req);
+    }
+
+    /**
+     * Mirror this step's own deadline as a linked to-do task, so it shows
+     * up on the team's Todolist board instead of only living on the Steps
+     * tab. Called after any Action::Update that touches 'deadline':
+     * creates the link on the first non-empty deadline, keeps title/
+     * deadline in sync on later edits, and removes the reflected to-do
+     * entirely once the deadline is cleared (toggleFinished() handles the
+     * "step is done" case separately, since it clears deadline too but the
+     * to-do should stay as a completed record, not disappear).
+     */
+    private function syncLinkedTodo(): void
+    {
+        $step = $this->readOne();
+        $entityType = $this->Entity->entityType->value;
+        $stepId = (int) $this->id;
+        $existingTodolistId = StepTodolistLinks::findTodolistId($entityType, $stepId);
+
+        if (empty($step['deadline'])) {
+            if ($existingTodolistId !== null) {
+                StepTodolistLinks::unlink($entityType, $stepId);
+                new Todolist($this->Entity->Users, $existingTodolistId)->destroyAsLinkedStep();
+            }
+            return;
+        }
+
+        $body = sprintf(_('Step: %s'), Filter::toPureString($step['body']));
+        if ($existingTodolistId !== null) {
+            new Todolist($this->Entity->Users, $existingTodolistId)->syncFromLinkedStep(array(
+                'content' => $body,
+                'deadline' => $step['deadline'],
+            ));
+            return;
+        }
+
+        $Task = new Todolist($this->Entity->Users);
+        $newTodolistId = $Task->postAction(Action::Create, array(
+            'content' => $body,
+            'deadline' => $step['deadline'],
+        ));
+        StepTodolistLinks::link($entityType, $stepId, $newTodolistId);
+        new TodolistEntityLinks($this->Entity->Users, new Todolist($this->Entity->Users, $newTodolistId))
+            ->postAction(Action::Create, array('entity_type' => $entityType, 'entity_id' => $this->Entity->id));
     }
 
     private function getStepDeadline(string $deadline = ''): StepDeadline
