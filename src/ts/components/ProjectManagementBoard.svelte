@@ -44,6 +44,7 @@
     description: string | null;
     deadline: string | null;
     completed_at: string | null;
+    archived_at: string | null;
     in_progress: boolean;
     pinned: boolean;
     priority: Priority | null;
@@ -228,6 +229,16 @@
   // actually loaded -- same reasoning as Orders' own search box
   let searchQuery = '';
   let priorityFilter: Priority | 'all' = 'all';
+
+  // Archived tasks are excluded from every other fetch (open/completed,
+  // counts, calendar -- see Todolist::readAll()'s own archived filter), so
+  // this is the only place one can be found again to unarchive it or just
+  // look it up. Its own separate fetch, on demand, rather than folded into
+  // load() above -- archived tasks are rare compared to open/completed
+  // ones, not needed on every board load.
+  let archivedModalOpen = false;
+  let archivedTasks: Task[] = [];
+  let loadingArchived = false;
 
   $: activeProject = typeof activeProjectId === 'number' ? (projects.find(p => p.id === activeProjectId) ?? null) : null;
   $: assignableMembers = activeProject ? activeProject.members : teamMembers;
@@ -690,6 +701,7 @@
       description: null,
       deadline: null,
       completed_at: null,
+      archived_at: null,
       in_progress: false,
       pinned: false,
       priority: null,
@@ -1014,6 +1026,48 @@
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not delete the task.');
     }
+  }
+
+  // Archiving keeps the task around (unlike deleteTask above) but takes it
+  // off the active board/counts entirely -- see Todolist::readAll()'s own
+  // archived filter. Closes the detail popup on archive since the task no
+  // longer belongs in the (unarchived) board this popup was opened from.
+  async function archiveTask(task: Task): Promise<void> {
+    try {
+      await ApiC.patch(`${Model.Todolist}/${task.id}`, { archived: true });
+      closeDetail();
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not archive the task.');
+    }
+  }
+
+  async function unarchiveTask(task: Task): Promise<void> {
+    try {
+      await ApiC.patch(`${Model.Todolist}/${task.id}`, { archived: false });
+      archivedTasks = archivedTasks.filter(t => t.id !== task.id);
+      closeDetail();
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not unarchive the task.');
+    }
+  }
+
+  async function openArchivedModal(): Promise<void> {
+    archivedModalOpen = true;
+    loadingArchived = true;
+    try {
+      archivedTasks = await ApiC.getJson(`${Model.Todolist}?scope=team&archived=1&limit=100`) as Task[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load archived tasks.');
+    } finally {
+      loadingArchived = false;
+    }
+  }
+
+  function closeArchivedModal(): void {
+    archivedModalOpen = false;
+    archivedTasks = [];
   }
 
   // Naively slicing the stored UTC string's first 10 characters used to
@@ -1944,6 +1998,9 @@
         <i class="fas fa-pen-to-square fa-fw mr-1" aria-hidden="true"></i>{t('Created by me')}
       </button>
     </div>
+    <button type="button" class="btn btn-sm btn-ghost ml-2" on:click={openArchivedModal}>
+      <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archived')}
+    </button>
   </div>
 
   {#if selectedTaskIds.size > 0}
@@ -2510,6 +2567,17 @@
         {/if}
       </div>
       <div class="pm-dialog-footer">
+        {#if !detailEditing && !creatingNewTask && canManage(detailTask)}
+          {#if detailTask.archived_at}
+            <button type="button" class="btn btn-secondary mr-auto" on:click={() => unarchiveTask(detailTask)}>
+              <i class="fas fa-box-open fa-fw mr-1" aria-hidden="true"></i>{t('Unarchive')}
+            </button>
+          {:else}
+            <button type="button" class="btn btn-secondary mr-auto" on:click={() => archiveTask(detailTask)}>
+              <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archive')}
+            </button>
+          {/if}
+        {/if}
         {#if detailEditing}
           <button type="button" class="btn btn-ghost" on:click={cancelEdit}>{t('Cancel')}</button>
           <button type="button" class="btn btn-primary" disabled={savingDetail} on:click={saveDetail}>{t('Save')}</button>
@@ -2751,6 +2819,42 @@
               {loadingMoreLinksSummary ? t('Loading') + '…' : t('Load more links')}
             </button>
           {/if}
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if archivedModalOpen}
+  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeArchivedModal(); }}>
+    <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pmArchivedTitle">
+      <div class="pm-dialog-header">
+        <h4 id="pmArchivedTitle" class="mb-0">{t('Archived tasks')}</h4>
+        <button type="button" class="pm-close-btn" on:click={closeArchivedModal} aria-label={t('Close')}>&times;</button>
+      </div>
+      <div class="pm-dialog-body">
+        {#if loadingArchived}
+          <p class="pm-muted small mb-0">{t('Loading')}…</p>
+        {:else if archivedTasks.length === 0}
+          <p class="pm-muted small mb-0">{t('No archived tasks.')}</p>
+        {:else}
+          <ul class="pm-entity-link-list">
+            {#each archivedTasks as task (task.id)}
+              <li class="pm-entity-link">
+                <button type="button" class="btn-unstyled mr-auto text-break text-left" on:click={() => { closeArchivedModal(); openDetail(task); }}>
+                  {task.body}
+                </button>
+                {#if task.project_name}
+                  <span class="badge badge-light ml-2" title={t('Project')}>
+                    {#if task.project_parent_name}{task.project_parent_name} / {/if}{task.project_name}
+                  </span>
+                {/if}
+                <button type="button" class="btn btn-ghost btn-sm ml-2" on:click={() => unarchiveTask(task)}>
+                  <i class="fas fa-box-open fa-fw mr-1" aria-hidden="true"></i>{t('Unarchive')}
+                </button>
+              </li>
+            {/each}
+          </ul>
         {/if}
       </div>
     </div>

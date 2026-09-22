@@ -186,10 +186,20 @@ final class Todolist extends AbstractRest
             $linksOffset = max(0, $query->getInt('offset'));
             return array($this->readEntityLinksSummary($projectId, $includeSubprojects, $linksLimit, $linksOffset));
         }
+        // Archiving is orthogonal to completed/done -- a task can be
+        // archived whether or not it was ever marked done. The default and
+        // completed views exclude every archived task regardless of its own
+        // completed state (see $archivedClause below); ?archived=1 shows
+        // only archived ones, ignoring the completed filter entirely, for a
+        // dedicated "Archived" list ordered by when they were archived.
+        $archived = $query->getBoolean('archived');
         $completed = $query->getBoolean('completed');
-        $completedFilter = $completed ? 'IS NOT NULL' : 'IS NULL';
-        $order = $completed ? 'pinned DESC, completed_at DESC' : 'pinned DESC, ordering ASC, creation_time DESC';
-        $completedSince = $completed && $query->has('completed_since')
+        $completedClause = $archived ? '' : ' AND t.completed_at ' . ($completed ? 'IS NOT NULL' : 'IS NULL');
+        $archivedClause = ' AND t.archived_at ' . ($archived ? 'IS NOT NULL' : 'IS NULL');
+        $order = $archived
+            ? 'archived_at DESC'
+            : ($completed ? 'pinned DESC, completed_at DESC' : 'pinned DESC, ordering ASC, creation_time DESC');
+        $completedSince = $completed && !$archived && $query->has('completed_since')
             ? $this->getDeadline($query->getString('completed_since'))
             : null;
         $completedSinceFilter = $completedSince === null ? '' : ' AND completed_at >= :completed_since';
@@ -271,6 +281,7 @@ final class Todolist extends AbstractRest
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
                 t.reminder_minutes,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
+                DATE_FORMAT(t.archived_at, '%Y-%m-%dT%H:%i:%sZ') AS archived_at,
                 t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id, t.in_progress, t.priority, t.column_id, t.pinned,
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
@@ -290,7 +301,7 @@ final class Todolist extends AbstractRest
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
             LEFT JOIN todolist_projects AS parent_project ON parent_project.id = project.parent_id
             LEFT JOIN todolist_columns AS col ON col.id = t.column_id
-            WHERE t.team = :team AND t.completed_at {$completedFilter}{$completedSinceFilter}{$scopeFilter}{$projectFilter}{$priorityFilter}{$searchFilter}
+            WHERE t.team = :team{$completedClause}{$archivedClause}{$completedSinceFilter}{$scopeFilter}{$projectFilter}{$priorityFilter}{$searchFilter}
                 -- archiving a project takes its tasks off the active board
                 -- entirely (All, search, counts) -- readOne() deliberately
                 -- doesn't apply this, so a direct link to one of them (e.g.
@@ -388,6 +399,7 @@ final class Todolist extends AbstractRest
             FROM todolist AS t
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
             WHERE t.team = :team{$scopeFilter}
+                AND t.archived_at IS NULL
                 AND (t.project_id IS NULL OR project.archived = 0)
                 AND (
                     t.project_id IS NULL
@@ -467,6 +479,7 @@ final class Todolist extends AbstractRest
                 AND t.deadline IS NOT NULL
                 AND t.reminder_minutes IS NOT NULL
                 AND t.deadline <= DATE_ADD(UTC_TIMESTAMP(), INTERVAL t.reminder_minutes MINUTE)
+                AND t.archived_at IS NULL
                 AND (t.project_id IS NULL OR project.archived = 0)
                 AND (
                     t.project_id IS NULL
@@ -623,6 +636,7 @@ final class Todolist extends AbstractRest
             WHERE EXISTS (
                     SELECT 1 FROM todolist_task_assignees ta WHERE ta.task_id = todolist.id AND ta.userid = :userid
                 )
+                AND archived_at IS NULL
                 AND deadline >= :deadline_from
                 AND deadline < :deadline_to
             ORDER BY deadline ASC, id ASC";
@@ -641,6 +655,7 @@ final class Todolist extends AbstractRest
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
                 t.reminder_minutes,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
+                DATE_FORMAT(t.archived_at, '%Y-%m-%dT%H:%i:%sZ') AS archived_at,
                 t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id, t.in_progress, t.priority, t.column_id, t.pinned,
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
@@ -1141,6 +1156,7 @@ final class Todolist extends AbstractRest
                 PDO::PARAM_INT,
             ),
             'completed' => array('completed_at', $this->getCompletedAt($value), PDO::PARAM_STR),
+            'archived' => array('archived_at', $this->getArchivedAt($value), PDO::PARAM_STR),
             'project_id' => array('project_id', $this->getProjectId($value), PDO::PARAM_INT),
             'description' => array('description', $this->getDescription($value), PDO::PARAM_STR),
             'in_progress' => array('in_progress', (int) (bool) $value, PDO::PARAM_INT),
@@ -1230,11 +1246,20 @@ final class Todolist extends AbstractRest
         return (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d H:i:s');
     }
 
+    private function getArchivedAt(mixed $value): ?string
+    {
+        if (!filter_var($value, FILTER_VALIDATE_BOOLEAN)) {
+            return null;
+        }
+        return (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d H:i:s');
+    }
+
     private function syncDeadlineNotification(): void
     {
         $task = $this->readOne();
         $this->destroyDeadlineNotification();
         if (!empty($task['completed_at'])
+            || !empty($task['archived_at'])
             || empty($task['deadline'])
             || $task['reminder_minutes'] === null
         ) {
