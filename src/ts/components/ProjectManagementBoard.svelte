@@ -1082,7 +1082,7 @@
   async function archiveTask(task: Task): Promise<void> {
     try {
       await ApiC.patch(`${Model.Todolist}/${task.id}`, { archived: true });
-      closeDetail();
+      if (detailTask?.id === task.id) closeDetail();
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not archive the task.');
@@ -1093,7 +1093,7 @@
     try {
       await ApiC.patch(`${Model.Todolist}/${task.id}`, { archived: false });
       archivedTasks = archivedTasks.filter(t => t.id !== task.id);
-      closeDetail();
+      if (detailTask?.id === task.id) closeDetail();
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not unarchive the task.');
@@ -2149,6 +2149,18 @@
                   {#if nextCol}
                     <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={`${t('Move to')} ${nextCol.name}`} aria-label={`${t('Move to')} ${nextCol.name}`} on:click={() => moveTaskToColumn(task, nextCol.id)}>
                       <i class="fas fa-arrow-right fa-fw" aria-hidden="true"></i>
+                    </button>
+                  {/if}
+                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Duplicate')} aria-label={t('Duplicate')} on:click={() => duplicateTask(task)}>
+                    <i class="fas fa-copy fa-fw" aria-hidden="true"></i>
+                  </button>
+                  {#if task.archived_at}
+                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Unarchive')} aria-label={t('Unarchive')} on:click={() => unarchiveTask(task)}>
+                      <i class="fas fa-box-open fa-fw" aria-hidden="true"></i>
+                    </button>
+                  {:else}
+                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Archive')} aria-label={t('Archive')} on:click={() => archiveTask(task)}>
+                      <i class="fas fa-box-archive fa-fw" aria-hidden="true"></i>
                     </button>
                   {/if}
                   <button type="button" class="btn btn-danger-ghost btn-sm pm-icon-button" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteTask(task)}>
