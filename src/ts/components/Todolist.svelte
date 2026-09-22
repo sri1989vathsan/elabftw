@@ -202,10 +202,12 @@
     String(initialDeadline.getMonth() + 1).padStart(2, '0'),
     String(initialDeadline.getDate()).padStart(2, '0'),
   ].join('-');
-  const initialDeadlineTime = [
-    String(initialDeadline.getHours()).padStart(2, '0'),
-    String(initialDeadline.getMinutes()).padStart(2, '0'),
-  ].join(':');
+  // Defaults to 5 PM rather than "right now" -- most quick-added tasks
+  // don't actually need a precise time, and a sensible default they can
+  // still change beats one that's already stale by the time they notice it
+  // (e.g. quick-adding a task at 23:50 would otherwise default to a
+  // deadline 10 minutes away).
+  const initialDeadlineTime = '17:00';
   const quarterHourOptions = Array.from({ length: 96 }, (_, index) => {
     const hours = String(Math.floor(index / 4)).padStart(2, '0');
     const minutes = String((index % 4) * 15).padStart(2, '0');
