@@ -1047,6 +1047,34 @@
     }
   }
 
+  // Copies the core fields (title, notes, description, deadline, priority,
+  // assignees, project/column) -- deliberately not steps or linked items,
+  // which would each need their own follow-up request per item, same as
+  // the "create new task" draft flow above does for a brand-new task.
+  // Opens the freshly created copy's own detail popup right away, closing
+  // the original's first, so it reads as "here's your duplicate" rather
+  // than silently creating something off-screen.
+  async function duplicateTask(task: Task): Promise<void> {
+    try {
+      const newId = await ApiC.post2location(Model.Todolist, {
+        content: task.body,
+        notes: task.notes,
+        description: task.description,
+        deadline: task.deadline,
+        assignee_userids: task.assignees.map(a => a.userid),
+        priority: task.priority,
+        project_id: task.project_id,
+        column_id: task.column_id,
+      });
+      closeDetail();
+      await load();
+      const created = tasks.find(t => t.id === newId) ?? await ApiC.getJson(`${Model.Todolist}/${newId}`) as Task;
+      openDetail(created);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not duplicate the task.');
+    }
+  }
+
   // Archiving keeps the task around (unlike deleteTask above) but takes it
   // off the active board/counts entirely -- see Todolist::readAll()'s own
   // archived filter. Closes the detail popup on archive since the task no
@@ -2597,6 +2625,9 @@
                 <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archive')}
               </button>
             {/if}
+            <button type="button" class="btn btn-secondary" on:click={() => duplicateTask(detailTask)}>
+              <i class="fas fa-copy fa-fw mr-1" aria-hidden="true"></i>{t('Duplicate')}
+            </button>
             <button type="button" class="btn btn-danger-ghost" on:click={() => deleteTask(detailTask)}>
               <i class="fas fa-trash-alt fa-fw mr-1" aria-hidden="true"></i>{t('Delete')}
             </button>

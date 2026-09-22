@@ -986,6 +986,29 @@
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
 
+  // Copies the core fields (title, notes, description, deadline, project,
+  // assignees -- SidebarEntry doesn't carry priority at all, nothing to
+  // copy there) -- deliberately not steps or linked items, matching
+  // ProjectManagementBoard.svelte's own duplicateTask(). Opens the new
+  // copy's own detail popup right away, same reasoning as there: reads as
+  // "here's your duplicate" rather than silently creating one off-screen.
+  async function duplicateEntry(entry: SidebarEntry): Promise<void> {
+    if (entry.source !== 'todo') return;
+    const newId = await ApiC.post2location(Model.Todolist, {
+      content: entry.body,
+      notes: entry.notes,
+      description: entry.description,
+      deadline: entry.deadline,
+      assignee_userids: (entry.assignees ?? []).map(a => a.userid),
+      project_id: entry.projectId ?? null,
+    });
+    closeDetail();
+    await load();
+    const created = entries.find(e => e.source === 'todo' && e.id === newId);
+    if (created) openDetail(created);
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
+  }
+
   async function deleteEntry(entry: SidebarEntry): Promise<void> {
     if (entry.source !== 'todo') return;
     if (!window.confirm(t('Delete this task? This cannot be undone.'))) return;
@@ -2601,6 +2624,9 @@
                 <i class='fas fa-box-archive fa-fw mr-1' aria-hidden='true'></i>{t('Archive')}
               </button>
             {/if}
+            <button type='button' class='btn btn-secondary' on:click={() => duplicateEntry(detailEntry)}>
+              <i class='fas fa-copy fa-fw mr-1' aria-hidden='true'></i>{t('Duplicate')}
+            </button>
             <button type='button' class='btn btn-danger-ghost' on:click={() => deleteEntry(detailEntry)}>
               <i class='fas fa-trash-alt fa-fw mr-1' aria-hidden='true'></i>{t('Delete')}
             </button>
