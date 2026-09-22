@@ -83,6 +83,7 @@
     reminder_minutes: number | null;
     creation_time: string;
     completed_at: string | null;
+    archived_at: string | null;
     ordering: number;
     userid?: number;
     assigned_userid?: number | null;
@@ -119,6 +120,7 @@
     deadline: string | null;
     notes: string | null;
     description: string | null;
+    archivedAt?: string | null;
     creationTime: string | null;
     ordering: number | null;
     entityId?: number;
@@ -317,6 +319,7 @@
       deadline: item.deadline,
       notes: item.notes,
       description: item.description,
+      archivedAt: item.archived_at,
       creationTime: item.creation_time,
       ordering: Number(item.ordering),
       creatorUserid: item.userid,
@@ -956,6 +959,27 @@
       reminder_minutes: reminderMinutes,
       project_id: editProjectId,
     });
+    await load();
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
+  }
+
+  // Archiving keeps the task around (unlike a delete) but takes it off the
+  // sidebar/board/calendar/counts entirely -- same relationship it has to
+  // ProjectManagementBoard.svelte's own archiveTask()/unarchiveTask(),
+  // just reachable from here too since this sidebar has its own separate
+  // task detail popup.
+  async function archiveEntry(entry: SidebarEntry): Promise<void> {
+    if (entry.source !== 'todo') return;
+    await ApiC.patch(`${Model.Todolist}/${entry.id}`, { archived: true });
+    closeDetail();
+    await load();
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
+  }
+
+  async function unarchiveEntry(entry: SidebarEntry): Promise<void> {
+    if (entry.source !== 'todo') return;
+    await ApiC.patch(`${Model.Todolist}/${entry.id}`, { archived: false });
+    closeDetail();
     await load();
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
@@ -2555,6 +2579,17 @@
         </div>
       </div>
       <div class='todo-detail-footer'>
+        {#if !detailEditing}
+          {#if detailEntry.archivedAt}
+            <button type='button' class='btn btn-secondary mr-auto' on:click={() => unarchiveEntry(detailEntry)}>
+              <i class='fas fa-box-open fa-fw mr-1' aria-hidden='true'></i>{t('Unarchive')}
+            </button>
+          {:else}
+            <button type='button' class='btn btn-secondary mr-auto' on:click={() => archiveEntry(detailEntry)}>
+              <i class='fas fa-box-archive fa-fw mr-1' aria-hidden='true'></i>{t('Archive')}
+            </button>
+          {/if}
+        {/if}
         {#if detailEditing}
           <button type='button' class='btn btn-ghost' on:click={cancelDetailEdit}>{t('Cancel')}</button>
           <button type='button' class='btn btn-primary' on:click={saveDetailEdit}>{t('Save')}</button>
