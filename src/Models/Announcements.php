@@ -112,14 +112,21 @@ final class Announcements extends AbstractRest
 
     /**
      * The active (not yet expired) announcements for this team, most
-     * recent first -- what the dashboard banner shows.
+     * recent first -- what the dashboard banner shows. Capped at $limit
+     * (the dashboard only ever displays the first 10 -- see
+     * dashboard.html's own |slice(0, 10)) so a team that has accumulated
+     * hundreds of permanent (never-expiring) announcements over time
+     * doesn't pay for fetching, hydrating and attaching reactions to all
+     * of them on every dashboard load just to show 10. The full history,
+     * paginated separately, is still readAll()'s own job.
      */
-    public function readActive(): array
+    public function readActive(int $limit = 10): array
     {
         $sql = self::selectSql() . '
             WHERE announcement.team = :team
                 AND (announcement.expires_at IS NULL OR announcement.expires_at > UTC_TIMESTAMP())
-            ORDER BY announcement.pinned DESC, announcement.created_at DESC';
+            ORDER BY announcement.pinned DESC, announcement.created_at DESC
+            LIMIT ' . $limit;
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);

@@ -137,7 +137,7 @@
     </div>
     <hr>
     <div class='announcement-card-list' id='announcementFeed' style='max-height: min(70vh, 600px); overflow-y: auto;'>
-      {% for announcement in announcementsArr|slice(0, 10) %}
+      {% for announcement in announcementsArr %}
         {% set notifId = notifIdByAnnouncementId[announcement.id] ?? '' %}
         <div class='breakable announcement-card {{ notifId ? 'announcement-card--new' }}' data-announcement-notif-id='{{ notifId }}'>
           <div class='announcement-card-header'>
