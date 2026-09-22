@@ -1316,6 +1316,15 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     tableVisibility.disconnect();
     Array.from(spreadsheetOverlays.keys()).forEach(removeOverlay);
     window.removeEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
+    // A pending debounced mceAutoResize (see syncOverlayPositions) has
+    // nothing left to act on once the editor itself is gone -- calling
+    // execCommand on a destroyed editor, or trying to refocus an element
+    // that's since been torn down along with it, has no reason to run at
+    // all at that point.
+    if (autoResizeDebounce !== null) {
+      clearTimeout(autoResizeDebounce);
+      autoResizeDebounce = null;
+    }
   });
 
   editor.on('ObjectResizeStart', event => {
