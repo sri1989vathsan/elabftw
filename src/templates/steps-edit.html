@@ -78,29 +78,36 @@
           <div id='stepDeadlineDiv_{{ step.id }}'>
             {% if step.deadline %}
               {{ 'Deadline:'|trans }}
-              {# here the data-ma-input-value is formatted so it works with the datetime-local input type, and the displayed one is formatted differently to be more readable #}
-              <span data-stepid='{{ step.id }}' data-target='deadline' data-ma-type='datetime-local' data-ma-input-value='{{ step.deadline|date('Y-m-d\\TH:i') }}' class='step editable hl-hover p-1 rounded'>{{ step.deadline|format_datetime() }}</span>
+              <strong>{{ step.deadline|format_datetime() }}</strong>
+              <button data-action='toggle-next' data-toggle-target='stepDeadlineEditor_{{ step.id }}' type='button' class='btn btn-sm btn-secondary ml-1'>{{ 'Change'|trans }}</button>
               <button class='btn btn-danger-ghost ml-2' data-action='step-destroy-deadline' data-stepid='{{ step.id }}' title='{{ 'Clear deadline'|trans }}' aria-label='{{ 'Clear deadline'|trans }}'>
                 <i class='fas fa-trash-alt'></i>
               </button>
             {% else %}
-              <button data-action='replace-with-next' type='button' class='btn btn-sm btn-secondary'>{{ 'Add a deadline'|trans }}</button>
-              <div hidden class='input-group'>
-                <select class='custom-select col-md-3' id='stepSelectDeadline_{{ step.id }}' data-change-action='toggle-step-custom-deadline' data-stepid='{{ step.id }}'>
-                  <option disabled selected>{{ 'Set deadline in'|trans }}</option>
-                  <option value='{{ '+1 hour'|toDatetime }}'>{{ '%d hour'|trans|format(1) }}</option>
-                  <option value='{{ '+1 day'|toDatetime }}'>{{ '%d day'|trans|format(1) }}</option>
-                  <option value='{{ '+1 week'|toDatetime }}'>{{ '%d week'|trans|format(1) }}</option>
-                  <option value='{{ '+1 month'|toDatetime }}'>{{ '%d month'|trans|format(1) }}</option>
-                  <option value='{{ '+1 year'|toDatetime }}'>{{ '%d year'|trans|format(1) }}</option>
-                  <option value='custom'>{{ 'Custom date…'|trans }}</option>
-                </select>
-                <input type='datetime-local' id='stepCustomDeadline_{{ step.id }}' class='form-control col-md-3' hidden>
-                <div class='input-group-append'>
-                  <button class='btn btn-primary' type='button' data-action='step-update-deadline' data-stepid='{{ step.id }}'>{{ 'Save'|trans }}</button>
-                </div>
-              </div>
+              <button data-action='toggle-next' data-toggle-target='stepDeadlineEditor_{{ step.id }}' type='button' class='btn btn-sm btn-secondary'>{{ 'Add a deadline'|trans }}</button>
             {% endif %}
+            {# Setting and changing a deadline share this one editor --
+               relative quick-options, or an exact date + time (two plain
+               fields, not a combined datetime-local: a full-fledged date
+               picker plus a separate hour/minute field, not one control
+               trying to be both). Pre-filled with the current deadline (if
+               any) so "Change" starts from what's already set. #}
+            <div hidden class='input-group mt-1' id='stepDeadlineEditor_{{ step.id }}'>
+              <select class='custom-select col-md-3' id='stepSelectDeadline_{{ step.id }}' data-change-action='toggle-step-custom-deadline' data-stepid='{{ step.id }}'>
+                <option disabled {{ step.deadline ? '' : 'selected' }}>{{ 'Set deadline in'|trans }}</option>
+                <option value='{{ '+1 hour'|toDatetime }}'>{{ '%d hour'|trans|format(1) }}</option>
+                <option value='{{ '+1 day'|toDatetime }}'>{{ '%d day'|trans|format(1) }}</option>
+                <option value='{{ '+1 week'|toDatetime }}'>{{ '%d week'|trans|format(1) }}</option>
+                <option value='{{ '+1 month'|toDatetime }}'>{{ '%d month'|trans|format(1) }}</option>
+                <option value='{{ '+1 year'|toDatetime }}'>{{ '%d year'|trans|format(1) }}</option>
+                <option value='custom' {{ step.deadline ? 'selected' : '' }}>{{ 'Custom date…'|trans }}</option>
+              </select>
+              <input type='date' id='stepCustomDeadlineDate_{{ step.id }}' class='form-control col-md-2' {{ step.deadline ? '' : 'hidden' }} value='{{ step.deadline ? step.deadline|date('Y-m-d') : '' }}'>
+              <input type='time' id='stepCustomDeadlineTime_{{ step.id }}' class='form-control col-md-2' {{ step.deadline ? '' : 'hidden' }} value='{{ step.deadline ? step.deadline|date('H:i') : '' }}'>
+              <div class='input-group-append'>
+                <button class='btn btn-primary' type='button' data-action='step-update-deadline' data-stepid='{{ step.id }}'>{{ 'Save'|trans }}</button>
+              </div>
+            </div>
             </div>
             <div data-action='import-step-body' data-stepid='{{ step.id }}'><i class='fas fa-file-import'></i> {{ 'Copy step to cursor position'|trans }}</div>
           </div>

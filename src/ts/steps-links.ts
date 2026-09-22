@@ -183,18 +183,34 @@ on('create-steps-bulk', (_, event: Event) => {
 
 // the deadline select's last option is a plain marker value ("custom")
 // rather than an already-computed datetime like the others -- picking it
-// reveals the adjacent datetime-local input instead of an offset from now
+// reveals the adjacent date + time inputs instead of an offset from now
 on('toggle-step-custom-deadline', (el: HTMLElement) => {
   const select = el as HTMLSelectElement;
-  const input = document.getElementById('stepCustomDeadline_' + select.dataset.stepid) as HTMLInputElement;
-  input.hidden = select.value !== 'custom';
+  const isCustom = select.value === 'custom';
+  const dateInput = document.getElementById('stepCustomDeadlineDate_' + select.dataset.stepid) as HTMLInputElement;
+  const timeInput = document.getElementById('stepCustomDeadlineTime_' + select.dataset.stepid) as HTMLInputElement;
+  dateInput.hidden = !isCustom;
+  timeInput.hidden = !isCustom;
+  // a bare date with no time at all isn't a valid deadline -- default to
+  // the current time of day the first time this is revealed, rather than
+  // making the user set one just to get past validation
+  if (isCustom && !timeInput.value) {
+    timeInput.value = new Date().toTimeString().slice(0, 5);
+  }
 });
 
 on('step-update-deadline', (el: HTMLElement) => {
   const select = document.getElementById('stepSelectDeadline_' + el.dataset.stepid) as HTMLSelectElement;
-  const value = select.value === 'custom'
-    ? (document.getElementById('stepCustomDeadline_' + el.dataset.stepid) as HTMLInputElement).value
-    : select.value;
+  let value = select.value;
+  if (value === 'custom') {
+    const dateInput = document.getElementById('stepCustomDeadlineDate_' + el.dataset.stepid) as HTMLInputElement;
+    const timeInput = document.getElementById('stepCustomDeadlineTime_' + el.dataset.stepid) as HTMLInputElement;
+    if (!dateInput.value || !timeInput.value) {
+      dateInput.reportValidity();
+      return;
+    }
+    value = `${dateInput.value}T${timeInput.value}`;
+  }
   const stepid = parseInt(el.dataset.stepid, 10);
   StepC.update(stepid, value, Target.Deadline).then(() => {
     StepC.notif(stepid).then(() => reloadElements(['stepsDiv']));
