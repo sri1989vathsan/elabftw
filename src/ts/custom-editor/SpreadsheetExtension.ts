@@ -880,6 +880,33 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // position sync above, but the expensive resize call only actually
   // runs once height has stopped changing for a short moment.
   let autoResizeDebounce: ReturnType<typeof setTimeout> | null = null;
+  let autoResizePending = false;
+  let spreadsheetInteractionActive = false;
+
+  const runPendingAutoResize = (): void => {
+    if (!autoResizePending || spreadsheetInteractionActive) return;
+    autoResizePending = false;
+    editor.execCommand('mceAutoResize');
+  };
+
+  // Do not resize TinyMCE while jspreadsheet owns keyboard focus. TinyMCE's
+  // autoresize command focuses its iframe as part of its layout work; when
+  // the active grid is an overlay in the outer document, that steals focus
+  // from the cell and scrolls back to TinyMCE's stale internal selection
+  // (often the first spreadsheet). Keep one resize pending instead and run
+  // it only after the user genuinely leaves every spreadsheet overlay.
+  // Track that boundary from pointer interaction, not document.activeElement:
+  // jspreadsheet transiently removes/replaces its internal input while
+  // committing a keystroke, briefly making <body> active even though the
+  // user has not left the grid. Treating that internal transition as a real
+  // exit was what let autoresize steal the cursor mid-edit.
+  const onSpreadsheetPointerDown = (event: PointerEvent): void => {
+    spreadsheetInteractionActive = event.target instanceof Element
+      && event.target.closest('.elabftw-spreadsheet-editor-overlay') !== null;
+    if (!autoResizePending || spreadsheetInteractionActive) return;
+    window.requestAnimationFrame(runPendingAutoResize);
+  };
+  document.addEventListener('pointerdown', onSpreadsheetPointerDown, true);
 
   const getEditorIframe = (): HTMLIFrameElement | null =>
     document.getElementById(`${editor.id}_ifr`) as HTMLIFrameElement | null;
@@ -1074,34 +1101,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
             if (autoResizeDebounce !== null) clearTimeout(autoResizeDebounce);
             autoResizeDebounce = setTimeout(() => {
               autoResizeDebounce = null;
-              // A synchronous restore-right-after-execCommand (an earlier
-              // version of this) wasn't enough: a live console trace
-              // showed TinyMCE moves focus into its own iframe (and the
-              // browser scrolls accordingly) *asynchronously*, after
-              // execCommand('mceAutoResize') already returns -- code
-              // running synchronously right after it can't catch that.
-              // Two rAF frames give that async work time to actually
-              // finish before checking whether it stole anything. Only
-              // restores when the current focus looks like TinyMCE's own
-              // involuntary steal (its iframe, or a bare document.body --
-              // see the jspreadsheet-grid-cell-input case this same
-              // pattern already covers above) rather than unconditionally
-              // every time, so a focus change the user actually made in
-              // the meantime (clicking some other control) is left alone.
-              const focused = document.activeElement as HTMLElement | null;
-              const scrollX = window.scrollX;
-              const scrollY = window.scrollY;
-              editor.execCommand('mceAutoResize');
-              requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                  const current = document.activeElement;
-                  const stolen = current === document.body
-                    || (current instanceof HTMLElement && current.tagName === 'IFRAME');
-                  if (!focused || !stolen || !document.contains(focused)) return;
-                  focused.focus({ preventScroll: true });
-                  window.scrollTo({ left: scrollX, top: scrollY, behavior: 'instant' });
-                });
-              });
+              autoResizePending = true;
+              runPendingAutoResize();
             }, 200);
           }
           // A zero-size rect means the real table isn't actually visible right
@@ -1317,6 +1318,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     tableVisibility.disconnect();
     Array.from(spreadsheetOverlays.keys()).forEach(removeOverlay);
     window.removeEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
+    document.removeEventListener('pointerdown', onSpreadsheetPointerDown, true);
     // A pending debounced mceAutoResize (see syncOverlayPositions) has
     // nothing left to act on once the editor itself is gone -- calling
     // execCommand on a destroyed editor, or trying to refocus an element
@@ -1326,6 +1328,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       clearTimeout(autoResizeDebounce);
       autoResizeDebounce = null;
     }
+    autoResizePending = false;
+    spreadsheetInteractionActive = false;
   });
 
   editor.on('ObjectResizeStart', event => {

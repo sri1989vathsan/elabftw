@@ -5736,6 +5736,17 @@ export function buildReadOnlySpreadsheetHost(
     // keep overwriting it. Setting .value in JS does not fire 'input'.
     formulaInputEl.addEventListener('input', () => {
       awaitingReferenceReplacement = false;
+      // Keep the selected cell in step with the formula bar while typing,
+      // rather than waiting for Enter/blur. This also updates the raw-data
+      // mirror immediately, so an overlay teardown cannot lose the latest
+      // character even if jspreadsheet has not emitted onchange yet.
+      if (!formulaEditingCell || !formulaInputEl) return;
+      const { col, row } = formulaEditingCell;
+      const value = formulaInputEl.value;
+      updateRawDataMirrorCell(col, row, value, false);
+      const targetWorksheet = getMountedWorksheet(sheetContainer);
+      targetWorksheet?.setValue?.(`${colLabel(col)}${row + 1}`, value);
+      notifyFromMirror();
     });
     formulaInputEl.addEventListener('keydown', event => {
       // jspreadsheet-ce listens for keydown on `document` itself (not the
@@ -5972,33 +5983,11 @@ export function buildReadOnlySpreadsheetHost(
   // formula bar. Reassert focus on the input whenever it loses it while
   // still composing, regardless of what stole it or when.
   let reclaimFocusHandler: ((event: FocusEvent) => void) | null = null;
-  // jspreadsheet-ce's own cell-edit handling can remove the actively
-  // focused element from the DOM mid-keystroke as part of re-rendering
-  // that cell -- the browser's only fallback when a focused element is
-  // removed is <body>, not anywhere useful. Left alone, the *next*
-  // keystroke lands on <body> instead of any input: it can fall through
-  // to a global keyboard shortcut (e.g. toggling an unrelated sidebar
-  // panel shut) rather than reaching the cell at all, and either way the
-  // character the user just typed never arrives anywhere. Tracked
-  // separately from composingFormula/reclaimFocusHandler above (that one
-  // only ever reclaims for the formula bar specifically); this covers
-  // plain in-grid cell editing, the more common case.
-  let lastFocusWasInGrid = false;
   if (editable) {
     reclaimFocusHandler = (event: FocusEvent): void => {
       if (composingFormula && formulaInputEl && event.target !== formulaInputEl) {
         formulaInputEl.focus();
-        return;
       }
-      const target = event.target;
-      if (target === document.body) {
-        // sheetContainer itself has no tabindex -- the element jspreadsheet
-        // actually hands keyboard focus to (a [tabindex] div it owns,
-        // recreated as cells are edited) is the one to reclaim.
-        if (lastFocusWasInGrid) sheetContainer.querySelector<HTMLElement>('[tabindex]')?.focus();
-        return;
-      }
-      lastFocusWasInGrid = target instanceof Node && sheetContainer.contains(target);
     };
     document.addEventListener('focusin', reclaimFocusHandler);
   }
