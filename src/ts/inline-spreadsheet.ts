@@ -6299,6 +6299,17 @@ export function buildReadOnlySpreadsheetHost(
           awaitingReferenceReplacement = true;
           return;
         }
+        // Commit whatever's currently in the bar for the *previous* cell
+        // before overwriting it below -- jspreadsheet fires this selection
+        // callback synchronously on mousedown, well before the browser's
+        // own blur event for this input (the one that normally calls
+        // commitFormulaInput()) has any chance to run. Without this, typing
+        // a change and then clicking straight to another cell (rather than
+        // blurring some other way first) silently discarded that edit: the
+        // value below overwrites formulaInputEl.value first, and by the
+        // time blur finally does fire, there's nothing of the old edit
+        // left to commit.
+        commitFormulaInput();
         // A plain new selection: show that cell's current raw value/formula,
         // ready to edit here -- only for a single cell, matching the popup.
         // This is the actual "starting fresh" point -- any reference a

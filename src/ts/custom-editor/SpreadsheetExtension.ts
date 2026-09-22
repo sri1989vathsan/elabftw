@@ -869,6 +869,17 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // same tracked node and just repositioning it every frame is self-
   // healing regardless of what got typed around it.
   const spreadsheetSpacers = new WeakMap<HTMLTableElement, HTMLElement>();
+  // mceAutoResize actually resizes the iframe synchronously -- calling it
+  // every single time the spacer's measured height changes by even a
+  // sub-pixel (routine float jitter from one rAF frame to the next, not
+  // just genuine settling) turned typing into a resize storm: every
+  // keystroke forced a full iframe reflow, which visibly scrolled the
+  // page away from the table the user was typing into and dropped
+  // keystrokes outright. Debounced instead -- the spacer's own height
+  // (cheap, just a style write) still updates every frame for the
+  // position sync above, but the expensive resize call only actually
+  // runs once height has stopped changing for a short moment.
+  let autoResizeDebounce: ReturnType<typeof setTimeout> | null = null;
 
   const getEditorIframe = (): HTMLIFrameElement | null =>
     document.getElementById(`${editor.id}_ifr`) as HTMLIFrameElement | null;
@@ -1060,7 +1071,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           if (spacer.dataset.lastHeight !== String(spacerHeight)) {
             spacer.dataset.lastHeight = String(spacerHeight);
             spacer.style.height = `${spacerHeight}px`;
-            editor.execCommand('mceAutoResize');
+            if (autoResizeDebounce !== null) clearTimeout(autoResizeDebounce);
+            autoResizeDebounce = setTimeout(() => {
+              autoResizeDebounce = null;
+              editor.execCommand('mceAutoResize');
+            }, 200);
           }
           // A zero-size rect means the real table isn't actually visible right
           // now (e.g. inside a collapsed <details>) -- hide the overlay rather
