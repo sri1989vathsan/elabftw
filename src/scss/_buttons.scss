@@ -198,6 +198,19 @@
     background-color: var(--primary);
     border-color: var(--primary);
     color: var(--primary-fg, #fff);
+
+    // A global `.fas, .far { color: var(--medium); }` rule (main.scss)
+    // sets color directly on the icon element itself -- an inherited
+    // value (like the active color above, which the icon would otherwise
+    // just inherit from this button) always loses to *any* rule that
+    // targets the element directly, no matter how much higher specificity
+    // the inherited rule's own selector has. Without this, the icon
+    // stayed the same muted grey in both states and the "active" look was
+    // invisible on the icon itself (only the background/border changed).
+    .fas,
+    .far {
+      color: inherit;
+    }
   }
 }
 
