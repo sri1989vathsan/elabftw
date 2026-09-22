@@ -5682,6 +5682,36 @@ export function buildReadOnlySpreadsheetHost(
     // above the grid it edits into.
     host.insertBefore(formatBarEl, formulaBarEl);
 
+    // One arrow collapses both chrome rows (formatting toolbar + formula
+    // bar) at once, leaving the grid itself untouched -- distinct from the
+    // view-mode toggleBar chevron above, which collapses the whole table
+    // (grid included) and is deliberately disabled in editable mode (see
+    // its own comment). Starts collapsed: most edits are a quick cell
+    // tweak that never touches either bar, so showing them by default
+    // spent header space most spreadsheets never needed.
+    const optionsToggle = document.createElement('button');
+    optionsToggle.type = 'button';
+    optionsToggle.className = 'elabftw-spreadsheet-options-toggle';
+    const optionsToggleIcon = document.createElement('i');
+    optionsToggleIcon.setAttribute('aria-hidden', 'true');
+    optionsToggle.appendChild(optionsToggleIcon);
+    let optionsCollapsed = true;
+    const applyOptionsCollapsed = (): void => {
+      formatBarEl.hidden = optionsCollapsed;
+      formulaBarEl.hidden = optionsCollapsed;
+      optionsToggleIcon.className = optionsCollapsed ? 'fas fa-chevron-right fa-fw' : 'fas fa-chevron-down fa-fw';
+      const label = optionsCollapsed ? 'Show formula and formatting bars' : 'Hide formula and formatting bars';
+      optionsToggle.title = label;
+      optionsToggle.setAttribute('aria-label', label);
+    };
+    applyOptionsCollapsed();
+    optionsToggle.addEventListener('click', event => {
+      event.stopPropagation();
+      optionsCollapsed = !optionsCollapsed;
+      applyOptionsCollapsed();
+    });
+    toggleBar.insertBefore(optionsToggle, toggleBar.firstChild);
+
     // Does NOT reset activeReferenceRange/awaitingReferenceReplacement --
     // reclaimFocusHandler below re-focuses this input every time
     // jspreadsheet steals it back (which it does on every single cell

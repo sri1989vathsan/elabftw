@@ -3416,6 +3416,27 @@ body.html-tool-workspace-resizing * {
   color: var(--dangerred);
 }
 
+.elabftw-spreadsheet-options-toggle {
+  background: none;
+  border: none;
+  color: var(--medium);
+  padding: 0.15rem 0.3rem;
+}
+
+.elabftw-spreadsheet-options-toggle:hover {
+  color: var(--primary);
+}
+
+// Both bars set their own display: flex below, at the same specificity as
+// the browser's own [hidden] { display: none }, so which one wins is just
+// down to cascade order rather than anything guaranteed -- pairing the
+// class with [hidden] here outranks the plain class selector and makes
+// toggling the `hidden` property from inline-spreadsheet.ts reliable.
+.elabftw-spreadsheet-format-bar[hidden],
+.elabftw-spreadsheet-formula-bar[hidden] {
+  display: none;
+}
+
 // Formula bar for the inline editor overlay -- select a cell to see its
 // value/formula here, then click other cells while this has focus to
 // insert their reference, mirroring .inline-spreadsheet-formula-bar in
