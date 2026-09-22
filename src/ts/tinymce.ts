@@ -481,6 +481,15 @@ export function getTinymceBaseConfig(page: string): object {
         // to trigger, making it "shrink" only once clicked into. Force one
         // extra recompute once everything has actually settled.
         window.setTimeout(() => editor.execCommand('mceAutoResize'), 100);
+        // Same settling problem, but for a spreadsheet overlay's own
+        // position/size sync (SpreadsheetExtension.ts): it's normally kept
+        // current by a continuous requestAnimationFrame loop, but that loop
+        // only starts once a table first becomes visible, which can itself
+        // land before the surrounding chrome has finished settling -- same
+        // as mceAutoResize above, only clicking into the editor happened to
+        // trigger a NodeChange that re-measured everything fresh. Ask it to
+        // re-measure right away too, at each of the same checkpoints.
+        window.dispatchEvent(new CustomEvent('elabftw-spreadsheet-resync'));
       });
       // Hook into the blur event - Finalize potential changes to images if user clicks outside of editor
       editor.on('blur', () => {
@@ -593,6 +602,7 @@ export function getTinymceBaseConfig(page: string): object {
       // provisional iframe height. Without this, edit mode can initially
       // expose a long empty scrolling region until the editor receives focus.
       window.requestAnimationFrame(() => editor.execCommand('mceAutoResize'));
+      window.requestAnimationFrame(() => window.dispatchEvent(new CustomEvent('elabftw-spreadsheet-resync')));
       // The frame above can still fire before the iframe's own fonts finish
       // loading, so the initial height is measured against fallback-font
       // metrics; TinyMCE only recalculates again on its next trigger (a
@@ -600,6 +610,7 @@ export function getTinymceBaseConfig(page: string): object {
       // shrinks the moment it's clicked. Recheck once those fonts are
       // actually ready so the correct height shows up without needing focus.
       editor.getDoc()?.fonts?.ready.then(() => editor.execCommand('mceAutoResize'));
+      editor.getDoc()?.fonts?.ready.then(() => window.dispatchEvent(new CustomEvent('elabftw-spreadsheet-resync')));
       editor.on('ExecCommand', (e) => {
         if (e.command == 'mcePreview') {
           // declaration as iFrame element required to avoid errors with getting srcdoc property

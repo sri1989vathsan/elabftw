@@ -1198,9 +1198,25 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
 
   editor.on('SetContent NodeChange', enhanceAllTables);
+  // Dispatched from tinymce.ts at the same "layout has actually settled"
+  // checkpoints it uses to force an extra mceAutoResize (a short setTimeout,
+  // a requestAnimationFrame, and once web fonts are ready). Once any
+  // overlay exists, the continuous per-frame loop below (syncOverlayPositions
+  // rescheduling itself via requestAnimationFrame) already re-measures fresh
+  // every frame, so its very next tick already reflects whatever the
+  // settling checkpoint just corrected -- no need to force a second,
+  // parallel sync pass here (calling syncOverlayPositions() directly would
+  // just spawn a second self-rescheduling rAF chain alongside the existing
+  // one, doubling the sync rate for good rather than fixing anything). The
+  // gap this actually closes is enhanceTable() itself never having run yet
+  // (gated on IntersectionObserver visibility, which can land before the
+  // surrounding chrome has settled) -- re-scanning for not-yet-enhanced
+  // tables here covers that.
+  window.addEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
   editor.on('remove', () => {
     tableVisibility.disconnect();
     Array.from(spreadsheetOverlays.keys()).forEach(removeOverlay);
+    window.removeEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
   });
 
   editor.on('ObjectResizeStart', event => {
