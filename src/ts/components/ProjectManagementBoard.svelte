@@ -827,8 +827,18 @@
     const reordered = [...columnTasks];
     const [moved] = reordered.splice(index, 1);
     reordered.splice(targetIndex, 0, moved);
+    // Only PATCH the entries whose ordering actually needs to change --
+    // once a column's tasks have distinct sequential values (which this
+    // same loop establishes the first time it runs there), a single-step
+    // move only ever touches the 2 that swapped places, not the whole
+    // column. Still renumbers everyone the first time a column is used
+    // (its own comment above explains why that's needed then), but a 100-
+    // task column doesn't pay for 100 requests on every later move.
+    const changed = reordered
+      .map((t, i) => ({ id: t.id, ordering: i, unchanged: t.ordering === i }))
+      .filter(entry => !entry.unchanged);
     try {
-      await Promise.all(reordered.map((t, i) => ApiC.patch(`${Model.Todolist}/${t.id}`, { ordering: i })));
+      await Promise.all(changed.map(entry => ApiC.patch(`${Model.Todolist}/${entry.id}`, { ordering: entry.ordering })));
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not reorder that task.');
