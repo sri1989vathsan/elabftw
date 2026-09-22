@@ -765,6 +765,16 @@
     deadline: Date,
     specificDate: string,
     specificTime: string,
+    // A 'specific' reminder is stored relative to the deadline it was set
+    // against. Editing *only* the deadline (e.g. pushing an overdue task
+    // weeks into the future) can leave that gap outside the allowed
+    // 0-10080 minute window without the reminder date/time itself having
+    // changed at all -- saveEditing() passes true here so that case clamps
+    // back into range instead of throwing and aborting the whole save
+    // (deadline included). The create flow leaves this false: there the
+    // user is actively choosing both values together, so a combination
+    // that's out of range is a real input mistake worth blocking on.
+    lenientRange = false,
   ): number | null {
     if (choice === 'none') return null;
     if (choice === 'specific') {
@@ -776,6 +786,9 @@
         throw new Error('Enter a valid reminder date and time.');
       }
       const minutes = Math.round((deadline.getTime() - reminder.getTime()) / 60000);
+      if (lenientRange) {
+        return Math.max(0, Math.min(10080, minutes));
+      }
       if (minutes < 0) {
         throw new Error('The reminder must be at or before the task deadline.');
       }
@@ -927,6 +940,7 @@
           deadline,
           editReminderDate,
           editReminderTime,
+          true,
         );
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Enter a valid reminder.');
