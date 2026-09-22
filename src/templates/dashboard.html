@@ -127,8 +127,13 @@
     </div>
   </div>
   <div class='col-md-4 mt-2 mt-md-0'>
-    <div class='d-flex justify-content-between'>
+    <div class='d-flex justify-content-between align-items-center'>
       <h3><i class='fas fa-bullhorn mr-2'></i>{{ 'Announcements'|trans }}</h3>
+      {% if App.Users.isAdmin %}
+        <a href='admin.php?tab=9#createAnnouncementForm' class='btn btn-primary btn-sm' title='{{ 'New announcement'|trans }}' aria-label='{{ 'New announcement'|trans }}'>
+          <i class='fas fa-plus'></i>
+        </a>
+      {% endif %}
     </div>
     <hr>
     <div class='announcement-card-list' id='announcementFeed' style='max-height: min(70vh, 600px); overflow-y: auto;'>
