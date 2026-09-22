@@ -2691,7 +2691,13 @@
   <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeProjectDialog(); }}>
     <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmProjectDialogTitle">
       <div class="pm-dialog-header">
-        <h4 id="pmProjectDialogTitle" class="mb-0">{editingProject ? t('Manage project') : t('New project')}</h4>
+        <h4 id="pmProjectDialogTitle" class="mb-0">
+          {#if editingProject}
+            {editingProject.parent_id !== null ? t('Manage subproject') : t('Manage project')}
+          {:else}
+            {dialogParentId !== null ? t('New subproject') : t('New project')}
+          {/if}
+        </h4>
         <button type="button" class="pm-close-btn" on:click={closeProjectDialog} aria-label={t('Close')}>&times;</button>
       </div>
       <div class="pm-dialog-body">
