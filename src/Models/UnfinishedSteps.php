@@ -87,9 +87,21 @@ final class UnfinishedSteps extends AbstractRest
                     COALESCE(DATE_FORMAT(entity_steps.deadline, '%Y-%m-%dT%H:%i:%sZ'), '')
                     ORDER BY entity_steps.ordering SEPARATOR '|'
                 ) AS steps_deadline
-                FROM " . $model->value . '_steps as entity_steps
-                WHERE finished = 0 GROUP BY item_id
-            ) AS stepst ON (stepst.item_id = entity.id)';
+                FROM " . $model->value . "_steps as entity_steps
+                WHERE finished = 0
+                    -- a step with a deadline that's already reflected as a
+                    -- linked to-do (see Steps::syncLinkedTodo()) shows up
+                    -- through the normal to-do listing instead, fully
+                    -- editable there -- without this it also showed up
+                    -- here a second time, as a plain read-only duplicate
+                    -- with no way to edit its date at all.
+                    AND NOT EXISTS (
+                        SELECT 1 FROM custom_step_todolist_links AS link
+                        WHERE link.entity_type = '" . $model->value . "'
+                            AND link.step_id = entity_steps.id
+                    )
+                GROUP BY item_id
+            ) AS stepst ON (stepst.item_id = entity.id)";
 
         $sql .= ' JOIN users2teams ON (users2teams.users_id = entity.userid AND users2teams.teams_id = :teamid)';
         $sql .= ' WHERE ' . ($this->teamScoped ? $this->getTeamWhereClause($model) : 'entity.userid = :userid');
