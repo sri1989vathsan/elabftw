@@ -227,6 +227,9 @@
   let completedWindow = '7';
   let completedLoaded = false;
   let loadingCompleted = false;
+  let archivedItems: Todo[] = [];
+  let archivedLoaded = false;
+  let loadingArchived = false;
   let draft = '';
   let draftNotes = '';
   let draftProjectId: number | null = null;
@@ -685,6 +688,30 @@
     if ((event.currentTarget as HTMLDetailsElement).open && !completedLoaded) {
       void loadCompleted();
     }
+  }
+
+  // Archived tasks are excluded from every other fetch this sidebar makes
+  // (see Todolist::readAll()'s own archived filter) -- this disclosure,
+  // loaded lazily on first open, is the only place to find one again from
+  // the sidebar once archiveEntry() has taken it out of the normal list.
+  async function loadArchived(): Promise<void> {
+    loadingArchived = true;
+    archivedItems = await ApiC.getJson(`${Model.Todolist}?scope=assigned&archived=1&limit=100`) as Todo[];
+    archivedLoaded = true;
+    loadingArchived = false;
+  }
+
+  function toggleArchivedHistory(event: Event): void {
+    if ((event.currentTarget as HTMLDetailsElement).open && !archivedLoaded) {
+      void loadArchived();
+    }
+  }
+
+  async function unarchiveFromHistory(id: number): Promise<void> {
+    await ApiC.patch(`${Model.Todolist}/${id}`, { archived: false });
+    archivedItems = archivedItems.filter(item => Number(item.id) !== id);
+    await load();
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
 
   async function openFullHistory(event: MouseEvent): Promise<void> {
@@ -2095,6 +2122,32 @@
           </ul>
         </section>
       {/each}
+    {/if}
+  </details>
+  <details class='todo-completed-history mt-2' on:toggle={toggleArchivedHistory}>
+    <summary>
+      <span>{t('Archived tasks')}</span>
+      {#if archivedLoaded}<span class='badge badge-secondary'>{archivedItems.length}</span>{/if}
+    </summary>
+    {#if loadingArchived}
+      <p class='todo-secondary-text mb-0'>{t('Loading')}…</p>
+    {:else if archivedItems.length === 0}
+      <p class='todo-secondary-text mb-0'>{t('No archived tasks.')}</p>
+    {:else}
+      <ul class='list-group'>
+        {#each archivedItems as item (item.id)}
+          <li class='list-group-item todo-completed-entry'>
+            <button type='button' class='btn-unstyled flex-grow-1 min-width-0 text-left' on:click={() => openDetail(mapTodoToEntry(item))}>
+              <div>{item.body}</div>
+            </button>
+            <div class='btn-group btn-group-sm ml-2'>
+              <button type='button' class='btn btn-ghost' on:click={() => unarchiveFromHistory(Number(item.id))} title={t('Unarchive')} aria-label={t('Unarchive')}>
+                <i class='fas fa-box-open' aria-hidden='true'></i>
+              </button>
+            </div>
+          </li>
+        {/each}
+      </ul>
     {/if}
   </details>
 {/if}
