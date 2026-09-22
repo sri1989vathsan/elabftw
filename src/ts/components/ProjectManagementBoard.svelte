@@ -241,7 +241,25 @@
   let loadingArchived = false;
 
   $: activeProject = typeof activeProjectId === 'number' ? (projects.find(p => p.id === activeProjectId) ?? null) : null;
-  $: assignableMembers = activeProject ? activeProject.members : teamMembers;
+  // A parent project's member can already see and manage a subproject's
+  // tasks -- Todolist::readAll()/TodolistProjects::readAll() both grant
+  // that via a live membership check against the *parent*, not by copying
+  // rows into the subproject's own todolist_project_members, so adding or
+  // removing someone from the parent already takes effect immediately
+  // there. But this dropdown only ever read the subproject's own explicit
+  // members, so an inherited parent member had access yet never showed up
+  // as assignable within the subproject's board -- unioning with the
+  // parent's own members (deduped) here mirrors that same inheritance,
+  // still computed live off current membership rather than copied.
+  $: activeProjectParent = activeProject?.parent_id !== null && activeProject?.parent_id !== undefined
+    ? (projects.find(p => p.id === activeProject.parent_id) ?? null)
+    : null;
+  $: assignableMembers = activeProject
+    ? [
+      ...activeProject.members,
+      ...(activeProjectParent?.members.filter(m => !activeProject.members.some(am => am.userid === m.userid)) ?? []),
+    ]
+    : teamMembers;
 
   // Subprojects (parent_id set) never get their own top-level tab -- only
   // topLevelProjects do. Viewing one is reached through its parent's own
