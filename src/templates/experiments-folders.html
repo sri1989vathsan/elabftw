@@ -174,9 +174,13 @@
         <i class='fas fa-folder-open fa-fw mr-1'></i>{{ 'You have not created any folders yet.'|trans }}
       </div>
 
-      {# Create new folder form #}
-      <div class='folder-create-section border-top mt-3 pt-3'>
-        <h4 class='h6 mb-2'><i class='fas fa-folder-plus fa-fw mr-1'></i>{{ 'New folder'|trans }}</h4>
+      {# Create new folder form -- collapsed by default (a <details>,
+         matching the sidebar's own Completed/Archived tasks disclosures):
+         most visits to this panel are browsing existing folders, not
+         creating one, so the create form's own fields (name, parent,
+         description) don't need to take up space by default. #}
+      <details class='folder-create-section border-top mt-3 pt-3'>
+        <summary class='h6 mb-2'><i class='fas fa-folder-plus fa-fw mr-1'></i>{{ 'New folder'|trans }}</summary>
         <div class='form-group mb-2'>
           <label class='small mb-1' for='newFolderName'>{{ 'Folder name'|trans }}</label>
           <input type='text' id='newFolderName' class='form-control' placeholder='{{ 'New folder name'|trans }}' aria-label='{{ 'New folder name'|trans }}' />
@@ -202,7 +206,7 @@
         <button class='btn btn-primary btn-sm btn-block' type='button' data-action='create-experiment-folder'>
           <i class='fas fa-plus fa-fw mr-1'></i>{{ 'Create folder'|trans }}
         </button>
-      </div>
+      </details>
     </div>
   </div>
 </div>
