@@ -172,8 +172,8 @@
                 <button type='button' class='btn btn-sm btn-link p-0' data-action='toggle-next' data-toggle-target='announcementEditForm-feed-{{ announcement.id }}' aria-expanded='false' aria-controls='announcementEditForm-feed-{{ announcement.id }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit'|trans }}'>
                   <i class='fas fa-edit'></i>
                 </button>
-                <button type='button' class='btn btn-sm btn-link p-0 ml-2' data-action='toggle-pin-announcement' data-id='{{ announcement.id }}' title='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}' aria-label='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}'>
-                  <i class='fas fa-thumbtack {{ announcement.pinned ? 'color-warning' : '' }}'></i>
+                <button type='button' class='btn btn-neutral btn-sm p-0 ml-2 announcement-pin-btn {{ announcement.pinned ? 'active' : '' }}' data-action='toggle-pin-announcement' data-id='{{ announcement.id }}' title='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}' aria-label='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}'>
+                  <i class='fas fa-thumbtack'></i>
                 </button>
               </div>
             {% endif %}

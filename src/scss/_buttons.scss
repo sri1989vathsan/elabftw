@@ -200,3 +200,14 @@
     color: var(--primary-fg, #fff);
   }
 }
+
+// The dashboard feed's pin toggle sits inline in a compact icon toolbar
+// (next to a plain .btn-link Edit button) -- .btn-neutral's own padding/
+// border read as bulky there, so this trims it down to a small icon-only
+// circle while keeping the same .active fill/color above for "pinned".
+.announcement-pin-btn {
+  border-radius: 50%;
+  height: 1.5rem;
+  padding: 0 !important;
+  width: 1.5rem;
+}
