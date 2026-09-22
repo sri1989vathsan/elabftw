@@ -171,6 +171,16 @@ function filter(event){
   if (target.closest('.elabftw-spreadsheet-editor-overlay, .inline-spreadsheet-overlay, .jss_container')) {
     return false;
   }
+  // Covers the gap the ancestry check above can't: jspreadsheet can
+  // momentarily drop focus to <body> itself while recreating its own
+  // cell-edit input (most visibly as typed content nears the column's
+  // width) -- <body> is never a descendant of the overlay, so a keystroke
+  // landing there in that single frame isn't caught by the check above.
+  // inline-spreadsheet.ts's own focus-reclaim logic toggles this class on
+  // body for exactly this window (see its own comment).
+  if (document.body.classList.contains('elabftw-spreadsheet-editing')) {
+    return false;
+  }
   const tagName = target.tagName;
   // ignore keypressed in any elements that support keyboard data input
   return !(tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA' || target.hasAttribute('contenteditable'));

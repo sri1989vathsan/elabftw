@@ -5983,11 +5983,42 @@ export function buildReadOnlySpreadsheetHost(
   // formula bar. Reassert focus on the input whenever it loses it while
   // still composing, regardless of what stole it or when.
   let reclaimFocusHandler: ((event: FocusEvent) => void) | null = null;
+  // jspreadsheet-ce recreates its own internal cell-edit <input> as part of
+  // re-rendering a cell while it's being typed into -- most visibly, right
+  // as the typed content approaches filling the column's own width, which
+  // seems to trigger a remeasure/rebuild of that input. The browser's only
+  // fallback when the currently-focused element is removed from the DOM is
+  // <body>, not anywhere useful: left alone, every keystroke after that
+  // point reaches no input at all ("stops typing"), and since a keydown
+  // targeting <body> is not excluded by keymaster's own spreadsheet-aware
+  // filter (that filter only excludes based on where the event *target*
+  // sits in the DOM, and <body> is never a descendant of the overlay it
+  // checks for), a later keystroke can still fall through to a global
+  // shortcut too. Tracked separately from composingFormula/the formula-bar
+  // case above (that one only ever reclaims for the formula bar
+  // specifically); this covers plain in-grid cell editing, the more
+  // common case and the one actually reported.
+  let lastFocusWasInGrid = false;
   if (editable) {
     reclaimFocusHandler = (event: FocusEvent): void => {
       if (composingFormula && formulaInputEl && event.target !== formulaInputEl) {
         formulaInputEl.focus();
+        return;
       }
+      const target = event.target;
+      if (target === document.body) {
+        // Also covers the keystroke that lands on <body> in the single
+        // frame before this handler gets a chance to reclaim it -- a plain
+        // ancestry check (is event.target inside the overlay?) can never
+        // catch that, since <body> is never a descendant of it. keymaster's
+        // own filter checks this same flag as a fallback for exactly that
+        // gap (see its own comment).
+        document.body.classList.add('elabftw-spreadsheet-editing');
+        if (lastFocusWasInGrid) sheetContainer.querySelector<HTMLElement>('[tabindex]')?.focus();
+        return;
+      }
+      lastFocusWasInGrid = target instanceof Node && sheetContainer.contains(target);
+      document.body.classList.toggle('elabftw-spreadsheet-editing', lastFocusWasInGrid);
     };
     document.addEventListener('focusin', reclaimFocusHandler);
   }
