@@ -230,6 +230,11 @@
   let archivedItems: Todo[] = [];
   let archivedLoaded = false;
   let loadingArchived = false;
+  // How far in from the viewport's left edge the detail popup's overlay
+  // should center from -- the sidebar's own current right edge (which
+  // varies: it's user-resizable), or 0 when there's no sidebar to avoid.
+  // Set fresh each time the popup opens (see openDetail()).
+  let overlayLeftOffset = 0;
   let draft = '';
   let draftNotes = '';
   let draftProjectId: number | null = null;
@@ -914,15 +919,20 @@
     void loadComments(entry.id);
     void loadSteps(entry.id);
     window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: { id: entry.id, title: entry.body } }));
-    // The detail popup centers itself across the *whole* viewport (see
-    // .todo-detail-overlay in main.scss), not just the space outside the
-    // sidebar -- on a narrow window there isn't room for both, and the
-    // popup ends up partly hidden behind the sidebar's own z-index. Rather
-    // than teach the popup's centering about the sidebar's width, just
-    // close the sidebar first: it's already reachable again from the
-    // close button once the popup itself is dismissed.
+    // The detail popup's own overlay centers within the sidebar's own
+    // right edge to the window's right edge (see overlayLeftOffset below),
+    // not the whole viewport -- otherwise, since this sidebar itself can
+    // be wide (resizable, up to whatever the user's dragged it to), the
+    // popup's "centered on the full viewport" position routinely landed
+    // partly behind the sidebar rather than in the visible remainder.
+    const sidebar = document.querySelector<HTMLElement>('.side-panel:not([hidden])');
+    overlayLeftOffset = sidebar ? sidebar.getBoundingClientRect().right : 0;
+    // Fallback for a window too small for both the sidebar and a usable
+    // centered popup side by side: close the sidebar outright rather than
+    // trying to squeeze the dialog into whatever sliver is left.
     if (window.innerWidth < 1200) {
       (document.querySelector('[data-action="toggle-sidepanel"][data-target="todolist"][data-purpose="hide"]') as HTMLElement | null)?.click();
+      overlayLeftOffset = 0;
     }
   }
 
@@ -2344,7 +2354,7 @@
 {/if}
 
 {#if detailEntry}
-  <div class='todo-detail-overlay pm-overlay-task' role='presentation' use:portalToContainer>
+  <div class='todo-detail-overlay pm-overlay-task' role='presentation' style={`left: ${overlayLeftOffset}px`} use:portalToContainer>
     <div class='todo-detail-dialog' role='dialog' aria-modal='true' aria-labelledby='todoDetailTitle'>
       <div class='todo-detail-header'>
         <h4 id='todoDetailTitle' class='mb-0'>{detailEditing ? t('Edit task') : detailEntry.body}</h4>
