@@ -1452,6 +1452,38 @@
     return entry.entityType === 'items' ? 'database.php' : 'experiments.php';
   }
 
+  // A 'step' entry here never already has a deadline -- UnfinishedSteps
+  // excludes any step once it has one (it shows up as a fully-editable
+  // 'todo' entry instead, via its linked to-do -- see Steps::
+  // syncLinkedTodo()). So this is always "add one", not "change one";
+  // once saved the step reappears as that 'todo' entry on the next load().
+  let editingStepKey: string | null = null;
+  let stepDeadlineDate = '';
+  let stepDeadlineTime = '';
+
+  function startStepDeadlineEdit(entry: SidebarEntry): void {
+    editingStepKey = entry.key;
+    const now = toLocalInput(new Date());
+    stepDeadlineDate = now.slice(0, 10);
+    stepDeadlineTime = now.slice(11, 16);
+  }
+
+  function cancelStepDeadlineEdit(): void {
+    editingStepKey = null;
+  }
+
+  async function saveStepDeadline(entry: SidebarEntry): Promise<void> {
+    if (!stepDeadlineDate || !stepDeadlineTime || entry.entityType === undefined || entry.entityId === undefined) {
+      notify.error('Enter both a deadline date and time.');
+      return;
+    }
+    await ApiC.patch(`${entry.entityType}/${entry.entityId}/steps/${entry.id}`, {
+      deadline: `${stepDeadlineDate}T${stepDeadlineTime}`,
+    });
+    editingStepKey = null;
+    await load();
+  }
+
   function startTaskDrag(event: DragEvent, id: number): void {
     draggedTaskId = id;
     event.dataTransfer?.setData('text/plain', String(id));
@@ -1851,10 +1883,22 @@
                         </div>
                       {/if}
                     {:else}
-                      <span>{entry.body}</span>
+                      <a class='btn-unstyled todo-title-btn' href={`${entityPage(entry)}?mode=edit&id=${entry.entityId}#step_${entry.id}`}>{entry.body}</a>
                       <a class='small todo-step-entity-link' href={`${entityPage(entry)}?mode=view&id=${entry.entityId}#step_view_${entry.id}`}>
                         {entry.entityTitle}
                       </a>
+                      {#if editingStepKey === entry.key}
+                        <div class='small d-flex align-items-center flex-wrap todo-step-deadline-editor' style='gap:0.3rem'>
+                          <input type='date' class='form-control form-control-sm' style='width:auto' bind:value={stepDeadlineDate} />
+                          <input type='time' class='form-control form-control-sm' style='width:auto' bind:value={stepDeadlineTime} />
+                          <button type='button' class='btn btn-primary btn-sm' on:click={() => void saveStepDeadline(entry)}>{t('Save')}</button>
+                          <button type='button' class='btn btn-ghost btn-sm' on:click={cancelStepDeadlineEdit}>{t('Cancel')}</button>
+                        </div>
+                      {:else}
+                        <button type='button' class='btn-unstyled small todo-step-add-deadline' on:click={() => startStepDeadlineEdit(entry)}>
+                          <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{t('Add a deadline')}
+                        </button>
+                      {/if}
                     {/if}
                     {#if entry.deadline}
                       <div class:font-weight-bold={isOverdue(entry)} class='small todo-item-deadline'>

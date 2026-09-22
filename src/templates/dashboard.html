@@ -150,7 +150,7 @@
             <a href='announcements.php#announcement-{{ announcement.id }}' class='smallgray d-none' data-announcement-readmore>{{ 'Read more…'|trans }}</a>
           {% endif %}
           {% if announcement.image_url %}
-            <a href='announcements.php#announcement-{{ announcement.id }}'>
+            <a href='{{ announcement.image_url }}' target='_blank' rel='noopener'>
               <img class='announcement-tweet-image mt-2' src='{{ announcement.image_url }}' alt=''>
             </a>
           {% endif %}
