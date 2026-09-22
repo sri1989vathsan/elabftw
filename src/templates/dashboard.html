@@ -173,7 +173,7 @@
                   <i class='fas fa-edit'></i>
                 </button>
                 <button type='button' class='btn btn-sm btn-link p-0 ml-2' data-action='toggle-pin-announcement' data-id='{{ announcement.id }}' title='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}' aria-label='{{ announcement.pinned ? 'Unpin'|trans : 'Pin to top'|trans }}'>
-                  <i class='fas fa-thumbtack'></i>
+                  <i class='fas fa-thumbtack {{ announcement.pinned ? 'color-warning' : '' }}'></i>
                 </button>
               </div>
             {% endif %}
