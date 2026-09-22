@@ -6299,7 +6299,7 @@ export function buildReadOnlySpreadsheetHost(
     },
     ...(editable ? {
       onbeforechange: (
-        _changedWorksheet: JssInstance,
+        changedWorksheet: JssInstance,
         cell: HTMLElement,
         changedCol: number,
         changedRow: number,
@@ -6320,6 +6320,23 @@ export function buildReadOnlySpreadsheetHost(
         // already on its way to being saved continuously, not just the
         // one a clean commit happens to catch.
         notifyFromMirror();
+        // Confirmed via a live MutationObserver trace: the real table DOES
+        // end up with the correct value (the write-back above works), but
+        // jspreadsheet's own *visual* grid can still show the cell as
+        // empty/stale -- returning `value` here is normally enough for
+        // jspreadsheet to apply it to its own model itself, but that never
+        // happens when the abrupt destroy-and-recreate above interrupts
+        // its own commit sequence before it gets there. Explicitly setting
+        // it on the worksheet too (deferred one tick, so this doesn't
+        // recurse back into this same onbeforechange while it's still
+        // running) keeps what's on screen in step with what's already
+        // been correctly saved, the same fix already applied to the
+        // formula bar's own live-update case above.
+        const cellName = `${colLabel(changedCol)}${changedRow + 1}`;
+        window.setTimeout(() => {
+          if (changedWorksheet?.getValue?.(cellName) === value) return;
+          changedWorksheet?.setValue?.(cellName, value);
+        }, 0);
         return value;
       },
       onchange: notifyChange,
