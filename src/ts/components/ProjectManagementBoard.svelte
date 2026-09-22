@@ -1022,6 +1022,7 @@
   async function deleteTask(task: Task): Promise<void> {
     try {
       await ApiC.delete(`${Model.Todolist}/${task.id}`);
+      if (detailTask?.id === task.id) closeDetail();
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not delete the task.');
@@ -2568,15 +2569,20 @@
       </div>
       <div class="pm-dialog-footer">
         {#if !detailEditing && !creatingNewTask && canManage(detailTask)}
-          {#if detailTask.archived_at}
-            <button type="button" class="btn btn-secondary mr-auto" on:click={() => unarchiveTask(detailTask)}>
-              <i class="fas fa-box-open fa-fw mr-1" aria-hidden="true"></i>{t('Unarchive')}
+          <div class="d-flex mr-auto" style="gap:0.5rem">
+            {#if detailTask.archived_at}
+              <button type="button" class="btn btn-secondary" on:click={() => unarchiveTask(detailTask)}>
+                <i class="fas fa-box-open fa-fw mr-1" aria-hidden="true"></i>{t('Unarchive')}
+              </button>
+            {:else}
+              <button type="button" class="btn btn-secondary" on:click={() => archiveTask(detailTask)}>
+                <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archive')}
+              </button>
+            {/if}
+            <button type="button" class="btn btn-danger-ghost" on:click={() => deleteTask(detailTask)}>
+              <i class="fas fa-trash-alt fa-fw mr-1" aria-hidden="true"></i>{t('Delete')}
             </button>
-          {:else}
-            <button type="button" class="btn btn-secondary mr-auto" on:click={() => archiveTask(detailTask)}>
-              <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archive')}
-            </button>
-          {/if}
+          </div>
         {/if}
         {#if detailEditing}
           <button type="button" class="btn btn-ghost" on:click={cancelEdit}>{t('Cancel')}</button>

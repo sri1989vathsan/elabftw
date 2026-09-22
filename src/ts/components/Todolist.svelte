@@ -984,6 +984,15 @@
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
 
+  async function deleteEntry(entry: SidebarEntry): Promise<void> {
+    if (entry.source !== 'todo') return;
+    if (!window.confirm(t('Delete this task? This cannot be undone.'))) return;
+    await ApiC.delete(`${Model.Todolist}/${entry.id}`);
+    closeDetail();
+    await load();
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
+  }
+
   // A lightweight rich-text toolbar (contenteditable + execCommand), same
   // approach as ProjectManagementBoard.svelte's Notes field.
   function exec(el: HTMLElement | undefined, cmd: string, value?: string): void {
@@ -2580,15 +2589,20 @@
       </div>
       <div class='todo-detail-footer'>
         {#if !detailEditing}
-          {#if detailEntry.archivedAt}
-            <button type='button' class='btn btn-secondary mr-auto' on:click={() => unarchiveEntry(detailEntry)}>
-              <i class='fas fa-box-open fa-fw mr-1' aria-hidden='true'></i>{t('Unarchive')}
+          <div class='d-flex mr-auto' style='gap:0.5rem'>
+            {#if detailEntry.archivedAt}
+              <button type='button' class='btn btn-secondary' on:click={() => unarchiveEntry(detailEntry)}>
+                <i class='fas fa-box-open fa-fw mr-1' aria-hidden='true'></i>{t('Unarchive')}
+              </button>
+            {:else}
+              <button type='button' class='btn btn-secondary' on:click={() => archiveEntry(detailEntry)}>
+                <i class='fas fa-box-archive fa-fw mr-1' aria-hidden='true'></i>{t('Archive')}
+              </button>
+            {/if}
+            <button type='button' class='btn btn-danger-ghost' on:click={() => deleteEntry(detailEntry)}>
+              <i class='fas fa-trash-alt fa-fw mr-1' aria-hidden='true'></i>{t('Delete')}
             </button>
-          {:else}
-            <button type='button' class='btn btn-secondary mr-auto' on:click={() => archiveEntry(detailEntry)}>
-              <i class='fas fa-box-archive fa-fw mr-1' aria-hidden='true'></i>{t('Archive')}
-            </button>
-          {/if}
+          </div>
         {/if}
         {#if detailEditing}
           <button type='button' class='btn btn-ghost' on:click={cancelDetailEdit}>{t('Cancel')}</button>
