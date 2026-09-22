@@ -1074,7 +1074,33 @@ export function registerSpreadsheetExtension(editor: Editor): void {
             if (autoResizeDebounce !== null) clearTimeout(autoResizeDebounce);
             autoResizeDebounce = setTimeout(() => {
               autoResizeDebounce = null;
+              // mceAutoResize can drag the page's scroll position back
+              // toward wherever TinyMCE's own internal selection/cursor
+              // last actually sat -- typing into this overlay's cell never
+              // moves that (the overlay is a plain input outside TinyMCE's
+              // own contenteditable entirely), so if the user last clicked
+              // into the real editor body near an earlier table, every
+              // resize this debounce fires while editing a *later* one
+              // visibly yanked the page back toward that stale spot ("it
+              // takes me to the first table"). Restoring the scroll
+              // position right after the call neutralizes that regardless
+              // of the exact internal reason, without needing to fight
+              // TinyMCE's own selection handling directly.
+              // Also restores whatever actually had focus (almost always
+              // the overlay's own cell input while this fires) -- losing
+              // that to TinyMCE's own body is worse than the scroll jump
+              // on its own: with focus no longer in any text input, the
+              // very next keystroke can fall through to a global keyboard
+              // shortcut instead of the cell (e.g. toggling the sidebar
+              // shut, if that shortcut's key is what got typed next).
+              const scrollX = window.scrollX;
+              const scrollY = window.scrollY;
+              const focused = document.activeElement as HTMLElement | null;
               editor.execCommand('mceAutoResize');
+              window.scrollTo(scrollX, scrollY);
+              if (focused && document.activeElement !== focused && document.contains(focused)) {
+                focused.focus();
+              }
             }, 200);
           }
           // A zero-size rect means the real table isn't actually visible right
