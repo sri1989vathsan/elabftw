@@ -1039,7 +1039,29 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // sibling: .after() on a node already there is a no-op move,
           // cheap, and guarantees it can never drift or duplicate.
           table.after(spacer);
-          spacer.style.height = `${Math.max(0, overlayHeight - tableRect.height)}px`;
+          const spacerHeight = Math.max(0, overlayHeight - tableRect.height);
+          // mceAutoResize (the iframe's own outer box height) is only
+          // force-called from tinymce.ts at a few fixed checkpoints after
+          // init (a short setTimeout, a requestAnimationFrame, and once web
+          // fonts are ready) -- if this spacer's real height (which is what
+          // actually needs to be reflected in the iframe's own resize, not
+          // just the real table's un-chromed one) isn't done changing by
+          // the last of those checkpoints -- e.g. jspreadsheet's own grid
+          // still settling its rows/columns, or a spreadsheet inserted
+          // live well after those checkpoints already fired once -- the
+          // iframe stays permanently too short: not a one-frame flash, a
+          // lasting misalignment, exactly as reported ("still doesn't work
+          // ... doesn't extend to the height of the table"). Forcing the
+          // resize here too, right whenever this spacer's own height
+          // actually changes, means it keeps re-firing for as long as the
+          // spacer is still settling, with no dependency on fixed timing
+          // elsewhere -- and is a no-op call otherwise (skipped whenever
+          // the height is already correct), so it doesn't run every frame.
+          if (spacer.dataset.lastHeight !== String(spacerHeight)) {
+            spacer.dataset.lastHeight = String(spacerHeight);
+            spacer.style.height = `${spacerHeight}px`;
+            editor.execCommand('mceAutoResize');
+          }
           // A zero-size rect means the real table isn't actually visible right
           // now (e.g. inside a collapsed <details>) -- hide the overlay rather
           // than pin it to a stale, meaningless position.
