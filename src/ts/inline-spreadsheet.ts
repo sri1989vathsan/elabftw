@@ -6017,8 +6017,26 @@ export function buildReadOnlySpreadsheetHost(
         if (lastFocusWasInGrid) sheetContainer.querySelector<HTMLElement>('[tabindex]')?.focus();
         return;
       }
+      // lastFocusWasInGrid is deliberately scoped to *this* overlay's own
+      // sheetContainer (used just above to decide which grid to reclaim
+      // focus into), but the shared body class below must not be: with
+      // several spreadsheet tables on the same page, each one registers
+      // its own copy of this same handler, and every one of them receives
+      // every focusin event on the page regardless of which table it
+      // actually landed in. Toggling the class off whenever *this*
+      // instance's own containment check came back false -- even while
+      // focus is genuinely still inside some *other* table's grid --
+      // meant whichever instance's handler happened to run last on a
+      // given event won the race, intermittently clearing a class another
+      // instance had just correctly set. Checking ancestry against any
+      // .elabftw-spreadsheet-readonly-grid (every table's own sheetContainer
+      // carries that class) instead of just this one's own container gives
+      // every instance's handler the same answer, so the class reflects
+      // "some spreadsheet grid has focus" rather than "this one does".
       lastFocusWasInGrid = target instanceof Node && sheetContainer.contains(target);
-      document.body.classList.toggle('elabftw-spreadsheet-editing', lastFocusWasInGrid);
+      const inAnySpreadsheetGrid = target instanceof Element
+        && target.closest('.elabftw-spreadsheet-readonly-grid') !== null;
+      document.body.classList.toggle('elabftw-spreadsheet-editing', inAnySpreadsheetGrid);
     };
     document.addEventListener('focusin', reclaimFocusHandler);
   }
