@@ -1163,6 +1163,7 @@ final class Todolist extends AbstractRest
             'priority' => array('priority', $this->getPriority($value), PDO::PARAM_STR),
             'column_id' => array('column_id', $this->getColumnId($value), PDO::PARAM_INT),
             'pinned' => array('pinned', Filter::toBinary($value), PDO::PARAM_INT),
+            'ordering' => array('ordering', (int) $value, PDO::PARAM_INT),
             default => throw new ImproperActionException(_('Invalid to-do property.')),
         };
         $sql = sprintf(

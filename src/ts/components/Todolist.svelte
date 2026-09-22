@@ -2669,19 +2669,19 @@
         {#if !detailEditing}
           <div class='d-flex mr-auto' style='gap:0.5rem'>
             {#if detailEntry.archivedAt}
-              <button type='button' class='btn btn-secondary' on:click={() => unarchiveEntry(detailEntry)}>
-                <i class='fas fa-box-open fa-fw mr-1' aria-hidden='true'></i>{t('Unarchive')}
+              <button type='button' class='btn btn-secondary' title={t('Unarchive')} aria-label={t('Unarchive')} on:click={() => unarchiveEntry(detailEntry)}>
+                <i class='fas fa-box-open fa-fw' aria-hidden='true'></i>
               </button>
             {:else}
-              <button type='button' class='btn btn-secondary' on:click={() => archiveEntry(detailEntry)}>
-                <i class='fas fa-box-archive fa-fw mr-1' aria-hidden='true'></i>{t('Archive')}
+              <button type='button' class='btn btn-secondary' title={t('Archive')} aria-label={t('Archive')} on:click={() => archiveEntry(detailEntry)}>
+                <i class='fas fa-box-archive fa-fw' aria-hidden='true'></i>
               </button>
             {/if}
-            <button type='button' class='btn btn-secondary' on:click={() => duplicateEntry(detailEntry)}>
-              <i class='fas fa-copy fa-fw mr-1' aria-hidden='true'></i>{t('Duplicate')}
+            <button type='button' class='btn btn-secondary' title={t('Duplicate')} aria-label={t('Duplicate')} on:click={() => duplicateEntry(detailEntry)}>
+              <i class='fas fa-copy fa-fw' aria-hidden='true'></i>
             </button>
-            <button type='button' class='btn btn-danger-ghost' on:click={() => deleteEntry(detailEntry)}>
-              <i class='fas fa-trash-alt fa-fw mr-1' aria-hidden='true'></i>{t('Delete')}
+            <button type='button' class='btn btn-danger-ghost' title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteEntry(detailEntry)}>
+              <i class='fas fa-trash-alt fa-fw' aria-hidden='true'></i>
             </button>
           </div>
         {/if}

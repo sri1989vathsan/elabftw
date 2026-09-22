@@ -45,6 +45,7 @@
     deadline: string | null;
     completed_at: string | null;
     archived_at: string | null;
+    ordering: number;
     in_progress: boolean;
     pinned: boolean;
     priority: Priority | null;
@@ -720,6 +721,7 @@
       deadline: null,
       completed_at: null,
       archived_at: null,
+      ordering: 0,
       in_progress: false,
       pinned: false,
       priority: null,
@@ -799,6 +801,37 @@
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not move the task.');
+    }
+  }
+
+  // Moves this task one slot within the same column. columnTasks is
+  // passed in already sorted the same way the board renders it (pinned
+  // DESC, ordering ASC, creation DESC -- see Todolist::readAll()), so a
+  // pinned task's neighbor is always another pinned one and an unpinned
+  // task's neighbor always unpinned -- moving by one array index can
+  // never cross that boundary.
+  //
+  // Renumbers the whole column sequentially (0..n-1) rather than just
+  // swapping this task's ordering with its neighbor's: unlike columns
+  // (whose default rows get explicit sequential ordering on creation,
+  // see 034_todolist_columns.sql) or steps (postAction() sets
+  // COALESCE(MAX(ordering)+1, 0) on insert), nothing ever sets a new
+  // task's own ordering -- most of a column's tasks can easily still
+  // share whatever tied default they were all created with, and swapping
+  // two equal values would silently do nothing the first time this is
+  // ever used on that column.
+  async function moveTask(task: Task, direction: -1 | 1, columnTasks: Task[]): Promise<void> {
+    const index = columnTasks.findIndex(t => t.id === task.id);
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= columnTasks.length) return;
+    const reordered = [...columnTasks];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+    try {
+      await Promise.all(reordered.map((t, i) => ApiC.patch(`${Model.Todolist}/${t.id}`, { ordering: i })));
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not reorder that task.');
     }
   }
 
@@ -2152,6 +2185,12 @@
               </div>
               {#if canManage(task)}
                 <div class="pm-task-actions">
+                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Move up')} aria-label={t('Move up')} disabled={columnTasks.indexOf(task) === 0} on:click={() => moveTask(task, -1, columnTasks)}>
+                    <i class="fas fa-chevron-up fa-fw" aria-hidden="true"></i>
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Move down')} aria-label={t('Move down')} disabled={columnTasks.indexOf(task) === columnTasks.length - 1} on:click={() => moveTask(task, 1, columnTasks)}>
+                    <i class="fas fa-chevron-down fa-fw" aria-hidden="true"></i>
+                  </button>
                   {#if doneColumn}
                     <button type="button" class="btn btn-ghost btn-sm pm-icon-button" class:pm-icon-button-active={column.kind === 'done'} title={column.kind === 'done' ? t('Mark as not done') : t('Mark as done')} aria-label={column.kind === 'done' ? t('Mark as not done') : t('Mark as done')} on:click={() => moveTaskToColumn(task, column.kind === 'done' ? (todoColumn?.id ?? column.id) : doneColumn.id)}>
                       <i class={`fas ${column.kind === 'done' ? 'fa-rotate-left' : 'fa-check'} fa-fw`} aria-hidden="true"></i>
@@ -2657,19 +2696,19 @@
         {#if !detailEditing && !creatingNewTask && canManage(detailTask)}
           <div class="d-flex mr-auto" style="gap:0.5rem">
             {#if detailTask.archived_at}
-              <button type="button" class="btn btn-secondary" on:click={() => unarchiveTask(detailTask)}>
-                <i class="fas fa-box-open fa-fw mr-1" aria-hidden="true"></i>{t('Unarchive')}
+              <button type="button" class="btn btn-secondary pm-icon-button" title={t('Unarchive')} aria-label={t('Unarchive')} on:click={() => unarchiveTask(detailTask)}>
+                <i class="fas fa-box-open fa-fw" aria-hidden="true"></i>
               </button>
             {:else}
-              <button type="button" class="btn btn-secondary" on:click={() => archiveTask(detailTask)}>
-                <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archive')}
+              <button type="button" class="btn btn-secondary pm-icon-button" title={t('Archive')} aria-label={t('Archive')} on:click={() => archiveTask(detailTask)}>
+                <i class="fas fa-box-archive fa-fw" aria-hidden="true"></i>
               </button>
             {/if}
-            <button type="button" class="btn btn-secondary" on:click={() => duplicateTask(detailTask)}>
-              <i class="fas fa-copy fa-fw mr-1" aria-hidden="true"></i>{t('Duplicate')}
+            <button type="button" class="btn btn-secondary pm-icon-button" title={t('Duplicate')} aria-label={t('Duplicate')} on:click={() => duplicateTask(detailTask)}>
+              <i class="fas fa-copy fa-fw" aria-hidden="true"></i>
             </button>
-            <button type="button" class="btn btn-danger-ghost" on:click={() => deleteTask(detailTask)}>
-              <i class="fas fa-trash-alt fa-fw mr-1" aria-hidden="true"></i>{t('Delete')}
+            <button type="button" class="btn btn-danger-ghost pm-icon-button" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteTask(detailTask)}>
+              <i class="fas fa-trash-alt fa-fw" aria-hidden="true"></i>
             </button>
           </div>
         {/if}
