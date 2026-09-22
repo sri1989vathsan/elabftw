@@ -838,7 +838,12 @@
       .map((t, i) => ({ id: t.id, ordering: i, unchanged: t.ordering === i }))
       .filter(entry => !entry.unchanged);
     try {
-      await Promise.all(changed.map(entry => ApiC.patch(`${Model.Todolist}/${entry.id}`, { ordering: entry.ordering })));
+      // notifOnSaved: 0 on every PATCH but the batch's own single success
+      // toast after -- otherwise moving one task fires one "Saved" toast
+      // per request the move happens to need (2 in steady state, more the
+      // first time a column is used), for what reads as one user action.
+      await Promise.all(changed.map(entry => ApiC.patch(`${Model.Todolist}/${entry.id}`, { ordering: entry.ordering, notifOnSaved: 0 })));
+      notify.success();
       await load();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not reorder that task.');
@@ -861,7 +866,8 @@
     const ids = [...selectedTaskIds];
     if (ids.length === 0) return;
     try {
-      await Promise.all(ids.map(id => ApiC.patch(`${Model.Todolist}/${id}`, { column_id: columnId })));
+      await Promise.all(ids.map(id => ApiC.patch(`${Model.Todolist}/${id}`, { column_id: columnId, notifOnSaved: 0 })));
+      notify.success();
       selectedTaskIds = new Set();
       await load();
     } catch (error) {
@@ -947,12 +953,13 @@
     const [moved] = reordered.splice(sourceIdx, 1);
     reordered.splice(targetIdx, 0, moved);
     try {
+      const changes = reordered
+        .map((column, index) => ({ column, index }))
+        .filter(({ column, index }) => column.ordering !== index);
       await Promise.all(
-        reordered
-          .map((column, index) => ({ column, index }))
-          .filter(({ column, index }) => column.ordering !== index)
-          .map(({ column, index }) => ApiC.patch(`${Model.TodolistColumns}/${column.id}`, { ordering: index })),
+        changes.map(({ column, index }) => ApiC.patch(`${Model.TodolistColumns}/${column.id}`, { ordering: index, notifOnSaved: 0 })),
       );
+      if (changes.length > 0) notify.success();
       await loadColumns();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not reorder that column.');
@@ -1002,12 +1009,13 @@
     const [moved] = reordered.splice(sourceIdx, 1);
     reordered.splice(targetIdx, 0, moved);
     try {
+      const changes = reordered
+        .map((project, index) => ({ project, index }))
+        .filter(({ project, index }) => project.ordering !== index);
       await Promise.all(
-        reordered
-          .map((project, index) => ({ project, index }))
-          .filter(({ project, index }) => project.ordering !== index)
-          .map(({ project, index }) => ApiC.patch(`${Model.TodolistProjects}/${project.id}`, { ordering: index })),
+        changes.map(({ project, index }) => ApiC.patch(`${Model.TodolistProjects}/${project.id}`, { ordering: index, notifOnSaved: 0 })),
       );
+      if (changes.length > 0) notify.success();
       await loadProjects();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not reorder that project.');
@@ -1071,9 +1079,10 @@
     if (!swapWith) return;
     try {
       await Promise.all([
-        ApiC.patch(`${Model.TodolistColumns}/${column.id}`, { ordering: swapWith.ordering }),
-        ApiC.patch(`${Model.TodolistColumns}/${swapWith.id}`, { ordering: column.ordering }),
+        ApiC.patch(`${Model.TodolistColumns}/${column.id}`, { ordering: swapWith.ordering, notifOnSaved: 0 }),
+        ApiC.patch(`${Model.TodolistColumns}/${swapWith.id}`, { ordering: column.ordering, notifOnSaved: 0 }),
       ]);
+      notify.success();
       await loadColumns();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not reorder that column.');
@@ -1337,14 +1346,19 @@
           project_id: detailProjectId,
           column_id: newTaskColumnId,
         });
+        // notifOnSaved: 0 on these -- the post2location above already
+        // fired the one "Saved" toast for creating the task; each step/
+        // link is a followup request for that same single save action,
+        // not a save of its own.
         for (const body of draftSteps) {
-          await ApiC.post(`${Model.Todolist}/${newId}/steps`, { body });
+          await ApiC.post(`${Model.Todolist}/${newId}/steps`, { body, notifOnSaved: 0 });
         }
         for (const link of draftLinks) {
           await ApiC.post(`${Model.Todolist}/${newId}/entity_links`, {
             entity_type: 'weblink',
             url: link.url,
             label: link.label,
+            notifOnSaved: 0,
           });
         }
         closeDetail();
@@ -1557,9 +1571,10 @@
     if (!swapWith) return;
     try {
       await Promise.all([
-        ApiC.patch(`${Model.Todolist}/${detailTask.id}/steps/${step.id}`, { ordering: swapWith.ordering }),
-        ApiC.patch(`${Model.Todolist}/${detailTask.id}/steps/${swapWith.id}`, { ordering: step.ordering }),
+        ApiC.patch(`${Model.Todolist}/${detailTask.id}/steps/${step.id}`, { ordering: swapWith.ordering, notifOnSaved: 0 }),
+        ApiC.patch(`${Model.Todolist}/${detailTask.id}/steps/${swapWith.id}`, { ordering: step.ordering, notifOnSaved: 0 }),
       ]);
+      notify.success();
       await loadSteps(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not reorder that step.');
@@ -2144,8 +2159,6 @@
     <div class="pm-columns">
       {#each visibleColumns(columns) as column (column.id)}
         {@const columnTasks = tasksInColumn(column, visibleTasks)}
-        {@const prevCol = adjacentColumn(column, -1)}
-        {@const nextCol = adjacentColumn(column, 1)}
         {@const columnExpanded = !!expandedColumns[column.id]}
         {@const shownTasks = columnExpanded ? columnTasks : columnTasks.slice(0, COLUMN_TASK_LIMIT)}
         {@const hiddenCount = columnTasks.length - shownTasks.length}
@@ -2206,22 +2219,9 @@
                       <i class={`fas ${column.kind === 'done' ? 'fa-rotate-left' : 'fa-check'} fa-fw`} aria-hidden="true"></i>
                     </button>
                   {/if}
-                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" class:pm-icon-button-active={task.pinned} title={task.pinned ? t('Unpin') : t('Pin to top')} aria-label={task.pinned ? t('Unpin') : t('Pin to top')} on:click={() => togglePin(task)}>
-                    <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i>
-                  </button>
                   <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task)}>
                     <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
                   </button>
-                  {#if prevCol}
-                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={`${t('Move to')} ${prevCol.name}`} aria-label={`${t('Move to')} ${prevCol.name}`} on:click={() => moveTaskToColumn(task, prevCol.id)}>
-                      <i class="fas fa-arrow-left fa-fw" aria-hidden="true"></i>
-                    </button>
-                  {/if}
-                  {#if nextCol}
-                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={`${t('Move to')} ${nextCol.name}`} aria-label={`${t('Move to')} ${nextCol.name}`} on:click={() => moveTaskToColumn(task, nextCol.id)}>
-                      <i class="fas fa-arrow-right fa-fw" aria-hidden="true"></i>
-                    </button>
-                  {/if}
                   <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Duplicate')} aria-label={t('Duplicate')} on:click={() => duplicateTask(task)}>
                     <i class="fas fa-copy fa-fw" aria-hidden="true"></i>
                   </button>
@@ -2234,9 +2234,37 @@
                       <i class="fas fa-box-archive fa-fw" aria-hidden="true"></i>
                     </button>
                   {/if}
-                  <button type="button" class="btn btn-danger-ghost btn-sm pm-icon-button" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteTask(task)}>
-                    <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
-                  </button>
+                  <!-- Pin/Unpin, Move to <column> and Delete folded into one
+                       dropdown -- drag-and-drop already covers moving a task
+                       between columns, so a whole row of separate buttons for
+                       it (plus pin/delete alongside) was more chrome than the
+                       card needed. -->
+                  <select
+                    class="form-control form-control-sm pm-task-actions-select"
+                    title={t('More actions')}
+                    aria-label={t('More actions')}
+                    value=""
+                    on:change={(event) => {
+                      const value = (event.target as HTMLSelectElement).value;
+                      (event.target as HTMLSelectElement).value = '';
+                      if (value === 'pin') {
+                        togglePin(task);
+                      } else if (value === 'delete') {
+                        deleteTask(task);
+                      } else if (value) {
+                        moveTaskToColumn(task, Number(value));
+                      }
+                    }}
+                  >
+                    <option value="" disabled>{t('More')}…</option>
+                    <option value="pin">{task.pinned ? t('Unpin') : t('Pin to top')}</option>
+                    <optgroup label={t('Move to')}>
+                      {#each visibleColumns(columns).filter(c => c.id !== column.id) as target (target.id)}
+                        <option value={target.id}>{target.name}</option>
+                      {/each}
+                    </optgroup>
+                    <option value="delete">{t('Delete')}</option>
+                  </select>
                 </div>
               {/if}
               {#if activeProjectId === 'all'}

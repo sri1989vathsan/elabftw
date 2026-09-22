@@ -914,6 +914,16 @@
     void loadComments(entry.id);
     void loadSteps(entry.id);
     window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: { id: entry.id, title: entry.body } }));
+    // The detail popup centers itself across the *whole* viewport (see
+    // .todo-detail-overlay in main.scss), not just the space outside the
+    // sidebar -- on a narrow window there isn't room for both, and the
+    // popup ends up partly hidden behind the sidebar's own z-index. Rather
+    // than teach the popup's centering about the sidebar's width, just
+    // close the sidebar first: it's already reachable again from the
+    // close button once the popup itself is dismissed.
+    if (window.innerWidth < 1200) {
+      (document.querySelector('[data-action="toggle-sidepanel"][data-target="todolist"][data-purpose="hide"]') as HTMLElement | null)?.click();
+    }
   }
 
   function closeDetail(): void {
