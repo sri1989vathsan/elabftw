@@ -916,8 +916,21 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           }
           const tableRect = table.getBoundingClientRect();
           overlay.style.position = 'fixed';
-          overlay.style.left = `${iframeRect.left + tableRect.left}px`;
-          overlay.style.top = `${iframeRect.top + tableRect.top}px`;
+          // Moved via `transform`, not `top`/`left` -- Firefox treats a
+          // fixed-position element whose top/left are rewritten every
+          // rAF frame as a "scroll-linked positioning effect" (it warns
+          // about this in the console) and can defer actually repainting
+          // it at its new spot until a discrete interaction (a click)
+          // forces a main-thread/compositor resync -- the inline style
+          // (and everything computed from it, like this overlay's own
+          // getBoundingClientRect()) is already correct in the meantime,
+          // it just isn't painted there yet, exactly matching "the table
+          // appears outside until I click, then it goes back inside".
+          // `transform` moves are compositor-driven and don't trigger
+          // that heuristic.
+          overlay.style.left = '0';
+          overlay.style.top = '0';
+          overlay.style.transform = `translate(${iframeRect.left + tableRect.left}px, ${iframeRect.top + tableRect.top}px)`;
           // Height follows the grid's own current content (rows/columns can
           // change live as the user edits, well before the debounced commit
           // catches the -- until then stale -- real table's own rect up) --
