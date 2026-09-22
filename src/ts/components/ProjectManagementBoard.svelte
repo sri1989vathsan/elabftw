@@ -1501,6 +1501,28 @@
     }
   }
 
+  // Swaps this step's ordering with its immediate neighbor's -- same
+  // adjacent-swap approach as moveColumn() above, simpler and less error-
+  // prone than a full drag-and-drop reorder for what's normally a short
+  // list. detailSteps is already sorted by ordering (TodolistSteps::
+  // readAll()'s own ORDER BY), so direction -1/1 is just the previous/
+  // next array index.
+  async function moveStep(step: Step, direction: -1 | 1): Promise<void> {
+    if (!detailTask) return;
+    const index = detailSteps.findIndex(s => s.id === step.id);
+    const swapWith = detailSteps[index + direction];
+    if (!swapWith) return;
+    try {
+      await Promise.all([
+        ApiC.patch(`${Model.Todolist}/${detailTask.id}/steps/${step.id}`, { ordering: swapWith.ordering }),
+        ApiC.patch(`${Model.Todolist}/${detailTask.id}/steps/${swapWith.id}`, { ordering: step.ordering }),
+      ]);
+      await loadSteps(detailTask.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not reorder that step.');
+    }
+  }
+
   let editingStepId: number | null = null;
   let editStepDraft = '';
 
@@ -2524,6 +2546,12 @@
                     />
                     <span class="pm-step-body">{step.body}</span>
                     <div class="pm-item-actions">
+                      <button type="button" class="btn-unstyled pm-comment-delete" title={t('Move up')} aria-label={t('Move up')} disabled={detailSteps.indexOf(step) === 0} on:click={() => moveStep(step, -1)}>
+                        <i class="fas fa-arrow-up fa-fw" aria-hidden="true"></i>
+                      </button>
+                      <button type="button" class="btn-unstyled pm-comment-delete" title={t('Move down')} aria-label={t('Move down')} disabled={detailSteps.indexOf(step) === detailSteps.length - 1} on:click={() => moveStep(step, 1)}>
+                        <i class="fas fa-arrow-down fa-fw" aria-hidden="true"></i>
+                      </button>
                       <button type="button" class="btn-unstyled pm-comment-delete" title={t('Edit')} aria-label={t('Edit')} on:click={() => startEditStep(step)}>
                         <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
                       </button>
