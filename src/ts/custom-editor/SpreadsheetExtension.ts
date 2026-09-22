@@ -1210,6 +1210,29 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       });
   };
 
+  // Same trailing-paragraph safeguard newInlineSpreadsheet() applies right
+  // after inserting a table (see its own comment above), but for content
+  // that already exists when the editor loads it (e.g. an experiment saved
+  // before that safeguard existed, or from any other path that can leave a
+  // table as the very last element). A spreadsheet table with nothing after
+  // it is exactly the case where the editor's own auto-resize has the
+  // furthest to grow once this table's overlay is measured -- the bigger
+  // that jump, the more visible the moment where the overlay is still
+  // positioned for the old, unresized layout. Giving it a paragraph to grow
+  // into instead removes that jump at the source, rather than trying to
+  // chase it with tighter position-sync timing. Bound to 'SetContent' only
+  // (not 'NodeChange' too, unlike enhanceAllTables below) since this only
+  // ever needs to run when content is first loaded, not on every keystroke.
+  editor.on('SetContent', () => {
+    Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
+      .forEach(table => {
+        if (!table.nextElementSibling) {
+          const paragraph = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
+          table.parentNode?.insertBefore(paragraph, table.nextSibling);
+        }
+      });
+  });
+
   editor.on('SetContent NodeChange', enhanceAllTables);
   // Dispatched from tinymce.ts at the same "layout has actually settled"
   // checkpoints it uses to force an extra mceAutoResize (a short setTimeout,
