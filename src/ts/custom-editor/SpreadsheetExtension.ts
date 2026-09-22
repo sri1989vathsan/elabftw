@@ -1074,25 +1074,34 @@ export function registerSpreadsheetExtension(editor: Editor): void {
             if (autoResizeDebounce !== null) clearTimeout(autoResizeDebounce);
             autoResizeDebounce = setTimeout(() => {
               autoResizeDebounce = null;
-              // Restoring scroll position here turned out to be actively
-              // harmful, not protective: a live console trace showed this
-              // was the *only* remaining source of window.scrollTo calls
-              // once the real root cause (keymaster.ts letting a keystroke
-              // typed into the grid fall through to a global shortcut --
-              // see its own commit) was fixed. jspreadsheet creates a new
-              // <input> per cell edit, and focusing it can legitimately
-              // scroll it into view on its own; forcibly snapping back to
-              // whatever scrollY was captured just before this call fought
-              // that every ~200ms while actively typing, which is exactly
-              // the jumpiness this was meant to prevent. Still restores
-              // focus, though: losing it to TinyMCE's own body -- still
-              // possible regardless of the keymaster fix -- means the next
-              // keystroke reaches no input at all rather than the cell.
+              // A synchronous restore-right-after-execCommand (an earlier
+              // version of this) wasn't enough: a live console trace
+              // showed TinyMCE moves focus into its own iframe (and the
+              // browser scrolls accordingly) *asynchronously*, after
+              // execCommand('mceAutoResize') already returns -- code
+              // running synchronously right after it can't catch that.
+              // Two rAF frames give that async work time to actually
+              // finish before checking whether it stole anything. Only
+              // restores when the current focus looks like TinyMCE's own
+              // involuntary steal (its iframe, or a bare document.body --
+              // see the jspreadsheet-grid-cell-input case this same
+              // pattern already covers above) rather than unconditionally
+              // every time, so a focus change the user actually made in
+              // the meantime (clicking some other control) is left alone.
               const focused = document.activeElement as HTMLElement | null;
+              const scrollX = window.scrollX;
+              const scrollY = window.scrollY;
               editor.execCommand('mceAutoResize');
-              if (focused && document.activeElement !== focused && document.contains(focused)) {
-                focused.focus();
-              }
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  const current = document.activeElement;
+                  const stolen = current === document.body
+                    || (current instanceof HTMLElement && current.tagName === 'IFRAME');
+                  if (!focused || !stolen || !document.contains(focused)) return;
+                  focused.focus({ preventScroll: true });
+                  window.scrollTo({ left: scrollX, top: scrollY, behavior: 'instant' });
+                });
+              });
             }, 200);
           }
           // A zero-size rect means the real table isn't actually visible right
