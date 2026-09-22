@@ -5382,10 +5382,24 @@ div > .sticky-navbar {
   color: var(--primary);
 }
 
-.pm-task-actions-select {
-  height: 1.8rem;
-  padding: 0 1.2rem 0 0.3rem;
-  width: auto;
+// The dropdown's trigger is a plain .pm-icon-button (3-dot kebab, sized
+// like every other card icon button already); .dropdown-menu itself is
+// Bootstrap's own. Items are icon-only (Pin/Unpin, Delete) except "Move
+// to <column>", which keeps the column's name visible -- an arrow icon
+// alone can't distinguish one column from another when there's more
+// than one to move to.
+.pm-task-more-dropdown {
+  display: inline-block;
+}
+
+.pm-task-more-item {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pm-task-more-item-label {
+  white-space: nowrap;
 }
 
 .pm-task-meta {

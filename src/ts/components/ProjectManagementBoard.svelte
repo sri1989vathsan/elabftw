@@ -2238,33 +2238,28 @@
                        dropdown -- drag-and-drop already covers moving a task
                        between columns, so a whole row of separate buttons for
                        it (plus pin/delete alongside) was more chrome than the
-                       card needed. -->
-                  <select
-                    class="form-control form-control-sm pm-task-actions-select"
-                    title={t('More actions')}
-                    aria-label={t('More actions')}
-                    value=""
-                    on:change={(event) => {
-                      const value = (event.target as HTMLSelectElement).value;
-                      (event.target as HTMLSelectElement).value = '';
-                      if (value === 'pin') {
-                        togglePin(task);
-                      } else if (value === 'delete') {
-                        deleteTask(task);
-                      } else if (value) {
-                        moveTaskToColumn(task, Number(value));
-                      }
-                    }}
-                  >
-                    <option value="" disabled>{t('More')}…</option>
-                    <option value="pin">{task.pinned ? t('Unpin') : t('Pin to top')}</option>
-                    <optgroup label={t('Move to')}>
+                       card needed. Bootstrap's dropdown.js (already loaded
+                       globally, see builder.js) delegates off data-toggle
+                       rather than needing its own per-element init, so this
+                       works as-is on a Svelte-rendered button. -->
+                  <div class="dropdown pm-task-more-dropdown">
+                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" title={t('More actions')} aria-label={t('More actions')}>
+                      <i class="fas fa-ellipsis-vertical fa-fw" aria-hidden="true"></i>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-right">
+                      <button type="button" class="dropdown-item pm-task-more-item" title={task.pinned ? t('Unpin') : t('Pin to top')} aria-label={task.pinned ? t('Unpin') : t('Pin to top')} on:click={() => togglePin(task)}>
+                        <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i>
+                      </button>
                       {#each visibleColumns(columns).filter(c => c.id !== column.id) as target (target.id)}
-                        <option value={target.id}>{target.name}</option>
+                        <button type="button" class="dropdown-item pm-task-more-item" title={`${t('Move to')} ${target.name}`} aria-label={`${t('Move to')} ${target.name}`} on:click={() => moveTaskToColumn(task, target.id)}>
+                          <i class="fas fa-arrow-right fa-fw" aria-hidden="true"></i><span class="pm-task-more-item-label">{target.name}</span>
+                        </button>
                       {/each}
-                    </optgroup>
-                    <option value="delete">{t('Delete')}</option>
-                  </select>
+                      <button type="button" class="dropdown-item pm-task-more-item text-danger" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteTask(task)}>
+                        <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               {/if}
               {#if activeProjectId === 'all'}
