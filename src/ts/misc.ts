@@ -1057,6 +1057,12 @@ async function runEntitySave(redirect: boolean): Promise<boolean> {
 async function performEntitySave(redirect: boolean): Promise<boolean> {
   const editor = getEditor();
   const entity = getEntity();
+  // Any inline spreadsheet overlay debounces its write-back into the real
+  // table by 500ms (see notifyFromMirror() in inline-spreadsheet.ts). A cell
+  // edited and saved faster than that would otherwise have this getContent()
+  // read fire before that write lands, silently discarding the edit. Flush
+  // every open overlay synchronously first so the content below is current.
+  window.dispatchEvent(new CustomEvent('elabftw-flush-spreadsheets'));
   const body = editor.getContent();
   const saveStartedAt = Date.now();
   beginEntitySave();

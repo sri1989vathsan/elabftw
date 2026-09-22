@@ -853,7 +853,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // document, tracked to the table's on-screen rect every animation frame.
   // Double-clicking the overlay opens the same edit modal as the dblclick
   // handler above -- it needs its own listener for that (see enhanceTable()).
-  const spreadsheetOverlays = new Map<HTMLTableElement, { el: HTMLElement; destroy: () => void }>();
+  const spreadsheetOverlays = new Map<HTMLTableElement, { el: HTMLElement; destroy: () => void; flush: () => void }>();
   const enhancedTables = new WeakSet<HTMLTableElement>();
   let overlaySyncRunning = false;
   // One persistent spacer per table, reserving room below it for the
@@ -1245,7 +1245,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       overlay.classList.add('has-open-context-menu');
     });
     document.body.appendChild(overlay);
-    spreadsheetOverlays.set(table, { el: overlay, destroy });
+    spreadsheetOverlays.set(table, { el: overlay, destroy, flush });
     ensureSyncLoop();
   };
 
@@ -1314,10 +1314,22 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // surrounding chrome has settled) -- re-scanning for not-yet-enhanced
   // tables here covers that.
   window.addEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
+  // Dispatched synchronously from performEntitySave() (misc.ts) right before
+  // it reads editor.getContent(). notifyFromMirror() in inline-spreadsheet.ts
+  // debounces its write-back to the real table by 500ms, so a cell edited
+  // and then saved within that window would otherwise have its value read
+  // out of the editor before the debounced write ever lands, losing the
+  // edit silently. Flushing every open overlay here forces that pending
+  // write to happen immediately, in step with the save.
+  const flushAllOverlays = (): void => {
+    spreadsheetOverlays.forEach(({ flush }) => flush());
+  };
+  window.addEventListener('elabftw-flush-spreadsheets', flushAllOverlays);
   editor.on('remove', () => {
     tableVisibility.disconnect();
     Array.from(spreadsheetOverlays.keys()).forEach(removeOverlay);
     window.removeEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
+    window.removeEventListener('elabftw-flush-spreadsheets', flushAllOverlays);
     document.removeEventListener('pointerdown', onSpreadsheetPointerDown, true);
     // A pending debounced mceAutoResize (see syncOverlayPositions) has
     // nothing left to act on once the editor itself is gone -- calling
