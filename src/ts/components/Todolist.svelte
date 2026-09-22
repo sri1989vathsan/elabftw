@@ -354,9 +354,11 @@
   $: dueGroups = buildDueGroups(entries);
   $: completedGroups = buildCompletedGroups(completedItems);
   $: calendarCells = buildCalendarCells(calendarMonthCursor, entries);
-  $: selectedDateTasks = entries.filter(
-    entry => entry.source === 'todo' && entry.deadline !== null && dateKey(new Date(entry.deadline)) === selectedCalendarDate,
-  );
+  $: selectedDateTasks = entries
+    .filter(
+      entry => entry.source === 'todo' && entry.deadline !== null && dateKey(new Date(entry.deadline)) === selectedCalendarDate,
+    )
+    .sort((a, b) => new Date(a.deadline as string).getTime() - new Date(b.deadline as string).getTime());
   $: selectedDateLabel = new Intl.DateTimeFormat(locale, {
     weekday: 'long',
     year: 'numeric',
