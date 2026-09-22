@@ -160,6 +160,17 @@ function filter(event){
   if (!(target instanceof HTMLElement)) {
     return true;
   }
+  // The inline spreadsheet grid (both the TinyMCE-embedded overlay and the
+  // standalone popup editor) keeps keyboard focus on a plain, jspreadsheet-
+  // owned <div tabindex="0"> while editing a cell, not an <input> or
+  // contenteditable -- none of the tag checks below ever excluded it, so a
+  // character typed into a cell that happened to match an app-wide shortcut
+  // (e.g. the Favorites-panel toggle) fired that shortcut instead of (or as
+  // well as) reaching the cell. Losing focus to whatever that shortcut
+  // opened then made the spreadsheet itself look like it "jumped" away.
+  if (target.closest('.elabftw-spreadsheet-editor-overlay, .inline-spreadsheet-overlay, .jss_container')) {
+    return false;
+  }
   const tagName = target.tagName;
   // ignore keypressed in any elements that support keyboard data input
   return !(tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA' || target.hasAttribute('contenteditable'));
