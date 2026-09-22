@@ -6022,6 +6022,25 @@ export function buildReadOnlySpreadsheetHost(
     };
     document.addEventListener('focusin', reclaimFocusHandler);
   }
+  // Belt-and-braces for the same gap: a live trace showed Firefox not
+  // always dispatching a 'focusin' event at all for the implicit "focused
+  // element was removed from the DOM, so focus falls back to <body>" case
+  // -- when that happens, reclaimFocusHandler above (which only ever runs
+  // *in response to* a focusin event) never fires, and focus is left on
+  // <body> until the user happens to click something themselves. Polling
+  // document.activeElement directly doesn't depend on that event firing at
+  // all. A short interval, not a MutationObserver on the cell editor
+  // specifically: jspreadsheet recreates that element under a new,
+  // unpredictable reference each time, so there is no single stable node
+  // to observe.
+  let focusPollInterval: ReturnType<typeof setInterval> | null = null;
+  if (editable) {
+    focusPollInterval = setInterval(() => {
+      if (!lastFocusWasInGrid || document.activeElement !== document.body) return;
+      document.body.classList.add('elabftw-spreadsheet-editing');
+      sheetContainer.querySelector<HTMLElement>('[tabindex]')?.focus();
+    }, 50);
+  }
   if (!editable) {
     const toggleCollapsed = (): void => {
       const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
@@ -6269,6 +6288,20 @@ export function buildReadOnlySpreadsheetHost(
         value: CellValue,
       ): CellValue => {
         updateRawDataMirrorCell(changedCol, changedRow, value, !cell?.classList?.contains('editor'));
+        // notifyFromMirror() (debounced internally, see its own comment)
+        // was previously only called from onchange/oneditionend -- both
+        // fire on a *clean* commit (Enter, Tab, clicking another cell).
+        // jspreadsheet can instead abruptly destroy and recreate its own
+        // cell-edit input while the user is still typing (most visibly as
+        // content nears the column's own width -- see
+        // reclaimFocusHandler's own comment), which never fires either:
+        // the edit is simply abandoned rather than committed, and
+        // whatever had only ever reached the in-memory mirror here (not
+        // yet pushed out to the actually-saved content) was silently
+        // lost. Calling it here too means every keystroke's value is
+        // already on its way to being saved continuously, not just the
+        // one a clean commit happens to catch.
+        notifyFromMirror();
         return value;
       },
       onchange: notifyChange,
@@ -6400,6 +6433,7 @@ export function buildReadOnlySpreadsheetHost(
       // away immediately after typing into a cell.
       flush();
       if (reclaimFocusHandler) document.removeEventListener('focusin', reclaimFocusHandler);
+      if (focusPollInterval !== null) clearInterval(focusPollInterval);
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
     },
   };
