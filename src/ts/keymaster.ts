@@ -157,6 +157,13 @@ function resetModifiers() {
 
 function filter(event){
   const target = event.target as HTMLElement;
+  // Jspreadsheet may transiently relocate or replace its cell editor while
+  // text reaches the visible column edge. During that interval the keydown
+  // target is no longer guaranteed to be inside .jss_container, even though
+  // the user is still editing the same spreadsheet cell.
+  if (document.body?.dataset.spreadsheetCellEditing === 'true') {
+    return false;
+  }
   if (!(target instanceof HTMLElement)) {
     return true;
   }

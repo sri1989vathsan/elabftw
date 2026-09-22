@@ -1907,11 +1907,16 @@ function renderFormulaResults(container: HTMLElement, data: AOA): void {
       const cell = container.querySelector<HTMLElement>(
         `td[data-x="${colIndex}"][data-y="${rowIndex}"]`,
       );
-      // jspreadsheet v5 can leave the `editor` class on a cell after Enter,
-      // even though its input has already closed. The formula repaint only
-      // runs after data/edition events, so updating the cell here does not
-      // interfere with the active input and guarantees a visible result.
-      if (cell) cell.textContent = formatFormulaResult(result);
+      // Never replace an active editor. Formula repaints are deliberately
+      // retried on timers, so one scheduled by an earlier change can run
+      // while this (or another) formula cell is being edited; assigning
+      // textContent then removes jspreadsheet's input from the DOM, loses
+      // the cursor and lets the next key fall through to app shortcuts.
+      // The `editor` class is unreliable after Enter in v5, but the actual
+      // input/textarea is an unambiguous indication that editing is active.
+      if (cell && !cell.querySelector('input, textarea, [contenteditable="true"]')) {
+        cell.textContent = formatFormulaResult(result);
+      }
     });
   });
 }
@@ -5460,6 +5465,7 @@ export function buildReadOnlySpreadsheetHost(
   // focus to insert their reference at the cursor, same as the popup.
   let formulaInputEl: HTMLInputElement | null = null;
   let formulaEditingCell: { col: number; row: number } | null = null;
+  let formulaInputDirty = false;
   let composingFormula = false;
   // jspreadsheet-ce's own document-level mousedown handler calls
   // resetSelection() on the worksheet whenever a click lands outside it
@@ -5736,6 +5742,7 @@ export function buildReadOnlySpreadsheetHost(
     // keep overwriting it. Setting .value in JS does not fire 'input'.
     formulaInputEl.addEventListener('input', () => {
       awaitingReferenceReplacement = false;
+      formulaInputDirty = true;
       // Keep the selected cell in step with the formula bar while typing,
       // rather than waiting for Enter/blur. This also updates the raw-data
       // mirror immediately, so an overlay teardown cannot lose the latest
@@ -5768,10 +5775,11 @@ export function buildReadOnlySpreadsheetHost(
   // Commits the formula bar's current value into whichever cell was
   // selected when it was last enabled -- called on Enter/blur.
   function commitFormulaInput(): void {
-    if (!formulaEditingCell || !formulaInputEl) return;
+    if (!formulaEditingCell || !formulaInputEl || !formulaInputDirty) return;
     const targetWorksheet = getMountedWorksheet(sheetContainer);
     const cellName = `${colLabel(formulaEditingCell.col)}${formulaEditingCell.row + 1}`;
     targetWorksheet?.setValue?.(cellName, formulaInputEl.value);
+    formulaInputDirty = false;
   }
 
   const sheetContainer = document.createElement('div');
@@ -5908,6 +5916,7 @@ export function buildReadOnlySpreadsheetHost(
         formulaSelectionDrag.insertionEnd,
         'end',
       );
+      formulaInputDirty = true;
       formulaSelectionDrag.insertionEnd = formulaSelectionDrag.insertionStart + label.length;
       const targetWorksheetForDrag = getMountedWorksheet(sheetContainer);
       targetWorksheetForDrag?.updateSelectionFromCoords?.(...range);
@@ -6340,6 +6349,38 @@ export function buildReadOnlySpreadsheetHost(
         return value;
       },
       onchange: notifyChange,
+      oneditionstart: (): void => {
+        document.body.dataset.spreadsheetCellEditing = 'true';
+      },
+      oncreateeditor: (
+        _editingWorksheet: JssInstance,
+        cell: HTMLElement,
+        editingCol: number,
+        editingRow: number,
+      ): void => {
+        // Jspreadsheet can temporarily move/replace its editor while text
+        // reaches a cell boundary. Mark the whole editing lifetime rather
+        // than relying on the input's current DOM ancestry, so application
+        // shortcuts remain disabled throughout.
+        document.body.dataset.spreadsheetCellEditing = 'true';
+        // jspreadsheet-ce 5 passes null as the documented `input` callback
+        // argument even for its default text editor. It has already appended
+        // the real control to the cell before dispatching oncreateeditor, so
+        // resolve it from there instead.
+        const editorControl = cell.querySelector<HTMLElement>('input, textarea, [contenteditable="true"]');
+        editorControl?.addEventListener('input', () => {
+          const value = editorControl instanceof HTMLInputElement || editorControl instanceof HTMLTextAreaElement
+            ? editorControl.value
+            : editorControl.textContent ?? '';
+          updateRawDataMirrorCell(editingCol, editingRow, value, false);
+          if (formulaEditingCell?.col === editingCol && formulaEditingCell.row === editingRow && formulaInputEl) {
+            formulaInputEl.value = value;
+            // This reflects a grid edit in the bar, not a bar edit waiting
+            // to be committed back over the grid.
+            formulaInputDirty = false;
+          }
+        });
+      },
       // openSpreadsheetModal wires this too, alongside onchange, not as a
       // pure duplicate: it's what fires when the native double-click-to-
       // edit-a-cell editor actually closes, an extra, later repaint pass
@@ -6347,7 +6388,16 @@ export function buildReadOnlySpreadsheetHost(
       // cell (rather than through the formula bar's own setValue() call)
       // to reliably still show its computed result instead of the raw
       // "=..." text.
-      oneditionend: notifyChange,
+      oneditionend: (
+        changedWorksheet: JssInstance,
+        cell: HTMLElement,
+        changedCol: number,
+        changedRow: number,
+        editorValue: CellValue,
+      ): void => {
+        delete document.body.dataset.spreadsheetCellEditing;
+        notifyChange(changedWorksheet, cell, changedCol, changedRow, editorValue);
+      },
       oninsertrow: notifyStructuralChange,
       oninsertcolumn: notifyStructuralChange,
       ondeleterow: notifyStructuralChange,
@@ -6402,6 +6452,7 @@ export function buildReadOnlySpreadsheetHost(
             ? activeReferenceRange.end
             : formulaInputEl.selectionEnd ?? formulaInputEl.value.length;
           formulaInputEl.value = formulaInputEl.value.slice(0, start) + reference + formulaInputEl.value.slice(end);
+          formulaInputDirty = true;
           const cursor = start + reference.length;
           formulaInputEl.setSelectionRange(cursor, cursor);
           formulaInputEl.focus();
@@ -6429,6 +6480,7 @@ export function buildReadOnlySpreadsheetHost(
         awaitingReferenceReplacement = false;
         if (startCol !== endCol || startRow !== endRow) {
           formulaEditingCell = null;
+          formulaInputDirty = false;
           formulaInputEl.disabled = true;
           formulaInputEl.value = '';
           return;
@@ -6443,6 +6495,7 @@ export function buildReadOnlySpreadsheetHost(
         const rawValue = rawDataMirror[startRow]?.[startCol];
         formulaInputEl.disabled = false;
         formulaInputEl.value = String(rawValue ?? '');
+        formulaInputDirty = false;
       },
     } : {}),
   });
@@ -6467,6 +6520,7 @@ export function buildReadOnlySpreadsheetHost(
       // when this grid is torn down for virtualization -- e.g. scrolling
       // away immediately after typing into a cell.
       flush();
+      delete document.body.dataset.spreadsheetCellEditing;
       if (reclaimFocusHandler) document.removeEventListener('focusin', reclaimFocusHandler);
       if (focusPollInterval !== null) clearInterval(focusPollInterval);
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
