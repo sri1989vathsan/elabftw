@@ -107,6 +107,7 @@ final class CustomMigrationRunner
         '066_step_todolist_links.sql',
         '067_announcement_reactions_multi.sql',
         '068_announcement_uploads.sql',
+        '069_todolist_task_archive.sql',
     );
 
     private Db $Db;
