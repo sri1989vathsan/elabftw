@@ -6071,7 +6071,17 @@ export function buildReadOnlySpreadsheetHost(
         // own filter checks this same flag as a fallback for exactly that
         // gap (see its own comment).
         document.body.classList.add('elabftw-spreadsheet-editing');
-        if (lastFocusWasInGrid) sheetContainer.querySelector<HTMLElement>('[tabindex]')?.focus();
+        if (lastFocusWasInGrid) {
+          const reclaimTarget = sheetContainer.querySelector<HTMLElement>('[tabindex]');
+          // TEMPORARY DIAGNOSTIC -- see oncreateeditor's own comment.
+          // eslint-disable-next-line no-console
+          console.log('[SS-DEBUG] reclaimFocusHandler: body case, reclaiming onto', {
+            tag: reclaimTarget?.tagName,
+            className: reclaimTarget?.className,
+            isEditorInput: reclaimTarget?.matches('input, textarea, [contenteditable="true"]'),
+          });
+          reclaimTarget?.focus();
+        }
         return;
       }
       // lastFocusWasInGrid is deliberately scoped to *this* overlay's own
@@ -6113,8 +6123,36 @@ export function buildReadOnlySpreadsheetHost(
     focusPollInterval = setInterval(() => {
       if (!lastFocusWasInGrid || document.activeElement !== document.body) return;
       document.body.classList.add('elabftw-spreadsheet-editing');
-      sheetContainer.querySelector<HTMLElement>('[tabindex]')?.focus();
+      const reclaimTarget = sheetContainer.querySelector<HTMLElement>('[tabindex]');
+      // TEMPORARY DIAGNOSTIC -- see oncreateeditor's own comment.
+      // eslint-disable-next-line no-console
+      console.log('[SS-DEBUG] focusPollInterval: reclaiming onto', {
+        tag: reclaimTarget?.tagName,
+        className: reclaimTarget?.className,
+        isEditorInput: reclaimTarget?.matches('input, textarea, [contenteditable="true"]'),
+      });
+      reclaimTarget?.focus();
     }, 50);
+  }
+  // TEMPORARY DIAGNOSTIC -- remove once the column-boundary typing bug is
+  // root-caused. Logs every keydown while a cell in this grid is being
+  // edited, so a live trace can show exactly where a keystroke's target
+  // lands (and whether it's still the cell's own input) right as typing
+  // appears to stop.
+  if (editable) {
+    document.addEventListener('keydown', event => {
+      if (document.body.dataset.spreadsheetCellEditing !== 'true') return;
+      const target = event.target;
+      // eslint-disable-next-line no-console
+      console.log('[SS-DEBUG] keydown', {
+        key: event.key,
+        targetTag: target instanceof Element ? target.tagName : String(target),
+        targetClass: target instanceof Element ? target.className : undefined,
+        isEditorInput: target instanceof Element && target.matches('input, textarea, [contenteditable="true"]'),
+        inSheetContainer: target instanceof Node && sheetContainer.contains(target),
+        defaultPrevented: event.defaultPrevented,
+      });
+    }, true);
   }
   if (!editable) {
     const toggleCollapsed = (): void => {
@@ -6436,6 +6474,17 @@ export function buildReadOnlySpreadsheetHost(
         editingCol: number,
         editingRow: number,
       ): void => {
+        // TEMPORARY DIAGNOSTIC -- remove once the column-boundary typing
+        // bug is root-caused. Logs every editor (re)creation so a live
+        // trace can distinguish a fresh edit start from jspreadsheet
+        // destroying/recreating its input mid-edit.
+        // eslint-disable-next-line no-console
+        console.log('[SS-DEBUG] oncreateeditor', {
+          col: editingCol,
+          row: editingRow,
+          cellHasEditorInput: !!cell.querySelector('input, textarea, [contenteditable="true"]'),
+          activeElement: document.activeElement?.tagName,
+        });
         // Jspreadsheet can temporarily move/replace its editor while text
         // reaches a cell boundary. Mark the whole editing lifetime rather
         // than relying on the input's current DOM ancestry, so application
