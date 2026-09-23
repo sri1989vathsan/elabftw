@@ -5913,6 +5913,27 @@ export function buildReadOnlySpreadsheetHost(
       notifyStructuralChange(targetWorksheet);
     }, true);
 
+    // Double-click a data cell to edit it -- intercepted ahead of
+    // jspreadsheet's own dblclick-to-edit (capture phase, like the two
+    // boundary-specific listeners just above, which stopImmediatePropagation
+    // only when they actually handle the click, letting this one still run
+    // otherwise) so jspreadsheet's own broken column-boundary editor never
+    // opens in the first place. See openCellEditor()'s own comment.
+    sheetContainer.addEventListener('dblclick', event => {
+      if (event.button !== 0) return;
+      const cell = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
+        : null;
+      if (!cell) return;
+      const col = Number.parseInt(cell.dataset.x ?? '', 10);
+      const row = Number.parseInt(cell.dataset.y ?? '', 10);
+      if (!Number.isInteger(col) || !Number.isInteger(row)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const currentValue = rawDataMirror[row]?.[col];
+      openCellEditor(col, row, currentValue === undefined || currentValue === null ? '' : String(currentValue), false);
+    }, true);
+
     // Click-a-cell-to-insert-its-reference, ported from openSpreadsheetModal's
     // own onFormulaSelectionStart/Move/End -- the formula bar's own click-to-
     // insert (in the onselection handler below) only ever covers that one
@@ -6141,14 +6162,47 @@ export function buildReadOnlySpreadsheetHost(
         event.preventDefault();
         commitRescueInput();
       } else if (event.key === 'Escape') {
+        // Cancel, not commit -- standard spreadsheet convention, and now
+        // that this is the primary editor (not just an emergency
+        // fallback), the distinction actually matters.
         event.preventDefault();
-        commitRescueInput();
+        el.hidden = true;
+        rescueInputCol = null;
+        rescueInputRow = null;
+        delete document.body.dataset.spreadsheetCellEditing;
+        document.body.classList.remove('elabftw-spreadsheet-editing');
       }
     });
     el.addEventListener('blur', commitRescueInput);
     host.appendChild(el);
     rescueInputEl = el;
     return el;
+  };
+  // Per the user's own suggestion: rather than keep patching jspreadsheet's
+  // own broken destroy/recreate-at-the-column-boundary cell editor (see
+  // this whole section's history in git log), make ALL in-grid cell
+  // editing go through the same stable, always-alive input the formula
+  // bar already uses successfully -- the column-boundary bug never
+  // reproduces there because jspreadsheet never owns or recreates it.
+  // openCellEditor() is the single entry point both triggers below (double-
+  // click, and typing directly over a selected cell) call into.
+  const openCellEditor = (col: number, row: number, initialValue: string, selectAll: boolean): void => {
+    const cell = document.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
+    if (!cell) return;
+    const rescue = ensureRescueInput();
+    const cellRect = cell.getBoundingClientRect();
+    rescue.style.left = `${cellRect.left}px`;
+    rescue.style.top = `${cellRect.top}px`;
+    rescue.style.width = `${Math.max(cellRect.width, 60)}px`;
+    rescue.style.height = `${Math.max(cellRect.height, 20)}px`;
+    rescue.hidden = false;
+    rescueInputCol = col;
+    rescueInputRow = row;
+    rescue.value = initialValue;
+    document.body.dataset.spreadsheetCellEditing = 'true';
+    rescue.focus();
+    if (selectAll) rescue.select();
+    else rescue.setSelectionRange(rescue.value.length, rescue.value.length);
   };
   // A live trace caught this reclaiming focus onto jspreadsheet's own
   // hidden grid-level '.jss_textarea' (used for the grid's own keyboard/
@@ -6260,6 +6314,32 @@ export function buildReadOnlySpreadsheetHost(
       document.body.classList.toggle('elabftw-spreadsheet-editing', inAnySpreadsheetGrid);
     };
     document.addEventListener('focusin', reclaimFocusHandler);
+  }
+  // Typing directly over a selected-but-not-editing cell (no double-click)
+  // is the other common way to start an edit, alongside double-click above
+  // -- same interception principle: capture phase, ahead of jspreadsheet's
+  // own keydown handling (wherever it currently lives; a live trace showed
+  // this can be relocated outside sheetContainer entirely), so its own
+  // broken editor never opens from a typed character either.
+  // lastFocusWasInGrid (kept current above) scopes this to whichever
+  // instance's grid focus is actually in, when several spreadsheets share
+  // the page.
+  if (editable) {
+    document.addEventListener('keydown', event => {
+      if (rescueInputCol !== null || !lastFocusWasInGrid || !lastKnownSelection) return;
+      if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
+      const [c1, r1, c2, r2] = lastKnownSelection;
+      if (c1 !== c2 || r1 !== r2) return;
+      // Neither formulaInputEl nor rescueInputEl live inside sheetContainer
+      // or '.jss_container' (both are appended to host directly), so
+      // lastFocusWasInGrid is already false while either has focus --
+      // deliberately not excluding jspreadsheet's own '.jss_textarea' here
+      // (which does match that check) the same way, since redirecting a
+      // keystroke typed there into this overlay too is the whole point.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openCellEditor(c1, r1, event.key, false);
+    }, true);
   }
   // Belt-and-braces for the same gap: a live trace showed Firefox not
   // always dispatching a 'focusin' event at all for the implicit "focused
