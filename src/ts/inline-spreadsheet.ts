@@ -6187,7 +6187,15 @@ export function buildReadOnlySpreadsheetHost(
   // openCellEditor() is the single entry point both triggers below (double-
   // click, and typing directly over a selected cell) call into.
   const openCellEditor = (col: number, row: number, initialValue: string, selectAll: boolean): void => {
-    const cell = document.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
+    // data-x/data-y are coordinates *within* one table, not page-unique --
+    // with more than one spreadsheet on the page, a document-wide query can
+    // match a different table's cell that happens to share the same
+    // column/row index, positioned nowhere near this one. Scope to this
+    // instance's own sheetContainer first; only fall back to a document-
+    // wide search for the rarer case jspreadsheet has relocated this
+    // table's own structure outside it (see pickReclaimTarget()'s comment).
+    const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`)
+      ?? document.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
     if (!cell) return;
     const rescue = ensureRescueInput();
     const cellRect = cell.getBoundingClientRect();
@@ -6220,8 +6228,12 @@ export function buildReadOnlySpreadsheetHost(
   // edited (its own 'editor' class on the <td>) -- a signal that doesn't
   // depend on DOM location at all.
   const pickReclaimTarget = (): HTMLElement | null => {
+    // Scoped to sheetContainer first, same reasoning as openCellEditor()'s
+    // own comment: data-x/data-y aren't page-unique with more than one
+    // spreadsheet present.
     const editingCell = lastEditingCol !== null && lastEditingRow !== null
-      ? document.querySelector<HTMLElement>(`td[data-x="${lastEditingCol}"][data-y="${lastEditingRow}"]`)
+      ? sheetContainer.querySelector<HTMLElement>(`td[data-x="${lastEditingCol}"][data-y="${lastEditingRow}"]`)
+        ?? document.querySelector<HTMLElement>(`td[data-x="${lastEditingCol}"][data-y="${lastEditingRow}"]`)
       : null;
     // A live trace showed this cell comes back with no classes and no
     // tabindex at all once jspreadsheet has fully closed its editor
