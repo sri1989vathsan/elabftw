@@ -1921,6 +1921,25 @@ function renderFormulaResults(container: HTMLElement, data: AOA): void {
   });
 }
 
+function previewSpreadsheetCell(
+  container: HTMLElement,
+  data: AOA,
+  col: number,
+  row: number,
+  value: CellValue,
+): void {
+  const cell = container.querySelector<HTMLElement>(
+    `td[data-x="${col}"][data-y="${row}"]`,
+  );
+  if (!cell || cell.querySelector('input, textarea, [contenteditable="true"]')) return;
+  if (typeof value === 'string' && value.trimStart().startsWith('=')) {
+    const result = evaluateFormula(value, data, col, row);
+    cell.textContent = result === undefined ? value : formatFormulaResult(result);
+    return;
+  }
+  cell.textContent = String(value ?? '');
+}
+
 function applyFormulaResults(rawData: AOA, computedData: AOA): AOA {
   const rows = Math.max(rawData.length, computedData.length);
   const cols = Math.max(
@@ -4924,6 +4943,13 @@ export function openSpreadsheetModal(
         ? `${ui.formulaCellLabel.textContent} = ${formatFormulaResult(result)}`
         : `${ui.formulaCellLabel.textContent} updated.`;
     };
+    ui.formulaInput.addEventListener('input', () => {
+      if (!formulaInputTarget || !sheetContainer) return;
+      const { col, row } = formulaInputTarget;
+      const value = ui.formulaInput.value;
+      updateRawDataMirrorCell(col, row, value, false);
+      previewSpreadsheetCell(sheetContainer, readRawData(), col, row, value);
+    });
     ui.formulaInput.addEventListener('keydown', event => {
       if (event.key !== 'Enter') return;
       if (!formulaInputTarget) {
@@ -5771,9 +5797,11 @@ export function buildReadOnlySpreadsheetHost(
       const { col, row } = formulaEditingCell;
       const value = formulaInputEl.value;
       updateRawDataMirrorCell(col, row, value, false);
-      const targetWorksheet = getMountedWorksheet(sheetContainer);
-      targetWorksheet?.setValue?.(`${colLabel(col)}${row + 1}`, value);
-      notifyFromMirror();
+      previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, value);
+      // Persist the mirror continuously, but do not run the staggered
+      // formula repaints on every partial keystroke. The final setValue on
+      // blur/Enter triggers the normal repaint once editing is complete.
+      notifyFromMirror(false);
     });
     formulaInputEl.addEventListener('keydown', event => {
       // jspreadsheet-ce listens for keydown on `document` itself (not the
@@ -6222,19 +6250,21 @@ export function buildReadOnlySpreadsheetHost(
     rawDataMirror[row][col] = value;
   };
 
-  const notifyFromMirror = (): void => {
+  const notifyFromMirror = (repaintFormulas = true): void => {
     const data = rawDataMirror;
     // jspreadsheet repaints the cell itself asynchronously after onchange
     // (e.g. when its own edit box closes) -- a single immediate repaint
     // here can get overwritten right back to the raw "=..." text by that
     // later repaint. Match openSpreadsheetModal's own staggered retries.
-    const repaint = (): void => renderFormulaResults(sheetContainer, data);
-    window.requestAnimationFrame(() => {
-      repaint();
-      window.setTimeout(repaint, 0);
-      window.setTimeout(repaint, 120);
-      window.setTimeout(repaint, 400);
-    });
+    if (repaintFormulas) {
+      const repaint = (): void => renderFormulaResults(sheetContainer, data);
+      window.requestAnimationFrame(() => {
+        repaint();
+        window.setTimeout(repaint, 0);
+        window.setTimeout(repaint, 120);
+        window.setTimeout(repaint, 400);
+      });
+    }
     if (!options.onChange) return;
     const nextRows = data.length;
     const nextCols = data.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
