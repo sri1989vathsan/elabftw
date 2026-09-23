@@ -6424,6 +6424,15 @@ export function buildReadOnlySpreadsheetHost(
       if (rescueInputCol === null) return;
       commitRescueInput();
     }, true);
+    // Also commit on the raw wheel gesture itself, not just the scroll it
+    // produces -- 'wheel' fires first, so this closes the box a frame
+    // earlier than waiting for 'scroll' to catch up, rather than letting it
+    // visibly linger at its stale position for even one frame of a fast
+    // scroll gesture.
+    window.addEventListener('wheel', () => {
+      if (rescueInputCol === null) return;
+      commitRescueInput();
+    }, true);
   }
   // Belt-and-braces for the same gap: a live trace showed Firefox not
   // always dispatching a 'focusin' event at all for the implicit "focused
