@@ -6107,8 +6107,23 @@ export function buildReadOnlySpreadsheetHost(
         lastEditingCol, lastEditingRow, lastEditingCol, lastEditingRow,
       );
     }
+    // Confirmed by a further live trace: even with DOM focus on the <td>
+    // AND jspreadsheet's own selection state correctly pointing at it
+    // (both verified working), typing still didn't resume -- and the same
+    // thing happens in the standalone popup editor too, which shares none
+    // of the inline overlay's TinyMCE-specific code, confirming this is
+    // purely a jspreadsheet-ce interaction issue. jspreadsheet-ce captures
+    // "type on a selected-but-not-editing cell" keystrokes through one
+    // shared, hidden '.jss_textarea' per worksheet (kept focused instead
+    // of the <td> itself, for IME/mobile-keyboard compatibility) -- not
+    // the cell. Selection alone was never going to be enough; focus needs
+    // to land there instead, now that selection genuinely points at the
+    // right cell.
+    const sharedTextarea = editingCell?.closest('.jss_container')?.querySelector<HTMLElement>('.jss_textarea')
+      ?? sheetContainer.querySelector<HTMLElement>('.jss_textarea');
     const target = document.querySelector<HTMLElement>('td.editor input, td.editor textarea, td.editor [contenteditable="true"]')
       ?? sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
+      ?? (editingCell ? sharedTextarea : null)
       // A live trace showed jspreadsheet can close a cell's editor at the
       // boundary without recreating any replacement input at all -- in
       // that case there's no editor DOM to find, but reselecting the same
