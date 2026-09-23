@@ -6302,9 +6302,16 @@ export function buildReadOnlySpreadsheetHost(
       placeCaretAtEnd();
       // The browser can finish the originating double-click's native text
       // selection after this handler returns, selecting the newly-created
-      // textarea's whole value. Reassert the insertion caret on the next
-      // frame so typing edits/appends instead of replacing existing text.
+      // textarea's whole value -- reported as needing an extra click after
+      // the double-click before typing actually inserted/appended instead
+      // of replacing the whole value. A single requestAnimationFrame wasn't
+      // reliably late enough to catch when the browser actually applied
+      // that native selection; layer a setTimeout(0) behind it too, which
+      // runs as a fresh macrotask after all pending browser-internal
+      // selection handling from the originating event, not just the next
+      // paint.
       window.requestAnimationFrame(placeCaretAtEnd);
+      window.setTimeout(placeCaretAtEnd, 0);
     }
   };
   // A live trace caught this reclaiming focus onto jspreadsheet's own
