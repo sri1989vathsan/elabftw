@@ -6071,11 +6071,23 @@ export function buildReadOnlySpreadsheetHost(
   // document for the cell jspreadsheet itself marks as actively being
   // edited (its own 'editor' class on the <td>) -- a signal that doesn't
   // depend on DOM location at all.
-  const pickReclaimTarget = (): HTMLElement | null => (
-    document.querySelector<HTMLElement>('td.editor input, td.editor textarea, td.editor [contenteditable="true"]')
-    ?? sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
-    ?? sheetContainer.querySelector<HTMLElement>('[tabindex]:not(.jss_textarea)')
-  );
+  const pickReclaimTarget = (): HTMLElement | null => {
+    const target = document.querySelector<HTMLElement>('td.editor input, td.editor textarea, td.editor [contenteditable="true"]')
+      ?? sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
+      ?? sheetContainer.querySelector<HTMLElement>('[tabindex]:not(.jss_textarea)');
+    // TEMPORARY DIAGNOSTIC -- remove once the column-boundary typing bug is
+    // confirmed fixed. Logs what this actually found/focused, and whether
+    // focus genuinely landed there a tick later (jspreadsheet can steal it
+    // straight back).
+    window.setTimeout(() => {
+      // eslint-disable-next-line no-console
+      console.log('[SS-DEBUG] pickReclaimTarget', {
+        found: target ? `${target.tagName}.${target.className}` : null,
+        activeElementNow: document.activeElement === target ? 'MATCHES target' : document.activeElement?.tagName,
+      });
+    }, 0);
+    return target;
+  };
   if (editable) {
     reclaimFocusHandler = (event: FocusEvent): void => {
       if (composingFormula && formulaInputEl && event.target !== formulaInputEl) {
