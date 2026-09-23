@@ -6185,7 +6185,17 @@ export function buildReadOnlySpreadsheetHost(
       }
     });
     el.addEventListener('blur', commitRescueInput);
-    host.appendChild(el);
+    // document.body, deliberately not host: host is moved via a CSS
+    // transform (see syncOverlayPositions's own comment, to avoid a
+    // Firefox scroll-positioning quirk), and any element with `transform`
+    // becomes the *containing block* for its own position:fixed
+    // descendants -- so a position:fixed child of host is positioned
+    // relative to host's own transformed box, not the viewport, no matter
+    // what left/top it's given. cellRect below comes from
+    // getBoundingClientRect(), which is always viewport-relative
+    // regardless of any transform -- appending to body keeps this input in
+    // that same coordinate space instead of a mismatched one.
+    document.body.appendChild(el);
     rescueInputEl = el;
     return el;
   };

@@ -1149,7 +1149,18 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // A zero-size rect means the real table isn't actually visible right
           // now (e.g. inside a collapsed <details>) -- hide the overlay rather
           // than pin it to a stale, meaningless position.
-          overlay.style.display = (tableRect.width === 0 && tableRect.height === 0) ? 'none' : '';
+          const shouldHide = tableRect.width === 0 && tableRect.height === 0;
+          if (shouldHide && overlay.style.display !== 'none') {
+            // TEMPORARY DIAGNOSTIC -- remove once the table-disappears-
+            // while-editing bug is confirmed fixed.
+            // eslint-disable-next-line no-console
+            console.log('[SS-DEBUG] hiding overlay: table rect is zero', {
+              tableConnected: table.isConnected,
+              iframeRect: { width: iframeRect.width, height: iframeRect.height },
+              spreadsheetCellEditing: document.body.dataset.spreadsheetCellEditing,
+            });
+          }
+          overlay.style.display = shouldHide ? 'none' : '';
         } catch (error) {
           console.error('Failed to sync a spreadsheet overlay\'s position', error);
         }
