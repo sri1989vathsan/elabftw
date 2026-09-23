@@ -4045,15 +4045,35 @@ export function openSpreadsheetModal(
     // jspreadsheet's own happens to be. sheetContainer.contains(cell) below
     // keeps this scoped to this modal's own single table instance.
     const onCellDoubleClickMousedown = (event: MouseEvent): void => {
+      // TEMPORARY DIAGNOSTIC -- remove once the popup's double-click/
+      // select-other-cells bug is confirmed fixed.
+      // eslint-disable-next-line no-console
+      console.log('[SS-POPUP-DEBUG] mousedown', {
+        detail: event.detail,
+        button: event.button,
+        hasSheetContainer: !!sheetContainer,
+        targetTag: event.target instanceof Element ? event.target.tagName : String(event.target),
+        targetClass: event.target instanceof Element ? event.target.className : undefined,
+      });
       if (event.button !== 0 || event.detail < 2 || !sheetContainer) return;
       const cell = event.target instanceof Element
         ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
         : null;
+      // eslint-disable-next-line no-console
+      console.log('[SS-POPUP-DEBUG] mousedown cell match', {
+        foundCell: !!cell,
+        inContainer: cell ? sheetContainer.contains(cell) : null,
+      });
       if (!cell || !sheetContainer.contains(cell)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
     };
     const onCellDoubleClick = (event: MouseEvent): void => {
+      // eslint-disable-next-line no-console
+      console.log('[SS-POPUP-DEBUG] dblclick fired', {
+        hasSheetContainer: !!sheetContainer,
+        targetTag: event.target instanceof Element ? event.target.tagName : String(event.target),
+      });
       if (event.button !== 0 || !sheetContainer) return;
       const cell = event.target instanceof Element
         ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
@@ -4062,6 +4082,8 @@ export function openSpreadsheetModal(
       const col = Number.parseInt(cell.dataset.x ?? '', 10);
       const row = Number.parseInt(cell.dataset.y ?? '', 10);
       if (!Number.isInteger(col) || !Number.isInteger(row)) return;
+      // eslint-disable-next-line no-console
+      console.log('[SS-POPUP-DEBUG] opening cell editor', { col, row });
       event.preventDefault();
       event.stopImmediatePropagation();
       const currentValue = rawDataMirror[row]?.[col];
@@ -4131,6 +4153,13 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('dblclick', onColumnBoundaryDoubleClick, true);
     ui.sheetHost.addEventListener('dblclick', onRowBoundaryDoubleClick, true);
     // window, not ui.sheetHost: see onCellDoubleClickMousedown's own comment.
+    // Both pointerdown and mousedown -- pointerdown fires first for the
+    // same physical click, so if jspreadsheet's own handler for this is
+    // actually bound to pointerdown rather than mousedown (still reported
+    // reproducing jspreadsheet's own mouseDownControls/closeEditor crash
+    // even with the mousedown-level interceptor in place), only stopping
+    // mousedown would never get a chance to run first.
+    window.addEventListener('pointerdown', onCellDoubleClickMousedown, true);
     window.addEventListener('mousedown', onCellDoubleClickMousedown, true);
     ui.sheetHost.addEventListener('dblclick', onCellDoubleClick, true);
     ui.sheetHost.addEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
@@ -5186,6 +5215,7 @@ export function openSpreadsheetModal(
       ui.sheetHost.removeEventListener('paste', onSpreadsheetPaste, true);
       ui.sheetHost.removeEventListener('dblclick', onColumnBoundaryDoubleClick, true);
       ui.sheetHost.removeEventListener('dblclick', onRowBoundaryDoubleClick, true);
+      window.removeEventListener('pointerdown', onCellDoubleClickMousedown, true);
       window.removeEventListener('mousedown', onCellDoubleClickMousedown, true);
       ui.sheetHost.removeEventListener('dblclick', onCellDoubleClick, true);
       ui.sheetHost.removeEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
