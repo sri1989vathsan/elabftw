@@ -3920,7 +3920,24 @@ export function openSpreadsheetModal(
     let rescueInputEl: HTMLTextAreaElement | null = null;
     let rescueInputCol: number | null = null;
     let rescueInputRow: number | null = null;
-    const commitRescueInput = (): void => {
+    // deferWrite defaults to true -- matches the inline overlay's own,
+    // already-fixed rescue input (see git log "Stabilize spreadsheet cell
+    // editing"): calling worksheet.setValue() *synchronously* while a
+    // pointerdown/blur triggered by a click on a *different* cell is still
+    // being processed makes jspreadsheet redraw the old cell mid-event,
+    // invalidating that same click's own target before jspreadsheet's own
+    // selection handler gets to it -- the exact cause of the reported
+    // "only able to double-click, not select" and the mouseDownControls/
+    // closeEditor crash, not an event-registration-order issue as
+    // originally (incorrectly) assumed here. Deferring the write with
+    // setTimeout(0) lets that click finish being processed first.
+    // Callers *not* triggered by a live click elsewhere in the grid (Enter,
+    // the Insert/Cancel buttons, mountSpreadsheet() about to tear down the
+    // current instance) pass false: nothing else is concurrently reading
+    // jspreadsheet's own model then, and several of them (readRawData(),
+    // the hasChanges check) need the value to have already landed there,
+    // synchronously, right after this returns.
+    const commitRescueInput = (deferWrite = true): void => {
       if (!rescueInputEl || rescueInputCol === null || rescueInputRow === null) return;
       const col = rescueInputCol;
       const row = rescueInputRow;
@@ -3928,11 +3945,21 @@ export function openSpreadsheetModal(
       rescueInputEl.hidden = true;
       rescueInputCol = null;
       rescueInputRow = null;
-      // worksheet.setValue() itself drives onchange (updates rawDataMirror,
-      // hasChanges, scheduleFormulaResultRender) the same as any other
-      // jspreadsheet-originated edit -- no separate write-back needed here.
-      const cellName = `${colLabel(col)}${row + 1}`;
-      worksheet?.setValue?.(cellName, value);
+      // rawDataMirror already has this (kept current on every keystroke by
+      // the 'input' listener below) -- repainting it into the live grid
+      // directly is enough to keep what's on screen correct even before
+      // worksheet.setValue() itself lands.
+      updateRawDataMirrorCell(col, row, value, false);
+      if (sheetContainer) previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, value);
+      const writeToWorksheet = (): void => {
+        const cellName = `${colLabel(col)}${row + 1}`;
+        worksheet?.setValue?.(cellName, value);
+      };
+      if (deferWrite) {
+        window.setTimeout(writeToWorksheet, 0);
+      } else {
+        writeToWorksheet();
+      }
     };
     const ensureRescueInput = (): HTMLTextAreaElement => {
       if (rescueInputEl) return rescueInputEl;
@@ -3962,7 +3989,9 @@ export function openSpreadsheetModal(
       el.addEventListener('keydown', event => {
         if (event.key === 'Enter' && !event.shiftKey) {
           event.preventDefault();
-          commitRescueInput();
+          // Not deferred: a keyboard commit, not a click jspreadsheet is
+          // concurrently handling elsewhere.
+          commitRescueInput(false);
         } else if (event.key === 'Escape') {
           // Cancel, not commit -- standard spreadsheet convention.
           event.preventDefault();
@@ -3971,7 +4000,11 @@ export function openSpreadsheetModal(
           rescueInputRow = null;
         }
       });
-      el.addEventListener('blur', commitRescueInput);
+      // Deferred write (see commitRescueInput's own comment): blur fires as
+      // a direct consequence of a click moving focus elsewhere, the same
+      // "concurrently being processed by jspreadsheet" case as the
+      // pointerdown handler below.
+      el.addEventListener('blur', () => commitRescueInput(true));
       // document.body, not ui.sheetHost/sheetContainer: jspreadsheet-ce
       // repaints the whole worksheet DOM on plenty of routine actions
       // (resize, style change, undo -- every mountSpreadsheet() call
@@ -4100,7 +4133,7 @@ export function openSpreadsheetModal(
       const targetCol = Number.parseInt(targetCell.dataset.x ?? '', 10);
       const targetRow = Number.parseInt(targetCell.dataset.y ?? '', 10);
       if (targetCol === rescueInputCol && targetRow === rescueInputRow) return;
-      commitRescueInput();
+      commitRescueInput(true);
     };
 
     // Same fit-to-content measurement as the per-column/per-row double-click
@@ -4178,7 +4211,9 @@ export function openSpreadsheetModal(
       // contents -- an edit still sitting in the rescue input would
       // otherwise be silently orphaned (tracking a cell element that's
       // about to stop existing) rather than reaching worksheet.setValue().
-      commitRescueInput();
+      // Not deferred: this must land on the *current* worksheet before it
+      // gets destroyed below, and nothing else is concurrently reading it.
+      commitRescueInput(false);
       if (sheetContainer) {
         // Every caller here (applying a font/fill/alignment change, table
         // appearance, dimensions, undo, ...) destroys and recreates the
@@ -5228,8 +5263,8 @@ export function openSpreadsheetModal(
       // Otherwise an edit still sitting in the rescue input, never having
       // reached worksheet.setValue() yet, wouldn't count toward hasChanges
       // at all -- Escape/Cancel could silently discard it without even
-      // asking.
-      commitRescueInput();
+      // asking. Not deferred: hasChanges is read synchronously right below.
+      commitRescueInput(false);
       if (!force && hasChanges && !window.confirm('Discard unsaved spreadsheet changes?')) return;
       cleanup();
       reject(new Error('cancelled'));
@@ -5291,8 +5326,9 @@ export function openSpreadsheetModal(
       // readRawData() below only prefers rawDataMirror's own value over
       // worksheet.getData()'s for a formula still being composed -- a plain
       // value sitting in an open rescue input, never having reached
-      // worksheet.setValue() yet, would otherwise be silently dropped.
-      commitRescueInput();
+      // worksheet.setValue() yet, would otherwise be silently dropped. Not
+      // deferred: readRawData() is read synchronously right below.
+      commitRescueInput(false);
       const rawData = readRawData();
       const rows = clampDimension(rawData.length, working.rows);
       const cols = clampDimension(
