@@ -6189,7 +6189,11 @@ export function buildReadOnlySpreadsheetHost(
     el.className = 'elabftw-spreadsheet-rescue-input';
     el.spellcheck = false;
     el.style.position = 'fixed';
-    el.style.zIndex = '2147483647';
+    // Match the spreadsheet overlay's stacking layer. The textarea is
+    // appended after the overlay, so it still paints above its cells, while
+    // TinyMCE's sticky header (z-index: 2) remains above both when the table
+    // scrolls underneath the toolbar.
+    el.style.zIndex = '1';
     el.style.boxSizing = 'border-box';
     el.style.resize = 'none';
     el.style.font = 'inherit';
@@ -6287,8 +6291,21 @@ export function buildReadOnlySpreadsheetHost(
     )}px`;
     document.body.dataset.spreadsheetCellEditing = 'true';
     rescue.focus();
-    if (selectAll) rescue.select();
-    else rescue.setSelectionRange(rescue.value.length, rescue.value.length);
+    if (selectAll) {
+      rescue.select();
+    } else {
+      const placeCaretAtEnd = (): void => {
+        if (rescue.hidden || rescueInputCol !== col || rescueInputRow !== row) return;
+        rescue.focus({ preventScroll: true });
+        rescue.setSelectionRange(rescue.value.length, rescue.value.length);
+      };
+      placeCaretAtEnd();
+      // The browser can finish the originating double-click's native text
+      // selection after this handler returns, selecting the newly-created
+      // textarea's whole value. Reassert the insertion caret on the next
+      // frame so typing edits/appends instead of replacing existing text.
+      window.requestAnimationFrame(placeCaretAtEnd);
+    }
   };
   // A live trace caught this reclaiming focus onto jspreadsheet's own
   // hidden grid-level '.jss_textarea' (used for the grid's own keyboard/
