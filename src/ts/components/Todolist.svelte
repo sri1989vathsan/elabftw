@@ -163,6 +163,7 @@
     id: number;
     name: string;
     userid: number;
+    parent_id: number | null;
     members: TeamMember[];
   };
 
@@ -221,6 +222,16 @@
   let completedItems: Todo[] = [];
   let unfinished: UnfinishedResponse = { experiments: [], items: [] };
   let projects: Project[] = [];
+  // Flat list for the plain <select> project pickers below, ordered so
+  // each subproject follows directly after its own parent rather than
+  // wherever it sorts on its own -- mirrors projectPickerOptions in
+  // ProjectManagementBoard.svelte.
+  $: projectPickerOptions = projects
+    .filter(project => project.parent_id === null)
+    .flatMap(project => [
+      project,
+      ...projects.filter(candidate => candidate.parent_id === project.id),
+    ]);
   let entries: SidebarEntry[] = [];
   let dueGroups: DueGroup[] = [];
   let completedGroups: CompletedGroup[] = [];
@@ -1837,8 +1848,8 @@
         <span class='small'>{t('Project')}</span>
         <select class='form-control form-control-sm' bind:value={draftProjectId}>
           <option value={null}>{t('Unfiled')}</option>
-          {#each projects as project (project.id)}
-            <option value={project.id}>{project.name}</option>
+          {#each projectPickerOptions as project (project.id)}
+            <option value={project.id}>{project.parent_id !== null ? `- ${project.name}` : project.name}</option>
           {/each}
         </select>
       </label>
@@ -2372,8 +2383,8 @@
             <label class='pm-label' for='todo-detail-project'>{t('Project')}</label>
             <select id='todo-detail-project' class='form-control' bind:value={editProjectId}>
               <option value={null}>{t('Unfiled')}</option>
-              {#each projects as project (project.id)}
-                <option value={project.id}>{project.name}</option>
+              {#each projectPickerOptions as project (project.id)}
+                <option value={project.id}>{project.parent_id !== null ? `- ${project.name}` : project.name}</option>
               {/each}
             </select>
           </div>
