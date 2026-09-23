@@ -3484,15 +3484,19 @@ export function openSpreadsheetModal(
       const cellCount = (endCol - startCol + 1) * (endRow - startRow + 1);
       const rangeLabel = `${colLabel(startCol)}${startRow + 1}:${colLabel(endCol)}${endRow + 1}`;
       ui.cellFormatStatus.textContent = `${rangeLabel} selected (${cellCount} cell${cellCount === 1 ? '' : 's'}).`;
-      // Also skip the overwrite below while the formula bar itself has
-      // focus, not just during an active formula-reference drag: clicking a
-      // different cell while typing an ordinary (non-formula) value there
+      // Also skip the overwrite below while the formula bar itself has an
+      // uncommitted edit, not just during an active formula-reference drag:
+      // clicking a different cell while typing an ordinary value there
       // still changes the grid's selected cell (via jspreadsheet's own
       // click handling, never intercepted for that case -- see
       // onFormulaSelectionStart's expectsCellReference check just below,
       // which only claims the click when a cell reference is actually
       // expected), which used to blow away whatever the user was mid-typing
-      // by replacing it with the newly-clicked cell's own value. Formula
+      // by replacing it with the newly-clicked cell's own value. Focus by
+      // itself is not enough to suppress the update: mouse selection fires
+      // before blur, and treating that brief retained focus as an edit made
+      // the first click leave formulaInputTarget on the previous cell.
+      // Formula
       // building (expectsCellReference true) is unaffected: that path
       // already sets formulaSelectionDrag before this ever runs.
       // forceSyncFormulaBar overrides this for the one case that genuinely
@@ -3501,9 +3505,11 @@ export function openSpreadsheetModal(
       // (see that handler) -- by that point the previous cell's value is
       // already committed, so there is nothing left to protect, and the bar
       // should reflect the newly-selected cell same as any other move.
+      const formulaBarHasPendingEdit = document.activeElement === ui.formulaInput
+        && ui.formulaInput.value !== lastCommittedFormulaValue;
       const selectingForFormulaBar = !forceSyncFormulaBar
         && (formulaSelectionDrag?.input === ui.formulaInput
-          || document.activeElement === ui.formulaInput);
+          || formulaBarHasPendingEdit);
       if (!selectingForFormulaBar) {
         ui.formulaCellLabel.textContent = cellCount === 1
           ? `${colLabel(startCol)}${startRow + 1}`
