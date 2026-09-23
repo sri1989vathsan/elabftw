@@ -6324,8 +6324,25 @@ export function buildReadOnlySpreadsheetHost(
   // lastFocusWasInGrid (kept current above) scopes this to whichever
   // instance's grid focus is actually in, when several spreadsheets share
   // the page.
+  //
+  // Registered on window, not document: jspreadsheet-ce's own keydown
+  // handling is itself attached to document (see keyDownControls in its
+  // stack trace), at mount time -- before this code runs. Two capture-
+  // phase listeners on the *same* node fire in registration order
+  // regardless of which one calls stopImmediatePropagation, so a listener
+  // here on document would still run after jspreadsheet's own, letting its
+  // own (broken) edit-start partially run first and corrupt its internal
+  // state -- confirmed by a live trace: every click to select a *different*
+  // cell started crashing inside jspreadsheet's own mouseDownControls/
+  // closeEditor after typing (which goes through this listener) into one,
+  // but not after only double-clicking (which goes through the sheet
+  // Container-scoped listener above, a deeper node jspreadsheet can't
+  // register anything above). window is strictly higher than document in
+  // the capture chain, so a listener here always runs first regardless of
+  // registration order, actually preventing jspreadsheet from seeing the
+  // keystroke at all rather than merely reacting after the fact.
   if (editable) {
-    document.addEventListener('keydown', event => {
+    window.addEventListener('keydown', event => {
       if (rescueInputCol !== null || !lastFocusWasInGrid || !lastKnownSelection) return;
       if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
       const [c1, r1, c2, r2] = lastKnownSelection;
