@@ -61,11 +61,45 @@ export const BARE_URL_PATTERN = /^https?:\/\/\S+$/i;
  * replace the default paste with a link-preview badge. Anything else
  * (regular text, a URL mixed with other text, an image, ...) falls
  * through to the field's normal paste behavior untouched.
+ *
+ * The title lookup is a server round-trip that itself fetches the external
+ * page, so it can take a noticeable moment -- long enough that waiting for
+ * it before inserting anything made a paste feel stuck. Insert the plain
+ * link immediately instead, then swap in the titled version once the
+ * lookup resolves, in the background.
  */
 export function handleLinkPreviewPaste(event: ClipboardEvent, el: HTMLElement): void {
   const text = event.clipboardData?.getData('text/plain').trim() ?? '';
   if (!BARE_URL_PATTERN.test(text)) return;
   event.preventDefault();
   el.focus();
-  void buildLinkPreviewHtml(text).then(html => document.execCommand('insertHTML', false, html));
+  const escapedUrl = escapeHTML(text);
+  const pendingId = `link-preview-pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  document.execCommand(
+    'insertHTML',
+    false,
+    `<a href="${escapedUrl}" target="_blank" rel="noreferrer noopener" data-link-preview-pending="${pendingId}">${escapedUrl}</a>`,
+  );
+  void upgradeLinkPreview(text, pendingId);
+}
+
+/**
+ * Looks up the pasted-in placeholder anchor by its one-off marker (rather
+ * than holding a direct element reference) so a stale lookup harmlessly
+ * finds nothing if the anchor was since edited, undone, or removed --
+ * across however many other notes fields exist elsewhere on the same page.
+ */
+async function upgradeLinkPreview(url: string, pendingId: string): Promise<void> {
+  const selector = `[data-link-preview-pending="${pendingId}"]`;
+  if (!document.querySelector(selector)) return;
+  try {
+    const preview = await ApiC.getJson(`${Model.LinkPreview}?url=${encodeURIComponent(url)}`) as LinkPreviewResponse;
+    const anchor = document.querySelector<HTMLAnchorElement>(selector);
+    if (!anchor) return;
+    anchor.textContent = preview.title || preview.hostname;
+    anchor.classList.add('elabftw-link-preview');
+    anchor.removeAttribute('data-link-preview-pending');
+  } catch {
+    document.querySelector<HTMLAnchorElement>(selector)?.removeAttribute('data-link-preview-pending');
+  }
 }
