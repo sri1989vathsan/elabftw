@@ -6068,6 +6068,77 @@ export function buildReadOnlySpreadsheetHost(
   // existing.
   let lastEditingCol: number | null = null;
   let lastEditingRow: number | null = null;
+  // Six separate live traces on this same bug (see git log for each one's
+  // own findings) ruled out every way of coaxing jspreadsheet's own broken
+  // recreate-at-the-column-boundary cycle back into a working state:
+  // reclaiming focus onto whatever editor DOM exists (none, some traces),
+  // forcing DOM focus + tabindex onto the reselected cell (focus genuinely
+  // landed, typing still didn't resume), syncing jspreadsheet's own
+  // internal selection state via updateSelectionFromCoords() (confirmed
+  // correct, typing still didn't resume), and focusing jspreadsheet's own
+  // shared '.jss_textarea' (also confirmed focused, still didn't work) --
+  // and the same failure reproduces in the standalone popup editor too,
+  // which shares none of the inline overlay's TinyMCE-specific code,
+  // ruling that out as well. Rather than keep guessing at jspreadsheet-ce's
+  // opaque internal state, take over entirely for this one case: a
+  // dedicated, always-alive rescue <textarea> (never owned or recreated by
+  // jspreadsheet, the same principle the formula bar above already relies
+  // on to avoid this exact class of bug) positioned over the cell, wired
+  // into the same rawDataMirror/notifyFromMirror pipeline that already
+  // reliably persists every other kind of edit in this file.
+  let rescueInputEl: HTMLTextAreaElement | null = null;
+  let rescueInputCol: number | null = null;
+  let rescueInputRow: number | null = null;
+  const commitRescueInput = (): void => {
+    if (!rescueInputEl || rescueInputCol === null || rescueInputRow === null) return;
+    const col = rescueInputCol;
+    const row = rescueInputRow;
+    const value = rescueInputEl.value;
+    rescueInputEl.hidden = true;
+    rescueInputCol = null;
+    rescueInputRow = null;
+    const cellName = `${colLabel(col)}${row + 1}`;
+    getMountedWorksheet(sheetContainer)?.setValue?.(cellName, value);
+    delete document.body.dataset.spreadsheetCellEditing;
+    document.body.classList.remove('elabftw-spreadsheet-editing');
+  };
+  const ensureRescueInput = (): HTMLTextAreaElement => {
+    if (rescueInputEl) return rescueInputEl;
+    const el = document.createElement('textarea');
+    el.className = 'elabftw-spreadsheet-rescue-input';
+    el.spellcheck = false;
+    el.style.position = 'fixed';
+    el.style.zIndex = '2147483647';
+    el.style.boxSizing = 'border-box';
+    el.style.resize = 'none';
+    el.style.font = 'inherit';
+    el.style.padding = '2px 4px';
+    el.style.border = '2px solid #4285f4';
+    el.style.background = '#fff';
+    el.style.overflow = 'hidden';
+    el.hidden = true;
+    el.addEventListener('input', () => {
+      if (rescueInputCol === null || rescueInputRow === null) return;
+      updateRawDataMirrorCell(rescueInputCol, rescueInputRow, el.value, false);
+      notifyFromMirror();
+    });
+    // Enter commits and hands focus back to jspreadsheet's own grid --
+    // mirroring how a normal cell edit closes -- rather than inserting a
+    // newline (a plain <textarea>'s own default for Enter).
+    el.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        commitRescueInput();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        commitRescueInput();
+      }
+    });
+    el.addEventListener('blur', commitRescueInput);
+    host.appendChild(el);
+    rescueInputEl = el;
+    return el;
+  };
   // A live trace caught this reclaiming focus onto jspreadsheet's own
   // hidden grid-level '.jss_textarea' (used for the grid's own keyboard/
   // clipboard handling across every cell, not for entering text into any
@@ -6093,45 +6164,28 @@ export function buildReadOnlySpreadsheetHost(
     // tabindex is a silent no-op, which is why activeElement stayed <body>
     // every time this fallback was actually reached. Force it focusable
     // first, the same way jspreadsheet marks a selected cell itself.
-    if (editingCell && editingCell.tabIndex < 0) editingCell.tabIndex = 0;
-    // Confirmed by a live trace: forcing DOM focus alone stops the cursor
-    // jumping away (the earlier symptom), but jspreadsheet still doesn't
-    // treat this as *its own* selected cell internally, so a keystroke
-    // right after doesn't restart editing -- typing still goes nowhere.
-    // updateSelectionFromCoords() is jspreadsheet's own public API for
-    // exactly this (already used elsewhere in this file for programmatic
-    // single-cell selection); call it so its internal selection state
-    // actually agrees with where DOM focus just landed.
-    if (editingCell && lastEditingCol !== null && lastEditingRow !== null) {
-      getMountedWorksheet(sheetContainer)?.updateSelectionFromCoords?.(
-        lastEditingCol, lastEditingRow, lastEditingCol, lastEditingRow,
-      );
+    let target = document.querySelector<HTMLElement>('td.editor input, td.editor textarea, td.editor [contenteditable="true"]')
+      ?? sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]');
+    // Nothing left to reclaim into that jspreadsheet itself still owns --
+    // take over with the dedicated rescue textarea instead (see its own
+    // comment for the four separate approaches already ruled out here).
+    if (!target && editingCell && lastEditingCol !== null && lastEditingRow !== null) {
+      const rescue = ensureRescueInput();
+      const cellRect = editingCell.getBoundingClientRect();
+      rescue.style.left = `${cellRect.left}px`;
+      rescue.style.top = `${cellRect.top}px`;
+      rescue.style.width = `${Math.max(cellRect.width, 60)}px`;
+      rescue.style.height = `${Math.max(cellRect.height, 20)}px`;
+      rescue.hidden = false;
+      rescueInputCol = lastEditingCol;
+      rescueInputRow = lastEditingRow;
+      // Seed with whatever was already typed (rawDataMirror already holds
+      // it -- onbeforechange writes every keystroke there continuously,
+      // not just on a clean commit) rather than jspreadsheet's own
+      // possibly-stale visual value for this cell.
+      rescue.value = String(rawDataMirror[lastEditingRow]?.[lastEditingCol] ?? '');
+      target = rescue;
     }
-    // Confirmed by a further live trace: even with DOM focus on the <td>
-    // AND jspreadsheet's own selection state correctly pointing at it
-    // (both verified working), typing still didn't resume -- and the same
-    // thing happens in the standalone popup editor too, which shares none
-    // of the inline overlay's TinyMCE-specific code, confirming this is
-    // purely a jspreadsheet-ce interaction issue. jspreadsheet-ce captures
-    // "type on a selected-but-not-editing cell" keystrokes through one
-    // shared, hidden '.jss_textarea' per worksheet (kept focused instead
-    // of the <td> itself, for IME/mobile-keyboard compatibility) -- not
-    // the cell. Selection alone was never going to be enough; focus needs
-    // to land there instead, now that selection genuinely points at the
-    // right cell.
-    const sharedTextarea = editingCell?.closest('.jss_container')?.querySelector<HTMLElement>('.jss_textarea')
-      ?? sheetContainer.querySelector<HTMLElement>('.jss_textarea');
-    const target = document.querySelector<HTMLElement>('td.editor input, td.editor textarea, td.editor [contenteditable="true"]')
-      ?? sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
-      ?? (editingCell ? sharedTextarea : null)
-      // A live trace showed jspreadsheet can close a cell's editor at the
-      // boundary without recreating any replacement input at all -- in
-      // that case there's no editor DOM to find, but reselecting the same
-      // cell (which still has a tabindex once editing ends) lets the
-      // user's next keystroke start a fresh edit on it, same as clicking
-      // it manually would.
-      ?? editingCell
-      ?? sheetContainer.querySelector<HTMLElement>('[tabindex]:not(.jss_textarea)');
     // TEMPORARY DIAGNOSTIC -- remove once the column-boundary typing bug is
     // confirmed fixed. Logs what this actually found/focused, and whether
     // focus genuinely landed there a tick later (jspreadsheet can steal it
@@ -6140,7 +6194,7 @@ export function buildReadOnlySpreadsheetHost(
       // eslint-disable-next-line no-console
       console.log('[SS-DEBUG] pickReclaimTarget', {
         found: target ? `${target.tagName}.${target.className}` : null,
-        viaEditingCellFallback: target === editingCell,
+        viaRescueInput: target === rescueInputEl,
         activeElementNow: document.activeElement === target ? 'MATCHES target' : document.activeElement?.tagName,
       });
     }, 0);
@@ -6750,6 +6804,7 @@ export function buildReadOnlySpreadsheetHost(
       delete document.body.dataset.spreadsheetCellEditing;
       if (reclaimFocusHandler) document.removeEventListener('focusin', reclaimFocusHandler);
       if (focusPollInterval !== null) clearInterval(focusPollInterval);
+      rescueInputEl?.remove();
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
     },
   };
