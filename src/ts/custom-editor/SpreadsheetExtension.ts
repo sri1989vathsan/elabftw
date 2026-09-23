@@ -898,18 +898,32 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // actually leaves the overlay instead of while a cell is still live.
   let keyupDispatchPending = false;
 
+  // spreadsheetInteractionActive only ever gets set from a pointerdown
+  // targeting the overlay -- inline-spreadsheet.ts's own cell-edit overlay
+  // (opened by typing directly over a selected cell, no click involved) is
+  // a separate, later addition that never fires one. Without this, a cell
+  // edit started that way was never recognized as "still interacting with
+  // the spreadsheet" here, so a pending autoresize could still run mid-
+  // edit -- shrinking/repositioning the iframe (and this overlay along
+  // with it, via its own position-sync loop reading a mid-transition rect)
+  // right while the user was typing, making the whole table appear to
+  // vanish. document.body.dataset.spreadsheetCellEditing is set/cleared
+  // reliably by that same overlay regardless of how the edit started.
+  const spreadsheetInteractionOngoing = (): boolean =>
+    spreadsheetInteractionActive || document.body.dataset.spreadsheetCellEditing === 'true';
+
   const runPendingAutoResize = (): void => {
-    if (keyupDispatchPending && !spreadsheetInteractionActive) {
+    if (keyupDispatchPending && !spreadsheetInteractionOngoing()) {
       keyupDispatchPending = false;
       editor.dispatch('keyup');
     }
-    if (!autoResizePending || spreadsheetInteractionActive) return;
+    if (!autoResizePending || spreadsheetInteractionOngoing()) return;
     autoResizePending = false;
     editor.execCommand('mceAutoResize');
   };
 
   const dispatchKeyupForAutosave = (): void => {
-    if (spreadsheetInteractionActive) {
+    if (spreadsheetInteractionOngoing()) {
       keyupDispatchPending = true;
       return;
     }
