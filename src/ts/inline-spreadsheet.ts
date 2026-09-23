@@ -5347,6 +5347,8 @@ export interface SpreadsheetHostHandle {
   host: HTMLDivElement;
   /** Properly tears down the jspreadsheet-ce instance; call before discarding the host. */
   destroy: () => void;
+  /** Keep an active cell editor attached to its cell, or commit it once the cell is genuinely out of view. */
+  syncActiveEditor: () => void;
   /**
    * Immediately commits any edit still waiting out the debounce below,
    * without tearing anything down. Call before reading the real table
@@ -6237,12 +6239,8 @@ export function buildReadOnlySpreadsheetHost(
     // data-x/data-y are coordinates *within* one table, not page-unique --
     // with more than one spreadsheet on the page, a document-wide query can
     // match a different table's cell that happens to share the same
-    // column/row index, positioned nowhere near this one. Scope to this
-    // instance's own sheetContainer first; only fall back to a document-
-    // wide search for the rarer case jspreadsheet has relocated this
-    // table's own structure outside it (see pickReclaimTarget()'s comment).
-    const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`)
-      ?? document.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
+    // column/row index. Always scope editing to this grid instance.
+    const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
     if (!cell) return;
     const rescue = ensureRescueInput();
     const cellRect = cell.getBoundingClientRect();
@@ -6276,18 +6274,15 @@ export function buildReadOnlySpreadsheetHost(
   // jspreadsheet's *entire* internal tab/container structure
   // ('.jtabs-content' > '.jss_container' > ... > the cell's own <input>)
   // as a fresh tree that lands completely outside both -- confirmed by
-  // that trace's full ancestor chain. Rather than chase wherever
-  // jspreadsheet decides to place that structure, search the whole
-  // document for the cell jspreadsheet itself marks as actively being
-  // edited (its own 'editor' class on the <td>) -- a signal that doesn't
-  // depend on DOM location at all.
+  // that trace's full ancestor chain. Coordinates repeat across tables, so
+  // recovery deliberately remains scoped to this grid instance instead of
+  // risking an editor belonging to another spreadsheet.
   const pickReclaimTarget = (): HTMLElement | null => {
     // Scoped to sheetContainer first, same reasoning as openCellEditor()'s
     // own comment: data-x/data-y aren't page-unique with more than one
     // spreadsheet present.
     const editingCell = lastEditingCol !== null && lastEditingRow !== null
       ? sheetContainer.querySelector<HTMLElement>(`td[data-x="${lastEditingCol}"][data-y="${lastEditingRow}"]`)
-        ?? document.querySelector<HTMLElement>(`td[data-x="${lastEditingCol}"][data-y="${lastEditingRow}"]`)
       : null;
     // A live trace showed this cell comes back with no classes and no
     // tabindex at all once jspreadsheet has fully closed its editor
@@ -6295,8 +6290,9 @@ export function buildReadOnlySpreadsheetHost(
     // tabindex is a silent no-op, which is why activeElement stayed <body>
     // every time this fallback was actually reached. Force it focusable
     // first, the same way jspreadsheet marks a selected cell itself.
-    let target = document.querySelector<HTMLElement>('td.editor input, td.editor textarea, td.editor [contenteditable="true"]')
-      ?? sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]');
+    let target = sheetContainer.querySelector<HTMLElement>(
+      'td.editor input, td.editor textarea, td.editor [contenteditable="true"], input:not(.jss_textarea), textarea:not(.jss_textarea), [contenteditable="true"]',
+    );
     // Nothing left to reclaim into that jspreadsheet itself still owns --
     // take over with the dedicated rescue textarea instead (see its own
     // comment for the four separate approaches already ruled out here).
@@ -6937,9 +6933,43 @@ export function buildReadOnlySpreadsheetHost(
     pendingChange = null;
   };
 
+  const syncActiveEditor = (): void => {
+    if (!rescueInputEl || rescueInputEl.hidden
+      || rescueInputCol === null || rescueInputRow === null) return;
+    const cell = sheetContainer.querySelector<HTMLElement>(
+      `td[data-x="${rescueInputCol}"][data-y="${rescueInputRow}"]`,
+    );
+    const gridRect = sheetContainer.getBoundingClientRect();
+    const cellRect = cell?.getBoundingClientRect();
+    const visible = !!cellRect
+      && cellRect.width > 0
+      && cellRect.height > 0
+      && cellRect.right > Math.max(0, gridRect.left)
+      && cellRect.left < Math.min(window.innerWidth, gridRect.right)
+      && cellRect.bottom > Math.max(0, gridRect.top)
+      && cellRect.top < Math.min(window.innerHeight, gridRect.bottom);
+    if (!visible || !cell) {
+      commitRescueInput();
+      return;
+    }
+    // The rescue textarea lives under document.body so it is not moved by
+    // the overlay's transform. Re-anchor it from the exact, table-scoped
+    // cell every frame while visible. Preserve its content-driven width,
+    // merely cap it at the viewport edge.
+    rescueInputEl.style.left = `${cellRect.left}px`;
+    rescueInputEl.style.top = `${cellRect.top}px`;
+    rescueInputEl.style.height = `${Math.max(cellRect.height, 20)}px`;
+    const desiredWidth = Math.max(cellRect.width, rescueInputEl.scrollWidth + 6, 60);
+    rescueInputEl.style.width = `${Math.min(
+      Math.max(60, window.innerWidth - cellRect.left - 8),
+      desiredWidth,
+    )}px`;
+  };
+
   return {
     host,
     flush,
+    syncActiveEditor,
     // Properly tears down the jspreadsheet-ce instance (not just removing
     // the DOM) -- needed by callers that mount/unmount this repeatedly as
     // a table scrolls in and out of view, rather than once per page load.
@@ -6948,6 +6978,10 @@ export function buildReadOnlySpreadsheetHost(
       // inside the 500ms debounce above) would otherwise be silently lost
       // when this grid is torn down for virtualization -- e.g. scrolling
       // away immediately after typing into a cell.
+      // The rescue editor updates the raw mirror continuously but only
+      // schedules the persisted table update when committed. Commit before
+      // flushing so virtualization cannot discard the last active value.
+      commitRescueInput();
       flush();
       delete document.body.dataset.spreadsheetCellEditing;
       if (reclaimFocusHandler) document.removeEventListener('focusin', reclaimFocusHandler);

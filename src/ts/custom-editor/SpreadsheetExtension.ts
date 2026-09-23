@@ -477,7 +477,7 @@ function growSpreadsheetColumnToFitCell(cell: HTMLTableCellElement): void {
 export function registerSpreadsheetExtension(editor: Editor): void {
   const tableIndentation = new TableIndentation(editor);
   // sort down icon from COLLECTION: Dazzle Line Icons LICENSE: CC Attribution License AUTHOR: Dazzle UI
-  editor.ui.registry.addIcon('sort-amount-down-alt', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 12h8m-8-4h8m-8 8h8M6 7v10m0 0-3-3m3 3 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'); // eslint-disable-line
+  editor.ui.registry.addIcon('sort-amount-down-alt', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 12h8m-8-4h8m-8 8h8M6 7v10m0 0-3-3m3 3 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
   editor.ui.registry.addIcon(
     'elabftw-spreadsheet-formula',
     '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 4v16M15 4v16M3 9.5h18M3 14.5h18" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M16.3 11.3h3.2M16.3 12.9h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
@@ -853,7 +853,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // document, tracked to the table's on-screen rect every animation frame.
   // Double-clicking the overlay opens the same edit modal as the dblclick
   // handler above -- it needs its own listener for that (see enhanceTable()).
-  const spreadsheetOverlays = new Map<HTMLTableElement, { el: HTMLElement; destroy: () => void; flush: () => void }>();
+  const spreadsheetOverlays = new Map<HTMLTableElement, {
+    el: HTMLElement;
+    destroy: () => void;
+    flush: () => void;
+    syncActiveEditor: () => void;
+  }>();
   const enhancedTables = new WeakSet<HTMLTableElement>();
   let overlaySyncRunning = false;
   // One persistent spacer per table, reserving room below it for the
@@ -987,7 +992,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // reported.
     try {
       const iframeRect = iframe.getBoundingClientRect();
-      Array.from(spreadsheetOverlays.entries()).forEach(([table, { el: overlay }]) => {
+      Array.from(spreadsheetOverlays.entries()).forEach(([table, { el: overlay, syncActiveEditor }]) => {
         try {
           if (!table.isConnected || !editor.getBody().contains(table)) {
             removeOverlay(table);
@@ -1150,17 +1155,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // now (e.g. inside a collapsed <details>) -- hide the overlay rather
           // than pin it to a stale, meaningless position.
           const shouldHide = tableRect.width === 0 && tableRect.height === 0;
-          if (shouldHide && overlay.style.display !== 'none') {
-            // TEMPORARY DIAGNOSTIC -- remove once the table-disappears-
-            // while-editing bug is confirmed fixed.
-            // eslint-disable-next-line no-console
-            console.log('[SS-DEBUG] hiding overlay: table rect is zero', {
-              tableConnected: table.isConnected,
-              iframeRect: { width: iframeRect.width, height: iframeRect.height },
-              spreadsheetCellEditing: document.body.dataset.spreadsheetCellEditing,
-            });
-          }
           overlay.style.display = shouldHide ? 'none' : '';
+          syncActiveEditor();
         } catch (error) {
           console.error('Failed to sync a spreadsheet overlay\'s position', error);
         }
@@ -1238,7 +1234,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // Set once buildReadOnlySpreadsheetHost returns below -- referenced
     // from inside onOpenFullEditor, one of the very options passed to it.
     let flushOverlay: (() => void) | null = null;
-    const { host: overlay, flush, destroy } = buildReadOnlySpreadsheetHost(extractFromTable(table), {
+    const {
+      host: overlay, flush, destroy, syncActiveEditor,
+    } = buildReadOnlySpreadsheetHost(extractFromTable(table), {
       editable: true,
       onChange: data => commitOverlayChange(table, data),
       onOpenFullEditor: () => {
@@ -1300,7 +1298,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       overlay.classList.add('has-open-context-menu');
     });
     document.body.appendChild(overlay);
-    spreadsheetOverlays.set(table, { el: overlay, destroy, flush });
+    spreadsheetOverlays.set(table, {
+      el: overlay, destroy, flush, syncActiveEditor,
+    });
     ensureSyncLoop();
   };
 
