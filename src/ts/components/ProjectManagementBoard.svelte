@@ -2343,7 +2343,7 @@
               <select id="pm-detail-project" class="form-control" bind:value={detailProjectId}>
                 <option value={null}>{t('Unfiled')}</option>
                 {#each projectPickerOptions as project (project.id)}
-                  <option value={project.id}>{project.parent_id !== null ? `    - ${project.name}` : project.name}</option>
+                  <option value={project.id}>{project.parent_id !== null ? `- ${project.name}` : project.name}</option>
                 {/each}
               </select>
             </div>
