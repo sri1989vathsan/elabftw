@@ -6399,15 +6399,24 @@ export function buildReadOnlySpreadsheetHost(
       // carries that class) instead of just this one's own container gives
       // every instance's handler the same answer, so the class reflects
       // "some spreadsheet grid has focus" rather than "this one does".
-      // Checking sheetContainer ancestry alone missed the same relocation
-      // pickReclaimTarget()'s own comment describes: once jspreadsheet
-      // rebuilds its tab/container structure outside sheetContainer, a
-      // focusin landing on that relocated input left this false, so the
-      // later reclaim (once focus fell to <body>) never ran at all. '.jss_
-      // container' ancestry is jspreadsheet's own wrapper for that whole
-      // structure and stays true regardless of where it's mounted.
-      const inSpreadsheetStructure = target instanceof Element
-        && (sheetContainer.contains(target) || target.closest('.jss_container') !== null);
+      // Checking sheetContainer ancestry alone misses jspreadsheet
+      // relocating its own tab/container structure outside sheetContainer
+      // during its (now mostly bypassed -- see openCellEditor) broken
+      // recreate cycle -- a generic '.jss_container' ancestry check was
+      // added to catch that, but '.jss_container' is jspreadsheet's own
+      // class name, identical across every table on the page, not scoped
+      // to this specific instance's own worksheet. With more than one
+      // spreadsheet on the page, that let every *other* table's handler
+      // also see focus as "in my own grid" whenever *any* table's
+      // structure got relocated and focused -- reported directly: editing
+      // one table near its column boundary jumped into a stale, unrelated
+      // cell from a completely different table, whichever one's poll
+      // interval happened to fire the reclaim. Back to strict sheetContainer
+      // ancestry: real editing now goes through openCellEditor's own
+      // rescue input (which never relies on this flag at all), so the
+      // narrower relocation case this was covering is a much smaller loss
+      // than cross-table interference.
+      const inSpreadsheetStructure = target instanceof Element && sheetContainer.contains(target);
       lastFocusWasInGrid = inSpreadsheetStructure;
       const inAnySpreadsheetGrid = target instanceof Element
         && (target.closest('.elabftw-spreadsheet-readonly-grid') !== null || inSpreadsheetStructure);
