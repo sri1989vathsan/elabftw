@@ -5985,7 +5985,21 @@ export function buildReadOnlySpreadsheetHost(
         formulaSelectionDrag.insertionEnd,
         'end',
       );
-      formulaInputDirty = true;
+      if (formulaSelectionDrag.input === formulaInputEl) {
+        formulaInputDirty = true;
+      } else if (formulaSelectionDrag.input === rescueInputEl
+        && rescueInputCol !== null && rescueInputRow !== null
+      ) {
+        // setRangeText() does not emit an input event. Keep the cell's raw
+        // value in sync explicitly so the selected reference survives a
+        // later click/Enter commit just like ordinary typed characters.
+        updateRawDataMirrorCell(
+          rescueInputCol,
+          rescueInputRow,
+          formulaSelectionDrag.input.value,
+          false,
+        );
+      }
       formulaSelectionDrag.insertionEnd = formulaSelectionDrag.insertionStart + label.length;
       const targetWorksheetForDrag = getMountedWorksheet(sheetContainer);
       targetWorksheetForDrag?.updateSelectionFromCoords?.(...range);
@@ -6129,8 +6143,15 @@ export function buildReadOnlySpreadsheetHost(
     rescueInputEl.hidden = true;
     rescueInputCol = null;
     rescueInputRow = null;
-    const cellName = `${colLabel(col)}${row + 1}`;
-    getMountedWorksheet(sheetContainer)?.setValue?.(cellName, value);
+    // Do not call worksheet.setValue() while a pointer click is moving to
+    // another cell. jspreadsheet redraws the old cell synchronously from
+    // setValue(), which invalidates the click target before its own
+    // selection handler runs. The raw mirror is the authoritative value for
+    // these stable editors; update the visible cell directly and use the
+    // normal debounced persistence path instead.
+    updateRawDataMirrorCell(col, row, value, false);
+    previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, value);
+    notifyFromMirror();
     delete document.body.dataset.spreadsheetCellEditing;
     document.body.classList.remove('elabftw-spreadsheet-editing');
   };
@@ -6164,6 +6185,11 @@ export function buildReadOnlySpreadsheetHost(
       // commitRescueInput() on blur/Enter is the only point this writes
       // out, mirroring commitFormulaInput()'s own commit-once pattern.
       updateRawDataMirrorCell(rescueInputCol, rescueInputRow, el.value, false);
+      // Grow only the temporary editor, not the underlying column. This
+      // keeps long text editable without making neighbouring saved cells
+      // paint over one another.
+      const viewportRoom = Math.max(60, window.innerWidth - el.getBoundingClientRect().left - 8);
+      el.style.width = `${Math.min(viewportRoom, Math.max(60, el.scrollWidth + 6))}px`;
     });
     // Enter commits and hands focus back to jspreadsheet's own grid --
     // mirroring how a normal cell edit closes -- rather than inserting a
@@ -6228,6 +6254,13 @@ export function buildReadOnlySpreadsheetHost(
     rescueInputCol = col;
     rescueInputRow = row;
     rescue.value = initialValue;
+    // Reset before measuring: otherwise a previous long edit leaves the
+    // shared textarea unnecessarily wide for the next cell.
+    rescue.style.width = `${Math.max(cellRect.width, 60)}px`;
+    rescue.style.width = `${Math.min(
+      Math.max(60, window.innerWidth - cellRect.left - 8),
+      Math.max(cellRect.width, rescue.scrollWidth + 6, 60),
+    )}px`;
     document.body.dataset.spreadsheetCellEditing = 'true';
     rescue.focus();
     if (selectAll) rescue.select();
@@ -6284,18 +6317,6 @@ export function buildReadOnlySpreadsheetHost(
       rescue.value = String(rawDataMirror[lastEditingRow]?.[lastEditingCol] ?? '');
       target = rescue;
     }
-    // TEMPORARY DIAGNOSTIC -- remove once the column-boundary typing bug is
-    // confirmed fixed. Logs what this actually found/focused, and whether
-    // focus genuinely landed there a tick later (jspreadsheet can steal it
-    // straight back).
-    window.setTimeout(() => {
-      // eslint-disable-next-line no-console
-      console.log('[SS-DEBUG] pickReclaimTarget', {
-        found: target ? `${target.tagName}.${target.className}` : null,
-        viaRescueInput: target === rescueInputEl,
-        activeElementNow: document.activeElement === target ? 'MATCHES target' : document.activeElement?.tagName,
-      });
-    }, 0);
     return target;
   };
   if (editable) {
@@ -6375,6 +6396,31 @@ export function buildReadOnlySpreadsheetHost(
   // registration order, actually preventing jspreadsheet from seeing the
   // keystroke at all rather than merely reacting after the fact.
   if (editable) {
+    // Commit the stable editor before jspreadsheet handles a click on a
+    // different cell. Because commitRescueInput() no longer redraws the
+    // worksheet, the original pointer event remains valid and jspreadsheet
+    // can update its selection normally on the very first click.
+    sheetContainer.addEventListener('pointerdown', event => {
+      if (!rescueInputEl || rescueInputEl.hidden
+        || rescueInputCol === null || rescueInputRow === null
+        || !(event.target instanceof Element)) return;
+      const targetCell = event.target.closest<HTMLElement>('td[data-x][data-y]');
+      if (!targetCell) return;
+      const targetCol = Number.parseInt(targetCell.dataset.x ?? '', 10);
+      const targetRow = Number.parseInt(targetCell.dataset.y ?? '', 10);
+      if (targetCol === rescueInputCol && targetRow === rescueInputRow) return;
+      // A cell click while the caret follows `=`, an operator or an open
+      // function is a formula-reference selection, not navigation away
+      // from the editing cell. Leave the rescue editor open so the
+      // mousedown formula-selection handler can insert/drag that range.
+      const selectionStart = rescueInputEl.selectionStart ?? rescueInputEl.value.length;
+      const formulaBeforeCaret = rescueInputEl.value.slice(0, selectionStart).trimStart();
+      const expectsCellReference = /^=\s*$/.test(formulaBeforeCaret)
+        || /[+\-*/(,;]\s*$/.test(formulaBeforeCaret);
+      if (expectsCellReference) return;
+      commitRescueInput();
+    }, true);
+
     window.addEventListener('keydown', event => {
       if (rescueInputCol !== null || !lastFocusWasInGrid || !lastKnownSelection) return;
       if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
@@ -6712,25 +6758,12 @@ export function buildReadOnlySpreadsheetHost(
         // queued persistence above; jspreadsheet applies the visual value on
         // its own clean close. Only repair a stale visual cell after its
         // editor has genuinely gone away.
-        const cellName = `${colLabel(changedCol)}${changedRow + 1}`;
-        window.setTimeout(() => {
-          if (cell.querySelector('input, textarea, [contenteditable="true"]')) return;
-          try {
-            // A live trace caught this throwing ("r.records[t] is
-            // undefined") when jspreadsheet's own close/reopen cycle at
-            // the column boundary rebuilds its internal row data between
-            // this being scheduled and it actually running -- the row this
-            // was targeting no longer exists at that index by then. Left
-            // uncaught, that silently aborted this repair (harmless on its
-            // own) but was also a sign that jspreadsheet's model had
-            // already moved on, right when the *next* keystroke needed a
-            // freshly-focused cell input to land in.
-            if (changedWorksheet?.getValue?.(cellName) === value) return;
-            changedWorksheet?.setValue?.(cellName, value);
-          } catch (error) {
-            console.error('Failed to repair a stale spreadsheet cell after an interrupted edit', error);
-          }
-        }, 0);
+        // Do not schedule a second setValue() repair here. The callback can
+        // run after jspreadsheet has replaced its row records, causing the
+        // stale `records[row]` crash and stealing focus/selection from the
+        // next cell. onbeforechange already updated the authoritative raw
+        // mirror and queued persistence; the grid owns its own visual
+        // commit, while the stable rescue editor updates its cell directly.
         return value;
       },
       onchange: notifyChange,

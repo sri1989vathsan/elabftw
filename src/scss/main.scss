@@ -3343,6 +3343,7 @@ body.html-tool-workspace-resizing * {
 }
 
 .inline-spreadsheet-container .jss_worksheet td[data-x][data-y] {
+  overflow: hidden;
   white-space: pre-wrap;
 }
 /* stylelint-enable selector-class-pattern */
@@ -3577,6 +3578,7 @@ body.html-tool-workspace-resizing * {
 }
 
 .elabftw-spreadsheet-readonly-view .jss_worksheet td[data-x][data-y] {
+  overflow: hidden;
   white-space: pre-wrap;
 }
 
