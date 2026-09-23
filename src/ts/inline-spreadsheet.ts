@@ -6369,32 +6369,22 @@ export function buildReadOnlySpreadsheetHost(
     };
     document.addEventListener('focusin', reclaimFocusHandler);
   }
-  // Typing directly over a selected-but-not-editing cell (no double-click)
-  // is the other common way to start an edit, alongside double-click above
-  // -- same interception principle: capture phase, ahead of jspreadsheet's
-  // own keydown handling (wherever it currently lives; a live trace showed
-  // this can be relocated outside sheetContainer entirely), so its own
-  // broken editor never opens from a typed character either.
-  // lastFocusWasInGrid (kept current above) scopes this to whichever
-  // instance's grid focus is actually in, when several spreadsheets share
-  // the page.
-  //
-  // Registered on window, not document: jspreadsheet-ce's own keydown
-  // handling is itself attached to document (see keyDownControls in its
-  // stack trace), at mount time -- before this code runs. Two capture-
-  // phase listeners on the *same* node fire in registration order
-  // regardless of which one calls stopImmediatePropagation, so a listener
-  // here on document would still run after jspreadsheet's own, letting its
-  // own (broken) edit-start partially run first and corrupt its internal
-  // state -- confirmed by a live trace: every click to select a *different*
-  // cell started crashing inside jspreadsheet's own mouseDownControls/
-  // closeEditor after typing (which goes through this listener) into one,
-  // but not after only double-clicking (which goes through the sheet
-  // Container-scoped listener above, a deeper node jspreadsheet can't
-  // register anything above). window is strictly higher than document in
-  // the capture chain, so a listener here always runs first regardless of
-  // registration order, actually preventing jspreadsheet from seeing the
-  // keystroke at all rather than merely reacting after the fact.
+  // Typing directly over a selected-but-not-editing cell used to also open
+  // this editor here (Excel-style, no double-click needed), via a keydown
+  // listener on window (capture phase, ahead of jspreadsheet's own keydown
+  // handling on document -- see git log for why window specifically).
+  // Removed: even preempting jspreadsheet's own handler that way still left
+  // its click/selection handling broken afterward -- a live trace-free but
+  // directly reported regression: single click could no longer select a
+  // cell, or drag-select a range, at all once this had fired once. Double-
+  // click to edit (below) doesn't have this problem -- it's scoped to
+  // sheetContainer, a node deep enough that jspreadsheet can't register
+  // anything above it in the capture chain, so it never even reaches
+  // jspreadsheet's own handling in the first place, rather than trying to
+  // outrace it. Selection and multi-select working reliably matters more
+  // than typing being possible without a double-click first, so this
+  // trade-off stands until a way to add it back without that collision is
+  // found.
   if (editable) {
     // Commit the stable editor before jspreadsheet handles a click on a
     // different cell. Because commitRescueInput() no longer redraws the
@@ -6419,22 +6409,6 @@ export function buildReadOnlySpreadsheetHost(
         || /[+\-*/(,;]\s*$/.test(formulaBeforeCaret);
       if (expectsCellReference) return;
       commitRescueInput();
-    }, true);
-
-    window.addEventListener('keydown', event => {
-      if (rescueInputCol !== null || !lastFocusWasInGrid || !lastKnownSelection) return;
-      if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
-      const [c1, r1, c2, r2] = lastKnownSelection;
-      if (c1 !== c2 || r1 !== r2) return;
-      // Neither formulaInputEl nor rescueInputEl live inside sheetContainer
-      // or '.jss_container' (both are appended to host directly), so
-      // lastFocusWasInGrid is already false while either has focus --
-      // deliberately not excluding jspreadsheet's own '.jss_textarea' here
-      // (which does match that check) the same way, since redirecting a
-      // keystroke typed there into this overlay too is the whole point.
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      openCellEditor(c1, r1, event.key, false);
     }, true);
   }
   // Belt-and-braces for the same gap: a live trace showed Firefox not
