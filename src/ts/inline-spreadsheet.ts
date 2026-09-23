@@ -6272,6 +6272,12 @@ export function buildReadOnlySpreadsheetHost(
     notifyFromMirror();
   };
 
+  const activeEditorCellStyles = new WeakMap<HTMLElement, {
+    overflow: string;
+    position: string;
+    zIndex: string;
+  }>();
+
   (jspreadsheet as unknown as JssFactory)(sheetContainer, {
     worksheets: [{
       data: displayValues,
@@ -6368,6 +6374,34 @@ export function buildReadOnlySpreadsheetHost(
         // the real control to the cell before dispatching oncreateeditor, so
         // resolve it from there instead.
         const editorControl = cell.querySelector<HTMLElement>('input, textarea, [contenteditable="true"]');
+        if (editorControl) {
+          activeEditorCellStyles.set(cell, {
+            overflow: cell.style.overflow,
+            position: cell.style.position,
+            zIndex: cell.style.zIndex,
+          });
+          const initialWidth = Math.max(1, cell.getBoundingClientRect().width - 2);
+          cell.style.overflow = 'visible';
+          cell.style.position = 'relative';
+          cell.style.zIndex = '3';
+          editorControl.style.boxSizing = 'border-box';
+          editorControl.style.left = '0';
+          editorControl.style.maxWidth = 'none';
+          editorControl.style.position = 'absolute';
+          editorControl.style.top = '0';
+          editorControl.style.zIndex = '4';
+          if (editorControl instanceof HTMLTextAreaElement) editorControl.wrap = 'off';
+
+          // Let the temporary editor overlay adjacent cells as text grows,
+          // like Excel, without changing the underlying column width. The
+          // scrollWidth is the full text width even when the visible input
+          // has reached the original cell boundary.
+          const fitEditorToContent = (): void => {
+            editorControl.style.width = `${Math.max(initialWidth, editorControl.scrollWidth + 4)}px`;
+          };
+          fitEditorToContent();
+          editorControl.addEventListener('input', fitEditorToContent);
+        }
         editorControl?.addEventListener('input', () => {
           const value = editorControl instanceof HTMLInputElement || editorControl instanceof HTMLTextAreaElement
             ? editorControl.value
@@ -6396,6 +6430,13 @@ export function buildReadOnlySpreadsheetHost(
         editorValue: CellValue,
       ): void => {
         delete document.body.dataset.spreadsheetCellEditing;
+        const originalCellStyle = activeEditorCellStyles.get(cell);
+        if (originalCellStyle) {
+          cell.style.overflow = originalCellStyle.overflow;
+          cell.style.position = originalCellStyle.position;
+          cell.style.zIndex = originalCellStyle.zIndex;
+          activeEditorCellStyles.delete(cell);
+        }
         notifyChange(changedWorksheet, cell, changedCol, changedRow, editorValue);
       },
       oninsertrow: notifyStructuralChange,
