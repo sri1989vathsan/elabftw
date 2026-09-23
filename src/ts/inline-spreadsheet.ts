@@ -6410,24 +6410,6 @@ export function buildReadOnlySpreadsheetHost(
       if (expectsCellReference) return;
       commitRescueInput();
     }, true);
-
-    // The rescue input is positioned once, at open time, from the cell's
-    // then-current getBoundingClientRect() -- it doesn't track scrolling
-    // the way the (constantly re-synced) read-only overlay does, so it's
-    // left visibly stranded at that stale position once the page, or the
-    // table's own horizontal scrollbar, moves the actual cell out from
-    // under it. Commit (not cancel, so nothing typed is lost) on any
-    // scroll anywhere -- 'scroll' doesn't bubble, but a capture-phase
-    // listener on window still sees one dispatched on any scrollable
-    // descendant, same technique as the pointerdown commit above. 'wheel'
-    // fires before the scroll it produces, so listening for that too closes
-    // the box a frame earlier than waiting for 'scroll' to catch up.
-    const commitRescueInputOnScroll = (): void => {
-      if (rescueInputCol === null) return;
-      commitRescueInput();
-    };
-    window.addEventListener('scroll', commitRescueInputOnScroll, true);
-    window.addEventListener('wheel', commitRescueInputOnScroll, true);
   }
   // Belt-and-braces for the same gap: a live trace showed Firefox not
   // always dispatching a 'focusin' event at all for the implicit "focused
