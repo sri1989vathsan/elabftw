@@ -6023,13 +6023,24 @@ export function buildReadOnlySpreadsheetHost(
 
     const onFormulaSelectionStart = (event: MouseEvent): void => {
       if (event.button !== 0) return;
-      const input = sheetContainer.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      // jspreadsheet's own native cell editor (td.editor > input/textarea)
+      // is one possible source of a formula being composed directly in a
+      // cell -- but cell editing normally goes through the rescue input
+      // now (see openCellEditor()'s own comment on why), which lives
+      // outside any <td> entirely, so it wouldn't otherwise match here at
+      // all and "click a cell to insert its reference" while typing a
+      // formula into a cell would silently do nothing.
+      const nativeInput = sheetContainer.querySelector<HTMLInputElement | HTMLTextAreaElement>(
         'td.editor[data-x][data-y] > input, td.editor[data-x][data-y] > textarea',
       );
+      const input = nativeInput
+        ?? (rescueInputEl && rescueInputCol !== null && rescueInputRow !== null && !rescueInputEl.hidden
+          ? rescueInputEl
+          : null);
       if (!input || event.target === input) return;
-      const formulaCell = input.closest<HTMLElement>('td.editor[data-x][data-y]');
-      const formulaCol = Number.parseInt(formulaCell?.dataset.x ?? '', 10);
-      const formulaRow = Number.parseInt(formulaCell?.dataset.y ?? '', 10);
+      const formulaCell = nativeInput?.closest<HTMLElement>('td.editor[data-x][data-y]');
+      const formulaCol = nativeInput ? Number.parseInt(formulaCell?.dataset.x ?? '', 10) : rescueInputCol;
+      const formulaRow = nativeInput ? Number.parseInt(formulaCell?.dataset.y ?? '', 10) : rescueInputRow;
       if (!Number.isInteger(formulaCol) || !Number.isInteger(formulaRow)) return;
       const startRange = getGridRangeFromTarget(event.target);
       if (!startRange) return;
