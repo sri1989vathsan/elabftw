@@ -6119,8 +6119,19 @@ export function buildReadOnlySpreadsheetHost(
     el.hidden = true;
     el.addEventListener('input', () => {
       if (rescueInputCol === null || rescueInputRow === null) return;
+      // Deliberately NOT notifyFromMirror() here, unlike every other write
+      // path in this file -- that's what the formula bar above already
+      // gets right and this didn't at first: notifyFromMirror() eventually
+      // triggers a real write back into the table plus editor.setDirty()/
+      // undoManager.add(), on every keystroke. With jspreadsheet's own
+      // editor already in a broken state (why this rescue path exists at
+      // all), that repeated write-and-react cycle turned into a visible
+      // loop -- focus kept getting yanked back to <body> and the same
+      // interrupted-edit crash kept re-firing every cycle. Track locally
+      // only while typing, the same as formulaInputDirty above; a single
+      // commitRescueInput() on blur/Enter is the only point this writes
+      // out, mirroring commitFormulaInput()'s own commit-once pattern.
       updateRawDataMirrorCell(rescueInputCol, rescueInputRow, el.value, false);
-      notifyFromMirror();
     });
     // Enter commits and hands focus back to jspreadsheet's own grid --
     // mirroring how a normal cell edit closes -- rather than inserting a
