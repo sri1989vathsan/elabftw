@@ -6137,6 +6137,32 @@ export function buildReadOnlySpreadsheetHost(
   let rescueInputEl: HTMLTextAreaElement | null = null;
   let rescueInputCol: number | null = null;
   let rescueInputRow: number | null = null;
+  const measureRescueInputWidth = (input: HTMLTextAreaElement): number => {
+    const style = window.getComputedStyle(input);
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) return 60;
+    context.font = [
+      style.fontStyle,
+      style.fontVariant,
+      style.fontWeight,
+      style.fontSize,
+      style.fontFamily,
+    ].join(' ');
+    const textWidth = input.value.split(/\r?\n/).reduce(
+      (maximum, line) => Math.max(maximum, context.measureText(line || ' ').width),
+      0,
+    );
+    const chrome = Number.parseFloat(style.paddingLeft)
+      + Number.parseFloat(style.paddingRight)
+      + Number.parseFloat(style.borderLeftWidth)
+      + Number.parseFloat(style.borderRightWidth);
+    // Fixed breathing room for the caret. Crucially this is based only on
+    // text metrics, never the textarea's current scrollWidth, so repeated
+    // synchronization frames cannot feed the previous width back into the
+    // next calculation and grow forever while idle.
+    return Math.ceil(textWidth + chrome + 8);
+  };
   const commitRescueInput = (): void => {
     if (!rescueInputEl || rescueInputCol === null || rescueInputRow === null) return;
     const col = rescueInputCol;
@@ -6191,7 +6217,7 @@ export function buildReadOnlySpreadsheetHost(
       // keeps long text editable without making neighbouring saved cells
       // paint over one another.
       const viewportRoom = Math.max(60, window.innerWidth - el.getBoundingClientRect().left - 8);
-      el.style.width = `${Math.min(viewportRoom, Math.max(60, el.scrollWidth + 6))}px`;
+      el.style.width = `${Math.min(viewportRoom, Math.max(60, measureRescueInputWidth(el)))}px`;
     });
     // Enter commits and hands focus back to jspreadsheet's own grid --
     // mirroring how a normal cell edit closes -- rather than inserting a
@@ -6257,7 +6283,7 @@ export function buildReadOnlySpreadsheetHost(
     rescue.style.width = `${Math.max(cellRect.width, 60)}px`;
     rescue.style.width = `${Math.min(
       Math.max(60, window.innerWidth - cellRect.left - 8),
-      Math.max(cellRect.width, rescue.scrollWidth + 6, 60),
+      Math.max(cellRect.width, measureRescueInputWidth(rescue), 60),
     )}px`;
     document.body.dataset.spreadsheetCellEditing = 'true';
     rescue.focus();
@@ -6959,7 +6985,7 @@ export function buildReadOnlySpreadsheetHost(
     rescueInputEl.style.left = `${cellRect.left}px`;
     rescueInputEl.style.top = `${cellRect.top}px`;
     rescueInputEl.style.height = `${Math.max(cellRect.height, 20)}px`;
-    const desiredWidth = Math.max(cellRect.width, rescueInputEl.scrollWidth + 6, 60);
+    const desiredWidth = Math.max(cellRect.width, measureRescueInputWidth(rescueInputEl), 60);
     rescueInputEl.style.width = `${Math.min(
       Math.max(60, window.innerWidth - cellRect.left - 8),
       desiredWidth,
