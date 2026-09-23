@@ -1179,21 +1179,36 @@
       notify.error('Enter a valid web address.');
       return;
     }
+    const entryId = detailEntry.id;
+    const explicitLabel = weblinkLabel.trim();
     addingWeblink = true;
     try {
-      const label = weblinkLabel.trim() || await fetchLinkPreviewLabel(url);
-      await ApiC.post(`${Model.Todolist}/${detailEntry.id}/entity_links`, {
+      const linkId = await ApiC.post2location(`${Model.Todolist}/${entryId}/entity_links`, {
         entity_type: 'weblink',
         url,
-        label,
+        label: explicitLabel || url,
       });
       weblinkUrl = '';
       weblinkLabel = '';
-      await loadEntityLinks(detailEntry.id);
+      await loadEntityLinks(entryId);
+      // No explicit label -- the link is already visible with the bare url
+      // as a placeholder; fetch the real title lookup in the background and
+      // patch it in once it resolves, rather than blocking this add on it.
+      if (!explicitLabel) void upgradeWeblinkLabel(entryId, linkId, url);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not add that link.');
     } finally {
       addingWeblink = false;
+    }
+  }
+
+  async function upgradeWeblinkLabel(entryId: number, linkId: number, url: string): Promise<void> {
+    try {
+      const label = await fetchLinkPreviewLabel(url);
+      await ApiC.patch(`${Model.Todolist}/${entryId}/entity_links/${linkId}`, { url, label });
+      if (detailEntry?.id === entryId) await loadEntityLinks(entryId);
+    } catch {
+      // Best effort -- the link keeps its bare-url fallback label.
     }
   }
 

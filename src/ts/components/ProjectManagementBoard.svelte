@@ -1438,27 +1438,48 @@
       notify.error('Enter a valid web address.');
       return;
     }
-    const label = weblinkLabel.trim() || await fetchLinkPreviewLabel(url);
+    const explicitLabel = weblinkLabel.trim();
     if (creatingNewTask) {
-      draftLinks = [...draftLinks, { url, label }];
+      const draftEntry = { url, label: explicitLabel || url };
+      draftLinks = [...draftLinks, draftEntry];
       weblinkUrl = '';
       weblinkLabel = '';
+      // No explicit label -- draftEntry is already visible with the bare
+      // url as a placeholder; fetch the real title in the background and
+      // patch this same entry in place once it resolves.
+      if (!explicitLabel) {
+        void fetchLinkPreviewLabel(url).then(label => {
+          draftLinks = draftLinks.map(entry => (entry === draftEntry ? { ...entry, label } : entry));
+        });
+      }
       return;
     }
+    const taskId = detailTask.id;
     addingWeblink = true;
     try {
-      await ApiC.post(`${Model.Todolist}/${detailTask.id}/entity_links`, {
+      const linkId = await ApiC.post2location(`${Model.Todolist}/${taskId}/entity_links`, {
         entity_type: 'weblink',
         url,
-        label,
+        label: explicitLabel || url,
       });
       weblinkUrl = '';
       weblinkLabel = '';
-      await loadEntityLinks(detailTask.id);
+      await loadEntityLinks(taskId);
+      if (!explicitLabel) void upgradeWeblinkLabel(taskId, linkId, url);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not add that link.');
     } finally {
       addingWeblink = false;
+    }
+  }
+
+  async function upgradeWeblinkLabel(taskId: number, linkId: number, url: string): Promise<void> {
+    try {
+      const label = await fetchLinkPreviewLabel(url);
+      await ApiC.patch(`${Model.Todolist}/${taskId}/entity_links/${linkId}`, { url, label });
+      if (detailTask?.id === taskId) await loadEntityLinks(taskId);
+    } catch {
+      // Best effort -- the link keeps its bare-url fallback label.
     }
   }
 
@@ -1826,21 +1847,33 @@
       notify.error('Enter a valid web address.');
       return;
     }
-    const label = projectWeblinkLabel.trim() || await fetchLinkPreviewLabel(url);
+    const explicitLabel = projectWeblinkLabel.trim();
+    const projectId = editingProject.id;
     addingProjectWeblink = true;
     try {
-      await ApiC.post(`${Model.TodolistProjects}/${editingProject.id}/entity_links`, {
+      const linkId = await ApiC.post2location(`${Model.TodolistProjects}/${projectId}/entity_links`, {
         entity_type: 'weblink',
         url,
-        label,
+        label: explicitLabel || url,
       });
       projectWeblinkUrl = '';
       projectWeblinkLabel = '';
-      await loadProjectEntityLinks(editingProject.id);
+      await loadProjectEntityLinks(projectId);
+      if (!explicitLabel) void upgradeProjectWeblinkLabel(projectId, linkId, url);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not add that link.');
     } finally {
       addingProjectWeblink = false;
+    }
+  }
+
+  async function upgradeProjectWeblinkLabel(projectId: number, linkId: number, url: string): Promise<void> {
+    try {
+      const label = await fetchLinkPreviewLabel(url);
+      await ApiC.patch(`${Model.TodolistProjects}/${projectId}/entity_links/${linkId}`, { url, label });
+      if (editingProject?.id === projectId) await loadProjectEntityLinks(projectId);
+    } catch {
+      // Best effort -- the link keeps its bare-url fallback label.
     }
   }
 
