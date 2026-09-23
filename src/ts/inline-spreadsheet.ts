@@ -6090,6 +6090,7 @@ export function buildReadOnlySpreadsheetHost(
   // mount code). Without retrying, this grid can render fully empty --
   // visually indistinguishable from the table having just vanished.
   const firstValue = String(displayValues[0]?.[0] ?? '');
+  let hydrationConfirmed = false;
   const looksHydrated = (): boolean => {
     if (!sheetContainer.isConnected) return true; // replaced/removed meanwhile -- stop retrying
     const bodyRows = sheetContainer.querySelectorAll('.jss_worksheet tbody tr').length;
@@ -6120,7 +6121,19 @@ export function buildReadOnlySpreadsheetHost(
 
   const hydrateUntilReady = (worksheet: JssInstance, attempt = 0): void => {
     if (!sheetContainer.isConnected) return;
-    if (looksHydrated() || attempt >= 30) {
+    // Reaching an interactive cell editor proves that jspreadsheet finished
+    // mounting, even if the first-cell text comparison below differs (for
+    // example because a formula is showing its computed result). Never let
+    // a delayed initialization retry call setData() over a live edit: that
+    // redraw removes the native input and makes typing appear to stop at an
+    // arbitrary character/column boundary. Keep this confirmation sticky so
+    // closing the editor cannot allow a later retry to restore stale initial
+    // data over the value the user just entered.
+    if (sheetContainer.querySelector('td.editor input, td.editor textarea, td.editor [contenteditable="true"]')) {
+      hydrationConfirmed = true;
+    }
+    if (hydrationConfirmed || looksHydrated() || attempt >= 30) {
+      hydrationConfirmed = true;
       applyCoordinateHeaderDimensions(sheetContainer, appearance);
       applyCoordinateHeaderStyle(sheetContainer, appearance);
       applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights);
