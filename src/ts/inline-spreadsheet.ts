@@ -3379,26 +3379,18 @@ export function openSpreadsheetModal(
     });
 
     const readRawData = (): AOA => {
-      const worksheetData = worksheet?.getData?.();
-      if (!Array.isArray(worksheetData)) {
-        return resizeData(rawDataMirror, working.rows, working.cols);
-      }
-      const rows = Math.max(working.rows, worksheetData.length, rawDataMirror.length);
+      // Every worksheet callback keeps rawDataMirror current, and the
+      // stable popup editor writes there directly. Treat it as the source
+      // of truth instead of merging plain values back from getData(): the
+      // latter can still contain the value from before a rescue edit and
+      // would otherwise silently overwrite the user's latest input.
+      const rows = Math.max(working.rows, rawDataMirror.length);
       const cols = Math.max(
         working.cols,
-        worksheetData.reduce((max, row) => Math.max(max, row?.length ?? 0), 0),
         rawDataMirror.reduce((max, row) => Math.max(max, row.length), 0),
       );
-      const currentData = resizeData(worksheetData, rows, cols);
-      const mirroredData = resizeData(rawDataMirror, rows, cols);
-      const mergedData = currentData.map((row, rowIndex) => row.map((value, colIndex) => {
-        const mirroredValue = mirroredData[rowIndex][colIndex];
-        return typeof mirroredValue === 'string' && mirroredValue.trimStart().startsWith('=')
-          ? mirroredValue
-          : value;
-      }));
-      rawDataMirror = mergedData;
-      return resizeData(mergedData, rows, cols);
+      rawDataMirror = resizeData(rawDataMirror, rows, cols);
+      return resizeData(rawDataMirror, rows, cols);
     };
 
     const updateRawDataMirrorCell = (
@@ -3661,6 +3653,14 @@ export function openSpreadsheetModal(
         formulaSelectionDrag.insertionEnd,
         'end',
       );
+      if (formulaSelectionDrag.input === rescueInputEl) {
+        updateRawDataMirrorCell(
+          formulaSelectionDrag.formulaCol,
+          formulaSelectionDrag.formulaRow,
+          formulaSelectionDrag.input.value,
+          false,
+        );
+      }
       formulaSelectionDrag.insertionEnd = formulaSelectionDrag.insertionStart + label.length;
       worksheet?.updateSelectionFromCoords?.(...safeRange);
       ui.formulaStatus.textContent = `${label} added to the formula. Press Enter to apply it.`;
@@ -3713,6 +3713,11 @@ export function openSpreadsheetModal(
         const formulaCell = input.closest<HTMLElement>('td.editor[data-x][data-y]');
         formulaCol = Number.parseInt(formulaCell?.dataset.x ?? '', 10);
         formulaRow = Number.parseInt(formulaCell?.dataset.y ?? '', 10);
+      } else if (rescueInputEl && !rescueInputEl.hidden
+        && rescueInputCol !== null && rescueInputRow !== null) {
+        input = rescueInputEl;
+        formulaCol = rescueInputCol;
+        formulaRow = rescueInputRow;
       } else if (document.activeElement === ui.formulaInput && formulaInputTarget) {
         input = ui.formulaInput;
         formulaCol = formulaInputTarget.col;
@@ -3920,24 +3925,7 @@ export function openSpreadsheetModal(
     let rescueInputEl: HTMLTextAreaElement | null = null;
     let rescueInputCol: number | null = null;
     let rescueInputRow: number | null = null;
-    // deferWrite defaults to true -- matches the inline overlay's own,
-    // already-fixed rescue input (see git log "Stabilize spreadsheet cell
-    // editing"): calling worksheet.setValue() *synchronously* while a
-    // pointerdown/blur triggered by a click on a *different* cell is still
-    // being processed makes jspreadsheet redraw the old cell mid-event,
-    // invalidating that same click's own target before jspreadsheet's own
-    // selection handler gets to it -- the exact cause of the reported
-    // "only able to double-click, not select" and the mouseDownControls/
-    // closeEditor crash, not an event-registration-order issue as
-    // originally (incorrectly) assumed here. Deferring the write with
-    // setTimeout(0) lets that click finish being processed first.
-    // Callers *not* triggered by a live click elsewhere in the grid (Enter,
-    // the Insert/Cancel buttons, mountSpreadsheet() about to tear down the
-    // current instance) pass false: nothing else is concurrently reading
-    // jspreadsheet's own model then, and several of them (readRawData(),
-    // the hasChanges check) need the value to have already landed there,
-    // synchronously, right after this returns.
-    const commitRescueInput = (deferWrite = true): void => {
+    const commitRescueInput = (): void => {
       if (!rescueInputEl || rescueInputCol === null || rescueInputRow === null) return;
       const col = rescueInputCol;
       const row = rescueInputRow;
@@ -3945,21 +3933,15 @@ export function openSpreadsheetModal(
       rescueInputEl.hidden = true;
       rescueInputCol = null;
       rescueInputRow = null;
-      // rawDataMirror already has this (kept current on every keystroke by
-      // the 'input' listener below) -- repainting it into the live grid
-      // directly is enough to keep what's on screen correct even before
-      // worksheet.setValue() itself lands.
+      // Never call worksheet.setValue() from this stable editor. Doing so
+      // redraws jspreadsheet during the pointer event that is selecting the
+      // next cell, invalidating that event's target and reintroducing the
+      // column-boundary/editor failure. The mirror is authoritative and the
+      // visible cell can be updated without rebuilding the grid.
       updateRawDataMirrorCell(col, row, value, false);
       if (sheetContainer) previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, value);
-      const writeToWorksheet = (): void => {
-        const cellName = `${colLabel(col)}${row + 1}`;
-        worksheet?.setValue?.(cellName, value);
-      };
-      if (deferWrite) {
-        window.setTimeout(writeToWorksheet, 0);
-      } else {
-        writeToWorksheet();
-      }
+      hasChanges = true;
+      scheduleFormulaResultRender();
     };
     const ensureRescueInput = (): HTMLTextAreaElement => {
       if (rescueInputEl) return rescueInputEl;
@@ -3989,9 +3971,7 @@ export function openSpreadsheetModal(
       el.addEventListener('keydown', event => {
         if (event.key === 'Enter' && !event.shiftKey) {
           event.preventDefault();
-          // Not deferred: a keyboard commit, not a click jspreadsheet is
-          // concurrently handling elsewhere.
-          commitRescueInput(false);
+          commitRescueInput();
         } else if (event.key === 'Escape') {
           // Cancel, not commit -- standard spreadsheet convention.
           event.preventDefault();
@@ -4000,11 +3980,7 @@ export function openSpreadsheetModal(
           rescueInputRow = null;
         }
       });
-      // Deferred write (see commitRescueInput's own comment): blur fires as
-      // a direct consequence of a click moving focus elsewhere, the same
-      // "concurrently being processed by jspreadsheet" case as the
-      // pointerdown handler below.
-      el.addEventListener('blur', () => commitRescueInput(true));
+      el.addEventListener('blur', commitRescueInput);
       // document.body, not ui.sheetHost/sheetContainer: jspreadsheet-ce
       // repaints the whole worksheet DOM on plenty of routine actions
       // (resize, style change, undo -- every mountSpreadsheet() call
@@ -4055,58 +4031,7 @@ export function openSpreadsheetModal(
         window.setTimeout(placeCaretAtEnd, 0);
       }
     };
-    // A double-click is mousedown->mouseup->click->mousedown->mouseup->
-    // click->dblclick -- 'dblclick' only fires last, well after
-    // jspreadsheet's own mousedown/click handling has already fully run for
-    // the *second* click of the pair. event.detail is the browser's own
-    // click-count for the current mouse button sequence, 2 on that second
-    // mousedown -- stop it from ever reaching jspreadsheet at all, before
-    // it has a chance to steal focus back from the rescue input. Doesn't
-    // cancel the dblclick event that still follows (an independently-
-    // dispatched event driven by the raw click gesture).
-    //
-    // Registered on window (see below), not ui.sheetHost: jspreadsheet-ce's
-    // own mousedown handling can itself be attached to document (confirmed
-    // for its keydown handling elsewhere in this file, via keyDownControls'
-    // own stack trace) -- a listener on ui.sheetHost, a *descendant* of
-    // document, would never run early enough to stop that. Reported
-    // directly: clicking a different cell afterward stopped being able to
-    // select it at all, the same class of jspreadsheet-internal-state
-    // corruption already root-caused for the inline overlay's identical
-    // mousedown interceptor. window sits above document in the capture
-    // chain, so a listener there always runs first regardless of where
-    // jspreadsheet's own happens to be. sheetContainer.contains(cell) below
-    // keeps this scoped to this modal's own single table instance.
-    const onCellDoubleClickMousedown = (event: MouseEvent): void => {
-      // TEMPORARY DIAGNOSTIC -- remove once the popup's double-click/
-      // select-other-cells bug is confirmed fixed.
-      // eslint-disable-next-line no-console
-      console.log('[SS-POPUP-DEBUG] mousedown', {
-        detail: event.detail,
-        button: event.button,
-        hasSheetContainer: !!sheetContainer,
-        targetTag: event.target instanceof Element ? event.target.tagName : String(event.target),
-        targetClass: event.target instanceof Element ? event.target.className : undefined,
-      });
-      if (event.button !== 0 || event.detail < 2 || !sheetContainer) return;
-      const cell = event.target instanceof Element
-        ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
-        : null;
-      // eslint-disable-next-line no-console
-      console.log('[SS-POPUP-DEBUG] mousedown cell match', {
-        foundCell: !!cell,
-        inContainer: cell ? sheetContainer.contains(cell) : null,
-      });
-      if (!cell || !sheetContainer.contains(cell)) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    };
     const onCellDoubleClick = (event: MouseEvent): void => {
-      // eslint-disable-next-line no-console
-      console.log('[SS-POPUP-DEBUG] dblclick fired', {
-        hasSheetContainer: !!sheetContainer,
-        targetTag: event.target instanceof Element ? event.target.tagName : String(event.target),
-      });
       if (event.button !== 0 || !sheetContainer) return;
       const cell = event.target instanceof Element
         ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
@@ -4115,8 +4040,6 @@ export function openSpreadsheetModal(
       const col = Number.parseInt(cell.dataset.x ?? '', 10);
       const row = Number.parseInt(cell.dataset.y ?? '', 10);
       if (!Number.isInteger(col) || !Number.isInteger(row)) return;
-      // eslint-disable-next-line no-console
-      console.log('[SS-POPUP-DEBUG] opening cell editor', { col, row });
       event.preventDefault();
       event.stopImmediatePropagation();
       const currentValue = rawDataMirror[row]?.[col];
@@ -4133,7 +4056,12 @@ export function openSpreadsheetModal(
       const targetCol = Number.parseInt(targetCell.dataset.x ?? '', 10);
       const targetRow = Number.parseInt(targetCell.dataset.y ?? '', 10);
       if (targetCol === rescueInputCol && targetRow === rescueInputRow) return;
-      commitRescueInput(true);
+      const selectionStart = rescueInputEl.selectionStart ?? rescueInputEl.value.length;
+      const formulaBeforeCaret = rescueInputEl.value.slice(0, selectionStart).trimStart();
+      const expectsCellReference = /^=\s*$/.test(formulaBeforeCaret)
+        || /[+\-*/(,;]\s*$/.test(formulaBeforeCaret);
+      if (expectsCellReference) return;
+      commitRescueInput();
     };
 
     // Same fit-to-content measurement as the per-column/per-row double-click
@@ -4185,15 +4113,6 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('keydown', onCellEditorKeydown, true);
     ui.sheetHost.addEventListener('dblclick', onColumnBoundaryDoubleClick, true);
     ui.sheetHost.addEventListener('dblclick', onRowBoundaryDoubleClick, true);
-    // window, not ui.sheetHost: see onCellDoubleClickMousedown's own comment.
-    // Both pointerdown and mousedown -- pointerdown fires first for the
-    // same physical click, so if jspreadsheet's own handler for this is
-    // actually bound to pointerdown rather than mousedown (still reported
-    // reproducing jspreadsheet's own mouseDownControls/closeEditor crash
-    // even with the mousedown-level interceptor in place), only stopping
-    // mousedown would never get a chance to run first.
-    window.addEventListener('pointerdown', onCellDoubleClickMousedown, true);
-    window.addEventListener('mousedown', onCellDoubleClickMousedown, true);
     ui.sheetHost.addEventListener('dblclick', onCellDoubleClick, true);
     ui.sheetHost.addEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
 
@@ -4213,7 +4132,7 @@ export function openSpreadsheetModal(
       // about to stop existing) rather than reaching worksheet.setValue().
       // Not deferred: this must land on the *current* worksheet before it
       // gets destroyed below, and nothing else is concurrently reading it.
-      commitRescueInput(false);
+      commitRescueInput();
       if (sheetContainer) {
         // Every caller here (applying a font/fill/alignment change, table
         // appearance, dimensions, undo, ...) destroys and recreates the
@@ -5250,8 +5169,6 @@ export function openSpreadsheetModal(
       ui.sheetHost.removeEventListener('paste', onSpreadsheetPaste, true);
       ui.sheetHost.removeEventListener('dblclick', onColumnBoundaryDoubleClick, true);
       ui.sheetHost.removeEventListener('dblclick', onRowBoundaryDoubleClick, true);
-      window.removeEventListener('pointerdown', onCellDoubleClickMousedown, true);
-      window.removeEventListener('mousedown', onCellDoubleClickMousedown, true);
       ui.sheetHost.removeEventListener('dblclick', onCellDoubleClick, true);
       ui.sheetHost.removeEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
       rescueInputEl?.remove();
@@ -5264,7 +5181,7 @@ export function openSpreadsheetModal(
       // reached worksheet.setValue() yet, wouldn't count toward hasChanges
       // at all -- Escape/Cancel could silently discard it without even
       // asking. Not deferred: hasChanges is read synchronously right below.
-      commitRescueInput(false);
+      commitRescueInput();
       if (!force && hasChanges && !window.confirm('Discard unsaved spreadsheet changes?')) return;
       cleanup();
       reject(new Error('cancelled'));
@@ -5328,7 +5245,7 @@ export function openSpreadsheetModal(
       // value sitting in an open rescue input, never having reached
       // worksheet.setValue() yet, would otherwise be silently dropped. Not
       // deferred: readRawData() is read synchronously right below.
-      commitRescueInput(false);
+      commitRescueInput();
       const rawData = readRawData();
       const rows = clampDimension(rawData.length, working.rows);
       const cols = clampDimension(
