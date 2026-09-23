@@ -6094,6 +6094,19 @@ export function buildReadOnlySpreadsheetHost(
     // every time this fallback was actually reached. Force it focusable
     // first, the same way jspreadsheet marks a selected cell itself.
     if (editingCell && editingCell.tabIndex < 0) editingCell.tabIndex = 0;
+    // Confirmed by a live trace: forcing DOM focus alone stops the cursor
+    // jumping away (the earlier symptom), but jspreadsheet still doesn't
+    // treat this as *its own* selected cell internally, so a keystroke
+    // right after doesn't restart editing -- typing still goes nowhere.
+    // updateSelectionFromCoords() is jspreadsheet's own public API for
+    // exactly this (already used elsewhere in this file for programmatic
+    // single-cell selection); call it so its internal selection state
+    // actually agrees with where DOM focus just landed.
+    if (editingCell && lastEditingCol !== null && lastEditingRow !== null) {
+      getMountedWorksheet(sheetContainer)?.updateSelectionFromCoords?.(
+        lastEditingCol, lastEditingRow, lastEditingCol, lastEditingRow,
+      );
+    }
     const target = document.querySelector<HTMLElement>('td.editor input, td.editor textarea, td.editor [contenteditable="true"]')
       ?? sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
       // A live trace showed jspreadsheet can close a cell's editor at the
