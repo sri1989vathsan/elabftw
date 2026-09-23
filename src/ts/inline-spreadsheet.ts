@@ -6069,6 +6069,7 @@ export function buildReadOnlySpreadsheetHost(
   // exclude the grid-level textarea explicitly.
   const pickReclaimTarget = (): HTMLElement | null => (
     sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
+    ?? host.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
     ?? sheetContainer.querySelector<HTMLElement>('[tabindex]:not(.jss_textarea)')
   );
   if (editable) {
@@ -6130,6 +6131,27 @@ export function buildReadOnlySpreadsheetHost(
       document.body.classList.add('elabftw-spreadsheet-editing');
       pickReclaimTarget()?.focus();
     }, 50);
+  }
+  // TEMPORARY DIAGNOSTIC -- remove once the column-boundary typing bug is
+  // root-caused. A prior trace showed keystrokes reaching a real, working
+  // <input> that was NOT inside sheetContainer -- this logs that input's
+  // full ancestor chain (up to document.body) so we can see exactly where
+  // jspreadsheet places it when recreated at the boundary, and widen
+  // pickReclaimTarget()'s search to actually find it.
+  if (editable) {
+    document.addEventListener('keydown', event => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.matches('input, textarea, [contenteditable="true"]')) return;
+      if (sheetContainer.contains(target) || host.contains(target)) return;
+      const chain: string[] = [];
+      let node: HTMLElement | null = target;
+      for (let i = 0; i < 8 && node; i += 1) {
+        chain.push(`${node.tagName}${node.className ? '.' + String(node.className).replace(/\s+/g, '.') : ''}`);
+        node = node.parentElement;
+      }
+      // eslint-disable-next-line no-console
+      console.log('[SS-DEBUG] editor input outside sheetContainer/host, ancestor chain:', chain);
+    }, true);
   }
   if (!editable) {
     const toggleCollapsed = (): void => {
