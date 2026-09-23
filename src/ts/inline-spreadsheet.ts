@@ -6347,8 +6347,17 @@ export function buildReadOnlySpreadsheetHost(
         // running) keeps what's on screen in step with what's already
         // been correctly saved, the same fix already applied to the
         // formula bar's own live-update case above.
+        // Never call setValue while jspreadsheet's native input is still in
+        // this cell. setValue redraws the cell and removes that input from
+        // the DOM, which made typing stop as soon as a mid-edit change took
+        // this path (most visibly around the original column boundary).
+        // onbeforechange has already copied the value into rawDataMirror and
+        // queued persistence above; jspreadsheet applies the visual value on
+        // its own clean close. Only repair a stale visual cell after its
+        // editor has genuinely gone away.
         const cellName = `${colLabel(changedCol)}${changedRow + 1}`;
         window.setTimeout(() => {
+          if (cell.querySelector('input, textarea, [contenteditable="true"]')) return;
           if (changedWorksheet?.getValue?.(cellName) === value) return;
           changedWorksheet?.setValue?.(cellName, value);
         }, 0);
