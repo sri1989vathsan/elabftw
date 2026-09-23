@@ -4038,6 +4038,20 @@ export function openSpreadsheetModal(
         worksheet = mountedWorksheet;
         scheduleCoordinateDimensionEnforcement();
 
+        // An open native cell editor is definitive proof that the popup
+        // worksheet finished mounting. Keep this sticky: once the user has
+        // started editing, the representative saved-cell comparison below
+        // can legitimately differ from mountedData. Treating that edit as
+        // failed hydration made the retry loop call setData(oldData), which
+        // removed the input as its text approached the column width and
+        // restored the previous value. This is the popup counterpart of the
+        // same guard used by buildReadOnlySpreadsheetHost().
+        if (mountedContainer.querySelector(
+          'td.editor input, td.editor textarea, td.editor [contenteditable="true"]',
+        )) {
+          hydrationComplete = true;
+        }
+
         // jspreadsheet v5 creates worksheets asynchronously. A worksheet can
         // therefore exist with its headers/minDimensions but without the data
         // supplied in the original configuration. Reapply the saved raw data
