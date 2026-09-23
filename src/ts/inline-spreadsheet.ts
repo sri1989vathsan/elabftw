@@ -6087,6 +6087,13 @@ export function buildReadOnlySpreadsheetHost(
     const editingCell = lastEditingCol !== null && lastEditingRow !== null
       ? document.querySelector<HTMLElement>(`td[data-x="${lastEditingCol}"][data-y="${lastEditingRow}"]`)
       : null;
+    // A live trace showed this cell comes back with no classes and no
+    // tabindex at all once jspreadsheet has fully closed its editor
+    // (deselected, not just stopped editing) -- .focus() on a <td> with no
+    // tabindex is a silent no-op, which is why activeElement stayed <body>
+    // every time this fallback was actually reached. Force it focusable
+    // first, the same way jspreadsheet marks a selected cell itself.
+    if (editingCell && editingCell.tabIndex < 0) editingCell.tabIndex = 0;
     const target = document.querySelector<HTMLElement>('td.editor input, td.editor textarea, td.editor [contenteditable="true"]')
       ?? sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
       // A live trace showed jspreadsheet can close a cell's editor at the
