@@ -137,14 +137,21 @@ final class UserNotifications extends AbstractRest
      */
     private function visibilityClause(): string
     {
+        // Only the three deadline/reminder-style categories below actually
+        // need a due-date gate -- they were joined by three more
+        // (need_validation, is_validated, onboarding_email) in the NOT IN
+        // list that excludes every gated category from the plain always-
+        // visible branch, but never had an OR branch of their own to let
+        // them back in: nothing in this clause matched them at all, so
+        // notifications of those three categories were permanently
+        // invisible (in the bell and the history page alike) regardless of
+        // is_ack. They don't need gating -- just leave them in the always-
+        // visible branch by not naming them here.
         return '(
             (category NOT IN (
                 :step_deadline,
                 :todo_deadline,
-                :order_reminder,
-                :need_validation,
-                :is_validated,
-                :onboarding_email
+                :order_reminder
             ))
             OR (
                 category = :step_deadline
@@ -166,9 +173,6 @@ final class UserNotifications extends AbstractRest
         $req->bindValue(':step_deadline', Notifications::StepDeadline->value, PDO::PARAM_INT);
         $req->bindValue(':todo_deadline', Notifications::TodoDeadline->value, PDO::PARAM_INT);
         $req->bindValue(':order_reminder', Notifications::OrderReminder->value, PDO::PARAM_INT);
-        $req->bindValue(':need_validation', Notifications::SelfNeedValidation->value, PDO::PARAM_INT);
-        $req->bindValue(':is_validated', Notifications::SelfIsValidated->value, PDO::PARAM_INT);
-        $req->bindValue(':onboarding_email', Notifications::OnboardingEmail->value, PDO::PARAM_INT);
         $req->bindValue(':notif_lead_time', StepDeadline::NOTIFLEADTIME, PDO::PARAM_INT);
     }
 
