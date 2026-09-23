@@ -61,6 +61,8 @@ use Elabftw\Make\MakeUniversignTimestamp;
 use Elabftw\Make\MakeUniversignTimestampDev;
 use Elabftw\Models\Links\AbstractExperimentsLinks;
 use Elabftw\Models\Links\AbstractItemsLinks;
+use Elabftw\Models\Notifications\AccessGranted;
+use Elabftw\Models\TeamGroups;
 use Elabftw\Models\Users\AnonymousUser;
 use Elabftw\Models\Users\Users;
 use Elabftw\Params\ContentParams;
@@ -85,7 +87,10 @@ use Symfony\Component\HttpFoundation\Request;
 use ZipArchive;
 
 use function array_column;
+use function array_diff;
 use function array_merge;
+use function array_unique;
+use function array_values;
 use function implode;
 use function in_array;
 use function is_bool;
@@ -1093,6 +1098,40 @@ abstract class AbstractEntity extends AbstractRest
         return $this->readOne();
     }
 
+    /**
+     * Expand a canread-style base permission + additive grant list (teams/
+     * teamgroups/users) into the concrete set of userids it grants access
+     * to, for diffing an old value against a new one to find newly-granted
+     * users (see update()). Full and Organization deliberately resolve to
+     * no *additional* grantees here -- expanding those to literally every
+     * user in the team/instance would turn one visibility change into an
+     * unbounded number of notifications rather than reflecting a
+     * considered decision to add specific people.
+     */
+    private function resolveGranteeUserIds(BasePermissions $base, array $can): array
+    {
+        $team = (int) ($this->entityData['team'] ?? 0);
+        $userIds = array();
+        if ($base === BasePermissions::Team) {
+            $userIds = array_merge($userIds, new TeamsHelper($team)->getAllUsersUserid());
+        } elseif ($base === BasePermissions::User) {
+            // Matches Permissions::getCan()'s own definition of what the
+            // "User" base scope additionally grants beyond the owner:
+            // admins of the entity's team.
+            $userIds = array_merge($userIds, new TeamsHelper($team)->getAllAdminsUserid());
+        }
+        foreach ($can['teams'] ?? array() as $teamId) {
+            $userIds = array_merge($userIds, new TeamsHelper((int) $teamId)->getAllUsersUserid());
+        }
+        foreach ($can['teamgroups'] ?? array() as $groupId) {
+            $userIds = array_merge($userIds, new TeamGroups($this->Users)->getMemberUserIds((int) $groupId));
+        }
+        foreach ($can['users'] ?? array() as $userId) {
+            $userIds[] = (int) $userId;
+        }
+        return array_values(array_unique($userIds));
+    }
+
     // Update an entity. The revision is saved before so it can easily compare old and new body.
     public function update(ContentParamsInterface $params): bool
     {
@@ -1129,6 +1168,26 @@ abstract class AbstractEntity extends AbstractRest
             throw new UnprocessableContentException(_('Cannot modify permissions immutability settings.'));
         }
 
+        // For an AccessGranted notification below: resolve the concrete
+        // set of userids gaining read access, diffing against the current
+        // (still pre-patch here) value -- $target is exactly one of
+        // canread/canread_base per call (see the AbstractEntity::patch()
+        // loop that calls update() once per changed key), so only one of
+        // canread/canread_base actually changes in $content; the other
+        // half of the pair keeps its existing value from $this->entityData.
+        $newlyGrantedUserIds = array();
+        if ($target === 'canread' || $target === 'canread_base') {
+            $oldBase = BasePermissions::from((int) ($this->entityData['canread_base'] ?? BasePermissions::UserOnly->value));
+            $oldCan = json_decode((string) ($this->entityData['canread'] ?? '{}'), true) ?? array();
+            $newBase = $target === 'canread_base' ? BasePermissions::from((int) $content) : $oldBase;
+            $newCan = $target === 'canread' ? (json_decode((string) $content, true) ?? array()) : $oldCan;
+            $newlyGrantedUserIds = array_diff(
+                $this->resolveGranteeUserIds($newBase, $newCan),
+                $this->resolveGranteeUserIds($oldBase, $oldCan),
+                array($this->Users->userData['userid']),
+            );
+        }
+
         // save a revision for body target
         if ($params->getTarget() === 'body' || $params->getTarget() === 'bodyappend') {
             $Config = Config::getConfig();
@@ -1151,13 +1210,25 @@ abstract class AbstractEntity extends AbstractRest
         $req->bindParam(':userid', $this->Users->userData['userid'], PDO::PARAM_INT);
         // custom_id could be used twice unintentionally
         try {
-            return $this->Db->execute($req);
+            $result = $this->Db->execute($req);
         } catch (DatabaseErrorException $e) {
             if ($params->getColumn() === 'custom_id' && $e->getErrorCode() === Db::DUPLICATE_CONSTRAINT_ERROR) {
                 throw new ImproperActionException(_('Custom ID is already used! Try another one.'));
             }
             throw $e;
         }
+        // Only after the write actually succeeded, and only for users who
+        // didn't already have access.
+        foreach ($newlyGrantedUserIds as $granteeUserId) {
+            new AccessGranted(
+                new Users((int) $granteeUserId),
+                $this->Users,
+                $this->entityType->toPage(),
+                $this->id,
+                (string) ($this->entityData['title'] ?? ''),
+            )->create();
+        }
+        return $result;
     }
 
     public function timestamp(): array

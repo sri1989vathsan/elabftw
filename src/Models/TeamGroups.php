@@ -230,6 +230,18 @@ final class TeamGroups extends AbstractRest
         return $req->fetchColumn() > '0';
     }
 
+    /**
+     * Get all the userid of members of a team group
+     */
+    public function getMemberUserIds(int $groupid): array
+    {
+        $sql = 'SELECT userid FROM users2team_groups WHERE groupid = :groupid';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':groupid', $groupid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return $req->fetchAll(PDO::FETCH_COLUMN);
+    }
+
     public function readGroupsFromUser(): array
     {
         $sql = 'SELECT DISTINCT team_groups.id, team_groups.name

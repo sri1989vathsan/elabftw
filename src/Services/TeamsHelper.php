@@ -125,6 +125,22 @@ final class TeamsHelper
         return $req->fetchAll(PDO::FETCH_COLUMN);
     }
 
+    /**
+     * Get all the userid of active members of the team (not just admins)
+     */
+    public function getAllUsersUserid(): array
+    {
+        $sql = 'SELECT users_id
+                FROM users2teams
+                WHERE users2teams.is_archived = 0
+                    AND users2teams.teams_id = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+
+        return $req->fetchAll(PDO::FETCH_COLUMN);
+    }
+
     public function getUsersCount(): int
     {
         $sql = 'SELECT COUNT(users_id) AS usernb

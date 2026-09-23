@@ -240,6 +240,19 @@ final class Transform
                     ),
                     $notif['created_at'],
                 ),
+            Notifications::AccessGranted =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d" data-href="%s?mode=view&amp;id=%d">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    $notif['body']['page'],
+                    (int) $notif['body']['entity_id'],
+                    sprintf(
+                        _('%s gave you access to: %s'),
+                        $notif['body']['granter_fullname'],
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    ),
+                    $notif['created_at'],
+                ),
             default => throw new ImproperActionException('Invalid notification type.'),
         };
     }
