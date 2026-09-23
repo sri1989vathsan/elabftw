@@ -253,6 +253,37 @@ final class Transform
                     ),
                     $notif['created_at'],
                 ),
+            // These three were permanently excluded from every result by a
+            // bug in UserNotifications::visibilityClause() (now fixed) --
+            // never having actually been reachable meant this match was
+            // never exercised for them either, and fell through to the
+            // default throw below. That's an uncaught exception right in
+            // the middle of rendering head.html's notification bell, which
+            // is included on every single page -- anyone with one of these
+            // (SelfIsValidated in particular: "your account was approved",
+            // which most non-admin users have) got a blank page on every
+            // load the moment the visibility fix shipped.
+            Notifications::SelfIsValidated =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    _('Your account was validated by an admin.'),
+                    $notif['created_at'],
+                ),
+            Notifications::SelfNeedValidation =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    _('Your account is pending admin validation.'),
+                    $notif['created_at'],
+                ),
+            Notifications::OnboardingEmail =>
+                sprintf(
+                    '<span data-action="ack-notif" data-id="%d">%s</span>' . $relativeMoment,
+                    (int) $notif['id'],
+                    _('An onboarding email was sent.'),
+                    $notif['created_at'],
+                ),
             default => throw new ImproperActionException('Invalid notification type.'),
         };
     }
