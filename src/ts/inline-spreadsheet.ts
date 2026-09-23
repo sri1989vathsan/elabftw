@@ -5187,6 +5187,31 @@ export function openSpreadsheetModal(
       reject(new Error('cancelled'));
     };
     const onKey = (event: KeyboardEvent): void => {
+      // Route ordinary type-to-edit through the same stable textarea used
+      // by double-click editing. Without this interception, a single click
+      // followed by typing still opens jspreadsheet's native editor, whose
+      // destroy/recreate behaviour at the column boundary is the original
+      // cause of typing stopping or focus moving to keyboard shortcuts.
+      const eventTarget = event.target;
+      const targetIsTextControl = eventTarget instanceof HTMLInputElement
+        || eventTarget instanceof HTMLTextAreaElement
+        || (eventTarget instanceof HTMLElement && eventTarget.isContentEditable);
+      const hasSingleCellSelection = selectedRange !== null
+        && selectedRange[0] === selectedRange[2]
+        && selectedRange[1] === selectedRange[3];
+      const isPrintableKey = event.key.length === 1
+        && !event.ctrlKey && !event.metaKey && !event.altKey;
+      if (!targetIsTextControl
+        && (!rescueInputEl || rescueInputEl.hidden)
+        && hasSingleCellSelection
+        && (isPrintableKey || event.key === 'Backspace' || event.key === 'Delete')) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const col = selectedRange![0];
+        const row = selectedRange![1];
+        openCellEditor(col, row, isPrintableKey ? event.key : '', false);
+        return;
+      }
       if (event.key === 'Escape') {
         // This runs in the capture phase on document, ahead of the rescue
         // input's own keydown listener (a descendant, necessarily later in
