@@ -5209,7 +5209,17 @@ export function openSpreadsheetModal(
         event.stopImmediatePropagation();
         const col = selectedRange![0];
         const row = selectedRange![1];
-        openCellEditor(col, row, isPrintableKey ? event.key : '', false);
+        // This handler also catches the first key after jspreadsheet drops
+        // its native editor at a column boundary. Seed the replacement from
+        // the authoritative mirror before applying that key; starting with
+        // event.key alone discarded everything typed before the takeover.
+        const currentValue = String(rawDataMirror[row]?.[col] ?? '');
+        const nextValue = isPrintableKey
+          ? `${currentValue}${event.key}`
+          : event.key === 'Backspace'
+            ? currentValue.slice(0, -1)
+            : '';
+        openCellEditor(col, row, nextValue, false);
         return;
       }
       if (event.key === 'Escape') {
