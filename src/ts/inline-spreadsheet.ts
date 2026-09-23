@@ -6060,16 +6060,20 @@ export function buildReadOnlySpreadsheetHost(
   // hidden grid-level '.jss_textarea' (used for the grid's own keyboard/
   // clipboard handling across every cell, not for entering text into any
   // one cell) -- a plain '[tabindex]' query has no way to prefer a genuine
-  // per-cell edit input over it, and matches whichever happens to sit
-  // first in the DOM. Once focus landed there, further keystrokes stopped
-  // visibly reaching any cell at all -- exactly "stops letting me type".
-  // Prefer an actual live cell editor if jspreadsheet has already
-  // recreated one; only fall back to a bare tabindex element (grid
-  // navigation, no cell actively being edited) otherwise, and even then
-  // exclude the grid-level textarea explicitly.
+  // per-cell edit input over it. A second trace then showed that scoping
+  // the search to sheetContainer (or even its own parent, host) doesn't
+  // work either: recreating its editor at the column boundary rebuilds
+  // jspreadsheet's *entire* internal tab/container structure
+  // ('.jtabs-content' > '.jss_container' > ... > the cell's own <input>)
+  // as a fresh tree that lands completely outside both -- confirmed by
+  // that trace's full ancestor chain. Rather than chase wherever
+  // jspreadsheet decides to place that structure, search the whole
+  // document for the cell jspreadsheet itself marks as actively being
+  // edited (its own 'editor' class on the <td>) -- a signal that doesn't
+  // depend on DOM location at all.
   const pickReclaimTarget = (): HTMLElement | null => (
-    sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
-    ?? host.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
+    document.querySelector<HTMLElement>('td.editor input, td.editor textarea, td.editor [contenteditable="true"]')
+    ?? sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
     ?? sheetContainer.querySelector<HTMLElement>('[tabindex]:not(.jss_textarea)')
   );
   if (editable) {
@@ -6106,9 +6110,18 @@ export function buildReadOnlySpreadsheetHost(
       // carries that class) instead of just this one's own container gives
       // every instance's handler the same answer, so the class reflects
       // "some spreadsheet grid has focus" rather than "this one does".
-      lastFocusWasInGrid = target instanceof Node && sheetContainer.contains(target);
+      // Checking sheetContainer ancestry alone missed the same relocation
+      // pickReclaimTarget()'s own comment describes: once jspreadsheet
+      // rebuilds its tab/container structure outside sheetContainer, a
+      // focusin landing on that relocated input left this false, so the
+      // later reclaim (once focus fell to <body>) never ran at all. '.jss_
+      // container' ancestry is jspreadsheet's own wrapper for that whole
+      // structure and stays true regardless of where it's mounted.
+      const inSpreadsheetStructure = target instanceof Element
+        && (sheetContainer.contains(target) || target.closest('.jss_container') !== null);
+      lastFocusWasInGrid = inSpreadsheetStructure;
       const inAnySpreadsheetGrid = target instanceof Element
-        && target.closest('.elabftw-spreadsheet-readonly-grid') !== null;
+        && (target.closest('.elabftw-spreadsheet-readonly-grid') !== null || inSpreadsheetStructure);
       document.body.classList.toggle('elabftw-spreadsheet-editing', inAnySpreadsheetGrid);
     };
     document.addEventListener('focusin', reclaimFocusHandler);
@@ -6131,27 +6144,6 @@ export function buildReadOnlySpreadsheetHost(
       document.body.classList.add('elabftw-spreadsheet-editing');
       pickReclaimTarget()?.focus();
     }, 50);
-  }
-  // TEMPORARY DIAGNOSTIC -- remove once the column-boundary typing bug is
-  // root-caused. A prior trace showed keystrokes reaching a real, working
-  // <input> that was NOT inside sheetContainer -- this logs that input's
-  // full ancestor chain (up to document.body) so we can see exactly where
-  // jspreadsheet places it when recreated at the boundary, and widen
-  // pickReclaimTarget()'s search to actually find it.
-  if (editable) {
-    document.addEventListener('keydown', event => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement) || !target.matches('input, textarea, [contenteditable="true"]')) return;
-      if (sheetContainer.contains(target) || host.contains(target)) return;
-      const chain: string[] = [];
-      let node: HTMLElement | null = target;
-      for (let i = 0; i < 8 && node; i += 1) {
-        chain.push(`${node.tagName}${node.className ? '.' + String(node.className).replace(/\s+/g, '.') : ''}`);
-        node = node.parentElement;
-      }
-      // eslint-disable-next-line no-console
-      console.log('[SS-DEBUG] editor input outside sheetContainer/host, ancestor chain:', chain);
-    }, true);
   }
   if (!editable) {
     const toggleCollapsed = (): void => {
