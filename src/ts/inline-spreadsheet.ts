@@ -4031,12 +4031,25 @@ export function openSpreadsheetModal(
     // it has a chance to steal focus back from the rescue input. Doesn't
     // cancel the dblclick event that still follows (an independently-
     // dispatched event driven by the raw click gesture).
+    //
+    // Registered on window (see below), not ui.sheetHost: jspreadsheet-ce's
+    // own mousedown handling can itself be attached to document (confirmed
+    // for its keydown handling elsewhere in this file, via keyDownControls'
+    // own stack trace) -- a listener on ui.sheetHost, a *descendant* of
+    // document, would never run early enough to stop that. Reported
+    // directly: clicking a different cell afterward stopped being able to
+    // select it at all, the same class of jspreadsheet-internal-state
+    // corruption already root-caused for the inline overlay's identical
+    // mousedown interceptor. window sits above document in the capture
+    // chain, so a listener there always runs first regardless of where
+    // jspreadsheet's own happens to be. sheetContainer.contains(cell) below
+    // keeps this scoped to this modal's own single table instance.
     const onCellDoubleClickMousedown = (event: MouseEvent): void => {
       if (event.button !== 0 || event.detail < 2 || !sheetContainer) return;
       const cell = event.target instanceof Element
         ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
         : null;
-      if (!cell) return;
+      if (!cell || !sheetContainer.contains(cell)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
     };
@@ -4117,7 +4130,8 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('keydown', onCellEditorKeydown, true);
     ui.sheetHost.addEventListener('dblclick', onColumnBoundaryDoubleClick, true);
     ui.sheetHost.addEventListener('dblclick', onRowBoundaryDoubleClick, true);
-    ui.sheetHost.addEventListener('mousedown', onCellDoubleClickMousedown, true);
+    // window, not ui.sheetHost: see onCellDoubleClickMousedown's own comment.
+    window.addEventListener('mousedown', onCellDoubleClickMousedown, true);
     ui.sheetHost.addEventListener('dblclick', onCellDoubleClick, true);
     ui.sheetHost.addEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
 
@@ -5172,7 +5186,7 @@ export function openSpreadsheetModal(
       ui.sheetHost.removeEventListener('paste', onSpreadsheetPaste, true);
       ui.sheetHost.removeEventListener('dblclick', onColumnBoundaryDoubleClick, true);
       ui.sheetHost.removeEventListener('dblclick', onRowBoundaryDoubleClick, true);
-      ui.sheetHost.removeEventListener('mousedown', onCellDoubleClickMousedown, true);
+      window.removeEventListener('mousedown', onCellDoubleClickMousedown, true);
       ui.sheetHost.removeEventListener('dblclick', onCellDoubleClick, true);
       ui.sheetHost.removeEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
       rescueInputEl?.remove();
@@ -6128,12 +6142,24 @@ export function buildReadOnlySpreadsheetHost(
     // event that still follows (a later, independently-dispatched event
     // driven by the raw click gesture, unaffected by another event type
     // having its propagation stopped).
-    sheetContainer.addEventListener('mousedown', event => {
+    // On window, not sheetContainer: jspreadsheet-ce's own mousedown
+    // handling for a click can itself be attached to document (confirmed
+    // for its keydown handling elsewhere in this file, via keyDownControls'
+    // own stack trace) -- a listener on sheetContainer, a *descendant* of
+    // document, would never run early enough to stop that, the same gap
+    // that made the keydown-based type-to-edit interception ineffective
+    // before it was removed entirely. window sits above document in the
+    // capture chain, so a listener here always runs first regardless of
+    // where jspreadsheet's own happens to be. sheetContainer.contains(cell)
+    // keeps this scoped to this table's own instance specifically, the
+    // same reasoning as pickReclaimTarget()'s own cross-table-collision
+    // fix -- a window-level listener otherwise sees every table's clicks.
+    window.addEventListener('mousedown', event => {
       if (event.button !== 0 || event.detail < 2) return;
       const cell = event.target instanceof Element
         ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
         : null;
-      if (!cell) return;
+      if (!cell || !sheetContainer.contains(cell)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
     }, true);
