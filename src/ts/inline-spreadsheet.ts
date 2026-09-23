@@ -5915,6 +5915,31 @@ export function buildReadOnlySpreadsheetHost(
       notifyStructuralChange(targetWorksheet);
     }, true);
 
+    // A double-click is mousedown->mouseup->click->mousedown->mouseup->
+    // click->dblclick -- 'dblclick' only fires last, well after
+    // jspreadsheet's own mousedown/click handling has already fully run for
+    // the *second* click of the pair. Stopping just 'dblclick' (below)
+    // therefore doesn't stop jspreadsheet's own selection/focus handling
+    // for that second click from running first -- reported as needing a
+    // further click after the double-click before typing actually landed
+    // in the rescue input (jspreadsheet's own handling, however briefly,
+    // still won that focus race). event.detail is the browser's own click-
+    // count for the current mouse button sequence, 2 on that second
+    // mousedown -- stop it from ever reaching jspreadsheet at all, before
+    // it has a chance to do anything. This doesn't cancel the dblclick
+    // event that still follows (a later, independently-dispatched event
+    // driven by the raw click gesture, unaffected by another event type
+    // having its propagation stopped).
+    sheetContainer.addEventListener('mousedown', event => {
+      if (event.button !== 0 || event.detail < 2) return;
+      const cell = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
+        : null;
+      if (!cell) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
+
     // Double-click a data cell to edit it -- intercepted ahead of
     // jspreadsheet's own dblclick-to-edit (capture phase, like the two
     // boundary-specific listeners just above, which stopImmediatePropagation
