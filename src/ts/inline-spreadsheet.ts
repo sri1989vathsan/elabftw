@@ -6056,6 +6056,21 @@ export function buildReadOnlySpreadsheetHost(
   // specifically); this covers plain in-grid cell editing, the more
   // common case and the one actually reported.
   let lastFocusWasInGrid = false;
+  // A live trace caught this reclaiming focus onto jspreadsheet's own
+  // hidden grid-level '.jss_textarea' (used for the grid's own keyboard/
+  // clipboard handling across every cell, not for entering text into any
+  // one cell) -- a plain '[tabindex]' query has no way to prefer a genuine
+  // per-cell edit input over it, and matches whichever happens to sit
+  // first in the DOM. Once focus landed there, further keystrokes stopped
+  // visibly reaching any cell at all -- exactly "stops letting me type".
+  // Prefer an actual live cell editor if jspreadsheet has already
+  // recreated one; only fall back to a bare tabindex element (grid
+  // navigation, no cell actively being edited) otherwise, and even then
+  // exclude the grid-level textarea explicitly.
+  const pickReclaimTarget = (): HTMLElement | null => (
+    sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
+    ?? sheetContainer.querySelector<HTMLElement>('[tabindex]:not(.jss_textarea)')
+  );
   if (editable) {
     reclaimFocusHandler = (event: FocusEvent): void => {
       if (composingFormula && formulaInputEl && event.target !== formulaInputEl) {
@@ -6071,17 +6086,7 @@ export function buildReadOnlySpreadsheetHost(
         // own filter checks this same flag as a fallback for exactly that
         // gap (see its own comment).
         document.body.classList.add('elabftw-spreadsheet-editing');
-        if (lastFocusWasInGrid) {
-          const reclaimTarget = sheetContainer.querySelector<HTMLElement>('[tabindex]');
-          // TEMPORARY DIAGNOSTIC -- see oncreateeditor's own comment.
-          // eslint-disable-next-line no-console
-          console.log('[SS-DEBUG] reclaimFocusHandler: body case, reclaiming onto', {
-            tag: reclaimTarget?.tagName,
-            className: reclaimTarget?.className,
-            isEditorInput: reclaimTarget?.matches('input, textarea, [contenteditable="true"]'),
-          });
-          reclaimTarget?.focus();
-        }
+        if (lastFocusWasInGrid) pickReclaimTarget()?.focus();
         return;
       }
       // lastFocusWasInGrid is deliberately scoped to *this* overlay's own
@@ -6123,36 +6128,8 @@ export function buildReadOnlySpreadsheetHost(
     focusPollInterval = setInterval(() => {
       if (!lastFocusWasInGrid || document.activeElement !== document.body) return;
       document.body.classList.add('elabftw-spreadsheet-editing');
-      const reclaimTarget = sheetContainer.querySelector<HTMLElement>('[tabindex]');
-      // TEMPORARY DIAGNOSTIC -- see oncreateeditor's own comment.
-      // eslint-disable-next-line no-console
-      console.log('[SS-DEBUG] focusPollInterval: reclaiming onto', {
-        tag: reclaimTarget?.tagName,
-        className: reclaimTarget?.className,
-        isEditorInput: reclaimTarget?.matches('input, textarea, [contenteditable="true"]'),
-      });
-      reclaimTarget?.focus();
+      pickReclaimTarget()?.focus();
     }, 50);
-  }
-  // TEMPORARY DIAGNOSTIC -- remove once the column-boundary typing bug is
-  // root-caused. Logs every keydown while a cell in this grid is being
-  // edited, so a live trace can show exactly where a keystroke's target
-  // lands (and whether it's still the cell's own input) right as typing
-  // appears to stop.
-  if (editable) {
-    document.addEventListener('keydown', event => {
-      if (document.body.dataset.spreadsheetCellEditing !== 'true') return;
-      const target = event.target;
-      // eslint-disable-next-line no-console
-      console.log('[SS-DEBUG] keydown', {
-        key: event.key,
-        targetTag: target instanceof Element ? target.tagName : String(target),
-        targetClass: target instanceof Element ? target.className : undefined,
-        isEditorInput: target instanceof Element && target.matches('input, textarea, [contenteditable="true"]'),
-        inSheetContainer: target instanceof Node && sheetContainer.contains(target),
-        defaultPrevented: event.defaultPrevented,
-      });
-    }, true);
   }
   if (!editable) {
     const toggleCollapsed = (): void => {
@@ -6459,8 +6436,21 @@ export function buildReadOnlySpreadsheetHost(
         const cellName = `${colLabel(changedCol)}${changedRow + 1}`;
         window.setTimeout(() => {
           if (cell.querySelector('input, textarea, [contenteditable="true"]')) return;
-          if (changedWorksheet?.getValue?.(cellName) === value) return;
-          changedWorksheet?.setValue?.(cellName, value);
+          try {
+            // A live trace caught this throwing ("r.records[t] is
+            // undefined") when jspreadsheet's own close/reopen cycle at
+            // the column boundary rebuilds its internal row data between
+            // this being scheduled and it actually running -- the row this
+            // was targeting no longer exists at that index by then. Left
+            // uncaught, that silently aborted this repair (harmless on its
+            // own) but was also a sign that jspreadsheet's model had
+            // already moved on, right when the *next* keystroke needed a
+            // freshly-focused cell input to land in.
+            if (changedWorksheet?.getValue?.(cellName) === value) return;
+            changedWorksheet?.setValue?.(cellName, value);
+          } catch (error) {
+            console.error('Failed to repair a stale spreadsheet cell after an interrupted edit', error);
+          }
         }, 0);
         return value;
       },
@@ -6474,17 +6464,6 @@ export function buildReadOnlySpreadsheetHost(
         editingCol: number,
         editingRow: number,
       ): void => {
-        // TEMPORARY DIAGNOSTIC -- remove once the column-boundary typing
-        // bug is root-caused. Logs every editor (re)creation so a live
-        // trace can distinguish a fresh edit start from jspreadsheet
-        // destroying/recreating its input mid-edit.
-        // eslint-disable-next-line no-console
-        console.log('[SS-DEBUG] oncreateeditor', {
-          col: editingCol,
-          row: editingRow,
-          cellHasEditorInput: !!cell.querySelector('input, textarea, [contenteditable="true"]'),
-          activeElement: document.activeElement?.tagName,
-        });
         // Jspreadsheet can temporarily move/replace its editor while text
         // reaches a cell boundary. Mark the whole editing lifetime rather
         // than relying on the input's current DOM ancestry, so application
