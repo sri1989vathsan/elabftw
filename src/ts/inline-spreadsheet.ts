@@ -6056,6 +6056,18 @@ export function buildReadOnlySpreadsheetHost(
   // specifically); this covers plain in-grid cell editing, the more
   // common case and the one actually reported.
   let lastFocusWasInGrid = false;
+  // The most recent cell oncreateeditor started editing -- kept as a
+  // fallback reclaim target for the case a live trace showed pickReclaim
+  // Target()'s other selectors can't handle: jspreadsheet sometimes closes
+  // a cell's editor at the column boundary (mouseDownControls -> closeEditor)
+  // without recreating a replacement input at all, leaving no '.editor'
+  // cell and no editor input anywhere in the document to find. Reselecting
+  // this same cell by its own data-x/data-y coordinates still works in
+  // that case -- jspreadsheet starts a fresh edit on the next keystroke a
+  // selected cell receives -- and doesn't depend on any editor DOM still
+  // existing.
+  let lastEditingCol: number | null = null;
+  let lastEditingRow: number | null = null;
   // A live trace caught this reclaiming focus onto jspreadsheet's own
   // hidden grid-level '.jss_textarea' (used for the grid's own keyboard/
   // clipboard handling across every cell, not for entering text into any
@@ -6072,8 +6084,18 @@ export function buildReadOnlySpreadsheetHost(
   // edited (its own 'editor' class on the <td>) -- a signal that doesn't
   // depend on DOM location at all.
   const pickReclaimTarget = (): HTMLElement | null => {
+    const editingCell = lastEditingCol !== null && lastEditingRow !== null
+      ? document.querySelector<HTMLElement>(`td[data-x="${lastEditingCol}"][data-y="${lastEditingRow}"]`)
+      : null;
     const target = document.querySelector<HTMLElement>('td.editor input, td.editor textarea, td.editor [contenteditable="true"]')
       ?? sheetContainer.querySelector<HTMLElement>('input, textarea:not(.jss_textarea), [contenteditable="true"]')
+      // A live trace showed jspreadsheet can close a cell's editor at the
+      // boundary without recreating any replacement input at all -- in
+      // that case there's no editor DOM to find, but reselecting the same
+      // cell (which still has a tabindex once editing ends) lets the
+      // user's next keystroke start a fresh edit on it, same as clicking
+      // it manually would.
+      ?? editingCell
       ?? sheetContainer.querySelector<HTMLElement>('[tabindex]:not(.jss_textarea)');
     // TEMPORARY DIAGNOSTIC -- remove once the column-boundary typing bug is
     // confirmed fixed. Logs what this actually found/focused, and whether
@@ -6083,6 +6105,7 @@ export function buildReadOnlySpreadsheetHost(
       // eslint-disable-next-line no-console
       console.log('[SS-DEBUG] pickReclaimTarget', {
         found: target ? `${target.tagName}.${target.className}` : null,
+        viaEditingCellFallback: target === editingCell,
         activeElementNow: document.activeElement === target ? 'MATCHES target' : document.activeElement?.tagName,
       });
     }, 0);
@@ -6495,6 +6518,8 @@ export function buildReadOnlySpreadsheetHost(
         // than relying on the input's current DOM ancestry, so application
         // shortcuts remain disabled throughout.
         document.body.dataset.spreadsheetCellEditing = 'true';
+        lastEditingCol = editingCol;
+        lastEditingRow = editingRow;
         // jspreadsheet-ce 5 passes null as the documented `input` callback
         // argument even for its default text editor. It has already appended
         // the real control to the cell before dispatching oncreateeditor, so
