@@ -882,11 +882,38 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   let autoResizeDebounce: ReturnType<typeof setTimeout> | null = null;
   let autoResizePending = false;
   let spreadsheetInteractionActive = false;
+  // commitOverlayChange() used to call editor.dispatch('keyup') unconditionally,
+  // every debounced edit, to reset the editor's own autosave timer (see its
+  // own comment). Dispatching a synthetic keyup directly on the editor also
+  // feeds TinyMCE's *built-in* autoresize plugin, which has its own internal
+  // keyup listener -- unconditional, and entirely outside the
+  // spreadsheetInteractionActive guard below (that guard only wraps this
+  // file's own explicit execCommand('mceAutoResize') calls). That plugin-
+  // internal resize focuses the iframe as part of its layout work, exactly
+  // like the guarded call does -- so it could still steal focus out of a
+  // cell mid-edit (most visibly as content neared the column's width,
+  // wherever the debounce happened to land), landing the next keystroke in
+  // the editor body instead, right after the table. Defer the dispatch the
+  // same way autoresize itself is deferred, so it fires once the user
+  // actually leaves the overlay instead of while a cell is still live.
+  let keyupDispatchPending = false;
 
   const runPendingAutoResize = (): void => {
+    if (keyupDispatchPending && !spreadsheetInteractionActive) {
+      keyupDispatchPending = false;
+      editor.dispatch('keyup');
+    }
     if (!autoResizePending || spreadsheetInteractionActive) return;
     autoResizePending = false;
     editor.execCommand('mceAutoResize');
+  };
+
+  const dispatchKeyupForAutosave = (): void => {
+    if (spreadsheetInteractionActive) {
+      keyupDispatchPending = true;
+      return;
+    }
+    editor.dispatch('keyup');
   };
 
   // Do not resize TinyMCE while jspreadsheet owns keyboard focus. TinyMCE's
@@ -903,7 +930,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const onSpreadsheetPointerDown = (event: PointerEvent): void => {
     spreadsheetInteractionActive = event.target instanceof Element
       && event.target.closest('.elabftw-spreadsheet-editor-overlay') !== null;
-    if (!autoResizePending || spreadsheetInteractionActive) return;
+    if ((!autoResizePending && !keyupDispatchPending) || spreadsheetInteractionActive) return;
     window.requestAnimationFrame(runPendingAutoResize);
   };
   document.addEventListener('pointerdown', onSpreadsheetPointerDown, true);
@@ -1155,8 +1182,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // main document, not the iframe) never fires those, so autosave never
     // saw this edit at all. 'keyup' is what that timer actually listens
     // for; dispatching it programmatically resets the same timer as if
-    // this had been typed directly into the editor.
-    editor.dispatch('keyup');
+    // this had been typed directly into the editor. Routed through
+    // dispatchKeyupForAutosave() (not a direct call) -- see its own
+    // comment for why this can't just fire immediately while a cell is
+    // still being edited.
+    dispatchKeyupForAutosave();
   };
 
   // Tears down and rebuilds the live overlay for a table whose underlying
@@ -1341,6 +1371,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       autoResizeDebounce = null;
     }
     autoResizePending = false;
+    keyupDispatchPending = false;
     spreadsheetInteractionActive = false;
   });
 
