@@ -3905,6 +3905,169 @@ export function openSpreadsheetModal(
       hasChanges = true;
     };
 
+    // The inline TinyMCE overlay's own cell editing bypasses jspreadsheet's
+    // native inline editor entirely for the same reason this does now: six
+    // separate live traces (see that file's own git log) confirmed
+    // jspreadsheet-ce's editor can permanently break -- typing simply stops
+    // -- once its own destroy/recreate cycle fires while text nears a
+    // column's width, and nothing short of not using it at all reliably
+    // recovers from that. Reported as reproducing here too, in this
+    // standalone popup, despite it sharing none of the overlay's TinyMCE-
+    // specific code -- confirming it's a plain jspreadsheet-ce issue, not
+    // anything specific to how the overlay embeds it. A dedicated rescue
+    // <textarea>, positioned over the cell and never owned or recreated by
+    // jspreadsheet, replaces it here the same way.
+    let rescueInputEl: HTMLTextAreaElement | null = null;
+    let rescueInputCol: number | null = null;
+    let rescueInputRow: number | null = null;
+    const commitRescueInput = (): void => {
+      if (!rescueInputEl || rescueInputCol === null || rescueInputRow === null) return;
+      const col = rescueInputCol;
+      const row = rescueInputRow;
+      const value = rescueInputEl.value;
+      rescueInputEl.hidden = true;
+      rescueInputCol = null;
+      rescueInputRow = null;
+      // worksheet.setValue() itself drives onchange (updates rawDataMirror,
+      // hasChanges, scheduleFormulaResultRender) the same as any other
+      // jspreadsheet-originated edit -- no separate write-back needed here.
+      const cellName = `${colLabel(col)}${row + 1}`;
+      worksheet?.setValue?.(cellName, value);
+    };
+    const ensureRescueInput = (): HTMLTextAreaElement => {
+      if (rescueInputEl) return rescueInputEl;
+      const el = document.createElement('textarea');
+      el.className = 'elabftw-spreadsheet-rescue-input';
+      el.spellcheck = false;
+      el.style.position = 'fixed';
+      el.style.zIndex = '2147483647';
+      el.style.boxSizing = 'border-box';
+      el.style.resize = 'none';
+      el.style.font = 'inherit';
+      el.style.padding = '2px 4px';
+      el.style.border = '2px solid #4285f4';
+      el.style.background = '#fff';
+      el.style.overflow = 'hidden';
+      el.hidden = true;
+      el.addEventListener('input', () => {
+        if (rescueInputCol === null || rescueInputRow === null) return;
+        // Track locally only while typing -- see commitRescueInput()'s own
+        // comment on why this deliberately never writes out on every
+        // keystroke (a live trace on the inline overlay's identical rescue
+        // input showed that turn into a visible focus-stealing loop).
+        updateRawDataMirrorCell(rescueInputCol, rescueInputRow, el.value, false);
+        const viewportRoom = Math.max(60, window.innerWidth - el.getBoundingClientRect().left - 8);
+        el.style.width = `${Math.min(viewportRoom, Math.max(60, measureRescueInputWidth(el)))}px`;
+      });
+      el.addEventListener('keydown', event => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          commitRescueInput();
+        } else if (event.key === 'Escape') {
+          // Cancel, not commit -- standard spreadsheet convention.
+          event.preventDefault();
+          el.hidden = true;
+          rescueInputCol = null;
+          rescueInputRow = null;
+        }
+      });
+      el.addEventListener('blur', commitRescueInput);
+      // document.body, not ui.sheetHost/sheetContainer: jspreadsheet-ce
+      // repaints the whole worksheet DOM on plenty of routine actions
+      // (resize, style change, undo -- every mountSpreadsheet() call
+      // destroys and recreates sheetContainer's entire contents), which
+      // would otherwise destroy this input along with everything else the
+      // instant any of that happens while it's open.
+      document.body.appendChild(el);
+      rescueInputEl = el;
+      return el;
+    };
+    const openCellEditor = (col: number, row: number, initialValue: string, selectAll: boolean): void => {
+      if (!sheetContainer) return;
+      const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
+      if (!cell) return;
+      const rescue = ensureRescueInput();
+      const cellRect = cell.getBoundingClientRect();
+      rescue.style.left = `${cellRect.left}px`;
+      rescue.style.top = `${cellRect.top}px`;
+      rescue.style.height = `${Math.max(cellRect.height, 20)}px`;
+      rescue.hidden = false;
+      rescueInputCol = col;
+      rescueInputRow = row;
+      rescue.value = initialValue;
+      // Reset before measuring: otherwise a previous long edit leaves the
+      // shared textarea unnecessarily wide for the next cell.
+      rescue.style.width = `${Math.max(cellRect.width, 60)}px`;
+      rescue.style.width = `${Math.min(
+        Math.max(60, window.innerWidth - cellRect.left - 8),
+        Math.max(cellRect.width, measureRescueInputWidth(rescue), 60),
+      )}px`;
+      rescue.focus();
+      if (selectAll) {
+        rescue.select();
+      } else {
+        const placeCaretAtEnd = (): void => {
+          if (rescue.hidden || rescueInputCol !== col || rescueInputRow !== row) return;
+          rescue.focus({ preventScroll: true });
+          rescue.setSelectionRange(rescue.value.length, rescue.value.length);
+        };
+        placeCaretAtEnd();
+        // The browser can finish the originating double-click's native text
+        // selection after this handler returns, selecting the newly-created
+        // textarea's whole value -- reassert the insertion caret once the
+        // next paint, and once more as a fresh macrotask (not reliably
+        // caught by requestAnimationFrame alone), so typing edits/appends
+        // instead of replacing existing text.
+        window.requestAnimationFrame(placeCaretAtEnd);
+        window.setTimeout(placeCaretAtEnd, 0);
+      }
+    };
+    // A double-click is mousedown->mouseup->click->mousedown->mouseup->
+    // click->dblclick -- 'dblclick' only fires last, well after
+    // jspreadsheet's own mousedown/click handling has already fully run for
+    // the *second* click of the pair. event.detail is the browser's own
+    // click-count for the current mouse button sequence, 2 on that second
+    // mousedown -- stop it from ever reaching jspreadsheet at all, before
+    // it has a chance to steal focus back from the rescue input. Doesn't
+    // cancel the dblclick event that still follows (an independently-
+    // dispatched event driven by the raw click gesture).
+    const onCellDoubleClickMousedown = (event: MouseEvent): void => {
+      if (event.button !== 0 || event.detail < 2 || !sheetContainer) return;
+      const cell = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
+        : null;
+      if (!cell) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    const onCellDoubleClick = (event: MouseEvent): void => {
+      if (event.button !== 0 || !sheetContainer) return;
+      const cell = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
+        : null;
+      if (!cell) return;
+      const col = Number.parseInt(cell.dataset.x ?? '', 10);
+      const row = Number.parseInt(cell.dataset.y ?? '', 10);
+      if (!Number.isInteger(col) || !Number.isInteger(row)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const currentValue = rawDataMirror[row]?.[col];
+      openCellEditor(col, row, currentValue === undefined || currentValue === null ? '' : String(currentValue), false);
+    };
+    // Commit before jspreadsheet handles a click on a different cell, same
+    // as the inline overlay's own equivalent listener.
+    const onCellPointerDownAwayFromRescueInput = (event: PointerEvent): void => {
+      if (!rescueInputEl || rescueInputEl.hidden
+        || rescueInputCol === null || rescueInputRow === null
+        || !(event.target instanceof Element)) return;
+      const targetCell = event.target.closest<HTMLElement>('td[data-x][data-y]');
+      if (!targetCell) return;
+      const targetCol = Number.parseInt(targetCell.dataset.x ?? '', 10);
+      const targetRow = Number.parseInt(targetCell.dataset.y ?? '', 10);
+      if (targetCol === rescueInputCol && targetRow === rescueInputRow) return;
+      commitRescueInput();
+    };
+
     // Same fit-to-content measurement as the per-column/per-row double-click
     // shortcuts above, just applied to every column and row at once. DOM-
     // only (no worksheet.setWidth()/setHeight() calls in the loop) -- with
@@ -3954,6 +4117,9 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('keydown', onCellEditorKeydown, true);
     ui.sheetHost.addEventListener('dblclick', onColumnBoundaryDoubleClick, true);
     ui.sheetHost.addEventListener('dblclick', onRowBoundaryDoubleClick, true);
+    ui.sheetHost.addEventListener('mousedown', onCellDoubleClickMousedown, true);
+    ui.sheetHost.addEventListener('dblclick', onCellDoubleClick, true);
+    ui.sheetHost.addEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
 
     const updateSizeControls = (rows: number, cols: number): void => {
       ui.rowsInput.value = String(rows);
@@ -3965,6 +4131,11 @@ export function openSpreadsheetModal(
     };
 
     const mountSpreadsheet = (spreadsheet: SpreadsheetData): void => {
+      // Every caller here destroys and recreates sheetContainer's entire
+      // contents -- an edit still sitting in the rescue input would
+      // otherwise be silently orphaned (tracking a cell element that's
+      // about to stop existing) rather than reaching worksheet.setValue().
+      commitRescueInput();
       if (sheetContainer) {
         // Every caller here (applying a font/fill/alignment change, table
         // appearance, dimensions, undo, ...) destroys and recreates the
@@ -5001,17 +5172,39 @@ export function openSpreadsheetModal(
       ui.sheetHost.removeEventListener('paste', onSpreadsheetPaste, true);
       ui.sheetHost.removeEventListener('dblclick', onColumnBoundaryDoubleClick, true);
       ui.sheetHost.removeEventListener('dblclick', onRowBoundaryDoubleClick, true);
+      ui.sheetHost.removeEventListener('mousedown', onCellDoubleClickMousedown, true);
+      ui.sheetHost.removeEventListener('dblclick', onCellDoubleClick, true);
+      ui.sheetHost.removeEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
+      rescueInputEl?.remove();
       document.removeEventListener('keydown', onKey, true);
       ui.overlay.remove();
       restoreFocus(openerFocus);
     };
     const cancel = (force = false): void => {
+      // Otherwise an edit still sitting in the rescue input, never having
+      // reached worksheet.setValue() yet, wouldn't count toward hasChanges
+      // at all -- Escape/Cancel could silently discard it without even
+      // asking.
+      commitRescueInput();
       if (!force && hasChanges && !window.confirm('Discard unsaved spreadsheet changes?')) return;
       cleanup();
       reject(new Error('cancelled'));
     };
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // This runs in the capture phase on document, ahead of the rescue
+        // input's own keydown listener (a descendant, necessarily later in
+        // capture order) -- without this check, Escape while editing a
+        // single cell would close the *entire* modal before that listener's
+        // own "cancel just this cell" handling ever got a chance to run.
+        if (rescueInputEl && !rescueInputEl.hidden) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          rescueInputEl.hidden = true;
+          rescueInputCol = null;
+          rescueInputRow = null;
+          return;
+        }
         // Escape is easy to hit out of habit. Unlike the explicit Cancel
         // button, guard it the same way backdrop clicks already are: don't
         // silently discard a fully-formatted spreadsheet.
@@ -5051,6 +5244,11 @@ export function openSpreadsheetModal(
     };
 
     ui.insertBtn.addEventListener('click', () => {
+      // readRawData() below only prefers rawDataMirror's own value over
+      // worksheet.getData()'s for a formula still being composed -- a plain
+      // value sitting in an open rescue input, never having reached
+      // worksheet.setValue() yet, would otherwise be silently dropped.
+      commitRescueInput();
       const rawData = readRawData();
       const rows = clampDimension(rawData.length, working.rows);
       const cols = clampDimension(
@@ -6162,32 +6360,6 @@ export function buildReadOnlySpreadsheetHost(
   let rescueInputEl: HTMLTextAreaElement | null = null;
   let rescueInputCol: number | null = null;
   let rescueInputRow: number | null = null;
-  const measureRescueInputWidth = (input: HTMLTextAreaElement): number => {
-    const style = window.getComputedStyle(input);
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    if (!context) return 60;
-    context.font = [
-      style.fontStyle,
-      style.fontVariant,
-      style.fontWeight,
-      style.fontSize,
-      style.fontFamily,
-    ].join(' ');
-    const textWidth = input.value.split(/\r?\n/).reduce(
-      (maximum, line) => Math.max(maximum, context.measureText(line || ' ').width),
-      0,
-    );
-    const chrome = Number.parseFloat(style.paddingLeft)
-      + Number.parseFloat(style.paddingRight)
-      + Number.parseFloat(style.borderLeftWidth)
-      + Number.parseFloat(style.borderRightWidth);
-    // Fixed breathing room for the caret. Crucially this is based only on
-    // text metrics, never the textarea's current scrollWidth, so repeated
-    // synchronization frames cannot feed the previous width back into the
-    // next calculation and grow forever while idle.
-    return Math.ceil(textWidth + chrome + 8);
-  };
   const commitRescueInput = (): void => {
     if (!rescueInputEl || rescueInputCol === null || rescueInputRow === null) return;
     const col = rescueInputCol;
@@ -7316,6 +7488,36 @@ function colLabel(index: number): string {
     current = Math.floor(current / 26) - 1;
   } while (current >= 0);
   return label;
+}
+
+// Shared by both the inline overlay's and the popup's own rescue <textarea>
+// (see each one's own "rescue input" comment for why jspreadsheet's native
+// cell editor is bypassed for typing at all). A pure function of the
+// textarea's current value and font -- never its own scrollWidth, so
+// repeated synchronization frames cannot feed the previous width back into
+// the next calculation and grow forever while idle.
+function measureRescueInputWidth(input: HTMLTextAreaElement): number {
+  const style = window.getComputedStyle(input);
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) return 60;
+  context.font = [
+    style.fontStyle,
+    style.fontVariant,
+    style.fontWeight,
+    style.fontSize,
+    style.fontFamily,
+  ].join(' ');
+  const textWidth = input.value.split(/\r?\n/).reduce(
+    (maximum, line) => Math.max(maximum, context.measureText(line || ' ').width),
+    0,
+  );
+  const chrome = Number.parseFloat(style.paddingLeft)
+    + Number.parseFloat(style.paddingRight)
+    + Number.parseFloat(style.borderLeftWidth)
+    + Number.parseFloat(style.borderRightWidth);
+  // Fixed breathing room for the caret.
+  return Math.ceil(textWidth + chrome + 8);
 }
 
 function escapeHTML(value: string): string {
