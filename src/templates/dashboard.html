@@ -152,7 +152,7 @@
           </div>
           {% if announcement.body %}
             <div class='announcement-card-body announcement-feed-body-clamp' data-announcement-body>{{ announcement.body_html|raw }}</div>
-            <a href='announcements.php#announcement-{{ announcement.id }}' class='smallgray d-none' data-announcement-readmore>{{ 'Read more…'|trans }}</a>
+            <a href='announcements.php#announcement-{{ announcement.id }}' class='smallgray d-none' data-announcement-readmore data-label-more='{{ 'Show more'|trans }}' data-label-less='{{ 'Show less'|trans }}'>{{ 'Show more'|trans }}</a>
           {% endif %}
           {% if announcement.image_url %}
             <a href='{{ announcement.image_url }}' target='_blank' rel='noopener'>

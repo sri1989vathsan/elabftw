@@ -160,12 +160,13 @@ body::before {
 
 /* dashboard "Announcements" feed: clamp long bodies to a few lines instead
  * of letting one long announcement push everything else out of view; the
- * "Read more…" link (toggled in JS once we know the text actually overflows)
- * takes the reader to the full text on the history page. */
+ * "Show more" link (toggled in JS once we know the text actually overflows,
+ * see refreshAnnouncementWidgets() in common.ts) expands it in place by
+ * removing this class, rather than navigating to the history page. */
 .announcement-feed-body-clamp {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 6;
   overflow: hidden;
 }
 

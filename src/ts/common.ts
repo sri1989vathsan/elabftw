@@ -517,13 +517,29 @@ export function refreshAnnouncementWidgets(): void {
     ApiC.patch(`${Model.User}/me/${Model.Notification}/${notifId}`, { is_ack: 1 });
   });
 
-  // dashboard announcement feed: only show the "Read more…" link for an
+  // dashboard announcement feed: only show the "Show more" link for an
   // entry whose body text actually got clamped, not every entry
   document.querySelectorAll<HTMLElement>('[data-announcement-body]').forEach((body) => {
-    body.nextElementSibling?.classList.add('d-none');
+    const readMore = body.nextElementSibling;
+    if (!readMore) return;
+    readMore.classList.add('d-none');
     if (body.scrollHeight > body.clientHeight + 1) {
-      body.nextElementSibling?.classList.remove('d-none');
+      readMore.classList.remove('d-none');
     }
+    // Expand/collapse the full text in place instead of navigating to the
+    // history page -- the clamp is a plain CSS class (see .announcement-
+    // feed-body-clamp), and the complete body is already sitting in the DOM
+    // underneath it, so toggling the class is all showing/hiding the rest
+    // takes. The two labels come from the template (data-label-more/-less,
+    // both already run through Twig's own |trans) rather than a hardcoded
+    // string here, matching how this link's initial text is translated.
+    readMore.addEventListener('click', (event) => {
+      event.preventDefault();
+      const nowClamped = body.classList.toggle('announcement-feed-body-clamp');
+      readMore.textContent = (nowClamped
+        ? readMore.getAttribute('data-label-more')
+        : readMore.getAttribute('data-label-less')) ?? readMore.textContent;
+    });
   });
 }
 refreshAnnouncementWidgets();
