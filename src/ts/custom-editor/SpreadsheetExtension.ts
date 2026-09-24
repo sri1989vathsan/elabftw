@@ -432,6 +432,43 @@ function autofitSpreadsheetRows(table: HTMLTableElement): void {
   removeOuterTableHeight(table);
 }
 
+// Like autofitSpreadsheetRows above, but for every automatic reconciliation
+// after a cell edit commits rather than the explicit "Autofit row heights"
+// menu action -- that one is a deliberate, unconditional reset (the whole
+// point of clicking it is "I don't care about old sizes, redo them all"),
+// but resetting every row that unconditionally after every single edit
+// would just as readily undo a row height the user dragged on purpose.
+//
+// manualRowHeights is the just-committed data's own rowHeights (pass
+// data.rowHeights from commitOverlayChange) -- readRenderedRowHeights() in
+// inline-spreadsheet.ts, what populates it, only ever records a row that
+// has an *explicit* style.height/height attribute on the live overlay grid,
+// which jspreadsheet only ever sets there from a genuine drag-resize, never
+// merely from a cell's content wrapping onto more lines (ordinary browser
+// table layout handles that without any explicit height at all). A row
+// missing from it has therefore never been manually resized, and is free to
+// shrink back to whatever its current content actually needs -- reported
+// directly as a large gap left behind under a table whose rows had all
+// gone back to looking normal, from a row still holding a taller entry's
+// since-edited-or-deleted height.
+function reconcileSpreadsheetRowHeights(table: HTMLTableElement, manualRowHeights: Record<string, number> | undefined): void {
+  const kind = table.dataset.spreadsheetStyle;
+  const rows = kind === 'notebook'
+    ? Array.from(table.querySelectorAll<HTMLTableRowElement>('tr'))
+    : Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody > tr'));
+  if (rows.length === 0) return;
+  removeOuterTableHeight(table);
+  rows.forEach((row, index) => {
+    const manualHeight = manualRowHeights?.[String(index)] ?? 0;
+    row.style.removeProperty('height');
+    const naturalHeight = Math.ceil(row.getBoundingClientRect().height);
+    row.style.height = `${Math.max(naturalHeight, manualHeight)}px`;
+    const serializedStyle = row.getAttribute('style')?.trim();
+    if (serializedStyle) row.setAttribute('data-mce-style', serializedStyle);
+  });
+  removeOuterTableHeight(table);
+}
+
 // Grows (never auto-shrinks, so it never fights a size you set on purpose) a
 // row to fit whatever was just typed into one of its cells, the same way
 // Excel keeps row height following wrapped content without any explicit
@@ -1195,6 +1232,15 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // what editor.getContent() serializes -- correct by construction.
   const commitOverlayChange = (table: HTMLTableElement, data: SpreadsheetData): void => {
     if (!applySpreadsheetHtmlToTable(table, spreadsheetToHTML(data, data.displayData ?? data.data))) return;
+    // The table's own rows just got rebuilt from data.rowHeights -- reconcile
+    // them now, right after this commit's markup is actually in place, so a
+    // row that no longer needs the height an earlier, since-edited-or-
+    // deleted entry gave it shrinks back down instead of permanently
+    // reserving that space (reported directly: a large gap left under a
+    // table whose cells all looked normal again). See
+    // reconcileSpreadsheetRowHeights's own comment for why data.rowHeights
+    // itself is what distinguishes that case from a genuine manual resize.
+    reconcileSpreadsheetRowHeights(table, data.rowHeights);
     editor.undoManager.add();
     editor.setDirty(true);
     // The editor's own 7-second autosave (tinymce.ts) resets its timer on
@@ -1223,6 +1269,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const enhanceTable = (table: HTMLTableElement): void => {
     if (enhancedTables.has(table)) return;
     enhancedTables.add(table);
+    const extracted = extractFromTable(table);
+    // Reconciles this table's rows against its own saved rowHeights right
+    // as it's mounted, not just after a future edit commits (see
+    // commitOverlayChange's own call to this) -- a table whose height
+    // already went stale before that fix existed, or one the user is only
+    // viewing/scrolling past rather than actively editing right now,
+    // otherwise keeps showing the same gap indefinitely, with nothing to
+    // ever trigger the reconciliation that would fix it. Reported directly
+    // as still there after the edit-time fix landed.
+    reconcileSpreadsheetRowHeights(table, extracted.rowHeights);
     // Editable in place (typing, insert/delete row/column, drag-resize a
     // column/row border) -- the same jspreadsheet-ce engine and event
     // hooks the popup itself uses, just live instead of commit-on-close.
@@ -1236,7 +1292,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     let flushOverlay: (() => void) | null = null;
     const {
       host: overlay, flush, destroy, syncActiveEditor,
-    } = buildReadOnlySpreadsheetHost(extractFromTable(table), {
+    } = buildReadOnlySpreadsheetHost(extracted, {
       editable: true,
       onChange: data => commitOverlayChange(table, data),
       onOpenFullEditor: () => {
@@ -1470,7 +1526,30 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // to track the editor's live horizontal offset -- visibly drift off
     // to one side while scrolling, instead of the editor simply staying
     // put because there was nothing wider than the viewport to scroll to.
-    hideSpreadsheetTablesStyle.textContent = 'table.elabftw-spreadsheet { visibility: hidden; max-width: 100%; }';
+    // table-layout:fixed (below) needs no width of its own here: it applies
+    // over whatever the table's own inline style already computed --
+    // spreadsheetToHTML() sets that explicitly, to the sum of the column
+    // widths, for exactly this (a table with no manually-set width, the
+    // common case). A width:100% forcing every table to the full editor
+    // body's width regardless of its actual column widths was tried here
+    // and reverted: it stretched the real table (which reserves this
+    // content's document-flow space) wider than the overlay standing in
+    // for it ever visually shows, reachable by clicking/placing the cursor
+    // well past the last visible column -- max-width still caps it from
+    // growing past the viewport, just no longer forces it to fill one.
+    hideSpreadsheetTablesStyle.textContent = `
+      table.elabftw-spreadsheet {
+        box-sizing: border-box;
+        table-layout: fixed !important;
+        visibility: hidden;
+        max-width: 100%;
+      }
+      table.elabftw-spreadsheet td,
+      table.elabftw-spreadsheet th {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    `;
     editorDocument.head.appendChild(hideSpreadsheetTablesStyle);
     editor.on('remove', () => hideSpreadsheetTablesStyle.remove());
     // jspreadsheet-ce closes its own context menu (and clears its own
