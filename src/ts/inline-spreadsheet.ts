@@ -4031,6 +4031,21 @@ export function openSpreadsheetModal(
         window.setTimeout(placeCaretAtEnd, 0);
       }
     };
+    // A double-click's second mousedown reaches jspreadsheet before the
+    // browser dispatches dblclick. Its native handler can therefore take
+    // focus back just before onCellDoubleClick opens the stable editor,
+    // making a third click appear necessary. Intercept only that second
+    // mousedown, scoped to this popup's grid; ordinary single-click cell
+    // selection is deliberately unaffected.
+    const onCellSecondMousedown = (event: MouseEvent): void => {
+      if (event.button !== 0 || event.detail < 2 || !sheetContainer) return;
+      const cell = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
+        : null;
+      if (!cell || !sheetContainer.contains(cell)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
     const onCellDoubleClick = (event: MouseEvent): void => {
       if (event.button !== 0 || !sheetContainer) return;
       const cell = event.target instanceof Element
@@ -4113,6 +4128,7 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('keydown', onCellEditorKeydown, true);
     ui.sheetHost.addEventListener('dblclick', onColumnBoundaryDoubleClick, true);
     ui.sheetHost.addEventListener('dblclick', onRowBoundaryDoubleClick, true);
+    window.addEventListener('mousedown', onCellSecondMousedown, true);
     ui.sheetHost.addEventListener('dblclick', onCellDoubleClick, true);
     ui.sheetHost.addEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
 
@@ -5169,6 +5185,7 @@ export function openSpreadsheetModal(
       ui.sheetHost.removeEventListener('paste', onSpreadsheetPaste, true);
       ui.sheetHost.removeEventListener('dblclick', onColumnBoundaryDoubleClick, true);
       ui.sheetHost.removeEventListener('dblclick', onRowBoundaryDoubleClick, true);
+      window.removeEventListener('mousedown', onCellSecondMousedown, true);
       ui.sheetHost.removeEventListener('dblclick', onCellDoubleClick, true);
       ui.sheetHost.removeEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
       rescueInputEl?.remove();
