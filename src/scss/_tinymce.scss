@@ -26,6 +26,14 @@ figure {
   word-break: break-word;
 }
 
+// Keep the editor's text and caret scale independent of the document's
+// intrinsic width. An inline spreadsheet uses a fixed overlay while its
+// backing table remains in the iframe's layout; without an explicit value,
+// a long cell can make the browser text-autosize the paragraph after it.
+.mce-content-body {
+  text-size-adjust: 100%;
+}
+
 .tox-tinymce--toolbar-sticky-on .tox-editor-header {
   top: calc(var(--navbar-height) + var(--toolbar-height)) !important;
   transition: top var(--sticky-header-speed) var(--sticky-header-easing);
