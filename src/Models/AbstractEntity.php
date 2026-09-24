@@ -1181,9 +1181,30 @@ abstract class AbstractEntity extends AbstractRest
             $oldCan = json_decode((string) ($this->entityData['canread'] ?? '{}'), true) ?? array();
             $newBase = $target === 'canread_base' ? BasePermissions::from((int) $content) : $oldBase;
             $newCan = $target === 'canread' ? (json_decode((string) $content, true) ?? array()) : $oldCan;
-            $newlyGrantedUserIds = array_diff(
+            // Two distinct things count as "granted access" here, unioned
+            // together: (1) the resolved set of who can actually read this
+            // grew (a base-scope change that newly exposes people who
+            // couldn't read it at all before), and (2) someone was
+            // explicitly, individually added to canread's own teams/
+            // teamgroups/users lists -- the Share modal's own "add a
+            // specific person" action -- worth notifying about even when
+            // they could already read it some other way (most commonly:
+            // already a member of this entity's own team, with
+            // canread_base already Team). From the sharer's own
+            // perspective they just shared it with that person; only
+            // checking the resolved set missed exactly this case, reported
+            // directly as the notification never firing for it.
+            $resolvedNewGrantees = array_diff(
                 $this->resolveGranteeUserIds($newBase, $newCan),
                 $this->resolveGranteeUserIds($oldBase, $oldCan),
+            );
+            $explicitlyAddedGrantees = $this->resolveGranteeUserIds(BasePermissions::UserOnly, array(
+                'teams' => array_diff($newCan['teams'] ?? array(), $oldCan['teams'] ?? array()),
+                'teamgroups' => array_diff($newCan['teamgroups'] ?? array(), $oldCan['teamgroups'] ?? array()),
+                'users' => array_diff($newCan['users'] ?? array(), $oldCan['users'] ?? array()),
+            ));
+            $newlyGrantedUserIds = array_diff(
+                array_unique(array_merge($resolvedNewGrantees, $explicitlyAddedGrantees)),
                 array($this->Users->userData['userid']),
             );
         }
