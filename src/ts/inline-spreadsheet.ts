@@ -4043,7 +4043,15 @@ export function openSpreadsheetModal(
         // input showed that turn into a visible focus-stealing loop).
         updateRawDataMirrorCell(rescueInputCol, rescueInputRow, el.value, false);
         const viewportRoom = Math.max(60, window.innerWidth - el.getBoundingClientRect().left - 8);
-        el.style.width = `${Math.min(viewportRoom, Math.max(60, measureRescueInputWidth(el)))}px`;
+        // Floored at the box's own current width, not just what the typed
+        // text needs -- openCellEditor's own initial width already floors
+        // at the real cell's width (so it starts out matching the column),
+        // but this recalculation on every keystroke didn't carry that floor
+        // forward at all, only the measured text width -- shrinking the box
+        // down to fit "s" the instant a single character replaced whatever
+        // longer value (or the column's own width) it opened with.
+        const currentWidth = Number.parseFloat(el.style.width) || 0;
+        el.style.width = `${Math.min(viewportRoom, Math.max(60, currentWidth, measureRescueInputWidth(el)))}px`;
       });
       releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
         if (event.key === 'Enter' && !event.shiftKey) {
@@ -6764,7 +6772,15 @@ export function buildReadOnlySpreadsheetHost(
       // keeps long text editable without making neighbouring saved cells
       // paint over one another.
       const viewportRoom = Math.max(60, window.innerWidth - el.getBoundingClientRect().left - 8);
-      el.style.width = `${Math.min(viewportRoom, Math.max(60, measureRescueInputWidth(el)))}px`;
+      // Floored at the box's own current width, not just what the typed
+      // text needs -- openCellEditor's own initial width already floors at
+      // the real cell's width (so it starts out matching the column), but
+      // this recalculation on every keystroke didn't carry that floor
+      // forward at all, only the measured text width -- shrinking the box
+      // down to fit a single typed character instead of staying at the
+      // column's own width.
+      const currentWidth = Number.parseFloat(el.style.width) || 0;
+      el.style.width = `${Math.min(viewportRoom, Math.max(60, currentWidth, measureRescueInputWidth(el)))}px`;
     });
     // Enter commits and hands focus back to jspreadsheet's own grid --
     // mirroring how a normal cell edit closes -- rather than inserting a
@@ -7023,22 +7039,35 @@ export function buildReadOnlySpreadsheetHost(
     };
     document.addEventListener('keydown', onUndoRedoKey, true);
   }
-  // Typing directly over a selected-but-not-editing cell used to also open
-  // this editor here (Excel-style, no double-click needed), via a keydown
-  // listener on window (capture phase, ahead of jspreadsheet's own keydown
-  // handling on document -- see git log for why window specifically).
-  // Removed: even preempting jspreadsheet's own handler that way still left
-  // its click/selection handling broken afterward -- a live trace-free but
-  // directly reported regression: single click could no longer select a
-  // cell, or drag-select a range, at all once this had fired once. Double-
-  // click to edit (below) doesn't have this problem -- it's scoped to
-  // sheetContainer, a node deep enough that jspreadsheet can't register
-  // anything above it in the capture chain, so it never even reaches
-  // jspreadsheet's own handling in the first place, rather than trying to
-  // outrace it. Selection and multi-select working reliably matters more
-  // than typing being possible without a double-click first, so this
-  // trade-off stands until a way to add it back without that collision is
-  // found.
+  // Match the popup's type-to-edit path. Only the grid that owns the key
+  // may start an edit: other inline tables can retain stale selections.
+  // The library's hidden textarea is its keyboard sink, not a cell editor.
+  const onDirectCellKey = (event: KeyboardEvent): void => {
+    const target = event.target;
+    if (!(target instanceof Element) || !sheetContainer.contains(target)
+      || event.isComposing || event.ctrlKey || event.metaKey || event.altKey
+      || (rescueInputEl && !rescueInputEl.hidden)) return;
+    if ((target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+      || (target instanceof HTMLElement && target.isContentEditable))
+      && !target.classList.contains('jss_textarea')) return;
+    if (!lastKnownSelection) return;
+    const [col, row, endCol, endRow] = lastKnownSelection;
+    if (col !== endCol || row !== endRow) return;
+    const printable = event.key.length === 1;
+    if (!printable && event.key !== 'Backspace' && event.key !== 'Delete') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
+    const wasEditing = cell?.classList.contains('editor') ?? false;
+    const currentValue = String(rawDataMirror[row]?.[col] ?? '');
+    const value = printable
+      ? (wasEditing ? `${currentValue}${event.key}` : event.key)
+      : event.key === 'Backspace' ? currentValue.slice(0, -1) : '';
+    // The first key has already been inserted; leave a caret after it so
+    // the next key appends, rather than selecting/replacing that first key.
+    openCellEditor(col, row, value, false);
+  };
+  if (editable) window.addEventListener('keydown', onDirectCellKey, true);
   if (editable) {
     // Commit the stable editor before jspreadsheet handles a click on a
     // different cell. Because commitRescueInput() no longer redraws the
@@ -7700,6 +7729,7 @@ export function buildReadOnlySpreadsheetHost(
       rescueInputEl?.remove();
       releaseRescueKeys?.();
       if (onCellDoubleClick) window.removeEventListener('dblclick', onCellDoubleClick, true);
+      window.removeEventListener('keydown', onDirectCellKey, true);
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
     },
   };
