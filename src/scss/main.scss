@@ -3394,6 +3394,19 @@ body.html-tool-workspace-resizing * {
   font-weight: 700;
 }
 
+.elabftw-spreadsheet-readonly-undo,
+.elabftw-spreadsheet-readonly-redo {
+  background: none;
+  border: none;
+  color: var(--medium);
+  padding: 0.15rem 0.3rem;
+}
+
+.elabftw-spreadsheet-readonly-undo:hover,
+.elabftw-spreadsheet-readonly-redo:hover {
+  color: var(--primary);
+}
+
 .elabftw-spreadsheet-readonly-open-editor {
   background: none;
   border: none;

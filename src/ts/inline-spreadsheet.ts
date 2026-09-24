@@ -22,6 +22,24 @@ type RowHeights = Record<string, number>;
 type ColWidths = Record<string, number>;
 type AppearanceScope = 'user' | 'notebook';
 type CellRange = [number, number, number, number];
+// One user-facing action's worth of cell-value changes -- a plain typed
+// edit is a single-entry array, a paste covering a range is one array with
+// every affected cell, so undo/redo always steps by "what the user did
+// once" rather than one step per cell. Deliberately narrower than
+// jspreadsheet's own undo()/redo(): those only ever see whatever happened
+// to reach worksheet.setValue(), which most cell edits no longer do at all
+// (see commitRescueInput's own comment on why) -- reported directly as
+// "only does one undo" once that architecture change landed. This stack
+// tracks value changes directly instead, independent of whether jspreadsheet
+// itself was ever told about them.
+interface CellValueChange {
+  col: number;
+  row: number;
+  oldValue: string;
+  newValue: string;
+}
+type CellHistoryEntry = CellValueChange[];
+const MAX_CELL_HISTORY = 200;
 
 interface ClipboardTable {
   data: AOA;
@@ -2336,6 +2354,8 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   sheetHost: HTMLDivElement;
   insertBtn: HTMLButtonElement;
   cancelBtn: HTMLButtonElement;
+  undoBtn: HTMLButtonElement;
+  redoBtn: HTMLButtonElement;
   addRowBtn: HTMLButtonElement;
   addColBtn: HTMLButtonElement;
   resizeBtn: HTMLButtonElement;
@@ -2450,6 +2470,18 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
 
   const sizeButtons = document.createElement('div');
   sizeButtons.className = 'inline-spreadsheet-size-actions';
+  const undoBtn = document.createElement('button');
+  undoBtn.type = 'button';
+  undoBtn.innerHTML = '<i class="fas fa-undo" aria-hidden="true"></i>';
+  undoBtn.title = 'Undo (Ctrl/Cmd+Z)';
+  undoBtn.setAttribute('aria-label', 'Undo');
+  undoBtn.className = 'btn btn-sm btn-outline-secondary';
+  const redoBtn = document.createElement('button');
+  redoBtn.type = 'button';
+  redoBtn.innerHTML = '<i class="fas fa-redo" aria-hidden="true"></i>';
+  redoBtn.title = 'Redo (Ctrl/Cmd+Shift+Z)';
+  redoBtn.setAttribute('aria-label', 'Redo');
+  redoBtn.className = 'btn btn-sm btn-outline-secondary';
   const addRowBtn = document.createElement('button');
   addRowBtn.type = 'button';
   addRowBtn.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i> <i class="fas fa-grip-lines" aria-hidden="true"></i>';
@@ -3075,7 +3107,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   buttonRow.className = 'inline-spreadsheet-actions';
   const gridButtons = document.createElement('div');
   gridButtons.className = 'inline-spreadsheet-grid-actions';
-  gridButtons.append(addRowBtn, addColBtn);
+  gridButtons.append(undoBtn, redoBtn, addRowBtn, addColBtn);
   const rightButtons = document.createElement('div');
   rightButtons.className = 'd-flex ml-auto';
   const cancelBtn = document.createElement('button');
@@ -3098,6 +3130,8 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     sheetHost,
     insertBtn,
     cancelBtn,
+    undoBtn,
+    redoBtn,
     addRowBtn,
     addColBtn,
     resizeBtn,
@@ -3925,14 +3959,56 @@ export function openSpreadsheetModal(
     let rescueInputEl: HTMLTextAreaElement | null = null;
     let rescueInputCol: number | null = null;
     let rescueInputRow: number | null = null;
+    // The cell's value from just before this specific edit started (read at
+    // the top of openCellEditor, before anything -- including a type-to-
+    // edit's own first keystroke -- has touched it), so commitRescueInput
+    // below can record what actually changed regardless of how the edit
+    // was opened.
+    let rescueInputOriginalValue: string | null = null;
+    let cellUndoStack: CellHistoryEntry[] = [];
+    let cellRedoStack: CellHistoryEntry[] = [];
+    const pushCellHistoryEntry = (changes: CellHistoryEntry): void => {
+      if (changes.length === 0) return;
+      cellUndoStack.push(changes);
+      if (cellUndoStack.length > MAX_CELL_HISTORY) cellUndoStack.shift();
+      cellRedoStack = [];
+    };
+    // Shared by performCellUndo/performCellRedo below: writes a whole
+    // entry's worth of cell values back through the same mirror-first path
+    // every other edit in this file already uses (see commitRescueInput's
+    // own comment on why this never calls worksheet.setValue() directly).
+    const applyCellHistoryEntry = (changes: CellHistoryEntry, useOldValue: boolean): void => {
+      changes.forEach(({ col, row, oldValue, newValue }) => {
+        const value = useOldValue ? oldValue : newValue;
+        updateRawDataMirrorCell(col, row, value, false);
+        if (sheetContainer) previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, value);
+      });
+      hasChanges = true;
+      scheduleFormulaResultRender();
+    };
+    const performCellUndo = (): void => {
+      const entry = cellUndoStack.pop();
+      if (!entry) return;
+      applyCellHistoryEntry(entry, true);
+      cellRedoStack.push(entry);
+    };
+    const performCellRedo = (): void => {
+      const entry = cellRedoStack.pop();
+      if (!entry) return;
+      applyCellHistoryEntry(entry, false);
+      cellUndoStack.push(entry);
+    };
     const commitRescueInput = (): void => {
       if (!rescueInputEl || rescueInputCol === null || rescueInputRow === null) return;
       const col = rescueInputCol;
       const row = rescueInputRow;
       const value = rescueInputEl.value;
+      const originalValue = rescueInputOriginalValue ?? value;
       rescueInputEl.hidden = true;
       rescueInputCol = null;
       rescueInputRow = null;
+      rescueInputOriginalValue = null;
+      if (originalValue !== value) pushCellHistoryEntry([{ col, row, oldValue: originalValue, newValue: value }]);
       // Never call worksheet.setValue() from this stable editor. Doing so
       // redraws jspreadsheet during the pointer event that is selecting the
       // next cell, invalidating that event's target and reintroducing the
@@ -3981,6 +4057,23 @@ export function openSpreadsheetModal(
         }
       });
       el.addEventListener('blur', commitRescueInput);
+      // Distinguish at a glance what the next keystroke will do: replace a
+      // selection outright, Excel-style -- reachable not just through our
+      // own selectAll (openCellEditor's double-click case never uses it,
+      // but a *triple*-click lands on this textarea once it's already
+      // open, and the browser's own native "select the whole line" for a
+      // third click applies here exactly like any other text field -- no
+      // code of ours triggers that one at all) but also an ordinary click-
+      // drag or Shift+Arrow selection -- vs. inserting at a plain caret.
+      // selectionchange is a document-level event with no useful target of
+      // its own, so re-check activeElement here rather than relying on
+      // anything selection-change-specific about how it fired.
+      document.addEventListener('selectionchange', () => {
+        if (document.activeElement !== el || el.hidden) return;
+        const isReplacing = el.selectionStart !== el.selectionEnd;
+        el.style.border = isReplacing ? '2px solid #f9a825' : '2px solid #4285f4';
+        el.style.background = isReplacing ? '#fff8e1' : '#fff';
+      });
       // document.body, not ui.sheetHost/sheetContainer: jspreadsheet-ce
       // repaints the whole worksheet DOM on plenty of routine actions
       // (resize, style change, undo -- every mountSpreadsheet() call
@@ -3995,6 +4088,11 @@ export function openSpreadsheetModal(
       if (!sheetContainer) return;
       const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
       if (!cell) return;
+      // Before anything -- including onKey's own type-to-edit, whose
+      // initialValue argument is already the *new* value with this
+      // keystroke applied -- so commitRescueInput can record the real
+      // before/after regardless of how this edit was opened.
+      rescueInputOriginalValue = String(rawDataMirror[row]?.[col] ?? '');
       const rescue = ensureRescueInput();
       const cellRect = cell.getBoundingClientRect();
       rescue.style.left = `${cellRect.left}px`;
@@ -4289,6 +4387,49 @@ export function openSpreadsheetModal(
           Math.min(250, 15 + (attempt * 10)),
         );
       };
+      // jspreadsheet's own row/column insert (Enter past the last row, Tab
+      // or Right-arrow past the last column, or its context menu) creates
+      // bare <tr>/<td> elements with none of this sheet's own appearance
+      // styling applied -- every other cell gets that from
+      // spreadsheetToHTML()/the initial mount (see resizeSpreadsheet,
+      // which addRowBtn/addColBtn above go through instead of this path),
+      // neither of which a live jspreadsheet-internal insert touches.
+      // Reported directly: a row or column added this way looked
+      // completely different from the rest of the table. Deferred, like
+      // syncMountedDimensions below, so the new cells actually exist in
+      // the DOM by the time this runs -- and independently re-reads
+      // dimensions from the live worksheet rather than trusting
+      // working.rows/cols, which syncMountedDimensions only updates in
+      // its own separate deferred callback (scheduled first, so it
+      // normally wins the race, but nothing here should depend on that).
+      const styleNewlyInsertedRow = (changedWorksheet?: JssInstance): void => {
+        window.setTimeout(() => {
+          if (sheetContainer !== mountedContainer) return;
+          const currentWorksheet = getMountedWorksheet(mountedContainer, changedWorksheet);
+          const currentData = currentWorksheet?.getData?.();
+          if (!Array.isArray(currentData) || currentData.length === 0) return;
+          const newRow = currentData.length - 1;
+          const cols = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
+          for (let col = 0; col < cols; col++) {
+            const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${newRow}"]`);
+            if (cell) cell.style.cssText = getAppearanceCellStyle(working.appearance, col, newRow);
+          }
+        }, 0);
+      };
+      const styleNewlyInsertedColumn = (changedWorksheet?: JssInstance): void => {
+        window.setTimeout(() => {
+          if (sheetContainer !== mountedContainer) return;
+          const currentWorksheet = getMountedWorksheet(mountedContainer, changedWorksheet);
+          const currentData = currentWorksheet?.getData?.();
+          if (!Array.isArray(currentData) || currentData.length === 0) return;
+          const rows = currentData.length;
+          const newCol = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0) - 1;
+          for (let row = 0; row < rows; row++) {
+            const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${newCol}"][data-y="${row}"]`);
+            if (cell) cell.style.cssText = getAppearanceCellStyle(working.appearance, newCol, row);
+          }
+        }, 0);
+      };
       const syncMountedDimensions = (changedWorksheet?: JssInstance): void => {
         window.setTimeout(() => {
           if (sheetContainer !== mountedContainer) return;
@@ -4414,10 +4555,12 @@ export function openSpreadsheetModal(
         oninsertrow: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
           syncMountedDimensions(changedWorksheet);
+          styleNewlyInsertedRow(changedWorksheet);
         },
         oninsertcolumn: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
           syncMountedDimensions(changedWorksheet);
+          styleNewlyInsertedColumn(changedWorksheet);
         },
         ondeleterow: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
@@ -5026,6 +5169,8 @@ export function openSpreadsheetModal(
         'Cleared formatting from',
       );
     });
+    ui.undoBtn.addEventListener('click', () => performCellUndo());
+    ui.redoBtn.addEventListener('click', () => performCellRedo());
     ui.addRowBtn.addEventListener('click', () => {
       resizeSpreadsheet(Math.min(MAX_DIMENSION, working.rows + 1), working.cols);
     });
@@ -5111,12 +5256,17 @@ export function openSpreadsheetModal(
       const { col, row } = formulaInputTarget;
       let value = ui.formulaInput.value;
       if (value === lastCommittedFormulaValue) return;
+      // lastCommittedFormulaValue is seeded from the cell's own value the
+      // moment the selection landed on it (see onselection above), and only
+      // ever reassigned right below -- still the pre-edit value here.
+      const formulaOldValue = lastCommittedFormulaValue ?? '';
       if (value.trimStart().startsWith('=')) {
         const missingParentheses = formulaParenthesisBalance(value);
         if (missingParentheses > 0) value += ')'.repeat(missingParentheses);
       }
       ui.formulaInput.value = value;
       lastCommittedFormulaValue = value;
+      pushCellHistoryEntry([{ col, row, oldValue: formulaOldValue, newValue: value }]);
       updateRawDataMirrorCell(col, row, value, false);
       worksheet?.setValueFromCoords?.(col, row, value);
       selectedRange = [col, row, col, row];
@@ -5227,16 +5377,27 @@ export function openSpreadsheetModal(
         const col = selectedRange![0];
         const row = selectedRange![1];
         // This handler also catches the first key after jspreadsheet drops
-        // its native editor at a column boundary. Seed the replacement from
-        // the authoritative mirror before applying that key; starting with
-        // event.key alone discarded everything typed before the takeover.
+        // its native editor at a column boundary -- that break leaves its
+        // own 'editor' class behind on the cell (see openCellEditor's own
+        // lookup above) rather than cleaning it up, so its presence here
+        // means the user was already mid-edit and this keystroke is a
+        // resume: seed the replacement from the authoritative mirror
+        // before applying that key, same as before (starting with
+        // event.key alone would discard everything typed before the
+        // takeover). A plain click never adds that class at all -- its
+        // absence means nothing was being edited yet, so a printable key
+        // starts a brand new entry instead, Excel-style, replacing
+        // whatever the cell held rather than appending to it.
+        const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`) ?? null;
+        const wasNativelyEditing = cell?.classList.contains('editor') ?? false;
         const currentValue = String(rawDataMirror[row]?.[col] ?? '');
+        const replacing = isPrintableKey && !wasNativelyEditing;
         const nextValue = isPrintableKey
-          ? `${currentValue}${event.key}`
+          ? (wasNativelyEditing ? `${currentValue}${event.key}` : event.key)
           : event.key === 'Backspace'
             ? currentValue.slice(0, -1)
             : '';
-        openCellEditor(col, row, nextValue, false);
+        openCellEditor(col, row, nextValue, replacing);
         return;
       }
       if (event.key === 'Escape') {
@@ -5284,10 +5445,21 @@ export function openSpreadsheetModal(
       // intervening click on our own chrome) -- undoing two steps for one
       // Ctrl+Z press instead of one.
       event.stopImmediatePropagation();
+      // Cell value edits (typing, formula bar) go through cellUndoStack --
+      // see its own comment for why jspreadsheet's undo()/redo() no longer
+      // see most of those at all. Deliberately no fallback to
+      // worksheet.undo()/redo() once this stack is exhausted: reported
+      // directly as jumping the whole sheet to a confusing, unrelated
+      // structural state once it kicked in -- that history reflects
+      // whatever few operations happened to reach jspreadsheet's own
+      // model (a row/column op, maybe), not a coherent continuation of
+      // the cell edits the user actually just made and undid. Doing
+      // nothing once there's nothing left to undo is the correct,
+      // unsurprising behavior here, not a worse one.
       if (event.shiftKey) {
-        worksheet?.redo?.();
+        performCellRedo();
       } else {
-        worksheet?.undo?.();
+        performCellUndo();
       }
     };
 
@@ -5333,6 +5505,23 @@ export function openSpreadsheetModal(
       // large sheet. Keep the dialog open so it cannot silently discard work.
       ui.formulaStatus.textContent = 'Spreadsheet is still open. Use Insert / Update to save your changes, or Cancel to discard them.';
     });
+    // selectedRange otherwise stays set to whatever cell was last selected
+    // forever (nothing else ever clears it -- see its declaration), so
+    // onKey's type-to-edit shortcut kept routing keystrokes into that stale
+    // cell from anywhere the click landed outside the grid itself -- the
+    // caption input, the appearance panel, empty dialog padding, even the
+    // backdrop -- not just literally outside the dialog. pointerdown, not
+    // click, and on document rather than scoped to any one container: the
+    // same reasoning as onCellSecondMousedown's own comment on window vs
+    // sheetContainer -- this needs to see it regardless of which element
+    // the pointer actually went down on.
+    document.addEventListener('pointerdown', event => {
+      const target = event.target;
+      const withinEditingSurface = target instanceof Node
+        && ((sheetContainer !== null && sheetContainer.contains(target))
+          || (rescueInputEl !== null && rescueInputEl.contains(target)));
+      if (!withinEditingSurface) selectedRange = null;
+    }, true);
     document.addEventListener('keydown', onKey, true);
   });
 }
@@ -5717,6 +5906,37 @@ export function buildReadOnlySpreadsheetHost(
   }
   host.appendChild(toggleBar);
 
+  let undoButton: HTMLButtonElement | null = null;
+  let redoButton: HTMLButtonElement | null = null;
+  if (editable) {
+    undoButton = document.createElement('button');
+    undoButton.type = 'button';
+    undoButton.className = 'elabftw-spreadsheet-readonly-undo';
+    undoButton.title = 'Undo (Ctrl/Cmd+Z)';
+    undoButton.setAttribute('aria-label', 'Undo');
+    undoButton.innerHTML = '<i class="fas fa-undo" aria-hidden="true"></i>';
+    toggleBar.appendChild(undoButton);
+    redoButton = document.createElement('button');
+    redoButton.type = 'button';
+    redoButton.className = 'elabftw-spreadsheet-readonly-redo';
+    redoButton.title = 'Redo (Ctrl/Cmd+Shift+Z)';
+    redoButton.setAttribute('aria-label', 'Redo');
+    redoButton.innerHTML = '<i class="fas fa-redo" aria-hidden="true"></i>';
+    toggleBar.appendChild(redoButton);
+    // Bodies reference performCellUndo/cellUndoStack etc., declared further
+    // down in this same function -- safe, since a click can't actually
+    // reach these before the rest of the function (and everything it
+    // declares) has finished running.
+    undoButton.addEventListener('click', event => {
+      event.stopPropagation();
+      performCellUndo();
+    });
+    redoButton.addEventListener('click', event => {
+      event.stopPropagation();
+      performCellRedo();
+    });
+  }
+
   if (options.onOpenFullEditor) {
     const openFullEditorButton = document.createElement('button');
     openFullEditorButton.type = 'button';
@@ -5761,6 +5981,7 @@ export function buildReadOnlySpreadsheetHost(
   let formulaInputEl: HTMLInputElement | null = null;
   let formulaEditingCell: { col: number; row: number } | null = null;
   let formulaInputDirty = false;
+  let formulaInputOriginalValue: string | null = null;
   let composingFormula = false;
   // jspreadsheet-ce's own document-level mousedown handler calls
   // resetSelection() on the worksheet whenever a click lands outside it
@@ -6075,6 +6296,11 @@ export function buildReadOnlySpreadsheetHost(
     if (!formulaEditingCell || !formulaInputEl || !formulaInputDirty) return;
     const targetWorksheet = getMountedWorksheet(sheetContainer);
     const cellName = `${colLabel(formulaEditingCell.col)}${formulaEditingCell.row + 1}`;
+    const { col, row } = formulaEditingCell;
+    const newValue = formulaInputEl.value;
+    const oldValue = formulaInputOriginalValue ?? newValue;
+    if (oldValue !== newValue) pushCellHistoryEntry([{ col, row, oldValue, newValue }]);
+    formulaInputOriginalValue = newValue;
     targetWorksheet?.setValue?.(cellName, formulaInputEl.value);
     formulaInputDirty = false;
   }
@@ -6372,6 +6598,22 @@ export function buildReadOnlySpreadsheetHost(
   // formula bar. Reassert focus on the input whenever it loses it while
   // still composing, regardless of what stole it or when.
   let reclaimFocusHandler: ((event: FocusEvent) => void) | null = null;
+  // reclaimFocusHandler and the focusPollInterval below both steal focus
+  // back into this grid whenever it lands on <body> and lastFocusWasInGrid
+  // is still true -- correct when jspreadsheet's own redraw transiently
+  // defocuses everything mid-edit, but <body> is *also* where focus lands
+  // from a plain click on any ordinary, non-focusable page element (the
+  // document title, a paragraph, ...), which looks identical from here.
+  // Reported directly: clicking the title while lastFocusWasInGrid was
+  // still stale-true from earlier editing yanked focus straight back into
+  // the grid, as if edit mode had turned itself on. Track the most recent
+  // pointerdown's own target instead of waiting to react after the fact --
+  // anything outside this overlay (host) and the rescue input (appended to
+  // body, not host -- see ensureRescueInput's own comment) means the user
+  // just deliberately clicked away, so neither reclaim path should fire
+  // even if lastFocusWasInGrid hasn't caught up yet.
+  let suppressReclaimHandler: ((event: PointerEvent) => void) | null = null;
+  let onUndoRedoKey: ((event: KeyboardEvent) => void) | null = null;
   // jspreadsheet-ce recreates its own internal cell-edit <input> as part of
   // re-rendering a cell while it's being typed into -- most visibly, right
   // as the typed content approaches filling the column's own width, which
@@ -6421,14 +6663,49 @@ export function buildReadOnlySpreadsheetHost(
   let rescueInputEl: HTMLTextAreaElement | null = null;
   let rescueInputCol: number | null = null;
   let rescueInputRow: number | null = null;
+  // See CellHistoryEntry's own comment (module scope, top of file) for why
+  // this tracks cell value changes directly instead of relying on
+  // jspreadsheet's own undo()/redo().
+  let rescueInputOriginalValue: string | null = null;
+  let cellUndoStack: CellHistoryEntry[] = [];
+  let cellRedoStack: CellHistoryEntry[] = [];
+  const pushCellHistoryEntry = (changes: CellHistoryEntry): void => {
+    if (changes.length === 0) return;
+    cellUndoStack.push(changes);
+    if (cellUndoStack.length > MAX_CELL_HISTORY) cellUndoStack.shift();
+    cellRedoStack = [];
+  };
+  const applyCellHistoryEntry = (changes: CellHistoryEntry, useOldValue: boolean): void => {
+    changes.forEach(({ col, row, oldValue, newValue }) => {
+      const value = useOldValue ? oldValue : newValue;
+      updateRawDataMirrorCell(col, row, value, false);
+      previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, value);
+    });
+    notifyFromMirror();
+  };
+  const performCellUndo = (): void => {
+    const entry = cellUndoStack.pop();
+    if (!entry) return;
+    applyCellHistoryEntry(entry, true);
+    cellRedoStack.push(entry);
+  };
+  const performCellRedo = (): void => {
+    const entry = cellRedoStack.pop();
+    if (!entry) return;
+    applyCellHistoryEntry(entry, false);
+    cellUndoStack.push(entry);
+  };
   const commitRescueInput = (): void => {
     if (!rescueInputEl || rescueInputCol === null || rescueInputRow === null) return;
     const col = rescueInputCol;
     const row = rescueInputRow;
     const value = rescueInputEl.value;
+    const originalValue = rescueInputOriginalValue ?? value;
     rescueInputEl.hidden = true;
     rescueInputCol = null;
     rescueInputRow = null;
+    rescueInputOriginalValue = null;
+    if (originalValue !== value) pushCellHistoryEntry([{ col, row, oldValue: originalValue, newValue: value }]);
     // Do not call worksheet.setValue() while a pointer click is moving to
     // another cell. jspreadsheet redraws the old cell synchronously from
     // setValue(), which invalidates the click target before its own
@@ -6501,6 +6778,20 @@ export function buildReadOnlySpreadsheetHost(
       }
     });
     el.addEventListener('blur', commitRescueInput);
+    // Distinguish at a glance what the next keystroke will do: replace a
+    // selection outright, Excel-style -- a triple-click lands on this
+    // textarea once it's already open, and the browser's own native
+    // "select the whole line" for a third click applies here exactly like
+    // any other text field, no code of ours involved -- vs. inserting at a
+    // plain caret. selectionchange is a document-level event with no
+    // useful target of its own, so re-check activeElement here rather than
+    // relying on anything selection-change-specific about how it fired.
+    document.addEventListener('selectionchange', () => {
+      if (document.activeElement !== el || el.hidden) return;
+      const isReplacing = el.selectionStart !== el.selectionEnd;
+      el.style.border = isReplacing ? '2px solid #f9a825' : '2px solid #4285f4';
+      el.style.background = isReplacing ? '#fff8e1' : '#fff';
+    });
     // document.body, deliberately not host: host is moved via a CSS
     // transform (see syncOverlayPositions's own comment, to avoid a
     // Firefox scroll-positioning quirk), and any element with `transform`
@@ -6530,6 +6821,9 @@ export function buildReadOnlySpreadsheetHost(
     // column/row index. Always scope editing to this grid instance.
     const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
     if (!cell) return;
+    // Before anything touches it, so commitRescueInput can record the real
+    // before/after regardless of how this edit was opened.
+    rescueInputOriginalValue = String(rawDataMirror[row]?.[col] ?? '');
     const rescue = ensureRescueInput();
     const cellRect = cell.getBoundingClientRect();
     rescue.style.left = `${cellRect.left}px`;
@@ -6681,6 +6975,45 @@ export function buildReadOnlySpreadsheetHost(
       document.body.classList.toggle('elabftw-spreadsheet-editing', inAnySpreadsheetGrid);
     };
     document.addEventListener('focusin', reclaimFocusHandler);
+    suppressReclaimHandler = (event: PointerEvent): void => {
+      const target = event.target;
+      const withinEditingSurface = target instanceof Node
+        && (host.contains(target) || (rescueInputEl !== null && rescueInputEl.contains(target)));
+      if (!withinEditingSurface) lastFocusWasInGrid = false;
+    };
+    document.addEventListener('pointerdown', suppressReclaimHandler, true);
+    // No prior Ctrl/Cmd+Z handling existed for this overlay at all --
+    // jspreadsheet's own document-level keydown listener was the only
+    // thing ever reachable, dropping the same class of edits from its
+    // history that cellUndoStack exists to work around (see
+    // CellHistoryEntry's own comment, module scope, top of file).
+    // Deliberately no fallback to jspreadsheet's own undo()/redo() once
+    // this stack is exhausted -- see performCellUndo's own callers in
+    // openSpreadsheetModal for why: that history reflects whatever few
+    // operations happened to reach jspreadsheet's own model, not a
+    // coherent continuation of the edits just undone, and jumped the
+    // whole sheet to a confusing, unrelated structural state once
+    // reached. Stopping once there's nothing left to undo is correct.
+    // Scoped to this table's own host/rescue input via event.target --
+    // with more than one spreadsheet on the page, every instance's own
+    // copy of this listener sees every keydown, and only the one the
+    // keystroke actually happened in should act on it.
+    onUndoRedoKey = (event: KeyboardEvent): void => {
+      const key = event.key.toLowerCase();
+      if (!(event.ctrlKey || event.metaKey) || key !== 'z') return;
+      const target = event.target;
+      const withinThisOverlay = target instanceof Node
+        && (host.contains(target) || (rescueInputEl !== null && rescueInputEl.contains(target)));
+      if (!withinThisOverlay) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.shiftKey) {
+        performCellRedo();
+      } else {
+        performCellUndo();
+      }
+    };
+    document.addEventListener('keydown', onUndoRedoKey, true);
   }
   // Typing directly over a selected-but-not-editing cell used to also open
   // this editor here (Excel-style, no double-click needed), via a keydown
@@ -6962,6 +7295,43 @@ export function buildReadOnlySpreadsheetHost(
     notifyFromMirror();
   };
 
+  // jspreadsheet's own row/column insert (Enter past the last row, Tab or
+  // Right-arrow past the last column, or its context menu) creates bare
+  // <tr>/<td> elements with none of this sheet's own appearance styling
+  // applied -- every other cell gets that from spreadsheetToHTML()/the
+  // initial mount, neither of which a live jspreadsheet-internal insert
+  // touches. Reported directly: a row or column added this way looked
+  // completely different from the rest of the table. Deferred so the new
+  // cells actually exist in the DOM by the time this runs, and reads
+  // dimensions from the live worksheet directly rather than through
+  // rawDataMirror (notifyStructuralChange above updates that synchronously,
+  // so it would work too, but re-reading independently here doesn't
+  // depend on call order between the two).
+  const styleNewlyInsertedRow = (changedWorksheet: JssInstance): void => {
+    window.setTimeout(() => {
+      const currentData = changedWorksheet?.getData?.();
+      if (!Array.isArray(currentData) || currentData.length === 0) return;
+      const newRow = currentData.length - 1;
+      const cols = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
+      for (let col = 0; col < cols; col++) {
+        const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${newRow}"]`);
+        if (cell) cell.style.cssText = getAppearanceCellStyle(appearance, col, newRow);
+      }
+    }, 0);
+  };
+  const styleNewlyInsertedColumn = (changedWorksheet: JssInstance): void => {
+    window.setTimeout(() => {
+      const currentData = changedWorksheet?.getData?.();
+      if (!Array.isArray(currentData) || currentData.length === 0) return;
+      const rows = currentData.length;
+      const newCol = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0) - 1;
+      for (let row = 0; row < rows; row++) {
+        const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${newCol}"][data-y="${row}"]`);
+        if (cell) cell.style.cssText = getAppearanceCellStyle(appearance, newCol, row);
+      }
+    }, 0);
+  };
+
   const activeEditorCellStyles = new WeakMap<HTMLElement, {
     overflow: string;
     position: string;
@@ -7140,8 +7510,14 @@ export function buildReadOnlySpreadsheetHost(
         }
         notifyChange(changedWorksheet, cell, changedCol, changedRow, editorValue);
       },
-      oninsertrow: notifyStructuralChange,
-      oninsertcolumn: notifyStructuralChange,
+      oninsertrow: (changedWorksheet: JssInstance): void => {
+        notifyStructuralChange(changedWorksheet);
+        styleNewlyInsertedRow(changedWorksheet);
+      },
+      oninsertcolumn: (changedWorksheet: JssInstance): void => {
+        notifyStructuralChange(changedWorksheet);
+        styleNewlyInsertedColumn(changedWorksheet);
+      },
       ondeleterow: notifyStructuralChange,
       ondeletecolumn: notifyStructuralChange,
       onresizerow: notifyStructuralChange,
@@ -7237,6 +7613,9 @@ export function buildReadOnlySpreadsheetHost(
         const rawValue = rawDataMirror[startRow]?.[startCol];
         formulaInputEl.disabled = false;
         formulaInputEl.value = String(rawValue ?? '');
+        // Captured here, before any edit, for commitFormulaInput's own
+        // cell-history entry below.
+        formulaInputOriginalValue = formulaInputEl.value;
         formulaInputDirty = false;
       },
     } : {}),
@@ -7302,6 +7681,8 @@ export function buildReadOnlySpreadsheetHost(
       flush();
       delete document.body.dataset.spreadsheetCellEditing;
       if (reclaimFocusHandler) document.removeEventListener('focusin', reclaimFocusHandler);
+      if (suppressReclaimHandler) document.removeEventListener('pointerdown', suppressReclaimHandler, true);
+      if (onUndoRedoKey) document.removeEventListener('keydown', onUndoRedoKey, true);
       if (focusPollInterval !== null) clearInterval(focusPollInterval);
       rescueInputEl?.remove();
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
