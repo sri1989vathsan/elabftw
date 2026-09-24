@@ -3957,6 +3957,7 @@ export function openSpreadsheetModal(
     // <textarea>, positioned over the cell and never owned or recreated by
     // jspreadsheet, replaces it here the same way.
     let rescueInputEl: HTMLTextAreaElement | null = null;
+    let releaseRescueKeys: (() => void) | null = null;
     let rescueInputCol: number | null = null;
     let rescueInputRow: number | null = null;
     // The cell's value from just before this specific edit started (read at
@@ -4044,7 +4045,7 @@ export function openSpreadsheetModal(
         const viewportRoom = Math.max(60, window.innerWidth - el.getBoundingClientRect().left - 8);
         el.style.width = `${Math.min(viewportRoom, Math.max(60, measureRescueInputWidth(el)))}px`;
       });
-      el.addEventListener('keydown', event => {
+      releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
         if (event.key === 'Enter' && !event.shiftKey) {
           event.preventDefault();
           commitRescueInput();
@@ -4149,7 +4150,7 @@ export function openSpreadsheetModal(
       const cell = event.target instanceof Element
         ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
         : null;
-      if (!cell) return;
+      if (!cell || !sheetContainer.contains(cell)) return;
       const col = Number.parseInt(cell.dataset.x ?? '', 10);
       const row = Number.parseInt(cell.dataset.y ?? '', 10);
       if (!Number.isInteger(col) || !Number.isInteger(row)) return;
@@ -4227,7 +4228,7 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('dblclick', onColumnBoundaryDoubleClick, true);
     ui.sheetHost.addEventListener('dblclick', onRowBoundaryDoubleClick, true);
     window.addEventListener('mousedown', onCellSecondMousedown, true);
-    ui.sheetHost.addEventListener('dblclick', onCellDoubleClick, true);
+    window.addEventListener('dblclick', onCellDoubleClick, true);
     ui.sheetHost.addEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
 
     const updateSizeControls = (rows: number, cols: number): void => {
@@ -5336,7 +5337,8 @@ export function openSpreadsheetModal(
       ui.sheetHost.removeEventListener('dblclick', onColumnBoundaryDoubleClick, true);
       ui.sheetHost.removeEventListener('dblclick', onRowBoundaryDoubleClick, true);
       window.removeEventListener('mousedown', onCellSecondMousedown, true);
-      ui.sheetHost.removeEventListener('dblclick', onCellDoubleClick, true);
+      window.removeEventListener('dblclick', onCellDoubleClick, true);
+      releaseRescueKeys?.();
       ui.sheetHost.removeEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
       rescueInputEl?.remove();
       document.removeEventListener('keydown', onKey, true);
@@ -6308,6 +6310,7 @@ export function buildReadOnlySpreadsheetHost(
   const sheetContainer = document.createElement('div');
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   host.appendChild(sheetContainer);
+  let onCellDoubleClick: ((event: MouseEvent) => void) | null = null;
   if (editable) {
     // Clicking a cell to insert its reference into the formula bar must
     // not steal focus away from it -- preventDefault() on mousedown blocks
@@ -6431,12 +6434,12 @@ export function buildReadOnlySpreadsheetHost(
     // only when they actually handle the click, letting this one still run
     // otherwise) so jspreadsheet's own broken column-boundary editor never
     // opens in the first place. See openCellEditor()'s own comment.
-    sheetContainer.addEventListener('dblclick', event => {
+    onCellDoubleClick = (event: MouseEvent): void => {
       if (event.button !== 0) return;
       const cell = event.target instanceof Element
         ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
         : null;
-      if (!cell) return;
+      if (!cell || !sheetContainer.contains(cell)) return;
       const col = Number.parseInt(cell.dataset.x ?? '', 10);
       const row = Number.parseInt(cell.dataset.y ?? '', 10);
       if (!Number.isInteger(col) || !Number.isInteger(row)) return;
@@ -6444,7 +6447,8 @@ export function buildReadOnlySpreadsheetHost(
       event.stopImmediatePropagation();
       const currentValue = rawDataMirror[row]?.[col];
       openCellEditor(col, row, currentValue === undefined || currentValue === null ? '' : String(currentValue), false);
-    }, true);
+    };
+    window.addEventListener('dblclick', onCellDoubleClick, true);
 
     // Click-a-cell-to-insert-its-reference, ported from openSpreadsheetModal's
     // own onFormulaSelectionStart/Move/End -- the formula bar's own click-to-
@@ -6661,6 +6665,7 @@ export function buildReadOnlySpreadsheetHost(
   // into the same rawDataMirror/notifyFromMirror pipeline that already
   // reliably persists every other kind of edit in this file.
   let rescueInputEl: HTMLTextAreaElement | null = null;
+  let releaseRescueKeys: (() => void) | null = null;
   let rescueInputCol: number | null = null;
   let rescueInputRow: number | null = null;
   // See CellHistoryEntry's own comment (module scope, top of file) for why
@@ -6701,6 +6706,9 @@ export function buildReadOnlySpreadsheetHost(
     const row = rescueInputRow;
     const value = rescueInputEl.value;
     const originalValue = rescueInputOriginalValue ?? value;
+    lastEditingCol = null;
+    lastEditingRow = null;
+    lastFocusWasInGrid = false;
     rescueInputEl.hidden = true;
     rescueInputCol = null;
     rescueInputRow = null;
@@ -6761,7 +6769,7 @@ export function buildReadOnlySpreadsheetHost(
     // Enter commits and hands focus back to jspreadsheet's own grid --
     // mirroring how a normal cell edit closes -- rather than inserting a
     // newline (a plain <textarea>'s own default for Enter).
-    el.addEventListener('keydown', event => {
+    releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         commitRescueInput();
@@ -7501,6 +7509,11 @@ export function buildReadOnlySpreadsheetHost(
         editorValue: CellValue,
       ): void => {
         delete document.body.dataset.spreadsheetCellEditing;
+        // A normal Enter commit is not an interrupted edit. Do not let
+        // the focus recovery poll reopen the editor after it closes.
+        lastEditingCol = null;
+        lastEditingRow = null;
+        lastFocusWasInGrid = false;
         const originalCellStyle = activeEditorCellStyles.get(cell);
         if (originalCellStyle) {
           cell.style.overflow = originalCellStyle.overflow;
@@ -7685,6 +7698,8 @@ export function buildReadOnlySpreadsheetHost(
       if (onUndoRedoKey) document.removeEventListener('keydown', onUndoRedoKey, true);
       if (focusPollInterval !== null) clearInterval(focusPollInterval);
       rescueInputEl?.remove();
+      releaseRescueKeys?.();
+      if (onCellDoubleClick) window.removeEventListener('dblclick', onCellDoubleClick, true);
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
     },
   };
@@ -7932,12 +7947,28 @@ function colLabel(index: number): string {
   return label;
 }
 
-// Shared by both the inline overlay's and the popup's own rescue <textarea>
-// (see each one's own "rescue input" comment for why jspreadsheet's native
-// cell editor is bypassed for typing at all). A pure function of the
-// textarea's current value and font -- never its own scrollWidth, so
-// repeated synchronization frames cannot feed the previous width back into
-// the next calculation and grow forever while idle.
+function isolateSpreadsheetEditorKeys(
+  input: HTMLTextAreaElement,
+  onKeydown: (event: KeyboardEvent) => void,
+): () => void {
+  // Jspreadsheet's document handlers must never process keys belonging to
+  // our separate textarea. In particular Enter can otherwise commit here
+  // and immediately reopen a native editor; character keys can replace
+  // the selected cell instead of editing the textarea's existing value.
+  const handle = (event: KeyboardEvent): void => {
+    if (event.target !== input) return;
+    // Preserve the existing cell-history undo/redo handlers.
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') return;
+    event.stopImmediatePropagation();
+    if (event.type === 'keydown') onKeydown(event);
+  };
+  const types = ['keydown', 'keypress', 'keyup'] as const;
+  types.forEach(type => window.addEventListener(type, handle, true));
+  return () => types.forEach(type => window.removeEventListener(type, handle, true));
+}
+
+// Measure the value and font, never scrollWidth: feeding the editor's own
+// previous width into the next measurement makes it grow while idle.
 function measureRescueInputWidth(input: HTMLTextAreaElement): number {
   const style = window.getComputedStyle(input);
   const canvas = document.createElement('canvas');
