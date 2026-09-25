@@ -68,6 +68,9 @@ final class OrderUploads extends AbstractRest
     #[Override]
     public function postAction(Action $action, array $reqBody): int
     {
+        if ($action === Action::Duplicate) {
+            return $this->copyFrom((int) ($reqBody['source_upload_id'] ?? 0));
+        }
         if ($action !== Action::Create) {
             throw new ImproperActionException('Invalid action for order upload creation.');
         }
@@ -148,6 +151,73 @@ final class OrderUploads extends AbstractRest
         }
 
         return $uploadId;
+    }
+
+    /**
+     * Attach a copy of an existing order's attachment (e.g. a procurement
+     * confirmation you already have on file from a previous, similar order)
+     * to this order, without the user having to download and re-upload it
+     * by hand. Physically duplicates the file under a new storage path
+     * rather than pointing both rows at the same one: destroy() below
+     * deletes a row's own long_name unconditionally, so two rows sharing a
+     * path would let deleting either attachment silently break the other.
+     * Reuses the source's own extracted_text/extraction_status verbatim --
+     * it's the same file content, so there is nothing new to extract.
+     */
+    private function copyFrom(int $sourceUploadId): int
+    {
+        // Also confirms the target order belongs to our team before writing
+        // anything.
+        $this->Order->readOne();
+
+        // Scoped to :team the same way selectSql() always is, so a source
+        // upload from another team's order can't be copied in this way --
+        // only ones this user could already see themselves.
+        $sql = self::selectSql() . ' WHERE upload.id = :id';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $req->bindValue(':id', $sourceUploadId, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $source = $this->Db->fetch($req);
+        if (empty($source)) {
+            throw new ImproperActionException('Source attachment not found.');
+        }
+
+        $ext = mb_strtolower(pathinfo((string) $source['real_name'], PATHINFO_EXTENSION) ?: 'bin');
+        $someRandomString = Tools::getUuidv4();
+        $folder = mb_substr($someRandomString, 0, 2);
+        $longName = sprintf('%s/%s.%s', $folder, $someRandomString, $ext);
+
+        $storageId = (int) $source['storage'];
+        $storageFs = Storage::from($storageId)->getStorage()->getFs();
+        $storageFs->createDirectory($folder);
+        $storageFs->writeStream($longName, $storageFs->readStream((string) $source['long_name']));
+
+        $extractedText = $source['has_extracted_text'] ? $this->readSourceExtractedText($sourceUploadId) : null;
+        $sql = 'INSERT INTO custom_order_uploads (order_id, userid, real_name, long_name, storage, filesize, extraction_status, extracted_text)
+            VALUES (:order_id, :userid, :real_name, :long_name, :storage, :filesize, :extraction_status, :extracted_text)';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':order_id', $this->Order->id, PDO::PARAM_INT);
+        $req->bindParam(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $req->bindValue(':real_name', $source['real_name']);
+        $req->bindValue(':long_name', $longName);
+        $req->bindValue(':storage', $storageId, PDO::PARAM_INT);
+        $req->bindValue(':filesize', $source['filesize'], PDO::PARAM_INT);
+        $req->bindValue(':extraction_status', $source['extraction_status']);
+        $req->bindValue(':extracted_text', $extractedText, $extractedText === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $this->Db->execute($req);
+
+        return (int) $this->Db->lastInsertId();
+    }
+
+    /** selectSql() deliberately never selects the (potentially large) extracted_text column itself, only whether it's set -- fetch it separately, only for the one row actually being copied. */
+    private function readSourceExtractedText(int $uploadId): ?string
+    {
+        $sql = 'SELECT extracted_text FROM custom_order_uploads WHERE id = :id';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':id', $uploadId, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return $req->fetchColumn() ?: null;
     }
 
     /**

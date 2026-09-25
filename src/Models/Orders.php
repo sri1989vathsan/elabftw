@@ -331,13 +331,21 @@ final class Orders extends AbstractRest
             $conditions[] = '(' . implode(' OR ', $searchConditions) . ')';
         }
 
+        // Only two columns are exposed for sorting -- procurement_id is
+        // free-text (whatever a supplier's PDF happened to contain), not a
+        // number, so ORDER BY sorts it lexicographically; NULLs (no tag
+        // extracted yet/at all) sort first ascending, last descending, same
+        // as MySQL's own default for any other column.
+        $sortColumn = $query->getString('sort_by') === 'procurement_id' ? 'o.procurement_id' : 'o.created_at';
+        $sortDir = $query->getString('sort_dir') === 'asc' ? 'ASC' : 'DESC';
+
         $limit = $query->getInt('limit') ?: 0;
         $offset = max(0, $query->getInt('offset'));
 
         if ($limit === 0) {
             $sql = self::selectSql() . '
-                WHERE ' . implode(' AND ', $conditions) . '
-                ORDER BY o.pinned DESC, o.created_at DESC';
+                WHERE ' . implode(' AND ', $conditions) . "
+                ORDER BY o.pinned DESC, {$sortColumn} {$sortDir}";
 
             return array_map($this->hydrate(...), $this->fetchAllBound($sql, $bind));
         }
@@ -356,9 +364,9 @@ final class Orders extends AbstractRest
         $pinnedLimit = $query->getInt('pinned_limit') ?: self::DEFAULT_PINNED_LIMIT;
         $pinnedOffset = max(0, $query->getInt('pinned_offset'));
         $pinnedSql = self::selectSql() . '
-            WHERE ' . implode(' AND ', $conditions) . '
+            WHERE ' . implode(' AND ', $conditions) . "
             AND o.pinned = 1
-            ORDER BY o.created_at DESC LIMIT ' . ($pinnedLimit + 1) . " OFFSET {$pinnedOffset}";
+            ORDER BY {$sortColumn} {$sortDir} LIMIT " . ($pinnedLimit + 1) . " OFFSET {$pinnedOffset}";
         $pinnedRows = $this->fetchAllBound($pinnedSql, $bind);
 
         // "load more pinned" only needs the next chunk of the pinned
@@ -372,7 +380,7 @@ final class Orders extends AbstractRest
         $unpinnedSql = self::selectSql() . '
             WHERE ' . implode(' AND ', $conditions) . "
             AND o.pinned = 0
-            ORDER BY o.created_at DESC LIMIT " . ($limit + 1) . " OFFSET {$offset}";
+            ORDER BY {$sortColumn} {$sortDir} LIMIT " . ($limit + 1) . " OFFSET {$offset}";
         $unpinnedRows = $this->fetchAllBound($unpinnedSql, $bind);
 
         return array_map($this->hydrate(...), array(...$pinnedRows, ...$unpinnedRows));

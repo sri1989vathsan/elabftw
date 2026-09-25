@@ -55,6 +55,54 @@ export async function fetchLinkPreviewLabel(url: string): Promise<string> {
 
 export const BARE_URL_PATTERN = /^https?:\/\/\S+$/i;
 
+/** Upgrade pasted bare links after insertion, without changing destinations. */
+export async function upgradeNoteLinks(root: HTMLElement): Promise<void> {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    if (!node.parentElement?.closest('a, code, pre')) nodes.push(node);
+  }
+  for (const node of nodes) {
+    const text = node.data;
+    const matches = [...text.matchAll(/(?:https?:\/\/|www\.)[^\s<>]+/gi)];
+    if (!matches.length) continue;
+    const fragment = document.createDocumentFragment();
+    let offset = 0;
+    for (const match of matches) {
+      const label = match[0].replace(/[.,;!?)\]]+$/, '');
+      fragment.append(text.slice(offset, match.index));
+      const anchor = document.createElement('a');
+      anchor.href = /^www\./i.test(label) ? `https://${label}` : label;
+      anchor.textContent = label;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      fragment.append(anchor);
+      offset = match.index + label.length;
+    }
+    fragment.append(text.slice(offset));
+    node.replaceWith(fragment);
+  }
+  const requests = new Map<string, Promise<string>>();
+  // Sequential lookups keep large notes from flooding the preview service.
+  for (const anchor of Array.from(root.querySelectorAll<HTMLAnchorElement>('a[href]'))) {
+    if (!root.isConnected) break;
+    if (!root.contains(anchor) || anchor.hasAttribute('data-link-preview-pending')) continue;
+    const url = anchor.href;
+    const originalLabel = anchor.textContent ?? '';
+    if (!/^https?:\/\//i.test(url)
+      || !/^(?:https?:\/\/|www\.)\S+$/i.test(originalLabel.trim())) continue;
+    if (!requests.has(url)) requests.set(url, fetchLinkPreviewLabel(url));
+    const label = await requests.get(url)!;
+    // A lookup must not overwrite edits made while it was in flight.
+    if (!root.isConnected || !root.contains(anchor) || anchor.href !== url
+      || anchor.textContent !== originalLabel) continue;
+    anchor.textContent = label;
+    anchor.classList.add('elabftw-link-preview');
+    root.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
 /**
  * Paste handler for a rich-text (contenteditable) field: if what's on the
  * clipboard is JUST a bare http(s) URL (nothing else pasted alongside it),

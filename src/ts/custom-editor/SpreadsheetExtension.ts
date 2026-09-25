@@ -1159,8 +1159,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // Always reposition, even when it was already the very next
           // sibling: .after() on a node already there is a no-op move,
           // cheap, and guarantees it can never drift or duplicate.
-          table.after(spacer);
-          const spacerHeight = Math.max(0, overlayHeight - tableRect.height);
+          if (table.nextSibling !== spacer) table.after(spacer);
+          // The hidden HTML table can wrap into taller rows than the live
+          // grid. Account for BOTH directions or its growing hidden height
+          // pushes the following paragraph farther down on every edit.
+          const heightDifference = Math.round(overlayHeight - tableRect.height);
+          const spacerHeight = Math.max(0, heightDifference);
           // mceAutoResize (the iframe's own outer box height) is only
           // force-called from tinymce.ts at a few fixed checkpoints after
           // init (a short setTimeout, a requestAnimationFrame, and once web
@@ -1178,9 +1182,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // spacer is still settling, with no dependency on fixed timing
           // elsewhere -- and is a no-op call otherwise (skipped whenever
           // the height is already correct), so it doesn't run every frame.
-          if (spacer.dataset.lastHeight !== String(spacerHeight)) {
-            spacer.dataset.lastHeight = String(spacerHeight);
+          if (spacer.dataset.lastHeight !== String(heightDifference)) {
+            spacer.dataset.lastHeight = String(heightDifference);
             spacer.style.height = `${spacerHeight}px`;
+            spacer.style.marginTop = `${Math.min(0, heightDifference)}px`;
             if (autoResizeDebounce !== null) clearTimeout(autoResizeDebounce);
             autoResizeDebounce = setTimeout(() => {
               autoResizeDebounce = null;

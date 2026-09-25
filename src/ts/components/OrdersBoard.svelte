@@ -3,10 +3,10 @@
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
-  import { EntityType, Model } from '../interfaces';
+  import { Action, EntityType, Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
   import { applyMention, extractMentionQuery, wrapMentionsAsHtml, stripMentionHtml } from '../mentions';
-  import { handleLinkPreviewPaste } from '../linkPreview';
+  import { handleLinkPreviewPaste, upgradeNoteLinks } from '../linkPreview';
   import { buildLabCollectorUrl } from '../labcollector-link';
 
   // Closes a results dropdown on any click outside its own container --
@@ -182,6 +182,8 @@
   let searchPdf = false;
   let dateFrom = '';
   let dateTo = '';
+  let sortBy: 'date' | 'procurement_id' = 'date';
+  let sortDir: 'asc' | 'desc' = 'desc';
   let selectedIds = new Set<number>();
 
   // pagination: the server is asked for pageSize+1 rows so hasNextPage can
@@ -218,6 +220,12 @@
   // submit time instead
   let newNotesEl: HTMLElement;
   let newFiles: File[] = [];
+  // Attachments picked via the "Add to new order" button on an existing
+  // order's own attachment list (see reuseUpload()) -- queued here rather
+  // than copied immediately, since the new order doesn't have an id yet
+  // until it's actually created. Flushed the same way newFiles is, in
+  // submitNewItem()'s own post-creation loop.
+  let reusedUploads: OrderUpload[] = [];
   let newIsReference = false;
   let newIsCommon = false;
   // place the order for a teammate instead of themself
@@ -485,7 +493,14 @@
     if (quickFilter === 'labcollector:registered') params.labcollector = 'registered';
     else if (quickFilter === 'labcollector:unregistered') params.labcollector = 'unregistered';
     else if (quickFilter === 'common') params.common = '1';
+    params.sort_by = sortBy;
+    params.sort_dir = sortDir;
     return params;
+  }
+
+  function onSortChange(): void {
+    pageOffset = 0;
+    void load();
   }
 
   function onQuickFilterChange(): void {
@@ -641,6 +656,13 @@
           notify.error(error instanceof Error ? error.message : `Could not attach ${file.name}.`);
         }
       }
+      for (const upload of reusedUploads) {
+        try {
+          await copyUploadToOrder(orderId, upload.id);
+        } catch (error) {
+          notify.error(error instanceof Error ? error.message : `Could not attach ${upload.real_name}.`);
+        }
+      }
       let notesChanged = false;
       for (const pending of pendingNoteImages) {
         try {
@@ -664,6 +686,7 @@
       newTitle = '';
       if (newNotesEl) newNotesEl.innerHTML = '';
       newFiles = [];
+      reusedUploads = [];
       newIsReference = false;
       newIsCommon = false;
       newForUserid = null;
@@ -690,6 +713,20 @@
 
   function removeNewFile(index: number): void {
     newFiles = newFiles.filter((_, i) => i !== index);
+  }
+
+  // Bound to the "Add to new order" button next to an attachment on an
+  // existing order (see the orderCard snippet below) -- queues it into the
+  // pinned new-order form's own attachment list rather than copying it
+  // immediately, since the new order this is headed for doesn't exist yet.
+  function reuseUpload(upload: OrderUpload): void {
+    if (reusedUploads.some(u => u.id === upload.id)) return;
+    reusedUploads = [...reusedUploads, upload];
+    notify.success(t('Added to the new order form.'));
+  }
+
+  function removeReusedUpload(index: number): void {
+    reusedUploads = reusedUploads.filter((_, i) => i !== index);
   }
 
   let newFilesDragOver = false;
@@ -1055,8 +1092,12 @@
     return ApiC.post2location(`${Model.Order}/${orderId}/${Model.Upload}`, formData);
   }
 
+  async function copyUploadToOrder(orderId: number, sourceUploadId: number): Promise<number> {
+    return ApiC.post2location(`${Model.Order}/${orderId}/${Model.Upload}`, { action: Action.Duplicate, source_upload_id: sourceUploadId });
+  }
+
   function isImageFile(file: File): boolean {
-    return file.type.startsWith('image/');
+    return typeof file.type === 'string' && file.type.startsWith('image/');
   }
 
   // Pasting/dropping an image straight into a plain contenteditable, left to
@@ -1097,7 +1138,16 @@
   }
 
   function handleNotesPaste(event: ClipboardEvent, orderId: number | null, el: HTMLElement): void {
-    const imageFile = Array.from(event.clipboardData?.files ?? []).find(isImageFile);
+    // Detecting a pasted image is a nicety on top of the link-preview
+    // handling below -- if it throws for any reason (an oddly-shaped
+    // clipboard entry, e.g.), still fall through to handleLinkPreviewPaste
+    // instead of leaving the paste as an uninterrupted plain-text default.
+    let imageFile: File | undefined;
+    try {
+      imageFile = Array.from(event.clipboardData?.files ?? []).find(isImageFile);
+    } catch {
+      imageFile = undefined;
+    }
     if (imageFile) {
       event.preventDefault();
       if (orderId !== null) {
@@ -1108,6 +1158,13 @@
       return;
     }
     handleLinkPreviewPaste(event, el);
+    // Let the browser finish inserting rich text or multiple URLs first.
+    // Title requests then run in the background, without delaying paste.
+    if (!event.defaultPrevented) {
+      window.setTimeout(() => {
+        if (el.isConnected) void upgradeNoteLinks(el);
+      }, 0);
+    }
   }
 
   function handleNotesDrop(event: DragEvent, orderId: number | null, el: HTMLElement): void {
@@ -1162,6 +1219,15 @@
 
   function canDeleteUpload(upload: OrderUpload): boolean {
     return core.isAdmin || upload.userid === core.currentUserid;
+  }
+
+  // The procurement_id tag is auto-extracted from an uploaded PDF's own
+  // text content (see extractProcurementTags in OrderUploads.php) --
+  // checking the attachment's filename too was dropped: extraction runs
+  // asynchronously after upload, so a file attached moments ago still
+  // reads as "missing" until that finishes, however it's checked.
+  function isMissingProcurementId(item: OrderItem): boolean {
+    return !item.procurement_id;
   }
 
   function escapeRegExp(value: string): string {
@@ -1446,13 +1512,23 @@
           <input type="file" class="orders-file-input" multiple on:change={onNewFilesSelected} />
         </label>
         <span class="orders-muted small ml-2">{t('or drag files here')}</span>
-        {#if newFiles.length > 0}
+        {#if newFiles.length > 0 || reusedUploads.length > 0}
           <ul class="orders-upload-list mt-1">
             {#each newFiles as file, index (file.name + index)}
               <li class="orders-upload">
                 <i class="fas fa-file fa-fw mr-1" aria-hidden="true"></i>
                 {file.name}
                 <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button ml-auto" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeNewFile(index)}>
+                  <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                </button>
+              </li>
+            {/each}
+            {#each reusedUploads as upload, index (upload.id)}
+              <li class="orders-upload">
+                <i class="fas fa-share fa-fw mr-1" aria-hidden="true"></i>
+                {upload.real_name}
+                <span class="orders-muted ml-1">{t('from a previous order')}</span>
+                <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button ml-auto" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeReusedUpload(index)}>
                   <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
                 </button>
               </li>
@@ -1555,6 +1631,20 @@
         <option value="common">{t('Common')}</option>
       </optgroup>
     </select>
+    <span class="orders-toolbar-divider" aria-hidden="true"></span>
+    <select class="form-control form-control-sm" style="width:auto" bind:value={sortBy} on:change={onSortChange} title={t('Sort by')}>
+      <option value="date">{t('Sort: Date')}</option>
+      <option value="procurement_id">{t('Sort: Procurement ID')}</option>
+    </select>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm orders-icon-button"
+      title={sortDir === 'desc' ? t('Descending -- click for ascending') : t('Ascending -- click for descending')}
+      aria-label={t('Toggle sort direction')}
+      on:click={() => { sortDir = sortDir === 'desc' ? 'asc' : 'desc'; onSortChange(); }}
+    >
+      <i class={sortDir === 'desc' ? 'fas fa-arrow-down-wide-short fa-fw' : 'fas fa-arrow-up-wide-short fa-fw'} aria-hidden="true"></i>
+    </button>
   </div>
 
   <div class="d-flex flex-wrap align-items-start mb-3 orders-toolbar-row" style="gap:0.75rem">
@@ -1646,7 +1736,7 @@
     </div>
   {/if}
 
-  {#if loading}
+  {#if loading && visibleItems.length === 0}
     <p class="orders-muted">{t('Loading')}…</p>
   {:else if visibleItems.length === 0}
     <p class="orders-muted">{t('No orders here.')}</p>
@@ -1788,6 +1878,11 @@
                 </select>
                 <span class="orders-muted orders-item-id" title={t('Order ID')}>#{item.id}</span>
                 <strong class="orders-item-title">{item.title}</strong>
+                {#if !['requested', 'reference', 'backlogged', 'cancelled'].includes(item.status) && isMissingProcurementId(item)}
+                  <span class="badge badge-danger" title={t('No Procurement ID tag was extracted from an attached file.')}>
+                    <i class="fas fa-triangle-exclamation fa-fw mr-1" aria-hidden="true"></i>{t('Missing Procurement ID')}
+                  </span>
+                {/if}
                 {#if item.common}
                   <span class="badge badge-warning orders-common-badge" title={t('Commonly ordered lab supply')}>
                     <i class="fas fa-tag fa-fw mr-1" aria-hidden="true"></i>{t('Common')}
@@ -1946,10 +2041,19 @@
                       {:else if upload.extraction_status === 'pending'}
                         <i class="fas fa-spinner fa-spin fa-fw ml-1 orders-muted" title={t('Extracting text for search…')} aria-label={t('Extracting text for search')}></i>
                       {/if}
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-sm orders-icon-button ml-auto"
+                        title={t('Add to new order')}
+                        aria-label={t('Add to new order')}
+                        on:click={() => reuseUpload(upload)}
+                      >
+                        <i class="fas fa-share fa-fw" aria-hidden="true"></i>
+                      </button>
                       {#if canDeleteUpload(upload)}
                         <button
                           type="button"
-                          class="btn btn-danger-ghost btn-sm orders-icon-button ml-auto"
+                          class="btn btn-danger-ghost btn-sm orders-icon-button"
                           title={t('Delete')}
                           aria-label={t('Delete')}
                           on:click={() => deleteUpload(item, upload)}
@@ -2390,6 +2494,11 @@
     border: none;
     color: #212529;
     background-color: #ffc107;
+  }
+
+  .orders-status-select-backlogged {
+    color: #fff;
+    background-color: #fd7e14;
   }
 
   .orders-status-select-ordered {
