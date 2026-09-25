@@ -949,9 +949,9 @@
   }
 
   function toggleSelectAllVisible(): void {
-    const manageableIds = visibleItems.filter(canManage).map(i => i.id);
-    const allSelected = manageableIds.length > 0 && manageableIds.every(id => selectedIds.has(id));
-    selectedIds = allSelected ? new Set() : new Set(manageableIds);
+    const visibleIds = visibleItems.map(i => i.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
+    selectedIds = allSelected ? new Set() : new Set(visibleIds);
   }
 
   async function bulkSetStatus(status: OrderStatus): Promise<void> {
@@ -1743,7 +1743,7 @@
   {:else}
     <div class="mb-1">
       <label class="btn-unstyled d-inline-flex align-items-center orders-select-all">
-        <input type="checkbox" class="mr-1" checked={visibleItems.some(canManage) && visibleItems.filter(canManage).every(i => selectedIds.has(i.id))} on:change={toggleSelectAllVisible} />
+        <input type="checkbox" class="mr-1" checked={visibleItems.length > 0 && visibleItems.every(i => selectedIds.has(i.id))} on:change={toggleSelectAllVisible} />
         {t('Select all')}
       </label>
     </div>
@@ -1857,15 +1857,13 @@
               </div>
             {:else}
               <div class="orders-item-header">
-                {#if canManage(item)}
-                  <input
-                    type="checkbox"
-                    class="mr-1"
-                    checked={selectedIds.has(item.id)}
-                    on:change={() => toggleSelect(item.id)}
-                    aria-label={t('Select')}
-                  />
-                {/if}
+                <input
+                  type="checkbox"
+                  class="mr-1"
+                  checked={selectedIds.has(item.id)}
+                  on:change={() => toggleSelect(item.id)}
+                  aria-label={t('Select')}
+                />
                 <select
                   class={`form-control form-control-sm orders-status-select orders-status-select-${item.status}`}
                   value={item.status}
