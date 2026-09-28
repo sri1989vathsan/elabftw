@@ -454,6 +454,23 @@
     return `${ENTITY_TYPE_PAGES[link.entity_type]}?mode=view&id=${link.entity_id}`;
   }
 
+  // Links pasted into the task dialog are stored as weblinks, including
+  // links to our own experiments/resources. Group those without rewriting
+  // the stored link or treating another server's records as local entities.
+  function boardLinkType(link: EntityLink): EntityLinkType {
+    if (link.entity_type !== 'weblink' || !link.url) return link.entity_type;
+    try {
+      const url = new URL(link.url, window.location.href);
+      if (url.origin !== window.location.origin || !/^[1-9]\d*$/.test(url.searchParams.get('id') ?? '')) return 'weblink';
+      for (const type of ['experiments', 'items'] as const) {
+        if (url.pathname === new URL(ENTITY_TYPE_PAGES[type]!, window.location.href).pathname) return type;
+      }
+    } catch {
+      // Leave malformed or unsupported links in the generic link group.
+    }
+    return 'weblink';
+  }
+
   function entityTypeLabel(type: EntityLinkType): string {
     return {
       experiments: t('Experiment'),
@@ -1427,7 +1444,12 @@
     loadingEntityLinks = true;
     try {
       const links = await ApiC.getJson(`${Model.Todolist}/${taskId}/entity_links`) as EntityLink[];
-      detailEntityLinks = links.filter(link => link.title !== null);
+      const visibleLinks = links.filter(link => link.title !== null);
+      tasks = tasks.map(task => task.id === taskId ? { ...task, entity_links: visibleLinks } : task);
+      if (detailTask?.id === taskId) {
+        detailEntityLinks = visibleLinks;
+        detailTask = { ...detailTask, entity_links: visibleLinks };
+      }
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load linked items.');
     } finally {
@@ -2379,8 +2401,8 @@
                   {/each}
                 </div>
               {/if}
-              {#each [{ type: 'experiments', label: t('Experiments'), icon: 'fa-flask' }, { type: 'items', label: t('Resources'), icon: 'fa-cubes' }] as group}
-                {@const links = task.entity_links.filter(link => link.entity_type === group.type)}
+              {#each [{ type: 'experiments', label: t('Experiments'), icon: 'fa-flask' }, { type: 'items', label: t('Resources'), icon: 'fa-cubes' }, { type: 'weblink', label: t('Links'), icon: 'fa-link' }, { type: 'experiments_templates', label: t('Templates'), icon: 'fa-file' }, { type: 'items_types', label: t('Resource template'), icon: 'fa-file' }] as group}
+                {@const links = task.entity_links.filter(link => boardLinkType(link) === group.type)}
                 {#if links.length}
                   <details class="mt-2">
                     <summary><i class="fas {group.icon} fa-fw mr-1" aria-hidden="true"></i>{links.length} {group.label}</summary>
