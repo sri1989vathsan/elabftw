@@ -16,8 +16,11 @@ use Defuse\Crypto\Crypto;
 use Defuse\Crypto\Key;
 use Elabftw\Elabftw\Env;
 use Elabftw\Exceptions\ImproperActionException;
+use Elabftw\Models\Orders;
 use Elabftw\Services\Filter;
 use Override;
+
+use function in_array;
 
 final class TeamParam extends ContentParams
 {
@@ -47,8 +50,18 @@ final class TeamParam extends ContentParams
             'onboarding_email_active' => $this->getBinary(),
             'newcomer_threshold',
             'orders_autoarchive_days' => $this->asInt(),
+            'orders_autoarchive_status' => $this->getAutoArchiveStatus(),
             default => throw new ImproperActionException('Incorrect parameter for team.' . $this->target),
         };
+    }
+
+    private function getAutoArchiveStatus(): string
+    {
+        $status = (string) $this->content;
+        if (!in_array($status, Orders::AUTOARCHIVABLE_STATUSES, true)) {
+            throw new ImproperActionException('Invalid order status for auto-archiving.');
+        }
+        return $status;
     }
 
     private function getNullableContent(): ?string

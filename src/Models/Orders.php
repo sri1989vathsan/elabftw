@@ -56,7 +56,12 @@ final class Orders extends AbstractRest
 {
     use SetIdTrait;
 
-    private const array STATUSES = array('requested', 'ordered', 'received', 'backlogged', 'cancelled', 'reference');
+    public const array STATUSES = array('requested', 'ordered', 'received', 'backlogged', 'cancelled', 'reference');
+
+    // 'reference' excluded: those are pinned catalog entries with no real
+    // lifecycle to measure "time in status" from (see updateStatus() and
+    // postAction()'s own comments) -- not a sensible auto-archive trigger.
+    public const array AUTOARCHIVABLE_STATUSES = array('requested', 'ordered', 'received', 'backlogged', 'cancelled');
 
     // same module list/URL scheme as the LabCollector link already
     // insertable into an entity's body -- see buildLabCollectorUrl() in
@@ -860,7 +865,7 @@ final class Orders extends AbstractRest
         $sql = "UPDATE custom_orders AS o
             INNER JOIN teams AS tm ON tm.id = o.team
             SET o.archived = 1
-            WHERE o.status = 'ordered'
+            WHERE o.status = tm.orders_autoarchive_status
                 AND o.archived = 0
                 AND tm.orders_autoarchive_days > 0
                 AND o.status_changed_at <= NOW() - INTERVAL tm.orders_autoarchive_days DAY";
