@@ -65,6 +65,7 @@
     project_name: string | null;
     project_parent_name: string | null;
     entity_links: EntityLink[];
+    steps?: Step[];
   };
 
   type TeamMember = {
@@ -525,7 +526,7 @@
   // slice of a project's own visible tasks to show, and the "team" fetch
   // has to keep seeing all of them for that slicing to stay correct.
   function taskFilterParams(): string {
-    let params = '';
+    let params = '&include_steps=1';
     if (typeof activeProjectId === 'number') {
       params += `&project_id=${activeProjectId}`;
       if (computeViewingAllSubprojects(activeProjectId)) params += '&include_subprojects=1';
@@ -1127,6 +1128,41 @@
     }
   }
 
+  // Same field copy as duplicateTask above, but for a whole selection at
+  // once -- opening a detail popup per copy wouldn't make sense here, so
+  // this just creates them all and reloads, the same shape as the other
+  // bulk actions (bulkMoveToColumn) below.
+  let copyingTasks = false;
+  async function bulkDuplicateTasks(): Promise<void> {
+    const selected = tasks.filter(t => selectedTaskIds.has(t.id) && canManage(t));
+    if (selected.length === 0 || copyingTasks) return;
+    copyingTasks = true;
+    try {
+      // Bound request pressure; remove successful copies from the selection
+      // so a failed remainder can be retried without duplicating successes.
+      for (const task of selected) {
+        await ApiC.post2location(Model.Todolist, {
+          content: task.body,
+          notes: task.notes,
+          description: task.description,
+          deadline: task.deadline,
+          assignee_userids: task.assignees.map(a => a.userid),
+          priority: task.priority,
+          project_id: task.project_id,
+          column_id: task.column_id,
+        });
+        selectedTaskIds = new Set([...selectedTaskIds].filter(id => id !== task.id));
+      }
+      notify.success();
+      selectedTaskIds = new Set();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not duplicate the selected tasks.');
+    } finally {
+      copyingTasks = false;
+      await load();
+    }
+  }
+
   // Archiving keeps the task around (unlike deleteTask above) but takes it
   // off the active board/counts entirely -- see Todolist::readAll()'s own
   // archived filter. Closes the detail popup on archive since the task no
@@ -1527,6 +1563,7 @@
     loadingSteps = true;
     try {
       detailSteps = await ApiC.getJson(`${Model.Todolist}/${taskId}/steps`) as Step[];
+      tasks = tasks.map(task => task.id === taskId ? { ...task, steps: detailSteps } : task);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load steps.');
     } finally {
@@ -1566,6 +1603,24 @@
       await loadSteps(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not update that step.');
+    }
+  }
+
+  let savingBoardSteps = new Set<number>();
+  async function toggleBoardStep(task: Task, step: Step): Promise<void> {
+    if (!canManage(task) || savingBoardSteps.has(step.id)) return;
+    savingBoardSteps = new Set([...savingBoardSteps, step.id]);
+    const finished = !step.finished;
+    try {
+      await ApiC.patch(`${Model.Todolist}/${task.id}/steps/${step.id}`, { finished });
+      tasks = tasks.map(item => item.id === task.id
+        ? { ...item, steps: item.steps?.map(value => value.id === step.id ? { ...value, finished } : value) }
+        : item);
+      if (detailTask?.id === task.id) await loadSteps(task.id);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not update that step.');
+    } finally {
+      savingBoardSteps = new Set([...savingBoardSteps].filter(id => id !== step.id));
     }
   }
 
@@ -2182,6 +2237,9 @@
           <option value={column.id}>{column.name}</option>
         {/each}
       </select>
+      <button type="button" class="btn btn-secondary btn-sm mr-2" disabled={copyingTasks} on:click={bulkDuplicateTasks}>
+        <i class="fas fa-clone fa-fw mr-1" aria-hidden="true"></i>{copyingTasks ? t('Copying…') : t('Copy selected')}
+      </button>
       <button type="button" class="btn btn-ghost btn-sm" on:click={() => selectedTaskIds = new Set()}>{t('Clear selection')}</button>
     </div>
   {/if}
@@ -2295,8 +2353,8 @@
                   </div>
                 </div>
               {/if}
-              {#if activeProjectId === 'all'}
-                <span class="badge badge-info mt-1">{task.project_name ?? t('Unfiled')}</span>
+              {#if activeProjectId === 'all' || viewingAllSubprojects}
+                <span class="badge badge-info mt-1">{#if task.project_parent_name}{task.project_parent_name} › {/if}{task.project_name ?? t('Unfiled')}</span>
               {/if}
               {#if task.priority}
                 <span class="badge pm-priority pm-priority-{task.priority} mt-1">{priorityLabel(task.priority)}</span>
@@ -2310,6 +2368,28 @@
               {#if task.notes}
                 <p class="pm-muted pm-task-preview">{plainPreview(task.notes)}</p>
               {/if}
+              {#if task.steps?.length}
+                <div class="mt-2">
+                  <div class="d-flex justify-content-between pm-muted"><span>{t('Steps')}</span><span>{task.steps.filter(step => step.finished).length} / {task.steps.length}</span></div>
+                  {#each task.steps as step (step.id)}
+                    <label class="d-flex align-items-start mb-1">
+                      <input type="checkbox" class="mr-2 mt-1" checked={step.finished} disabled={!canManage(task) || savingBoardSteps.has(step.id)} on:change={(event) => { event.currentTarget.checked = step.finished; void toggleBoardStep(task, step); }} />
+                      <span style:text-decoration={step.finished ? 'line-through' : 'none'}>{step.body}</span>
+                    </label>
+                  {/each}
+                </div>
+              {/if}
+              {#each [{ type: 'experiments', label: t('Experiments'), icon: 'fa-flask' }, { type: 'items', label: t('Resources'), icon: 'fa-cubes' }] as group}
+                {@const links = task.entity_links.filter(link => link.entity_type === group.type)}
+                {#if links.length}
+                  <details class="mt-2">
+                    <summary><i class="fas {group.icon} fa-fw mr-1" aria-hidden="true"></i>{links.length} {group.label}</summary>
+                    {#each links as link (link.id)}
+                      <a class="d-block" href={entityViewUrl(link)} target="_blank" rel="noopener noreferrer">{link.title || `${entityTypeLabel(link.entity_type)} #${link.entity_id}`}</a>
+                    {/each}
+                  </details>
+                {/if}
+              {/each}
               <div class="pm-task-meta d-flex align-items-center flex-wrap mt-1">
                 {#if task.assignees.length === 0}
                   <span class="badge badge-info mr-1"><i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Unassigned')}</span>
@@ -3120,4 +3200,3 @@
     </div>
   </div>
 {/if}
-

@@ -349,7 +349,30 @@ final class Todolist extends AbstractRest
         }
         $this->Db->execute($req);
 
-        return array_map(fn(array $row): array => $this->decodeEntityLinks($this->decodeAssignees($row)), $req->fetchAll());
+        $tasks = array_map(fn(array $row): array => $this->decodeEntityLinks($this->decodeAssignees($row)), $req->fetchAll());
+        // Board-only enrichment: one query for the already permission-filtered
+        // page, not one request per card. Sidebar callers remain unchanged.
+        if ($query->getBoolean('include_steps') && $tasks !== array()) {
+            $ids = array_map('intval', array_column($tasks, 'id'));
+            $stepsReq = $this->Db->prepare('SELECT task_id, id, body, ordering, finished
+                FROM custom_todolist_steps WHERE task_id IN (' . implode(',', $ids) . ')
+                ORDER BY ordering ASC, id ASC');
+            $this->Db->execute($stepsReq);
+            $byTask = array();
+            foreach ($stepsReq->fetchAll() as $step) {
+                $taskId = (int) $step['task_id'];
+                unset($step['task_id']);
+                $step['id'] = (int) $step['id'];
+                $step['ordering'] = (int) $step['ordering'];
+                $step['finished'] = (bool) $step['finished'];
+                $byTask[$taskId][] = $step;
+            }
+            foreach ($tasks as &$task) {
+                $task['steps'] = $byTask[(int) $task['id']] ?? array();
+            }
+            unset($task);
+        }
+        return $tasks;
     }
 
     /**
