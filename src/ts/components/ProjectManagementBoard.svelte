@@ -2461,15 +2461,15 @@
                 <p class="pm-muted pm-task-preview">{plainPreview(task.notes)}</p>
               {/if}
               {#if task.steps?.length}
-                <div class="mt-2">
-                  <div class="d-flex justify-content-between pm-muted"><span>{t('Steps')}</span><span>{task.steps.filter(step => step.finished).length} / {task.steps.length}</span></div>
+                <details class="pm-task-steps mt-2" open>
+                  <summary class="d-flex justify-content-between pm-muted"><span>{t('Steps')}</span><span>{task.steps.filter(step => step.finished).length} / {task.steps.length}</span></summary>
                   {#each task.steps as step (step.id)}
                     <label class="d-flex align-items-start mb-1">
                       <input type="checkbox" class="mr-2 mt-1" checked={step.finished} disabled={!canManage(task) || savingBoardSteps.has(step.id)} on:change={(event) => { event.currentTarget.checked = step.finished; void toggleBoardStep(task, step); }} />
                       <span style:text-decoration={step.finished ? 'line-through' : 'none'}>{step.body}</span>
                     </label>
                   {/each}
-                </div>
+                </details>
               {/if}
               {#if taskLinkGroups(task).length}
                 <div class="pm-task-links-row mt-2">

@@ -5778,6 +5778,19 @@ div > .sticky-navbar {
   margin-bottom: 0.25rem;
 }
 
+.pm-task-steps > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.pm-task-steps > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pm-task-steps[open] > summary {
+  margin-bottom: 0.25rem;
+}
+
 .pm-entity-link-list {
   list-style: none;
   margin: 0 0 0.5rem;
