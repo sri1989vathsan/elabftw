@@ -308,7 +308,7 @@ final class Todolist extends AbstractRest
                 -- from an existing notification) still opens
                 AND (t.project_id IS NULL OR project.archived = 0)
                 AND (
-                    t.project_id IS NULL
+                    (t.project_id IS NULL AND (t.userid = :requester7 OR EXISTS (SELECT 1 FROM todolist_task_assignees AS ta3 WHERE ta3.task_id = t.id AND ta3.userid = :requester8)))
                     OR project.userid = :requester3
                     OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester4)
                     OR (project.parent_id IS NOT NULL AND (
@@ -327,11 +327,15 @@ final class Todolist extends AbstractRest
         }
         // a task tied to a project is only visible to that project's
         // creator/members (or the parent project's creator/members for
-        // subproject tasks), regardless of scope
+        // subproject tasks), regardless of scope; an unfiled task (no
+        // project at all) is only visible to its own creator/assignee(s)
+        // -- not the whole team, and not an admin exception either
         $req->bindParam(':requester3', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':requester5', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':requester6', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester7', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester8', $this->userid, PDO::PARAM_INT);
         if ($completedSince !== null) {
             $req->bindValue(':completed_since', $completedSince, PDO::PARAM_STR);
         }
@@ -425,7 +429,7 @@ final class Todolist extends AbstractRest
                 AND t.archived_at IS NULL
                 AND (t.project_id IS NULL OR project.archived = 0)
                 AND (
-                    t.project_id IS NULL
+                    (t.project_id IS NULL AND (t.userid = :requester7 OR EXISTS (SELECT 1 FROM todolist_task_assignees AS ta3 WHERE ta3.task_id = t.id AND ta3.userid = :requester8)))
                     OR project.userid = :requester3
                     OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester4)
                     OR (project.parent_id IS NOT NULL AND (
@@ -451,6 +455,8 @@ final class Todolist extends AbstractRest
         $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':requester5', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':requester6', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester7', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester8', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         $row = $this->Db->fetch($req);
         return array(
@@ -700,7 +706,7 @@ final class Todolist extends AbstractRest
             LEFT JOIN todolist_columns AS col ON col.id = t.column_id
             WHERE t.id = :id AND t.team = :team
                 AND (
-                    t.project_id IS NULL
+                    (t.project_id IS NULL AND (t.userid = :requester3 OR EXISTS (SELECT 1 FROM todolist_task_assignees AS ta2 WHERE ta2.task_id = t.id AND ta2.userid = :requester4)))
                     OR project.userid = :requester
                     OR EXISTS (SELECT 1 FROM todolist_project_members AS pm WHERE pm.project_id = t.project_id AND pm.userid = :requester2)
                 )";
@@ -709,6 +715,8 @@ final class Todolist extends AbstractRest
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $req->bindParam(':requester', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':requester2', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester3', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':requester4', $this->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
 
         $task = $this->Db->fetch($req);

@@ -174,8 +174,11 @@
   // 'assigned' shows tasks assigned to me (by myself or someone else);
   // 'created' shows tasks I set up, whether for myself or someone else;
   // 'all' is the union of both -- never a view of everyone else's work
-  // 'team' is the backend's actual "every task in the team" scope --
-  // confusingly, its 'all' means "created by me OR assigned to me", which
+  // 'team' is the backend's own unscoped param -- despite the name, it's
+  // not literally "every task in the team" (readAll()'s own visibility
+  // check already restricts each task to its project's members, or to
+  // its own creator/assignee(s) when it has no project, unconditionally);
+  // confusingly, 'all' means "created by me OR assigned to me", which
   // is not what a board default should hide everything else behind
   let scope: 'assigned' | 'created' | 'all' | 'team' = 'team';
   // set while the detail dialog is open for a task that doesn't exist yet
