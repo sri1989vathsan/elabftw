@@ -45,7 +45,8 @@ final class TeamParam extends ContentParams
             'visible',
             'newcomer_banner_active',
             'onboarding_email_active' => $this->getBinary(),
-            'newcomer_threshold' => $this->asInt(),
+            'newcomer_threshold',
+            'orders_autoarchive_days' => $this->asInt(),
             default => throw new ImproperActionException('Incorrect parameter for team.' . $this->target),
         };
     }

@@ -12,6 +12,7 @@ namespace Elabftw\Models;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use Elabftw\Elabftw\Db;
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
@@ -605,10 +606,15 @@ final class Orders extends AbstractRest
         }
         // same "a reference stays pinned" rule postAction() applies at
         // creation -- also enforced here so marking an existing order as
-        // reference later has the same effect
+        // reference later has the same effect. status_changed_at only
+        // moves when status actually changes (not on a no-op re-save of
+        // the same value, e.g. alongside an unrelated field patch) -- it's
+        // what auto-archiving (Orders::autoArchivePastDue()) measures
+        // "how long has this been in ordered" from.
+        $changedClause = $status !== $previousOrder['status'] ? ', status_changed_at = NOW()' : '';
         $sql = $status === 'reference'
-            ? 'UPDATE custom_orders SET status = :status, pinned = 1 WHERE id = :id AND team = :team'
-            : 'UPDATE custom_orders SET status = :status WHERE id = :id AND team = :team';
+            ? "UPDATE custom_orders SET status = :status, pinned = 1{$changedClause} WHERE id = :id AND team = :team"
+            : "UPDATE custom_orders SET status = :status{$changedClause} WHERE id = :id AND team = :team";
         $req = $this->Db->prepare($sql);
         $req->bindValue(':status', $status);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
@@ -835,5 +841,31 @@ final class Orders extends AbstractRest
             throw new ImproperActionException('One or more resources could not be found.');
         }
         return $itemIds;
+    }
+
+    /**
+     * Auto-archive every order that's been sitting in 'ordered' for at
+     * least that team's own orders_autoarchive_days (0 = disabled, the
+     * default -- opt-in per team, admin-only setting). Invoked from
+     * orders:autoarchive (see OrdersAutoArchiveCommand), which runs outside
+     * of any HTTP request/team context -- so, like OrderUploads::extractOne()
+     * and pendingIds(), this is a static, cross-team sweep rather than
+     * going through readOne()/an instance bound to one team.
+     *
+     * @return int how many orders were archived
+     */
+    public static function autoArchivePastDue(): int
+    {
+        $Db = Db::getConnection();
+        $sql = "UPDATE custom_orders AS o
+            INNER JOIN teams AS tm ON tm.id = o.team
+            SET o.archived = 1
+            WHERE o.status = 'ordered'
+                AND o.archived = 0
+                AND tm.orders_autoarchive_days > 0
+                AND o.status_changed_at <= NOW() - INTERVAL tm.orders_autoarchive_days DAY";
+        $req = $Db->prepare($sql);
+        $Db->execute($req);
+        return $req->rowCount();
     }
 }

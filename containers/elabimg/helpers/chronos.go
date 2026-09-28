@@ -39,6 +39,7 @@ func main() {
 	go scheduleWeekly(ctx, time.Sunday, 1, 45, []string{"notifications:send-expiration"})
 	go scheduleDaily(ctx, 13, 37, []string{"notifications:tsbalance"})
 	go scheduleDaily(ctx, 3, 37, []string{"idps:refresh"})
+	go scheduleDaily(ctx, 4, 15, []string{"orders:autoarchive"})
 	go scheduleEveryMinute(ctx, []string{"notifications:send"})
 	log.Println("scheduled tasks started")
 
