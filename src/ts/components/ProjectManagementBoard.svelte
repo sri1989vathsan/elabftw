@@ -481,6 +481,23 @@
     }[type];
   }
 
+  // Non-empty groups of a task's entity_links, one per link type, each
+  // still carrying its own links so the card's compact icon+count chip
+  // stays individually expandable. A plain function rather than a
+  // template {@const} since the latter must be the immediate child of
+  // an {#if}/{#each}/etc, not a bare element like the card's outer <div>.
+  function taskLinkGroups(task: Task) {
+    return [
+      { type: 'experiments' as const, label: t('Experiments'), icon: 'fa-flask' },
+      { type: 'items' as const, label: t('Resources'), icon: 'fa-cubes' },
+      { type: 'weblink' as const, label: t('Links'), icon: 'fa-link' },
+      { type: 'experiments_templates' as const, label: t('Templates'), icon: 'fa-file' },
+      { type: 'items_types' as const, label: t('Resource template'), icon: 'fa-file' },
+    ]
+      .map(group => ({ ...group, links: task.entity_links.filter(link => boardLinkType(link) === group.type) }))
+      .filter(group => group.links.length > 0);
+  }
+
   async function loadTeamMembers(): Promise<void> {
     try {
       teamMembers = await ApiC.getJson('users?currentTeam=1') as TeamMember[];
@@ -1176,6 +1193,49 @@
       notify.error(error instanceof Error ? error.message : 'Could not duplicate the selected tasks.');
     } finally {
       copyingTasks = false;
+      await load();
+    }
+  }
+
+  let archivingTasks = false;
+  async function bulkArchiveTasks(): Promise<void> {
+    const selected = tasks.filter(t => selectedTaskIds.has(t.id) && canManage(t));
+    if (selected.length === 0 || archivingTasks) return;
+    archivingTasks = true;
+    try {
+      for (const task of selected) {
+        await ApiC.patch(`${Model.Todolist}/${task.id}`, { archived: true });
+        if (detailTask?.id === task.id) closeDetail();
+        selectedTaskIds = new Set([...selectedTaskIds].filter(id => id !== task.id));
+      }
+      notify.success();
+      selectedTaskIds = new Set();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not archive the selected tasks.');
+    } finally {
+      archivingTasks = false;
+      await load();
+    }
+  }
+
+  let deletingTasks = false;
+  async function bulkDeleteTasks(): Promise<void> {
+    const selected = tasks.filter(t => selectedTaskIds.has(t.id) && canManage(t));
+    if (selected.length === 0 || deletingTasks) return;
+    if (!window.confirm(`${t('Delete')} ${selected.length} ${t('tasks')}? ${t('This cannot be undone.')}`)) return;
+    deletingTasks = true;
+    try {
+      for (const task of selected) {
+        await ApiC.delete(`${Model.Todolist}/${task.id}`);
+        if (detailTask?.id === task.id) closeDetail();
+        selectedTaskIds = new Set([...selectedTaskIds].filter(id => id !== task.id));
+      }
+      notify.success();
+      selectedTaskIds = new Set();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not delete the selected tasks.');
+    } finally {
+      deletingTasks = false;
       await load();
     }
   }
@@ -2262,6 +2322,12 @@
       <button type="button" class="btn btn-secondary btn-sm mr-2" disabled={copyingTasks} on:click={bulkDuplicateTasks}>
         <i class="fas fa-clone fa-fw mr-1" aria-hidden="true"></i>{copyingTasks ? t('Copying…') : t('Copy selected')}
       </button>
+      <button type="button" class="btn btn-secondary btn-sm mr-2" disabled={archivingTasks} on:click={bulkArchiveTasks}>
+        <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{archivingTasks ? t('Archiving…') : t('Archive')}
+      </button>
+      <button type="button" class="btn btn-danger-ghost btn-sm mr-2" disabled={deletingTasks} on:click={bulkDeleteTasks}>
+        <i class="fas fa-trash fa-fw mr-1" aria-hidden="true"></i>{deletingTasks ? t('Deleting…') : t('Delete')}
+      </button>
       <button type="button" class="btn btn-ghost btn-sm" on:click={() => selectedTaskIds = new Set()}>{t('Clear selection')}</button>
     </div>
   {/if}
@@ -2335,22 +2401,11 @@
                   <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task)}>
                     <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
                   </button>
-                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Duplicate')} aria-label={t('Duplicate')} on:click={() => duplicateTask(task)}>
-                    <i class="fas fa-copy fa-fw" aria-hidden="true"></i>
-                  </button>
-                  {#if task.archived_at}
-                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Unarchive')} aria-label={t('Unarchive')} on:click={() => unarchiveTask(task)}>
-                      <i class="fas fa-box-open fa-fw" aria-hidden="true"></i>
-                    </button>
-                  {:else}
-                    <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Archive')} aria-label={t('Archive')} on:click={() => archiveTask(task)}>
-                      <i class="fas fa-box-archive fa-fw" aria-hidden="true"></i>
-                    </button>
-                  {/if}
-                  <!-- Pin/Unpin, Move to <column> and Delete folded into one
-                       dropdown -- drag-and-drop already covers moving a task
-                       between columns, so a whole row of separate buttons for
-                       it (plus pin/delete alongside) was more chrome than the
+                  <!-- Duplicate, Archive/Unarchive, Pin/Unpin, Move to
+                       <column> and Delete folded into one dropdown -- with
+                       move up/down, mark-done and edit already covering the
+                       common actions, a whole row of separate buttons for
+                       these less-frequent ones was more chrome than the
                        card needed. Bootstrap's dropdown.js (already loaded
                        globally, see builder.js) delegates off data-toggle
                        rather than needing its own per-element init, so this
@@ -2360,8 +2415,20 @@
                       <i class="fas fa-ellipsis-vertical fa-fw" aria-hidden="true"></i>
                     </button>
                     <div class="dropdown-menu dropdown-menu-right">
+                      <button type="button" class="dropdown-item pm-task-more-item" title={t('Duplicate')} aria-label={t('Duplicate')} on:click={() => duplicateTask(task)}>
+                        <i class="fas fa-copy fa-fw" aria-hidden="true"></i><span class="pm-task-more-item-label">{t('Duplicate')}</span>
+                      </button>
+                      {#if task.archived_at}
+                        <button type="button" class="dropdown-item pm-task-more-item" title={t('Unarchive')} aria-label={t('Unarchive')} on:click={() => unarchiveTask(task)}>
+                          <i class="fas fa-box-open fa-fw" aria-hidden="true"></i><span class="pm-task-more-item-label">{t('Unarchive')}</span>
+                        </button>
+                      {:else}
+                        <button type="button" class="dropdown-item pm-task-more-item" title={t('Archive')} aria-label={t('Archive')} on:click={() => archiveTask(task)}>
+                          <i class="fas fa-box-archive fa-fw" aria-hidden="true"></i><span class="pm-task-more-item-label">{t('Archive')}</span>
+                        </button>
+                      {/if}
                       <button type="button" class="dropdown-item pm-task-more-item" title={task.pinned ? t('Unpin') : t('Pin to top')} aria-label={task.pinned ? t('Unpin') : t('Pin to top')} on:click={() => togglePin(task)}>
-                        <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i>
+                        <i class="fas fa-thumbtack fa-fw" aria-hidden="true"></i><span class="pm-task-more-item-label">{task.pinned ? t('Unpin') : t('Pin to top')}</span>
                       </button>
                       {#each visibleColumns(columns).filter(c => c.id !== column.id) as target (target.id)}
                         <button type="button" class="dropdown-item pm-task-more-item" title={`${t('Move to')} ${target.name}`} aria-label={`${t('Move to')} ${target.name}`} on:click={() => moveTaskToColumn(task, target.id)}>
@@ -2369,7 +2436,7 @@
                         </button>
                       {/each}
                       <button type="button" class="dropdown-item pm-task-more-item text-danger" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteTask(task)}>
-                        <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                        <i class="fas fa-trash fa-fw" aria-hidden="true"></i><span class="pm-task-more-item-label">{t('Delete')}</span>
                       </button>
                     </div>
                   </div>
@@ -2401,17 +2468,18 @@
                   {/each}
                 </div>
               {/if}
-              {#each [{ type: 'experiments', label: t('Experiments'), icon: 'fa-flask' }, { type: 'items', label: t('Resources'), icon: 'fa-cubes' }, { type: 'weblink', label: t('Links'), icon: 'fa-link' }, { type: 'experiments_templates', label: t('Templates'), icon: 'fa-file' }, { type: 'items_types', label: t('Resource template'), icon: 'fa-file' }] as group}
-                {@const links = task.entity_links.filter(link => boardLinkType(link) === group.type)}
-                {#if links.length}
-                  <details class="mt-2">
-                    <summary><i class="fas {group.icon} fa-fw mr-1" aria-hidden="true"></i>{links.length} {group.label}</summary>
-                    {#each links as link (link.id)}
-                      <a class="d-block" href={entityViewUrl(link)} target="_blank" rel="noopener noreferrer">{link.title || `${entityTypeLabel(link.entity_type)} #${link.entity_id}`}</a>
-                    {/each}
-                  </details>
-                {/if}
-              {/each}
+              {#if taskLinkGroups(task).length}
+                <div class="pm-task-links-row mt-2">
+                  {#each taskLinkGroups(task) as group (group.type)}
+                    <details class="pm-task-links-group">
+                      <summary title={group.label} aria-label={`${group.links.length} ${group.label}`}><i class="fas {group.icon} fa-fw" aria-hidden="true"></i>{group.links.length}</summary>
+                      {#each group.links as link (link.id)}
+                        <a class="d-block" href={entityViewUrl(link)} target="_blank" rel="noopener noreferrer">{link.title || `${entityTypeLabel(link.entity_type)} #${link.entity_id}`}</a>
+                      {/each}
+                    </details>
+                  {/each}
+                </div>
+              {/if}
               <div class="pm-task-meta d-flex align-items-center flex-wrap mt-1">
                 {#if task.assignees.length === 0}
                   <span class="badge badge-info mr-1"><i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('Unassigned')}</span>
