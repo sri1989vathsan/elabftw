@@ -18,9 +18,19 @@ use Elabftw\Elabftw\Env;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Models\Orders;
 use Elabftw\Services\Filter;
+use JsonException;
 use Override;
 
+use function array_column;
+use function array_map;
+use function array_unique;
+use function count;
 use function in_array;
+use function is_array;
+use function json_decode;
+use function json_encode;
+
+use const JSON_THROW_ON_ERROR;
 
 final class TeamParam extends ContentParams
 {
@@ -48,20 +58,46 @@ final class TeamParam extends ContentParams
             'visible',
             'newcomer_banner_active',
             'onboarding_email_active' => $this->getBinary(),
-            'newcomer_threshold',
-            'orders_autoarchive_days' => $this->asInt(),
-            'orders_autoarchive_status' => $this->getAutoArchiveStatus(),
+            'newcomer_threshold' => $this->asInt(),
+            'orders_autoarchive_rules' => $this->getAutoArchiveRules(),
             default => throw new ImproperActionException('Incorrect parameter for team.' . $this->target),
         };
     }
 
-    private function getAutoArchiveStatus(): string
+    /**
+     * $this->content is a JSON-encoded array of {"status": "...", "days": N}
+     * rules (see Orders::autoArchivePastDue()) -- one rule per status, days
+     * a positive integer. Re-encoded rather than passed through as-is so a
+     * malformed or partial object (e.g. missing "days") can't reach storage.
+     */
+    private function getAutoArchiveRules(): string
     {
-        $status = (string) $this->content;
-        if (!in_array($status, Orders::AUTOARCHIVABLE_STATUSES, true)) {
-            throw new ImproperActionException('Invalid order status for auto-archiving.');
+        try {
+            $decoded = json_decode((string) $this->content, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            throw new ImproperActionException('Invalid auto-archive rules.');
         }
-        return $status;
+        if (!is_array($decoded)) {
+            throw new ImproperActionException('Invalid auto-archive rules.');
+        }
+        $rules = array_map(function (mixed $rule): array {
+            if (!is_array($rule)) {
+                throw new ImproperActionException('Invalid auto-archive rule.');
+            }
+            $status = (string) ($rule['status'] ?? '');
+            if (!in_array($status, Orders::AUTOARCHIVABLE_STATUSES, true)) {
+                throw new ImproperActionException('Invalid order status for auto-archiving.');
+            }
+            $days = (int) ($rule['days'] ?? 0);
+            if ($days <= 0) {
+                throw new ImproperActionException('Number of days for auto-archiving must be a positive integer.');
+            }
+            return array('status' => $status, 'days' => $days);
+        }, $decoded);
+        if (count(array_unique(array_column($rules, 'status'))) !== count($rules)) {
+            throw new ImproperActionException('Only one auto-archive rule per status is allowed.');
+        }
+        return json_encode($rules, JSON_THROW_ON_ERROR);
     }
 
     private function getNullableContent(): ?string

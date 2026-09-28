@@ -45,6 +45,7 @@ import {
   updateCatStat,
   makeMalleableColumnsGreatAgain, rebuildTomSelectOptions,
   mountRors,
+  mountOrdersAutoArchiveRules,
   initPermissionsTomSelects,
   PERMISSION_SELECT_IDS,
   reloadEntitiesShow,
@@ -371,6 +372,7 @@ TableSortingC.init();
 makeSortableGreatAgain();
 bindMoreFiltersOutsideClick();
 mountRors();
+mountOrdersAutoArchiveRules();
 
 const userPrefs = document.getElementById('user-prefs').dataset;
 if (userPrefs.scDisabled === '0') {

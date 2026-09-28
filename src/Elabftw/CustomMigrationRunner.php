@@ -111,6 +111,7 @@ final class CustomMigrationRunner
         '070_todolist_archived_index.sql',
         '071_order_autoarchive.sql',
         '072_order_autoarchive_status.sql',
+        '073_order_autoarchive_rules.sql',
     );
 
     private Db $Db;

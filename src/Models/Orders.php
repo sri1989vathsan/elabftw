@@ -849,28 +849,52 @@ final class Orders extends AbstractRest
     }
 
     /**
-     * Auto-archive every order that's been sitting in 'ordered' for at
-     * least that team's own orders_autoarchive_days (0 = disabled, the
-     * default -- opt-in per team, admin-only setting). Invoked from
-     * orders:autoarchive (see OrdersAutoArchiveCommand), which runs outside
-     * of any HTTP request/team context -- so, like OrderUploads::extractOne()
-     * and pendingIds(), this is a static, cross-team sweep rather than
-     * going through readOne()/an instance bound to one team.
+     * Auto-archive every order that's been sitting in one of its team's
+     * configured auto-archive statuses for at least that rule's own number
+     * of days -- an opt-in, per-team, admin-only, per-status set of rules
+     * (orders_autoarchive_rules, empty by default; see TeamParam's own
+     * validation of its shape). Invoked from orders:autoarchive (see
+     * OrdersAutoArchiveCommand), which runs outside of any HTTP
+     * request/team context -- so, like OrderUploads::extractOne() and
+     * pendingIds(), this is a static, cross-team sweep rather than going
+     * through readOne()/an instance bound to one team.
+     *
+     * A handful of teams with a handful of rules each -- a plain per-rule
+     * UPDATE in a PHP loop stays simple and readable here, rather than
+     * flattening the JSON rules into one query with MySQL's JSON_TABLE.
      *
      * @return int how many orders were archived
      */
     public static function autoArchivePastDue(): int
     {
         $Db = Db::getConnection();
-        $sql = "UPDATE custom_orders AS o
-            INNER JOIN teams AS tm ON tm.id = o.team
-            SET o.archived = 1
-            WHERE o.status = tm.orders_autoarchive_status
-                AND o.archived = 0
-                AND tm.orders_autoarchive_days > 0
-                AND o.status_changed_at <= NOW() - INTERVAL tm.orders_autoarchive_days DAY";
-        $req = $Db->prepare($sql);
-        $Db->execute($req);
-        return $req->rowCount();
+        $teamsReq = $Db->prepare("SELECT id, orders_autoarchive_rules FROM teams WHERE JSON_LENGTH(orders_autoarchive_rules) > 0");
+        $Db->execute($teamsReq);
+        $archived = 0;
+        foreach ($teamsReq->fetchAll() as $team) {
+            $rules = json_decode((string) $team['orders_autoarchive_rules'], true, 512, JSON_THROW_ON_ERROR);
+            foreach ($rules as $rule) {
+                $status = (string) ($rule['status'] ?? '');
+                $days = (int) ($rule['days'] ?? 0);
+                // defensive: TeamParam already validates this shape at
+                // write time, but never trust a stored blob blindly on read
+                if (!in_array($status, self::AUTOARCHIVABLE_STATUSES, true) || $days <= 0) {
+                    continue;
+                }
+                $sql = 'UPDATE custom_orders
+                    SET archived = 1
+                    WHERE team = :team
+                        AND status = :status
+                        AND archived = 0
+                        AND status_changed_at <= NOW() - INTERVAL :days DAY';
+                $req = $Db->prepare($sql);
+                $req->bindValue(':team', (int) $team['id'], PDO::PARAM_INT);
+                $req->bindValue(':status', $status);
+                $req->bindValue(':days', $days, PDO::PARAM_INT);
+                $Db->execute($req);
+                $archived += $req->rowCount();
+            }
+        }
+        return $archived;
     }
 }

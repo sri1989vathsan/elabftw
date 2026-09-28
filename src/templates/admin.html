@@ -140,22 +140,8 @@
 
   <h2 class='p-2 pl-3 section-title' id='ordersSettings'>{{ 'Orders'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5'>
-    <div class='d-flex justify-content-between align-items-center'>
-      <label for='orders_autoarchive_status' class='col-form-label'>{{ 'Auto-archive an order once it has stayed in this status'|trans }}</label>
-      {% set autoArchiveStatus = App.Teams.teamArr.orders_autoarchive_status %}
-      <select class='form-control col-md-4' data-trigger='change' data-model='{{ model }}' data-target='orders_autoarchive_status' name='orders_autoarchive_status' id='orders_autoarchive_status'>
-        <option value='requested' {{ autoArchiveStatus == 'requested' ? 'selected' }}>{{ 'Requested'|trans }}</option>
-        <option value='ordered' {{ autoArchiveStatus == 'ordered' ? 'selected' }}>{{ 'Ordered'|trans }}</option>
-        <option value='received' {{ autoArchiveStatus == 'received' ? 'selected' }}>{{ 'Received'|trans }}</option>
-        <option value='backlogged' {{ autoArchiveStatus == 'backlogged' ? 'selected' }}>{{ 'Backlogged'|trans }}</option>
-        <option value='cancelled' {{ autoArchiveStatus == 'cancelled' ? 'selected' }}>{{ 'Cancelled'|trans }}</option>
-      </select>
-    </div>
-    <div class='d-flex justify-content-between align-items-center mt-2'>
-      <label for='orders_autoarchive_days' class='col-form-label'>{{ 'Number of days'|trans }}</label>
-      <input class='form-control col-md-4' data-trigger='blur' data-model='{{ model }}' data-target='orders_autoarchive_days' type='number' min='0' value='{{ App.Teams.teamArr.orders_autoarchive_days|e('html_attr') }}' name='orders_autoarchive_days' id='orders_autoarchive_days' />
-    </div>
-    <p class='smallgray mb-0'>{{ '0 disables auto-archiving (the default). An order only moves once it has stayed in the status above this many days -- switching to another status resets the count.'|trans }}</p>
+    <p class='smallgray'>{{ 'Automatically archive an order once it has stayed in a given status for a set number of days. Off by default -- add a rule per status you want to watch.'|trans }}</p>
+    <div data-svelte-component='orders-autoarchive-rules' data-endpoint='{{ model }}' data-rules='{{ App.Teams.teamArr.orders_autoarchive_rules|e('html_attr') }}'></div>
   </div>
 
   <h2 class='p-2 pl-3 section-title' id='existingRors'>{{ 'Research Organization Registry (ROR)'|trans }}</h2>

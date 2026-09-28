@@ -32,6 +32,7 @@ import TomSelectRemoveButton from 'tom-select/dist/esm/plugins/remove_button/plu
 import TomSelectNoBackspaceDelete from 'tom-select/dist/esm/plugins/no_backspace_delete/plugin.js';
 import { mount, unmount } from 'svelte';
 import RorsSv from './components/Rors.svelte';
+import OrdersAutoArchiveRulesSv from './components/OrdersAutoArchiveRules.svelte';
 import RegisterForm from './components/RegisterForm.svelte';
 
 // get html of current page reloaded via get
@@ -1410,6 +1411,28 @@ export function mountRors(options: { force?: boolean } = {}): void {
       component,
       endpoint,
     });
+  });
+}
+
+const mountedOrdersAutoArchiveRules = new WeakSet<HTMLElement>();
+
+export function mountOrdersAutoArchiveRules(): void {
+  document.querySelectorAll<HTMLElement>('[data-svelte-component="orders-autoarchive-rules"]').forEach(target => {
+    if (mountedOrdersAutoArchiveRules.has(target)) {
+      return;
+    }
+    const endpoint = target.dataset.endpoint;
+    if (!endpoint) {
+      throw new Error('Missing data-endpoint for orders-autoarchive-rules component');
+    }
+    mount(OrdersAutoArchiveRulesSv, {
+      target,
+      props: {
+        endpoint,
+        rules: target.dataset.rules ?? '[]',
+      },
+    });
+    mountedOrdersAutoArchiveRules.add(target);
   });
 }
 
