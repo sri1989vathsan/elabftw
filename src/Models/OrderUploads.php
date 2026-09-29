@@ -149,6 +149,7 @@ final class OrderUploads extends AbstractRest
                 // swallowed on purpose, see above
             }
         }
+        $this->advanceOnAttachment();
 
         return $uploadId;
     }
@@ -206,8 +207,28 @@ final class OrderUploads extends AbstractRest
         $req->bindValue(':extraction_status', $source['extraction_status']);
         $req->bindValue(':extracted_text', $extractedText, $extractedText === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $this->Db->execute($req);
+        $this->advanceOnAttachment();
 
         return (int) $this->Db->lastInsertId();
+    }
+
+    // opt-in, admin-only per team (orders_autoadvance_on_attachment, off by
+    // default): any attachment -- not just one with a procurement ID, see
+    // extractProcurementTags()'s own narrower trigger -- moves a still-
+    // requested order to ordered. Called from both postAction() (a fresh
+    // upload) and copyFrom() (reusing a previous order's attachment):
+    // either one counts as "an attachment landed on this order".
+    private function advanceOnAttachment(): void
+    {
+        $sql = "UPDATE custom_orders AS o
+            INNER JOIN teams AS tm ON tm.id = o.team
+            SET o.status = 'ordered', o.status_changed_at = NOW()
+            WHERE o.id = :order_id
+                AND o.status = 'requested'
+                AND tm.orders_autoadvance_on_attachment = 1";
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':order_id', $this->Order->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
     }
 
     /** selectSql() deliberately never selects the (potentially large) extracted_text column itself, only whether it's set -- fetch it separately, only for the one row actually being copied. */

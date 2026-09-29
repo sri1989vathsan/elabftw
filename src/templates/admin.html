@@ -145,6 +145,11 @@
       'label': 'Automatically move an order from Requested to Ordered once a procurement ID is detected'|trans,
       'help': 'Only applies to a Requested order -- one already Backlogged, Received, Cancelled or a Reference is left alone.'|trans} %}
 
+    {% include 'binary-setting.html' with {'model': model, 'src': src,
+      'slug': 'orders_autoadvance_on_attachment',
+      'label': 'Automatically move an order from Requested to Ordered as soon as any file is attached'|trans,
+      'help': 'Fires for any attachment, not just one with a procurement ID -- only applies to a Requested order.'|trans} %}
+
     <p class='smallgray'>{{ 'Automatically archive an order once it has stayed in a given status for a set number of days. Off by default -- add a rule per status you want to watch.'|trans }}</p>
     <div data-svelte-component='orders-autoarchive-rules' data-endpoint='{{ model }}' data-rules='{{ App.Teams.teamArr.orders_autoarchive_rules|e('html_attr') }}'></div>
   </div>

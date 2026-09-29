@@ -1226,17 +1226,30 @@
     }
   }
 
-  async function uploadFile(item: OrderItem, file: File): Promise<void> {
+  async function uploadFiles(item: OrderItem, files: File[]): Promise<void> {
+    if (files.length === 0) return;
     uploadingItem = new Set(uploadingItem).add(item.id);
     try {
-      const newId = await uploadFileToOrder(item.id, file);
-      await loadUploads(item.id);
-      const uploaded = uploadsByItem[item.id]?.find(u => u.id === newId);
-      if (uploaded?.extraction_status === 'pending') {
-        void pollOrderExtractionThenRefresh(item.id, [newId]);
+      // Sequential, not Promise.all: uploadingItem is a Set keyed by
+      // item.id, so concurrent calls for the same item would race each
+      // other's own add/remove of that key and could clear the "still
+      // uploading" state while a sibling file is still in flight.
+      const pendingExtractionIds: number[] = [];
+      for (const file of files) {
+        try {
+          const newId = await uploadFileToOrder(item.id, file);
+          pendingExtractionIds.push(newId);
+        } catch (error) {
+          notify.error(error instanceof Error ? error.message : `Could not upload ${file.name}.`);
+        }
       }
-    } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not upload this file.');
+      await loadUploads(item.id);
+      const stillPending = pendingExtractionIds.filter(
+        id => uploadsByItem[item.id]?.find(u => u.id === id)?.extraction_status === 'pending',
+      );
+      if (stillPending.length > 0) {
+        void pollOrderExtractionThenRefresh(item.id, stillPending);
+      }
     } finally {
       const next = new Set(uploadingItem);
       next.delete(item.id);
@@ -1246,9 +1259,8 @@
 
   async function onFileSelected(item: OrderItem, event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    await uploadFile(item, file);
+    if (!input.files || input.files.length === 0) return;
+    await uploadFiles(item, Array.from(input.files));
     input.value = '';
   }
 
@@ -1264,9 +1276,9 @@
   async function onFileDropped(item: OrderItem, event: DragEvent): Promise<void> {
     event.preventDefault();
     dragOverItem = null;
-    const file = event.dataTransfer?.files?.[0];
-    if (!file) return;
-    await uploadFile(item, file);
+    const files = event.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+    await uploadFiles(item, Array.from(files));
   }
 
   function canDeleteUpload(upload: OrderUpload): boolean {
@@ -2100,7 +2112,7 @@
                 <label class="btn btn-ghost btn-sm ml-2 mb-0" class:disabled={uploadingItem.has(item.id)}>
                   <i class="fas fa-paperclip fa-fw mr-1" aria-hidden="true"></i>
                   {uploadingItem.has(item.id) ? t('Uploading') + '…' : t('Attach file')}
-                  <input type="file" class="orders-file-input" on:change={(event) => onFileSelected(item, event)} disabled={uploadingItem.has(item.id)} />
+                  <input type="file" class="orders-file-input" multiple on:change={(event) => onFileSelected(item, event)} disabled={uploadingItem.has(item.id)} />
                 </label>
                 <span class="orders-muted small ml-2">{t('or drag a file here')}</span>
               </div>
