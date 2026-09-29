@@ -1679,6 +1679,7 @@
       weblinkUrl = '';
       weblinkLabel = '';
       await loadEntityLinks(taskId);
+      void refreshTaskInBoard(taskId);
       if (!explicitLabel) void upgradeWeblinkLabel(taskId, linkId, url);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not add that link.');
@@ -1692,6 +1693,7 @@
       const label = await fetchLinkPreviewLabel(url);
       await ApiC.patch(`${Model.Todolist}/${taskId}/entity_links/${linkId}`, { url, label });
       if (detailTask?.id === taskId) await loadEntityLinks(taskId);
+      void refreshTaskInBoard(taskId);
     } catch {
       // Best effort -- the link keeps its bare-url fallback label.
     }
@@ -1722,6 +1724,7 @@
       });
       editingWeblinkId = null;
       await loadEntityLinks(detailTask.id);
+      void refreshTaskInBoard(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not save that link.');
     }
@@ -1732,6 +1735,7 @@
     try {
       await ApiC.delete(`${Model.Todolist}/${detailTask.id}/entity_links/${link.id}`);
       await loadEntityLinks(detailTask.id);
+      void refreshTaskInBoard(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not remove that link.');
     }
@@ -1767,6 +1771,7 @@
       await ApiC.post(`${Model.Todolist}/${detailTask.id}/steps`, { body });
       newStepText = '';
       await loadSteps(detailTask.id);
+      void refreshTaskInBoard(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not add that step.');
     } finally {
@@ -1779,6 +1784,7 @@
     try {
       await ApiC.patch(`${Model.Todolist}/${detailTask.id}/steps/${step.id}`, { finished: !step.finished });
       await loadSteps(detailTask.id);
+      void refreshTaskInBoard(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not update that step.');
     }
@@ -1795,6 +1801,7 @@
         ? { ...item, steps: item.steps?.map(value => value.id === step.id ? { ...value, finished } : value) }
         : item);
       if (detailTask?.id === task.id) await loadSteps(task.id);
+      void refreshTaskInBoard(task.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not update that step.');
     } finally {
@@ -1807,6 +1814,7 @@
     try {
       await ApiC.delete(`${Model.Todolist}/${detailTask.id}/steps/${step.id}`);
       await loadSteps(detailTask.id);
+      void refreshTaskInBoard(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not remove that step.');
     }
@@ -1855,8 +1863,27 @@
       await ApiC.patch(`${Model.Todolist}/${detailTask.id}/steps/${step.id}`, { body });
       editingStepId = null;
       await loadSteps(detailTask.id);
+      void refreshTaskInBoard(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not save that step.');
+    }
+  }
+
+  // Detail-popup mutations (comments, steps, links) each update their own
+  // local state (detailComments/detailSteps/detailEntityLinks) so the
+  // popup itself feels instant, but that never touched the card sitting
+  // behind it -- its comment_count, updated_at/updated_by_fullname,
+  // steps and entity_links all stayed exactly as they were when the
+  // popup opened. Re-fetching this one task and swapping it into `tasks`
+  // (rather than a full load(), which would re-fetch the whole board) is
+  // what saveDetail()'s own load() already does more heavily for the
+  // title/notes/etc. fields; this covers everything else.
+  async function refreshTaskInBoard(taskId: number): Promise<void> {
+    try {
+      const fresh = await ApiC.getJson(`${Model.Todolist}/${taskId}`) as Task;
+      tasks = tasks.map(t => t.id === taskId ? fresh : t);
+    } catch {
+      // best-effort -- the card just stays stale until the next full load()
     }
   }
 
@@ -1884,6 +1911,7 @@
       newCommentText = '';
       commentMentions = [];
       await loadComments(detailTask.id);
+      void refreshTaskInBoard(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not post the comment.');
     } finally {
@@ -1933,6 +1961,7 @@
     try {
       await ApiC.delete(`${Model.Todolist}/${detailTask.id}/${Model.Comment}/${comment.id}`);
       await loadComments(detailTask.id);
+      void refreshTaskInBoard(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not delete the comment.');
     }
@@ -1959,6 +1988,7 @@
       await ApiC.patch(`${Model.Todolist}/${detailTask.id}/${Model.Comment}/${comment.id}`, { body });
       editingCommentId = null;
       await loadComments(detailTask.id);
+      void refreshTaskInBoard(detailTask.id);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not save this comment.');
     }
@@ -2431,7 +2461,7 @@
     </div>
   {/if}
 
-  {#if loading}
+  {#if loading && tasks.length === 0}
     <p class="pm-muted">{t('Loading')}…</p>
   {:else}
     <div class="pm-columns">
@@ -2565,7 +2595,7 @@
                 {@const visibleSteps = stepsExpanded ? task.steps : task.steps.slice(0, CARD_STEPS_LIMIT)}
                 {@const hiddenStepsCount = task.steps.length - visibleSteps.length}
                 <details class="pm-task-steps mt-2" open>
-                  <summary class="d-flex justify-content-between pm-muted"><span>{t('Steps')}</span><span>{task.steps.filter(step => step.finished).length} / {task.steps.length}</span></summary>
+                  <summary class="d-flex justify-content-between pm-muted"><strong>{t('Steps')}</strong><span>{task.steps.filter(step => step.finished).length} / {task.steps.length}</span></summary>
                   {#each visibleSteps as step (step.id)}
                     <label class="d-flex align-items-start mb-1">
                       <input type="checkbox" class="mr-2 mt-1" checked={step.finished} disabled={!canManage(task) || savingBoardSteps.has(step.id)} on:change={(event) => { event.currentTarget.checked = step.finished; void toggleBoardStep(task, step); }} />
