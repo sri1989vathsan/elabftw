@@ -45,6 +45,8 @@
     deadline: string | null;
     completed_at: string | null;
     archived_at: string | null;
+    updated_at: string | null;
+    updated_by_fullname: string | null;
     ordering: number;
     in_progress: boolean;
     pinned: boolean;
@@ -237,6 +239,15 @@
       loadingCardComments = new Set(loadingCardComments);
     }
   }
+  const CARD_STEPS_LIMIT = 5;
+  let expandedStepsTaskIds = new Set<number>();
+
+  function toggleStepsExpanded(taskId: number): void {
+    const next = new Set(expandedStepsTaskIds);
+    if (next.has(taskId)) next.delete(taskId); else next.add(taskId);
+    expandedStepsTaskIds = next;
+  }
+
   let notesEl: HTMLDivElement;
   let detailEntityLinks: EntityLink[] = [];
   let loadingEntityLinks = false;
@@ -441,6 +452,38 @@
   function formatDeadline(deadline: string | null): string {
     if (!deadline) return '';
     return new Date(deadline).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  type DeadlineUrgency = { label: string; severity: 'overdue' | 'due-soon' };
+
+  // A completed task's deadline is history, not a live countdown -- no
+  // indicator once it's done. Calendar-day difference (not a raw ms/24h
+  // divide) so "overdue" flips at local midnight, matching what a person
+  // means by "yesterday" rather than a fuzzy 24h-multiple boundary.
+  function deadlineUrgency(task: Task): DeadlineUrgency | null {
+    if (!task.deadline || task.completed_at) return null;
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((startOfDay(new Date(task.deadline)).getTime() - startOfDay(new Date()).getTime()) / 86400000);
+    if (diffDays < 0) {
+      const days = Math.abs(diffDays);
+      return { label: days === 1 ? t('1 day overdue') : `${days} ${t('days overdue')}`, severity: 'overdue' };
+    }
+    if (diffDays === 0) return { label: t('Due today'), severity: 'due-soon' };
+    if (diffDays === 1) return { label: t('Due tomorrow'), severity: 'due-soon' };
+    if (diffDays <= 3) return { label: `${t('Due in')} ${diffDays} ${t('days')}`, severity: 'due-soon' };
+    return null;
+  }
+
+  // "today"/"yesterday"/"N days ago" for a recent change, falling back to
+  // the plain date once it's old enough that a relative count stops being
+  // the more scannable option -- same calendar-day logic as deadlineUrgency.
+  function formatRelativeUpdate(timestamp: string): string {
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.round((startOfDay(new Date()).getTime() - startOfDay(new Date(timestamp)).getTime()) / 86400000);
+    if (diffDays === 0) return t('today');
+    if (diffDays === 1) return t('yesterday');
+    if (diffDays > 1 && diffDays <= 6) return `${diffDays} ${t('days ago')}`;
+    return formatDeadline(timestamp);
   }
 
   function formatCommentTime(timestamp: string): string {
@@ -712,6 +755,7 @@
       if (!explicitProjectSelection && projects.length > 0) {
         activeProjectId = projects[0].id;
       }
+      cardDensity = loadCardDensity(activeProjectId);
       void loadColumns();
       void load().then(async () => {
         if (!Number.isInteger(taskParam) || taskParam <= 0) return;
@@ -757,11 +801,39 @@
 
   function selectProject(id: number | null | 'all'): void {
     activeProjectId = id;
+    cardDensity = loadCardDensity(id);
     // project is now sent to load() itself (see taskFilterParams()) --
     // switching tabs has to re-fetch the list, not just columns/counts,
     // now that the list is actually scoped by it
     void loadColumns();
     void load();
+  }
+
+  // Compact/expanded is remembered per project (or the All/Unfiled tab),
+  // not one global switch -- a project used for quick scanning shouldn't
+  // force the same density on one you actually work the detail of, and
+  // vice versa. Per-browser (localStorage), not a synced team setting.
+  let cardDensity: 'compact' | 'expanded' = 'expanded';
+
+  function cardDensityStorageKey(id: number | null | 'all'): string {
+    return `elabftw-pm-density-${id ?? 'unfiled'}`;
+  }
+
+  function loadCardDensity(id: number | null | 'all'): 'compact' | 'expanded' {
+    try {
+      return localStorage.getItem(cardDensityStorageKey(id)) === 'compact' ? 'compact' : 'expanded';
+    } catch {
+      return 'expanded';
+    }
+  }
+
+  function toggleCardDensity(): void {
+    cardDensity = cardDensity === 'compact' ? 'expanded' : 'compact';
+    try {
+      localStorage.setItem(cardDensityStorageKey(activeProjectId), cardDensity);
+    } catch {
+      // best-effort -- a private/blocked-storage browser just won't remember it across reloads
+    }
   }
 
   function openNewTaskInColumn(columnId: number): void {
@@ -2181,7 +2253,10 @@
     <button type="button" class="pm-manage-btn" class:active={showArchivedProjects} title={showArchivedProjects ? t('Show active projects') : t('Show archived projects')} aria-label={showArchivedProjects ? t('Show active projects') : t('Show archived projects')} on:click={toggleShowArchivedProjects}>
       <i class="fas fa-box-archive fa-fw" aria-hidden="true"></i>
     </button>
-    <button type="button" class="pm-manage-btn ml-auto" title={t('Manage columns')} aria-label={t('Manage columns')} on:click={openColumnDialog}>
+    <button type="button" class="pm-manage-btn ml-auto" title={cardDensity === 'compact' ? t('Switch to expanded view') : t('Switch to compact view')} aria-label={cardDensity === 'compact' ? t('Switch to expanded view') : t('Switch to compact view')} on:click={toggleCardDensity}>
+      <i class="fas {cardDensity === 'compact' ? 'fa-expand' : 'fa-compress'} fa-fw" aria-hidden="true"></i>
+    </button>
+    <button type="button" class="pm-manage-btn" title={t('Manage columns')} aria-label={t('Manage columns')} on:click={openColumnDialog}>
       <i class="fas fa-table-columns fa-fw" aria-hidden="true"></i>
     </button>
     <button
@@ -2467,14 +2542,18 @@
                 </div>
               {/if}
               {#if activeProjectId === 'all' || viewingAllSubprojects}
-                <span class="badge badge-info mt-1">{#if task.project_parent_name}{task.project_parent_name} › {/if}{task.project_name ?? t('Unfiled')}</span>
+                <span class="badge badge-info mt-1">{#if activeProjectId === 'all' && task.project_parent_name}{task.project_parent_name} › {/if}{task.project_name ?? t('Unfiled')}</span>
               {/if}
               {#if task.priority}
                 <span class="badge pm-priority pm-priority-{task.priority} mt-1">{priorityLabel(task.priority)}</span>
               {/if}
               {#if task.deadline}
-                <div class="pm-muted pm-task-meta"><i class="fas fa-calendar fa-fw mr-1" aria-hidden="true"></i>{formatDeadline(task.deadline)}</div>
+                {@const urgency = deadlineUrgency(task)}
+                <div class="pm-task-meta" class:pm-deadline-overdue={urgency?.severity === 'overdue'} class:pm-deadline-due-soon={urgency?.severity === 'due-soon'} class:pm-muted={!urgency}>
+                  <i class="fas fa-calendar fa-fw mr-1" aria-hidden="true"></i>{formatDeadline(task.deadline)}{#if urgency}<span class="ml-1">({urgency.label})</span>{/if}
+                </div>
               {/if}
+              {#if cardDensity === 'expanded'}
               {#if task.description}
                 <p class="pm-muted pm-task-preview">{plainPreview(task.description)}</p>
               {/if}
@@ -2482,14 +2561,22 @@
                 <p class="pm-muted pm-task-preview">{plainPreview(task.notes)}</p>
               {/if}
               {#if task.steps?.length}
+                {@const stepsExpanded = expandedStepsTaskIds.has(task.id)}
+                {@const visibleSteps = stepsExpanded ? task.steps : task.steps.slice(0, CARD_STEPS_LIMIT)}
+                {@const hiddenStepsCount = task.steps.length - visibleSteps.length}
                 <details class="pm-task-steps mt-2" open>
                   <summary class="d-flex justify-content-between pm-muted"><span>{t('Steps')}</span><span>{task.steps.filter(step => step.finished).length} / {task.steps.length}</span></summary>
-                  {#each task.steps as step (step.id)}
+                  {#each visibleSteps as step (step.id)}
                     <label class="d-flex align-items-start mb-1">
                       <input type="checkbox" class="mr-2 mt-1" checked={step.finished} disabled={!canManage(task) || savingBoardSteps.has(step.id)} on:change={(event) => { event.currentTarget.checked = step.finished; void toggleBoardStep(task, step); }} />
                       <span style:text-decoration={step.finished ? 'line-through' : 'none'}>{step.body}</span>
                     </label>
                   {/each}
+                  {#if hiddenStepsCount > 0 || stepsExpanded && task.steps.length > CARD_STEPS_LIMIT}
+                    <button type="button" class="btn-unstyled pm-muted" on:click={() => toggleStepsExpanded(task.id)}>
+                      {stepsExpanded ? t('Show less') : `${t('See')} ${hiddenStepsCount} ${t('more')}`}
+                    </button>
+                  {/if}
                 </details>
               {/if}
               {#if taskLinkGroups(task).length || task.comment_count > 0}
@@ -2509,16 +2596,22 @@
                         <p class="pm-muted mb-0">{t('Loading')}…</p>
                       {:else}
                         {#each cardComments[task.id] ?? [] as comment (comment.id)}
-                          <div class="pm-card-comment-preview mb-1">
-                            <span class="pm-muted">{comment.author_fullname}</span>
-                            <div>{@html comment.body}</div>
+                          <div class="pm-card-comment-preview mb-2">
+                            <span class="pm-card-comment-author">{comment.author_fullname}</span>
+                            <span class="pm-card-comment-body">{@html comment.body}</span>
                           </div>
                         {/each}
-                        <button type="button" class="btn-unstyled" on:click={() => openDetail(task)}>{t('Reply')}…</button>
+                        <button type="button" class="btn-unstyled pm-card-comment-reply" on:click={() => openDetail(task)}>{t('Reply')}…</button>
                       {/if}
                     </details>
                   {/if}
                 </div>
+              {/if}
+              {/if}
+              {#if task.updated_at && task.updated_by_fullname}
+                <button type="button" class="btn-unstyled pm-muted pm-task-updated" on:click={() => openDetail(task)}>
+                  {t('Updated')} {formatRelativeUpdate(task.updated_at)} {t('by')} {task.updated_by_fullname}
+                </button>
               {/if}
               <div class="pm-task-meta d-flex align-items-center flex-wrap mt-1">
                 {#if task.assignees.length === 0}

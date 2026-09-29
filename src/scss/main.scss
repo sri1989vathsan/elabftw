@@ -5422,6 +5422,26 @@ div > .sticky-navbar {
   font-size: 0.85rem;
 }
 
+.pm-deadline-overdue {
+  color: #a32d2d;
+  font-weight: 600;
+}
+
+.pm-deadline-due-soon {
+  color: #854f0b;
+  font-weight: 600;
+}
+
+.pm-task-updated {
+  border-top: 1px solid #d9d9d9;
+  cursor: pointer;
+  display: block;
+  font-size: 0.7rem;
+  padding-top: 0.35rem;
+  text-align: left;
+  width: 100%;
+}
+
 .pm-reassign-select {
   max-width: 10rem;
   width: auto;
@@ -5778,8 +5798,37 @@ div > .sticky-navbar {
   margin-bottom: 0.25rem;
 }
 
+// An open group takes the full row width instead of sitting beside its
+// still-collapsed siblings -- so its content reads left-aligned under its
+// own summary, and a second group opened at the same time stacks below
+// this one (both now full-width flex items) rather than beside it.
+.pm-task-links-group[open] {
+  flex-basis: 100%;
+  text-align: left;
+}
+
 .pm-card-comment-preview {
-  font-size: 0.8rem;
+  text-align: left;
+}
+
+.pm-card-comment-author {
+  color: #8a938a;
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.pm-card-comment-body {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.pm-card-comment-reply {
+  color: var(--link);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .pm-task-steps > summary {

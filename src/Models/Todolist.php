@@ -282,9 +282,11 @@ final class Todolist extends AbstractRest
                 t.reminder_minutes,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
                 DATE_FORMAT(t.archived_at, '%Y-%m-%dT%H:%i:%sZ') AS archived_at,
+                DATE_FORMAT(t.updated_at, '%Y-%m-%dT%H:%i:%sZ') AS updated_at,
                 t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id, t.in_progress, t.priority, t.column_id, t.pinned,
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
+                CONCAT(updater.firstname, ' ', updater.lastname) AS updated_by_fullname,
                 project.name AS project_name,
                 parent_project.name AS project_parent_name,
                 col.kind AS column_kind,
@@ -299,6 +301,7 @@ final class Todolist extends AbstractRest
             FROM todolist AS t
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
+            LEFT JOIN users AS updater ON updater.userid = t.updated_by
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
             LEFT JOIN todolist_projects AS parent_project ON parent_project.id = project.parent_id
             LEFT JOIN todolist_columns AS col ON col.id = t.column_id
@@ -686,9 +689,11 @@ final class Todolist extends AbstractRest
                 t.reminder_minutes,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
                 DATE_FORMAT(t.archived_at, '%Y-%m-%dT%H:%i:%sZ') AS archived_at,
+                DATE_FORMAT(t.updated_at, '%Y-%m-%dT%H:%i:%sZ') AS updated_at,
                 t.creation_time, t.ordering, t.userid, t.team, t.assigned_userid, t.project_id, t.in_progress, t.priority, t.column_id, t.pinned,
                 CONCAT(creator.firstname, ' ', creator.lastname) AS creator_fullname,
                 CONCAT(assignee.firstname, ' ', assignee.lastname) AS assigned_fullname,
+                CONCAT(updater.firstname, ' ', updater.lastname) AS updated_by_fullname,
                 project.name AS project_name,
                 parent_project.name AS project_parent_name,
                 col.kind AS column_kind,
@@ -703,6 +708,7 @@ final class Todolist extends AbstractRest
             FROM todolist AS t
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
+            LEFT JOIN users AS updater ON updater.userid = t.updated_by
             LEFT JOIN todolist_projects AS project ON project.id = t.project_id
             LEFT JOIN todolist_projects AS parent_project ON parent_project.id = project.parent_id
             LEFT JOIN todolist_columns AS col ON col.id = t.column_id
@@ -782,6 +788,7 @@ final class Todolist extends AbstractRest
             $newAssignees = $this->getAssigneeUserids($params['assignee_userids'] ?? $params['assigned_userid']);
             $this->syncAssignees((int) $this->id, $newAssignees);
             $this->updatePrimaryAssignee($newAssignees[0]);
+            $this->touchUpdated();
         }
         $this->syncDeadlineNotification();
         $task = $this->readOne();
@@ -1202,16 +1209,35 @@ final class Todolist extends AbstractRest
             'ordering' => array('ordering', (int) $value, PDO::PARAM_INT),
             default => throw new ImproperActionException(_('Invalid to-do property.')),
         };
+        // Reordering (drag position within a column) is cosmetic, not a
+        // meaningful change from a collaborator's point of view -- left out
+        // so it doesn't spam "updated 2 minutes ago" on every drag.
+        $touchClause = $target !== 'ordering' ? ', updated_at = NOW(), updated_by = :updater' : '';
         $sql = sprintf(
-            'UPDATE todolist SET %s = :content WHERE id = :id AND team = :team',
+            'UPDATE todolist SET %s = :content%s WHERE id = :id AND team = :team',
             $column,
+            $touchClause,
         );
         $req = $this->Db->prepare($sql);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindValue(':content', $content, $content === null ? PDO::PARAM_NULL : $type);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        if ($target !== 'ordering') {
+            $req->bindParam(':updater', $this->userid, PDO::PARAM_INT);
+        }
 
         return $this->Db->execute($req);
+    }
+
+    /** For a mutation that doesn't go through update() above (e.g. assignee changes, their own dedicated SQL) but should still count as "an update" */
+    private function touchUpdated(): void
+    {
+        $sql = 'UPDATE todolist SET updated_at = NOW(), updated_by = :updater WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':updater', $this->userid, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
     }
 
     private function getContent(mixed $value): string
