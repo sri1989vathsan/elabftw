@@ -916,4 +916,31 @@ final class Orders extends AbstractRest
         }
         return $archived;
     }
+
+    /**
+     * Catch-up sweep for orders_autoadvance_on_procurement_id (see admin
+     * settings, and OrderUploads::extractProcurementTags()'s own event-
+     * driven trigger): that trigger only fires the moment a procurement ID
+     * is newly extracted, so a requested order that already had one --
+     * extracted before the setting was turned on, or from an older
+     * extraction run -- would otherwise never move. This sweeps every
+     * team with the setting on for any requested order that already has a
+     * procurement_id, regardless of when it was set. Invoked from the same
+     * orders:autoarchive command/schedule as autoArchivePastDue() above.
+     *
+     * @return int how many orders were advanced
+     */
+    public static function autoAdvanceOnProcurementId(): int
+    {
+        $Db = Db::getConnection();
+        $sql = "UPDATE custom_orders AS o
+            INNER JOIN teams AS tm ON tm.id = o.team
+            SET o.status = 'ordered', o.status_changed_at = NOW()
+            WHERE o.status = 'requested'
+                AND o.procurement_id IS NOT NULL
+                AND tm.orders_autoadvance_on_procurement_id = 1";
+        $req = $Db->prepare($sql);
+        $Db->execute($req);
+        return $req->rowCount();
+    }
 }

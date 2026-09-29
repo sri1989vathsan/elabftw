@@ -1377,6 +1377,16 @@
     void loadTeamMembers();
     void loadCategories();
     void loadTemplates();
+
+    // A status change isn't always driven by someone looking at this page
+    // -- the auto-archive/auto-advance-on-procurement-id sweeps (see
+    // OrdersAutoArchiveCommand) run on their own schedule, so a tab left
+    // open would otherwise show a stale status until manually refreshed.
+    // load() already keeps the list mounted during a background reload
+    // (see the loading && visibleItems.length === 0 guard below), so this
+    // doesn't cause any visible jump.
+    const refreshInterval = setInterval(() => { void load(); }, 60000);
+    return () => clearInterval(refreshInterval);
   });
 </script>
 

@@ -20,11 +20,17 @@ use Symfony\Component\Console\Output\OutputInterface;
 use function sprintf;
 
 /**
- * Archive every order that's been sitting in 'ordered' for at least that
- * team's own orders_autoarchive_days -- an opt-in, per-team, admin-only
- * setting (0 = disabled, the default). Meant to run on a schedule (see
- * chronos.go); safe to run manually too, and a no-op for any team that
- * hasn't turned it on.
+ * Two opt-in, per-team, admin-only Orders maintenance sweeps, both off by
+ * default and both a no-op for any team that hasn't turned them on:
+ *   - archive an order that's been sitting in a configured status for at
+ *     least that team's own threshold (orders_autoarchive_rules);
+ *   - catch up any requested order that already has a procurement ID but
+ *     never got auto-advanced to ordered (orders_autoadvance_on_procurement_id)
+ *     -- the event-driven trigger in OrderUploads::extractProcurementTags()
+ *     only fires at the moment one is newly extracted, so this is the
+ *     periodic catch-up for anything that predates that, or predates the
+ *     setting being turned on at all.
+ * Meant to run on a schedule (see chronos.go); safe to run manually too.
  */
 #[AsCommand(name: 'orders:autoarchive')]
 final class OrdersAutoArchiveCommand extends Command
@@ -32,14 +38,16 @@ final class OrdersAutoArchiveCommand extends Command
     #[Override]
     protected function configure(): void
     {
-        $this->setDescription('Archive orders that have been \'ordered\' past a team\'s configured threshold');
+        $this->setDescription('Run Orders\' scheduled maintenance sweeps (auto-archive, auto-advance on procurement ID)');
     }
 
     #[Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $count = Orders::autoArchivePastDue();
-        $output->writeln(sprintf('Auto-archived %d order(s).', $count));
+        $archived = Orders::autoArchivePastDue();
+        $output->writeln(sprintf('Auto-archived %d order(s).', $archived));
+        $advanced = Orders::autoAdvanceOnProcurementId();
+        $output->writeln(sprintf('Auto-advanced %d order(s) to ordered.', $advanced));
         return Command::SUCCESS;
     }
 }
