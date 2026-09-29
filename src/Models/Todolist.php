@@ -294,6 +294,7 @@ final class Todolist extends AbstractRest
                     INNER JOIN (SELECT userid, CONCAT(firstname, ' ', lastname) AS fullname FROM users) AS au ON au.userid = ta.userid
                     WHERE ta.task_id = t.id
                 ), JSON_ARRAY()) AS assignees,
+                (SELECT COUNT(*) FROM custom_todolist_comments AS c WHERE c.task_id = t.id) AS comment_count,
                 {$this->entityLinksSubquery()} AS entity_links
             FROM todolist AS t
             LEFT JOIN users AS creator ON creator.userid = t.userid
@@ -697,6 +698,7 @@ final class Todolist extends AbstractRest
                     INNER JOIN (SELECT userid, CONCAT(firstname, ' ', lastname) AS fullname FROM users) AS au ON au.userid = ta.userid
                     WHERE ta.task_id = t.id
                 ), JSON_ARRAY()) AS assignees,
+                (SELECT COUNT(*) FROM custom_todolist_comments AS c WHERE c.task_id = t.id) AS comment_count,
                 {$this->entityLinksSubquery()} AS entity_links
             FROM todolist AS t
             LEFT JOIN users AS creator ON creator.userid = t.userid
@@ -1023,6 +1025,9 @@ final class Todolist extends AbstractRest
         $row['assignees'] = json_decode((string) $row['assignees'], true, 512, JSON_THROW_ON_ERROR);
         $row['in_progress'] = (bool) $row['in_progress'];
         $row['pinned'] = (bool) $row['pinned'];
+        if (array_key_exists('comment_count', $row)) {
+            $row['comment_count'] = (int) $row['comment_count'];
+        }
         return $row;
     }
 

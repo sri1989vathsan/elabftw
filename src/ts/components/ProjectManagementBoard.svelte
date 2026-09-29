@@ -62,6 +62,7 @@
     creator_fullname: string;
     assigned_fullname: string | null;
     assignees: TeamMember[];
+    comment_count: number;
     project_name: string | null;
     project_parent_name: string | null;
     entity_links: EntityLink[];
@@ -216,6 +217,26 @@
   let mentionCandidates: TeamMember[] = [];
   let postingComment = false;
   let descriptionEl: HTMLDivElement;
+
+  // Read-only preview shown in a card's own collapsible comments chip --
+  // separate from detailComments (the detail popup's own, editable list),
+  // lazy-loaded the first time a given card's comments are expanded, so
+  // opening a column full of cards doesn't fetch comments no one looked at.
+  let cardComments: Record<number, TaskComment[]> = {};
+  let loadingCardComments = new Set<number>();
+
+  async function loadCardComments(taskId: number): Promise<void> {
+    if (taskId in cardComments || loadingCardComments.has(taskId)) return;
+    loadingCardComments = new Set([...loadingCardComments, taskId]);
+    try {
+      cardComments[taskId] = await ApiC.getJson(`${Model.Todolist}/${taskId}/${Model.Comment}`) as TaskComment[];
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not load comments.');
+    } finally {
+      loadingCardComments.delete(taskId);
+      loadingCardComments = new Set(loadingCardComments);
+    }
+  }
   let notesEl: HTMLDivElement;
   let detailEntityLinks: EntityLink[] = [];
   let loadingEntityLinks = false;
@@ -2471,7 +2492,7 @@
                   {/each}
                 </details>
               {/if}
-              {#if taskLinkGroups(task).length}
+              {#if taskLinkGroups(task).length || task.comment_count > 0}
                 <div class="pm-task-links-row mt-2">
                   {#each taskLinkGroups(task) as group (group.type)}
                     <details class="pm-task-links-group">
@@ -2481,6 +2502,22 @@
                       {/each}
                     </details>
                   {/each}
+                  {#if task.comment_count > 0}
+                    <details class="pm-task-links-group" on:toggle={(event) => { if ((event.target as HTMLDetailsElement).open) void loadCardComments(task.id); }}>
+                      <summary title={t('Comments')} aria-label={`${task.comment_count} ${t('Comments')}`}><i class="fas fa-comment fa-fw" aria-hidden="true"></i>{task.comment_count}</summary>
+                      {#if loadingCardComments.has(task.id)}
+                        <p class="pm-muted mb-0">{t('Loading')}…</p>
+                      {:else}
+                        {#each cardComments[task.id] ?? [] as comment (comment.id)}
+                          <div class="pm-card-comment-preview mb-1">
+                            <span class="pm-muted">{comment.author_fullname}</span>
+                            <div>{@html comment.body}</div>
+                          </div>
+                        {/each}
+                        <button type="button" class="btn-unstyled" on:click={() => openDetail(task)}>{t('Reply')}…</button>
+                      {/if}
+                    </details>
+                  {/if}
                 </div>
               {/if}
               <div class="pm-task-meta d-flex align-items-center flex-wrap mt-1">
