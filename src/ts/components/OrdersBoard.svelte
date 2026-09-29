@@ -270,6 +270,16 @@
 
   const COMMENT_PAGE_SIZE = 5;
   let expandedComments = new Set<number>();
+  // Attachments (unlike comments/steps) already come fully populated with
+  // the order itself (see uploadsByItem's own init from item.uploads) --
+  // no lazy fetch needed here, this is purely a display toggle.
+  let expandedAttachments = new Set<number>();
+
+  function toggleAttachments(itemId: number): void {
+    const next = new Set(expandedAttachments);
+    if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+    expandedAttachments = next;
+  }
   let fullyExpandedComments = new Set<number>();
   let commentsByItem: Record<number, OrderComment[]> = {};
   let commentsLoading = new Set<number>();
@@ -2108,7 +2118,15 @@
               on:drop={(event) => onFileDropped(item, event)}
             >
               <div class="d-flex align-items-center flex-wrap mb-1">
-                <strong class="orders-attachments-title">{t('Attachments')}</strong>
+                <button
+                  type="button"
+                  class="btn-unstyled orders-attachments-title"
+                  aria-expanded={expandedAttachments.has(item.id)}
+                  on:click={() => toggleAttachments(item.id)}
+                >
+                  <i class="fas {expandedAttachments.has(item.id) ? 'fa-chevron-down' : 'fa-chevron-right'} fa-fw mr-1" aria-hidden="true"></i>
+                  {t('Attachments')}{#if (uploadsByItem[item.id] ?? []).length > 0} ({uploadsByItem[item.id].length}){/if}
+                </button>
                 <label class="btn btn-ghost btn-sm ml-2 mb-0" class:disabled={uploadingItem.has(item.id)}>
                   <i class="fas fa-paperclip fa-fw mr-1" aria-hidden="true"></i>
                   {uploadingItem.has(item.id) ? t('Uploading') + '…' : t('Attach file')}
@@ -2116,43 +2134,45 @@
                 </label>
                 <span class="orders-muted small ml-2">{t('or drag a file here')}</span>
               </div>
-              {#if (uploadsByItem[item.id] ?? []).length === 0}
-                <p class="orders-muted mb-2">{t('No attachments yet.')}</p>
-              {:else}
-                <ul class="orders-upload-list mb-2">
-                  {#each uploadsByItem[item.id] as upload (upload.id)}
-                    <li class="orders-upload">
-                      <i class="fas fa-file fa-fw mr-1" aria-hidden="true"></i>
-                      <a href={downloadUrl(upload)} target="_blank" rel="noopener noreferrer">{upload.real_name}</a>
-                      <span class="orders-muted ml-1">{formatFilesize(upload.filesize)}</span>
-                      {#if upload.has_extracted_text}
-                        <i class="fas fa-magnifying-glass fa-fw ml-1 orders-muted" title={t('Content is searchable')} aria-label={t('Content is searchable')}></i>
-                      {:else if upload.extraction_status === 'pending'}
-                        <i class="fas fa-spinner fa-spin fa-fw ml-1 orders-muted" title={t('Extracting text for search…')} aria-label={t('Extracting text for search')}></i>
-                      {/if}
-                      <button
-                        type="button"
-                        class="btn btn-ghost btn-sm orders-icon-button ml-auto"
-                        title={t('Add to new order')}
-                        aria-label={t('Add to new order')}
-                        on:click={() => reuseUpload(upload)}
-                      >
-                        <i class="fas fa-share fa-fw" aria-hidden="true"></i>
-                      </button>
-                      {#if canDeleteUpload(upload)}
+              {#if expandedAttachments.has(item.id)}
+                {#if (uploadsByItem[item.id] ?? []).length === 0}
+                  <p class="orders-muted mb-2">{t('No attachments yet.')}</p>
+                {:else}
+                  <ul class="orders-upload-list mb-2">
+                    {#each uploadsByItem[item.id] as upload (upload.id)}
+                      <li class="orders-upload">
+                        <i class="fas fa-file fa-fw mr-1" aria-hidden="true"></i>
+                        <a href={downloadUrl(upload)} target="_blank" rel="noopener noreferrer">{upload.real_name}</a>
+                        <span class="orders-muted ml-1">{formatFilesize(upload.filesize)}</span>
+                        {#if upload.has_extracted_text}
+                          <i class="fas fa-magnifying-glass fa-fw ml-1 orders-muted" title={t('Content is searchable')} aria-label={t('Content is searchable')}></i>
+                        {:else if upload.extraction_status === 'pending'}
+                          <i class="fas fa-spinner fa-spin fa-fw ml-1 orders-muted" title={t('Extracting text for search…')} aria-label={t('Extracting text for search')}></i>
+                        {/if}
                         <button
                           type="button"
-                          class="btn btn-danger-ghost btn-sm orders-icon-button"
-                          title={t('Delete')}
-                          aria-label={t('Delete')}
-                          on:click={() => deleteUpload(item, upload)}
+                          class="btn btn-ghost btn-sm orders-icon-button ml-auto"
+                          title={t('Add to new order')}
+                          aria-label={t('Add to new order')}
+                          on:click={() => reuseUpload(upload)}
                         >
-                          <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                          <i class="fas fa-share fa-fw" aria-hidden="true"></i>
                         </button>
-                      {/if}
-                    </li>
-                  {/each}
-                </ul>
+                        {#if canDeleteUpload(upload)}
+                          <button
+                            type="button"
+                            class="btn btn-danger-ghost btn-sm orders-icon-button"
+                            title={t('Delete')}
+                            aria-label={t('Delete')}
+                            on:click={() => deleteUpload(item, upload)}
+                          >
+                            <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                          </button>
+                        {/if}
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
               {/if}
             </div>
             <button
@@ -2774,7 +2794,9 @@
   }
 
   .orders-attachments-title {
+    cursor: pointer;
     font-size: 0.85rem;
+    font-weight: 700;
   }
 
   .orders-file-input {

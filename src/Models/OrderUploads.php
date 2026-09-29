@@ -207,6 +207,16 @@ final class OrderUploads extends AbstractRest
         $req->bindValue(':extraction_status', $source['extraction_status']);
         $req->bindValue(':extracted_text', $extractedText, $extractedText === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $this->Db->execute($req);
+        // The source upload's extracted_text is reused verbatim above (same
+        // file content, nothing new to OCR/parse for text) -- but that text
+        // was already run through extractProcurementTags() once, against
+        // the *source* order, not this one. Re-running it here is what
+        // actually sets procurement_id/order_number on *this* order;
+        // skipping it (as this used to) left every copied attachment's
+        // order permanently missing its procurement ID tag.
+        if ($extractedText !== null) {
+            self::extractProcurementTags($this->Db, (int) $this->Order->id, $extractedText);
+        }
         $this->advanceOnAttachment();
 
         return (int) $this->Db->lastInsertId();
