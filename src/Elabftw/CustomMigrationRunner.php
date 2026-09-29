@@ -112,6 +112,7 @@ final class CustomMigrationRunner
         '071_order_autoarchive.sql',
         '072_order_autoarchive_status.sql',
         '073_order_autoarchive_rules.sql',
+        '074_order_autoadvance_procurement.sql',
     );
 
     private Db $Db;

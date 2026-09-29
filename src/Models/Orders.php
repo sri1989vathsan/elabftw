@@ -544,6 +544,12 @@ final class Orders extends AbstractRest
             }
             $this->updateCommon((bool) $params['common']);
         }
+        if (array_key_exists('userid', $params)) {
+            if (!$isOwner && !$this->Users->isAdmin) {
+                throw new ImproperActionException('Only the author or a team admin can edit this order.');
+            }
+            $this->updateOwner($params['userid']);
+        }
         if (array_key_exists('title', $params) || array_key_exists('notes', $params)) {
             if (!$isOwner && !$this->Users->isAdmin) {
                 throw new ImproperActionException('Only the author or a team admin can edit this order.');
@@ -665,6 +671,19 @@ final class Orders extends AbstractRest
         $sql = 'UPDATE custom_orders SET common = :common WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':common', $common, PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    // reuses getOwnerUserid()'s own "must be a member of this team" check --
+    // null/empty falls back to the requester themself, same as at creation
+    private function updateOwner(mixed $value): void
+    {
+        $userid = $this->getOwnerUserid($value);
+        $sql = 'UPDATE custom_orders SET userid = :userid WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':userid', $userid, PDO::PARAM_INT);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);

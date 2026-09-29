@@ -253,6 +253,8 @@
   // form, but kept in its own state so it never interferes with it
   let editingItemId: number | null = null;
   let editTitle = '';
+  let editIsCommon = false;
+  let editForUserid: number | null = null;
   // same rich-text approach as newNotesEl: editNotesInitial only seeds the
   // contenteditable's starting content, the live value is read from
   // editNotesEl.innerHTML when saving
@@ -756,6 +758,8 @@
   function startEdit(item: OrderItem): void {
     editingItemId = item.id;
     editTitle = item.title;
+    editIsCommon = item.common;
+    editForUserid = item.userid === core.currentUserid ? null : item.userid;
     editNotesInitial = item.notes ?? '';
     editResourceQuery = '';
     editResourceResults = [];
@@ -820,6 +824,8 @@
         title: editTitle.trim(),
         notes: notesHtml === '' ? null : notesHtml,
         item_ids: itemIds,
+        common: editIsCommon,
+        userid: editForUserid,
       });
       editingItemId = null;
       await load();
@@ -1771,6 +1777,23 @@
                   bind:value={editTitle}
                   required
                 />
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm orders-reference-toggle mb-2"
+                  class:active={editIsCommon}
+                  aria-pressed={editIsCommon}
+                  title={t('Commonly ordered lab supply (e.g. gloves, tips) — just a label, still a normal order')}
+                  on:click={() => editIsCommon = !editIsCommon}
+                >
+                  <i class="fas fa-tag fa-fw mr-1" aria-hidden="true"></i>{t('Common')}
+                </button>
+                <label class="sr-only" for={`ordersEditForUser-${item.id}`}>{t('Place this order for')}</label>
+                <select id={`ordersEditForUser-${item.id}`} class="form-control form-control-sm mb-2" bind:value={editForUserid} title={t('Place this order for')}>
+                  <option value={null}>{t('Myself')}</option>
+                  {#each teamMembers.filter(member => member.userid !== core.currentUserid) as member (member.userid)}
+                    <option value={member.userid}>{member.fullname}</option>
+                  {/each}
+                </select>
                 <label class="sr-only" for={`ordersEditNotes-${item.id}`}>{t('Notes')}</label>
                 <div
                   id={`ordersEditNotes-${item.id}`}

@@ -316,6 +316,25 @@ final class OrderUploads extends AbstractRest
         $req->bindValue(':order_number', $orderNumber, $orderNumber === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':order_id', $orderId, PDO::PARAM_INT);
         $Db->execute($req);
+
+        // opt-in, admin-only per team (orders_autoadvance_on_procurement_id,
+        // off by default): a requested order that just got a procurement ID
+        // extracted from one of its attachments moves straight to ordered,
+        // saving the manual status change once the paperwork is in. Only
+        // ever moves a *requested* order -- one already backlogged/received/
+        // cancelled/reference is left alone even if it later gets a
+        // procurement ID (e.g. a second, corrected attachment).
+        if ($procurementId !== null) {
+            $advanceSql = "UPDATE custom_orders AS o
+                INNER JOIN teams AS tm ON tm.id = o.team
+                SET o.status = 'ordered', o.status_changed_at = NOW()
+                WHERE o.id = :order_id
+                    AND o.status = 'requested'
+                    AND tm.orders_autoadvance_on_procurement_id = 1";
+            $advanceReq = $Db->prepare($advanceSql);
+            $advanceReq->bindValue(':order_id', $orderId, PDO::PARAM_INT);
+            $Db->execute($advanceReq);
+        }
     }
 
     /** @return list<int> upload ids still waiting on extraction */
