@@ -1881,7 +1881,11 @@
   async function refreshTaskInBoard(taskId: number): Promise<void> {
     try {
       const fresh = await ApiC.getJson(`${Model.Todolist}/${taskId}`) as Task;
-      tasks = tasks.map(t => t.id === taskId ? fresh : t);
+      // readOne() (unlike the board's own bulk list fetch) never sets
+      // steps at all -- carry over whatever's already in `tasks`
+      // (loadSteps()/toggleBoardStep() are the ones that keep it current)
+      // instead of wiping every existing step out from under it.
+      tasks = tasks.map(t => t.id === taskId ? { ...fresh, steps: t.steps } : t);
     } catch {
       // best-effort -- the card just stays stale until the next full load()
     }
