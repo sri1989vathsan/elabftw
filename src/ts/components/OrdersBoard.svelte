@@ -651,13 +651,15 @@
         labcollector_type: newLabcollectorType ?? undefined,
         labcollector_id: newLabcollectorId ?? undefined,
       });
+      const newlyUploadedIds: number[] = [];
       for (const file of newFiles) {
         try {
-          await uploadFileToOrder(orderId, file);
+          newlyUploadedIds.push(await uploadFileToOrder(orderId, file));
         } catch (error) {
           notify.error(error instanceof Error ? error.message : `Could not attach ${file.name}.`);
         }
       }
+      if (newlyUploadedIds.length > 0) void pollOrderExtractionThenRefresh(orderId, newlyUploadedIds);
       for (const upload of reusedUploads) {
         try {
           await copyUploadToOrder(orderId, upload.id);
@@ -1092,6 +1094,46 @@
     }
   }
 
+  // Re-fetches just this one order and swaps it into whichever list(s) it's
+  // currently in -- same idea as the board's own 60s poll, but immediate,
+  // for the one order that just changed rather than waiting on the timer.
+  async function refreshOrderInBoard(itemId: number): Promise<void> {
+    try {
+      const fresh = await ApiC.getJson(`${Model.Order}/${itemId}`) as OrderItem;
+      items = items.map(i => i.id === itemId ? fresh : i);
+      pinnedItems = pinnedItems.map(i => i.id === itemId ? fresh : i);
+    } catch {
+      // best-effort -- the 60s poll will catch it eventually either way
+    }
+  }
+
+  // A just-uploaded PDF's procurement-id extraction (and, if
+  // orders_autoadvance_on_procurement_id is on, the requested->ordered
+  // move it can trigger) runs out-of-band via the Invoker, typically
+  // finishing within a couple of seconds -- short-poll this one upload's
+  // own extraction_status rather than making the user wait for the
+  // board's full 60s cycle (or a manual refresh) to see it land.
+  async function pollOrderExtractionThenRefresh(itemId: number, uploadIds: number[]): Promise<void> {
+    let pending = new Set(uploadIds);
+    for (let attempt = 0; attempt < 10 && pending.size > 0; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      try {
+        const uploads = await ApiC.getJson(`${Model.Order}/${itemId}/${Model.Upload}`) as OrderUpload[];
+        uploadsByItem[itemId] = uploads;
+        uploadsByItem = uploadsByItem;
+        pending = new Set(
+          [...pending].filter(id => {
+            const upload = uploads.find(u => u.id === id);
+            return upload !== undefined && upload.extraction_status === 'pending';
+          }),
+        );
+      } catch {
+        return;
+      }
+    }
+    void refreshOrderInBoard(itemId);
+  }
+
   async function uploadFileToOrder(orderId: number, file: File): Promise<number> {
     const formData = new FormData();
     formData.set('file', file);
@@ -1187,8 +1229,12 @@
   async function uploadFile(item: OrderItem, file: File): Promise<void> {
     uploadingItem = new Set(uploadingItem).add(item.id);
     try {
-      await uploadFileToOrder(item.id, file);
+      const newId = await uploadFileToOrder(item.id, file);
       await loadUploads(item.id);
+      const uploaded = uploadsByItem[item.id]?.find(u => u.id === newId);
+      if (uploaded?.extraction_status === 'pending') {
+        void pollOrderExtractionThenRefresh(item.id, [newId]);
+      }
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not upload this file.');
     } finally {
