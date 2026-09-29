@@ -155,6 +155,7 @@ final class TodolistEntityLinks extends AbstractRest
         if ($req->rowCount() === 0) {
             throw new ResourceNotFoundException();
         }
+        $this->Task->touchUpdated();
 
         return (int) $this->Db->lastInsertId();
     }
@@ -187,6 +188,7 @@ final class TodolistEntityLinks extends AbstractRest
         if ($req->rowCount() === 0) {
             throw new ResourceNotFoundException();
         }
+        $this->Task->touchUpdated();
 
         return (int) $this->Db->lastInsertId();
     }
@@ -228,6 +230,7 @@ final class TodolistEntityLinks extends AbstractRest
             $req->bindValue($param, $valueAndType[0], $valueAndType[1]);
         }
         $this->Db->execute($req);
+        $this->Task->touchUpdated();
 
         return $this->readOne();
     }
@@ -243,6 +246,10 @@ final class TodolistEntityLinks extends AbstractRest
         $req->bindValue(':task_id', $this->Task->id, PDO::PARAM_INT);
         $req->bindValue(':team', $this->Users->team, PDO::PARAM_INT);
 
-        return $this->Db->execute($req);
+        $result = $this->Db->execute($req);
+        if ($result) {
+            $this->Task->touchUpdated();
+        }
+        return $result;
     }
 }

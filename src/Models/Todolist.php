@@ -1229,8 +1229,14 @@ final class Todolist extends AbstractRest
         return $this->Db->execute($req);
     }
 
-    /** For a mutation that doesn't go through update() above (e.g. assignee changes, their own dedicated SQL) but should still count as "an update" */
-    private function touchUpdated(): void
+    /**
+     * For a mutation that doesn't go through update() above but should
+     * still count as "an update" -- assignee changes (own dedicated SQL,
+     * called from patch() itself), and a step or linked entity being
+     * added/edited/removed (called from TodolistSteps/TodolistEntityLinks
+     * on their own $Task instance, constructed with the same requester).
+     */
+    public function touchUpdated(): void
     {
         $sql = 'UPDATE todolist SET updated_at = NOW(), updated_by = :updater WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
