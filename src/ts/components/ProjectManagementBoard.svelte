@@ -628,6 +628,10 @@
   // has to keep seeing all of them for that slicing to stay correct.
   function taskFilterParams(): string {
     let params = '&include_steps=1';
+    // Compact view never renders notes/description/entity_links (see
+    // cardDensity below) -- skip fetching them too, rather than paying
+    // for the heaviest fields on every task just to throw them away.
+    if (cardDensity === 'compact') params += '&include_details=0';
     if (typeof activeProjectId === 'number') {
       params += `&project_id=${activeProjectId}`;
       if (computeViewingAllSubprojects(activeProjectId)) params += '&include_subprojects=1';
@@ -834,6 +838,13 @@
     } catch {
       // best-effort -- a private/blocked-storage browser just won't remember it across reloads
     }
+    // taskFilterParams() (and therefore what notes/description/entity_links
+    // actually got fetched) depends on cardDensity -- switching to expanded
+    // without this would show blank notes/description until an unrelated
+    // reload happened to refetch them; switching to compact without this
+    // just leaves the already-fetched detail in memory an extra moment,
+    // harmless but worth a fresh fetch anyway for consistency.
+    void load();
   }
 
   function openNewTaskInColumn(columnId: number): void {

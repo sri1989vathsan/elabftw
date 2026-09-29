@@ -31,19 +31,24 @@ use PDO;
 
 use function _;
 use function array_column;
+use function array_filter;
 use function array_key_exists;
 use function array_map;
 use function array_unique;
 use function array_values;
 use function filter_var;
+use function implode;
 use function in_array;
 use function is_array;
 use function json_decode;
 use function mb_strlen;
+use function preg_replace;
+use function preg_split;
 use function sprintf;
 use function trim;
 
 use const JSON_THROW_ON_ERROR;
+use const PREG_SPLIT_NO_EMPTY;
 
 /**
  * All about the todolist, including tasks assigned to teammates (project management)
@@ -237,10 +242,22 @@ final class Todolist extends AbstractRest
         $searchBind = array();
         if ($search !== '') {
             $like = '%' . $search . '%';
+            // A leading-wildcard LIKE over body/notes/description means a
+            // full table scan per search, on the three biggest columns in
+            // the row -- ft_todolist_search (see migration 076) lets MySQL
+            // seek instead. BOOLEAN MODE with a trailing '*' per word is
+            // the closest fulltext equivalent to the previous substring
+            // behavior (true substring matching isn't possible with an
+            // inverted index either way). Only worth it once every word
+            // clears MySQL's own default innodb_ft_min_token_size (3) --
+            // shorter terms (an order code, an initialism) still need the
+            // LIKE fallback, since fulltext wouldn't index them at all.
+            $fulltextQuery = $this->buildFulltextBooleanQuery($search);
+            $bigTextCondition = $fulltextQuery !== null
+                ? 'MATCH(t.body, t.notes, t.description) AGAINST (:search_fulltext IN BOOLEAN MODE)'
+                : '(t.body LIKE :search_body OR t.notes LIKE :search_notes OR t.description LIKE :search_description)';
             $searchConditions = array(
-                't.body LIKE :search_body',
-                't.notes LIKE :search_notes',
-                't.description LIKE :search_description',
+                $bigTextCondition,
                 't.priority LIKE :search_priority',
                 'project.name LIKE :search_project',
                 'CONCAT(creator.firstname, " ", creator.lastname) LIKE :search_creator',
@@ -263,12 +280,19 @@ final class Todolist extends AbstractRest
             );
             $searchFilter = ' AND (' . implode(' OR ', $searchConditions) . ')';
             foreach (array(
-                'search_body', 'search_notes', 'search_description', 'search_priority',
+                'search_priority',
                 'search_project', 'search_creator', 'search_assignee', 'search_multi_assignee',
                 'search_link_label', 'search_link_experiments', 'search_link_items',
                 'search_link_exp_templates', 'search_link_item_types',
             ) as $name) {
                 $searchBind[$name] = $like;
+            }
+            if ($fulltextQuery !== null) {
+                $searchBind['search_fulltext'] = $fulltextQuery;
+            } else {
+                $searchBind['search_body'] = $like;
+                $searchBind['search_notes'] = $like;
+                $searchBind['search_description'] = $like;
             }
         }
 
@@ -277,7 +301,18 @@ final class Todolist extends AbstractRest
         $limit = $queryParams->getLimit() ?: 100;
         $offset = max(0, $query->getInt('offset'));
         $limitSql = $limit > 0 ? sprintf(' LIMIT %d OFFSET %d', $limit, $offset) : '';
-        $sql = "SELECT t.id, t.body, t.notes, t.description,
+        // notes/description/entity_links are the heaviest fields on a task
+        // (rich HTML, and entity_links' own per-link-type title lookups) --
+        // a board rendering a page of cards in compact view never shows any
+        // of them (see ProjectManagementBoard.svelte's cardDensity), so
+        // there's no reason to pay for fetching them. Defaults to true so
+        // every other caller (sidebar widget, calendar, etc, none of which
+        // pass this param) keeps exactly its current payload; only the
+        // board's own compact-mode fetch opts out.
+        $includeDetails = $query->getBoolean('include_details', true);
+        $notesSelect = $includeDetails ? 't.notes, t.description,' : 'NULL AS notes, NULL AS description,';
+        $entityLinksSelect = $includeDetails ? $this->entityLinksSubquery() : 'JSON_ARRAY()';
+        $sql = "SELECT t.id, t.body, {$notesSelect}
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
                 t.reminder_minutes,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
@@ -297,7 +332,7 @@ final class Todolist extends AbstractRest
                     WHERE ta.task_id = t.id
                 ), JSON_ARRAY()) AS assignees,
                 (SELECT COUNT(*) FROM custom_todolist_comments AS c WHERE c.task_id = t.id) AS comment_count,
-                {$this->entityLinksSubquery()} AS entity_links
+                {$entityLinksSelect} AS entity_links
             FROM todolist AS t
             LEFT JOIN users AS creator ON creator.userid = t.userid
             LEFT JOIN users AS assignee ON assignee.userid = t.assigned_userid
@@ -626,6 +661,31 @@ final class Todolist extends AbstractRest
      * todolist row (a bound parameter can't cross a correlated subquery
      * boundary like this).
      */
+    /**
+     * Turns a raw user search string into a MySQL BOOLEAN MODE fulltext
+     * query, or null if nothing in it actually qualifies for the index
+     * (every word shorter than innodb_ft_min_token_size's default of 3,
+     * or the string was nothing but boolean-mode operator characters).
+     * A '*' suffix per word gives prefix matching -- the closest fulltext
+     * equivalent to the LIKE '%term%' substring behavior this replaces.
+     */
+    private function buildFulltextBooleanQuery(string $search): ?string
+    {
+        // + - * " ( ) < > ~ @ are BOOLEAN MODE syntax, not literal
+        // characters a user typed into a search box -- stripped so
+        // e.g. "high-priority" or "check (soon)" can't produce a
+        // malformed, or unintentionally narrowed, boolean query.
+        $stripped = preg_replace('/[+\-*"()<>~@]/', ' ', $search) ?? $search;
+        $words = array_filter(
+            preg_split('/\s+/', trim($stripped), -1, PREG_SPLIT_NO_EMPTY) ?: array(),
+            static fn(string $word): bool => mb_strlen($word) >= 3,
+        );
+        if ($words === array()) {
+            return null;
+        }
+        return implode(' ', array_map(static fn(string $word): string => $word . '*', $words));
+    }
+
     private function entityLinksSubquery(): string
     {
         return "COALESCE((
