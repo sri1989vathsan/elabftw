@@ -4973,11 +4973,21 @@ export function openSpreadsheetModal(
 
     const onSpreadsheetPaste = (event: ClipboardEvent): void => {
       const clipboard = event.clipboardData;
-      // jspreadsheet performs in-cell editing through an input/textarea. Do
-      // not bypass structured clipboard handling for that active editor or a
-      // copied Excel/HTML/TSV range is inserted into one cell as plain text.
-      // Unstructured single-cell text still falls through to jspreadsheet.
-      if (!clipboard) return;
+      // A cell actively being edited (jspreadsheet's own "editor" class on
+      // the <td>, with its input/textarea/div appended inside) always
+      // wants a plain, in-place paste at the cursor -- never a structured
+      // multi-cell replace, even when the clipboard text happens to
+      // contain tabs or newlines (multi-line text, or anything copied from
+      // another spreadsheet). Checking this unconditionally, before ever
+      // trying to parse the clipboard as a table, matches how
+      // Excel/Sheets behave and was reported as "paste does nothing"
+      // while typing into a cell -- structured parsing was winning and
+      // replacing the whole grid instead of letting the browser's normal
+      // paste-into-input happen.
+      const pasteTarget = event.target;
+      const isEditingCell = pasteTarget instanceof Element
+        && pasteTarget.closest('.jss_worksheet td.editor') !== null;
+      if (!clipboard || isEditingCell) return;
       const plainText = clipboard.getData('text/plain');
       const normalizedPlainText = normalizePdfPrivateUseText(plainText);
       const richClipboardHtml = clipboard.getData('text/html');
