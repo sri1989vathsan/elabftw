@@ -471,7 +471,12 @@ function reconcileSpreadsheetRowHeights(table: HTMLTableElement, manualRowHeight
     // natural height in the same commit -- reported as not being able to
     // drag a row shorter than some floor. Only a row with NO manual entry
     // (never resized) falls back to natural height.
-    row.style.height = `${manualHeight === undefined ? naturalHeight : Math.max(20, Math.round(manualHeight))}px`;
+    const finalHeight = manualHeight === undefined ? naturalHeight : Math.max(20, Math.round(manualHeight));
+    row.style.height = `${finalHeight}px`;
+    // eslint-disable-next-line no-console -- temporary debug instrumentation, remove once the multi-table resize issue is diagnosed
+    console.debug('[spreadsheet-debug] reconcileSpreadsheetRowHeights row', {
+      index, manualHeight, naturalHeight, finalHeight,
+    });
     const serializedStyle = row.getAttribute('style')?.trim();
     if (serializedStyle) row.setAttribute('data-mce-style', serializedStyle);
   });
@@ -1281,6 +1286,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
 
   const enhanceTable = (table: HTMLTableElement): void => {
+    // eslint-disable-next-line no-console -- temporary debug instrumentation, remove once the multi-table resize issue is diagnosed
+    console.debug('[spreadsheet-debug] enhanceTable called', { table, alreadyEnhanced: enhancedTables.has(table) });
     if (enhancedTables.has(table)) return;
     enhancedTables.add(table);
     const extracted = extractFromTable(table);
