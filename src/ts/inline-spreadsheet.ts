@@ -6684,10 +6684,6 @@ export function buildReadOnlySpreadsheetHost(
       const rowHeader = event.target instanceof Element
         ? event.target.closest<HTMLElement>('.jss_worksheet > tbody .jss_row[data-y]')
         : null;
-      // eslint-disable-next-line no-console -- temporary debug instrumentation, remove once the multi-table resize issue is diagnosed
-      console.debug('[spreadsheet-debug] mousedown on sheetContainer', {
-        sheetContainer, target: event.target, rowHeader, clientY: event.clientY,
-      });
       if (!rowHeader) return;
       const headerRect = rowHeader.getBoundingClientRect();
       const edgeTolerance = 8;
@@ -6702,23 +6698,7 @@ export function buildReadOnlySpreadsheetHost(
           ? sheetContainer.querySelector<HTMLElement>(`.jss_worksheet > tbody .jss_row[data-y="${row}"]`)
           : null;
       }
-      // eslint-disable-next-line no-console -- temporary debug instrumentation, remove once the multi-table resize issue is diagnosed
-      console.debug('[spreadsheet-debug] resize-arm hit-test', {
-        distanceFromTop, distanceFromBottom, edgeTolerance, resizingRow, heightBeforeClear: resizingRow?.style.height,
-      });
       resizingRow?.style.removeProperty('height');
-      if (resizingRow) {
-        const target = resizingRow;
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(() => {
-            // eslint-disable-next-line no-console -- temporary debug instrumentation, remove once the multi-table resize issue is diagnosed
-            console.debug('[spreadsheet-debug] row classList 2 frames after mousedown', {
-              target, classList: Array.from(target.parentElement?.classList ?? target.classList),
-              heightAttr: target.getAttribute('height'), styleHeight: target.style.height,
-            });
-          });
-        });
-      }
     }, true);
     // jspreadsheet's own copy-to-clipboard reads each selected cell's
     // innerHTML -- which, for a row applyCellClipHeights has capped, is no
@@ -7710,12 +7690,6 @@ export function buildReadOnlySpreadsheetHost(
     const nextCols = data.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
     const liveRowHeights = readRenderedRowHeights(sheetContainer);
     const liveColWidths = readRenderedColWidths(sheetContainer);
-    // eslint-disable-next-line no-console -- temporary debug instrumentation, remove once the multi-table resize issue is diagnosed
-    console.debug('[spreadsheet-debug] notifyFromMirror rowHeights', {
-      extractedRowHeights: extracted.rowHeights, liveRowHeights,
-      trStyleHeights: Array.from(sheetContainer.querySelectorAll<HTMLTableRowElement>('.jss_worksheet > tbody > tr'))
-        .map(tr => ({ style: tr.style.height, attr: tr.getAttribute('height') })),
-    });
     // getStyle() is jspreadsheet-ce's own live cellName->style map, kept
     // up to date by the cell-format toolbar's setStyle() calls below --
     // without reading it back here, any of those changes would be
