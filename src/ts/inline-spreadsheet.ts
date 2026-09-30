@@ -4864,10 +4864,23 @@ export function openSpreadsheetModal(
     };
 
     const onSpreadsheetCopy = (event: ClipboardEvent): void => {
-      if (!event.clipboardData
-        || event.target instanceof HTMLInputElement
-        || event.target instanceof HTMLTextAreaElement
-      ) {
+      // Exclude our own UI's real inputs (formula bar, caption field, etc)
+      // so copying out of those still behaves like a normal text field --
+      // but NOT jspreadsheet's own hidden "jss_textarea": jspreadsheet
+      // implements Cmd+C itself by writing each selected cell's raw
+      // element.innerHTML into that textarea, selecting it, and calling
+      // document.execCommand("copy"), which dispatches this very event
+      // with that textarea as event.target. A blanket
+      // HTMLTextAreaElement/HTMLInputElement check caught that too,
+      // silently skipping our override and letting jspreadsheet's own
+      // innerHTML-based copy through -- which, for a row applyCellClipHeights
+      // has capped, is the escaped <div class="jss-cell-clip"> wrapper
+      // markup, not the cell's plain text (see the inline overlay's own
+      // copy listener for the same bug, already fixed there the same way).
+      const target = event.target;
+      const isOwnFormField = (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+        && target.id !== 'jss_textarea';
+      if (!event.clipboardData || isOwnFormField) {
         return;
       }
       const selection = getSelectedRange();
