@@ -2142,10 +2142,10 @@
                 <button
                   type="button"
                   class="btn-unstyled orders-attachments-title"
-                  aria-expanded={isAttachmentsExpanded(item.id)}
+                  aria-expanded={attachmentsOverride[item.id] ?? attachmentsDefaultOpen}
                   on:click={() => toggleAttachments(item.id)}
                 >
-                  <i class="fas {isAttachmentsExpanded(item.id) ? 'fa-chevron-down' : 'fa-chevron-right'} fa-fw mr-1" aria-hidden="true"></i>
+                  <i class="fas {(attachmentsOverride[item.id] ?? attachmentsDefaultOpen) ? 'fa-chevron-down' : 'fa-chevron-right'} fa-fw mr-1" aria-hidden="true"></i>
                   {t('Attachments')}{#if (uploadsByItem[item.id] ?? []).length > 0} ({uploadsByItem[item.id].length}){/if}
                 </button>
                 <label class="btn btn-ghost btn-sm ml-2 mb-0" class:disabled={uploadingItem.has(item.id)}>
@@ -2155,7 +2155,7 @@
                 </label>
                 <span class="orders-muted small ml-2">{t('or drag a file here')}</span>
               </div>
-              {#if isAttachmentsExpanded(item.id)}
+              {#if attachmentsOverride[item.id] ?? attachmentsDefaultOpen}
                 {#if (uploadsByItem[item.id] ?? []).length === 0}
                   <p class="orders-muted mb-2">{t('No attachments yet.')}</p>
                 {:else}
