@@ -3657,6 +3657,25 @@ body.html-tool-workspace-resizing * {
   // Below TinyMCE's own toolbar (.tox-editor-header, z-index:2) so a table
   // scrolled up near the sticky toolbar renders behind it, not on top.
   z-index: 1;
+  // syncOverlayPositions rewrites this element's transform every animation
+  // frame it's on screen for (its own comment explains why transform, not
+  // top/left, is used at all). Without an upfront compositor-layer hint,
+  // Firefox (and, less often, Chromium) can still fall behind on actually
+  // *painting* those rewrites on a busy page with several overlays each
+  // running their own rAF loop -- the element's real position/size is
+  // already correct the whole time, it just isn't on screen yet, so two
+  // overlays can appear to overlap, one can appear to spill past the
+  // editor's content column, or an overlay can appear to vanish entirely
+  // (painted at its stale, pre-edit spot, which may be off-screen or
+  // behind another element) until some unrelated discrete interaction
+  // (e.g. clicking elsewhere in the editor) forces the browser to repaint
+  // for real -- reported as spontaneous, hard-to-reproduce table overlap/
+  // overflow/disappearance that clears up the moment you click outside
+  // the table. will-change promotes the overlay to its own compositor
+  // layer proactively, keeping every later transform write on the fast,
+  // always-repainted compositor path instead of occasionally falling back
+  // to a deferred main-thread one.
+  will-change: transform;
 }
 
 // The real (hidden) table this overlay stands in for is what TinyMCE's own
