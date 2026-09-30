@@ -328,10 +328,27 @@ final class ExperimentsFolders extends AbstractRest
         $sql = 'SELECT id FROM experiments_folders WHERE team = :team AND name = :name AND parent_id <=> :parent_id LIMIT 1';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
-        $req->bindParam(':name', $name);
-        $req->bindParam(':parent_id', $parentId);
+        $req->bindValue(':name', $name);
+        // bindValue, not bindParam -- bindParam binds by reference, and
+        // PDO's own implicit type coercion for an untyped bind can mutate
+        // the referenced variable to a string once execute() runs. $parentId
+        // going from int|null to a string right here broke the create()
+        // call receiving it as a fallthrough two lines below (a real
+        // ?int parameter), throwing a TypeError instead of creating the
+        // folder -- only ever surfaced once the ResourceNotFoundException
+        // bug above this was fixed and execution could actually reach it.
+        $req->bindValue(':parent_id', $parentId);
         $this->Db->execute($req);
-        $res = $this->Db->fetch($req);
+        // Not $this->Db->fetch($req) -- that throws ResourceNotFoundException
+        // on an empty result, but finding no existing folder by this name/
+        // parent here is the normal, expected case (it's what falls through
+        // to create() below), not an error. Using it made that fallthrough
+        // dead code and made this idempotent lookup throw "Nothing to show
+        // with this id" instead of creating the folder -- reported via
+        // .eln import (getIdFromPath()'s own caller) failing outright
+        // whenever a folder in the exported path didn't already exist on
+        // the importing instance.
+        $res = $req->fetch();
         if ($res !== false) {
             return (int) $res['id'];
         }

@@ -1018,6 +1018,21 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const removeOverlay = (table: HTMLTableElement): void => {
     const entry = spreadsheetOverlays.get(table);
     if (!entry) return;
+    // A resize or edit settles through a 500ms debounce (see
+    // notifyFromMirror in inline-spreadsheet.ts) before it's actually
+    // written back to this real table -- scrolling this overlay out of
+    // view (tearing it down here, e.g. right after dragging a row border
+    // and immediately scrolling to check another table) used to destroy
+    // it mid-debounce with no flush, silently discarding that pending
+    // change. Reported as a resize "working" on whichever table the user
+    // stayed on long enough for the debounce to fire, but not on others.
+    // Only when the table itself is still actually in the document,
+    // though (the scrolled-out-of-view case) -- this same function is
+    // also the cleanup path for a table that's gone for good (deleted, or
+    // undone right after being pasted), where flushing would write the
+    // overlay's still-stale in-memory content back into a table nothing
+    // should be resurrecting.
+    if (table.isConnected && editor.getBody().contains(table)) entry.flush();
     entry.destroy();
     entry.el.remove();
     spreadsheetOverlays.delete(table);

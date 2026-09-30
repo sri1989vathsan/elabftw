@@ -639,7 +639,18 @@ class Eln extends AbstractZip
         if (!empty($file['alternateName'])) {
             // read the newly created upload so we can get the new long_name to replace the old in the body
             $Uploads = new Uploads($this->Entity, $newUploadId);
-            $currentBody = $this->Entity->readOne()['body'];
+            // entityData['body'] is already current -- every earlier patch()
+            // call in this same import (bodyappend, etc.) refreshes it via
+            // its own internal readOne() as a side effect. Re-fetching here
+            // via an explicit readOne() threw ResourceNotFoundException
+            // ("Nothing to show with this id") on real-world .eln imports
+            // (any file with a long_name to replace hits this, i.e. most
+            // imports with attachments) -- readOne()'s own WHERE entity.id
+            // = %d lookup was coming back empty for this entity/id at this
+            // point in the import, for reasons not fully pinned down, but
+            // reusing the already-correct in-memory body sidesteps needing
+            // that lookup to succeed at all.
+            $currentBody = $this->Entity->entityData['body'] ?? '';
             // also search for url encoded filename
             $newBody = str_replace(array(rawurlencode($file['alternateName']), $file['alternateName']), $Uploads->uploadData['long_name'], $currentBody);
             $this->Entity->patch(Action::Update, array('body' => $newBody));

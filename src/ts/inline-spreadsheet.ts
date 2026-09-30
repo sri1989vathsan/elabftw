@@ -2109,6 +2109,11 @@ function readRenderedRowHeights(container: HTMLElement): RowHeights | undefined 
   return Object.keys(rowHeights).length > 0 ? rowHeights : undefined;
 }
 
+/** RowHeights (string-keyed, as saved/serialized) -> the Map applyCellClipHeights below takes. */
+function toRowHeightsMap(rowHeights: RowHeights | undefined): Map<number, number> {
+  return new Map(Object.entries(rowHeights ?? {}).map(([key, value]) => [Number(key), value]));
+}
+
 // A bare table cell's height is always a floor, never a ceiling, when it
 // holds text directly -- confirmed directly (real DOM, live drag) while
 // diagnosing rows that would grow to fit a drag-resize but never actually
@@ -2172,7 +2177,7 @@ function installRowResizeGuide(container: HTMLElement): void {
   });
 }
 
-function applyCellClipHeights(container: HTMLElement, manuallyResizedRows: ReadonlySet<number>): void {
+function applyCellClipHeights(container: HTMLElement, manualRowHeights: ReadonlyMap<number, number>): void {
   const rows = container.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr');
   rows.forEach((row, rowIndex) => {
     const cells = row.querySelectorAll<HTMLElement>(':scope > td[data-x][data-y], :scope > td.jss_row');
@@ -2184,7 +2189,8 @@ function applyCellClipHeights(container: HTMLElement, manuallyResizedRows: Reado
     // nobody asked to shrink. Leave these completely natural/uncapped,
     // unwrapping if an earlier resize (since undone, or shifted by a row
     // insert/delete changing this index's occupant) left a wrapper behind.
-    if (!manuallyResizedRows.has(rowIndex)) {
+    const rowHeight = manualRowHeights.get(rowIndex);
+    if (rowHeight === undefined) {
       cells.forEach(cell => {
         const wrapper = cell.querySelector<HTMLElement>(`:scope > .${CELL_CLIP_CLASS}`);
         if (!wrapper) return;
@@ -2193,8 +2199,20 @@ function applyCellClipHeights(container: HTMLElement, manuallyResizedRows: Reado
       });
       return;
     }
-    const rowHeight = Number.parseFloat(row.style.height || row.getAttribute('height') || '');
-    if (!Number.isFinite(rowHeight)) return;
+    // Re-assert the intended height on every call, rather than trusting
+    // whatever's currently in the DOM -- applySpreadsheetRowHeights (at
+    // mount, and on every hydration retry) writes style.height directly,
+    // deliberately bypassing jspreadsheet's own stateful setHeight() API
+    // (see its own comment) so restoring a saved size doesn't spam undo
+    // history or refire onresizerow. The cost is that jspreadsheet's own
+    // internal row-height bookkeeping never learns about that write, and
+    // can silently redraw the row back to its own (stale, larger)
+    // recollection on some later, unrelated internal repaint -- reported
+    // as a row's height (and its now-wrapped, clipped text) reverting to
+    // its old size on some tables but not others, depending on whether
+    // jspreadsheet happened to redraw since mount. Writing it here too,
+    // every settle, keeps it pinned regardless.
+    row.style.height = `${rowHeight}px`;
     cells.forEach(cell => {
       // Actively being edited (jspreadsheet's own "editor" class) -- its
       // current child is jspreadsheet's own edit widget, not this cell's
@@ -3571,7 +3589,7 @@ export function openSpreadsheetModal(
       const render = (): void => {
         if (sheetContainer) {
           renderFormulaResults(sheetContainer, readRawData());
-          applyCellClipHeights(sheetContainer, new Set(Object.keys(working.rowHeights ?? {}).map(Number)));
+          applyCellClipHeights(sheetContainer, toRowHeightsMap(working.rowHeights));
         }
       };
       // jspreadsheet paints the non-editing cell after closeEditor/onchange.
@@ -4453,7 +4471,7 @@ export function openSpreadsheetModal(
           worksheet,
           normalizeRowHeights(working.rowHeights, mountedRows),
         );
-        applyCellClipHeights(mountedContainer, new Set(Object.keys(working.rowHeights ?? {}).map(Number)));
+        applyCellClipHeights(mountedContainer, toRowHeightsMap(working.rowHeights));
         applySpreadsheetColWidths(
           mountedContainer,
           worksheet,
@@ -5295,7 +5313,7 @@ export function openSpreadsheetModal(
       });
       applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights, working.rows);
       ui.cellFormatStatus.textContent = `Set rows ${startRow + 1}–${endRow + 1} to ${height}px.`;
-      applyCellClipHeights(sheetContainer, new Set(Object.keys(rowHeights).map(Number)));
+      applyCellClipHeights(sheetContainer, toRowHeightsMap(rowHeights));
     });
     ui.clearCellFormatBtn.addEventListener('click', () => {
       updateSelectedCells(
@@ -5979,18 +5997,22 @@ export function buildReadOnlySpreadsheetHost(
   // the popup.
   let rawDataMirror = resizeData(extracted.data, rows, cols);
   // Which rows applyCellClipHeights (below) is allowed to actually cap a
-  // cell's own content at -- only ones genuinely drag-resized (or
-  // autofit, which is just as deliberate) by a person, tracked as they
-  // happen via notifyStructuralChange's own resizedRow param. Seeded from
-  // rowHeights (the saved data this host mounted with) so a row resized
-  // in an *earlier* session survives a remount still capped; a row
-  // jspreadsheet renders at its own generic, never-resized default never
-  // enters this set and stays fully natural/uncapped, exactly like a
-  // plain table cell always has -- capping every row indiscriminately
-  // (keyed only by "does it currently have some style.height", which
-  // jspreadsheet sets even for rows nobody ever touched) is what silently
-  // clipped text nobody asked to shrink.
-  const manuallyResizedRows = new Set<number>(Object.keys(rowHeights).map(Number));
+  // cell's own content at, and to exactly what height -- only ones
+  // genuinely drag-resized (or autofit, which is just as deliberate) by a
+  // person, tracked as they happen via notifyStructuralChange's own
+  // resizedRow/newHeight params. Seeded from rowHeights (the saved data
+  // this host mounted with) so a row resized in an *earlier* session
+  // survives a remount still capped; a row jspreadsheet renders at its
+  // own generic, never-resized default never enters this map and stays
+  // fully natural/uncapped, exactly like a plain table cell always has --
+  // capping every row indiscriminately (keyed only by "does it currently
+  // have some style.height", which jspreadsheet sets even for rows nobody
+  // ever touched) is what silently clipped text nobody asked to shrink.
+  // applyCellClipHeights also *writes* row.style.height from this map on
+  // every call rather than trusting the DOM -- see its own comment for
+  // why (jspreadsheet's internal bookkeeping can silently revert a
+  // DOM-only height write from outside its own setHeight() API).
+  const manuallyResizedRows = toRowHeightsMap(rowHeights);
   // How wide this table renders in view mode / the static HTML fallback
   // (spreadsheetToHTML's own colgroup width sum) -- exposed via a data
   // attribute so the TinyMCE editor overlay can cap its own width at this
@@ -6531,6 +6553,44 @@ export function buildReadOnlySpreadsheetHost(
           });
         });
       }
+    }, true);
+    // jspreadsheet's own copy-to-clipboard reads each selected cell's
+    // innerHTML -- which, for a row applyCellClipHeights has capped, is no
+    // longer the cell's plain text but a <div class="jss-cell-clip"> tag
+    // wrapping it (see applyCellClipHeights' own comment for why that
+    // wrapper exists at all). Copying then pasted that wrapper's raw,
+    // HTML-escaped markup as literal text instead of the cell's actual
+    // content. Cell selection here is jspreadsheet's own internal
+    // start/end-coordinate state (getSelection()), not a real browser
+    // Selection/Range -- window.getSelection().toString() is empty for it,
+    // so the range has to be read cell-by-cell here instead. Capture
+    // phase, ahead of jspreadsheet's own copy handling.
+    sheetContainer.addEventListener('copy', event => {
+      if (!event.clipboardData) return;
+      const range = getMountedWorksheet(sheetContainer)?.getSelection?.();
+      if (!Array.isArray(range) || range.length < 4 || !range.slice(0, 4).every(value => Number.isInteger(value))) {
+        return;
+      }
+      const [selStartCol, selStartRow, selEndCol, selEndRow] = range as CellRange;
+      const startCol = Math.min(selStartCol, selEndCol);
+      const endCol = Math.max(selStartCol, selEndCol);
+      const startRow = Math.min(selStartRow, selEndRow);
+      const endRow = Math.max(selStartRow, selEndRow);
+      const textRows: string[] = [];
+      for (let row = startRow; row <= endRow; row++) {
+        const textCells: string[] = [];
+        for (let col = startCol; col <= endCol; col++) {
+          const cell = sheetContainer.querySelector<HTMLElement>(
+            `.jss_worksheet > tbody td[data-x="${col}"][data-y="${row}"]`,
+          );
+          const text = (cell?.textContent ?? '').trim();
+          textCells.push(/[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text);
+        }
+        textRows.push(textCells.join('\t'));
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      event.clipboardData.setData('text/plain', textRows.join('\n'));
     }, true);
     // Double-click a column/row border to fit it to its content, same
     // gesture (and same edge-tolerance/measurement code) as
@@ -7539,6 +7599,17 @@ export function buildReadOnlySpreadsheetHost(
     changedRow: number,
     newValue: CellValue,
   ): void => {
+    // hydrateUntilReady's own setData()/setStyle() retries (mount only,
+    // see its own comment on why it retries at all) can each trigger
+    // jspreadsheet's onchange callback per cell as it (re-)populates the
+    // grid with data this host was *already* built from -- genuine as far
+    // as jspreadsheet is concerned, but not an actual edit, since
+    // rawDataMirror already reflects the exact same values from its own
+    // initialization above. Committing each one anyway pushed a separate
+    // undo level per retry, on top of the paste's own -- reported as
+    // needing 3+ Ctrl+Z presses to remove a table that was just pasted in
+    // a single action.
+    if (!hydrationConfirmed) return;
     updateRawDataMirrorCell(changedCol, changedRow, newValue);
     notifyFromMirror();
   };
@@ -7551,7 +7622,17 @@ export function buildReadOnlySpreadsheetHost(
     // renders at its own generic, unresized default has no entry, and
     // stays completely uncapped/natural, same as any plain cell always
     // has (see manuallyResizedRows' own comment at its declaration).
-    if (typeof resizedRow === 'number') manuallyResizedRows.add(resizedRow);
+    // Read right now, straight off the DOM -- jspreadsheet's own mouseup
+    // handler (or setHeight(), for autofit) has *just* set the row's real
+    // style.height, immediately before dispatching onresizerow, so this
+    // is the one moment that value is guaranteed fresh and correct.
+    if (typeof resizedRow === 'number') {
+      const resizedRowEl = sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr')[resizedRow];
+      const newHeight = resizedRowEl
+        ? Number.parseFloat(resizedRowEl.style.height || resizedRowEl.getAttribute('height') || '')
+        : NaN;
+      if (Number.isFinite(newHeight)) manuallyResizedRows.set(resizedRow, newHeight);
+    }
     const liveData = changedWorksheet?.getData?.();
     if (Array.isArray(liveData)) {
       const rows = liveData.length;
