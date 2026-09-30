@@ -1554,9 +1554,9 @@
     openDetail(task);
   }
 
-  function openDetail(task: Task): void {
+  function openDetail(task: Task, editing = false): void {
     detailTask = task;
-    detailEditing = false;
+    detailEditing = editing;
     detailTitle = task.body;
     detailDeadline = toDateInputValue(task.deadline);
     detailAssignees = [...task.assignees];
@@ -2601,7 +2601,7 @@
                       <i class={`fas ${column.kind === 'done' ? 'fa-rotate-left' : 'fa-check'} fa-fw`} aria-hidden="true"></i>
                     </button>
                   {/if}
-                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task)}>
+                  <button type="button" class="btn btn-ghost btn-sm pm-icon-button" title={t('Edit')} aria-label={t('Edit')} on:click={() => openDetail(task, true)}>
                     <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
                   </button>
                   <!-- Duplicate, Archive/Unarchive, Pin/Unpin, Move to
