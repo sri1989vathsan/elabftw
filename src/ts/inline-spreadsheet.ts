@@ -8235,6 +8235,18 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
   // same saved markup.
   const savedHtml = new WeakMap<HTMLElement, string>();
   const destroyers = new WeakMap<HTMLElement, () => void>();
+  // TocPanel's own section filter (filterMainText()) hides non-selected
+  // content by toggling a CSS class on each top-level element it walks --
+  // including, while a spreadsheet is still its plain unmounted <table>,
+  // that table itself. Neither direction of the swap below used to carry
+  // that class over: scrolling a hidden table into view replaced it with a
+  // freshly-built host that had never heard of the filter, silently
+  // un-hiding it; scrolling a still-hidden *mounted* grid back out (after
+  // toggling the filter while it happened to be live) lost the same class
+  // the other way, leaving the table it reverts to always visible too.
+  // Reported as a section filter/print selection hiding regular text
+  // correctly but still showing spreadsheet tables from other sections.
+  const FILTER_HIDDEN_CLASS = 'toc-section-filter-hidden';
   const observer = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       const el = entry.target as HTMLElement;
@@ -8242,6 +8254,7 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
         if (!(el instanceof HTMLTableElement)) return; // already mounted
         const html = el.outerHTML;
         const { host, destroy } = buildReadOnlySpreadsheetHost(extractFromTable(el));
+        host.classList.toggle(FILTER_HIDDEN_CLASS, el.classList.contains(FILTER_HIDDEN_CLASS));
         el.replaceWith(host);
         savedHtml.set(host, html);
         destroyers.set(host, destroy);
@@ -8257,6 +8270,7 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
         parsed.innerHTML = html;
         const table = parsed.querySelector('table.elabftw-spreadsheet');
         if (!table) return;
+        table.classList.toggle(FILTER_HIDDEN_CLASS, el.classList.contains(FILTER_HIDDEN_CLASS));
         el.replaceWith(table);
         observer.unobserve(el);
         observer.observe(table);
