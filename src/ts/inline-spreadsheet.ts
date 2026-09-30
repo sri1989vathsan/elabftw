@@ -2212,7 +2212,28 @@ function applyCellClipHeights(container: HTMLElement, manualRowHeights: Readonly
     // its old size on some tables but not others, depending on whether
     // jspreadsheet happened to redraw since mount. Writing it here too,
     // every settle, keeps it pinned regardless.
-    row.style.height = `${rowHeight}px`;
+    // A manual height is a ceiling for the content, but never below one
+    // line of actual text -- otherwise a drag past a single line's worth
+    // of height silently hides that line entirely instead of just
+    // trimming wrapped overflow, which read as "the text disappeared"
+    // rather than "the row got smaller". The floor is read from each
+    // cell's own rendered line-height/padding (jspreadsheet's actual
+    // font, not a guessed constant), so it tracks whatever font size or
+    // wrapping that cell/row is using rather than a flat px minimum.
+    let minRowHeight = MIN_DATA_ROW_HEIGHT;
+    cells.forEach(cell => {
+      if (cell.classList.contains('editor')) return;
+      const computed = window.getComputedStyle(cell);
+      const verticalChrome = Number.parseFloat(computed.paddingTop)
+        + Number.parseFloat(computed.paddingBottom)
+        + Number.parseFloat(computed.borderTopWidth)
+        + Number.parseFloat(computed.borderBottomWidth);
+      const lineHeight = Number.parseFloat(computed.lineHeight);
+      const oneLine = Number.isFinite(lineHeight) ? lineHeight : Number.parseFloat(computed.fontSize) * 1.2;
+      minRowHeight = Math.max(minRowHeight, Math.ceil(oneLine + verticalChrome));
+    });
+    const effectiveHeight = Math.max(rowHeight, minRowHeight);
+    row.style.height = `${effectiveHeight}px`;
     cells.forEach(cell => {
       // Actively being edited (jspreadsheet's own "editor" class) -- its
       // current child is jspreadsheet's own edit widget, not this cell's
@@ -2225,10 +2246,9 @@ function applyCellClipHeights(container: HTMLElement, manualRowHeights: Readonly
         + Number.parseFloat(computed.paddingBottom)
         + Number.parseFloat(computed.borderTopWidth)
         + Number.parseFloat(computed.borderBottomWidth);
-      // A manual height is a ceiling for the content, not a request to
-      // preserve a whole line plus padding. Include the index cell too:
-      // otherwise its unbounded text keeps the entire row taller.
-      const clipHeight = Math.max(0, Math.floor(rowHeight - verticalChrome));
+      // Include the index cell too: otherwise its unbounded text keeps
+      // the entire row taller.
+      const clipHeight = Math.max(0, Math.floor(effectiveHeight - verticalChrome));
       let wrapper = cell.querySelector<HTMLElement>(`:scope > .${CELL_CLIP_CLASS}`);
       if (!wrapper) {
         wrapper = document.createElement('div');
