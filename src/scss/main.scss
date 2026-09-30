@@ -3402,7 +3402,10 @@ body.html-tool-workspace-resizing * {
 }
 
 .elabftw-spreadsheet-readonly-undo,
-.elabftw-spreadsheet-readonly-redo {
+.elabftw-spreadsheet-readonly-redo,
+.elabftw-spreadsheet-readonly-autofit-rows,
+.elabftw-spreadsheet-readonly-autofit-columns,
+.elabftw-spreadsheet-readonly-copy-table {
   background: none;
   border: none;
   color: var(--medium);
@@ -3410,7 +3413,10 @@ body.html-tool-workspace-resizing * {
 }
 
 .elabftw-spreadsheet-readonly-undo:hover,
-.elabftw-spreadsheet-readonly-redo:hover {
+.elabftw-spreadsheet-readonly-redo:hover,
+.elabftw-spreadsheet-readonly-autofit-rows:hover,
+.elabftw-spreadsheet-readonly-autofit-columns:hover,
+.elabftw-spreadsheet-readonly-copy-table:hover {
   color: var(--primary);
 }
 
