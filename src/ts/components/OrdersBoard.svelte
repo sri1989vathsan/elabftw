@@ -273,12 +273,23 @@
   // Attachments (unlike comments/steps) already come fully populated with
   // the order itself (see uploadsByItem's own init from item.uploads) --
   // no lazy fetch needed here, this is purely a display toggle.
-  let expandedAttachments = new Set<number>();
+  //
+  // Whether a *given* order's list starts open or collapsed is the admin's
+  // own orders_attachments_default_open team setting (loaded once on
+  // mount, defaults true so nothing changes for a team that never sets
+  // it) -- attachmentsOverride only ever holds an entry for an order the
+  // user has actually clicked to toggle themselves, so a manual choice on
+  // one card is never lost or forced back to the team default, however
+  // many times the board reloads.
+  let attachmentsDefaultOpen = true;
+  let attachmentsOverride: Record<number, boolean> = {};
+
+  function isAttachmentsExpanded(itemId: number): boolean {
+    return attachmentsOverride[itemId] ?? attachmentsDefaultOpen;
+  }
 
   function toggleAttachments(itemId: number): void {
-    const next = new Set(expandedAttachments);
-    if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
-    expandedAttachments = next;
+    attachmentsOverride = { ...attachmentsOverride, [itemId]: !isAttachmentsExpanded(itemId) };
   }
   let fullyExpandedComments = new Set<number>();
   let commentsByItem: Record<number, OrderComment[]> = {};
@@ -628,6 +639,15 @@
       categories = await ApiC.getJson(`${Model.Team}/current/resources_categories`) as Category[];
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load resource categories.');
+    }
+  }
+
+  async function loadTeamSettings(): Promise<void> {
+    try {
+      const team = await ApiC.getJson(`${Model.Team}/current`) as { orders_attachments_default_open: boolean | number };
+      attachmentsDefaultOpen = Boolean(team.orders_attachments_default_open);
+    } catch {
+      // best-effort -- keep the (true) default if this fails to load
     }
   }
 
@@ -1445,6 +1465,7 @@
     void loadTeamMembers();
     void loadCategories();
     void loadTemplates();
+    void loadTeamSettings();
 
     // A status change isn't always driven by someone looking at this page
     // -- the auto-archive/auto-advance-on-procurement-id sweeps (see
@@ -2121,10 +2142,10 @@
                 <button
                   type="button"
                   class="btn-unstyled orders-attachments-title"
-                  aria-expanded={expandedAttachments.has(item.id)}
+                  aria-expanded={isAttachmentsExpanded(item.id)}
                   on:click={() => toggleAttachments(item.id)}
                 >
-                  <i class="fas {expandedAttachments.has(item.id) ? 'fa-chevron-down' : 'fa-chevron-right'} fa-fw mr-1" aria-hidden="true"></i>
+                  <i class="fas {isAttachmentsExpanded(item.id) ? 'fa-chevron-down' : 'fa-chevron-right'} fa-fw mr-1" aria-hidden="true"></i>
                   {t('Attachments')}{#if (uploadsByItem[item.id] ?? []).length > 0} ({uploadsByItem[item.id].length}){/if}
                 </button>
                 <label class="btn btn-ghost btn-sm ml-2 mb-0" class:disabled={uploadingItem.has(item.id)}>
@@ -2134,7 +2155,7 @@
                 </label>
                 <span class="orders-muted small ml-2">{t('or drag a file here')}</span>
               </div>
-              {#if expandedAttachments.has(item.id)}
+              {#if isAttachmentsExpanded(item.id)}
                 {#if (uploadsByItem[item.id] ?? []).length === 0}
                   <p class="orders-muted mb-2">{t('No attachments yet.')}</p>
                 {:else}
