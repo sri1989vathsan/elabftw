@@ -2568,6 +2568,9 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   cellFormatVerticalAlignSelect: HTMLSelectElement;
   rowHeightInput: HTMLInputElement;
   clearCellFormatBtn: HTMLButtonElement;
+  autofitRowsBtn: HTMLButtonElement;
+  autofitColumnsBtn: HTMLButtonElement;
+  autofitAllBtn: HTMLButtonElement;
   cellFormatStatus: HTMLSpanElement;
   cellFormatNoColorInput: HTMLInputElement;
   cellFormatNoTextColorInput: HTMLInputElement;
@@ -3164,6 +3167,18 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   clearCellFormatBtn.innerHTML = '<i class="fas fa-eraser" aria-hidden="true"></i>';
   clearCellFormatBtn.title = 'Clear all formatting from selected cells';
   clearCellFormatBtn.setAttribute('aria-label', 'Clear all formatting from selected cells');
+  const autofitRowsBtn = document.createElement('button');
+  autofitRowsBtn.type = 'button';
+  autofitRowsBtn.className = 'btn btn-sm btn-outline-secondary';
+  autofitRowsBtn.innerHTML = '<i class="fas fa-arrows-alt-v" aria-hidden="true"></i>';
+  autofitRowsBtn.title = 'Auto-fit every row to its content';
+  autofitRowsBtn.setAttribute('aria-label', 'Auto-fit every row to its content');
+  const autofitColumnsBtn = document.createElement('button');
+  autofitColumnsBtn.type = 'button';
+  autofitColumnsBtn.className = 'btn btn-sm btn-outline-secondary';
+  autofitColumnsBtn.innerHTML = '<i class="fas fa-arrows-alt-h" aria-hidden="true"></i>';
+  autofitColumnsBtn.title = 'Auto-fit every column to its content';
+  autofitColumnsBtn.setAttribute('aria-label', 'Auto-fit every column to its content');
   const autofitAllBtn = document.createElement('button');
   autofitAllBtn.type = 'button';
   autofitAllBtn.className = 'btn btn-sm btn-outline-secondary';
@@ -3175,6 +3190,8 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   cellFormatBar.append(
     cellStyleRow,
     clearCellFormatBtn,
+    autofitRowsBtn,
+    autofitColumnsBtn,
     autofitAllBtn,
     cellFormatStatus,
   );
@@ -3344,6 +3361,8 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     cellFormatVerticalAlignSelect,
     rowHeightInput,
     clearCellFormatBtn,
+    autofitRowsBtn,
+    autofitColumnsBtn,
     autofitAllBtn,
     cellFormatStatus,
     cellFormatNoColorInput,
@@ -4365,7 +4384,7 @@ export function openSpreadsheetModal(
     // already reads the width attribute as its source of truth (see
     // applySpreadsheetColWidths()'s comment) and the saved data-spreadsheet
     // blob is read back from the live DOM on close regardless.
-    const autofitAllColumnsAndRows = (): void => {
+    const autofitAllColumns = (): void => {
       if (!sheetContainer) return;
       const colWidths: ColWidths = { ...(working.colWidths ?? {}) };
       for (let col = 0; col < working.cols; col++) {
@@ -4378,6 +4397,20 @@ export function openSpreadsheetModal(
         );
         colWidths[String(col)] = Math.max(MIN_DATA_COL_WIDTH, Math.min(MAX_DATA_COL_WIDTH, naturalWidth));
       }
+      working = normalizeSpreadsheetData({
+        ...working,
+        data: readRawData(),
+        colWidths,
+      });
+      applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
+      hasChanges = true;
+    };
+    // Measured after any column-width change already above it in the call
+    // order (autofitAllColumnsAndRows below runs this second) so a row
+    // whose text now wraps onto more lines because its column just got
+    // narrower is measured at that new, narrower width, not the old one.
+    const autofitAllRows = (): void => {
+      if (!sheetContainer) return;
       const rowHeights: RowHeights = { ...(working.rowHeights ?? {}) };
       for (let row = 0; row < working.rows; row++) {
         const cells = Array.from(sheetContainer.querySelectorAll<HTMLElement>(
@@ -4392,13 +4425,25 @@ export function openSpreadsheetModal(
       working = normalizeSpreadsheetData({
         ...working,
         data: readRawData(),
-        colWidths,
         rowHeights,
       });
-      applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
-      applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights, working.rows);
+      applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights);
+      // applySpreadsheetRowHeights only grows the <tr> itself -- the actual
+      // visible content sits in applyCellClipHeights' own inner
+      // .jss-cell-clip wrapper div, sized independently so a *smaller*
+      // manual height can clip it (see that function's own comment). A row
+      // that was previously shrunk still has that wrapper capped to its old,
+      // smaller height; without re-running this, the row grows but the text
+      // inside stays clipped exactly as it was before the autofit.
+      applyCellClipHeights(sheetContainer, toRowHeightsMap(rowHeights));
       hasChanges = true;
     };
+    const autofitAllColumnsAndRows = (): void => {
+      autofitAllColumns();
+      autofitAllRows();
+    };
+    ui.autofitRowsBtn.addEventListener('click', autofitAllRows);
+    ui.autofitColumnsBtn.addEventListener('click', autofitAllColumns);
     ui.autofitAllBtn.addEventListener('click', autofitAllColumnsAndRows);
 
     ui.sheetHost.addEventListener('mousedown', onFormulaSelectionStart, true);
