@@ -1333,6 +1333,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // this table via lastActiveSpreadsheetTable above.
     overlay.addEventListener('mousedown', event => {
       setActiveSpreadsheetTable(table);
+      editor.dispatch('ElabftwSpreadsheetSelected', { table });
       // indentSelectedTable()/outdentSelectedTable() (below) read their own
       // separate internal lastSelectedTable, not the menu-display check
       // above -- both need tracking, or the menu item can show while
@@ -1651,6 +1652,24 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       document.removeEventListener('mousedown', clearActiveTableUnlessClickedOnOne);
       document.removeEventListener('mousedown', closeAnyOpenContextMenuOverlay);
     });
+    // Selecting a spreadsheet's header selects its backing table for copy.
+    // TinyMCE's insertContent would replace that whole node on the next
+    // table paste. Insert after a singly selected spreadsheet instead;
+    // retain normal replacement for selections containing text or ranges.
+    const insertPastedSpreadsheet = (html: string): void => {
+      const range = editor.selection.getRng();
+      if (range.startContainer === range.endContainer
+        && range.endOffset === range.startOffset + 1) {
+        const node = range.startContainer.childNodes[range.startOffset];
+        if (node?.nodeType === 1
+          && (node as Element).matches('table.elabftw-spreadsheet')) {
+          range.setStartAfter(node);
+          range.collapse(true);
+          editor.selection.setRng(range);
+        }
+      }
+      editor.insertContent(html);
+    };
     const spreadsheetPasteHandler = (event: ClipboardEvent): void => {
       const clipboard = event.clipboardData;
       if (!clipboard) return;
@@ -1704,7 +1723,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           return;
         }
         editor.undoManager.transact(() => {
-          editor.insertContent(spreadsheetToHTML(spreadsheet, spreadsheet.data));
+          insertPastedSpreadsheet(spreadsheetToHTML(spreadsheet, spreadsheet.data));
         });
         return;
       }
@@ -1759,7 +1778,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           editor.focus();
           editor.selection.moveToBookmark(bookmark);
           editor.undoManager.transact(() => {
-            editor.insertContent(spreadsheetToHTML(recovered, recovered.data));
+            insertPastedSpreadsheet(spreadsheetToHTML(recovered, recovered.data));
           });
           api.close();
         },

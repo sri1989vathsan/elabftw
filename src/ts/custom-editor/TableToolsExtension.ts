@@ -15,10 +15,22 @@ export function registerTableToolsExtension(editor: Editor): void {
     '<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="4" width="11" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 8h7M8 11.5h7M11.5 8v7" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="10" width="10" height="10" rx="1.5" fill="var(--tox-icon-highlight-bg, none)" stroke="currentColor" stroke-width="1.8"/><path d="M13 13h4M13 16h4M15 13v5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
   );
   let lastSelectedTable: HTMLTableElement | null = null;
+  let overlaySelectedTable: HTMLTableElement | null = null;
+  editor.on('ElabftwSpreadsheetSelected', event => {
+    overlaySelectedTable = (event as unknown as { table: HTMLTableElement }).table;
+    lastSelectedTable = overlaySelectedTable;
+  });
+  // A genuine click in the editor takes precedence; toolbar focus/NodeChange
+  // may still report the old iframe caret after selecting an overlay.
+  editor.on('mousedown', () => { overlaySelectedTable = null; });
   let lastMixedSelectionRange: Range | null = null;
   let copyFallbackInProgress = false;
 
   const selectedTable = (node?: Node | null): HTMLTableElement | null => {
+    if (overlaySelectedTable && editor.getBody().contains(overlaySelectedTable)) {
+      return overlaySelectedTable;
+    }
+    overlaySelectedTable = null;
     const element = node?.nodeType === 1
       ? node as Element
       : node?.parentElement ?? editor.selection.getNode() as Element;
@@ -79,6 +91,7 @@ export function registerTableToolsExtension(editor: Editor): void {
   const copyWholeTable = async(): Promise<void> => {
     const table = selectedTable();
     if (!table) return;
+    window.dispatchEvent(new CustomEvent('elabftw-flush-spreadsheets'));
     const container = editor.getDoc().createElement('div');
     const clone = table.cloneNode(true) as HTMLTableElement;
     container.append(clone);
