@@ -258,6 +258,123 @@ if (navbar) {
   }, { passive: true });
 }
 
+// Priority navigation for the main menu bar: the logo/home icon and the
+// create/notifications/help/user-menu icons always stay visible; the links
+// in between (#navbar-primary-nav) are hidden one at a time, starting from
+// the end, as soon as they'd stop fitting on one row, and reappear the same
+// way as room reopens -- on load and on every resize. A hidden item is
+// never moved out of #navbar-primary-nav (re-parenting a live Bootstrap
+// dropdown broke its Popper-based positioning the first time this was
+// tried -- once shown while re-parented it stayed mispositioned even after
+// being moved back). Instead the "More" dropdown lists plain placeholder
+// links for whichever items are currently hidden.
+(function initPriorityNav(): void {
+  const primaryNav = document.getElementById('navbar-primary-nav');
+  const moreItem = document.getElementById('navbarMoreItem');
+  const overflowMenu = document.getElementById('navbar-overflow-menu');
+  if (!primaryNav || !moreItem || !overflowMenu) {
+    return;
+  }
+
+  // Snapshot the collapsible items in their original order once -- each one
+  // stays exactly here in the DOM for good; only its own display and its
+  // placeholder's presence in the overflow menu change afterwards.
+  const items = Array.from(primaryNav.children).filter(
+    (el): el is HTMLElement => el instanceof HTMLElement && el.id !== 'navbarMoreItem',
+  );
+  if (items.length === 0) {
+    return;
+  }
+
+  // Measure intrinsic widths again after resize/font loading. Measuring
+  // hidden or flex-shrunk items underestimates the space their text needs.
+  let widths: number[] | null = null;
+  let moreWidth = 0;
+  const outerWidth = (item: HTMLElement): number => {
+    const style = getComputedStyle(item);
+    return item.getBoundingClientRect().width
+      + (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0);
+  };
+
+  const measure = (): void => {
+    for (const item of items) {
+      item.style.display = '';
+    }
+    moreItem.style.display = 'none';
+    widths = items.map(outerWidth);
+    moreItem.style.display = '';
+    moreWidth = outerWidth(moreItem);
+    moreItem.style.display = 'none';
+  };
+
+  // A hidden item that's a plain link (Project management/Orders/Team/
+  // Feedback) becomes an identical link in the "More" menu. One that's a
+  // dropdown itself (Experiments/Resources/Tools/Scheduler) has no single
+  // href of its own (its toggle is href='#') -- data-overflow-href on that
+  // toggle (set in head.html) gives it a sensible landing page instead, so
+  // the placeholder can still be a plain, safe link rather than nesting a
+  // second live dropdown inside this one.
+  const placeholderFor = (item: HTMLElement): HTMLAnchorElement => {
+    const toggle = item.matches('a') ? (item as HTMLAnchorElement) : item.querySelector<HTMLAnchorElement>('.dropdown-toggle');
+    const href = item.matches('a') ? item.getAttribute('href') : toggle?.dataset.overflowHref;
+    const placeholder = document.createElement('a');
+    placeholder.className = 'dropdown-item';
+    placeholder.href = href ?? '#';
+    placeholder.innerHTML = (toggle ?? item).innerHTML;
+    return placeholder;
+  };
+
+  const apply = (): void => {
+    measure();
+    const itemWidths = widths as number[];
+    const gap = parseFloat(getComputedStyle(primaryNav).columnGap) || 0;
+    const available = Math.max(0, primaryNav.clientWidth - 2);
+    const total = itemWidths.reduce((sum, w) => sum + w, 0) + gap * Math.max(0, items.length - 1);
+
+    // Everything fits with no "More" button at all -- the common case.
+    if (total <= available) {
+      moreItem.style.display = 'none';
+      overflowMenu.innerHTML = '';
+      for (const item of items) {
+        item.style.display = '';
+      }
+      return;
+    }
+
+    // Otherwise the "More" button itself takes up some of the row -- work
+    // out how many items (from the start) still fit alongside it.
+    let shown = 0;
+    let sum = 0;
+    for (let i = 0; i < items.length; i++) {
+      if (sum + itemWidths[i] + gap + moreWidth > available) {
+        break;
+      }
+      sum += itemWidths[i] + gap;
+      shown++;
+    }
+
+    overflowMenu.innerHTML = '';
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (i < shown) {
+        item.style.display = '';
+      } else {
+        item.style.display = 'none';
+        overflowMenu.appendChild(placeholderFor(item));
+      }
+    }
+    moreItem.style.display = shown < items.length ? '' : 'none';
+  };
+
+  apply();
+  const observer = new ResizeObserver(apply);
+  observer.observe(primaryNav);
+  const secondaryNav = document.getElementById('navbar-secondary-nav');
+  if (secondaryNav) observer.observe(secondaryNav);
+  void document.fonts.ready.then(apply);
+  document.fonts.addEventListener('loadingdone', apply);
+})();
+
 const container = document.getElementById('container')!;
 
 on('set-theme', (el: HTMLElement) => {

@@ -4355,21 +4355,82 @@ input[type='color'] {
   }
 }
 
-/* bring the search and user menu a bit more on the left
- * this is the only way I found that works
- * adding row/columns will mess up the left alignment of the navbar
- */
-#main-nav {
-  background-color: inherit;
+/* Priority navigation: the logo and home icon (.navbar-left-group) and the
+ * create/notifications/help/user-menu icons (#navbar-secondary-nav) always
+ * stay visible; the links in between (#navbar-primary-nav) are measured by
+ * priorityNav.ts and, one at a time starting from the end, moved into the
+ * hidden #navbarMoreItem dropdown as soon as they'd stop fitting on one
+ * row -- restored the same way as room reopens, on load and on resize. */
+#main-navbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  /* Dropdowns extend outside the bar. A scroll container here clips them
+   * even when Bootstrap correctly adds .show. Both axes must stay visible:
+   * overflow-x:auto would also turn overflow-y:visible into auto. The
+   * priority navigation above handles links that no longer fit. */
+  overflow: visible;
+}
 
-  @media (min-width: 992px) {
-    height: 43px;
-  }
+.navbar-left-group {
+  flex-shrink: 0;
+}
+
+#main-nav {
+  align-items: center;
+  background-color: inherit;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 0.5rem;
+  height: 43px;
+  min-width: 0;
 
   /* prevent wrap on whitespace for elements of the menu so it doesn't take two lines when screen size is getting small */
   .nav-item {
     white-space: nowrap;
   }
+}
+
+#navbar-primary-nav {
+  align-items: center;
+  display: flex;
+  /* Bootstrap's base .navbar-nav defaults to flex-direction: column, with
+   * its .dropdown-menu children left in normal flow (position: static) --
+   * its mobile-first, un-expanded state, where a submenu opens as an
+   * accordion within the vertical menu. Normally a .navbar-expand-* class on
+   * the <nav> overrides both of those above a breakpoint, but this bar no
+   * longer uses that mechanism (priorityNav.ts replaces it at every width),
+   * so both have to be forced explicitly here instead -- without the
+   * second override every dropdown-menu renders inline in the bar itself
+   * instead of floating below its toggle. */
+  flex-direction: row;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
+
+  // Measure intrinsic link widths, not flex-shrunk boxes whose text can
+  // overflow into the permanently visible action buttons.
+  > .nav-item {
+    flex-shrink: 0;
+  }
+
+  .dropdown-menu {
+    float: left;
+    position: absolute;
+  }
+}
+
+#navbarMoreItem,
+#navbar-secondary-nav {
+  flex-shrink: 0;
+}
+
+/* Holds a plain .dropdown-item placeholder link for each currently-hidden
+ * #navbar-primary-nav item -- ordinary Bootstrap dropdown-item markup, so it
+ * needs no styling of its own beyond a sensible minimum width. */
+#navbar-overflow-menu {
+  min-width: 14rem;
 }
 
 /* to make the pie smaller */
