@@ -3622,7 +3622,11 @@ body.html-tool-workspace-resizing * {
   pointer-events: none;
   position: fixed;
   text-align: right;
-  z-index: 10000;
+  // Above .inline-spreadsheet-overlay's 10050 -- the guide is appended to
+  // document.body as a sibling of the popup's own overlay, so it needs a
+  // higher z-index to paint over the modal instead of being hidden behind
+  // it (only visible in the inline, non-popup overlay otherwise).
+  z-index: 10060;
 }
 
 /* No editing chrome makes sense on a read-only grid. */
