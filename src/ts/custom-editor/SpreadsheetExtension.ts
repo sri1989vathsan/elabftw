@@ -459,10 +459,19 @@ function reconcileSpreadsheetRowHeights(table: HTMLTableElement, manualRowHeight
   if (rows.length === 0) return;
   removeOuterTableHeight(table);
   rows.forEach((row, index) => {
-    const manualHeight = manualRowHeights?.[String(index)] ?? 0;
+    const manualHeight = manualRowHeights?.[String(index)];
     row.style.removeProperty('height');
     const naturalHeight = Math.ceil(row.getBoundingClientRect().height);
-    row.style.height = `${Math.max(naturalHeight, manualHeight)}px`;
+    // A row present in manualRowHeights was genuinely drag-resized (see the
+    // comment above) -- that choice wins outright, including shrinking
+    // below the row's own natural content height (the same trade-off
+    // Excel makes: a row can be dragged shorter than a line of text, which
+    // then clips). Math.max(natural, manual) here used to win regardless,
+    // which silently snapped any deliberate shrink straight back to
+    // natural height in the same commit -- reported as not being able to
+    // drag a row shorter than some floor. Only a row with NO manual entry
+    // (never resized) falls back to natural height.
+    row.style.height = `${manualHeight === undefined ? naturalHeight : Math.max(20, Math.round(manualHeight))}px`;
     const serializedStyle = row.getAttribute('style')?.trim();
     if (serializedStyle) row.setAttribute('data-mce-style', serializedStyle);
   });

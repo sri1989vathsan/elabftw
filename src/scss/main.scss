@@ -5403,7 +5403,15 @@ div > .sticky-navbar {
   padding: 0.7rem;
 }
 
-.pm-task-done {
+// Not opacity on the card itself -- opacity < 1 creates a CSS stacking
+// context, which would trap this card's own .pm-task-actions dropdown
+// inside it, so no z-index on that dropdown's menu could ever escape to
+// paint above the next task card below it (reported as the "More actions"
+// menu rendering behind/under the following card, specifically in the
+// Done column -- the only place cards get this dimmed treatment). Dimming
+// every child except the actions row gets the same muted look without
+// putting an opacity-bearing element between the dropdown and the page.
+.pm-task-done > :not(.pm-task-actions) {
   opacity: 0.7;
 }
 

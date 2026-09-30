@@ -3485,6 +3485,21 @@ export function openSpreadsheetModal(
       const bounds = target.getBoundingClientRect();
       const distanceFromBottom = bounds.bottom - event.clientY;
       rowResizePointerActive = distanceFromBottom >= 0 && distanceFromBottom <= 8;
+      if (rowResizePointerActive) {
+        // jspreadsheet's own live drag feedback only ever sets the `height`
+        // HTML attribute on this row (never style.height) until mouseup,
+        // when it finally calls its real setHeight() and sets style.height
+        // for good. An inline style always wins the cascade over a plain
+        // presentational attribute, so a row that was ever resized before
+        // (or hydrated with a saved height -- effectively every real
+        // table, since a height is persisted after every edit) shows no
+        // visible feedback for the whole drag, only snapping to the right
+        // size at mouseup -- reported as row resizing "not working".
+        // Clearing it here lets the live attribute render normally during
+        // the drag; mouseup's real setHeight() puts a fresh style.height
+        // back regardless of whether this was cleared.
+        target.style.removeProperty('height');
+      }
     };
 
     const onRowResizePointerUp = (): void => {
@@ -6328,6 +6343,40 @@ export function buildReadOnlySpreadsheetHost(
     sheetContainer.addEventListener('mousedown', event => {
       if (composingFormula) event.preventDefault();
     });
+    // jspreadsheet's own live row-resize drag only ever sets the `height`
+    // HTML attribute on the row while dragging (never style.height) --
+    // style.height is only set for real, once, at mouseup. An inline style
+    // always wins the cascade over that plain attribute, so a row that was
+    // ever resized before (or hydrated with a saved height -- effectively
+    // every real table, since a height is persisted after every edit) shows
+    // no visible feedback for the whole drag, only snapping to the right
+    // size once released -- reported as row resizing "not working". Same
+    // edge-tolerance hit-test as the dblclick-autofit handler just below,
+    // clearing whichever row's border is actually being grabbed (it can be
+    // grabbed from either the bottom of the row above or the top of this
+    // one) so the live attribute renders normally during the drag; the
+    // real setHeight() at mouseup puts a fresh style.height back regardless.
+    sheetContainer.addEventListener('mousedown', event => {
+      if (event.button !== 0) return;
+      const rowHeader = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > tbody .jss_row[data-y]')
+        : null;
+      if (!rowHeader) return;
+      const headerRect = rowHeader.getBoundingClientRect();
+      const edgeTolerance = 8;
+      const distanceFromTop = event.clientY - headerRect.top;
+      const distanceFromBottom = headerRect.bottom - event.clientY;
+      let resizingRow: HTMLElement | null = null;
+      if (distanceFromBottom >= 0 && distanceFromBottom <= edgeTolerance) {
+        resizingRow = rowHeader;
+      } else if (distanceFromTop >= 0 && distanceFromTop <= edgeTolerance) {
+        const row = Number.parseInt(rowHeader.dataset.y ?? '', 10) - 1;
+        resizingRow = row >= 0
+          ? sheetContainer.querySelector<HTMLElement>(`.jss_worksheet > tbody .jss_row[data-y="${row}"]`)
+          : null;
+      }
+      resizingRow?.style.removeProperty('height');
+    }, true);
     // Double-click a column/row border to fit it to its content, same
     // gesture (and same edge-tolerance/measurement code) as
     // openSpreadsheetModal's onColumnBoundaryDoubleClick/

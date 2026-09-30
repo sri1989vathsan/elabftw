@@ -1241,38 +1241,84 @@
     }
   }
 
-  // Copies the core fields (title, notes, description, deadline, priority,
-  // assignees, project/column) -- deliberately not steps or linked items,
-  // which would each need their own follow-up request per item, same as
-  // the "create new task" draft flow above does for a brand-new task.
-  // Opens the freshly created copy's own detail popup right away, closing
-  // the original's first, so it reads as "here's your duplicate" rather
-  // than silently creating something off-screen.
-  async function duplicateTask(task: Task): Promise<void> {
+  // Opens the "Duplicate task" dialog -- lets the destination project/
+  // subproject be changed before the copy is actually created, defaulting
+  // to the task's own. Confirming is confirmDuplicateTask() below.
+  let duplicatingTask: Task | null = null;
+  let duplicateTargetProjectId: number | null = null;
+  let duplicatingTaskBusy = false;
+
+  function openDuplicateDialog(task: Task): void {
+    duplicatingTask = task;
+    duplicateTargetProjectId = task.project_id;
+  }
+
+  function closeDuplicateDialog(): void {
+    if (duplicatingTaskBusy) return;
+    duplicatingTask = null;
+  }
+
+  // Copies the full task -- title, notes, description, deadline, priority,
+  // assignees, and now its steps and linked items too, each needing its
+  // own follow-up request against the new task, same shape as the "create
+  // new task" draft flow above does for a brand-new task. The task list's
+  // own row can have notes/description/entity_links stripped out under the
+  // compact density view (see taskFilterParams()), so the source task and
+  // its steps/links are all re-fetched fresh here rather than trusting
+  // whatever's already in `tasks`. Opens the freshly created copy's own
+  // detail popup right away, closing the original's first, so it reads as
+  // "here's your duplicate" rather than silently creating something
+  // off-screen.
+  async function confirmDuplicateTask(): Promise<void> {
+    const task = duplicatingTask;
+    if (!task || duplicatingTaskBusy) return;
+    duplicatingTaskBusy = true;
     try {
+      const [fullTask, steps, entityLinks] = await Promise.all([
+        ApiC.getJson(`${Model.Todolist}/${task.id}`) as Promise<Task>,
+        ApiC.getJson(`${Model.Todolist}/${task.id}/steps`) as Promise<Step[]>,
+        ApiC.getJson(`${Model.Todolist}/${task.id}/entity_links`) as Promise<EntityLink[]>,
+      ]);
       const newId = await ApiC.post2location(Model.Todolist, {
-        content: task.body,
-        notes: task.notes,
-        description: task.description,
-        deadline: task.deadline,
-        assignee_userids: task.assignees.map(a => a.userid),
-        priority: task.priority,
-        project_id: task.project_id,
-        column_id: task.column_id,
+        content: fullTask.body,
+        notes: fullTask.notes,
+        description: fullTask.description,
+        deadline: fullTask.deadline,
+        assignee_userids: fullTask.assignees.map(a => a.userid),
+        priority: fullTask.priority,
+        project_id: duplicateTargetProjectId,
+        column_id: fullTask.column_id,
       });
+      // notifOnSaved: 0 on these -- post2location above already fired the
+      // one "Saved" toast for creating the task; each step/link is a
+      // followup request for that same single duplicate action, not a
+      // save of its own.
+      for (const step of steps) {
+        await ApiC.post(`${Model.Todolist}/${newId}/steps`, { body: step.body, notifOnSaved: 0 });
+      }
+      for (const link of entityLinks) {
+        await ApiC.post(`${Model.Todolist}/${newId}/entity_links`, link.entity_type === 'weblink'
+          ? { entity_type: 'weblink', url: link.url, label: link.title, notifOnSaved: 0 }
+          : { entity_type: link.entity_type, entity_id: link.entity_id, notifOnSaved: 0 });
+      }
       closeDetail();
+      duplicatingTask = null;
       await load();
       const created = tasks.find(t => t.id === newId) ?? await ApiC.getJson(`${Model.Todolist}/${newId}`) as Task;
       openDetail(created);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not duplicate the task.');
+    } finally {
+      duplicatingTaskBusy = false;
     }
   }
 
-  // Same field copy as duplicateTask above, but for a whole selection at
-  // once -- opening a detail popup per copy wouldn't make sense here, so
-  // this just creates them all and reloads, the same shape as the other
-  // bulk actions (bulkMoveToColumn) below.
+  // Same field copy as confirmDuplicateTask above (including steps and
+  // linked items), but for a whole selection at once, each staying in its
+  // own project -- opening a detail popup, let alone a destination-project
+  // dialog, per copy wouldn't make sense here, so this just creates them
+  // all and reloads, the same shape as the other bulk actions
+  // (bulkMoveToColumn) below.
   let copyingTasks = false;
   async function bulkDuplicateTasks(): Promise<void> {
     const selected = tasks.filter(t => selectedTaskIds.has(t.id) && canManage(t));
@@ -1282,16 +1328,29 @@
       // Bound request pressure; remove successful copies from the selection
       // so a failed remainder can be retried without duplicating successes.
       for (const task of selected) {
-        await ApiC.post2location(Model.Todolist, {
-          content: task.body,
-          notes: task.notes,
-          description: task.description,
-          deadline: task.deadline,
-          assignee_userids: task.assignees.map(a => a.userid),
-          priority: task.priority,
-          project_id: task.project_id,
-          column_id: task.column_id,
+        const [fullTask, steps, entityLinks] = await Promise.all([
+          ApiC.getJson(`${Model.Todolist}/${task.id}`) as Promise<Task>,
+          ApiC.getJson(`${Model.Todolist}/${task.id}/steps`) as Promise<Step[]>,
+          ApiC.getJson(`${Model.Todolist}/${task.id}/entity_links`) as Promise<EntityLink[]>,
+        ]);
+        const newId = await ApiC.post2location(Model.Todolist, {
+          content: fullTask.body,
+          notes: fullTask.notes,
+          description: fullTask.description,
+          deadline: fullTask.deadline,
+          assignee_userids: fullTask.assignees.map(a => a.userid),
+          priority: fullTask.priority,
+          project_id: fullTask.project_id,
+          column_id: fullTask.column_id,
         });
+        for (const step of steps) {
+          await ApiC.post(`${Model.Todolist}/${newId}/steps`, { body: step.body, notifOnSaved: 0 });
+        }
+        for (const link of entityLinks) {
+          await ApiC.post(`${Model.Todolist}/${newId}/entity_links`, link.entity_type === 'weblink'
+            ? { entity_type: 'weblink', url: link.url, label: link.title, notifOnSaved: 0 }
+            : { entity_type: link.entity_type, entity_id: link.entity_id, notifOnSaved: 0 });
+        }
         selectedTaskIds = new Set([...selectedTaskIds].filter(id => id !== task.id));
       }
       notify.success();
@@ -2559,7 +2618,7 @@
                       <i class="fas fa-ellipsis-vertical fa-fw" aria-hidden="true"></i>
                     </button>
                     <div class="dropdown-menu dropdown-menu-right">
-                      <button type="button" class="dropdown-item pm-task-more-item" title={t('Duplicate')} aria-label={t('Duplicate')} on:click={() => duplicateTask(task)}>
+                      <button type="button" class="dropdown-item pm-task-more-item" title={t('Duplicate')} aria-label={t('Duplicate')} on:click={() => openDuplicateDialog(task)}>
                         <i class="fas fa-copy fa-fw" aria-hidden="true"></i><span class="pm-task-more-item-label">{t('Duplicate')}</span>
                       </button>
                       {#if task.archived_at}
@@ -3118,7 +3177,7 @@
                 <i class="fas fa-box-archive fa-fw" aria-hidden="true"></i>
               </button>
             {/if}
-            <button type="button" class="btn btn-secondary pm-icon-button" title={t('Duplicate')} aria-label={t('Duplicate')} on:click={() => duplicateTask(detailTask)}>
+            <button type="button" class="btn btn-secondary pm-icon-button" title={t('Duplicate')} aria-label={t('Duplicate')} on:click={() => detailTask && openDuplicateDialog(detailTask)}>
               <i class="fas fa-copy fa-fw" aria-hidden="true"></i>
             </button>
             <button type="button" class="btn btn-danger-ghost pm-icon-button" title={t('Delete')} aria-label={t('Delete')} on:click={() => deleteTask(detailTask)}>
@@ -3327,6 +3386,33 @@
         <button type="button" class="btn btn-primary" disabled={savingProject || dialogName.trim() === ''} on:click={saveProject}>
           {editingProject ? t('Save changes') : t('Create project')}
         </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if duplicatingTask}
+  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeDuplicateDialog(); }}>
+    <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pmDuplicateTaskTitle">
+      <div class="pm-dialog-header">
+        <h4 id="pmDuplicateTaskTitle" class="mb-0">{t('Duplicate task')}</h4>
+        <button type="button" class="pm-close-btn" on:click={closeDuplicateDialog} aria-label={t('Close')}>&times;</button>
+      </div>
+      <div class="pm-dialog-body">
+        <p class="pm-muted small">{duplicatingTask.body}</p>
+        <div class="pm-dialog-field">
+          <label class="pm-label" for="pm-duplicate-project">{t('Project')}</label>
+          <select id="pm-duplicate-project" class="form-control" bind:value={duplicateTargetProjectId}>
+            <option value={null}>{t('Unfiled')}</option>
+            {#each projectPickerOptions as project (project.id)}
+              <option value={project.id}>{project.parent_id !== null ? `- ${project.name}` : project.name}</option>
+            {/each}
+          </select>
+        </div>
+      </div>
+      <div class="pm-dialog-footer">
+        <button type="button" class="btn btn-ghost" disabled={duplicatingTaskBusy} on:click={closeDuplicateDialog}>{t('Cancel')}</button>
+        <button type="button" class="btn btn-primary" disabled={duplicatingTaskBusy} on:click={confirmDuplicateTask}>{t('Duplicate')}</button>
       </div>
     </div>
   </div>
