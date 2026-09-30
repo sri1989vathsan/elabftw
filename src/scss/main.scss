@@ -3602,6 +3602,29 @@ body.html-tool-workspace-resizing * {
   white-space: pre-wrap;
 }
 
+/* A bare table cell's own height is always a floor, never a ceiling, when
+ * it holds text directly -- overflow:hidden on the <td> itself (just
+ * above) doesn't override the browser's row auto-sizing, so a row could
+ * grow to fit a drag-resize but never actually shrink below its content's
+ * natural height. This wrapper (a plain block element, unlike the cell)
+ * DOES respect overflow:hidden against an explicit height -- JS
+ * (applyCellClipHeights in inline-spreadsheet.ts) sizes it to whatever
+ * room the row has left, clipping the rest, the same trade-off Excel
+ * makes when a row is dragged shorter than a line of text. */
+.jss-cell-clip {
+  overflow: hidden;
+}
+
+.elabftw-row-resize-guide {
+  border-top: 2px dashed var(--strongest);
+  color: var(--strongest);
+  font-size: 12px;
+  pointer-events: none;
+  position: fixed;
+  text-align: right;
+  z-index: 10000;
+}
+
 /* No editing chrome makes sense on a read-only grid. */
 .elabftw-spreadsheet-readonly-view .jss_toolbar,
 .elabftw-spreadsheet-readonly-view .jss_pagination {
