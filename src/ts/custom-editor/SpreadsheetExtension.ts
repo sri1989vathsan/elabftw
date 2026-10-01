@@ -633,18 +633,21 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       editor.execCommand('mceInsertContent', false, html);
       // A table with nothing after it leaves no click target below itself --
       // clicking in the empty space under a trailing table does nothing,
-      // since there's no element there for the cursor to land in. Only when
-      // it has no following sibling, add an empty paragraph after it so a
-      // click there always has somewhere to put the cursor.
+      // since there's no element there for the cursor to land in. A table
+      // immediately followed by *another* table (or by anything else) has
+      // the same problem in miniature: there's no gap to click into right
+      // at the boundary, reported as not being able to insert text between
+      // two tables placed one after another. Unconditional now -- always
+      // give a freshly inserted table its own paragraph immediately after
+      // it, rather than only guessing when one is "needed" from the next
+      // sibling's tag, which didn't cover every case this was reported for.
       const insertedTable = editor.dom.select('table[data-just-inserted="1"]')[0] as
         | HTMLTableElement
         | undefined;
       if (insertedTable) {
         insertedTable.removeAttribute('data-just-inserted');
-        if (!insertedTable.nextElementSibling) {
-          const paragraph = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
-          insertedTable.parentNode?.insertBefore(paragraph, insertedTable.nextSibling);
-        }
+        const paragraph = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
+        insertedTable.parentNode?.insertBefore(paragraph, insertedTable.nextSibling);
       }
       editor.undoManager.add();
     }).catch(() => {
@@ -908,6 +911,50 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   }>();
   const enhancedTables = new WeakSet<HTMLTableElement>();
   let overlaySyncRunning = false;
+  // Cmd/Ctrl+Z is a whole-document snapshot in TinyMCE, not a per-element
+  // diff -- an undo level added for an ordinary main-text edit captures
+  // the *entire* body as it stood at that moment, table content included.
+  // Since a cell edit deliberately never adds its own level (see
+  // commitOverlayChange's own comment), undoing back past an unrelated
+  // later main-text edit reverted whatever the table looked like at that
+  // earlier snapshot too -- reported directly as Ctrl+Z deleting the
+  // table's own edits right along with the main-text change it was meant
+  // to undo. Every enhanced table gets a stable id (persists through the
+  // HTML round-trip an undo/redo replaces the body with, since it's a
+  // real attribute, not a data-mce-bogus one) so its latest live content
+  // can be tracked here and force-restored immediately after any Undo or
+  // Redo, regardless of what that operation's own snapshot says the
+  // table should look like. A table whose id is genuinely gone afterward
+  // (its own insertion or deletion is what got undone/redone) has nothing
+  // to restore, which is exactly the one case table content SHOULD change.
+  const SPREADSHEET_UID_ATTR = 'data-elabftw-spreadsheet-uid';
+  const latestTableContent = new Map<string, string>();
+  // Which table currently holds each id -- lets a colliding duplicate
+  // (see ensureSpreadsheetUid's own comment) be told apart from the one
+  // table that's genuinely always held it.
+  const uidToTable = new Map<string, HTMLTableElement>();
+  const generateSpreadsheetUid = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const ensureSpreadsheetUid = (table: HTMLTableElement): string => {
+    const existing = table.getAttribute(SPREADSHEET_UID_ATTR);
+    // A fresh, internal rich copy of this exact table (see tinymce.ts'
+    // paste_preprocess) preserves every attribute verbatim, id included --
+    // two *different* tables sharing one id would let editing either one
+    // force-restore content onto the other after an unrelated undo, so a
+    // duplicate gets a new id of its own the moment it's enhanced (each
+    // copy is its own independent table from here on, not a link back to
+    // the original).
+    // A holder that's no longer connected is a stale mapping, not a real
+    // collision -- Undo/Redo (and ordinary re-enhancement after a table
+    // is torn down and rebuilt) replace the DOM node wholesale while the
+    // id attribute itself survives on the new node, so this is the normal
+    // case right after either, not a duplicate.
+    const holder = existing ? uidToTable.get(existing) : undefined;
+    const isCollision = !!holder && holder !== table && holder.isConnected;
+    const uid = existing && !isCollision ? existing : generateSpreadsheetUid();
+    table.setAttribute(SPREADSHEET_UID_ATTR, uid);
+    uidToTable.set(uid, table);
+    return uid;
+  };
   // One persistent spacer per table, reserving room below it for the
   // overlay's own extra chrome (see syncOverlayPositions). Tracked here
   // instead of re-detected each frame by "is my next sibling already a
@@ -1036,11 +1083,6 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
 
   const syncOverlayPositions = (): void => {
-    const iframe = getEditorIframe();
-    if (!iframe || spreadsheetOverlays.size === 0) {
-      overlaySyncRunning = false;
-      return;
-    }
     // The requestAnimationFrame reschedule below is in a `finally` so this
     // loop can never permanently die from one bad frame -- previously, any
     // uncaught exception here (e.g. a transient zero-size/detached rect
@@ -1052,7 +1094,23 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // existing overlay on the page would freeze in whatever position it
     // last had, unresponsive to further scrolling or resizing, exactly as
     // reported.
+    //
+    // The same was true, less obviously, of stopping the reschedule
+    // whenever there was momentarily nothing to sync (no iframe yet, or
+    // every overlay briefly removed from the map, e.g. a table that
+    // spuriously failed its own isConnected check for one frame during an
+    // unrelated TinyMCE operation): the very next frame is exactly what
+    // would have caught and corrected that transient state, but skipping
+    // the reschedule meant it never got the chance to. Nothing else calls
+    // ensureSyncLoop() again afterward except a *different* table being
+    // freshly enhanced, so an existing table's overlay could freeze --
+    // including mid-hide, if its rect happened to read zero-size on the
+    // frame the loop gave up -- until a reload re-ran the whole
+    // enhancement pass from scratch. Reschedule unconditionally instead;
+    // only the per-frame work below is skipped when there's nothing to do.
     try {
+      const iframe = getEditorIframe();
+      if (!iframe || spreadsheetOverlays.size === 0) return;
       const iframeRect = iframe.getBoundingClientRect();
       Array.from(spreadsheetOverlays.entries()).forEach(([table, { el: overlay, syncActiveEditor }]) => {
         try {
@@ -1229,7 +1287,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         }
       });
     } finally {
-      window.requestAnimationFrame(syncOverlayPositions);
+      // Only editor.on('remove') below turns this off -- everywhere else
+      // (zero overlays, no iframe yet) the loop keeps rescheduling itself
+      // regardless, so it's always there to catch the very next frame
+      // where that's no longer true.
+      if (overlaySyncRunning) window.requestAnimationFrame(syncOverlayPositions);
     }
   };
 
@@ -1247,6 +1309,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // the popup editor's save, so the two paths can never drift apart from
   // writing the same logical table two different ways.
   const applySpreadsheetHtmlToTable = (table: HTMLTableElement, html: string): boolean => {
+    // spreadsheetToHTML() has no notion of SPREADSHEET_UID_ATTR -- wiping
+    // every existing attribute below and replacing them with only what it
+    // generated would silently erase this table's stable id on every
+    // single edit, breaking the Undo/Redo content protection that id
+    // exists for (see its own comment). Preserved explicitly across the
+    // wipe rather than taught to spreadsheetToHTML itself, since nothing
+    // about this attribute is part of the spreadsheet's own saved shape.
+    const existingUid = table.getAttribute(SPREADSHEET_UID_ATTR);
     const parsed = document.createElement('div');
     parsed.innerHTML = html;
     const freshTable = parsed.querySelector('table.elabftw-spreadsheet');
@@ -1254,6 +1324,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     Array.from(table.attributes).forEach(attr => table.removeAttribute(attr.name));
     Array.from(freshTable.attributes).forEach(attr => table.setAttribute(attr.name, attr.value));
     table.innerHTML = freshTable.innerHTML;
+    if (existingUid) table.setAttribute(SPREADSHEET_UID_ATTR, existingUid);
     return true;
   };
 
@@ -1261,29 +1332,55 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // Only the table's own attributes/innerHTML are touched, which is exactly
   // what editor.getContent() serializes -- correct by construction.
   const commitOverlayChange = (table: HTMLTableElement, data: SpreadsheetData): void => {
-    if (!applySpreadsheetHtmlToTable(table, spreadsheetToHTML(data, data.displayData ?? data.data))) return;
-    // The table's own rows just got rebuilt from data.rowHeights -- reconcile
-    // them now, right after this commit's markup is actually in place, so a
-    // row that no longer needs the height an earlier, since-edited-or-
-    // deleted entry gave it shrinks back down instead of permanently
-    // reserving that space (reported directly: a large gap left under a
-    // table whose cells all looked normal again). See
-    // reconcileSpreadsheetRowHeights's own comment for why data.rowHeights
-    // itself is what distinguishes that case from a genuine manual resize.
-    reconcileSpreadsheetRowHeights(table, data.rowHeights);
-    editor.undoManager.add();
-    editor.setDirty(true);
-    // The editor's own 7-second autosave (tinymce.ts) resets its timer on
-    // native keyup/keydown against the editor body -- typing into this
-    // overlay (outside that body entirely; a position:fixed div in the
-    // main document, not the iframe) never fires those, so autosave never
-    // saw this edit at all. 'keyup' is what that timer actually listens
-    // for; dispatching it programmatically resets the same timer as if
-    // this had been typed directly into the editor. Routed through
-    // dispatchKeyupForAutosave() (not a direct call) -- see its own
-    // comment for why this can't just fire immediately while a cell is
-    // still being edited.
-    dispatchKeyupForAutosave();
+    // A cell edit has its own, separate undo/redo inside the table's own
+    // toolbar (performCellUndo/performCellRedo) -- it must never *also*
+    // land in the main editor's own undo history, or Ctrl+Z from the main
+    // text, after editing a table, undoes that edit instead of whatever
+    // the user actually changed in the surrounding text (and takes as many
+    // presses as there were edits to fully clear). Simply not calling
+    // editor.undoManager.add() ourselves here turned out not to be enough:
+    // dispatchKeyupForAutosave() below fires a real 'keyup' through
+    // editor.dispatch() so the autosave timer notices this edit, and
+    // TinyMCE's own UndoManager listens for that same event internally to
+    // add levels automatically, independent of any explicit add() call of
+    // ours. undoManager.ignore() is the one API that actually suppresses
+    // every source of a new level -- ours and TinyMCE's own internal
+    // triggers alike -- for everything that runs inside it. Leaving the
+    // main editor's undo history untouched by cell edits means Ctrl+Z
+    // there only ever affects the main text, or (via the table's own
+    // insertion/deletion, each already its own explicit
+    // undoManager.add() elsewhere in this file) the table as a whole --
+    // e.g. undoing a table just pasted and not yet edited still deletes
+    // it in one press.
+    editor.undoManager.ignore(() => {
+      if (!applySpreadsheetHtmlToTable(table, spreadsheetToHTML(data, data.displayData ?? data.data))) return;
+      // The table's own rows just got rebuilt from data.rowHeights --
+      // reconcile them now, right after this commit's markup is actually
+      // in place, so a row that no longer needs the height an earlier,
+      // since-edited-or-deleted entry gave it shrinks back down instead
+      // of permanently reserving that space (reported directly: a large
+      // gap left under a table whose cells all looked normal again). See
+      // reconcileSpreadsheetRowHeights's own comment for why
+      // data.rowHeights itself is what distinguishes that case from a
+      // genuine manual resize.
+      reconcileSpreadsheetRowHeights(table, data.rowHeights);
+      // Keeps the Undo/Redo content-protection map (see its own comment,
+      // near enhancedTables) current with every edit, not just the state
+      // as of whenever the table was first enhanced.
+      latestTableContent.set(ensureSpreadsheetUid(table), table.outerHTML);
+      editor.setDirty(true);
+      // The editor's own 7-second autosave (tinymce.ts) resets its timer
+      // on native keyup/keydown against the editor body -- typing into
+      // this overlay (outside that body entirely; a position:fixed div
+      // in the main document, not the iframe) never fires those, so
+      // autosave never saw this edit at all. 'keyup' is what that timer
+      // actually listens for; dispatching it programmatically resets the
+      // same timer as if this had been typed directly into the editor.
+      // Routed through dispatchKeyupForAutosave() (not a direct call) --
+      // see its own comment for why this can't just fire immediately
+      // while a cell is still being edited.
+      dispatchKeyupForAutosave();
+    });
   };
 
   // Tears down and rebuilds the live overlay for a table whose underlying
@@ -1299,6 +1396,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const enhanceTable = (table: HTMLTableElement): void => {
     if (enhancedTables.has(table)) return;
     enhancedTables.add(table);
+    ensureSpreadsheetUid(table);
     const extracted = extractFromTable(table);
     // Reconciles this table's rows against its own saved rowHeights right
     // as it's mounted, not just after a future edit commits (see
@@ -1337,6 +1435,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       onDelete: () => {
         if (lastActiveSpreadsheetTable === table) setActiveSpreadsheetTable(null);
         removeOverlay(table);
+        // A genuine, explicit deletion (unlike an ordinary scroll-out
+        // teardown, which also calls removeOverlay but must NOT clear
+        // this) -- Ctrl+Z restoring this exact table should bring back
+        // its real pre-deletion content, not have the protection below
+        // force-overwrite it with whatever was last captured.
+        const uid = table.getAttribute(SPREADSHEET_UID_ATTR);
+        if (uid) {
+          latestTableContent.delete(uid);
+          uidToTable.delete(uid);
+        }
         // The spacer reserving room below this table for its overlay's
         // chrome has no purpose once the table itself is gone -- unlike
         // the overlay div, it isn't rebuilt from scratch next time
@@ -1385,6 +1493,25 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       overlay.classList.add('has-open-context-menu');
     });
     document.body.appendChild(overlay);
+    // jspreadsheet-ce/jSuites position their own right-click menu with
+    // plain `style.left/top = event.clientX/clientY` -- correct only when
+    // the menu's nearest positioned ancestor is the viewport itself. It's
+    // created once, as a child of the worksheet's own root element, which
+    // for this overlay sits inside a `position: fixed` + `transform`
+    // ancestor (see syncOverlayPositions' own comment on why transform,
+    // not top/left, is used to move it every frame) -- and a `transform`
+    // on an ancestor makes IT the containing block for every
+    // fixed/absolute-positioned descendant, per the CSS spec. The menu's
+    // clientX/clientY-based coordinates ended up relative to the
+    // overlay's own on-screen position instead of the viewport's origin,
+    // landing the menu however far from the actual click as the overlay
+    // itself currently sits from (0, 0) -- reported directly as the
+    // right-click menu opening far from the mouse. Reparented to
+    // document.body once, right after mount, puts it outside that
+    // transformed ancestor's containing-block chain entirely, matching
+    // the plain-viewport coordinates it was always computing.
+    const contextMenuEl = overlay.querySelector<HTMLElement>('.jss_contextmenu');
+    if (contextMenuEl) document.body.appendChild(contextMenuEl);
     spreadsheetOverlays.set(table, {
       el: overlay, destroy, flush, syncActiveEditor,
     });
@@ -1397,12 +1524,36 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // document with many spreadsheets costs roughly what's on screen, not
   // what's in the whole document.
   const observedTables = new WeakSet<HTMLTableElement>();
+  // entry.isIntersecting alone is unreliable for tearing an overlay down:
+  // it's computed purely from the real (hidden) backing <table>'s own
+  // rect, which can differ wildly from what's actually still visually
+  // reserved for this spreadsheet -- the whole reason the spacer exists
+  // (see its own comment) is that the backing table's row layout doesn't
+  // necessarily match the live grid's pixel-for-pixel, and that mismatch
+  // can transiently spike right when an edit rewrites the table's
+  // innerHTML, or during a scroll-triggered reflow under this file's own
+  // table-layout:fixed override. A backing table read as collapsed to a
+  // few px at exactly that moment reports "400px+ out of view" even while
+  // its spacer still reserves a large, genuinely on-screen block --
+  // reported directly as a table (and a large chunk of blank space where
+  // it should be) vanishing while scrolling, or while editing. Re-checked
+  // here against the spacer's own rect too, not just the table's, before
+  // actually destroying the live overlay.
+  const isNearViewport = (table: HTMLTableElement): boolean => {
+    const margin = 400;
+    const viewportTop = -margin;
+    const viewportBottom = window.innerHeight + margin;
+    const inRange = (rect: DOMRect): boolean => rect.bottom >= viewportTop && rect.top <= viewportBottom;
+    if (inRange(table.getBoundingClientRect())) return true;
+    const spacer = spreadsheetSpacers.get(table);
+    return !!spacer?.isConnected && inRange(spacer.getBoundingClientRect());
+  };
   const tableVisibility = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       const table = entry.target as HTMLTableElement;
       if (entry.isIntersecting) {
         enhanceTable(table);
-      } else {
+      } else if (!isNearViewport(table)) {
         removeOverlay(table);
       }
     });
@@ -1441,6 +1592,51 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   });
 
   editor.on('SetContent NodeChange', enhanceAllTables);
+  // The content-protection half of the id-based tracking above (see
+  // latestTableContent's own comment): Undo/Redo replace editor.getBody()
+  // wholesale from a serialized snapshot, so every spreadsheet table
+  // afterward is a brand-new DOM node -- matched back up here by the id
+  // attribute alone, which is real markup and so survives that
+  // replacement verbatim. Runs synchronously, straight after TinyMCE has
+  // already swapped in the reverted/reapplied content and before
+  // enhanceAllTables (bound to the same SetContent this triggers) gets a
+  // chance to mount an overlay from it, so a freshly (re)mounted overlay
+  // never has a stale frame to show in between.
+  editor.on('Undo Redo', () => {
+    Array.from(editor.getBody().querySelectorAll<HTMLTableElement>(`table.elabftw-spreadsheet[${SPREADSHEET_UID_ATTR}]`))
+      .forEach(table => {
+        const uid = table.getAttribute(SPREADSHEET_UID_ATTR);
+        if (!uid) return;
+        // Undo/Redo replaces editor.getBody() wholesale from a serialized
+        // snapshot -- every table matched above is a brand-new DOM node,
+        // never the same object as whichever one previously held this
+        // same id. That OLD table's own overlay <div> is still attached
+        // to document.body regardless (overlays live outside the iframe
+        // entirely) -- nothing else ever explicitly tears it down for
+        // this specific case, only the IntersectionObserver eventually
+        // noticing the old node is now detached, which isn't guaranteed
+        // to happen before the new table gets its own fresh overlay a few
+        // lines below. Until then, both exist at once: an orphaned
+        // overlay frozen whatever position the detached table's rect
+        // last resolved to, plus the new one -- a second, self-inflicted
+        // source of the reported overlap bug. Torn down explicitly here
+        // instead of waiting on the observer.
+        const staleTable = uidToTable.get(uid);
+        if (staleTable && staleTable !== table) removeOverlay(staleTable);
+        uidToTable.set(uid, table);
+        const savedHtml = latestTableContent.get(uid);
+        if (savedHtml) applySpreadsheetHtmlToTable(table, savedHtml);
+        // This table element is always a brand-new node at this point, so
+        // it's never already in enhancedTables -- refreshTableOverlay's
+        // own removeOverlay() is a harmless no-op for a node nothing was
+        // tracking yet, and enhanceTable() then mounts fresh from the
+        // content just corrected above (if any), rather than (if
+        // 'SetContent' already ran enhanceAllTables on the stale
+        // pre-correction content) leaving a stale overlay in place from
+        // before this handler fixed it up.
+        refreshTableOverlay(table);
+      });
+  });
   // Dispatched from tinymce.ts at the same "layout has actually settled"
   // checkpoints it uses to force an extra mceAutoResize (a short setTimeout,
   // a requestAnimationFrame, and once web fonts are ready). Once any
@@ -1468,6 +1664,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
   window.addEventListener('elabftw-flush-spreadsheets', flushAllOverlays);
   editor.on('remove', () => {
+    // syncOverlayPositions now reschedules itself unconditionally, even
+    // with zero overlays (see its own comment for why) -- it no longer
+    // self-stops once every overlay is gone, so this editor instance's
+    // copy would otherwise keep rescheduling a no-op frame forever.
+    overlaySyncRunning = false;
     tableVisibility.disconnect();
     Array.from(spreadsheetOverlays.keys()).forEach(removeOverlay);
     window.removeEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
