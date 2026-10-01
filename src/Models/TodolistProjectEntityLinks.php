@@ -118,11 +118,22 @@ final class TodolistProjectEntityLinks extends AbstractRest
             throw new ImproperActionException('Item not found in this team.');
         }
 
+        // Same fix as TodolistEntityLinks::addEntityLink()'s identical
+        // pattern: id = id is a true no-op UPDATE, so MySQL reports 0
+        // affected rows for a duplicate-key hit here too, indistinguishable
+        // from a genuinely failed INSERT...SELECT (project not found/wrong
+        // team) by the rowCount() check below -- re-linking an entity
+        // already linked at the project level hit the same
+        // ResourceNotFoundException ("Nothing to show with this id") as
+        // linking to a nonexistent project. LAST_INSERT_ID(id) is the
+        // standard idempotent-upsert trick: MySQL counts it as a real
+        // update (rowCount() 2, not 0) and LAST_INSERT_ID() still returns
+        // the existing row's id afterward.
         $sql = 'INSERT INTO todolist_project_entity_links (project_id, entity_type, entity_id)
             SELECT project.id, :entity_type, :entity_id
             FROM todolist_projects AS project
             WHERE project.id = :project_id AND project.team = :team
-            ON DUPLICATE KEY UPDATE todolist_project_entity_links.id = todolist_project_entity_links.id';
+            ON DUPLICATE KEY UPDATE todolist_project_entity_links.id = LAST_INSERT_ID(todolist_project_entity_links.id)';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':project_id', $this->Project->id, PDO::PARAM_INT);
         $req->bindValue(':team', $this->Users->team, PDO::PARAM_INT);

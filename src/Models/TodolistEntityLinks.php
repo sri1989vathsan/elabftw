@@ -141,11 +141,24 @@ final class TodolistEntityLinks extends AbstractRest
             throw new ImproperActionException('Item not found in this team.');
         }
 
+        // id = id below was a true no-op UPDATE -- MySQL reports 0 affected
+        // rows for a duplicate-key hit whose UPDATE clause doesn't actually
+        // change anything, identical to what a genuinely failed INSERT...
+        // SELECT (task not found/wrong team, the WHERE above matching no
+        // row) also reports. The rowCount() check right below couldn't
+        // tell those two cases apart, so linking an entity that was
+        // already linked to this task hit the same exception as linking
+        // to a nonexistent task -- "Nothing to show with this id" on an
+        // ordinary, harmless re-link. id = LAST_INSERT_ID(id) is the
+        // standard idempotent-upsert trick: MySQL counts this specific
+        // pattern as a real update (rowCount() 2, not 0) even though the
+        // id's value is unchanged, and LAST_INSERT_ID() returns the
+        // existing row's id afterward exactly like a fresh INSERT would.
         $sql = 'INSERT INTO todolist_entity_links (task_id, entity_type, entity_id)
             SELECT task.id, :entity_type, :entity_id
             FROM todolist AS task
             WHERE task.id = :task_id AND task.team = :team
-            ON DUPLICATE KEY UPDATE todolist_entity_links.id = todolist_entity_links.id';
+            ON DUPLICATE KEY UPDATE todolist_entity_links.id = LAST_INSERT_ID(todolist_entity_links.id)';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':task_id', $this->Task->id, PDO::PARAM_INT);
         $req->bindValue(':team', $this->Users->team, PDO::PARAM_INT);
