@@ -352,6 +352,19 @@ export function getTinymceBaseConfig(page: string): object {
       pasteContainer.querySelectorAll('[data-elabftw-rich-selection]').forEach(marker => {
         marker.replaceWith(...Array.from(marker.childNodes));
       });
+      // Google Sheets (and some Excel/LibreOffice exports) set each
+      // column's width through a <style> block with per-class rules (e.g.
+      // ".s0 { width: 75px }" applied to cells by class), not through an
+      // inline style or a width attribute -- stripping those per-element,
+      // as done below, left this block completely untouched, so its class
+      // selectors kept forcing the same narrow widths regardless. Dropped
+      // entirely for the same reason table/col/cell widths are: a pasted
+      // table's own layout should come from spreadsheetToHTML()/the
+      // browser's natural table sizing, not whatever the source app's
+      // styling happened to be.
+      if (!isElabftwRichSelection) {
+        pasteContainer.querySelectorAll('style').forEach(style => style.remove());
+      }
       pasteContainer.querySelectorAll<HTMLTableElement>('table').forEach(table => {
         // Internal rich copies already contain the complete safe table style,
         // spreadsheet data and display preset. Do not normalize them into a
@@ -361,6 +374,26 @@ export function getTinymceBaseConfig(page: string): object {
         table.style.removeProperty('width');
         table.classList.add('elabftw-pasted-table');
         if (!table.getAttribute('style')?.trim()) table.removeAttribute('style');
+        // Word/Excel/Sheets clipboard HTML encodes each column's width
+        // explicitly, either on a <col> or on every <td>/<th> in it
+        // (often both) -- stripping only the outer <table>'s own width
+        // above left those untouched, so every column still rendered at
+        // whatever narrow, fixed width the source application happened
+        // to use regardless of how much text it actually held (the
+        // table's own width: max-content, set by CSS for
+        // .elabftw-pasted-table, only sizes the table as a whole; it
+        // can't override an explicit width on a child cell). Reported as
+        // pasted tables coming in with very narrow columns even when
+        // they contain a lot of text.
+        table.querySelectorAll<HTMLElement>('col').forEach(col => {
+          col.removeAttribute('width');
+          col.style.removeProperty('width');
+        });
+        table.querySelectorAll<HTMLElement>('td, th').forEach(cell => {
+          cell.removeAttribute('width');
+          cell.style.removeProperty('width');
+          if (!cell.getAttribute('style')?.trim()) cell.removeAttribute('style');
+        });
       });
       args.content = pasteContainer.innerHTML;
     },
