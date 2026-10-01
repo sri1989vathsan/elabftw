@@ -4242,10 +4242,30 @@ export function openSpreadsheetModal(
         const currentWidth = Number.parseFloat(el.style.width) || 0;
         el.style.width = `${Math.min(viewportRoom, Math.max(60, currentWidth, measureRescueInputWidth(el)))}px`;
       });
+      // Commits the current edit, then moves the grid's own selection by
+      // (deltaCol, deltaRow) -- standard spreadsheet Enter/Tab convention,
+      // which this rescue-input editor never implemented at all: nothing
+      // here ever called updateSelectionFromCoords() for either key, so
+      // the selection just silently stayed on the cell being edited
+      // (Enter), or whatever the browser's own default Tab/focus
+      // traversal happened to do once the isolated keydown reached it
+      // unhandled (Tab) -- reported as both not moving to the next
+      // cell the way they should.
+      const commitRescueInputAndMove = (deltaCol: number, deltaRow: number): void => {
+        if (rescueInputCol === null || rescueInputRow === null) return;
+        const nextCol = Math.min(Math.max(rescueInputCol + deltaCol, 0), working.cols - 1);
+        const nextRow = Math.min(Math.max(rescueInputRow + deltaRow, 0), working.rows - 1);
+        commitRescueInput();
+        selectedRange = [nextCol, nextRow, nextCol, nextRow];
+        worksheet?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
+      };
       releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
-        if (event.key === 'Enter' && !event.shiftKey) {
+        if (event.key === 'Enter') {
           event.preventDefault();
-          commitRescueInput();
+          commitRescueInputAndMove(0, event.shiftKey ? -1 : 1);
+        } else if (event.key === 'Tab') {
+          event.preventDefault();
+          commitRescueInputAndMove(event.shiftKey ? -1 : 1, 0);
         } else if (event.key === 'Escape') {
           // Cancel, not commit -- standard spreadsheet convention.
           event.preventDefault();
@@ -5643,13 +5663,24 @@ export function openSpreadsheetModal(
         const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`) ?? null;
         const wasNativelyEditing = cell?.classList.contains('editor') ?? false;
         const currentValue = String(rawDataMirror[row]?.[col] ?? '');
-        const replacing = isPrintableKey && !wasNativelyEditing;
         const nextValue = isPrintableKey
           ? (wasNativelyEditing ? `${currentValue}${event.key}` : event.key)
           : event.key === 'Backspace'
             ? currentValue.slice(0, -1)
             : '';
-        openCellEditor(col, row, nextValue, replacing);
+        // "Replacing" here only ever meant discarding the cell's OLD
+        // value instead of appending to it -- nextValue above already
+        // does that (it's just event.key alone, not currentValue+key).
+        // Passing that same flag on as openCellEditor's selectAll
+        // parameter too conflated it with a different thing: whether to
+        // select whatever's now IN the edit box. For a brand new entry
+        // that's a single freshly-typed character, so selecting it meant
+        // the very next keystroke overwrote it instead of appending --
+        // reported as "the first character typed is selected, so typing
+        // the second character replaces it" (only in the popup; the
+        // inline overlay's own equivalent call sites already pass false
+        // here unconditionally).
+        openCellEditor(col, row, nextValue, false);
         return;
       }
       if (event.key === 'Escape') {
