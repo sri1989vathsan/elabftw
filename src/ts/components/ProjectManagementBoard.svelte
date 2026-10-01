@@ -521,6 +521,32 @@
     return `${ENTITY_TYPE_PAGES[link.entity_type]}?mode=view&id=${link.entity_id}`;
   }
 
+  // A step's own body is always plain text (see its render sites below,
+  // {step.body} rather than {@html step.body}) -- an entity added as a
+  // step via the Search side panel's "Add as step" button
+  // (FavoriteFilters.class.ts's insertPmTaskStep()) stores it as
+  // "[label](elabftw-entity:type:id)", a made-up pseudo-scheme carrying
+  // the entity's real type/id directly rather than a URL string. An
+  // earlier version stored the entity's actual page URL and tried to
+  // reverse-match its path back to an entity type here -- that depended
+  // on two different files independently resolving the same relative
+  // page path to the same absolute one, which didn't hold if the app is
+  // served under any path prefix, breaking both the link itself ("An
+  // internal error occurred") and the type-from-URL guess (always
+  // falling back to the generic "Link" badge). Carrying type/id directly
+  // and building the href with entityViewUrl() -- the exact same
+  // function a real entity_link already uses below -- removes that
+  // mismatch entirely.
+  const STEP_LINK_PATTERN = /^\[(.+)\]\(elabftw-entity:([a-z_]+):(\d+)\)$/;
+  function parseStepLink(body: string): { label: string; url: string; entityType: EntityLinkType } | null {
+    const match = STEP_LINK_PATTERN.exec(body);
+    if (!match) return null;
+    const entityType = match[2] as EntityLinkType;
+    if (!(entityType in ENTITY_TYPE_PAGES)) return null;
+    const url = entityViewUrl({ entity_type: entityType, entity_id: Number(match[3]), url: null });
+    return { label: match[1].replace(/\\([\\[\]])/g, '$1'), url, entityType };
+  }
+
   // Links pasted into the task dialog are stored as weblinks, including
   // links to our own experiments/resources. Group those without rewriting
   // the stored link or treating another server's records as local entities.
@@ -792,8 +818,20 @@
       if (detailTask) void loadEntityLinks(detailTask.id);
     };
     window.addEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
+    // Same mechanism, for the Search side panel's "Add as step" button
+    // (see FavoriteFilters.class.ts's insertPmTaskStep()) -- refreshes
+    // this task's step list so the newly added one shows up without
+    // needing to close and reopen the detail dialog.
+    const onStepAdded = (): void => {
+      if (detailTask) {
+        void loadSteps(detailTask.id);
+        void refreshTaskInBoard(detailTask.id);
+      }
+    };
+    window.addEventListener('elabftw:pm-step-added', onStepAdded);
     return () => {
       window.removeEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
+      window.removeEventListener('elabftw:pm-step-added', onStepAdded);
       window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: null }));
     };
   });
@@ -2671,9 +2709,16 @@
                 <details class="pm-task-steps mt-2" open>
                   <summary class="d-flex justify-content-between pm-muted"><strong>{t('Steps')}</strong><span>{task.steps.filter(step => step.finished).length} / {task.steps.length}</span></summary>
                   {#each visibleSteps as step (step.id)}
+                    {@const stepLink = parseStepLink(step.body)}
                     <label class="d-flex align-items-start mb-1">
                       <input type="checkbox" class="mr-2 mt-1" checked={step.finished} disabled={!canManage(task) || savingBoardSteps.has(step.id)} on:change={(event) => { event.currentTarget.checked = step.finished; void toggleBoardStep(task, step); }} />
-                      <span style:text-decoration={step.finished ? 'line-through' : 'none'}>{step.body}</span>
+                      <span style:text-decoration={step.finished ? 'line-through' : 'none'}>
+                        {#if stepLink}
+                          <span class="badge badge-info mr-1">{entityTypeLabel(stepLink.entityType)}</span><a href={stepLink.url} on:click={(event) => event.stopPropagation()}>{stepLink.label}</a>
+                        {:else}
+                          {step.body}
+                        {/if}
+                      </span>
                     </label>
                   {/each}
                   {#if hiddenStepsCount > 0 || stepsExpanded && task.steps.length > CARD_STEPS_LIMIT}
@@ -3050,13 +3095,20 @@
                     <button type="button" class="btn btn-primary btn-sm mr-1" disabled={!editStepDraft.trim()} on:click={() => saveEditStep(step)}>{t('Save')}</button>
                     <button type="button" class="btn btn-ghost btn-sm" on:click={cancelEditStep}>{t('Cancel')}</button>
                   {:else}
+                    {@const stepLink = parseStepLink(step.body)}
                     <input
                       type="checkbox"
                       checked={step.finished}
                       on:change={() => toggleStep(step)}
                       aria-label={step.body}
                     />
-                    <span class="pm-step-body">{step.body}</span>
+                    <span class="pm-step-body">
+                      {#if stepLink}
+                        <span class="badge badge-info mr-1">{entityTypeLabel(stepLink.entityType)}</span><a href={stepLink.url} target="_blank" rel="noreferrer noopener">{stepLink.label}</a>
+                      {:else}
+                        {step.body}
+                      {/if}
+                    </span>
                     <div class="pm-item-actions">
                       <button type="button" class="btn-unstyled pm-comment-delete" title={t('Move up')} aria-label={t('Move up')} disabled={detailSteps.indexOf(step) === 0} on:click={() => moveStep(step, -1)}>
                         <i class="fas fa-arrow-up fa-fw" aria-hidden="true"></i>

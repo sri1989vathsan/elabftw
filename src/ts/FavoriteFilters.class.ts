@@ -478,6 +478,26 @@ export default class FavoriteFilters extends SidePanel {
 
     const pmEntityType = activePmTask !== null ? PM_TASK_ENTITY_TYPE[target] : undefined;
     if (pmEntityType) {
+      // Icon-only (title/aria-label still carry the full description) --
+      // with Add to text/Link already on the same row, the text labels
+      // here made a result's whole action row wrap onto several lines,
+      // reported directly as "the sidebar is getting crowded". Add as
+      // step first: it's the finer-grained, more frequently reached-for
+      // action once a task's detail is open to begin with.
+      const pmStep = document.createElement('button');
+      pmStep.type = 'button';
+      pmStep.className = 'btn btn-sm btn-outline-primary favorite-filter-result-insert ml-1';
+      pmStep.title = `Add as a step on task: ${activePmTask!.title}`;
+      pmStep.setAttribute('aria-label', pmStep.title);
+      const pmStepIcon = document.createElement('i');
+      pmStepIcon.className = 'fas fa-list-ol fa-fw';
+      pmStepIcon.setAttribute('aria-hidden', 'true');
+      pmStep.append(pmStepIcon);
+      pmStep.addEventListener('click', () => {
+        void this.insertPmTaskStep(result, pmEntityType, pmStep);
+      });
+      heading.append(pmStep);
+
       const pmLink = document.createElement('button');
       pmLink.type = 'button';
       pmLink.className = 'btn btn-sm btn-outline-primary favorite-filter-result-insert ml-1';
@@ -486,10 +506,7 @@ export default class FavoriteFilters extends SidePanel {
       const pmIcon = document.createElement('i');
       pmIcon.className = 'fas fa-list-check fa-fw';
       pmIcon.setAttribute('aria-hidden', 'true');
-      const pmLabel = document.createElement('span');
-      pmLabel.className = 'ml-1';
-      pmLabel.textContent = 'Link to task';
-      pmLink.append(pmIcon, pmLabel);
+      pmLink.append(pmIcon);
       pmLink.addEventListener('click', () => {
         void this.insertPmTaskLink(result, pmEntityType, pmLink);
       });
@@ -606,11 +623,59 @@ export default class FavoriteFilters extends SidePanel {
       button.title = `Linked to task: ${activePmTask.title}`;
       button.setAttribute('aria-label', button.title);
       button.querySelector('i')?.classList.replace('fa-list-check', 'fa-check');
-      const buttonLabel = button.querySelector<HTMLSpanElement>('span');
-      if (buttonLabel) buttonLabel.textContent = 'Linked';
       window.dispatchEvent(new CustomEvent('elabftw:pm-entity-link-added'));
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not link that item.');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  // Same idea as insertPmTaskLink() just above, but adds the result as a
+  // step on the task AND links it as an entity (both at once, requested
+  // directly: "if i add it as a step - also add the experiment to the
+  // linked items") -- a step's own body renders as plain text (see
+  // ProjectManagementBoard.svelte), not {@html}.
+  //
+  // The body is stored as "[label](elabftw-entity:type:id)" -- a made-up
+  // pseudo-scheme carrying the entity's real type/id directly, NOT
+  // getMainTextLink()'s own "[label](url)" built from getResultUrl().
+  // That real URL depends on resolving a relative page path against the
+  // current origin, which doesn't necessarily land on the same absolute
+  // path entityViewUrl() (ProjectManagementBoard.svelte) independently
+  // resolves it to if the app is served under any path prefix -- a
+  // mismatch there broke both the link itself ("An internal error
+  // occurred") and the type-from-URL guess the badge used (always
+  // falling back to the generic "Link" label). Storing type/id directly
+  // and letting ProjectManagementBoard.svelte's own entityViewUrl() build
+  // the href the exact same way it does for a real entity_link sidesteps
+  // that mismatch entirely instead of trying to keep two URL-building
+  // functions in two different files in sync.
+  private async insertPmTaskStep(
+    result: FavoriteFilterResult,
+    entityType: string,
+    button: HTMLButtonElement,
+  ): Promise<void> {
+    if (!activePmTask) return;
+    const label = result.category_title ? `${result.category_title} – ${result.title}` : result.title;
+    const escapedLabel = label.replace(/([\\[\]])/g, '\\$1');
+    const body = `[${escapedLabel}](elabftw-entity:${entityType}:${result.id})`;
+    button.disabled = true;
+    try {
+      await Promise.all([
+        ApiC.post(`${Model.Todolist}/${activePmTask.id}/steps`, { body }),
+        ApiC.post(`${Model.Todolist}/${activePmTask.id}/entity_links`, {
+          entity_type: entityType,
+          entity_id: result.id,
+        }),
+      ]);
+      button.title = `Added as a step and linked on task: ${activePmTask.title}`;
+      button.setAttribute('aria-label', button.title);
+      button.querySelector('i')?.classList.replace('fa-list-ol', 'fa-check');
+      window.dispatchEvent(new CustomEvent('elabftw:pm-step-added'));
+      window.dispatchEvent(new CustomEvent('elabftw:pm-entity-link-added'));
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not add that item as a step.');
     } finally {
       button.disabled = false;
     }
