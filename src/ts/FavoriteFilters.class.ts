@@ -660,20 +660,23 @@ export default class FavoriteFilters extends SidePanel {
     const label = result.category_title ? `${result.category_title} – ${result.title}` : result.title;
     const escapedLabel = label.replace(/([\\[\]])/g, '\\$1');
     const body = `[${escapedLabel}](elabftw-entity:${entityType}:${result.id})`;
+    const task = activePmTask;
     button.disabled = true;
     try {
-      await Promise.all([
-        ApiC.post(`${Model.Todolist}/${activePmTask.id}/steps`, { body }),
-        ApiC.post(`${Model.Todolist}/${activePmTask.id}/entity_links`, {
-          entity_type: entityType,
-          entity_id: result.id,
-        }),
-      ]);
-      button.title = `Added as a step and linked on task: ${activePmTask.title}`;
+      // Link first: repeating this request is safe, whereas creating a step
+      // before a failed link used to leave a hidden, partially saved result.
+      await ApiC.post(`${Model.Todolist}/${task.id}/entity_links`, {
+        entity_type: entityType,
+        entity_id: result.id,
+        notifOnSaved: 0,
+      });
+      window.dispatchEvent(new CustomEvent('elabftw:pm-entity-link-added'));
+      await ApiC.post(`${Model.Todolist}/${task.id}/steps`, { body, notifOnSaved: 0 });
+      button.title = `Added as a step and linked on task: ${task.title}`;
       button.setAttribute('aria-label', button.title);
       button.querySelector('i')?.classList.replace('fa-list-ol', 'fa-check');
       window.dispatchEvent(new CustomEvent('elabftw:pm-step-added'));
-      window.dispatchEvent(new CustomEvent('elabftw:pm-entity-link-added'));
+      notify.success();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not add that item as a step.');
     } finally {

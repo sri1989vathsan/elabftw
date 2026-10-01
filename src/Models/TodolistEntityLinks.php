@@ -141,19 +141,9 @@ final class TodolistEntityLinks extends AbstractRest
             throw new ImproperActionException('Item not found in this team.');
         }
 
-        // id = id below was a true no-op UPDATE -- MySQL reports 0 affected
-        // rows for a duplicate-key hit whose UPDATE clause doesn't actually
-        // change anything, identical to what a genuinely failed INSERT...
-        // SELECT (task not found/wrong team, the WHERE above matching no
-        // row) also reports. The rowCount() check right below couldn't
-        // tell those two cases apart, so linking an entity that was
-        // already linked to this task hit the same exception as linking
-        // to a nonexistent task -- "Nothing to show with this id" on an
-        // ordinary, harmless re-link. id = LAST_INSERT_ID(id) is the
-        // standard idempotent-upsert trick: MySQL counts this specific
-        // pattern as a real update (rowCount() 2, not 0) even though the
-        // id's value is unchanged, and LAST_INSERT_ID() returns the
-        // existing row's id afterward exactly like a fresh INSERT would.
+        // Reuse an existing association. Affected-row counts are not a
+        // reliable existence check for an unchanged duplicate-key update;
+        // the scoped lookup below verifies the resulting association.
         $sql = 'INSERT INTO todolist_entity_links (task_id, entity_type, entity_id)
             SELECT task.id, :entity_type, :entity_id
             FROM todolist AS task
@@ -165,12 +155,25 @@ final class TodolistEntityLinks extends AbstractRest
         $req->bindValue(':entity_type', $entityType);
         $req->bindValue(':entity_id', $entityId, PDO::PARAM_INT);
         $this->Db->execute($req);
-        if ($req->rowCount() === 0) {
+        // An unchanged duplicate can report zero affected rows. Read the
+        // resulting link instead of mistaking that successful no-op for a
+        // missing task. Keep the lookup scoped to the current team.
+        $lookup = $this->Db->prepare('SELECT link.id FROM todolist_entity_links AS link
+            INNER JOIN todolist AS task ON task.id = link.task_id
+            WHERE link.task_id = :task_id AND task.team = :team
+                AND link.entity_type = :entity_type AND link.entity_id = :entity_id');
+        $lookup->bindValue(':task_id', $this->Task->id, PDO::PARAM_INT);
+        $lookup->bindValue(':team', $this->Users->team, PDO::PARAM_INT);
+        $lookup->bindValue(':entity_type', $entityType);
+        $lookup->bindValue(':entity_id', $entityId, PDO::PARAM_INT);
+        $this->Db->execute($lookup);
+        $linkId = (int) $lookup->fetchColumn();
+        if ($linkId <= 0) {
             throw new ResourceNotFoundException();
         }
         $this->Task->touchUpdated();
 
-        return (int) $this->Db->lastInsertId();
+        return $linkId;
     }
 
     private function addWeblink(array $reqBody): int
