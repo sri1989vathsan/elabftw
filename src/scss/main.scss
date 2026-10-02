@@ -3355,6 +3355,64 @@ body.html-tool-workspace-resizing * {
 }
 /* stylelint-enable selector-class-pattern */
 
+/* jspreadsheet-ce already tags the current selection (.highlight/
+ * .highlight-top/-bottom/-left/-right) and, while dragging the fill handle,
+ * the cells the drag would copy into (.selection/.selection-top/-bottom/
+ * -left/-right) -- but its own stylesheet (jspreadsheet.css) only gives
+ * these a 1px dotted black border and a near-invisible 5% gray tint, easy to
+ * lose against this app's own cell borders/backgrounds. Both the popup
+ * (.inline-spreadsheet-container) and the inline overlay
+ * (.elabftw-spreadsheet-readonly-grid) share the same vendor classes, so one
+ * rule set covers both surfaces. Solid for the actual selection, dashed for
+ * the in-progress fill-drag target -- same visual language Excel/Sheets use
+ * to distinguish "this is selected" from "this is about to be overwritten". */
+/* stylelint-disable selector-class-pattern */
+.inline-spreadsheet-container .jss_worksheet td.highlight-top,
+.elabftw-spreadsheet-readonly-grid .jss_worksheet td.highlight-top {
+  border-top: 2px solid var(--primary) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet td.highlight-bottom,
+.elabftw-spreadsheet-readonly-grid .jss_worksheet td.highlight-bottom {
+  border-bottom: 2px solid var(--primary) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet td.highlight-left,
+.elabftw-spreadsheet-readonly-grid .jss_worksheet td.highlight-left {
+  border-left: 2px solid var(--primary) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet td.highlight-right,
+.elabftw-spreadsheet-readonly-grid .jss_worksheet td.highlight-right {
+  border-right: 2px solid var(--primary) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet td.selection,
+.elabftw-spreadsheet-readonly-grid .jss_worksheet td.selection {
+  background-color: color-mix(in srgb, var(--primary) 15%, transparent) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet td.selection-top,
+.elabftw-spreadsheet-readonly-grid .jss_worksheet td.selection-top {
+  border-top: 2px dashed var(--primary) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet td.selection-bottom,
+.elabftw-spreadsheet-readonly-grid .jss_worksheet td.selection-bottom {
+  border-bottom: 2px dashed var(--primary) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet td.selection-left,
+.elabftw-spreadsheet-readonly-grid .jss_worksheet td.selection-left {
+  border-left: 2px dashed var(--primary) !important;
+}
+
+.inline-spreadsheet-container .jss_worksheet td.selection-right,
+.elabftw-spreadsheet-readonly-grid .jss_worksheet td.selection-right {
+  border-right: 2px dashed var(--primary) !important;
+}
+/* stylelint-enable selector-class-pattern */
+
 /* Read-only jspreadsheet-ce grid mounted in place of a saved spreadsheet's
  * static HTML on a view page (see mountReadOnlySpreadsheetGrid() in
  * inline-spreadsheet.ts). Unlike .inline-spreadsheet-container above (the
