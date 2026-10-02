@@ -5829,9 +5829,18 @@ export function openSpreadsheetModal(
     // the pointer actually went down on.
     document.addEventListener('pointerdown', event => {
       const target = event.target;
+      // The cell-format toolbar (bold/italic/font/background/alignment --
+      // see cellFormatBar) lives in this same dialog but outside
+      // sheetContainer, same as the caption input/appearance panel/backdrop
+      // this guard was written for. Clearing selectedRange before its own
+      // click handler can read it (updateSelectedCells -> getSelectedRange)
+      // left every one of those controls permanently no-op'ing with "Select
+      // one or more cells first.", even right after clicking a cell: this
+      // capture-phase pointerdown always runs before that click.
       const withinEditingSurface = target instanceof Node
         && ((sheetContainer !== null && sheetContainer.contains(target))
-          || (rescueInputEl !== null && rescueInputEl.contains(target)));
+          || (rescueInputEl !== null && rescueInputEl.contains(target))
+          || (target instanceof Element && target.closest('.inline-spreadsheet-cell-format') !== null));
       if (!withinEditingSurface) selectedRange = null;
     }, true);
     document.addEventListener('keydown', onKey, true);
