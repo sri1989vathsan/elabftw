@@ -2248,7 +2248,9 @@ function applyCellClipHeights(container: HTMLElement, manualRowHeights: Readonly
         + Number.parseFloat(computed.borderBottomWidth);
       // Include the index cell too: otherwise its unbounded text keeps
       // the entire row taller.
-      const clipHeight = Math.max(0, Math.floor(effectiveHeight - verticalChrome));
+      // Preserve fractional pixels: rounding down can clip the last pixel
+      // of a line even when auto-fit measured enough room for it.
+      const clipHeight = Math.max(0, effectiveHeight - verticalChrome);
       let wrapper = cell.querySelector<HTMLElement>(`:scope > .${CELL_CLIP_CLASS}`);
       if (!wrapper) {
         wrapper = document.createElement('div');
@@ -2335,7 +2337,11 @@ function measureNaturalCellHeight(cell: HTMLElement): number {
   document.body.append(probe);
   const height = probe.getBoundingClientRect().height;
   probe.remove();
-  return Math.ceil(height);
+  // Leave a small allowance for glyph ink and subpixel rounding between
+  // the offscreen block and the table's clipped cell content (notably at
+  // browser zoom levels). This is constant, not based on the current row
+  // height, so repeated auto-fit cannot keep growing the row.
+  return Math.ceil(height) + 2;
 }
 
 /** Reapply saved data-row heights after jspreadsheet rebuilds its worksheet DOM. */
