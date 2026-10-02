@@ -58,6 +58,7 @@
   let items: FeedbackItem[] = [];
   let loading = true;
   let typeFilter: 'all' | FeedbackType = 'all';
+  let sortBy: 'votes' | 'date' = 'votes';
   // finished items stay in the list (nothing is lost) but are hidden from
   // the default view, matching how the type filter narrows what's shown
   let showFinished = false;
@@ -93,7 +94,10 @@
 
   $: visibleItems = items
     .filter(item => showFinished ? item.status === 'done' : item.status !== 'done')
-    .filter(item => typeFilter === 'all' || item.type === typeFilter);
+    .filter(item => typeFilter === 'all' || item.type === typeFilter)
+    .sort((a, b) => sortBy === 'votes'
+      ? b.vote_count - a.vote_count || Date.parse(b.created_at) - Date.parse(a.created_at)
+      : Date.parse(b.created_at) - Date.parse(a.created_at));
   $: finishedCount = items.filter(item => item.status === 'done').length;
 
   async function load(): Promise<void> {
@@ -398,6 +402,14 @@
       <i class='fas fa-check fa-fw mr-1' aria-hidden='true'></i>{t('Finished')}
       {#if finishedCount > 0}<span class='badge badge-light ml-1'>{finishedCount}</span>{/if}
     </button>
+    <div class='btn-group btn-group-sm ml-auto' role='group' aria-label={t('Sort by')}>
+      <button type='button' class={sortBy === 'votes' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => sortBy = 'votes'}>
+        <i class='fas fa-arrow-up fa-fw mr-1' aria-hidden='true'></i>{t('Most votes')}
+      </button>
+      <button type='button' class={sortBy === 'date' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => sortBy = 'date'}>
+        <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{t('Newest')}
+      </button>
+    </div>
   </div>
 
   {#if loading}
