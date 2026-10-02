@@ -7241,11 +7241,28 @@ export function buildReadOnlySpreadsheetHost(
     });
     // Enter commits and hands focus back to jspreadsheet's own grid --
     // mirroring how a normal cell edit closes -- rather than inserting a
-    // newline (a plain <textarea>'s own default for Enter).
+    // newline (a plain <textarea>'s own default for Enter). Enter/Tab also
+    // advance the grid's own selection to the next row/column, matching
+    // the popup editor's identical rescue-input fix (see openCellEditor's
+    // own comment there) and standard spreadsheet convention -- this
+    // editor never moved the selection at all before, leaving it on
+    // whatever cell was just committed.
+    const commitRescueInputAndMove = (deltaCol: number, deltaRow: number): void => {
+      if (rescueInputCol === null || rescueInputRow === null) return;
+      const maxCol = (rawDataMirror[0]?.length ?? cols) - 1;
+      const maxRow = rawDataMirror.length - 1;
+      const nextCol = Math.min(Math.max(rescueInputCol + deltaCol, 0), maxCol);
+      const nextRow = Math.min(Math.max(rescueInputRow + deltaRow, 0), maxRow);
+      commitRescueInput();
+      getMountedWorksheet(sheetContainer)?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
+    };
     releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
-      if (event.key === 'Enter' && !event.shiftKey) {
+      if (event.key === 'Enter') {
         event.preventDefault();
-        commitRescueInput();
+        commitRescueInputAndMove(0, event.shiftKey ? -1 : 1);
+      } else if (event.key === 'Tab') {
+        event.preventDefault();
+        commitRescueInputAndMove(event.shiftKey ? -1 : 1, 0);
       } else if (event.key === 'Escape') {
         // Cancel, not commit -- standard spreadsheet convention, and now
         // that this is the primary editor (not just an emergency
