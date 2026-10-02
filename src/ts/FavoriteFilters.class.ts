@@ -614,6 +614,12 @@ export default class FavoriteFilters extends SidePanel {
     button: HTMLButtonElement,
   ): Promise<void> {
     if (!activePmTask) return;
+    if (activePmTask.id === 0) {
+      window.dispatchEvent(new CustomEvent('elabftw:pm-draft-item', {
+        detail: { entityType, entityId: result.id, title: result.title },
+      }));
+      return;
+    }
     button.disabled = true;
     try {
       await ApiC.post(`${Model.Todolist}/${activePmTask.id}/entity_links`, {
@@ -660,6 +666,12 @@ export default class FavoriteFilters extends SidePanel {
     const label = result.category_title ? `${result.category_title} – ${result.title}` : result.title;
     const escapedLabel = label.replace(/([\\[\]])/g, '\\$1');
     const body = `[${escapedLabel}](elabftw-entity:${entityType}:${result.id})`;
+    if (activePmTask.id === 0) {
+      window.dispatchEvent(new CustomEvent('elabftw:pm-draft-item', {
+        detail: { entityType, entityId: result.id, title: result.title, body },
+      }));
+      return;
+    }
     const task = activePmTask;
     button.disabled = true;
     try {

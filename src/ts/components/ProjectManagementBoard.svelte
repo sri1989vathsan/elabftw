@@ -192,7 +192,9 @@
   let creatingNewTask = false;
   let newTaskColumnId: number | null = null;
   let draftSteps: string[] = [];
+  let draftCreatedTaskId: number | null = null;
   let draftLinks: { url: string; label: string }[] = [];
+  let draftEntityLinks: { entity_type: EntityLinkType; entity_id: number; title: string }[] = [];
   let linksSummaryOpen = false;
   let linksSummaryItems: LinkSummaryItem[] = [];
   let loadingLinksSummary = false;
@@ -829,7 +831,20 @@
       }
     };
     window.addEventListener('elabftw:pm-step-added', onStepAdded);
+    const onDraftItem = (event: Event): void => {
+      if (!creatingNewTask || savingDetail) return;
+      const { entityType, entityId, title, body } = (event as CustomEvent<{
+        entityType: EntityLinkType; entityId: number; title: string; body?: string;
+      }>).detail;
+      if (!ENTITY_TYPE_PAGES[entityType] || !Number.isInteger(entityId) || entityId <= 0) return;
+      if (!draftEntityLinks.some(link => link.entity_type === entityType && link.entity_id === entityId)) {
+        draftEntityLinks = [...draftEntityLinks, { entity_type: entityType, entity_id: entityId, title }];
+      }
+      if (body) draftSteps = [...draftSteps, body];
+    };
+    window.addEventListener('elabftw:pm-draft-item', onDraftItem);
     return () => {
+      window.removeEventListener('elabftw:pm-draft-item', onDraftItem);
       window.removeEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
       window.removeEventListener('elabftw:pm-step-added', onStepAdded);
       window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: null }));
@@ -886,6 +901,8 @@
   }
 
   function openNewTaskInColumn(columnId: number): void {
+    draftCreatedTaskId = null;
+    draftEntityLinks = [];
     creatingNewTask = true;
     newTaskColumnId = columnId;
     draftSteps = [];
@@ -927,6 +944,7 @@
     detailProjectId = detailTask.project_id;
     detailDescription = '';
     detailNotes = '';
+    window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: { id: 0, title: t('New task') } }));
   }
 
   async function loadColumns(): Promise<void> {
@@ -1371,7 +1389,7 @@
           ApiC.getJson(`${Model.Todolist}/${task.id}/steps`) as Promise<Step[]>,
           ApiC.getJson(`${Model.Todolist}/${task.id}/entity_links`) as Promise<EntityLink[]>,
         ]);
-        const newId = await ApiC.post2location(Model.Todolist, {
+        const newId = draftCreatedTaskId ?? await ApiC.post2location(Model.Todolist, {
           content: fullTask.body,
           notes: fullTask.notes,
           description: fullTask.description,
@@ -1663,19 +1681,29 @@
           project_id: detailProjectId,
           column_id: newTaskColumnId,
         });
+        draftCreatedTaskId = newId;
         // notifOnSaved: 0 on these -- the post2location above already
         // fired the one "Saved" toast for creating the task; each step/
         // link is a followup request for that same single save action,
         // not a save of its own.
-        for (const body of draftSteps) {
+        while (draftSteps.length) {
+          const body = draftSteps[0];
           await ApiC.post(`${Model.Todolist}/${newId}/steps`, { body, notifOnSaved: 0 });
+          draftSteps = draftSteps.slice(1);
         }
-        for (const link of draftLinks) {
+        while (draftLinks.length) {
+          const link = draftLinks[0];
           await ApiC.post(`${Model.Todolist}/${newId}/entity_links`, {
             entity_type: 'weblink',
             url: link.url,
             label: link.label,
             notifOnSaved: 0,
+          });
+          draftLinks = draftLinks.slice(1);
+        }
+        for (const link of draftEntityLinks) {
+          await ApiC.post(`${Model.Todolist}/${newId}/entity_links`, {
+            entity_type: link.entity_type, entity_id: link.entity_id, notifOnSaved: 0,
           });
         }
         closeDetail();
@@ -2957,7 +2985,6 @@
         <div class="pm-dialog-field">
           <div class="d-flex align-items-center justify-content-between">
             <span class="pm-label mb-0">{t('Linked items')}</span>
-            {#if !creatingNewTask}
               <button
                 type="button"
                 class="btn btn-ghost btn-sm"
@@ -2970,10 +2997,16 @@
               >
                 <i class="fas fa-magnifying-glass fa-fw mr-1" aria-hidden="true"></i>{t('Open Search to link')}
               </button>
-            {/if}
           </div>
           {#if creatingNewTask}
-            {#if draftLinks.length === 0}
+            {#each draftEntityLinks as link, index (`${link.entity_type}:${link.entity_id}`)}
+              <div class="d-flex align-items-center mb-1">
+                <span class="badge badge-info mr-1">{entityTypeLabel(link.entity_type)}</span>
+                <a class="mr-auto" href={entityViewUrl({ ...link, url: null })} target="_blank" rel="noopener noreferrer">{link.title}</a>
+                <button type="button" class="btn-unstyled" aria-label={t('Remove')} on:click={() => draftEntityLinks = draftEntityLinks.filter((_, i) => i !== index)}><i class="fas fa-trash fa-fw" aria-hidden="true"></i></button>
+              </div>
+            {/each}
+            {#if draftLinks.length === 0 && draftEntityLinks.length === 0}
               <p class="pm-muted small">{t('No linked items yet.')}</p>
             {:else}
               <ul class="pm-entity-link-list">
@@ -3067,8 +3100,13 @@
             {:else}
               <ul class="pm-step-list">
                 {#each draftSteps as step, index (index)}
+                  {@const stepLink = parseStepLink(step)}
                   <li class="pm-step">
-                    <span class="pm-step-body">{step}</span>
+                    <span class="pm-step-body">
+                      {#if stepLink}
+                        <span class="badge badge-info mr-1">{entityTypeLabel(stepLink.entityType)}</span><a href={stepLink.url} target="_blank" rel="noopener noreferrer">{stepLink.label}</a>
+                      {:else}{step}{/if}
+                    </span>
                     <button type="button" class="btn-unstyled pm-comment-delete" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeDraftStep(index)}>
                       <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
                     </button>
