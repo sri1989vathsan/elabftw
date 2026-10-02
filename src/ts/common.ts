@@ -307,21 +307,47 @@ if (navbar) {
     moreItem.style.display = 'none';
   };
 
+  const makeDivider = (): HTMLElement => {
+    const divider = document.createElement('div');
+    divider.className = 'dropdown-divider';
+    return divider;
+  };
+
   // A hidden item that's a plain link (Project management/Orders/Team/
   // Feedback) becomes an identical link in the "More" menu. One that's a
-  // dropdown itself (Experiments/Resources/Tools/Scheduler) has no single
-  // href of its own (its toggle is href='#') -- data-overflow-href on that
-  // toggle (set in head.html) gives it a sensible landing page instead, so
-  // the placeholder can still be a plain, safe link rather than nesting a
-  // second live dropdown inside this one.
-  const placeholderFor = (item: HTMLElement): HTMLAnchorElement => {
-    const toggle = item.matches('a') ? (item as HTMLAnchorElement) : item.querySelector<HTMLAnchorElement>('.dropdown-toggle');
-    const href = item.matches('a') ? item.getAttribute('href') : toggle?.dataset.overflowHref;
-    const placeholder = document.createElement('a');
-    placeholder.className = 'dropdown-item';
-    placeholder.href = href ?? '#';
-    placeholder.innerHTML = (toggle ?? item).innerHTML;
-    return placeholder;
+  // dropdown itself (Experiments/Resources/Tools/Links/Scheduler) used to
+  // collapse to a single placeholder link (data-overflow-href on its
+  // toggle, set in head.html) rather than nesting a second live dropdown
+  // inside this one -- but that silently threw away every item inside it
+  // except whichever one the placeholder happened to link to, reported
+  // directly as not being able to see or reach a collapsed dropdown's own
+  // items at all (worst for one like Links, which has no single landing
+  // page of its own to begin with). Flattened into the More menu instead:
+  // a disabled header naming the dropdown, followed by a real, clickable
+  // copy of each of its own items.
+  const placeholderFor = (item: HTMLElement): HTMLElement[] => {
+    if (item.matches('a')) {
+      const placeholder = document.createElement('a');
+      placeholder.className = 'dropdown-item';
+      placeholder.href = item.getAttribute('href') ?? '#';
+      placeholder.innerHTML = item.innerHTML;
+      return [placeholder];
+    }
+    const toggle = item.querySelector<HTMLAnchorElement>('.dropdown-toggle');
+    const menu = item.querySelector<HTMLElement>('.dropdown-menu');
+    const header = document.createElement('h6');
+    header.className = 'dropdown-header';
+    header.innerHTML = (toggle ?? item).innerHTML;
+    // A divider on each side -- a flattened dropdown's own header isn't
+    // visually distinct enough on its own from an ordinary plain-link
+    // item sitting right above/below it, reported as not being able to
+    // tell a dropdown's grouped items apart from the rest of the menu.
+    const elements: HTMLElement[] = [makeDivider(), header];
+    menu?.querySelectorAll<HTMLElement>(':scope > .dropdown-item, :scope > .dropdown-divider').forEach(child => {
+      elements.push(child.cloneNode(true) as HTMLElement);
+    });
+    elements.push(makeDivider());
+    return elements;
   };
 
   const apply = (): void => {
@@ -360,7 +386,7 @@ if (navbar) {
         item.style.display = '';
       } else {
         item.style.display = 'none';
-        overflowMenu.appendChild(placeholderFor(item));
+        placeholderFor(item).forEach(el => overflowMenu.appendChild(el));
       }
     }
     moreItem.style.display = shown < items.length ? '' : 'none';
