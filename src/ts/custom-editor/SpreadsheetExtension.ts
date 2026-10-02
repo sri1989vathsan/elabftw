@@ -905,7 +905,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // handler above -- it needs its own listener for that (see enhanceTable()).
   const spreadsheetOverlays = new Map<HTMLTableElement, {
     el: HTMLElement;
-    destroy: () => void;
+    destroy: (discardChanges?: boolean) => void;
     flush: () => void;
     syncActiveEditor: () => void;
   }>();
@@ -1058,7 +1058,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // live (and re-measured every animation frame, see syncOverlayPositions)
   // for the rest of the editing session regardless of whether any of them
   // are still on screen.
-  const removeOverlay = (table: HTMLTableElement): void => {
+  const removeOverlay = (table: HTMLTableElement, discardChanges = false): void => {
     const entry = spreadsheetOverlays.get(table);
     if (!entry) return;
     // A resize or edit settles through a 500ms debounce (see
@@ -1075,8 +1075,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // undone right after being pasted), where flushing would write the
     // overlay's still-stale in-memory content back into a table nothing
     // should be resurrecting.
-    if (table.isConnected && editor.getBody().contains(table)) entry.flush();
-    entry.destroy();
+    const discard = discardChanges || !table.isConnected || !editor.getBody().contains(table);
+    entry.destroy(discard);
     entry.el.remove();
     spreadsheetOverlays.delete(table);
     enhancedTables.delete(table);
@@ -1210,6 +1210,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           const overlayHeight = naturalContentHeight + scrollbarHeight
             + (toggleBarEl?.offsetHeight ?? 0) + (formulaBarEl?.offsetHeight ?? 0) + (formatBarEl?.offsetHeight ?? 0);
           overlay.style.height = `${overlayHeight}px`;
+          // The overlay lives outside the iframe, so native iframe clipping
+          // does not apply. Keep its pixels and hit targets within the editor.
+          const overlayTop = iframeRect.top + tableRect.top;
+          const overlayLeft = iframeRect.left + tableRect.left;
+          const overlayWidth = overlay.getBoundingClientRect().width;
+          const clipTop = Math.max(0, iframeRect.top - overlayTop);
+          const clipBottom = Math.max(0, overlayTop + overlayHeight - iframeRect.bottom);
+          const clipLeft = Math.max(0, iframeRect.left - overlayLeft);
+          const clipRight = Math.max(0, overlayLeft + overlayWidth - iframeRect.right);
+          overlay.style.clipPath = `inset(${clipTop}px ${clipRight}px ${clipBottom}px ${clipLeft}px)`;
           // The real table -- hidden, but still in normal document flow --
           // only ever reserves space for its own rows; it has no idea the
           // overlay standing in for it is taller by the toggle/formula/
@@ -1389,13 +1399,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // extracted at mount time, silently stale until the table next scrolls
   // out and back into view (or the page reloads).
   const refreshTableOverlay = (table: HTMLTableElement): void => {
-    removeOverlay(table);
+    // The backing table already contains the replacement. Never flush the
+    // outgoing grid's pending edit over it (including destroy's flush).
+    removeOverlay(table, true);
     enhanceTable(table);
   };
 
   const enhanceTable = (table: HTMLTableElement): void => {
     if (enhancedTables.has(table)) return;
-    enhancedTables.add(table);
     ensureSpreadsheetUid(table);
     const extracted = extractFromTable(table);
     // Reconciles this table's rows against its own saved rowHeights right
@@ -1515,6 +1526,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     spreadsheetOverlays.set(table, {
       el: overlay, destroy, flush, syncActiveEditor,
     });
+    enhancedTables.add(table);
     ensureSyncLoop();
   };
 
@@ -1543,7 +1555,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const margin = 400;
     const viewportTop = -margin;
     const viewportBottom = window.innerHeight + margin;
-    const inRange = (rect: DOMRect): boolean => rect.bottom >= viewportTop && rect.top <= viewportBottom;
+    const iframeTop = getEditorIframe()?.getBoundingClientRect().top ?? 0;
+    const inRange = (rect: DOMRect): boolean => rect.bottom + iframeTop >= viewportTop && rect.top + iframeTop <= viewportBottom;
     if (inRange(table.getBoundingClientRect())) return true;
     const spacer = spreadsheetSpacers.get(table);
     return !!spacer?.isConnected && inRange(spacer.getBoundingClientRect());
@@ -1567,6 +1580,28 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         tableVisibility.observe(table);
       });
   };
+
+  // A spacer can remain visible after its tiny backing table leaves the
+  // observer's range. Recheck on scrolling so returning to that reserved
+  // area mounts the grid even without a new table-intersection event.
+  let visibilityFrame = 0;
+  const recheckSpreadsheetVisibility = (): void => {
+    if (visibilityFrame) return;
+    visibilityFrame = window.requestAnimationFrame(() => {
+      visibilityFrame = 0;
+      editor.getBody()?.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet').forEach(table => {
+        if (isNearViewport(table)) enhanceTable(table);
+        else removeOverlay(table);
+      });
+    });
+  };
+  window.addEventListener('scroll', recheckSpreadsheetVisibility, true);
+  window.addEventListener('resize', recheckSpreadsheetVisibility);
+  editor.on('remove', () => {
+    window.cancelAnimationFrame(visibilityFrame);
+    window.removeEventListener('scroll', recheckSpreadsheetVisibility, true);
+    window.removeEventListener('resize', recheckSpreadsheetVisibility);
+  });
 
   // Same trailing-paragraph safeguard newInlineSpreadsheet() applies right
   // after inserting a table (see its own comment above), but for content
@@ -1670,7 +1705,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // copy would otherwise keep rescheduling a no-op frame forever.
     overlaySyncRunning = false;
     tableVisibility.disconnect();
-    Array.from(spreadsheetOverlays.keys()).forEach(removeOverlay);
+    Array.from(spreadsheetOverlays.keys()).forEach(table => removeOverlay(table));
     window.removeEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
     window.removeEventListener('elabftw-flush-spreadsheets', flushAllOverlays);
     document.removeEventListener('pointerdown', onSpreadsheetPointerDown, true);

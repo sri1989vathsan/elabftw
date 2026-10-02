@@ -6065,7 +6065,7 @@ export interface SpreadsheetHostOptions {
 export interface SpreadsheetHostHandle {
   host: HTMLDivElement;
   /** Properly tears down the jspreadsheet-ce instance; call before discarding the host. */
-  destroy: () => void;
+  destroy: (discardChanges?: boolean) => void;
   /** Keep an active cell editor attached to its cell, or commit it once the cell is genuinely out of view. */
   syncActiveEditor: () => void;
   /**
@@ -7699,7 +7699,9 @@ export function buildReadOnlySpreadsheetHost(
     rawDataMirror[row][col] = value;
   };
 
+  let disposed = false;
   const notifyFromMirror = (repaintFormulas = true): void => {
+    if (disposed) return;
     const data = rawDataMirror;
     // jspreadsheet repaints the cell itself asynchronously after onchange
     // (e.g. when its own edit box closes) -- a single immediate repaint
@@ -8205,7 +8207,8 @@ export function buildReadOnlySpreadsheetHost(
     // Properly tears down the jspreadsheet-ce instance (not just removing
     // the DOM) -- needed by callers that mount/unmount this repeatedly as
     // a table scrolls in and out of view, rather than once per page load.
-    destroy: (): void => {
+    destroy: (discardChanges = false): void => {
+      if (disposed) return;
       // Flush, don't just cancel: a pending edit not yet committed (still
       // inside the 500ms debounce above) would otherwise be silently lost
       // when this grid is torn down for virtualization -- e.g. scrolling
@@ -8213,8 +8216,16 @@ export function buildReadOnlySpreadsheetHost(
       // The rescue editor updates the raw mirror continuously but only
       // schedules the persisted table update when committed. Commit before
       // flushing so virtualization cannot discard the last active value.
-      commitRescueInput();
-      flush();
+      if (discardChanges) {
+        if (changeTimer) window.clearTimeout(changeTimer);
+        changeTimer = null;
+        pendingChange = null;
+      } else {
+        commitRescueInput();
+        commitFormulaInput();
+        flush();
+      }
+      disposed = true;
       delete document.body.dataset.spreadsheetCellEditing;
       if (reclaimFocusHandler) document.removeEventListener('focusin', reclaimFocusHandler);
       if (suppressReclaimHandler) document.removeEventListener('pointerdown', suppressReclaimHandler, true);
