@@ -39,6 +39,10 @@ interface CellValueChange {
   newValue: string;
 }
 type CellHistoryEntry = CellValueChange[];
+export interface SpreadsheetCellHistory {
+  undo: CellHistoryEntry[];
+  redo: CellHistoryEntry[];
+}
 const MAX_CELL_HISTORY = 200;
 
 interface ClipboardTable {
@@ -6137,6 +6141,8 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
  * be mutated).
  */
 export interface SpreadsheetHostOptions {
+  /** Owned by the table, not its disposable visual overlay. */
+  cellHistory?: SpreadsheetCellHistory;
   /** When true, the grid accepts edits (typing, insert/delete row/column, row/column resize) instead of being read-only. */
   editable?: boolean;
   /**
@@ -6799,6 +6805,51 @@ export function buildReadOnlySpreadsheetHost(
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   if (editable) installRowResizeGuide(sheetContainer);
   host.appendChild(sheetContainer);
+  // jspreadsheet's own copy-to-clipboard reads each selected cell's
+  // innerHTML -- which, for a row applyCellClipHeights has capped, is no
+  // longer the cell's plain text but a <div class="jss-cell-clip"> tag
+  // wrapping it (see applyCellClipHeights' own comment for why that
+  // wrapper exists at all). Copying then pasted that wrapper's raw,
+  // HTML-escaped markup as literal text instead of the cell's actual
+  // content. Cell selection here is jspreadsheet's own internal
+  // start/end-coordinate state (getSelection()), not a real browser
+  // Selection/Range -- window.getSelection().toString() is empty for it,
+  // so the range has to be read cell-by-cell here instead. Capture
+  // phase, ahead of jspreadsheet's own copy handling.
+  //
+  // Unconditional, not just for the editable inline overlay: a read-only
+  // view-page grid (editable: false) still allows selecting and copying
+  // cells, and without its own listener here it fell through to the exact
+  // same jspreadsheet default this was originally fixed for -- pasting the
+  // jss-cell-clip wrapper markup as literal text instead of the cells'
+  // actual values.
+  sheetContainer.addEventListener('copy', event => {
+    if (!event.clipboardData) return;
+    const range = getMountedWorksheet(sheetContainer)?.getSelection?.();
+    if (!Array.isArray(range) || range.length < 4 || !range.slice(0, 4).every(value => Number.isInteger(value))) {
+      return;
+    }
+    const [selStartCol, selStartRow, selEndCol, selEndRow] = range as CellRange;
+    const startCol = Math.min(selStartCol, selEndCol);
+    const endCol = Math.max(selStartCol, selEndCol);
+    const startRow = Math.min(selStartRow, selEndRow);
+    const endRow = Math.max(selStartRow, selEndRow);
+    const textRows: string[] = [];
+    for (let row = startRow; row <= endRow; row++) {
+      const textCells: string[] = [];
+      for (let col = startCol; col <= endCol; col++) {
+        const cell = sheetContainer.querySelector<HTMLElement>(
+          `.jss_worksheet > tbody td[data-x="${col}"][data-y="${row}"]`,
+        );
+        const text = (cell?.textContent ?? '').trim();
+        textCells.push(/[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text);
+      }
+      textRows.push(textCells.join('\t'));
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    event.clipboardData.setData('text/plain', textRows.join('\n'));
+  }, true);
   // Mirrors openSpreadsheetModal's own fillDragSource -- see its comment.
   let fillDragSource: { col: number; row: number } | null = null;
   let onCellDoubleClick: ((event: MouseEvent) => void) | null = null;
@@ -6859,44 +6910,6 @@ export function buildReadOnlySpreadsheetHost(
           : null;
       }
       resizingRow?.style.removeProperty('height');
-    }, true);
-    // jspreadsheet's own copy-to-clipboard reads each selected cell's
-    // innerHTML -- which, for a row applyCellClipHeights has capped, is no
-    // longer the cell's plain text but a <div class="jss-cell-clip"> tag
-    // wrapping it (see applyCellClipHeights' own comment for why that
-    // wrapper exists at all). Copying then pasted that wrapper's raw,
-    // HTML-escaped markup as literal text instead of the cell's actual
-    // content. Cell selection here is jspreadsheet's own internal
-    // start/end-coordinate state (getSelection()), not a real browser
-    // Selection/Range -- window.getSelection().toString() is empty for it,
-    // so the range has to be read cell-by-cell here instead. Capture
-    // phase, ahead of jspreadsheet's own copy handling.
-    sheetContainer.addEventListener('copy', event => {
-      if (!event.clipboardData) return;
-      const range = getMountedWorksheet(sheetContainer)?.getSelection?.();
-      if (!Array.isArray(range) || range.length < 4 || !range.slice(0, 4).every(value => Number.isInteger(value))) {
-        return;
-      }
-      const [selStartCol, selStartRow, selEndCol, selEndRow] = range as CellRange;
-      const startCol = Math.min(selStartCol, selEndCol);
-      const endCol = Math.max(selStartCol, selEndCol);
-      const startRow = Math.min(selStartRow, selEndRow);
-      const endRow = Math.max(selStartRow, selEndRow);
-      const textRows: string[] = [];
-      for (let row = startRow; row <= endRow; row++) {
-        const textCells: string[] = [];
-        for (let col = startCol; col <= endCol; col++) {
-          const cell = sheetContainer.querySelector<HTMLElement>(
-            `.jss_worksheet > tbody td[data-x="${col}"][data-y="${row}"]`,
-          );
-          const text = (cell?.textContent ?? '').trim();
-          textCells.push(/[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text);
-        }
-        textRows.push(textCells.join('\t'));
-      }
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      event.clipboardData.setData('text/plain', textRows.join('\n'));
     }, true);
     // Double-click a column/row border to fit it to its content, same
     // gesture (and same edge-tolerance/measurement code) as
@@ -7250,13 +7263,14 @@ export function buildReadOnlySpreadsheetHost(
   // this tracks cell value changes directly instead of relying on
   // jspreadsheet's own undo()/redo().
   let rescueInputOriginalValue: string | null = null;
-  let cellUndoStack: CellHistoryEntry[] = [];
-  let cellRedoStack: CellHistoryEntry[] = [];
+  const cellUndoStack = options.cellHistory?.undo ?? [];
+  const cellRedoStack = options.cellHistory?.redo ?? [];
+  let nativeCellEdit: { col: number; row: number; oldValue: string } | null = null;
   const pushCellHistoryEntry = (changes: CellHistoryEntry): void => {
     if (changes.length === 0) return;
     cellUndoStack.push(changes);
     if (cellUndoStack.length > MAX_CELL_HISTORY) cellUndoStack.shift();
-    cellRedoStack = [];
+    cellRedoStack.length = 0;
   };
   const applyCellHistoryEntry = (changes: CellHistoryEntry, useOldValue: boolean): void => {
     changes.forEach(({ col, row, oldValue, newValue }) => {
@@ -7267,12 +7281,16 @@ export function buildReadOnlySpreadsheetHost(
     notifyFromMirror();
   };
   const performCellUndo = (): void => {
+    commitRescueInput();
+    commitFormulaInput();
     const entry = cellUndoStack.pop();
     if (!entry) return;
     applyCellHistoryEntry(entry, true);
     cellRedoStack.push(entry);
   };
   const performCellRedo = (): void => {
+    commitRescueInput();
+    commitFormulaInput();
     const entry = cellRedoStack.pop();
     if (!entry) return;
     applyCellHistoryEntry(entry, false);
@@ -8116,6 +8134,10 @@ export function buildReadOnlySpreadsheetHost(
         document.body.dataset.spreadsheetCellEditing = 'true';
         lastEditingCol = editingCol;
         lastEditingRow = editingRow;
+        nativeCellEdit = {
+          col: editingCol, row: editingRow,
+          oldValue: String(rawDataMirror[editingRow]?.[editingCol] ?? ''),
+        };
         // jspreadsheet-ce 5 passes null as the documented `input` callback
         // argument even for its default text editor. It has already appended
         // the real control to the cell before dispatching oncreateeditor, so
@@ -8190,6 +8212,16 @@ export function buildReadOnlySpreadsheetHost(
           activeEditorCellStyles.delete(cell);
         }
         notifyChange(changedWorksheet, cell, changedCol, changedRow, editorValue);
+        // Native inputs update the mirror on every keystroke, so comparing
+        // the mirror at blur cannot recover the pre-edit value. Retain it
+        // from editor creation and record one action when the edit closes.
+        if (nativeCellEdit?.col === changedCol && nativeCellEdit.row === changedRow) {
+          const newValue = String(rawDataMirror[changedRow]?.[changedCol] ?? '');
+          if (nativeCellEdit.oldValue !== newValue) {
+            pushCellHistoryEntry([{ ...nativeCellEdit, newValue }]);
+          }
+          nativeCellEdit = null;
+        }
       },
       oninsertrow: (changedWorksheet: JssInstance): void => {
         notifyStructuralChange(changedWorksheet);
@@ -8306,6 +8338,9 @@ export function buildReadOnlySpreadsheetHost(
   });
 
   const flush = (): void => {
+    if (disposed) return;
+    commitRescueInput();
+    commitFormulaInput();
     if (!changeTimer) return;
     window.clearTimeout(changeTimer);
     changeTimer = null;

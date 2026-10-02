@@ -30,6 +30,77 @@ function visit(node) {
 visit(ast);
 assert.ok(flushSource && teardownSource, 'Production lifecycle closures must be found');
 
+test('native cell blur records the original value even after live typing changed the mirror', () => {
+  let handler;
+  function find(node) {
+    if (ts.isPropertyAssignment(node) && node.name.getText(ast) === 'oneditionend') handler = node.initializer.getText(ast);
+    ts.forEachChild(node, find);
+  }
+  find(ast);
+  const history = [];
+  const context = vm.createContext({
+    document: { body: { dataset: {} } },
+    lastEditingCol: 0, lastEditingRow: 0, lastFocusWasInGrid: true,
+    activeEditorCellStyles: new Map(),
+    nativeCellEdit: { col: 0, row: 0, oldValue: 'before typing' },
+    rawDataMirror: [['after typing']],
+    notifyChange() {},
+    pushCellHistoryEntry: entry => history.push(entry),
+  });
+  vm.runInContext(ts.transpileModule(`globalThis.endEdit = ${handler};`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText, context);
+  context.endEdit({}, {}, 0, 0, 'after typing');
+  context.endEdit({}, {}, 0, 0, 'after typing');
+  assert.equal(history.length, 1, 'repeated close events must not duplicate history');
+  assert.equal(history[0][0].oldValue, 'before typing');
+  assert.equal(history[0][0].newValue, 'after typing');
+});
+
+test('table-local undo survives remount and never changes another table', () => {
+  const names = ['cellUndoStack', 'cellRedoStack', 'pushCellHistoryEntry', 'performCellUndo', 'performCellRedo'];
+  const declarations = new Map();
+  function collect(node) {
+    if (ts.isVariableDeclaration(node) && names.includes(node.name.getText(ast))) {
+      declarations.set(node.name.getText(ast), node.getText(ast));
+    }
+    ts.forEachChild(node, collect);
+  }
+  collect(ast);
+  function mount(history, cells) {
+    const context = vm.createContext({
+      options: { cellHistory: history }, MAX_CELL_HISTORY: 200,
+      commitRescueInput() {}, commitFormulaInput() {},
+      applyCellHistoryEntry: (changes, old) => {
+        for (const change of changes) cells[`${change.col},${change.row}`] = old ? change.oldValue : change.newValue;
+      },
+    });
+    const script = names.map(name => `const ${declarations.get(name)};`).join('\n')
+      + '\nglobalThis.push = pushCellHistoryEntry; globalThis.undo = performCellUndo; globalThis.redo = performCellRedo;';
+    vm.runInContext(ts.transpileModule(script, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
+    return context;
+  }
+  const firstHistory = { undo: [], redo: [] };
+  const secondHistory = { undo: [], redo: [] };
+  const firstCells = { '0,0': 'latest' };
+  const secondCells = { '0,0': 'other table' };
+  const first = mount(firstHistory, firstCells);
+  const second = mount(secondHistory, secondCells);
+  first.push([{ col: 0, row: 0, oldValue: 'original', newValue: 'latest' }]);
+  second.push([{ col: 0, row: 0, oldValue: '', newValue: 'other table' }]);
+  const remounted = mount(firstHistory, firstCells);
+  remounted.undo();
+  assert.equal(firstCells['0,0'], 'original');
+  assert.equal(secondCells['0,0'], 'other table');
+  assert.equal(secondHistory.undo.length, 1);
+  const remountedAgain = mount(firstHistory, firstCells);
+  remountedAgain.redo();
+  assert.equal(firstCells['0,0'], 'latest');
+  remountedAgain.undo();
+  remountedAgain.push([{ col: 0, row: 0, oldValue: 'original', newValue: 'new edit' }]);
+  assert.equal(firstHistory.redo.length, 0, 'a new edit invalidates the shared redo stack');
+});
+
 function harness() {
   let now = 0;
   let nextId = 1;
@@ -107,9 +178,7 @@ for (const mode of ['cell', 'formula']) {
     assert.deepEqual(h.writes, ['=A1+2']);
   });
 
-  test(`popup/save flush must commit an active ${mode} draft`, {
-    todo: 'Known gap: flush drains the queue but does not commit active inputs',
-  }, () => {
+  test(`popup/save flush must commit an active ${mode} draft`, () => {
     const h = harness();
     h[mode]('=A1+2');
     h.context.flush();

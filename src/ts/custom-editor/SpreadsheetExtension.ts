@@ -14,12 +14,14 @@ import {
   spreadsheetFromFlattenedClipboard,
   spreadsheetToHTML,
   SpreadsheetData,
+  SpreadsheetCellHistory,
   WELL_PLATE_PRESETS,
 } from '../inline-spreadsheet';
 import { escapeHTML } from '../misc';
 import { RICH_SELECTION_ATTRIBUTE } from '../ClipboardContent';
 import TableIndentation from '../TableIndentation.class';
 import { isSortable } from '../TableSorting.class';
+import { captureSpreadsheetPositions, restoreSpreadsheetPositions } from './SpreadsheetUndo';
 
 interface PdfTableDialogData {
   columns: string;
@@ -924,11 +926,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // real attribute, not a data-mce-bogus one) so its latest live content
   // can be tracked here and force-restored immediately after any Undo or
   // Redo, regardless of what that operation's own snapshot says the
-  // table should look like. A table whose id is genuinely gone afterward
-  // (its own insertion or deletion is what got undone/redone) has nothing
-  // to restore, which is exactly the one case table content SHOULD change.
+  // table should look like. Stepping past insertion also preserves it:
+  // spreadsheet lifetimes are independent of main-text history.
   const SPREADSHEET_UID_ATTR = 'data-elabftw-spreadsheet-uid';
   const latestTableContent = new Map<string, string>();
+  const tableCellHistories = new Map<string, SpreadsheetCellHistory>();
   // Which table currently holds each id -- lets a colliding duplicate
   // (see ensureSpreadsheetUid's own comment) be told apart from the one
   // table that's genuinely always held it.
@@ -1425,8 +1427,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
 
   const enhanceTable = (table: HTMLTableElement): void => {
+    if (!editor.getBody().contains(table)) return;
     if (enhancedTables.has(table)) return;
-    ensureSpreadsheetUid(table);
+    const tableUid = ensureSpreadsheetUid(table);
+    if (!latestTableContent.has(tableUid)) latestTableContent.set(tableUid, table.outerHTML);
+    if (!tableCellHistories.has(tableUid)) tableCellHistories.set(tableUid, { undo: [], redo: [] });
     const extracted = extractFromTable(table);
     // Reconciles this table's rows against its own saved rowHeights right
     // as it's mounted, not just after a future edit commits (see
@@ -1452,6 +1457,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       host: overlay, flush, destroy, syncActiveEditor,
     } = buildReadOnlySpreadsheetHost(extracted, {
       editable: true,
+      cellHistory: tableCellHistories.get(tableUid),
       onChange: data => commitOverlayChange(table, data),
       onOpenFullEditor: () => {
         // A cell committed less than 500ms ago can still be waiting out
@@ -1473,6 +1479,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         const uid = table.getAttribute(SPREADSHEET_UID_ATTR);
         if (uid) {
           latestTableContent.delete(uid);
+          tableCellHistories.delete(uid);
           uidToTable.delete(uid);
         }
         // The spacer reserving room below this table for its overlay's
@@ -1646,50 +1653,51 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   });
 
   editor.on('SetContent NodeChange', enhanceAllTables);
-  // The content-protection half of the id-based tracking above (see
-  // latestTableContent's own comment): Undo/Redo replace editor.getBody()
-  // wholesale from a serialized snapshot, so every spreadsheet table
-  // afterward is a brand-new DOM node -- matched back up here by the id
-  // attribute alone, which is real markup and so survives that
-  // replacement verbatim. Runs synchronously, straight after TinyMCE has
-  // already swapped in the reverted/reapplied content and before
-  // enhanceAllTables (bound to the same SetContent this triggers) gets a
-  // chance to mount an overlay from it, so a freshly (re)mounted overlay
-  // never has a stale frame to show in between.
+  // Snapshot only the currently live tables, including their actual DOM
+  // nodes. Reusing those nodes preserves overlay ownership and local undo.
+  let pendingSpreadsheetPositions: ReturnType<typeof captureSpreadsheetPositions> | null = null;
+  const capturePendingSpreadsheets = (): void => {
+    spreadsheetOverlays.forEach(entry => entry.flush());
+    pendingSpreadsheetPositions = captureSpreadsheetPositions(editor.getBody());
+  };
+  editor.on('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && ['z', 'y'].includes(event.key.toLowerCase())) {
+      capturePendingSpreadsheets();
+    }
+  }, true);
+  editor.on('BeforeExecCommand', event => {
+    if (['undo', 'redo'].includes(event.command.toLowerCase())) capturePendingSpreadsheets();
+  });
   editor.on('Undo Redo', () => {
-    Array.from(editor.getBody().querySelectorAll<HTMLTableElement>(`table.elabftw-spreadsheet[${SPREADSHEET_UID_ATTR}]`))
-      .forEach(table => {
-        const uid = table.getAttribute(SPREADSHEET_UID_ATTR);
-        if (!uid) return;
-        // Undo/Redo replaces editor.getBody() wholesale from a serialized
-        // snapshot -- every table matched above is a brand-new DOM node,
-        // never the same object as whichever one previously held this
-        // same id. That OLD table's own overlay <div> is still attached
-        // to document.body regardless (overlays live outside the iframe
-        // entirely) -- nothing else ever explicitly tears it down for
-        // this specific case, only the IntersectionObserver eventually
-        // noticing the old node is now detached, which isn't guaranteed
-        // to happen before the new table gets its own fresh overlay a few
-        // lines below. Until then, both exist at once: an orphaned
-        // overlay frozen whatever position the detached table's rect
-        // last resolved to, plus the new one -- a second, self-inflicted
-        // source of the reported overlap bug. Torn down explicitly here
-        // instead of waiting on the observer.
-        const staleTable = uidToTable.get(uid);
-        if (staleTable && staleTable !== table) removeOverlay(staleTable);
-        uidToTable.set(uid, table);
-        const savedHtml = latestTableContent.get(uid);
-        if (savedHtml) applySpreadsheetHtmlToTable(table, savedHtml);
-        // This table element is always a brand-new node at this point, so
-        // it's never already in enhancedTables -- refreshTableOverlay's
-        // own removeOverlay() is a harmless no-op for a node nothing was
-        // tracking yet, and enhanceTable() then mounts fresh from the
-        // content just corrected above (if any), rather than (if
-        // 'SetContent' already ran enhanceAllTables on the stale
-        // pre-correction content) leaving a stale overlay in place from
-        // before this handler fixed it up.
-        refreshTableOverlay(table);
-      });
+    const positions = pendingSpreadsheetPositions;
+    pendingSpreadsheetPositions = null;
+    if (!positions) return;
+    const body = editor.getBody();
+    const retained = new Set(positions.map(position => position.table));
+    Array.from(spreadsheetOverlays.keys()).forEach(table => {
+      if (!retained.has(table)) removeOverlay(table, true);
+    });
+    editor.undoManager.ignore(() => restoreSpreadsheetPositions(body, positions));
+    positions.forEach(({ table }) => {
+      const uid = table.getAttribute(SPREADSHEET_UID_ATTR);
+      if (uid) uidToTable.set(uid, table);
+      enhanceTable(table);
+    });
+  });
+  // A spreadsheet-only snapshot should not consume a main-text Undo press.
+  // Keep the native history for prose, but disregard tables and their
+  // transient layout spacers when comparing two adjacent snapshots.
+  const mainTextSnapshot = (html: string): string => {
+    const fragment = editor.getDoc().createElement('div');
+    fragment.innerHTML = html;
+    fragment.querySelectorAll('table.elabftw-spreadsheet, [data-elabftw-spreadsheet-spacer]').forEach(node => node.remove());
+    return fragment.innerHTML;
+  };
+  editor.on('BeforeAddUndo', event => {
+    if (typeof event.level?.content !== 'string' || typeof event.lastLevel?.content !== 'string') return;
+    if (mainTextSnapshot(event.level.content) === mainTextSnapshot(event.lastLevel.content)) {
+      event.preventDefault();
+    }
   });
   // Dispatched from tinymce.ts at the same "layout has actually settled"
   // checkpoints it uses to force an extra mceAutoResize (a short setTimeout,
