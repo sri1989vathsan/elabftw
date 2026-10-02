@@ -1690,6 +1690,25 @@ function coordinatesFromCellName(cellName: string): { col: number; row: number }
   return { col: col - 1, row: parseInt(match[2], 10) - 1 };
 }
 
+// Shifts every A1-style reference in a formula by (deltaCol, deltaRow),
+// honoring Excel-style $ anchors ($C$1 stays put; C$1/$C1 shift only the
+// unanchored half). Used to correct jspreadsheet-ce's own fill-handle
+// drag-copy, which shifts every reference uniformly regardless of $ --
+// see fillDragSource's own comment in openSpreadsheetModal.
+function shiftFormulaReferences(formula: string, deltaCol: number, deltaRow: number): string {
+  return formula.replace(
+    /(\$?)([A-Za-z]+)(\$?)([1-9]\d*)/g,
+    (match: string, colAnchor: string, colLetters: string, rowAnchor: string, rowDigits: string) => {
+      const coordinates = coordinatesFromCellName(`${colLetters.toUpperCase()}${rowDigits}`);
+      if (!coordinates) return match;
+      const nextCol = colAnchor ? coordinates.col : coordinates.col + deltaCol;
+      const nextRow = rowAnchor ? coordinates.row : coordinates.row + deltaRow;
+      if (nextCol < 0 || nextRow < 0) return match;
+      return `${colAnchor}${colLabel(nextCol)}${rowAnchor}${nextRow + 1}`;
+    },
+  );
+}
+
 function evaluateArithmeticExpression(
   expression: string,
   resolveCell: (cellName: string) => number | undefined,
@@ -3591,6 +3610,10 @@ export function openSpreadsheetModal(
     // truth so rendering never destroys what the user entered.
     let rawDataMirror = resizeData(working.data, working.rows, working.cols);
     let selectedRange: CellRange | null = null;
+    // The single formula cell a fill-handle (.jss_corner) drag started
+    // from, armed on its mousedown -- see the onbeforechange override below
+    // for why this needs correcting at all.
+    let fillDragSource: { col: number; row: number } | null = null;
     let formulaInputTarget: { col: number; row: number } | null = null;
     let lastCommittedFormulaValue: string | null = null;
     let formulaSelectionDrag: {
@@ -4502,6 +4525,31 @@ export function openSpreadsheetModal(
     window.addEventListener('mousedown', onCellSecondMousedown, true);
     window.addEventListener('dblclick', onCellDoubleClick, true);
     ui.sheetHost.addEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
+    // jspreadsheet-ce's own fill-handle drag-copy (the .jss_corner square)
+    // shifts every A1-style reference in a copied formula by the drag's
+    // column/row delta uniformly -- its reference regex matches straight
+    // through a leading $, so an intended-absolute reference like $C$1
+    // gets shifted right along with the relative ones instead of staying
+    // put. Only armed for a single formula cell (the common, well-defined
+    // case): with a multi-cell source block, which cell in that block each
+    // filled target was tiled from is ambiguous enough not to guess at.
+    ui.sheetHost.addEventListener('mousedown', event => {
+      fillDragSource = null;
+      if (!(event.target instanceof Element) || !event.target.closest('.jss_corner')) return;
+      const selection = getSelectedRange();
+      if (!selection || selection[0] !== selection[2] || selection[1] !== selection[3]) return;
+      const value = rawDataMirror[selection[1]]?.[selection[0]];
+      if (typeof value === 'string' && value.trimStart().startsWith('=')) {
+        fillDragSource = { col: selection[0], row: selection[1] };
+      }
+    }, true);
+    // Bubble phase, plus a macrotask delay: jspreadsheet-ce performs the
+    // actual fill from its OWN mouseup handler, synchronously calling
+    // onbeforechange (below) per filled cell -- clearing fillDragSource
+    // here needs to run strictly after all of that, not race it.
+    window.addEventListener('mouseup', () => {
+      window.setTimeout(() => { fillDragSource = null; }, 0);
+    });
 
     const updateSizeControls = (rows: number, cols: number): void => {
       ui.rowsInput.value = String(rows);
@@ -4796,6 +4844,22 @@ export function openSpreadsheetModal(
           changedRow: number,
           value: CellValue,
         ): CellValue => {
+          // Recompute this cell's own fill-copied formula ourselves,
+          // honoring $ anchors, instead of trusting jspreadsheet-ce's
+          // uniformly-shifted one -- see fillDragSource's own comment.
+          // updateCell (the fill-handle's own write path) calls
+          // onbeforechange per filled cell and uses its return value, same
+          // as any other edit, so overriding it here is enough.
+          if (fillDragSource && (changedCol !== fillDragSource.col || changedRow !== fillDragSource.row)) {
+            const sourceValue = rawDataMirror[fillDragSource.row]?.[fillDragSource.col];
+            if (typeof sourceValue === 'string' && sourceValue.trimStart().startsWith('=')) {
+              value = shiftFormulaReferences(
+                sourceValue,
+                changedCol - fillDragSource.col,
+                changedRow - fillDragSource.row,
+              );
+            }
+          }
           updateRawDataMirrorCell(
             changedCol,
             changedRow,
@@ -6735,8 +6799,25 @@ export function buildReadOnlySpreadsheetHost(
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   if (editable) installRowResizeGuide(sheetContainer);
   host.appendChild(sheetContainer);
+  // Mirrors openSpreadsheetModal's own fillDragSource -- see its comment.
+  let fillDragSource: { col: number; row: number } | null = null;
   let onCellDoubleClick: ((event: MouseEvent) => void) | null = null;
   if (editable) {
+    sheetContainer.addEventListener('mousedown', event => {
+      fillDragSource = null;
+      if (!(event.target instanceof Element) || !event.target.closest('.jss_corner')) return;
+      const selection = getMountedWorksheet(sheetContainer)?.getSelection?.();
+      if (!Array.isArray(selection) || selection.length < 4
+        || !selection.slice(0, 4).every(value => Number.isInteger(value))
+        || selection[0] !== selection[2] || selection[1] !== selection[3]) return;
+      const value = rawDataMirror[selection[1]]?.[selection[0]];
+      if (typeof value === 'string' && value.trimStart().startsWith('=')) {
+        fillDragSource = { col: selection[0], row: selection[1] };
+      }
+    }, true);
+    window.addEventListener('mouseup', () => {
+      window.setTimeout(() => { fillDragSource = null; }, 0);
+    });
     // Clicking a cell to insert its reference into the formula bar must
     // not steal focus away from it -- preventDefault() on mousedown blocks
     // the browser's default focus-shift while still letting jspreadsheet's
@@ -7965,6 +8046,16 @@ export function buildReadOnlySpreadsheetHost(
         changedRow: number,
         value: CellValue,
       ): CellValue => {
+        if (fillDragSource && (changedCol !== fillDragSource.col || changedRow !== fillDragSource.row)) {
+          const sourceValue = rawDataMirror[fillDragSource.row]?.[fillDragSource.col];
+          if (typeof sourceValue === 'string' && sourceValue.trimStart().startsWith('=')) {
+            value = shiftFormulaReferences(
+              sourceValue,
+              changedCol - fillDragSource.col,
+              changedRow - fillDragSource.row,
+            );
+          }
+        }
         updateRawDataMirrorCell(changedCol, changedRow, value, !cell?.classList?.contains('editor'));
         // notifyFromMirror() (debounced internally, see its own comment)
         // was previously only called from onchange/oneditionend -- both
