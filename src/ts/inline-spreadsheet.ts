@@ -1964,12 +1964,23 @@ function applyFormulaResults(rawData: AOA, computedData: AOA): AOA {
     rawData.reduce((max, row) => Math.max(max, row.length), 0),
     computedData.reduce((max, row) => Math.max(max, row.length), 0),
   );
-  const displayData = resizeData(computedData, rows, cols);
+  // Non-formula cells always keep their own raw value -- never computedData's.
+  // computedData can be a DOM scrape (see openSpreadsheetModal's insertBtn
+  // handler, getComputedDataFromDOM) rather than a true mirror of rawData;
+  // any desync between the two used to silently blank or corrupt plain cells
+  // on save, since this used to start from computedData and only patch in
+  // formula results on top of it. Formulas still prefer computedData's own
+  // rendered text as a fallback (below) for when evaluateFormula can't
+  // resolve one itself (e.g. a function it doesn't implement).
+  const displayData = resizeData(rawData, rows, cols);
+  const fallback = resizeData(computedData, rows, cols);
   rawData.forEach((row, rowIndex) => {
     row.forEach((value, colIndex) => {
       if (typeof value !== 'string' || !value.trimStart().startsWith('=')) return;
       const result = evaluateFormula(value, rawData, colIndex, rowIndex);
-      if (result !== undefined) displayData[rowIndex][colIndex] = formatFormulaResult(result);
+      displayData[rowIndex][colIndex] = result !== undefined
+        ? formatFormulaResult(result)
+        : fallback[rowIndex][colIndex];
     });
   });
   return displayData;
@@ -2407,16 +2418,28 @@ function applySpreadsheetColWidths(
 }
 
 function getComputedDataFromDOM(container: HTMLElement): AOA {
+  // Keyed by each cell's own data-x/data-y, not tr/td traversal order:
+  // jspreadsheet's row-header td carries no data-x/data-y (hence the old
+  // "skip index 0" rule here), but that rule silently misaligned every
+  // other column too wherever a row's td count didn't match that
+  // assumption exactly (a frozen column, a leftover selection helper
+  // element, a jagged row). Reading each cell's own coordinates instead
+  // makes this immune to td ordering/count entirely.
   const result: AOA = [];
-  const tbody = container.querySelector('.jss_worksheet tbody, table.jss tbody, table.jexcel tbody');
-  if (!tbody) return result;
-  tbody.querySelectorAll('tr').forEach(tr => {
-    const row: CellValue[] = [];
-    tr.querySelectorAll('td').forEach((td, index) => {
-      if (index > 0) row.push(td.textContent?.trim() ?? '');
-    });
-    if (row.length > 0) result.push(row);
+  const cells = container.querySelectorAll<HTMLElement>('.jss_worksheet td[data-x][data-y]');
+  cells.forEach(cell => {
+    const col = Number.parseInt(cell.dataset.x ?? '', 10);
+    const row = Number.parseInt(cell.dataset.y ?? '', 10);
+    if (!Number.isInteger(col) || !Number.isInteger(row) || col < 0 || row < 0) return;
+    if (!result[row]) result[row] = [];
+    result[row][col] = cell.textContent?.trim() ?? '';
   });
+  for (let row = 0; row < result.length; row++) {
+    if (!result[row]) result[row] = [];
+    for (let col = 0; col < result[row].length; col++) {
+      if (result[row][col] === undefined) result[row][col] = '';
+    }
+  }
   return result;
 }
 
