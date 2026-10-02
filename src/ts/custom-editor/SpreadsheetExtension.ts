@@ -1134,7 +1134,22 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // that heuristic.
           overlay.style.left = '0';
           overlay.style.top = '0';
-          overlay.style.transform = `translate(${iframeRect.left + tableRect.left}px, ${iframeRect.top + tableRect.top}px)`;
+          // Rounded to whole pixels -- getBoundingClientRect() is
+          // sub-pixel, and translate()-ing by a fractional amount that
+          // changes slightly every single rAF frame during a scroll makes
+          // the renderer round the overlay's own grid-line borders
+          // differently from one frame to the next, independently of the
+          // rest of the (unmoving, already-pixel-aligned) page. The
+          // result is every border in the grid visibly swimming/stretching
+          // in place as you scroll (reported as a "jelly" wobble) even
+          // though the overlay's actual position only ever changes by
+          // whole scroll-wheel pixels. clipTop/clipBottom/clipLeft/
+          // clipRight below are computed from these same rounded values
+          // (via overlayTop/overlayLeft), so the clip-path stays in sync
+          // with where the overlay is actually painted.
+          const translateX = Math.round(iframeRect.left + tableRect.left);
+          const translateY = Math.round(iframeRect.top + tableRect.top);
+          overlay.style.transform = `translate(${translateX}px, ${translateY}px)`;
           // Height follows the grid's own current content (rows/columns can
           // change live as the user edits, well before the debounced commit
           // catches the -- until then stale -- real table's own rect up) --
@@ -1212,13 +1227,17 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           overlay.style.height = `${overlayHeight}px`;
           // The overlay lives outside the iframe, so native iframe clipping
           // does not apply. Keep its pixels and hit targets within the editor.
-          const overlayTop = iframeRect.top + tableRect.top;
-          const overlayLeft = iframeRect.left + tableRect.left;
+          const overlayTop = translateY;
+          const overlayLeft = translateX;
           const overlayWidth = overlay.getBoundingClientRect().width;
-          const clipTop = Math.max(0, iframeRect.top - overlayTop);
-          const clipBottom = Math.max(0, overlayTop + overlayHeight - iframeRect.bottom);
-          const clipLeft = Math.max(0, iframeRect.left - overlayLeft);
-          const clipRight = Math.max(0, overlayLeft + overlayWidth - iframeRect.right);
+          // Rounded for the same reason translateX/translateY are: a clip
+          // inset that drifts by a fraction of a pixel every frame makes
+          // the clipped edge itself shimmer independently of the border
+          // jitter translateX/translateY already fix.
+          const clipTop = Math.max(0, Math.round(iframeRect.top) - overlayTop);
+          const clipBottom = Math.max(0, overlayTop + overlayHeight - Math.round(iframeRect.bottom));
+          const clipLeft = Math.max(0, Math.round(iframeRect.left) - overlayLeft);
+          const clipRight = Math.max(0, overlayLeft + overlayWidth - Math.round(iframeRect.right));
           overlay.style.clipPath = `inset(${clipTop}px ${clipRight}px ${clipBottom}px ${clipLeft}px)`;
           // The real table -- hidden, but still in normal document flow --
           // only ever reserves space for its own rows; it has no idea the
