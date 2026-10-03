@@ -22,6 +22,7 @@ import { RICH_SELECTION_ATTRIBUTE } from '../ClipboardContent';
 import TableIndentation from '../TableIndentation.class';
 import { isSortable } from '../TableSorting.class';
 import { captureSpreadsheetPositions, restoreSpreadsheetPositions } from './SpreadsheetUndo';
+import { createSpreadsheetLayoutGate, createSpreadsheetSnapshotCache } from './SpreadsheetPerformance';
 
 interface PdfTableDialogData {
   columns: string;
@@ -932,6 +933,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   }>();
   const enhancedTables = new WeakSet<HTMLTableElement>();
   let overlaySyncRunning = false;
+  const layoutGate = createSpreadsheetLayoutGate();
+  const invalidateSpreadsheetLayout = (): void => layoutGate.invalidate(performance.now());
   // Cmd/Ctrl+Z is a whole-document snapshot in TinyMCE, not a per-element
   // diff -- an undo level added for an ordinary main-text edit captures
   // the *entire* body as it stood at that moment, table content included.
@@ -1130,6 +1133,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // enhancement pass from scratch. Reschedule unconditionally instead;
     // only the per-frame work below is skipped when there's nothing to do.
     try {
+      if (!layoutGate.shouldMeasure(performance.now(), document.body.dataset.spreadsheetCellEditing === 'true')) return;
       const iframe = getEditorIframe();
       if (!iframe || spreadsheetOverlays.size === 0) return;
       const iframeRect = iframe.getBoundingClientRect();
@@ -1356,6 +1360,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
 
   const ensureSyncLoop = (): void => {
+    invalidateSpreadsheetLayout();
     if (overlaySyncRunning) return;
     overlaySyncRunning = true;
     window.requestAnimationFrame(syncOverlayPositions);
@@ -1722,9 +1727,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     fragment.querySelectorAll('table.elabftw-spreadsheet, [data-elabftw-spreadsheet-spacer]').forEach(node => node.remove());
     return fragment.innerHTML;
   };
+  const cachedMainTextSnapshot = createSpreadsheetSnapshotCache(mainTextSnapshot);
   editor.on('BeforeAddUndo', event => {
     if (typeof event.level?.content !== 'string' || typeof event.lastLevel?.content !== 'string') return;
-    if (mainTextSnapshot(event.level.content) === mainTextSnapshot(event.lastLevel.content)) {
+    if (cachedMainTextSnapshot(event.level) === cachedMainTextSnapshot(event.lastLevel)) {
       event.preventDefault();
     }
   });
@@ -1743,6 +1749,20 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // surrounding chrome has settled) -- re-scanning for not-yet-enhanced
   // tables here covers that.
   window.addEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
+  // Retain a 250ms safety check for layout changes not represented by an
+  // editor event. Interaction/transition bursts keep the original frame
+  // rate; idle frames skip all DOM geometry reads and style writes.
+  const layoutEvents = ['scroll', 'resize', 'pointermove', 'pointerdown', 'input', 'transitionrun', 'transitionend', 'elabftw-spreadsheet-resync'];
+  layoutEvents.forEach(name => window.addEventListener(name, invalidateSpreadsheetLayout, true));
+  editor.on('input keydown NodeChange SetContent Undo Redo ResizeEditor', invalidateSpreadsheetLayout);
+  const layoutObserver = new ResizeObserver(invalidateSpreadsheetLayout);
+  const observeEditorLayout = (): void => {
+    if (editor.getBody()) layoutObserver.observe(editor.getBody());
+    if (editor.getContainer()) layoutObserver.observe(editor.getContainer());
+    invalidateSpreadsheetLayout();
+  };
+  observeEditorLayout();
+  editor.on('init', observeEditorLayout);
   // Dispatched synchronously from performEntitySave() (misc.ts) right before
   // it reads editor.getContent(). notifyFromMirror() in inline-spreadsheet.ts
   // debounces its write-back to the real table by 500ms, so a cell edited
@@ -1760,6 +1780,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // self-stops once every overlay is gone, so this editor instance's
     // copy would otherwise keep rescheduling a no-op frame forever.
     overlaySyncRunning = false;
+    layoutObserver.disconnect();
+    layoutEvents.forEach(name => window.removeEventListener(name, invalidateSpreadsheetLayout, true));
     tableVisibility.disconnect();
     Array.from(spreadsheetOverlays.keys()).forEach(table => removeOverlay(table));
     window.removeEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
