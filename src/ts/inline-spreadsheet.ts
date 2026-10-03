@@ -3598,7 +3598,8 @@ function updateQuickFontStyle(
 export function openSpreadsheetModal(
   initialData: SpreadsheetData,
   isEditing = false,
-): Promise<{ raw: SpreadsheetData; computed: AOA }> {
+  initialHistory?: SpreadsheetCellHistory,
+): Promise<{ raw: SpreadsheetData; computed: AOA; history: SpreadsheetCellHistory }> {
   return new Promise((resolve, reject) => {
     let working = normalizeSpreadsheetData({
       ...initialData,
@@ -4211,8 +4212,10 @@ export function openSpreadsheetModal(
     // below can record what actually changed regardless of how the edit
     // was opened.
     let rescueInputOriginalValue: string | null = null;
-    let cellUndoStack: CellHistoryEntry[] = [];
-    let cellRedoStack: CellHistoryEntry[] = [];
+    // Modal edits are a transaction: Cancel must leave both the inline
+    // values and their undo/redo stacks untouched.
+    let cellUndoStack: CellHistoryEntry[] = structuredClone(initialHistory?.undo ?? []);
+    let cellRedoStack: CellHistoryEntry[] = structuredClone(initialHistory?.redo ?? []);
     const pushCellHistoryEntry = (changes: CellHistoryEntry): void => {
       if (changes.length === 0) return;
       cellUndoStack.push(changes);
@@ -4233,12 +4236,16 @@ export function openSpreadsheetModal(
       scheduleFormulaResultRender();
     };
     const performCellUndo = (): void => {
+      commitRescueInput();
+      commitFormulaInput();
       const entry = cellUndoStack.pop();
       if (!entry) return;
       applyCellHistoryEntry(entry, true);
       cellRedoStack.push(entry);
     };
     const performCellRedo = (): void => {
+      commitRescueInput();
+      commitFormulaInput();
       const entry = cellRedoStack.pop();
       if (!entry) return;
       applyCellHistoryEntry(entry, false);
@@ -5850,6 +5857,7 @@ export function openSpreadsheetModal(
       // worksheet.setValue() yet, would otherwise be silently dropped. Not
       // deferred: readRawData() is read synchronously right below.
       commitRescueInput();
+      commitFormulaInput();
       const rawData = readRawData();
       const rows = clampDimension(rawData.length, working.rows);
       const cols = clampDimension(
@@ -5875,7 +5883,7 @@ export function openSpreadsheetModal(
         ? resizeData(getComputedDataFromDOM(sheetContainer), rows, cols)
         : result.data;
       cleanup();
-      resolve({ raw: result, computed });
+      resolve({ raw: result, computed, history: { undo: cellUndoStack, redo: cellRedoStack } });
     });
 
     ui.cancelBtn.addEventListener('click', () => cancel());

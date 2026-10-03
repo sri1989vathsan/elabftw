@@ -60,23 +60,27 @@ test('native cell blur records the original value even after live typing changed
 test('table-local undo survives remount and never changes another table', () => {
   const names = ['cellUndoStack', 'cellRedoStack', 'pushCellHistoryEntry', 'performCellUndo', 'performCellRedo'];
   const declarations = new Map();
+  const popupDeclarations = new Map();
   function collect(node) {
     if (ts.isVariableDeclaration(node) && names.includes(node.name.getText(ast))) {
+      if (!popupDeclarations.has(node.name.getText(ast))) popupDeclarations.set(node.name.getText(ast), node.getText(ast));
       declarations.set(node.name.getText(ast), node.getText(ast));
     }
     ts.forEachChild(node, collect);
   }
   collect(ast);
-  function mount(history, cells) {
+  function mount(history, cells, popup = false) {
     const context = vm.createContext({
       options: { cellHistory: history }, MAX_CELL_HISTORY: 200,
+      initialHistory: history, structuredClone,
       commitRescueInput() {}, commitFormulaInput() {},
       applyCellHistoryEntry: (changes, old) => {
         for (const change of changes) cells[`${change.col},${change.row}`] = old ? change.oldValue : change.newValue;
       },
     });
-    const script = names.map(name => `const ${declarations.get(name)};`).join('\n')
-      + '\nglobalThis.push = pushCellHistoryEntry; globalThis.undo = performCellUndo; globalThis.redo = performCellRedo;';
+    const selected = popup ? popupDeclarations : declarations;
+    const script = names.map(name => `let ${selected.get(name)};`).join('\n')
+      + '\nglobalThis.push = pushCellHistoryEntry; globalThis.undo = performCellUndo; globalThis.redo = performCellRedo; globalThis.history = () => ({undo: cellUndoStack, redo: cellRedoStack});';
     vm.runInContext(ts.transpileModule(script, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
     return context;
   }
@@ -99,6 +103,20 @@ test('table-local undo survives remount and never changes another table', () => 
   remountedAgain.undo();
   remountedAgain.push([{ col: 0, row: 0, oldValue: 'original', newValue: 'new edit' }]);
   assert.equal(firstHistory.redo.length, 0, 'a new edit invalidates the shared redo stack');
+
+  const popupCells = { ...firstCells };
+  const popup = mount(firstHistory, popupCells, true);
+  popup.undo();
+  assert.equal(popupCells['0,0'], 'original', 'popup can undo inline edits');
+  assert.equal(firstHistory.undo.length, 1, 'Cancel leaves inline history unchanged');
+  popupCells['0,0'] = 'popup edit';
+  popup.push([{ col: 0, row: 0, oldValue: 'original', newValue: 'popup edit' }]);
+  const appliedCells = { ...popupCells };
+  const appliedInline = mount(popup.history(), appliedCells);
+  appliedInline.undo();
+  assert.equal(appliedCells['0,0'], 'original', 'inline can undo an applied popup edit');
+  appliedInline.redo();
+  assert.equal(appliedCells['0,0'], 'popup edit');
 });
 
 function harness() {

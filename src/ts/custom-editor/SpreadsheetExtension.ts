@@ -603,7 +603,15 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     existingTable: HTMLTableElement | null = null,
   ): void => {
     const bookmark = editor.selection.getBookmark(2, true);
-    openSpreadsheetModal(initial, existingTable !== null).then(({ raw, computed }) => {
+    // Every entry point (toolbar or overlay) must first finish inline edits.
+    if (existingTable) spreadsheetOverlays.get(existingTable)?.flush();
+    const uid = existingTable ? ensureSpreadsheetUid(existingTable) : null;
+    if (uid && !tableCellHistories.has(uid)) tableCellHistories.set(uid, { undo: [], redo: [] });
+    openSpreadsheetModal(
+      existingTable ? extractFromTable(existingTable) : initial,
+      existingTable !== null,
+      uid ? tableCellHistories.get(uid) : undefined,
+    ).then(({ raw, computed, history }) => {
       // Saving over a table that's already in the document: update that
       // SAME node in place (like the inline overlay's own edits do)
       // rather than replacing it with a freshly-parsed one. Replacing it
@@ -612,6 +620,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       // nothing pointed it at the new node afterward.
       if (existingTable && existingTable.isConnected) {
         if (applySpreadsheetHtmlToTable(existingTable, spreadsheetToHTML(raw, computed))) {
+          if (uid) {
+            tableCellHistories.set(uid, history);
+            latestTableContent.set(uid, existingTable.outerHTML);
+          }
           editor.undoManager.add();
           editor.setDirty(true);
           // See the identical comment on commitOverlayChange -- the popup
@@ -648,8 +660,15 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         | undefined;
       if (insertedTable) {
         insertedTable.removeAttribute('data-just-inserted');
+        const insertedUid = ensureSpreadsheetUid(insertedTable);
+        tableCellHistories.set(insertedUid, history);
+        latestTableContent.set(insertedUid, insertedTable.outerHTML);
+        // Insertion may already have mounted an overlay with an empty
+        // history. Rebind it to the history returned by the popup.
+        refreshTableOverlay(insertedTable);
         const paragraph = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
         insertedTable.parentNode?.insertBefore(paragraph, insertedTable.nextSibling);
+        editor.selection.setCursorLocation(paragraph, 0);
       }
       editor.undoManager.add();
     }).catch(() => {
@@ -1267,9 +1286,19 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // of the bars, reserving more than was actually needed.
           let spacer = spreadsheetSpacers.get(table);
           if (!spacer || !spacer.isConnected) {
-            spacer = editor.dom.create('div', { 'data-mce-bogus': '1', 'data-elabftw-spreadsheet-spacer': '1' });
+            spacer = editor.dom.create('div', {
+              'data-mce-bogus': 'all',
+              'data-elabftw-spreadsheet-spacer': '1',
+              contenteditable: 'false',
+              'aria-hidden': 'true',
+            });
             spreadsheetSpacers.set(table, spacer);
           }
+          // This is layout-only space, never a place to type. A caret in
+          // a zero-height/negative-margin spacer paints lines on top of
+          // one another and the spacer is omitted from saved content.
+          spacer.setAttribute('contenteditable', 'false');
+          spacer.style.pointerEvents = 'none';
           // Always reposition, even when it was already the very next
           // sibling: .after() on a node already there is a no-op move,
           // cheap, and guarantees it can never drift or duplicate.
