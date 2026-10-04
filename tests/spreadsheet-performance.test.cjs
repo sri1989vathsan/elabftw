@@ -11,6 +11,56 @@ vm.runInContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,
 }).outputText, context);
 const { createSpreadsheetLayoutGate, createSpreadsheetSnapshotCache } = context.exports;
 
+function repaintHarness() {
+  let id = 0;
+  const frames = new Map(), timers = new Map();
+  const painted = [];
+  let value = 0;
+  const queue = context.exports.createSpreadsheetRepaintQueue(() => painted.push(value), {
+    requestFrame: cb => { frames.set(++id, cb); return id; },
+    cancelFrame: key => frames.delete(key),
+    setTimer: (cb, delay) => { timers.set(++id, { cb, delay }); return id; },
+    clearTimer: key => timers.delete(key),
+  });
+  return { queue, frames, timers, painted, set: v => { value = v; },
+    frame: () => { const jobs = [...frames.values()]; frames.clear(); jobs.forEach(cb => cb()); },
+    settle: () => { const jobs = [...timers.values()]; timers.clear(); jobs.forEach(({ cb }) => cb()); },
+  };
+}
+
+test('100 updates coalesce into one frame and three settling passes using latest state', () => {
+  const h = repaintHarness();
+  for (let i = 0; i < 100; i++) { h.set(i); h.queue.schedule(); }
+  assert.equal(h.frames.size, 1);
+  h.frame(); h.settle();
+  assert.deepEqual(h.painted, [99, 99, 99, 99]);
+});
+
+test('new edits cancel old settling work, including already queued stale callbacks', () => {
+  const h = repaintHarness();
+  h.queue.schedule(); h.frame();
+  const stale = [...h.timers.values()].map(t => t.cb);
+  h.set(1); h.queue.schedule();
+  stale.forEach(cb => cb());
+  assert.deepEqual(h.painted, [0]);
+  h.frame(); h.settle();
+  assert.deepEqual(h.painted, [0, 1, 1, 1, 1]);
+});
+
+test('destroyed grids never repaint and another grid remains independent', () => {
+  const a = repaintHarness(), b = repaintHarness();
+  a.queue.schedule(); a.frame();
+  const stale = [...a.timers.values()].map(t => t.cb);
+  a.queue.dispose(); a.queue.schedule(); stale.forEach(cb => cb()); a.frame(); a.settle();
+  b.queue.schedule(); b.frame(); b.settle();
+  assert.deepEqual(a.painted, [0]);
+  assert.equal(a.timers.size, 0);
+  assert.equal(b.painted.length, 4);
+  const c = repaintHarness();
+  c.queue.schedule(); c.queue.dispose(); c.frame();
+  assert.equal(c.painted.length, 0);
+});
+
 test('idle geometry work is bounded while active editing retains every frame', () => {
   const idle = createSpreadsheetLayoutGate();
   const active = createSpreadsheetLayoutGate();

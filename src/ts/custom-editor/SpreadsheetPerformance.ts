@@ -23,3 +23,49 @@ export function createSpreadsheetSnapshotCache(normalize: (html: string) => stri
     return normalized;
   };
 }
+
+export interface SpreadsheetRepaintClock {
+  requestFrame(callback: () => void): number;
+  cancelFrame(id: number): void;
+  setTimer(callback: () => void, delay: number): number;
+  clearTimer(id: number): void;
+}
+
+/** One repaint burst per grid, always reading current state, never a stale edit. */
+export function createSpreadsheetRepaintQueue(repaint: () => void, clock: SpreadsheetRepaintClock) {
+  let frame: number | null = null;
+  let timers: number[] = [];
+  let disposed = false;
+  let generation = 0;
+  const clearRetries = (): void => {
+    timers.forEach(id => clock.clearTimer(id));
+    timers = [];
+  };
+  return {
+    schedule(): void {
+      if (disposed) return;
+      generation++;
+      clearRetries();
+      if (frame !== null) return;
+      frame = clock.requestFrame(() => {
+        frame = null;
+        if (disposed) return;
+        const current = generation;
+        repaint();
+        if (disposed || current !== generation) return;
+        // Retain the existing library-settling checkpoints, but cancel
+        // older bursts when a newer edit supersedes them.
+        timers = [0, 120, 400].map(delay => clock.setTimer(() => {
+          if (!disposed && current === generation) repaint();
+        }, delay));
+      });
+    },
+    dispose(): void {
+      disposed = true;
+      generation++;
+      if (frame !== null) clock.cancelFrame(frame);
+      frame = null;
+      clearRetries();
+    },
+  };
+}

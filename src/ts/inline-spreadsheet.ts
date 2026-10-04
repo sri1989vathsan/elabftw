@@ -13,6 +13,7 @@ import 'jsuites/dist/jsuites.css';
 import { ApiC } from './api';
 import { captureFocus, restoreFocus } from './a11y';
 import { entity } from './getEntity';
+import { createSpreadsheetRepaintQueue } from './custom-editor/SpreadsheetPerformance';
 
 type CellValue = string | number | boolean | null;
 type AOA = CellValue[][];
@@ -7862,6 +7863,16 @@ export function buildReadOnlySpreadsheetHost(
   };
 
   let disposed = false;
+  const repaintQueue = createSpreadsheetRepaintQueue(() => {
+    if (disposed) return;
+    renderFormulaResults(sheetContainer, rawDataMirror);
+    applyCellClipHeights(sheetContainer, manuallyResizedRows);
+  }, {
+    requestFrame: callback => window.requestAnimationFrame(callback),
+    cancelFrame: id => window.cancelAnimationFrame(id),
+    setTimer: (callback, delay) => window.setTimeout(callback, delay),
+    clearTimer: id => window.clearTimeout(id),
+  });
   const notifyFromMirror = (repaintFormulas = true): void => {
     if (disposed) return;
     const data = rawDataMirror;
@@ -7877,16 +7888,7 @@ export function buildReadOnlySpreadsheetHost(
       // wrapper the same way editing it does; re-wrapping on each retry
       // keeps it from silently reverting to full (unclipped) height until
       // whatever the next settle happens to be.
-      const repaint = (): void => {
-        renderFormulaResults(sheetContainer, data);
-        applyCellClipHeights(sheetContainer, manuallyResizedRows);
-      };
-      window.requestAnimationFrame(() => {
-        repaint();
-        window.setTimeout(repaint, 0);
-        window.setTimeout(repaint, 120);
-        window.setTimeout(repaint, 400);
-      });
+      repaintQueue.schedule();
     } else {
       applyCellClipHeights(sheetContainer, manuallyResizedRows);
     }
@@ -8415,6 +8417,7 @@ export function buildReadOnlySpreadsheetHost(
         flush();
       }
       disposed = true;
+      repaintQueue.dispose();
       delete document.body.dataset.spreadsheetCellEditing;
       if (reclaimFocusHandler) document.removeEventListener('focusin', reclaimFocusHandler);
       if (suppressReclaimHandler) document.removeEventListener('pointerdown', suppressReclaimHandler, true);
