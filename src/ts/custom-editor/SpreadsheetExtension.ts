@@ -461,10 +461,11 @@ function reconcileSpreadsheetRowHeights(table: HTMLTableElement, manualRowHeight
     : Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody > tr'));
   if (rows.length === 0) return;
   removeOuterTableHeight(table);
-  rows.forEach((row, index) => {
+  // Separate layout writes from reads: measuring after each individual
+  // height reset forces a new table layout for every row.
+  rows.forEach(row => row.style.removeProperty('height'));
+  const heights = rows.map((row, index) => {
     const manualHeight = manualRowHeights?.[String(index)];
-    row.style.removeProperty('height');
-    const naturalHeight = Math.ceil(row.getBoundingClientRect().height);
     // A row present in manualRowHeights was genuinely drag-resized (see the
     // comment above) -- that choice wins outright, including shrinking
     // below the row's own natural content height (the same trade-off
@@ -474,8 +475,12 @@ function reconcileSpreadsheetRowHeights(table: HTMLTableElement, manualRowHeight
     // natural height in the same commit -- reported as not being able to
     // drag a row shorter than some floor. Only a row with NO manual entry
     // (never resized) falls back to natural height.
-    const finalHeight = manualHeight === undefined ? naturalHeight : Math.max(20, Math.round(manualHeight));
-    row.style.height = `${finalHeight}px`;
+    return manualHeight === undefined
+      ? Math.ceil(row.getBoundingClientRect().height)
+      : Math.max(20, Math.round(manualHeight));
+  });
+  rows.forEach((row, index) => {
+    row.style.height = `${heights[index]}px`;
     const serializedStyle = row.getAttribute('style')?.trim();
     if (serializedStyle) row.setAttribute('data-mce-style', serializedStyle);
   });
