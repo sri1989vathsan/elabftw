@@ -2213,6 +2213,14 @@ function installRowResizeGuide(container: HTMLElement): void {
 }
 
 function applyCellClipHeights(container: HTMLElement, manualRowHeights: ReadonlyMap<number, number>): void {
+  // The common case for a table that's never had a row drag-resized: no
+  // manual heights to apply, and (since this function is the only thing
+  // that ever creates a .jss-cell-clip wrapper) no existing wrapper to tear
+  // back down either -- genuinely nothing to do. Without this, every
+  // repaint still walked every row and every cell just to confirm that,
+  // which is pure waste scaling with table size for the majority of tables
+  // that have no manually-resized rows at all.
+  if (manualRowHeights.size === 0 && !container.querySelector(`.${CELL_CLIP_CLASS}`)) return;
   const rows = container.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr');
   rows.forEach((row, rowIndex) => {
     const cells = row.querySelectorAll<HTMLElement>(':scope > td[data-x][data-y], :scope > td.jss_row');
@@ -6232,6 +6240,18 @@ export function buildReadOnlySpreadsheetHost(
   // here so a formula survives being edited live instead of only through
   // the popup.
   let rawDataMirror = resizeData(extracted.data, rows, cols);
+  // Whether this table's data contains any formula cell at all -- checked
+  // once here, then kept (cheaply) up to date below instead of rescanned.
+  // renderFormulaResults' own full grid walk is skipped entirely while this
+  // stays false, which is the common case for a plain data table: on every
+  // single-cell edit that function otherwise visits every cell just to
+  // confirm none of them are formulas. Updated whenever a cell is actually
+  // written (see updateRawDataMirrorCell) and recomputed after a structural
+  // change (see notifyStructuralChange, which replaces rawDataMirror
+  // wholesale and so can't be updated incrementally the same way).
+  let hasAnyFormulaCell = rawDataMirror.some(
+    row => row.some(value => typeof value === 'string' && value.trimStart().startsWith('=')),
+  );
   // Which rows applyCellClipHeights (below) is allowed to actually cap a
   // cell's own content at, and to exactly what height -- only ones
   // genuinely drag-resized (or autofit, which is just as deliberate) by a
@@ -7859,13 +7879,18 @@ export function buildReadOnlySpreadsheetHost(
       const result = evaluateFormula(currentValue, rawDataMirror, col, row);
       if (value === '#ERROR' || (result !== undefined && String(value) === String(result))) return;
     }
+    if (typeof value === 'string' && value.trimStart().startsWith('=')) hasAnyFormulaCell = true;
     rawDataMirror[row][col] = value;
   };
 
   let disposed = false;
   const repaintQueue = createSpreadsheetRepaintQueue(() => {
     if (disposed) return;
-    renderFormulaResults(sheetContainer, rawDataMirror);
+    // Skipping this entirely for a table with no formulas at all removes a
+    // full grid walk (every cell, every repaint) that would otherwise just
+    // confirm there's nothing to do -- hasAnyFormulaCell never understates
+    // (see its own comment), so a real formula is never left unevaluated.
+    if (hasAnyFormulaCell) renderFormulaResults(sheetContainer, rawDataMirror);
     applyCellClipHeights(sheetContainer, manuallyResizedRows);
   }, {
     requestFrame: callback => window.requestAnimationFrame(callback),
@@ -7985,6 +8010,13 @@ export function buildReadOnlySpreadsheetHost(
       const rows = liveData.length;
       const cols = liveData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
       rawDataMirror = resizeData(liveData, rows, cols);
+      // A row/column insert or delete replaces rawDataMirror wholesale
+      // (rather than a single tracked cell), so hasAnyFormulaCell can't be
+      // updated incrementally here the way updateRawDataMirrorCell does --
+      // rescan the (usually small, now-current) grid instead.
+      hasAnyFormulaCell = rawDataMirror.some(
+        row => row.some(value => typeof value === 'string' && value.trimStart().startsWith('=')),
+      );
     }
     notifyFromMirror();
   };
