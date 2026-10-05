@@ -678,7 +678,20 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       }
       editor.undoManager.add();
     }).catch(() => {
-      // User cancelled.
+      // User cancelled -- the real table was never touched (the popup
+      // only ever edits its own separate copy), but its inline overlay can
+      // end up torn down while the popup was open (observed intermittently
+      // in this exact flow, likely a timing race in the
+      // visibility/geometry recheck machinery elsewhere in this file) with
+      // nothing left to rebuild it, since only the success path above ever
+      // did. The real table stays visibility:hidden by design -- its
+      // overlay is the only visible representation -- so losing it reads
+      // as the whole spreadsheet silently vanishing on Cancel, though the
+      // data was never actually at risk. refreshTableOverlay() rebuilds
+      // from the real table's own (untouched) content, so this is a safe,
+      // idempotent no-op on the common case where the overlay was never
+      // actually removed.
+      if (existingTable && existingTable.isConnected) refreshTableOverlay(existingTable);
     });
   };
 
