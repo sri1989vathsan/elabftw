@@ -2012,7 +2012,25 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           editor.selection.setRng(range);
         }
       }
+      const body = editor.getBody();
+      const tablesBefore = new Set(Array.from(body.querySelectorAll('table.elabftw-spreadsheet')));
       editor.insertContent(html);
+      const insertedTable = Array.from(body.querySelectorAll('table.elabftw-spreadsheet'))
+        .find(table => !tablesBefore.has(table));
+      if (!insertedTable) return;
+      // TinyMCE's own table-insert default otherwise leaves the cursor
+      // inside the table's first cell, so the very next keystroke lands in
+      // a cell instead of the surrounding text. Move it to a line of its
+      // own right below the pasted table instead, creating one if nothing
+      // suitable already follows.
+      let next = insertedTable.nextElementSibling;
+      if (!next || next.tagName === 'TABLE') {
+        const p = body.ownerDocument.createElement('p');
+        p.innerHTML = '<br data-mce-bogus="1">';
+        insertedTable.after(p);
+        next = p;
+      }
+      editor.selection.setCursorLocation(next, 0);
     };
     const spreadsheetPasteHandler = (event: ClipboardEvent): void => {
       const clipboard = event.clipboardData;
