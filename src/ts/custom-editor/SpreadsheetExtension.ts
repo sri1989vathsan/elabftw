@@ -1759,6 +1759,22 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // rate; idle frames skip all DOM geometry reads and style writes.
   const layoutEvents = ['scroll', 'resize', 'pointermove', 'pointerdown', 'input', 'transitionrun', 'transitionend', 'elabftw-spreadsheet-resync'];
   layoutEvents.forEach(name => window.addEventListener(name, invalidateSpreadsheetLayout, true));
+  // Backgrounding the tab/window doesn't pause native scrolling (compositor
+  // driven), but browsers deliberately throttle requestAnimationFrame for a
+  // hidden document -- often to ~1fps or less -- to save battery/CPU. This
+  // loop is entirely rAF-driven, so an overlay left mid-sync when the tab
+  // went background only catches up a frame or two at a time once it's
+  // visible again, lagging behind the (instantly correct) real scroll
+  // position for a moment -- reported as spreadsheets responding slower to
+  // scrolling than the rest of the page right after switching back.
+  // ensureSyncLoop() itself (not a direct syncOverlayPositions() call,
+  // which would start a second, permanently-doubled rAF chain on top of
+  // whatever's already running) forces the gate open for the very next
+  // frame without that risk.
+  const onVisibilityChange = (): void => {
+    if (document.visibilityState === 'visible') ensureSyncLoop();
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
   editor.on('input keydown NodeChange SetContent Undo Redo ResizeEditor', invalidateSpreadsheetLayout);
   const layoutObserver = new ResizeObserver(invalidateSpreadsheetLayout);
   const observeEditorLayout = (): void => {
@@ -1787,6 +1803,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     overlaySyncRunning = false;
     layoutObserver.disconnect();
     layoutEvents.forEach(name => window.removeEventListener(name, invalidateSpreadsheetLayout, true));
+    document.removeEventListener('visibilitychange', onVisibilityChange);
     tableVisibility.disconnect();
     Array.from(spreadsheetOverlays.keys()).forEach(table => removeOverlay(table));
     window.removeEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
