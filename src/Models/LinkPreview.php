@@ -145,7 +145,18 @@ final class LinkPreview extends AbstractRest
                 'method' => 'GET',
                 'timeout' => self::TIMEOUT_SECONDS,
                 'follow_location' => 0,
-                'header' => "User-Agent: elabftw-link-preview\r\n",
+                // A self-identifying UA (the previous
+                // "elabftw-link-preview") gets flat-out 403'd by the bot
+                // protection in front of plenty of ordinary vendor sites
+                // (confirmed against fishersci.ch: 403 with this, 200 with
+                // a browser-looking one) -- those sites don't care that the
+                // request is otherwise harmless, only that it doesn't look
+                // like a browser. A generic, current desktop Chrome UA gets
+                // treated like any other visitor instead.
+                'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    . " (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36\r\n"
+                    . "Accept: text/html,application/xhtml+xml\r\n"
+                    . "Accept-Language: en-US,en;q=0.9\r\n",
                 'ignore_errors' => true,
             ),
             'ssl' => array(
@@ -155,6 +166,18 @@ final class LinkPreview extends AbstractRest
         ));
         $stream = @fopen($url, 'rb', false, $context);
         if ($stream === false) {
+            return null;
+        }
+        // $http_response_header is populated by the fopen() wrapper above
+        // into the calling scope once the stream is open -- a WAF/bot-block
+        // page is still a "successful" fetch as far as fopen is concerned,
+        // just not a 2xx one, so without this check its block page's own
+        // <title> (often literally "Access Denied") gets extracted below
+        // and shown to the user as if it were the real page's title.
+        $statusLine = $http_response_header[0] ?? '';
+        if (preg_match('{^HTTP/\S+\s+(\d{3})}', $statusLine, $statusMatch) !== 1
+            || (int) $statusMatch[1] >= 300) {
+            fclose($stream);
             return null;
         }
         // fread() over a network stream can (and often does) return fewer
