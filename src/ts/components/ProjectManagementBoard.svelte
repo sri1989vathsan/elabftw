@@ -677,7 +677,7 @@
         }
         : null;
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not load task counts.');
+      notify.error(error instanceof Error ? error.message : 'Could not load card counts.');
     }
   }
 
@@ -733,7 +733,7 @@
       hasMoreOpen = open.length === PAGE_SIZE;
       hasMoreCompleted = done.length === PAGE_SIZE;
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not load tasks.');
+      notify.error(error instanceof Error ? error.message : 'Could not load cards.');
     } finally {
       loading = false;
     }
@@ -769,7 +769,7 @@
       }
       await Promise.all(requests);
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not load more tasks.');
+      notify.error(error instanceof Error ? error.message : 'Could not load more cards.');
     } finally {
       loadingMore = false;
     }
@@ -847,7 +847,7 @@
       });
     });
 
-    // Lets the Search side panel offer a "Link to task" button on its
+    // Lets the Search side panel offer a "Link to card" button on its
     // results (see FavoriteFilters.class.ts) while a task's detail dialog is
     // open, the same way it offers "Link" while editing an experiment.
     const onEntityLinkAdded = (): void => {
@@ -978,7 +978,7 @@
     detailProjectId = detailTask.project_id;
     detailDescription = '';
     detailNotes = '';
-    window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: { id: 0, title: t('New task') } }));
+    window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: { id: 0, title: t('New card') } }));
   }
 
   async function loadColumns(): Promise<void> {
@@ -1032,7 +1032,7 @@
       await ApiC.patch(`${Model.Todolist}/${task.id}`, { column_id: columnId });
       await load();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not move the task.');
+      notify.error(error instanceof Error ? error.message : 'Could not move the card.');
     }
   }
 
@@ -1078,7 +1078,7 @@
       notify.success();
       await load();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not reorder that task.');
+      notify.error(error instanceof Error ? error.message : 'Could not reorder that card.');
     }
   }
 
@@ -1103,7 +1103,7 @@
       selectedTaskIds = new Set();
       await load();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not move the selected tasks.');
+      notify.error(error instanceof Error ? error.message : 'Could not move the selected cards.');
     }
   }
 
@@ -1112,7 +1112,7 @@
       await ApiC.patch(`${Model.Todolist}/${task.id}`, { pinned: !task.pinned });
       await load();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not update the task.');
+      notify.error(error instanceof Error ? error.message : 'Could not update the card.');
     }
   }
 
@@ -1327,7 +1327,7 @@
       if (detailTask?.id === task.id) closeDetail();
       await load();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not delete the task.');
+      notify.error(error instanceof Error ? error.message : 'Could not delete the card.');
     }
   }
 
@@ -1397,7 +1397,7 @@
       const created = tasks.find(t => t.id === newId) ?? await ApiC.getJson(`${Model.Todolist}/${newId}`) as Task;
       openDetail(created);
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not duplicate the task.');
+      notify.error(error instanceof Error ? error.message : 'Could not duplicate the card.');
     } finally {
       duplicatingTaskBusy = false;
     }
@@ -1446,7 +1446,7 @@
       notify.success();
       selectedTaskIds = new Set();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not duplicate the selected tasks.');
+      notify.error(error instanceof Error ? error.message : 'Could not duplicate the selected cards.');
     } finally {
       copyingTasks = false;
       await load();
@@ -1467,7 +1467,7 @@
       notify.success();
       selectedTaskIds = new Set();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not archive the selected tasks.');
+      notify.error(error instanceof Error ? error.message : 'Could not archive the selected cards.');
     } finally {
       archivingTasks = false;
       await load();
@@ -1478,7 +1478,7 @@
   async function bulkDeleteTasks(): Promise<void> {
     const selected = tasks.filter(t => selectedTaskIds.has(t.id) && canManage(t));
     if (selected.length === 0 || deletingTasks) return;
-    if (!window.confirm(`${t('Delete')} ${selected.length} ${t('tasks')}? ${t('This cannot be undone.')}`)) return;
+    if (!window.confirm(`${t('Delete')} ${selected.length} ${t('cards')}? ${t('This cannot be undone.')}`)) return;
     deletingTasks = true;
     try {
       for (const task of selected) {
@@ -1489,7 +1489,7 @@
       notify.success();
       selectedTaskIds = new Set();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not delete the selected tasks.');
+      notify.error(error instanceof Error ? error.message : 'Could not delete the selected cards.');
     } finally {
       deletingTasks = false;
       await load();
@@ -1506,7 +1506,7 @@
       if (detailTask?.id === task.id) closeDetail();
       await load();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not archive the task.');
+      notify.error(error instanceof Error ? error.message : 'Could not archive the card.');
     }
   }
 
@@ -1517,7 +1517,7 @@
       if (detailTask?.id === task.id) closeDetail();
       await load();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not unarchive the task.');
+      notify.error(error instanceof Error ? error.message : 'Could not unarchive the card.');
     }
   }
 
@@ -1527,7 +1527,7 @@
     try {
       archivedTasks = await ApiC.getJson(`${Model.Todolist}?scope=team&archived=1&limit=100`) as Task[];
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not load archived tasks.');
+      notify.error(error instanceof Error ? error.message : 'Could not load archived cards.');
     } finally {
       loadingArchived = false;
     }
@@ -1637,7 +1637,7 @@
       try {
         task = await ApiC.getJson(`${Model.Todolist}/${taskId}`) as Task;
       } catch (error) {
-        notify.error(error instanceof Error ? error.message : 'Could not open this task.');
+        notify.error(error instanceof Error ? error.message : 'Could not open this card.');
         return;
       }
     }
@@ -1701,7 +1701,7 @@
     if (!detailTask) return;
     const title = detailTitle.trim();
     if (!title) {
-      notify.error('Enter a task title.');
+      notify.error('Enter a card title.');
       return;
     }
     savingDetail = true;
@@ -1760,7 +1760,7 @@
       detailEditing = false;
       await load();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not save the task.');
+      notify.error(error instanceof Error ? error.message : 'Could not save the card.');
     } finally {
       savingDetail = false;
     }
@@ -2402,7 +2402,7 @@
 
   async function setProjectArchived(archived: boolean): Promise<void> {
     if (!editingProject) return;
-    if (archived && !window.confirm(t('Archive this project? It disappears from the normal project list, and so do its tasks (from All, search and progress counts too) -- nothing is deleted, and it can be restored later from "Show archived".'))) return;
+    if (archived && !window.confirm(t('Archive this project? It disappears from the normal project list, and so do its cards (from All, search and progress counts too) -- nothing is deleted, and it can be restored later from "Show archived".'))) return;
     savingProject = true;
     try {
       await ApiC.patch(`${Model.TodolistProjects}/${editingProject.id}`, { archived });
@@ -2549,7 +2549,7 @@
       <input
         class="form-control form-control-sm"
         type="search"
-        placeholder={t('Search tasks…')}
+        placeholder={t('Search cards…')}
         title={t('Searches title, notes, description, project, priority, people and linked items')}
         bind:value={searchQuery}
         on:input={onSearchInput}
@@ -2571,7 +2571,7 @@
   {/if}
   {#if hasMoreTasks}
     <button type="button" class="btn btn-link btn-sm pm-load-more" on:click={loadMoreTasks} disabled={loadingMore}>
-      {loadingMore ? t('Loading') + '…' : t('Load more tasks')}
+      {loadingMore ? t('Loading') + '…' : t('Load more cards')}
     </button>
   {/if}
 
@@ -2582,12 +2582,12 @@
       on:click={() => openNewTaskInColumn(todoColumn?.id ?? visibleColumns(columns)[0]?.id ?? 0)}
       disabled={columns.length === 0}
     >
-      <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add task')}
+      <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add card')}
     </button>
   </div>
 
   <div class="d-flex align-items-center my-3">
-    <div class="btn-group btn-group-sm" role="group" aria-label={t('Task view')}>
+    <div class="btn-group btn-group-sm" role="group" aria-label={t('Card view')}>
       <button type="button" class={scope === 'team' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('team')}>
         <i class="fas fa-list fa-fw mr-1" aria-hidden="true"></i>{t('All')}
       </button>
@@ -2659,7 +2659,7 @@
               on:dragstart={(event) => startColumnDrag(event, column.id)}
               on:dragend={finishColumnDrag}
             >{column.name} <span class="badge badge-secondary">{columnTasks.length}</span></h3>
-            <button type="button" class="btn-unstyled pm-column-add-btn ml-auto" title={`${t('Add a task to')} ${column.name}`} aria-label={`${t('Add a task to')} ${column.name}`} on:click={() => openNewTaskInColumn(column.id)}>
+            <button type="button" class="btn-unstyled pm-column-add-btn ml-auto" title={`${t('Add a card to')} ${column.name}`} aria-label={`${t('Add a card to')} ${column.name}`} on:click={() => openNewTaskInColumn(column.id)}>
               <i class="fas fa-plus fa-fw" aria-hidden="true"></i>
             </button>
           </div>
@@ -2858,7 +2858,7 @@
   <div class="pm-overlay pm-overlay-task" role="presentation">
     <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmDetailTitle">
       <div class="pm-dialog-header">
-        <h4 id="pmDetailTitle" class="mb-0">{detailEditing ? t('Edit task') : detailTask.body}</h4>
+        <h4 id="pmDetailTitle" class="mb-0">{detailEditing ? t('Edit card') : detailTask.body}</h4>
         {#if detailTask.project_name}
           <span class="badge badge-info">{#if detailTask.project_parent_name}{detailTask.project_parent_name} / {/if}{detailTask.project_name}</span>
         {/if}
@@ -3524,7 +3524,7 @@
   <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeDuplicateDialog(); }}>
     <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pmDuplicateTaskTitle">
       <div class="pm-dialog-header">
-        <h4 id="pmDuplicateTaskTitle" class="mb-0">{t('Duplicate task')}</h4>
+        <h4 id="pmDuplicateTaskTitle" class="mb-0">{t('Duplicate card')}</h4>
         <button type="button" class="pm-close-btn" on:click={closeDuplicateDialog} aria-label={t('Close')}>&times;</button>
       </div>
       <div class="pm-dialog-body">
@@ -3599,14 +3599,14 @@
   <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeArchivedModal(); }}>
     <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pmArchivedTitle">
       <div class="pm-dialog-header">
-        <h4 id="pmArchivedTitle" class="mb-0">{t('Archived tasks')}</h4>
+        <h4 id="pmArchivedTitle" class="mb-0">{t('Archived cards')}</h4>
         <button type="button" class="pm-close-btn" on:click={closeArchivedModal} aria-label={t('Close')}>&times;</button>
       </div>
       <div class="pm-dialog-body">
         {#if loadingArchived}
           <p class="pm-muted small mb-0">{t('Loading')}…</p>
         {:else if archivedTasks.length === 0}
-          <p class="pm-muted small mb-0">{t('No archived tasks.')}</p>
+          <p class="pm-muted small mb-0">{t('No archived cards.')}</p>
         {:else}
           <ul class="pm-entity-link-list">
             {#each archivedTasks as task (task.id)}
