@@ -588,11 +588,10 @@
     }[type];
   }
 
-  // Same icon set as taskLinkGroups' own compact chips below, reused here so
-  // a linked entity's type reads the same icon everywhere it's referenced
-  // (step, linked-items list, or the card's own grouped chip) instead of a
-  // wordy text badge -- entityTypeLabel() still supplies the title/
-  // aria-label for anyone not relying on the icon alone.
+  // Single source of truth for the icon shown for a linked entity's type --
+  // used both for the inline badge below and for taskLinkGroups' own compact
+  // chips, so the two can't drift apart. entityTypeLabel() still supplies
+  // the title/aria-label for anyone not relying on the icon alone.
   function entityTypeIcon(type: EntityLinkType): string {
     return {
       experiments: 'fa-flask',
@@ -618,13 +617,13 @@
   // an {#if}/{#each}/etc, not a bare element like the card's outer <div>.
   function taskLinkGroups(task: Task) {
     return [
-      { type: 'experiments' as const, label: t('Experiments'), icon: 'fa-flask' },
-      { type: 'items' as const, label: t('Resources'), icon: 'fa-cubes' },
-      { type: 'weblink' as const, label: t('Links'), icon: 'fa-link' },
-      { type: 'experiments_templates' as const, label: t('Templates'), icon: 'fa-file' },
-      { type: 'items_types' as const, label: t('Resource template'), icon: 'fa-file' },
+      { type: 'experiments' as const, label: t('Experiments') },
+      { type: 'items' as const, label: t('Resources') },
+      { type: 'weblink' as const, label: t('Links') },
+      { type: 'experiments_templates' as const, label: t('Templates') },
+      { type: 'items_types' as const, label: t('Resource template') },
     ]
-      .map(group => ({ ...group, links: task.entity_links.filter(link => boardLinkType(link) === group.type) }))
+      .map(group => ({ ...group, icon: entityTypeIcon(group.type), links: task.entity_links.filter(link => boardLinkType(link) === group.type) }))
       .filter(group => group.links.length > 0);
   }
 
