@@ -4434,6 +4434,36 @@ export function openSpreadsheetModal(
       event.preventDefault();
       event.stopImmediatePropagation();
     };
+    // Same idea as onCellSecondMousedown just above, but for a double-click
+    // on a column/row border: jspreadsheet's own native resize-drag arms
+    // itself (and, on an immediate same-position mouseup with zero
+    // movement, resolves) from a plain mousedown within 6px of a border,
+    // with no awareness of this being part of a double-click. Left alone,
+    // BOTH of a double-click's own mousedowns independently trigger that
+    // native no-op resize/mouseup cycle -- each calling jspreadsheet's own
+    // setWidth()/setHeight() and pushing an undo-history entry -- before
+    // onColumnBoundaryDoubleClick/onRowBoundaryDoubleClick's own (real)
+    // resize ever runs. Confirmed directly: one double-click-to-autofit
+    // fired onresizecolumn three times (two harmless same-width no-ops,
+    // then the actual autofit), meaning a single Ctrl+Z after autofitting a
+    // column only undid the last of those three. Same edge-tolerance as
+    // those handlers, so this only swallows a mousedown that would
+    // otherwise have armed a border resize.
+    const onBorderSecondMousedown = (event: MouseEvent): void => {
+      if (event.button !== 0 || event.detail < 2 || !sheetContainer) return;
+      const header = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > thead [data-x], .jss_worksheet > tbody .jss_row[data-y]')
+        : null;
+      if (!header || !sheetContainer.contains(header)) return;
+      const rect = header.getBoundingClientRect();
+      const edgeTolerance = 7;
+      const nearBorder = header.classList.contains('jss_row')
+        ? Math.min(Math.abs(event.clientY - rect.top), Math.abs(rect.bottom - event.clientY)) <= edgeTolerance
+        : Math.min(Math.abs(event.clientX - rect.left), Math.abs(rect.right - event.clientX)) <= edgeTolerance;
+      if (!nearBorder) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
     const onCellDoubleClick = (event: MouseEvent): void => {
       if (event.button !== 0 || !sheetContainer) return;
       const cell = event.target instanceof Element
@@ -4543,6 +4573,7 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('dblclick', onColumnBoundaryDoubleClick, true);
     ui.sheetHost.addEventListener('dblclick', onRowBoundaryDoubleClick, true);
     window.addEventListener('mousedown', onCellSecondMousedown, true);
+    window.addEventListener('mousedown', onBorderSecondMousedown, true);
     window.addEventListener('dblclick', onCellDoubleClick, true);
     ui.sheetHost.addEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
     // jspreadsheet-ce's own fill-handle drag-copy (the .jss_corner square)
@@ -5720,6 +5751,7 @@ export function openSpreadsheetModal(
       ui.sheetHost.removeEventListener('dblclick', onColumnBoundaryDoubleClick, true);
       ui.sheetHost.removeEventListener('dblclick', onRowBoundaryDoubleClick, true);
       window.removeEventListener('mousedown', onCellSecondMousedown, true);
+      window.removeEventListener('mousedown', onBorderSecondMousedown, true);
       window.removeEventListener('dblclick', onCellDoubleClick, true);
       releaseRescueKeys?.();
       ui.sheetHost.removeEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
@@ -7044,6 +7076,39 @@ export function buildReadOnlySpreadsheetHost(
         ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
         : null;
       if (!cell || !sheetContainer.contains(cell)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
+
+    // Same second-mousedown interception as just above, but for a double-
+    // click on a column/row border -- jspreadsheet's own native resize-drag
+    // arms itself (and, on an immediate same-position mouseup with zero
+    // movement, resolves) from a plain mousedown within 6px of a border,
+    // with no awareness of this being part of a double-click at all. Left
+    // alone, BOTH of a double-click's own mousedowns independently trigger
+    // that native no-op resize/mouseup cycle -- each one calling
+    // jspreadsheet's own setWidth()/setHeight() and pushing an undo-history
+    // entry -- before this file's own dblclick-autofit handler below ever
+    // runs its own (real) resize. Confirmed directly: one double-click-to-
+    // autofit fired onresizecolumn three times (two harmless same-width
+    // no-ops, then the actual autofit), meaning a single Ctrl+Z press after
+    // autofitting a column only undid the last of those three, leaving the
+    // column visibly still at its new, fitted width. Same edge-tolerance as
+    // the dblclick handlers below, so this only swallows a mousedown that
+    // would otherwise have armed a border resize, not an ordinary click
+    // elsewhere in the header/row.
+    window.addEventListener('mousedown', event => {
+      if (event.button !== 0 || event.detail < 2) return;
+      const header = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.jss_worksheet > thead [data-x], .jss_worksheet > tbody .jss_row[data-y]')
+        : null;
+      if (!header || !sheetContainer.contains(header)) return;
+      const rect = header.getBoundingClientRect();
+      const edgeTolerance = 7;
+      const nearBorder = header.classList.contains('jss_row')
+        ? Math.min(Math.abs(event.clientY - rect.top), Math.abs(rect.bottom - event.clientY)) <= edgeTolerance
+        : Math.min(Math.abs(event.clientX - rect.left), Math.abs(rect.right - event.clientX)) <= edgeTolerance;
+      if (!nearBorder) return;
       event.preventDefault();
       event.stopImmediatePropagation();
     }, true);
