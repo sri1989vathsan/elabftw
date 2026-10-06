@@ -26,7 +26,7 @@ $Response = new Response();
 try {
     $Response->prepare($App->Request);
     $Response->setContent($App->render('projectmanagement.html', array(
-        'pageTitle' => _('Project management'),
+        'pageTitle' => _('Boards'),
         'hideTitle' => true,
     )));
     $Response->headers->set('Cache-Control', 'no-store');
