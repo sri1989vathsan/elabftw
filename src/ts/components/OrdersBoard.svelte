@@ -1204,6 +1204,20 @@
   type PendingNoteImage = { placeholderId: string; file: File };
   let pendingNoteImages: PendingNoteImage[] = [];
 
+  // The notes field has no toolbar at all otherwise -- insertUnorderedList/
+  // insertOrderedList are the same plain document.execCommand() approach
+  // already used for pasted/dropped images just below, rather than pulling
+  // in a rich-text editor for one field. A toolbar button's own click
+  // already moved focus off the contenteditable by the time a click handler
+  // would run, taking the text selection/cursor position with it -- el
+  // .focus() alone cannot restore where the cursor was. Callers bind this
+  // to the button's mousedown (with preventDefault) instead of click, so
+  // focus never actually leaves the editor in the first place.
+  function applyNotesListFormat(el: HTMLElement, command: 'insertUnorderedList' | 'insertOrderedList'): void {
+    el.focus();
+    document.execCommand(command);
+  }
+
   function queueNoteImageForCreate(file: File, el: HTMLElement): void {
     const placeholderId = `pending-image-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     pendingNoteImages = [...pendingNoteImages, { placeholderId, file }];
@@ -1528,6 +1542,14 @@
         </span>
       {/if}
       <label class="sr-only" for="ordersNewNotes">{t('Notes')}</label>
+      <div class="orders-notes-toolbar mb-1">
+        <button type="button" class="btn btn-ghost btn-sm orders-icon-button" title={t('Bulleted list')} aria-label={t('Bulleted list')} on:mousedown|preventDefault={() => applyNotesListFormat(newNotesEl, 'insertUnorderedList')}>
+          <i class="fas fa-list-ul fa-fw" aria-hidden="true"></i>
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm orders-icon-button" title={t('Numbered list')} aria-label={t('Numbered list')} on:mousedown|preventDefault={() => applyNotesListFormat(newNotesEl, 'insertOrderedList')}>
+          <i class="fas fa-list-ol fa-fw" aria-hidden="true"></i>
+        </button>
+      </div>
       <div
         id="ordersNewNotes"
         class="form-control mb-2 orders-notes-editor"
@@ -1894,6 +1916,14 @@
                   {/each}
                 </select>
                 <label class="sr-only" for={`ordersEditNotes-${item.id}`}>{t('Notes')}</label>
+                <div class="orders-notes-toolbar mb-1">
+                  <button type="button" class="btn btn-ghost btn-sm orders-icon-button" title={t('Bulleted list')} aria-label={t('Bulleted list')} on:mousedown|preventDefault={() => applyNotesListFormat(editNotesEl, 'insertUnorderedList')}>
+                    <i class="fas fa-list-ul fa-fw" aria-hidden="true"></i>
+                  </button>
+                  <button type="button" class="btn btn-ghost btn-sm orders-icon-button" title={t('Numbered list')} aria-label={t('Numbered list')} on:mousedown|preventDefault={() => applyNotesListFormat(editNotesEl, 'insertOrderedList')}>
+                    <i class="fas fa-list-ol fa-fw" aria-hidden="true"></i>
+                  </button>
+                </div>
                 <div
                   id={`ordersEditNotes-${item.id}`}
                   class="form-control form-control-sm mb-2 orders-notes-editor"
@@ -2770,10 +2800,21 @@
     object-fit: contain;
   }
 
+  .orders-notes-toolbar {
+    display: flex;
+    gap: 0.2rem;
+  }
+
   .orders-notes-editor {
     height: auto;
     min-height: 4rem;
     overflow-y: auto;
+  }
+
+  .orders-notes-editor :global(ul),
+  .orders-notes-editor :global(ol) {
+    margin-bottom: 0.25rem;
+    padding-left: 1.25rem;
   }
 
   .orders-notes-editor:focus {
