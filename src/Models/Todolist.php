@@ -42,6 +42,7 @@ use function in_array;
 use function is_array;
 use function json_decode;
 use function mb_strlen;
+use function preg_match;
 use function preg_replace;
 use function preg_split;
 use function sprintf;
@@ -401,13 +402,18 @@ final class Todolist extends AbstractRest
                 FROM custom_todolist_steps WHERE task_id IN (' . implode(',', $ids) . ')
                 ORDER BY ordering ASC, id ASC');
             $this->Db->execute($stepsReq);
+            $steps = $stepsReq->fetchAll();
+            $stepStatuses = $this->readLinkedStepStatuses($steps);
             $byTask = array();
-            foreach ($stepsReq->fetchAll() as $step) {
+            foreach ($steps as $step) {
                 $taskId = (int) $step['task_id'];
                 unset($step['task_id']);
                 $step['id'] = (int) $step['id'];
                 $step['ordering'] = (int) $step['ordering'];
                 $step['finished'] = (bool) $step['finished'];
+                $status = $stepStatuses[$step['id']] ?? null;
+                $step['status_title'] = $status['title'] ?? null;
+                $step['status_color'] = $status['color'] ?? null;
                 $byTask[$taskId][] = $step;
             }
             foreach ($tasks as &$task) {
@@ -416,6 +422,61 @@ final class Todolist extends AbstractRest
             unset($task);
         }
         return $tasks;
+    }
+
+    // Mirrors TodolistSteps::STEP_LINK_PATTERN -- a step whose entire body
+    // is "[label](elabftw-entity:type:id)" is the client's pseudo-link
+    // syntax for "this step is actually about this experiment/resource"
+    // (see parseStepLink() in ProjectManagementBoard.svelte). This board
+    // listing covers every task on the page at once, so status is resolved
+    // here in at most two bulk IN(...) queries (one per entity type that
+    // actually carries a status) rather than one query per step.
+    private const string STEP_LINK_PATTERN = '/^\[(.+)\]\(elabftw-entity:([a-z_]+):(\d+)\)$/';
+
+    /** @return array<int, array{title: string, color: string}> keyed by step id */
+    private function readLinkedStepStatuses(array $steps): array
+    {
+        $idsByType = array('experiments' => array(), 'items' => array());
+        foreach ($steps as $step) {
+            if (preg_match(self::STEP_LINK_PATTERN, (string) $step['body'], $matches) !== 1) {
+                continue;
+            }
+            [, , $entityType, $entityId] = $matches;
+            if (array_key_exists($entityType, $idsByType)) {
+                $idsByType[$entityType][(int) $step['id']] = (int) $entityId;
+            }
+        }
+        $statusByStepId = array();
+        foreach ($idsByType as $entityType => $stepIdToEntityId) {
+            if ($stepIdToEntityId === array()) {
+                continue;
+            }
+            $entityIds = array_values(array_unique($stepIdToEntityId));
+            $sql = sprintf(
+                'SELECT e.id AS entity_id, statust.title, statust.color FROM %s AS e
+                    LEFT JOIN %s_status AS statust ON statust.id = e.status
+                    WHERE e.id IN (%s) AND e.team = :team',
+                $entityType,
+                $entityType,
+                implode(',', $entityIds),
+            );
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $statusByEntityId = array();
+            foreach ($req->fetchAll() as $row) {
+                if ($row['title'] === null) {
+                    continue;
+                }
+                $statusByEntityId[(int) $row['entity_id']] = array('title' => $row['title'], 'color' => $row['color']);
+            }
+            foreach ($stepIdToEntityId as $stepId => $entityId) {
+                if (isset($statusByEntityId[$entityId])) {
+                    $statusByStepId[$stepId] = $statusByEntityId[$entityId];
+                }
+            }
+        }
+        return $statusByStepId;
     }
 
     /**
@@ -614,7 +675,33 @@ final class Todolist extends AbstractRest
                         WHEN 'items' THEN (SELECT title FROM items WHERE id = tel.entity_id)
                         WHEN 'experiments_templates' THEN (SELECT title FROM experiments_templates WHERE id = tel.entity_id)
                         WHEN 'items_types' THEN (SELECT title FROM items_types WHERE id = tel.entity_id)
-                    END AS title
+                    END AS title,
+                    -- Same status lookup as TodolistEntityLinks::readAll()
+                    -- -- only experiments/items carry a status.
+                    CASE tel.entity_type
+                        WHEN 'experiments' THEN (
+                            SELECT statust.title FROM experiments AS e
+                            LEFT JOIN experiments_status AS statust ON statust.id = e.status
+                            WHERE e.id = tel.entity_id
+                        )
+                        WHEN 'items' THEN (
+                            SELECT statust.title FROM items AS e
+                            LEFT JOIN items_status AS statust ON statust.id = e.status
+                            WHERE e.id = tel.entity_id
+                        )
+                    END AS status_title,
+                    CASE tel.entity_type
+                        WHEN 'experiments' THEN (
+                            SELECT statust.color FROM experiments AS e
+                            LEFT JOIN experiments_status AS statust ON statust.id = e.status
+                            WHERE e.id = tel.entity_id
+                        )
+                        WHEN 'items' THEN (
+                            SELECT statust.color FROM items AS e
+                            LEFT JOIN items_status AS statust ON statust.id = e.status
+                            WHERE e.id = tel.entity_id
+                        )
+                    END AS status_color
                 FROM todolist AS t
                 INNER JOIN todolist_entity_links AS tel ON tel.task_id = t.id
                 LEFT JOIN todolist_projects AS project ON project.id = t.project_id

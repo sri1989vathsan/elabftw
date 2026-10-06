@@ -21,6 +21,7 @@ use Override;
 use PDO;
 
 use function mb_strlen;
+use function preg_match;
 use function sprintf;
 
 /**
@@ -31,6 +32,15 @@ use function sprintf;
 final class TodolistSteps extends AbstractRest
 {
     use SetIdTrait;
+
+    // Mirrors parseStepLink() in ProjectManagementBoard.svelte -- a step
+    // whose entire body is nothing but "[label](elabftw-entity:type:id)" is
+    // the client's own pseudo-link syntax for "this step is actually about
+    // this experiment/resource" (no real foreign key, since a step's body
+    // is otherwise plain text). Parsed the same way here so the step's
+    // linked entity's status can be shown next to it, same as a real
+    // entity link (see TodolistEntityLinks::readAll()).
+    private const string STEP_LINK_PATTERN = '/^\[(.+)\]\(elabftw-entity:([a-z_]+):(\d+)\)$/';
 
     public function __construct(private Users $Users, private Todolist $Task, ?int $id = null)
     {
@@ -62,9 +72,55 @@ final class TodolistSteps extends AbstractRest
             $step['id'] = (int) $step['id'];
             $step['ordering'] = (int) $step['ordering'];
             $step['finished'] = (bool) $step['finished'];
+            $step['status_title'] = null;
+            $step['status_color'] = null;
+            if (preg_match(self::STEP_LINK_PATTERN, (string) $step['body'], $matches) === 1) {
+                $status = $this->readLinkedStepStatus($matches[2], (int) $matches[3]);
+                if ($status !== null) {
+                    $step['status_title'] = $status['title'];
+                    $step['status_color'] = $status['color'];
+                }
+            }
         }
 
         return $result;
+    }
+
+    /** Only experiments/items carry a status at all; everything else (including a bad/foreign-team id) is null. */
+    private function readLinkedStepStatus(string $entityType, int $entityId): ?array
+    {
+        $table = match ($entityType) {
+            'experiments' => 'experiments',
+            'items' => 'items',
+            default => null,
+        };
+        if ($table === null) {
+            return null;
+        }
+        $sql = sprintf(
+            'SELECT statust.title, statust.color FROM %s AS e
+                LEFT JOIN %s_status AS statust ON statust.id = e.status
+                WHERE e.id = :id AND e.team = :team',
+            $table,
+            $table,
+        );
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':id', $entityId, PDO::PARAM_INT);
+        $req->bindValue(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        // Db::fetch() throws when there's no row -- a plain "that id
+        // doesn't exist (or isn't on this team)" here, same as a dangling
+        // entity link elsewhere in this file, not an error worth failing
+        // the whole steps list over.
+        try {
+            $row = $this->Db->fetch($req);
+        } catch (ResourceNotFoundException) {
+            return null;
+        }
+        if ($row['title'] === null) {
+            return null;
+        }
+        return $row;
     }
 
     #[Override]

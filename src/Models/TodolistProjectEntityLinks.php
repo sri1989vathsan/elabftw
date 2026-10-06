@@ -67,7 +67,35 @@ final class TodolistProjectEntityLinks extends AbstractRest
                     WHEN 'items' THEN (SELECT title FROM items WHERE id = link.entity_id AND team = :team)
                     WHEN 'experiments_templates' THEN (SELECT title FROM experiments_templates WHERE id = link.entity_id AND team = :team)
                     WHEN 'items_types' THEN (SELECT title FROM items_types WHERE id = link.entity_id AND team = :team)
-                END AS title
+                END AS title,
+                -- Same status lookup as TodolistEntityLinks::readAll() --
+                -- only experiments/items carry a status; NULL for every
+                -- other entity_type is exactly what the frontend badge
+                -- treats as \"nothing to show\".
+                CASE link.entity_type
+                    WHEN 'experiments' THEN (
+                        SELECT statust.title FROM experiments AS e
+                        LEFT JOIN experiments_status AS statust ON statust.id = e.status
+                        WHERE e.id = link.entity_id AND e.team = :team
+                    )
+                    WHEN 'items' THEN (
+                        SELECT statust.title FROM items AS e
+                        LEFT JOIN items_status AS statust ON statust.id = e.status
+                        WHERE e.id = link.entity_id AND e.team = :team
+                    )
+                END AS status_title,
+                CASE link.entity_type
+                    WHEN 'experiments' THEN (
+                        SELECT statust.color FROM experiments AS e
+                        LEFT JOIN experiments_status AS statust ON statust.id = e.status
+                        WHERE e.id = link.entity_id AND e.team = :team
+                    )
+                    WHEN 'items' THEN (
+                        SELECT statust.color FROM items AS e
+                        LEFT JOIN items_status AS statust ON statust.id = e.status
+                        WHERE e.id = link.entity_id AND e.team = :team
+                    )
+                END AS status_color
             FROM todolist_project_entity_links AS link
             INNER JOIN todolist_projects AS project ON project.id = link.project_id AND project.team = :team
             WHERE link.project_id = :project_id
