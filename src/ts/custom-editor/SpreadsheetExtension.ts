@@ -604,11 +604,93 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       },
     });
   };
+  // Inserts a brand-new spreadsheet's HTML at the current selection -- the
+  // same final step openInlineSpreadsheet's own modal-based insert uses
+  // once it has raw/computed/history in hand, factored out so the grid-
+  // picker fancymenuitem below (which never opens that modal at all, same
+  // as "Table"'s own grid-picker skips its dialog) can reach it directly.
+  const insertNewSpreadsheet = (
+    data: SpreadsheetData,
+    computed: SpreadsheetData['data'] = data.data,
+    history: SpreadsheetCellHistory = { undo: [], redo: [] },
+  ): void => {
+    const bookmark = editor.selection.getBookmark(2, true);
+    // A marker attribute (stripped right after) reliably identifies the
+    // table this specific insert placed, regardless of where TinyMCE
+    // leaves the selection afterward -- more robust than trying to read
+    // it back from editor.selection.getNode().
+    const html = spreadsheetToHTML(data, computed).replace(
+      '<table class="elabftw-spreadsheet"',
+      '<table class="elabftw-spreadsheet" data-just-inserted="1"',
+    );
+    editor.focus();
+    editor.selection.moveToBookmark(bookmark);
+    editor.execCommand('mceInsertContent', false, html);
+    // A table with nothing after it leaves no click target below itself --
+    // clicking in the empty space under a trailing table does nothing,
+    // since there's no element there for the cursor to land in. A table
+    // immediately followed by *another* table (or by anything else) has
+    // the same problem in miniature: there's no gap to click into right
+    // at the boundary, reported as not being able to insert text between
+    // two tables placed one after another. Unconditional now -- always
+    // give a freshly inserted table its own paragraph immediately after
+    // it, rather than only guessing when one is "needed" from the next
+    // sibling's tag, which didn't cover every case this was reported for.
+    const insertedTable = editor.dom.select('table[data-just-inserted="1"]')[0] as
+      | HTMLTableElement
+      | undefined;
+    if (insertedTable) {
+      insertedTable.removeAttribute('data-just-inserted');
+      const insertedUid = ensureSpreadsheetUid(insertedTable);
+      tableCellHistories.set(insertedUid, history);
+      latestTableContent.set(insertedUid, insertedTable.outerHTML);
+      // Insertion may already have mounted an overlay with an empty
+      // history. Rebind it to the history returned by the popup.
+      refreshTableOverlay(insertedTable);
+      const paragraph = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
+      insertedTable.parentNode?.insertBefore(paragraph, insertedTable.nextSibling);
+      editor.selection.setCursorLocation(paragraph, 0);
+    }
+    editor.undoManager.add();
+  };
+
+  // Shared by the insert-data-table toolbar dropdown and the classic Insert
+  // menu's own "Spreadsheet" entry (see tinymce.ts's menu.insert.items) so
+  // the two can't drift apart. The grid-picker widget first -- reusing
+  // TinyMCE's own built-in 'inserttable' fancymenuitem (a public,
+  // documented type; its onAction receives the picked {numRows,
+  // numColumns} regardless of what it inserts, so this only has to swap in
+  // a spreadsheet instead of a plain table) -- gives size selection by
+  // dragging over a grid of squares, exactly like "Table" already offers
+  // right next to it. "Custom spreadsheet…" stays alongside it for sizes
+  // the 10x10 grid can't reach, a caption, or a non-default kind.
+  const buildSpreadsheetSubmenuItems = () => [
+    {
+      type: 'fancymenuitem' as const,
+      fancytype: 'inserttable' as const,
+      onAction: ({ numRows, numColumns }: { numRows: number; numColumns: number }) => {
+        insertNewSpreadsheet(emptySpreadsheetData(numColumns, numRows));
+      },
+    },
+    { type: 'separator' as const },
+    {
+      type: 'menuitem' as const,
+      text: 'Custom spreadsheet…',
+      icon: 'elabftw-spreadsheet-formula',
+      onAction: () => openInlineSpreadsheet(emptySpreadsheetData()),
+    },
+    {
+      type: 'menuitem' as const,
+      text: 'Benchling-style data table',
+      icon: 'elabftw-data-table',
+      onAction: () => openInlineSpreadsheet(createNotebookSpreadsheetData()),
+    },
+  ];
+
   const openInlineSpreadsheet = (
     initial: SpreadsheetData,
     existingTable: HTMLTableElement | null = null,
   ): void => {
-    const bookmark = editor.selection.getBookmark(2, true);
     // Every entry point (toolbar or overlay) must first finish inline edits.
     if (existingTable) spreadsheetOverlays.get(existingTable)?.flush();
     const uid = existingTable ? ensureSpreadsheetUid(existingTable) : null;
@@ -640,43 +722,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         }
         return;
       }
-      // A marker attribute (stripped right after) reliably identifies the
-      // table this specific insert placed, regardless of where TinyMCE
-      // leaves the selection afterward -- more robust than trying to read
-      // it back from editor.selection.getNode().
-      const html = spreadsheetToHTML(raw, computed).replace(
-        '<table class="elabftw-spreadsheet"',
-        '<table class="elabftw-spreadsheet" data-just-inserted="1"',
-      );
-      editor.focus();
-      editor.selection.moveToBookmark(bookmark);
-      editor.execCommand('mceInsertContent', false, html);
-      // A table with nothing after it leaves no click target below itself --
-      // clicking in the empty space under a trailing table does nothing,
-      // since there's no element there for the cursor to land in. A table
-      // immediately followed by *another* table (or by anything else) has
-      // the same problem in miniature: there's no gap to click into right
-      // at the boundary, reported as not being able to insert text between
-      // two tables placed one after another. Unconditional now -- always
-      // give a freshly inserted table its own paragraph immediately after
-      // it, rather than only guessing when one is "needed" from the next
-      // sibling's tag, which didn't cover every case this was reported for.
-      const insertedTable = editor.dom.select('table[data-just-inserted="1"]')[0] as
-        | HTMLTableElement
-        | undefined;
-      if (insertedTable) {
-        insertedTable.removeAttribute('data-just-inserted');
-        const insertedUid = ensureSpreadsheetUid(insertedTable);
-        tableCellHistories.set(insertedUid, history);
-        latestTableContent.set(insertedUid, insertedTable.outerHTML);
-        // Insertion may already have mounted an overlay with an empty
-        // history. Rebind it to the history returned by the popup.
-        refreshTableOverlay(insertedTable);
-        const paragraph = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
-        insertedTable.parentNode?.insertBefore(paragraph, insertedTable.nextSibling);
-        editor.selection.setCursorLocation(paragraph, 0);
-      }
-      editor.undoManager.add();
+      insertNewSpreadsheet(raw, computed, history);
     }).catch(() => {
       // User cancelled -- the real table was never touched (the popup
       // only ever edits its own separate copy), but its inline overlay can
@@ -845,20 +891,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         type: 'nestedmenuitem',
         text: 'Spreadsheet',
         icon: 'elabftw-spreadsheet-formula',
-        getSubmenuItems: () => [
-          {
-            type: 'menuitem',
-            text: 'Custom spreadsheet…',
-            icon: 'elabftw-spreadsheet-formula',
-            onAction: () => openInlineSpreadsheet(emptySpreadsheetData()),
-          },
-          {
-            type: 'menuitem',
-            text: 'Benchling-style data table',
-            icon: 'elabftw-data-table',
-            onAction: () => openInlineSpreadsheet(createNotebookSpreadsheetData()),
-          },
-        ],
+        getSubmenuItems: buildSpreadsheetSubmenuItems,
       },
       {
         type: 'nestedmenuitem',
@@ -938,18 +971,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     text: 'Spreadsheet',
     icon: 'elabftw-spreadsheet-formula',
     getSubmenuItems: () => [
-      {
-        type: 'menuitem',
-        text: 'Custom spreadsheet…',
-        icon: 'elabftw-spreadsheet-formula',
-        onAction: () => openInlineSpreadsheet(emptySpreadsheetData()),
-      },
-      {
-        type: 'menuitem',
-        text: 'Benchling-style data table',
-        icon: 'elabftw-data-table',
-        onAction: () => openInlineSpreadsheet(createNotebookSpreadsheetData()),
-      },
+      ...buildSpreadsheetSubmenuItems(),
       {
         type: 'nestedmenuitem',
         text: 'Well plate',
