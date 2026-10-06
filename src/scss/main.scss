@@ -5994,6 +5994,14 @@ div > .sticky-navbar {
 
 .pm-card-comment-preview {
   text-align: left;
+
+  // A divider between consecutive comments in the card's expanded preview --
+  // without it, two comments read as one continuous block of text with
+  // nothing marking where one ends and the next begins.
+  &:not(:first-child) {
+    border-top: 1px solid var(--firstlevel);
+    padding-top: 0.5rem;
+  }
 }
 
 .pm-card-comment-author {

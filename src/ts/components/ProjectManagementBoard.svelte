@@ -588,6 +588,21 @@
     }[type];
   }
 
+  // Same icon set as taskLinkGroups' own compact chips below, reused here so
+  // a linked entity's type reads the same icon everywhere it's referenced
+  // (step, linked-items list, or the card's own grouped chip) instead of a
+  // wordy text badge -- entityTypeLabel() still supplies the title/
+  // aria-label for anyone not relying on the icon alone.
+  function entityTypeIcon(type: EntityLinkType): string {
+    return {
+      experiments: 'fa-flask',
+      items: 'fa-cubes',
+      experiments_templates: 'fa-file',
+      items_types: 'fa-file',
+      weblink: 'fa-link',
+    }[type];
+  }
+
   // Same markup/class as the status pill on an entity's own "Links" tab
   // (see link-view-one.html) -- reused here so a linked experiment/resource
   // shows the identical status badge wherever it's referenced from project
@@ -2762,7 +2777,7 @@
                       <input type="checkbox" class="mr-2 mt-1" checked={step.finished} disabled={!canManage(task) || savingBoardSteps.has(step.id)} on:change={(event) => { event.currentTarget.checked = step.finished; void toggleBoardStep(task, step); }} />
                       <span style:text-decoration={step.finished ? 'line-through' : 'none'}>
                         {#if stepLink}
-                          <span class="badge badge-info mr-1">{entityTypeLabel(stepLink.entityType)}</span>{#if step.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(step.status_color)}><i class="fas fa-circle fa-fw" aria-hidden="true"></i> {step.status_title}</span>{/if}<a href={stepLink.url} on:click={(event) => event.stopPropagation()}>{stepLink.label}</a>
+                          <span class="badge badge-info mr-1" title={entityTypeLabel(stepLink.entityType)} aria-label={entityTypeLabel(stepLink.entityType)}><i class="fas {entityTypeIcon(stepLink.entityType)} fa-fw" aria-hidden="true"></i></span>{#if step.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(step.status_color)} title={step.status_title} aria-label={step.status_title}><i class="fas fa-circle fa-fw" aria-hidden="true"></i></span>{/if}<a href={stepLink.url} on:click={(event) => event.stopPropagation()}>{stepLink.label}</a>
                         {:else}
                           {step.body}
                         {/if}
@@ -2783,7 +2798,7 @@
                       <summary title={group.label} aria-label={`${group.links.length} ${group.label}`}><i class="fas {group.icon} fa-fw" aria-hidden="true"></i>{group.links.length}</summary>
                       {#each group.links as link (link.id)}
                         <div class="d-flex align-items-center">
-                          {#if link.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(link.status_color)}><i class="fas fa-circle fa-fw" aria-hidden="true"></i> {link.status_title}</span>{/if}
+                          {#if link.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(link.status_color)} title={link.status_title} aria-label={link.status_title}><i class="fas fa-circle fa-fw" aria-hidden="true"></i></span>{/if}
                           <a class="d-block" href={entityViewUrl(link)} target="_blank" rel="noopener noreferrer">{link.title || `${entityTypeLabel(link.entity_type)} #${link.entity_id}`}</a>
                         </div>
                       {/each}
@@ -3024,7 +3039,7 @@
           {#if creatingNewTask}
             {#each draftEntityLinks as link, index (`${link.entity_type}:${link.entity_id}`)}
               <div class="d-flex align-items-center mb-1">
-                <span class="badge badge-info mr-1">{entityTypeLabel(link.entity_type)}</span>
+                <span class="badge badge-info mr-1" title={entityTypeLabel(link.entity_type)} aria-label={entityTypeLabel(link.entity_type)}><i class="fas {entityTypeIcon(link.entity_type)} fa-fw" aria-hidden="true"></i></span>
                 <a class="mr-auto" href={entityViewUrl({ ...link, url: null })} target="_blank" rel="noopener noreferrer">{link.title}</a>
                 <button type="button" class="btn-unstyled" aria-label={t('Remove')} on:click={() => draftEntityLinks = draftEntityLinks.filter((_, i) => i !== index)}><i class="fas fa-trash fa-fw" aria-hidden="true"></i></button>
               </div>
@@ -3078,8 +3093,8 @@
                         <i class="fab fa-windows fa-fw" aria-hidden="true"></i>
                       </button>
                     {:else}
-                      <span class="badge badge-info mr-1">{entityTypeLabel(link.entity_type)}</span>
-                      {#if link.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(link.status_color)}><i class="fas fa-circle fa-fw" aria-hidden="true"></i> {link.status_title}</span>{/if}
+                      <span class="badge badge-info mr-1" title={entityTypeLabel(link.entity_type)} aria-label={entityTypeLabel(link.entity_type)}><i class="fas {entityTypeIcon(link.entity_type)} fa-fw" aria-hidden="true"></i></span>
+                      {#if link.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(link.status_color)} title={link.status_title} aria-label={link.status_title}><i class="fas fa-circle fa-fw" aria-hidden="true"></i></span>{/if}
                       <a class="mr-auto text-break" href={entityViewUrl(link)} target="_blank" rel="noreferrer noopener">{link.title}</a>
                     {/if}
                     <div class="pm-item-actions">
@@ -3128,7 +3143,7 @@
                   <li class="pm-step">
                     <span class="pm-step-body">
                       {#if stepLink}
-                        <span class="badge badge-info mr-1">{entityTypeLabel(stepLink.entityType)}</span><a href={stepLink.url} target="_blank" rel="noopener noreferrer">{stepLink.label}</a>
+                        <span class="badge badge-info mr-1" title={entityTypeLabel(stepLink.entityType)} aria-label={entityTypeLabel(stepLink.entityType)}><i class="fas {entityTypeIcon(stepLink.entityType)} fa-fw" aria-hidden="true"></i></span><a href={stepLink.url} target="_blank" rel="noopener noreferrer">{stepLink.label}</a>
                       {:else}{step}{/if}
                     </span>
                     <button type="button" class="btn-unstyled pm-comment-delete" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeDraftStep(index)}>
@@ -3166,7 +3181,7 @@
                     />
                     <span class="pm-step-body">
                       {#if stepLink}
-                        <span class="badge badge-info mr-1">{entityTypeLabel(stepLink.entityType)}</span>{#if step.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(step.status_color)}><i class="fas fa-circle fa-fw" aria-hidden="true"></i> {step.status_title}</span>{/if}<a href={stepLink.url} target="_blank" rel="noreferrer noopener">{stepLink.label}</a>
+                        <span class="badge badge-info mr-1" title={entityTypeLabel(stepLink.entityType)} aria-label={entityTypeLabel(stepLink.entityType)}><i class="fas {entityTypeIcon(stepLink.entityType)} fa-fw" aria-hidden="true"></i></span>{#if step.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(step.status_color)} title={step.status_title} aria-label={step.status_title}><i class="fas fa-circle fa-fw" aria-hidden="true"></i></span>{/if}<a href={stepLink.url} target="_blank" rel="noreferrer noopener">{stepLink.label}</a>
                       {:else}
                         {step.body}
                       {/if}
@@ -3452,8 +3467,8 @@
                           <i class="fab fa-windows fa-fw" aria-hidden="true"></i>
                         </button>
                       {:else}
-                        <span class="badge badge-info mr-1">{entityTypeLabel(link.entity_type)}</span>
-                        {#if link.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(link.status_color)}><i class="fas fa-circle fa-fw" aria-hidden="true"></i> {link.status_title}</span>{/if}
+                        <span class="badge badge-info mr-1" title={entityTypeLabel(link.entity_type)} aria-label={entityTypeLabel(link.entity_type)}><i class="fas {entityTypeIcon(link.entity_type)} fa-fw" aria-hidden="true"></i></span>
+                        {#if link.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(link.status_color)} title={link.status_title} aria-label={link.status_title}><i class="fas fa-circle fa-fw" aria-hidden="true"></i></span>{/if}
                         <a class="mr-auto text-break" href={entityViewUrl(link)} target="_blank" rel="noreferrer noopener">{link.title}</a>
                       {/if}
                       <div class="pm-item-actions">
@@ -3556,8 +3571,8 @@
           <ul class="pm-entity-link-list">
             {#each linksSummaryItems as item (item.link_id)}
               <li class="pm-entity-link">
-                <span class="badge badge-info mr-1">{entityTypeLabel(item.entity_type)}</span>
-                {#if item.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(item.status_color)}><i class="fas fa-circle fa-fw" aria-hidden="true"></i> {item.status_title}</span>{/if}
+                <span class="badge badge-info mr-1" title={entityTypeLabel(item.entity_type)} aria-label={entityTypeLabel(item.entity_type)}><i class="fas {entityTypeIcon(item.entity_type)} fa-fw" aria-hidden="true"></i></span>
+                {#if item.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(item.status_color)} title={item.status_title} aria-label={item.status_title}><i class="fas fa-circle fa-fw" aria-hidden="true"></i></span>{/if}
                 <a class="mr-auto text-break" href={entityViewUrl(item)} target="_blank" rel="noreferrer noopener">{item.title}</a>
                 {#if item.project_name}
                   <span class="badge badge-light ml-2" title={t('Project')}>
