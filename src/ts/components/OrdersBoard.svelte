@@ -2170,9 +2170,18 @@
                         {:else if upload.extraction_status === 'pending'}
                           <i class="fas fa-spinner fa-spin fa-fw ml-1 orders-muted" title={t('Extracting text for search…')} aria-label={t('Extracting text for search')}></i>
                         {/if}
+                        <a
+                          class="btn btn-ghost btn-sm orders-icon-button ml-auto"
+                          href={downloadUrl(upload)}
+                          download={upload.real_name}
+                          title={t('Download')}
+                          aria-label={t('Download')}
+                        >
+                          <i class="fas fa-download fa-fw" aria-hidden="true"></i>
+                        </a>
                         <button
                           type="button"
-                          class="btn btn-ghost btn-sm orders-icon-button ml-auto"
+                          class="btn btn-ghost btn-sm orders-icon-button"
                           title={t('Add to new order')}
                           aria-label={t('Add to new order')}
                           on:click={() => reuseUpload(upload)}
