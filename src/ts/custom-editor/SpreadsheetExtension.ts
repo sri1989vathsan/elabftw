@@ -1639,13 +1639,34 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const spacer = spreadsheetSpacers.get(table);
     return !!spacer?.isConnected && inRange(spacer.getBoundingClientRect());
   };
+  // A single "out of view" reading can be a transient false negative --
+  // isNearViewport's own comment already documents the backing table's
+  // layout momentarily collapsing to a few px right when an edit rewrites
+  // its innerHTML or during a scroll-triggered reflow, misreading a table
+  // that's genuinely still on screen as 400px+ away. Also reproduced via
+  // the full editor popup: opening/closing it can fire enough scroll/resize
+  // events to catch this same transient collapse, tearing the overlay down
+  // with nothing left to rebuild it (reported as the spreadsheet vanishing
+  // after Cancel). Confirmed one more animation frame later instead of
+  // acting on the very first reading -- a genuinely off-screen table still
+  // reads the same way a frame later, so real teardown is barely delayed;
+  // a transient collapse has almost always corrected itself by then.
+  const pendingOverlayRemovals = new Set<HTMLTableElement>();
+  const removeOverlayIfStillOutOfView = (table: HTMLTableElement): void => {
+    if (pendingOverlayRemovals.has(table)) return;
+    pendingOverlayRemovals.add(table);
+    window.requestAnimationFrame(() => {
+      pendingOverlayRemovals.delete(table);
+      if (!isNearViewport(table)) removeOverlay(table);
+    });
+  };
   const tableVisibility = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       const table = entry.target as HTMLTableElement;
       if (entry.isIntersecting) {
         enhanceTable(table);
       } else if (!isNearViewport(table)) {
-        removeOverlay(table);
+        removeOverlayIfStillOutOfView(table);
       }
     });
   }, { rootMargin: '400px 0px' });
@@ -1669,7 +1690,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       visibilityFrame = 0;
       editor.getBody()?.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet').forEach(table => {
         if (isNearViewport(table)) enhanceTable(table);
-        else removeOverlay(table);
+        else removeOverlayIfStillOutOfView(table);
       });
     });
   };
