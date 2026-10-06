@@ -2769,6 +2769,20 @@
     width: 100% !important;
   }
 
+  /* .elabftw-link-preview (see main.scss) is deliberately a single-line,
+     ellipsis-truncated chip everywhere else -- the right look for one
+     inline inside flowing prose. A pasted URL's own page title can run
+     well past what that leaves room for on a narrow order card, though
+     (e.g. a long product-listing title), truncating to little more than
+     the site name. Only this card's own read-only notes rendering
+     overrides that to wrap onto multiple lines instead, so the title
+     stays readable without widening or overflowing the card. */
+  :global(.orders-item-description .elabftw-link-preview) {
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+  }
+
   /* :global() because this class is set on an <img> inserted at runtime via
      document.execCommand('insertHTML', ...) when pasting/dropping an image
      into notes -- never through Svelte's own template, so it never gets
@@ -2889,7 +2903,22 @@
   .orders-upload {
     align-items: center;
     display: flex;
+    flex-wrap: wrap;
     font-size: 0.85rem;
+    row-gap: 0.2rem;
+  }
+
+  /* The filename link has no width of its own and no flex-shrink floor
+     (a flex item's default min-width is auto, i.e. its content's natural,
+     unbroken width) -- a long filename just pushed the row's own trailing
+     download/share/delete buttons past the card's right edge instead of
+     ever wrapping, with the delete button landing visibly outside the
+     card. min-width: 0 lets it actually shrink/wrap within the row;
+     flex-wrap above then moves the buttons down to their own line once
+     the filename needs the width, rather than clipping or overflowing. */
+  .orders-upload a:first-of-type {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .orders-comment-list {
