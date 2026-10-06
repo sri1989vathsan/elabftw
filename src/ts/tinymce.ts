@@ -475,6 +475,20 @@ export function getTinymceBaseConfig(page: string): object {
     // keyboard shortcut to insert today's date at cursor in editor
     menu: {
       file: { title: 'File', items: fileMenuItems },
+      // TinyMCE's own default Insert menu, as confirmed live (Insert >
+      // in the classic menu bar: Image, Link, Media, Insert template,
+      // Code sample, Table, Accordion, Special character, Emojis,
+      // Horizontal line, Page break, Date/time -- i.e. 'image link media
+      // template codesample inserttable accordion charmap emoticons hr
+      // pagebreak insertdatetime'), with elabftw-insert-spreadsheet (see
+      // SpreadsheetExtension.ts) added right after 'inserttable' so
+      // "Spreadsheet" sits next to "Table", the same relationship they
+      // already have in the insert-data-table toolbar button's own menu.
+      insert: {
+        title: 'Insert',
+        items: 'image link media template codesample inserttable elabftw-insert-spreadsheet '
+          + 'accordion charmap emoticons hr pagebreak insertdatetime',
+      },
     },
     setup: (editor: Editor): void => {
       registerCustomEditorExtensions(editor);

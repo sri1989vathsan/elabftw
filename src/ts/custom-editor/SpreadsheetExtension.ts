@@ -926,6 +926,43 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     },
   });
 
+  // Same "Spreadsheet" submenu as the insert-data-table toolbar button just
+  // above, surfaced in TinyMCE's own classic Insert menu (File/Edit/View/
+  // Insert/...) right alongside its native "Table" entry -- see tinymce.ts's
+  // own menu.insert.items, where this item's name is placed right after
+  // 'inserttable'. A plain menuitem rather than this file's own
+  // openStandardTableDialog-style dialog: Custom spreadsheet/Benchling-style
+  // need no dimensions upfront (openInlineSpreadsheet's own editor picks
+  // that), and Table already has its own native dialog via 'inserttable'.
+  editor.ui.registry.addNestedMenuItem('elabftw-insert-spreadsheet', {
+    text: 'Spreadsheet',
+    icon: 'elabftw-spreadsheet-formula',
+    getSubmenuItems: () => [
+      {
+        type: 'menuitem',
+        text: 'Custom spreadsheet…',
+        icon: 'elabftw-spreadsheet-formula',
+        onAction: () => openInlineSpreadsheet(emptySpreadsheetData()),
+      },
+      {
+        type: 'menuitem',
+        text: 'Benchling-style data table',
+        icon: 'elabftw-data-table',
+        onAction: () => openInlineSpreadsheet(createNotebookSpreadsheetData()),
+      },
+      {
+        type: 'nestedmenuitem',
+        text: 'Well plate',
+        icon: 'elabftw-well-plate',
+        getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
+          type: 'menuitem',
+          text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
+          onAction: () => openInlineSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
+        })),
+      },
+    ],
+  });
+
   editor.on('dblclick', event => {
     const target = (event.target as HTMLElement)
       .closest('table.elabftw-spreadsheet') as HTMLTableElement | null;
