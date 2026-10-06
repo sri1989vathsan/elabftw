@@ -6116,6 +6116,19 @@ div > .sticky-navbar {
   border-bottom: 0;
 }
 
+// Same divider convention as .pm-entity-link/.pm-step above, for the
+// card's own compact per-type chip dropdown (e.g. expanding "Experiments"
+// to see each one) -- multiple entries there had nothing marking where one
+// ended and the next began.
+.pm-task-link-chip-item {
+  border-bottom: 1px solid #d9d9d9;
+  padding: 0.2rem 0;
+}
+
+.pm-task-link-chip-item:last-child {
+  border-bottom: 0;
+}
+
 
 .pm-field-edit-btn {
   color: #495057;

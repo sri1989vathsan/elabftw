@@ -2797,7 +2797,7 @@
                     <details class="pm-task-links-group">
                       <summary title={group.label} aria-label={`${group.links.length} ${group.label}`}><i class="fas {group.icon} fa-fw" aria-hidden="true"></i>{group.links.length}</summary>
                       {#each group.links as link (link.id)}
-                        <div class="d-flex align-items-center">
+                        <div class="pm-task-link-chip-item d-flex align-items-center">
                           {#if link.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(link.status_color)} title={link.status_title} aria-label={link.status_title}><i class="fas fa-circle fa-fw" aria-hidden="true"></i></span>{/if}
                           <a class="d-block" href={entityViewUrl(link)} target="_blank" rel="noopener noreferrer">{link.title || `${entityTypeLabel(link.entity_type)} #${link.entity_id}`}</a>
                         </div>
