@@ -2387,6 +2387,39 @@ function measureNaturalCellHeight(cell: HTMLElement): number {
   return Math.ceil(height) + 2;
 }
 
+// When a column narrows, text already wrapped onto multiple lines in that
+// column can need more vertical room than a row's own saved/manual height
+// still allows -- applyCellClipHeights' own clip wrapper (see its comment)
+// keeps the row capped at that stale height regardless, clipping the now-
+// longer wrapped text instead of the row visibly growing to fit it. Only
+// rows already present in rowHeights are touched here -- a row never
+// manually resized (or autofit) stays fully natural/uncapped already, same
+// as manuallyResizedRows' own comment at its declaration -- and only ever
+// grown, never shrunk, so this can't fight a person's own deliberate
+// narrower resize of a row that happens to share this column. Returns
+// whether anything actually changed, so a caller can skip reapplying
+// row heights/clip wrappers on the (overwhelmingly common) no-op case.
+function growRowsForNarrowedColumn(
+  container: HTMLElement,
+  column: number,
+  rowHeights: Map<number, number>,
+): boolean {
+  let grew = false;
+  container.querySelectorAll<HTMLElement>(
+    `.jss_worksheet > tbody td[data-x="${column}"][data-y]`,
+  ).forEach(cell => {
+    const row = Number.parseInt(cell.dataset.y ?? '', 10);
+    const current = rowHeights.get(row);
+    if (current === undefined) return;
+    const natural = Math.min(MAX_DATA_ROW_HEIGHT, measureNaturalCellHeight(cell));
+    if (natural > current) {
+      rowHeights.set(row, natural);
+      grew = true;
+    }
+  });
+  return grew;
+}
+
 /** Reapply saved data-row heights after jspreadsheet rebuilds its worksheet DOM. */
 function applySpreadsheetRowHeights(
   container: HTMLElement,
@@ -5026,10 +5059,31 @@ export function openSpreadsheetModal(
             colWidths[String(safeCol)] = safeWidth;
           });
           worksheet = changedWorksheet;
+          // Grow-only: a narrower column can need more vertical room than a
+          // row's own saved/manual height still allows for text already
+          // wrapped in it (see growRowsForNarrowedColumn's own comment).
+          // Converted to/from the same Map shape applyCellClipHeights and
+          // the inline overlay's own equivalent handler both use, since
+          // RowHeights itself is a plain string-keyed object.
+          let rowHeights = working.rowHeights;
+          const container = sheetContainer;
+          if (container) {
+            const rowHeightsMap = toRowHeightsMap(working.rowHeights);
+            const grew = changedCols
+              .map(changedCol => Number(changedCol))
+              .filter(Number.isInteger)
+              .reduce((any, safeCol) => growRowsForNarrowedColumn(container, safeCol, rowHeightsMap) || any, false);
+            if (grew) {
+              rowHeights = Object.fromEntries(rowHeightsMap);
+              applySpreadsheetRowHeights(container, worksheet, rowHeights);
+              applyCellClipHeights(container, rowHeightsMap);
+            }
+          }
           working = normalizeSpreadsheetData({
             ...working,
             data: readRawData(),
             colWidths,
+            rowHeights,
           });
         },
         onselection: (
@@ -8344,7 +8398,10 @@ export function buildReadOnlySpreadsheetHost(
       // resizedRow here is genuinely a row index, unlike onresizecolumn's own
       // second argument (a column index), so only this one may pass it through.
       onresizerow: (worksheet: JssInstance, row: number): void => notifyStructuralChange(worksheet, row),
-      onresizecolumn: notifyStructuralChange,
+      onresizecolumn: (worksheet: JssInstance, column: number): void => {
+        growRowsForNarrowedColumn(sheetContainer, column, manuallyResizedRows);
+        notifyStructuralChange(worksheet);
+      },
       onselection: (
         selectedWorksheet: JssInstance,
         startCol: number,
