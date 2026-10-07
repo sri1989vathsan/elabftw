@@ -8699,6 +8699,15 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivEle
     colgroup.appendChild(col);
   });
   worksheet.appendChild(colgroup);
+  // jspreadsheet's stylesheet gives .jss_worksheet `width: 0` and the live
+  // grid then sets an explicit pixel width; without one the fixed-layout
+  // columns collapse to nothing. Same sum the live grid ends up with.
+  const columnWidths = Array.from(colgroup.children).map(col => (
+    Number.parseFloat((col as HTMLElement).style.width || col.getAttribute('width') || '')
+  ));
+  worksheet.style.width = columnWidths.length > 0 && columnWidths.every(Number.isFinite)
+    ? `${columnWidths.reduce((sum, width) => sum + width, 0)}px`
+    : table.style.width;
 
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
