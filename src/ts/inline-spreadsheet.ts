@@ -8689,25 +8689,36 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivEle
   const worksheet = document.createElement('table');
   worksheet.className = 'jss_worksheet jss_overflow';
 
+  // Sizes come from the saved spreadsheet data, which is what the live grid
+  // uses -- the table's own <colgroup>/row styles can differ from it (e.g.
+  // after a native TinyMCE resize), which showed up as equal-width columns.
+  let saved: SpreadsheetData | null = null;
+  const encoded = table.dataset.spreadsheet;
+  if (encoded) {
+    try {
+      saved = decodeSpreadsheetData(encoded);
+    } catch {
+      saved = null;
+    }
+  }
+  const dataCols = Math.max(0, headRow.children.length - 1);
+  const rowIndexWidth = normalizeAppearance(saved?.appearance).rowIndexWidth;
   const colgroup = document.createElement('colgroup');
-  table.querySelectorAll('colgroup > col').forEach(source => {
+  const columnWidths: number[] = [rowIndexWidth];
+  for (let col = 0; col < dataCols; col++) {
+    columnWidths.push(saved?.colWidths?.[String(col)] ?? DEFAULT_DATA_COL_WIDTH);
+  }
+  columnWidths.forEach(width => {
     const col = document.createElement('col');
-    const style = source.getAttribute('style');
-    if (style) col.setAttribute('style', style);
-    const width = source.getAttribute('width');
-    if (width) col.setAttribute('width', width);
+    col.setAttribute('width', String(width));
+    col.style.width = `${width}px`;
     colgroup.appendChild(col);
   });
   worksheet.appendChild(colgroup);
   // jspreadsheet's stylesheet gives .jss_worksheet `width: 0` and the live
   // grid then sets an explicit pixel width; without one the fixed-layout
-  // columns collapse to nothing. Same sum the live grid ends up with.
-  const columnWidths = Array.from(colgroup.children).map(col => (
-    Number.parseFloat((col as HTMLElement).style.width || col.getAttribute('width') || '')
-  ));
-  worksheet.style.width = columnWidths.length > 0 && columnWidths.every(Number.isFinite)
-    ? `${columnWidths.reduce((sum, width) => sum + width, 0)}px`
-    : table.style.width;
+  // columns collapse to nothing.
+  worksheet.style.width = `${columnWidths.reduce((sum, width) => sum + width, 0)}px`;
 
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
@@ -8717,6 +8728,7 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivEle
     else cell.dataset.x = String(index - 1);
     const style = source.getAttribute('style');
     if (style) cell.setAttribute('style', style);
+    cell.style.textAlign = 'center';
     cell.textContent = source.textContent;
     headerRow.appendChild(cell);
   });
@@ -8727,8 +8739,9 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivEle
   bodyRows.forEach((sourceRow, rowIndex) => {
     const row = document.createElement('tr');
     row.dataset.y = String(rowIndex);
-    const rowStyle = sourceRow.getAttribute('style');
-    if (rowStyle) row.setAttribute('style', rowStyle);
+    const savedHeight = saved?.rowHeights?.[String(rowIndex)];
+    if (savedHeight) row.style.height = `${savedHeight}px`;
+    else if (sourceRow.getAttribute('style')) row.setAttribute('style', sourceRow.getAttribute('style') ?? '');
     Array.from(sourceRow.children).forEach((source, index) => {
       const cell = document.createElement('td');
       if (index === 0) {
