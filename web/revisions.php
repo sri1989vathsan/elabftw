@@ -82,6 +82,14 @@ try {
         'isTemplate' => $isTemplate,
         'templateVersionDocs' => $templateVersionDocs,
         'versionRevisions' => $versionRevisions,
+        'hideTitle' => $App->Request->query->getBoolean('embed'),
+        // Set when this page is loaded inside the "Version history" popup's
+        // own iframe (see view-edit-toolbar.html) -- that popup already has
+        // its own close button and is itself inside the entity's own edit
+        // page, so the site chrome (navbar, side panels, footer, Go back)
+        // this page normally renders would just be a second, redundant copy
+        // of the one already surrounding the popup.
+        'embed' => $App->Request->query->getBoolean('embed'),
     );
 
     $Response->setContent($App->render($template, $renderArr));

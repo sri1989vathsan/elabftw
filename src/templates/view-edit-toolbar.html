@@ -65,18 +65,15 @@
           <span aria-hidden='true'>&times;</span>
         </button>
       </div>
-      <div class='modal-body'>
-        {% for v in templateVersionsArr %}
-          <div class='mb-3'>
-            <span>{{ 'Version %d'|trans|format(v.version) }} — {{ v.published_by_fullname }} — <span class='relative-moment' title='{{ v.published_at }}'></span></span>
-            <a href='template-version.php?id={{ v.id }}' target='_blank' rel='noopener' class='btn btn-sm btn-secondary ml-2'>
-              <i class='fas fa-eye fa-fw'></i> {{ 'View'|trans }}
-            </a>
-            <button type='button' class='btn btn-sm btn-secondary ml-2' data-action='restore-template-version' data-versionid='{{ v.id }}' data-version='{{ v.version }}'>{{ 'Restore this version'|trans }}</button>
-          </div>
-        {% else %}
-          <p>{{ 'No published versions yet.'|trans }}</p>
-        {% endfor %}
+      <div class='modal-body p-0'>
+        {# The full "Template versions" page (revisions.php), with its
+           per-version changelog of in-between edits -- embedded rather than
+           re-built here, so this popup always matches that page exactly
+           instead of drifting into a second, slightly different listing. #}
+        <iframe id='templateVersionHistoryIframe'
+          src='revisions.php?type={{ Entity.entityType.value }}&amp;item_id={{ Entity.id }}&amp;embed=1'
+          title='{{ 'Version history'|trans }}'
+          style='width:100%;height:70vh;border:0'></iframe>
       </div>
       <div class='modal-footer'>
         <button type='button' class='btn btn-secondary' data-dismiss='modal'>{{ 'Close'|trans }}</button>
