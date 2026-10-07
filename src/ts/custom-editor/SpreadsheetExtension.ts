@@ -1007,6 +1007,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     destroy: (discardChanges?: boolean) => void;
     flush: () => void;
     syncActiveEditor: () => void;
+    /** Cheap static stand-in; upgraded to the real grid on first click. */
+    isPreview?: boolean;
   }>();
   const enhancedTables = new WeakSet<HTMLTableElement>();
   let overlaySyncRunning = false;
@@ -1530,6 +1532,120 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // saving over it) -- otherwise the overlay keeps showing whatever it had
   // extracted at mount time, silently stale until the table next scrolls
   // out and back into view (or the page reloads).
+  // Parsing a table back into SpreadsheetData (base64 JSON, per-cell styles,
+  // row/column sizes) was the dominant cost of mounting an overlay. The
+  // result only changes when the table's DOM does, so it's cached per table
+  // and dropped by a MutationObserver on the editor body.
+  const extractionCache = new WeakMap<HTMLTableElement, SpreadsheetData>();
+  const invalidateExtractions = (records: MutationRecord[]): void => {
+    records.forEach(record => {
+      const node = record.target;
+      const element = node instanceof Element ? node : node.parentElement;
+      const table = element?.closest<HTMLTableElement>('table.elabftw-spreadsheet');
+      if (table) extractionCache.delete(table);
+    });
+  };
+  let extractionObserver: MutationObserver | null = null;
+  const ensureExtractionObserver = (): MutationObserver | null => {
+    const body = editor.getBody();
+    if (!body) return null;
+    if (!extractionObserver) {
+      extractionObserver = new MutationObserver(invalidateExtractions);
+      extractionObserver.observe(body, {
+        subtree: true, childList: true, attributes: true, characterData: true,
+      });
+    }
+    return extractionObserver;
+  };
+  editor.on('remove', () => {
+    extractionObserver?.disconnect();
+    extractionObserver = null;
+  });
+  const extractCached = (table: HTMLTableElement): SpreadsheetData => {
+    const observer = ensureExtractionObserver();
+    // Apply any mutations not yet delivered before trusting the cache.
+    if (observer) invalidateExtractions(observer.takeRecords());
+    const cached = extractionCache.get(table);
+    if (cached) return structuredClone(cached);
+    const extracted = extractFromTable(table);
+    extractionCache.set(table, structuredClone(extracted));
+    return extracted;
+  };
+  // Called after this file's own writes to a table whose extracted data is
+  // known to be unchanged by them (row-height reconciliation), so they don't
+  // throw the cache away.
+  const keepExtraction = (table: HTMLTableElement, data: SpreadsheetData): void => {
+    ensureExtractionObserver()?.takeRecords();
+    extractionCache.set(table, structuredClone(data));
+  };
+
+  // Tables near the viewport first get only a static preview: a clone of the
+  // real (hidden) table plus a placeholder bar the height of the real
+  // overlay's toggle bar, so the swap to the full grid doesn't shift the
+  // content. No jspreadsheet instance, no extraction -- cheap enough to
+  // mount several per scroll tick. A press on it builds the real grid for
+  // just that table and selects the cell that was clicked.
+  const mountPreview = (table: HTMLTableElement): void => {
+    if (!editor.getBody().contains(table)) return;
+    if (spreadsheetOverlays.has(table)) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'elabftw-spreadsheet-editor-overlay elabftw-spreadsheet-preview';
+    const bar = document.createElement('div');
+    bar.className = 'elabftw-spreadsheet-readonly-toggle';
+    const caption = table.querySelector('caption')?.textContent?.trim();
+    if (caption) {
+      const label = document.createElement('span');
+      label.textContent = caption;
+      bar.appendChild(label);
+    }
+    overlay.appendChild(bar);
+    const clone = table.cloneNode(true) as HTMLTableElement;
+    Array.from(clone.attributes)
+      .filter(attribute => attribute.name.startsWith('data-mce') || attribute.name === SPREADSHEET_UID_ATTR)
+      .forEach(attribute => clone.removeAttribute(attribute.name));
+    clone.querySelectorAll('caption').forEach(node => node.remove());
+    const wrapper = document.createElement('div');
+    wrapper.className = 'elabftw-spreadsheet-preview-body';
+    wrapper.appendChild(clone);
+    overlay.appendChild(wrapper);
+    overlay.addEventListener('pointerdown', event => {
+      if (!(event.target instanceof Element)) return;
+      const cell = event.target.closest<HTMLTableCellElement>('td, th');
+      let selection: { col: number; row: number } | undefined;
+      if (cell && !cell.classList.contains('spreadsheet-coordinate')) {
+        const kind = table.dataset.spreadsheetStyle;
+        const offset = kind === 'notebook' ? 0 : 1;
+        const rowEl = cell.parentElement as HTMLTableRowElement;
+        const rowIndex = Array.from(clone.querySelectorAll('tr')).indexOf(rowEl) - offset;
+        const colIndex = Array.from(rowEl.children).indexOf(cell) - offset;
+        if (rowIndex >= 0 && colIndex >= 0) selection = { col: colIndex, row: rowIndex };
+      }
+      event.preventDefault();
+      activateTable(table, selection);
+    });
+    document.body.appendChild(overlay);
+    spreadsheetOverlays.set(table, {
+      el: overlay,
+      destroy: () => undefined,
+      flush: () => undefined,
+      syncActiveEditor: () => undefined,
+      isPreview: true,
+    });
+    ensureSyncLoop();
+  };
+
+  const activateTable = (table: HTMLTableElement, selection?: { col: number; row: number }): void => {
+    const existing = spreadsheetOverlays.get(table);
+    if (existing && !existing.isPreview) return;
+    removeOverlay(table, true);
+    pendingInitialSelection.set(table, selection);
+    enhanceTable(table);
+    setActiveSpreadsheetTable(table);
+    editor.dispatch('ElabftwSpreadsheetSelected', { table });
+    tableIndentation.trackSelectedTable(table);
+  };
+  const pendingInitialSelection = new WeakMap<HTMLTableElement, { col: number; row: number } | undefined>();
+
   const refreshTableOverlay = (table: HTMLTableElement): void => {
     // The backing table already contains the replacement. Never flush the
     // outgoing grid's pending edit over it (including destroy's flush).
@@ -1540,10 +1656,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const enhanceTable = (table: HTMLTableElement): void => {
     if (!editor.getBody().contains(table)) return;
     if (enhancedTables.has(table)) return;
+    if (spreadsheetOverlays.get(table)?.isPreview) removeOverlay(table, true);
     const tableUid = ensureSpreadsheetUid(table);
     if (!latestTableContent.has(tableUid)) latestTableContent.set(tableUid, table.outerHTML);
     if (!tableCellHistories.has(tableUid)) tableCellHistories.set(tableUid, { undo: [], redo: [] });
-    const extracted = extractFromTable(table);
+    const extracted = extractCached(table);
+    const initialSelection = pendingInitialSelection.get(table);
+    pendingInitialSelection.delete(table);
     // Reconciles this table's rows against its own saved rowHeights right
     // as it's mounted, not just after a future edit commits (see
     // commitOverlayChange's own call to this) -- a table whose height
@@ -1553,6 +1672,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // ever trigger the reconciliation that would fix it. Reported directly
     // as still there after the edit-time fix landed.
     reconcileSpreadsheetRowHeights(table, extracted.rowHeights);
+    keepExtraction(table, extracted);
     // Editable in place (typing, insert/delete row/column, drag-resize a
     // column/row border) -- the same jspreadsheet-ce engine and event
     // hooks the popup itself uses, just live instead of commit-on-close.
@@ -1568,6 +1688,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       host: overlay, flush, destroy, syncActiveEditor,
     } = buildReadOnlySpreadsheetHost(extracted, {
       editable: true,
+      initialSelection,
       cellHistory: tableCellHistories.get(tableUid),
       onChange: data => commitOverlayChange(table, data),
       onOpenFullEditor: () => {
@@ -1755,14 +1876,20 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     pendingOverlayRemovals.add(table);
     window.requestAnimationFrame(() => {
       pendingOverlayRemovals.delete(table);
-      if (!isNearViewport(table)) removeOverlay(table);
+      if (isNearViewport(table)) return;
+      // The table being edited stays mounted while scrolled away, so an
+      // in-progress cell edit or pending change is never interrupted.
+      const entry = spreadsheetOverlays.get(table);
+      if (entry && !entry.isPreview && (lastActiveSpreadsheetTable === table
+        || entry.el.contains(document.activeElement))) return;
+      removeOverlay(table);
     });
   };
   const tableVisibility = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       const table = entry.target as HTMLTableElement;
       if (entry.isIntersecting) {
-        enhanceTable(table);
+        mountPreview(table);
       } else if (!isNearViewport(table)) {
         removeOverlayIfStillOutOfView(table);
       }
@@ -1787,7 +1914,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     visibilityFrame = window.requestAnimationFrame(() => {
       visibilityFrame = 0;
       editor.getBody()?.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet').forEach(table => {
-        if (isNearViewport(table)) enhanceTable(table);
+        if (isNearViewport(table)) mountPreview(table);
         else removeOverlayIfStillOutOfView(table);
       });
     });

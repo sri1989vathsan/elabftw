@@ -6274,6 +6274,8 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
 export interface SpreadsheetHostOptions {
   /** Owned by the table, not its disposable visual overlay. */
   cellHistory?: SpreadsheetCellHistory;
+  /** Data cell (0-based, excluding coordinate headers) to select once the grid has mounted. */
+  initialSelection?: { col: number; row: number };
   /** When true, the grid accepts edits (typing, insert/delete row/column, row/column resize) instead of being read-only. */
   editable?: boolean;
   /**
@@ -7976,6 +7978,15 @@ export function buildReadOnlySpreadsheetHost(
       applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
       applyCellClipHeights(sheetContainer, manuallyResizedRows);
       window.requestAnimationFrame(reserveRoomForHorizontalScrollbar);
+      if (options.initialSelection) {
+        const { col, row } = options.initialSelection;
+        try {
+          worksheet?.updateSelectionFromCoords?.(col, row, col, row);
+        } catch {
+          // selection is a convenience only
+        }
+        options.initialSelection = undefined;
+      }
       return;
     }
     try {

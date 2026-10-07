@@ -6159,3 +6159,35 @@ div > .sticky-navbar {
 .pm-overlay-task {
   z-index: 1020;
 }
+
+// Static stand-in for a spreadsheet that has not been clicked yet (see
+// mountPreview in SpreadsheetExtension.ts). Same box as the real overlay
+// so the swap to the full grid doesn't shift anything.
+.elabftw-spreadsheet-preview {
+  background: var(--mainbackground);
+  cursor: pointer;
+  overflow: hidden;
+
+  .elabftw-spreadsheet-preview-body table.elabftw-spreadsheet {
+    border-collapse: collapse;
+    font-size: 0.9em;
+    margin: 0;
+    max-width: 100%;
+    table-layout: fixed;
+    visibility: visible;
+  }
+
+  .elabftw-spreadsheet-preview-body td,
+  .elabftw-spreadsheet-preview-body th {
+    border: 1px solid var(--secondary-muted, #ccd2d8);
+    overflow: hidden;
+    padding: 0.35rem 0.5rem;
+    white-space: pre-wrap;
+  }
+
+  .elabftw-spreadsheet-preview-body .spreadsheet-coordinate {
+    background-color: var(--superlight, #f0f2f4);
+    color: var(--medium);
+    text-align: center;
+  }
+}
