@@ -273,10 +273,22 @@ function entityEditUrl(entityType: string, id: string): string {
   return `${page}?mode=edit&id=${id}`;
 }
 
+// This page is also loaded inside an <iframe> (the "Version history" popup
+// on the edit page's own toolbar, see view-edit-toolbar.html) -- navigating
+// plain `window` there would redirect the iframe itself to the full edit
+// page, rendering its entire toolbar/editor squeezed inside the small
+// popup instead of the real page underneath. window.top is that real,
+// top-level page in both cases (itself, when this page isn't embedded at
+// all), so navigating it both reaches the right page and discards the
+// iframe/popup along with it, closing the popup as a side effect.
+function topWindow(): Window {
+  return window.top ?? window;
+}
+
 on('restore-revision', (el: HTMLElement) => {
   if (!confirm('Restore this revision? This replaces the current content.')) return;
   ApiC.patch(`${el.dataset.type}/${el.dataset.id}/revisions/${el.dataset.revid}`, {'action': Action.Replace})
-    .then(() => window.location.href = entityEditUrl(el.dataset.type, el.dataset.id))
+    .then(() => topWindow().location.href = entityEditUrl(el.dataset.type, el.dataset.id))
     .catch(error => notify.error(error));
 });
 
@@ -286,7 +298,7 @@ on('restore-template-version', (el: HTMLElement) => {
     action: Action.RestoreTemplateVersion,
     version_id: parseInt(el.dataset.versionid, 10),
   })
-    .then(() => window.location.href = entityEditUrl(el.dataset.type, el.dataset.id))
+    .then(() => topWindow().location.href = entityEditUrl(el.dataset.type, el.dataset.id))
     .catch(error => notify.error(error));
 });
 
