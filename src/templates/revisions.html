@@ -17,7 +17,7 @@
   </style>
 {% endif %}
 
-{% if isTemplate %}
+{% if isTemplate and not embed %}
   <div class='alert alert-info'>
     <strong>{{ 'Template version documentation'|trans }}</strong><br>
     {{ 'Add a short name and notes to explain what changed in each retained template version. The documentation is saved with the template and included in backups and exports.'|trans }}
