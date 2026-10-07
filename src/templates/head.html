@@ -165,9 +165,9 @@
               <div class='dropdown-menu'>
                 {% set labcollectorInventoryUrl = App.Teams.teamArr.labcollector_url|default('http://bs-labcollect01.ethz.ch/moor/index.php') %}
                 <div class='dropdown-item d-flex align-items-center justify-content-between'>
-                  <a id='labcollectorInventoryLink' href='{{ labcollectorInventoryUrl }}' target='_blank' rel='noopener noreferrer'><i class='fas fa-arrow-up-right-from-square fa-fw mr-1'></i>{{ 'LabCollector Inventory'|trans }}</a>
+                  <a id='labcollectorInventoryLink' href='{{ labcollectorInventoryUrl }}' target='_blank' rel='noopener noreferrer'><i class='fas fa-arrow-up-right-from-square fa-fw mr-1'></i>{{ 'LabCollector'|trans }}</a>
                   {% if App.Users.isAdmin %}
-                    <button type='button' class='btn btn-link p-0 ml-2' data-action='edit-labcollector-inventory-link' data-current-url='{{ labcollectorInventoryUrl }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit LabCollector Inventory link'|trans }}'><i class='fas fa-pen fa-fw fa-xs' aria-hidden='true'></i></button>
+                    <button type='button' class='btn btn-link p-0 ml-2' data-action='edit-labcollector-inventory-link' data-current-url='{{ labcollectorInventoryUrl }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit LabCollector link'|trans }}'><i class='fas fa-pen fa-fw fa-xs' aria-hidden='true'></i></button>
                   {% endif %}
                 </div>
                 <div class='dropdown-item d-flex align-items-center justify-content-between'>

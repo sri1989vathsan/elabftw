@@ -1110,7 +1110,7 @@ on('edit-labcollector-inventory-link', (el: HTMLElement) => {
   const link = document.getElementById('labcollectorInventoryLink') as HTMLAnchorElement | null;
   if (!link) return;
   const currentUrl = el.dataset.currentUrl ?? link.href;
-  const nextUrl = window.prompt(i18next.t('Enter the LabCollector Inventory URL'), currentUrl);
+  const nextUrl = window.prompt(i18next.t('Enter the LabCollector URL'), currentUrl);
   if (nextUrl === null || nextUrl.trim() === '' || nextUrl.trim() === currentUrl) return;
   const trimmed = nextUrl.trim();
   ApiC.patch(`${Model.Team}/current`, {labcollector_url: trimmed}).then(() => {
