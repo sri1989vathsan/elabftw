@@ -75,6 +75,9 @@ trait TwigTrait
         $canToHuman = new TwigFilter('canToHuman', '\Elabftw\Elabftw\TwigFunctions::canToHuman', $filterOptions);
         $toSymbol = new TwigFilter('toSymbol', '\Elabftw\Elabftw\TwigFilters::toSymbol', $filterOptions);
         $formatMfaSecret = new TwigFilter('formatMfaSecret', '\Elabftw\Elabftw\TwigFilters::formatMfaSecret', $filterOptions);
+        // Deliberately no is_safe: html here -- Twig's own auto-escaping must
+        // still run on the result, see this filter's own docblock.
+        $breakableUnderscores = new TwigFilter('breakableUnderscores', '\Elabftw\Elabftw\TwigFilters::breakableUnderscores');
 
         // custom twig functions
         $limitOptions = new TwigFunction('limitOptions', '\Elabftw\Elabftw\TwigFunctions::getLimitOptions');
@@ -112,6 +115,7 @@ trait TwigTrait
         $TwigEnvironment->addFilter($canToHuman);
         $TwigEnvironment->addFilter($toSymbol);
         $TwigEnvironment->addFilter($formatMfaSecret);
+        $TwigEnvironment->addFilter($breakableUnderscores);
         // functions
         $TwigEnvironment->addFunction($limitOptions);
         $TwigEnvironment->addFunction($generationTime);

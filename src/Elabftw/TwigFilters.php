@@ -230,6 +230,23 @@ final class TwigFilters
         return implode(' ', str_split($input, 4));
     }
 
+    /**
+     * Unicode line-breaking treats a space or hyphen as a normal, preferred
+     * wrap opportunity, but not an underscore -- a long underscore-joined
+     * filename (e.g. "Procurement_ID_26048466_20260923154815.pdf") reads as
+     * one unbroken word, overflowing a narrow attachment list instead of
+     * wrapping the way a person reading it would expect. Inserting an
+     * invisible zero-width space (U+200B) after every underscore gives the
+     * browser a real, preferred break point there, same priority as a
+     * literal space -- not marked is_safe: html, so Twig's own auto-escaping
+     * still runs on the result afterward (the inserted character is not a
+     * special HTML character, so escaping leaves it untouched).
+     */
+    public static function breakableUnderscores(string $text): string
+    {
+        return str_replace('_', "_\u{200B}", $text);
+    }
+
     public static function array2String(array $input, ?int $depth = null): string
     {
         $str = '';

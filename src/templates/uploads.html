@@ -83,7 +83,7 @@
                     {# use a span as title doesn't work directly on i element #}
                     <span title='{{ 'Archived'|trans }}'><i class='fas fa-box-archive mr-1'></i></span>
                   {% endif %}
-                  <span id='upload-filename_{{ upload.id }}' class='text-break'>{{ upload.real_name }}</span>
+                  <span id='upload-filename_{{ upload.id }}' class='text-break'>{{ upload.real_name|breakableUnderscores }}</span>
                   <div class='mt-2' id='moreinfoDiv_{{ upload.id }}' hidden>
                     {% include 'upload-more-info.html' %}
                   </div>
@@ -262,7 +262,7 @@
             <div class='caption'>
               <i class='fas fa-fw fa-download mr-1'></i>
               <p class='d-inline'>
-                <a id='upload-filename_{{ upload.id }}' class='text-break' href='app/download.php?f={{ upload.long_name|e('url') }}&amp;name={{ upload.real_name|e('url') }}&amp;storage={{ upload.storage }}{% if accessKey %}&amp;access_key={{ accessKey|e('url') }}{% endif %}' target='_blank' rel='noopener'>{{ upload.real_name }}</a>
+                <a id='upload-filename_{{ upload.id }}' class='text-break' href='app/download.php?f={{ upload.long_name|e('url') }}&amp;name={{ upload.real_name|e('url') }}&amp;storage={{ upload.storage }}{% if accessKey %}&amp;access_key={{ accessKey|e('url') }}{% endif %}' target='_blank' rel='noopener'>{{ upload.real_name|breakableUnderscores }}</a>
                 <span class='smallgray' style='display:inline'>
                   {% if upload.filesize %}
                     {{ upload.filesize|formatBytes }} -

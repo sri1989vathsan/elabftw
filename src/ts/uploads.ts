@@ -76,7 +76,12 @@ on('rename-upload', (el: HTMLElement) => {
   const filenameInput = document.createElement('input');
   filenameInput.dataset.id = el.dataset.uploadid;
   filenameInput.classList.add('form-control');
-  filenameInput.value = filenameLink.textContent;
+  // The displayed name (breakableUnderscores Twig filter) has an invisible
+  // zero-width space inserted after every underscore so a long filename can
+  // wrap -- stripped back out here so editing and saving a name the user
+  // never touched (or only partly edited) can't silently reintroduce those
+  // characters into the real, stored filename.
+  filenameInput.value = filenameLink.textContent.replace(/​/g, '');
   const parentSpan = filenameLink.parentElement;
   parentSpan.classList.add('form-inline');
   filenameInput.addEventListener('blur', event => {
