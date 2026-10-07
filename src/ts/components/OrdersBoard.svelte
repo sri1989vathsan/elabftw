@@ -1397,6 +1397,44 @@
     return `app/download.php?f=${encodeURIComponent(upload.long_name)}&storage=${upload.storage}&name=${encodeURIComponent(upload.real_name)}`;
   }
 
+  // A space or hyphen is a normal soft-wrap point by default; an underscore
+  // is not (Unicode line-breaking treats it as an ordinary word character).
+  // overflow-wrap: anywhere on a title/filename's own CSS still lets a long
+  // underscore-joined run (e.g. "Procurement_ID_26048466_...") break, but
+  // only as a last resort, wherever happens to fit -- not necessarily right
+  // after an underscore, which reads oddly mid-word. A zero-width space
+  // (invisible, no visual gap) inserted after each underscore gives the
+  // browser a real, preferred break opportunity there, same priority as a
+  // literal space, so long names wrap at the same places a person reading
+  // them would expect. Plain-text display only -- never used on anything
+  // serialized back out (a filename's own download attribute, an upload's
+  // real_name sent to the API, etc.), since the inserted character would
+  // then corrupt that value.
+  function breakableUnderscores(text: string): string {
+    return text.replace(/_/g, '_​');
+  }
+
+  // Same idea as breakableUnderscores() above, but for the notes field's
+  // own rendered HTML (a link preview chip, an uploaded image's alt text,
+  // arbitrary pasted markup) rather than a single plain-text value. A blind
+  // string replace across the whole HTML would just as happily land inside
+  // a tag name, an href/src, or a data- attribute -- each as likely to
+  // contain an underscore as the visible text is, and each corrupted by an
+  // inserted character no parser asked for. Walking only the parsed DOM's
+  // actual text nodes keeps every edit confined to content a person
+  // actually reads.
+  function breakableUnderscoresHtml(html: string): string {
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    let node: Node | null;
+    // eslint-disable-next-line no-cond-assign
+    while ((node = walker.nextNode())) {
+      if (node.nodeValue?.includes('_')) node.nodeValue = breakableUnderscores(node.nodeValue);
+    }
+    return container.innerHTML;
+  }
+
   function formatFilesize(bytes: number | null): string {
     if (bytes === null) return '';
     if (bytes < 1024) return `${bytes} B`;
@@ -1644,7 +1682,7 @@
             {#each newFiles as file, index (file.name + index)}
               <li class="orders-upload">
                 <i class="fas fa-file fa-fw mr-1" aria-hidden="true"></i>
-                {file.name}
+                {breakableUnderscores(file.name)}
                 <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button ml-auto" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeNewFile(index)}>
                   <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
                 </button>
@@ -1653,7 +1691,7 @@
             {#each reusedUploads as upload, index (upload.id)}
               <li class="orders-upload">
                 <i class="fas fa-share fa-fw mr-1" aria-hidden="true"></i>
-                {upload.real_name}
+                {breakableUnderscores(upload.real_name)}
                 <span class="orders-muted ml-1">{t('from a previous order')}</span>
                 <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button ml-auto" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeReusedUpload(index)}>
                   <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
@@ -2027,7 +2065,7 @@
                   {/each}
                 </select>
                 <span class="orders-muted orders-item-id" title={t('Order ID')}>#{item.id}</span>
-                <strong class="orders-item-title">{item.title}</strong>
+                <strong class="orders-item-title">{breakableUnderscores(item.title)}</strong>
                 {#if !['requested', 'reference', 'backlogged', 'cancelled'].includes(item.status) && isMissingProcurementId(item)}
                   <span class="badge badge-danger" title={t('No Procurement ID tag was extracted from an attached file.')}>
                     <i class="fas fa-triangle-exclamation fa-fw mr-1" aria-hidden="true"></i>{t('Missing Procurement ID')}
@@ -2156,7 +2194,7 @@
                   </div>
                 </div>
               </div>
-              {#if item.notes}<div class="orders-item-description mb-1">{@html item.notes}</div>{/if}
+              {#if item.notes}<div class="orders-item-description mb-1">{@html breakableUnderscoresHtml(item.notes)}</div>{/if}
               <div class="orders-muted orders-item-meta">
                 {t('Requested by')} {item.author_fullname} · {formatDate(item.created_at)}
               </div>
@@ -2193,7 +2231,7 @@
                     {#each uploadsByItem[item.id] as upload (upload.id)}
                       <li class="orders-upload">
                         <i class="fas fa-file fa-fw mr-1" aria-hidden="true"></i>
-                        <a href={downloadUrl(upload)} target="_blank" rel="noopener noreferrer">{upload.real_name}</a>
+                        <a href={downloadUrl(upload)} target="_blank" rel="noopener noreferrer">{breakableUnderscores(upload.real_name)}</a>
                         <span class="orders-muted ml-1">{formatFilesize(upload.filesize)}</span>
                         {#if upload.has_extracted_text}
                           <i class="fas fa-magnifying-glass fa-fw ml-1 orders-muted" title={t('Content is searchable')} aria-label={t('Content is searchable')}></i>
