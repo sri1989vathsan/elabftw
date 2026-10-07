@@ -70,9 +70,15 @@
            per-version changelog of in-between edits -- embedded rather than
            re-built here, so this popup always matches that page exactly
            instead of drifting into a second, slightly different listing. #}
+        {# allow='modals': this page's Restore buttons gate on
+           window.confirm() -- blocked by default inside any iframe
+           (a Permissions Policy restriction, same-origin or not), so
+           without this the confirm prompt never even displays and the
+           click silently does nothing. #}
         <iframe id='templateVersionHistoryIframe'
           src='revisions.php?type={{ Entity.entityType.value }}&amp;item_id={{ Entity.id }}&amp;embed=1'
           title='{{ 'Version history'|trans }}'
+          allow='modals'
           style='width:100%;height:70vh;border:0'></iframe>
       </div>
       <div class='modal-footer'>
