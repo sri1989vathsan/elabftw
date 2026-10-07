@@ -1575,7 +1575,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // known to be unchanged by them (row-height reconciliation), so they don't
   // throw the cache away.
   const keepExtraction = (table: HTMLTableElement, data: SpreadsheetData): void => {
-    ensureExtractionObserver()?.takeRecords();
+    // Only this table's own just-made writes may be discarded; anything
+    // that touched another table must still invalidate that table's cache.
+    const records = ensureExtractionObserver()?.takeRecords() ?? [];
+    invalidateExtractions(records.filter(record => {
+      const node = record.target;
+      const element = node instanceof Element ? node : node.parentElement;
+      return element?.closest('table.elabftw-spreadsheet') !== table;
+    }));
     extractionCache.set(table, structuredClone(data));
   };
 
