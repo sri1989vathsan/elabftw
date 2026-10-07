@@ -1653,23 +1653,49 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // looked like right-click had stopped doing anything at all).
     // Reparenting to document.body puts it outside that transformed
     // ancestor's containing-block chain entirely, matching the plain-
-    // viewport coordinates it was always computing -- but jspreadsheet only
-    // ever creates this element lazily, on the first right-click, so doing
-    // this once at mount (as an earlier version of this fix did) always ran
-    // before the element existed and silently reparented nothing. Deferred
-    // with setTimeout(0) inside the overlay's own contextmenu handler
-    // instead: by the time that macrotask runs, every synchronous listener
-    // for this same event -- including jspreadsheet's own, which creates
-    // and positions the menu in the first place -- has already finished.
+    // viewport coordinates it was always computing -- but jspreadsheet-ce's
+    // own factory creates and appends this element only after an internal
+    // `await` (see its own createWorksheets() call), so it doesn't exist
+    // yet at the exact synchronous instant this overlay mounts. Doing this
+    // once at mount (as an earlier version of this fix did) ran before the
+    // element existed and silently reparented nothing, every time.
     const reparentContextMenu = (): void => {
       const contextMenuEl = overlay.querySelector<HTMLElement>('.jss_contextmenu');
       if (contextMenuEl && contextMenuEl.parentElement !== document.body) {
         document.body.appendChild(contextMenuEl);
       }
     };
+    // Retried for a few frames right after mount so the element is already
+    // in document.body well before anyone actually right-clicks -- jspreadsheet-
+    // ce's own async init reliably settles within one or two frames in
+    // practice, and this loop costs nothing once reparentContextMenu finds
+    // nothing left to do. Without this, the very same jSuites function that
+    // positions the menu also computes whether to flip it upward (so it
+    // doesn't run off the bottom of the viewport) from this same element's
+    // OWN getBoundingClientRect() -- read while it's still nested several
+    // levels inside this scrollable, clipped overlay on that very first
+    // right-click, before the contextmenu handler's own reparenting (below)
+    // has a chance to run. That stale geometry threw the flip decision off
+    // on a first open near the bottom of the table specifically, reported
+    // as the menu sometimes appearing below the table instead of flipping
+    // above it like every later open (once the element is already sitting
+    // in document.body throughout) correctly does.
+    let contextMenuRetries = 0;
+    const retryReparentContextMenu = (): void => {
+      reparentContextMenu();
+      if (overlay.querySelector('.jss_contextmenu')?.parentElement === document.body) return;
+      if (++contextMenuRetries >= 30) return;
+      window.requestAnimationFrame(retryReparentContextMenu);
+    };
+    retryReparentContextMenu();
     overlay.addEventListener('contextmenu', () => {
       openContextMenuOverlay = overlay;
       overlay.classList.add('has-open-context-menu');
+      // Safety net for the rare case the retry loop above somehow hasn't
+      // caught up yet (e.g. a very slow initial load) -- by the time this
+      // macrotask runs, every synchronous listener for this same event,
+      // including jspreadsheet's own (which creates/positions the menu in
+      // the first place), has already finished.
       window.setTimeout(reparentContextMenu, 0);
     });
     document.body.appendChild(overlay);
