@@ -127,8 +127,15 @@ final class TemplateVersions
         if (count($oldestFirst) === 0) {
             return $buckets;
         }
+        // (int) cast on both sides: PDO returns an INT column's value as a
+        // numeric string by default, which a strict === against an already-
+        // cast-to-int $currentVersion would never match -- silently falling
+        // through to the highest-numbered-version fallback below on every
+        // call, so a restore-to-an-earlier-version's new drafts kept
+        // attaching to the wrong (newer, abandoned) version regardless of
+        // this parameter.
         $currentVersionRow = $currentVersion !== null
-            ? array_values(array_filter($oldestFirst, static fn(array $v): bool => $v['version'] === $currentVersion))
+            ? array_values(array_filter($oldestFirst, static fn(array $v): bool => (int) $v['version'] === $currentVersion))
             : array();
         $unclaimedBucketId = $currentVersionRow !== array() ? $currentVersionRow[0]['id'] : end($oldestFirst)['id'];
         foreach ($revisions as $revision) {
