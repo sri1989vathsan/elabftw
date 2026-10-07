@@ -63,6 +63,61 @@ final class TemplateVersions
     }
 
     /**
+     * Buckets the ordinary auto-saved revisions (from the core Revisions
+     * model -- a completely separate system, see this class's own top
+     * comment) under whichever published version was current while each one
+     * was made, so a published version's own row can show (and restore to)
+     * the intermediate edits that led up to it, not just its own one
+     * all-or-nothing snapshot. A revision belongs to the *earliest* version
+     * whose own published_at is still at or after it, i.e. the first
+     * publish it was absorbed into -- checked oldest-version-first
+     * regardless of the order either argument arrives in (sorted into a
+     * local copy below), since checking newest-first would instead match
+     * every old revision against the newest version's own published_at
+     * (always satisfied by anything older), dumping the entire history
+     * into one bucket. A revision newer than every version's own
+     * published_at is draft work made since the last publish, not yet
+     * claimed by any version -- instead of being hidden entirely, it is
+     * attached to the *newest* version's own bucket, as the in-progress
+     * edit history leading up to whatever gets published next. Once that
+     * next version is published, the same revision naturally re-buckets
+     * under it on the normal rule above (this method has no persisted
+     * state of its own -- every call recomputes from scratch).
+     *
+     * @param list<array{id: int, version: int, published_at: string}> $versions
+     * @param list<array{id: int, created_at: string}> $revisions
+     * @return array<int, list<array<string, mixed>>> revisions keyed by version id
+     */
+    public static function bucketRevisionsByVersion(array $versions, array $revisions): array
+    {
+        $oldestFirst = $versions;
+        usort($oldestFirst, static fn(array $a, array $b): int => $a['version'] <=> $b['version']);
+
+        $buckets = array();
+        foreach ($oldestFirst as $version) {
+            $buckets[$version['id']] = array();
+        }
+        if (count($oldestFirst) === 0) {
+            return $buckets;
+        }
+        $newestVersionId = end($oldestFirst)['id'];
+        foreach ($revisions as $revision) {
+            $claimed = false;
+            foreach ($oldestFirst as $version) {
+                if ($revision['created_at'] <= $version['published_at']) {
+                    $buckets[$version['id']][] = $revision;
+                    $claimed = true;
+                    break;
+                }
+            }
+            if (!$claimed) {
+                $buckets[$newestVersionId][] = $revision;
+            }
+        }
+        return $buckets;
+    }
+
+    /**
      * Templates::create() now records v1 immediately, but templates created
      * before that fix (or by any other path that skipped it) never got a
      * permanent v1 snapshot -- "Publish new version" only ever snapshots the

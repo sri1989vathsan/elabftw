@@ -93,6 +93,38 @@
          these ids) core revisions endpoint. Also lets compare-revisions
          below read it straight out of the DOM, no extra fetch either. #}
       <div hidden id='{{ randomId }}' {{ isTemplate ? "data-body-loaded='1'" }} style='overflow:auto;margin: 10px 0 0 20px'><div>{{ isTemplate ? revision.body|raw : '' }}</div></div>
+      {# the ordinary auto-saved edits absorbed into this published version
+         (see TemplateVersions::bucketRevisionsByVersion) -- a changelog of
+         what actually happened while this version was being worked on,
+         each restorable on its own, not just the version's one snapshot #}
+      {% set changelog = versionRevisions[revision.id]|default([]) %}
+      {% if isTemplate and changelog|length > 0 %}
+        <details class='ml-4 mt-2'>
+          <summary>{{ 'Edit history (%d)'|trans|format(changelog|length) }}</summary>
+          <ul class='list-group mt-2'>
+            {% for edit in changelog %}
+              <li class='list-group-item'>
+                <div class='d-flex'>
+                  <div>
+                    <input autocomplete='off' type='checkbox' data-action='checkbox-revision' data-id='{{ Entity.id }}' data-revid='{{ edit.id }}' data-type='{{ Entity.entityType.value }}' aria-label='{{ 'Select'|trans }}' class='mr-2' />
+                    <span title='{{ 'Revision ID'|trans }}' class='badge badge-secondary mr-2'>{{ edit.id }}</span>
+                    <button type='button' aria-label='{{ 'Toggle content '|trans }}' class='btn btn-ghost border-0' data-type='{{ Entity.entityType.value }}' data-id='{{ Entity.id }}' data-revid={{ edit.id }} data-randid='templateVersionEdit_{{ edit.id }}' data-action='toggle-body' data-opened-icon='fa-square-minus' data-closed-icon='fa-square-plus' title='{{ 'Toggle content'|trans }}'>
+                      <i class='fas fa-square-plus fa-fw'></i>
+                    </button>
+                    <span class='relative-moment' title='{{ edit.created_at }}'></span> {{ 'by'|trans }} {{ edit.fullname }}
+                  </div>
+                  <div class='ml-auto'>
+                    {% if not Entity.isReadOnly %}
+                      <button type='button' data-action='restore-revision' data-id='{{ Entity.id }}' data-type='{{ Entity.entityType.value }}' data-revid='{{ edit.id }}' class='btn btn-ghost'>{{ 'Restore'|trans }}</button>
+                    {% endif %}
+                  </div>
+                </div>
+                <div hidden id='templateVersionEdit_{{ edit.id }}' style='overflow:auto;margin: 10px 0 0 20px'><div></div></div>
+              </li>
+            {% endfor %}
+          </ul>
+        </details>
+      {% endif %}
     </li>
   {% endfor %}
 </ul>

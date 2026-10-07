@@ -7,7 +7,7 @@
  */
 
 import { ApiC } from './api';
-import { Action } from './interfaces';
+import { Action, EntityType } from './interfaces';
 import DiffMatchPatch from 'diff-match-patch';
 import { notify } from './notify';
 import DOMPurify from 'dompurify';
@@ -244,8 +244,33 @@ on('compare-revisions', async (el: HTMLElement) => {
   });
 });
 
+// This page (revisions.php) only ever shows a version's history -- it has
+// no "edit" mode of its own to redirect back into. A relative
+// `?mode=edit&id=...` stayed on this same page, landing on
+// revisions.php?mode=edit&id=... instead of the entity's own editor: that
+// page's own controller requires `type`/`item_id`, not `mode`/`id`, so the
+// request threw before rendering anything -- a blank page, though the
+// restore itself (the PATCH above, already awaited by the time this runs)
+// had already succeeded and is not lost by that broken redirect or by
+// reloading afterward. Matches EntityType::toPage() on the PHP side --
+// each entity type (plus the two template kinds, each edited on their own
+// separate page) needs its own mapping, not one shared page name.
+function entityEditUrl(entityType: string, id: string): string {
+  const pages: Record<string, string> = {
+    [EntityType.Experiment]: 'experiments.php',
+    [EntityType.Item]: 'database.php',
+    [EntityType.Template]: 'templates.php',
+    [EntityType.ItemType]: 'resources-templates.php',
+  };
+  const page = pages[entityType] ?? 'experiments.php';
+  return `${page}?mode=edit&id=${id}`;
+}
+
 on('restore-revision', (el: HTMLElement) => {
-  ApiC.patch(`${el.dataset.type}/${el.dataset.id}/revisions/${el.dataset.revid}`, {'action': Action.Replace});
+  if (!confirm('Restore this revision? This replaces the current content.')) return;
+  ApiC.patch(`${el.dataset.type}/${el.dataset.id}/revisions/${el.dataset.revid}`, {'action': Action.Replace})
+    .then(() => window.location.href = entityEditUrl(el.dataset.type, el.dataset.id))
+    .catch(error => notify.error(error));
 });
 
 on('restore-template-version', (el: HTMLElement) => {
@@ -254,7 +279,7 @@ on('restore-template-version', (el: HTMLElement) => {
     action: Action.RestoreTemplateVersion,
     version_id: parseInt(el.dataset.versionid, 10),
   })
-    .then(() => window.location.href = `?mode=edit&id=${el.dataset.id}`)
+    .then(() => window.location.href = entityEditUrl(el.dataset.type, el.dataset.id))
     .catch(error => notify.error(error));
 });
 

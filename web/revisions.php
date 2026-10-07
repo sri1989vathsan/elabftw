@@ -46,14 +46,23 @@ try {
     // documentation per version still lives in the entity metadata so it's
     // exported/backed up with the template and requires no schema fork.
     $isTemplate = in_array($Entity->entityType, array(EntityType::Templates, EntityType::ItemsTypes), true);
+    $RevisionsModel = new Revisions(
+        $Entity,
+        (int) $App->Config->configArr['max_revisions'],
+        (int) $App->Config->configArr['min_delta_revisions'],
+        (int) $App->Config->configArr['min_days_revisions'],
+    );
     $revisionsArr = $isTemplate
         ? TemplateVersions::readAllForEntity($Entity->id ?? 0)
-        : new Revisions(
-            $Entity,
-            (int) $App->Config->configArr['max_revisions'],
-            (int) $App->Config->configArr['min_delta_revisions'],
-            (int) $App->Config->configArr['min_days_revisions'],
-        )->readAll();
+        : $RevisionsModel->readAll();
+    // Each published version's own changelog: the ordinary auto-saved
+    // revisions made while it was being worked on, so "what actually
+    // changed within this version" is visible, not just the one before/
+    // after snapshot the version itself is. See bucketRevisionsByVersion's
+    // own comment for how a revision is assigned to a version.
+    $versionRevisions = $isTemplate
+        ? TemplateVersions::bucketRevisionsByVersion($revisionsArr, $RevisionsModel->readAll())
+        : array();
     $templateVersionDocs = array();
     if ($isTemplate && !empty($Entity->entityData['metadata'])) {
         $metadata = json_decode((string) $Entity->entityData['metadata'], true);
@@ -72,6 +81,7 @@ try {
         'revisionsArr' => $revisionsArr,
         'isTemplate' => $isTemplate,
         'templateVersionDocs' => $templateVersionDocs,
+        'versionRevisions' => $versionRevisions,
     );
 
     $Response->setContent($App->render($template, $renderArr));
