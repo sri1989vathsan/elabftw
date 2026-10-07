@@ -166,7 +166,14 @@ function renderSpreadsheetDiff(oldHtml: string, newHtml: string): HTMLElement | 
 // count number of checked revisions
 function getCheckedBoxes(): Array<CheckedRevision> {
   const checkedBoxes = [];
-  document.querySelectorAll('input[type=checkbox]:checked').forEach((box: HTMLInputElement) => {
+  // Scoped to this page's own revision checkboxes (data-action
+  // 'checkbox-revision') -- a bare 'input[type=checkbox]:checked' matched
+  // any already-checked checkbox anywhere on the page (e.g. a todolist
+  // task in the side panel), which has no data-id/data-revid of its own
+  // and so counted as an extra, bogus selection: checking a single real
+  // revision box already looked like 2 selections were made (enabling
+  // Compare too early), and checking 2 looked like 3 (leaving it disabled).
+  document.querySelectorAll('input[data-action="checkbox-revision"]:checked').forEach((box: HTMLInputElement) => {
     checkedBoxes.push({
       id: parseInt(box.dataset.id),
       revid: parseInt(box.dataset.revid),
