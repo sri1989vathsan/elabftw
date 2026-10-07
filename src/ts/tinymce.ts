@@ -372,27 +372,40 @@ export function getTinymceBaseConfig(page: string): object {
         if (isElabftwRichSelection) return;
         table.removeAttribute('width');
         table.style.removeProperty('width');
+        // table-layout: fixed (Word/Excel set it routinely) sizes columns
+        // from the specified table width and first-row cells alone, never
+        // from content -- left in place, it can fight .elabftw-pasted-table's
+        // own width: max-content below (meant to size the whole table from
+        // its actual content, auto-layout style) in browser-dependent ways,
+        // rather than reliably falling back to it.
+        table.style.removeProperty('table-layout');
         table.classList.add('elabftw-pasted-table');
         if (!table.getAttribute('style')?.trim()) table.removeAttribute('style');
         // Word/Excel/Sheets clipboard HTML encodes each column's width
-        // explicitly, either on a <col> or on every <td>/<th> in it
-        // (often both) -- stripping only the outer <table>'s own width
-        // above left those untouched, so every column still rendered at
-        // whatever narrow, fixed width the source application happened
-        // to use regardless of how much text it actually held (the
-        // table's own width: max-content, set by CSS for
-        // .elabftw-pasted-table, only sizes the table as a whole; it
-        // can't override an explicit width on a child cell). Reported as
-        // pasted tables coming in with very narrow columns even when
-        // they contain a lot of text.
-        table.querySelectorAll<HTMLElement>('col').forEach(col => {
-          col.removeAttribute('width');
-          col.style.removeProperty('width');
-        });
-        table.querySelectorAll<HTMLElement>('td, th').forEach(cell => {
-          cell.removeAttribute('width');
-          cell.style.removeProperty('width');
-          if (!cell.getAttribute('style')?.trim()) cell.removeAttribute('style');
+        // explicitly -- on a <col>, on every <td>/<th>, or (Word especially)
+        // on a <p>/<span> it wraps a cell's own text in, whose "mso-"
+        // styling carries the real pixel width rather than the <td> itself
+        // -- stripping only the outer <table>'s own width above left all of
+        // those untouched, so every column still rendered at whatever
+        // narrow, fixed width the source application happened to use
+        // regardless of how much text it actually held (the table's own
+        // width: max-content, set by CSS for .elabftw-pasted-table, only
+        // sizes the table as a whole; it can't override an explicit width
+        // on a descendant, however deeply nested). Reported as pasted
+        // tables coming in with very narrow columns even when they contain
+        // a lot of text. Every descendant gets the same treatment rather
+        // than only <col>/<td>/<th> specifically, since Word's own nested
+        // wrapper is neither -- <img> is the one deliberate exception: an
+        // embedded image's own width is a real, deliberate display size,
+        // not table layout left over from the source app, and stripping it
+        // would make it render at whatever oversized natural resolution it
+        // was captured at.
+        table.querySelectorAll<HTMLElement>(':scope *:not(img)').forEach(el => {
+          el.removeAttribute('width');
+          el.style.removeProperty('width');
+          el.style.removeProperty('min-width');
+          el.style.removeProperty('max-width');
+          if (!el.getAttribute('style')?.trim()) el.removeAttribute('style');
         });
       });
       args.content = pasteContainer.innerHTML;

@@ -254,6 +254,20 @@ const PRESERVED_STYLE_PROPERTIES = new Set([
   'white-space',
   'width',
 ]);
+// Same whitelist as PRESERVED_STYLE_PROPERTIES, minus sizing -- used only
+// for an external (non-elabftw) clipboard paste. width/height are kept in
+// the main whitelist for this app's own rich copy-paste, where a cell
+// deliberately sized via this editor's own format controls should keep
+// that size when copied elsewhere -- but Word/Excel/Sheets encode a
+// column's source-app layout through those exact same properties, not
+// anything the person pasting actually asked to preserve. See
+// stripSizingProperties' own call site in parseClipboardHtmlTable.
+const EXTERNAL_PASTE_STYLE_PROPERTIES = new Set(
+  Array.from(PRESERVED_STYLE_PROPERTIES).filter(property => property !== 'width' && property !== 'height'),
+);
+function stripSizingProperties(style: string | undefined): string | undefined {
+  return sanitizeStyle(style, EXTERNAL_PASTE_STYLE_PROPERTIES);
+}
 const PRESERVED_TABLE_STYLE_PROPERTIES = new Set([
   ...PRESERVED_STYLE_PROPERTIES,
   'border-collapse',
@@ -1255,7 +1269,21 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
       const colSpan = Math.max(1, cell.colSpan || 1);
       const rowSpan = Math.max(1, cell.rowSpan || 1);
       const cellValue = (cell.textContent ?? '').replace(/\u00a0/g, ' ').trim();
-      const cellStyle = getClipboardCellStyle(cell, styleRules);
+      // width/height are in PRESERVED_STYLE_PROPERTIES for this app's own
+      // rich copy-paste (a cell deliberately sized via this editor's own
+      // format controls should keep that size when copied elsewhere), but
+      // Word/Excel/Sheets encode a column's *source-app layout* the exact
+      // same way -- the external-paste equivalent of a plain pasted table's
+      // own now-stripped width attribute/style (see paste_preprocess in
+      // tinymce.ts), just arriving through cellStyles on this, the "convert
+      // a pasted table straight into a spreadsheet" path, instead. Left in,
+      // every cell rendered at whatever narrow, fixed pixel/point size the
+      // source application happened to use regardless of its own text, the
+      // same "narrow columns" symptom, reconstructed through the one path
+      // that previous fix never covered.
+      const cellStyle = isFormulaSpreadsheet
+        ? getClipboardCellStyle(cell, styleRules)
+        : stripSizingProperties(getClipboardCellStyle(cell, styleRules));
       for (let rowOffset = 0; rowOffset < rowSpan; rowOffset++) {
         const targetRow = rowIndex + rowOffset;
         rows[targetRow] ??= [];
