@@ -6161,12 +6161,15 @@ div > .sticky-navbar {
 }
 
 // Static stand-in for a spreadsheet that has not been clicked yet (see
-// mountPreview in SpreadsheetExtension.ts). Same box as the real overlay
-// so the swap to the full grid doesn't shift anything.
+// mountPreview in SpreadsheetExtension.ts). Built from the live grid's own
+// markup and classes, so its look comes from the rules above; this only adds
+// what makes it a stand-in. The notebook fallback gets minimal table styling.
 .elabftw-spreadsheet-preview {
-  background: var(--mainbackground);
   cursor: pointer;
-  overflow: hidden;
+
+  button {
+    pointer-events: none;
+  }
 
   .elabftw-spreadsheet-preview-body table.elabftw-spreadsheet {
     border-collapse: collapse;
@@ -6183,11 +6186,5 @@ div > .sticky-navbar {
     overflow: hidden;
     padding: 0.35rem 0.5rem;
     white-space: pre-wrap;
-  }
-
-  .elabftw-spreadsheet-preview-body .spreadsheet-coordinate {
-    background-color: var(--superlight, #f0f2f4);
-    color: var(--medium);
-    text-align: center;
   }
 }

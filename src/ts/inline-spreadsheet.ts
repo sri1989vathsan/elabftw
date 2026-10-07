@@ -8637,6 +8637,114 @@ export function buildReadOnlySpreadsheetHost(
 
 
 /**
+ * A static stand-in for the live editor overlay, built straight from the
+ * saved <table> (no extraction, no jspreadsheet instance). It reuses the
+ * live grid's own markup and class names -- host, toggle bar, .jss_worksheet
+ * with coordinate headers -- so every existing stylesheet rule for the real
+ * grid applies unchanged and swapping in the live grid does not shift
+ * anything. Returns null for kinds it does not mirror (notebook).
+ */
+export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivElement | null {
+  if (table.dataset.spreadsheetStyle === 'notebook') return null;
+  const headRow = table.querySelector('thead > tr');
+  const bodyRows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody > tr'));
+  if (!headRow) return null;
+  const host = document.createElement('div');
+  host.className = 'elabftw-spreadsheet-readonly-view';
+  ['--spreadsheet-row-index-width', '--spreadsheet-column-index-height'].forEach(name => {
+    const value = table.style.getPropertyValue(name);
+    if (value) host.style.setProperty(name, value);
+  });
+  host.style.maxWidth = '100%';
+
+  const toggleBar = document.createElement('div');
+  toggleBar.className = 'elabftw-spreadsheet-readonly-toggle';
+  const caption = table.querySelector('caption')?.textContent?.trim();
+  if (caption) {
+    const label = document.createElement('span');
+    label.textContent = caption;
+    toggleBar.appendChild(label);
+  }
+  [
+    ['undo', 'fa-undo'], ['redo', 'fa-redo'], ['autofit-rows', 'fa-arrows-alt-v'],
+    ['autofit-columns', 'fa-arrows-alt-h'], ['copy-table', 'fa-copy'],
+    ['open-editor', 'fa-up-right-and-down-left-from-center'], ['delete', 'fa-trash'],
+  ].forEach(([name, icon]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.tabIndex = -1;
+    button.className = `elabftw-spreadsheet-readonly-${name}`;
+    button.setAttribute('aria-hidden', 'true');
+    button.innerHTML = `<i class="fas ${icon}" aria-hidden="true"></i>`;
+    toggleBar.appendChild(button);
+  });
+  host.appendChild(toggleBar);
+
+  const grid = document.createElement('div');
+  grid.className = 'elabftw-spreadsheet-readonly-grid';
+  const container = document.createElement('div');
+  container.className = 'jss_container';
+  const content = document.createElement('div');
+  content.className = 'jss_content';
+  const worksheet = document.createElement('table');
+  worksheet.className = 'jss_worksheet jss_overflow';
+
+  const colgroup = document.createElement('colgroup');
+  table.querySelectorAll('colgroup > col').forEach(source => {
+    const col = document.createElement('col');
+    const style = source.getAttribute('style');
+    if (style) col.setAttribute('style', style);
+    const width = source.getAttribute('width');
+    if (width) col.setAttribute('width', width);
+    colgroup.appendChild(col);
+  });
+  worksheet.appendChild(colgroup);
+
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  Array.from(headRow.children).forEach((source, index) => {
+    const cell = document.createElement('td');
+    if (index === 0) cell.className = 'jss_selectall';
+    else cell.dataset.x = String(index - 1);
+    const style = source.getAttribute('style');
+    if (style) cell.setAttribute('style', style);
+    cell.textContent = source.textContent;
+    headerRow.appendChild(cell);
+  });
+  thead.appendChild(headerRow);
+  worksheet.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  bodyRows.forEach((sourceRow, rowIndex) => {
+    const row = document.createElement('tr');
+    row.dataset.y = String(rowIndex);
+    const rowStyle = sourceRow.getAttribute('style');
+    if (rowStyle) row.setAttribute('style', rowStyle);
+    Array.from(sourceRow.children).forEach((source, index) => {
+      const cell = document.createElement('td');
+      if (index === 0) {
+        cell.className = 'jss_row';
+      } else {
+        cell.dataset.x = String(index - 1);
+        cell.dataset.y = String(rowIndex);
+      }
+      const style = source.getAttribute('style');
+      if (style) cell.setAttribute('style', style);
+      cell.textContent = source.textContent;
+      row.appendChild(cell);
+    });
+    tbody.appendChild(row);
+  });
+  worksheet.appendChild(tbody);
+
+  content.appendChild(worksheet);
+  container.appendChild(content);
+  grid.appendChild(container);
+  host.appendChild(grid);
+  return host;
+}
+
+/**
  * Lazily upgrade every saved spreadsheet table under `root` (a view page's
  * rendered entity body, typically) to a real jspreadsheet-ce grid once it
  * scrolls into view, instead of mounting every one on page load -- a page

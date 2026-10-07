@@ -2,6 +2,7 @@
 import { Editor } from 'tinymce/tinymce';
 import {
   buildReadOnlySpreadsheetHost,
+  buildSpreadsheetPreviewHost,
   createNotebookSpreadsheetData,
   createWellPlateSpreadsheetData,
   emptySpreadsheetData,
@@ -1597,38 +1598,38 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const mountPreview = (table: HTMLTableElement): void => {
     if (!editor.getBody().contains(table)) return;
     if (spreadsheetOverlays.has(table)) return;
-    const overlay = document.createElement('div');
-    overlay.className = 'elabftw-spreadsheet-editor-overlay elabftw-spreadsheet-preview';
-    const bar = document.createElement('div');
-    bar.className = 'elabftw-spreadsheet-readonly-toggle';
-    const caption = table.querySelector('caption')?.textContent?.trim();
-    if (caption) {
-      const label = document.createElement('span');
-      label.textContent = caption;
-      bar.appendChild(label);
+    // Built from the grid's own markup and classes so it looks identical.
+    // Notebook-style tables aren't mirrored there; they get a plain cloned
+    // table under a placeholder bar instead.
+    const gridPreview = buildSpreadsheetPreviewHost(table);
+    const overlay: HTMLElement = gridPreview ?? document.createElement('div');
+    if (!gridPreview) {
+      const bar = document.createElement('div');
+      bar.className = 'elabftw-spreadsheet-readonly-toggle';
+      const caption = table.querySelector('caption')?.textContent?.trim();
+      if (caption) {
+        const label = document.createElement('span');
+        label.textContent = caption;
+        bar.appendChild(label);
+      }
+      overlay.appendChild(bar);
+      const clone = table.cloneNode(true) as HTMLTableElement;
+      Array.from(clone.attributes)
+        .filter(attribute => attribute.name.startsWith('data-mce') || attribute.name === SPREADSHEET_UID_ATTR)
+        .forEach(attribute => clone.removeAttribute(attribute.name));
+      clone.querySelectorAll('caption').forEach(node => node.remove());
+      const wrapper = document.createElement('div');
+      wrapper.className = 'elabftw-spreadsheet-preview-body';
+      wrapper.appendChild(clone);
+      overlay.appendChild(wrapper);
     }
-    overlay.appendChild(bar);
-    const clone = table.cloneNode(true) as HTMLTableElement;
-    Array.from(clone.attributes)
-      .filter(attribute => attribute.name.startsWith('data-mce') || attribute.name === SPREADSHEET_UID_ATTR)
-      .forEach(attribute => clone.removeAttribute(attribute.name));
-    clone.querySelectorAll('caption').forEach(node => node.remove());
-    const wrapper = document.createElement('div');
-    wrapper.className = 'elabftw-spreadsheet-preview-body';
-    wrapper.appendChild(clone);
-    overlay.appendChild(wrapper);
+    overlay.classList.add('elabftw-spreadsheet-editor-overlay', 'elabftw-spreadsheet-preview');
     overlay.addEventListener('pointerdown', event => {
       if (!(event.target instanceof Element)) return;
-      const cell = event.target.closest<HTMLTableCellElement>('td, th');
-      let selection: { col: number; row: number } | undefined;
-      if (cell && !cell.classList.contains('spreadsheet-coordinate')) {
-        const kind = table.dataset.spreadsheetStyle;
-        const offset = kind === 'notebook' ? 0 : 1;
-        const rowEl = cell.parentElement as HTMLTableRowElement;
-        const rowIndex = Array.from(clone.querySelectorAll('tr')).indexOf(rowEl) - offset;
-        const colIndex = Array.from(rowEl.children).indexOf(cell) - offset;
-        if (rowIndex >= 0 && colIndex >= 0) selection = { col: colIndex, row: rowIndex };
-      }
+      const cell = event.target.closest<HTMLElement>('td[data-x][data-y]');
+      const selection = cell
+        ? { col: Number(cell.dataset.x), row: Number(cell.dataset.y) }
+        : undefined;
       event.preventDefault();
       activateTable(table, selection);
     });
