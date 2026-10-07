@@ -61,7 +61,11 @@ try {
     // after snapshot the version itself is. See bucketRevisionsByVersion's
     // own comment for how a revision is assigned to a version.
     $versionRevisions = $isTemplate
-        ? TemplateVersions::bucketRevisionsByVersion($revisionsArr, $RevisionsModel->readAll())
+        ? TemplateVersions::bucketRevisionsByVersion(
+            $revisionsArr,
+            $RevisionsModel->readAll(),
+            (int) ($Entity->entityData['version'] ?? 0),
+        )
         : array();
     $templateVersionDocs = array();
     if ($isTemplate && !empty($Entity->entityData['metadata'])) {

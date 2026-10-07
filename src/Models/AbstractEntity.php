@@ -546,7 +546,14 @@ abstract class AbstractEntity extends AbstractRest
                 throw new ImproperActionException('Publishing a version is only available for templates.');
             }
             $this->canOrExplode(AccessType::Write);
-            $newVersion = (int) ($this->entityData['version'] ?? 1) + 1;
+            // Always one past the highest version number that has ever
+            // existed, not one past the entity's own current counter --
+            // restoring to an earlier version (see RestoreTemplateVersion
+            // below) can leave that counter lower than versions already
+            // published and still sitting in history, and reusing one of
+            // their numbers would collide with the unique (entity_id,
+            // version) constraint on the row already there.
+            $newVersion = TemplateVersions::readMaxVersion($this->id) + 1;
             $sql = 'UPDATE experiments_templates
                 SET version = :version, locked = 1, lockedby = :lockedby, locked_at = CURRENT_TIMESTAMP
                 WHERE id = :id';
@@ -589,11 +596,21 @@ abstract class AbstractEntity extends AbstractRest
             if (!$versionRow) {
                 throw new ImproperActionException('This version does not exist.');
             }
+            // The entity's own version counter becomes the restored
+            // version's number too -- not just its body -- so "current
+            // version" (the badge, and which version's own changelog
+            // in-progress edits get attached to, see
+            // TemplateVersions::bucketRevisionsByVersion) reflects what's
+            // actually being worked on now, even when that's a lower number
+            // than versions published after it. Those later versions are
+            // left exactly as they were: still in history, still viewable
+            // and restorable, just no longer "current".
             $sql = 'UPDATE experiments_templates
-                SET body = :body, locked = 0, lockedby = NULL, locked_at = NULL
+                SET body = :body, version = :version, locked = 0, lockedby = NULL, locked_at = NULL
                 WHERE id = :id';
             $req = $this->Db->prepare($sql);
             $req->bindParam(':body', $versionRow['body']);
+            $req->bindParam(':version', $versionRow['version'], PDO::PARAM_INT);
             $req->bindParam(':id', $this->id, PDO::PARAM_INT);
             $this->Db->execute($req);
             $Changelog = new Changelog($this);

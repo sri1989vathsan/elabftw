@@ -63,6 +63,27 @@ final class TemplateVersions
     }
 
     /**
+     * The next number "Publish new version" should use -- always one past
+     * the highest version number that has ever existed for this entity, not
+     * one past whatever the entity's own (possibly restored-backward)
+     * current version counter says. Restoring to an earlier version leaves
+     * later ones (e.g. 3 and 4) sitting in history untouched -- publishing
+     * again from version 2 must not try to recreate version 3 and collide
+     * with the unique (entity_id, version) constraint on the one already
+     * there, so it jumps straight to 5 instead.
+     */
+    public static function readMaxVersion(int $entityId): int
+    {
+        $Db = Db::getConnection();
+        $sql = 'SELECT MAX(version) FROM custom_template_versions WHERE entity_id = :entity_id';
+        $req = $Db->prepare($sql);
+        $req->bindValue(':entity_id', $entityId, PDO::PARAM_INT);
+        $Db->execute($req);
+
+        return (int) $req->fetchColumn();
+    }
+
+    /**
      * Buckets the ordinary auto-saved revisions (from the core Revisions
      * model -- a completely separate system, see this class's own top
      * comment) under whichever published version was current while each one
@@ -78,17 +99,23 @@ final class TemplateVersions
      * into one bucket. A revision newer than every version's own
      * published_at is draft work made since the last publish, not yet
      * claimed by any version -- instead of being hidden entirely, it is
-     * attached to the *newest* version's own bucket, as the in-progress
-     * edit history leading up to whatever gets published next. Once that
-     * next version is published, the same revision naturally re-buckets
-     * under it on the normal rule above (this method has no persisted
-     * state of its own -- every call recomputes from scratch).
+     * attached to the entity's own *current* version (by number, via
+     * $currentVersion), as the in-progress edit history leading up to
+     * whatever gets published next. That is ordinarily also the
+     * highest-numbered version, but not after a restore to an earlier one:
+     * versions published after the one just restored to (e.g. 3 and 4,
+     * restored back to 2) are left untouched in history, so new draft work
+     * belongs under 2 -- the one actually being worked on -- not under 4,
+     * an abandoned future branch nobody is editing anymore. Falls back to
+     * the highest-numbered version if $currentVersion doesn't match any
+     * ($versions may not be in sync with the entity's own row in a caller
+     * that doesn't pass it).
      *
      * @param list<array{id: int, version: int, published_at: string}> $versions
      * @param list<array{id: int, created_at: string}> $revisions
      * @return array<int, list<array<string, mixed>>> revisions keyed by version id
      */
-    public static function bucketRevisionsByVersion(array $versions, array $revisions): array
+    public static function bucketRevisionsByVersion(array $versions, array $revisions, ?int $currentVersion = null): array
     {
         $oldestFirst = $versions;
         usort($oldestFirst, static fn(array $a, array $b): int => $a['version'] <=> $b['version']);
@@ -100,7 +127,10 @@ final class TemplateVersions
         if (count($oldestFirst) === 0) {
             return $buckets;
         }
-        $newestVersionId = end($oldestFirst)['id'];
+        $currentVersionRow = $currentVersion !== null
+            ? array_values(array_filter($oldestFirst, static fn(array $v): bool => $v['version'] === $currentVersion))
+            : array();
+        $unclaimedBucketId = $currentVersionRow !== array() ? $currentVersionRow[0]['id'] : end($oldestFirst)['id'];
         foreach ($revisions as $revision) {
             $claimed = false;
             foreach ($oldestFirst as $version) {
@@ -111,7 +141,7 @@ final class TemplateVersions
                 }
             }
             if (!$claimed) {
-                $buckets[$newestVersionId][] = $revision;
+                $buckets[$unclaimedBucketId][] = $revision;
             }
         }
         return $buckets;
