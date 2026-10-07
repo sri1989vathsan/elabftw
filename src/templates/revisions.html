@@ -103,7 +103,7 @@
           <summary>{{ 'Edit history (%d)'|trans|format(changelog|length) }}</summary>
           <ul class='list-group mt-2'>
             {% for edit in changelog %}
-              <li class='list-group-item'>
+              <li id='parent_templateVersionEdit_{{ edit.id }}' class='list-group-item'>
                 <div class='d-flex'>
                   <div>
                     <input autocomplete='off' type='checkbox' data-action='checkbox-revision' data-id='{{ Entity.id }}' data-revid='{{ edit.id }}' data-type='{{ Entity.entityType.value }}' aria-label='{{ 'Select'|trans }}' class='mr-2' />
