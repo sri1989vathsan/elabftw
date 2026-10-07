@@ -6486,95 +6486,105 @@ export function buildReadOnlySpreadsheetHost(
       event.stopPropagation();
       performCellRedo();
     });
-    const autofitRowsButton = document.createElement('button');
-    autofitRowsButton.type = 'button';
-    autofitRowsButton.className = 'elabftw-spreadsheet-readonly-autofit-rows';
-    autofitRowsButton.title = 'Auto-fit every row to its content';
-    autofitRowsButton.setAttribute('aria-label', 'Auto-fit every row to its content');
-    autofitRowsButton.innerHTML = '<i class="fas fa-arrows-alt-v" aria-hidden="true"></i>';
-    toggleBar.appendChild(autofitRowsButton);
-    const autofitColumnsButton = document.createElement('button');
-    autofitColumnsButton.type = 'button';
-    autofitColumnsButton.className = 'elabftw-spreadsheet-readonly-autofit-columns';
-    autofitColumnsButton.title = 'Auto-fit every column to its content';
-    autofitColumnsButton.setAttribute('aria-label', 'Auto-fit every column to its content');
-    autofitColumnsButton.innerHTML = '<i class="fas fa-arrows-alt-h" aria-hidden="true"></i>';
-    toggleBar.appendChild(autofitColumnsButton);
-    // Bodies reference sheetContainer/manuallyResizedRows/notifyStructuralChange,
-    // declared further down this same function -- safe for the same reason
-    // as undoButton/redoButton just above (a click can't land before the
-    // rest of the function has finished running).
-    autofitRowsButton.addEventListener('click', event => {
-      event.stopPropagation();
-      const targetWorksheet = getMountedWorksheet(sheetContainer);
-      const rowEls = Array.from(sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr'));
-      rowEls.forEach((rowEl, row) => {
-        const cells = Array.from(rowEl.querySelectorAll<HTMLElement>(
-          ':scope > td[data-x][data-y], :scope > td.jss_row',
-        ));
-        const naturalHeight = cells.reduce(
-          (maximum, cell) => Math.max(maximum, measureNaturalCellHeight(cell)),
-          MIN_DATA_ROW_HEIGHT,
-        );
-        const fittedHeight = Math.max(MIN_DATA_ROW_HEIGHT, Math.min(MAX_DATA_ROW_HEIGHT, Math.ceil(naturalHeight)));
-        // DOM-only, like applySpreadsheetRowHeights -- a bulk fit-all is one
-        // action, not one undo-history entry and one onresizerow dispatch
-        // per row.
-        rowEl.style.height = `${fittedHeight}px`;
-        manuallyResizedRows.set(row, fittedHeight);
-      });
-      applyCellClipHeights(sheetContainer, manuallyResizedRows);
-      notifyStructuralChange(targetWorksheet);
-    });
-    autofitColumnsButton.addEventListener('click', event => {
-      event.stopPropagation();
-      const targetWorksheet = getMountedWorksheet(sheetContainer);
-      const headerCells = Array.from(sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > thead [data-x]'));
-      const colCount = headerCells.reduce(
-        (max, cell) => Math.max(max, Number.parseInt(cell.dataset.x ?? '-1', 10) + 1),
-        0,
-      );
-      const colWidthsUpdate: ColWidths = {};
-      for (let col = 0; col < colCount; col++) {
-        const cells = Array.from(sheetContainer.querySelectorAll<HTMLElement>(
-          `.jss_worksheet > thead [data-x="${col}"], .jss_worksheet > tbody td[data-x="${col}"][data-y]`,
-        ));
-        const naturalWidth = cells.reduce(
-          (maximum, cell) => Math.max(maximum, measureNaturalCellWidth(cell)),
-          MIN_DATA_COL_WIDTH,
-        );
-        colWidthsUpdate[String(col)] = Math.max(MIN_DATA_COL_WIDTH, Math.min(MAX_DATA_COL_WIDTH, naturalWidth));
-      }
-      applySpreadsheetColWidths(sheetContainer, targetWorksheet, colWidthsUpdate);
-      notifyStructuralChange(targetWorksheet);
-    });
-    const copyTableButton = document.createElement('button');
-    copyTableButton.type = 'button';
-    copyTableButton.className = 'elabftw-spreadsheet-readonly-copy-table';
-    copyTableButton.title = 'Copy the whole table';
-    copyTableButton.setAttribute('aria-label', 'Copy the whole table');
-    copyTableButton.innerHTML = '<i class="fas fa-copy" aria-hidden="true"></i>';
-    toggleBar.appendChild(copyTableButton);
-    // A dedicated button rather than relying on select-all (Cmd/Ctrl+A)
-    // plus Cmd/Ctrl+C -- reported as not actually copying the table's
-    // content. Builds the same plain tab/newline-delimited text the
-    // capture-phase 'copy' listener above writes for a selection, but for
-    // every row/column unconditionally, and writes it directly via the
-    // Clipboard API (a button click is its own user gesture, so this
-    // doesn't need a synthetic 'copy' event at all).
-    copyTableButton.addEventListener('click', event => {
-      event.stopPropagation();
-      const rowEls = Array.from(sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr'));
-      const textRows = rowEls.map(rowEl => {
-        const cells = Array.from(rowEl.querySelectorAll<HTMLElement>(':scope > td[data-x][data-y]'));
-        return cells.map(cell => {
-          const text = (cell.textContent ?? '').trim();
-          return /[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-        }).join('\t');
-      });
-      navigator.clipboard?.writeText(textRows.join('\n'))?.catch(() => {});
-    });
   }
+  // Auto-fit rows/columns and copy-table: useful in plain view mode too
+  // (rowResize/columnResize drag handles are disabled there, via
+  // rowResize: editable below -- these buttons are the only way a viewer
+  // can widen a cramped column or grow a clipped row without opening the
+  // full editor), so built for both editable and read-only hosts. Nothing
+  // these buttons do here persists anywhere for a read-only host: there's
+  // no options.onChange for the view-page call site, so notifyStructuralChange's
+  // own notifyFromMirror() repaints the DOM and returns without ever
+  // reaching the save path -- the same reason the collapse toggle above is
+  // safe to be view-mode-only state.
+  const autofitRowsButton = document.createElement('button');
+  autofitRowsButton.type = 'button';
+  autofitRowsButton.className = 'elabftw-spreadsheet-readonly-autofit-rows';
+  autofitRowsButton.title = 'Auto-fit every row to its content';
+  autofitRowsButton.setAttribute('aria-label', 'Auto-fit every row to its content');
+  autofitRowsButton.innerHTML = '<i class="fas fa-arrows-alt-v" aria-hidden="true"></i>';
+  toggleBar.appendChild(autofitRowsButton);
+  const autofitColumnsButton = document.createElement('button');
+  autofitColumnsButton.type = 'button';
+  autofitColumnsButton.className = 'elabftw-spreadsheet-readonly-autofit-columns';
+  autofitColumnsButton.title = 'Auto-fit every column to its content';
+  autofitColumnsButton.setAttribute('aria-label', 'Auto-fit every column to its content');
+  autofitColumnsButton.innerHTML = '<i class="fas fa-arrows-alt-h" aria-hidden="true"></i>';
+  toggleBar.appendChild(autofitColumnsButton);
+  // Bodies reference sheetContainer/manuallyResizedRows/notifyStructuralChange,
+  // declared further down this same function -- safe for the same reason
+  // as undoButton/redoButton just above (a click can't land before the
+  // rest of the function has finished running).
+  autofitRowsButton.addEventListener('click', event => {
+    event.stopPropagation();
+    const targetWorksheet = getMountedWorksheet(sheetContainer);
+    const rowEls = Array.from(sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr'));
+    rowEls.forEach((rowEl, row) => {
+      const cells = Array.from(rowEl.querySelectorAll<HTMLElement>(
+        ':scope > td[data-x][data-y], :scope > td.jss_row',
+      ));
+      const naturalHeight = cells.reduce(
+        (maximum, cell) => Math.max(maximum, measureNaturalCellHeight(cell)),
+        MIN_DATA_ROW_HEIGHT,
+      );
+      const fittedHeight = Math.max(MIN_DATA_ROW_HEIGHT, Math.min(MAX_DATA_ROW_HEIGHT, Math.ceil(naturalHeight)));
+      // DOM-only, like applySpreadsheetRowHeights -- a bulk fit-all is one
+      // action, not one undo-history entry and one onresizerow dispatch
+      // per row.
+      rowEl.style.height = `${fittedHeight}px`;
+      manuallyResizedRows.set(row, fittedHeight);
+    });
+    applyCellClipHeights(sheetContainer, manuallyResizedRows);
+    notifyStructuralChange(targetWorksheet);
+  });
+  autofitColumnsButton.addEventListener('click', event => {
+    event.stopPropagation();
+    const targetWorksheet = getMountedWorksheet(sheetContainer);
+    const headerCells = Array.from(sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > thead [data-x]'));
+    const colCount = headerCells.reduce(
+      (max, cell) => Math.max(max, Number.parseInt(cell.dataset.x ?? '-1', 10) + 1),
+      0,
+    );
+    const colWidthsUpdate: ColWidths = {};
+    for (let col = 0; col < colCount; col++) {
+      const cells = Array.from(sheetContainer.querySelectorAll<HTMLElement>(
+        `.jss_worksheet > thead [data-x="${col}"], .jss_worksheet > tbody td[data-x="${col}"][data-y]`,
+      ));
+      const naturalWidth = cells.reduce(
+        (maximum, cell) => Math.max(maximum, measureNaturalCellWidth(cell)),
+        MIN_DATA_COL_WIDTH,
+      );
+      colWidthsUpdate[String(col)] = Math.max(MIN_DATA_COL_WIDTH, Math.min(MAX_DATA_COL_WIDTH, naturalWidth));
+    }
+    applySpreadsheetColWidths(sheetContainer, targetWorksheet, colWidthsUpdate);
+    notifyStructuralChange(targetWorksheet);
+  });
+  const copyTableButton = document.createElement('button');
+  copyTableButton.type = 'button';
+  copyTableButton.className = 'elabftw-spreadsheet-readonly-copy-table';
+  copyTableButton.title = 'Copy the whole table';
+  copyTableButton.setAttribute('aria-label', 'Copy the whole table');
+  copyTableButton.innerHTML = '<i class="fas fa-copy" aria-hidden="true"></i>';
+  toggleBar.appendChild(copyTableButton);
+  // A dedicated button rather than relying on select-all (Cmd/Ctrl+A)
+  // plus Cmd/Ctrl+C -- reported as not actually copying the table's
+  // content. Builds the same plain tab/newline-delimited text the
+  // capture-phase 'copy' listener above writes for a selection, but for
+  // every row/column unconditionally, and writes it directly via the
+  // Clipboard API (a button click is its own user gesture, so this
+  // doesn't need a synthetic 'copy' event at all).
+  copyTableButton.addEventListener('click', event => {
+    event.stopPropagation();
+    const rowEls = Array.from(sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr'));
+    const textRows = rowEls.map(rowEl => {
+      const cells = Array.from(rowEl.querySelectorAll<HTMLElement>(':scope > td[data-x][data-y]'));
+      return cells.map(cell => {
+        const text = (cell.textContent ?? '').trim();
+        return /[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+      }).join('\t');
+    });
+    navigator.clipboard?.writeText(textRows.join('\n'))?.catch(() => {});
+  });
 
   if (options.onOpenFullEditor) {
     const openFullEditorButton = document.createElement('button');
