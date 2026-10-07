@@ -1636,30 +1636,43 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         editor.focus();
       }
     });
+    // jspreadsheet-ce/jSuites position their own right-click menu with
+    // plain `style.left/top = event.clientX/clientY` -- correct only when
+    // the menu's nearest positioned ancestor is the viewport itself. It
+    // lives as a child of the worksheet's own root element, which for this
+    // overlay sits inside a `position: fixed` + `transform` ancestor (see
+    // syncOverlayPositions' own comment on why transform, not top/left, is
+    // used to move it every frame) -- and a `transform` on an ancestor
+    // makes IT the containing block for every fixed/absolute-positioned
+    // descendant, per the CSS spec. The menu's clientX/clientY-based
+    // coordinates then end up relative to the overlay's own on-screen
+    // position instead of the viewport's origin, landing the menu however
+    // far from the actual click as the overlay itself currently sits from
+    // (0, 0) -- reported directly as the right-click menu opening far from
+    // the mouse (or, scrolled further down the page, so far off-screen it
+    // looked like right-click had stopped doing anything at all).
+    // Reparenting to document.body puts it outside that transformed
+    // ancestor's containing-block chain entirely, matching the plain-
+    // viewport coordinates it was always computing -- but jspreadsheet only
+    // ever creates this element lazily, on the first right-click, so doing
+    // this once at mount (as an earlier version of this fix did) always ran
+    // before the element existed and silently reparented nothing. Deferred
+    // with setTimeout(0) inside the overlay's own contextmenu handler
+    // instead: by the time that macrotask runs, every synchronous listener
+    // for this same event -- including jspreadsheet's own, which creates
+    // and positions the menu in the first place -- has already finished.
+    const reparentContextMenu = (): void => {
+      const contextMenuEl = overlay.querySelector<HTMLElement>('.jss_contextmenu');
+      if (contextMenuEl && contextMenuEl.parentElement !== document.body) {
+        document.body.appendChild(contextMenuEl);
+      }
+    };
     overlay.addEventListener('contextmenu', () => {
       openContextMenuOverlay = overlay;
       overlay.classList.add('has-open-context-menu');
+      window.setTimeout(reparentContextMenu, 0);
     });
     document.body.appendChild(overlay);
-    // jspreadsheet-ce/jSuites position their own right-click menu with
-    // plain `style.left/top = event.clientX/clientY` -- correct only when
-    // the menu's nearest positioned ancestor is the viewport itself. It's
-    // created once, as a child of the worksheet's own root element, which
-    // for this overlay sits inside a `position: fixed` + `transform`
-    // ancestor (see syncOverlayPositions' own comment on why transform,
-    // not top/left, is used to move it every frame) -- and a `transform`
-    // on an ancestor makes IT the containing block for every
-    // fixed/absolute-positioned descendant, per the CSS spec. The menu's
-    // clientX/clientY-based coordinates ended up relative to the
-    // overlay's own on-screen position instead of the viewport's origin,
-    // landing the menu however far from the actual click as the overlay
-    // itself currently sits from (0, 0) -- reported directly as the
-    // right-click menu opening far from the mouse. Reparented to
-    // document.body once, right after mount, puts it outside that
-    // transformed ancestor's containing-block chain entirely, matching
-    // the plain-viewport coordinates it was always computing.
-    const contextMenuEl = overlay.querySelector<HTMLElement>('.jss_contextmenu');
-    if (contextMenuEl) document.body.appendChild(contextMenuEl);
     spreadsheetOverlays.set(table, {
       el: overlay, destroy, flush, syncActiveEditor,
     });
