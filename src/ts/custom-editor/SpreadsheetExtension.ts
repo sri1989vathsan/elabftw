@@ -1835,6 +1835,21 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     });
     enhancedTables.add(table);
     ensureSyncLoop();
+    // jspreadsheet builds its cells a few frames after the host is attached
+    // (its factory awaits internally). The layout gate only measures during
+    // interaction bursts, and a click-activated grid has no scroll to keep
+    // it open -- the overlay was sized once, while only the row-number column
+    // existed, and stayed that width. Keep invalidating until the cells are
+    // there, plus a few settling frames.
+    let framesLeft = 120;
+    let settled = 0;
+    const keepMeasuring = (): void => {
+      if (spreadsheetOverlays.get(table)?.el !== overlay || framesLeft-- <= 0) return;
+      invalidateSpreadsheetLayout();
+      if (overlay.querySelector('.jss_worksheet td[data-x][data-y]')) settled++;
+      if (settled < 12) window.requestAnimationFrame(keepMeasuring);
+    };
+    window.requestAnimationFrame(keepMeasuring);
   };
 
   // Only tables actually near the viewport get a live overlay (and join
