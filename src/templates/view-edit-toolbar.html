@@ -240,7 +240,7 @@
       <button type='button' title='{{ 'Save'|trans }}' data-action='update-entity-body' aria-label='{{ 'Save'|trans }}' class='btn btn-primary mr-2'>
         <i class='fas fa-save'></i>
       </button>
-      <button type='button' title='{{ 'Save and go back'|trans }}' aria-label='{{ 'Save and go back'|trans }}' data-action='update-entity-body' data-redirect='{{ Entity.entityType.value in ['experiments', 'items'] ? 'view' : 'list' }}' class='btn btn-secondary mr-2'>
+      <button type='button' title='{{ 'Save and go back'|trans }}' aria-label='{{ 'Save and go back'|trans }}' data-action='update-entity-body' data-redirect='{{ Entity.entityType.value in ['experiments', 'items', 'experiments_templates', 'items_types'] ? 'view' : 'list' }}' class='btn btn-secondary mr-2'>
         <i class='fas fa-arrow-left fa-fw' aria-hidden='true'></i>
         <i class='fas fa-save fa-fw' aria-hidden='true'></i>
       </button>
