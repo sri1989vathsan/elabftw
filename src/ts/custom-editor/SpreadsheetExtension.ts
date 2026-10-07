@@ -1536,12 +1536,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // row/column sizes) was the dominant cost of mounting an overlay. The
   // result only changes when the table's DOM does, so it's cached per table
   // and dropped by a MutationObserver on the editor body.
+  // nodeType, not `instanceof Element`: the table lives in TinyMCE's iframe,
+  // a different realm whose Element constructor is not this window's.
+  const owningSpreadsheetTable = (node: Node): HTMLTableElement | null => {
+    const element = node.nodeType === 1 ? node as Element : node.parentElement;
+    return element?.closest<HTMLTableElement>('table.elabftw-spreadsheet') ?? null;
+  };
   const extractionCache = new WeakMap<HTMLTableElement, SpreadsheetData>();
   const invalidateExtractions = (records: MutationRecord[]): void => {
     records.forEach(record => {
-      const node = record.target;
-      const element = node instanceof Element ? node : node.parentElement;
-      const table = element?.closest<HTMLTableElement>('table.elabftw-spreadsheet');
+      const table = owningSpreadsheetTable(record.target);
       if (table) extractionCache.delete(table);
     });
   };
@@ -1579,9 +1583,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // that touched another table must still invalidate that table's cache.
     const records = ensureExtractionObserver()?.takeRecords() ?? [];
     invalidateExtractions(records.filter(record => {
-      const node = record.target;
-      const element = node instanceof Element ? node : node.parentElement;
-      return element?.closest('table.elabftw-spreadsheet') !== table;
+      return owningSpreadsheetTable(record.target) !== table;
     }));
     extractionCache.set(table, structuredClone(data));
   };
