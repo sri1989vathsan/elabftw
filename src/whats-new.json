@@ -51,8 +51,15 @@
       "Restoring a version makes it current and keeps the other versions.",
       "Each version has its own edit history that you can restore individually."
     ],
-    "image": "",
-    "imageAlt": "The template version history popup"
+    "image": "template-version-history.jpg",
+    "imageAlt": "The template version history popup showing a version with its Restore button and edit history, outlined",
+    "highlight": {
+      "x": 35.8,
+      "y": 15.2,
+      "w": 63.3,
+      "h": 24.4,
+      "label": "A version, with Restore"
+    }
   },
   {
     "id": "spreadsheet-insert-and-view",
@@ -87,8 +94,15 @@
       "Steps and comments can be collapsed, and deadlines show how urgent they are.",
       "Duplicate a card into another project, and open a card straight into edit mode."
     ],
-    "image": "",
-    "imageAlt": "A Boards card with status badges and linked items"
+    "image": "boards.jpg",
+    "imageAlt": "The Boards page with a card showing its steps and a linked experiment, outlined",
+    "highlight": {
+      "x": 0.6,
+      "y": 57.1,
+      "w": 42.3,
+      "h": 35.7,
+      "label": "A card with its linked experiment"
+    }
   },
   {
     "id": "orders",
@@ -101,8 +115,15 @@
       "Orders can move from requested to ordered when a procurement ID appears, and archive after a set time.",
       "Notes support bulleted and numbered lists, and long titles and file names wrap properly."
     ],
-    "image": "",
-    "imageAlt": "An order card with attachments"
+    "image": "orders.jpg",
+    "imageAlt": "The Orders request form with bullet and numbered list buttons above the notes field, outlined",
+    "highlight": {
+      "x": 4.4,
+      "y": 35.3,
+      "w": 91.5,
+      "h": 22.4,
+      "label": "Notes with list buttons"
+    }
   },
   {
     "id": "spreadsheet-editing",
@@ -136,8 +157,15 @@
       "A Links dropdown groups shortcuts.",
       "The LabCollector link keeps its URL editable from the Tools menu."
     ],
-    "image": "",
-    "imageAlt": "The top navigation bar with the More menu open"
+    "image": "navigation.jpg",
+    "imageAlt": "The top bar with the More menu open, showing Boards, Orders, Links and Tools",
+    "highlight": {
+      "x": 52.5,
+      "y": 6.0,
+      "w": 25.4,
+      "h": 54.2,
+      "label": "The More menu"
+    }
   },
   {
     "id": "cards-linked-experiments",
@@ -152,8 +180,15 @@
       "A project's Linked items section and an All links summary list everything connected to that project, including subprojects.",
       "Click a linked item to open the experiment or resource itself."
     ],
-    "image": "",
-    "imageAlt": "A Boards card with linked experiments and resources, and the search panel beside it"
+    "image": "cards-linked-experiments.jpg",
+    "imageAlt": "A card's detail view with a linked experiment under Linked items and as a step, outlined",
+    "highlight": {
+      "x": 2.9,
+      "y": 41.9,
+      "w": 92.0,
+      "h": 33.1,
+      "label": "Linked items and steps"
+    }
   },
   {
     "id": "notifications-feedback",
@@ -165,8 +200,15 @@
       "Notifications arrive when you gain read access to an experiment or resource, even if you had access before.",
       "The dashboard announcement feed is easier to read."
     ],
-    "image": "",
-    "imageAlt": "A notification about newly shared access"
+    "image": "notifications-feedback.jpg",
+    "imageAlt": "The notifications dropdown with a notification that a user gave you access to a resource, outlined",
+    "highlight": {
+      "x": 4.8,
+      "y": 48.0,
+      "w": 88.8,
+      "h": 17.6,
+      "label": "Told when someone shares with you"
+    }
   },
   {
     "id": "activity-calendar",
@@ -185,8 +227,15 @@
       "Reminders appear as one grouped, collapsible banner that stays as you move between pages, and they also arrive as notifications and email, following your existing step-deadline preference.",
       "Subscribe to your deadlines from Google Calendar or Apple Calendar with a private link from the Calendar tab. The link is read-only, and you can regenerate or revoke it at any time."
     ],
-    "image": "",
-    "imageAlt": "The activity calendar panel with the month grid and the agenda below it"
+    "image": "activity-calendar.jpg",
+    "imageAlt": "The activity calendar panel in the left sidebar with the month grid, Day, Week and Month buttons and the legend, outlined",
+    "highlight": {
+      "x": 21.6,
+      "y": 23.7,
+      "w": 67.5,
+      "h": 60.2,
+      "label": "Month grid, views and legend"
+    }
   },
   {
     "id": "left-sidebar",
@@ -203,7 +252,14 @@
       "On experiment pages a table of contents tab lists the headings so you can jump around, and filter sections to print or copy.",
       "The rail stays put while you scroll, and the last panel you opened is remembered."
     ],
-    "image": "",
-    "imageAlt": "The left sidebar rail with its tabs, one panel open"
+    "image": "left-sidebar.jpg",
+    "imageAlt": "The left sidebar: the rail of tabs (folders, search, quick search, to-do, calendar) with the calendar panel open, rail outlined",
+    "highlight": {
+      "x": 0.0,
+      "y": 13.9,
+      "w": 11.0,
+      "h": 33.1,
+      "label": "The sidebar rail"
+    }
   }
 ]

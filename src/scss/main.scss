@@ -6193,6 +6193,8 @@ div > .sticky-navbar {
 // the feature is (positions are percentages of the picture, set per entry in
 // src/whats-new.json).
 .whats-new-shot {
+  // Clips the dimming shadow around the outline to the picture itself.
+  overflow: hidden;
   position: relative;
 }
 

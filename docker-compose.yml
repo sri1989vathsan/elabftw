@@ -166,6 +166,7 @@ services:
       - ./web/labcollector-lookup.php:/elabftw/web/labcollector-lookup.php:ro
       - ./web/whats-new.php:/elabftw/web/whats-new.php:ro
       - ./src/whats-new.json:/elabftw/src/whats-new.json:ro
+      - ./src/templates/whats-new.html:/elabftw/src/templates/whats-new.html:ro
       - ./web/assets/images/whats-new:/elabftw/web/assets/images/whats-new:ro
 
     tmpfs:
