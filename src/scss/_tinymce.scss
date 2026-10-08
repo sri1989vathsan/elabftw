@@ -5,8 +5,18 @@
 
 .image figure,
 figure {
-  display: block;
+  // A column, so the caption can be placed above the picture (see below)
+  // while the figure itself stays a block that can float or center.
+  align-items: center;
+  display: flex;
+  flex-direction: column;
   text-align: center;
+}
+
+// Picture captions are shown above the picture, not under it.
+.image figure > figcaption,
+figure > figcaption {
+  order: -1;
 }
 
 /* Under the normal table-layout:auto a table uses, a column can never

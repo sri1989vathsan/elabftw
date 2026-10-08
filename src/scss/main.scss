@@ -4433,6 +4433,18 @@ figure figcaption {
   text-align: center;
 }
 
+// Picture captions are shown above the picture, not under it -- the same
+// as in the editor (see _tinymce.scss).
+#body_view figure {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+}
+
+#body_view figure > figcaption {
+  order: -1;
+}
+
 /* make the markdown editor full width */
 .markdown-textarea {
   width: 100%;
