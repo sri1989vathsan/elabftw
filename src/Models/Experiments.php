@@ -22,6 +22,7 @@ use Elabftw\Enums\EntityType;
 use Elabftw\Enums\AccessType;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
+use Elabftw\Params\ContentParams;
 use Elabftw\Models\Links\Experiments2ExperimentsLinks;
 use Elabftw\Services\Filter;
 use Elabftw\Traits\InsertTagsTrait;
@@ -97,13 +98,13 @@ final class Experiments extends AbstractConcreteEntity
         }
 
         if ($hasGoal) {
-            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_GOAL, $this->id, $goal);
+            $this->updateSummary(CustomUiDescriptions::EXPERIMENT_GOAL, $this->id, $goal);
         }
         if ($hasConclusion) {
-            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_CONCLUSION, $this->id, $conclusion);
+            $this->updateSummary(CustomUiDescriptions::EXPERIMENT_CONCLUSION, $this->id, $conclusion);
         }
         if ($hasNotes) {
-            $this->getSummaryStore()->write(CustomUiDescriptions::EXPERIMENT_NOTES, $this->id, $notes);
+            $this->updateSummary(CustomUiDescriptions::EXPERIMENT_NOTES, $this->id, $notes);
         }
         return $this->readOne();
     }
@@ -299,6 +300,24 @@ final class Experiments extends AbstractConcreteEntity
     private function getSummaryStore(): CustomUiDescriptions
     {
         return new CustomUiDescriptions();
+    }
+
+    /**
+     * Save a goal, conclusion or notes text and record the change in the
+     * changelog like any other field. These texts are kept apart from the
+     * entity row, so the normal update path (which writes the changelog) never
+     * sees them.
+     */
+    private function updateSummary(string $scope, int $entityId, string $value): void
+    {
+        $store = $this->getSummaryStore();
+        $previous = $store->read($scope, $entityId);
+        $store->write($scope, $entityId, $value);
+        if (trim($value) === trim($previous)) {
+            return;
+        }
+        // An emptied field is logged as such; an empty log entry would read as a glitch.
+        new Changelog($this)->create(new ContentParams($scope, trim($value) === '' ? '(emptied)' : $value));
     }
 
     private function normalizeSummary(mixed $summary, string $label): string
