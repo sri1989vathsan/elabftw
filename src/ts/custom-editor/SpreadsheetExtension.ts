@@ -1476,6 +1476,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // wipe rather than taught to spreadsheetToHTML itself, since nothing
     // about this attribute is part of the spreadsheet's own saved shape.
     const existingUid = table.getAttribute(SPREADSHEET_UID_ATTR);
+    // The table of contents anchors to this table by id; keep it as well.
+    const existingId = table.getAttribute('id');
     const parsed = document.createElement('div');
     parsed.innerHTML = html;
     const freshTable = parsed.querySelector('table.elabftw-spreadsheet');
@@ -1484,6 +1486,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     Array.from(freshTable.attributes).forEach(attr => table.setAttribute(attr.name, attr.value));
     table.innerHTML = freshTable.innerHTML;
     if (existingUid) table.setAttribute(SPREADSHEET_UID_ATTR, existingUid);
+    if (existingId) table.setAttribute('id', existingId);
     return true;
   };
 

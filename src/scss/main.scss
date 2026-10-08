@@ -3463,6 +3463,7 @@ body.html-tool-workspace-resizing * {
 .elabftw-spreadsheet-readonly-redo,
 .elabftw-spreadsheet-readonly-autofit-rows,
 .elabftw-spreadsheet-readonly-autofit-columns,
+.elabftw-spreadsheet-readonly-edit-title,
 .elabftw-spreadsheet-readonly-copy-table {
   background: none;
   border: none;
@@ -3474,8 +3475,29 @@ body.html-tool-workspace-resizing * {
 .elabftw-spreadsheet-readonly-redo:hover,
 .elabftw-spreadsheet-readonly-autofit-rows:hover,
 .elabftw-spreadsheet-readonly-autofit-columns:hover,
+.elabftw-spreadsheet-readonly-edit-title:hover,
 .elabftw-spreadsheet-readonly-copy-table:hover {
   color: var(--primary);
+}
+
+// Inline title editor in a spreadsheet's toolbar (see the edit-title button in
+// buildReadOnlySpreadsheetHost).
+.elabftw-spreadsheet-title-input {
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 4px;
+  color: var(--strongest);
+  flex: 1 1 8rem;
+  font-size: 0.85rem;
+  max-width: 24rem;
+  min-width: 6rem;
+  padding: 0.1rem 0.4rem;
+}
+
+// A table entry in the table of contents.
+.toc-table-icon {
+  color: var(--medium);
+  opacity: 0.8;
 }
 
 .elabftw-spreadsheet-readonly-open-editor {

@@ -14,14 +14,23 @@ import {
   writeRichClipboard,
 } from './ClipboardContent';
 import { restoreStaticSpreadsheetsForPrint } from './inline-spreadsheet';
+import {
+  getSpreadsheetTocLabel,
+  hasTocSpreadsheet,
+  isTocSpreadsheet,
+  SPREADSHEET_TOC_SELECTOR,
+} from './toc-tables';
 
 // We don't register this in the Model enum because TOC is purely client-side
 // and doesn't correspond to any API endpoint.
 const TOC_MODEL = 'toc';
 const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6';
+const TOC_SELECTOR = `${HEADING_SELECTOR}, ${SPREADSHEET_TOC_SELECTOR}`;
 const FILTER_HIDDEN_CLASS = 'toc-section-filter-hidden';
 
 interface TocEntry {
+  /** 'table' is a spreadsheet; it is listed in the contents but is not a filterable section. */
+  kind?: 'heading' | 'table';
   level: number;
   text: string;
   id: string;
@@ -63,7 +72,7 @@ export default class TocPanel extends SidePanel {
     } else {
       this.updateAvailability();
     }
-    window.addEventListener('editor-headings-changed', () => this.updateAvailability());
+    window.addEventListener('editor-headings-changed', () => this.refresh());
   }
 
   /**
@@ -90,10 +99,10 @@ export default class TocPanel extends SidePanel {
 
   private hasHeadings(): boolean {
     const bodyView = document.getElementById('body_view');
-    if (bodyView?.querySelector(HEADING_SELECTOR)) return true;
+    if (bodyView?.querySelector(HEADING_SELECTOR) || hasTocSpreadsheet(bodyView)) return true;
 
-    const editor = this.getEditor();
-    return Boolean(editor?.getBody()?.querySelector(HEADING_SELECTOR));
+    const editorBody = this.getEditor()?.getBody();
+    return Boolean(editorBody?.querySelector(HEADING_SELECTOR)) || hasTocSpreadsheet(editorBody);
   }
 
   /**
@@ -103,28 +112,58 @@ export default class TocPanel extends SidePanel {
     const entries: TocEntry[] = [];
     const ancestors: TocEntry[] = [];
     const usedIds = new Set<string>();
-    let headings: NodeListOf<HTMLHeadingElement> | null = null;
+    let nodes: NodeListOf<Element> | null = null;
 
     // View mode: headings live inside #body_view
     const bodyView = document.getElementById('body_view');
     if (bodyView) {
-      headings = bodyView.querySelectorAll(HEADING_SELECTOR);
+      nodes = bodyView.querySelectorAll(TOC_SELECTOR);
     }
 
     // Edit mode: headings are inside the TinyMCE iframe body
-    if (!headings || headings.length === 0) {
+    if (!nodes || nodes.length === 0) {
       const editor = this.getEditor();
       if (editor) {
         const editorBody = editor.getBody();
         if (editorBody) {
-          headings = editorBody.querySelectorAll(HEADING_SELECTOR);
+          nodes = editorBody.querySelectorAll(TOC_SELECTOR);
         }
       }
     }
 
-    if (!headings) return entries;
+    if (!nodes) return entries;
 
-    headings.forEach((heading, index) => {
+    let tableNumber = 0;
+    const orphanTables: TocEntry[] = [];
+    nodes.forEach((node, index) => {
+      if (!node.matches(HEADING_SELECTOR)) {
+        if (!isTocSpreadsheet(node)) return;
+        // A spreadsheet is listed under the heading it sits in, as a leaf: it
+        // never becomes an ancestor of what follows.
+        tableNumber++;
+        const text = getSpreadsheetTocLabel(node, tableNumber);
+        let id = node.id.trim();
+        if (!id || usedIds.has(id)) {
+          id = this.createTableId(text, tableNumber, usedIds);
+          node.id = id;
+        }
+        usedIds.add(id);
+        const parent = ancestors[ancestors.length - 1];
+        const entry: TocEntry = {
+          kind: 'table',
+          level: parent ? parent.level + 1 : 0,
+          text,
+          id,
+          path: [...ancestors.map(ancestor => ancestor.text), text].join(' › '),
+          parentId: parent?.id,
+          ancestorIds: ancestors.map(ancestor => ancestor.id),
+        };
+        entries.push(entry);
+        if (!parent) orphanTables.push(entry);
+        return;
+      }
+
+      const heading = node as HTMLHeadingElement;
       const level = parseInt(heading.tagName.charAt(1), 10);
       const text = heading.textContent?.trim() || '';
       if (text.length === 0) return;
@@ -142,6 +181,7 @@ export default class TocPanel extends SidePanel {
         ancestors.pop();
       }
       const entry: TocEntry = {
+        kind: 'heading',
         level,
         text,
         id,
@@ -152,6 +192,11 @@ export default class TocPanel extends SidePanel {
       entries.push(entry);
       ancestors.push(entry);
     });
+
+    // Spreadsheets above the first heading line up with the top-level headings.
+    const headingLevels = entries.filter(entry => entry.kind !== 'table').map(entry => entry.level);
+    const topLevel = headingLevels.length > 0 ? Math.min(...headingLevels) : 1;
+    orphanTables.forEach(entry => { entry.level = topLevel; });
 
     return entries;
   }
@@ -175,7 +220,7 @@ export default class TocPanel extends SidePanel {
     if (!container) return;
 
     if (entries.length === 0) {
-      container.innerHTML = '<p class="text-muted px-2">No headings found in the document.</p>';
+      container.innerHTML = '<p class="text-muted px-2">No headings or tables found in the document.</p>';
       this.renderSectionFilterTree();
       this.renderSectionFilters();
       this.setupSearchControls();
@@ -188,11 +233,15 @@ export default class TocPanel extends SidePanel {
 
     let html = '<ul class="toc-list list-unstyled mb-0">';
     for (const entry of entries) {
+      const isTable = entry.kind === 'table';
       const indent = (entry.level - minLevel) * 16;
-      const fontClass = entry.level <= 2 ? 'font-weight-bold' : '';
-      const fontSize = entry.level <= 2 ? '' : (entry.level === 3 ? 'style="font-size:0.95em"' : 'style="font-size:0.9em"');
+      const fontClass = !isTable && entry.level <= 2 ? 'font-weight-bold' : '';
+      const fontSize = isTable || entry.level > 3
+        ? 'style="font-size:0.9em"'
+        : (entry.level === 3 ? 'style="font-size:0.95em"' : '');
       const id = this.escapeAttribute(entry.id);
-      const text = this.escapeHTML(entry.text);
+      const text = (isTable ? '<i class="fas fa-table fa-fw mr-1 toc-table-icon" aria-hidden="true"></i>' : '')
+        + this.escapeHTML(entry.text);
       const label = this.escapeAttribute(entry.text);
       const searchText = this.escapeAttribute(entry.path.toLocaleLowerCase());
       html += `<li class="toc-item" style="padding-left:${indent}px" data-toc-search-text="${searchText}" data-toc-target="${id}">`;
@@ -327,8 +376,9 @@ export default class TocPanel extends SidePanel {
     if (!container || !empty) return;
 
     container.replaceChildren();
-    empty.hidden = this.entries.length > 0;
-    this.entries.forEach((entry, index) => {
+    const sectionEntries = this.entries.filter(entry => entry.kind !== 'table');
+    empty.hidden = sectionEntries.length > 0;
+    sectionEntries.forEach((entry, index) => {
       const row = document.createElement('div');
       row.className = 'toc-section-filter-option';
       row.dataset.tocSectionId = entry.id;
@@ -426,7 +476,8 @@ export default class TocPanel extends SidePanel {
       container.appendChild(chip);
     });
 
-    const selectedCount = this.selectedSectionIds.size;
+    const selectedCount = this.entries
+      .filter(entry => entry.kind !== 'table' && this.selectedSectionIds.has(entry.id)).length;
     count.textContent = selectedCount.toString();
     count.toggleAttribute('hidden', selectedCount === 0);
   }
@@ -435,8 +486,9 @@ export default class TocPanel extends SidePanel {
     entry: TocEntry;
     directOnly: boolean;
   }> {
+    const sectionEntries = this.entries.filter(entry => entry.kind !== 'table');
     const fullBranchIds = new Set(
-      this.entries
+      sectionEntries
         .filter(entry => (
           this.getSectionIds(entry.id)
             .every(id => this.selectedSectionIds.has(id))
@@ -444,7 +496,7 @@ export default class TocPanel extends SidePanel {
         .map(entry => entry.id),
     );
     const groups: Array<{ entry: TocEntry; directOnly: boolean }> = [];
-    this.entries.forEach(entry => {
+    sectionEntries.forEach(entry => {
       if (!this.selectedSectionIds.has(entry.id)) return;
       if (fullBranchIds.has(entry.id)) {
         if (!entry.parentId || !fullBranchIds.has(entry.parentId)) {
@@ -526,7 +578,7 @@ export default class TocPanel extends SidePanel {
   }
 
   private hasSectionChildren(entryId: string): boolean {
-    return this.entries.some(entry => entry.parentId === entryId);
+    return this.entries.some(entry => entry.parentId === entryId && entry.kind !== 'table');
   }
 
   private filterEntries(): void {
@@ -542,6 +594,7 @@ export default class TocPanel extends SidePanel {
     const matchAll = mode?.value !== 'any';
     const hasSectionSelection = this.selectedSectionIds.size > 0;
     const matchingRoots = this.entries.filter(entry => {
+      if (entry.kind === 'table') return false;
       if (hasSectionSelection && !this.selectedSectionIds.has(entry.id)) return false;
       if (filters.length === 0) return hasSectionSelection;
       const path = entry.path.toLocaleLowerCase();
@@ -549,6 +602,17 @@ export default class TocPanel extends SidePanel {
         ? filters.every(filter => path.includes(filter))
         : filters.some(filter => path.includes(filter));
     });
+    // A spreadsheet whose own title matches the search shows up in the list,
+    // but it is not a section: it never drives the main-text filter or print.
+    const matchingTableIds = new Set(this.entries
+      .filter(entry => {
+        if (entry.kind !== 'table' || hasSectionSelection || filters.length === 0) return false;
+        const path = entry.path.toLocaleLowerCase();
+        return matchAll
+          ? filters.every(filter => path.includes(filter))
+          : filters.some(filter => path.includes(filter));
+      })
+      .map(entry => entry.id));
     const sectionIds = new Set<string>();
     matchingRoots.forEach(entry => {
       this.getSectionIds(entry.id).forEach(id => {
@@ -560,8 +624,9 @@ export default class TocPanel extends SidePanel {
     const filterActive = filters.length > 0 || hasSectionSelection;
     const visibleTocIds = new Set(sectionIds);
     this.entries.forEach(entry => {
-      if (sectionIds.has(entry.id)) {
+      if (sectionIds.has(entry.id) || matchingTableIds.has(entry.id)) {
         entry.ancestorIds.forEach(id => visibleTocIds.add(id));
+        if (matchingTableIds.has(entry.id)) visibleTocIds.add(entry.id);
       }
     });
     let matches = 0;
@@ -570,7 +635,7 @@ export default class TocPanel extends SidePanel {
       const targetId = item.dataset.tocTarget ?? '';
       const visible = !filterActive || visibleTocIds.has(targetId);
       item.hidden = !visible;
-      if (sectionIds.has(targetId)) matches++;
+      if (sectionIds.has(targetId) || matchingTableIds.has(targetId)) matches++;
     }
 
     if (noResults) {
@@ -871,6 +936,24 @@ export default class TocPanel extends SidePanel {
     let candidate = base;
     let suffix = 2;
 
+    while (usedIds.has(candidate)) {
+      candidate = `${base}-${suffix}`;
+      suffix++;
+    }
+    return candidate;
+  }
+
+  private createTableId(text: string, number: number, usedIds: Set<string>): string {
+    const slug = text
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    // "Table 3" already says it all; a real title gets its own readable anchor.
+    const base = !slug || /^table-\d+$/.test(slug) ? `table-${number}` : `table-${slug}`;
+    let candidate = base;
+    let suffix = 2;
     while (usedIds.has(candidate)) {
       candidate = `${base}-${suffix}`;
       suffix++;

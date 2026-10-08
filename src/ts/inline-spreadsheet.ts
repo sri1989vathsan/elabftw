@@ -6452,8 +6452,13 @@ export function buildReadOnlySpreadsheetHost(
     toggleIcon.className = 'fas fa-chevron-down';
     toggleBar.appendChild(toggleIcon);
   }
+  // The table's title (its caption). Also what the table of contents lists it
+  // under (see toc-tables.ts), so it is a tracked element the title editor
+  // below can change in place.
+  let captionLabel: HTMLSpanElement | null = null;
   if (extracted.caption) {
-    const captionLabel = document.createElement('span');
+    captionLabel = document.createElement('span');
+    captionLabel.className = 'elabftw-spreadsheet-title';
     captionLabel.textContent = extracted.caption;
     toggleBar.appendChild(captionLabel);
   }
@@ -6587,6 +6592,79 @@ export function buildReadOnlySpreadsheetHost(
     });
     navigator.clipboard?.writeText(textRows.join('\n'))?.catch(() => {});
   });
+
+  if (editable) {
+    const editTitleButton = document.createElement('button');
+    editTitleButton.type = 'button';
+    editTitleButton.className = 'elabftw-spreadsheet-readonly-edit-title';
+    editTitleButton.title = 'Edit table title';
+    editTitleButton.setAttribute('aria-label', 'Edit table title');
+    editTitleButton.innerHTML = '<i class="fas fa-heading" aria-hidden="true"></i>';
+    toggleBar.appendChild(editTitleButton);
+    editTitleButton.addEventListener('click', event => {
+      event.stopPropagation();
+      if (toggleBar.querySelector('.elabftw-spreadsheet-title-input')) return;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'elabftw-spreadsheet-title-input';
+      input.value = extracted.caption ?? '';
+      input.placeholder = 'Table title';
+      input.maxLength = 120;
+      input.setAttribute('aria-label', 'Table title');
+      if (captionLabel) {
+        captionLabel.hidden = true;
+        captionLabel.after(input);
+      } else {
+        toggleBar.insertBefore(input, toggleBar.firstChild);
+      }
+      let finished = false;
+      const finish = (commit: boolean): void => {
+        if (finished) return;
+        finished = true;
+        const title = input.value.replace(/\s+/g, ' ').trim();
+        input.remove();
+        if (commit && title !== (extracted.caption ?? '')) {
+          extracted.caption = title;
+          if (title) {
+            if (!captionLabel) {
+              captionLabel = document.createElement('span');
+              captionLabel.className = 'elabftw-spreadsheet-title';
+              toggleBar.insertBefore(captionLabel, toggleBar.firstChild);
+            }
+            captionLabel.textContent = title;
+            captionLabel.hidden = false;
+          } else if (captionLabel) {
+            captionLabel.remove();
+            captionLabel = null;
+          }
+          // Saved like any other edit: extracted is what notifyFromMirror
+          // builds the committed data from, so the title rides along.
+          notifyFromMirror();
+        } else if (captionLabel) {
+          captionLabel.hidden = false;
+        }
+      };
+      // Keep typing in the title box away from the grid's and the page's
+      // own key handling.
+      ['keydown', 'keyup', 'keypress'].forEach(type => input.addEventListener(type, keyEvent => {
+        keyEvent.stopPropagation();
+        if (type === 'keydown') {
+          const key = (keyEvent as KeyboardEvent).key;
+          if (key === 'Enter') {
+            keyEvent.preventDefault();
+            finish(true);
+          } else if (key === 'Escape') {
+            keyEvent.preventDefault();
+            finish(false);
+          }
+        }
+      }));
+      input.addEventListener('blur', () => finish(true));
+      input.addEventListener('mousedown', mouseEvent => mouseEvent.stopPropagation());
+      input.focus();
+      input.select();
+    });
+  }
 
   if (options.onOpenFullEditor) {
     const openFullEditorButton = document.createElement('button');
@@ -8674,12 +8752,13 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivEle
   const caption = table.querySelector('caption')?.textContent?.trim();
   if (caption) {
     const label = document.createElement('span');
+    label.className = 'elabftw-spreadsheet-title';
     label.textContent = caption;
     toggleBar.appendChild(label);
   }
   [
     ['undo', 'fa-undo'], ['redo', 'fa-redo'], ['autofit-rows', 'fa-arrows-alt-v'],
-    ['autofit-columns', 'fa-arrows-alt-h'], ['copy-table', 'fa-copy'],
+    ['autofit-columns', 'fa-arrows-alt-h'], ['copy-table', 'fa-copy'], ['edit-title', 'fa-heading'],
     ['open-editor', 'fa-up-right-and-down-left-from-center'], ['delete', 'fa-trash'],
   ].forEach(([name, icon]) => {
     const button = document.createElement('button');
@@ -8818,6 +8897,8 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
         const html = el.outerHTML;
         const { host, destroy } = buildReadOnlySpreadsheetHost(extractFromTable(el));
         host.classList.toggle(FILTER_HIDDEN_CLASS, el.classList.contains(FILTER_HIDDEN_CLASS));
+        // The table of contents links to a spreadsheet by id; keep it across the swap.
+        if (el.id) host.id = el.id;
         el.replaceWith(host);
         savedHtml.set(host, html);
         destroyers.set(host, destroy);
@@ -8834,6 +8915,7 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
         const table = parsed.querySelector('table.elabftw-spreadsheet');
         if (!table) return;
         table.classList.toggle(FILTER_HIDDEN_CLASS, el.classList.contains(FILTER_HIDDEN_CLASS));
+        if (el.id) table.id = el.id;
         el.replaceWith(table);
         observer.unobserve(el);
         observer.observe(table);
