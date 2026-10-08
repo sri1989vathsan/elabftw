@@ -11,6 +11,27 @@
   // Closes the @mention dropdown on any click outside its own container --
   // it otherwise stayed open until a mention was picked, even after
   // clicking elsewhere on the page.
+  // Keeps a dialog's dimmed overlay to the right of any open side panel
+  // (Search, Folders, To-do...), so the dialog centers in the space that is
+  // actually visible instead of the whole window, where a wide side panel
+  // would cover part of it. The panel can be opened, resized or closed while
+  // the dialog is up (e.g. "Open Search to link"), so this re-reads the
+  // panel's edge a few times a second rather than only once on open.
+  function avoidSidebar(node: HTMLElement): { destroy(): void } {
+    const update = (): void => {
+      let left = 0;
+      document.querySelectorAll<HTMLElement>('.side-panel:not([hidden])').forEach(panel => {
+        const { right, width } = panel.getBoundingClientRect();
+        if (width > 0 && right > left) left = right;
+      });
+      const value = `${Math.round(left)}px`;
+      if (node.style.left !== value) node.style.left = value;
+    };
+    update();
+    const timer = window.setInterval(update, 150);
+    return { destroy: () => window.clearInterval(timer) };
+  }
+
   function clickOutside(node: HTMLElement, onOutsideClick: () => void): { destroy(): void } {
     const handleClick = (event: MouseEvent): void => {
       if (event.target instanceof Node && !node.contains(event.target)) {
@@ -2855,7 +2876,7 @@
 </div>
 
 {#if detailTask}
-  <div class="pm-overlay pm-overlay-task" role="presentation">
+  <div class="pm-overlay pm-overlay-task" role="presentation" use:avoidSidebar>
     <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmDetailTitle">
       <div class="pm-dialog-header">
         <h4 id="pmDetailTitle" class="mb-0">{detailEditing ? t('Edit card') : detailTask.body}</h4>
@@ -3328,7 +3349,7 @@
 {/if}
 
 {#if projectDialogOpen}
-  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeProjectDialog(); }}>
+  <div class="pm-overlay" role="presentation" use:avoidSidebar on:click={(event) => { if (event.target === event.currentTarget) closeProjectDialog(); }}>
     <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmProjectDialogTitle">
       <div class="pm-dialog-header">
         <h4 id="pmProjectDialogTitle" class="mb-0">
@@ -3521,7 +3542,7 @@
 {/if}
 
 {#if duplicatingTask}
-  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeDuplicateDialog(); }}>
+  <div class="pm-overlay" role="presentation" use:avoidSidebar on:click={(event) => { if (event.target === event.currentTarget) closeDuplicateDialog(); }}>
     <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pmDuplicateTaskTitle">
       <div class="pm-dialog-header">
         <h4 id="pmDuplicateTaskTitle" class="mb-0">{t('Duplicate card')}</h4>
@@ -3548,7 +3569,7 @@
 {/if}
 
 {#if linksSummaryOpen}
-  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeLinksSummary(); }}>
+  <div class="pm-overlay" role="presentation" use:avoidSidebar on:click={(event) => { if (event.target === event.currentTarget) closeLinksSummary(); }}>
     <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmLinksSummaryTitle">
       <div class="pm-dialog-header">
         <h4 id="pmLinksSummaryTitle" class="mb-0">
@@ -3596,7 +3617,7 @@
 {/if}
 
 {#if archivedModalOpen}
-  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeArchivedModal(); }}>
+  <div class="pm-overlay" role="presentation" use:avoidSidebar on:click={(event) => { if (event.target === event.currentTarget) closeArchivedModal(); }}>
     <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pmArchivedTitle">
       <div class="pm-dialog-header">
         <h4 id="pmArchivedTitle" class="mb-0">{t('Archived cards')}</h4>
@@ -3632,7 +3653,7 @@
 {/if}
 
 {#if columnDialogOpen}
-  <div class="pm-overlay" role="presentation" on:click={(event) => { if (event.target === event.currentTarget) closeColumnDialog(); }}>
+  <div class="pm-overlay" role="presentation" use:avoidSidebar on:click={(event) => { if (event.target === event.currentTarget) closeColumnDialog(); }}>
     <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pmColumnDialogTitle">
       <div class="pm-dialog-header">
         <h4 id="pmColumnDialogTitle" class="mb-0">{t('Manage columns')}</h4>
