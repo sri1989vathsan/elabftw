@@ -10,8 +10,15 @@
       "The preview matches the editor's look, column widths and row heights, so nothing jumps when you click.",
       "The cell you clicked is selected straight away, and the table you are editing stays live while you scroll."
     ],
-    "image": "",
-    "imageAlt": "A spreadsheet shown as a preview before clicking, and as the live editor after"
+    "image": "spreadsheet-previews.jpg",
+    "imageAlt": "A spreadsheet shown as a light preview while scrolling, outlined; clicking it opens the full editor",
+    "highlight": {
+      "x": 6.8,
+      "y": 57.8,
+      "w": 52.3,
+      "h": 37.1,
+      "label": "Click a table to edit it"
+    }
   },
   {
     "id": "list-indent",
@@ -23,8 +30,15 @@
       "Works for bullet lists, numbered lists and several selected paragraphs.",
       "Nested lists move one level per press."
     ],
-    "image": "",
-    "imageAlt": "Three selected bullet lines being indented together"
+    "image": "list-indent.jpg",
+    "imageAlt": "Three bullet lines selected in the editor, outlined; Tab indents them together",
+    "highlight": {
+      "x": 7.5,
+      "y": 68.5,
+      "w": 23.0,
+      "h": 15.2,
+      "label": "Select lines, press Tab"
+    }
   },
   {
     "id": "template-version-history",
@@ -51,8 +65,15 @@
       "Copy the whole table in one click, and auto-fit rows or columns to their content.",
       "Row heights now grow when a narrower column needs more wrapped lines."
     ],
-    "image": "",
-    "imageAlt": "The drag-to-size grid for inserting a spreadsheet"
+    "image": "spreadsheet-insert-and-view.jpg",
+    "imageAlt": "The Insert menu's Spreadsheet submenu with the drag-to-size grid, outlined",
+    "highlight": {
+      "x": 37.2,
+      "y": 9.4,
+      "w": 22.2,
+      "h": 48.2,
+      "label": "Insert > Spreadsheet: drag to pick a size"
+    }
   },
   {
     "id": "boards",
@@ -95,8 +116,15 @@
       "Tab and Enter move between cells, and selected cells and fill-drag are clearly highlighted.",
       "Fixed cell formatting in the popup and a case where saving could blank cells."
     ],
-    "image": "",
-    "imageAlt": "Spreadsheet with a highlighted selection and fill handle"
+    "image": "spreadsheet-editing.jpg",
+    "imageAlt": "A spreadsheet with a selected cell, its formula in the formula bar and the formatting toolbar above, outlined",
+    "highlight": {
+      "x": 6.9,
+      "y": 54.1,
+      "w": 61.9,
+      "h": 12.8,
+      "label": "Formula bar and formatting toolbar"
+    }
   },
   {
     "id": "navigation",

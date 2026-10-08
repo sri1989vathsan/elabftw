@@ -1672,9 +1672,33 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     pendingInitialSelection.set(table, selection);
     enhanceTable(table);
     profiler.end('click to grid mounted (ms, grid cells appear a few frames later)', activateStartedAt);
+    if (selection) selectCellWhenReady(table, selection);
     setActiveSpreadsheetTable(table);
     editor.dispatch('ElabftwSpreadsheetSelected', { table });
     tableIndentation.trackSelectedTable(table);
+  };
+  // The grid mounts while the mouse button is still down; jspreadsheet's own
+  // document-level handlers then see the button's release (and the click that
+  // follows) land outside any cell and clear the selection. Wait for the
+  // release and for the cells to exist before selecting the clicked one.
+  const selectCellWhenReady = (table: HTMLTableElement, cell: { col: number; row: number }): void => {
+    let buttonDown = true;
+    const released = (): void => { buttonDown = false; };
+    window.addEventListener('pointerup', released, { capture: true, once: true });
+    window.addEventListener('pointercancel', released, { capture: true, once: true });
+    const attempt = (frame: number): void => {
+      const entry = spreadsheetOverlays.get(table);
+      if (!entry || entry.isPreview || frame > 180) return;
+      const grid = entry.el.querySelector('.elabftw-spreadsheet-readonly-grid') as
+        (HTMLElement & { spreadsheet?: { worksheets?: Array<{ updateSelectionFromCoords?: (...args: number[]) => void }> } }) | null;
+      const worksheet = grid?.spreadsheet?.worksheets?.[0];
+      if (!buttonDown && worksheet?.updateSelectionFromCoords && entry.el.querySelector('td[data-x][data-y]')) {
+        window.setTimeout(() => worksheet.updateSelectionFromCoords?.(cell.col, cell.row, cell.col, cell.row), 80);
+        return;
+      }
+      window.requestAnimationFrame(() => attempt(frame + 1));
+    };
+    window.requestAnimationFrame(() => attempt(0));
   };
   const pendingInitialSelection = new WeakMap<HTMLTableElement, { col: number; row: number } | undefined>();
 
