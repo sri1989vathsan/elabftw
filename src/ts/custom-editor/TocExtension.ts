@@ -10,7 +10,9 @@ export function registerTocExtension(editor: Editor): void {
     // Spreadsheets are listed too, under their title.
     const sheets = Array.from(body.querySelectorAll('table.elabftw-spreadsheet'))
       .map(table => `TABLE:${table.querySelector(':scope > caption')?.textContent?.trim() ?? ''}`);
-    const signature = [...headings, ...sheets].join('|');
+    const pictures = Array.from(body.querySelectorAll('img:not([data-mce-bogus])'))
+      .map(image => `IMG:${image.getAttribute('title') ?? ''}:${image.getAttribute('alt') ?? ''}:${image.closest('figure')?.querySelector('figcaption')?.textContent?.trim() ?? ''}`);
+    const signature = [...headings, ...sheets, ...pictures].join('|');
     if (signature === headingSignature) return;
     headingSignature = signature;
     window.dispatchEvent(new CustomEvent('editor-headings-changed'));

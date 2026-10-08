@@ -3494,7 +3494,12 @@ body.html-tool-workspace-resizing * {
   padding: 0.1rem 0.4rem;
 }
 
-// A table entry in the table of contents.
+// Pictures can be hidden from the table of contents with its checkbox.
+.toc-hide-images .toc-item-image {
+  display: none;
+}
+
+// A table or picture entry in the table of contents.
 .toc-table-icon {
   color: var(--medium);
   opacity: 0.8;
