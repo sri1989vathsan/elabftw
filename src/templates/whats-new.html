@@ -2,10 +2,26 @@
 
 {% block body %}
 <div class='container-fluid px-0'>
-  <div class='mb-4'>
-    <h1 class='mb-1'><i class='fas fa-star mr-2'></i>{{ 'What\'s new'|trans }}</h1>
-    <p class='text-muted mb-0'>{{ 'The newest features and improvements, newest first.'|trans }}</p>
+  <div class='d-flex flex-wrap align-items-start justify-content-between mb-4'>
+    <div>
+      <h1 class='mb-1'><i class='fas fa-star mr-2'></i>{{ 'What\'s new'|trans }}</h1>
+      <p class='text-muted mb-0'>{{ 'The newest features and improvements, newest first.'|trans }}</p>
+    </div>
+    {% if whatsNewCanEdit %}
+      <details class='whats-new-edit mt-2 mt-md-0'>
+        <summary class='btn btn-primary btn-sm'><i class='fas fa-plus fa-fw mr-1'></i>{{ 'New entry'|trans }}</summary>
+        <div class='card card-body mt-2 whats-new-edit-panel'>
+          {% include 'whats-new-form.html' with {'entry': {}} %}
+        </div>
+      </details>
+    {% endif %}
   </div>
+
+  {% if whatsNewCanEdit %}
+    <datalist id='whatsNewAreas'>
+      {% for area in whatsNewAreas %}<option value='{{ area }}'></option>{% endfor %}
+    </datalist>
+  {% endif %}
 
   {% if whatsNewEntries is empty %}
     <div class='alert alert-info'>{{ 'Nothing to show yet.'|trans }}</div>
@@ -17,7 +33,7 @@
         <div class='card h-100'>
           {% if entry.image %}
             <div class='whats-new-shot'>
-              <img class='card-img-top' src='assets/images/whats-new/{{ entry.image }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'>
+              <img class='card-img-top' src='whats-new.php?image={{ entry.image|url_encode }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'>
               {% if entry.highlight %}
                 <span class='whats-new-highlight' style='left: {{ entry.highlight.x }}%; top: {{ entry.highlight.y }}%; width: {{ entry.highlight.w }}%; height: {{ entry.highlight.h }}%;'>
                   {% if entry.highlight.label %}<span class='whats-new-highlight-label'>{{ entry.highlight.label }}</span>{% endif %}
@@ -27,7 +43,7 @@
           {% endif %}
           <div class='card-body'>
             <div class='mb-2'>
-              <span class='badge badge-primary mr-1'>{{ entry.area }}</span>
+              {% if entry.area %}<span class='badge badge-primary mr-1'>{{ entry.area }}</span>{% endif %}
               <span class='text-muted small'>{{ entry.date|date('j M Y') }}</span>
             </div>
             <h2 class='h4 card-title'>{{ entry.title }}</h2>
@@ -40,6 +56,24 @@
               </ul>
             {% endif %}
           </div>
+          {% if whatsNewCanEdit %}
+            <div class='card-footer whats-new-edit'>
+              <details>
+                <summary class='btn btn-secondary btn-sm'><i class='fas fa-pen fa-fw mr-1'></i>{{ 'Edit'|trans }}</summary>
+                {% include 'whats-new-form.html' with {'entry': entry} %}
+                <details class='mt-3'>
+                  <summary class='btn btn-link btn-sm text-danger px-0'>{{ 'Delete this entry'|trans }}</summary>
+                  <form method='post' action='whats-new.php' class='mt-2'>
+                    {{ App.Session.get('csrf')|csrf }}
+                    <input type='hidden' name='action' value='delete'>
+                    <input type='hidden' name='id' value='{{ entry.id }}'>
+                    <p class='mb-2'>{{ 'This removes the entry and its picture for everyone.'|trans }}</p>
+                    <button type='submit' class='btn btn-danger btn-sm'><i class='fas fa-trash fa-fw mr-1'></i>{{ 'Delete'|trans }}</button>
+                  </form>
+                </details>
+              </details>
+            </div>
+          {% endif %}
         </div>
       </div>
     {% endfor %}

@@ -1,0 +1,67 @@
+{# Edit form for one What's new entry; `entry` is empty when adding a new one. #}
+{% set fid = entry.id|default('new') %}
+<form method='post' action='whats-new.php' enctype='multipart/form-data' class='whats-new-form mt-3'>
+  {{ App.Session.get('csrf')|csrf }}
+  <input type='hidden' name='action' value='save'>
+  {% if entry.id is defined and entry.id %}<input type='hidden' name='id' value='{{ entry.id }}'>{% endif %}
+
+  <div class='form-group'>
+    <label for='wn-title-{{ fid }}'>{{ 'Title'|trans }}</label>
+    <input id='wn-title-{{ fid }}' class='form-control' type='text' name='title' maxlength='120' required value='{{ entry.title|default('') }}'>
+  </div>
+  <div class='form-row'>
+    <div class='form-group col-sm-6'>
+      <label for='wn-area-{{ fid }}'>{{ 'Area'|trans }}</label>
+      <input id='wn-area-{{ fid }}' class='form-control' type='text' name='area' maxlength='40' list='whatsNewAreas' value='{{ entry.area|default('') }}'>
+    </div>
+    <div class='form-group col-sm-6'>
+      <label for='wn-date-{{ fid }}'>{{ 'Date'|trans }}</label>
+      <input id='wn-date-{{ fid }}' class='form-control' type='date' name='date' required value='{{ entry.date|default('now'|date('Y-m-d')) }}'>
+    </div>
+  </div>
+  <div class='form-group'>
+    <label for='wn-summary-{{ fid }}'>{{ 'Short description'|trans }}</label>
+    <textarea id='wn-summary-{{ fid }}' class='form-control' name='summary' rows='2' maxlength='400'>{{ entry.summary|default('') }}</textarea>
+  </div>
+  <div class='form-group'>
+    <label for='wn-details-{{ fid }}'>{{ 'Details'|trans }}</label>
+    <textarea id='wn-details-{{ fid }}' class='form-control' name='details' rows='5'>{{ entry.details|default([])|join("\n") }}</textarea>
+    <small class='form-text text-muted'>{{ 'One point per line. Up to 12 lines.'|trans }}</small>
+  </div>
+
+  <div class='form-group'>
+    <label for='wn-image-{{ fid }}'>{{ 'Picture'|trans }}</label>
+    {% if entry.image is defined and entry.image %}
+      <div class='mb-2'>
+        <img class='whats-new-form-thumb' src='whats-new.php?image={{ entry.image|url_encode }}' alt=''>
+      </div>
+      <div class='custom-control custom-checkbox mb-2'>
+        <input id='wn-remove-{{ fid }}' class='custom-control-input' type='checkbox' name='remove_image' value='1'>
+        <label class='custom-control-label' for='wn-remove-{{ fid }}'>{{ 'Remove the current picture'|trans }}</label>
+      </div>
+    {% endif %}
+    <input id='wn-image-{{ fid }}' class='form-control-file' type='file' name='image' accept='image/jpeg,image/png,image/webp,image/gif'>
+    <small class='form-text text-muted'>{{ 'JPG, PNG, WebP or GIF, up to 8 MB. Choosing a file replaces the current picture.'|trans }}</small>
+  </div>
+  <div class='form-group'>
+    <label for='wn-alt-{{ fid }}'>{{ 'Picture description (for screen readers)'|trans }}</label>
+    <input id='wn-alt-{{ fid }}' class='form-control' type='text' name='imageAlt' maxlength='200' value='{{ entry.imageAlt|default('') }}'>
+  </div>
+
+  <fieldset class='form-group'>
+    <legend class='col-form-label pt-0'>{{ 'Outline on the picture (optional)'|trans }}</legend>
+    <small class='form-text text-muted mb-2'>{{ 'Draws a box around the part of the picture that shows the feature. Values are percentages of the picture, measured from its top-left corner. Leave empty for no outline.'|trans }}</small>
+    <div class='form-row'>
+      {% for key, label in {'x': 'From left', 'y': 'From top', 'w': 'Width', 'h': 'Height'} %}
+        <div class='form-group col-6 col-sm-3'>
+          <label for='wn-hl-{{ key }}-{{ fid }}'>{{ label|trans }} (%)</label>
+          <input id='wn-hl-{{ key }}-{{ fid }}' class='form-control' type='number' min='0' max='100' step='0.1' name='highlight_{{ key }}' value='{{ entry.highlight[key]|default('') }}'>
+        </div>
+      {% endfor %}
+    </div>
+    <label for='wn-hl-label-{{ fid }}'>{{ 'Label shown under the box'|trans }}</label>
+    <input id='wn-hl-label-{{ fid }}' class='form-control' type='text' name='highlight_label' maxlength='80' value='{{ entry.highlight.label|default('') }}'>
+  </fieldset>
+
+  <button type='submit' class='btn btn-primary'><i class='fas fa-save fa-fw mr-1'></i>{{ 'Save'|trans }}</button>
+</form>

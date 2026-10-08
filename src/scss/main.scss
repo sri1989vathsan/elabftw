@@ -6240,3 +6240,27 @@ div > .sticky-navbar {
   top: calc(100% + 6px);
   white-space: nowrap;
 }
+
+// What's new editing (admins): the Edit and New entry buttons are native
+// <details> summaries, so they work without any script.
+.whats-new-edit > summary,
+.whats-new-edit details > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.whats-new-edit > summary::-webkit-details-marker,
+.whats-new-edit details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.whats-new-edit-panel {
+  max-width: 36rem;
+}
+
+.whats-new-form-thumb {
+  border: 1px solid var(--secondary-muted);
+  border-radius: 4px;
+  max-height: 8rem;
+  max-width: 100%;
+}

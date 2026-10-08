@@ -506,13 +506,29 @@ gap.
 
 ## Feature: What's new page
 
-A page listing the newest features, linked from the Tools menu.
+A page listing the newest features, linked from the Tools menu. Team admins and
+sysadmins can edit entries, add new ones and attach pictures from the page itself;
+everyone else only reads it.
 
-- `src/whats-new.json` — the entries (id, date, area, title, summary, details, optional `image` file name, `imageAlt`, and `highlight` {x, y, w, h as % of the picture, label} outlining where the feature is); edit this file to add or change entries, newest date is shown first
-- `src/Controllers/WhatsNewController.php`, `web/whats-new.php`, `src/templates/whats-new.html` — the page itself
-- `web/assets/images/whats-new/` — screenshots referenced by an entry's `image` (an entry without one shows no picture)
+- `src/whats-new.json` — the entries shipped with the code (id, date, area, title, summary, details, optional `image`, `imageAlt` and `highlight` {x, y, w, h as % of the picture, label} outlining where the feature is)
+- `web/assets/images/whats-new/` — the pictures shipped with the code
+- `src/Services/WhatsNewStore.php` — merges the shipped entries with what admins changed. Changes live in the persistent uploads volume (`/var/lib/elabftw/uploads/whats-new/`: `entries.json` and `images/`), so they survive upgrades. An edited entry replaces the shipped one with the same id, a deleted shipped entry stays hidden, and entries shipped later still appear.
+- `src/Controllers/WhatsNewController.php`, `web/whats-new.php`, `src/templates/whats-new.html`, `src/templates/whats-new-form.html` — the page, its pictures (`whats-new.php?image=<name>`) and the admin forms (plain POST forms with the usual CSRF field, no script needed)
 - `src/templates/head.html` — "What's new" item in the Tools dropdown
-- `docker-compose.yml` — mount for `web/whats-new.php`, like the other fork pages
+- `docker-compose.yml` — mounts for `web/whats-new.php` and, for quick edits during development, the data file, the template and the pictures folder
+- `whats-new-screenshots/` — `process.py` turns screenshots dropped in `inbox/` into pictures (crop, blank out private areas, outline); see its README
+
+## Spreadsheets in the table of contents
+
+Each spreadsheet is listed in the table of contents under the heading it sits in,
+with its title (the table caption) or "Table N" when it has none. In the editor the
+spreadsheet toolbar has an **Edit title** button that changes the caption in place.
+
+- `src/ts/toc-tables.ts` — what counts as a listed spreadsheet and how its label is chosen
+- `src/ts/TocPanel.class.ts` — spreadsheets are `kind: 'table'` entries: leaves, not filterable sections; a search can match their title
+- `src/ts/custom-editor/TocExtension.ts` — refreshes the contents when a spreadsheet is added, removed or retitled
+- `src/ts/inline-spreadsheet.ts` — the Edit title button; the table id is kept across view-mode swaps
+- `src/ts/custom-editor/SpreadsheetExtension.ts` — keeps the table's `id` when an edit rewrites its attributes
 
 ## General Merge Notes
 
