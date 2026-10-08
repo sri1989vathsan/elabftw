@@ -48,9 +48,15 @@
       </button>
     </details>
     <div id='tocSectionFilters' class='toc-search-filters mb-2' aria-live='polite'></div>
-    <div class='custom-control custom-checkbox toc-images-toggle mb-2' hidden>
-      <input type='checkbox' class='custom-control-input' id='tocShowImages' checked>
-      <label class='custom-control-label small' for='tocShowImages'>{{ 'Show pictures'|trans }}</label>
+    <div class='d-flex flex-wrap mb-2'>
+      <div class='custom-control custom-checkbox toc-leaf-toggle mr-3' hidden>
+        <input type='checkbox' class='custom-control-input' id='tocShowTables' checked>
+        <label class='custom-control-label small' for='tocShowTables'>{{ 'Show spreadsheets'|trans }}</label>
+      </div>
+      <div class='custom-control custom-checkbox toc-leaf-toggle' hidden>
+        <input type='checkbox' class='custom-control-input' id='tocShowImages' checked>
+        <label class='custom-control-label small' for='tocShowImages'>{{ 'Show pictures'|trans }}</label>
+      </div>
     </div>
     {# this will be filled with the TOC entries by TocPanel.class.ts #}
     <div id='tocItems' class='toc-items-container'></div>

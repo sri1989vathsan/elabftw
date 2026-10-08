@@ -3494,8 +3494,10 @@ body.html-tool-workspace-resizing * {
   padding: 0.1rem 0.4rem;
 }
 
-// Pictures can be hidden from the table of contents with its checkbox.
-.toc-hide-images .toc-item-image {
+// Spreadsheets and pictures can each be hidden from the table of contents
+// with the checkboxes above the list.
+.toc-hide-images .toc-item-image,
+.toc-hide-tables .toc-item-table {
   display: none;
 }
 
@@ -6268,4 +6270,16 @@ div > .sticky-navbar {
   border-radius: 4px;
   max-height: 8rem;
   max-width: 100%;
+}
+
+// Attached files table: the row's action buttons (download, link, edit,
+// archive, delete, more) sit side by side, and a narrow window scrolls the
+// table sideways instead of squeezing them into a column.
+.uploads-table-wrap {
+  overflow-x: auto;
+
+  #uploadsTable > tr > td:last-child {
+    white-space: nowrap;
+    width: 1%;
+  }
 }

@@ -31,6 +31,7 @@ const TOC_MODEL = 'toc';
 const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6';
 const TOC_SELECTOR = `${HEADING_SELECTOR}, ${SPREADSHEET_TOC_SELECTOR}, ${IMAGE_TOC_SELECTOR}`;
 const SHOW_IMAGES_KEY = 'toc-show-images';
+const SHOW_TABLES_KEY = 'toc-show-tables';
 const FILTER_HIDDEN_CLASS = 'toc-section-filter-hidden';
 
 interface TocEntry {
@@ -82,10 +83,15 @@ export default class TocPanel extends SidePanel {
     }
     window.addEventListener('editor-headings-changed', () => this.refresh());
     document.addEventListener('change', event => {
-      const target = event.target as HTMLElement | null;
-      if (target?.id !== 'tocShowImages') return;
-      localStorage.setItem(SHOW_IMAGES_KEY, (target as HTMLInputElement).checked ? '1' : '0');
-      document.getElementById('tocItems')?.classList.toggle('toc-hide-images', !(target as HTMLInputElement).checked);
+      const target = event.target as HTMLInputElement | null;
+      const switches: Record<string, [string, string]> = {
+        tocShowImages: [SHOW_IMAGES_KEY, 'toc-hide-images'],
+        tocShowTables: [SHOW_TABLES_KEY, 'toc-hide-tables'],
+      };
+      const found = target?.id ? switches[target.id] : undefined;
+      if (!target || !found) return;
+      localStorage.setItem(found[0], target.checked ? '1' : '0');
+      document.getElementById('tocItems')?.classList.toggle(found[1], !target.checked);
     });
   }
 
@@ -114,6 +120,11 @@ export default class TocPanel extends SidePanel {
   /** Whether pictures are listed; on unless the reader switched them off. */
   private showImages(): boolean {
     return localStorage.getItem(SHOW_IMAGES_KEY) !== '0';
+  }
+
+  /** Same for spreadsheets. */
+  private showTables(): boolean {
+    return localStorage.getItem(SHOW_TABLES_KEY) !== '0';
   }
 
   private hasHeadings(): boolean {
@@ -266,7 +277,7 @@ export default class TocPanel extends SidePanel {
         + this.escapeHTML(entry.text);
       const label = this.escapeAttribute(entry.text);
       const searchText = this.escapeAttribute(entry.path.toLocaleLowerCase());
-      const kindClass = entry.kind === 'image' ? ' toc-item-image' : '';
+      const kindClass = entry.kind === 'image' ? ' toc-item-image' : (entry.kind === 'table' ? ' toc-item-table' : '');
       html += `<li class="toc-item${kindClass}" style="padding-left:${indent}px" data-toc-search-text="${searchText}" data-toc-target="${id}">`;
       html += '<div class="toc-entry d-flex align-items-center">';
       html += `<a href="#${encodeURIComponent(entry.id)}" class="toc-link flex-grow-1 py-1 px-2 rounded ${fontClass}" ${fontSize} data-toc-target="${id}">${text}</a>`;
@@ -279,12 +290,17 @@ export default class TocPanel extends SidePanel {
     }
     html += '</ul>';
     container.innerHTML = html;
-    container.classList.toggle('toc-hide-images', !this.showImages());
-    const imagesToggle = document.getElementById('tocShowImages') as HTMLInputElement | null;
-    if (imagesToggle) {
-      imagesToggle.checked = this.showImages();
-      imagesToggle.closest('.toc-images-toggle')?.toggleAttribute('hidden', !entries.some(entry => entry.kind === 'image'));
-    }
+    // Spreadsheets and pictures can each be switched off; the switch for a
+    // kind only appears when the document has some.
+    (['image', 'table'] as const).forEach(kind => {
+      const shown = kind === 'image' ? this.showImages() : this.showTables();
+      container.classList.toggle(`toc-hide-${kind === 'image' ? 'images' : 'tables'}`, !shown);
+      const toggle = document.getElementById(kind === 'image' ? 'tocShowImages' : 'tocShowTables') as HTMLInputElement | null;
+      if (toggle) {
+        toggle.checked = shown;
+        toggle.closest('.toc-leaf-toggle')?.toggleAttribute('hidden', !entries.some(entry => entry.kind === kind));
+      }
+    });
 
     // Attach click handlers for smooth scrolling
     container.querySelectorAll('.toc-link').forEach(link => {
