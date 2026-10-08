@@ -176,13 +176,21 @@
                     <button type='button' class='btn btn-link p-0 ml-2' data-action='edit-openiris-link' data-current-url='{{ App.Teams.teamArr.openiris_url|default('https://reservation-bsse.openiris.io/#!/scheduler/timeline') }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit OpenIRIS link'|trans }}'><i class='fas fa-pen fa-fw fa-xs' aria-hidden='true'></i></button>
                   {% endif %}
                 </div>
-                {% set moorlabWikiUrl = App.Teams.teamArr.moorlab_wiki_url|default('https://wiki-bsse.ethz.ch/spaces/DBSSEMOOR/pages/213941413/D-BSSE+Moor+Group+Home') %}
-                <div class='dropdown-item d-flex align-items-center justify-content-between'>
-                  <a id='moorlabWikiLink' href='{{ moorlabWikiUrl }}' target='_blank' rel='noopener noreferrer'><i class='fas fa-arrow-up-right-from-square fa-fw mr-1'></i>{{ 'MoorLab Wiki'|trans }}</a>
-                  {% if App.Users.isAdmin %}
-                    <button type='button' class='btn btn-link p-0 ml-2' data-action='edit-moorlab-wiki-link' data-current-url='{{ moorlabWikiUrl }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit MoorLab Wiki link'|trans }}'><i class='fas fa-pen fa-fw fa-xs' aria-hidden='true'></i></button>
-                  {% endif %}
-                </div>
+                {# Links any team admin can change; each is a column on the team (see TeamParam). #}
+                {% set editableLinks = [
+                  {'id': 'moorlabWikiLink', 'field': 'moorlab_wiki_url', 'label': 'MoorLab Wiki', 'default': 'https://wiki-bsse.ethz.ch/spaces/DBSSEMOOR/pages/213941413/D-BSSE+Moor+Group+Home'},
+                  {'id': 'ethisLink', 'field': 'ethis_url', 'label': 'ETHIS', 'default': 'https://ethis.ethz.ch'},
+                  {'id': 'moorlabZoomLink', 'field': 'moorlab_zoom_url', 'label': 'MoorLab Zoom', 'default': 'https://ethz.zoom.us/j/6870256161'},
+                ] %}
+                {% for editableLink in editableLinks %}
+                  {% set editableLinkUrl = App.Teams.teamArr[editableLink.field] ?? editableLink.default %}
+                  <div class='dropdown-item d-flex align-items-center justify-content-between'>
+                    <a id='{{ editableLink.id }}' href='{{ editableLinkUrl }}' target='_blank' rel='noopener noreferrer'><i class='fas fa-arrow-up-right-from-square fa-fw mr-1'></i>{{ editableLink.label|trans }}</a>
+                    {% if App.Users.isAdmin %}
+                      <button type='button' class='btn btn-link p-0 ml-2' data-action='edit-team-link' data-field='{{ editableLink.field }}' data-link-id='{{ editableLink.id }}' data-label='{{ editableLink.label }}' data-current-url='{{ editableLinkUrl }}' title='{{ 'Edit'|trans }}' aria-label='{{ 'Edit link'|trans }}: {{ editableLink.label }}'><i class='fas fa-pen fa-fw fa-xs' aria-hidden='true'></i></button>
+                    {% endif %}
+                  </div>
+                {% endfor %}
               </div>
             </div>
 

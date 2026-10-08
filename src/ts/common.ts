@@ -1120,14 +1120,17 @@ on('edit-labcollector-inventory-link', (el: HTMLElement) => {
   }).catch((error: Error) => notify.error(error.message));
 });
 
-on('edit-moorlab-wiki-link', (el: HTMLElement) => {
-  const link = document.getElementById('moorlabWikiLink') as HTMLAnchorElement | null;
-  if (!link) return;
+// The editable team links under Links (MoorLab Wiki, ETHIS, MoorLab Zoom): the button names the
+// team column to change (data-field) and the link element to update (data-link-id).
+on('edit-team-link', (el: HTMLElement) => {
+  const { field, linkId, label } = el.dataset;
+  const link = linkId ? document.getElementById(linkId) as HTMLAnchorElement | null : null;
+  if (!field || !link) return;
   const currentUrl = el.dataset.currentUrl ?? link.href;
-  const nextUrl = window.prompt(i18next.t('Enter the MoorLab Wiki URL'), currentUrl);
+  const nextUrl = window.prompt(i18next.t('Enter the URL for {{name}}', { name: label ?? '' }), currentUrl);
   if (nextUrl === null || nextUrl.trim() === '' || nextUrl.trim() === currentUrl) return;
   const trimmed = nextUrl.trim();
-  ApiC.patch(`${Model.Team}/current`, {moorlab_wiki_url: trimmed}).then(() => {
+  ApiC.patch(`${Model.Team}/current`, { [field]: trimmed }).then(() => {
     link.href = trimmed;
     el.dataset.currentUrl = trimmed;
     notify.success();

@@ -518,15 +518,16 @@ everyone else only read it.
 - `docker-compose.yml` — mounts for `web/whats-new.php` and, for quick edits during development, the data file, the template and the pictures folder
 - `whats-new-screenshots/` — `process.py` turns screenshots dropped in `inbox/` into pictures (crop, blank out private areas, outline); see its README
 
-## MoorLab Wiki link
+## MoorLab Wiki, ETHIS and MoorLab Zoom links
 
-A third editable link under **Links** in the top bar, next to LabCollector and OpenIRIS. It is
-stored per team and team admins edit it with the pencil next to it.
+Three more editable links under **Links** in the top bar, next to LabCollector and OpenIRIS:
+MoorLab Wiki (`moorlab_wiki_url`), ETHIS (`ethis_url`, `https://ethis.ethz.ch`) and MoorLab Zoom
+(`moorlab_zoom_url`). Each is stored per team and team admins edit it with the pencil next to it.
 
-- `src/sql/custom/079_moorlab_wiki_link.sql` — adds `teams.moorlab_wiki_url` (default: the D-BSSE Moor Group home page), registered in `CustomMigrationRunner`
-- `src/Params/TeamParam.php` — validates it as an optional URL
-- `src/templates/head.html` — the menu entry and its edit button
-- `src/ts/common.ts` — the `edit-moorlab-wiki-link` action
+- `src/sql/custom/079_moorlab_wiki_link.sql`, `080_ethis_link.sql`, `081_moorlab_zoom_link.sql` — add the `teams` columns with their default URLs, registered in `CustomMigrationRunner`
+- `src/Params/TeamParam.php` — validates them as optional URLs
+- `src/templates/head.html` — the three entries are generated from one list (`editableLinks`), so adding another is one line plus a column and a validator entry
+- `src/ts/common.ts` — the shared `edit-team-link` action
 
 ## Spreadsheets in the table of contents
 

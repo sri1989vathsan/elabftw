@@ -118,6 +118,8 @@ final class CustomMigrationRunner
         '077_order_autoadvance_attachment.sql',
         '078_order_attachments_default_open.sql',
         '079_moorlab_wiki_link.sql',
+        '080_ethis_link.sql',
+        '081_moorlab_zoom_link.sql',
     );
 
     private Db $Db;
