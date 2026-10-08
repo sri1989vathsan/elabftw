@@ -1223,6 +1223,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       if (!iframe || spreadsheetOverlays.size === 0) return;
       profiler.count('overlays positioned', spreadsheetOverlays.size);
       const iframeRect = iframe.getBoundingClientRect();
+      const maxContentWidth = editor.getBody().getBoundingClientRect().width;
       Array.from(spreadsheetOverlays.entries()).forEach(([table, { el: overlay, syncActiveEditor }]) => {
         try {
           if (!table.isConnected || !editor.getBody().contains(table)) {
@@ -1281,7 +1282,6 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // remembered visibly did nothing until well after mouseup, if at
           // all -- looking like the resize simply didn't work.
           const naturalContentWidth = worksheetEl?.scrollWidth ?? tableRect.width;
-          const maxContentWidth = editor.getBody().getBoundingClientRect().width;
           // A narrow table (few/short columns) can be narrower than the
           // toolbar bars above it -- formatBarEl has many controls and
           // wraps onto a second line once its own container is narrower
@@ -1927,11 +1927,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // it should be) vanishing while scrolling, or while editing. Re-checked
   // here against the spacer's own rect too, not just the table's, before
   // actually destroying the live overlay.
-  const isNearViewport = (table: HTMLTableElement): boolean => {
+  const isNearViewport = (
+    table: HTMLTableElement,
+    iframeTop = getEditorIframe()?.getBoundingClientRect().top ?? 0,
+  ): boolean => {
     const margin = 400;
     const viewportTop = -margin;
     const viewportBottom = window.innerHeight + margin;
-    const iframeTop = getEditorIframe()?.getBoundingClientRect().top ?? 0;
     const inRange = (rect: DOMRect): boolean => rect.bottom + iframeTop >= viewportTop && rect.top + iframeTop <= viewportBottom;
     if (inRange(table.getBoundingClientRect())) return true;
     const spacer = spreadsheetSpacers.get(table);
@@ -1951,6 +1953,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // a transient collapse has almost always corrected itself by then.
   const pendingOverlayRemovals = new Set<HTMLTableElement>();
   const removeOverlayIfStillOutOfView = (table: HTMLTableElement): void => {
+    if (!spreadsheetOverlays.has(table)) return;
     if (pendingOverlayRemovals.has(table)) return;
     pendingOverlayRemovals.add(table);
     window.requestAnimationFrame(() => {
@@ -1992,8 +1995,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     if (visibilityFrame) return;
     visibilityFrame = window.requestAnimationFrame(() => {
       visibilityFrame = 0;
-      editor.getBody()?.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet').forEach(table => {
-        if (isNearViewport(table)) mountPreview(table);
+      // Read every position before mounting/removing anything. Interleaving
+      // DOM construction with the next table's rect forces repeated layout
+      // during a scroll, even when all overlays are only static previews.
+      const iframeTop = getEditorIframe()?.getBoundingClientRect().top ?? 0;
+      const visibility = Array.from(editor.getBody()?.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet') ?? [])
+        .map(table => ({ table, near: isNearViewport(table, iframeTop) }));
+      visibility.forEach(({ table, near }) => {
+        if (near) mountPreview(table);
         else removeOverlayIfStillOutOfView(table);
       });
     });
