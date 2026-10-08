@@ -40,3 +40,6 @@ src/ts/langs/*.js
 .yarn
 .DS_Store
 /.env
+
+# What's new screenshot inbox (originals stay local)
+whats-new-screenshots/inbox/
