@@ -59,7 +59,7 @@
     {# TABLE LAYOUT (0) #}
     {% if App.Users.userData.uploads_layout == 0 and Entity.entityData.uploads %}
       {% include 'filter-input-snippet.html' with {'target': 'uploadsTable'} %}
-      <div class='table'>
+      <div class='table uploads-table-wrap'>
         <table class='table mt-3' aria-label='{{ 'Attached files'|trans }}' data-table-sort='true'>
           <thead>
             <tr>
