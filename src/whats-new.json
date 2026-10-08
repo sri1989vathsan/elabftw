@@ -90,7 +90,7 @@
     "title": "More reliable spreadsheet editing",
     "summary": "Formulas, fill-drag, undo and cell formatting behave more predictably, in both the inline editor and the popup.",
     "details": [
-      "Fill-drag keeps $ absolute references fixed, for example =B3*$C$1/50.",
+      "Fill-drag keeps absolute references (the ones written with a dollar sign) fixed, so a formula copied down still points at the same cell.",
       "Undo in a spreadsheet only undoes spreadsheet edits, and undo in the text leaves tables alone.",
       "Tab and Enter move between cells, and selected cells and fill-drag are clearly highlighted.",
       "Fixed cell formatting in the popup and a case where saving could blank cells."
@@ -139,6 +139,26 @@
     ],
     "image": "",
     "imageAlt": "A notification about newly shared access"
+  },
+  {
+    "id": "activity-calendar",
+    "date": "2026-09-16",
+    "area": "Tasks and calendar",
+    "title": "An activity calendar for deadlines and tasks",
+    "summary": "See every deadline in one calendar: your scheduled tasks together with the unfinished steps of your experiments and resources.",
+    "details": [
+      "Open it from the calendar icon in the left sidebar. A badge counts what is overdue or due within the next hour.",
+      "A month grid shows each day's items as small count pills, with clear states for Today, the day you selected, and overdue days. Collapse the grid when you only want the list.",
+      "Switch between Day, Week and Month views, and hide weekends if you don't need them. The Today button and 'All visible dates' jump you back or show everything in range.",
+      "Below the grid, an agenda lists the items for what you selected, ordered by exact time. Each card says where it came from: a personal task, or a step of an experiment or resource.",
+      "Click a step to open its experiment or resource, and mark steps and tasks done right from the agenda, the same way as on the experiment page.",
+      "The User and Team switch decides whose experiment and resource steps you see.",
+      "Give a task a title, notes, an exact date and time, and a reminder: at the deadline, 15 minutes, 1 hour, 1 day or 1 week before, or a custom number of minutes.",
+      "Reminders appear as one grouped, collapsible banner that stays as you move between pages, and they also arrive as notifications and email, following your existing step-deadline preference.",
+      "Subscribe to your deadlines from Google Calendar or Apple Calendar with a private link from the Calendar tab. The link is read-only, and you can regenerate or revoke it at any time."
+    ],
+    "image": "",
+    "imageAlt": "The activity calendar panel with the month grid and the agenda below it"
   },
   {
     "id": "left-sidebar",
