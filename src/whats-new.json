@@ -13,10 +13,10 @@
     "image": "spreadsheet-previews.jpg",
     "imageAlt": "A spreadsheet shown as a light preview while scrolling, outlined; clicking it opens the full editor",
     "highlight": {
-      "x": 6.8,
-      "y": 57.8,
-      "w": 52.3,
-      "h": 37.1,
+      "x": 3.3,
+      "y": 15.2,
+      "w": 92.2,
+      "h": 79.6,
       "label": "Click a table to edit it"
     }
   },
@@ -33,10 +33,10 @@
     "image": "list-indent.jpg",
     "imageAlt": "Three bullet lines selected in the editor, outlined; Tab indents them together",
     "highlight": {
-      "x": 7.5,
-      "y": 68.5,
-      "w": 23.0,
-      "h": 15.2,
+      "x": 10.5,
+      "y": 42.3,
+      "w": 39.5,
+      "h": 53.8,
       "label": "Select lines, press Tab"
     }
   },
@@ -54,10 +54,10 @@
     "image": "template-version-history.jpg",
     "imageAlt": "The template version history popup showing a version with its Restore button and edit history, outlined",
     "highlight": {
-      "x": 35.8,
-      "y": 15.2,
-      "w": 63.3,
-      "h": 24.4,
+      "x": 35.7,
+      "y": 31.0,
+      "w": 63.7,
+      "h": 49.6,
       "label": "A version, with Restore"
     }
   },
@@ -75,11 +75,11 @@
     "image": "spreadsheet-insert-and-view.jpg",
     "imageAlt": "The Insert menu's Spreadsheet submenu with the drag-to-size grid, outlined",
     "highlight": {
-      "x": 37.2,
-      "y": 9.4,
-      "w": 22.2,
-      "h": 48.2,
-      "label": "Insert > Spreadsheet: drag to pick a size"
+      "x": 43.5,
+      "y": 2.7,
+      "w": 52.6,
+      "h": 92.7,
+      "label": "Drag to pick a size"
     }
   },
   {
@@ -140,10 +140,10 @@
     "image": "spreadsheet-editing.jpg",
     "imageAlt": "A spreadsheet with a selected cell, its formula in the formula bar and the formatting toolbar above, outlined",
     "highlight": {
-      "x": 6.9,
-      "y": 54.1,
-      "w": 61.9,
-      "h": 12.8,
+      "x": 2.9,
+      "y": 18.0,
+      "w": 95.2,
+      "h": 27.1,
       "label": "Formula bar and formatting toolbar"
     }
   },
@@ -160,10 +160,10 @@
     "image": "navigation.jpg",
     "imageAlt": "The top bar with the More menu open, showing Boards, Orders, Links and Tools",
     "highlight": {
-      "x": 52.5,
-      "y": 6.0,
-      "w": 25.4,
-      "h": 54.2,
+      "x": 14.3,
+      "y": 9.9,
+      "w": 72.5,
+      "h": 87.8,
       "label": "The More menu"
     }
   },
@@ -230,10 +230,10 @@
     "image": "activity-calendar.jpg",
     "imageAlt": "The activity calendar panel in the left sidebar with the month grid, Day, Week and Month buttons and the legend, outlined",
     "highlight": {
-      "x": 21.6,
-      "y": 23.7,
-      "w": 67.5,
-      "h": 60.2,
+      "x": 23.3,
+      "y": 25.3,
+      "w": 65.1,
+      "h": 61.0,
       "label": "Month grid, views and legend"
     }
   },
@@ -256,10 +256,10 @@
     "imageAlt": "The left sidebar: the rail of tabs (folders, search, quick search, to-do, calendar) with the calendar panel open, rail outlined",
     "highlight": {
       "x": 0.0,
-      "y": 13.9,
-      "w": 11.0,
-      "h": 33.1,
-      "label": "The sidebar rail"
+      "y": 14.0,
+      "w": 10.5,
+      "h": 33.3,
+      "label": "Sidebar tabs"
     }
   }
 ]
