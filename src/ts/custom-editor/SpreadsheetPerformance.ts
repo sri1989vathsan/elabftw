@@ -69,3 +69,79 @@ export function createSpreadsheetRepaintQueue(repaint: () => void, clock: Spread
     },
   };
 }
+
+export interface SpreadsheetProfiler {
+  readonly enabled: boolean;
+  /** Returns a timestamp to pass to end(); 0 when profiling is off. */
+  start(): number;
+  end(label: string, startedAt: number): void;
+  count(label: string, amount?: number): void;
+  summary(): Record<string, { count: number; totalMs: number; maxMs: number; avgMs: number }>;
+  reset(): void;
+}
+
+/**
+ * Opt-in timing for the spreadsheet overlays. Off unless
+ * localStorage['elabftw-spreadsheet-perf'] === '1' (reload to apply). Prints
+ * one summary to the console shortly after activity settles, and exposes
+ * window.elabftwSpreadsheetPerf.{summary,reset} for manual reads. Records
+ * nothing and costs one boolean check per call when disabled.
+ */
+export function createSpreadsheetProfiler(
+  log: (message: string, data: unknown) => void = (message, data) => console.log(message, data),
+): SpreadsheetProfiler {
+  let enabled = false;
+  try {
+    enabled = window.localStorage.getItem('elabftw-spreadsheet-perf') === '1';
+  } catch {
+    enabled = false;
+  }
+  const stats = new Map<string, { count: number; totalMs: number; maxMs: number }>();
+  let flushTimer: number | null = null;
+  const summary = (): Record<string, { count: number; totalMs: number; maxMs: number; avgMs: number }> => {
+    const result: Record<string, { count: number; totalMs: number; maxMs: number; avgMs: number }> = {};
+    stats.forEach((value, key) => {
+      result[key] = {
+        count: value.count,
+        totalMs: Math.round(value.totalMs * 10) / 10,
+        maxMs: Math.round(value.maxMs * 10) / 10,
+        avgMs: Math.round((value.totalMs / value.count) * 100) / 100,
+      };
+    });
+    return result;
+  };
+  const scheduleFlush = (): void => {
+    if (flushTimer !== null) window.clearTimeout(flushTimer);
+    flushTimer = window.setTimeout(() => {
+      flushTimer = null;
+      log('[spreadsheet-perf] activity settled; summary since last reset', summary());
+    }, 1500);
+  };
+  const profiler: SpreadsheetProfiler = {
+    enabled,
+    start: () => (enabled ? performance.now() : 0),
+    end(label, startedAt) {
+      if (!enabled) return;
+      const elapsed = performance.now() - startedAt;
+      const entry = stats.get(label) ?? { count: 0, totalMs: 0, maxMs: 0 };
+      entry.count++;
+      entry.totalMs += elapsed;
+      entry.maxMs = Math.max(entry.maxMs, elapsed);
+      stats.set(label, entry);
+      scheduleFlush();
+    },
+    count(label, amount = 1) {
+      if (!enabled) return;
+      const entry = stats.get(label) ?? { count: 0, totalMs: 0, maxMs: 0 };
+      entry.count += amount;
+      stats.set(label, entry);
+      scheduleFlush();
+    },
+    summary,
+    reset: () => stats.clear(),
+  };
+  if (enabled) {
+    (window as unknown as { elabftwSpreadsheetPerf?: SpreadsheetProfiler }).elabftwSpreadsheetPerf = profiler;
+  }
+  return profiler;
+}

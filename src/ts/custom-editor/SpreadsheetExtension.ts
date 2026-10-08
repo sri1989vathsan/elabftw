@@ -23,7 +23,7 @@ import { RICH_SELECTION_ATTRIBUTE } from '../ClipboardContent';
 import TableIndentation from '../TableIndentation.class';
 import { isSortable } from '../TableSorting.class';
 import { captureSpreadsheetPositions, restoreSpreadsheetPositions } from './SpreadsheetUndo';
-import { createSpreadsheetLayoutGate, createSpreadsheetSnapshotCache } from './SpreadsheetPerformance';
+import { createSpreadsheetLayoutGate, createSpreadsheetProfiler, createSpreadsheetSnapshotCache } from './SpreadsheetPerformance';
 
 interface PdfTableDialogData {
   columns: string;
@@ -1014,6 +1014,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const enhancedTables = new WeakSet<HTMLTableElement>();
   let overlaySyncRunning = false;
   const layoutGate = createSpreadsheetLayoutGate();
+  const profiler = createSpreadsheetProfiler();
   const invalidateSpreadsheetLayout = (): void => layoutGate.invalidate(performance.now());
   // Cmd/Ctrl+Z is a whole-document snapshot in TinyMCE, not a per-element
   // diff -- an undo level added for an ordinary main-text edit captures
@@ -1180,13 +1181,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // overlay's still-stale in-memory content back into a table nothing
     // should be resurrecting.
     const discard = discardChanges || !table.isConnected || !editor.getBody().contains(table);
+    profiler.count(entry.isPreview ? 'preview destroyed' : 'grid destroyed');
     entry.destroy(discard);
     entry.el.remove();
     spreadsheetOverlays.delete(table);
     enhancedTables.delete(table);
   };
 
-  const syncOverlayPositions = (): void => {
+  const runOverlaySync = (): void => {
     // The requestAnimationFrame reschedule below is in a `finally` so this
     // loop can never permanently die from one bad frame -- previously, any
     // uncaught exception here (e.g. a transient zero-size/detached rect
@@ -1213,9 +1215,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // enhancement pass from scratch. Reschedule unconditionally instead;
     // only the per-frame work below is skipped when there's nothing to do.
     try {
-      if (!layoutGate.shouldMeasure(performance.now(), document.body.dataset.spreadsheetCellEditing === 'true')) return;
+      if (!layoutGate.shouldMeasure(performance.now(), document.body.dataset.spreadsheetCellEditing === 'true')) {
+        profiler.count('sync frames skipped by gate');
+        return;
+      }
       const iframe = getEditorIframe();
       if (!iframe || spreadsheetOverlays.size === 0) return;
+      profiler.count('overlays positioned', spreadsheetOverlays.size);
       const iframeRect = iframe.getBoundingClientRect();
       Array.from(spreadsheetOverlays.entries()).forEach(([table, { el: overlay, syncActiveEditor }]) => {
         try {
@@ -1439,6 +1445,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     }
   };
 
+  // Frame time of one positioning pass over every overlay (measured frames
+  // only; frames the gate skips are counted separately in runOverlaySync).
+  const syncOverlayPositions = (): void => {
+    const startedAt = profiler.start();
+    runOverlaySync();
+    profiler.end('sync frame (ms)', startedAt);
+  };
+
   const ensureSyncLoop = (): void => {
     invalidateSpreadsheetLayout();
     if (overlaySyncRunning) return;
@@ -1571,7 +1585,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // Apply any mutations not yet delivered before trusting the cache.
     if (observer) invalidateExtractions(observer.takeRecords());
     const cached = extractionCache.get(table);
-    if (cached) return structuredClone(cached);
+    if (cached) {
+      profiler.count('extraction cache hit');
+      return structuredClone(cached);
+    }
+    profiler.count('extraction cache miss');
     const extracted = extractFromTable(table);
     extractionCache.set(table, structuredClone(extracted));
     return extracted;
@@ -1598,6 +1616,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const mountPreview = (table: HTMLTableElement): void => {
     if (!editor.getBody().contains(table)) return;
     if (spreadsheetOverlays.has(table)) return;
+    const mountStartedAt = profiler.start();
     // Built from the grid's own markup and classes so it looks identical.
     // Notebook-style tables aren't mirrored there; they get a plain cloned
     // table under a placeholder bar instead.
@@ -1642,14 +1661,17 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       isPreview: true,
     });
     ensureSyncLoop();
+    profiler.end('preview built (ms)', mountStartedAt);
   };
 
   const activateTable = (table: HTMLTableElement, selection?: { col: number; row: number }): void => {
     const existing = spreadsheetOverlays.get(table);
     if (existing && !existing.isPreview) return;
+    const activateStartedAt = profiler.start();
     removeOverlay(table, true);
     pendingInitialSelection.set(table, selection);
     enhanceTable(table);
+    profiler.end('click to grid mounted (ms, grid cells appear a few frames later)', activateStartedAt);
     setActiveSpreadsheetTable(table);
     editor.dispatch('ElabftwSpreadsheetSelected', { table });
     tableIndentation.trackSelectedTable(table);
@@ -1670,7 +1692,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const tableUid = ensureSpreadsheetUid(table);
     if (!latestTableContent.has(tableUid)) latestTableContent.set(tableUid, table.outerHTML);
     if (!tableCellHistories.has(tableUid)) tableCellHistories.set(tableUid, { undo: [], redo: [] });
+    const extractStartedAt = profiler.start();
     const extracted = extractCached(table);
+    profiler.end('table extraction (ms)', extractStartedAt);
     const initialSelection = pendingInitialSelection.get(table);
     pendingInitialSelection.delete(table);
     // Reconciles this table's rows against its own saved rowHeights right
@@ -1694,6 +1718,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // Set once buildReadOnlySpreadsheetHost returns below -- referenced
     // from inside onOpenFullEditor, one of the very options passed to it.
     let flushOverlay: (() => void) | null = null;
+    const hostStartedAt = profiler.start();
     const {
       host: overlay, flush, destroy, syncActiveEditor,
     } = buildReadOnlySpreadsheetHost(extracted, {
@@ -1739,6 +1764,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       },
     });
     flushOverlay = flush;
+    profiler.end('grid host built (ms)', hostStartedAt);
+    profiler.count('grid mounted');
     overlay.classList.add('elabftw-spreadsheet-editor-overlay');
     // Passive bookkeeping only (never steals focus, unlike editor.selection.
     // select() would) -- lets table-scoped actions like indent/outdent find
