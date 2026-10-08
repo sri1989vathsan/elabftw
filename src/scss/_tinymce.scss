@@ -3,17 +3,20 @@
  * @license AGPL-3.0
  */
 
+/* This file is copied into the editor's stylesheet as plain CSS, without being
+ * compiled (see src/tools/yarn-plugin-tinymce.js). Use block comments only:
+ * a double-slash line comment is not CSS and breaks whatever follows it. */
 .image figure,
 figure {
-  // A column, so the caption can be placed above the picture (see below)
-  // while the figure itself stays a block that can float or center.
+  /* A column, so the caption can be placed above the picture (see below)
+   * while the figure itself stays a block that can float or center. */
   align-items: center;
   display: flex;
   flex-direction: column;
   text-align: center;
 }
 
-// Picture captions are shown above the picture, not under it.
+/* Picture captions are shown above the picture, not under it. */
 .image figure > figcaption,
 figure > figcaption {
   order: -1;
@@ -36,10 +39,10 @@ figure > figcaption {
   word-break: break-word;
 }
 
-// Keep the editor's text and caret scale independent of the document's
-// intrinsic width. An inline spreadsheet uses a fixed overlay while its
-// backing table remains in the iframe's layout; without an explicit value,
-// a long cell can make the browser text-autosize the paragraph after it.
+/* Keep the editor's text and caret scale independent of the document's
+ * intrinsic width. An inline spreadsheet uses a fixed overlay while its
+ * backing table remains in the iframe's layout; without an explicit value,
+ * a long cell can make the browser text-autosize the paragraph after it. */
 .mce-content-body {
   text-size-adjust: 100%;
 }
