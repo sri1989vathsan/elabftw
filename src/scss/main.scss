@@ -6188,3 +6188,31 @@ div > .sticky-navbar {
     white-space: pre-wrap;
   }
 }
+
+// "What's new" page: a screenshot with an optional outlined box showing where
+// the feature is (positions are percentages of the picture, set per entry in
+// src/whats-new.json).
+.whats-new-shot {
+  position: relative;
+}
+
+.whats-new-highlight {
+  border: 3px solid var(--primary);
+  border-radius: 6px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  position: absolute;
+}
+
+.whats-new-highlight-label {
+  background: var(--primary);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  left: -3px;
+  padding: 0.1rem 0.4rem;
+  position: absolute;
+  top: calc(100% + 6px);
+  white-space: nowrap;
+}
