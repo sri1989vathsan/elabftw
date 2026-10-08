@@ -153,11 +153,18 @@ function handleBlockIndentShortcut(editor: Editor, event: KeyboardEvent): boolea
   const selectionNode = editor.selection.getNode() as HTMLElement;
   if (selectionNode.closest('td,th,[contenteditable="false"]')) return false;
 
-  const listItem = selectionNode.matches('li') ? selectionNode : selectionNode.closest('li');
+  // A selection spanning several lines reports its common ancestor (the
+  // whole <ul>/<ol>, or the body) as the node, which is neither an <li> nor
+  // inside a paragraph -- so look at every selected block instead. The
+  // Indent/Outdent commands themselves already act on all of them.
+  const selectedBlocks = editor.selection.getSelectedBlocks() as HTMLElement[];
+  const listItem = selectionNode.matches('li')
+    ? selectionNode
+    : selectionNode.closest('li') ?? selectedBlocks.find(item => item.matches('li'));
   const block = editor.dom.getParent(
     selectionNode,
     'p,h1,h2,h3,h4,h5,h6,blockquote,div,pre',
-  );
+  ) ?? selectedBlocks.find(item => item !== editor.getBody() && !item.closest('table'));
   if (!listItem && (!block || block === editor.getBody())) return false;
 
   event.preventDefault();
