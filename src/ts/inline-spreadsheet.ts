@@ -7986,6 +7986,18 @@ export function buildReadOnlySpreadsheetHost(
           // selection is a convenience only
         }
         options.initialSelection = undefined;
+        // Selecting a cell adds the fill handle and can make the grid's
+        // horizontal scrollbar appear. Nothing else is happening on the
+        // page after a click, so ask the overlay to re-measure itself now
+        // (and again once it has settled) instead of keeping its old height.
+        const resync = (): void => {
+          window.dispatchEvent(new CustomEvent('elabftw-spreadsheet-resync'));
+        };
+        resync();
+        window.requestAnimationFrame(() => {
+          resync();
+          window.setTimeout(resync, 300);
+        });
       }
       return;
     }
