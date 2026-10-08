@@ -292,7 +292,12 @@ export function getTinymceBaseConfig(page: string): object {
     // still drawing/interactive around it underneath -- a click landing on
     // one instead of the overlay could shrink the (invisible) real table
     // to nothing, which then hides the overlay standing in for it too.
-    object_resizing: 'table:not(.elabftw-spreadsheet),img',
+    //
+    // figure.image is listed too: a picture with a caption sits in a figure,
+    // and clicking it selects the figure, not the <img>. Without it in this
+    // list no handles appeared and a captioned picture could not be resized.
+    // Dragging a handle on the figure resizes the picture inside it.
+    object_resizing: 'table:not(.elabftw-spreadsheet),img,figure.image',
     browser_spellcheck: true,
     // location of the skin directory
     skin_url: isDark ? '/assets/tinymce_skins_dark' : '/assets/tinymce_skins',

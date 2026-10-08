@@ -32,6 +32,7 @@ use function explode;
 use function is_numeric;
 use function mb_substr;
 use function preg_match;
+use function pathinfo;
 use function preg_replace;
 use function random_bytes;
 use function bin2hex;
@@ -107,6 +108,13 @@ final class WhatsNewController extends AbstractHtmlController
             throw new ResourceNotFoundException();
         }
         $response = new BinaryFileResponse($path);
+        // Say what it is: the file's own type, not the page default.
+        $response->headers->set('Content-Type', match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            'gif' => 'image/gif',
+            default => 'image/jpeg',
+        });
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         // The file name changes whenever a picture is replaced, so it can be cached.
         $response->setPublic();
