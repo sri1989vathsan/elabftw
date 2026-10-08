@@ -55,21 +55,6 @@
     "imageAlt": "The drag-to-size grid for inserting a spreadsheet"
   },
   {
-    "id": "spreadsheet-editing",
-    "date": "2026-10-02",
-    "area": "Spreadsheets",
-    "title": "More reliable spreadsheet editing",
-    "summary": "Formulas, fill-drag, undo and cell formatting behave more predictably, in both the inline editor and the popup.",
-    "details": [
-      "Fill-drag keeps $ absolute references fixed, for example =B3*$C$1/50.",
-      "Undo in a spreadsheet only undoes spreadsheet edits, and undo in the text leaves tables alone.",
-      "Tab and Enter move between cells, and selected cells and fill-drag are clearly highlighted.",
-      "Fixed cell formatting in the popup and a case where saving could blank cells."
-    ],
-    "image": "",
-    "imageAlt": "Spreadsheet with a highlighted selection and fill handle"
-  },
-  {
     "id": "boards",
     "date": "2026-10-06",
     "area": "Boards",
@@ -99,6 +84,21 @@
     "imageAlt": "An order card with attachments"
   },
   {
+    "id": "spreadsheet-editing",
+    "date": "2026-10-02",
+    "area": "Spreadsheets",
+    "title": "More reliable spreadsheet editing",
+    "summary": "Formulas, fill-drag, undo and cell formatting behave more predictably, in both the inline editor and the popup.",
+    "details": [
+      "Fill-drag keeps $ absolute references fixed, for example =B3*$C$1/50.",
+      "Undo in a spreadsheet only undoes spreadsheet edits, and undo in the text leaves tables alone.",
+      "Tab and Enter move between cells, and selected cells and fill-drag are clearly highlighted.",
+      "Fixed cell formatting in the popup and a case where saving could blank cells."
+    ],
+    "image": "",
+    "imageAlt": "Spreadsheet with a highlighted selection and fill handle"
+  },
+  {
     "id": "navigation",
     "date": "2026-10-02",
     "area": "Navigation",
@@ -123,5 +123,23 @@
     ],
     "image": "",
     "imageAlt": "A notification about newly shared access"
+  },
+  {
+    "id": "left-sidebar",
+    "date": "2026-09-09",
+    "area": "Navigation",
+    "title": "A left sidebar with your tools one click away",
+    "summary": "A slim rail on the left keeps folders, search, to-dos and the calendar open next to your work, on every page.",
+    "details": [
+      "Folders: browse and manage your experiment folders, pin a favorite, and collapse branches you don't need.",
+      "Search: your saved filters and results, combined in one place.",
+      "Quick search and commands: press Ctrl/Cmd + K from anywhere.",
+      "To-do list: tasks and step deadlines sorted by due date, with a count of what is due.",
+      "Activity calendar: a Day, Week or Month view of deadlines, with your external calendar.",
+      "On experiment pages a table of contents tab lists the headings so you can jump around, and filter sections to print or copy.",
+      "The rail stays put while you scroll, and the last panel you opened is remembered."
+    ],
+    "image": "",
+    "imageAlt": "The left sidebar rail with its tabs, one panel open"
   }
 ]

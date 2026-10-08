@@ -49,7 +49,8 @@ final class WhatsNewController extends AbstractHtmlController
             throw new UnauthorizedException();
         }
 
-        return array_merge(parent::getData(), array('whatsNewEntries' => $this->getEntries()));
+        // The template draws its own heading (with an icon); hide the base one.
+        return array_merge(parent::getData(), array('hideTitle' => true, 'whatsNewEntries' => $this->getEntries()));
     }
 
     /**
