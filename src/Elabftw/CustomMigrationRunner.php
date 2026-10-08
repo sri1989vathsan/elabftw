@@ -117,6 +117,7 @@ final class CustomMigrationRunner
         '076_todolist_fulltext_search.sql',
         '077_order_autoadvance_attachment.sql',
         '078_order_attachments_default_open.sql',
+        '079_moorlab_wiki_link.sql',
     );
 
     private Db $Db;

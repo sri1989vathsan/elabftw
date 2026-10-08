@@ -1120,6 +1120,20 @@ on('edit-labcollector-inventory-link', (el: HTMLElement) => {
   }).catch((error: Error) => notify.error(error.message));
 });
 
+on('edit-moorlab-wiki-link', (el: HTMLElement) => {
+  const link = document.getElementById('moorlabWikiLink') as HTMLAnchorElement | null;
+  if (!link) return;
+  const currentUrl = el.dataset.currentUrl ?? link.href;
+  const nextUrl = window.prompt(i18next.t('Enter the MoorLab Wiki URL'), currentUrl);
+  if (nextUrl === null || nextUrl.trim() === '' || nextUrl.trim() === currentUrl) return;
+  const trimmed = nextUrl.trim();
+  ApiC.patch(`${Model.Team}/current`, {moorlab_wiki_url: trimmed}).then(() => {
+    link.href = trimmed;
+    el.dataset.currentUrl = trimmed;
+    notify.success();
+  }).catch(() => notify.error('Please enter a valid URL.'));
+});
+
 on('toggle-all-notif-settings', (el: HTMLElement) => {
   const checkbox = el as HTMLInputElement;
   const wantEmail = checkbox.dataset.suffix === '_email';

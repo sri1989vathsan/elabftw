@@ -42,7 +42,7 @@ final class TeamParam extends ContentParams
             'announcement', 'newcomer_banner',
             'onboarding_email_subject',
             'onboarding_email_body' => $this->getNullableContent(),
-            'openiris_url', 'labcollector_url' => $this->getNullableUrl(),
+            'openiris_url', 'labcollector_url', 'moorlab_wiki_url' => $this->getNullableUrl(),
             'labcollector_api_key' => $this->getNullableSecret(),
             'user_create_tag',
             'force_exp_tpl',

@@ -518,6 +518,16 @@ everyone else only read it.
 - `docker-compose.yml` — mounts for `web/whats-new.php` and, for quick edits during development, the data file, the template and the pictures folder
 - `whats-new-screenshots/` — `process.py` turns screenshots dropped in `inbox/` into pictures (crop, blank out private areas, outline); see its README
 
+## MoorLab Wiki link
+
+A third editable link under **Links** in the top bar, next to LabCollector and OpenIRIS. It is
+stored per team and team admins edit it with the pencil next to it.
+
+- `src/sql/custom/079_moorlab_wiki_link.sql` — adds `teams.moorlab_wiki_url` (default: the D-BSSE Moor Group home page), registered in `CustomMigrationRunner`
+- `src/Params/TeamParam.php` — validates it as an optional URL
+- `src/templates/head.html` — the menu entry and its edit button
+- `src/ts/common.ts` — the `edit-moorlab-wiki-link` action
+
 ## Spreadsheets in the table of contents
 
 Each spreadsheet is listed in the table of contents under the heading it sits in,
