@@ -40,9 +40,9 @@ use function strtolower;
 use function trim;
 
 /**
- * Lists the newest features of this installation. Team admins and sysadmins
- * can edit the entries, add new ones and attach pictures; see WhatsNewStore for
- * where the changes are kept.
+ * Lists the newest features of this installation. Sysadmins can edit the
+ * entries, add new ones and attach pictures; see WhatsNewStore for where the
+ * changes are kept.
  */
 final class WhatsNewController extends AbstractHtmlController
 {
@@ -94,9 +94,10 @@ final class WhatsNewController extends AbstractHtmlController
         ));
     }
 
+    /** Only sysadmins edit; team admins and everyone else just read. */
     private function canEdit(): bool
     {
-        return $this->app->Users->isAdmin || (int) ($this->app->Users->userData['is_sysadmin'] ?? 0) === 1;
+        return (int) ($this->app->Users->userData['is_sysadmin'] ?? 0) === 1;
     }
 
     private function imageResponse(string $name): Response

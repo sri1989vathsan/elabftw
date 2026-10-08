@@ -6222,7 +6222,16 @@ div > .sticky-navbar {
 // the feature is (positions are percentages of the picture, set per entry in
 // src/whats-new.json).
 .whats-new-shot {
-  // Clips the dimming shadow around the outline to the picture itself.
+  position: relative;
+
+  // Room under the picture for the outline's label, which can hang below it.
+  &.has-label {
+    margin-bottom: 1.5rem;
+  }
+}
+
+// Clips the dimming shadow around the outline to the picture itself.
+.whats-new-shot-clip {
   overflow: hidden;
   position: relative;
 }
@@ -6241,10 +6250,10 @@ div > .sticky-navbar {
   color: #fff;
   font-size: 0.75rem;
   font-weight: 700;
-  left: -3px;
+  overflow: hidden;
   padding: 0.1rem 0.4rem;
   position: absolute;
-  top: calc(100% + 6px);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

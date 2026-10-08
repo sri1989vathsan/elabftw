@@ -506,9 +506,9 @@ gap.
 
 ## Feature: What's new page
 
-A page listing the newest features, linked from the Tools menu. Team admins and
-sysadmins can edit entries, add new ones and attach pictures from the page itself;
-everyone else only reads it.
+A page listing the newest features, linked from the Tools menu. Sysadmins can edit
+entries, add new ones and attach pictures from the page itself; team admins and
+everyone else only read it.
 
 - `src/whats-new.json` — the entries shipped with the code (id, date, area, title, summary, details, optional `image`, `imageAlt` and `highlight` {x, y, w, h as % of the picture, label} outlining where the feature is)
 - `web/assets/images/whats-new/` — the pictures shipped with the code

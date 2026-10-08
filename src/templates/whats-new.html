@@ -32,12 +32,16 @@
       <div class='col-12 col-lg-6 mb-4' id='whats-new-{{ entry.id }}'>
         <div class='card h-100'>
           {% if entry.image %}
-            <div class='whats-new-shot'>
-              <img class='card-img-top' src='whats-new.php?image={{ entry.image|url_encode }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'>
-              {% if entry.highlight %}
-                <span class='whats-new-highlight' style='left: {{ entry.highlight.x }}%; top: {{ entry.highlight.y }}%; width: {{ entry.highlight.w }}%; height: {{ entry.highlight.h }}%;'>
-                  {% if entry.highlight.label %}<span class='whats-new-highlight-label'>{{ entry.highlight.label }}</span>{% endif %}
-                </span>
+            <div class='whats-new-shot{{ entry.highlight and entry.highlight.label ? ' has-label' }}'>
+              {# The clip keeps the dimming around the outline inside the picture; the label sits outside it so it is never cut off. #}
+              <div class='whats-new-shot-clip'>
+                <img class='card-img-top' src='whats-new.php?image={{ entry.image|url_encode }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'>
+                {% if entry.highlight %}
+                  <span class='whats-new-highlight' style='left: {{ entry.highlight.x }}%; top: {{ entry.highlight.y }}%; width: {{ entry.highlight.w }}%; height: {{ entry.highlight.h }}%;'></span>
+                {% endif %}
+              </div>
+              {% if entry.highlight and entry.highlight.label %}
+                <span class='whats-new-highlight-label' style='left: {{ entry.highlight.x }}%; top: calc({{ entry.highlight.y + entry.highlight.h }}% + 6px); max-width: calc(100% - {{ entry.highlight.x }}%);'>{{ entry.highlight.label }}</span>
               {% endif %}
             </div>
           {% endif %}
