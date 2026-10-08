@@ -112,6 +112,22 @@
     "imageAlt": "The top navigation bar with the More menu open"
   },
   {
+    "id": "cards-linked-experiments",
+    "date": "2026-10-02",
+    "area": "Boards",
+    "title": "Link experiments and resources to your cards",
+    "summary": "Connect a card to the experiments and resources it is about, and jump between them in one click.",
+    "details": [
+      "Link items while you create a card, or later from the card's detail view.",
+      "Use the search panel next to the card to find an experiment or resource, link it, or add it as a step in one move.",
+      "Each linked item shows its status colour and type, so you can see at a glance how the work is going.",
+      "A project's Linked items section and an All links summary list everything connected to that project, including subprojects.",
+      "Click a linked item to open the experiment or resource itself."
+    ],
+    "image": "",
+    "imageAlt": "A Boards card with linked experiments and resources, and the search panel beside it"
+  },
+  {
     "id": "notifications-feedback",
     "date": "2026-09-24",
     "area": "Collaboration",
