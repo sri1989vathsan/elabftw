@@ -11,12 +11,12 @@
       "The cell you clicked is selected straight away, and the table you are editing stays live while you scroll."
     ],
     "image": "spreadsheet-previews.jpg",
-    "imageAlt": "A spreadsheet shown as a light preview while scrolling, outlined; clicking it opens the full editor",
+    "imageAlt": "A spreadsheet shown as a light preview with its toolbar; clicking it opens the full editor",
     "highlight": {
-      "x": 3.3,
-      "y": 15.2,
-      "w": 92.2,
-      "h": 79.6,
+      "x": 1.1,
+      "y": 3.5,
+      "w": 97.7,
+      "h": 85.4,
       "label": "Click a table to edit it"
     }
   },
@@ -31,12 +31,12 @@
       "Nested lists move one level per press."
     ],
     "image": "list-indent.jpg",
-    "imageAlt": "Three bullet lines selected in the editor, outlined; Tab indents them together",
+    "imageAlt": "Several bullet lines selected in the editor; Tab indents them together",
     "highlight": {
-      "x": 10.5,
-      "y": 42.3,
-      "w": 39.5,
-      "h": 53.8,
+      "x": 4.0,
+      "y": 9.5,
+      "w": 89.0,
+      "h": 79.5,
       "label": "Select lines, press Tab"
     }
   },
@@ -52,13 +52,13 @@
       "Each version has its own edit history that you can restore individually."
     ],
     "image": "template-version-history.jpg",
-    "imageAlt": "The template version history popup showing a version with its Restore button and edit history, outlined",
+    "imageAlt": "The template version history popup listing versions, each with a Restore button and its edit history, outlined",
     "highlight": {
-      "x": 35.7,
-      "y": 31.0,
-      "w": 63.7,
-      "h": 49.6,
-      "label": "A version, with Restore"
+      "x": 1.4,
+      "y": 8.5,
+      "w": 95.7,
+      "h": 53.0,
+      "label": "Each version, with Restore and its edit history"
     }
   },
   {
@@ -73,12 +73,12 @@
       "Row heights now grow when a narrower column needs more wrapped lines."
     ],
     "image": "spreadsheet-insert-and-view.jpg",
-    "imageAlt": "The Insert menu's Spreadsheet submenu with the drag-to-size grid, outlined",
+    "imageAlt": "The Insert menu with the Spreadsheet size grid and its options, outlined",
     "highlight": {
-      "x": 43.5,
-      "y": 2.7,
-      "w": 52.6,
-      "h": 92.7,
+      "x": 42.4,
+      "y": 19.4,
+      "w": 56.5,
+      "h": 78.3,
       "label": "Drag to pick a size"
     }
   },
@@ -95,13 +95,13 @@
       "Duplicate a card into another project, and open a card straight into edit mode."
     ],
     "image": "boards.jpg",
-    "imageAlt": "The Boards page with a card showing its steps and a linked experiment, outlined",
+    "imageAlt": "The Boards page with a card showing its steps and linked experiments, outlined",
     "highlight": {
-      "x": 0.6,
-      "y": 57.1,
-      "w": 42.3,
-      "h": 35.7,
-      "label": "A card with its linked experiment"
+      "x": 4.9,
+      "y": 60.6,
+      "w": 29.3,
+      "h": 39.4,
+      "label": "A card with its steps and linked items"
     }
   },
   {
@@ -118,10 +118,10 @@
     "image": "orders.jpg",
     "imageAlt": "The Orders request form with bullet and numbered list buttons above the notes field, outlined",
     "highlight": {
-      "x": 4.4,
-      "y": 35.3,
-      "w": 91.5,
-      "h": 22.4,
+      "x": 7.6,
+      "y": 34.2,
+      "w": 89.9,
+      "h": 22.6,
       "label": "Notes with list buttons"
     }
   },
@@ -138,13 +138,13 @@
       "Fixed cell formatting in the popup and a case where saving could blank cells."
     ],
     "image": "spreadsheet-editing.jpg",
-    "imageAlt": "A spreadsheet with a selected cell, its formula in the formula bar and the formatting toolbar above, outlined",
+    "imageAlt": "A spreadsheet with a selected cell and its fill handle, outlined, under the spreadsheet toolbar",
     "highlight": {
-      "x": 2.9,
-      "y": 18.0,
-      "w": 95.2,
-      "h": 27.1,
-      "label": "Formula bar and formatting toolbar"
+      "x": 40.5,
+      "y": 45.2,
+      "w": 25.6,
+      "h": 15.4,
+      "label": "Selected cell with its fill handle"
     }
   },
   {
@@ -158,12 +158,12 @@
       "The LabCollector link keeps its URL editable from the Tools menu."
     ],
     "image": "navigation.jpg",
-    "imageAlt": "The top bar with the More menu open, showing Boards, Orders, Links and Tools",
+    "imageAlt": "The top bar with the More menu open, listing Boards, Orders, Links and Tools",
     "highlight": {
-      "x": 14.3,
-      "y": 9.9,
-      "w": 72.5,
-      "h": 87.8,
+      "x": 41.2,
+      "y": 7.7,
+      "w": 27.3,
+      "h": 88.9,
       "label": "The More menu"
     }
   },
@@ -181,12 +181,12 @@
       "Click a linked item to open the experiment or resource itself."
     ],
     "image": "cards-linked-experiments.jpg",
-    "imageAlt": "A card's detail view with a linked experiment under Linked items and as a step, outlined",
+    "imageAlt": "A card's detail view with linked experiments and steps, next to the search panel used to link them",
     "highlight": {
-      "x": 2.9,
-      "y": 41.9,
-      "w": 92.0,
-      "h": 33.1,
+      "x": 41.3,
+      "y": 42.3,
+      "w": 55.3,
+      "h": 46.6,
       "label": "Linked items and steps"
     }
   },
@@ -201,12 +201,12 @@
       "The dashboard announcement feed is easier to read."
     ],
     "image": "notifications-feedback.jpg",
-    "imageAlt": "The notifications dropdown with a notification that a user gave you access to a resource, outlined",
+    "imageAlt": "The notifications dropdown, with a notification that someone gave you access to a resource, outlined",
     "highlight": {
-      "x": 4.8,
-      "y": 48.0,
-      "w": 88.8,
-      "h": 17.6,
+      "x": -0.0,
+      "y": 51.3,
+      "w": 92.7,
+      "h": 18.1,
       "label": "Told when someone shares with you"
     }
   },
@@ -228,12 +228,12 @@
       "Subscribe to your deadlines from Google Calendar or Apple Calendar with a private link from the Calendar tab. The link is read-only, and you can regenerate or revoke it at any time."
     ],
     "image": "activity-calendar.jpg",
-    "imageAlt": "The activity calendar panel in the left sidebar with the month grid, Day, Week and Month buttons and the legend, outlined",
+    "imageAlt": "The activity calendar panel in the left sidebar: month grid, Day/Week/Month buttons and legend, outlined",
     "highlight": {
-      "x": 23.3,
-      "y": 25.3,
-      "w": 65.1,
-      "h": 61.0,
+      "x": 18.9,
+      "y": 25.2,
+      "w": 72.7,
+      "h": 57.6,
       "label": "Month grid, views and legend"
     }
   },
@@ -253,12 +253,12 @@
       "The rail stays put while you scroll, and the last panel you opened is remembered."
     ],
     "image": "left-sidebar.jpg",
-    "imageAlt": "The left sidebar: the rail of tabs (folders, search, quick search, to-do, calendar) with the calendar panel open, rail outlined",
+    "imageAlt": "The left sidebar: the rail of tabs (folders, search, quick search, to-do, calendar) next to an open panel, rail outlined",
     "highlight": {
-      "x": 0.0,
-      "y": 14.0,
-      "w": 10.5,
-      "h": 33.3,
+      "x": 0.2,
+      "y": 26.2,
+      "w": 8.0,
+      "h": 64.8,
       "label": "Sidebar tabs"
     }
   }

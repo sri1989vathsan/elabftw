@@ -1,0 +1,320 @@
+{
+  "activity-calendar": {
+    "crop": [
+      0.0265,
+      0.0,
+      0.9735,
+      1.0
+    ],
+    "highlight": [
+      0.2102,
+      0.2523,
+      0.708,
+      0.5757
+    ],
+    "label": "Month grid, views and legend",
+    "alt": "The activity calendar panel in the left sidebar: month grid, Day/Week/Month buttons and legend, outlined"
+  },
+  "left-sidebar": {
+    "crop": [
+      0.0066,
+      0.0,
+      0.9934,
+      0.4375
+    ],
+    "mask": [
+      [
+        0.1363,
+        0.3594,
+        0.4396,
+        0.0208
+      ],
+      [
+        0.1319,
+        0.3917,
+        0.8681,
+        0.0458
+      ]
+    ],
+    "highlight": [
+      0.0088,
+      0.1146,
+      0.0791,
+      0.2833
+    ],
+    "label": "Sidebar tabs",
+    "alt": "The left sidebar: the rail of tabs (folders, search, quick search, to-do, calendar) next to an open panel, rail outlined"
+  },
+  "boards": {
+    "mask": [
+      [
+        0.016,
+        0.4144,
+        0.0875,
+        0.0181
+      ],
+      [
+        0.057,
+        0.9639,
+        0.137,
+        0.0155
+      ],
+      [
+        0.364,
+        0.9699,
+        0.152,
+        0.0155
+      ],
+      [
+        0.6705,
+        0.8091,
+        0.161,
+        0.0155
+      ]
+    ],
+    "highlight": [
+      0.049,
+      0.6062,
+      0.293,
+      0.3938
+    ],
+    "label": "A card with its steps and linked items",
+    "alt": "The Boards page with a card showing its steps and linked experiments, outlined"
+  },
+  "cards-linked-experiments": {
+    "crop": [
+      0.0183,
+      0.0,
+      0.9817,
+      1.0
+    ],
+    "mask": [
+      [
+        0.4241,
+        0.2144,
+        0.1776,
+        0.0193
+      ],
+      [
+        0.0656,
+        0.3859,
+        0.2116,
+        0.0193
+      ],
+      [
+        0.0656,
+        0.4523,
+        0.2116,
+        0.0193
+      ],
+      [
+        0.0656,
+        0.5284,
+        0.2116,
+        0.0193
+      ],
+      [
+        0.0656,
+        0.5949,
+        0.2116,
+        0.0193
+      ],
+      [
+        0.0656,
+        0.6613,
+        0.2116,
+        0.0193
+      ],
+      [
+        0.0656,
+        0.7374,
+        0.2116,
+        0.0193
+      ],
+      [
+        0.0656,
+        0.8039,
+        0.2116,
+        0.0193
+      ],
+      [
+        0.0656,
+        0.88,
+        0.2116,
+        0.0193
+      ]
+    ],
+    "highlight": [
+      0.4241,
+      0.4234,
+      0.5427,
+      0.4662
+    ],
+    "label": "Linked items and steps",
+    "alt": "A card's detail view with linked experiments and steps, next to the search panel used to link them"
+  },
+  "list-indent": {
+    "highlight": [
+      0.0402,
+      0.0947,
+      0.8898,
+      0.7955
+    ],
+    "label": "Select lines, press Tab",
+    "alt": "Several bullet lines selected in the editor; Tab indents them together"
+  },
+  "navigation": {
+    "crop": [
+      0.012,
+      0.0155,
+      0.988,
+      0.9845
+    ],
+    "highlight": [
+      0.419,
+      0.0914,
+      0.27,
+      0.8753
+    ],
+    "label": "The More menu",
+    "alt": "The top bar with the More menu open, listing Boards, Orders, Links and Tools"
+  },
+  "notifications-feedback": {
+    "crop": [
+      0.0426,
+      0.0,
+      0.9574,
+      1.0
+    ],
+    "highlight": [
+      0.0426,
+      0.5131,
+      0.8876,
+      0.1814
+    ],
+    "label": "Told when someone shares with you",
+    "alt": "The notifications dropdown, with a notification that someone gave you access to a resource, outlined"
+  },
+  "orders": {
+    "crop": [
+      0.0,
+      0.1552,
+      0.335,
+      0.6874
+    ],
+    "mask": [
+      [
+        0.303,
+        0.2461,
+        0.083,
+        0.0266
+      ]
+    ],
+    "highlight": [
+      0.0255,
+      0.3902,
+      0.301,
+      0.1552
+    ],
+    "label": "Notes with list buttons",
+    "alt": "The Orders request form with bullet and numbered list buttons above the notes field, outlined"
+  },
+  "spreadsheet-editing": {
+    "mask": [
+      [
+        0.126,
+        0.0981,
+        0.155,
+        0.0101
+      ],
+      [
+        0.126,
+        0.1082,
+        0.155,
+        0.0303
+      ]
+    ],
+    "highlight": [
+      0.4045,
+      0.4517,
+      0.2555,
+      0.1544
+    ],
+    "label": "Selected cell with its fill handle",
+    "alt": "A spreadsheet with a selected cell and its fill handle, outlined, under the spreadsheet toolbar"
+  },
+  "spreadsheet-insert-and-view": {
+    "highlight": [
+      0.4238,
+      0.1942,
+      0.565,
+      0.7835
+    ],
+    "label": "Drag to pick a size",
+    "alt": "The Insert menu with the Spreadsheet size grid and its options, outlined"
+  },
+  "spreadsheet-previews": {
+    "highlight": [
+      0.011,
+      0.0347,
+      0.9765,
+      0.8542
+    ],
+    "label": "Click a table to edit it",
+    "alt": "A spreadsheet shown as a light preview with its toolbar; clicking it opens the full editor"
+  },
+  "template-version-history": {
+    "mask": [
+      [
+        0.3872,
+        0.1067,
+        0.2009,
+        0.0242
+      ],
+      [
+        0.3681,
+        0.303,
+        0.2009,
+        0.0242
+      ],
+      [
+        0.3681,
+        0.3879,
+        0.2009,
+        0.0242
+      ],
+      [
+        0.3597,
+        0.4727,
+        0.2009,
+        0.0242
+      ],
+      [
+        0.3597,
+        0.557,
+        0.2009,
+        0.0242
+      ],
+      [
+        0.3872,
+        0.6588,
+        0.2009,
+        0.0242
+      ],
+      [
+        0.3872,
+        0.8612,
+        0.2009,
+        0.0242
+      ]
+    ],
+    "highlight": [
+      0.0135,
+      0.0848,
+      0.9574,
+      0.5303
+    ],
+    "label": "Each version, with Restore and its edit history",
+    "alt": "The template version history popup listing versions, each with a Restore button and its edit history, outlined"
+  }
+}
