@@ -504,6 +504,16 @@ gap.
 - `schema214.sql` — Adds one private external-calendar token per account and the
   validated account-wide colour-theme setting
 
+## Feature: What's new page
+
+A page listing the newest features, linked from the Tools menu.
+
+- `src/whats-new.json` — the entries (id, date, area, title, summary, details, optional `image` file name and `imageAlt`); edit this file to add or change entries, newest date is shown first
+- `src/Controllers/WhatsNewController.php`, `web/whats-new.php`, `src/templates/whats-new.html` — the page itself
+- `web/assets/images/whats-new/` — screenshots referenced by an entry's `image` (an entry without one shows no picture)
+- `src/templates/head.html` — "What's new" item in the Tools dropdown
+- `docker-compose.yml` — mount for `web/whats-new.php`, like the other fork pages
+
 ## General Merge Notes
 
 - eLabFTW uses Yarn PnP (no `node_modules` directory) — packages are in zip archives

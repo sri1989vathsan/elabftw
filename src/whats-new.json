@@ -1,0 +1,127 @@
+[
+  {
+    "id": "spreadsheet-previews",
+    "date": "2026-10-08",
+    "area": "Spreadsheets",
+    "title": "Faster scrolling with several spreadsheets",
+    "summary": "Spreadsheets near the screen now appear as a light preview and become fully editable the moment you click them.",
+    "details": [
+      "Only the table you click gets the full editor, so scrolling past many tables stays smooth.",
+      "The preview matches the editor's look, column widths and row heights, so nothing jumps when you click.",
+      "The cell you clicked is selected straight away, and the table you are editing stays live while you scroll."
+    ],
+    "image": "",
+    "imageAlt": "A spreadsheet shown as a preview before clicking, and as the live editor after"
+  },
+  {
+    "id": "list-indent",
+    "date": "2026-10-08",
+    "area": "Editor",
+    "title": "Tab and Shift+Tab indent several list lines at once",
+    "summary": "Select multiple bullet or numbered lines and press Tab to indent them all, or Shift+Tab to outdent them.",
+    "details": [
+      "Works for bullet lists, numbered lists and several selected paragraphs.",
+      "Nested lists move one level per press."
+    ],
+    "image": "",
+    "imageAlt": "Three selected bullet lines being indented together"
+  },
+  {
+    "id": "template-version-history",
+    "date": "2026-10-07",
+    "area": "Templates",
+    "title": "Version history for templates",
+    "summary": "See every saved version of a template, compare revisions, and restore an older one without losing the current one.",
+    "details": [
+      "The history opens in a popup on the edit page.",
+      "Restoring a version makes it current and keeps the other versions.",
+      "Each version has its own edit history that you can restore individually."
+    ],
+    "image": "",
+    "imageAlt": "The template version history popup"
+  },
+  {
+    "id": "spreadsheet-insert-and-view",
+    "date": "2026-10-06",
+    "area": "Spreadsheets",
+    "title": "Insert a spreadsheet of any size, and handier tools in view mode",
+    "summary": "Drag across a grid to choose the size, like Insert table. View mode now has copy-table and auto-fit buttons.",
+    "details": [
+      "Spreadsheet is also in the classic Insert menu.",
+      "Copy the whole table in one click, and auto-fit rows or columns to their content.",
+      "Row heights now grow when a narrower column needs more wrapped lines."
+    ],
+    "image": "",
+    "imageAlt": "The drag-to-size grid for inserting a spreadsheet"
+  },
+  {
+    "id": "spreadsheet-editing",
+    "date": "2026-10-02",
+    "area": "Spreadsheets",
+    "title": "More reliable spreadsheet editing",
+    "summary": "Formulas, fill-drag, undo and cell formatting behave more predictably, in both the inline editor and the popup.",
+    "details": [
+      "Fill-drag keeps $ absolute references fixed, for example =B3*$C$1/50.",
+      "Undo in a spreadsheet only undoes spreadsheet edits, and undo in the text leaves tables alone.",
+      "Tab and Enter move between cells, and selected cells and fill-drag are clearly highlighted.",
+      "Fixed cell formatting in the popup and a case where saving could blank cells."
+    ],
+    "image": "",
+    "imageAlt": "Spreadsheet with a highlighted selection and fill handle"
+  },
+  {
+    "id": "boards",
+    "date": "2026-10-06",
+    "area": "Boards",
+    "title": "Project management is now Boards, with richer cards",
+    "summary": "Tasks are now cards, with status badges, deadlines, linked experiments and resources, and bulk actions.",
+    "details": [
+      "Cards show each linked experiment or resource with its status colour.",
+      "Select several cards to archive or delete them together.",
+      "Steps and comments can be collapsed, and deadlines show how urgent they are.",
+      "Duplicate a card into another project, and open a card straight into edit mode."
+    ],
+    "image": "",
+    "imageAlt": "A Boards card with status badges and linked items"
+  },
+  {
+    "id": "orders",
+    "date": "2026-10-06",
+    "area": "Orders",
+    "title": "Smoother ordering",
+    "summary": "Attachments can be reused, orders can advance and archive themselves, and notes support lists.",
+    "details": [
+      "Reuse an attachment across orders, and download it with its own button.",
+      "Orders can move from requested to ordered when a procurement ID appears, and archive after a set time.",
+      "Notes support bulleted and numbered lists, and long titles and file names wrap properly."
+    ],
+    "image": "",
+    "imageAlt": "An order card with attachments"
+  },
+  {
+    "id": "navigation",
+    "date": "2026-10-02",
+    "area": "Navigation",
+    "title": "A tidier top bar",
+    "summary": "The navigation bar keeps the key icons visible and folds the rest into a More menu.",
+    "details": [
+      "A Links dropdown groups shortcuts.",
+      "The LabCollector link keeps its URL editable from the Tools menu."
+    ],
+    "image": "",
+    "imageAlt": "The top navigation bar with the More menu open"
+  },
+  {
+    "id": "notifications-feedback",
+    "date": "2026-09-24",
+    "area": "Collaboration",
+    "title": "Better notifications and feedback",
+    "summary": "You are told when someone gives you access, and the Feedback board can sort by votes or date.",
+    "details": [
+      "Notifications arrive when you gain read access to an experiment or resource, even if you had access before.",
+      "The dashboard announcement feed is easier to read."
+    ],
+    "image": "",
+    "imageAlt": "A notification about newly shared access"
+  }
+]

@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class='container-fluid px-0'>
+  <div class='mb-4'>
+    <h1 class='mb-1'><i class='fas fa-star mr-2'></i>{{ 'What\'s new'|trans }}</h1>
+    <p class='text-muted mb-0'>{{ 'The newest features and improvements, newest first.'|trans }}</p>
+  </div>
+
+  {% if whatsNewEntries is empty %}
+    <div class='alert alert-info'>{{ 'Nothing to show yet.'|trans }}</div>
+  {% endif %}
+
+  <div class='row'>
+    {% for entry in whatsNewEntries %}
+      <div class='col-12 col-lg-6 mb-4' id='whats-new-{{ entry.id }}'>
+        <div class='card h-100'>
+          {% if entry.image %}
+            <img class='card-img-top' src='assets/images/whats-new/{{ entry.image }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'>
+          {% endif %}
+          <div class='card-body'>
+            <div class='mb-2'>
+              <span class='badge badge-primary mr-1'>{{ entry.area }}</span>
+              <span class='text-muted small'>{{ entry.date|date('j M Y') }}</span>
+            </div>
+            <h2 class='h4 card-title'>{{ entry.title }}</h2>
+            <p class='card-text'>{{ entry.summary }}</p>
+            {% if entry.details %}
+              <ul class='mb-0 pl-3'>
+                {% for detail in entry.details %}
+                  <li>{{ detail }}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock body %}
