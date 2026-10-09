@@ -110,6 +110,15 @@ export default class FavoriteFilters extends SidePanel {
       if (target.matches(
         '[data-favorite-filter-category], [data-favorite-filter-tag], [data-favorite-filter-status], [data-favorite-filter-owner]',
       )) {
+        const input = target as HTMLInputElement;
+        const group = input.closest<HTMLElement>('[data-favorite-target-group]')?.dataset.favoriteTargetGroup;
+        const select = document.getElementById('favoriteFilterTarget') as HTMLSelectElement | null;
+        if (group && select && select.value === 'all' && input.checked) {
+          // A category/status only means something for its own type: switch to it.
+          select.value = group;
+          this.updateTarget();
+          return;
+        }
         this.apply();
       }
     });
@@ -206,13 +215,12 @@ export default class FavoriteFilters extends SidePanel {
 
   updateTarget(): void {
     const target = this.getTarget();
-    // "All" has no single category/status group of its own -- category and
-    // status filters only make sense once a specific entity type is picked,
-    // so hide (and disable, see hasDetailedFilters()) both groups rather than
-    // falling back to one of them.
+    // "All" has no single category/status group of its own, so it lists both (a
+    // favourite must never be hidden). Ticking one switches Type to that group's
+    // own type, see the change listener in the constructor.
     const categoryGroup = target === 'all' ? null : this.getCategoryGroup(target);
     document.querySelectorAll<HTMLElement>('[data-favorite-target-group]').forEach(group => {
-      const isActive = categoryGroup !== null && group.dataset.favoriteTargetGroup === categoryGroup;
+      const isActive = categoryGroup === null || group.dataset.favoriteTargetGroup === categoryGroup;
       group.toggleAttribute('hidden', !isActive);
       group.querySelectorAll<HTMLInputElement>('input').forEach(input => {
         input.disabled = !isActive;
@@ -445,10 +453,7 @@ export default class FavoriteFilters extends SidePanel {
       const icon = document.createElement('i');
       icon.className = 'fas fa-link fa-fw';
       icon.setAttribute('aria-hidden', 'true');
-      const insertLabel = document.createElement('span');
-      insertLabel.className = 'ml-1';
-      insertLabel.textContent = 'Link';
-      insert.append(icon, insertLabel);
+      insert.append(icon);
       insert.addEventListener('click', () => {
         void this.insertResultLink(result, target, insert);
       });
@@ -466,10 +471,7 @@ export default class FavoriteFilters extends SidePanel {
       const textIcon = document.createElement('i');
       textIcon.className = 'fas fa-paragraph fa-fw';
       textIcon.setAttribute('aria-hidden', 'true');
-      const textLabel = document.createElement('span');
-      textLabel.className = 'ml-1';
-      textLabel.textContent = 'Add to text';
-      insertInText.append(textIcon, textLabel);
+      insertInText.append(textIcon);
       insertInText.addEventListener('click', () => {
         void this.insertResultInMainText(result, target, insertInText);
       });

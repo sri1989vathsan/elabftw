@@ -987,6 +987,16 @@ on('destroy-favtags', (el: HTMLElement) => {
   }
 });
 
+// Categories and statuses are only listed once a specific Type is selected, so a
+// favourite added while "All" is selected would be saved but stay hidden. Switch to
+// its own type so it shows up right away.
+const showFavoriteType = (type: string): void => {
+  const select = document.getElementById('favoriteFilterTarget') as HTMLSelectElement | null;
+  if (!select || select.value !== 'all' || !['experiments', 'resources'].includes(type)) return;
+  select.value = type;
+  FavoriteFiltersC.updateTarget();
+};
+
 on('create-favcategory', () => {
   const select = document.getElementById('favoriteCategorySelect') as HTMLSelectElement | null;
   if (!select?.value) return;
@@ -995,7 +1005,8 @@ on('create-favcategory', () => {
   ApiC.post(Model.FavCategory, {
     category_type: categoryType,
     category_id: parseInt(categoryId, 10),
-  }).then(() => FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']));
+  }).then(() => FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']))
+    .then(() => showFavoriteType(categoryType));
 });
 
 on('destroy-favcategory', (el: HTMLElement) => {
@@ -1016,7 +1027,8 @@ on('create-and-favorite-category', async () => {
   }
   input.setCustomValidity('');
 
-  const categoryType = FavoriteFiltersC.getTarget();
+  const target = FavoriteFiltersC.getTarget();
+  const categoryType = target === 'resources' || target === 'items_types' ? 'resources' : 'experiments';
   const endpoint = categoryType === 'experiments' ? 'experiments_categories' : 'resources_categories';
   const categoryId = await ApiC.post2location(`${Model.Team}/current/${endpoint}`, {
     name,
@@ -1028,6 +1040,7 @@ on('create-and-favorite-category', async () => {
   });
   input.value = '';
   await FavoriteFiltersC.reloadSections(['favoriteCategoriesDiv']);
+  showFavoriteType(categoryType);
 });
 
 on('create-favfilter', () => {
@@ -1039,7 +1052,8 @@ on('create-favfilter', () => {
     filter_type: filterType,
     target_type: targetType,
     target_id: parseInt(targetId, 10),
-  }).then(() => FavoriteFiltersC.reloadSections(['favoriteStatusesDiv', 'favoriteOwnersDiv']));
+  }).then(() => FavoriteFiltersC.reloadSections(['favoriteStatusesDiv', 'favoriteOwnersDiv']))
+    .then(() => { if (filterType === 'status') showFavoriteType(targetType); });
 });
 
 on('destroy-favfilter', (el: HTMLElement) => {

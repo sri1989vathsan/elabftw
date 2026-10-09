@@ -71,7 +71,7 @@
       </summary>
       <div class='favorite-filter-section-body' id='favoriteCategoriesDiv'>
       {% for categoryType in ['experiments', 'resources'] %}
-        <div data-favorite-target-group='{{ categoryType }}' {{ categoryType != favoriteFilterTarget ? 'hidden' }}>
+        <div data-favorite-target-group='{{ categoryType }}' {{ favoriteFilterTarget != 'all' and categoryType != favoriteFilterTarget ? 'hidden' }}>
           {% set favoriteCategoriesForType = App.favoriteCategoriesArr|filter(category => category.category_type == categoryType) %}
           {% for category in favoriteCategoriesForType %}
               <div class='favorite-filter-option d-flex align-items-center'>
@@ -139,7 +139,7 @@
       </summary>
       <div class='favorite-filter-section-body' id='favoriteStatusesDiv'>
       {% for statusType in ['experiments', 'resources'] %}
-        <div data-favorite-target-group='{{ statusType }}' {{ statusType != favoriteFilterTarget ? 'hidden' }}>
+        <div data-favorite-target-group='{{ statusType }}' {{ favoriteFilterTarget != 'all' and statusType != favoriteFilterTarget ? 'hidden' }}>
           {% set favoriteStatusesForType = App.favoriteFiltersArr|filter(filter => filter.filter_type == 'status' and filter.target_type == statusType) %}
           {% for status in favoriteStatusesForType %}
             <div class='favorite-filter-option d-flex align-items-center'>
