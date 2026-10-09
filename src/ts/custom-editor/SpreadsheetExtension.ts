@@ -1252,7 +1252,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
             return;
           }
           const tableRect = table.getBoundingClientRect();
-          overlay.style.position = 'fixed';
+          // Positioned in PAGE coordinates (absolute), not viewport coordinates
+          // (fixed): the browser then moves the layer together with the page while
+          // scrolling, in step with the text. With fixed positioning the layer is
+          // re-placed from script every frame, which trails the page's own scroll
+          // by a frame or two -- seen as tables wiggling when scrolling.
+          overlay.style.position = 'absolute';
           // Moved via `transform`, not `top`/`left` -- Firefox treats a
           // fixed-position element whose top/left are rewritten every
           // rAF frame as a "scroll-linked positioning effect" (it warns
@@ -1280,9 +1285,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // clipRight below are computed from these same rounded values
           // (via overlayTop/overlayLeft), so the clip-path stays in sync
           // with where the overlay is actually painted.
-          const translateX = Math.round(iframeRect.left + tableRect.left);
-          const translateY = Math.round(iframeRect.top + tableRect.top);
-          overlay.style.transform = `translate(${translateX}px, ${translateY}px)`;
+          const pageScrollX = window.scrollX;
+          const pageScrollY = window.scrollY;
+          const pageX = Math.round(iframeRect.left + tableRect.left + pageScrollX);
+          const pageY = Math.round(iframeRect.top + tableRect.top + pageScrollY);
+          overlay.style.transform = `translate(${pageX}px, ${pageY}px)`;
+          // Viewport position, for the clip below.
+          const translateX = pageX - pageScrollX;
+          const translateY = pageY - pageScrollY;
           // Height follows the grid's own current content (rows/columns can
           // change live as the user edits, well before the debounced commit
           // catches the -- until then stale -- real table's own rect up) --

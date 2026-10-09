@@ -7979,6 +7979,18 @@ export function buildReadOnlySpreadsheetHost(
   };
   if (editable) window.addEventListener('keydown', onDirectCellKey, true);
   if (editable) {
+    // Clicking a cell selects it, but in Chromium keyboard focus can stay in the
+    // page editor from before (its old caret), so typing lands in the page text
+    // instead of the selected cell. Pull focus into this grid on the press, the
+    // same as the popup does. jspreadsheet's own handling still runs after it.
+    sheetContainer.addEventListener('pointerdown', () => {
+      if (sheetContainer.contains(document.activeElement)) return;
+      const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea')
+        ?? sheetContainer.querySelector<HTMLElement>('.jss_spreadsheet');
+      sink?.focus({ preventScroll: true });
+    }, true);
+  }
+  if (editable) {
     // Commit the stable editor before jspreadsheet handles a click on a
     // different cell. Because commitRescueInput() no longer redraws the
     // worksheet, the original pointer event remains valid and jspreadsheet
