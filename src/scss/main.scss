@@ -3708,6 +3708,14 @@ body.html-tool-workspace-resizing * {
   overflow: hidden;
 }
 
+// A row number wrapped for a manually resized row must still be the click
+// target itself: jspreadsheet reads the row index (data-y) from the element
+// that was right-clicked, and the wrapper has none, so "Insert row above /
+// below" silently did nothing on those rows.
+.jss_row > .jss-cell-clip {
+  pointer-events: none;
+}
+
 .elabftw-row-resize-guide {
   border-top: 2px dashed var(--strongest);
   color: var(--strongest);

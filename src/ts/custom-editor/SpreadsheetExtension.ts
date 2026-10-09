@@ -738,7 +738,28 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       // from the real table's own (untouched) content, so this is a safe,
       // idempotent no-op on the common case where the overlay was never
       // actually removed.
-      if (existingTable && existingTable.isConnected) refreshTableOverlay(existingTable);
+      if (!existingTable) return;
+      // Firefox runs the "Discard unsaved changes?" confirm() with its own
+      // blur/focus handling around it, and the overlay has been seen missing
+      // after confirming. Rebuild now, then check again once focus and layout
+      // have settled, and surface any error instead of swallowing it.
+      const restoreOverlay = (): void => {
+        if (!existingTable.isConnected || !editor.getBody().contains(existingTable)) return;
+        try {
+          const entry = spreadsheetOverlays.get(existingTable);
+          if (!entry || !entry.el.isConnected) refreshTableOverlay(existingTable);
+        } catch (error) {
+          console.error('Could not restore the spreadsheet after Cancel', error);
+        }
+      };
+      try {
+        if (existingTable.isConnected) refreshTableOverlay(existingTable);
+      } catch (error) {
+        console.error('Could not restore the spreadsheet after Cancel', error);
+      }
+      window.requestAnimationFrame(restoreOverlay);
+      window.setTimeout(restoreOverlay, 250);
+      window.setTimeout(restoreOverlay, 1000);
     });
   };
 
@@ -1006,7 +1027,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const spreadsheetOverlays = new Map<HTMLTableElement, {
     el: HTMLElement;
     destroy: (discardChanges?: boolean) => void;
-    flush: () => void;
+    flush: (commitEditors?: boolean) => void;
     syncActiveEditor: () => void;
     /** Cheap static stand-in; upgraded to the real grid on first click. */
     isPreview?: boolean;
@@ -1978,7 +1999,51 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     });
   }, { rootMargin: '400px 0px' });
 
+  // Each table owns exactly one layout spacer (see spreadsheetSpacers). When a
+  // table node is replaced (undo, a rebuilt overlay), its old spacer is left
+  // behind with nothing to resize or remove it: a blank, undeletable gap under
+  // the table that stacks up with each such event.
+  const removeOrphanSpacers = (): void => {
+    const body = editor.getBody();
+    if (!body) return;
+    const owned = new Set<HTMLElement>();
+    body.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet').forEach(table => {
+      const spacer = spreadsheetSpacers.get(table);
+      if (spacer) owned.add(spacer);
+    });
+    body.querySelectorAll<HTMLElement>('[data-elabftw-spreadsheet-spacer]').forEach(spacer => {
+      if (!owned.has(spacer)) spacer.remove();
+    });
+  };
+
+  // While the spreadsheet popup is open, the page text behind it must not take
+  // input. If keyboard focus ever stays in (or returns to) the editor, typing
+  // over a selected table replaces it with the typed text. Block edits at the
+  // editor document's capture phase, ahead of TinyMCE's own handlers.
+  const popupIsOpen = (): boolean => document.querySelector('.inline-spreadsheet-dialog') !== null;
+  const blockEditorInputWhilePopupOpen = (event: Event): void => {
+    if (!popupIsOpen()) return;
+    if (event instanceof KeyboardEvent) {
+      // Copying is harmless and stays available.
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') return;
+      if (event.key === 'Tab' || event.key === 'Shift' || event.key === 'Control'
+        || event.key === 'Meta' || event.key === 'Alt') return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  const attachPopupInputGuard = (): void => {
+    const doc = editor.getDoc();
+    if (!doc) return;
+    ['keydown', 'keypress', 'beforeinput', 'paste', 'cut', 'drop'].forEach(name => {
+      doc.addEventListener(name, blockEditorInputWhilePopupOpen, true);
+    });
+  };
+  if (editor.initialized) attachPopupInputGuard();
+  else editor.on('init', attachPopupInputGuard);
+
   const enhanceAllTables = (): void => {
+    removeOrphanSpacers();
     Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
       .forEach(table => {
         if (observedTables.has(table)) return;
@@ -2038,6 +2103,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       });
   });
 
+  // A cell edit reaches the real table only after a 500ms debounce. Saving (or an
+  // autosave) inside that window would store the table without the last edit, which
+  // then only shows up in the inline overlay. Write out anything still pending
+  // before the editor reads its content.
+  editor.on('BeforeGetContent', () => {
+    spreadsheetOverlays.forEach(entry => entry.flush(false));
+  });
   editor.on('SetContent NodeChange', enhanceAllTables);
   // Snapshot only the currently live tables, including their actual DOM
   // nodes. Reusing those nodes preserves overlay ownership and local undo.

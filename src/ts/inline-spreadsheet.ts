@@ -2193,6 +2193,17 @@ function toRowHeightsMap(rowHeights: RowHeights | undefined): Map<number, number
 // of text.
 const CELL_CLIP_CLASS = 'jss-cell-clip';
 
+// The rows/columns jspreadsheet reports for an insert (its onbefore/oninsert hooks
+// pass [{ row, ... }] / [{ column, ... }]); falls back to the last index, which is
+// where an Enter/Tab insert at the edge lands.
+function insertedIndexes(inserted: unknown, key: 'row' | 'column', fallback: number): number[] {
+  const found = Array.isArray(inserted)
+    ? inserted.map(entry => (entry as Record<string, unknown> | null)?.[key]).filter(Number.isInteger) as number[]
+    : [];
+  return found.length > 0 ? found : [fallback];
+}
+
+
 /** Show the native resize destination independently of table layout constraints. */
 function installRowResizeGuide(container: HTMLElement): void {
   container.addEventListener('mousedown', event => {
@@ -3415,6 +3426,16 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
 
   overlay.appendChild(dialog);
   dialog.addEventListener('click', event => event.stopPropagation());
+  // When the popup is opened from the inline table, keyboard focus is still in
+  // the editor iframe behind it. Clicking a cell selects it, but the keys keep
+  // going to the editor (and end up in the page text) until a second click. Pull
+  // focus into the popup on the first press. Inputs and buttons take focus
+  // themselves; this only covers a press landing while focus is outside.
+  dialog.tabIndex = -1;
+  dialog.style.outline = 'none';
+  dialog.addEventListener('pointerdown', () => {
+    if (!dialog.contains(document.activeElement)) dialog.focus({ preventScroll: true });
+  }, true);
 
   return {
     overlay,
@@ -3703,6 +3724,19 @@ export function openSpreadsheetModal(
     let rowResizePointerActive = false;
     const openerFocus = captureFocus();
     document.body.appendChild(ui.overlay);
+    // Make everything behind the popup inert while it is open: the page editor
+    // and any inline spreadsheet layers can then neither hold keyboard focus nor
+    // receive keys, so typing can only reach the popup. Undone in cleanup().
+    const inertedBehindPopup: HTMLElement[] = [];
+    document.querySelectorAll<HTMLElement>('.tox-tinymce, .elabftw-spreadsheet-editor-overlay').forEach(element => {
+      if (element.inert || ui.overlay.contains(element)) return;
+      element.inert = true;
+      inertedBehindPopup.push(element);
+    });
+    // Take keyboard focus away from whatever opened this (often the editor
+    // iframe, with the table selected): keys typed before the first click inside
+    // the popup would otherwise go to the page text and replace the table.
+    ui.overlay.querySelector<HTMLElement>('.inline-spreadsheet-dialog')?.focus({ preventScroll: true });
     ui.overlay.querySelector('.inline-spreadsheet-dialog')?.addEventListener('input', () => {
       hasChanges = true;
     });
@@ -4837,32 +4871,35 @@ export function openSpreadsheetModal(
       // working.rows/cols, which syncMountedDimensions only updates in
       // its own separate deferred callback (scheduled first, so it
       // normally wins the race, but nothing here should depend on that).
-      const styleNewlyInsertedRow = (changedWorksheet?: JssInstance): void => {
+      const styleNewlyInsertedRow = (changedWorksheet?: JssInstance, inserted?: unknown): void => {
         window.setTimeout(() => {
           if (sheetContainer !== mountedContainer) return;
           const currentWorksheet = getMountedWorksheet(mountedContainer, changedWorksheet);
           const currentData = currentWorksheet?.getData?.();
           if (!Array.isArray(currentData) || currentData.length === 0) return;
-          const newRow = currentData.length - 1;
           const cols = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
-          for (let col = 0; col < cols; col++) {
-            const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${newRow}"]`);
-            if (cell) cell.style.cssText = getAppearanceCellStyle(working.appearance, col, newRow);
-          }
+          insertedIndexes(inserted, 'row', currentData.length - 1).forEach(newRow => {
+            for (let col = 0; col < cols; col++) {
+              const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${newRow}"]`);
+              if (cell) cell.style.cssText = getAppearanceCellStyle(working.appearance, col, newRow);
+            }
+          });
         }, 0);
       };
-      const styleNewlyInsertedColumn = (changedWorksheet?: JssInstance): void => {
+      const styleNewlyInsertedColumn = (changedWorksheet?: JssInstance, inserted?: unknown): void => {
         window.setTimeout(() => {
           if (sheetContainer !== mountedContainer) return;
           const currentWorksheet = getMountedWorksheet(mountedContainer, changedWorksheet);
           const currentData = currentWorksheet?.getData?.();
           if (!Array.isArray(currentData) || currentData.length === 0) return;
           const rows = currentData.length;
-          const newCol = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0) - 1;
-          for (let row = 0; row < rows; row++) {
-            const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${newCol}"][data-y="${row}"]`);
-            if (cell) cell.style.cssText = getAppearanceCellStyle(working.appearance, newCol, row);
-          }
+          const lastCol = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0) - 1;
+          insertedIndexes(inserted, 'column', lastCol).forEach(newCol => {
+            for (let row = 0; row < rows; row++) {
+              const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${newCol}"][data-y="${row}"]`);
+              if (cell) cell.style.cssText = getAppearanceCellStyle(working.appearance, newCol, row);
+            }
+          });
         }, 0);
       };
       const syncMountedDimensions = (changedWorksheet?: JssInstance): void => {
@@ -5003,15 +5040,15 @@ export function openSpreadsheetModal(
           updateRawDataMirrorCell(changedCol, changedRow, value);
           scheduleFormulaResultRender();
         },
-        oninsertrow: (changedWorksheet: JssInstance): void => {
+        oninsertrow: (changedWorksheet: JssInstance, inserted?: unknown): void => {
           if (acceptsGridChanges) hasChanges = true;
           syncMountedDimensions(changedWorksheet);
-          styleNewlyInsertedRow(changedWorksheet);
+          styleNewlyInsertedRow(changedWorksheet, inserted);
         },
-        oninsertcolumn: (changedWorksheet: JssInstance): void => {
+        oninsertcolumn: (changedWorksheet: JssInstance, inserted?: unknown): void => {
           if (acceptsGridChanges) hasChanges = true;
           syncMountedDimensions(changedWorksheet);
-          styleNewlyInsertedColumn(changedWorksheet);
+          styleNewlyInsertedColumn(changedWorksheet, inserted);
         },
         ondeleterow: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
@@ -5822,6 +5859,8 @@ export function openSpreadsheetModal(
     document.addEventListener('mousedown', commitFormulaInput, true);
 
     const cleanup = (): void => {
+      // First, so focus can go back to the opener once the popup is gone.
+      inertedBehindPopup.forEach(element => { element.inert = false; });
       finishFormulaSelection();
       document.removeEventListener('mousedown', commitFormulaInput, true);
       ui.sheetHost.removeEventListener('mousedown', onFormulaSelectionStart, true);
@@ -6316,7 +6355,7 @@ export interface SpreadsheetHostHandle {
    * for the "open full editor" popup) -- otherwise a change made less
    * than 500ms ago can still be missing from it.
    */
-  flush: () => void;
+  flush: (commitEditors?: boolean) => void;
 }
 
 // The SpreadsheetData a mounted host was built from -- lets
@@ -8063,6 +8102,11 @@ export function buildReadOnlySpreadsheetHost(
         } catch {
           // selection is a convenience only
         }
+        // A programmatic selection does not reliably fire onselection, and
+        // onDirectCellKey needs this to route the first keystrokes into the
+        // stable editor. Without it, typing right after a spreadsheet is
+        // inserted lands in jspreadsheet's own editor and stops at the column width.
+        lastKnownSelection = [col, row, col, row];
         options.initialSelection = undefined;
         // Selecting a cell adds the fill handle and can make the grid's
         // horizontal scrollbar appear. Nothing else is happening on the
@@ -8291,28 +8335,31 @@ export function buildReadOnlySpreadsheetHost(
   // rawDataMirror (notifyStructuralChange above updates that synchronously,
   // so it would work too, but re-reading independently here doesn't
   // depend on call order between the two).
-  const styleNewlyInsertedRow = (changedWorksheet: JssInstance): void => {
+  const styleNewlyInsertedRow = (changedWorksheet: JssInstance, inserted?: unknown): void => {
     window.setTimeout(() => {
       const currentData = changedWorksheet?.getData?.();
       if (!Array.isArray(currentData) || currentData.length === 0) return;
-      const newRow = currentData.length - 1;
       const cols = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
-      for (let col = 0; col < cols; col++) {
-        const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${newRow}"]`);
-        if (cell) cell.style.cssText = getAppearanceCellStyle(appearance, col, newRow);
-      }
+      insertedIndexes(inserted, 'row', currentData.length - 1).forEach(newRow => {
+        for (let col = 0; col < cols; col++) {
+          const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${newRow}"]`);
+          if (cell) cell.style.cssText = getAppearanceCellStyle(appearance, col, newRow);
+        }
+      });
     }, 0);
   };
-  const styleNewlyInsertedColumn = (changedWorksheet: JssInstance): void => {
+  const styleNewlyInsertedColumn = (changedWorksheet: JssInstance, inserted?: unknown): void => {
     window.setTimeout(() => {
       const currentData = changedWorksheet?.getData?.();
       if (!Array.isArray(currentData) || currentData.length === 0) return;
       const rows = currentData.length;
-      const newCol = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0) - 1;
-      for (let row = 0; row < rows; row++) {
-        const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${newCol}"][data-y="${row}"]`);
-        if (cell) cell.style.cssText = getAppearanceCellStyle(appearance, newCol, row);
-      }
+      const lastCol = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0) - 1;
+      insertedIndexes(inserted, 'column', lastCol).forEach(newCol => {
+        for (let row = 0; row < rows; row++) {
+          const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${newCol}"][data-y="${row}"]`);
+          if (cell) cell.style.cssText = getAppearanceCellStyle(appearance, newCol, row);
+        }
+      });
     }, 0);
   };
 
@@ -8523,13 +8570,13 @@ export function buildReadOnlySpreadsheetHost(
           nativeCellEdit = null;
         }
       },
-      oninsertrow: (changedWorksheet: JssInstance): void => {
+      oninsertrow: (changedWorksheet: JssInstance, inserted?: unknown): void => {
         notifyStructuralChange(changedWorksheet);
-        styleNewlyInsertedRow(changedWorksheet);
+        styleNewlyInsertedRow(changedWorksheet, inserted);
       },
-      oninsertcolumn: (changedWorksheet: JssInstance): void => {
+      oninsertcolumn: (changedWorksheet: JssInstance, inserted?: unknown): void => {
         notifyStructuralChange(changedWorksheet);
-        styleNewlyInsertedColumn(changedWorksheet);
+        styleNewlyInsertedColumn(changedWorksheet, inserted);
       },
       ondeleterow: notifyStructuralChange,
       ondeletecolumn: notifyStructuralChange,
@@ -8640,10 +8687,15 @@ export function buildReadOnlySpreadsheetHost(
     } : {}),
   });
 
-  const flush = (): void => {
+  // commitEditors=false only writes out a change already waiting in the 500ms
+  // debounce, leaving a cell that is still being typed in untouched (used right
+  // before the editor reads its content, e.g. an autosave mid-typing).
+  const flush = (commitEditors = true): void => {
     if (disposed) return;
-    commitRescueInput();
-    commitFormulaInput();
+    if (commitEditors) {
+      commitRescueInput();
+      commitFormulaInput();
+    }
     if (!changeTimer) return;
     window.clearTimeout(changeTimer);
     changeTimer = null;
