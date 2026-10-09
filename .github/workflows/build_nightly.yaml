@@ -3,6 +3,13 @@ name: Build nightly elabimg
 on:
   schedule:
     - cron: "42 01 * * *"
+  # lets the fork run it by hand to check the build and publish
+  workflow_dispatch:
+
+# Fork: the image is published to this repository's own GitHub Container Registry,
+# not to the upstream project's Docker Hub (the fork has no credentials for it).
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
 
 ## GITHUB_TOKEN authentication
 permissions:
@@ -10,6 +17,7 @@ permissions:
   id-token: write
   attestations: write
   artifact-metadata: write
+  packages: write
 
 jobs:
   buildandpush:
@@ -62,19 +70,20 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
-      # https://github.com/docker/login-action#docker-hub
-      - name: Login to Docker Hub
+      # https://github.com/docker/login-action#github-container-registry
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set version string
         id: version
         run: echo "value=$(date -u +'%y%m%d')-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       # https://github.com/docker/build-push-action#multi-platform-image
-      - name: Build nightly for ${{ matrix.platform }} and push to Docker Hub
+      - name: Build nightly for ${{ matrix.platform }} and push to GitHub Container Registry
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
         id: push
         with:
@@ -84,7 +93,7 @@ jobs:
           # the scope parameter is necessary when doing multi arch builds or we'll always miss cache
           cache-from: type=gha,scope=${{ runner.os }}-${{ matrix.arch }}
           cache-to:   type=gha,mode=max,scope=${{ runner.os }}-${{ matrix.arch }}
-          outputs: type=image,name=docker.io/elabftw/elabimg,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           sbom: true
           build-args: |
               ELABFTW_VERSION=${{ steps.version.outputs.value }}
@@ -141,12 +150,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
-      # https://github.com/docker/login-action#docker-hub
-      - name: Login to Docker Hub
+      # https://github.com/docker/login-action#github-container-registry
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create and push manifest list
         working-directory: /tmp/digests
@@ -157,7 +167,7 @@ jobs:
           refs=()
           while IFS= read -r digest; do
             if [[ "$digest" =~ ^[a-fA-F0-9]{64}$ ]]; then
-              refs+=("elabftw/elabimg@sha256:${digest}")
+              refs+=("${IMAGE}@sha256:${digest}")
             fi
           done < <(find . -type f -exec basename {} \; | sort)
 
@@ -168,7 +178,7 @@ jobs:
 
           for attempt in 1 2 3 4 5; do
             if docker buildx imagetools create \
-              -t elabftw/elabimg:nightly \
+              -t "${IMAGE}:nightly" \
               "${refs[@]}"; then
               break
             fi
@@ -186,7 +196,7 @@ jobs:
       - name: Resolve manifest digest
         id: manifest
         run: |
-          digest=$(docker buildx imagetools inspect docker.io/elabftw/elabimg:nightly | awk '/^Digest:/ { print $2; exit }')
+          digest=$(docker buildx imagetools inspect "${IMAGE}:nightly" | awk '/^Digest:/ { print $2; exit }')
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       # TRIVY scans disabled because of https://socket.dev/blog/trivy-under-attack-again-github-actions-compromise
@@ -217,6 +227,6 @@ jobs:
       - name: Create build provenance attestation
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
-          subject-name: docker.io/elabftw/elabimg
+          subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.manifest.outputs.digest }}
           push-to-registry: true
