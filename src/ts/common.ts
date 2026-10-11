@@ -1136,6 +1136,20 @@ on('edit-labcollector-inventory-link', (el: HTMLElement) => {
 
 // The editable team links under Links (MoorLab Wiki, ETHIS, MoorLab Zoom): the button names the
 // team column to change (data-field) and the link element to update (data-link-id).
+// Key features page: show only the entries of one area (or all of them).
+on('whats-new-filter', (el: HTMLElement) => {
+  const area = el.dataset.area ?? '';
+  document.querySelectorAll<HTMLElement>('.whats-new-entry').forEach(entry => {
+    entry.hidden = area !== '' && entry.dataset.area !== area;
+  });
+  document.querySelectorAll<HTMLElement>('[data-action="whats-new-filter"]').forEach(chip => {
+    const active = chip === el;
+    chip.classList.toggle('btn-primary', active);
+    chip.classList.toggle('btn-outline-primary', !active);
+    chip.setAttribute('aria-pressed', String(active));
+  });
+});
+
 on('edit-team-link', (el: HTMLElement) => {
   const { field, linkId, label } = el.dataset;
   const link = linkId ? document.getElementById(linkId) as HTMLAnchorElement | null : null;

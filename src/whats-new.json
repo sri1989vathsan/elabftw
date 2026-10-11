@@ -1,5 +1,50 @@
 [
   {
+    "id": "link-to-data",
+    "date": "2026-10-11",
+    "area": "Linking",
+    "featured": true,
+    "title": "Link an experiment to its data folder",
+    "summary": "Attach the network folder where an experiment's raw data lives, and open it from the entry in one click.",
+    "details": [
+      "In the Data section of an experiment, paste a network share path (smb://server/share/folder or \\\\server\\share\\folder), add an optional label such as \"Raw data folder\", and press Add.",
+      "Each link has buttons to open it on a Mac, to copy the Windows path to paste into Explorer, and to insert a reference to it in the main text.",
+      "The label keeps a long path readable. Remove a link with the trash icon while editing."
+    ],
+    "image": "",
+    "imageAlt": ""
+  },
+  {
+    "id": "quick-links",
+    "date": "2026-10-11",
+    "area": "Navigation",
+    "featured": true,
+    "title": "Quick links to LabCollector and your lab's tools",
+    "summary": "The Links menu in the top bar opens LabCollector and your lab's own pages in one click.",
+    "details": [
+      "Open Links in the top bar to reach LabCollector, OpenIRIS, MoorLab Wiki, ETHIS and MoorLab Zoom. They open in a new tab.",
+      "A team admin can change any of these addresses with the pencil icon next to it, so the link always points to the right place."
+    ],
+    "image": "",
+    "imageAlt": ""
+  },
+  {
+    "id": "link-templates-and-versions",
+    "date": "2026-10-11",
+    "area": "Templates",
+    "featured": true,
+    "title": "Link templates and see which version you used",
+    "summary": "Record the template an experiment follows, with or without inserting its content, and keep track of its versions.",
+    "details": [
+      "In an experiment, open Search in the left sidebar and set Type to Experiment templates.",
+      "Press Link to associate the template with the experiment without inserting anything, or Add to text to insert its content at the cursor.",
+      "Associated templates are listed under Links, each with its version number and how many times it was inserted. Click one to open the template.",
+      "Open a template to see its version history and restore an older version; the other versions are kept."
+    ],
+    "image": "",
+    "imageAlt": ""
+  },
+  {
     "id": "spreadsheet-previews",
     "date": "2026-10-08",
     "area": "Spreadsheets",
@@ -102,7 +147,8 @@
       "w": 29.3,
       "h": 39.4,
       "label": "A card with its steps and linked items"
-    }
+    },
+    "featured": true
   },
   {
     "id": "orders",
@@ -188,7 +234,8 @@
       "w": 55.3,
       "h": 46.6,
       "label": "Linked items and steps"
-    }
+    },
+    "featured": true
   },
   {
     "id": "notifications-feedback",
@@ -235,7 +282,8 @@
       "w": 72.7,
       "h": 57.6,
       "label": "Month grid, views and legend"
-    }
+    },
+    "featured": true
   },
   {
     "id": "left-sidebar",
@@ -260,6 +308,7 @@
       "w": 8.0,
       "h": 64.8,
       "label": "Sidebar tabs"
-    }
+    },
+    "featured": true
   }
 ]

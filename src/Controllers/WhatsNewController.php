@@ -36,6 +36,7 @@ use function pathinfo;
 use function preg_replace;
 use function random_bytes;
 use function bin2hex;
+use function count;
 use function str_replace;
 use function strtolower;
 use function trim;
@@ -79,18 +80,27 @@ final class WhatsNewController extends AbstractHtmlController
     #[Override]
     protected function getPageTitle(): string
     {
-        return _('What\'s new');
+        return _('Key features');
     }
 
     #[Override]
     protected function getData(): array
     {
-        $entries = $this->Store->all();
+        $all = $this->Store->all();
+        // The page shows the featured entries; ?all=1 lists every update.
+        $showAll = $this->app->Request->query->getString('all') === '1';
+        $entries = $showAll
+            ? $all
+            : array_values(array_filter($all, static fn(array $e): bool => !empty($e['featured'])));
         // The template draws its own heading (with an icon); hide the base one.
         return array_merge(parent::getData(), array(
             'hideTitle' => true,
             'whatsNewEntries' => $entries,
-            'whatsNewAreas' => array_values(array_unique(array_filter(array_column($entries, 'area')))),
+            'whatsNewShowAll' => $showAll,
+            'whatsNewTotal' => count($all),
+            // Filter chips only for the areas that are on show; the editor suggests every area.
+            'whatsNewChips' => array_values(array_unique(array_filter(array_column($entries, 'area')))),
+            'whatsNewAreas' => array_values(array_unique(array_filter(array_column($all, 'area')))),
             'whatsNewCanEdit' => $this->canEdit(),
         ));
     }
@@ -152,7 +162,10 @@ final class WhatsNewController extends AbstractHtmlController
             );
             $this->app->Session->getFlashBag()->add('ok', _('Saved'));
 
-            return new RedirectResponse('whats-new.php#whats-new-' . $id);
+            // An entry that is not featured only shows in the full list.
+            $page = $request->getBoolean('featured') ? 'whats-new.php' : 'whats-new.php?all=1';
+
+            return new RedirectResponse($page . '#whats-new-' . $id);
         } catch (ImproperActionException $e) {
             $this->app->Session->getFlashBag()->add('ko', $e->getMessage());
 
@@ -192,6 +205,7 @@ final class WhatsNewController extends AbstractHtmlController
             'summary' => $this->oneLine($request->getString('summary'), 400),
             'details' => $details,
             'imageAlt' => $this->oneLine($request->getString('imageAlt'), 200),
+            'featured' => $request->getBoolean('featured'),
         );
         $highlight = $this->buildHighlight();
         if ($highlight !== null) {

@@ -19,6 +19,10 @@
       <input id='wn-date-{{ fid }}' class='form-control' type='date' name='date' required value='{{ entry.date|default('now'|date('Y-m-d')) }}'>
     </div>
   </div>
+  <div class='custom-control custom-checkbox mb-3'>
+    <input id='wn-featured-{{ fid }}' class='custom-control-input' type='checkbox' name='featured' value='1' {{ entry.featured|default(false) ? 'checked' }}>
+    <label class='custom-control-label' for='wn-featured-{{ fid }}'>{{ 'Show in Key features'|trans }}</label>
+  </div>
   <div class='form-group'>
     <label for='wn-summary-{{ fid }}'>{{ 'Short description'|trans }}</label>
     <textarea id='wn-summary-{{ fid }}' class='form-control' name='summary' rows='2' maxlength='400'>{{ entry.summary|default('') }}</textarea>
