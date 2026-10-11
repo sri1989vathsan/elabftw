@@ -22,7 +22,10 @@ use Twig\Loader\FilesystemLoader;
 use Twig\TwigFilter;
 use Twig\TwigFunction;
 
+use function dechex;
 use function dirname;
+use function filemtime;
+use function is_file;
 
 /**
  * To get Twig
@@ -127,7 +130,15 @@ trait TwigTrait
 
         // use the image BUILD_ID to use as parameter for loading assets
         // this helps with busting the cache in browsers
-        $TwigEnvironment->addGlobal('v', BuildInfo::ID);
+        // BUILD_ID is generated when dependencies are installed, which a cached image layer
+        // can skip, so it can stay the same across rebuilds that changed the front-end code.
+        // The bundle's own modification time follows every rebuild.
+        $assetVersion = BuildInfo::ID;
+        $mainBundle = dirname(__DIR__, 2) . '/web/assets/main.bundle.js';
+        if (is_file($mainBundle)) {
+            $assetVersion .= '-' . dechex((int) filemtime($mainBundle));
+        }
+        $TwigEnvironment->addGlobal('v', $assetVersion);
 
         return $TwigEnvironment;
     }
