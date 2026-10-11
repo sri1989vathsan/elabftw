@@ -4376,6 +4376,26 @@ export function openSpreadsheetModal(
       hasChanges = true;
       scheduleFormulaResultRender();
     };
+    // Escape: drop the edit. The typed text is mirrored into rawDataMirror on
+    // every keystroke, so hiding the box alone would keep it -- put the value
+    // from before the edit back.
+    const cancelRescueInput = (): void => {
+      if (!rescueInputEl) return;
+      if (rescueInputCol !== null && rescueInputRow !== null) {
+        const col = rescueInputCol;
+        const row = rescueInputRow;
+        const original = rescueInputOriginalValue ?? '';
+        updateRawDataMirrorCell(col, row, original, false);
+        if (sheetContainer) previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, original);
+        scheduleFormulaResultRender();
+      }
+      // Mark the edit closed BEFORE hiding the box: hiding a focused element
+      // fires blur, whose handler commits whatever is still marked as being edited.
+      rescueInputCol = null;
+      rescueInputRow = null;
+      rescueInputOriginalValue = null;
+      rescueInputEl.hidden = true;
+    };
     const ensureRescueInput = (): HTMLTextAreaElement => {
       if (rescueInputEl) return rescueInputEl;
       const el = document.createElement('textarea');
@@ -4436,9 +4456,7 @@ export function openSpreadsheetModal(
         } else if (event.key === 'Escape') {
           // Cancel, not commit -- standard spreadsheet convention.
           event.preventDefault();
-          el.hidden = true;
-          rescueInputCol = null;
-          rescueInputRow = null;
+          cancelRescueInput();
         }
       });
       el.addEventListener('blur', commitRescueInput);
@@ -5901,11 +5919,28 @@ export function openSpreadsheetModal(
       const targetIsTextControl = eventTarget instanceof HTMLInputElement
         || eventTarget instanceof HTMLTextAreaElement
         || (eventTarget instanceof HTMLElement && eventTarget.isContentEditable);
-      const hasSingleCellSelection = selectedRange !== null
-        && selectedRange[0] === selectedRange[2]
-        && selectedRange[1] === selectedRange[3];
+      // The recorded range can still be empty right after the first click in the
+      // popup (the click may not report a selection change); ask the grid itself.
+      if (selectedRange === null) getSelectedRange();
       const isPrintableKey = event.key.length === 1
         && !event.ctrlKey && !event.metaKey && !event.altKey;
+      let hasSingleCellSelection = selectedRange !== null
+        && selectedRange[0] === selectedRange[2]
+        && selectedRange[1] === selectedRange[3];
+      if (!hasSingleCellSelection && isPrintableKey && sheetContainer) {
+        // The grid can report a click as a range (the clicked cell plus a neighbour)
+        // or nothing at all. Typing edits the active cell, as in a spreadsheet
+        // application, so use the one active (highlight-selected) cell.
+        const active = sheetContainer.querySelectorAll<HTMLElement>('td[data-x][data-y].highlight-selected');
+        if (active.length === 1) {
+          const col = Number.parseInt(active[0].dataset.x ?? '', 10);
+          const row = Number.parseInt(active[0].dataset.y ?? '', 10);
+          if (Number.isInteger(col) && Number.isInteger(row)) {
+            selectedRange = [col, row, col, row];
+            hasSingleCellSelection = true;
+          }
+        }
+      }
       if (!targetIsTextControl
         && (!rescueInputEl || rescueInputEl.hidden)
         && hasSingleCellSelection
@@ -5958,9 +5993,7 @@ export function openSpreadsheetModal(
         if (rescueInputEl && !rescueInputEl.hidden) {
           event.preventDefault();
           event.stopImmediatePropagation();
-          rescueInputEl.hidden = true;
-          rescueInputCol = null;
-          rescueInputRow = null;
+          cancelRescueInput();
           return;
         }
         // Escape is easy to hit out of habit. Unlike the explicit Cancel
@@ -7627,6 +7660,29 @@ export function buildReadOnlySpreadsheetHost(
     delete document.body.dataset.spreadsheetCellEditing;
     document.body.classList.remove('elabftw-spreadsheet-editing');
   };
+  // Escape: drop the edit. The typed text is mirrored into rawDataMirror on every
+  // keystroke, so hiding the box alone would keep it (and a later change would
+  // save it) -- put the value from before the edit back.
+  const cancelRescueInput = (): void => {
+    if (!rescueInputEl) return;
+    if (rescueInputCol !== null && rescueInputRow !== null) {
+      const col = rescueInputCol;
+      const row = rescueInputRow;
+      const original = rescueInputOriginalValue ?? '';
+      updateRawDataMirrorCell(col, row, original, false);
+      previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, original);
+    }
+    // Mark the edit closed BEFORE hiding the box: hiding a focused element fires
+    // blur, whose handler commits whatever is still marked as being edited.
+    rescueInputCol = null;
+    rescueInputRow = null;
+    rescueInputOriginalValue = null;
+    rescueInputEl.hidden = true;
+    lastEditingCol = null;
+    lastEditingRow = null;
+    delete document.body.dataset.spreadsheetCellEditing;
+    document.body.classList.remove('elabftw-spreadsheet-editing');
+  };
   const ensureRescueInput = (): HTMLTextAreaElement => {
     if (rescueInputEl) return rescueInputEl;
     const el = document.createElement('textarea');
@@ -7704,11 +7760,7 @@ export function buildReadOnlySpreadsheetHost(
         // that this is the primary editor (not just an emergency
         // fallback), the distinction actually matters.
         event.preventDefault();
-        el.hidden = true;
-        rescueInputCol = null;
-        rescueInputRow = null;
-        delete document.body.dataset.spreadsheetCellEditing;
-        document.body.classList.remove('elabftw-spreadsheet-editing');
+        cancelRescueInput();
       }
     });
     el.addEventListener('blur', commitRescueInput);
