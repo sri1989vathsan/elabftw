@@ -719,7 +719,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           });
           if (nowHash !== openedHash) {
             diag.saveRecovery(uid, 'the spreadsheet popup was replacing a newer version of the table', existingTable.outerHTML);
-            warnSync('The spreadsheet changed while the popup was open. Your popup changes were applied; a recovery copy of the other version was saved.');
+            warnSync('The spreadsheet changed while the popup was open. Your popup changes were applied; a recovery copy of the other version was saved.', uid);
           }
         });
       }
@@ -744,7 +744,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
               if (writtenHash !== hashCells(raw.data)) {
                 diag.log('popup-write-mismatch', uid, { rev, popupHash: hashCells(raw.data), tableHash: writtenHash });
                 diag.saveRecovery(uid, 'the table does not match what the popup applied', existingTable.outerHTML);
-                warnSync('The spreadsheet could not be updated exactly as shown in the popup. A recovery copy was saved; please check the table.');
+                warnSync('The spreadsheet could not be updated exactly as shown in the popup. A recovery copy was saved; please check the table.', uid);
               }
             });
           }
@@ -1108,12 +1108,83 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       checksCalls++;
     }
   };
-  let lastSyncWarning = 0;
-  const warnSync = (text: string): void => {
-    const now = Date.now();
-    if (now - lastSyncWarning < 15000) return;
-    lastSyncWarning = now;
-    editor.notificationManager.open({ text, type: 'warning', timeout: 12000 });
+  // The warning shown when the sync checks found two versions of a spreadsheet that disagreed. It is a small
+  // banner (not a plain notification) so it can offer "Restore previous version": the version that was
+  // replaced is kept as a recovery copy, and restoring first keeps the current version as one too, so the
+  // restore itself can be undone from the same banner.
+  let recoveryBanner: HTMLElement | null = null;
+  let recoveryBannerTimer: number | null = null;
+  const closeRecoveryBanner = (): void => {
+    if (recoveryBannerTimer !== null) window.clearTimeout(recoveryBannerTimer);
+    recoveryBannerTimer = null;
+    recoveryBanner?.remove();
+    recoveryBanner = null;
+  };
+  const showRecoveryBanner = (text: string, copyIndex: number | null, canUndoRestore = false): void => {
+    closeRecoveryBanner();
+    const banner = document.createElement('div');
+    banner.className = 'elabftw-spreadsheet-recovery-banner';
+    banner.setAttribute('role', 'alert');
+    const message = document.createElement('span');
+    message.className = 'elabftw-spreadsheet-recovery-banner-text';
+    message.textContent = text;
+    banner.appendChild(message);
+    const actions = document.createElement('span');
+    actions.className = 'elabftw-spreadsheet-recovery-banner-actions';
+    if (copyIndex !== null) {
+      const restore = document.createElement('button');
+      restore.type = 'button';
+      restore.className = 'btn btn-sm btn-primary';
+      restore.textContent = canUndoRestore ? 'Undo restore' : 'Restore previous version';
+      restore.addEventListener('click', () => {
+        const restored = restoreRecoveryCopy(copyIndex);
+        if (restored === null) {
+          showRecoveryBanner('That spreadsheet is no longer in the text, so it cannot be restored here.', null);
+          return;
+        }
+        showRecoveryBanner(
+          canUndoRestore
+            ? 'Restored. The version before is still kept.'
+            : 'Previous version restored. The version you had before is also kept.',
+          canUndoRestore ? null : restored,
+          !canUndoRestore,
+        );
+      });
+      actions.appendChild(restore);
+    }
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'btn btn-sm btn-secondary';
+    dismiss.textContent = 'Dismiss';
+    dismiss.addEventListener('click', closeRecoveryBanner);
+    actions.appendChild(dismiss);
+    banner.appendChild(actions);
+    document.body.appendChild(banner);
+    recoveryBanner = banner;
+    recoveryBannerTimer = window.setTimeout(closeRecoveryBanner, 90000);
+  };
+  const warnSync = (text: string, uid?: string): void => {
+    const copies = diag.recoveryCopies();
+    let copyIndex: number | null = null;
+    for (let i = copies.length - 1; i >= 0; i--) {
+      if (!uid || copies[i].uid === uid) { copyIndex = i; break; }
+    }
+    showRecoveryBanner(text, copyIndex);
+  };
+  // Put a recovery copy back into its spreadsheet. The version it replaces is kept as a recovery copy first
+  // (so this can be undone). Returns the index of that new copy, or null if the spreadsheet is gone.
+  const restoreRecoveryCopy = (index: number): number | null => {
+    const copy = diag.recoveryCopies()[index];
+    const table = copy ? tableByUid(copy.uid) : null;
+    if (!copy || !table) return null;
+    diag.saveRecovery(copy.uid, 'the version before a recovered copy was restored', table.outerHTML);
+    const keptIndex = diag.recoveryCopies().length - 1;
+    if (!applySpreadsheetHtmlToTable(table, copy.html)) return null;
+    markOwnWrite(table);
+    diag.bump(copy.uid, 'recovery-restore');
+    refreshTableOverlay(table);
+    editor.setDirty(true);
+    return keptIndex;
   };
   const enhancedTables = new WeakSet<HTMLTableElement>();
   // A live grid's right-click menu is moved into the page body so it positions correctly; this
@@ -1646,7 +1717,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           rev: diag.revision(uid), baseHash, tableHash: currentHash, overlayHash: newHash,
         });
         diag.saveRecovery(uid, 'a spreadsheet grid was replacing a newer version of the table', table.outerHTML);
-        warnSync('A spreadsheet was changed from two places at once. Your latest edit was kept; a recovery copy of the other version was saved.');
+        warnSync('A spreadsheet was changed from two places at once. Your latest edit was kept; a recovery copy of the other version was saved.', uid);
       }
     });
     commitOverlayChange(table, data);
@@ -2349,7 +2420,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       if (status === 'overlay-stale') {
         // The table is the newer one; show it again instead of the old grid.
         refreshTableOverlay(table);
-        warnSync('A spreadsheet on screen was out of date and has been reloaded from the saved table. A recovery copy was kept.');
+        warnSync('A spreadsheet on screen was out of date and has been reloaded from the saved table. A recovery copy was kept.', uid);
         return;
       }
       // The grid holds what you see and last typed: write it to the table.
@@ -2358,7 +2429,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       lastSyncedHash.set(table, overlayHash);
       diag.bump(uid, 'repair');
       markSynced(table);
-      warnSync('A spreadsheet had edits that were not yet in the saved table. They were added, and a recovery copy of the previous table was kept.');
+      warnSync('A spreadsheet had edits that were not yet in the saved table. They were added, and a recovery copy of the previous table was kept.', uid);
     }));
     return results;
   };
@@ -2408,16 +2479,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       enhanceTable(table);
       return !!spreadsheetOverlays.get(table) && !spreadsheetOverlays.get(table)?.isPreview;
     },
-    restoreRecovery: (index: number): boolean => {
-      const copy = diag.recoveryCopies()[index];
-      const table = copy ? tableByUid(copy.uid) : null;
-      if (!copy || !table) return false;
-      if (!applySpreadsheetHtmlToTable(table, copy.html)) return false;
-      markOwnWrite(table);
-      diag.bump(copy.uid, 'recovery-restore');
-      refreshTableOverlay(table);
-      return true;
-    },
+    restoreRecovery: (index: number): boolean => restoreRecoveryCopy(index) !== null,
     equal: cellsEqual,
     overlayElement: (uid: string): HTMLElement | null => {
       const table = tableByUid(uid);
@@ -2625,6 +2687,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     document.removeEventListener('pointerdown', onSpreadsheetPointerDown, true);
     document.removeEventListener('keydown', onPageUndoKey, true);
     document.removeEventListener('contextmenu', hideUnsupportedMenuItems);
+    closeRecoveryBanner();
     // A pending debounced mceAutoResize (see syncOverlayPositions) has
     // nothing left to act on once the editor itself is gone -- calling
     // execCommand on a destroyed editor, or trying to refocus an element

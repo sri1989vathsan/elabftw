@@ -91,3 +91,4 @@ Build 61, 2026-10-12. Chromium tested by Claude; Firefox: faults, acceptance, re
 | 85 | P8 | Memory over 24 popup-open/cancel/scroll cycles | PASS: leak test x2, build 61 (heap +0.8 MB, elements back to start) |
 | 86 | P9 | Page load, 5 tables | Measured on builds 52-55, not re-run on 61 |
 | 87 | P10 | Scaling, 10 / 30 / 60 tables, all grids live (worst case), reading the content | Measured on builds 52-55, not re-run on 61 |
+| 88 | R30 | Sync warning has a Restore previous version button (only that spreadsheet changes), keeps the replaced version, offers Undo restore | PASS (build 63; Chromium) |

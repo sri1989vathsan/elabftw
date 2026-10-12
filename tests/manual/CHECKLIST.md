@@ -165,6 +165,7 @@ undone, so these could break without anyone noticing. Delete any row you do not 
 | R27 | Scrolling: when the top nav bar hides or shows, the editor's menu bar and toolbar glide with the back/save bar, no single-frame jump | yes | n/a | both | MEASURED OK live | 2026-10-12 | Owner confirmed 'much better'. Measured: menu bar jumped 43 px in one frame while the back/save bar eased. Cause: TinyMCE skin's `transition: box-shadow` overrode our `top` transition |
 | R28 | Delete on a selected cell or range clears it at once, with no editor opened; undo brings it back; inline and popup; grid and saved table agree | yes | yes | both | TODO build 60 | 2026-10-12 | Owner request: like Excel. Before, Delete opened an empty editor and needed Enter |
 | R29 | F2 on a selected cell opens its editor with the current content, same as a double-click; Enter commits, Escape cancels; inline and popup | yes | yes | both | TODO build 60 | 2026-10-12 | Owner request |
+| R30 | When the sync warning appears it has a Restore previous version button; it puts back only that spreadsheet's saved version (no other table or text changes), keeps the version it replaced as a recovery copy, and offers Undo restore | yes | n/a | both | PASS build 63 (restore, undo restore, spreadsheet gone, dismiss; other tables and text unchanged) | 2026-10-12 | Owner request: a restore button is only useful while the warning is showing |
 
 ## 8. Right-click menu (inline grid and popup)
 
@@ -199,6 +200,7 @@ build number so a pass is tied to the code it tested.
 | 4 | 62 | 2026-10-12 | seed 501 (41 ops): 0 failures | S7-S11 pass | A1-A6, A9 pass | R6 (Undo) pass; delete + Cmd+Z, hidden comments checked by hand | R4, R6, R7 pass | n/a | clean
 | 5 | 62 | 2026-10-12 | seed 502 (41 ops): 0 failures | S7-S11 pass | A1-A6, A9 pass | n/a | R4, R6, R7 pass | n/a | clean
 | 6 | 62 | 2026-10-12 | seed 603 (41 ops): 0 failures | S7-S11 pass (the first run of this pass counted events by position and failed on a full event log; fixed in the test, app behaved correctly) | A1-A6, A9 pass | n/a | R4, R6, R7 pass | leak test: heap +0.54 MB, elements constant 4089 | clean
+| 7 | 62, Firefox | 2026-10-12 | seed 21 (40 ops): 0 failures | S7-S11 pass | A1-A6, A9 pass | n/a | R4, R6, R7 pass | n/a | clean (run by the owner)
 
 ---
 

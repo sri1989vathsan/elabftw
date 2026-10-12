@@ -6307,3 +6307,29 @@ div > .sticky-navbar {
     width: 1%;
   }
 }
+
+/* Warning shown when two versions of a spreadsheet disagreed (see warnSync in SpreadsheetExtension.ts). */
+.elabftw-spreadsheet-recovery-banner {
+  align-items: center;
+  background-color: var(--firstlevel);
+  border: 1px solid var(--secondary);
+  border-left: 4px solid #f0ad4e;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  color: var(--strongest);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  gap: 0.5rem 0.75rem;
+  max-width: min(440px, calc(100vw - 2rem));
+  padding: 0.6rem 0.75rem;
+  position: fixed;
+  right: 1rem;
+  top: calc(var(--navbar-height) + var(--toolbar-height) + 0.75rem);
+  z-index: 10070;
+}
+
+.elabftw-spreadsheet-recovery-banner-actions {
+  display: flex;
+  gap: 0.4rem;
+}
