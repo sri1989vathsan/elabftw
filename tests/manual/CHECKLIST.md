@@ -99,8 +99,10 @@ with many tables. Nothing is deployed until every row is `PASS` in both browsers
 | A6 | Undo and redo work in both, as before | yes | yes | both | PASS | 2026-10-12 | Chromium; confirm in Firefox |
 | A7 | Adding and deleting rows and columns works in both | yes | yes | both | PASS | 2026-10-12 | Chromium with real clicks, menu and toolbar buttons |
 | A8 | The spreadsheet's look does not change when rows or columns are added or deleted | yes | yes | both | PASS | 2026-10-12 | Chromium, real clicks. Found and fixed: new cells were left-aligned next to centred ones; now they copy the neighbour's alignment (inline and popup) |
-| A9 | The formatting buttons work in both (bold, italic, colours, alignment, font size) | yes | yes | both | FAIL | 2026-10-12 | Inline passes. Popup: bold and italic show in the popup but were not kept after Update (script run); a real-click attempt did not apply bold at all. Being compared against the previous version |
+| A9 | The formatting buttons work in both (bold, italic, colours, alignment, font size) | yes | yes | both | FIXED? | 2026-10-12 | Inline passes. Popup: formatting IS kept after Update, but the Bold/Italic/Underline boxes did not follow the selected cell, so bolding a second cell needed two clicks (the first un-bolded). Fix in build 54: the boxes show the selected cell's state |
 | A10 | The table does not jiggle when scrolling | yes | n/a | both | WATCH | 2026-10-11 | Measured in Chromium only; confirm in Firefox |
+| A11 | First click on a spreadsheet not clicked before, then typing: text goes into the clicked cell (real click, caret previously in the page text) | yes | yes | both | PASS | 2026-10-12 | Build 59, Chromium, real click and real key presses. Was failing in builds 55 and 56: the page editor's iframe kept keyboard focus. Same as R24. Reported by owner |
+| A12 | Typing a formula and clicking or dragging cells inserts their references (inline and popup) | yes | yes | both | PASS | 2026-10-12 | Build 59, inline and popup, real clicks (reference inserted). Popup: one first attempt failed and did not repeat in 2 more tries: WATCH. Same as R25. Reported by owner |
 
 ### Speed (must not get slower, even with many or big tables)
 
@@ -112,6 +114,7 @@ Measured in Chromium with the app running locally. "Check" is the pre-save sync 
 | P1 | 5 tables, none live | 8.1 | 0.01 | PASS | |
 | P2 | 30 tables, 9 live grids | 30.4 | 6.8 | WATCH | About 0.8 ms per live grid; the content read itself grows with the number of tables |
 | P3 | One table of 300 x 30 cells | | | TODO | Insert, live mount, content read, check, hashing both copies |
+| P10 | Scaling, 10 / 30 / 60 tables, all grids live (worst case), reading the content | 81 / 256 / 369 vs plain HTML 60 / 80 / 131 | | WATCH | Cost per spreadsheet table about 4 to 6 ms over a plain table, with the checks off as well (the larger hidden table markup), so not caused by the new checks. Page elements: 202 per live grid vs 27 per plain table, linear |
 | P7 | Checks on versus off, 25 extra tables, 5 rounds | 23.0 vs 21.7 | 0.2 per call | PASS | Commit 562 vs 570 ms, popup open 23.3 vs 23.8 ms, popup apply 11.5 vs 11.5 ms, frames identical (16.7 ms) |
 | P8 | Memory over 24 popup-open/cancel/scroll cycles | | | PASS | Heap flat (85 to 86 MB), element count constant (4,278), 0 leftover menus. Before the fix: 155 leftover menus |
 | P9 | Page load, 5 tables | | | PASS | 1.1 s DOMContentLoaded, 1.7 s load, 86 MB, checks used 0 ms |
@@ -131,11 +134,11 @@ undone, so these could break without anyone noticing. Delete any row you do not 
 | R1 | Tables far from the screen show a light preview; the first click makes one live and selects the clicked cell; the preview looks like the live grid (widths, heights) | both | TODO | | Tables are now positioned in page coordinates |
 | R2 | The horizontal scroll bar never covers the last row of a live table | both | TODO | | Same positioning code |
 | R3 | Double-click a cell and type: nothing is lost (the 2026-10-02 data-loss fix) | both | TODO | | Focus handling around cell editing changed |
-| R4 | Cell formatting (bold, colours, alignment) set in the popup survives Update, save and reload | both | TODO | | Save path now has extra checks |
+| R4 | Cell formatting (bold, colours, alignment) set in the popup survives Update, save and reload | both | WATCH | 2026-10-12 | Survives Update and save (Chromium). Reload not yet checked |
 | R5 | Fill handle (drag a cell's corner) copies formulas correctly, including `$` references (2026-10-02 fix) | both | TODO | | |
-| R6 | Ctrl+Z in the main text does not undo spreadsheet edits, and the table's own undo does not touch the text | both | TODO | | Writes to the table go through new wrappers |
-| R7 | An autosave while you are typing in a cell does not interrupt the typing | both | TODO | | The pre-save check runs on every content read |
-| R8 | Delete a spreadsheet with the trash icon, then undo: it comes back with its content | both | TODO | | Table and layout spacers are removed and restored |
+| R6 | Ctrl+Z in the main text does not undo spreadsheet edits, and the table's own undo does not touch the text | both | PASS | 2026-10-12 | Chromium, script (uses the Undo command, as Ctrl+Z does) |
+| R7 | An autosave while you are typing in a cell does not interrupt the typing | both | PASS | 2026-10-12 | Chromium, script: a content read leaves the cell editor open. A manual Save click ends the edit, as before |
+| R8 | Delete a spreadsheet with the trash icon, then press Ctrl+Z: it comes back at the same place with its content, without changing the text or other tables; text edits made after the deletion are undone first | yes | n/a | both | PASS build 62 (Cmd+Z; deleted at the end of the page: restored in place with content, text undone first, other tables untouched). Also tested with a table deleted from the middle of the page (restored in the same slot) | 2026-10-12 | Owner decision: bring it back. Implemented as its own undo stack (deleted tables are kept in memory for this page session only); a page reload forgets them |
 | R9 | Copy and paste a range inside a table, between two tables, and from Excel; pasted PDF tables are cleaned up | both | TODO | | |
 | R10 | Drag a column or row border to resize (with the size guide); autofit rows and columns; sizes survive save and reload | both | TODO | | |
 | R11 | Double-click a table's cell edits in place and does not open the popup unexpectedly | both | TODO | | Popup open logic changed |
@@ -156,6 +159,12 @@ undone, so these could break without anyone noticing. Delete any row you do not 
 | R21 | Boards dialogs open centred beside an open sidebar; the file list is shown once and without the horizontal action buttons | both | TODO | | |
 | R22 | Revisions: the number kept and the minimum days between them behave as before; timestamping an experiment still works | both | TODO | | Unchanged by today's work, listed so it is not forgotten |
 | R23 | Sysadmin can edit Key features entries and upload a picture; other users cannot | both | TODO | | |
+| R24 | **Real click**: put the text caret in the page text, then click ONCE in a spreadsheet that has not been clicked before (still a preview) and type: the text goes into that cell, not the page text | both | PASS build 59 | 2026-10-12 | Reported by owner 2026-10-12 on a build where it failed. Cause: the preview's pointerdown is default-prevented so focus never moved; automated tests mount the grid directly and skipped this path |
+| R25 | **Real click**: while typing a formula (`=`, `=SUM(`, after `+`), clicking or dragging cells inserts their references, inline and in the popup | both | PASS build 59 | 2026-10-12 | Reported by owner 2026-10-12. Cause: my focus-pull on pointerdown closed the cell editor before the click was handled |
+| R26 | Right-click a cell: the table stays below the editor toolbar and the site menu bar (it must not paint on top of them) while the menu is open | yes | yes | both | PASS build 59 | 2026-10-12 | Overlay z-index 1 below the toolbar (2) with the menu open. Reported by owner with screenshot. Cause: the overlay was raised to z-index 10053 while a menu was open |
+| R27 | Scrolling: when the top nav bar hides or shows, the editor's menu bar and toolbar glide with the back/save bar, no single-frame jump | yes | n/a | both | MEASURED OK live | 2026-10-12 | Owner confirmed 'much better'. Measured: menu bar jumped 43 px in one frame while the back/save bar eased. Cause: TinyMCE skin's `transition: box-shadow` overrode our `top` transition |
+| R28 | Delete on a selected cell or range clears it at once, with no editor opened; undo brings it back; inline and popup; grid and saved table agree | yes | yes | both | TODO build 60 | 2026-10-12 | Owner request: like Excel. Before, Delete opened an empty editor and needed Enter |
+| R29 | F2 on a selected cell opens its editor with the current content, same as a double-click; Enter commits, Escape cancels; inline and popup | yes | yes | both | TODO build 60 | 2026-10-12 | Owner request |
 
 ## 8. Right-click menu (inline grid and popup)
 
@@ -171,10 +180,25 @@ Added at the owner's request. These need a real right-click: scripted clicks can
 | M6 | A table near the bottom of the screen: the menu flips upward and stays fully visible | yes | yes | both | TODO | | |
 | M7 | After inserting or deleting through the menu, the grid and the saved table agree, and the look is unchanged (alignment, widths) | yes | yes | both | PASS | 2026-10-12 | Chromium; grid and table matched after a row and a column insert |
 | M8 | Copy... , Paste... and Save as... items in the menu behave | yes | yes | both | TODO | | |
-| M9 | Add comments item (cell menu) works or is hidden by choice | yes | yes | both | TODO | | |
+| M9 | Add comments item is hidden from the cell menu (inline and popup) | yes | yes | both | PASS build 62 (hidden inline and in the popup) | 2026-10-12 | Owner: low priority; hidden because notes were never saved with the table |
 | M10 | Menus are cleaned up: after scrolling past tables many times, no leftover menu elements stay in the page | yes | n/a | both | PASS | 2026-10-12 | 155 leftovers found, fixed in build 53; leak test now shows 0 and a constant element count |
 | M11 | A table opened from a page with several tables: the menu belongs to the table that was clicked | yes | n/a | both | TODO | | |
 | M12 | Right-click while a cell is being edited does not lose the typed text | yes | yes | both | TODO | | |
+
+## 9. Full retest passes (after the last bug fix)
+
+The owner asked for everything to be retested several times once all bugs are fixed. A pass is
+**clean** only if every row below passes. Any failure is fixed and the count restarts. Record the
+build number so a pass is tied to the code it tested.
+
+| Pass | Build | Date | Stress runs (seeds, failures) | Sync fault tests S7-S11 | Acceptance A1-A9 | Right-click menu M1-M12 | Regression R1-R12 | Speed and memory P-rows | Result |
+|------|-------|------|------------------------------|-------------------------|------------------|-------------------------|-------------------|-------------------------|--------|
+| 1 | 61 (superseded by the 62 passes below) | 2026-10-12 | seed 201 (46 ops): 0 failures; reload check 0 mismatches | S7-S11 pass | A1-A6, A9 pass; A7, A8 real clicks pass (row and column insert, delete, alignment kept, grid = table) | M2, M3, M4 (unresized row), M5, M6, M12 pass with real clicks; M8 clipboard items, M11, M4 on a resized row still manual | R4, R6, R7 pass (R4 failed once in the first run, not reproduced in 2 repeats: WATCH) | not re-run on 61 (leak test on 55 was flat) | not clean: R4 flake
+| 2 | 61 (superseded) | 2026-10-12 | seed 301 (41 ops): 0 failures; reload check 0 mismatches | S7-S11 pass | A1-A6, A9 pass | covered in pass 1 | R4, R6, R7 pass | n/a | clean
+| 3 | 61 (superseded) | 2026-10-12 | seed 401 (41 ops): 0 failures; Firefox seed 11 (45 ops): 0 failures | S7-S11 pass, also in Firefox | A1-A6, A9 pass, also in Firefox | covered in pass 1 | R4, R6, R7 pass, also in Firefox | leak test: heap +0.77 MB, elements back to start | clean
+| 4 | 62 | 2026-10-12 | seed 501 (41 ops): 0 failures | S7-S11 pass | A1-A6, A9 pass | R6 (Undo) pass; delete + Cmd+Z, hidden comments checked by hand | R4, R6, R7 pass | n/a | clean
+| 5 | 62 | 2026-10-12 | seed 502 (41 ops): 0 failures | S7-S11 pass | A1-A6, A9 pass | n/a | R4, R6, R7 pass | n/a | clean
+| 6 | 62 | 2026-10-12 | seed 603 (41 ops): 0 failures | S7-S11 pass (the first run of this pass counted events by position and failed on a full event log; fixed in the test, app behaved correctly) | A1-A6, A9 pass | n/a | R4, R6, R7 pass | leak test: heap +0.54 MB, elements constant 4089 | clean
 
 ---
 

@@ -2838,18 +2838,19 @@ body.html-tool-workspace-resizing * {
   color: var(--strongest);
   display: flex;
   flex-direction: column;
-  height: 90vh;
-  max-height: 98vh;
+  // Sized by its content (the grid area has its own height, set when it opens) instead of a fixed
+  // share of the window: on a large window a fixed 90vh left a tall empty strip below the buttons.
+  height: auto;
+  max-height: 96vh;
   max-width: 98vw;
   min-height: 20rem;
   min-width: 20rem;
   overflow: hidden;
   padding: 0;
-  // Drag the bottom-right corner to resize -- 90vh/90vw is just the
-  // opening size, not a fixed one. overflow: hidden above still satisfies
-  // the resize property's own requirement (anything but visible).
+  // Drag the bottom-right corner to resize -- the size above is only the opening size, not a fixed
+  // one. overflow: hidden above still satisfies the resize property's own requirement.
   resize: both;
-  width: 90vw;
+  width: min(90vw, 1400px);
 }
 
 .inline-spreadsheet-dialog > h5 {
@@ -3784,18 +3785,12 @@ body.html-tool-workspace-resizing * {
   outline-offset: -1px;
 }
 
-// This overlay is its own stacking context (deliberately kept below the
-// editor's sticky toolbar, z-index:1 vs .tox-editor-header's 2). Bumped
-// only while a menu opened from it is actually open (see
-// openContextMenuOverlay in SpreadsheetExtension.ts) so the *overlay*
-// itself -- not jspreadsheet-ce's own context menu, which that same file
-// reparents straight to document.body and which wins any overlap via its
-// own, strictly higher .jss_contextmenu z-index below regardless -- can
-// still rise above the toolbar for whatever else about an open menu
-// still cares (e.g. a column-type dropdown or other nested popup that
-// stays inside the overlay).
+// The overlay stays below the editor's sticky toolbar and the site menu bar even while one of its
+// menus is open: jspreadsheet-ce's own context menu is reparented to document.body (see
+// openContextMenuOverlay in SpreadsheetExtension.ts) with its own, much higher .jss_contextmenu
+// z-index, so the overlay does not need to rise. Raising it made the whole table paint over the menu bar.
 .elabftw-spreadsheet-editor-overlay.has-open-context-menu {
-  z-index: 10053 !important;
+  z-index: 1;
 }
 
 .elabftw-spreadsheet-editor-overlay .elabftw-spreadsheet-readonly-grid {

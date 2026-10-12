@@ -33,7 +33,17 @@ async function spreadsheetSyncStress(options = {}) {
   if (!api) throw new Error('The spreadsheet diagnostics are not loaded: open an experiment in edit mode.');
   const editor = tinymce.activeEditor;
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-  const frames = n => new Promise(resolve => { let i = 0; const tick = () => (++i >= n ? resolve() : requestAnimationFrame(tick)); tick(); });
+  // A hidden or background tab fires no animation frames; give up waiting after 120 ms per frame.
+  const frames = n => new Promise(resolve => {
+    let i = 0;
+    const next = () => {
+      if (++i >= n) { resolve(); return; }
+      let fired = false;
+      requestAnimationFrame(() => { fired = true; next(); });
+      setTimeout(() => { if (!fired) { fired = true; next(); } }, 120);
+    };
+    next();
+  });
 
   // Small seeded generator so a failing run can be repeated exactly.
   let state = config.seed >>> 0 || 1;

@@ -34,6 +34,7 @@ export interface SpreadsheetRepaintClock {
 /** One repaint burst per grid, always reading current state, never a stale edit. */
 export function createSpreadsheetRepaintQueue(repaint: () => void, clock: SpreadsheetRepaintClock) {
   let frame: number | null = null;
+  let fallback: number | null = null;
   let timers: number[] = [];
   let disposed = false;
   let generation = 0;
@@ -41,30 +42,45 @@ export function createSpreadsheetRepaintQueue(repaint: () => void, clock: Spread
     timers.forEach(id => clock.clearTimer(id));
     timers = [];
   };
+  const clearFallback = (): void => {
+    if (fallback !== null) clock.clearTimer(fallback);
+    fallback = null;
+  };
+  const burst = (): void => {
+    frame = null;
+    clearFallback();
+    if (disposed) return;
+    const current = generation;
+    repaint();
+    if (disposed || current !== generation) return;
+    // Retain the existing library-settling checkpoints, but cancel
+    // older bursts when a newer edit supersedes them.
+    timers = [0, 120, 400].map(delay => clock.setTimer(() => {
+      if (!disposed && current === generation) repaint();
+    }, delay));
+  };
   return {
     schedule(): void {
       if (disposed) return;
       generation++;
       clearRetries();
       if (frame !== null) return;
-      frame = clock.requestFrame(() => {
-        frame = null;
-        if (disposed) return;
-        const current = generation;
-        repaint();
-        if (disposed || current !== generation) return;
-        // Retain the existing library-settling checkpoints, but cancel
-        // older bursts when a newer edit supersedes them.
-        timers = [0, 120, 400].map(delay => clock.setTimer(() => {
-          if (!disposed && current === generation) repaint();
-        }, delay));
-      });
+      frame = clock.requestFrame(burst);
+      // A hidden or background tab never runs animation frames. If none arrives soon, repaint from
+      // a timer instead so formula results do not stay stale.
+      fallback = clock.setTimer(() => {
+        fallback = null;
+        if (frame === null) return;
+        clock.cancelFrame(frame);
+        burst();
+      }, 100);
     },
     dispose(): void {
       disposed = true;
       generation++;
       if (frame !== null) clock.cancelFrame(frame);
       frame = null;
+      clearFallback();
       clearRetries();
     },
   };

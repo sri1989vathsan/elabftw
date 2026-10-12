@@ -47,15 +47,20 @@ figure > figcaption {
   text-size-adjust: 100%;
 }
 
-.tox-tinymce--toolbar-sticky-on .tox-editor-header {
+.tox.tox-tinymce.tox-tinymce--toolbar-sticky-on .tox-editor-header {
   top: calc(var(--navbar-height) + var(--toolbar-height)) !important;
-  transition: top var(--sticky-header-speed) var(--sticky-header-easing);
+  // TinyMCE's skin sets `transition: box-shadow` on this element with a more specific selector, which
+  // silently dropped the `top` transition: the bar jumped when the top nav bar hid or showed while
+  // the back/save bar glided. Same speed and easing as the back/save bar; box-shadow kept from the skin.
+  transition:
+    top var(--sticky-header-speed) var(--sticky-header-easing),
+    box-shadow 0.5s !important;
   will-change: top;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tox-tinymce--toolbar-sticky-on .tox-editor-header {
-    transition: none;
+  .tox.tox-tinymce.tox-tinymce--toolbar-sticky-on .tox-editor-header {
+    transition: box-shadow 0.5s !important;
   }
 }
 

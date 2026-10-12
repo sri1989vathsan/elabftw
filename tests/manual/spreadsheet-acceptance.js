@@ -19,6 +19,17 @@ window.spreadsheetAcceptance = (() => {
   const tableEl = () => editor().getBody().querySelector(`table.elabftw-spreadsheet[data-elabftw-spreadsheet-uid="${state.uid}"]`);
   const snap = () => api().snapshot(true).find(entry => entry.uid === state.uid);
   const inlineRoot = () => api().overlayElement(state.uid);
+  // The grid is briefly absent while it is rebuilt after an edit or a popup Update (slower in Firefox):
+  // wait for it instead of failing on a null.
+  const liveRoot = async () => {
+    for (let i = 0; i < 100; i++) {
+      const root = inlineRoot();
+      if (root && root.querySelector('td[data-x][data-y]')) return root;
+      if (i === 20) { try { api().mountLive(state.uid); } catch (e) { /* retry below */ } }
+      await sleep(50);
+    }
+    throw new Error('the inline grid did not come back');
+  };
   const dialog = () => document.querySelector('.inline-spreadsheet-dialog');
   const cell = (root, r, c) => root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
   const text = (root, r, c) => (cell(root, r, c)?.innerText ?? '').trim();
@@ -301,18 +312,18 @@ window.spreadsheetAcceptance = (() => {
         button.click();
         await sleep(400);
       };
-      const root = inlineRoot();
+      const root = await liveRoot();
       const toggle = root.querySelector('.elabftw-spreadsheet-options-toggle');
       if (toggle && !root.querySelector('.elabftw-spreadsheet-format-bar')?.offsetParent) { toggle.click(); await sleep(500); }
-      await apply(root, 0, 0, 'Bold'); out.inlineBold = style(cell(inlineRoot(), 0, 0)).font.includes('700') || style(cell(inlineRoot(), 0, 0)).font.includes('bold');
-      await apply(inlineRoot(), 0, 1, 'Italic'); out.inlineItalic = style(cell(inlineRoot(), 0, 1)).font.includes('italic');
-      await apply(inlineRoot(), 1, 0, 'Align right'); out.inlineAlignRight = style(cell(inlineRoot(), 1, 0)).align === 'right';
+      await apply(root, 0, 0, 'Bold'); out.inlineBold = style(cell(await liveRoot(), 0, 0)).font.includes('700') || style(cell(await liveRoot(), 0, 0)).font.includes('bold');
+      await apply(await liveRoot(), 0, 1, 'Italic'); out.inlineItalic = style(cell(await liveRoot(), 0, 1)).font.includes('italic');
+      await apply(await liveRoot(), 1, 0, 'Align right'); out.inlineAlignRight = style(cell(await liveRoot(), 1, 0)).align === 'right';
       const dlg = await openPopup();
       await apply(dlg, 1, 1, 'Bold'); out.popupBold = style(cell(dlg, 1, 1)).font.includes('700') || style(cell(dlg, 1, 1)).font.includes('bold');
       await apply(dlg, 2, 0, 'Italic'); out.popupItalic = style(cell(dlg, 2, 0)).font.includes('italic');
       await apply(dlg, 2, 1, 'Align center'); out.popupAlignCenter = style(cell(dlg, 2, 1)).align === 'center';
       await closePopup('update');
-      out.popupBoldKept = (style(cell(inlineRoot(), 1, 1)).font.includes('700') || style(cell(inlineRoot(), 1, 1)).font.includes('bold'));
+      out.popupBoldKept = (style(cell(await liveRoot(), 1, 1)).font.includes('700') || style(cell(await liveRoot(), 1, 1)).font.includes('bold'));
       return result('A9', Object.values(out).every(Boolean), out);
     },
   };

@@ -1140,6 +1140,17 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // spreadsheet lifetimes are independent of main-text history.
   const SPREADSHEET_UID_ATTR = 'data-elabftw-spreadsheet-uid';
   const latestTableContent = new Map<string, string>();
+  // Spreadsheets deleted with the trash icon, newest last. Ctrl+Z / Undo brings the newest one back once
+  // any text changes made after the deletion have been undone (see restoreDeletedSpreadsheet).
+  // proseRevision counts the undo levels the text history has actually added, so "nothing newer to undo"
+  // can be told apart from "there is still text to undo first".
+  const deletedSpreadsheets: Array<{
+    table: HTMLTableElement;
+    position: ReturnType<typeof captureSpreadsheetPositions>[number];
+    tablesBefore: number;
+    revision: number;
+  }> = [];
+  let proseRevision = 0;
   const tableCellHistories = new Map<string, SpreadsheetCellHistory>();
   // Which table currently holds each id -- lets a colliding duplicate
   // (see ensureSpreadsheetUid's own comment) be told apart from the one
@@ -1862,7 +1873,18 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         (HTMLElement & { spreadsheet?: { worksheets?: Array<{ updateSelectionFromCoords?: (...args: number[]) => void }> } }) | null;
       const worksheet = grid?.spreadsheet?.worksheets?.[0];
       if (!buttonDown && worksheet?.updateSelectionFromCoords && entry.el.querySelector('td[data-x][data-y]')) {
-        window.setTimeout(() => worksheet.updateSelectionFromCoords?.(cell.col, cell.row, cell.col, cell.row), 80);
+        window.setTimeout(() => {
+          worksheet.updateSelectionFromCoords?.(cell.col, cell.row, cell.col, cell.row);
+          // The preview's pointerdown is default-prevented, so the browser never moved focus; without
+          // this the page editor keeps its old caret and the first keystrokes land in the page text.
+          const current = spreadsheetOverlays.get(table);
+          if (!current || current.isPreview || current.el.contains(document.activeElement)) return;
+          const sink = current.el.querySelector<HTMLElement>('.jss_textarea')
+            ?? current.el.querySelector<HTMLElement>('.jss_spreadsheet');
+          editor.getWin().blur();
+          window.focus();
+          sink?.focus({ preventScroll: true });
+        }, 80);
         return;
       }
       window.requestAnimationFrame(() => attempt(frame + 1));
@@ -1938,6 +1960,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       },
       onDelete: () => {
         if (lastActiveSpreadsheetTable === table) setActiveSpreadsheetTable(null);
+        // Remember where this table sits and keep its node (with its current content) so Undo can
+        // bring it back. Anything still waiting in the overlay's debounce is written to the table first.
+        flushOverlay?.();
+        const livePositions = captureSpreadsheetPositions(editor.getBody());
+        const deletedPosition = livePositions.find(position => position.table === table);
+        const deletedTablesBefore = livePositions.findIndex(position => position.table === table);
         removeOverlay(table);
         // A genuine, explicit deletion (unlike an ordinary scroll-out
         // teardown, which also calls removeOverlay but must NOT clear
@@ -1960,6 +1988,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         // has nothing of its own to restore.
         editor.dom.remove(table);
         editor.undoManager.add();
+        if (deletedPosition) {
+          deletedSpreadsheets.push({
+            table, position: deletedPosition, tablesBefore: deletedTablesBefore, revision: proseRevision,
+          });
+          if (deletedSpreadsheets.length > 20) deletedSpreadsheets.shift();
+        }
         editor.setDirty(true);
         editor.dispatch('keyup');
       },
@@ -2424,9 +2458,69 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       capturePendingSpreadsheets();
     }
   }, true);
+  // Undo for a spreadsheet deleted with the trash icon. The text history deliberately ignores
+  // spreadsheet-only changes (so Ctrl+Z in the text never touches tables), which also meant a deleted
+  // spreadsheet could never come back. Only when no text change made after the deletion is left to
+  // undo does Undo restore the table, and nothing else about the text or the other tables changes.
+  const restoreDeletedSpreadsheet = (): boolean => {
+    const entry = deletedSpreadsheets[deletedSpreadsheets.length - 1];
+    if (!entry || entry.revision !== proseRevision) return false;
+    const body = editor.getBody();
+    if (body.contains(entry.table)) {
+      deletedSpreadsheets.pop();
+      return false;
+    }
+    deletedSpreadsheets.pop();
+    spreadsheetOverlays.forEach(overlayEntry => overlayEntry.flush());
+    const positions = captureSpreadsheetPositions(body);
+    positions.splice(Math.min(entry.tablesBefore, positions.length), 0, entry.position);
+    editor.undoManager.ignore(() => restoreSpreadsheetPositions(body, positions));
+    const uid = entry.table.getAttribute(SPREADSHEET_UID_ATTR);
+    if (uid) uidToTable.set(uid, entry.table);
+    removeOverlay(entry.table, true);
+    enhanceTable(entry.table);
+    editor.setDirty(true);
+    editor.nodeChanged();
+    window.dispatchEvent(new CustomEvent('elabftw-spreadsheet-resync'));
+    return true;
+  };
+  editor.on('AddUndo', () => { proseRevision += 1; });
+  editor.on('Undo', () => { proseRevision -= 1; });
+  editor.on('Redo', () => { proseRevision += 1; });
   editor.on('BeforeExecCommand', event => {
-    if (['undo', 'redo'].includes(event.command.toLowerCase())) capturePendingSpreadsheets();
+    const command = event.command.toLowerCase();
+    if (command === 'undo' && restoreDeletedSpreadsheet()) {
+      event.preventDefault();
+      return;
+    }
+    if (['undo', 'redo'].includes(command)) capturePendingSpreadsheets();
   });
+  // Ctrl+Z pressed with focus outside the text editor (for example right after clicking the trash icon,
+  // which leaves focus on the page): only act when nothing else on the page wants the key.
+  const onPageUndoKey = (event: KeyboardEvent): void => {
+    if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== 'z') return;
+    const target = event.target;
+    const onPlainPage = target === document.body || target === document.documentElement;
+    if (!onPlainPage || !deletedSpreadsheets.length) return;
+    if (restoreDeletedSpreadsheet()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  };
+  document.addEventListener('keydown', onPageUndoKey, true);
+  // The grid's "Add comments" menu item is hidden: a note typed there lives only in the grid and is never
+  // saved with the table, so it would silently disappear on reload. Runs for the inline grid and the popup.
+  const hideUnsupportedMenuItems = (): void => {
+    window.setTimeout(() => {
+      document.querySelectorAll<HTMLElement>('.jcontextmenu a').forEach(item => {
+        if (!/^\s*(add|edit)\s+comments?\s*$/i.test(item.textContent ?? '')) return;
+        item.style.display = 'none';
+        const next = item.nextElementSibling;
+        if (next instanceof HTMLElement && next.tagName === 'HR') next.style.display = 'none';
+      });
+    }, 0);
+  };
+  document.addEventListener('contextmenu', hideUnsupportedMenuItems);
   editor.on('Undo Redo', () => {
     const positions = pendingSpreadsheetPositions;
     pendingSpreadsheetPositions = null;
@@ -2529,6 +2623,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     window.removeEventListener('elabftw-spreadsheet-resync', enhanceAllTables);
     window.removeEventListener('elabftw-flush-spreadsheets', flushAllOverlays);
     document.removeEventListener('pointerdown', onSpreadsheetPointerDown, true);
+    document.removeEventListener('keydown', onPageUndoKey, true);
+    document.removeEventListener('contextmenu', hideUnsupportedMenuItems);
     // A pending debounced mceAutoResize (see syncOverlayPositions) has
     // nothing left to act on once the editor itself is gone -- calling
     // execCommand on a destroyed editor, or trying to refocus an element

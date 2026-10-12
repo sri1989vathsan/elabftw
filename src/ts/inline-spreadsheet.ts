@@ -23,6 +23,16 @@ type RowHeights = Record<string, number>;
 type ColWidths = Record<string, number>;
 type AppearanceScope = 'user' | 'notebook';
 type CellRange = [number, number, number, number];
+// Moving focus from the page editor's iframe into a grid needs the iframe to let go first: calling
+// element.focus() alone sets document.activeElement but typed characters still reach the iframe's caret.
+export const releaseEditorFrameFocus = (): void => {
+  const active = document.activeElement;
+  if (active instanceof HTMLIFrameElement) {
+    try { active.contentWindow?.blur(); } catch { /* cross-origin frame: nothing to release */ }
+  }
+  window.focus();
+};
+
 // One user-facing action's worth of cell-value changes -- a plain typed
 // edit is a single-entry array, a paste covering a range is one array with
 // every affected cell, so undo/redo always steps by "what the user did
@@ -3414,7 +3424,8 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   sheetHost.className = 'inline-spreadsheet-container';
   // .inline-spreadsheet-container already has resize:both, so the editing
   // area is natively drag-resizable without a dedicated control bar.
-  const defaultViewportHeight = Math.max(220, Math.min(1200, Math.round(window.innerHeight * 0.65)));
+  // Capped so the popup stays a reasonable size on a large window; drag the corner to enlarge it.
+  const defaultViewportHeight = Math.max(220, Math.min(640, Math.round(window.innerHeight * 0.6)));
   sheetHost.style.height = `${defaultViewportHeight}px`;
   dialog.append(sheetHost);
 
@@ -3447,7 +3458,11 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   dialog.tabIndex = -1;
   dialog.style.outline = 'none';
   dialog.addEventListener('pointerdown', () => {
-    if (!dialog.contains(document.activeElement)) dialog.focus({ preventScroll: true });
+    const active = document.activeElement;
+    // The cell editor box lives outside the dialog; pulling focus off it would close it before a click
+    // can insert a cell reference into the formula being typed.
+    if (active instanceof HTMLElement && active.classList.contains('elabftw-spreadsheet-rescue-input')) return;
+    if (!dialog.contains(active)) { releaseEditorFrameFocus(); dialog.focus({ preventScroll: true }); }
   }, true);
 
   return {
@@ -3813,6 +3828,10 @@ export function openSpreadsheetModal(
         window.setTimeout(render, 120);
         window.setTimeout(render, 400);
       });
+      // A hidden or background tab never runs animation frames, so the popup would keep showing
+      // raw formula text. Timers still run there: draw from them as well.
+      window.setTimeout(render, 60);
+      window.setTimeout(render, 450);
     };
 
     const captureRenderedRowHeights = (): void => {
@@ -3964,6 +3983,16 @@ export function openSpreadsheetModal(
         button.disabled = cellCount < 2;
       });
       ui.formulaFunctionSelect.disabled = !hasNumericCell;
+      // Bold / italic / underline show the formatting of the selected cell (its first cell), not
+      // whatever was clicked last. Otherwise bolding a second cell takes two clicks: the first
+      // one un-checks the box and clears the formatting. Setting .checked fires no 'change'.
+      const firstCell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${startCol}"][data-y="${startRow}"]`);
+      if (firstCell) {
+        const computed = window.getComputedStyle(firstCell);
+        ui.cellFormatBoldInput.checked = computed.fontWeight === 'bold' || Number.parseInt(computed.fontWeight, 10) >= 600;
+        ui.cellFormatItalicInput.checked = computed.fontStyle === 'italic';
+        ui.cellFormatUnderlineInput.checked = computed.textDecorationLine.includes('underline');
+      }
     };
 
     const formulaParenthesisBalance = (value: string): number => {
@@ -4386,6 +4415,24 @@ export function openSpreadsheetModal(
       // visible cell can be updated without rebuilding the grid.
       updateRawDataMirrorCell(col, row, value, false);
       if (sheetContainer) previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, value);
+      hasChanges = true;
+      scheduleFormulaResultRender();
+    };
+    // Delete clears every selected cell at once, as a spreadsheet application does; the cell editor
+    // is not opened. One history entry, so a single undo brings all of them back.
+    const clearSelectedCells = (range: CellRange): void => {
+      const changes: CellHistoryEntry = [];
+      for (let row = Math.min(range[1], range[3]); row <= Math.max(range[1], range[3]); row++) {
+        for (let col = Math.min(range[0], range[2]); col <= Math.max(range[0], range[2]); col++) {
+          const oldValue = String(rawDataMirror[row]?.[col] ?? '');
+          if (oldValue === '') continue;
+          changes.push({ col, row, oldValue, newValue: '' });
+          updateRawDataMirrorCell(col, row, '', false);
+          if (sheetContainer) previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, '');
+        }
+      }
+      if (changes.length === 0) return;
+      pushCellHistoryEntry(changes);
       hasChanges = true;
       scheduleFormulaResultRender();
     };
@@ -5958,10 +6005,31 @@ export function openSpreadsheetModal(
           }
         }
       }
+      // The grid's own hidden input (jss_textarea) is its keyboard sink, not a cell editor.
+      const targetIsGridSink = eventTarget instanceof Element && eventTarget.classList.contains('jss_textarea');
+      if ((!targetIsTextControl || targetIsGridSink)
+        && (!rescueInputEl || rescueInputEl.hidden)
+        && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
+        if (event.key === 'Delete' && selectedRange !== null) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          clearSelectedCells(selectedRange);
+          return;
+        }
+        if (event.key === 'F2' && hasSingleCellSelection) {
+          // Same as a double-click: edit the cell with its current content.
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const f2Col = selectedRange![0];
+          const f2Row = selectedRange![1];
+          openCellEditor(f2Col, f2Row, String(rawDataMirror[f2Row]?.[f2Col] ?? ''), false);
+          return;
+        }
+      }
       if (!targetIsTextControl
         && (!rescueInputEl || rescueInputEl.hidden)
         && hasSingleCellSelection
-        && (isPrintableKey || event.key === 'Backspace' || event.key === 'Delete')) {
+        && (isPrintableKey || event.key === 'Backspace')) {
         event.preventDefault();
         event.stopImmediatePropagation();
         const col = selectedRange![0];
@@ -7681,6 +7749,23 @@ export function buildReadOnlySpreadsheetHost(
     delete document.body.dataset.spreadsheetCellEditing;
     document.body.classList.remove('elabftw-spreadsheet-editing');
   };
+  // Delete clears every selected cell at once, as a spreadsheet application does; the cell editor
+  // is not opened. One history entry, so a single undo brings all of them back.
+  const clearSelectedCells = (range: CellRange): void => {
+    const changes: CellHistoryEntry = [];
+    for (let row = Math.min(range[1], range[3]); row <= Math.max(range[1], range[3]); row++) {
+      for (let col = Math.min(range[0], range[2]); col <= Math.max(range[0], range[2]); col++) {
+        const oldValue = String(rawDataMirror[row]?.[col] ?? '');
+        if (oldValue === '') continue;
+        changes.push({ col, row, oldValue, newValue: '' });
+        updateRawDataMirrorCell(col, row, '', false);
+        previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, '');
+      }
+    }
+    if (changes.length === 0) return;
+    pushCellHistoryEntry(changes);
+    notifyFromMirror();
+  };
   // Escape: drop the edit. The typed text is mirrored into rawDataMirror on every
   // keystroke, so hiding the box alone would keep it (and a later change would
   // save it) -- put the value from before the edit back.
@@ -8034,10 +8119,23 @@ export function buildReadOnlySpreadsheetHost(
       || (target instanceof HTMLElement && target.isContentEditable))
       && !target.classList.contains('jss_textarea')) return;
     if (!lastKnownSelection) return;
+    if (event.key === 'Delete') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      clearSelectedCells(lastKnownSelection);
+      return;
+    }
     const [col, row, endCol, endRow] = lastKnownSelection;
     if (col !== endCol || row !== endRow) return;
+    if (event.key === 'F2') {
+      // Same as a double-click: edit the cell with its current content.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openCellEditor(col, row, String(rawDataMirror[row]?.[col] ?? ''), false);
+      return;
+    }
     const printable = event.key.length === 1;
-    if (!printable && event.key !== 'Backspace' && event.key !== 'Delete') return;
+    if (!printable && event.key !== 'Backspace') return;
     event.preventDefault();
     event.stopImmediatePropagation();
     const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
@@ -8058,8 +8156,12 @@ export function buildReadOnlySpreadsheetHost(
     // same as the popup does. jspreadsheet's own handling still runs after it.
     sheetContainer.addEventListener('pointerdown', () => {
       if (sheetContainer.contains(document.activeElement)) return;
+      // A cell is being edited in the rescue box (outside the grid): moving focus now would close it
+      // before the click can insert a cell reference into a formula.
+      if (rescueInputEl && !rescueInputEl.hidden && document.activeElement === rescueInputEl) return;
       const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea')
         ?? sheetContainer.querySelector<HTMLElement>('.jss_spreadsheet');
+      releaseEditorFrameFocus();
       sink?.focus({ preventScroll: true });
     }, true);
   }
