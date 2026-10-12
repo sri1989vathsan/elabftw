@@ -249,6 +249,12 @@
           </div>
         </div>
         <div class='modal-footer'>
+          {% if teamsArr is defined and scopedTeamgroupsArr is defined and visibilityArr is defined %}
+            {# Shown by the script only to the folder's owner and admins. #}
+            <button type='button' class='btn btn-secondary mr-auto' id='editExperimentFolderPermissionsButton' data-action='open-folder-permissions' hidden>
+              <i class='fas fa-user-shield fa-fw mr-1'></i>{{ 'Permissions'|trans }}
+            </button>
+          {% endif %}
           <button type='button' class='btn btn-ghost' data-dismiss='modal'>{{ 'Cancel'|trans }}</button>
           <button type='submit' class='btn btn-primary' data-action='save-folder-details'>{{ 'Save'|trans }}</button>
         </div>
@@ -258,4 +264,5 @@
 </div>
 
 {% include 'folder-export-modal.html' %}
+{% include 'folder-permissions-modal.html' %}
 {% endif %}

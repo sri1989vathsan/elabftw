@@ -169,6 +169,8 @@ abstract class AbstractEntityController implements ControllerInterface
             'pageTitle' => $this->getPageTitle(),
             'requestActionsArr' => $UserRequestActions->readAllFull(),
             'scopedTeamgroupsArr' => $this->scopedTeamgroupsArr,
+            // teams, user groups and base choices for the folder permissions dialog
+            'teamsArr' => $this->App->Teams->readAllVisible(),
             // get all the tags for the top search bar
             'tagsArrForSelect' => $TeamTags->readAll(),
             'usersArr' => $this->App->Users->readAllFromTeam(),

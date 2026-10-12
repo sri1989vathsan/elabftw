@@ -25,6 +25,77 @@ interface FolderReadme {
   can_edit_readme: boolean;
 }
 
+interface FolderPermissionUser {
+  userid: number;
+  fullname: string;
+  email: string;
+}
+
+interface FolderPermissionSet {
+  canread_base: number;
+  canwrite_base: number;
+  canread: { teams: number[]; teamgroups: number[]; users: number[] };
+  canwrite: { teams: number[]; teamgroups: number[]; users: number[] };
+  canread_users?: FolderPermissionUser[];
+  canwrite_users?: FolderPermissionUser[];
+}
+
+interface FolderPermissionsData {
+  id: number;
+  name: string;
+  can_manage_permissions: boolean;
+  permission_item_count: number;
+  permissions: null | FolderPermissionSet;
+  default_permissions?: FolderPermissionSet;
+  permission_apply_result?: { updated: number; skipped: number };
+}
+
+type TomSelectLike = { clear: (silent?: boolean) => void; addOption: (option: object) => void; setValue: (values: string[], silent?: boolean) => void };
+const tomSelectOf = (id: string): TomSelectLike | null => (document.getElementById(id) as (HTMLSelectElement & { tomselect?: TomSelectLike }) | null)?.tomselect ?? null;
+
+// Fill one base + teams + user groups + users picker of the folder permissions dialog.
+function fillFolderPermissions(
+  identifier: string,
+  base: number | null,
+  can: { teams: number[]; teamgroups: number[]; users: number[] } | undefined,
+  users: FolderPermissionUser[] | undefined,
+): void {
+  const baseSelect = document.getElementById(`${identifier}_select_base`) as HTMLSelectElement | null;
+  if (baseSelect) {
+    // Nothing remembered yet: start from what a new item of this user gets, shown as the dialog's default.
+    baseSelect.value = base !== null ? String(base) : baseSelect.value;
+  }
+  const teams = tomSelectOf(`${identifier}_select_teams`);
+  teams?.clear(true);
+  teams?.setValue((can?.teams ?? []).map(id => `team:${id}`), true);
+  const groups = tomSelectOf(`${identifier}_select_teamgroups`);
+  groups?.clear(true);
+  groups?.setValue((can?.teamgroups ?? []).map(id => `teamgroup:${id}`), true);
+  const usersSelect = tomSelectOf(`${identifier}_select_users`);
+  usersSelect?.clear(true);
+  (users ?? []).forEach(user => usersSelect?.addOption({ value: `user:${user.userid}`, text: `${user.fullname} (${user.email})` }));
+  usersSelect?.setValue((can?.users ?? []).map(id => `user:${id}`), true);
+}
+
+function readFolderPermissionsBase(identifier: string): number {
+  return parseInt((document.getElementById(`${identifier}_select_base`) as HTMLSelectElement).value, 10);
+}
+
+// Same JSON shape an experiment's own permissions have: {"teams": [], "teamgroups": [], "users": []}.
+function collectFolderPermissions(identifier: string): string {
+  const values = (suffix: string, prefix: string): number[] => {
+    const select = document.getElementById(`${identifier}_${suffix}`) as HTMLSelectElement | null;
+    return select
+      ? Array.from(select.selectedOptions).map(option => parseInt(option.value.replace(`${prefix}:`, ''), 10)).filter(id => Number.isInteger(id))
+      : [];
+  };
+  return JSON.stringify({
+    teams: values('select_teams', 'team'),
+    teamgroups: values('select_teamgroups', 'teamgroup'),
+    users: values('select_users', 'user'),
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   // Only run on experiments page
   const initialSidebar = document.getElementById('experimentsFoldersSidebar');
@@ -706,6 +777,63 @@ document.addEventListener('DOMContentLoaded', () => {
     parentSelect.value = el.dataset.parentId ?? '';
     (document.getElementById('editExperimentFolderDescription') as HTMLTextAreaElement).value = el.dataset.description ?? '';
     $('#editExperimentFolderModal').modal('show');
+    // The Permissions button is only for the folder's owner and admins (the server decides).
+    const permissionsButton = document.getElementById('editExperimentFolderPermissionsButton');
+    if (permissionsButton) {
+      permissionsButton.hidden = true;
+      ApiC.getJson<FolderPermissionsData>(`experiments_folders/${folderId}`)
+        .then(folder => {
+          permissionsButton.hidden = !folder.can_manage_permissions;
+        })
+        .catch(() => { permissionsButton.hidden = true; });
+    }
+  });
+
+  // Permissions remembered by a folder: open the dialog filled with what the folder has now.
+  on('open-folder-permissions', () => {
+    const folderId = (document.getElementById('editExperimentFolderId') as HTMLInputElement).value;
+    if (!folderId) return;
+    ApiC.getJson<FolderPermissionsData>(`experiments_folders/${folderId}`).then(folder => {
+      (document.getElementById('folderPermissionsFolderId') as HTMLInputElement).value = folderId;
+      const nameEl = document.getElementById('folderPermissionsFolderName');
+      if (nameEl) nameEl.textContent = folder.name;
+      // A folder that remembers nothing yet starts from the user's own default permissions for new items.
+      const shown = folder.permissions ?? folder.default_permissions;
+      fillFolderPermissions('folderRead', shown?.canread_base ?? null, shown?.canread, shown?.canread_users);
+      fillFolderPermissions('folderWrite', shown?.canwrite_base ?? null, shown?.canwrite, shown?.canwrite_users);
+      (document.getElementById('folderPermissionsIncludeSubfolders') as HTMLInputElement).checked = true;
+      const countEl = document.getElementById('folderPermissionsCount');
+      if (countEl) {
+        countEl.textContent = folder.permission_item_count === 0
+          ? 'There are no items in this folder yet; the permissions will apply to items added to it.'
+          : `${folder.permission_item_count} item(s) in this folder and its subfolders will be changed.`;
+      }
+      $('#editExperimentFolderModal').modal('hide');
+      $('#folderPermissionsModal').modal('show');
+    });
+  });
+
+  on('apply-folder-permissions', () => {
+    const folderId = (document.getElementById('folderPermissionsFolderId') as HTMLInputElement).value;
+    if (!folderId) return;
+    const includeSubfolders = (document.getElementById('folderPermissionsIncludeSubfolders') as HTMLInputElement).checked;
+    const countText = document.getElementById('folderPermissionsCount')?.textContent ?? '';
+    if (!confirm(`${countText}\n\nThis replaces the permissions of those items${includeSubfolders ? '' : ' (this folder only)'}. Continue?`)) return;
+    ApiC.patch(`experiments_folders/${folderId}`, {
+      action: 'set_folder_permissions',
+      canread_base: readFolderPermissionsBase('folderRead'),
+      canread: collectFolderPermissions('folderRead'),
+      canwrite_base: readFolderPermissionsBase('folderWrite'),
+      canwrite: collectFolderPermissions('folderWrite'),
+      include_subfolders: includeSubfolders,
+    }).then(response => response.json()).then((folder: FolderPermissionsData) => {
+      $('#folderPermissionsModal').modal('hide');
+      const result = folder.permission_apply_result;
+      if (result) {
+        const skipped = result.skipped > 0 ? `, ${result.skipped} left as they were (archived, locked, or not yours to edit)` : '';
+        notify.success(`Permissions applied: ${result.updated} item(s) updated${skipped}.`);
+      }
+    });
   });
 
   on('open-folder-export', (el: HTMLElement, event: Event) => {

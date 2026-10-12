@@ -120,6 +120,7 @@ final class CustomMigrationRunner
         '079_moorlab_wiki_link.sql',
         '080_ethis_link.sql',
         '081_moorlab_zoom_link.sql',
+        '082_folder_permissions.sql',
     );
 
     private Db $Db;

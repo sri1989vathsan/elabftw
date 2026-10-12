@@ -13,14 +13,18 @@ declare(strict_types=1);
 namespace Elabftw\Models;
 
 use Elabftw\Elabftw\CanSqlBuilder;
+use Elabftw\Elabftw\TwigFunctions;
 use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Action;
+use Elabftw\Enums\BasePermissions;
 use Elabftw\Exceptions\IllegalActionException;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
+use Elabftw\Exceptions\UnprocessableContentException;
 use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Users\Users;
 use Elabftw\Params\CommentParam;
+use Elabftw\Services\Check;
 use Elabftw\Services\Filter;
 use Elabftw\Services\SlowOperationTimer;
 use Elabftw\Traits\SetIdTrait;
@@ -28,6 +32,12 @@ use Override;
 use PDO;
 
 use function array_column;
+use function array_map;
+use function array_unique;
+use function array_values;
+use function implode;
+use function json_decode;
+use function json_encode;
 use function array_key_exists;
 use function count;
 use function in_array;
@@ -118,6 +128,28 @@ final class ExperimentsFolders extends AbstractRest
         }
         $folder['has_readme'] = $folder['readme_body'] !== '';
         $folder['can_edit_readme'] = $this->canEditReadme((int) $folder['userid']);
+        $folder['can_manage_permissions'] = $this->canManagePermissions((int) $folder['userid']);
+        $folder['permissions'] = $this->readPermissions((int) $folder['id']);
+        if ($folder['permissions'] !== null) {
+            // names of the individually selected users, so the permissions dialog can show them
+            foreach (array('canread', 'canwrite') as $key) {
+                $folder['permissions'][$key . '_users'] = TwigFunctions::canToHuman((string) json_encode($folder['permissions'][$key]))['users'] ?? array();
+            }
+        }
+        $folder['permission_item_count'] = $this->countItemsInTree((int) $folder['id']);
+        // What a folder with nothing remembered yet starts from: the requester's own default permissions
+        // for new experiments and resources (Settings > Experiments).
+        $userData = $this->requester->userData;
+        $defaultRead = (string) ($userData['default_read'] ?? '{"teams":[],"teamgroups":[],"users":[]}');
+        $defaultWrite = (string) ($userData['default_write'] ?? '{"teams":[],"teamgroups":[],"users":[]}');
+        $folder['default_permissions'] = array(
+            'canread_base' => (int) ($userData['default_read_base'] ?? BasePermissions::Team->value),
+            'canwrite_base' => (int) ($userData['default_write_base'] ?? BasePermissions::User->value),
+            'canread' => json_decode($defaultRead, true) ?? array('teams' => array(), 'teamgroups' => array(), 'users' => array()),
+            'canwrite' => json_decode($defaultWrite, true) ?? array('teams' => array(), 'teamgroups' => array(), 'users' => array()),
+            'canread_users' => TwigFunctions::canToHuman($defaultRead)['users'] ?? array(),
+            'canwrite_users' => TwigFunctions::canToHuman($defaultWrite)['users'] ?? array(),
+        );
         return (new CustomUiDescriptions())->enrichRows(
             CustomUiDescriptions::EXPERIMENT_FOLDER,
             array($folder),
@@ -254,6 +286,10 @@ final class ExperimentsFolders extends AbstractRest
             return array('favorite_experiment_folders' => $this->getFavoriteFolders());
         }
 
+        if (isset($params['action']) && $params['action'] === 'set_folder_permissions') {
+            return $this->setFolderPermissions($params);
+        }
+
         if (array_key_exists('readme_body', $params)) {
             $folder = $this->readOne();
             if (!$folder['can_edit_readme']) {
@@ -365,7 +401,13 @@ final class ExperimentsFolders extends AbstractRest
         $req->bindParam(':parent_id', $parentId);
         $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
         $this->Db->execute($req);
-        return $this->Db->lastInsertId();
+        $newId = $this->Db->lastInsertId();
+        // A subfolder starts with the permissions its parent folder remembers, so items filed in it
+        // get the same access without the permissions having to be set again.
+        if ($parentId !== null) {
+            $this->copyStoredPermissions((int) $parentId, $newId);
+        }
+        return $newId;
     }
 
     public function update(CommentParam $params): bool
@@ -409,7 +451,11 @@ final class ExperimentsFolders extends AbstractRest
         $req = $this->Db->prepare($sql);
         $req->bindParam(':folder_id', $folderId);
         $req->bindParam(':id', $experimentId, PDO::PARAM_INT);
-        return $this->Db->execute($req);
+        $result = $this->Db->execute($req);
+        if ($folderId !== null) {
+            $this->applyFolderPermissionsToEntity(Experiments::class, $experimentId, (int) $folderId);
+        }
+        return $result;
     }
 
     /**
@@ -421,7 +467,11 @@ final class ExperimentsFolders extends AbstractRest
         $req = $this->Db->prepare($sql);
         $req->bindParam(':folder_id', $folderId);
         $req->bindParam(':id', $resourceId, PDO::PARAM_INT);
-        return $this->Db->execute($req);
+        $result = $this->Db->execute($req);
+        if ($folderId !== null) {
+            $this->applyFolderPermissionsToEntity(Items::class, $resourceId, (int) $folderId);
+        }
+        return $result;
     }
 
     /**
@@ -705,6 +755,237 @@ final class ExperimentsFolders extends AbstractRest
     {
         if (!$this->canWrite()) {
             throw new IllegalActionException();
+        }
+    }
+
+    /**
+     * Who may set the permissions remembered by a folder: its owner and (sys)admins.
+     */
+    private function canManagePermissions(int $ownerId): bool
+    {
+        return $ownerId === (int) $this->requester->userData['userid']
+            || $this->requester->isAdmin()
+            || $this->requester->isSysadmin();
+    }
+
+    /**
+     * The permissions a folder remembers, or null if none were set.
+     *
+     * @return array{canread_base: int, canwrite_base: int, canread: array, canwrite: array}|null
+     */
+    public function readPermissions(?int $folderId = null): ?array
+    {
+        $folderId ??= (int) $this->id;
+        $req = $this->Db->prepare(
+            'SELECT canread_base, canwrite_base, canread, canwrite FROM custom_experiment_folder_permissions WHERE folder_id = :folder_id',
+        );
+        $req->bindValue(':folder_id', $folderId, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $row = $req->fetch();
+        if ($row === false) {
+            return null;
+        }
+        return array(
+            'canread_base' => (int) $row['canread_base'],
+            'canwrite_base' => (int) $row['canwrite_base'],
+            'canread' => json_decode((string) $row['canread'], true) ?? array('teams' => array(), 'teamgroups' => array(), 'users' => array()),
+            'canwrite' => json_decode((string) $row['canwrite'], true) ?? array('teams' => array(), 'teamgroups' => array(), 'users' => array()),
+        );
+    }
+
+    /**
+     * Ids of a folder and all folders below it (same team).
+     *
+     * @return array<int>
+     */
+    private function folderTreeIds(int $folderId): array
+    {
+        $sql = 'WITH RECURSIVE folder_tree AS (
+                SELECT id FROM experiments_folders WHERE id = :folder_id AND team = :team
+                UNION ALL
+                SELECT child.id FROM experiments_folders AS child
+                INNER JOIN folder_tree ON child.parent_id = folder_tree.id
+                WHERE child.team = :child_team
+            ) SELECT id FROM folder_tree';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':folder_id', $folderId, PDO::PARAM_INT);
+        $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $req->bindValue(':child_team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return array_map('intval', array_column($req->fetchAll(), 'id'));
+    }
+
+    private function countItemsInTree(int $folderId): int
+    {
+        $ids = $this->folderTreeIds($folderId);
+        if ($ids === array()) {
+            return 0;
+        }
+        $in = implode(',', $ids);
+        $total = 0;
+        foreach (array('experiments', 'items') as $table) {
+            $req = $this->Db->prepare(sprintf('SELECT COUNT(*) FROM %s WHERE folder_id IN (%s) AND team = :team AND state = 1', $table, $in));
+            $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $total += (int) $req->fetchColumn();
+        }
+        return $total;
+    }
+
+    private function storePermissions(int $folderId, int $canreadBase, string $canread, int $canwriteBase, string $canwrite): void
+    {
+        $sql = 'INSERT INTO custom_experiment_folder_permissions (folder_id, canread_base, canwrite_base, canread, canwrite, updated_by)
+            VALUES (:folder_id, :canread_base, :canwrite_base, :canread, :canwrite, :updated_by)
+            ON DUPLICATE KEY UPDATE canread_base = VALUES(canread_base), canwrite_base = VALUES(canwrite_base),
+                canread = VALUES(canread), canwrite = VALUES(canwrite), updated_by = VALUES(updated_by)';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':folder_id', $folderId, PDO::PARAM_INT);
+        $req->bindValue(':canread_base', $canreadBase, PDO::PARAM_INT);
+        $req->bindValue(':canwrite_base', $canwriteBase, PDO::PARAM_INT);
+        $req->bindValue(':canread', $canread);
+        $req->bindValue(':canwrite', $canwrite);
+        $req->bindValue(':updated_by', $this->requester->userData['userid'], PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    private function copyStoredPermissions(int $fromFolderId, int $toFolderId): void
+    {
+        $sql = 'INSERT INTO custom_experiment_folder_permissions (folder_id, canread_base, canwrite_base, canread, canwrite, updated_by)
+            SELECT :to_id, canread_base, canwrite_base, canread, canwrite, :updated_by
+            FROM custom_experiment_folder_permissions WHERE folder_id = :from_id';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':to_id', $toFolderId, PDO::PARAM_INT);
+        $req->bindValue(':from_id', $fromFolderId, PDO::PARAM_INT);
+        $req->bindValue(':updated_by', $this->requester->userData['userid'], PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    /**
+     * Remember the permissions on a folder (and its subfolders when asked) and replace the permissions of
+     * every item already in it. Items the requester cannot edit (not their own, immutable permissions,
+     * archived or in exclusive edit by someone else) are left as they are and counted as skipped.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function setFolderPermissions(array $params): array
+    {
+        $folder = $this->readOne();
+        if (!$this->canManagePermissions((int) $folder['userid'])) {
+            throw new IllegalActionException();
+        }
+        $canreadBase = Check::basePermission((int) ($params['canread_base'] ?? 0))->value;
+        $canwriteBase = Check::basePermission((int) ($params['canwrite_base'] ?? 0))->value;
+        $empty = '{"teams":[],"teamgroups":[],"users":[]}';
+        $canread = Check::visibility((string) ($params['canread'] ?? $empty));
+        $canwrite = Check::visibility((string) ($params['canwrite'] ?? $empty));
+        foreach (array($canread, $canwrite) as $json) {
+            $wanted = json_decode($json, true) ?? array();
+            $found = $this->existingTargets($wanted);
+            foreach (array('teams', 'teamgroups', 'users') as $key) {
+                if (count(array_unique(array_map('intval', (array) ($wanted[$key] ?? array())))) !== count($found[$key])) {
+                    throw new ImproperActionException(_('The permissions refer to a team, user group or user that does not exist.'));
+                }
+            }
+        }
+        $includeSubfolders = filter_var($params['include_subfolders'] ?? true, FILTER_VALIDATE_BOOLEAN);
+        $folderIds = $includeSubfolders ? $this->folderTreeIds((int) $this->id) : array((int) $this->id);
+
+        foreach ($folderIds as $folderId) {
+            $this->storePermissions($folderId, $canreadBase, $canread, $canwriteBase, $canwrite);
+        }
+
+        $result = array('updated' => 0, 'skipped' => 0);
+        $in = implode(',', $folderIds);
+        $payload = array(
+            'canread_base' => $canreadBase,
+            'canread' => $canread,
+            'canwrite_base' => $canwriteBase,
+            'canwrite' => $canwrite,
+        );
+        foreach (array('experiments' => Experiments::class, 'items' => Items::class) as $table => $entityClass) {
+            // normal and archived items; archived ones cannot be changed and are counted as skipped
+            $req = $this->Db->prepare(sprintf('SELECT id FROM %s WHERE folder_id IN (%s) AND team = :team AND state IN (1, 2)', $table, $in));
+            $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
+            $this->Db->execute($req);
+            foreach (array_column($req->fetchAll(), 'id') as $entityId) {
+                if ($this->patchEntityPermissions($entityClass, (int) $entityId, $payload)) {
+                    $result['updated']++;
+                } else {
+                    $result['skipped']++;
+                }
+            }
+        }
+        $folder = $this->readOne();
+        $folder['permission_apply_result'] = $result;
+        return $folder;
+    }
+
+    /**
+     * Give an item the permissions of the folder it was just filed in (nothing happens if the folder
+     * remembers none, or if the requester may not change the item).
+     */
+    public function applyFolderPermissionsToEntity(string $entityClass, int $entityId, int $folderId): void
+    {
+        $permissions = $this->readPermissions($folderId);
+        if ($permissions === null) {
+            return;
+        }
+        // someone deleted since the permissions were remembered is simply left out
+        $this->patchEntityPermissions($entityClass, $entityId, array(
+            'canread_base' => $permissions['canread_base'],
+            'canread' => (string) json_encode($this->existingTargets($permissions['canread'])),
+            'canwrite_base' => $permissions['canwrite_base'],
+            'canwrite' => (string) json_encode($this->existingTargets($permissions['canwrite'])),
+        ));
+    }
+
+    /**
+     * Keep only the teams, user groups and users that still exist.
+     *
+     * @param array<string, mixed> $can
+     * @return array{teams: array<int>, teamgroups: array<int>, users: array<int>}
+     */
+    private function existingTargets(array $can): array
+    {
+        $tables = array('teams' => array('teams', 'id'), 'teamgroups' => array('team_groups', 'id'), 'users' => array('users', 'userid'));
+        $result = array('teams' => array(), 'teamgroups' => array(), 'users' => array());
+        foreach ($tables as $key => $definition) {
+            $ids = array_values(array_unique(array_map('intval', (array) ($can[$key] ?? array()))));
+            if ($ids === array()) {
+                continue;
+            }
+            $req = $this->Db->prepare(sprintf('SELECT %2$s FROM %1$s WHERE %2$s IN (%3$s)', $definition[0], $definition[1], implode(',', $ids)));
+            $this->Db->execute($req);
+            $result[$key] = array_map('intval', array_column($req->fetchAll(), $definition[1]));
+        }
+        return $result;
+    }
+
+    /**
+     * Same code path as editing the permissions of one item by hand (checks, changelog, notifications).
+     * Returns false when the requester is not allowed to change this item.
+     *
+     * @param class-string<AbstractEntity> $entityClass
+     * @param array<string, mixed> $payload
+     */
+    private function patchEntityPermissions(string $entityClass, int $entityId, array $payload): bool
+    {
+        try {
+            $entity = new $entityClass($this->requester, $entityId);
+            // Decide before changing anything, so an item is never left with only part of the new permissions:
+            // archived items and items with locked permissions (unless the requester is an admin) are skipped.
+            if ((int) ($entity->entityData['state'] ?? 1) !== 1) {
+                return false;
+            }
+            $locked = (int) ($entity->entityData['canread_is_immutable'] ?? 0) === 1
+                || (int) ($entity->entityData['canwrite_is_immutable'] ?? 0) === 1;
+            if ($locked && !$this->requester->isAdmin()) {
+                return false;
+            }
+            $entity->patch(Action::Update, $payload);
+            return true;
+        } catch (IllegalActionException | UnprocessableContentException | ImproperActionException | ResourceNotFoundException) {
+            return false;
         }
     }
 

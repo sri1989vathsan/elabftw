@@ -1,0 +1,69 @@
+{# Permissions remembered by a folder. Needs teamsArr, scopedTeamgroupsArr and visibilityArr (set by the entity controllers). #}
+{% if teamsArr is defined and scopedTeamgroupsArr is defined and visibilityArr is defined %}
+<div class='modal fade' id='folderPermissionsModal' tabindex='-1' role='dialog' aria-labelledby='folderPermissionsModalLabel' aria-hidden='true'>
+  <div class='modal-dialog modal-lg' role='document'>
+    <div class='modal-content'>
+      <div class='modal-header'>
+        <h5 class='modal-title' id='folderPermissionsModalLabel'><i class='fas fa-user-shield fa-fw mr-1' aria-hidden='true'></i>{{ 'Folder permissions'|trans }}<span class='color-medium ml-2' id='folderPermissionsFolderName'></span></h5>
+        <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'><span aria-hidden='true'>&times;</span></button>
+      </div>
+      <div class='modal-body'>
+        <input type='hidden' id='folderPermissionsFolderId'>
+        <p class='smallgray' id='folderPermissionsIntro'>{{ 'Choose who can see and who can edit everything in this folder. These permissions replace the ones the items have now, and are also given to items added or moved into this folder later.'|trans }}</p>
+        <p class='smallgray' id='folderPermissionsSkipNote'>{{ 'Items you cannot edit yourself (for example someone else’s experiments) are left as they are.'|trans }}</p>
+        <ul class='nav nav-tabs mb-3' role='tablist'>
+          <li class='nav-item'><a class='nav-link active' id='folderPermissionsReadTab' data-toggle='tab' href='#folderPermissionsReadPanel' role='tab' aria-controls='folderPermissionsReadPanel' aria-selected='true'><i class='fas fa-eye fa-fw mr-1'></i>{{ 'Can see'|trans }}</a></li>
+          <li class='nav-item'><a class='nav-link' id='folderPermissionsWriteTab' data-toggle='tab' href='#folderPermissionsWritePanel' role='tab' aria-controls='folderPermissionsWritePanel' aria-selected='false'><i class='fas fa-pencil-alt fa-fw mr-1'></i>{{ 'Can edit'|trans }}</a></li>
+        </ul>
+        <div class='tab-content'>
+          {% for panel in [{id: 'folderRead', rw: 'canread', tab: 'folderPermissionsReadPanel', tabId: 'folderPermissionsReadTab', active: true}, {id: 'folderWrite', rw: 'canwrite', tab: 'folderPermissionsWritePanel', tabId: 'folderPermissionsWriteTab', active: false}] %}
+            <div class='tab-pane fade {{ panel.active ? 'show active' }}' id='{{ panel.tab }}' role='tabpanel' aria-labelledby='{{ panel.tabId }}'>
+              <label for='{{ panel.id }}_select_base'><strong><i class='fas fa-user-shield mr-2' aria-hidden='true'></i>{{ 'Base'|trans }}</strong></label>
+              <p class='smallgray'>{{ 'This setting sets a baseline upon which you can add more permissions by selecting teams, user groups or users below.'|trans }}</p>
+              <select id='{{ panel.id }}_select_base' class='form-control mb-2' name='{{ panel.rw }}_base'>
+                {% for key, value in visibilityArr %}
+                  <option value='{{ key }}'>{{ value|trans }}</option>
+                {% endfor %}
+              </select>
+              <hr>
+              <label for='{{ panel.id }}_select_teams'><strong><i class='fas fa-users mr-2' aria-hidden='true'></i>+ {{ 'Teams'|trans }}</strong></label>
+              <p class='smallgray'>{{ 'Selecting a team here will give access to all members of this team.'|trans }}</p>
+              <div class='ts-wrapper'>
+                <select id='{{ panel.id }}_select_teams' multiple class='form-control' autocomplete='off' aria-label='{{ 'Search for user team'|trans }}' data-tom-select='1'>
+                  {% for team in teamsArr %}
+                    <option value='team:{{ team.id }}'>{{ 'Team'|trans }} - {{ team.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <label for='{{ panel.id }}_select_teamgroups' class='mt-3'><strong><i class='fas fa-user-group mr-2' aria-hidden='true'></i>+ {{ 'User Groups'|trans }}</strong></label>
+              <p class='smallgray'>{{ 'Selecting a user group here will give access to all users of this group.'|trans }}</p>
+              <div class='ts-wrapper'>
+                <select id='{{ panel.id }}_select_teamgroups' multiple class='form-control' autocomplete='off' {{ scopedTeamgroupsArr|length == 0 ? 'disabled' }} aria-label='{{ 'Search for user group'|trans }}' data-tom-select='1'>
+                  {% for tg in scopedTeamgroupsArr %}
+                    <option value='teamgroup:{{ tg.id }}'>{{ tg.team_name }} - {{ tg.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <label for='{{ panel.id }}_select_users' class='mt-3'><strong><i class='fas fa-user mr-2' aria-hidden='true'></i>+ {{ 'Users'|trans }}</strong></label>
+              <p class='smallgray'>{{ 'You can select specific users to give access to.'|trans }}</p>
+              <div class='ts-wrapper'>
+                <select id='{{ panel.id }}_select_users' multiple class='form-control' autocomplete='off' aria-label='{{ 'Search for users'|trans }}' data-tom-select='1'></select>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <hr>
+        <div class='custom-control custom-checkbox'>
+          <input type='checkbox' class='custom-control-input' id='folderPermissionsIncludeSubfolders' checked autocomplete='off'>
+          <label class='custom-control-label' for='folderPermissionsIncludeSubfolders'>{{ 'Include subfolders'|trans }}</label>
+        </div>
+        <p class='smallgray mb-0' id='folderPermissionsCount'></p>
+      </div>
+      <div class='modal-footer'>
+        <button type='button' class='btn btn-ghost' data-dismiss='modal'>{{ 'Cancel'|trans }}</button>
+        <button type='button' class='btn btn-primary' data-action='apply-folder-permissions'><i class='fas fa-check fa-fw mr-1'></i>{{ 'Apply to this folder'|trans }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}

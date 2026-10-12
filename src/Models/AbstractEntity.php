@@ -1266,6 +1266,14 @@ abstract class AbstractEntity extends AbstractRest
                 (string) ($this->entityData['title'] ?? ''),
             )->create();
         }
+        // Moved into a folder that remembers permissions: the item takes them over, as when it is created there.
+        if ($params->getTarget() === 'folder_id' && $this->id !== null && is_numeric($content) && (int) $content > 0) {
+            if ($this instanceof Experiments) {
+                new ExperimentsFolders($this->Users)->applyFolderPermissionsToEntity(Experiments::class, $this->id, (int) $content);
+            } elseif ($this instanceof Items) {
+                new ExperimentsFolders($this->Users)->applyFolderPermissionsToEntity(Items::class, $this->id, (int) $content);
+            }
+        }
         return $result;
     }
 
