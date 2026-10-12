@@ -6381,6 +6381,10 @@ export interface SpreadsheetHostHandle {
   destroy: (discardChanges?: boolean) => void;
   /** Keep an active cell editor attached to its cell, or commit it once the cell is genuinely out of view. */
   syncActiveEditor: () => void;
+  /** The grid's current raw cell values (what it would write to the table on its next commit). */
+  getData: () => AOA;
+  /** True while a cell edit or the formula bar still holds text that has not been committed. */
+  isEditing: () => boolean;
   /**
    * Immediately commits any edit still waiting out the debounce below,
    * without tearing anything down. Call before reading the real table
@@ -8804,6 +8808,8 @@ export function buildReadOnlySpreadsheetHost(
     host,
     flush,
     syncActiveEditor,
+    getData: () => rawDataMirror.map(row => [...row]),
+    isEditing: () => (rescueInputEl !== null && !rescueInputEl.hidden) || formulaInputDirty,
     // Properly tears down the jspreadsheet-ce instance (not just removing
     // the DOM) -- needed by callers that mount/unmount this repeatedly as
     // a table scrolls in and out of view, rather than once per page load.

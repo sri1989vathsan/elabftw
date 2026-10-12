@@ -24,6 +24,7 @@ import TableIndentation from '../TableIndentation.class';
 import { isSortable } from '../TableSorting.class';
 import { captureSpreadsheetPositions, restoreSpreadsheetPositions } from './SpreadsheetUndo';
 import { createSpreadsheetLayoutGate, createSpreadsheetProfiler, createSpreadsheetSnapshotCache } from './SpreadsheetPerformance';
+import { cellsEqual, createSyncDiagnostics, hashCells, normalizeCells } from './SpreadsheetSyncDiagnostics';
 
 interface PdfTableDialogData {
   columns: string;
@@ -696,11 +697,29 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     if (existingTable) spreadsheetOverlays.get(existingTable)?.flush();
     const uid = existingTable ? ensureSpreadsheetUid(existingTable) : null;
     if (uid && !tableCellHistories.has(uid)) tableCellHistories.set(uid, { undo: [], redo: [] });
+    // What the popup is built from: if the table's data differs when the popup is
+    // applied, the popup is replacing a newer version.
+    const openedFrom = existingTable ? extractFromTable(existingTable) : initial;
+    const openedHash = hashCells(openedFrom.data);
+    const openedRevision = uid ? diag.revision(uid) : 0;
+    if (uid) diag.log('popup-open', uid, { rev: openedRevision, hash: openedHash });
     openSpreadsheetModal(
-      existingTable ? extractFromTable(existingTable) : initial,
+      openedFrom,
       existingTable !== null,
       uid ? tableCellHistories.get(uid) : undefined,
     ).then(({ raw, computed, history }) => {
+      if (existingTable && uid && existingTable.isConnected) {
+        diagnose('popup apply', () => {
+          const nowHash = hashCells(extractCached(existingTable).data);
+          diag.log('popup-apply', uid, {
+            openedRev: openedRevision, rev: diag.revision(uid), openedHash, tableHash: nowHash, popupHash: hashCells(raw.data),
+          });
+          if (nowHash !== openedHash) {
+            diag.saveRecovery(uid, 'the spreadsheet popup was replacing a newer version of the table', existingTable.outerHTML);
+            warnSync('The spreadsheet changed while the popup was open. Your popup changes were applied; a recovery copy of the other version was saved.');
+          }
+        });
+      }
       // Saving over a table that's already in the document: update that
       // SAME node in place (like the inline overlay's own edits do)
       // rather than replacing it with a freshly-parsed one. Replacing it
@@ -712,6 +731,19 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           if (uid) {
             tableCellHistories.set(uid, history);
             latestTableContent.set(uid, existingTable.outerHTML);
+            markOwnWrite(existingTable);
+            diagnose('popup write', () => {
+              const rev = diag.bump(uid, 'popup');
+              markSynced(existingTable);
+              lastSyncedHash.set(existingTable, hashCells(raw.data));
+              // The table must now hold exactly what the popup applied.
+              const writtenHash = hashCells(extractFromTable(existingTable).data);
+              if (writtenHash !== hashCells(raw.data)) {
+                diag.log('popup-write-mismatch', uid, { rev, popupHash: hashCells(raw.data), tableHash: writtenHash });
+                diag.saveRecovery(uid, 'the table does not match what the popup applied', existingTable.outerHTML);
+                warnSync('The spreadsheet could not be updated exactly as shown in the popup. A recovery copy was saved; please check the table.');
+              }
+            });
           }
           editor.undoManager.add();
           editor.setDirty(true);
@@ -725,6 +757,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       }
       insertNewSpreadsheet(raw, computed, history);
     }).catch(() => {
+      if (uid) diagnose('popup cancel', () => diag.log('popup-cancel', uid, { rev: diag.revision(uid), tableHash: existingTable ? hashCells(extractCached(existingTable).data) : '' }));
       // User cancelled -- the real table was never touched (the popup
       // only ever edits its own separate copy), but its inline overlay can
       // end up torn down while the popup was open (observed intermittently
@@ -1031,7 +1064,44 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     syncActiveEditor: () => void;
     /** Cheap static stand-in; upgraded to the real grid on first click. */
     isPreview?: boolean;
+    /** The grid's own current values and whether a cell is mid-edit (live grids only). */
+    getData?: () => unknown[][];
+    isEditing?: () => boolean;
   }>();
+  // Content-free event log, revisions and recovery copies for the grid / popup / table sync.
+  const diag = createSyncDiagnostics();
+  // The table data both the table and its grid agreed on the last time they synced (hash).
+  const lastSyncedHash = new WeakMap<HTMLTableElement, string>();
+  // Times something outside this code touched the table's DOM (any attribute or text), and
+  // the count each grid last synced at. Cheap to keep; only when they differ is the table's
+  // data re-read and compared. A revision (diag.bump) is only taken for real data changes.
+  const externalTouches = new WeakMap<HTMLTableElement, number>();
+  const lastSyncedTouch = new WeakMap<HTMLTableElement, number>();
+  const markSynced = (table: HTMLTableElement): void => {
+    lastSyncedTouch.set(table, externalTouches.get(table) ?? 0);
+  };
+  // A write this code just made to a table, so the DOM observer does not count it as external.
+  const ownWrites = new WeakSet<HTMLTableElement>();
+  const markOwnWrite = (table: HTMLTableElement): void => {
+    ownWrites.add(table);
+    queueMicrotask(() => queueMicrotask(() => ownWrites.delete(table)));
+  };
+  // The checks around a write must never be able to break the write itself: an error in
+  // them is reported to the console and otherwise ignored.
+  const diagnose = (what: string, work: () => void): void => {
+    try {
+      work();
+    } catch (error) {
+      console.error(`Spreadsheet sync check failed (${what})`, error);
+    }
+  };
+  let lastSyncWarning = 0;
+  const warnSync = (text: string): void => {
+    const now = Date.now();
+    if (now - lastSyncWarning < 15000) return;
+    lastSyncWarning = now;
+    editor.notificationManager.open({ text, type: 'warning', timeout: 12000 });
+  };
   const enhancedTables = new WeakSet<HTMLTableElement>();
   let overlaySyncRunning = false;
   const layoutGate = createSpreadsheetLayoutGate();
@@ -1203,6 +1273,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // should be resurrecting.
     const discard = discardChanges || !table.isConnected || !editor.getBody().contains(table);
     profiler.count(entry.isPreview ? 'preview destroyed' : 'grid destroyed');
+    diag.log('overlay-removed', table.getAttribute('data-elabftw-spreadsheet-uid') ?? '', {
+      discard, preview: !!entry.isPreview, connected: table.isConnected,
+    });
     entry.destroy(discard);
     entry.el.remove();
     spreadsheetOverlays.delete(table);
@@ -1524,6 +1597,37 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // Writes an in-overlay edit back into the real (hidden) table, in place.
   // Only the table's own attributes/innerHTML are touched, which is exactly
   // what editor.getContent() serializes -- correct by construction.
+  // The overlay's debounced write into the real table, with a check that nobody else
+  // changed the table's data since this grid last synced with it: if they did, this
+  // (older) grid is about to overwrite newer data, so keep that newer version first.
+  const writeOverlayChange = (table: HTMLTableElement, uid: string, data: SpreadsheetData): void => {
+    let newHash = '';
+    diagnose('overlay pre-write', () => {
+      newHash = hashCells(data.data);
+      // Cheap test first: the table is only re-read when something outside this grid
+      // touched it since the last sync.
+      if ((externalTouches.get(table) ?? 0) === lastSyncedTouch.get(table)) return;
+      const baseHash = lastSyncedHash.get(table);
+      const currentHash = hashCells(extractCached(table).data);
+      if (baseHash !== undefined && currentHash !== baseHash) {
+        diag.bump(uid, 'external-data');
+        diag.log('stale-overlay-write', uid, {
+          rev: diag.revision(uid), baseHash, tableHash: currentHash, overlayHash: newHash,
+        });
+        diag.saveRecovery(uid, 'a spreadsheet grid was replacing a newer version of the table', table.outerHTML);
+        warnSync('A spreadsheet was changed from two places at once. Your latest edit was kept; a recovery copy of the other version was saved.');
+      }
+    });
+    commitOverlayChange(table, data);
+    markOwnWrite(table);
+    diagnose('overlay post-write', () => {
+      lastSyncedHash.set(table, newHash);
+      const rev = diag.bump(uid, 'overlay');
+      markSynced(table);
+      diag.log('commit-overlay', uid, { rev, overlayHash: newHash });
+    });
+  };
+
   const commitOverlayChange = (table: HTMLTableElement, data: SpreadsheetData): void => {
     // A cell edit has its own, separate undo/redo inside the table's own
     // toolbar (performCellUndo/performCellRedo) -- it must never *also*
@@ -1593,9 +1697,19 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
   const extractionCache = new WeakMap<HTMLTableElement, SpreadsheetData>();
   const invalidateExtractions = (records: MutationRecord[]): void => {
+    const touched = new Set<HTMLTableElement>();
     records.forEach(record => {
       const table = owningSpreadsheetTable(record.target);
-      if (table) extractionCache.delete(table);
+      if (table) {
+        extractionCache.delete(table);
+        touched.add(table);
+      }
+    });
+    // A change to the table that this code did not make itself (undo/redo, autofit,
+    // a paste...) is a new revision the grids and the popup may not know about.
+    touched.forEach(table => {
+      if (ownWrites.has(table)) return;
+      externalTouches.set(table, (externalTouches.get(table) ?? 0) + 1);
     });
   };
   let extractionObserver: MutationObserver | null = null;
@@ -1737,6 +1851,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const pendingInitialSelection = new WeakMap<HTMLTableElement, { col: number; row: number } | undefined>();
 
   const refreshTableOverlay = (table: HTMLTableElement): void => {
+    diag.log('refresh', table.getAttribute('data-elabftw-spreadsheet-uid') ?? '', {});
     // The backing table already contains the replacement. Never flush the
     // outgoing grid's pending edit over it (including destroy's flush).
     removeOverlay(table, true);
@@ -1753,6 +1868,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const extractStartedAt = profiler.start();
     const extracted = extractCached(table);
     profiler.end('table extraction (ms)', extractStartedAt);
+    lastSyncedHash.set(table, hashCells(extracted.data));
+    markSynced(table);
+    diag.log('mount', tableUid, {
+      rev: diag.revision(tableUid), hash: hashCells(extracted.data), rows: extracted.rows, cols: extracted.cols,
+    });
     const initialSelection = pendingInitialSelection.get(table);
     pendingInitialSelection.delete(table);
     // Reconciles this table's rows against its own saved rowHeights right
@@ -1778,12 +1898,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     let flushOverlay: (() => void) | null = null;
     const hostStartedAt = profiler.start();
     const {
-      host: overlay, flush, destroy, syncActiveEditor,
+      host: overlay, flush, destroy, syncActiveEditor, getData, isEditing,
     } = buildReadOnlySpreadsheetHost(extracted, {
       editable: true,
       initialSelection,
       cellHistory: tableCellHistories.get(tableUid),
-      onChange: data => commitOverlayChange(table, data),
+      onChange: data => writeOverlayChange(table, tableUid, data),
       onOpenFullEditor: () => {
         // A cell committed less than 500ms ago can still be waiting out
         // notifyChange's debounce -- extractFromTable(table) below reads
@@ -1916,7 +2036,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     });
     document.body.appendChild(overlay);
     spreadsheetOverlays.set(table, {
-      el: overlay, destroy, flush, syncActiveEditor,
+      el: overlay, destroy, flush, syncActiveEditor, getData, isEditing,
     });
     enhancedTables.add(table);
     ensureSyncLoop();
@@ -2117,9 +2237,140 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // autosave) inside that window would store the table without the last edit, which
   // then only shows up in the inline overlay. Write out anything still pending
   // before the editor reads its content.
+  type SyncStatus = 'ok' | 'skipped' | 'overlay-missed-write' | 'overlay-stale' | 'conflict';
+  // Before anything reads the table (save, autosave, the popup): every live grid must
+  // hold exactly what the real table holds. When they differ, keep a recovery copy, say
+  // so, and repair -- never report success over a silent mismatch.
+  const verifySpreadsheetSync = (reason: string): Array<{ uid: string; status: SyncStatus }> => {
+    const results: Array<{ uid: string; status: SyncStatus }> = [];
+    Array.from(spreadsheetOverlays.entries()).forEach(([table, entry]) => diagnose('pre-save check', () => {
+      if (!entry.getData || entry.isPreview || !table.isConnected) return;
+      const uid = ensureSpreadsheetUid(table);
+      if (entry.isEditing?.()) {
+        results.push({ uid, status: 'skipped' });
+        return;
+      }
+      const extracted = extractCached(table);
+      const overlayData = entry.getData();
+      const tableHash = hashCells(extracted.data);
+      const overlayHash = hashCells(overlayData);
+      if (tableHash === overlayHash) {
+        results.push({ uid, status: 'ok' });
+        return;
+      }
+      const baseHash = lastSyncedHash.get(table);
+      const status: SyncStatus = tableHash === baseHash
+        ? 'overlay-missed-write'
+        : (overlayHash === baseHash ? 'overlay-stale' : 'conflict');
+      results.push({ uid, status });
+      if (status !== 'overlay-missed-write') diag.bump(uid, 'external-data');
+      diag.log('sync-mismatch', uid, {
+        reason, status, rev: diag.revision(uid), baseHash, tableHash, overlayHash,
+      });
+      const rows = Math.max(1, overlayData.length);
+      const cols = Math.max(1, overlayData.reduce((max, row) => Math.max(max, row.length), 0));
+      const gridAsData = {
+        ...extracted, data: overlayData as SpreadsheetData['data'], displayData: undefined, rows, cols,
+      };
+      // Keep the version that is about to be discarded: the old grid when the table is the
+      // newer one, otherwise the table that the grid's data is about to replace.
+      diag.saveRecovery(
+        uid,
+        `grid and table differed before ${reason} (${status})`,
+        status === 'overlay-stale' ? spreadsheetToHTML(gridAsData, gridAsData.data) : table.outerHTML,
+      );
+      if (status === 'overlay-stale') {
+        // The table is the newer one; show it again instead of the old grid.
+        refreshTableOverlay(table);
+        warnSync('A spreadsheet on screen was out of date and has been reloaded from the saved table. A recovery copy was kept.');
+        return;
+      }
+      // The grid holds what you see and last typed: write it to the table.
+      commitOverlayChange(table, gridAsData);
+      markOwnWrite(table);
+      lastSyncedHash.set(table, overlayHash);
+      diag.bump(uid, 'repair');
+      markSynced(table);
+      warnSync('A spreadsheet had edits that were not yet in the saved table. They were added, and a recovery copy of the previous table was kept.');
+    }));
+    return results;
+  };
+
   editor.on('BeforeGetContent', () => {
     spreadsheetOverlays.forEach(entry => entry.flush(false));
+    verifySpreadsheetSync('save');
   });
+
+  // Read-only inspection and test hooks. Nothing here returns cell values unless asked to.
+  const tableByUid = (uid: string): HTMLTableElement | null => editor.getBody()
+    ?.querySelector<HTMLTableElement>(`table.elabftw-spreadsheet[${SPREADSHEET_UID_ATTR}="${uid}"]`) ?? null;
+  (window as unknown as { elabftwSpreadsheetDiagnostics?: unknown }).elabftwSpreadsheetDiagnostics = {
+    events: diag.events,
+    revisions: diag.revisions,
+    recoveryCopies: diag.recoveryCopies,
+    verify: (reason = 'manual') => verifySpreadsheetSync(reason),
+    snapshot: (withData = false) => Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
+      .map(table => {
+        const uid = ensureSpreadsheetUid(table);
+        const entry = spreadsheetOverlays.get(table);
+        const tableData = extractFromTable(table).data;
+        const overlayData = entry?.getData?.();
+        return {
+          uid,
+          rev: diag.revision(uid),
+          live: !!entry && !entry.isPreview,
+          editing: entry?.isEditing?.() ?? false,
+          tableHash: hashCells(tableData),
+          overlayHash: overlayData ? hashCells(overlayData) : null,
+          ...(withData ? {
+            tableData: normalizeCells(tableData),
+            overlayData: overlayData ? normalizeCells(overlayData) : null,
+          } : {}),
+        };
+      }),
+    mountLive: (uid: string): boolean => {
+      const table = tableByUid(uid);
+      if (!table) return false;
+      enhanceTable(table);
+      return !!spreadsheetOverlays.get(table) && !spreadsheetOverlays.get(table)?.isPreview;
+    },
+    restoreRecovery: (index: number): boolean => {
+      const copy = diag.recoveryCopies()[index];
+      const table = copy ? tableByUid(copy.uid) : null;
+      if (!copy || !table) return false;
+      if (!applySpreadsheetHtmlToTable(table, copy.html)) return false;
+      markOwnWrite(table);
+      diag.bump(copy.uid, 'recovery-restore');
+      refreshTableOverlay(table);
+      return true;
+    },
+    equal: cellsEqual,
+    overlayElement: (uid: string): HTMLElement | null => {
+      const table = tableByUid(uid);
+      return table ? spreadsheetOverlays.get(table)?.el ?? null : null;
+    },
+    // For automated tests: add a scratch spreadsheet at the end of the text and remove it again.
+    insertScratch: (rows: number, cols: number): string | null => {
+      const known = new Set(Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
+        .map(table => ensureSpreadsheetUid(table)));
+      editor.selection.select(editor.getBody(), true);
+      editor.selection.collapse(false);
+      insertNewSpreadsheet(emptySpreadsheetData(cols, rows));
+      const added = Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
+        .find(table => !known.has(ensureSpreadsheetUid(table)));
+      return added ? ensureSpreadsheetUid(added) : null;
+    },
+    removeTable: (uid: string): boolean => {
+      const table = tableByUid(uid);
+      if (!table) return false;
+      removeOverlay(table, true);
+      spreadsheetSpacers.get(table)?.remove();
+      editor.dom.remove(table);
+      editor.undoManager.add();
+      editor.setDirty(true);
+      return true;
+    },
+  };
   editor.on('SetContent NodeChange', enhanceAllTables);
   // Snapshot only the currently live tables, including their actual DOM
   // nodes. Reusing those nodes preserves overlay ownership and local undo.
