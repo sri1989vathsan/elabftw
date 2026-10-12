@@ -356,7 +356,7 @@
       "A slim rail on the left shows the tabs. Click one to open its panel next to your page; click it again to close it.",
       "Folders: browse and manage your folders and bookmarks.",
       "Search: your saved filters and results in one place.",
-      "Quick search and commands: press Ctrl/Cmd + K from anywhere.",
+      "Quick search and commands: press Ctrl + K (Cmd + K on a Mac) on any page, start typing the name of an experiment, resource, folder or command, choose with the arrow keys and press Enter.",
       "To-do list: your tasks and step deadlines sorted by due date, with a count of what is due.",
       "Activity calendar: a Day, Week or Month view of your deadlines.",
       "On an experiment page there is also a table of contents tab. The rail stays put while you scroll, and the last panel you opened is remembered."
@@ -370,10 +370,11 @@
     "purpose": "Keep the tools you use all day next to your work, instead of hunting through menus.",
     "uses": [
       "Keep the To-do panel open on a busy day and tick off steps as you finish them.",
-      "Keep Folders open while you file new experiments."
+      "Keep Folders open while you file new experiments.",
+      "Create a new experiment, open the Boards, or jump to an old experiment without leaving the keyboard."
     ],
-    "news": "New: one rail with all of these tools, on every page.",
-    "shot": "The left sidebar with the Folders panel open and the rail of tabs outlined"
+    "news": "One rail with all of these tools on every page, and a keyboard-first quick search.",
+    "shot": "The left sidebar with the Folders panel open and the rail of tabs outlined, and the quick search window open over a page"
   },
   {
     "id": "guide-calendar",
@@ -466,11 +467,12 @@
     "date": "2026-10-12",
     "area": "Experiments",
     "title": "The sections at the end of an experiment",
-    "summary": "Steps, data, links, files and more, all in one place under the main text.",
+    "summary": "Steps, data, links, files and more, all in one place under the main text, including the folder where your raw data lives.",
     "details": [
       "Scroll below the main text. Each section opens and closes on its own.",
       "Steps and tasks: a checklist for the experiment, with deadlines that also show in your calendar.",
-      "Data: the network folder with the raw data (see Link an experiment to its data folder).",
+      "Data: link the network folder where the experiment’s raw data lives. Paste the path (smb://server/share/folder or \\\\server\\share\\folder), add an optional label such as “Raw data folder” and press Add.",
+      "Each data link has buttons to open it on a Mac, to copy the Windows path to paste into Explorer, and to insert a reference to it in the main text. Remove a link with the trash icon while editing.",
       "Links: other experiments, associated templates, resources, orders, web addresses and LabCollector entries this one relates to.",
       "Files / folders and Local files: attach files, or paste references to files kept elsewhere.",
       "Compounds and Custom fields: record chemicals from the compound database, and any extra fields your team defined."
@@ -484,36 +486,11 @@
     "purpose": "Record not only what you did but also what you used, where the data lives and what it relates to.",
     "uses": [
       "Link the resources (plasmids, cell lines) you used, so anyone can follow the trail.",
-      "Add a step with a deadline for the next measurement and see it in the calendar."
+      "Add a step with a deadline for the next measurement and see it in the calendar.",
+      "Link the folder with the microscope images or the sequencing run, and insert the reference where you describe the measurement."
     ],
-    "news": "New: data links, order links, template links and LabCollector links in these sections.",
-    "shot": "An experiment page scrolled to the sections under the main text, each one open"
-  },
-  {
-    "id": "guide-data-link",
-    "date": "2026-10-12",
-    "area": "Linking",
-    "title": "Link an experiment to its data folder",
-    "summary": "Attach the network folder where an experiment’s raw data lives, and open it in one click.",
-    "details": [
-      "In the Data section of an experiment, paste the network share path (smb://server/share/folder or \\\\server\\share\\folder).",
-      "Add an optional label such as “Raw data folder” and press Add.",
-      "Each link has buttons to open it on a Mac, to copy the Windows path to paste into Explorer, and to insert a reference to it in the main text.",
-      "Remove a link with the trash icon while editing."
-    ],
-    "image": "",
-    "imageAlt": "",
-    "featured": false,
-    "guide": true,
-    "order": 90,
-    "icon": "fa-hard-drive",
-    "purpose": "Raw data rarely fits in an experiment. This keeps the path to it next to the notes, so it can be found years later.",
-    "uses": [
-      "Link the folder with the microscope images or the sequencing run for each experiment.",
-      "Insert the reference in the main text where you describe the measurement."
-    ],
-    "news": "New: the Data section for network folders.",
-    "shot": "The Data section of an experiment with a labelled link and its three buttons"
+    "news": "New: the Data section for network folders, plus order links, template links and LabCollector links in these sections.",
+    "shot": "An experiment page scrolled to the sections under the main text, with the Data section open showing a labelled link and its three buttons"
   },
   {
     "id": "guide-lab-links",
@@ -618,30 +595,6 @@
     ],
     "news": "New: filters you can favourite, shared by search across experiments, resources and templates.",
     "shot": "The Search panel with Type set to Experiments, favourite filters ticked and results below"
-  },
-  {
-    "id": "guide-quick-search",
-    "date": "2026-10-12",
-    "area": "Navigate",
-    "title": "Quick search and commands",
-    "summary": "Press Ctrl/Cmd + K anywhere to jump to a page or run a command.",
-    "details": [
-      "Press Ctrl + K (Cmd + K on a Mac) on any page.",
-      "Start typing the name of an experiment, a resource, a folder or a command.",
-      "Use the arrow keys to choose and press Enter."
-    ],
-    "image": "",
-    "imageAlt": "",
-    "featured": false,
-    "guide": true,
-    "order": 140,
-    "icon": "fa-magnifying-glass",
-    "purpose": "Get anywhere without clicking through menus.",
-    "uses": [
-      "Create a new experiment, open the Boards, or jump to an old experiment without leaving the keyboard."
-    ],
-    "news": "New: a keyboard-first way to move around.",
-    "shot": "The quick search window open over a page with a few results"
   },
   {
     "id": "guide-toc",
