@@ -316,14 +316,18 @@
     "date": "2026-10-12",
     "area": "Organise",
     "title": "Folders and READMEs",
-    "summary": "A shared tree of folders for experiments and resources, each with its own README.",
+    "summary": "A shared tree of folders for experiments and resources, each with its own README and permissions.",
     "details": [
       "Open the Folders tab in the left sidebar. The tree shows every folder; the number next to a folder counts the items inside it.",
       "Press Create folder at the bottom, give it a name (and an optional short description) and choose a parent folder to nest it.",
       "Click a folder to list only what is inside it. Choose the folder when you create an experiment or resource, or change it on its edit page.",
       "Press the three dots on a folder for Export, Edit (rename, move to another parent, change the description) and Delete. Deleting a folder moves its items to Unfiled.",
       "Press the page icon on a folder to open its README: a page of notes for everyone working in that folder. The folder's owner and admins edit it; everyone who can see the folder can read it.",
-      "Star a folder to bookmark it, and collapse the branches you do not need. The tree remembers what you opened."
+      "Star a folder to bookmark it, and collapse the branches you do not need. The tree remembers what you opened.",
+      "Set who can see and edit a folder's contents: open the three dots, press Edit, then Permissions (shown to the folder's owner and admins).",
+      "Choose who can see and who can edit with the same options as on a single experiment: a base level, plus teams, user groups or specific people. Leave Include subfolders ticked to cover the whole tree, check the item count the dialog shows, and press Apply.",
+      "The permissions of every item you can edit are replaced (items that are not yours, locked or archived are skipped and counted). The folder remembers the choice, so items created in it, moved into it or filed in a new subfolder take the same permissions.",
+      "You can still change one experiment on its own afterwards. It stays as you set it until the next Apply on that folder."
     ],
     "image": "",
     "imageAlt": "",
@@ -331,43 +335,16 @@
     "guide": true,
     "order": 10,
     "icon": "fa-folder-tree",
-    "purpose": "Keep the lab organised in folders the whole team sees, instead of one long list of experiments.",
+    "purpose": "Keep the lab organised in folders the whole team sees, and decide once who can see and edit everything in a folder.",
     "uses": [
       "One folder per project or per person, with a README that lists the project protocols and naming rules.",
       "Export a whole folder (PDF or ZIP) when a paper is submitted or a person leaves.",
-      "Use subfolders for experiment series, such as one per cell line or per plasmid batch."
+      "Use subfolders for experiment series, such as one per cell line or per plasmid batch.",
+      "Give a project folder read access to the whole team but edit access only to the project members, in one step.",
+      "Keep a private folder for drafts that only you and a few colleagues can open."
     ],
-    "news": "Folders now hold resources as well as experiments, can be bookmarked, have READMEs and can be exported.",
-    "shot": "The Folders tab of the left sidebar with a project folder open and its README beside it"
-  },
-  {
-    "id": "guide-folder-permissions",
-    "date": "2026-10-12",
-    "area": "Organise",
-    "title": "Folder permissions",
-    "summary": "Decide once who can see and who can edit everything in a folder.",
-    "details": [
-      "Open the three dots on a folder, press Edit, then Permissions (shown to the folder's owner and admins).",
-      "Choose who can see and who can edit with the same options as on a single experiment: a base level, plus teams, user groups or specific people.",
-      "Leave Include subfolders ticked to cover the whole tree. The dialog tells you how many items will change before you confirm.",
-      "Press Apply. The permissions of every item you can edit are replaced. Items you cannot change (not yours, locked or archived) are skipped, and the message says how many.",
-      "The folder remembers the choice: items created in it, moved into it, or filed in a new subfolder take the same permissions.",
-      "You can still change one experiment on its own afterwards. It stays as you set it until the next Apply on that folder."
-    ],
-    "image": "",
-    "imageAlt": "",
-    "featured": false,
-    "guide": true,
-    "order": 20,
-    "icon": "fa-user-shield",
-    "purpose": "Instead of changing the permissions of every experiment by hand, set them on the folder and let it apply them.",
-    "uses": [
-      "A project folder where the whole team can read but only the project members can edit.",
-      "A private folder for drafts that only you and a few colleagues can open.",
-      "Hand over a project: give the new owners edit access to everything in the folder in one step."
-    ],
-    "news": "New: folders now remember permissions and apply them to the items inside, including items added later.",
-    "shot": "The Folder permissions dialog with the Can see tab open, the pickers and the item count"
+    "news": "Folders now hold resources as well as experiments, can be bookmarked, have READMEs, can be exported, and can remember permissions that apply to everything inside.",
+    "shot": "The Folders tab with a project folder open and its README beside it, and the Folder permissions dialog with the Can see tab open"
   },
   {
     "id": "guide-sidebar",
