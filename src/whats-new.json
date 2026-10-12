@@ -465,9 +465,9 @@
   {
     "id": "guide-experiment-sections",
     "date": "2026-10-12",
-    "area": "Experiments",
-    "title": "The sections at the end of an experiment",
-    "summary": "Steps, data, links, files and more, all in one place under the main text, including the folder where your raw data lives.",
+    "area": "Linking",
+    "title": "Connect an experiment to its data and tools",
+    "summary": "Steps, data, links and files under the main text, and one-click links to LabCollector and the lab's tools.",
     "details": [
       "Scroll below the main text. Each section opens and closes on its own.",
       "Steps and tasks: a checklist for the experiment, with deadlines that also show in your calendar.",
@@ -475,47 +475,25 @@
       "Each data link has buttons to open it on a Mac, to copy the Windows path to paste into Explorer, and to insert a reference to it in the main text. Remove a link with the trash icon while editing.",
       "Links: other experiments, associated templates, resources, orders, web addresses and LabCollector entries this one relates to.",
       "Files / folders and Local files: attach files, or paste references to files kept elsewhere.",
-      "Compounds and Custom fields: record chemicals from the compound database, and any extra fields your team defined."
+      "Compounds and Custom fields: record chemicals from the compound database, and any extra fields your team defined.",
+      "The Links menu in the top bar opens LabCollector, OpenIRIS, the MoorLab Wiki, ETHIS and MoorLab Zoom in a new tab, from any page.",
+      "A team admin can change any of these addresses with the pencil icon next to it, so the link always points to the right place. On an experiment, the LabCollector links section lists the LabCollector entries it relates to."
     ],
     "image": "",
     "imageAlt": "",
     "featured": false,
     "guide": true,
     "order": 80,
-    "icon": "fa-list-check",
-    "purpose": "Record not only what you did but also what you used, where the data lives and what it relates to.",
+    "icon": "fa-link",
+    "purpose": "Record not only what you did but also what you used, where the data lives, what it relates to, and reach the tools the lab uses without bookmarks.",
     "uses": [
       "Link the resources (plasmids, cell lines) you used, so anyone can follow the trail.",
       "Add a step with a deadline for the next measurement and see it in the calendar.",
-      "Link the folder with the microscope images or the sequencing run, and insert the reference where you describe the measurement."
+      "Link the folder with the microscope images or the sequencing run, and insert the reference where you describe the measurement.",
+      "Jump to the lab wiki for a protocol while you write an experiment, or join the group meeting with the Zoom link."
     ],
-    "news": "New: the Data section for network folders, plus order links, template links and LabCollector links in these sections.",
-    "shot": "An experiment page scrolled to the sections under the main text, with the Data section open showing a labelled link and its three buttons"
-  },
-  {
-    "id": "guide-lab-links",
-    "date": "2026-10-12",
-    "area": "Navigate",
-    "title": "Quick links to LabCollector and the lab’s tools",
-    "summary": "The Links menu in the top bar opens LabCollector and the lab’s own pages.",
-    "details": [
-      "Open Links in the top bar to reach LabCollector, OpenIRIS, the MoorLab Wiki, ETHIS and MoorLab Zoom. They open in a new tab.",
-      "A team admin can change any of these addresses with the pencil icon next to it, so the link always points to the right place.",
-      "On an experiment, the LabCollector links section lists the LabCollector entries it relates to."
-    ],
-    "image": "",
-    "imageAlt": "",
-    "featured": false,
-    "guide": true,
-    "order": 100,
-    "icon": "fa-arrow-up-right-from-square",
-    "purpose": "Reach the tools the lab uses every day from any page, without bookmarks.",
-    "uses": [
-      "Jump to the lab wiki for a protocol while you write an experiment.",
-      "Join the group meeting with the Zoom link."
-    ],
-    "news": "New: a Links menu and a tidier top bar that folds the rest into More.",
-    "shot": "The top bar with the Links menu open"
+    "news": "New: the Data section for network folders, order, template and LabCollector links in these sections, and a Links menu that folds the lab’s tools into the top bar.",
+    "shot": "An experiment page scrolled to the sections under the main text with the Data section open, and the top bar with the Links menu open"
   },
   {
     "id": "guide-templates",
