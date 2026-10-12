@@ -466,8 +466,8 @@
     "id": "guide-experiment-sections",
     "date": "2026-10-12",
     "area": "Linking",
-    "title": "Connect an experiment to its data and tools",
-    "summary": "Steps, data, links and files under the main text, and one-click links to LabCollector and the lab's tools.",
+    "title": "Link items to experiments",
+    "summary": "Connect an experiment to the resources, data folders, templates and tools it uses, and reach the lab's tools in one click.",
     "details": [
       "Scroll below the main text. Each section opens and closes on its own.",
       "Steps and tasks: a checklist for the experiment, with deadlines that also show in your calendar.",
