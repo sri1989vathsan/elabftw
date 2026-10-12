@@ -310,5 +310,435 @@
       "label": "Sidebar tabs"
     },
     "featured": true
+  },
+  {
+    "id": "guide-folders",
+    "date": "2026-10-12",
+    "area": "Organise",
+    "title": "Folders and READMEs",
+    "summary": "A shared tree of folders for experiments and resources, each with its own README.",
+    "details": [
+      "Open the Folders tab in the left sidebar. The tree shows every folder; the number next to a folder counts the items inside it.",
+      "Press Create folder at the bottom, give it a name (and an optional short description) and choose a parent folder to nest it.",
+      "Click a folder to list only what is inside it. Choose the folder when you create an experiment or resource, or change it on its edit page.",
+      "Press the three dots on a folder for Export, Edit (rename, move to another parent, change the description) and Delete. Deleting a folder moves its items to Unfiled.",
+      "Press the page icon on a folder to open its README: a page of notes for everyone working in that folder. The folder's owner and admins edit it; everyone who can see the folder can read it.",
+      "Star a folder to bookmark it, and collapse the branches you do not need. The tree remembers what you opened."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 10,
+    "icon": "fa-folder-tree",
+    "purpose": "Keep the lab organised in folders the whole team sees, instead of one long list of experiments.",
+    "uses": [
+      "One folder per project or per person, with a README that lists the project protocols and naming rules.",
+      "Export a whole folder (PDF or ZIP) when a paper is submitted or a person leaves.",
+      "Use subfolders for experiment series, such as one per cell line or per plasmid batch."
+    ],
+    "news": "Folders now hold resources as well as experiments, can be bookmarked, have READMEs and can be exported.",
+    "shot": "The Folders tab of the left sidebar with a project folder open and its README beside it"
+  },
+  {
+    "id": "guide-folder-permissions",
+    "date": "2026-10-12",
+    "area": "Organise",
+    "title": "Folder permissions",
+    "summary": "Decide once who can see and who can edit everything in a folder.",
+    "details": [
+      "Open the three dots on a folder, press Edit, then Permissions (shown to the folder's owner and admins).",
+      "Choose who can see and who can edit with the same options as on a single experiment: a base level, plus teams, user groups or specific people.",
+      "Leave Include subfolders ticked to cover the whole tree. The dialog tells you how many items will change before you confirm.",
+      "Press Apply. The permissions of every item you can edit are replaced. Items you cannot change (not yours, locked or archived) are skipped, and the message says how many.",
+      "The folder remembers the choice: items created in it, moved into it, or filed in a new subfolder take the same permissions.",
+      "You can still change one experiment on its own afterwards. It stays as you set it until the next Apply on that folder."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 20,
+    "icon": "fa-user-shield",
+    "purpose": "Instead of changing the permissions of every experiment by hand, set them on the folder and let it apply them.",
+    "uses": [
+      "A project folder where the whole team can read but only the project members can edit.",
+      "A private folder for drafts that only you and a few colleagues can open.",
+      "Hand over a project: give the new owners edit access to everything in the folder in one step."
+    ],
+    "news": "New: folders now remember permissions and apply them to the items inside, including items added later.",
+    "shot": "The Folder permissions dialog with the Can see tab open, the pickers and the item count"
+  },
+  {
+    "id": "guide-sidebar",
+    "date": "2026-10-12",
+    "area": "Navigate",
+    "title": "The left sidebar",
+    "summary": "Folders, search, quick search, to-dos and the calendar one click away on every page.",
+    "details": [
+      "A slim rail on the left shows the tabs. Click one to open its panel next to your page; click it again to close it.",
+      "Folders: browse and manage your folders and bookmarks.",
+      "Search: your saved filters and results in one place.",
+      "Quick search and commands: press Ctrl/Cmd + K from anywhere.",
+      "To-do list: your tasks and step deadlines sorted by due date, with a count of what is due.",
+      "Activity calendar: a Day, Week or Month view of your deadlines.",
+      "On an experiment page there is also a table of contents tab. The rail stays put while you scroll, and the last panel you opened is remembered."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 30,
+    "icon": "fa-bars",
+    "purpose": "Keep the tools you use all day next to your work, instead of hunting through menus.",
+    "uses": [
+      "Keep the To-do panel open on a busy day and tick off steps as you finish them.",
+      "Keep Folders open while you file new experiments."
+    ],
+    "news": "New: one rail with all of these tools, on every page.",
+    "shot": "The left sidebar with the Folders panel open and the rail of tabs outlined"
+  },
+  {
+    "id": "guide-calendar",
+    "date": "2026-10-12",
+    "area": "Tasks",
+    "title": "Activity calendar",
+    "summary": "Every deadline in one calendar: your tasks plus the unfinished steps of your experiments.",
+    "details": [
+      "Open it from the calendar icon in the left sidebar. A badge counts what is overdue or due within the next hour.",
+      "A month grid shows each day with small count pills, and marks today, the day you selected and overdue days. Switch between Day, Week and Month views, and hide weekends if you do not need them.",
+      "Below the grid, an agenda lists the items for what you selected, in time order. Each card says where it came from: a personal task, or a step of an experiment or resource.",
+      "Click a step to open its experiment, and tick steps and tasks off right from the agenda.",
+      "Add a task with a title, notes, an exact date and time and a reminder (at the deadline, or 15 minutes, 1 hour, 1 day or 1 week before).",
+      "Subscribe from Google Calendar or Apple Calendar with the private, read-only link on the Calendar tab. You can regenerate or revoke it any time."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 40,
+    "icon": "fa-calendar-days",
+    "purpose": "See what is due this week at a glance, and never miss a step deadline hidden inside an experiment.",
+    "uses": [
+      "Plan the week on Monday: switch to Week view and see every deadline across your experiments.",
+      "Put the subscription link in your phone calendar so lab deadlines show up next to the rest of your day."
+    ],
+    "news": "New: an activity calendar that combines tasks and experiment steps, with reminders and calendar subscriptions.",
+    "shot": "The Activity calendar panel with the month grid, the Day/Week/Month buttons and the agenda below"
+  },
+  {
+    "id": "guide-boards",
+    "date": "2026-10-12",
+    "area": "Boards",
+    "title": "Project Boards",
+    "summary": "Plan lab work as projects of cards, with deadlines, steps and linked experiments.",
+    "details": [
+      "Open Boards from the top bar (under More). Create a project, then add cards for the tasks in it.",
+      "A card has a title, notes, a deadline, steps, comments and people assigned to it. Status badges and deadline colours show at a glance what needs attention.",
+      "Steps and comments can be collapsed to keep a long card short.",
+      "Select several cards to archive or delete them together. Duplicate a card into another project, or open a card straight into edit mode.",
+      "Projects can hold subprojects, be pinned to stay on top, and be archived when finished."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 50,
+    "icon": "fa-table-columns",
+    "purpose": "Keep track of who does what and by when, in one board per project, next to your experiments.",
+    "uses": [
+      "One board per paper or grant, with a card for each experiment series and each deadline.",
+      "A board for lab chores, with a card per task and the person responsible."
+    ],
+    "news": "New: Boards replace the old project list, with richer cards, bulk actions and subprojects.",
+    "shot": "The Boards page with a project open and one card showing its steps and linked experiments"
+  },
+  {
+    "id": "guide-card-links",
+    "date": "2026-10-12",
+    "area": "Boards",
+    "title": "Link experiments and resources to cards",
+    "summary": "Connect a card to the experiments and resources it is about, and jump between them.",
+    "details": [
+      "While you create a card, or later from its detail view, open the search panel next to the card.",
+      "Find an experiment or resource, then press Link, or add it as a step in one move.",
+      "Each linked item shows its status colour and type, so you can see how the work is going.",
+      "A project's Linked items section and the All links summary list everything connected to that project, including subprojects.",
+      "Click a linked item to open the experiment or resource itself."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 60,
+    "icon": "fa-link",
+    "purpose": "Make the plan and the work point at each other, so nobody has to ask which experiment belongs to which task.",
+    "uses": [
+      "Link the protocol resource and the experiment for each planned run.",
+      "Open a project and see in one place which linked experiments are finished."
+    ],
+    "news": "New: cards link to experiments and resources, with status colours.",
+    "shot": "A card detail view with its linked experiments and steps next to the search panel"
+  },
+  {
+    "id": "guide-orders",
+    "date": "2026-10-12",
+    "area": "Orders",
+    "title": "Orders",
+    "summary": "Track things to order for the team, from request to delivery.",
+    "details": [
+      "Open Orders from the top bar (under More) and press New order. Link an existing resource, or add a new one.",
+      "Add the supplier details and notes (lists are supported), and attach quotes or invoices. An attachment can be reused on other orders.",
+      "Follow the order through its stages to delivery. An order can move on by itself, for example from requested to ordered when a procurement ID appears.",
+      "Orders can archive themselves after a set time, and you can set a reminder.",
+      "People involved are notified when the status changes."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 70,
+    "icon": "fa-cart-shopping",
+    "purpose": "One place to request what the lab needs and to see where each order is, instead of emails and sticky notes.",
+    "uses": [
+      "Request a reagent, attach the supplier quote and let the person who orders pick it up.",
+      "Keep one list of what has been ordered and what is still on its way."
+    ],
+    "news": "New: reusable attachments, automatic status changes and archiving, reminders and notes with lists.",
+    "shot": "The Orders page with a few orders at different stages and one order open"
+  },
+  {
+    "id": "guide-experiment-sections",
+    "date": "2026-10-12",
+    "area": "Experiments",
+    "title": "The sections at the end of an experiment",
+    "summary": "Steps, data, links, files and more, all in one place under the main text.",
+    "details": [
+      "Scroll below the main text. Each section opens and closes on its own.",
+      "Steps and tasks: a checklist for the experiment, with deadlines that also show in your calendar.",
+      "Data: the network folder with the raw data (see Link an experiment to its data folder).",
+      "Links: other experiments, associated templates, resources, orders, web addresses and LabCollector entries this one relates to.",
+      "Files / folders and Local files: attach files, or paste references to files kept elsewhere.",
+      "Compounds and Custom fields: record chemicals from the compound database, and any extra fields your team defined."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 80,
+    "icon": "fa-list-check",
+    "purpose": "Record not only what you did but also what you used, where the data lives and what it relates to.",
+    "uses": [
+      "Link the resources (plasmids, cell lines) you used, so anyone can follow the trail.",
+      "Add a step with a deadline for the next measurement and see it in the calendar."
+    ],
+    "news": "New: data links, order links, template links and LabCollector links in these sections.",
+    "shot": "An experiment page scrolled to the sections under the main text, each one open"
+  },
+  {
+    "id": "guide-data-link",
+    "date": "2026-10-12",
+    "area": "Linking",
+    "title": "Link an experiment to its data folder",
+    "summary": "Attach the network folder where an experiment’s raw data lives, and open it in one click.",
+    "details": [
+      "In the Data section of an experiment, paste the network share path (smb://server/share/folder or \\\\server\\share\\folder).",
+      "Add an optional label such as “Raw data folder” and press Add.",
+      "Each link has buttons to open it on a Mac, to copy the Windows path to paste into Explorer, and to insert a reference to it in the main text.",
+      "Remove a link with the trash icon while editing."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 90,
+    "icon": "fa-hard-drive",
+    "purpose": "Raw data rarely fits in an experiment. This keeps the path to it next to the notes, so it can be found years later.",
+    "uses": [
+      "Link the folder with the microscope images or the sequencing run for each experiment.",
+      "Insert the reference in the main text where you describe the measurement."
+    ],
+    "news": "New: the Data section for network folders.",
+    "shot": "The Data section of an experiment with a labelled link and its three buttons"
+  },
+  {
+    "id": "guide-lab-links",
+    "date": "2026-10-12",
+    "area": "Navigate",
+    "title": "Quick links to LabCollector and the lab’s tools",
+    "summary": "The Links menu in the top bar opens LabCollector and the lab’s own pages.",
+    "details": [
+      "Open Links in the top bar to reach LabCollector, OpenIRIS, the MoorLab Wiki, ETHIS and MoorLab Zoom. They open in a new tab.",
+      "A team admin can change any of these addresses with the pencil icon next to it, so the link always points to the right place.",
+      "On an experiment, the LabCollector links section lists the LabCollector entries it relates to."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 100,
+    "icon": "fa-arrow-up-right-from-square",
+    "purpose": "Reach the tools the lab uses every day from any page, without bookmarks.",
+    "uses": [
+      "Jump to the lab wiki for a protocol while you write an experiment.",
+      "Join the group meeting with the Zoom link."
+    ],
+    "news": "New: a Links menu and a tidier top bar that folds the rest into More.",
+    "shot": "The top bar with the Links menu open"
+  },
+  {
+    "id": "guide-templates",
+    "date": "2026-10-12",
+    "area": "Templates",
+    "title": "Templates and their versions",
+    "summary": "Link a template to an experiment, see which version you used, and restore older versions.",
+    "details": [
+      "In an experiment, open Search in the left sidebar and set Type to Experiment templates.",
+      "Press Link to record the template without inserting anything, or Add to text to insert its content at the cursor.",
+      "Associated templates are listed under Links with their version number and how many times they were inserted. Click one to open it.",
+      "Open a template to see its version history, compare versions and restore an older one. The other versions are kept.",
+      "Star the templates you use most to find them quickly."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 110,
+    "icon": "fa-clone",
+    "purpose": "Start from the lab’s standard protocol and know exactly which version of it an experiment followed.",
+    "uses": [
+      "Keep the standard protocol as a template and publish a new version when it changes.",
+      "Months later, see which experiments used the old version."
+    ],
+    "news": "New: template versions, version history with restore, and template links on experiments.",
+    "shot": "The template version history with the list of versions and the Restore buttons"
+  },
+  {
+    "id": "guide-feedback",
+    "date": "2026-10-12",
+    "area": "Collaboration",
+    "title": "Feedback board and announcements",
+    "summary": "Post ideas and bugs, upvote the ones that matter, and read team announcements.",
+    "details": [
+      "Open Feedback from the top bar. Post a bug or feature idea for your team and upvote the ones that matter most to you.",
+      "Sort the list by votes or by date.",
+      "The dashboard shows the announcement feed: pinned announcements stay on top, and you can react to them.",
+      "You are notified when someone mentions you in feedback."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 120,
+    "icon": "fa-comments",
+    "purpose": "Tell the people who run the system what would help, and see what the team cares about most.",
+    "uses": [
+      "Ask for a new field or a new link, and see how many colleagues want it too.",
+      "Read the latest lab news at the top of the dashboard."
+    ],
+    "news": "New: a feedback board with votes and an announcement feed on the dashboard.",
+    "shot": "The Feedback board sorted by votes, next to the dashboard announcement feed"
+  },
+  {
+    "id": "guide-search-filters",
+    "date": "2026-10-12",
+    "area": "Search",
+    "title": "Favourite search filters",
+    "summary": "Save the categories, statuses, tags and owners you search by, and apply them in one click.",
+    "details": [
+      "Open the Search tab in the left sidebar. Pick a Type (All, Experiments, Resources, Experiment templates or Resource templates) and type in the search box.",
+      "The Filters list shows your favourite categories, tags, statuses and owners for that type. Tick the ones you want and press Apply filters.",
+      "Press Manage to choose which ones are your favourites. They are saved only for your account.",
+      "Results appear below, with a link to the full list."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 130,
+    "icon": "fa-star",
+    "purpose": "Stop re-entering the same filters every time you look for something.",
+    "uses": [
+      "Favourite your own tags and the statuses you use, then filter “my running experiments” in two clicks.",
+      "Switch Type to Resources to look through plasmids with the same panel."
+    ],
+    "news": "New: filters you can favourite, shared by search across experiments, resources and templates.",
+    "shot": "The Search panel with Type set to Experiments, favourite filters ticked and results below"
+  },
+  {
+    "id": "guide-quick-search",
+    "date": "2026-10-12",
+    "area": "Navigate",
+    "title": "Quick search and commands",
+    "summary": "Press Ctrl/Cmd + K anywhere to jump to a page or run a command.",
+    "details": [
+      "Press Ctrl + K (Cmd + K on a Mac) on any page.",
+      "Start typing the name of an experiment, a resource, a folder or a command.",
+      "Use the arrow keys to choose and press Enter."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 140,
+    "icon": "fa-magnifying-glass",
+    "purpose": "Get anywhere without clicking through menus.",
+    "uses": [
+      "Create a new experiment, open the Boards, or jump to an old experiment without leaving the keyboard."
+    ],
+    "news": "New: a keyboard-first way to move around.",
+    "shot": "The quick search window open over a page with a few results"
+  },
+  {
+    "id": "guide-toc",
+    "date": "2026-10-12",
+    "area": "Experiments",
+    "title": "Table of contents in experiments",
+    "summary": "A list of the headings of an experiment so you can jump around, and print or copy only parts of it.",
+    "details": [
+      "On an experiment page, open the Table of Contents tab in the left sidebar.",
+      "The Document sections list shows the headings. Click one to jump to it.",
+      "Use Add filter or Add heading filter to select sections, and choose whether all or any of the filters must match.",
+      "Press Print selection or Copy filtered content to get only those parts. Switch spreadsheets and pictures on or off."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 150,
+    "icon": "fa-list-ol",
+    "purpose": "Long experiments become easy to move through, and you can share just the part someone needs.",
+    "uses": [
+      "Copy just the Methods part of an experiment into an email.",
+      "Print the results sections of a long experiment for a meeting."
+    ],
+    "news": "New: a contents tab with section filters, print and copy.",
+    "shot": "An experiment with the Table of Contents panel open and a few headings selected"
+  },
+  {
+    "id": "guide-todo-notifications",
+    "date": "2026-10-12",
+    "area": "Tasks",
+    "title": "To-do list and notifications",
+    "summary": "Your tasks and step deadlines in one list, and a bell that tells you what needs you.",
+    "details": [
+      "Open the To-do tab in the left sidebar. It lists Tasks and steps sorted by due date, with a count of what is due. Switch on Show steps for team to include your colleagues’ steps.",
+      "Project boards cards assigned to you show up here as well.",
+      "The bell in the top bar collects your notifications: someone gave you access, mentioned you, assigned you a task, or changed the status of an order.",
+      "Step deadlines can also arrive by email, following your existing preference."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 160,
+    "icon": "fa-bell",
+    "purpose": "Know what is due today, and be told when something changes for you, without checking every page.",
+    "uses": [
+      "Start the day by opening the To-do tab and tick off what is done.",
+      "Share an experiment and the person you shared it with gets a notification right away."
+    ],
+    "news": "New: assignments, access notifications and the combined to-do list.",
+    "shot": "The To-do panel next to the notifications dropdown"
   }
 ]

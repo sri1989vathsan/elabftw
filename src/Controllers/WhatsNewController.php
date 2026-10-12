@@ -40,6 +40,7 @@ use function count;
 use function str_replace;
 use function strtolower;
 use function trim;
+use function usort;
 
 /**
  * Lists the newest features of this installation. Sysadmins can edit the
@@ -48,7 +49,7 @@ use function trim;
  */
 final class WhatsNewController extends AbstractHtmlController
 {
-    private const int MAX_DETAILS = 12;
+    private const int MAX_DETAILS = 14;
 
     private WhatsNewStore $Store;
 
@@ -80,18 +81,18 @@ final class WhatsNewController extends AbstractHtmlController
     #[Override]
     protected function getPageTitle(): string
     {
-        return _('Key features');
+        return _('MoorLab eLab guide');
     }
 
     #[Override]
     protected function getData(): array
     {
         $all = $this->Store->all();
-        // The page shows the featured entries; ?all=1 lists every update.
+        // The page is the guide: one card per feature. ?all=1 lists every update, newest first ("What's new").
         $showAll = $this->app->Request->query->getString('all') === '1';
-        $entries = $showAll
-            ? $all
-            : array_values(array_filter($all, static fn(array $e): bool => !empty($e['featured'])));
+        $guide = array_values(array_filter($all, static fn(array $e): bool => !empty($e['guide'])));
+        usort($guide, static fn(array $a, array $b): int => ((int) ($a['order'] ?? 999)) <=> ((int) ($b['order'] ?? 999)));
+        $entries = $showAll ? $all : $guide;
         // The template draws its own heading (with an icon); hide the base one.
         return array_merge(parent::getData(), array(
             'hideTitle' => true,
@@ -192,10 +193,7 @@ final class WhatsNewController extends AbstractHtmlController
             $slug = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower($title)), '-');
             $id = mb_substr($slug === '' ? 'entry' : $slug, 0, 40) . '-' . bin2hex(random_bytes(2));
         }
-        $details = array_slice(array_values(array_filter(array_map(
-            fn(string $line): string => $this->oneLine($line, 300),
-            explode("\n", str_replace("\r", '', $request->getString('details'))),
-        ), static fn(string $line): bool => $line !== '')), 0, self::MAX_DETAILS);
+        $details = $this->lines($request->getString('details'), self::MAX_DETAILS, 300);
 
         $entry = array(
             'id' => $id,
@@ -206,6 +204,14 @@ final class WhatsNewController extends AbstractHtmlController
             'details' => $details,
             'imageAlt' => $this->oneLine($request->getString('imageAlt'), 200),
             'featured' => $request->getBoolean('featured'),
+            // The guide: a card per feature with what it is for, how it works, how to use it and what is new.
+            'guide' => $request->getBoolean('guide'),
+            'order' => max(0, min(999, (int) $request->getString('order'))),
+            'icon' => preg_match('/^fa-[a-z0-9-]{1,40}$/', trim($request->getString('icon'))) === 1 ? trim($request->getString('icon')) : '',
+            'purpose' => $this->oneLine($request->getString('purpose'), 400),
+            'uses' => $this->lines($request->getString('uses'), 8, 300),
+            'news' => $this->oneLine($request->getString('news'), 400),
+            'shot' => $this->oneLine($request->getString('shot'), 200),
         );
         $highlight = $this->buildHighlight();
         if ($highlight !== null) {
@@ -240,6 +246,17 @@ final class WhatsNewController extends AbstractHtmlController
         $values['label'] = $this->oneLine($request->getString('highlight_label'), 80);
 
         return $values;
+    }
+
+    /**
+     * @return array<int, string> one cleaned line per non-empty line, at most $max of them
+     */
+    private function lines(string $text, int $max, int $length): array
+    {
+        return array_slice(array_values(array_filter(array_map(
+            fn(string $line): string => $this->oneLine($line, $length),
+            explode("\n", str_replace("\r", '', $text)),
+        ), static fn(string $line): bool => $line !== '')), 0, $max);
     }
 
     private function cleanId(string $id): string

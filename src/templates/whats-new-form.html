@@ -19,18 +19,49 @@
       <input id='wn-date-{{ fid }}' class='form-control' type='date' name='date' required value='{{ entry.date|default('now'|date('Y-m-d')) }}'>
     </div>
   </div>
+  <div class='custom-control custom-checkbox mb-2'>
+    <input id='wn-guide-{{ fid }}' class='custom-control-input' type='checkbox' name='guide' value='1' {{ entry.guide|default(false) ? 'checked' }}>
+    <label class='custom-control-label' for='wn-guide-{{ fid }}'>{{ 'Show as a card in the guide'|trans }}</label>
+  </div>
   <div class='custom-control custom-checkbox mb-3'>
     <input id='wn-featured-{{ fid }}' class='custom-control-input' type='checkbox' name='featured' value='1' {{ entry.featured|default(false) ? 'checked' }}>
-    <label class='custom-control-label' for='wn-featured-{{ fid }}'>{{ 'Show in Key features'|trans }}</label>
+    <label class='custom-control-label' for='wn-featured-{{ fid }}'>{{ 'Mark as a key feature'|trans }}</label>
+  </div>
+  <div class='form-row'>
+    <div class='form-group col-sm-6'>
+      <label for='wn-order-{{ fid }}'>{{ 'Position in the guide (small numbers first)'|trans }}</label>
+      <input id='wn-order-{{ fid }}' class='form-control' type='number' min='0' max='999' name='order' value='{{ entry.order|default(100) }}'>
+    </div>
+    <div class='form-group col-sm-6'>
+      <label for='wn-icon-{{ fid }}'>{{ 'Icon (a Font Awesome name such as fa-folder)'|trans }}</label>
+      <input id='wn-icon-{{ fid }}' class='form-control' type='text' name='icon' maxlength='44' value='{{ entry.icon|default('') }}'>
+    </div>
   </div>
   <div class='form-group'>
     <label for='wn-summary-{{ fid }}'>{{ 'Short description'|trans }}</label>
     <textarea id='wn-summary-{{ fid }}' class='form-control' name='summary' rows='2' maxlength='400'>{{ entry.summary|default('') }}</textarea>
   </div>
   <div class='form-group'>
-    <label for='wn-details-{{ fid }}'>{{ 'Details'|trans }}</label>
-    <textarea id='wn-details-{{ fid }}' class='form-control' name='details' rows='5'>{{ entry.details|default([])|join("\n") }}</textarea>
-    <small class='form-text text-muted'>{{ 'One point per line. Up to 12 lines.'|trans }}</small>
+    <label for='wn-purpose-{{ fid }}'>{{ 'What it is for (for people new to it)'|trans }}</label>
+    <textarea id='wn-purpose-{{ fid }}' class='form-control' name='purpose' rows='2' maxlength='400'>{{ entry.purpose|default('') }}</textarea>
+  </div>
+  <div class='form-group'>
+    <label for='wn-details-{{ fid }}'>{{ 'How it works (steps)'|trans }}</label>
+    <textarea id='wn-details-{{ fid }}' class='form-control' name='details' rows='6'>{{ entry.details|default([])|join("\n") }}</textarea>
+    <small class='form-text text-muted'>{{ 'One point per line. Up to 14 lines.'|trans }}</small>
+  </div>
+  <div class='form-group'>
+    <label for='wn-uses-{{ fid }}'>{{ 'How you can use it (examples)'|trans }}</label>
+    <textarea id='wn-uses-{{ fid }}' class='form-control' name='uses' rows='3'>{{ entry.uses|default([])|join("\n") }}</textarea>
+    <small class='form-text text-muted'>{{ 'One example per line. Up to 8 lines.'|trans }}</small>
+  </div>
+  <div class='form-group'>
+    <label for='wn-news-{{ fid }}'>{{ 'New in this version (for people who know eLabFTW)'|trans }}</label>
+    <textarea id='wn-news-{{ fid }}' class='form-control' name='news' rows='2' maxlength='400'>{{ entry.news|default('') }}</textarea>
+  </div>
+  <div class='form-group'>
+    <label for='wn-shot-{{ fid }}'>{{ 'What the screenshot should show (shown until a picture is added)'|trans }}</label>
+    <input id='wn-shot-{{ fid }}' class='form-control' type='text' name='shot' maxlength='200' value='{{ entry.shot|default('') }}'>
   </div>
 
   <div class='form-group'>

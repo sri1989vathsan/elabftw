@@ -4,12 +4,12 @@
 <div class='container-fluid px-0'>
   <div class='d-flex flex-wrap align-items-start justify-content-between mb-4'>
     <div>
-      <h1 class='mb-1'><i class='fas fa-star mr-2'></i>{{ 'Key features'|trans }}</h1>
+      <h1 class='mb-1'><i class='fas {{ whatsNewShowAll ? 'fa-star' : 'fa-book-open' }} mr-2'></i>{{ whatsNewShowAll ? 'What’s new'|trans : 'MoorLab eLab guide'|trans }}</h1>
       <p class='text-muted mb-0'>
         {% if whatsNewShowAll %}
           {{ 'Every update, newest first.'|trans }}
         {% else %}
-          {{ 'The main features to know about.'|trans }}
+          {{ 'Key features and how to use them. Pick a feature to see what it is for, how it works and how you can use it.'|trans }}
         {% endif %}
       </p>
     </div>
@@ -17,7 +17,7 @@
       <details class='whats-new-edit mt-2 mt-md-0'>
         <summary class='btn btn-primary btn-sm'><i class='fas fa-plus fa-fw mr-1'></i>{{ 'New entry'|trans }}</summary>
         <div class='card card-body mt-2 whats-new-edit-panel'>
-          {% include 'whats-new-form.html' with {'entry': {'featured': not whatsNewShowAll}} %}
+          {% include 'whats-new-form.html' with {'entry': {'guide': not whatsNewShowAll, 'featured': false}} %}
         </div>
       </details>
     {% endif %}
@@ -48,6 +48,106 @@
     </div>
   {% endif %}
 
+  {% if not whatsNewShowAll %}
+    <div class='row'>
+      {% for entry in whatsNewEntries %}
+        <div class='col-12 col-md-6 col-xl-4 mb-4 whats-new-entry' id='whats-new-{{ entry.id }}' data-area='{{ entry.area }}'>
+          <div class='card h-100'>
+            <div class='card-body d-flex flex-column'>
+              <div class='d-flex align-items-center mb-3'>
+                <span class='mr-3 rounded-circle d-inline-flex align-items-center justify-content-center bg-primary flex-shrink-0' style='width: 2.75rem; height: 2.75rem; color: #fff;'><i class='fas {{ entry.icon|default('fa-star') }}' style='color: #fff;' aria-hidden='true'></i></span>
+                {% if entry.area %}<span class='badge badge-primary'>{{ entry.area }}</span>{% endif %}
+              </div>
+              <h2 class='h5 card-title'>{{ entry.title }}</h2>
+              <p class='card-text'>{{ entry.summary }}</p>
+              <button type='button' class='btn btn-primary btn-sm mt-auto align-self-start' data-toggle='modal' data-target='#guide-modal-{{ entry.id }}'>{{ 'Learn more'|trans }} <i class='fas fa-arrow-right fa-fw ml-1' aria-hidden='true'></i></button>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    {% for entry in whatsNewEntries %}
+      <div class='modal fade' id='guide-modal-{{ entry.id }}' tabindex='-1' role='dialog' aria-labelledby='guide-modal-label-{{ entry.id }}' aria-hidden='true'>
+        <div class='modal-dialog modal-lg modal-dialog-scrollable' role='document'>
+          <div class='modal-content'>
+            <div class='modal-header'>
+              <h5 class='modal-title' id='guide-modal-label-{{ entry.id }}'><i class='fas {{ entry.icon|default('fa-star') }} fa-fw mr-2' aria-hidden='true'></i>{{ entry.title }}</h5>
+              <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'><span aria-hidden='true'>&times;</span></button>
+            </div>
+            <div class='modal-body'>
+              {% if entry.image %}
+                <div class='whats-new-shot{{ entry.highlight and entry.highlight.label ? ' has-label' }} mb-3'>
+                  <div class='whats-new-shot-clip'>
+                    <img class='img-fluid' src='whats-new.php?image={{ entry.image|url_encode }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'>
+                    {% if entry.highlight %}
+                      <span class='whats-new-highlight' style='left: {{ entry.highlight.x }}%; top: {{ entry.highlight.y }}%; width: {{ entry.highlight.w }}%; height: {{ entry.highlight.h }}%;'></span>
+                    {% endif %}
+                  </div>
+                  {% if entry.highlight and entry.highlight.label %}
+                    <span class='whats-new-highlight-label' style='left: {{ entry.highlight.x }}%; top: calc({{ entry.highlight.y + entry.highlight.h }}% + 6px); max-width: calc(100% - {{ entry.highlight.x }}%);'>{{ entry.highlight.label }}</span>
+                  {% endif %}
+                </div>
+              {% else %}
+                {# Until a real screenshot is added (Edit > Picture), show what it will contain. #}
+                <div class='rounded border text-center text-muted d-flex flex-column align-items-center justify-content-center mb-3 px-3' style='min-height: 13rem; border-style: dashed !important; background-color: rgba(128, 128, 128, 0.08);'>
+                  <i class='far fa-image fa-2x mb-2' aria-hidden='true'></i>
+                  <strong>{{ 'Screenshot goes here'|trans }}</strong>
+                  {% if entry.shot %}<span class='small mt-1'>{{ entry.shot }}</span>{% endif %}
+                </div>
+              {% endif %}
+
+              {% if entry.purpose %}
+                <h6 class='text-uppercase text-muted small mb-1'>{{ 'What it is for'|trans }}</h6>
+                <p>{{ entry.purpose }}</p>
+              {% endif %}
+
+              {% if entry.details %}
+                <h6 class='text-uppercase text-muted small mb-1'>{{ 'How it works'|trans }}</h6>
+                <ol class='pl-3'>
+                  {% for detail in entry.details %}<li class='mb-1'>{{ detail }}</li>{% endfor %}
+                </ol>
+              {% endif %}
+
+              {% if entry.uses %}
+                <h6 class='text-uppercase text-muted small mb-1'>{{ 'How you can use it'|trans }}</h6>
+                <ul class='pl-3'>
+                  {% for use in entry.uses %}<li class='mb-1'>{{ use }}</li>{% endfor %}
+                </ul>
+              {% endif %}
+
+              {% if entry.news %}
+                <div class='alert alert-info mb-0'><span class='badge badge-primary mr-2'>{{ 'New in this version'|trans }}</span>{{ entry.news }}</div>
+              {% endif %}
+            </div>
+            <div class='modal-footer d-block'>
+              {% if whatsNewCanEdit %}
+                <div class='whats-new-edit'>
+                  <details>
+                    <summary class='btn btn-secondary btn-sm'><i class='fas fa-pen fa-fw mr-1'></i>{{ 'Edit'|trans }}</summary>
+                    {% include 'whats-new-form.html' with {'entry': entry} %}
+                    <details class='mt-3'>
+                      <summary class='btn btn-link btn-sm text-danger px-0'>{{ 'Delete this entry'|trans }}</summary>
+                      <form method='post' action='whats-new.php' class='mt-2'>
+                        {{ App.Session.get('csrf')|csrf }}
+                        <input type='hidden' name='action' value='delete'>
+                        <input type='hidden' name='id' value='{{ entry.id }}'>
+                        <p class='mb-2'>{{ 'This removes the entry and its picture for everyone.'|trans }}</p>
+                        <button type='submit' class='btn btn-danger btn-sm'><i class='fas fa-trash fa-fw mr-1'></i>{{ 'Delete'|trans }}</button>
+                      </form>
+                    </details>
+                  </details>
+                </div>
+              {% endif %}
+              <div class='text-right'><button type='button' class='btn btn-secondary' data-dismiss='modal'>{{ 'Close'|trans }}</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if whatsNewShowAll %}
   <div class='row'>
     {% for entry in whatsNewEntries %}
       <div class='col-12 col-lg-6 mb-4 whats-new-entry' id='whats-new-{{ entry.id }}' data-area='{{ entry.area }}'>
@@ -105,11 +205,13 @@
     {% endfor %}
   </div>
 
+  {% endif %}
+
   <p class='text-center mb-4'>
     {% if whatsNewShowAll %}
-      <a href='whats-new.php'><i class='fas fa-star fa-fw mr-1'></i>{{ 'Back to key features'|trans }}</a>
-    {% elseif whatsNewTotal > whatsNewEntries|length %}
-      <a href='whats-new.php?all=1'>{{ 'See all updates'|trans }} ({{ whatsNewTotal }})</a>
+      <a href='whats-new.php'><i class='fas fa-book-open fa-fw mr-1'></i>{{ 'Back to the guide'|trans }}</a>
+    {% else %}
+      <a href='whats-new.php?all=1'><i class='fas fa-star fa-fw mr-1'></i>{{ 'See what’s new'|trans }} ({{ whatsNewTotal }})</a>
     {% endif %}
   </p>
 </div>
