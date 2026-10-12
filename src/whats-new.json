@@ -408,13 +408,16 @@
     "date": "2026-10-12",
     "area": "Boards",
     "title": "Project Boards",
-    "summary": "Plan lab work as projects of cards, with deadlines, steps and linked experiments.",
+    "summary": "Plan lab work as projects of cards, with deadlines and steps, and link each card to its experiments and resources.",
     "details": [
       "Open Boards from the top bar (under More). Create a project, then add cards for the tasks in it.",
       "A card has a title, notes, a deadline, steps, comments and people assigned to it. Status badges and deadline colours show at a glance what needs attention.",
       "Steps and comments can be collapsed to keep a long card short.",
       "Select several cards to archive or delete them together. Duplicate a card into another project, or open a card straight into edit mode.",
-      "Projects can hold subprojects, be pinned to stay on top, and be archived when finished."
+      "Projects can hold subprojects, be pinned to stay on top, and be archived when finished.",
+      "To tie a card to the work it is about, open the search panel next to the card while you create it, or later from its detail view.",
+      "Find an experiment or resource, then press Link, or add it as a step in one move. Each linked item shows its status colour and type, so you can see how the work is going.",
+      "A project's Linked items section and the All links summary list everything connected to that project, including subprojects. Click a linked item to open the experiment or resource itself."
     ],
     "image": "",
     "imageAlt": "",
@@ -422,40 +425,14 @@
     "guide": true,
     "order": 50,
     "icon": "fa-table-columns",
-    "purpose": "Keep track of who does what and by when, in one board per project, next to your experiments.",
+    "purpose": "Keep track of who does what and by when in one board per project, with the plan and the experiments pointing at each other.",
     "uses": [
       "One board per paper or grant, with a card for each experiment series and each deadline.",
-      "A board for lab chores, with a card per task and the person responsible."
+      "A board for lab chores, with a card per task and the person responsible.",
+      "Link the protocol resource and the experiment for each planned run, and open the project to see which linked experiments are finished."
     ],
-    "news": "New: Boards replace the old project list, with richer cards, bulk actions and subprojects.",
-    "shot": "The Boards page with a project open and one card showing its steps and linked experiments"
-  },
-  {
-    "id": "guide-card-links",
-    "date": "2026-10-12",
-    "area": "Boards",
-    "title": "Link experiments and resources to cards",
-    "summary": "Connect a card to the experiments and resources it is about, and jump between them.",
-    "details": [
-      "While you create a card, or later from its detail view, open the search panel next to the card.",
-      "Find an experiment or resource, then press Link, or add it as a step in one move.",
-      "Each linked item shows its status colour and type, so you can see how the work is going.",
-      "A project's Linked items section and the All links summary list everything connected to that project, including subprojects.",
-      "Click a linked item to open the experiment or resource itself."
-    ],
-    "image": "",
-    "imageAlt": "",
-    "featured": false,
-    "guide": true,
-    "order": 60,
-    "icon": "fa-link",
-    "purpose": "Make the plan and the work point at each other, so nobody has to ask which experiment belongs to which task.",
-    "uses": [
-      "Link the protocol resource and the experiment for each planned run.",
-      "Open a project and see in one place which linked experiments are finished."
-    ],
-    "news": "New: cards link to experiments and resources, with status colours.",
-    "shot": "A card detail view with its linked experiments and steps next to the search panel"
+    "news": "Boards replace the old project list, with richer cards, bulk actions, subprojects, and cards that link to experiments and resources with their status colours.",
+    "shot": "The Boards page with a project open and one card showing its steps and linked experiments, and the search panel used to link them"
   },
   {
     "id": "guide-orders",
