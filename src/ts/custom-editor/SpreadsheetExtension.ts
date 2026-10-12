@@ -700,9 +700,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // What the popup is built from: if the table's data differs when the popup is
     // applied, the popup is replacing a newer version.
     const openedFrom = existingTable ? extractFromTable(existingTable) : initial;
-    const openedHash = hashCells(openedFrom.data);
+    let openedHash = '';
     const openedRevision = uid ? diag.revision(uid) : 0;
-    if (uid) diag.log('popup-open', uid, { rev: openedRevision, hash: openedHash });
+    diagnose('popup open', () => {
+      openedHash = hashCells(openedFrom.data);
+      if (uid) diag.log('popup-open', uid, { rev: openedRevision, hash: openedHash });
+    });
     openSpreadsheetModal(
       openedFrom,
       existingTable !== null,
@@ -1088,11 +1091,21 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
   // The checks around a write must never be able to break the write itself: an error in
   // them is reported to the console and otherwise ignored.
+  // The checks can be switched off (window.elabftwSpreadsheetDiagnostics.setChecks(false)) so
+  // the same actions can be timed with and without them; the time they use is counted.
+  let checksEnabled = true;
+  let checksMs = 0;
+  let checksCalls = 0;
   const diagnose = (what: string, work: () => void): void => {
+    if (!checksEnabled) return;
+    const started = performance.now();
     try {
       work();
     } catch (error) {
       console.error(`Spreadsheet sync check failed (${what})`, error);
+    } finally {
+      checksMs += performance.now() - started;
+      checksCalls++;
     }
   };
   let lastSyncWarning = 0;
@@ -1103,6 +1116,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     editor.notificationManager.open({ text, type: 'warning', timeout: 12000 });
   };
   const enhancedTables = new WeakSet<HTMLTableElement>();
+  // A live grid's right-click menu is moved into the page body so it positions correctly; this
+  // keeps track of it so it goes away with its grid instead of piling up.
+  const overlayContextMenus = new WeakMap<HTMLElement, HTMLElement>();
   let overlaySyncRunning = false;
   const layoutGate = createSpreadsheetLayoutGate();
   const profiler = createSpreadsheetProfiler();
@@ -1147,7 +1163,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const holder = existing ? uidToTable.get(existing) : undefined;
     const isCollision = !!holder && holder !== table && holder.isConnected;
     const uid = existing && !isCollision ? existing : generateSpreadsheetUid();
-    table.setAttribute(SPREADSHEET_UID_ATTR, uid);
+    // Writing the same value again still counts as a change to the table (it empties the
+    // extraction cache and counts as an outside edit), so only write when it is new.
+    if (table.getAttribute(SPREADSHEET_UID_ATTR) !== uid) table.setAttribute(SPREADSHEET_UID_ATTR, uid);
     uidToTable.set(uid, table);
     return uid;
   };
@@ -1278,6 +1296,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     });
     entry.destroy(discard);
     entry.el.remove();
+    overlayContextMenus.get(entry.el)?.remove();
+    overlayContextMenus.delete(entry.el);
     spreadsheetOverlays.delete(table);
     enhancedTables.delete(table);
   };
@@ -1707,6 +1727,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     });
     // A change to the table that this code did not make itself (undo/redo, autofit,
     // a paste...) is a new revision the grids and the popup may not know about.
+    if (!checksEnabled) return;
     touched.forEach(table => {
       if (ownWrites.has(table)) return;
       externalTouches.set(table, (externalTouches.get(table) ?? 0) + 1);
@@ -1868,11 +1889,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const extractStartedAt = profiler.start();
     const extracted = extractCached(table);
     profiler.end('table extraction (ms)', extractStartedAt);
-    lastSyncedHash.set(table, hashCells(extracted.data));
-    markSynced(table);
-    diag.log('mount', tableUid, {
-      rev: diag.revision(tableUid), hash: hashCells(extracted.data), rows: extracted.rows, cols: extracted.cols,
+    diagnose('mount', () => {
+      lastSyncedHash.set(table, hashCells(extracted.data));
+      diag.log('mount', tableUid, {
+        rev: diag.revision(tableUid), hash: hashCells(extracted.data), rows: extracted.rows, cols: extracted.cols,
+      });
     });
+    markSynced(table);
     const initialSelection = pendingInitialSelection.get(table);
     pendingInitialSelection.delete(table);
     // Reconciles this table's rows against its own saved rowHeights right
@@ -1999,6 +2022,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       const contextMenuEl = overlay.querySelector<HTMLElement>('.jss_contextmenu');
       if (contextMenuEl && contextMenuEl.parentElement !== document.body) {
         document.body.appendChild(contextMenuEl);
+        // Remembered so it is removed together with this grid (see removeOverlay): it lives in
+        // the page body now, so nothing else would ever clean it up.
+        overlayContextMenus.set(overlay, contextMenuEl);
       }
     };
     // Retried for a few frames right after mount so the element is already
@@ -2243,17 +2269,24 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // so, and repair -- never report success over a silent mismatch.
   const verifySpreadsheetSync = (reason: string): Array<{ uid: string; status: SyncStatus }> => {
     const results: Array<{ uid: string; status: SyncStatus }> = [];
+    if (!checksEnabled) return results;
     Array.from(spreadsheetOverlays.entries()).forEach(([table, entry]) => diagnose('pre-save check', () => {
       if (!entry.getData || entry.isPreview || !table.isConnected) return;
-      const uid = ensureSpreadsheetUid(table);
+      const uid = table.getAttribute(SPREADSHEET_UID_ATTR) ?? ensureSpreadsheetUid(table);
       if (entry.isEditing?.()) {
         results.push({ uid, status: 'skipped' });
         return;
       }
-      const extracted = extractCached(table);
       const overlayData = entry.getData();
-      const tableHash = hashCells(extracted.data);
       const overlayHash = hashCells(overlayData);
+      // Fast path, no table re-read: nothing outside this code touched the table since the grid
+      // last synced with it, and the grid still holds exactly what it synced. In sync by construction.
+      if ((externalTouches.get(table) ?? 0) === lastSyncedTouch.get(table) && overlayHash === lastSyncedHash.get(table)) {
+        results.push({ uid, status: 'ok' });
+        return;
+      }
+      const extracted = extractCached(table);
+      const tableHash = hashCells(extracted.data);
       if (tableHash === overlayHash) {
         results.push({ uid, status: 'ok' });
         return;
@@ -2309,6 +2342,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     revisions: diag.revisions,
     recoveryCopies: diag.recoveryCopies,
     verify: (reason = 'manual') => verifySpreadsheetSync(reason),
+    setChecks: (on: boolean): void => { checksEnabled = on; },
+    checksEnabled: (): boolean => checksEnabled,
+    overhead: (reset = false): { ms: number; calls: number } => {
+      const snapshot = { ms: Math.round(checksMs * 100) / 100, calls: checksCalls };
+      if (reset) { checksMs = 0; checksCalls = 0; }
+      return snapshot;
+    },
     snapshot: (withData = false) => Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
       .map(table => {
         const uid = ensureSpreadsheetUid(table);

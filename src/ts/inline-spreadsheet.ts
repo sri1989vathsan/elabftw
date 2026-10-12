@@ -2203,6 +2203,19 @@ function insertedIndexes(inserted: unknown, key: 'row' | 'column', fallback: num
   return found.length > 0 ? found : [fallback];
 }
 
+/**
+ * A new cell takes its text and vertical alignment from the cell next to it (above for a new
+ * row, to the left for a new column), as in other spreadsheet programs. The default alignment is
+ * stored on each existing cell, not in the table-wide style, so a new cell would otherwise come
+ * out left-aligned next to centred neighbours.
+ */
+function inheritCellAlignment(container: HTMLElement | null | undefined, cell: HTMLElement, neighbourCol: number, neighbourRow: number): void {
+  const neighbour = container?.querySelector<HTMLElement>(`td[data-x="${neighbourCol}"][data-y="${neighbourRow}"]`);
+  if (!neighbour) return;
+  if (neighbour.style.textAlign) cell.style.textAlign = neighbour.style.textAlign;
+  if (neighbour.style.verticalAlign) cell.style.verticalAlign = neighbour.style.verticalAlign;
+}
+
 
 /** Show the native resize destination independently of table layout constraints. */
 function installRowResizeGuide(container: HTMLElement): void {
@@ -4899,7 +4912,9 @@ export function openSpreadsheetModal(
           insertedIndexes(inserted, 'row', currentData.length - 1).forEach(newRow => {
             for (let col = 0; col < cols; col++) {
               const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${newRow}"]`);
-              if (cell) cell.style.cssText = getAppearanceCellStyle(working.appearance, col, newRow);
+              if (!cell) continue;
+              cell.style.cssText = getAppearanceCellStyle(working.appearance, col, newRow);
+              inheritCellAlignment(sheetContainer, cell, col, newRow > 0 ? newRow - 1 : newRow + 1);
             }
           });
         }, 0);
@@ -4915,7 +4930,9 @@ export function openSpreadsheetModal(
           insertedIndexes(inserted, 'column', lastCol).forEach(newCol => {
             for (let row = 0; row < rows; row++) {
               const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${newCol}"][data-y="${row}"]`);
-              if (cell) cell.style.cssText = getAppearanceCellStyle(working.appearance, newCol, row);
+              if (!cell) continue;
+              cell.style.cssText = getAppearanceCellStyle(working.appearance, newCol, row);
+              inheritCellAlignment(sheetContainer, cell, newCol > 0 ? newCol - 1 : newCol + 1, row);
             }
           });
         }, 0);
@@ -8411,7 +8428,9 @@ export function buildReadOnlySpreadsheetHost(
       insertedIndexes(inserted, 'row', currentData.length - 1).forEach(newRow => {
         for (let col = 0; col < cols; col++) {
           const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${newRow}"]`);
-          if (cell) cell.style.cssText = getAppearanceCellStyle(appearance, col, newRow);
+          if (!cell) continue;
+          cell.style.cssText = getAppearanceCellStyle(appearance, col, newRow);
+          inheritCellAlignment(sheetContainer, cell, col, newRow > 0 ? newRow - 1 : newRow + 1);
         }
       });
     }, 0);
@@ -8425,7 +8444,9 @@ export function buildReadOnlySpreadsheetHost(
       insertedIndexes(inserted, 'column', lastCol).forEach(newCol => {
         for (let row = 0; row < rows; row++) {
           const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${newCol}"][data-y="${row}"]`);
-          if (cell) cell.style.cssText = getAppearanceCellStyle(appearance, newCol, row);
+          if (!cell) continue;
+          cell.style.cssText = getAppearanceCellStyle(appearance, newCol, row);
+          inheritCellAlignment(sheetContainer, cell, newCol > 0 ? newCol - 1 : newCol + 1, row);
         }
       });
     }, 0);
