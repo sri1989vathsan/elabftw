@@ -6621,6 +6621,7 @@ export function buildReadOnlySpreadsheetHost(
     captionLabel = document.createElement('span');
     captionLabel.className = 'elabftw-spreadsheet-title';
     captionLabel.textContent = extracted.caption;
+    captionLabel.title = extracted.caption;
     toggleBar.appendChild(captionLabel);
   }
   host.appendChild(toggleBar);
@@ -6793,6 +6794,7 @@ export function buildReadOnlySpreadsheetHost(
               toggleBar.insertBefore(captionLabel, toggleBar.firstChild);
             }
             captionLabel.textContent = title;
+            captionLabel.title = title;
             captionLabel.hidden = false;
           } else if (captionLabel) {
             captionLabel.remove();
@@ -8999,6 +9001,7 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivEle
     const label = document.createElement('span');
     label.className = 'elabftw-spreadsheet-title';
     label.textContent = caption;
+    label.title = caption;
     toggleBar.appendChild(label);
   }
   [
