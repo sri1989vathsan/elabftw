@@ -134,6 +134,40 @@ export interface SpreadsheetAppearance {
 type JssInstance = any;
 type JssFactory = (element: HTMLDivElement, options: object) => JssInstance;
 
+type JssMenuItem = { title?: string; onclick?: () => void };
+
+/**
+ * The grid's own "Delete selected rows/columns" only removes the whole selection when
+ * entire rows/columns were picked through their headers; a range of cells (what dragging
+ * over the row numbers gives) fell back to deleting just the clicked row or column.
+ * Delete everything the selected range covers instead, as long as the click was inside it.
+ */
+const deleteWholeSelectionMenu = (
+  worksheet: JssInstance,
+  x: unknown,
+  y: unknown,
+  _event: unknown,
+  items: JssMenuItem[],
+): JssMenuItem[] => {
+  const range = worksheet?.selectedCell as number[] | null | undefined;
+  if (!Array.isArray(range) || range.length < 4) return items;
+  const clickedX = Number.parseInt(String(x), 10);
+  const clickedY = Number.parseInt(String(y), 10);
+  const [firstX, firstY, lastX, lastY] = range;
+  const minX = Math.min(firstX, lastX);
+  const maxX = Math.max(firstX, lastX);
+  const minY = Math.min(firstY, lastY);
+  const maxY = Math.max(firstY, lastY);
+  for (const item of items) {
+    if (item.title === 'Delete selected rows' && maxY > minY && clickedY >= minY && clickedY <= maxY) {
+      item.onclick = (): void => worksheet.deleteRow(minY, maxY - minY + 1);
+    } else if (item.title === 'Delete selected columns' && maxX > minX && clickedX >= minX && clickedX <= maxX) {
+      item.onclick = (): void => worksheet.deleteColumn(minX, maxX - minX + 1);
+    }
+  }
+  return items;
+};
+
 export interface SpreadsheetData {
   /** Array-of-arrays with raw values/formulas as entered by the user. */
   data: AOA;
@@ -5132,6 +5166,7 @@ export function openSpreadsheetModal(
           syncMountedDimensions(changedWorksheet);
           styleNewlyInsertedColumn(changedWorksheet, inserted);
         },
+        contextMenu: deleteWholeSelectionMenu,
         ondeleterow: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
           syncMountedDimensions(changedWorksheet);
@@ -8771,6 +8806,7 @@ export function buildReadOnlySpreadsheetHost(
         notifyStructuralChange(changedWorksheet);
         styleNewlyInsertedColumn(changedWorksheet, inserted);
       },
+      contextMenu: deleteWholeSelectionMenu,
       ondeleterow: notifyStructuralChange,
       ondeletecolumn: notifyStructuralChange,
       // jspreadsheet calls onresizerow(instance, row, newHeight, oldHeight) --
