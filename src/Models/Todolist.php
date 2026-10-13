@@ -776,7 +776,7 @@ final class Todolist extends AbstractRest
     private function entityLinksSubquery(): string
     {
         return "COALESCE((
-                    SELECT JSON_ARRAYAGG(JSON_OBJECT('id', link.id, 'entity_type', link.entity_type, 'entity_id', link.entity_id, 'url', link.url, 'title', link.title))
+                    SELECT JSON_ARRAYAGG(JSON_OBJECT('id', link.id, 'entity_type', link.entity_type, 'entity_id', link.entity_id, 'url', link.url, 'title', link.title, 'status_title', link.status_title, 'status_color', link.status_color))
                     FROM (
                         SELECT tel.id, tel.entity_type, tel.entity_id, tel.url,
                             CASE tel.entity_type
@@ -785,7 +785,32 @@ final class Todolist extends AbstractRest
                                 WHEN 'items' THEN (SELECT title FROM items WHERE id = tel.entity_id)
                                 WHEN 'experiments_templates' THEN (SELECT title FROM experiments_templates WHERE id = tel.entity_id)
                                 WHEN 'items_types' THEN (SELECT title FROM items_types WHERE id = tel.entity_id)
-                            END AS title
+                            END AS title,
+                            -- Same status lookup as TodolistEntityLinks::readAll(): only experiments/items carry one.
+                            CASE tel.entity_type
+                                WHEN 'experiments' THEN (
+                                    SELECT statust.title FROM experiments AS e
+                                    LEFT JOIN experiments_status AS statust ON statust.id = e.status
+                                    WHERE e.id = tel.entity_id
+                                )
+                                WHEN 'items' THEN (
+                                    SELECT statust.title FROM items AS e
+                                    LEFT JOIN items_status AS statust ON statust.id = e.status
+                                    WHERE e.id = tel.entity_id
+                                )
+                            END AS status_title,
+                            CASE tel.entity_type
+                                WHEN 'experiments' THEN (
+                                    SELECT statust.color FROM experiments AS e
+                                    LEFT JOIN experiments_status AS statust ON statust.id = e.status
+                                    WHERE e.id = tel.entity_id
+                                )
+                                WHEN 'items' THEN (
+                                    SELECT statust.color FROM items AS e
+                                    LEFT JOIN items_status AS statust ON statust.id = e.status
+                                    WHERE e.id = tel.entity_id
+                                )
+                            END AS status_color
                         FROM todolist_entity_links AS tel
                         WHERE tel.task_id = t.id
                     ) AS link
