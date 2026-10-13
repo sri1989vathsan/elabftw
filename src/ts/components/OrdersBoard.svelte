@@ -2751,6 +2751,17 @@
     justify-content: flex-end;
   }
 
+  /* The status/owner tabs stay one line each (icon beside its text); if they do not all
+     fit, the group wraps onto a second thin row instead of squeezing and stacking. */
+  .orders-toolbar-row .btn-group {
+    flex-wrap: wrap;
+  }
+
+  .orders-toolbar-row .btn-group > .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
   .orders-status-select {
     width: auto;
     font-weight: 700;
