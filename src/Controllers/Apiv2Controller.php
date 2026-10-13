@@ -82,6 +82,7 @@ use Elabftw\Models\TeamTags;
 use Elabftw\Models\Feedback;
 use Elabftw\Models\FeedbackComments;
 use Elabftw\Models\OrderTemplates;
+use Elabftw\Models\OrderTemplateUploads;
 use Elabftw\Models\Orders;
 use Elabftw\Models\OrderComments;
 use Elabftw\Models\OrderUploads;
@@ -508,6 +509,12 @@ final class Apiv2Controller extends AbstractApiController
             return match ($submodel) {
                 ApiSubModels::Comments => new FeedbackComments($this->requester, $this->Model, $this->subId),
                 default => throw new InvalidApiSubModelException(ApiEndpoint::Feedback),
+            };
+        }
+        if ($this->Model instanceof OrderTemplates) {
+            return match ($submodel) {
+                ApiSubModels::Uploads => new OrderTemplateUploads($this->requester, $this->Model, $this->subId),
+                default => throw new InvalidApiSubModelException(ApiEndpoint::OrderTemplates),
             };
         }
         if ($this->Model instanceof Orders) {

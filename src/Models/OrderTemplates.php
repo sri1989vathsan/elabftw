@@ -11,6 +11,7 @@ declare(strict_types=1);
 namespace Elabftw\Models;
 
 use Elabftw\Enums\Action;
+use Elabftw\Enums\Storage;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\QueryParamsInterface;
@@ -18,6 +19,7 @@ use Elabftw\Models\Users\Users;
 use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
+use RuntimeException;
 
 use function array_map;
 use function mb_strlen;
@@ -112,6 +114,17 @@ final class OrderTemplates extends AbstractRest
     public function destroy(): bool
     {
         $this->assertCanEdit($this->readOne());
+        // the rows go with the template (foreign key); the stored files have to be removed by hand
+        $files = $this->Db->prepare('SELECT storage, long_name FROM custom_order_template_uploads WHERE template_id = :id');
+        $files->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($files);
+        foreach ($files->fetchAll() as $file) {
+            try {
+                Storage::from((int) $file['storage'])->getStorage()->getFs()->delete($file['long_name']);
+            } catch (RuntimeException) {
+                // already gone
+            }
+        }
         $sql = 'DELETE FROM custom_order_templates WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
