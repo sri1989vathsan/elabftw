@@ -1671,7 +1671,8 @@
   .calendar-view-controls {
     align-items: center;
     display: flex;
-    gap: 0.6rem;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
     justify-content: space-between;
     margin-bottom: 0.5rem;
   }
