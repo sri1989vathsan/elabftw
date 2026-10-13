@@ -1,7 +1,8 @@
 {% extends 'base.html' %}
+{% import 'guide-info.html' as guide -%}
 
 {% block body %}
-<h1><i class='fas fa-list-check mr-2'></i>{{ 'Boards'|trans }}</h1>
+<h1><i class='fas fa-list-check mr-2'></i>{{ 'Boards'|trans }}{{ guide.info('guide-boards', 'Boards') }}</h1>
 <hr>
 <div id='projectManagementRoot'></div>
 {% endblock %}

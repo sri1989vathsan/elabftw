@@ -1,10 +1,11 @@
+{% import 'guide-info.html' as guide -%}
 <div class='side-panel' id='calendarActivityPanel' hidden>
   <button type='button' data-action='toggle-sidepanel' data-target='calendar-activity' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'>
     <i class='fas fa-xmark fa-2x'></i>
   </button>
   <div class='p-3'>
     <h3 class='mb-3 py-2 d-flex align-items-center justify-content-between'>
-      <span>{{ 'Activity calendar'|trans }}</span>
+      <span>{{ 'Activity calendar'|trans }}{{ guide.info('guide-calendar', 'Activity calendar') }}</span>
       <button type='button' id='calendarActivityRefresh' class='btn btn-sm btn-outline-secondary' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'>
         <i class='fas fa-sync-alt fa-fw' aria-hidden='true'></i>
       </button>

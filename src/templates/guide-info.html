@@ -1,0 +1,4 @@
+{# Small "i" that opens the guide card for a feature. Use: {% import 'guide-info.html' as guide %}{{ guide.info('guide-orders', 'Orders') }} #}
+{% macro info(card, name) %}
+  <button type='button' class='btn btn-link guide-info-btn p-0 ml-1' data-action='open-guide-card' data-card='{{ card }}' title='{{ 'About %name% in the guide'|trans|replace({'%name%': name}) }}' aria-label='{{ 'About %name% in the guide'|trans|replace({'%name%': name}) }}'><i class='fas fa-circle-info' aria-hidden='true'></i></button>
+{% endmacro %}

@@ -1157,6 +1157,26 @@ on('whats-new-filter', (el: HTMLElement) => {
   });
 });
 
+// "i" buttons next to features: open that feature's guide card as a popup, wherever you are.
+on('open-guide-card', async (el: HTMLElement) => {
+  const card = el.dataset.card;
+  if (!card) return;
+  try {
+    const response = await fetch(`whats-new.php?card=${encodeURIComponent(card)}`, { credentials: 'same-origin' });
+    if (!response.ok) throw new Error(String(response.status));
+    const holder = document.createElement('div');
+    holder.innerHTML = await response.text();
+    const modal = holder.querySelector<HTMLElement>('.modal');
+    if (!modal) throw new Error('no popup');
+    document.getElementById(modal.id)?.remove();
+    document.body.appendChild(modal);
+    $(modal).on('hidden.bs.modal', () => modal.remove());
+    $(modal).modal('show');
+  } catch {
+    window.location.href = `whats-new.php#whats-new-${encodeURIComponent(card)}`;
+  }
+});
+
 on('edit-team-link', (el: HTMLElement) => {
   const { field, linkId, label } = el.dataset;
   const link = linkId ? document.getElementById(linkId) as HTMLAnchorElement | null : null;

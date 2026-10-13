@@ -1,3 +1,4 @@
+{% import 'guide-info.html' as guide -%}
 {# "All" is the default -- it's what makes typing in the text box search
    everything (experiments, resources, templates, folders) at once.
    A specific target is only preselected when the URL
@@ -26,7 +27,7 @@
 <div class='side-panel' id='favoritesPanel' data-current-target='{{ favoriteFilterTarget }}' hidden>
   <button type='button' data-action='toggle-sidepanel' data-target='favorites' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
   <div class='p-3'>
-    <h3 class='mb-3'><i class='fas fa-magnifying-glass mr-2'></i>{{ 'Search'|trans }}</h3>
+    <h3 class='mb-3'><i class='fas fa-magnifying-glass mr-2'></i>{{ 'Search'|trans }}{{ guide.info('guide-search-filters', 'Search') }}</h3>
 
     <label for='favoriteFilterText'>{{ 'Text'|trans }}</label>
     <div class='input-group input-group-sm favorite-filter-text-group mb-2'>

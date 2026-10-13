@@ -1,9 +1,10 @@
+{% import 'guide-info.html' as guide -%}
 {# Table of Contents side panel — mirrors structure of todolist-panel.html #}
 <div class='side-panel' id='tocPanel' hidden>
   <button type='button' data-action='toggle-sidepanel' data-target='toc' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
   <div class='p-3'>
     <h3 class='mb-3 d-flex align-items-center justify-content-between'>
-      <span>{{ 'Table of Contents'|trans }}</span>
+      <span>{{ 'Table of Contents'|trans }}{{ guide.info('guide-toc', 'Table of Contents') }}</span>
       <button type='button' class='btn btn-sm btn-outline-secondary' data-action='refresh-toc' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'>
         <i class='fas fa-sync-alt fa-fw'></i>
       </button>

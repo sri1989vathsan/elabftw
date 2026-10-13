@@ -1,3 +1,4 @@
+{% import 'guide-info.html' as guide -%}
 {% set accessKey = App.Request.query.getString('access_key') %}
 {% set allFileFolderReferences = Entity.entityData.metadata_decoded.elabftw.file_folder_references|default([]) %}
 {# split by whether each reference is a real smb:// url or \\server\share
@@ -78,7 +79,7 @@
 <hr>
 
 {# LINKS #}
-<h3 data-action='toggle-next' data-scroll-btn='fa-link' data-scroll-btn-label='{{ 'Links'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ mode == 'edit' ? 'true' : 'false' }}' aria-controls='linksDiv'><i class='fas {{ mode == 'edit' ? 'fa-caret-down' : 'fa-caret-right' }} mr-2 fa-fw'></i>{{ 'Links'|trans }}</h3>
+<h3 data-action='toggle-next' data-scroll-btn='fa-link' data-scroll-btn-label='{{ 'Links'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ mode == 'edit' ? 'true' : 'false' }}' aria-controls='linksDiv'><i class='fas {{ mode == 'edit' ? 'fa-caret-down' : 'fa-caret-right' }} mr-2 fa-fw'></i>{{ 'Links'|trans }}</h3>{{ guide.info('guide-experiment-sections', 'Links') }}
 <div class='mt-2' {{ mode == 'edit' ? '' : 'hidden' }} data-save-hidden='linksDiv' id='linksDiv'>
   {# EXPERIMENTS LINKS #}
   <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='experimentsLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Experiment links'|trans }} (<span id='experimentsLinksCount'>{{ Entity.entityData.experiments_links|length }}</span>)</h4>

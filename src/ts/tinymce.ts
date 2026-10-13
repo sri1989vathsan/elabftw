@@ -225,7 +225,7 @@ export function getTinymceBaseConfig(page: string): object {
   // Table alignment (outdent/indent) and sortable-table toggle live inside
   // the insert-data-table dropdown itself (see SpreadsheetExtension.ts)
   // rather than as their own toolbar buttons.
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough superscript subscript forecolor backcolor alignleft aligncenter alignright alignjustify bullist numlist checklist outdent indent format-painter remove-formatting | elabftw-insert-menu | insert-link adddate experiment-title horizontal-rule insert-note insert-data-table copy-table-or-selection | charmap emoticons codesample';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough superscript subscript forecolor backcolor alignleft aligncenter alignright alignjustify bullist numlist checklist outdent indent | elabftw-insert-menu | insert-link adddate experiment-title horizontal-rule insert-note insert-data-table copy-table-or-selection | charmap emoticons codesample format-painter remove-formatting | guide-help';
   if (!document.getElementById('documentTitle')) {
     toolbar1 = toolbar1.replace('experiment-title ', '');
   }
@@ -239,11 +239,8 @@ export function getTinymceBaseConfig(page: string): object {
     // let Image in menu
     removedMenuItems = 'newdocument, anchor';
   }
-  // Keep the dedicated mouse action visible in experiment editors while the
-  // integration is dormant. MouseLinkExtension disables and greys the button
-  // unless the gated PyRAT experiment section is available.
+  // (The PyRAT mouse button is registered by MouseLinkExtension but is not on the toolbar.)
   if (page === 'edit' && entity.type === EntityType.Experiment) {
-    toolbar1 = toolbar1.replace('codesample', 'codesample insert-mouse');
     // searchable/favouritable template picker, in addition to the stock
     // Insert > Template… menu item still driven by the templates: callback below.
     // Kept next to insert-data-table (links/date/title/divider/note/spreadsheet
@@ -604,6 +601,22 @@ export function getTinymceBaseConfig(page: string): object {
         tooltip: 'Save',
         onAction: function() {
           editor.execCommand('mceSave');
+        },
+      });
+      // "i" at the end of the toolbar: opens the guide card that explains these buttons
+      editor.ui.registry.addButton('guide-help', {
+        icon: 'help',
+        tooltip: 'About these buttons in the guide',
+        onAction: () => {
+          const opener = document.createElement('button');
+          opener.type = 'button';
+          opener.hidden = true;
+          opener.dataset.action = 'open-guide-card';
+          opener.dataset.card = 'guide-editor-toolbar';
+          // the page's click dispatcher listens on #container
+          (document.getElementById('container') ?? document.body).append(opener);
+          opener.click();
+          opener.remove();
         },
       });
       // save and go back button for toolbar, inside "File" menu.

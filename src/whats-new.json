@@ -553,13 +553,17 @@
     "id": "guide-search-filters",
     "date": "2026-10-12",
     "area": "Search",
-    "title": "Favourite search filters",
-    "summary": "Save the categories, statuses, tags and owners you search by, and apply them in one click.",
+    "title": "Search, favourite filters and linking",
+    "summary": "Search with your favourite filters, then attach what you find to an experiment or paste a link to it, without leaving the page.",
     "details": [
       "Open the Search tab in the left sidebar. Pick a Type (All, Experiments, Resources, Experiment templates or Resource templates) and type in the search box.",
       "The Filters list shows your favourite categories, tags, statuses and owners for that type. Tick the ones you want and press Apply filters.",
       "Press Manage to choose which ones are your favourites. They are saved only for your account.",
-      "Results appear below, with a link to the full list."
+      "Results appear below, with a link to the full list.",
+      "Attach while editing: open an experiment or resource in edit mode, search in the panel, and press the link button on a result to attach that experiment or resource to the one you are editing. It then shows under Links.",
+      "Paste a link: press the second button on a result to put a link to it into the text, at the cursor.",
+      "For templates, the link button records the template an experiment came from, and the second button inserts the template's content at the cursor instead of a link.",
+      "With a board card open, results also get a button to link them to that card, and one to add them as a step on it."
     ],
     "image": "",
     "imageAlt": "",
@@ -567,24 +571,27 @@
     "guide": true,
     "order": 130,
     "icon": "fa-star",
-    "purpose": "Stop re-entering the same filters every time you look for something.",
+    "purpose": "Stop re-entering the same filters every time you look for something, and link what you find into your work in one click.",
     "uses": [
       "Favourite your own tags and the statuses you use, then filter “my running experiments” in two clicks.",
-      "Switch Type to Resources to look through plasmids with the same panel."
+      "Switch Type to Resources to look through plasmids with the same panel.",
+      "While writing up an experiment, search for the protocol resource and attach it, then paste a link to the earlier experiment next to the sentence that refers to it.",
+      "Search a template while editing and insert its content straight into the experiment."
     ],
-    "news": "New: filters you can favourite, shared by search across experiments, resources and templates.",
-    "shot": "The Search panel with Type set to Experiments, favourite filters ticked and results below"
+    "news": "New: filters you can favourite, shared by search across experiments, resources and templates, plus attach and paste-a-link buttons on every result.",
+    "shot": "The Search panel next to an experiment being edited, with the attach and paste-a-link buttons on a result outlined"
   },
   {
     "id": "guide-toc",
     "date": "2026-10-12",
     "area": "Experiments",
     "title": "Table of contents in experiments",
-    "summary": "A list of the headings of an experiment so you can jump around, and print or copy only parts of it.",
+    "summary": "A list of the headings of an experiment so you can jump around, show only the sections you pick, and print or copy only parts of it.",
     "details": [
       "On an experiment page, open the Table of Contents tab in the left sidebar.",
       "The Document sections list shows the headings. Click one to jump to it.",
       "Use Add filter or Add heading filter to select sections, and choose whether all or any of the filters must match.",
+      "To read only some parts, open Select headings to filter or print and tick the headings you want. The experiment then shows just those sections and hides the rest, until you clear the selection.",
       "Press Print selection or Copy filtered content to get only those parts. Switch spreadsheets and pictures on or off."
     ],
     "image": "",
@@ -596,7 +603,8 @@
     "purpose": "Long experiments become easy to move through, and you can share just the part someone needs.",
     "uses": [
       "Copy just the Methods part of an experiment into an email.",
-      "Print the results sections of a long experiment for a meeting."
+      "Print the results sections of a long experiment for a meeting.",
+      "Tick only the Results headings to read them without scrolling past the methods."
     ],
     "news": "New: a contents tab with section filters, print and copy.",
     "shot": "An experiment with the Table of Contents panel open and a few headings selected"
@@ -636,7 +644,7 @@
       "Save: the first button saves the experiment, and the bar shows whether your changes are saved. Save and go back is in the File menu.",
       "Insert: one menu for everything you can add. It lists what you used recently, then Text (title, date, notes, divider), Tables, Links and Laboratory (templates).",
       "Checklist: turns lines into tick boxes. Type [ ] and a space to start one, then click a box to tick it.",
-      "Format painter and Clear formatting: copy the look of some text and apply it to other text, or strip formatting from the selection.",
+      "Format painter and Clear formatting: at the end of the toolbar, next to the special characters, emoji and code buttons. Copy the look of some text and apply it to other text, or strip formatting from the selection.",
       "Links: add a web link, upload and link a file or folder, refer to a file or folder on a shared drive, or link a LabCollector item.",
       "Day: inserts today's date in your saved format. The arrow gives Custom date, Log entry (date and time), and Edit, Copy link and Delete for a date you selected. Double-click a date to edit it.",
       "Title: puts the experiment title in as a heading. The arrow lets you pick the title style and save it as your default.",
@@ -645,9 +653,9 @@
       "Table, spreadsheet and well plate: one menu to insert a table, a formula spreadsheet or a 6 to 384 well plate, edit or autofit the selected spreadsheet, style tables and cells, indent tables and make them sortable.",
       "Copy table: copies a whole table or your selection with its formatting, ready to paste into another program.",
       "Template: search your templates and insert one into the experiment. Favourites come first.",
-      "Mouse: inserts a PyRAT mouse or cage link (greyed out until Animal Studies is available).",
       "Keyboard shortcuts: Ctrl+Shift+D date and time, Ctrl+Alt+T title, Ctrl+Alt+N note, Ctrl+Shift+H single line, Ctrl+Alt+Shift+H double line.",
-      "On a long experiment the toolbar stays at the top as you scroll and slides smoothly with the top bar."
+      "On a long experiment the toolbar stays at the top as you scroll and slides smoothly with the top bar.",
+      "The “i” at the very end of the toolbar opens this guide card."
     ],
     "image": "",
     "imageAlt": "",

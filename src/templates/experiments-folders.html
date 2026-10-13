@@ -1,3 +1,4 @@
+{% import 'guide-info.html' as guide -%}
 {# Shared experiment/resource folder tree - dedicated tab in the left sidebar. #}
 {% if experimentsFoldersTreeArr is defined %}
 {% set folderEntityType = Entity is defined and Entity.entityType.value == 'items' ? 'items' : 'experiments' %}
@@ -14,7 +15,7 @@
     data-current-user-id='{{ App.Users.userData.userid }}'
   >
     <div class='d-flex align-items-center justify-content-between mb-3'>
-      <h3 class='mb-0'><i class='fas fa-folder-tree mr-2'></i>{{ 'Folders'|trans }}</h3>
+      <h3 class='mb-0'><i class='fas fa-folder-tree mr-2'></i>{{ 'Folders'|trans }}{{ guide.info('guide-folders', 'Folders') }}</h3>
       <button type='button' data-action='toggle-sidepanel' data-target='folders' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn btn-sm'>
         <i class='fas fa-xmark fa-2x'></i>
       </button>

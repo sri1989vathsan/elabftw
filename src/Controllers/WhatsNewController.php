@@ -65,6 +65,10 @@ final class WhatsNewController extends AbstractHtmlController
         if ($image !== '') {
             return $this->imageResponse($image);
         }
+        $card = $this->app->Request->query->getString('card');
+        if ($card !== '') {
+            return $this->cardResponse($card);
+        }
         if ($this->app->Request->getMethod() === 'POST') {
             return $this->handlePost();
         }
@@ -110,6 +114,23 @@ final class WhatsNewController extends AbstractHtmlController
     private function canEdit(): bool
     {
         return (int) ($this->app->Users->userData['is_sysadmin'] ?? 0) === 1;
+    }
+
+    /** Just the popup of one guide card, for the "i" buttons placed next to features across the app. */
+    private function cardResponse(string $id): Response
+    {
+        foreach ($this->Store->all() as $entry) {
+            if (($entry['id'] ?? '') === $id && !empty($entry['guide'])) {
+                $response = new Response($this->app->render('guide-modal.html', array(
+                    'entry' => $entry,
+                    'whatsNewCanEdit' => false,
+                )));
+                $response->prepare($this->app->Request);
+
+                return $response;
+            }
+        }
+        throw new ResourceNotFoundException();
     }
 
     private function imageResponse(string $name): Response

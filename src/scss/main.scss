@@ -3481,6 +3481,21 @@ body.html-tool-workspace-resizing * {
   color: var(--primary);
 }
 
+// A long title takes the room left beside the buttons and ends in "…" (the full
+// title is the tooltip), so a narrow table keeps a one-line header instead of
+// squeezing the buttons into a column beside a tall wrapped title.
+.elabftw-spreadsheet-readonly-toggle .elabftw-spreadsheet-title {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.elabftw-spreadsheet-readonly-toggle button {
+  flex: 0 0 auto;
+}
+
 // Inline title editor in a spreadsheet's toolbar (see the edit-title button in
 // buildReadOnlySpreadsheetHost).
 .elabftw-spreadsheet-title-input {
@@ -6337,4 +6352,17 @@ div > .sticky-navbar {
 .elabftw-spreadsheet-recovery-banner-actions {
   display: flex;
   gap: 0.4rem;
+}
+
+// The small "i" next to a feature's header that opens its guide card.
+.guide-info-btn {
+  color: var(--medium);
+  font-size: 0.55em;
+  opacity: 0.75;
+  vertical-align: middle;
+
+  &:hover,
+  &:focus {
+    opacity: 1;
+  }
 }

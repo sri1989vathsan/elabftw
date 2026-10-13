@@ -1,3 +1,4 @@
+{% import 'guide-info.html' as guide -%}
 <!DOCTYPE HTML>
 <!--
  * @author Nicolas CARPi <nico-git@deltablot.email>
@@ -211,7 +212,7 @@
                 {% set isActive = scriptName == 'inventory.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='inventory.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-warehouse fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Inventory'|trans }}</a>
                 {% set isActive = scriptName == 'whats-new.php' %}
-                <a class='dropdown-item {{ isActive ? 'active' }}' href='whats-new.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-star fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Key features'|trans }}</a>
+                <a class='dropdown-item {{ isActive ? 'active' }}' href='whats-new.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-book-open fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'MoorLab eLabFTW Guide'|trans }}</a>
                 {# "LabCollector" disabled placeholder hidden from the Tools
                    menu -- not needed while the integration isn't ready.
                    Left in place, not deleted, so it's easy to bring back:
@@ -304,7 +305,7 @@
           <button class='btn nav-link {{ unreadCount > 0 ? 'notif-active' }}' id='navbarNotifDropdown' type='button' data-count='{{ unreadCount }}' aria-label='{{ 'Notifications'|trans }}' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'><i class='far fa-bell fa-2x'></i></button>
           <div class='dropdown-menu dropdown-menu-right notif-dropdown' id='navbar-notif-dropdown'>
             <div class='notif-dropdown-header'>
-              <span>{{ 'Notifications'|trans }}</span>
+              <span>{{ 'Notifications'|trans }}{{ guide.info('guide-todo-notifications', 'Notifications') }}</span>
               {% if unreadCount > 0 %}<span class='badge badge-primary notif-unread-badge'>{{ unreadCount }}</span>{% endif %}
             </div>
             {% if App.notifsArr %}
