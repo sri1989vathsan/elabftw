@@ -125,6 +125,7 @@ final class CustomMigrationRunner
         '084_order_pinned_all_status.sql',
         '085_order_templates.sql',
         '086_order_template_uploads.sql',
+        '087_reference_not_pinned.sql',
     );
 
     private Db $Db;
