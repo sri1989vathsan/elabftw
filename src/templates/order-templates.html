@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% import 'guide-info.html' as guide -%}
+
+{% block body %}
+<h1><i class='fas fa-cart-shopping mr-2'></i>{{ 'Orders'|trans }}{{ guide.info('guide-orders', 'Orders') }}</h1>
+{% include 'orders-tabs.html' with {'active': 'templates'} %}
+<p class='text-muted'>{{ 'Texts that go with ordering, such as an email to a supplier or a quote request. Everyone in the team can copy them; the author or a team admin edits them.'|trans }}</p>
+<div id='orderTemplatesRoot'></div>
+{% endblock %}

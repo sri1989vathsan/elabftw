@@ -123,6 +123,7 @@ final class CustomMigrationRunner
         '082_folder_permissions.sql',
         '083_order_my_reference_status.sql',
         '084_order_pinned_all_status.sql',
+        '085_order_templates.sql',
     );
 
     private Db $Db;

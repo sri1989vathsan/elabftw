@@ -81,6 +81,7 @@ use Elabftw\Models\Teams2Rors;
 use Elabftw\Models\TeamTags;
 use Elabftw\Models\Feedback;
 use Elabftw\Models\FeedbackComments;
+use Elabftw\Models\OrderTemplates;
 use Elabftw\Models\Orders;
 use Elabftw\Models\OrderComments;
 use Elabftw\Models\OrderUploads;
@@ -396,6 +397,7 @@ final class Apiv2Controller extends AbstractApiController
             ApiEndpoint::FavCategories => new FavCategories($this->requester, $this->id),
             ApiEndpoint::Feedback => new Feedback($this->requester, $this->id),
             ApiEndpoint::Orders => new Orders($this->requester, $this->id),
+            ApiEndpoint::OrderTemplates => new OrderTemplates($this->requester, $this->id),
             ApiEndpoint::FavFilters => new FavFilters($this->requester, $this->id),
             ApiEndpoint::FavTags => new FavTags($this->requester, $this->id),
             ApiEndpoint::Reports => new ReportsHandler($this->requester),

@@ -144,3 +144,10 @@ if (document.getElementById('ordersRoot')) {
     './orders'
   );
 }
+
+if (document.getElementById('orderTemplatesRoot')) {
+  void import(
+    /* webpackChunkName: 'order-templates' */
+    './order-templates'
+  );
+}
