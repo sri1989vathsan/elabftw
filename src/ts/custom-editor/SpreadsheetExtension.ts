@@ -900,8 +900,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       const activeSpreadsheetTable = lastActiveSpreadsheetTable && editor.getBody().contains(lastActiveSpreadsheetTable)
         ? lastActiveSpreadsheetTable
         : null;
-      const selectedTable = (selectedNode.closest('table') as HTMLTableElement | null) ?? activeSpreadsheetTable;
+      // After "Indent table" the caret can sit on the margin wrapper around the table rather than inside it
+      const wrappedTable = selectedNode.closest('.elabftw-table-indent')?.querySelector('table') as HTMLTableElement | null | undefined;
+      const selectedTable = (selectedNode.closest('table') as HTMLTableElement | null) ?? wrappedTable ?? activeSpreadsheetTable;
       const existingTable = (selectedNode.closest('table.elabftw-spreadsheet') as HTMLTableElement | null)
+        ?? (wrappedTable?.classList.contains('elabftw-spreadsheet') ? wrappedTable : null)
         ?? activeSpreadsheetTable;
       const items = [];
       if (existingTable) {
@@ -2357,9 +2360,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   editor.on('SetContent', () => {
     Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
       .forEach(table => {
-        if (!table.nextElementSibling) {
+        // An indented table sits in a margin wrapper (see TableIndentation); the
+        // paragraph after it goes below the wrapper, or it would be indented too
+        // and could not be outdented.
+        const anchor = table.parentElement?.classList.contains('elabftw-table-indent') ? table.parentElement : table;
+        if (!anchor.nextElementSibling && !table.nextElementSibling) {
           const paragraph = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
-          table.parentNode?.insertBefore(paragraph, table.nextSibling);
+          anchor.parentNode?.insertBefore(paragraph, anchor.nextSibling);
         }
       });
   });
@@ -2878,9 +2885,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // actually on a spreadsheet overlay" itself rather than depending on
     // event ordering against the overlay's own listener.
     const clearActiveTableUnlessClickedOnOne = (event: MouseEvent): void => {
-      const clickedOverlay = event.target instanceof Element
-        && !!event.target.closest('.elabftw-spreadsheet-editor-overlay');
-      if (!clickedOverlay) setActiveSpreadsheetTable(null);
+      // A click on the editor's own toolbar or one of its menus is how a table action (indent,
+      // autofit, ...) is started for the active spreadsheet, so it must not forget which one that is.
+      const clickedOverlayOrToolbar = event.target instanceof Element
+        && !!event.target.closest('.elabftw-spreadsheet-editor-overlay, .tox-editor-header, .tox-tinymce-aux');
+      if (!clickedOverlayOrToolbar) setActiveSpreadsheetTable(null);
     };
     document.addEventListener('mousedown', clearActiveTableUnlessClickedOnOne);
     editor.on('remove', () => {

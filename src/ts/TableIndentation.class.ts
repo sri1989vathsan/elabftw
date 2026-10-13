@@ -17,7 +17,8 @@ function closestTable(node: Node | null | undefined): HTMLTableElement | null {
   // TinyMCE's editable body can live in an iframe, so avoid instanceof checks
   // against the parent window's Element constructor.
   const element = node?.nodeType === 1 ? node as Element : node?.parentElement;
-  return element?.closest('table') as HTMLTableElement | null;
+  // the caret can sit on the margin wrapper around an indented table
+  return (element?.closest('table') ?? element?.closest(`.${INDENT_WRAPPER_CLASS}`)?.querySelector('table') ?? null) as HTMLTableElement | null;
 }
 
 function tableFromSelection(editor: Editor): HTMLTableElement | null {
@@ -78,7 +79,42 @@ function currentIndentLevel(table: HTMLTableElement): number {
 export default class TableIndentation {
   private lastSelectedTable: HTMLTableElement | null = null;
 
-  constructor(private readonly editor: Editor) {}
+  constructor(private readonly editor: Editor) {
+    // The wrapper only exists to indent the table. A paragraph typed after the
+    // table (Enter at its end) would otherwise be created inside the wrapper,
+    // with no way to outdent it, so any text block inside one moves out below it.
+    editor.on('NewBlock', event => {
+      const block = (event as unknown as { newBlock?: Element }).newBlock;
+      if (!block?.parentElement?.classList.contains(INDENT_WRAPPER_CLASS)) return;
+      // TinyMCE places the caret in the new block right after this event, so move it afterwards
+      editor.getWin().setTimeout(() => {
+        editor.undoManager.transact(() => {
+          if (this.liftOutOfWrapper(block, block.parentElement)) {
+            editor.selection.setCursorLocation(block, 0);
+          }
+        });
+      }, 0);
+    });
+    const repair = (): void => {
+      for (const wrapper of Array.from(editor.getBody().querySelectorAll(`.${INDENT_WRAPPER_CLASS}`))) {
+        let after: Element = wrapper;
+        for (const child of Array.from(wrapper.children)) {
+          if (this.liftOutOfWrapper(child, wrapper, after)) after = child;
+        }
+      }
+    };
+    editor.on('init SetContent', repair);
+  }
+
+  /** Move a text block that sits inside a table's indent wrapper to just after the wrapper (or after `after`). */
+  private liftOutOfWrapper(block: Element, wrapper: Element | null, after?: Element): boolean {
+    if (!wrapper?.classList.contains(INDENT_WRAPPER_CLASS) || block.parentElement !== wrapper
+      || !/^(P|H[1-6]|UL|OL|PRE|BLOCKQUOTE)$/.test(block.tagName)) {
+      return false;
+    }
+    (after ?? wrapper).after(block);
+    return true;
+  }
 
   /**
    * Track NodeChange while the editor has focus so toolbar clicks can safely
