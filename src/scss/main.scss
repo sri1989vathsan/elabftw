@@ -4597,7 +4597,12 @@ input[type='color'] {
  * #navbar-primary-nav item -- ordinary Bootstrap dropdown-item markup, so it
  * needs no styling of its own beyond a sensible minimum width. */
 #navbar-overflow-menu {
+  // When the window is short the list scrolls inside the menu, so the items at
+  // the bottom stay reachable; the navbar itself stays put while the menu is open.
+  max-height: calc(100vh - var(--navbar-height, 3.5rem) - 1rem);
   min-width: 14rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* to make the pie smaller */

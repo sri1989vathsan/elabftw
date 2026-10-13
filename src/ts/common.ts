@@ -243,7 +243,14 @@ if (navbar) {
       if (currentScroll === 0 || accumulatedScroll <= -directionThreshold) {
         shouldHide = false;
       } else if (accumulatedScroll >= directionThreshold) {
-        shouldHide = true;
+        // An open dropdown (e.g. "More") that is taller than the viewport has
+        // to be scrolled to reach its lower items; hiding the navbar then
+        // would take the menu away mid-scroll. It hides again on the next
+        // scroll after the dropdown closes.
+        shouldHide = !navbar.querySelector('.dropdown-menu.show');
+        if (!shouldHide) {
+          accumulatedScroll = 0;
+        }
       }
 
       if (shouldHide !== isNavbarHidden) {
