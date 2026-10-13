@@ -357,7 +357,7 @@
       "Folders: browse and manage your folders and bookmarks.",
       "Search: your saved filters and results in one place.",
       "Quick search and commands: press Ctrl + K (Cmd + K on a Mac) on any page, start typing the name of an experiment, resource, folder or command, choose with the arrow keys and press Enter.",
-      "To-do list: your tasks and step deadlines sorted by due date, with a count of what is due.",
+      "To-do list: your tasks and step deadlines sorted by due date, with a count of what is due. Switch on Show steps for team to include your colleagues’ steps. Board cards assigned to you show up here as well.",
       "Activity calendar: a Day, Week or Month view of your deadlines.",
       "On an experiment page there is also a table of contents tab. The rail stays put while you scroll, and the last panel you opened is remembered."
     ],
@@ -605,12 +605,11 @@
     "id": "guide-todo-notifications",
     "date": "2026-10-12",
     "area": "Tasks",
-    "title": "To-do list and notifications",
-    "summary": "Your tasks and step deadlines in one list, and a bell that tells you what needs you.",
+    "title": "Notifications",
+    "summary": "A bell that tells you what needs you, so you do not have to check every page.",
     "details": [
-      "Open the To-do tab in the left sidebar. It lists Tasks and steps sorted by due date, with a count of what is due. Switch on Show steps for team to include your colleagues’ steps.",
-      "Project boards cards assigned to you show up here as well.",
-      "The bell in the top bar collects your notifications: someone gave you access, mentioned you, assigned you a task, or changed the status of an order.",
+      "The bell in the top bar collects your notifications and shows how many are new.",
+      "You are notified when someone gives you access to an experiment or resource, mentions you in a comment, assigns you a task or a card, or changes the status of an order.",
       "Step deadlines can also arrive by email, following your existing preference."
     ],
     "image": "",
@@ -619,13 +618,13 @@
     "guide": true,
     "order": 160,
     "icon": "fa-bell",
-    "purpose": "Know what is due today, and be told when something changes for you, without checking every page.",
+    "purpose": "Be told when something changes for you, without checking every page.",
     "uses": [
-      "Start the day by opening the To-do tab and tick off what is done.",
-      "Share an experiment and the person you shared it with gets a notification right away."
+      "Share an experiment and the person you shared it with gets a notification right away.",
+      "Mention a colleague with @name in a card comment and they are notified."
     ],
-    "news": "New: assignments, access notifications and the combined to-do list.",
-    "shot": "The To-do panel next to the notifications dropdown"
+    "news": "New: notifications for assignments, mentions and access.",
+    "shot": "The notifications dropdown open from the bell in the top bar"
   },
   {
     "id": "guide-editor-toolbar",
