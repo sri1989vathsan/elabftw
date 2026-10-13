@@ -92,3 +92,7 @@ Build 61, 2026-10-12. Chromium tested by Claude; Firefox: faults, acceptance, re
 | 86 | P9 | Page load, 5 tables | Measured on builds 52-55, not re-run on 61 |
 | 87 | P10 | Scaling, 10 / 30 / 60 tables, all grids live (worst case), reading the content | Measured on builds 52-55, not re-run on 61 |
 | 88 | R30 | Sync warning has a Restore previous version button (only that spreadsheet changes), keeps the replaced version, offers Undo restore | PASS (build 63; Chromium) |
+| 89 | R31 | Drag over several row numbers (or select a range of cells over several rows), right-click inside it, Delete selected rows: every selected row is deleted at once; grid and saved table agree; undo works; right-clicking outside the selection deletes only that row; inline and popup | NOT TESTED |
+| 90 | R32 | Same for columns: select several column letters or a range over several columns, right-click inside it, Delete selected columns: all selected columns are deleted; grid and saved table agree; inline and popup | NOT TESTED |
+| 91 | R33 | An indented spreadsheet: the Table menu (toolbar and Insert > Tables) still offers Outdent and Indent table after clicking in its grid; pressing Enter below it gives a paragraph that is not indented | NOT TESTED |
+| 92 | R34 | A spreadsheet with a long title in a narrow table: the header stays one line with the title cut short by an ellipsis (full title on hover) and the buttons stay on the right | NOT TESTED |

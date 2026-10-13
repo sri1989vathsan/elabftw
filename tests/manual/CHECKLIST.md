@@ -208,3 +208,7 @@ build number so a pass is tied to the code it tested.
 
 - Demo experiment "Demo: cell culture growth check" contains leftover test edits (one inline cell, A3 and A6 in the first table, one extra spreadsheet).
 - Test favourites in the account: category "In vitro", owner "User 1 User 1", status "Success".
+| R31 | Drag over several row numbers (or select a range of cells over several rows), right-click inside it, Delete selected rows: every selected row is deleted at once; grid and saved table agree; undo works; right-clicking outside the selection deletes only that row; inline and popup | yes | n/a | both | TODO | 2026-10-13 | Owner request |
+| R32 | Same for columns: select several column letters or a range over several columns, right-click inside it, Delete selected columns: all selected columns are deleted; grid and saved table agree; inline and popup | yes | n/a | both | TODO | 2026-10-13 | Owner request |
+| R33 | An indented spreadsheet: the Table menu (toolbar and Insert > Tables) still offers Outdent and Indent table after clicking in its grid; pressing Enter below it gives a paragraph that is not indented | yes | n/a | both | TODO | 2026-10-13 | Owner request |
+| R34 | A spreadsheet with a long title in a narrow table: the header stays one line with the title cut short by an ellipsis (full title on hover) and the buttons stay on the right | yes | n/a | both | TODO | 2026-10-13 | Owner request |
