@@ -633,12 +633,17 @@ final class Orders extends AbstractRest
         if (!in_array($status, self::STATUSES, true)) {
             throw new ImproperActionException('Invalid order status.');
         }
-        // a pinned order (status 'pinned_all') keeps that status for good
         if ($status === 'my_reference' && $previousOrder['status'] !== 'my_reference' && (int) $previousOrder['userid'] !== $this->Users->userid) {
             throw new ImproperActionException('Only the author can make an order their own Reference.');
         }
+        // a pinned order can switch between the two pinned kinds, never back to a normal status
         if (in_array($previousOrder['status'], self::PINNED_STATUSES, true) && $status !== $previousOrder['status']) {
-            throw new ImproperActionException('A pinned order keeps its status.');
+            if (!in_array($status, self::PINNED_STATUSES, true)) {
+                throw new ImproperActionException('A pinned order keeps its status.');
+            }
+            if ((int) $previousOrder['userid'] !== $this->Users->userid && !$this->Users->isAdmin) {
+                throw new ImproperActionException('Only the author or a team admin can change this order between Pinned for all and Reference.');
+            }
         }
         // same "a reference stays pinned" rule postAction() applies at
         // creation -- also enforced here so marking an existing order as

@@ -870,7 +870,7 @@
         common: editIsCommon,
         // a personal Reference always stays with its author, so no owner change goes with it
         userid: editPinKind === 'my_reference' ? undefined : editForUserid,
-        status: !editPinLocked && editPinKind !== null ? editPinKind : undefined,
+        status: editPinKind !== null && editPinKind !== item.status ? editPinKind : undefined,
       });
       editingItemId = null;
       await load();
@@ -1980,9 +1980,8 @@
                   class="btn btn-ghost btn-sm orders-reference-toggle mb-2"
                   class:active={editPinKind === 'pinned_all'}
                   aria-pressed={editPinKind === 'pinned_all'}
-                  disabled={editPinLocked}
-                  title={editPinLocked ? t('A pinned order keeps its status') : t('Pinned for the whole team — once saved, it stays pinned and its status cannot be changed')}
-                  on:click={() => editPinKind = editPinKind === 'pinned_all' ? null : 'pinned_all'}
+                  title={editPinLocked ? t('Pinned for the whole team — it stays pinned, and can be switched to Reference') : t('Pinned for the whole team — once saved, it stays pinned (it can only be switched to Reference)')}
+                  on:click={() => editPinKind = editPinLocked ? 'pinned_all' : (editPinKind === 'pinned_all' ? null : 'pinned_all')}
                 >
                   <i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Pinned for all')}
                 </button>
@@ -1991,9 +1990,9 @@
                   class="btn btn-ghost btn-sm orders-reference-toggle mb-2"
                   class:active={editPinKind === 'my_reference'}
                   aria-pressed={editPinKind === 'my_reference'}
-                  disabled={editPinLocked || item.userid !== core.currentUserid}
-                  title={editPinLocked ? t('A pinned order keeps its status') : (item.userid !== core.currentUserid ? t('Only the author can make an order their own Reference') : t('A reference only you can see — once saved, it stays pinned for you and its status cannot be changed'))}
-                  on:click={() => editPinKind = editPinKind === 'my_reference' ? null : 'my_reference'}
+                  disabled={item.userid !== core.currentUserid}
+                  title={item.userid !== core.currentUserid ? t('Only the author can make an order their own Reference') : t('A reference only you can see — once saved, it stays pinned for you (it can only be switched to Pinned for all)')}
+                  on:click={() => editPinKind = editPinLocked ? 'my_reference' : (editPinKind === 'my_reference' ? null : 'my_reference')}
                 >
                   <i class="fas fa-bookmark fa-fw mr-1" aria-hidden="true"></i>{t('Reference')}
                 </button>
@@ -2106,7 +2105,7 @@
                   aria-label={t('Select')}
                 />
                 {#if PINNED_STATUSES.includes(item.status)}
-                  <span class="orders-status-pill" title={t('A pinned order keeps its status')}>
+                  <span class="orders-status-pill" title={t('Pinned orders have no status; edit the order to switch between Pinned for all and Reference')}>
                     <i class={`fas ${item.status === 'my_reference' ? 'fa-bookmark' : 'fa-thumbtack'} fa-fw mr-1`} aria-hidden="true"></i>{statusLabel(item.status)}
                   </span>
                 {:else}
