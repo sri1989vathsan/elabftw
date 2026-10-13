@@ -2,7 +2,7 @@
   {
     "id": "link-to-data",
     "date": "2026-10-11",
-    "area": "Linking",
+    "area": "Experiments",
     "featured": true,
     "title": "Link an experiment to its data folder",
     "summary": "Attach the network folder where an experiment's raw data lives, and open it from the entry in one click.",
@@ -418,7 +418,7 @@
       "Select several cards to archive or delete them together. Duplicate a card into another project, or open a card straight into edit mode.",
       "Projects can hold subprojects, be pinned to stay on top, and be archived when finished.",
       "To tie a card to the work it is about, open the search panel next to the card while you create it, or later from its detail view.",
-      "Find an experiment or resource, then press Link, or add it as a step in one move. Each linked item shows its status colour and type, so you can see how the work is going.",
+      "Find an experiment or resource, then press Link, or add it as a step in one move. Each linked item shows its type icon and a coloured dot for its status, on the card as well as in the project, so you can see how the work is going.",
       "A project's Linked items section and the All links summary list everything connected to that project, including subprojects. Click a linked item to open the experiment or resource itself."
     ],
     "image": "",
