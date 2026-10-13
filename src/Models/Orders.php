@@ -561,7 +561,9 @@ final class Orders extends AbstractRest
             if (!$isOwner && !$this->Users->isAdmin) {
                 throw new ImproperActionException('Only the author or a team admin can edit this order.');
             }
-            if ($order['status'] === 'my_reference') {
+            $statusAfterPatch = array_key_exists('status', $params) ? (string) $params['status'] : $order['status'];
+            if (($order['status'] === 'my_reference' || $statusAfterPatch === 'my_reference')
+                && $this->getOwnerUserid($params['userid']) !== (int) $order['userid']) {
                 throw new ImproperActionException('A personal reference stays with its author.');
             }
             $this->updateOwner($params['userid']);
@@ -632,6 +634,9 @@ final class Orders extends AbstractRest
             throw new ImproperActionException('Invalid order status.');
         }
         // a pinned order (status 'pinned_all') keeps that status for good
+        if ($status === 'my_reference' && $previousOrder['status'] !== 'my_reference' && (int) $previousOrder['userid'] !== $this->Users->userid) {
+            throw new ImproperActionException('Only the author can make an order their own Reference.');
+        }
         if (in_array($previousOrder['status'], self::PINNED_STATUSES, true) && $status !== $previousOrder['status']) {
             throw new ImproperActionException('A pinned order keeps its status.');
         }
