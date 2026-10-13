@@ -27,7 +27,7 @@
     };
   }
 
-  type OrderStatus = 'requested' | 'ordered' | 'received' | 'backlogged' | 'cancelled' | 'reference' | 'my_reference';
+  type OrderStatus = 'requested' | 'ordered' | 'received' | 'backlogged' | 'cancelled' | 'pinned_all' | 'my_reference';
 
   type TeamMember = {
     userid: number;
@@ -149,13 +149,13 @@
     return [...existing, ...incoming.filter(item => !seenIds.has(item.id))];
   }
 
-  // 'reference' (shown as "Pinned") is only set when an order is created, and
+  // 'pinned_all' (shown as "Pinned") is only set when an order is created, and
   // is locked afterwards: the selects below leave it out for every other order
   // and disable it on a pinned one.
-  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'backlogged', 'cancelled', 'reference', 'my_reference'];
-  // 'reference' (shown as "Pinned for all") and 'my_reference' (shown as "Reference", only its
+  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'backlogged', 'cancelled', 'pinned_all', 'my_reference'];
+  // 'pinned_all' (shown as "Pinned for all") and 'my_reference' (shown as "Reference", only its
   // author sees it) are always pinned and never change status
-  const PINNED_STATUSES: OrderStatus[] = ['reference', 'my_reference'];
+  const PINNED_STATUSES: OrderStatus[] = ['pinned_all', 'my_reference'];
   const MOVABLE_STATUSES = STATUSES.filter(status => !PINNED_STATUSES.includes(status));
 
   function statusLabel(status: OrderStatus): string {
@@ -165,7 +165,7 @@
       ordered: t('Ordered'),
       received: t('Received'),
       cancelled: t('Cancelled'),
-      reference: t('Pinned for all'),
+      pinned_all: t('Pinned for all'),
       my_reference: t('Reference'),
     }[status];
   }
@@ -680,7 +680,7 @@
         // fixed up right below once each one is actually uploaded
         notes: notesHtml === '' ? null : notesHtml,
         item_ids: itemIds,
-        status: newIsReference ? 'reference' : (newIsMyReference ? 'my_reference' : undefined),
+        status: newIsReference ? 'pinned_all' : (newIsMyReference ? 'my_reference' : undefined),
         userid: newForUserid ?? undefined,
         common: newIsCommon,
         labcollector_type: newLabcollectorType ?? undefined,
@@ -1778,7 +1778,7 @@
       <button type="button" class={statusFilter === 'cancelled' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('cancelled')}>
         {t('Cancelled')}
       </button>
-      <button type="button" class={statusFilter === 'reference' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('reference')} title={t('Shared team pinned orders, visible to everyone regardless of the Mine/Everyone filter')}>
+      <button type="button" class={statusFilter === 'pinned_all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('pinned_all')} title={t('Shared team pinned orders, visible to everyone regardless of the Mine/Everyone filter')}>
         <i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Pinned for all')}
       </button>
       <button type="button" class={statusFilter === 'my_reference' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('my_reference')} title={t('Your own references, only you can see them')}>
@@ -2094,7 +2094,7 @@
                 {/if}
                 <span class="orders-muted orders-item-id" title={t('Order ID')}>#{item.id}</span>
                 <strong class="orders-item-title">{breakableUnderscores(item.title)}</strong>
-                {#if !['requested', 'reference', 'my_reference', 'backlogged', 'cancelled'].includes(item.status) && isMissingProcurementId(item)}
+                {#if !['requested', 'pinned_all', 'my_reference', 'backlogged', 'cancelled'].includes(item.status) && isMissingProcurementId(item)}
                   <span class="badge badge-danger" title={t('No Procurement ID tag was extracted from an attached file.')}>
                     <i class="fas fa-triangle-exclamation fa-fw mr-1" aria-hidden="true"></i>{t('Missing Procurement ID')}
                   </span>

@@ -122,6 +122,7 @@ final class CustomMigrationRunner
         '081_moorlab_zoom_link.sql',
         '082_folder_permissions.sql',
         '083_order_my_reference_status.sql',
+        '084_order_pinned_all_status.sql',
     );
 
     private Db $Db;

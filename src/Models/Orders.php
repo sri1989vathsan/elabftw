@@ -57,13 +57,14 @@ final class Orders extends AbstractRest
 {
     use SetIdTrait;
 
-    public const array STATUSES = array('requested', 'ordered', 'received', 'backlogged', 'cancelled', 'reference', 'my_reference');
+    public const array STATUSES = array('requested', 'ordered', 'received', 'backlogged', 'cancelled', 'pinned_all', 'my_reference');
 
-    // always pinned, and the status never changes once set: 'reference' is shared with the whole
-    // team (shown as "Pinned for all"), 'my_reference' is only visible to its author
-    private const array PINNED_STATUSES = array('reference', 'my_reference');
+    // always pinned, and the status never changes once set: 'pinned_all' is shared with the whole
+    // team (shown as "Pinned for all"), 'my_reference' (shown as "Reference") is only visible to its author.
+    // The old team-wide 'reference' status was converted to 'my_reference' by migration 084.
+    private const array PINNED_STATUSES = array('pinned_all', 'my_reference');
 
-    // 'reference' excluded: those are pinned catalog entries with no real
+    // 'pinned_all' excluded: those are pinned catalog entries with no real
     // lifecycle to measure "time in status" from (see updateStatus() and
     // postAction()'s own comments) -- not a sensible auto-archive trigger.
     public const array AUTOARCHIVABLE_STATUSES = array('requested', 'ordered', 'received', 'backlogged', 'cancelled');
@@ -103,7 +104,7 @@ final class Orders extends AbstractRest
         $itemIds = $this->getItemIds($reqBody['item_ids'] ?? null);
         // status is optional -- a plain order starts 'requested' (the column
         // default) same as always; the only other choice at creation time is
-        // marking it 'reference' up front, since that's known at the moment
+        // marking it 'pinned_all' up front, since that's known at the moment
         // you're logging catalog info rather than placing a real request,
         // not something you'd normally discover partway through the order's
         // ordered/received/cancelled lifecycle.
@@ -122,7 +123,7 @@ final class Orders extends AbstractRest
         // a personal reference is always the requester's own
         $userid = $status === 'my_reference' ? $this->Users->userid : $this->getOwnerUserid($reqBody['userid'] ?? null);
         // "common" is a plain tag (commonly-ordered lab supplies), separate
-        // from the status lifecycle -- unlike 'reference' it doesn't force
+        // from the status lifecycle -- unlike 'pinned_all' it doesn't force
         // pinning or skip the requested/ordered/received workflow
         $common = !empty($reqBody['common']) ? 1 : 0;
         $sql = "INSERT INTO custom_orders (team, userid, title, notes, status, pinned, common)
@@ -249,7 +250,7 @@ final class Orders extends AbstractRest
             // Reference orders are the one exception: they live only on
             // their own Reference tab (and All), never bleeding into the
             // others just because they happen to be pinned too.
-            $conditions[] = "(o.status = :status OR (o.pinned = 1 AND o.status NOT IN ('reference', 'my_reference')))";
+            $conditions[] = "(o.status = :status OR (o.pinned = 1 AND o.status NOT IN ('pinned_all', 'my_reference')))";
             $bind[':status'] = array($status, PDO::PARAM_STR);
         }
 
@@ -271,7 +272,7 @@ final class Orders extends AbstractRest
         // request, so it stays visible even while "Mine" is selected.
         $userid = $query->getInt('userid');
         if ($userid > 0 && ($userid === $this->Users->userid || $this->Users->isAdmin)) {
-            $conditions[] = "(o.userid = :userid OR o.status = 'reference')";
+            $conditions[] = "(o.userid = :userid OR o.status = 'pinned_all')";
             $bind[':userid'] = array($userid, PDO::PARAM_INT);
         }
 
@@ -630,7 +631,7 @@ final class Orders extends AbstractRest
         if (!in_array($status, self::STATUSES, true)) {
             throw new ImproperActionException('Invalid order status.');
         }
-        // a pinned order (status 'reference') keeps that status for good
+        // a pinned order (status 'pinned_all') keeps that status for good
         if (in_array($previousOrder['status'], self::PINNED_STATUSES, true) && $status !== $previousOrder['status']) {
             throw new ImproperActionException('A pinned order keeps its status.');
         }
