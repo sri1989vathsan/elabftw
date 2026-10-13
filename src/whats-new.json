@@ -381,12 +381,12 @@
     "date": "2026-10-12",
     "area": "Tasks",
     "title": "Activity calendar",
-    "summary": "Every deadline in one calendar: your tasks plus the unfinished steps of your experiments.",
+    "summary": "One calendar for what is coming and what you have already done: your tasks plus the unfinished steps of your experiments.",
     "details": [
       "Open it from the calendar icon in the left sidebar. A badge counts what is overdue or due within the next hour.",
       "A month grid shows each day with small count pills, and marks today, the day you selected and overdue days. Switch between Day, Week and Month views, and hide weekends if you do not need them.",
       "Below the grid, an agenda lists the items for what you selected, in time order. Each card says where it came from: a personal task, or a step of an experiment or resource.",
-      "Click a step to open its experiment, and tick steps and tasks off right from the agenda.",
+      "Click a step to open its experiment, and tick steps and tasks off right from the agenda. A completed task stays on its day with the time you finished it, so you can look back at what was done and when.",
       "Add a task with a title, notes, an exact date and time and a reminder (at the deadline, or 15 minutes, 1 hour, 1 day or 1 week before).",
       "Subscribe from Google Calendar or Apple Calendar with the private, read-only link on the Calendar tab. You can regenerate or revoke it any time."
     ],
@@ -396,9 +396,10 @@
     "guide": true,
     "order": 40,
     "icon": "fa-calendar-days",
-    "purpose": "See what is due this week at a glance, and never miss a step deadline hidden inside an experiment.",
+    "purpose": "See what is due this week at a glance, never miss a step deadline hidden inside an experiment, and look back at what you finished on earlier days.",
     "uses": [
       "Plan the week on Monday: switch to Week view and see every deadline across your experiments.",
+      "Go back to a past week or month to see which tasks you completed and when, for a weekly report or a lab meeting update.",
       "Put the subscription link in your phone calendar so lab deadlines show up next to the rest of your day."
     ],
     "news": "New: an activity calendar that combines tasks and experiment steps, with reminders and calendar subscriptions.",
@@ -444,8 +445,8 @@
     "details": [
       "Open Orders from the top bar (under More) and press New order. Link an existing resource, or add a new one.",
       "Add the supplier details and notes (lists are supported), and attach quotes or invoices. An attachment can be reused on other orders.",
-      "Follow the order through its stages to delivery. An order can move on by itself, for example from requested to ordered when a procurement ID appears.",
-      "Orders can archive themselves after a set time, and you can set a reminder.",
+      "Follow the order through its stages to delivery.",
+      "You can set a reminder on an order.",
       "People involved are notified when the status changes."
     ],
     "image": "",
@@ -459,13 +460,13 @@
       "Request a reagent, attach the supplier quote and let the person who orders pick it up.",
       "Keep one list of what has been ordered and what is still on its way."
     ],
-    "news": "New: reusable attachments, automatic status changes and archiving, reminders and notes with lists.",
+    "news": "New: reusable attachments, reminders and notes with lists.",
     "shot": "The Orders page with a few orders at different stages and one order open"
   },
   {
     "id": "guide-experiment-sections",
     "date": "2026-10-12",
-    "area": "Linking",
+    "area": "Experiments",
     "title": "Link items to experiments",
     "summary": "Connect an experiment to the resources, data folders, templates and tools it uses, and reach the lab's tools in one click.",
     "details": [
@@ -525,7 +526,7 @@
   {
     "id": "guide-feedback",
     "date": "2026-10-12",
-    "area": "Collaboration",
+    "area": "Others",
     "title": "Feedback board and announcements",
     "summary": "Post ideas and bugs, upvote the ones that matter, and read team announcements.",
     "details": [
@@ -625,5 +626,74 @@
     ],
     "news": "New: assignments, access notifications and the combined to-do list.",
     "shot": "The To-do panel next to the notifications dropdown"
+  },
+  {
+    "id": "guide-editor-toolbar",
+    "date": "2026-10-13",
+    "area": "Experiments",
+    "title": "The editor toolbar",
+    "summary": "New buttons above the text of an experiment: one Insert menu, dates, titles, notes, checklists, spreadsheets, links and more.",
+    "details": [
+      "Save: the first button saves the experiment, and the bar shows whether your changes are saved. Save and go back is in the File menu.",
+      "Insert: one menu for everything you can add. It lists what you used recently, then Text (title, date, notes, divider), Tables, Links and Laboratory (templates).",
+      "Checklist: turns lines into tick boxes. Type [ ] and a space to start one, then click a box to tick it.",
+      "Format painter and Clear formatting: copy the look of some text and apply it to other text, or strip formatting from the selection.",
+      "Links: add a web link, upload and link a file or folder, refer to a file or folder on a shared drive, or link a LabCollector item.",
+      "Day: inserts today's date in your saved format. The arrow gives Custom date, Log entry (date and time), and Edit, Copy link and Delete for a date you selected. Double-click a date to edit it.",
+      "Title: puts the experiment title in as a heading. The arrow lets you pick the title style and save it as your default.",
+      "Divider: single or double, solid or dashed lines to separate parts of your notes.",
+      "Note: inserts a highlighted note box. The arrow sets the title, whether it appears in the table of contents, and the heading level.",
+      "Table, spreadsheet and well plate: one menu to insert a table, a formula spreadsheet or a 6 to 384 well plate, edit or autofit the selected spreadsheet, style tables and cells, indent tables and make them sortable.",
+      "Copy table: copies a whole table or your selection with its formatting, ready to paste into another program.",
+      "Template: search your templates and insert one into the experiment. Favourites come first.",
+      "Mouse: inserts a PyRAT mouse or cage link (greyed out until Animal Studies is available).",
+      "Keyboard shortcuts: Ctrl+Shift+D date and time, Ctrl+Alt+T title, Ctrl+Alt+N note, Ctrl+Shift+H single line, Ctrl+Alt+Shift+H double line.",
+      "On a long experiment the toolbar stays at the top as you scroll and slides smoothly with the top bar."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 85,
+    "icon": "fa-screwdriver-wrench",
+    "purpose": "Find every editing tool in one place, and write and structure an experiment faster with fewer clicks.",
+    "uses": [
+      "Press Insert, then Text, then Log entry each time you return to an experiment so that your notes read as a dated record.",
+      "Start a protocol step list with a checklist, then tick the boxes off at the bench.",
+      "Insert a note box with a clear title for a warning or a deviation so that it shows up in the table of contents."
+    ],
+    "news": "New: one Insert menu, checklists, a format painter, date, title and note tools with saved defaults, spreadsheets and well plates, and a template picker.",
+    "shot": "The editor toolbar of an experiment with the Insert menu open"
+  },
+  {
+    "id": "guide-collaboration",
+    "date": "2026-10-13",
+    "area": "Boards",
+    "title": "Working together: members, assignments and comments",
+    "summary": "Add colleagues to a project, assign cards to people, and talk about the work in comments where you can @mention anyone.",
+    "details": [
+      "Open a project's edit dialog and use Team members on this project to add colleagues. Remove someone with the × on their name.",
+      "A subproject starts with the same members as its parent. Members of a parent project can already see and manage its subprojects, and you can still add more people to a subproject.",
+      "Open a card and choose people under Assigned to. You can assign several people, and remove one with the ×. Left empty, the card is assigned to you.",
+      "Each assigned person gets a notification, and the card shows who created it and who it was assigned by. Use Assigned to me above the board to see just your cards.",
+      "Cards assigned to you also appear in the To-do tab in the left sidebar.",
+      "Comments: every card has a Comments section. Write a comment, and type @ followed by a name to mention someone. The person you mention is notified.",
+      "The same comments with @mentions work on tasks in the To-do list and on posts in the Feedback board. You can edit or delete your own comments.",
+      "Cards show a comment count, so you can see which ones have a discussion going without opening them."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 55,
+    "icon": "fa-user-group",
+    "purpose": "Make clear who is on a project, who is responsible for each card, and keep the discussion next to the work instead of in emails.",
+    "uses": [
+      "Add the whole project team once, then assign a card to the person who will run each experiment.",
+      "Ask a question on a card with @name, so the person gets a notification and the answer stays with the card.",
+      "Create a subproject for one paper figure and let it start with the same people as the main project."
+    ],
+    "news": "New: project members, several people per card, comments with @mentions, and notifications when you are assigned or mentioned.",
+    "shot": "A card open with the Assigned to field and the Comments section showing an @mention"
   }
 ]

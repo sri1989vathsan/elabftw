@@ -4,14 +4,10 @@
 <div class='container-fluid px-0'>
   <div class='d-flex flex-wrap align-items-start justify-content-between mb-4'>
     <div>
-      <h1 class='mb-1'><i class='fas {{ whatsNewShowAll ? 'fa-star' : 'fa-book-open' }} mr-2'></i>{{ whatsNewShowAll ? 'What’s new'|trans : 'MoorLab eLab guide'|trans }}</h1>
-      <p class='text-muted mb-0'>
-        {% if whatsNewShowAll %}
-          {{ 'Every update, newest first.'|trans }}
-        {% else %}
-          {{ 'Key features and how to use them. Pick a feature to see what it is for, how it works and how you can use it.'|trans }}
-        {% endif %}
-      </p>
+      <h1 class='mb-1'><i class='fas {{ whatsNewShowAll ? 'fa-star' : 'fa-book-open' }} mr-2'></i>{{ whatsNewShowAll ? 'What’s new'|trans : 'MoorLab eLabFTW guide'|trans }}</h1>
+      {% if whatsNewShowAll %}
+        <p class='text-muted mb-0'>{{ 'Every update, newest first.'|trans }}</p>
+      {% endif %}
     </div>
     {% if whatsNewCanEdit %}
       <details class='whats-new-edit mt-2 mt-md-0'>

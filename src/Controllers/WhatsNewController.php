@@ -81,7 +81,7 @@ final class WhatsNewController extends AbstractHtmlController
     #[Override]
     protected function getPageTitle(): string
     {
-        return _('MoorLab eLab guide');
+        return _('MoorLab eLabFTW guide');
     }
 
     #[Override]
