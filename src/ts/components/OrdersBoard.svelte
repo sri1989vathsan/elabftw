@@ -27,7 +27,7 @@
     };
   }
 
-  type OrderStatus = 'requested' | 'ordered' | 'received' | 'backlogged' | 'cancelled' | 'reference';
+  type OrderStatus = 'requested' | 'ordered' | 'received' | 'backlogged' | 'cancelled' | 'reference' | 'my_reference';
 
   type TeamMember = {
     userid: number;
@@ -149,11 +149,14 @@
     return [...existing, ...incoming.filter(item => !seenIds.has(item.id))];
   }
 
-  // 'reference' is included so an order accidentally moved off it (e.g. via
-  // this same select) can always be moved back -- previously only settable
-  // at creation time via the new-order form's own toggle, with no way back
-  // once it was gone.
-  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'backlogged', 'cancelled', 'reference'];
+  // 'reference' (shown as "Pinned") is only set when an order is created, and
+  // is locked afterwards: the selects below leave it out for every other order
+  // and disable it on a pinned one.
+  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'backlogged', 'cancelled', 'reference', 'my_reference'];
+  // 'reference' (shown as "Pinned for all") and 'my_reference' (shown as "Reference", only its
+  // author sees it) are always pinned and never change status
+  const PINNED_STATUSES: OrderStatus[] = ['reference', 'my_reference'];
+  const MOVABLE_STATUSES = STATUSES.filter(status => !PINNED_STATUSES.includes(status));
 
   function statusLabel(status: OrderStatus): string {
     return {
@@ -162,7 +165,8 @@
       ordered: t('Ordered'),
       received: t('Received'),
       cancelled: t('Cancelled'),
-      reference: t('Reference'),
+      reference: t('Pinned for all'),
+      my_reference: t('Reference'),
     }[status];
   }
 
@@ -227,6 +231,7 @@
   // submitNewItem()'s own post-creation loop.
   let reusedUploads: OrderUpload[] = [];
   let newIsReference = false;
+  let newIsMyReference = false;
   let newIsCommon = false;
   // place the order for a teammate instead of themself
   let newForUserid: number | null = null;
@@ -675,7 +680,7 @@
         // fixed up right below once each one is actually uploaded
         notes: notesHtml === '' ? null : notesHtml,
         item_ids: itemIds,
-        status: newIsReference ? 'reference' : undefined,
+        status: newIsReference ? 'reference' : (newIsMyReference ? 'my_reference' : undefined),
         userid: newForUserid ?? undefined,
         common: newIsCommon,
         labcollector_type: newLabcollectorType ?? undefined,
@@ -722,6 +727,7 @@
       newFiles = [];
       reusedUploads = [];
       newIsReference = false;
+      newIsMyReference = false;
       newIsCommon = false;
       newForUserid = null;
       newLabcollectorType = null;
@@ -938,6 +944,7 @@
     selectedResources = item.items.map(linkedItem => ({ id: linkedItem.id, title: linkedItem.title }));
     newIsCommon = item.common;
     newIsReference = false;
+    newIsMyReference = false;
     newForUserid = null;
     newLabcollectorType = item.labcollector_type;
     newLabcollectorId = item.labcollector_id;
@@ -993,7 +1000,9 @@
   }
 
   async function bulkSetStatus(status: OrderStatus): Promise<void> {
-    const ids = [...selectedIds];
+    // pinned orders keep their status, so they are left out of a bulk move
+    const pinnedIds = new Set([...items, ...pinnedItems].filter(item => PINNED_STATUSES.includes(item.status)).map(item => item.id));
+    const ids = [...selectedIds].filter(id => !pinnedIds.has(id));
     if (ids.length === 0) return;
     try {
       await Promise.all(ids.map(id => ApiC.patch(`${Model.Order}/${id}`, { status })));
@@ -1551,10 +1560,20 @@
         class="btn btn-ghost btn-sm orders-reference-toggle mb-2"
         class:active={newIsReference}
         aria-pressed={newIsReference}
-        title={t('This is a reference (catalog info, not an actual order) — always stays pinned')}
-        on:click={() => newIsReference = !newIsReference}
+        title={t('Pinned for the whole team (catalog info, not an actual order) — it stays pinned and its status cannot be changed')}
+        on:click={() => { newIsReference = !newIsReference; if (newIsReference) newIsMyReference = false; }}
       >
-        <i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Reference')}
+        <i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Pinned for all')}
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm orders-reference-toggle mb-2"
+        class:active={newIsMyReference}
+        aria-pressed={newIsMyReference}
+        title={t('A reference only you can see — it stays pinned for you and its status cannot be changed')}
+        on:click={() => { newIsMyReference = !newIsMyReference; if (newIsMyReference) newIsReference = false; }}
+      >
+        <i class="fas fa-bookmark fa-fw mr-1" aria-hidden="true"></i>{t('Reference')}
       </button>
       <button
         type="button"
@@ -1759,8 +1778,11 @@
       <button type="button" class={statusFilter === 'cancelled' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('cancelled')}>
         {t('Cancelled')}
       </button>
-      <button type="button" class={statusFilter === 'reference' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('reference')} title={t('Shared team references, visible to everyone regardless of the Mine/Everyone filter')}>
-        <i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Reference')}
+      <button type="button" class={statusFilter === 'reference' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('reference')} title={t('Shared team pinned orders, visible to everyone regardless of the Mine/Everyone filter')}>
+        <i class="fas fa-thumbtack fa-fw mr-1" aria-hidden="true"></i>{t('Pinned for all')}
+      </button>
+      <button type="button" class={statusFilter === 'my_reference' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('my_reference')} title={t('Your own references, only you can see them')}>
+        <i class="fas fa-bookmark fa-fw mr-1" aria-hidden="true"></i>{t('Reference')}
       </button>
       <button type="button" class={statusFilter === 'archived' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('archived')}>
         <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archived')}
@@ -1881,7 +1903,7 @@
         aria-label={t('Move to status')}
       >
         <option value="" disabled>{t('Move to status…')}</option>
-        {#each STATUSES as status (status)}
+        {#each MOVABLE_STATUSES as status (status)}
           <option value={status}>{statusLabel(status)}</option>
         {/each}
       </select>
@@ -2054,19 +2076,25 @@
                   on:change={() => toggleSelect(item.id)}
                   aria-label={t('Select')}
                 />
-                <select
-                  class={`form-control form-control-sm orders-status-select orders-status-select-${item.status}`}
-                  value={item.status}
-                  on:change={(event) => setStatus(item, (event.target as HTMLSelectElement).value as OrderStatus)}
-                  aria-label={t('Status')}
-                >
-                  {#each STATUSES as status (status)}
-                    <option value={status}>{statusLabel(status)}</option>
-                  {/each}
-                </select>
+                {#if PINNED_STATUSES.includes(item.status)}
+                  <span class="orders-status-pill" title={t('A pinned order keeps its status')}>
+                    <i class={`fas ${item.status === 'my_reference' ? 'fa-bookmark' : 'fa-thumbtack'} fa-fw mr-1`} aria-hidden="true"></i>{statusLabel(item.status)}
+                  </span>
+                {:else}
+                  <select
+                    class={`form-control form-control-sm orders-status-select orders-status-select-${item.status}`}
+                    value={item.status}
+                    on:change={(event) => setStatus(item, (event.target as HTMLSelectElement).value as OrderStatus)}
+                    aria-label={t('Status')}
+                  >
+                    {#each MOVABLE_STATUSES as status (status)}
+                      <option value={status}>{statusLabel(status)}</option>
+                    {/each}
+                  </select>
+                {/if}
                 <span class="orders-muted orders-item-id" title={t('Order ID')}>#{item.id}</span>
                 <strong class="orders-item-title">{breakableUnderscores(item.title)}</strong>
-                {#if !['requested', 'reference', 'backlogged', 'cancelled'].includes(item.status) && isMissingProcurementId(item)}
+                {#if !['requested', 'reference', 'my_reference', 'backlogged', 'cancelled'].includes(item.status) && isMissingProcurementId(item)}
                   <span class="badge badge-danger" title={t('No Procurement ID tag was extracted from an attached file.')}>
                     <i class="fas fa-triangle-exclamation fa-fw mr-1" aria-hidden="true"></i>{t('Missing Procurement ID')}
                   </span>
@@ -2164,8 +2192,8 @@
                             type="button"
                             class="orders-more-dropdown-item"
                             class:orders-more-dropdown-item-active={item.pinned}
-                            disabled={item.status === 'reference'}
-                            title={item.status === 'reference' ? t('A reference always stays pinned') : ''}
+                            disabled={PINNED_STATUSES.includes(item.status)}
+                            title={PINNED_STATUSES.includes(item.status) ? t('A pinned order always stays pinned') : ''}
                             on:click={() => { setPinned(item, !item.pinned); openMenuItemId = null; }}
                           >
                             <i class="fas fa-thumbtack fa-fw mr-2" aria-hidden="true"></i>
@@ -2723,9 +2751,17 @@
     background-color: #4d4c4c;
   }
 
-  .orders-status-select-reference {
-    color: #fff;
-    background-color: #6f42c1;
+  /* A pinned order's status cannot change, so it is a plain label instead of a dropdown. */
+  .orders-status-pill {
+    align-items: center;
+    border-radius: 0.2rem;
+    display: inline-flex;
+    font-size: 0.875rem;
+    border: 1px solid currentColor;
+    font-weight: 700;
+    line-height: 1.5;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
   }
 
   .orders-category-select {

@@ -54,8 +54,10 @@ final class EntityOrderLinks extends AbstractRest
             FROM entity_order_links AS link
             INNER JOIN custom_orders AS o ON o.id = link.order_id AND o.team = :team
             WHERE link.entity_type = :entity_type AND link.entity_id = :entity_id
+                AND (o.status != \'my_reference\' OR o.userid = :viewer)
             ORDER BY link.created_at ASC';
         $req = $this->Db->prepare($sql);
+        $req->bindValue(':viewer', $this->Users->userid, PDO::PARAM_INT);
         $req->bindValue(':team', $this->Users->team, PDO::PARAM_INT);
         $req->bindValue(':entity_type', $this->Entity->entityType->value);
         $req->bindValue(':entity_id', $this->Entity->id, PDO::PARAM_INT);

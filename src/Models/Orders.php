@@ -15,6 +15,7 @@ use DateTimeZone;
 use Elabftw\Elabftw\Db;
 use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
+use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Notifications\OrderChanged;
 use Elabftw\Models\Notifications\OrderReminder;
@@ -56,7 +57,11 @@ final class Orders extends AbstractRest
 {
     use SetIdTrait;
 
-    public const array STATUSES = array('requested', 'ordered', 'received', 'backlogged', 'cancelled', 'reference');
+    public const array STATUSES = array('requested', 'ordered', 'received', 'backlogged', 'cancelled', 'reference', 'my_reference');
+
+    // always pinned, and the status never changes once set: 'reference' is shared with the whole
+    // team (shown as "Pinned for all"), 'my_reference' is only visible to its author
+    private const array PINNED_STATUSES = array('reference', 'my_reference');
 
     // 'reference' excluded: those are pinned catalog entries with no real
     // lifecycle to measure "time in status" from (see updateStatus() and
@@ -111,10 +116,11 @@ final class Orders extends AbstractRest
         // beside real, gone-once-fulfilled requests unless someone digs it
         // out of the Reference tab. See also updateStatus() below, which
         // keeps this true if a plain order is later marked reference.
-        $pinned = $status === 'reference' ? 1 : 0;
+        $pinned = in_array($status, self::PINNED_STATUSES, true) ? 1 : 0;
         // anyone can place an order on behalf of a teammate; leaving userid
         // out (the common case) just gets the requester themself as owner
-        $userid = $this->getOwnerUserid($reqBody['userid'] ?? null);
+        // a personal reference is always the requester's own
+        $userid = $status === 'my_reference' ? $this->Users->userid : $this->getOwnerUserid($reqBody['userid'] ?? null);
         // "common" is a plain tag (commonly-ordered lab supplies), separate
         // from the status lifecycle -- unlike 'reference' it doesn't force
         // pinning or skip the requested/ordered/received workflow
@@ -225,8 +231,11 @@ final class Orders extends AbstractRest
         $queryParams ??= $this->getQueryParams();
         $query = $queryParams->getQuery();
 
-        $conditions = array('o.team = :team');
-        $bind = array(':team' => array($this->Users->team, PDO::PARAM_INT));
+        $conditions = array('o.team = :team', "(o.status != 'my_reference' OR o.userid = :viewer)");
+        $bind = array(
+            ':team' => array($this->Users->team, PDO::PARAM_INT),
+            ':viewer' => array($this->Users->userid, PDO::PARAM_INT),
+        );
 
         $status = $query->getString('status');
         if ($status === 'archived') {
@@ -240,7 +249,7 @@ final class Orders extends AbstractRest
             // Reference orders are the one exception: they live only on
             // their own Reference tab (and All), never bleeding into the
             // others just because they happen to be pinned too.
-            $conditions[] = "(o.status = :status OR (o.pinned = 1 AND o.status != 'reference'))";
+            $conditions[] = "(o.status = :status OR (o.pinned = 1 AND o.status NOT IN ('reference', 'my_reference')))";
             $bind[':status'] = array($status, PDO::PARAM_STR);
         }
 
@@ -514,6 +523,9 @@ final class Orders extends AbstractRest
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
         $order = $this->Db->fetch($req);
+        if (($order['status'] ?? '') === 'my_reference' && (int) $order['userid'] !== $this->Users->userid) {
+            throw new ResourceNotFoundException();
+        }
 
         return $this->hydrate($order);
     }
@@ -534,7 +546,7 @@ final class Orders extends AbstractRest
             // so an explicit unpin is a no-op rather than an error while
             // this order is (or is becoming, in this same request) one
             $finalStatus = array_key_exists('status', $params) ? (string) $params['status'] : $order['status'];
-            if ((bool) $params['pinned'] || $finalStatus !== 'reference') {
+            if ((bool) $params['pinned'] || !in_array($finalStatus, self::PINNED_STATUSES, true)) {
                 $this->updatePinned((bool) $params['pinned']);
             }
         }
@@ -547,6 +559,9 @@ final class Orders extends AbstractRest
         if (array_key_exists('userid', $params)) {
             if (!$isOwner && !$this->Users->isAdmin) {
                 throw new ImproperActionException('Only the author or a team admin can edit this order.');
+            }
+            if ($order['status'] === 'my_reference') {
+                throw new ImproperActionException('A personal reference stays with its author.');
             }
             $this->updateOwner($params['userid']);
         }
@@ -615,6 +630,10 @@ final class Orders extends AbstractRest
         if (!in_array($status, self::STATUSES, true)) {
             throw new ImproperActionException('Invalid order status.');
         }
+        // a pinned order (status 'reference') keeps that status for good
+        if (in_array($previousOrder['status'], self::PINNED_STATUSES, true) && $status !== $previousOrder['status']) {
+            throw new ImproperActionException('A pinned order keeps its status.');
+        }
         // same "a reference stays pinned" rule postAction() applies at
         // creation -- also enforced here so marking an existing order as
         // reference later has the same effect. status_changed_at only
@@ -623,7 +642,7 @@ final class Orders extends AbstractRest
         // what auto-archiving (Orders::autoArchivePastDue()) measures
         // "how long has this been in ordered" from.
         $changedClause = $status !== $previousOrder['status'] ? ', status_changed_at = NOW()' : '';
-        $sql = $status === 'reference'
+        $sql = in_array($status, self::PINNED_STATUSES, true)
             ? "UPDATE custom_orders SET status = :status, pinned = 1{$changedClause} WHERE id = :id AND team = :team"
             : "UPDATE custom_orders SET status = :status{$changedClause} WHERE id = :id AND team = :team";
         $req = $this->Db->prepare($sql);
