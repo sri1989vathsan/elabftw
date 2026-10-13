@@ -511,6 +511,9 @@ document.addEventListener('DOMContentLoaded', () => {
       height: 360,
       min_height: 280,
       menubar: false,
+      // inside a modal: a sticky toolbar would dock to the page, not the dialog
+      toolbar_sticky: false,
+      toolbar_sticky_offset: 0,
       plugins: 'advlist autolink charmap code fullscreen link lists preview searchreplace table visualblocks',
       toolbar1: 'undo redo | blocks fontsize | bold italic underline | alignleft aligncenter alignright | bullist numlist | link table | removeformat code',
       setup: undefined,
