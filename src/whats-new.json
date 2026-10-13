@@ -447,7 +447,9 @@
       "Add the supplier details and notes (lists are supported), and attach quotes or invoices. An attachment can be reused on other orders.",
       "Follow the order through its stages to delivery.",
       "You can set a reminder on an order.",
-      "People involved are notified when the status changes."
+      "Pinned for all and Reference: tick one when you create an order, or later when you edit it. Pinned for all stays at the top for the whole team; Reference stays at the top for you only. Either can be switched to the other, but neither can go back to a normal status.",
+      "People involved are notified when the status changes.",
+      "Templates: the Templates tab on the Orders page holds texts that go with ordering, such as an email to a supplier or a quote request. Everyone in the team can search them and copy the text; the author or a team admin edits them."
     ],
     "image": "",
     "imageAlt": "",
@@ -458,9 +460,10 @@
     "purpose": "One place to request what the lab needs and to see where each order is, instead of emails and sticky notes.",
     "uses": [
       "Request a reagent, attach the supplier quote and let the person who orders pick it up.",
-      "Keep one list of what has been ordered and what is still on its way."
+      "Keep one list of what has been ordered and what is still on its way.",
+      "Keep a standard quote-request email as a template, copy it, fill in the supplier and the product, and send it from your mail program."
     ],
-    "news": "New: reusable attachments, reminders and notes with lists.",
+    "news": "New: reusable attachments, reminders and notes with lists, and shared text templates for supplier emails.",
     "shot": "The Orders page with a few orders at different stages and one order open"
   },
   {
