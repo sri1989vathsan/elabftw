@@ -241,7 +241,7 @@ final class Apiv2Controller extends AbstractApiController
     private function handlePost(): Response
     {
         // special case for POST/uploads where we get the information from the "files" attribute
-        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools || $this->Model instanceof OrderUploads || $this->Model instanceof AnnouncementUploads) && $this->action === Action::Create) {
+        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools || $this->Model instanceof OrderUploads || $this->Model instanceof OrderTemplateUploads || $this->Model instanceof AnnouncementUploads) && $this->action === Action::Create) {
             $file = $this->Request->files->get('file');
             // this was added to prevent: Uncaught Error: Call to a member function getClientOriginalName() on null
             // not sure what triggers it though
@@ -573,6 +573,7 @@ final class Apiv2Controller extends AbstractApiController
                 $this->Model instanceof Branding ||
                 $this->Model instanceof HtmlTools ||
                 $this->Model instanceof OrderUploads ||
+                $this->Model instanceof OrderTemplateUploads ||
                 $this->Model instanceof AnnouncementUploads
             )) {
             return;

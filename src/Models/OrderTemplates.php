@@ -16,14 +16,17 @@ use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Users\Users;
+use Elabftw\Services\Filter;
 use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
 use RuntimeException;
 
 use function array_map;
+use function implode;
 use function mb_strlen;
 use function preg_replace;
+use function sprintf;
 use function trim;
 
 /**
@@ -35,7 +38,7 @@ final class OrderTemplates extends AbstractRest
 {
     use SetIdTrait;
 
-    private const int MAX_BODY = 20000;
+    private const int MAX_BODY = 60000;
 
     public function __construct(private Users $Users, ?int $id = null)
     {
@@ -73,7 +76,10 @@ final class OrderTemplates extends AbstractRest
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
 
-        return array_map($this->hydrate(...), $req->fetchAll());
+        $rows = $req->fetchAll();
+        $uploads = $this->uploadsByTemplate(array_map(static fn(array $row): int => (int) $row['id'], $rows));
+
+        return array_map(fn(array $row): array => $this->hydrate($row, $uploads[(int) $row['id']] ?? array()), $rows);
     }
 
     #[Override]
@@ -89,7 +95,7 @@ final class OrderTemplates extends AbstractRest
             throw new ResourceNotFoundException();
         }
 
-        return $this->hydrate($row);
+        return $this->hydrate($row, $this->uploadsByTemplate(array((int) $row['id']))[(int) $row['id']] ?? array());
     }
 
     #[Override]
@@ -141,9 +147,41 @@ final class OrderTemplates extends AbstractRest
             LEFT JOIN users AS author ON author.userid = t.userid';
     }
 
-    /** @param array<string, mixed> $row */
-    private function hydrate(array $row): array
+    /**
+     * @param list<int> $ids
+     * @return array<int, list<array<string, mixed>>> the attached files, keyed by template id
+     */
+    private function uploadsByTemplate(array $ids): array
     {
+        if ($ids === array()) {
+            return array();
+        }
+        $sql = sprintf(
+            'SELECT id, template_id, real_name, long_name, storage, filesize FROM custom_order_template_uploads
+                WHERE template_id IN (%s) ORDER BY created_at ASC, id ASC',
+            implode(',', array_map('intval', $ids)),
+        );
+        $byTemplate = array();
+        foreach ($this->Db->q($sql)->fetchAll() as $upload) {
+            $byTemplate[(int) $upload['template_id']][] = array(
+                'id' => (int) $upload['id'],
+                'real_name' => $upload['real_name'],
+                'long_name' => $upload['long_name'],
+                'storage' => (int) $upload['storage'],
+                'filesize' => $upload['filesize'] === null ? null : (int) $upload['filesize'],
+            );
+        }
+
+        return $byTemplate;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @param list<array<string, mixed>> $uploads
+     */
+    private function hydrate(array $row, array $uploads = array()): array
+    {
+        $row['uploads'] = $uploads;
         $row['id'] = (int) $row['id'];
         $row['userid'] = (int) $row['userid'];
         $row['can_edit'] = $row['userid'] === $this->Users->userid || $this->Users->isAdmin;
@@ -169,17 +207,17 @@ final class OrderTemplates extends AbstractRest
         return $title;
     }
 
-    /** Plain text, kept exactly as typed (including <placeholders>): it is only shown escaped and copied, never rendered as HTML. */
+    /** Rich text (bullets, numbering, bold, ...) cleaned of anything unsafe before it is stored. */
     private function getBody(mixed $value): ?string
     {
         $body = trim((string) ($value ?? ''));
-        if ($body === '') {
+        if ($body === '' || trim(strip_tags($body)) === '') {
             return null;
         }
         if (mb_strlen($body) > self::MAX_BODY) {
             throw new ImproperActionException('The text must be shorter than ' . self::MAX_BODY . ' characters.');
         }
 
-        return $body;
+        return Filter::body($body);
     }
 }
