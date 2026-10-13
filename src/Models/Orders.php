@@ -117,8 +117,7 @@ final class Orders extends AbstractRest
         // beside real, gone-once-fulfilled requests unless someone digs it
         // out of the Reference tab. See also updateStatus() below, which
         // keeps this true if a plain order is later marked reference.
-        // only 'Pinned for all' is held at the top; a personal Reference lives on its own tab
-        $pinned = $status === 'pinned_all' ? 1 : 0;
+        $pinned = in_array($status, self::PINNED_STATUSES, true) ? 1 : 0;
         // anyone can place an order on behalf of a teammate; leaving userid
         // out (the common case) just gets the requester themself as owner
         // a personal reference is always the requester's own
@@ -548,7 +547,7 @@ final class Orders extends AbstractRest
             // so an explicit unpin is a no-op rather than an error while
             // this order is (or is becoming, in this same request) one
             $finalStatus = array_key_exists('status', $params) ? (string) $params['status'] : $order['status'];
-            if ((bool) $params['pinned'] || $finalStatus !== 'pinned_all') {
+            if ((bool) $params['pinned'] || !in_array($finalStatus, self::PINNED_STATUSES, true)) {
                 $this->updatePinned((bool) $params['pinned']);
             }
         }
@@ -654,13 +653,9 @@ final class Orders extends AbstractRest
         // what auto-archiving (Orders::autoArchivePastDue()) measures
         // "how long has this been in ordered" from.
         $changedClause = $status !== $previousOrder['status'] ? ', status_changed_at = NOW()' : '';
-        // 'Pinned for all' is always held at the top; a personal Reference never is
-        $pinnedClause = match ($status) {
-            'pinned_all' => ', pinned = 1',
-            'my_reference' => ', pinned = 0',
-            default => '',
-        };
-        $sql = "UPDATE custom_orders SET status = :status{$pinnedClause}{$changedClause} WHERE id = :id AND team = :team";
+        $sql = in_array($status, self::PINNED_STATUSES, true)
+            ? "UPDATE custom_orders SET status = :status, pinned = 1{$changedClause} WHERE id = :id AND team = :team"
+            : "UPDATE custom_orders SET status = :status{$changedClause} WHERE id = :id AND team = :team";
         $req = $this->Db->prepare($sql);
         $req->bindValue(':status', $status);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);

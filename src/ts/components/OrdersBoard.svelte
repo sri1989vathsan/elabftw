@@ -1577,7 +1577,7 @@
         class="btn btn-ghost btn-sm orders-reference-toggle mb-2"
         class:active={newIsMyReference}
         aria-pressed={newIsMyReference}
-        title={t('A reference only you can see — its status cannot be changed')}
+        title={t('A reference only you can see — it stays pinned for you and its status cannot be changed')}
         on:click={() => { newIsMyReference = !newIsMyReference; if (newIsMyReference) newIsReference = false; }}
       >
         <i class="fas fa-bookmark fa-fw mr-1" aria-hidden="true"></i>{t('Reference')}
@@ -1991,7 +1991,7 @@
                   class:active={editPinKind === 'my_reference'}
                   aria-pressed={editPinKind === 'my_reference'}
                   disabled={item.userid !== core.currentUserid}
-                  title={item.userid !== core.currentUserid ? t('Only the author can make an order their own Reference') : t('A reference only you can see — once saved, its status cannot be changed (it can only be switched to Pinned for all)')}
+                  title={item.userid !== core.currentUserid ? t('Only the author can make an order their own Reference') : t('A reference only you can see — once saved, it stays pinned for you (it can only be switched to Pinned for all)')}
                   on:click={() => editPinKind = editPinLocked ? 'my_reference' : (editPinKind === 'my_reference' ? null : 'my_reference')}
                 >
                   <i class="fas fa-bookmark fa-fw mr-1" aria-hidden="true"></i>{t('Reference')}
@@ -2220,8 +2220,8 @@
                             type="button"
                             class="orders-more-dropdown-item"
                             class:orders-more-dropdown-item-active={item.pinned}
-                            disabled={item.status === 'pinned_all'}
-                            title={item.status === 'pinned_all' ? t('A pinned order always stays pinned') : ''}
+                            disabled={PINNED_STATUSES.includes(item.status)}
+                            title={PINNED_STATUSES.includes(item.status) ? t('A pinned order always stays pinned') : ''}
                             on:click={() => { setPinned(item, !item.pinned); openMenuItemId = null; }}
                           >
                             <i class="fas fa-thumbtack fa-fw mr-2" aria-hidden="true"></i>
