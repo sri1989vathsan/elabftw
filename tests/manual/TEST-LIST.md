@@ -96,3 +96,6 @@ Build 61, 2026-10-12. Chromium tested by Claude; Firefox: faults, acceptance, re
 | 90 | R32 | Same for columns: select several column letters or a range over several columns, right-click inside it, Delete selected columns: all selected columns are deleted; grid and saved table agree; inline and popup | PASS (build 22): real drag + right-click, inline 5 to 2 columns and popup 5 to 2 columns, Update keeps the result |
 | 91 | R33 | An indented spreadsheet: the Table menu (toolbar and Insert > Tables) still offers Outdent and Indent table after clicking in its grid; pressing Enter below it gives a paragraph that is not indented | PASS (real clicks): grid click then Table menu offers Indent; after indenting it offers Outdent and Indent |
 | 92 | R34 | A spreadsheet with a long title in a narrow table: the header stays one line with the title cut short by an ellipsis (full title on hover) and the buttons stay on the right | PASS (measured, wraps when too narrow): title keeps one line with ellipsis, buttons wrap to a second row, none cut off |
+
+## Firefox, 2026-10-13 (owner, build 22)
+Faults S7-S11, regression R4, R6, R7 and acceptance A1-A6, A9 all PASS in Firefox. Not run in Firefox yet: stress run, R31-R34 and A7/A8 (real clicks).
