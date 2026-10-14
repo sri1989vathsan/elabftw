@@ -735,7 +735,7 @@
     "guide": true,
     "order": 55,
     "icon": "fa-user-group",
-    "purpose": "Make clear who is on a project, who is responsible for each card, and keep the discussion next to the work instead of in emails.",
+    "purpose": "See who is working on a project and who looks after each card, and keep the conversation right next to the work it is about.",
     "uses": [
       "Add the whole project team once, then assign a card to the person who will run each experiment.",
       "Ask a question on a card with @name, so the person gets a notification and the answer stays with the card.",
