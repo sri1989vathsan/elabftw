@@ -729,12 +729,12 @@
     "title": "Working together: members, assignments and comments",
     "summary": "Add colleagues to a project, assign cards to people, and talk about the work in comments where you can @mention anyone.",
     "details": [
-      "Open a project's edit dialog and use Team members on this project to add colleagues. Remove someone with the × on their name.",
+      "fa-user-group::Open a project's edit dialog and use Team members on this project to add colleagues. Remove someone with the × on their name.",
       "A subproject starts with the same members as its parent. Members of a parent project can already see and manage its subprojects, and you can still add more people to a subproject.",
-      "Open a card and choose people under Assigned to. You can assign several people, and remove one with the ×. Left empty, the card is assigned to you.",
+      "fa-user::Open a card and choose people under Assigned to. You can assign several people, and remove one with the ×. Left empty, the card is assigned to you.",
       "Each assigned person gets a notification, and the card shows who created it and who it was assigned by. Use Assigned to me above the board to see just your cards.",
       "Cards assigned to you also appear in the To-do tab in the left sidebar.",
-      "Comments: every card has a Comments section. Write a comment, and type @ followed by a name to mention someone. The person you mention is notified.",
+      "fa-comment::Comments: every card has a Comments section. Write a comment, and type @ followed by a name to mention someone. The person you mention is notified.",
       "The same comments with @mentions work on tasks in the To-do list and on posts in the Feedback board. You can edit or delete your own comments.",
       "Cards show a comment count, so you can see which ones have a discussion going without opening them."
     ],
