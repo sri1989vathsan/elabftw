@@ -501,11 +501,11 @@
     "summary": "Connect an experiment to the resources, data folders, templates and tools it uses, and reach the lab's tools in one click.",
     "details": [
       "Scroll below the main text. Each section opens and closes on its own.",
-      "Steps and tasks: a checklist for the experiment, with deadlines that also show in your calendar.",
+      "fa-list-check::Steps and tasks: a checklist for the experiment, with deadlines that also show in your calendar.",
       "Data: link the network folder where the experiment’s raw data lives. Paste the path (smb://server/share/folder or \\\\server\\share\\folder), add an optional label such as “Raw data folder” and press Add.",
       "Each data link has buttons to open it on a Mac, to copy the Windows path to paste into Explorer, and to insert a reference to it in the main text. Remove a link with the trash icon while editing.",
-      "Links: other experiments, associated templates, resources, orders, web addresses and LabCollector entries this one relates to.",
-      "Files / folders and Local files: attach files, or paste references to files kept elsewhere.",
+      "fa-link::Links: other experiments, associated templates, resources, orders, web addresses and LabCollector entries this one relates to.",
+      "fa-paperclip::Files / folders and Local files: attach files, or paste references to files kept elsewhere.",
       "Compounds and Custom fields: record chemicals from the compound database, and any extra fields your team defined.",
       "The Links menu in the top bar opens LabCollector, OpenIRIS, the MoorLab Wiki, ETHIS and MoorLab Zoom in a new tab, from any page.",
       "A team admin can change any of these addresses with the pencil icon next to it, so the link always points to the right place. On an experiment, the LabCollector links section lists the LabCollector entries it relates to."
