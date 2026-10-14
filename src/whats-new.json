@@ -712,5 +712,35 @@
     ],
     "news": "New: project members, several people per card, comments with @mentions, and notifications when you are assigned or mentioned.",
     "shot": "A card open with the Assigned to field and the Comments section showing an @mention"
+  },
+  {
+    "id": "guide-todo",
+    "date": "2026-10-14",
+    "area": "Tasks",
+    "title": "To-do list",
+    "summary": "Your tasks and the deadlines of your experiment steps in one list, sorted by when they are due.",
+    "details": [
+      "Open the To-do list from the checklist button in the left sidebar. The red number on the button counts what is overdue or due soon.",
+      "The list is grouped by due date: Overdue, Today, Tomorrow, then each later day, and No due date at the end. It mixes your own tasks with the steps of your experiments that have a deadline.",
+      "Add a task: type it in the box at the top and press Enter or the plus button. Press the arrow beside the box for more: notes, the project it belongs to, a date and time, and a reminder (at the deadline, or 15 minutes, 1 hour, 1 day or 1 week before, or a time you choose).",
+      "Tick a task or a step to mark it done. Finished tasks move to Archived tasks at the bottom, where you can look back at them.",
+      "Click a step to open the experiment it belongs to.",
+      "Project board cards assigned to you appear in this list as well. The Project boards button above the list opens the boards.",
+      "The refresh button reloads the list."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 35,
+    "icon": "fa-list-check",
+    "purpose": "Know what is due today and never lose a step deadline inside an experiment.",
+    "uses": [
+      "Start the day by opening the list and ticking off what is done.",
+      "Add a task with a reminder the moment you think of it, such as ordering a reagent by Friday.",
+      "Keep the list open on a busy day and tick off steps as you finish them."
+    ],
+    "news": "New: one list for tasks and step deadlines, with reminders and cards assigned to you from the boards.",
+    "shot": "The To-do panel open next to a page, with the add-task box and the groups Overdue, Today and Tomorrow"
   }
 ]
