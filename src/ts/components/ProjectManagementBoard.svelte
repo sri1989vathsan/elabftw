@@ -230,6 +230,8 @@
   let draftEntityLinks: { entity_type: EntityLinkType; entity_id: number; title: string }[] = [];
   let linksSummaryOpen = false;
   let linksSummaryItems: LinkSummaryItem[] = [];
+  // the "N cards" list that is open (only one at a time)
+  let openLinksGroupKey: string | null = null;
   // The same experiment, resource or web address linked from several cards (or a card and its duplicate)
   // is listed once, with every card it is linked from.
   type LinkSummaryGroup = {
@@ -1630,6 +1632,7 @@
     linksSummaryProjectId = activeProjectId;
     linksSummaryIncludeSubprojects = computeViewingAllSubprojects(activeProjectId);
     linksSummaryOpen = true;
+    openLinksGroupKey = null;
     linksSummaryItems = [];
     linksSummaryOffset = 0;
     linksSummaryHasMore = false;
@@ -3642,24 +3645,27 @@
                     </span>
                   </div>
                 {:else}
-                  <!-- linked from several cards: the count, with a dropdown listing them -->
-                  <details class="pm-link-cards-menu">
-                    <summary class="btn btn-ghost btn-sm">
+                  <!-- linked from several cards: the count, and a list of them that opens below this row (one at a time) -->
+                  <div class="pm-link-cards-menu" class:open={openLinksGroupKey === group.key}>
+                    <button type="button" class="btn btn-ghost btn-sm" aria-expanded={openLinksGroupKey === group.key} on:click={() => openLinksGroupKey = openLinksGroupKey === group.key ? null : group.key}>
                       <i class="fas fa-list-check fa-fw mr-1" aria-hidden="true"></i>{group.cards.length} {t('cards')}
-                    </summary>
-                    <ul class="pm-link-cards-dropdown">
-                      {#each group.cards as card (card.task_id)}
-                        <li>
-                          {#if card.project_name}
-                            <span class="badge badge-light" title={t('Project')}>
-                              {#if card.project_parent_name}{card.project_parent_name} / {/if}{card.project_name}
-                            </span>
-                          {/if}
-                          <button type="button" class="btn btn-ghost btn-sm" on:click={() => openTaskFromSummary(card.task_id)}>{card.task_body}</button>
-                        </li>
-                      {/each}
-                    </ul>
-                  </details>
+                      <i class="fas {openLinksGroupKey === group.key ? 'fa-caret-up' : 'fa-caret-down'} fa-fw ml-1" aria-hidden="true"></i>
+                    </button>
+                    {#if openLinksGroupKey === group.key}
+                      <ul class="pm-link-cards-dropdown">
+                        {#each group.cards as card (card.task_id)}
+                          <li>
+                            {#if card.project_name}
+                              <span class="badge badge-light" title={t('Project')}>
+                                {#if card.project_parent_name}{card.project_parent_name} / {/if}{card.project_name}
+                              </span>
+                            {/if}
+                            <button type="button" class="btn btn-ghost btn-sm" on:click={() => openTaskFromSummary(card.task_id)}>{card.task_body}</button>
+                          </li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  </div>
                 {/if}
               </li>
             {/each}
