@@ -870,7 +870,7 @@
     "featured": false,
     "guide": true,
     "id": "guide-resources",
-    "area": "Experiments",
+    "area": "Resources",
     "order": 95,
     "icon": "fa-cubes-stacked",
     "title": "Resources",
