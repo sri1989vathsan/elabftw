@@ -432,7 +432,7 @@
     "uses": [
       "One board per paper or grant, with a card for each experiment series and each deadline.",
       "A board for lab chores, with a card per task and the person responsible.",
-      "Link the protocol resource and the experiment for each planned run, and open the project to see which linked experiments are finished."
+      "Link the meeting record where each run was planned and the experiment itself, and open the project to see which linked experiments are finished."
     ],
     "news": "Boards replace the old project list, with richer cards, bulk actions, subprojects, and cards that link to experiments and resources with their status colours.",
     "shot": "The Boards page with a project open and one card showing its steps and linked experiments, and the search panel used to link them"
@@ -498,7 +498,7 @@
     "icon": "fa-link",
     "purpose": "Record not only what you did but also what you used, where the data lives, what it relates to, and reach the tools the lab uses without bookmarks.",
     "uses": [
-      "Link the resources (plasmids, cell lines) you used, so anyone can follow the trail.",
+      "Link the resources you refer to, such as the record of the meeting where the experiment was planned, so anyone can follow the trail.",
       "Add a step with a deadline for the next measurement and see it in the calendar.",
       "Link the folder with the microscope images or the sequencing run, and insert the reference where you describe the measurement.",
       "Jump to the lab wiki for a protocol while you write an experiment, or join the group meeting with the Zoom link."
@@ -584,8 +584,8 @@
     "purpose": "Stop re-entering the same filters every time you look for something, and link what you find into your work in one click.",
     "uses": [
       "Favourite your own tags and the statuses you use, then filter “my running experiments” in two clicks.",
-      "Switch Type to Resources to look through plasmids with the same panel.",
-      "While writing up an experiment, search for the protocol resource and attach it, then paste a link to the earlier experiment next to the sentence that refers to it.",
+      "Switch Type to Resources to look through meeting records and other resources with the same panel.",
+      "While writing up an experiment, search for the record of the meeting where it was planned and attach it, then paste a link to the earlier experiment next to the sentence that refers to it.",
       "Search a template while editing and insert its content straight into the experiment."
     ],
     "news": "New: filters you can favourite, shared by search across experiments, resources and templates, plus attach and paste-a-link buttons on every result.",
