@@ -961,7 +961,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
           type: 'menuitem',
           text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
-          onAction: () => openInlineSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
+          // straight into the text, like the size picker -- no popup to open first
+          onAction: () => insertNewSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
         })),
       });
       if (selectedTable) {
@@ -1040,7 +1041,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
           type: 'menuitem',
           text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
-          onAction: () => openInlineSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
+          // straight into the text, like the size picker -- no popup to open first
+          onAction: () => insertNewSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
         })),
       },
     ],
