@@ -99,3 +99,22 @@ Build 61, 2026-10-12. Chromium tested by Claude; Firefox: faults, acceptance, re
 
 ## Firefox, 2026-10-13 (owner, build 22)
 Faults S7-S11, regression R4, R6, R7 and acceptance A1-A6, A9 all PASS in Firefox. Not run in Firefox yet: stress run, R31-R34 and A7/A8 (real clicks).
+
+## Steps, comments and notifications (2026-10-14)
+
+Run on the dev instance with the accounts in `TEST-ACCOUNTS.md`.
+
+| # | Check | Result |
+| --- | --- | --- |
+| N1 | Step with `@Alice @Bob` makes one to-do task per person, owned by them, and notifies each | pass |
+| N2 | Editing the step text updates the task; removing a name removes that person's task; adding a name adds one | pass |
+| N3 | Step deadline is copied to the assignees' tasks | pass |
+| N4 | Completing the step on the experiment page marks all assignee tasks done (assigner who ticks it is not notified); reopening reopens them | pass |
+| N5 | An assignee ticking their task notifies the assigner; step stays open until every assignee is done, then finishes | pass |
+| N6 | Reopening an assignee's task reopens the step | pass |
+| N7 | Mentioning someone who cannot read a restricted entry: step/comment are saved, no task and no notification | pass |
+| N8 | Alice's bell shows "assigned you a step" with a link to the entry | pass |
+| N9 | Comment `@` suggestions, pill display, notification, in view mode and in edit mode | pass |
+| N10 | `@` suggestions in the add-a-step box with real typing | pass |
+| N11 | Inline spreadsheet grid: client height equals scroll height (no 9px clipping) on five sheets | pass |
+| N12 | Row with a set height: text centred / top / bottom follows the cell's vertical alignment | pass (CSS check, wrapper added by script) |

@@ -14,6 +14,7 @@ namespace Elabftw\Models;
 
 use Elabftw\Enums\Action;
 use Elabftw\Enums\AccessType;
+use Elabftw\Exceptions\ForbiddenException;
 use Elabftw\Exceptions\IllegalActionException;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
@@ -166,7 +167,7 @@ class Comments extends AbstractRest
             try {
                 $entityForTarget = new ($this->Entity::class)($target, $this->Entity->id);
                 $entityForTarget->canOrExplode(AccessType::Read);
-            } catch (IllegalActionException | ImproperActionException | ResourceNotFoundException) {
+            } catch (ForbiddenException | IllegalActionException | ImproperActionException | ResourceNotFoundException) {
                 continue;
             }
             (new MentionedInEntry(

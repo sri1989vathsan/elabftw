@@ -14,6 +14,7 @@ use Elabftw\Elabftw\Db;
 use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Action;
 use Elabftw\Enums\EntityType;
+use Elabftw\Exceptions\ForbiddenException;
 use Elabftw\Exceptions\IllegalActionException;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
@@ -275,7 +276,7 @@ final class StepMentions
         try {
             $entity = new ($this->Entity::class)($target, $this->Entity->id);
             $entity->canOrExplode($access);
-        } catch (IllegalActionException | ImproperActionException | ResourceNotFoundException) {
+        } catch (ForbiddenException | IllegalActionException | ImproperActionException | ResourceNotFoundException) {
             return false;
         }
 
