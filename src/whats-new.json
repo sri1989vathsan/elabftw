@@ -825,5 +825,76 @@
     ],
     "news": "New: an announcement feed on the dashboard with reactions, pinning, pictures and files.",
     "shot": "The dashboard with the Announcements feed on the right, showing a pinned announcement and its reactions"
+  },
+  {
+    "date": "2026-10-14",
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "id": "guide-experiments",
+    "area": "Experiments",
+    "order": 90,
+    "icon": "fa-flask",
+    "title": "Experiments",
+    "summary": "Where your experiments live: create them, find them, and see everything you can do with one.",
+    "details": [
+      "fa-flask::Open Experiments from the top bar, or from the Experiments heading on the dashboard. The list shows your team's experiments with the most recent first.",
+      "fa-plus::Create an experiment with the Create button at the top right of the list, or the plus in the top bar. Choose the type, give it a title and pick its folder.",
+      "fa-magnifying-glass::Find experiments with the search bar above the list or with the Search panel in the left sidebar. Filter by category, status, owner, visibility, date, tags and custom fields, and sort by newest, least recently modified, ID, custom ID or rating.",
+      "fa-square-check::Tick several experiments to act on them together: archive, delete or lock them, change their category, status or permissions, export them (for example as CSV, JSON or an ELN archive), or link them to a resource or another experiment.",
+      "fa-pencil::Open an experiment to read it. Edit opens the edit page, where you write the main text and fill the sections below it (see the Link items to experiments, Editor toolbar and Table of contents cards).",
+      "fa-floppy-disk::On the edit page, Save keeps your changes and shows when they were last saved; Save and go back also returns to the experiment.",
+      "fa-clone::Duplicate makes a copy of an experiment to start a new one from.",
+      "fa-signature::Add signature signs the content of the experiment with your key.",
+      "fa-lock::Lock freezes an experiment so that nobody changes it by accident; unlock it to edit again.",
+      "fa-calendar-check::Timestamp stores proof that the experiment existed at that moment. Every timestamp is kept as an attachment.",
+      "fa-ellipsis-vertical::The three dots hold the less common actions: See changelog, Transfer ownership, Create template from entry, Archive, Delete and, for a deleted experiment, Restore.",
+      "fa-people-arrows::Transfer ownership gives an experiment to a colleague. Create template from entry turns a finished experiment into a template.",
+      "fa-box-archive::Archive puts a finished experiment away without deleting it; Unarchive brings it back."
+    ],
+    "purpose": "Keep every experiment in one searchable place, from the first idea to the finished record.",
+    "uses": [
+      "Start a new experiment from a similar one with Duplicate.",
+      "Filter by status and owner to see which of your experiments are still running.",
+      "Tick all the experiments of a finished project and export them together.",
+      "Lock an experiment once the results are final."
+    ],
+    "news": "Experiments can be organised in folders, linked to orders and resources, and read in a table of contents.",
+    "shot": "The Experiments list with the search bar, a few experiments ticked, and the bulk-action bar open"
+  },
+  {
+    "date": "2026-10-14",
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "id": "guide-resources",
+    "area": "Experiments",
+    "order": 95,
+    "icon": "fa-cubes-stacked",
+    "title": "Resources",
+    "summary": "Where your team keeps records that are not experiments, such as meetings, and how to find and use them.",
+    "details": [
+      "fa-cubes-stacked::Open Resources from the top bar, or from the Resources heading on the dashboard. A resource is a record that is not an experiment, for example the record of a meeting.",
+      "fa-plus::Create a resource with the Create button at the top right of the list, or the plus in the top bar. Choose the type, give it a title and pick its folder.",
+      "fa-magnifying-glass::Find resources with the search bar above the list or with the Search panel in the left sidebar, with the same filters and sorting as for experiments.",
+      "fa-square-check::Tick several resources to archive, delete or lock them, change their category, status or permissions, export them, or link them to an experiment or another resource. A resource can also be made bookable or not from here.",
+      "fa-pencil::Open a resource to read it. Edit opens the edit page, with the same main text, editor toolbar and sections as an experiment.",
+      "fa-clone::Duplicate makes a copy of a resource, for example to prepare the next meeting from the last one.",
+      "fa-lock::Lock freezes a resource so that nobody changes it by accident.",
+      "fa-calendar-plus::Book item opens the scheduler to reserve a resource that can be booked. Modify booking parameters sets how it can be booked.",
+      "fa-cart-shopping::A resource can be set up to be ordered: Create procurement request starts an order for it.",
+      "fa-link::In an experiment's Links section, link the resources it relates to, so anyone can follow the trail.",
+      "fa-ellipsis-vertical::The three dots hold the less common actions: See changelog, Transfer ownership, Create template from entry, Archive, Delete and, for a deleted resource, Restore."
+    ],
+    "purpose": "Keep the shared records of the lab, such as meetings, in one place that anyone can search and link to.",
+    "uses": [
+      "Keep one resource per group meeting, with the agenda and the decisions, and link it from the experiments that came out of it.",
+      "Duplicate last meeting's resource to prepare the next one.",
+      "Search the Resources type in the Search panel to find an earlier meeting by a word from its title."
+    ],
+    "news": "Resources can be organised in folders, linked to experiments and orders, and found from the left sidebar.",
+    "shot": "The Resources list with a few resources, and one open with its toolbar"
   }
 ]
