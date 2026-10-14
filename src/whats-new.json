@@ -439,7 +439,7 @@
     "icon": "fa-table-columns",
     "purpose": "Keep track of who does what and by when in one board per project, with the plan and the experiments pointing at each other.",
     "uses": [
-      "One board per paper or grant, with a card for each experiment series and each deadline.",
+      "One board per paper, grant or project, with a card for each experiment series and each deadline.",
       "A board for lab chores, with a card per task and the person responsible.",
       "Link the protocol template and the experiment for each planned run, and open the project to see which linked experiments are finished.",
       "Press All links on a paper's project to see in one list every experiment and protocol behind it, and open any of them in a click."
