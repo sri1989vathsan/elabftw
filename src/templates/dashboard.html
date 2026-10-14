@@ -11,7 +11,7 @@
 <div class='row'>
   <div class='col-md-4'>
     <div class='d-flex justify-content-between'>
-      <h3><a href='experiments.php'><i class='fas fa-flask mr-2'></i>{% trans %}Experiment{% plural 2 %}Experiments{% endtrans %}</a>{{ guide.info('guide-experiments', 'Experiments') }}</h3>
+      <h3><a href='experiments.php'><i class='fas fa-flask mr-2'></i>{% trans %}Experiment{% plural 2 %}Experiments{% endtrans %}</a>{{ guide.area('Experiments', 'Experiments') }}</h3>
       <div>
         {% include 'create-new.html' with {'entityType': 'experiments'} %}
       </div>

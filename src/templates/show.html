@@ -4,8 +4,8 @@
 {% block title %}
 <div class='d-flex align-content-center'>
   {# the list pages that have a guide card get an "i" next to their title #}
-  {% set pageGuide = {'experiments.php': 'guide-experiments', 'database.php': 'guide-resources', 'templates.php': 'guide-templates', 'resources-templates.php': 'guide-templates'}[scriptName] ?? null %}
-  <h1 id='pageTitle' {% if hideTitle %}hidden{% endif %}>{{ pageTitle }}{% if pageGuide %}{{ guide.info(pageGuide, pageTitle) }}{% endif %}</h1>
+  {% set pageGuide = {'database.php': 'guide-resources', 'templates.php': 'guide-templates', 'resources-templates.php': 'guide-templates'}[scriptName] ?? null %}
+  <h1 id='pageTitle' {% if hideTitle %}hidden{% endif %}>{{ pageTitle }}{% if scriptName == 'experiments.php' %}{{ guide.area('Experiments', pageTitle) }}{% elseif pageGuide %}{{ guide.info(pageGuide, pageTitle) }}{% endif %}</h1>
   <div class='ml-auto d-flex'>
     {% include 'create-new.html' %}
   </div>

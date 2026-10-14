@@ -2,3 +2,7 @@
 {% macro info(card, name) %}
   <button type='button' class='btn btn-link guide-info-btn p-0 ml-1' data-action='open-guide-card' data-card='{{ card }}' title='{{ 'About %name% in the guide'|trans|replace({'%name%': name}) }}' aria-label='{{ 'About %name% in the guide'|trans|replace({'%name%': name}) }}'><i class='fas fa-circle-info' aria-hidden='true'></i></button>
 {% endmacro %}
+{# Same small "i", but it opens the guide page showing a whole group of cards: {{ guide.area('Experiments', 'Experiments') }} #}
+{% macro area(area, name) %}
+  <a class='btn btn-link guide-info-btn p-0 ml-1' href='whats-new.php?area={{ area|url_encode }}' title='{{ 'About %name% in the guide'|trans|replace({'%name%': name}) }}' aria-label='{{ 'About %name% in the guide'|trans|replace({'%name%': name}) }}'><i class='fas fa-circle-info' aria-hidden='true'></i></a>
+{% endmacro %}
