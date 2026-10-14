@@ -427,6 +427,10 @@
         <i class='fas fa-toolbox'></i>
       </button>
     {% endif %}
+    {# "i" at the bottom of the rail: describes the buttons above it in the guide #}
+    <button type='button' class='sidepanel-btn sidepanel-closed sidepanel-guide-btn' id='sidebarGuideOpener' data-action='open-guide-card' data-card='guide-sidebar' title='{{ 'About the sidebar buttons in the guide'|trans }}' aria-label='{{ 'About the sidebar buttons in the guide'|trans }}'>
+      <i class='fas fa-circle-info' aria-hidden='true'></i>
+    </button>
   </div>
 {% endif %}
 
