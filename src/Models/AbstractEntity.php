@@ -802,7 +802,7 @@ abstract class AbstractEntity extends AbstractRest
                         $this->entityData['content_type'] = (int) $params['content_type'];
                         unset($params['content_type']);
                     }
-                    foreach ($params as $key => $value) {
+                    foreach ($this->harmonizePermissions($params) as $key => $value) {
                         $this->update(new EntityParams($key, (string) $value));
                     }
                 }
@@ -813,6 +813,77 @@ abstract class AbstractEntity extends AbstractRest
             return $this->readOne();
         }
         return array();
+    }
+
+    /**
+     * One rule for who can see and who can edit, wherever the change comes from
+     * (the Visibility and Can write windows, Share, the bulk bar on the lists,
+     * the folder permissions dialog, the API):
+     *  - giving someone edit rights also gives them view rights;
+     *  - taking edit rights away takes only those;
+     *  - giving someone view rights gives only those;
+     *  - taking view rights away takes their edit rights too.
+     * The same holds for the base level (who can see / who can edit as a whole).
+     * Only what the request touches is adjusted; older entries that already
+     * have people who can edit but not see are left as they are.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function harmonizePermissions(array $params): array
+    {
+        $keys = array('canread', 'canwrite', 'canread_base', 'canwrite_base');
+        if (count(array_intersect($keys, array_keys($params))) === 0 || empty($this->entityData)) {
+            return $params;
+        }
+        $decode = static function (mixed $json): array {
+            $parsed = is_string($json) ? (json_decode($json, true) ?? array()) : array();
+            $result = array();
+            foreach (array('teams', 'teamgroups', 'users') as $list) {
+                $result[$list] = array_values(array_unique(array_map('intval', (array) ($parsed[$list] ?? array()))));
+            }
+
+            return $result;
+        };
+        $oldRead = $decode($this->entityData['canread'] ?? '{}');
+        $oldWrite = $decode($this->entityData['canwrite'] ?? '{}');
+        $newRead = array_key_exists('canread', $params) ? $decode($params['canread']) : $oldRead;
+        $newWrite = array_key_exists('canwrite', $params) ? $decode($params['canwrite']) : $oldWrite;
+        foreach (array('teams', 'teamgroups', 'users') as $list) {
+            $addedWrite = array_diff($newWrite[$list], $oldWrite[$list]);
+            $removedRead = array_diff(array_diff($oldRead[$list], $newRead[$list]), $addedWrite);
+            // view taken away: so is the right to edit
+            $newWrite[$list] = array_values(array_diff($newWrite[$list], $removedRead));
+            // edit given: so is the right to view
+            $newRead[$list] = array_values(array_unique(array_merge($newRead[$list], $addedWrite)));
+        }
+        $oldReadBase = (int) ($this->entityData['canread_base'] ?? BasePermissions::UserOnly->value);
+        $oldWriteBase = (int) ($this->entityData['canwrite_base'] ?? BasePermissions::UserOnly->value);
+        $newReadBase = array_key_exists('canread_base', $params) ? (int) $params['canread_base'] : $oldReadBase;
+        $newWriteBase = array_key_exists('canwrite_base', $params) ? (int) $params['canwrite_base'] : $oldWriteBase;
+        if ($newWriteBase > $newReadBase) {
+            if ($newWriteBase > $oldWriteBase) {
+                $newReadBase = $newWriteBase;
+            } elseif ($newReadBase < $oldReadBase) {
+                $newWriteBase = $newReadBase;
+            }
+        }
+        $encode = static fn(array $can): string => (string) json_encode($can);
+        $result = $params;
+        if ($encode($newRead) !== $encode($oldRead) || array_key_exists('canread', $params)) {
+            $result['canread'] = $encode($newRead);
+        }
+        if ($encode($newWrite) !== $encode($oldWrite) || array_key_exists('canwrite', $params)) {
+            $result['canwrite'] = $encode($newWrite);
+        }
+        if ($newReadBase !== $oldReadBase || array_key_exists('canread_base', $params)) {
+            $result['canread_base'] = $newReadBase;
+        }
+        if ($newWriteBase !== $oldWriteBase || array_key_exists('canwrite_base', $params)) {
+            $result['canwrite_base'] = $newWriteBase;
+        }
+
+        return $result;
     }
 
     #[Override]
