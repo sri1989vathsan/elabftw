@@ -51,7 +51,7 @@ use function usort;
  */
 final class WhatsNewController extends AbstractHtmlController
 {
-    private const int MAX_DETAILS = 14;
+    private const int MAX_DETAILS = 40;
 
     private WhatsNewStore $Store;
 
@@ -260,7 +260,7 @@ final class WhatsNewController extends AbstractHtmlController
             $slug = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower($title)), '-');
             $id = mb_substr($slug === '' ? 'entry' : $slug, 0, 40) . '-' . bin2hex(random_bytes(2));
         }
-        $details = $this->lines($request->getString('details'), self::MAX_DETAILS, 300);
+        $details = $this->lines($request->getString('details'), self::MAX_DETAILS, 700);
 
         $entry = array(
             'id' => $id,
@@ -276,7 +276,7 @@ final class WhatsNewController extends AbstractHtmlController
             'order' => max(0, min(999, (int) $request->getString('order'))),
             'icon' => preg_match('/^fa-[a-z0-9-]{1,40}$/', trim($request->getString('icon'))) === 1 ? trim($request->getString('icon')) : '',
             'purpose' => $this->oneLine($request->getString('purpose'), 400),
-            'uses' => $this->lines($request->getString('uses'), 8, 300),
+            'uses' => $this->lines($request->getString('uses'), 14, 500),
             'news' => $this->oneLine($request->getString('news'), 400),
             'shot' => $this->oneLine($request->getString('shot'), 200),
         );
