@@ -369,6 +369,9 @@
     "icon": "fa-bolt",
     "purpose": "Get anywhere, or do something, without taking your hands off the keyboard or hunting through menus.",
     "uses": [
+      "Keep the To-do panel open on a busy day and tick off steps as you finish them.",
+      "Keep Folders open while you file new experiments.",
+      "Create a new experiment, open the Boards, or jump to an old experiment without leaving the keyboard.",
       "Press Ctrl + K, type a few letters of an old experiment's title and open it.",
       "While writing, press Ctrl + K and choose Insert date, or Save, without reaching for the toolbar.",
       "Jump to a heading in a long experiment by typing part of it.",
