@@ -427,7 +427,9 @@
       "A project can hold subprojects, for example one for each idea you want to test within it. When a project is finished, archive it from its edit dialog: it leaves the project list but is not deleted, and the archive button next to the project tabs shows archived projects again. To keep a card at the top of its column, open its ⋮ menu and choose Pin to top.",
       "To tie a card to the work it is about, open the search panel next to the card while you create it, or later from its detail view.",
       "Find an experiment or resource, then press Link, or add it as a step in one move. Each linked item shows its type icon and a coloured dot for its status, on the card as well as in the project, so you can see how the work is going.",
-      "A project's Linked items section and the All links summary list everything connected to that project, including subprojects. Click a linked item to open the experiment or resource itself."
+      "A project's edit dialog has a Linked items section that lists everything connected to that project. Click a linked item to open the experiment or resource itself.",
+      "All links: the All links button next to Add subproject opens one list of every experiment, resource, template and web address linked to any card in the project, including its subprojects. When a subproject is selected it lists only that subproject, as Links in.",
+      "Each row in All links shows the item's type icon and, for experiments and resources, a coloured dot for its status. Click the title to open the item in a new tab. The badge shows which project or subproject it belongs to, and the button on the right shows the card it is linked to: click it to open that card. Press Load more links if the list is long."
     ],
     "image": "",
     "imageAlt": "",
@@ -439,7 +441,8 @@
     "uses": [
       "One board per paper or grant, with a card for each experiment series and each deadline.",
       "A board for lab chores, with a card per task and the person responsible.",
-      "Link the protocol template and the experiment for each planned run, and open the project to see which linked experiments are finished."
+      "Link the protocol template and the experiment for each planned run, and open the project to see which linked experiments are finished.",
+      "Press All links on a paper's project to see in one list every experiment and protocol behind it, and open any of them in a click."
     ],
     "news": "Boards replace the old project list, with richer cards, bulk actions, subprojects, and cards that link to experiments and resources with their status colours.",
     "shot": "The Boards page with a project open and one card showing its steps and linked experiments, and the search panel used to link them"
