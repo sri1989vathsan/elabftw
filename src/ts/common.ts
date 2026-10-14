@@ -1324,10 +1324,33 @@ on('save-permissions', (el: HTMLElement) => {
     params[paramKey] = params[el.dataset.rw];
     delete params[el.dataset.rw];
     ApiC.patch(`${Model.User}/me`, params).then(() => reloadElements([divId]));
+  } else if (el.dataset.rw === 'canwrite') {
+    // Nobody can edit what they cannot see: whoever is given write access is
+    // also added to Visibility, and the visibility level is raised to the
+    // write level if that is wider. Changing Visibility alone never touches
+    // Can write.
+    ApiC.getJson(`${entity.type}/${entity.id}`).then(current => {
+      const chosen = selectedPermissionTargets(el.dataset.identifier);
+      if (chosen.length > 0) {
+        params['canread'] = mergePermissionsJson(current.canread, chosen);
+      }
+      if (Number(baseSelect.value) > Number(current.canread_base)) {
+        params['canread_base'] = baseSelect.value;
+      }
+      return ApiC.patch(`${entity.type}/${entity.id}`, params);
+    }).then(() => reloadElements(['canreadDiv', 'canwriteDiv']));
   } else {
     ApiC.patch(`${entity.type}/${entity.id}`, params).then(() => reloadElements([divId]));
   }
 });
+
+function selectedPermissionTargets(identifier: string): string[] {
+  return [
+    ...(($('#' + identifier + '_select_teams').val() as string[] | null) ?? []),
+    ...(($('#' + identifier + '_select_teamgroups').val() as string[] | null) ?? []),
+    ...(($('#' + identifier + '_select_users').val() as string[] | null) ?? []),
+  ];
+}
 
 function collectPermissionsFromModal(identifier: string): string {
   const teams = ($('#' + identifier + '_select_teams').val() as string[] | null) ?? [];
@@ -1339,10 +1362,9 @@ function collectPermissionsFromModal(identifier: string): string {
 }
 
 // change both read & write permissions in one go
+// (no confirm() box: some browsers block or auto-dismiss it, which made the
+// button silently do nothing -- the window itself says what the button does)
 on('save-permissions-both', (el: HTMLElement) => {
-  if (!confirm(i18next.t('entity-apply-both-permissions-warning'))) {
-    return;
-  }
   const permissions = collectPermissionsFromModal(el.dataset.identifier);
   const baseSelect = getSafeElementById(`${el.dataset.identifier}_select_base`) as HTMLSelectElement;
   const params = {canread: permissions, canread_base: baseSelect.value, canwrite: permissions, canwrite_base: baseSelect.value};

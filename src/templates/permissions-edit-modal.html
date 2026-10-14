@@ -140,6 +140,15 @@
           </div>
         {% endif %}
       </div>
+      {% if not ucpPage and (rw == 'canread' or rw == 'canwrite') %}
+        <p class='smallgray mx-3 mt-2 mb-0'>
+          {% if rw == 'canwrite' %}
+            {{ 'Whoever can edit can also see: Save adds these people to Visibility too. Apply to Read & Write gives Visibility and Can write exactly what is selected here.'|trans }}
+          {% else %}
+            {{ 'Save changes Visibility only; Can write is not touched. Apply to Read & Write gives both exactly what is selected here.'|trans }}
+          {% endif %}
+        </p>
+      {% endif %}
       <div class='modal-footer'>
         <button type='button' class='btn btn-secondary' data-dismiss='modal'>{{ 'Close'|trans }}</button>
         {% if not ucpPage and (rw == 'canread' or rw == 'canwrite') %}

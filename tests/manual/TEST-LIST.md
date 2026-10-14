@@ -121,3 +121,6 @@ Run on the dev instance with the accounts in `TEST-ACCOUNTS.md`.
 | N11 | Inline spreadsheet grid: client height equals scroll height (no 9px clipping) on five sheets | pass |
 | N12 | Row with a set height: text centred / top / bottom follows the cell's vertical alignment | pass (CSS check, wrapper added by script) |
 | N15 | Share modal, Read & write: Visibility and Can write end up with the same people (all who had either, plus new picks) and the same base level | pass |
+| N16 | Visibility window: Save changes Visibility only, Can write is not touched | pass |
+| N17 | Can write window: Save also adds the chosen people to Visibility, and raises the visibility level if the write level is wider | pass |
+| N18 | Apply to Read & Write works with a real click (no browser confirm box any more): both get the same people and level | pass |
