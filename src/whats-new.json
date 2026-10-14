@@ -649,9 +649,13 @@
     "title": "Notifications",
     "summary": "A bell that tells you what needs you, so you do not have to check every page.",
     "details": [
-      "The bell in the top bar collects your notifications and shows how many are new.",
-      "You are notified when someone gives you access to an experiment or resource, mentions you in a comment, assigns you a task or a card, or changes the status of an order.",
-      "Step deadlines can also arrive by email, following your existing preference."
+      "fa-bell::The bell in the top bar collects your notifications and shows how many are new.",
+      "fa-user-check::You are notified when someone gives you access to an experiment or resource, mentions you in a comment, assigns you a task or a card, or changes the status of an order.",
+      "fa-gear::Choose how you receive each kind of notification: open your Settings from the user menu in the top bar and go to the Notifications tab. Every kind of notification has two switches.",
+      "fa-bell::Web: the notification appears in the bell inside eLabFTW.",
+      "fa-envelope::Email: the same notification is also sent to your email address. Switch Email off for a kind to receive it only in the app, or switch Web off to receive it only by email.",
+      "fa-toggle-on::The All notifications row at the top switches every kind on or off at once for Web, or for Email.",
+      "fa-envelope::Step deadlines can also arrive by email, following your existing preference."
     ],
     "image": "",
     "imageAlt": "",
@@ -662,7 +666,8 @@
     "purpose": "Be told when something changes for you, without checking every page.",
     "uses": [
       "Share an experiment and the person you shared it with gets a notification right away.",
-      "Mention a colleague with @name in a card comment and they are notified."
+      "Mention a colleague with @name in a card comment and they are notified.",
+      "Keep Web on for everything, and Email on only for the few that need your attention even when you are not in eLabFTW, such as a deadline or an order status change."
     ],
     "news": "New: notifications for assignments, mentions and access.",
     "shot": "The notifications dropdown open from the bell in the top bar"
