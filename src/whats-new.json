@@ -527,7 +527,12 @@
       "In an experiment, open Search in the left sidebar and set Type to Experiment templates.",
       "fa-link::Press Link to record the template without inserting anything, or Add to text to insert its content at the cursor.",
       "Associated templates are listed under Links with their version number and how many times they were inserted. Click one to open it.",
-      "Open a template to see its version history, compare versions and restore an older one. The other versions are kept.",
+      "fa-code-branch::Publish new version: when a template is in a state you want to keep, press Publish new version in its toolbar. Published versions are numbered (Version 1, 2, 3...) and never overwritten.",
+      "fa-clock-rotate-left::Version history: open a template and press Version history to list every published version with who published it and when. Click the plus beside a version to read its content.",
+      "Name and notes: give each version a short name (for example “Added analysis steps”) and notes on what changed, with the Edit button next to it. They are saved with the template and included in backups and exports.",
+      "fa-rotate-left::Restore a version: press Restore next to a version to make the template look like it did then. Nothing is lost, the other versions are kept.",
+      "fa-list::Edit history: every version also has an Edit history list of the smaller changes saved while it was being worked on. Each one can be read and restored on its own, so you can go back to a single edit within a version, not just to the version itself.",
+      "fa-code-compare::Compare: tick two entries, in the versions or inside an Edit history, and press Compare revisions to see what changed between them.",
       "fa-star::Star the templates you use most to find them quickly."
     ],
     "image": "",
@@ -541,7 +546,7 @@
       "Keep the standard protocol as a template and publish a new version when it changes.",
       "Months later, see which experiments used the old version."
     ],
-    "news": "New: template versions, version history with restore, and template links on experiments.",
+    "news": "New: template versions with names and notes, version history, restoring a version or a single edit, and template links on experiments.",
     "shot": "The template version history with the list of versions and the Restore buttons"
   },
   {
