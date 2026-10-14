@@ -4,6 +4,6 @@
 {% block body %}
 <h1><i class='fas fa-cart-shopping mr-2'></i>{{ 'Orders'|trans }}{{ guide.info('guide-orders', 'Orders') }}</h1>
 {% include 'orders-tabs.html' with {'active': 'orders'} %}
-<p class='text-muted'>{{ 'Track things to order for the team -- link an existing resource or add a new one, and follow it through to delivery.'|trans }}</p>
+<p class='text-muted'>{{ 'Track things to order for the team, and follow each one through to delivery.'|trans }}</p>
 <div id='ordersRoot'></div>
 {% endblock %}
