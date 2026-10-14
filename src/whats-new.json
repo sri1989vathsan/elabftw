@@ -556,27 +556,30 @@
     "id": "guide-feedback",
     "date": "2026-10-12",
     "area": "Others",
-    "title": "Feedback board and announcements",
-    "summary": "Post ideas and bugs, upvote the ones that matter, and read team announcements.",
+    "title": "Feedback board",
+    "summary": "Post ideas and bugs, upvote the ones that matter, and discuss them with your team.",
     "details": [
-      "Open Feedback from the top bar. Post a bug or feature idea for your team and upvote the ones that matter most to you.",
-      "Sort the list by votes or by date.",
-      "The dashboard shows the announcement feed: pinned announcements stay on top, and you can react to them.",
-      "You are notified when someone mentions you in feedback."
+      "fa-lightbulb::Open Feedback from the top bar and post an idea or a problem for your team, with a title and a description.",
+      "fa-star::Choose Feature for an idea, or Bug for a problem. The two buttons above the list also filter it.",
+      "fa-caret-up::Upvote the items that matter most to you. You automatically upvote your own post.",
+      "fa-arrow-up::Sort the list by Most votes or by date.",
+      "fa-comment::Open an item to read and write comments. Type @ followed by a name to mention a colleague, who is then notified.",
+      "fa-pen::The author of an item, or a team admin, can edit it, change its status (open, planned, done or declined) and delete it.",
+      "fa-bell::You are notified when someone mentions you in feedback."
     ],
     "image": "",
     "imageAlt": "",
     "featured": false,
     "guide": true,
     "order": 120,
-    "icon": "fa-comments",
+    "icon": "fa-lightbulb",
     "purpose": "Tell the people who run the system what would help, and see what the team cares about most.",
     "uses": [
       "Ask for a new field or a new link, and see how many colleagues want it too.",
-      "Read the latest lab news at the top of the dashboard."
+      "Report something that does not work, and follow it as it goes from open to planned to done."
     ],
-    "news": "New: a feedback board with votes and an announcement feed on the dashboard.",
-    "shot": "The Feedback board sorted by votes, next to the dashboard announcement feed"
+    "news": "New: a feedback board with votes, statuses and comments.",
+    "shot": "The Feedback board sorted by votes, with one item open and its comments"
   },
   {
     "id": "guide-search-filters",
@@ -785,5 +788,36 @@
     ],
     "news": "New: one list for tasks and step deadlines with reminders, steps and comments on tasks, linked items, a completed and archived history, a calendar view, and a calendar subscription.",
     "shot": "The To-do panel open next to a page, with the add-task box and the groups Overdue, Today and Tomorrow"
+  },
+  {
+    "id": "guide-announcements",
+    "date": "2026-10-14",
+    "area": "Others",
+    "title": "Announcements",
+    "summary": "Lab news at the top of your dashboard: read it, react to it, and look back at earlier announcements.",
+    "details": [
+      "fa-bullhorn::The Announcements feed is on the right of the dashboard. A new announcement carries a New badge until you have seen it, and a bell notification tells you when one is posted.",
+      "fa-circle-info::A blue circle marks an announcement for information.",
+      "fa-triangle-exclamation::A warning triangle marks something that needs attention.",
+      "fa-thumbtack::A pin means it was pinned to stay at the top of the feed.",
+      "fa-up-right-from-square::Click the title to open the announcement on its own page. Long texts are shortened: press Show more to read all of it. Pictures and attached files appear with the announcement.",
+      "fa-face-smile::React with the small face button under an announcement, which opens a choice of reactions. You can pick several. Reactions that others picked show as small counters you can click too.",
+      "fa-clock-rotate-left::See previous announcements, under the feed, lists the older ones.",
+      "fa-plus::Team admins write announcements with the plus button above the feed. In the feed they can also edit an announcement (the pen) and pin or unpin it (the pin)."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 121,
+    "icon": "fa-bullhorn",
+    "purpose": "Make sure everyone hears about lab news, maintenance and changes, without relying on emails that get lost.",
+    "uses": [
+      "Read the latest lab news every time you open the dashboard.",
+      "Pin the lab meeting schedule so that it always stays at the top.",
+      "React with a thumbs-up to confirm you have read a change."
+    ],
+    "news": "New: an announcement feed on the dashboard with reactions, pinning, pictures and files.",
+    "shot": "The dashboard with the Announcements feed on the right, showing a pinned announcement and its reactions"
   }
 ]
