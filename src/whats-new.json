@@ -351,23 +351,27 @@
     "id": "guide-sidebar",
     "date": "2026-10-12",
     "area": "Navigate",
-    "title": "Quick search and commands",
-    "summary": "Press Ctrl + K (Cmd + K on a Mac) on any page to find an experiment, resource, folder or heading, or to run a command, from the keyboard.",
+    "title": "The left sidebar",
+    "summary": "The row of buttons on the left edge of every page: folders, search, quick search, to-dos, the calendar and the table of contents, one click away.",
     "details": [
-      "Open it with Ctrl + K (Cmd + K on a Mac) on any page, even while you are typing in the editor, or with the lightning bolt button on the left edge. Press Escape or click outside the window to close it.",
+      "The slim row of buttons on the left edge of every page opens panels next to your page. Click a button to open its panel and click it again to close it. The row stays put while you scroll, and the last panel you opened is remembered. Each panel has its own “i” beside its title with more help.",
+      "Folders (the folder tree icon): browse your folders and bookmarks, and manage them.",
+      "Search (the magnifying glass): search experiments, resources, templates and folders, with your favourite filters. While you edit, its results have buttons to attach an item or paste a link.",
+      "Quick search and commands (the lightning bolt): open it with this button, or press Ctrl + K (Cmd + K on a Mac) on any page, even while typing in the editor. Press Escape or click outside the window to close it.",
       "With the box empty it lists commands. On an edit page these include Save, Save and go back, Insert date, Insert title, Insert note, Insert table or spreadsheet and Insert link. On every page: Open folders, Open filters, Search everything, Open tasks, Open calendar and Open table of contents.",
-      "Start typing to narrow the list. It matches the name of a command and the words that describe it.",
-      "It also finds headings in the entry you are looking at (choosing one scrolls to it) and the folders in your folder tree (choosing one opens it).",
-      "After two letters it searches your experiments and resources by title and lists the matches, with their category. Choosing one opens it. If you have unsaved changes while editing, it asks before leaving.",
-      "Move through the list with the up and down arrow keys and press Enter to choose, or click a result. Up to 24 results are shown."
+      "Start typing to narrow the list. It matches the name of a command and the words that describe it, the headings of the entry you are looking at (choosing one scrolls to it), and the folders in your folder tree (choosing one opens it).",
+      "After two letters it also searches your experiments and resources by title and lists the matches with their category. Choosing one opens it, and if you have unsaved changes while editing it asks before leaving. Move through the list with the up and down arrow keys and press Enter, or click a result. Up to 24 results are shown.",
+      "To-do list (the checklist icon): your tasks and step deadlines. A red number shows what is overdue or due soon.",
+      "Activity calendar (the calendar icon): a Day, Week or Month view of your deadlines and what you finished. A red number shows what is due soon.",
+      "Table of contents (the lines icon): only on an experiment or resource page, it lists the headings so you can jump to one or show only the sections you pick."
     ],
     "image": "",
     "imageAlt": "",
     "featured": false,
     "guide": true,
     "order": 30,
-    "icon": "fa-bolt",
-    "purpose": "Get anywhere, or do something, without taking your hands off the keyboard or hunting through menus.",
+    "icon": "fa-bars",
+    "purpose": "Keep the tools you use all day next to your work, and get anywhere, or do something, without hunting through menus.",
     "uses": [
       "Keep the To-do panel open on a busy day and tick off steps as you finish them.",
       "Keep Folders open while you file new experiments.",
@@ -377,8 +381,8 @@
       "Jump to a heading in a long experiment by typing part of it.",
       "Open the To-do list or the calendar from the keyboard."
     ],
-    "news": "New: a keyboard-first quick search and command window, available on every page.",
-    "shot": "The quick search window open over a page, with a few letters typed and experiment and command results listed"
+    "news": "One row of buttons with all of these tools on every page, and a keyboard-first quick search and command window.",
+    "shot": "The left sidebar with the Folders panel open and the row of buttons outlined, and the quick search window open over a page"
   },
   {
     "id": "guide-calendar",
