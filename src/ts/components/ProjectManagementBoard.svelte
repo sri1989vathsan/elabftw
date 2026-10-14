@@ -230,6 +230,34 @@
   let draftEntityLinks: { entity_type: EntityLinkType; entity_id: number; title: string }[] = [];
   let linksSummaryOpen = false;
   let linksSummaryItems: LinkSummaryItem[] = [];
+  // The same experiment, resource or web address linked from several cards (or a card and its duplicate)
+  // is listed once, with every card it is linked from.
+  type LinkSummaryGroup = {
+    key: string;
+    item: LinkSummaryItem;
+    cards: Array<Pick<LinkSummaryItem, 'task_id' | 'task_body' | 'project_name' | 'project_parent_name'>>;
+  };
+  function groupLinkSummary(items: LinkSummaryItem[]): LinkSummaryGroup[] {
+    const groups = new Map<string, LinkSummaryGroup>();
+    for (const item of items) {
+      const key = `${item.entity_type}:${item.entity_id ?? ''}:${item.url ?? ''}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = { key, item, cards: [] };
+        groups.set(key, group);
+      }
+      if (!group.cards.some(card => card.task_id === item.task_id)) {
+        group.cards.push({
+          task_id: item.task_id,
+          task_body: item.task_body,
+          project_name: item.project_name,
+          project_parent_name: item.project_parent_name,
+        });
+      }
+    }
+    return [...groups.values()];
+  }
+  $: linksSummaryGroups = groupLinkSummary(linksSummaryItems);
   let loadingLinksSummary = false;
   let loadingMoreLinksSummary = false;
   let linksSummaryOffset = 0;
@@ -3571,7 +3599,7 @@
 
 {#if linksSummaryOpen}
   <div class="pm-overlay" role="presentation" use:avoidSidebar on:click={(event) => { if (event.target === event.currentTarget) closeLinksSummary(); }}>
-    <div class="pm-dialog pm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="pmLinksSummaryTitle">
+    <div class="pm-dialog pm-dialog-wide pm-dialog-links" role="dialog" aria-modal="true" aria-labelledby="pmLinksSummaryTitle">
       <div class="pm-dialog-header">
         <h4 id="pmLinksSummaryTitle" class="mb-0">
           {linksSummaryIncludeSubprojects ? t('All links in') : t('Links in')}
@@ -3589,20 +3617,27 @@
               : t('No links yet in this subproject.')}
           </p>
         {:else}
-          <ul class="pm-entity-link-list">
-            {#each linksSummaryItems as item (item.link_id)}
+          <ul class="pm-entity-link-list pm-links-summary-list">
+            {#each linksSummaryGroups as group (group.key)}
+              {@const item = group.item}
               <li class="pm-entity-link">
                 <span class="badge badge-info mr-1" title={entityTypeLabel(item.entity_type)} aria-label={entityTypeLabel(item.entity_type)}><i class="fas {entityTypeIcon(item.entity_type)} fa-fw" aria-hidden="true"></i></span>
                 {#if item.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(item.status_color)} title={item.status_title} aria-label={item.status_title}><i class="fas fa-circle fa-fw" aria-hidden="true"></i></span>{/if}
                 <a class="mr-auto text-break" href={entityViewUrl(item)} target="_blank" rel="noreferrer noopener">{item.title}</a>
-                {#if item.project_name}
-                  <span class="badge badge-light ml-2" title={t('Project')}>
-                    {#if item.project_parent_name}{item.project_parent_name} / {/if}{item.project_name}
-                  </span>
-                {/if}
-                <button type="button" class="btn btn-ghost btn-sm ml-2" on:click={() => openTaskFromSummary(item.task_id)}>
-                  <i class="fas fa-list-check fa-fw mr-1" aria-hidden="true"></i>{item.task_body}
-                </button>
+                <div class="pm-link-cards">
+                  {#each group.cards as card (card.task_id)}
+                    <span class="pm-link-card">
+                      {#if card.project_name}
+                        <span class="badge badge-light" title={t('Project')}>
+                          {#if card.project_parent_name}{card.project_parent_name} / {/if}{card.project_name}
+                        </span>
+                      {/if}
+                      <button type="button" class="btn btn-ghost btn-sm" on:click={() => openTaskFromSummary(card.task_id)}>
+                        <i class="fas fa-list-check fa-fw mr-1" aria-hidden="true"></i>{card.task_body}
+                      </button>
+                    </span>
+                  {/each}
+                </div>
               </li>
             {/each}
           </ul>

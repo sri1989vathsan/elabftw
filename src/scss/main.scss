@@ -5825,6 +5825,44 @@ div > .sticky-navbar {
   max-width: 40rem;
 }
 
+// The "All links" popup grows with the window (up to a comfortable reading width), never has a
+// fixed-height list inside it (the dialog itself scrolls), and lets each row wrap on a narrow screen.
+.pm-dialog-links {
+  max-height: calc(100vh - 6rem);
+  max-width: min(96vw, 64rem);
+}
+
+.pm-dialog-links .pm-links-summary-list {
+  max-height: none;
+  overflow: visible;
+}
+
+.pm-dialog-links .pm-entity-link {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.pm-dialog-links .pm-entity-link > a {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.pm-link-cards {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: flex-end;
+  max-width: 100%;
+}
+
+.pm-link-card {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
 .pm-dialog-row {
   gap: 0.7rem;
 }
