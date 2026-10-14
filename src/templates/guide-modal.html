@@ -27,6 +27,14 @@
                   {% if entry.shot %}<span class='small mt-1'>{{ entry.shot }}</span>{% endif %}
                 </div>
               {% endif %}
+              {% for extra in entry.screenshots|default([]) %}
+                <figure class='whats-new-shot mb-3'>
+                  <div class='whats-new-shot-clip'>
+                    <img class='img-fluid' src='whats-new.php?image={{ extra.image|url_encode }}' alt='{{ extra.caption|default(entry.title) }}' loading='lazy'>
+                  </div>
+                  {% if extra.caption %}<figcaption class='small text-muted mt-1'>{{ extra.caption }}</figcaption>{% endif %}
+                </figure>
+              {% endfor %}
 
               {% if entry.purpose %}
                 <h6 class='text-uppercase text-muted small mb-1'>{{ 'What it is for'|trans }}</h6>

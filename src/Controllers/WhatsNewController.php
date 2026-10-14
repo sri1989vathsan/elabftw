@@ -29,6 +29,7 @@ use function array_unique;
 use function array_values;
 use function checkdate;
 use function explode;
+use function is_array;
 use function is_numeric;
 use function mb_substr;
 use function preg_match;
@@ -138,6 +139,44 @@ final class WhatsNewController extends AbstractHtmlController
         throw new ResourceNotFoundException();
     }
 
+    /**
+     * The further screenshots already on the entry, as the form sent them back (caption edited, or marked for removal).
+     *
+     * @return list<array{image: string, caption: string, remove?: bool}>
+     */
+    private function extraScreenshotsFromForm(): array
+    {
+        $rows = $this->app->Request->request->all('extra');
+        $out = array();
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $out[] = array(
+                'image' => (string) ($row['image'] ?? ''),
+                'caption' => (string) ($row['caption'] ?? ''),
+                'remove' => !empty($row['remove']),
+            );
+        }
+
+        return $out;
+    }
+
+    /** @return list<UploadedFile> further screenshots chosen in the form (several at once) */
+    private function newExtraScreenshots(): array
+    {
+        $files = $this->app->Request->files->get('extra_image');
+        $files = is_array($files) ? $files : array($files);
+        $out = array();
+        foreach ($files as $file) {
+            if ($file instanceof UploadedFile && $file->getError() !== UPLOAD_ERR_NO_FILE) {
+                $out[] = $file;
+            }
+        }
+
+        return $out;
+    }
+
     private function imageResponse(string $name): Response
     {
         $path = $this->Store->imagePath($name);
@@ -186,6 +225,8 @@ final class WhatsNewController extends AbstractHtmlController
                 $this->buildEntry(),
                 $file instanceof UploadedFile && $file->getError() !== UPLOAD_ERR_NO_FILE ? $file : null,
                 $request->getBoolean('remove_image'),
+                $this->extraScreenshotsFromForm(),
+                $this->newExtraScreenshots(),
             );
             $this->app->Session->getFlashBag()->add('ok', _('Saved'));
 

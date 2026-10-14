@@ -13,6 +13,7 @@ use Elabftw\Exceptions\ImproperActionException;
 use JsonException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
+use function array_column;
 use function array_filter;
 use function array_map;
 use function array_values;
@@ -27,9 +28,11 @@ use function is_dir;
 use function is_file;
 use function json_decode;
 use function json_encode;
+use function mb_substr;
 use function mkdir;
 use function preg_match;
 use function random_bytes;
+use function trim;
 use function rename;
 use function uasort;
 use function unlink;
@@ -89,7 +92,12 @@ final class WhatsNewStore
     /**
      * @param array<string, mixed> $entry already validated by the caller
      */
-    public function save(array $entry, ?UploadedFile $image, bool $removeImage): string
+    /**
+     * @param array<string, mixed> $entry already validated by the caller
+     * @param list<array{image: string, caption: string, remove?: bool}> $extraExisting the further screenshots as the form sent them back
+     * @param list<UploadedFile> $extraNew further screenshots uploaded now
+     */
+    public function save(array $entry, ?UploadedFile $image, bool $removeImage, array $extraExisting = array(), array $extraNew = array()): string
     {
         $state = $this->readState();
         $id = (string) $entry['id'];
@@ -104,14 +112,49 @@ final class WhatsNewStore
         } else {
             $entry['image'] = $oldImage;
         }
+        $entry['screenshots'] = $this->mergeScreenshots((array) ($previous['screenshots'] ?? array()), $extraExisting, $extraNew, $id);
         $state['entries'][$id] = $entry;
         $state['deleted'] = array_values(array_filter($state['deleted'], static fn(string $d): bool => $d !== $id));
         $this->writeState($state);
         if ($oldImage !== '' && $oldImage !== $entry['image']) {
             $this->removeStoredImage($oldImage);
         }
+        $keptNames = array_column($entry['screenshots'], 'image');
+        foreach ((array) ($previous['screenshots'] ?? array()) as $old) {
+            if (!in_array($old['image'] ?? '', $keptNames, true)) {
+                $this->removeStoredImage((string) ($old['image'] ?? ''));
+            }
+        }
 
         return $id;
+    }
+
+    /**
+     * The further screenshots of an entry after an edit: the ones that were there and are kept (with
+     * their caption as edited), then the newly uploaded ones. Only names the entry already had count,
+     * so a forged form cannot attach someone else's picture.
+     *
+     * @param array<int, mixed> $previous
+     * @param list<array{image: string, caption: string, remove?: bool}> $existing
+     * @param list<UploadedFile> $new
+     * @return list<array{image: string, caption: string}>
+     */
+    private function mergeScreenshots(array $previous, array $existing, array $new, string $id): array
+    {
+        $known = array_column($previous, 'image');
+        $result = array();
+        foreach ($existing as $item) {
+            $name = (string) ($item['image'] ?? '');
+            if (!in_array($name, $known, true) || !empty($item['remove'])) {
+                continue;
+            }
+            $result[] = array('image' => $name, 'caption' => mb_substr(trim((string) ($item['caption'] ?? '')), 0, 200));
+        }
+        foreach ($new as $file) {
+            $result[] = array('image' => $this->storeImage($file, $id), 'caption' => '');
+        }
+
+        return $result;
     }
 
     public function delete(string $id): void
@@ -127,6 +170,9 @@ final class WhatsNewStore
         $image = (string) ($previous['image'] ?? '');
         if ($image !== '') {
             $this->removeStoredImage($image);
+        }
+        foreach ((array) ($previous['screenshots'] ?? array()) as $extra) {
+            $this->removeStoredImage((string) ($extra['image'] ?? ''));
         }
     }
 

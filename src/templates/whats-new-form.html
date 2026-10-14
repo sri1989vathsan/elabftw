@@ -98,5 +98,22 @@
     <input id='wn-hl-label-{{ fid }}' class='form-control' type='text' name='highlight_label' maxlength='80' value='{{ entry.highlight.label|default('') }}'>
   </fieldset>
 
+  <fieldset class='form-group'>
+    <legend class='col-form-label pt-0'>{{ 'More screenshots (optional)'|trans }}</legend>
+    <small class='form-text text-muted mb-2'>{{ 'Further pictures shown under the first one, each with an optional caption. Choose several files at once.'|trans }}</small>
+    {% for extra in entry.screenshots|default([]) %}
+      <div class='d-flex align-items-center mb-2'>
+        <img class='whats-new-form-thumb mr-2' src='whats-new.php?image={{ extra.image|url_encode }}' alt=''>
+        <input type='hidden' name='extra[{{ loop.index0 }}][image]' value='{{ extra.image }}'>
+        <input class='form-control mr-2' type='text' name='extra[{{ loop.index0 }}][caption]' maxlength='200' placeholder='{{ 'Caption'|trans }}' aria-label='{{ 'Caption'|trans }}' value='{{ extra.caption|default('') }}'>
+        <div class='custom-control custom-checkbox text-nowrap'>
+          <input id='wn-extra-remove-{{ fid }}-{{ loop.index0 }}' class='custom-control-input' type='checkbox' name='extra[{{ loop.index0 }}][remove]' value='1'>
+          <label class='custom-control-label' for='wn-extra-remove-{{ fid }}-{{ loop.index0 }}'>{{ 'Remove'|trans }}</label>
+        </div>
+      </div>
+    {% endfor %}
+    <input id='wn-extra-{{ fid }}' class='form-control-file' type='file' name='extra_image[]' multiple accept='image/jpeg,image/png,image/webp,image/gif'>
+  </fieldset>
+
   <button type='submit' class='btn btn-primary'><i class='fas fa-save fa-fw mr-1'></i>{{ 'Save'|trans }}</button>
 </form>
