@@ -128,6 +128,9 @@ final class CustomMigrationRunner
         '087_reference_not_pinned.sql',
         '088_reference_pinned_again.sql',
         '089_notif_mentioned_entry.sql',
+        '090_step_mentions.sql',
+        '091_notif_step_finished.sql',
+        '092_step_mentions_assigner.sql',
     );
 
     private Db $Db;

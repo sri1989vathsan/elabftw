@@ -30,6 +30,7 @@ import {
 } from './file-folder-references';
 import { notify } from './notify';
 import { createWebLink, deleteWebLink } from './web-links';
+import { initCommentMentions } from './comment-mentions';
 import { deleteLabCollectorLink } from './labcollector-link';
 
 addAutocompleteToLinkInputs();
@@ -150,6 +151,9 @@ $(document).on('click', 'input[type=checkbox].stepbox', function(e) {
 });
 
 const StepC = new Step(entity);
+
+// the add-a-step box suggests team members after an "@"
+initCommentMentions();
 
 on('create-step', (_, event: Event) => {
   event.preventDefault();

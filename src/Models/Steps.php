@@ -198,6 +198,10 @@ final class Steps extends AbstractRest
                     if (array_key_exists('deadline', $params)) {
                         $this->syncLinkedTodo();
                     }
+                    if (array_key_exists('body', $params) || array_key_exists('deadline', $params)) {
+                        $step = $this->readOne();
+                        new StepMentions($this->Entity)->sync((int) $this->id, (string) $step['body'], $step['deadline'] ?: null);
+                    }
                 }
             )(),
             Action::ForceLock => $this->setImmutable(1),
@@ -219,7 +223,11 @@ final class Steps extends AbstractRest
         $this->Entity->touch();
         $Changelog = new Changelog($this->Entity);
         $Changelog->create(new ContentParams('steps', $action->value));
-        return $this->create($reqBody['body'] ?? 'RTFM');
+        $body = $reqBody['body'] ?? 'RTFM';
+        $stepId = $this->create($body);
+        new StepMentions($this->Entity)->sync($stepId, Filter::title($body), null);
+
+        return $stepId;
     }
 
     #[Override]
@@ -232,6 +240,8 @@ final class Steps extends AbstractRest
         $Changelog->create(new ContentParams('steps', sprintf('Removed step with id: %d', $this->id)));
 
         $this->getStepDeadline()->destroy();
+
+        new StepMentions($this->Entity)->removeAll((int) $this->id);
 
         $linkedTodolistId = StepTodolistLinks::unlink($this->Entity->entityType->value, (int) $this->id);
         if ($linkedTodolistId !== null) {
@@ -318,6 +328,11 @@ final class Steps extends AbstractRest
         $linkedTodolistId = StepTodolistLinks::findTodolistId($this->Entity->entityType->value, (int) $this->id);
         if ($linkedTodolistId !== null) {
             new Todolist($this->Entity->Users, $linkedTodolistId)->syncFromLinkedStep(array('completed' => $finished));
+        }
+        $Mentions = new StepMentions($this->Entity);
+        $Mentions->syncFinished((int) $this->id, $finished);
+        if ($finished) {
+            $Mentions->notifyFinished((int) $this->id, (string) $this->readOne()['body']);
         }
 
         return $res;

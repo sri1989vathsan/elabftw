@@ -966,6 +966,7 @@ final class Todolist extends AbstractRest
         $task = $this->readOne();
         if (array_key_exists('column_id', $params) || array_key_exists('completed', $params)) {
             $this->syncLinkedStepFromCompletion(!empty($task['completed_at']));
+            StepMentions::taskCompleted((int) $this->id, $this->requester, !empty($task['completed_at']));
         }
         if ($newAssignees !== null) {
             foreach ($newAssignees as $assignedUserid) {

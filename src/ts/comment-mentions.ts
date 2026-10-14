@@ -83,35 +83,51 @@ export async function decorateMentions(root: ParentNode = document): Promise<voi
   });
 }
 
-/** Adds the "@" suggestion list to the new-comment box. Safe to call again after a reload. */
+const MENTION_FIELDS = '#commentsCreateArea, #addStepInput';
+let delegated = false;
+
+function listFor(field: HTMLInputElement | HTMLTextAreaElement): HTMLUListElement {
+  const group = field.parentElement as HTMLElement;
+  let list = group.querySelector<HTMLUListElement>(':scope > .pm-mention-results');
+  if (!list) {
+    group.style.position = 'relative';
+    list = document.createElement('ul');
+    list.className = 'pm-mention-results';
+    list.hidden = true;
+    group.append(list);
+  }
+  return list;
+}
+
+/**
+ * Adds the "@" suggestion list to the new-comment box and the add-a-step
+ * box. Listens on the document, so it also covers fields that are drawn
+ * again after a reload; safe to call more than once.
+ */
 export function initCommentMentions(): void {
-  const area = document.getElementById('commentsCreateArea') as HTMLTextAreaElement | null;
-  if (!area || area.dataset.mentionsReady === '1') {
+  if (delegated) {
     return;
   }
-  area.dataset.mentionsReady = '1';
-  const group = area.parentElement as HTMLElement;
-  group.style.position = 'relative';
-  const list = document.createElement('ul');
-  list.className = 'pm-mention-results';
-  list.hidden = true;
-  group.append(list);
-
-  const hide = () => {
+  delegated = true;
+  const hide = (list: HTMLUListElement) => {
     list.hidden = true;
     list.replaceChildren();
   };
-
-  area.addEventListener('input', async () => {
-    const query = extractMentionQuery(area.value);
+  document.addEventListener('input', async event => {
+    const field = event.target as HTMLInputElement | HTMLTextAreaElement;
+    if (!(field instanceof Element) || !field.matches(MENTION_FIELDS)) {
+      return;
+    }
+    const list = listFor(field);
+    const query = extractMentionQuery(field.value);
     if (query === null) {
-      hide();
+      hide(list);
       return;
     }
     const lowered = query.toLowerCase();
     const matches = (await getMembers()).filter(m => m.fullname.toLowerCase().includes(lowered)).slice(0, 8);
     if (matches.length === 0) {
-      hide();
+      hide(list);
       return;
     }
     list.replaceChildren(...matches.map(member => {
@@ -120,18 +136,24 @@ export function initCommentMentions(): void {
       button.type = 'button';
       button.className = 'btn btn-ghost pm-mention-result';
       button.textContent = member.fullname;
-      // mousedown, so the textarea keeps its focus and the list does not vanish first
-      button.addEventListener('mousedown', event => {
-        event.preventDefault();
-        area.value = applyMention(area.value, query, member.fullname);
+      // mousedown, so the field keeps its focus and the list does not vanish first
+      button.addEventListener('mousedown', mouseEvent => {
+        mouseEvent.preventDefault();
+        field.value = applyMention(field.value, query, member.fullname);
         picked.set(member.fullname, member.userid);
-        hide();
-        area.focus();
+        hide(list);
+        field.focus();
       });
       item.append(button);
       return item;
     }));
     list.hidden = false;
   });
-  area.addEventListener('blur', () => setTimeout(hide, 150));
+  document.addEventListener('focusout', event => {
+    const field = event.target as Element;
+    if (field instanceof Element && field.matches(MENTION_FIELDS)) {
+      const list = listFor(field as HTMLInputElement);
+      setTimeout(() => hide(list), 150);
+    }
+  });
 }

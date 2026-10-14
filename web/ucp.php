@@ -75,8 +75,12 @@ try {
             'setting' => 'notif_mentioned_order',
         ),
         array(
-            'designation' => _('Mentioned in a comment on an experiment, template or resource'),
+            'designation' => _('Mentioned in a comment, or assigned a step, on an experiment, template or resource'),
             'setting' => 'notif_mentioned_entry',
+        ),
+        array(
+            'designation' => _('A step I assigned to someone was completed'),
+            'setting' => 'notif_step_finished',
         ),
         array(
             'designation' => _('Status of my order changed'),
