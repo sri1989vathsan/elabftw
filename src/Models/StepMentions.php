@@ -11,13 +11,8 @@ declare(strict_types=1);
 namespace Elabftw\Models;
 
 use Elabftw\Elabftw\Db;
-use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Action;
 use Elabftw\Enums\EntityType;
-use Elabftw\Exceptions\ForbiddenException;
-use Elabftw\Exceptions\IllegalActionException;
-use Elabftw\Exceptions\ImproperActionException;
-use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Models\Notifications\StepAssigned;
 use Elabftw\Models\Notifications\StepFinished;
 use Elabftw\Models\Users\Users;
@@ -69,10 +64,8 @@ final class StepMentions
             }
             // Whoever can edit the entry chose to assign this step, so the
             // person gets it even if they cannot open the entry (it is shared
-            // with owner and admins only, say). The task always links to the
-            // entry; only the notification leaves its name out for someone
-            // who cannot open it.
-            $readable = $this->canRead($target);
+            // with owner and admins only, say). The task and the notification
+            // both name and link the entry.
             $params = array('content' => $title);
             if (!empty($deadline)) {
                 $params['deadline'] = $deadline;
@@ -85,7 +78,7 @@ final class StepMentions
                 $this->Entity->Users,
                 $this->Entity->entityType->toPage(),
                 (int) $this->Entity->id,
-                $readable ? (string) ($this->Entity->entityData['title'] ?? '') : '',
+                (string) ($this->Entity->entityData['title'] ?? ''),
             )->create();
         }
     }
@@ -125,8 +118,8 @@ final class StepMentions
     }
 
     /**
-     * Assigner and assignees of a step, minus whoever just completed it. A
-     * person who cannot open the entry is told without its name.
+     * Assigner and assignees of a step, minus whoever just completed it. The
+     * entry's name is shown to all of them, even to someone who cannot open it.
      */
     private static function notifyParticipants(
         string $entityTypeValue,
@@ -154,13 +147,7 @@ final class StepMentions
         unset($recipients[(int) $actor->userData['userid']]);
         foreach (array_keys($recipients) as $userid) {
             $target = new Users($userid, $actor->team);
-            try {
-                $type->toInstance($target, $entityId)->canOrExplode(AccessType::Read);
-                $name = $title;
-            } catch (ForbiddenException | IllegalActionException | ImproperActionException | ResourceNotFoundException) {
-                $name = '';
-            }
-            new StepFinished($target, $actor, $type->toPage(), $entityId, $name, $step)->create();
+            new StepFinished($target, $actor, $type->toPage(), $entityId, $title, $step)->create();
         }
     }
 
@@ -308,24 +295,6 @@ final class StepMentions
     {
         // the link row goes with the task (ON DELETE CASCADE)
         new Todolist(new Users($userid, $this->Entity->Users->team), $taskId)->destroyAsLinkedStep();
-    }
-
-    /** People who cannot open the entry are not handed its title through a task. */
-    private function canRead(Users $target): bool
-    {
-        return $this->can($target, AccessType::Read);
-    }
-
-    private function can(Users $target, AccessType $access): bool
-    {
-        try {
-            $entity = new ($this->Entity::class)($target, $this->Entity->id);
-            $entity->canOrExplode($access);
-        } catch (ForbiddenException | IllegalActionException | ImproperActionException | ResourceNotFoundException) {
-            return false;
-        }
-
-        return true;
     }
 
     private function entityType(): string

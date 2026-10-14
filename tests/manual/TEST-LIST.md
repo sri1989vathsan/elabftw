@@ -126,3 +126,5 @@ Run on the dev instance with the accounts in `TEST-ACCOUNTS.md`.
 | N18 | Apply to Read & Write works with a real click (no browser confirm box any more): both get the same people and level | pass |
 | N19 | After a change from one window (Apply to Read & Write, or Can write Save), the other window opens showing the same people and level | pass |
 | N20 | "@" list: Tab takes the only match, or the highlighted one (first by default); Up/Down move the highlight; typing restarts it at the first name. Checked in the entry comment box | pass |
+| N21 | One permission rule on the server for every path (windows, Share, bulk bar, folder dialog, API): give edit also gives view; take edit away takes only edit; give view gives only view; take view away takes edit too; same for the base level | pass (API sequence on a test experiment) |
+| N22 | Assignee who cannot open the entry: still gets task and notification, with the entry's name | pass (by design change) |
