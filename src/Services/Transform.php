@@ -191,15 +191,18 @@ final class Transform
                 ),
             Notifications::StepAssigned =>
                 sprintf(
-                    '<span data-action="ack-notif" data-id="%d" data-href="%s?mode=view&id=%d">%s</span>' . $relativeMoment,
+                    '<span data-action="ack-notif" data-id="%d" data-href="%s">%s</span>' . $relativeMoment,
                     (int) $notif['id'],
-                    htmlspecialchars($notif['body']['page'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    (int) $notif['body']['entity_id'],
-                    sprintf(
-                        _('%s assigned you a step in %s'),
-                        $notif['body']['mentioner_fullname'],
-                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    ),
+                    $notif['body']['title'] === ''
+                        ? 'dashboard.php'
+                        : sprintf('%s?mode=view&id=%d', htmlspecialchars($notif['body']['page'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), (int) $notif['body']['entity_id']),
+                    $notif['body']['title'] === ''
+                        ? sprintf(_('%s assigned you a step (see your to-do list)'), $notif['body']['mentioner_fullname'])
+                        : sprintf(
+                            _('%s assigned you a step in %s'),
+                            $notif['body']['mentioner_fullname'],
+                            htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                        ),
                     $notif['created_at'],
                 ),
             Notifications::StepFinished =>

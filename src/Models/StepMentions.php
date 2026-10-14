@@ -68,23 +68,28 @@ final class StepMentions
                 new Todolist($target, $existing[$userid])->syncFromLinkedStep($params);
                 continue;
             }
-            if (!$this->canRead($target)) {
-                continue;
-            }
+            // Whoever can edit the entry chose to assign this step, so the
+            // person gets it even if they cannot open the entry (it is shared
+            // with owner and admins only, say): their task then carries just
+            // the step's own text, with no link, and the notification does
+            // not name the entry.
+            $readable = $this->canRead($target);
             $params = array('content' => $title);
             if (!empty($deadline)) {
                 $params['deadline'] = $deadline;
             }
             $taskId = new Todolist($target)->postAction(Action::Create, $params);
             $this->saveLink($stepId, $userid, $taskId);
-            new TodolistEntityLinks($target, new Todolist($target, $taskId))
-                ->postAction(Action::Create, array('entity_type' => $this->entityType(), 'entity_id' => $this->Entity->id));
+            if ($readable) {
+                new TodolistEntityLinks($target, new Todolist($target, $taskId))
+                    ->postAction(Action::Create, array('entity_type' => $this->entityType(), 'entity_id' => $this->Entity->id));
+            }
             new StepAssigned(
                 $target,
                 $this->Entity->Users,
                 $this->Entity->entityType->toPage(),
                 (int) $this->Entity->id,
-                (string) ($this->Entity->entityData['title'] ?? ''),
+                $readable ? (string) ($this->Entity->entityData['title'] ?? '') : '',
             )->create();
         }
     }
