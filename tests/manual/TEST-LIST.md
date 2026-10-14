@@ -120,3 +120,4 @@ Run on the dev instance with the accounts in `TEST-ACCOUNTS.md`.
 | N10 | `@` suggestions in the add-a-step box with real typing | pass |
 | N11 | Inline spreadsheet grid: client height equals scroll height (no 9px clipping) on five sheets | pass |
 | N12 | Row with a set height: text centred / top / bottom follows the cell's vertical alignment | pass (CSS check, wrapper added by script) |
+| N15 | Share modal, Read & write: Visibility and Can write end up with the same people (all who had either, plus new picks) and the same base level | pass |

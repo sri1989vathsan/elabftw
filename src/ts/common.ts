@@ -1414,7 +1414,8 @@ $('#permModal-share').on('show.bs.modal', async () => {
 
 // the "Share" modal: grant read-only or read & write access to whoever is
 // selected, on top of (never instead of) the existing lists -- unlike
-// save-permissions/save-permissions-both, which replace a list wholesale
+// save-permissions/save-permissions-both, which replace a list wholesale.
+// "Read & write" makes Visibility and Can write identical.
 on('save-permissions-share', async (el: HTMLElement) => {
   const selected = [
     ...(($('#share_select_teams').val() as string[] | null) ?? []),
@@ -1426,11 +1427,27 @@ on('save-permissions-share', async (el: HTMLElement) => {
   const level = el.dataset.level;
   const current = await ApiC.getJson(`${entity.type}/${entity.id}`);
   const params: Record<string, string> = {};
-  if (selected.length > 0) params['canread'] = mergePermissionsJson(current.canread, selected);
-  if (base) params['canread_base'] = base;
   if (level === 'both') {
-    if (selected.length > 0) params['canwrite'] = mergePermissionsJson(current.canwrite, selected);
-    if (base) params['canwrite_base'] = base;
+    // Read & write: Visibility and Can write end up with exactly the same
+    // people -- whoever already had either, plus the new picks -- and the
+    // same base level when one was chosen.
+    const already = unionPermissionsJson(current.canread, current.canwrite);
+    const everyone = [
+      ...already.teams.map(id => `team:${id}`),
+      ...already.teamgroups.map(id => `teamgroup:${id}`),
+      ...already.users.map(id => `user:${id}`),
+      ...selected,
+    ];
+    const same = mergePermissionsJson('{}', everyone);
+    params['canread'] = same;
+    params['canwrite'] = same;
+    if (base) {
+      params['canread_base'] = base;
+      params['canwrite_base'] = base;
+    }
+  } else {
+    if (selected.length > 0) params['canread'] = mergePermissionsJson(current.canread, selected);
+    if (base) params['canread_base'] = base;
   }
   await ApiC.patch(`${entity.type}/${entity.id}`, params);
   await reloadElements(['canreadDiv', 'canwriteDiv']);
