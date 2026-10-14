@@ -534,10 +534,10 @@
     "summary": "Link a template to an experiment, see which version you used, and restore older versions.",
     "details": [
       "In an experiment, open Search in the left sidebar and set Type to Experiment templates.",
-      "Press Link to record the template without inserting anything, or Add to text to insert its content at the cursor.",
+      "fa-link::Press Link to record the template without inserting anything, or Add to text to insert its content at the cursor.",
       "Associated templates are listed under Links with their version number and how many times they were inserted. Click one to open it.",
       "Open a template to see its version history, compare versions and restore an older one. The other versions are kept.",
-      "Star the templates you use most to find them quickly."
+      "fa-star::Star the templates you use most to find them quickly."
     ],
     "image": "",
     "imageAlt": "",
