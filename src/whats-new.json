@@ -621,11 +621,11 @@
     "title": "Table of contents in experiments",
     "summary": "A list of the headings of an experiment so you can jump around, show only the sections you pick, and print or copy only parts of it.",
     "details": [
-      "On an experiment page, open the Table of Contents tab in the left sidebar.",
+      "fa-bars-staggered::On an experiment page, open the Table of Contents tab in the left sidebar.",
       "The Document sections list shows the headings. Click one to jump to it.",
       "Use Add filter or Add heading filter to select sections, and choose whether all or any of the filters must match.",
       "To read only some parts, open Select headings to filter or print and tick the headings you want. The experiment then shows just those sections and hides the rest, until you clear the selection.",
-      "Press Print selection or Copy filtered content to get only those parts. Switch spreadsheets and pictures on or off."
+      "fa-print::Press Print selection or Copy filtered content to get only those parts. Switch spreadsheets and pictures on or off."
     ],
     "image": "",
     "imageAlt": "",
