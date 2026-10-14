@@ -589,11 +589,11 @@
     "title": "Search, favourite filters and linking",
     "summary": "Search with your favourite filters, then attach what you find to an experiment or paste a link to it, without leaving the page.",
     "details": [
-      "Open the Search tab in the left sidebar. Pick a Type (All, Experiments, Resources, Experiment templates or Resource templates) and type in the search box.",
+      "fa-magnifying-glass::Open the Search tab in the left sidebar. Pick a Type (All, Experiments, Resources, Experiment templates or Resource templates) and type in the search box.",
       "The Filters list shows your favourite categories, tags, statuses and owners for that type. Tick the ones you want and press Apply filters.",
       "Press Manage to choose which ones are your favourites. They are saved only for your account.",
       "Results appear below, with a link to the full list.",
-      "Attach while editing: open an experiment or resource in edit mode, search in the panel, and press the link button on a result to attach that experiment or resource to the one you are editing. It then shows under Links.",
+      "fa-link::Attach while editing: open an experiment or resource in edit mode, search in the panel, and press the link button on a result to attach that experiment or resource to the one you are editing. It then shows under Links.",
       "Paste a link: press the second button on a result to put a link to it into the text, at the cursor.",
       "For templates, the link button records the template an experiment came from, and the second button inserts the template's content at the cursor instead of a link.",
       "With a board card open, results also get a button to link them to that card, and one to add them as a step on it."
