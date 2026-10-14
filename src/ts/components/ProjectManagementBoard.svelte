@@ -2573,6 +2573,9 @@
       <button type="button" class="btn btn-ghost btn-sm" on:click={openLinksSummary}>
         <i class="fas fa-link fa-fw mr-1" aria-hidden="true"></i>{t('All links')}
       </button>
+      <button type="button" class="btn btn-link guide-info-btn p-0 ml-1" data-action="open-guide-card" data-card="guide-collaboration" title={t('About members, assignments and comments in the guide')} aria-label={t('About members, assignments and comments in the guide')}>
+        <i class="fas fa-circle-info" aria-hidden="true"></i>
+      </button>
     </div>
 
     {#if subprojectsOfActive.length > 0 && !viewingAllSubprojects && activeProject}
