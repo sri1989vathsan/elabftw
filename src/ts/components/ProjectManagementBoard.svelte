@@ -3624,8 +3624,9 @@
                 <span class="badge badge-info mr-1" title={entityTypeLabel(item.entity_type)} aria-label={entityTypeLabel(item.entity_type)}><i class="fas {entityTypeIcon(item.entity_type)} fa-fw" aria-hidden="true"></i></span>
                 {#if item.status_title}<span class="catstat-btn status-btn mr-1" style={statusBadgeStyle(item.status_color)} title={item.status_title} aria-label={item.status_title}><i class="fas fa-circle fa-fw" aria-hidden="true"></i></span>{/if}
                 <a class="mr-auto text-break" href={entityViewUrl(item)} target="_blank" rel="noreferrer noopener">{item.title}</a>
-                <div class="pm-link-cards">
-                  {#each group.cards as card (card.task_id)}
+                {#if group.cards.length === 1}
+                  {@const card = group.cards[0]}
+                  <div class="pm-link-cards">
                     <span class="pm-link-card">
                       {#if card.project_name}
                         <span class="badge badge-light" title={t('Project')}>
@@ -3636,8 +3637,27 @@
                         <i class="fas fa-list-check fa-fw mr-1" aria-hidden="true"></i>{card.task_body}
                       </button>
                     </span>
-                  {/each}
-                </div>
+                  </div>
+                {:else}
+                  <!-- linked from several cards: the count, with a dropdown listing them -->
+                  <details class="pm-link-cards-menu">
+                    <summary class="btn btn-ghost btn-sm">
+                      <i class="fas fa-list-check fa-fw mr-1" aria-hidden="true"></i>{group.cards.length} {t('cards')}
+                    </summary>
+                    <ul class="pm-link-cards-dropdown">
+                      {#each group.cards as card (card.task_id)}
+                        <li>
+                          {#if card.project_name}
+                            <span class="badge badge-light" title={t('Project')}>
+                              {#if card.project_parent_name}{card.project_parent_name} / {/if}{card.project_name}
+                            </span>
+                          {/if}
+                          <button type="button" class="btn btn-ghost btn-sm" on:click={() => openTaskFromSummary(card.task_id)}>{card.task_body}</button>
+                        </li>
+                      {/each}
+                    </ul>
+                  </details>
+                {/if}
               </li>
             {/each}
           </ul>
