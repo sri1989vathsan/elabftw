@@ -31,6 +31,7 @@ import {
 import { notify } from './notify';
 import { createWebLink, deleteWebLink } from './web-links';
 import { initCommentMentions } from './comment-mentions';
+import { askConfirm } from './confirm-dialog';
 import { deleteLabCollectorLink } from './labcollector-link';
 
 addAutocompleteToLinkInputs();
@@ -226,8 +227,8 @@ on('step-destroy-deadline', (el: HTMLElement) => {
     .then(() => reloadElements(['stepsDiv']));
 });
 
-on('destroy-step', (el: HTMLElement) => {
-  if (confirm(i18next.t('step-delete-warning'))) {
+on('destroy-step', async (el: HTMLElement) => {
+  if (await askConfirm(i18next.t('step-delete-warning'))) {
     StepC.destroy(parseInt(el.dataset.id, 10)).then(() => {
       el.parentElement.parentElement.remove();
       // keep to do list in sync

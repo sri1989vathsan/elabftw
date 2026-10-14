@@ -13,6 +13,7 @@ import { on } from './handlers';
 import i18next from './i18n';
 import { Model } from './interfaces';
 import { reloadElements } from './misc';
+import { askConfirm } from './confirm-dialog';
 import { decorateMentions, initCommentMentions, mentionedUserids } from './comment-mentions';
 
 // Comments of an entry, shared by the view page and the edit page.
@@ -44,8 +45,8 @@ on('create-comment', () => {
   });
 });
 
-on('destroy-comment', (el: HTMLElement) => {
-  if (confirm(i18next.t('generic-delete-warning'))) {
+on('destroy-comment', async (el: HTMLElement) => {
+  if (await askConfirm(i18next.t('generic-delete-warning'))) {
     ApiC.delete(`${entity.type}/${entity.id}/${Model.Comment}/${el.dataset.id}`).then(() => el.parentElement.parentElement.remove());
   }
 });

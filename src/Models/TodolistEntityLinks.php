@@ -110,7 +110,10 @@ final class TodolistEntityLinks extends AbstractRest
     }
 
     /**
-     * Every to-do task linked to this experiment/resource -- the reverse of
+     * Every to-do task linked to this experiment/resource, except the ones that
+     * only stand for one of its own steps (assigned or with a deadline): the
+     * step is already listed right above, so repeating it once per person made
+     * the list long for no reason -- the reverse of
      * readAll(), which is task-centric. Used to show a read-only "Linked
      * tasks" section on the entity's own view/edit page (see
      * AbstractEntityController).
@@ -122,6 +125,8 @@ final class TodolistEntityLinks extends AbstractRest
                 FROM todolist_entity_links AS link
                 INNER JOIN todolist AS task ON task.id = link.task_id
                 WHERE link.entity_type = :entity_type AND link.entity_id = :entity_id
+                    AND task.id NOT IN (SELECT todolist_id FROM custom_step_mentions)
+                    AND task.id NOT IN (SELECT todolist_id FROM custom_step_todolist_links)
                 ORDER BY link.created_at ASC';
         $req = $Db->prepare($sql);
         $req->bindValue(':entity_type', $entityType);
