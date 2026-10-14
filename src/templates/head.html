@@ -331,6 +331,13 @@
         </div>
         {% endif %}
 
+        {# MoorLab eLabFTW Guide: an "i" just before the help question mark #}
+        {% if not App.isAnonymous() %}
+          <div class='nav-item'>
+            <a class='btn nav-link border-0 {{ scriptName == 'whats-new.php' and not App.Request.query.has('all') ? 'active' }}' id='navGuideLink' href='whats-new.php' title='{{ 'MoorLab eLabFTW Guide'|trans }}' aria-label='{{ 'MoorLab eLabFTW Guide'|trans }}'><i class='fas fa-circle-info fa-2x'></i></a>
+          </div>
+        {% endif %}
+
         {# Help/Community dropdown #}
         <div class='nav-item dropdown {{ App.isAnonymous() ? 'ml-auto' }}'>
           <button class='btn nav-link border-0' id='navbarDropdownHelp' type='button' aria-label='{{ 'Help menu'|trans }}' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'><i class='fas fa-circle-question fa-2x'></i></button>
