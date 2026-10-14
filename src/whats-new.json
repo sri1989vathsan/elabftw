@@ -392,7 +392,7 @@
     "title": "Activity calendar",
     "summary": "One calendar for what is coming and what you have already done: your tasks, the steps of your experiments, and the experiments and notes you worked on each day.",
     "details": [
-      "Open it from the calendar icon in the left sidebar. A badge counts what is overdue or due within the next hour.",
+      "fa-calendar-days::Open it from the calendar icon in the left sidebar. A badge counts what is overdue or due within the next hour.",
       "A month grid shows each day with small count pills, and marks today, the day you selected and overdue days. Switch between Day, Week and Month views, and hide weekends if you do not need them.",
       "Below the grid, an agenda lists the items for what you selected, in time order. Each card says where it came from: a personal task, or a step of an experiment or resource.",
       "What appears on a day: tasks with a deadline (a finished task stays on its day with the time you finished it); unfinished experiment steps with a deadline; experiments and resources on their start date; and the headings of an experiment or resource on the day of the date inserted above them (see the next step).",
