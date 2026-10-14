@@ -28,9 +28,9 @@
 
   {% if whatsNewChips|length > 1 %}
     <div class='whats-new-chips mb-3' role='group' aria-label='{{ 'Filter by area'|trans }}'>
-      <button type='button' class='btn btn-sm btn-primary mr-1 mb-1' data-action='whats-new-filter' data-area='' aria-pressed='true'>{{ 'All'|trans }}</button>
+      <button type='button' class='btn btn-sm {{ whatsNewActiveArea ? 'btn-outline-primary' : 'btn-primary' }} mr-1 mb-1' data-action='whats-new-filter' data-area='' aria-pressed='{{ whatsNewActiveArea ? 'false' : 'true' }}'>{{ 'All'|trans }}</button>
       {% for area in whatsNewChips %}
-        <button type='button' class='btn btn-sm btn-outline-primary mr-1 mb-1' data-action='whats-new-filter' data-area='{{ area }}' aria-pressed='false'>{{ area }}</button>
+        <button type='button' class='btn btn-sm {{ area == whatsNewActiveArea ? 'btn-primary' : 'btn-outline-primary' }} mr-1 mb-1' data-action='whats-new-filter' data-area='{{ area }}' aria-pressed='{{ area == whatsNewActiveArea ? 'true' : 'false' }}'>{{ area }}</button>
       {% endfor %}
     </div>
   {% endif %}
@@ -48,7 +48,7 @@
   {% if not whatsNewShowAll %}
     <div class='row'>
       {% for entry in whatsNewEntries %}
-        <div class='col-12 col-md-6 col-xl-4 mb-4 whats-new-entry' id='whats-new-{{ entry.id }}' data-area='{{ entry.area }}'>
+        <div class='col-12 col-md-6 col-xl-4 mb-4 whats-new-entry' id='whats-new-{{ entry.id }}' data-area='{{ entry.area }}'{{ whatsNewActiveArea and entry.area != whatsNewActiveArea ? ' hidden' }}>
           <div class='card h-100'>
             <div class='card-body d-flex flex-column'>
               <div class='d-flex align-items-center mb-3'>

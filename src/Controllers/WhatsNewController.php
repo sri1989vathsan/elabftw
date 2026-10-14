@@ -37,6 +37,7 @@ use function preg_replace;
 use function random_bytes;
 use function bin2hex;
 use function count;
+use function in_array;
 use function str_replace;
 use function strtolower;
 use function trim;
@@ -105,6 +106,10 @@ final class WhatsNewController extends AbstractHtmlController
             'whatsNewTotal' => count($all),
             // Filter chips only for the areas that are on show; the editor suggests every area.
             'whatsNewChips' => array_values(array_unique(array_filter(array_column($entries, 'area')))),
+            // ?area=Experiments opens the guide already showing one group of cards (only a real, listed area counts)
+            'whatsNewActiveArea' => !$showAll && in_array($this->app->Request->query->getString('area'), array_column($entries, 'area'), true)
+                ? $this->app->Request->query->getString('area')
+                : '',
             'whatsNewAreas' => array_values(array_unique(array_filter(array_column($all, 'area')))),
             'whatsNewCanEdit' => $this->canEdit(),
         ));
