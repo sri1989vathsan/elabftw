@@ -61,10 +61,8 @@ final class StepMentions
         foreach ($mentioned as $userid => $fullname) {
             $target = new Users($userid, $this->Entity->Users->team);
             if (isset($existing[$userid])) {
-                $params = array('content' => $title);
-                if (!empty($deadline)) {
-                    $params['deadline'] = $deadline;
-                }
+                // the step's deadline, or none: removing it clears it on their task too
+                $params = array('content' => $title, 'deadline' => !empty($deadline) ? $deadline : null);
                 new Todolist($target, $existing[$userid])->syncFromLinkedStep($params);
                 $this->linkTaskToEntry($target, $existing[$userid]);
                 continue;
