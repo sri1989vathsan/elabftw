@@ -1796,7 +1796,19 @@
       if (detailEntry) void loadEntityLinks(detailEntry.id);
     };
     window.addEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
+    // Pick up what other people did (a step finished for everybody it was
+    // assigned to, a new assignment) without pressing refresh: every 30
+    // seconds while the page is visible, and never while a task is open or a
+    // field is being typed into, so a reload cannot get in the way of an edit.
+    const refreshTimer = window.setInterval(() => {
+      const editing = document.activeElement instanceof HTMLInputElement
+        || document.activeElement instanceof HTMLTextAreaElement
+        || document.activeElement instanceof HTMLSelectElement;
+      if (document.hidden || loading || detailEntry || editing) return;
+      void load();
+    }, 30000);
     return () => {
+      window.clearInterval(refreshTimer);
       window.removeEventListener('todolist-changed', reload);
       window.removeEventListener('todolist-scope-changed', reload);
       window.removeEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
