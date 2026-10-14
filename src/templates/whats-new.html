@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% import 'guide-detail.html' as guide_detail -%}
 
 {% block body %}
 <div class='container-fluid px-0'>
@@ -98,7 +99,7 @@
             {% if entry.details %}
               <ul class='mb-0 pl-3'>
                 {% for detail in entry.details %}
-                  <li>{{ detail }}</li>
+                  <li>{{ guide_detail.item(detail) }}</li>
                 {% endfor %}
               </ul>
             {% endif %}

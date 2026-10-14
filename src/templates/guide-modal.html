@@ -1,3 +1,4 @@
+{% import 'guide-detail.html' as guide_detail -%}
       <div class='modal fade' id='guide-modal-{{ entry.id }}' tabindex='-1' role='dialog' aria-labelledby='guide-modal-label-{{ entry.id }}' aria-hidden='true'>
         <div class='modal-dialog modal-lg modal-dialog-scrollable' role='document'>
           <div class='modal-content'>
@@ -35,7 +36,7 @@
               {% if entry.details %}
                 <h6 class='text-uppercase text-muted small mb-1'>{{ 'How it works'|trans }}</h6>
                 <ol class='pl-3'>
-                  {% for detail in entry.details %}<li class='mb-1'>{{ detail }}</li>{% endfor %}
+                  {% for detail in entry.details %}<li class='mb-1'>{{ guide_detail.item(detail) }}</li>{% endfor %}
                 </ol>
               {% endif %}
 

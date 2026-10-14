@@ -1,0 +1,13 @@
+{# One step of a guide card. A step may start with "fa-icon-name::" to show that icon before the text, e.g. "fa-bold::Bold: ...". #}
+{% macro item(text) %}
+  {%- if text starts with 'fa-' and '::' in text -%}
+    {%- set parts = text|split('::', 2) -%}
+    {%- if parts[0] matches '/^fa-[a-z0-9-]+$/' -%}
+      <i class='fas {{ parts[0] }} fa-fw mr-1 guide-step-icon' aria-hidden='true'></i>{{ parts[1] }}
+    {%- else -%}
+      {{ text }}
+    {%- endif -%}
+  {%- else -%}
+    {{ text }}
+  {%- endif -%}
+{% endmacro %}
