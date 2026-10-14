@@ -37,4 +37,5 @@ enum Notifications: int
     case MentionedInFeedback = 102;
     case AnnouncementPublished = 103;
     case AccessGranted = 104;
+    case MentionedInEntry = 105;
 }

@@ -75,6 +75,10 @@ try {
             'setting' => 'notif_mentioned_order',
         ),
         array(
+            'designation' => _('Mentioned in a comment on an experiment, template or resource'),
+            'setting' => 'notif_mentioned_entry',
+        ),
+        array(
             'designation' => _('Status of my order changed'),
             'setting' => 'notif_order_status_changed',
         ),

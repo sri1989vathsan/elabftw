@@ -16,15 +16,19 @@ use Elabftw\Enums\Action;
 use Elabftw\Enums\AccessType;
 use Elabftw\Exceptions\IllegalActionException;
 use Elabftw\Exceptions\ImproperActionException;
+use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Notifications\CommentCreated;
+use Elabftw\Models\Notifications\MentionedInEntry;
 use Elabftw\Models\Users\Users;
 use Elabftw\Params\CommentParam;
 use Elabftw\Traits\SetIdTrait;
 use Override;
 use PDO;
 
+use function array_map;
 use function array_unique;
+use function is_array;
 use function array_values;
 use function sprintf;
 
@@ -93,7 +97,10 @@ class Comments extends AbstractRest
     #[Override]
     public function postAction(Action $action, array $reqBody): int
     {
-        return $this->create(new CommentParam($reqBody['comment'] ?? throw new ImproperActionException('Missing comment field.')));
+        $id = $this->create(new CommentParam($reqBody['comment'] ?? throw new ImproperActionException('Missing comment field.')));
+        $this->notifyMentioned(is_array($reqBody['mentioned_userids'] ?? null) ? $reqBody['mentioned_userids'] : array());
+
+        return $id;
     }
 
     public function update(CommentParam $params): bool
@@ -141,6 +148,45 @@ class Comments extends AbstractRest
         $this->createNotifications();
 
         return $id;
+    }
+
+    /**
+     * People @-mentioned in the comment get a notification, as long as they
+     * are in the team and are allowed to read this entry (so a title never
+     * reaches someone who could not open it anyway).
+     */
+    protected function notifyMentioned(array $userids): void
+    {
+        $mentioner = $this->Entity->Users;
+        foreach (array_unique(array_map('intval', $userids)) as $userid) {
+            if ($userid === (int) $mentioner->userData['userid'] || !$this->isTeamMember($userid, (int) $mentioner->team)) {
+                continue;
+            }
+            $target = new Users($userid, $mentioner->team);
+            try {
+                $entityForTarget = new ($this->Entity::class)($target, $this->Entity->id);
+                $entityForTarget->canOrExplode(AccessType::Read);
+            } catch (IllegalActionException | ImproperActionException | ResourceNotFoundException) {
+                continue;
+            }
+            (new MentionedInEntry(
+                $target,
+                $mentioner,
+                $this->Entity->entityType->toPage(),
+                (int) $this->Entity->id,
+                (string) ($this->Entity->entityData['title'] ?? ''),
+            ))->create();
+        }
+    }
+
+    private function isTeamMember(int $userid, int $team): bool
+    {
+        $req = $this->Db->prepare('SELECT 1 FROM users2teams WHERE users_id = :userid AND teams_id = :team');
+        $req->bindParam(':userid', $userid, PDO::PARAM_INT);
+        $req->bindParam(':team', $team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+
+        return $req->fetch() !== false;
     }
 
     protected function canWriteOrExplode(): void

@@ -14,6 +14,13 @@ import i18next from './i18n';
 import { Action, Model } from './interfaces';
 import { reloadElements } from './misc';
 import { activateLazySpreadsheetViews } from './inline-spreadsheet';
+import { decorateMentions, initCommentMentions, mentionedUserids } from './comment-mentions';
+
+const refreshComments = () => {
+  malleableComments.listen();
+  initCommentMentions();
+  decorateMentions();
+};
 
 // UPDATE MALLEABLE COMMENT
 const malleableComments = new Malle({
@@ -24,9 +31,7 @@ const malleableComments = new Malle({
     const resp = await ApiC.patch(`${entity.type}/${entity.id}/${Model.Comment}/${original.dataset.id}`, {'comment': value});
     const json = await resp.json();
     // we reload all so the edition date is also reloaded
-    reloadElements(['commentsDiv']).then(() => {
-      malleableComments.listen();
-    });
+    reloadElements(['commentsDiv']).then(refreshComments);
     return json.comment;
   },
   inputType: InputType.Textarea,
@@ -39,10 +44,8 @@ const malleableComments = new Malle({
 
 on('create-comment', () => {
   const content = (document.getElementById('commentsCreateArea') as HTMLTextAreaElement).value;
-  ApiC.post(`${entity.type}/${entity.id}/${Model.Comment}`, {comment: content}).then(() => {
-    reloadElements(['commentsDiv']).then(() => {
-      malleableComments.listen();
-    });
+  ApiC.post(`${entity.type}/${entity.id}/${Model.Comment}`, {comment: content, mentioned_userids: mentionedUserids(content)}).then(() => {
+    reloadElements(['commentsDiv']).then(refreshComments);
   });
 });
 
@@ -64,6 +67,8 @@ document.title = titleElement?.textContent ? `${titleElement.textContent} - eLab
 if (!core.isAnon) {
   // listen on existing comments
   malleableComments.listen();
+  initCommentMentions();
+  decorateMentions();
 }
 
 // Upgrade any saved spreadsheet in the main text from its static HTML
