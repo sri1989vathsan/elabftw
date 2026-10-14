@@ -352,15 +352,16 @@
     "date": "2026-10-12",
     "area": "Navigate",
     "title": "The left sidebar",
-    "summary": "Folders, search, quick search, to-dos and the calendar one click away on every page.",
+    "summary": "The row of buttons on the left edge of every page, and what each one opens.",
     "details": [
-      "A slim rail on the left shows the tabs. Click one to open its panel next to your page; click it again to close it.",
-      "Folders: browse and manage your folders and bookmarks.",
-      "Search: your saved filters and results in one place.",
-      "Quick search and commands: press Ctrl + K (Cmd + K on a Mac) on any page, start typing the name of an experiment, resource, folder or command, choose with the arrow keys and press Enter.",
-      "To-do list: your tasks and step deadlines sorted by due date, with a count of what is due. Switch on Show steps for team to include your colleagues’ steps. Board cards assigned to you show up here as well.",
-      "Activity calendar: a Day, Week or Month view of your deadlines.",
-      "On an experiment page there is also a table of contents tab. The rail stays put while you scroll, and the last panel you opened is remembered."
+      "The slim row of buttons on the left edge of every page opens panels next to your page. Click a button to open its panel and click it again to close it. The rail stays put while you scroll, and the last panel you opened is remembered.",
+      "Folders (the folder tree icon): browse your folders and bookmarks, and manage them. See the Folders card.",
+      "Search (the magnifying glass): search experiments, resources, templates and folders, with your favourite filters. While you edit, its results have buttons to attach an item or paste a link. See the Search card.",
+      "Quick search and commands (the lightning bolt): press Ctrl + K (Cmd + K on a Mac) on any page, start typing the name of an experiment, resource, folder or command, choose with the arrow keys and press Enter.",
+      "To-do list (the checklist icon): your tasks and step deadlines. A red number shows what is overdue or due soon. See the To-do list card.",
+      "Activity calendar (the calendar icon): a Day, Week or Month view of your deadlines and what you finished. A red number shows what is due soon. See the Activity calendar card.",
+      "Table of contents (the lines icon): only on an experiment or resource page, it lists the headings so you can jump to one or show only the sections you pick. See the Table of contents card.",
+      "A toolbox button appears at the end when HTML tools are installed on your instance: small interactive tools you can open without leaving the page."
     ],
     "image": "",
     "imageAlt": "",
@@ -370,12 +371,12 @@
     "icon": "fa-bars",
     "purpose": "Keep the tools you use all day next to your work, instead of hunting through menus.",
     "uses": [
-      "Keep the To-do panel open on a busy day and tick off steps as you finish them.",
       "Keep Folders open while you file new experiments.",
+      "Keep the To-do panel open on a busy day and tick off steps as you finish them.",
       "Create a new experiment, open the Boards, or jump to an old experiment without leaving the keyboard."
     ],
-    "news": "One rail with all of these tools on every page, and a keyboard-first quick search.",
-    "shot": "The left sidebar with the Folders panel open and the rail of tabs outlined, and the quick search window open over a page"
+    "news": "One row of buttons with all of these tools on every page, and a keyboard-first quick search.",
+    "shot": "The left sidebar with the Folders panel open and the row of buttons outlined, and the quick search window open over a page"
   },
   {
     "id": "guide-calendar",
