@@ -389,14 +389,18 @@
     "date": "2026-10-12",
     "area": "Tasks",
     "title": "Activity calendar",
-    "summary": "One calendar for what is coming and what you have already done: your tasks plus the unfinished steps of your experiments.",
+    "summary": "One calendar for what is coming and what you have already done: your tasks, the steps of your experiments, and the experiments and notes you worked on each day.",
     "details": [
       "Open it from the calendar icon in the left sidebar. A badge counts what is overdue or due within the next hour.",
       "A month grid shows each day with small count pills, and marks today, the day you selected and overdue days. Switch between Day, Week and Month views, and hide weekends if you do not need them.",
       "Below the grid, an agenda lists the items for what you selected, in time order. Each card says where it came from: a personal task, or a step of an experiment or resource.",
+      "What appears on a day: tasks with a deadline (a finished task stays on its day with the time you finished it); unfinished experiment steps with a deadline; experiments and resources on their start date; and the headings of an experiment or resource on the day of the date inserted above them (see the next step).",
+      "fa-calendar-day::The Day button in the editor toolbar links your notes to this calendar. Each heading you write after an inserted date is listed on that date, under its experiment, until you insert the next date. A heading with no inserted date above it counts under the experiment's start date.",
+      "On a day, an experiment lists its headings as a nested outline, so you can see what was done that day. Click a heading to open the experiment at that place.",
+      "The User and Team buttons at the top switch between your own items and the whole team's.",
       "Click a step to open its experiment, and tick steps and tasks off right from the agenda. A completed task stays on its day with the time you finished it, so you can look back at what was done and when.",
       "Add a task with a title, notes, an exact date and time and a reminder (at the deadline, or 15 minutes, 1 hour, 1 day or 1 week before).",
-      "Subscribe from Google Calendar or Apple Calendar with the private, read-only link on the Calendar tab. You can regenerate or revoke it any time."
+      "Subscribe from Google Calendar or Apple Calendar with the private, read-only link on the Calendar tab. It carries your tasks, your step deadlines and the reminders you set on orders. You can regenerate or revoke it any time."
     ],
     "image": "",
     "imageAlt": "",
@@ -407,8 +411,10 @@
     "purpose": "See what is due this week at a glance, never miss a step deadline hidden inside an experiment, and look back at what you finished on earlier days.",
     "uses": [
       "Plan the week on Monday: switch to Week view and see every deadline across your experiments.",
+      "In a long experiment, press Day before each day's notes. Then look at the month to see which days you worked on it, and what you wrote on each.",
       "Go back to a past week or month to see which tasks you completed and when, for a weekly report or a lab meeting update.",
-      "Put the subscription link in your phone calendar so lab deadlines show up next to the rest of your day."
+      "Put the subscription link in your phone calendar so lab deadlines show up next to the rest of your day.",
+      "Switch to Team to see what the whole lab is working on this week."
     ],
     "news": "New: an activity calendar that combines tasks and experiment steps, with reminders and calendar subscriptions.",
     "shot": "The Activity calendar panel with the month grid, the Day/Week/Month buttons and the agenda below"
