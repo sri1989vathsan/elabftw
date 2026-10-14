@@ -360,8 +360,7 @@
       "Quick search and commands (the lightning bolt): press Ctrl + K (Cmd + K on a Mac) on any page, start typing the name of an experiment, resource, folder or command, choose with the arrow keys and press Enter.",
       "To-do list (the checklist icon): your tasks and step deadlines. A red number shows what is overdue or due soon. See the To-do list card.",
       "Activity calendar (the calendar icon): a Day, Week or Month view of your deadlines and what you finished. A red number shows what is due soon. See the Activity calendar card.",
-      "Table of contents (the lines icon): only on an experiment or resource page, it lists the headings so you can jump to one or show only the sections you pick. See the Table of contents card.",
-      "A toolbox button appears at the end when HTML tools are installed on your instance: small interactive tools you can open without leaving the page."
+      "Table of contents (the lines icon): only on an experiment or resource page, it lists the headings so you can jump to one or show only the sections you pick. See the Table of contents card."
     ],
     "image": "",
     "imageAlt": "",
