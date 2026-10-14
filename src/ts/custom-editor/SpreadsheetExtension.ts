@@ -1526,7 +1526,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // scrollbarHeight already reflected the new one, occasionally
           // under-counting the scrollbar's own height by a frame and
           // leaving it overlapping the last row.
-          const naturalContentHeight = worksheetEl?.scrollHeight ?? tableRect.height;
+          // The library's own container is a few pixels taller than the
+          // worksheet inside it; counting only the worksheet left the grid
+          // that much too short, so a new spreadsheet always scrolled a
+          // little and its first or last row was partly cut off.
+          const containerEl = overlay.querySelector('.jss_container') as HTMLElement | null;
+          const naturalContentHeight = worksheetEl
+            ? Math.max(worksheetEl.scrollHeight, containerEl?.offsetHeight ?? 0)
+            : tableRect.height;
           // A horizontal scrollbar (overflow-x:auto on the grid area, needed
           // whenever the table is wider than maxContentWidth) takes up its own
           // slice of vertical space that scrollHeight above doesn't know

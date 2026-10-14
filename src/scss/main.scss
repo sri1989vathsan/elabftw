@@ -3725,6 +3725,8 @@ body.html-tool-workspace-resizing * {
  * room the row has left, clipping the rest, the same trade-off Excel
  * makes when a row is dragged shorter than a line of text. */
 .jss-cell-clip {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 

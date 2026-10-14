@@ -2398,6 +2398,12 @@ function applyCellClipHeights(container: HTMLElement, manualRowHeights: Readonly
         cell.appendChild(wrapper);
       }
       wrapper.style.height = `${clipHeight}px`;
+      // The wrapper fills the row, so without this its text always sat at
+      // the top, whatever vertical alignment the cell asked for (middle by
+      // default): rows with a set height looked top-aligned.
+      wrapper.style.justifyContent = computed.verticalAlign === 'top'
+        ? 'flex-start'
+        : computed.verticalAlign === 'bottom' ? 'flex-end' : 'center';
     });
   });
 }
