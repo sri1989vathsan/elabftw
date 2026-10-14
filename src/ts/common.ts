@@ -86,6 +86,7 @@ import { get as getFromSvelte } from 'svelte/store';
 import { writable } from 'svelte/store';
 import { applyTheme, isThemeVariant, updateThemeControls } from './theme';
 import { mount } from 'svelte';
+import './mention-keys';
 import PrimaryColorPicker from './components/PrimaryColorPicker.svelte';
 
 // we need to extend the interface from malle to add more properties

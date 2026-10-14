@@ -6074,6 +6074,13 @@ div > .sticky-navbar {
   background: rgba(128, 128, 128, 0.15);
 }
 
+// the name Tab would take in an "@" list (moved with Up / Down, see mention-keys.ts)
+.pm-mention-results .pm-mention-result.active,
+.orders-mention-results .orders-resource-result.active {
+  background: var(--primary);
+  color: var(--primary-fg);
+}
+
 .pm-avatar-group {
   align-items: center;
   display: flex;
