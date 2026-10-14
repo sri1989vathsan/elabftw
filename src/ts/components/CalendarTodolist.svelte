@@ -63,6 +63,17 @@
     deadline_notif: number;
   };
 
+  type FinishedStep = {
+    entity_type: 'experiments' | 'items';
+    entity_page: string;
+    entity_id: number;
+    entity_title: string;
+    entity_userid: number;
+    step_id: number;
+    step_body: string;
+    finished_time: string;
+  };
+
   type CalendarEntry = {
     key: string;
     source: 'todo' | 'step';
@@ -152,6 +163,8 @@
   let calendarTasks: Todo[] = [];
   let activeTasks: ReminderTask[] = [];
   let stepDeadlines: StepDeadline[] = [];
+  // steps already finished, listed on the day they were completed
+  let finishedSteps: FinishedStep[] = [];
   // due-only, unbounded -- separate from stepDeadlines above, which is
   // capped at 100 rows and feeds the full calendar grid's day markers, not
   // the reminder check (see loadReminderData()'s own comment)
@@ -225,6 +238,22 @@
       completedAt: null,
       userid: Number(step.entity_userid),
       ownerFullname: step.owner_fullname,
+      entityId: Number(step.entity_id),
+      entityPage: step.entity_page,
+      entityTitle: step.entity_title,
+      entityType: step.entity_type,
+    })),
+    ...finishedSteps.map(step => ({
+      key: `step-done-${step.entity_type}-${step.step_id}`,
+      source: 'step' as const,
+      id: Number(step.step_id),
+      body: step.step_body,
+      notes: null,
+      deadline: step.finished_time,
+      reminderMinutes: null,
+      completedAt: step.finished_time,
+      userid: Number(step.entity_userid),
+      ownerFullname: '',
       entityId: Number(step.entity_id),
       entityPage: step.entity_page,
       entityTitle: step.entity_title,
@@ -491,6 +520,16 @@
       deadline_to: end.toISOString(),
     });
     return `${Model.Todolist}?${params.toString()}`;
+  }
+
+  // steps finished since the first day shown (the server returns the latest 200)
+  function finishedStepsQuery(): string {
+    const params = new URLSearchParams({
+      completed: '1',
+      completed_since: calendarStart(monthCursor).toISOString(),
+      scope: teamScope ? 'team' : 'user',
+    });
+    return `unfinished_steps?${params.toString()}`;
   }
 
   function calendarActivityQuery(): string {
@@ -915,15 +954,17 @@
   }
 
   async function loadCalendarExtras(expectedSequence: number): Promise<void> {
-    const [calendarResponse, activityResponse] = await Promise.all([
+    const [calendarResponse, activityResponse, finishedResponse] = await Promise.all([
       ApiC.getJson(calendarTaskQuery()) as Promise<Todo[]>,
       ApiC.getJson(calendarActivityQuery()) as Promise<ActivityResponse>,
+      ApiC.getJson(finishedStepsQuery()) as Promise<{ completed_steps?: FinishedStep[] }>,
     ]);
     // A newer request (e.g. the user navigated to a different month before
     // this one resolved) already won -- don't let this now-stale response
     // overwrite it.
     if (expectedSequence !== loadSequence) return;
     calendarTasks = calendarResponse;
+    finishedSteps = finishedResponse.completed_steps ?? [];
     entityActivities = [
       ...(activityResponse.experiments ?? []),
       ...(activityResponse.items ?? []),
