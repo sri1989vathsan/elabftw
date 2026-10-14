@@ -66,13 +66,14 @@ final class StepMentions
                     $params['deadline'] = $deadline;
                 }
                 new Todolist($target, $existing[$userid])->syncFromLinkedStep($params);
+                $this->linkTaskToEntry($target, $existing[$userid]);
                 continue;
             }
             // Whoever can edit the entry chose to assign this step, so the
             // person gets it even if they cannot open the entry (it is shared
-            // with owner and admins only, say): their task then carries just
-            // the step's own text, with no link, and the notification does
-            // not name the entry.
+            // with owner and admins only, say). The task always links to the
+            // entry; only the notification leaves its name out for someone
+            // who cannot open it.
             $readable = $this->canRead($target);
             $params = array('content' => $title);
             if (!empty($deadline)) {
@@ -80,10 +81,7 @@ final class StepMentions
             }
             $taskId = new Todolist($target)->postAction(Action::Create, $params);
             $this->saveLink($stepId, $userid, $taskId);
-            if ($readable) {
-                new TodolistEntityLinks($target, new Todolist($target, $taskId))
-                    ->postAction(Action::Create, array('entity_type' => $this->entityType(), 'entity_id' => $this->Entity->id));
-            }
+            $this->linkTaskToEntry($target, $taskId);
             new StepAssigned(
                 $target,
                 $this->Entity->Users,
@@ -92,6 +90,13 @@ final class StepMentions
                 $readable ? (string) ($this->Entity->entityData['title'] ?? '') : '',
             )->create();
         }
+    }
+
+    /** Puts the link to the experiment, template or resource on the assignee's task (once). */
+    private function linkTaskToEntry(Users $target, int $taskId): void
+    {
+        new TodolistEntityLinks($target, new Todolist($target, $taskId))
+            ->postAction(Action::Create, array('entity_type' => $this->entityType(), 'entity_id' => $this->Entity->id));
     }
 
     /** Marks the mentioned people's tasks done or open, following the step. */
