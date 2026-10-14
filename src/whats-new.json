@@ -424,7 +424,7 @@
       "A card has a title, notes, a deadline, steps, comments and people assigned to it. Status badges and deadline colours show at a glance what needs attention.",
       "Steps and comments can be collapsed to keep a long card short.",
       "Select several cards to archive or delete them together. Duplicate a card into another project, or open a card straight into edit mode.",
-      "A project can hold subprojects, for example one for each idea you want to test within it. When a project is finished, archive it from its edit dialog: it leaves the project list but is not deleted, and the archive button next to the project tabs shows archived projects again. To keep a card at the top of its column, open its ⋮ menu and choose Pin to top.",
+      "A project can hold subprojects, for example one for each idea you want to test within it. Drag a project tab onto another to put the projects in the order you want. When a project is finished, archive it from its edit dialog: it leaves the project list but is not deleted, and the archive button next to the project tabs shows archived projects again. To keep a card at the top of its column, open its ⋮ menu and choose Pin to top.",
       "To tie a card to the work it is about, open the search panel next to the card while you create it, or later from its detail view.",
       "Find an experiment or resource, then press Link, or add it as a step in one move. Each linked item shows its type icon and a coloured dot for its status, on the card as well as in the project, so you can see how the work is going.",
       "A project's edit dialog has a Linked items section that lists everything connected to that project. Click a linked item to open the experiment or resource itself.",
