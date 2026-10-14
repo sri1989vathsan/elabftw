@@ -1434,6 +1434,43 @@ $('#permModal-share').on('show.bs.modal', async () => {
   if (baseSelect) baseSelect.value = current.canread_base || current.canwrite_base || '';
 });
 
+// Fill the Visibility / Can write window with what the entry has right now,
+// every time it opens: the windows are drawn once with the page, so after a
+// change made from the other window (or Apply to Read & Write, or Share) they
+// would otherwise still show the old people.
+type TomSelectLike = HTMLSelectElement & {
+  tomselect?: { addOption: (o: { value: string; text: string }) => void; setValue: (v: string[]) => void };
+};
+
+async function fillPermissionWindow(rw: 'canread' | 'canwrite'): Promise<void> {
+  if (!entity?.id || !entity?.type) return;
+  const current = await ApiC.getJson(`${entity.type}/${entity.id}`);
+  let parsed: { teams?: number[]; teamgroups?: number[]; users?: number[] } = {};
+  try {
+    parsed = JSON.parse(current[rw] || '{}');
+  } catch {
+    parsed = {};
+  }
+  const teams = document.getElementById(`${rw}_select_teams`) as TomSelectLike | null;
+  teams?.tomselect?.setValue((parsed.teams ?? []).map(id => `team:${id}`));
+  const groups = document.getElementById(`${rw}_select_teamgroups`) as TomSelectLike | null;
+  groups?.tomselect?.setValue((parsed.teamgroups ?? []).map(id => `teamgroup:${id}`));
+  const users = document.getElementById(`${rw}_select_users`) as TomSelectLike | null;
+  if (users?.tomselect) {
+    const ids = parsed.users ?? [];
+    const found = await Promise.all(ids.map(id => ApiC.getJson(`users/${id}`).catch(() => null)));
+    found.forEach(u => {
+      if (u) users.tomselect.addOption({value: `user:${u.userid}`, text: `${u.fullname} (${u.email})`});
+    });
+    users.tomselect.setValue(ids.map(id => `user:${id}`));
+  }
+  const base = document.getElementById(`${rw}_select_base`) as HTMLSelectElement | null;
+  if (base) base.value = String(current[`${rw}_base`]);
+}
+
+$('#permModal-canread').on('show.bs.modal', () => { fillPermissionWindow('canread'); });
+$('#permModal-canwrite').on('show.bs.modal', () => { fillPermissionWindow('canwrite'); });
+
 // the "Share" modal: grant read-only or read & write access to whoever is
 // selected, on top of (never instead of) the existing lists -- unlike
 // save-permissions/save-permissions-both, which replace a list wholesale.

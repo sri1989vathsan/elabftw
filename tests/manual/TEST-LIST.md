@@ -124,3 +124,4 @@ Run on the dev instance with the accounts in `TEST-ACCOUNTS.md`.
 | N16 | Visibility window: Save changes Visibility only, Can write is not touched | pass |
 | N17 | Can write window: Save also adds the chosen people to Visibility, and raises the visibility level if the write level is wider | pass |
 | N18 | Apply to Read & Write works with a real click (no browser confirm box any more): both get the same people and level | pass |
+| N19 | After a change from one window (Apply to Read & Write, or Can write Save), the other window opens showing the same people and level | pass |
