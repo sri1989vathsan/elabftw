@@ -1439,11 +1439,20 @@ $('#permModal-share').on('show.bs.modal', async () => {
 // change made from the other window (or Apply to Read & Write, or Share) they
 // would otherwise still show the old people.
 type TomSelectLike = HTMLSelectElement & {
-  tomselect?: { addOption: (o: { value: string; text: string }) => void; setValue: (v: string[]) => void };
+  tomselect?: {
+    addOption: (o: { value: string; text: string }) => void;
+    clear: (silent?: boolean) => void;
+    setValue: (v: string[], silent?: boolean) => void;
+  };
 };
+
+// only the latest opening of a window may fill it (a slower earlier one must not overwrite it)
+const permissionFillTokens: Record<string, number> = {};
 
 async function fillPermissionWindow(rw: 'canread' | 'canwrite'): Promise<void> {
   if (!entity?.id || !entity?.type) return;
+  const token = (permissionFillTokens[rw] ?? 0) + 1;
+  permissionFillTokens[rw] = token;
   const current = await ApiC.getJson(`${entity.type}/${entity.id}`);
   let parsed: { teams?: number[]; teamgroups?: number[]; users?: number[] } = {};
   try {
@@ -1451,19 +1460,24 @@ async function fillPermissionWindow(rw: 'canread' | 'canwrite'): Promise<void> {
   } catch {
     parsed = {};
   }
-  const teams = document.getElementById(`${rw}_select_teams`) as TomSelectLike | null;
-  teams?.tomselect?.setValue((parsed.teams ?? []).map(id => `team:${id}`));
-  const groups = document.getElementById(`${rw}_select_teamgroups`) as TomSelectLike | null;
-  groups?.tomselect?.setValue((parsed.teamgroups ?? []).map(id => `teamgroup:${id}`));
-  const users = document.getElementById(`${rw}_select_users`) as TomSelectLike | null;
-  if (users?.tomselect) {
-    const ids = parsed.users ?? [];
-    const found = await Promise.all(ids.map(id => ApiC.getJson(`users/${id}`).catch(() => null)));
-    found.forEach(u => {
-      if (u) users.tomselect.addOption({value: `user:${u.userid}`, text: `${u.fullname} (${u.email})`});
-    });
-    users.tomselect.setValue(ids.map(id => `user:${id}`));
-  }
+  const ids = parsed.users ?? [];
+  const found = await Promise.all(ids.map(id => ApiC.getJson(`users/${id}`).catch(() => null)));
+  if (permissionFillTokens[rw] !== token) return;
+  const fill = (id: string, values: string[], options: { value: string; text: string }[] = []): void => {
+    const select = document.getElementById(id) as TomSelectLike | null;
+    if (!select?.tomselect) return;
+    select.tomselect.clear(true);
+    options.forEach(option => select.tomselect.addOption(option));
+    select.tomselect.setValue(values, true);
+  };
+  fill(`${rw}_select_teams`, (parsed.teams ?? []).map(id => `team:${id}`));
+  fill(`${rw}_select_teamgroups`, (parsed.teamgroups ?? []).map(id => `teamgroup:${id}`));
+  const people = found.filter(u => u !== null);
+  fill(
+    `${rw}_select_users`,
+    people.map(u => `user:${u.userid}`),
+    people.map(u => ({value: `user:${u.userid}`, text: `${u.fullname} (${u.email})`})),
+  );
   const base = document.getElementById(`${rw}_select_base`) as HTMLSelectElement | null;
   if (base) base.value = String(current[`${rw}_base`]);
 }
