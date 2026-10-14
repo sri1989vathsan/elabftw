@@ -320,6 +320,7 @@
     "details": [
       "Open the Folders tab in the left sidebar. The tree shows every folder; the number next to a folder counts the items inside it.",
       "Press Create folder at the bottom, give it a name (and an optional short description) and choose a parent folder to nest it.",
+      "A good way to use them: one folder for each project, and a subfolder inside it for each idea within that project that you want to test and verify. Each approach then has its own place, and you can compare them side by side.",
       "Click a folder to list only what is inside it. Choose the folder when you create an experiment or resource, or change it on its edit page.",
       "Press the three dots on a folder for Export, Edit (rename, move to another parent, change the description) and Delete. Deleting a folder moves its items to Unfiled.",
       "Press the page icon on a folder to open its README: a page of notes for everyone working in that folder. The folder's owner and admins edit it; everyone who can see the folder can read it.",
@@ -337,9 +338,9 @@
     "icon": "fa-folder-tree",
     "purpose": "Keep the lab organised in folders the whole team sees, and decide once who can see and edit everything in a folder.",
     "uses": [
-      "One folder per project or per person, with a README that lists the project protocols and naming rules.",
+      "One folder per project, with a README that lists the project protocols and naming rules.",
+      "Inside a project, one subfolder per idea you want to test and verify, so each approach keeps its own experiments and you can compare the results.",
       "Export a whole folder (PDF or ZIP) when a paper is submitted or a person leaves.",
-      "Use subfolders for experiment series, such as one per cell line or per plasmid batch.",
       "Give a project folder read access to the whole team but edit access only to the project members, in one step.",
       "Keep a private folder for drafts that only you and a few colleagues can open."
     ],
