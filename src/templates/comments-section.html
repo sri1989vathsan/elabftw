@@ -1,0 +1,31 @@
+  <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' aria-controls='commentsDiv'><i class='fas fa-caret-right fa-fw mr-2'></i>{{ 'Comments'|trans }} (<span id='commentsCount'>{{ Entity.entityData.comments|length }}</span>)</h3>
+  <div class='mt-2' id='commentsDiv' hidden data-count-for='commentsCount' data-save-hidden='commentsDiv'>
+      {% for comment in Entity.entityData.comments %}
+        <div class='box countable'>
+          <div class='comment-header text-muted p-2 d-flex flex align-items-center'>
+            <div>
+            {{ comment.fullname }} {{ 'commented'|trans }}
+            <span title='{{ comment.created_at }}' class='relative-moment'></span>
+            {% if comment.created_at != comment.modified_at %}
+              ({{ 'edited'|trans }} <span title='{{ comment.modified_at }}' class='relative-moment'></span>)
+            {% endif %}
+            </div>
+            {% if comment.userid == Entity.Users.userData.userid and comment.immutable == 0 %}
+              <button type='button' class='btn btn-danger-ghost ml-auto' data-action='destroy-comment' data-id='{{ comment.id }}' title='{{ 'Delete'|trans }}' aria-label='{{ 'Delete'|trans }}'>
+                <i class='fas fa-fw fa-trash-alt'></i>
+              </button>
+            {% endif %}
+          </div>
+          {# the comment itself is only editable by the owner #}
+          <p class='comment m-2 p-2 {{ comment.userid == Entity.Users.userData.userid and comment.immutable == 0 ? "editable hl-hover" }}' data-id='{{ comment.id }}'>{{ comment.comment|nl2br }}</p>
+        </div>
+      {% endfor %}
+
+      {# CREATE COMMENT INPUT #}
+      <div class='input-group my-1 rounded'>
+        <textarea id='commentsCreateArea' class='form-control p-2 brr-none' autocomplete='off' placeholder='{{ 'Add a comment'|trans }}' aria-label='Comment area'></textarea>
+        <div class='input-group-append'>
+          <button class='btn btn-primary' aria-label='{{ 'Add a comment'|trans }}' type='button' data-action='create-comment'><i class='fas fa-paper-plane'></i></button>
+        </div>
+      </div>
+    </div>

@@ -20,6 +20,7 @@ import { Uploader } from './uploader';
 import { entity } from './getEntity';
 import { on } from './handlers';
 import { platformSmbHref } from './file-folder-references';
+import './comments';
 import { spreadsheetToHTML, SpreadsheetData } from './inline-spreadsheet';
 import {
   clearRecoveryDraft,

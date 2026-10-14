@@ -206,6 +206,10 @@
 </div>
 <hr>
 
+{# COMMENTS #}
+{% include 'comments-section.html' %}
+<hr>
+
 {# DOODLE #}
 {# id for the i is needed by the annotate-image action #}
 <h3 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' aria-controls='doodleDiv'><i id='doodleDivIcon' class='fas fa-caret-right fa-fw mr-2'></i>{{ 'Draw something'|trans }}</h3>
