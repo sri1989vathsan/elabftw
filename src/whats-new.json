@@ -55,7 +55,6 @@
       "The preview matches the editor's look, column widths and row heights, so nothing jumps when you click.",
       "The cell you clicked is selected straight away, and the table you are editing stays live while you scroll."
     ],
-    "image": "spreadsheet-previews.jpg",
     "imageAlt": "A spreadsheet shown as a light preview with its toolbar; clicking it opens the full editor",
     "highlight": {
       "x": 1.1,
@@ -63,7 +62,8 @@
       "w": 97.7,
       "h": 85.4,
       "label": "Click a table to edit it"
-    }
+    },
+    "image": "spreadsheet-previews.jpg"
   },
   {
     "id": "list-indent",
@@ -330,8 +330,7 @@
       "The permissions of every item you can edit are replaced (items that are not yours, locked or archived are skipped and counted). The folder remembers the choice, so items created in it, moved into it or filed in a new subfolder take the same permissions.",
       "You can still change one experiment on its own afterwards. It stays as you set it until the next Apply on that folder."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "The Folders panel with a project folder, its subfolders, and the star, README and menu icons beside each folder",
     "featured": false,
     "guide": true,
     "order": 10,
@@ -345,7 +344,21 @@
       "Keep a private folder for drafts that only you and a few colleagues can open."
     ],
     "news": "Folders now hold resources as well as experiments, can be bookmarked, have READMEs, can be exported, and can remember permissions that apply to everything inside.",
-    "shot": "The Folders tab with a project folder open and its README beside it, and the Folder permissions dialog with the Can see tab open"
+    "shot": "The Folders tab with a project folder open and its README beside it, and the Folder permissions dialog with the Can see tab open",
+    "highlight": {
+      "x": 71.3,
+      "y": 73.2,
+      "w": 21.5,
+      "h": 5.2,
+      "label": "Star, README and menu"
+    },
+    "image": "guide-folders-62ac3ca6.png",
+    "screenshots": [
+      {
+        "image": "guide-folders-6ccb267c.png",
+        "caption": "The folder README: the owner and admins edit it, and everyone who can see the folder can read it"
+      }
+    ]
   },
   {
     "id": "guide-sidebar",
@@ -366,8 +379,7 @@
       "fa-bars-staggered::Table of contents (the lines icon): only on an experiment or resource page, it lists the headings so you can jump to one or show only the sections you pick.",
       "fa-circle-info::The “i” at the bottom of the row opens this guide card."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "The left sidebar buttons: folders, quick search, quick actions, to-do, activity calendar and guide",
     "featured": false,
     "guide": true,
     "order": 30,
@@ -383,7 +395,9 @@
       "Open the To-do list or the calendar from the keyboard."
     ],
     "news": "One row of buttons with all of these tools on every page, and a keyboard-first quick search and command window.",
-    "shot": "The left sidebar with the Folders panel open and the row of buttons outlined, and the quick search window open over a page"
+    "shot": "The left sidebar with the Folders panel open and the row of buttons outlined, and the quick search window open over a page",
+    "image": "guide-sidebar-79701a77.png",
+    "screenshots": []
   },
   {
     "id": "guide-calendar",
@@ -403,8 +417,7 @@
       "Add a task with a title, notes, an exact date and time and a reminder (at the deadline, or 15 minutes, 1 hour, 1 day or 1 week before).",
       "Subscribe from Google Calendar or Apple Calendar with the private, read-only link on the Calendar tab. It carries your tasks, your step deadlines and the reminders you set on orders. You can regenerate or revoke it any time."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "The Activity calendar panel with a month grid, coloured dots for tasks, experiments and overdue items, and the User and Team switch",
     "featured": false,
     "guide": true,
     "order": 40,
@@ -418,7 +431,16 @@
       "Switch to Team to see what the whole lab is working on this week."
     ],
     "news": "New: an activity calendar that combines tasks and experiment steps, with reminders and calendar subscriptions.",
-    "shot": "The Activity calendar panel with the month grid, the Day/Week/Month buttons and the agenda below"
+    "shot": "The Activity calendar panel with the month grid, the Day/Week/Month buttons and the agenda below",
+    "highlight": {
+      "x": 23.6,
+      "y": 25.8,
+      "w": 46.3,
+      "h": 3.2,
+      "label": "Day, Week or Month"
+    },
+    "image": "guide-calendar-14617795.png",
+    "screenshots": []
   },
   {
     "id": "guide-boards",
@@ -438,8 +460,7 @@
       "fa-link::All links: the All links button next to Add subproject opens one list of every experiment, resource, template and web address linked to any card in the project, including its subprojects. When a subproject is selected it lists only that subproject, as Links in.",
       "Each row in All links shows the item's type icon and, for experiments and resources, a coloured dot for its status. Click the title to open the item in a new tab. The badge shows which project or subproject it belongs to, and the button on the right shows the card it is linked to: click it to open that card. Press Load more links if the list is long."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "A project board with project tabs, the goals, Add subproject and All links buttons, and cards in the To do column",
     "featured": false,
     "guide": true,
     "order": 50,
@@ -452,7 +473,16 @@
       "Press All links on a paper's project to see in one list every experiment and protocol behind it, and open any of them in a click."
     ],
     "news": "Boards replace the old project list, with richer cards, bulk actions, subprojects, and cards that link to experiments and resources with their status colours.",
-    "shot": "The Boards page with a project open and one card showing its steps and linked experiments, and the search panel used to link them"
+    "shot": "The Boards page with a project open and one card showing its steps and linked experiments, and the search panel used to link them",
+    "highlight": {
+      "x": 1,
+      "y": 48.4,
+      "w": 14.3,
+      "h": 5.1,
+      "label": "Add a card"
+    },
+    "image": "guide-boards-89b465b4.png",
+    "screenshots": []
   },
   {
     "id": "guide-orders",
@@ -476,8 +506,7 @@
       "You can set a reminder on an order.",
       "fa-envelope-open-text::Templates: the Templates tab on the Orders page holds texts that go with ordering, such as an email to a supplier or a quote request. Everyone in the team can search them and copy the text; the author or a team admin edits them."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "Orders in three statuses (Requested, Ordered, Received) with their colored status dropdowns and the copy, edit and archive buttons",
     "featured": false,
     "guide": true,
     "order": 70,
@@ -491,7 +520,16 @@
       "Copy last month's order for the same supplier, adjust the quantity, and attach the previous quote with the arrow button instead of searching for the file."
     ],
     "news": "New: reusable attachments, reminders, notes with lists, the Pinned for all and Reference kinds, and shared text templates for supplier emails.",
-    "shot": "The Orders page with a few orders at different stages and one order open"
+    "shot": "The Orders page with a few orders at different stages and one order open",
+    "highlight": {
+      "x": 4.9,
+      "y": 20.5,
+      "w": 15,
+      "h": 6.6,
+      "label": "Status"
+    },
+    "image": "guide-orders-49cd1ce3.png",
+    "screenshots": []
   },
   {
     "id": "guide-experiment-sections",
@@ -500,10 +538,16 @@
     "title": "Link items to experiments",
     "summary": "Connect an experiment to the resources, data folders and templates it uses.",
     "details": [
+      "Scroll below the main text. Each section opens and closes on its own.",
+      "fa-list-check::Steps and tasks: a checklist for the experiment, with deadlines that also show in your calendar.",
+      "Data: link the network folder where the experiment’s raw data lives. Paste the path (smb://server/share/folder or \\\\server\\share\\folder), add an optional label such as “Raw data folder” and press Add.",
+      "Each data link has buttons to open it on a Mac, to copy the Windows path to paste into Explorer, and to insert a reference to it in the main text. Remove a link with the trash icon while editing.",
+      "fa-link::Links: other experiments, associated templates, resources, orders, web addresses and LabCollector entries this one relates to.",
+      "fa-paperclip::Files / folders and Local files: attach files, or paste references to files kept elsewhere.",
+      "Compounds and Custom fields: record chemicals from the compound database, and any extra fields your team defined.",
       "On an experiment, the LabCollector links section lists the LabCollector entries it relates to."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "An experiment page with the Steps and tasks section and the Links section showing a linked experiment and a linked resource",
     "featured": false,
     "guide": true,
     "order": 80,
@@ -515,7 +559,16 @@
       "Link the folder with the microscope images or the sequencing run, and insert the reference where you describe the measurement."
     ],
     "news": "New: the Data section for network folders, and order, template and LabCollector links in these sections.",
-    "shot": "An experiment page scrolled to the sections under the main text with the Data section open"
+    "shot": "An experiment page scrolled to the sections under the main text with the Data section open",
+    "highlight": {
+      "x": 1,
+      "y": 36.6,
+      "w": 13,
+      "h": 5.1,
+      "label": "Links section"
+    },
+    "image": "guide-experiment-sections-2bef0027.png",
+    "screenshots": []
   },
   {
     "id": "guide-templates",
@@ -535,8 +588,7 @@
       "fa-code-compare::Compare: tick two entries, in the versions or inside an Edit history, and press Compare revisions to see what changed between them.",
       "fa-star::Star the templates you use most to find them quickly."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "The version history of a template: a named version with notes and its Edit history, each with a Restore button",
     "featured": false,
     "guide": true,
     "order": 110,
@@ -547,7 +599,16 @@
       "Months later, see which experiments used the old version."
     ],
     "news": "New: template versions with names and notes, version history, restoring a version or a single edit, and template links on experiments.",
-    "shot": "The template version history with the list of versions and the Restore buttons"
+    "shot": "The template version history with the list of versions and the Restore buttons",
+    "highlight": {
+      "x": 4.5,
+      "y": 50,
+      "w": 92,
+      "h": 38,
+      "label": "Restore a single edit"
+    },
+    "image": "guide-templates-3aa028c1.png",
+    "screenshots": []
   },
   {
     "id": "guide-feedback",
@@ -564,8 +625,7 @@
       "fa-pen::The author of an item, or a team admin, can edit it, change its status (open, planned, done or declined) and delete it.",
       "fa-bell::You are notified when someone mentions you in feedback."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "The Feedback board with the form to post a feature or bug, the filter tabs and one post with its vote button and comments",
     "featured": false,
     "guide": true,
     "order": 120,
@@ -576,7 +636,16 @@
       "Report something that does not work, and follow it as it goes from open to planned to done."
     ],
     "news": "New: a feedback board with votes, statuses and comments.",
-    "shot": "The Feedback board sorted by votes, with one item open and its comments"
+    "shot": "The Feedback board sorted by votes, with one item open and its comments",
+    "highlight": {
+      "x": 3,
+      "y": 79,
+      "w": 7,
+      "h": 10.5,
+      "label": "Vote"
+    },
+    "image": "guide-feedback-c4b35c02.png",
+    "screenshots": []
   },
   {
     "id": "guide-search-filters",
@@ -594,8 +663,7 @@
       "For templates, the link button records the template an experiment came from, and the second button inserts the template's content at the cursor instead of a link.",
       "With a board card open, results also get a button to link them to that card, and one to add them as a step on it."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "The Search panel open beside an experiment being edited, listing results with a link button and a paste-a-link button on each",
     "featured": false,
     "guide": true,
     "order": 130,
@@ -608,7 +676,16 @@
       "Search a template while editing and insert its content straight into the experiment."
     ],
     "news": "New: filters you can favourite, shared by search across experiments, resources and templates, plus attach and paste-a-link buttons on every result.",
-    "shot": "The Search panel next to an experiment being edited, with the attach and paste-a-link buttons on a result outlined"
+    "shot": "The Search panel next to an experiment being edited, with the attach and paste-a-link buttons on a result outlined",
+    "highlight": {
+      "x": 20.5,
+      "y": 46,
+      "w": 7,
+      "h": 5.5,
+      "label": "Link or paste"
+    },
+    "image": "guide-search-filters-8ac714ba.png",
+    "screenshots": []
   },
   {
     "id": "guide-toc",
@@ -623,8 +700,7 @@
       "To read only some parts, open Select headings to filter or print and tick the headings you want. The experiment then shows just those sections and hides the rest, until you clear the selection.",
       "fa-print::Press Print selection or Copy filtered content to get only those parts. Switch spreadsheets and pictures on or off."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "An experiment with the Table of Contents panel open and three headings ticked, showing only those parts of the text",
     "featured": false,
     "guide": true,
     "order": 150,
@@ -636,7 +712,16 @@
       "Tick only the Results headings to read them without scrolling past the methods."
     ],
     "news": "New: a contents tab with section filters, print and copy.",
-    "shot": "An experiment with the Table of Contents panel open and a few headings selected"
+    "shot": "An experiment with the Table of Contents panel open and a few headings selected",
+    "highlight": {
+      "x": 5,
+      "y": 30,
+      "w": 24,
+      "h": 49,
+      "label": "Tick headings to filter, print or copy"
+    },
+    "image": "guide-toc-a91695b1.png",
+    "screenshots": []
   },
   {
     "id": "guide-todo-notifications",
@@ -653,8 +738,7 @@
       "fa-toggle-on::The All notifications row at the top switches every kind on or off at once for Web, or for Email.",
       "fa-envelope::Step deadlines can also arrive by email, following your existing preference."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "The notifications dropdown from the bell, with Clear all, Notification history and Notification settings",
     "featured": false,
     "guide": true,
     "order": 160,
@@ -666,7 +750,16 @@
       "Keep Web on for everything, and Email on only for the few that need your attention even when you are not in eLabFTW, such as a deadline or an order status change."
     ],
     "news": "New: notifications for assignments, mentions and access.",
-    "shot": "The notifications dropdown open from the bell in the top bar"
+    "shot": "The notifications dropdown open from the bell in the top bar",
+    "highlight": {
+      "x": 8,
+      "y": 91,
+      "w": 60,
+      "h": 6,
+      "label": "Choose Web or Email"
+    },
+    "image": "guide-todo-notifications-d013d95e.png",
+    "screenshots": []
   },
   {
     "id": "guide-editor-toolbar",
@@ -697,8 +790,7 @@
       "fa-thumbtack::On a long experiment the toolbar stays at the top as you scroll and slides smoothly with the top bar.",
       "fa-circle-info::The “i” at the very end of the toolbar opens this guide card."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "The editor toolbar with the Insert menu open, listing Text, Tables, Links and Laboratory",
     "featured": false,
     "guide": true,
     "order": 85,
@@ -716,7 +808,16 @@
       "Mark the templates you use all the time with a star, then use the Favourites tab."
     ],
     "news": "New: one Insert menu, checklists, a format painter, date, title and note tools with saved defaults, spreadsheets and well plates, and a template picker.",
-    "shot": "The editor toolbar of an experiment with the Insert menu open"
+    "shot": "The editor toolbar of an experiment with the Insert menu open",
+    "highlight": {
+      "x": 1.6,
+      "y": 48.7,
+      "w": 15.6,
+      "h": 50.5,
+      "label": "Insert menu"
+    },
+    "image": "guide-editor-toolbar-5f90cbad.png",
+    "screenshots": []
   },
   {
     "id": "guide-collaboration",
@@ -734,8 +835,7 @@
       "The same comments with @mentions work on tasks in the To-do list and on posts in the Feedback board. You can edit or delete your own comments.",
       "Cards show a comment count, so you can see which ones have a discussion going without opening them."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "A board card with two assigned people and a comment that mentions a colleague with @",
     "featured": false,
     "guide": true,
     "order": 55,
@@ -747,7 +847,16 @@
       "Create a subproject for one paper figure and let it start with the same people as the main project."
     ],
     "news": "New: project members, several people per card, comments with @mentions, and notifications when you are assigned or mentioned.",
-    "shot": "A card open with the Assigned to field and the Comments section showing an @mention"
+    "shot": "A card open with the Assigned to field and the Comments section showing an @mention",
+    "highlight": {
+      "x": 4.1,
+      "y": 80.1,
+      "w": 62.1,
+      "h": 4.1,
+      "label": "@ mention a colleague"
+    },
+    "image": "guide-collaboration-8ee40614.png",
+    "screenshots": []
   },
   {
     "id": "guide-todo",
@@ -773,8 +882,7 @@
       "Subscribe from your own calendar: on the Calendar tab press Create private link, then add it to Google Calendar or Apple Calendar. The link is read-only and shows your task titles and deadlines, so keep it private. You can regenerate or revoke it at any time. Google Calendar needs the link to be reachable from the internet.",
       "Board cards assigned to you appear in this list as well. The Project boards button above the list opens the boards. When someone assigns you a task, you get a notification from the bell."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "The To-do panel with the add-task box and tasks grouped by Today, Tomorrow and a later day",
     "featured": false,
     "guide": true,
     "order": 35,
@@ -789,7 +897,16 @@
       "Put the private calendar link in your phone's calendar so your deadlines appear next to the rest of your day."
     ],
     "news": "New: one list for tasks and step deadlines with reminders, steps and comments on tasks, linked items, a completed and archived history, a calendar view, and a calendar subscription.",
-    "shot": "The To-do panel open next to a page, with the add-task box and the groups Overdue, Today and Tomorrow"
+    "shot": "The To-do panel open next to a page, with the add-task box and the groups Overdue, Today and Tomorrow",
+    "highlight": {
+      "x": 16.4,
+      "y": 22,
+      "w": 75.2,
+      "h": 8.9,
+      "label": "Add a task"
+    },
+    "image": "guide-todo-58a3f88e.png",
+    "screenshots": []
   },
   {
     "id": "guide-announcements",
@@ -807,8 +924,7 @@
       "fa-clock-rotate-left::See previous announcements, under the feed, lists the older ones.",
       "fa-plus::Team admins write announcements with the plus button above the feed. In the feed they can also edit an announcement (the pen) and pin or unpin it (the pin)."
     ],
-    "image": "",
-    "imageAlt": "",
+    "imageAlt": "The Announcements feed on the dashboard with pinned announcements, their reactions and the plus button to write one",
     "featured": false,
     "guide": true,
     "order": 121,
@@ -820,18 +936,21 @@
       "React with a thumbs-up to confirm you have read a change."
     ],
     "news": "New: an announcement feed on the dashboard with reactions, pinning, pictures and files.",
-    "shot": "The dashboard with the Announcements feed on the right, showing a pinned announcement and its reactions"
+    "shot": "The dashboard with the Announcements feed on the right, showing a pinned announcement and its reactions",
+    "highlight": {
+      "x": 8,
+      "y": 42,
+      "w": 68,
+      "h": 5,
+      "label": "Reactions"
+    },
+    "image": "guide-announcements-1eeccb7b.png",
+    "screenshots": []
   },
   {
-    "date": "2026-10-14",
-    "image": "",
-    "imageAlt": "",
-    "featured": false,
-    "guide": true,
     "id": "guide-experiments",
+    "date": "2026-10-14",
     "area": "Experiments",
-    "order": 90,
-    "icon": "fa-flask",
     "title": "Experiments",
     "summary": "Where your experiments live: create them, find them, and see everything you can do with one.",
     "details": [
@@ -849,6 +968,11 @@
       "fa-people-arrows::Transfer ownership gives an experiment to a colleague. Create template from entry turns a finished experiment into a template.",
       "fa-box-archive::Archive puts a finished experiment away without deleting it; Unarchive brings it back."
     ],
+    "imageAlt": "The Experiments list with two experiments ticked and the bulk-action bar open above them",
+    "featured": false,
+    "guide": true,
+    "order": 90,
+    "icon": "fa-flask",
     "purpose": "Keep every experiment in one searchable place, from the first idea to the finished record.",
     "uses": [
       "Start a new experiment from a similar one with Duplicate.",
@@ -857,18 +981,21 @@
       "Lock an experiment once the results are final."
     ],
     "news": "Experiments can be organised in folders, linked to orders and resources, and read in a table of contents.",
-    "shot": "The Experiments list with the search bar, a few experiments ticked, and the bulk-action bar open"
+    "shot": "The Experiments list with the search bar, a few experiments ticked, and the bulk-action bar open",
+    "highlight": {
+      "x": 1.1,
+      "y": 30.5,
+      "w": 71,
+      "h": 30.5,
+      "label": "Act on ticked experiments"
+    },
+    "image": "guide-experiments-b4e3dbba.png",
+    "screenshots": []
   },
   {
-    "date": "2026-10-14",
-    "image": "",
-    "imageAlt": "",
-    "featured": false,
-    "guide": true,
     "id": "guide-resources",
+    "date": "2026-10-14",
     "area": "Resources",
-    "order": 95,
-    "icon": "fa-cubes-stacked",
     "title": "Resources",
     "summary": "Where your team keeps records that are not experiments, such as meetings, and how to find and use them.",
     "details": [
@@ -884,6 +1011,11 @@
       "fa-link::In an experiment's Links section, link the resources it relates to, so anyone can follow the trail.",
       "fa-ellipsis-vertical::The three dots hold the less common actions: See changelog, Transfer ownership, Create template from entry, Archive, Delete and, for a deleted resource, Restore."
     ],
+    "imageAlt": "A resource opened for reading, with its toolbar: edit, duplicate, book, sign, timestamp, order and download",
+    "featured": false,
+    "guide": true,
+    "order": 95,
+    "icon": "fa-cubes-stacked",
     "purpose": "Keep the shared records of the lab, such as meetings, in one place that anyone can search and link to.",
     "uses": [
       "Keep one resource per group meeting, with the agenda and the decisions, and link it from the experiments that came out of it.",
@@ -891,6 +1023,15 @@
       "Search the Resources type in the Search panel to find an earlier meeting by a word from its title."
     ],
     "news": "Resources can be organised in folders, linked to experiments and orders, and found from the left sidebar.",
-    "shot": "The Resources list with a few resources, and one open with its toolbar"
+    "shot": "The Resources list with a few resources, and one open with its toolbar",
+    "highlight": {
+      "x": 1.1,
+      "y": 31,
+      "w": 54,
+      "h": 15.5,
+      "label": "Resource actions"
+    },
+    "image": "guide-resources-bc394e18.png",
+    "screenshots": []
   }
 ]
