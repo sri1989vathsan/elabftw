@@ -498,17 +498,9 @@
     "date": "2026-10-12",
     "area": "Experiments",
     "title": "Link items to experiments",
-    "summary": "Connect an experiment to the resources, data folders, templates and tools it uses, and reach the lab's tools in one click.",
+    "summary": "Connect an experiment to the resources, data folders and templates it uses.",
     "details": [
-      "Scroll below the main text. Each section opens and closes on its own.",
-      "fa-list-check::Steps and tasks: a checklist for the experiment, with deadlines that also show in your calendar.",
-      "Data: link the network folder where the experiment’s raw data lives. Paste the path (smb://server/share/folder or \\\\server\\share\\folder), add an optional label such as “Raw data folder” and press Add.",
-      "Each data link has buttons to open it on a Mac, to copy the Windows path to paste into Explorer, and to insert a reference to it in the main text. Remove a link with the trash icon while editing.",
-      "fa-link::Links: other experiments, associated templates, resources, orders, web addresses and LabCollector entries this one relates to.",
-      "fa-paperclip::Files / folders and Local files: attach files, or paste references to files kept elsewhere.",
-      "Compounds and Custom fields: record chemicals from the compound database, and any extra fields your team defined.",
-      "The Links menu in the top bar opens LabCollector, OpenIRIS, the MoorLab Wiki, ETHIS and MoorLab Zoom in a new tab, from any page.",
-      "A team admin can change any of these addresses with the pencil icon next to it, so the link always points to the right place. On an experiment, the LabCollector links section lists the LabCollector entries it relates to."
+      "On an experiment, the LabCollector links section lists the LabCollector entries it relates to."
     ],
     "image": "",
     "imageAlt": "",
@@ -516,15 +508,14 @@
     "guide": true,
     "order": 80,
     "icon": "fa-link",
-    "purpose": "Record not only what you did but also what you used, where the data lives, what it relates to, and reach the tools the lab uses without bookmarks.",
+    "purpose": "Record not only what you did but also what you used, where the data lives and what it relates to.",
     "uses": [
       "Link the resources you refer to, such as the record of the meeting where the experiment was planned, so anyone can follow the trail.",
       "Add a step with a deadline for the next measurement and see it in the calendar.",
-      "Link the folder with the microscope images or the sequencing run, and insert the reference where you describe the measurement.",
-      "Jump to the lab wiki for a protocol while you write an experiment, or join the group meeting with the Zoom link."
+      "Link the folder with the microscope images or the sequencing run, and insert the reference where you describe the measurement."
     ],
-    "news": "New: the Data section for network folders, order, template and LabCollector links in these sections, and a Links menu that folds the lab’s tools into the top bar.",
-    "shot": "An experiment page scrolled to the sections under the main text with the Data section open, and the top bar with the Links menu open"
+    "news": "New: the Data section for network folders, and order, template and LabCollector links in these sections.",
+    "shot": "An experiment page scrolled to the sections under the main text with the Data section open"
   },
   {
     "id": "guide-templates",
