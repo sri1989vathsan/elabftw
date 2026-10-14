@@ -445,10 +445,15 @@
     "details": [
       "Open Orders from the top bar (under More) and press New order. Link an existing resource, or add a new one.",
       "Add the supplier details and notes (lists are supported), and attach quotes or invoices. An attachment can be reused on other orders.",
-      "Follow the order through its stages to delivery.",
+      "Statuses: an order is Requested (asked for), Ordered (placed with the supplier), Received (it has arrived), Backlogged (known to be needed but not requested yet) or Cancelled. Change it with the coloured dropdown at the top of the order.",
+      "Tabs: All, Requested, Ordered, Received, Backlogged and Cancelled show one status at a time. All shows everything that is not archived. Archived holds the orders you have archived.",
+      "To change several orders at once, tick them and use Move to status… in the bar that appears.",
+      "Ordered and Received orders show a Missing Procurement ID warning when no procurement ID was found in an attached file.",
+      "The person who placed an order is notified when someone else changes its status.",
+      "Pin an order by hand to keep it at the top of the list, on every tab, until you unpin it.",
+      "Pinned for all and Reference are two special kinds of order with no status and no dropdown. Pinned for all is shared with the team and stays at the top for everyone. Reference is only for you: nobody else sees it, and it stays at the top of the All tab for you. Each has its own tab and does not show on the status tabs.",
+      "Tick Pinned for all or Reference when you create an order, or later when you edit it. Once an order is one of them it cannot go back to Requested, Ordered or another status. You can switch it between the two in the edit form (the author or a team admin; only the author can make an order a Reference).",
       "You can set a reminder on an order.",
-      "Pinned for all and Reference: tick one when you create an order, or later when you edit it. Pinned for all stays at the top for the whole team; Reference stays at the top for you only. Either can be switched to the other, but neither can go back to a normal status.",
-      "People involved are notified when the status changes.",
       "Templates: the Templates tab on the Orders page holds texts that go with ordering, such as an email to a supplier or a quote request. Everyone in the team can search them and copy the text; the author or a team admin edits them."
     ],
     "image": "",
@@ -460,10 +465,11 @@
     "purpose": "One place to request what the lab needs and to see where each order is, instead of emails and sticky notes.",
     "uses": [
       "Request a reagent, attach the supplier quote and let the person who orders pick it up.",
-      "Keep one list of what has been ordered and what is still on its way.",
+      "Mark an order Received when it arrives, so the list always shows what is still on its way.",
+      "Keep a supplier's catalogue number or standing order details as a Reference of your own, or as Pinned for all for the whole team.",
       "Keep a standard quote-request email as a template, copy it, fill in the supplier and the product, and send it from your mail program."
     ],
-    "news": "New: reusable attachments, reminders and notes with lists, and shared text templates for supplier emails.",
+    "news": "New: reusable attachments, reminders, notes with lists, the Pinned for all and Reference kinds, and shared text templates for supplier emails.",
     "shot": "The Orders page with a few orders at different stages and one order open"
   },
   {
