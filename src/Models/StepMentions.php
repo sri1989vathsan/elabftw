@@ -208,7 +208,7 @@ final class StepMentions
         $sql = 'SELECT users.userid, CONCAT(users.firstname, " ", users.lastname) AS fullname
             FROM users
             INNER JOIN users2teams ON users2teams.users_id = users.userid AND users2teams.teams_id = :team
-            WHERE users.archived = 0';
+            WHERE users2teams.is_archived = 0';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':team', $this->Entity->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
