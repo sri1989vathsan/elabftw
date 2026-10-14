@@ -461,8 +461,8 @@
     "title": "Orders",
     "summary": "Track things to order for the team, from request to delivery.",
     "details": [
-      "Open Orders from the top bar (under More) and press New order. Say what you need, with the supplier and any link or catalogue number.",
-      "Add the supplier details and notes (lists are supported), and attach quotes or invoices. An attachment can be reused on other orders.",
+      "fa-cart-shopping::Open Orders from the top bar (under More) and press New order. Say what you need, with the supplier and any link or catalogue number.",
+      "fa-paperclip::Add the supplier details and notes (lists are supported), and attach quotes or invoices. An attachment can be reused on other orders.",
       "fa-clone::Copy an order: press the copy button on an order to fill the request form at the top with its title, notes, linked resources and tags. Change what you need and press Request order. The files are not copied; add them as described next.",
       "fa-share::Attach a previous attachment: on an order that already has a file, press the arrow button beside the file (Add to new order). It joins the attachments of the order you are writing, and a copy is attached when you press Request order, so you do not have to download and upload it again.",
       "Statuses: an order is Requested (asked for), Ordered (placed with the supplier), Received (it has arrived), Backlogged (known to be needed but not requested yet) or Cancelled. Change it with the coloured dropdown at the top of the order.",
@@ -470,11 +470,11 @@
       "To change several orders at once, tick them and use Move to status… in the bar that appears.",
       "Ordered and Received orders show a Missing Procurement ID warning when no procurement ID was found in an attached file.",
       "The person who placed an order is notified when someone else changes its status.",
-      "Pin an order by hand to keep it at the top of the list, on every tab, until you unpin it.",
-      "Pinned for all and Reference are two special kinds of order with no status and no dropdown. Pinned for all is shared with the team and stays at the top for everyone. Reference is only for you: nobody else sees it, and it stays at the top of the All tab for you. Each has its own tab and does not show on the status tabs.",
+      "fa-thumbtack::Pin an order by hand to keep it at the top of the list, on every tab, until you unpin it.",
+      "fa-bookmark::Pinned for all and Reference are two special kinds of order with no status and no dropdown. Pinned for all is shared with the team and stays at the top for everyone. Reference is only for you: nobody else sees it, and it stays at the top of the All tab for you. Each has its own tab and does not show on the status tabs.",
       "Tick Pinned for all or Reference when you create an order, or later when you edit it. Once an order is one of them it cannot go back to Requested, Ordered or another status. You can switch it between the two in the edit form (the author or a team admin; only the author can make an order a Reference).",
       "You can set a reminder on an order.",
-      "Templates: the Templates tab on the Orders page holds texts that go with ordering, such as an email to a supplier or a quote request. Everyone in the team can search them and copy the text; the author or a team admin edits them."
+      "fa-envelope-open-text::Templates: the Templates tab on the Orders page holds texts that go with ordering, such as an email to a supplier or a quote request. Everyone in the team can search them and copy the text; the author or a team admin edits them."
     ],
     "image": "",
     "imageAlt": "",
