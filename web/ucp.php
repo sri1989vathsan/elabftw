@@ -79,7 +79,7 @@ try {
             'setting' => 'notif_mentioned_entry',
         ),
         array(
-            'designation' => _('A step I assigned to someone was completed'),
+            'designation' => _('A step I assigned, or was assigned, was completed'),
             'setting' => 'notif_step_finished',
         ),
         array(

@@ -207,16 +207,23 @@ final class Transform
                 ),
             Notifications::StepFinished =>
                 sprintf(
-                    '<span data-action="ack-notif" data-id="%d" data-href="%s?mode=view&id=%d">%s</span>' . $relativeMoment,
+                    '<span data-action="ack-notif" data-id="%d" data-href="%s">%s</span>' . $relativeMoment,
                     (int) $notif['id'],
-                    htmlspecialchars($notif['body']['page'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    (int) $notif['body']['entity_id'],
-                    sprintf(
-                        _('%s completed a step you assigned: %s (%s)'),
-                        $notif['body']['finisher_fullname'],
-                        htmlspecialchars($notif['body']['step'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    ),
+                    $notif['body']['title'] === ''
+                        ? 'dashboard.php'
+                        : sprintf('%s?mode=view&id=%d', htmlspecialchars($notif['body']['page'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), (int) $notif['body']['entity_id']),
+                    $notif['body']['title'] === ''
+                        ? sprintf(
+                            _('%s completed a step: %s'),
+                            $notif['body']['finisher_fullname'],
+                            htmlspecialchars($notif['body']['step'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                        )
+                        : sprintf(
+                            _('%s completed a step: %s (%s)'),
+                            $notif['body']['finisher_fullname'],
+                            htmlspecialchars($notif['body']['step'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                            htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                        ),
                     $notif['created_at'],
                 ),
             Notifications::MentionedInFeedback =>

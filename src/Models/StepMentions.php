@@ -104,32 +104,60 @@ final class StepMentions
     }
 
     /**
-     * The step was completed on the entry's own page: whoever assigned it
-     * (not the people merely working on the same entry) is told.
+     * The step was completed on the entry's own page: whoever assigned it and
+     * everybody it was assigned to (except the person who did it) is told --
+     * not the other people who merely have access to the entry.
      */
     public function notifyFinished(int $stepId, string $stepBody): void
     {
-        $req = $this->Db->prepare(
-            'SELECT DISTINCT assigner_userid FROM custom_step_mentions
-                WHERE entity_type = :entity_type AND step_id = :step_id AND assigner_userid IS NOT NULL',
+        self::notifyParticipants(
+            $this->entityType(),
+            $stepId,
+            $this->Entity->Users,
+            $this->Entity->entityType,
+            (int) $this->Entity->id,
+            (string) ($this->Entity->entityData['title'] ?? ''),
+            Filter::toPureString($stepBody),
         );
-        $req->bindValue(':entity_type', $this->entityType());
+    }
+
+    /**
+     * Assigner and assignees of a step, minus whoever just completed it. A
+     * person who cannot open the entry is told without its name.
+     */
+    private static function notifyParticipants(
+        string $entityTypeValue,
+        int $stepId,
+        Users $actor,
+        EntityType $type,
+        int $entityId,
+        string $title,
+        string $step,
+    ): void {
+        $Db = Db::getConnection();
+        $req = $Db->prepare(
+            'SELECT assigner_userid, userid FROM custom_step_mentions WHERE entity_type = :entity_type AND step_id = :step_id',
+        );
+        $req->bindValue(':entity_type', $entityTypeValue);
         $req->bindValue(':step_id', $stepId, PDO::PARAM_INT);
-        $this->Db->execute($req);
-        $step = Filter::toPureString($stepBody);
-        foreach ($req->fetchAll(PDO::FETCH_COLUMN) as $assigner) {
-            $assigner = (int) $assigner;
-            if ($assigner === (int) $this->Entity->Users->userData['userid']) {
-                continue;
+        $Db->execute($req);
+        $recipients = array();
+        foreach ($req->fetchAll() as $row) {
+            if ($row['assigner_userid'] !== null) {
+                $recipients[(int) $row['assigner_userid']] = true;
             }
-            new StepFinished(
-                new Users($assigner, $this->Entity->Users->team),
-                $this->Entity->Users,
-                $this->Entity->entityType->toPage(),
-                (int) $this->Entity->id,
-                (string) ($this->Entity->entityData['title'] ?? ''),
-                $step,
-            )->create();
+            $recipients[(int) $row['userid']] = true;
+        }
+        unset($recipients[(int) $actor->userData['userid']]);
+        foreach (array_keys($recipients) as $userid) {
+            $target = new Users($userid, $actor->team);
+            try {
+                $type->toInstance($target, $entityId)->canOrExplode(AccessType::Read);
+                $name = $title;
+            } catch (ForbiddenException | IllegalActionException | ImproperActionException | ResourceNotFoundException) {
+                $name = '';
+            }
+            new StepFinished($target, $actor, $type->toPage(), $entityId, $name, $step)->create();
         }
     }
 
@@ -180,21 +208,21 @@ final class StepMentions
         $req->bindValue(':id', $stepId, PDO::PARAM_INT);
         $Db->execute($req);
 
-        $assigner = (int) ($link['assigner_userid'] ?? 0);
-        if (!$completed || $assigner === 0 || $assigner === (int) $actor->userData['userid']) {
+        if (!$completed) {
             return;
         }
         $req = $Db->prepare(sprintf('SELECT title FROM %s WHERE id = :id', $type->value));
         $req->bindValue(':id', (int) $step['item_id'], PDO::PARAM_INT);
         $Db->execute($req);
-        new StepFinished(
-            new Users($assigner, $actor->team),
+        self::notifyParticipants(
+            $type->value,
+            $stepId,
             $actor,
-            $type->toPage(),
+            $type,
             (int) $step['item_id'],
             (string) $req->fetchColumn(),
             Filter::toPureString((string) $step['body']),
-        )->create();
+        );
     }
 
     /** The step is gone: so are the tasks it created. */

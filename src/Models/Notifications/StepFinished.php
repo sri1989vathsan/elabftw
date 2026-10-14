@@ -20,8 +20,8 @@ use function _;
 use function sprintf;
 
 /**
- * A step of an experiment, template or resource was completed by someone it
- * was assigned to; sent to whoever assigned it.
+ * A step of an experiment, template or resource was completed; sent to whoever assigned it and to the other people it was
+ * assigned to.
  */
 final class StepFinished extends AbstractNotifications implements MailableInterface
 {
@@ -44,13 +44,15 @@ final class StepFinished extends AbstractNotifications implements MailableInterf
     public function getEmail(): array
     {
         return array(
-            'subject' => _('A step you assigned was completed'),
+            'subject' => _('A step was completed'),
             'body' => sprintf(
                 "%s\n\n%s\n%s\n%s",
-                sprintf(_('%s completed a step you assigned:'), $this->finisher->userData['fullname']),
+                sprintf(_('%s completed a step:'), $this->finisher->userData['fullname']),
                 $this->step,
                 $this->title,
-                sprintf('%s/%s?mode=view&id=%d', Env::asUrl('SITE_URL'), $this->page, $this->entityId),
+                $this->title === ''
+                    ? Env::asUrl('SITE_URL') . '/dashboard.php'
+                    : sprintf('%s/%s?mode=view&id=%d', Env::asUrl('SITE_URL'), $this->page, $this->entityId),
             ),
         );
     }

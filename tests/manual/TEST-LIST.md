@@ -113,6 +113,7 @@ Run on the dev instance with the accounts in `TEST-ACCOUNTS.md`.
 | N5 | An assignee ticking their task notifies the assigner; step stays open until every assignee is done, then finishes | pass |
 | N6 | Reopening an assignee's task reopens the step | pass |
 | N7 | Comment @mention of someone who cannot read a restricted entry: comment is saved, no notification | pass |
+| N14 | Step completed (on the experiment page, or by one assignee ticking their task): the assigner and the other assignees are all notified, the person who did it is not; people who cannot open the entry get the notice without its name | pass |
 | N13 | Entry shared with owner and admins only: assigning Alice and Bob still gives each a task and a notification, without the entry's name or a link | pass |
 | N8 | Alice's bell shows "assigned you a step" with a link to the entry | pass |
 | N9 | Comment `@` suggestions, pill display, notification, in view mode and in edit mode | pass |
