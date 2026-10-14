@@ -87,6 +87,7 @@ import { writable } from 'svelte/store';
 import { applyTheme, isThemeVariant, updateThemeControls } from './theme';
 import { mount } from 'svelte';
 import './mention-keys';
+import { askConfirm } from './confirm-dialog';
 import PrimaryColorPicker from './components/PrimaryColorPicker.svelte';
 
 // we need to extend the interface from malle to add more properties
@@ -1363,9 +1364,12 @@ function collectPermissionsFromModal(identifier: string): string {
 }
 
 // change both read & write permissions in one go
-// (no confirm() box: some browsers block or auto-dismiss it, which made the
-// button silently do nothing -- the window itself says what the button does)
-on('save-permissions-both', (el: HTMLElement) => {
+// (asks in the page itself: some browsers block or auto-dismiss the native
+// confirm() box, which made the button silently do nothing)
+on('save-permissions-both', async (el: HTMLElement) => {
+  if (!await askConfirm(i18next.t('entity-apply-both-permissions-warning'), 'Apply')) {
+    return;
+  }
   const permissions = collectPermissionsFromModal(el.dataset.identifier);
   const baseSelect = getSafeElementById(`${el.dataset.identifier}_select_base`) as HTMLSelectElement;
   const params = {canread: permissions, canread_base: baseSelect.value, canwrite: permissions, canwrite_base: baseSelect.value};
