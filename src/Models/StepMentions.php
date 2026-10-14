@@ -167,9 +167,9 @@ final class StepMentions
     }
 
     /**
-     * An assignee ticked (or reopened) their own to-do for a step: the
-     * assigner is told, and the step itself is marked done once everybody
-     * it was assigned to has finished their part (open again otherwise).
+     * An assignee ticked (or reopened) their own to-do for a step: the step is
+     * completed (or reopened) for everyone it was assigned to, and the
+     * assigner and the other assignees are told.
      */
     public static function taskCompleted(int $todolistId, Users $actor, bool $completed): void
     {
@@ -183,18 +183,6 @@ final class StepMentions
             return;
         }
         $stepId = (int) $link['step_id'];
-        $req = $Db->prepare(
-            'SELECT COUNT(*) AS total, SUM(todolist.completed_at IS NOT NULL) AS done
-                FROM custom_step_mentions AS m
-                INNER JOIN todolist ON todolist.id = m.todolist_id
-                WHERE m.entity_type = :entity_type AND m.step_id = :step_id',
-        );
-        $req->bindValue(':entity_type', $type->value);
-        $req->bindValue(':step_id', $stepId, PDO::PARAM_INT);
-        $Db->execute($req);
-        $counts = $req->fetch();
-        $allDone = (int) $counts['total'] > 0 && (int) $counts['total'] === (int) $counts['done'];
-
         // $type->value is one of EntityType's own values, never user input
         $req = $Db->prepare(sprintf('SELECT body, item_id FROM %s_steps WHERE id = :id', $type->value));
         $req->bindValue(':id', $stepId, PDO::PARAM_INT);
@@ -203,7 +191,9 @@ final class StepMentions
         if ($step === false) {
             return;
         }
-        $finished = $completed && $allDone;
+        // one assignee completing (or reopening) their part does it for the step
+        // and for everyone else it was assigned to
+        $finished = $completed;
         $req = $Db->prepare(sprintf(
             'UPDATE %s_steps SET finished = :finished, finished_time = %s WHERE id = :id',
             $type->value,
@@ -212,6 +202,25 @@ final class StepMentions
         $req->bindValue(':finished', (int) $finished, PDO::PARAM_INT);
         $req->bindValue(':id', $stepId, PDO::PARAM_INT);
         $Db->execute($req);
+
+        // the other assignees' tasks follow, and so does the one the step itself
+        // reflects on the author's list (no hook fires from here: only a user's
+        // own tick on a task goes through Todolist::patch)
+        $req = $Db->prepare(
+            'SELECT userid, todolist_id FROM custom_step_mentions WHERE entity_type = :entity_type AND step_id = :step_id AND todolist_id <> :self',
+        );
+        $req->bindValue(':entity_type', $type->value);
+        $req->bindValue(':step_id', $stepId, PDO::PARAM_INT);
+        $req->bindValue(':self', $todolistId, PDO::PARAM_INT);
+        $Db->execute($req);
+        foreach ($req->fetchAll() as $other) {
+            new Todolist(new Users((int) $other['userid'], $actor->team), (int) $other['todolist_id'])
+                ->syncFromLinkedStep(array('completed' => $finished));
+        }
+        $reflected = StepTodolistLinks::findTodolistId($type->value, $stepId);
+        if ($reflected !== null) {
+            new Todolist($actor, $reflected)->syncFromLinkedStep(array('completed' => $finished));
+        }
 
         if (!$completed) {
             return;

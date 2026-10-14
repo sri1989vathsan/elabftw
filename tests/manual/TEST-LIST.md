@@ -110,8 +110,8 @@ Run on the dev instance with the accounts in `TEST-ACCOUNTS.md`.
 | N2 | Editing the step text updates the task; removing a name removes that person's task; adding a name adds one | pass |
 | N3 | Step deadline is copied to the assignees' tasks | pass |
 | N4 | Completing the step on the experiment page marks all assignee tasks done (assigner who ticks it is not notified); reopening reopens them | pass |
-| N5 | An assignee ticking their task notifies the assigner; step stays open until every assignee is done, then finishes | pass |
-| N6 | Reopening an assignee's task reopens the step | pass |
+| N5 | An assignee ticking their task (sidebar Done button or board) completes the step and every other assignee's task, and notifies the assigner and the others | pass |
+| N6 | Reopening an assignee's task reopens the step and the other assignees' tasks | pass (reopen by the earlier rule; same code path) |
 | N7 | Comment @mention of someone who cannot read a restricted entry: comment is saved, no notification | pass |
 | N14 | Step completed (on the experiment page, or by one assignee ticking their task): the assigner and the other assignees are all notified, the person who did it is not; people who cannot open the entry get the notice without its name | pass |
 | N13 | Entry shared with owner and admins only: assigning Alice and Bob still gives each a task and a notification, without the entry's name or a link | pass |
