@@ -16,7 +16,7 @@
                     {% endif %}
                   </div>
                   {% if entry.highlight and entry.highlight.label %}
-                    <span class='whats-new-highlight-label' style='left: {{ entry.highlight.x }}%; top: calc({{ entry.highlight.y + entry.highlight.h }}% + 6px); max-width: calc(100% - {{ entry.highlight.x }}%);'>{{ entry.highlight.label }}</span>
+                    <span class='whats-new-highlight-label' style='{% if entry.highlight.x + entry.highlight.w > 55 %}right: calc(100% - {{ entry.highlight.x + entry.highlight.w }}%); max-width: {{ entry.highlight.x + entry.highlight.w }}%;{% else %}left: {{ entry.highlight.x }}%; max-width: calc(100% - {{ entry.highlight.x }}%);{% endif %} top: calc({{ entry.highlight.y + entry.highlight.h }}% + 6px);'>{{ entry.highlight.label }}</span>
                   {% endif %}
                 </div>
               {% else %}
