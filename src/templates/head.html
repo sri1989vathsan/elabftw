@@ -211,8 +211,6 @@
                 <a class='dropdown-item {{ not envAsBool('USE_OPENCLONING') ? 'disabled' }} {{ isActive ? 'active' }}' href='syc.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-dna fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'OpenCloning'|trans }}</a>
                 {% set isActive = scriptName == 'inventory.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='inventory.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-warehouse fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Inventory'|trans }}</a>
-                {% set isActive = scriptName == 'whats-new.php' %}
-                <a class='dropdown-item {{ isActive ? 'active' }}' href='whats-new.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-book-open fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'MoorLab eLabFTW Guide'|trans }}</a>
                 {# "LabCollector" disabled placeholder hidden from the Tools
                    menu -- not needed while the integration isn't ready.
                    Left in place, not deleted, so it's easy to bring back:
