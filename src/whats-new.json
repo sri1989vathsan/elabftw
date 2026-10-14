@@ -718,15 +718,24 @@
     "date": "2026-10-14",
     "area": "Tasks",
     "title": "To-do list",
-    "summary": "Your tasks and the deadlines of your experiment steps in one list, sorted by when they are due.",
+    "summary": "Your tasks and the deadlines of your experiment steps in one list: add, remind, tick off, look back, and subscribe from your own calendar.",
     "details": [
-      "Open the To-do list from the checklist button in the left sidebar. The red number on the button counts what is overdue or due soon.",
-      "The list is grouped by due date: Overdue, Today, Tomorrow, then each later day, and No due date at the end. It mixes your own tasks with the steps of your experiments that have a deadline.",
-      "Add a task: type it in the box at the top and press Enter or the plus button. Press the arrow beside the box for more: notes, the project it belongs to, a date and time, and a reminder (at the deadline, or 15 minutes, 1 hour, 1 day or 1 week before, or a time you choose).",
-      "Tick a task or a step to mark it done. Finished tasks move to Archived tasks at the bottom, where you can look back at them.",
-      "Click a step to open the experiment it belongs to.",
-      "Project board cards assigned to you appear in this list as well. The Project boards button above the list opens the boards.",
-      "The refresh button reloads the list."
+      "Open the To-do list from the checklist button in the left sidebar. The red number on the button counts what is overdue or due soon. The refresh button reloads the list.",
+      "The panel has two tabs. Tasks is the list; Calendar shows a month and the tasks of the day you pick.",
+      "The Tasks list is grouped by due date: Overdue, Today, Tomorrow, then each later day, and No due date at the end. It mixes your own tasks with the steps of your experiments that have a deadline.",
+      "A step shows the name of its experiment, and an Add a deadline link when it has no deadline yet. Click the step to open the experiment. Ticking it marks the step complete in the experiment.",
+      "Add a task: type it in the box at the top and press Enter or the plus button. Press the arrow beside the box for more: notes, the board project it belongs to, a date and a time, and a reminder.",
+      "Reminders: at the deadline, or 15 minutes, 1 hour, 1 day or 1 week before, or after a number of minutes you choose, or at a specific date and time. A reminder needs a date and time first.",
+      "Each row has a handle to drag it into a new order or onto another day, a button to edit it, and Done to tick it off. Click the task's title to open its details.",
+      "In a task's details you can add a description and notes (bold, italic, headings, bullet and numbered lists, links), link items, add steps and write comments.",
+      "Linked items: press Open Search to link and use the link buttons on the results to attach experiments, resources and templates. You can also add a web address or a network folder (smb://) with a label. On a Mac the network folder opens directly; on Windows you can copy its path to paste into Explorer.",
+      "Steps: break a task into smaller steps and tick them off one by one. Comments: write a note to your colleagues and type @ followed by a name to mention someone, who is then notified.",
+      "At the bottom of the details: Archive (puts the task away), Duplicate (a copy to adjust), Delete (asks first and cannot be undone), and Edit.",
+      "Done tasks move to Completed tasks below the list. Choose how far back to look, from the past day to the past month, and press Restore to bring one back.",
+      "Archived tasks, also below the list, holds the tasks you archived. Open it to see them and press Unarchive to bring one back.",
+      "The Calendar tab shows a month. Pick a day to see its tasks and the tasks you completed on it, and move between months with the arrows.",
+      "Subscribe from your own calendar: on the Calendar tab press Create private link, then add it to Google Calendar or Apple Calendar. The link is read-only and shows your task titles and deadlines, so keep it private. You can regenerate or revoke it at any time. Google Calendar needs the link to be reachable from the internet.",
+      "Board cards assigned to you appear in this list as well. The Project boards button above the list opens the boards. When someone assigns you a task, you get a notification from the bell."
     ],
     "image": "",
     "imageAlt": "",
@@ -738,9 +747,12 @@
     "uses": [
       "Start the day by opening the list and ticking off what is done.",
       "Add a task with a reminder the moment you think of it, such as ordering a reagent by Friday.",
-      "Keep the list open on a busy day and tick off steps as you finish them."
+      "Keep the list open on a busy day and tick off steps as you finish them.",
+      "Link the experiment and the network folder with the raw data to a task, so everything for it is one click away.",
+      "On Friday, open Completed tasks for the past week to see what you finished, for a report or a meeting.",
+      "Put the private calendar link in your phone's calendar so your deadlines appear next to the rest of your day."
     ],
-    "news": "New: one list for tasks and step deadlines, with reminders and cards assigned to you from the boards.",
+    "news": "New: one list for tasks and step deadlines with reminders, steps and comments on tasks, linked items, a completed and archived history, a calendar view, and a calendar subscription.",
     "shot": "The To-do panel open next to a page, with the add-task box and the groups Overdue, Today and Tomorrow"
   }
 ]
