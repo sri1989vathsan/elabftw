@@ -456,6 +456,8 @@
     "details": [
       "Open Orders from the top bar (under More) and press New order. Say what you need, with the supplier and any link or catalogue number.",
       "Add the supplier details and notes (lists are supported), and attach quotes or invoices. An attachment can be reused on other orders.",
+      "fa-clone::Copy an order: press the copy button on an order to fill the request form at the top with its title, notes, linked resources and tags. Change what you need and press Request order. The files are not copied; add them as described next.",
+      "fa-share::Attach a previous attachment: on an order that already has a file, press the arrow button beside the file (Add to new order). It joins the attachments of the order you are writing, and a copy is attached when you press Request order, so you do not have to download and upload it again.",
       "Statuses: an order is Requested (asked for), Ordered (placed with the supplier), Received (it has arrived), Backlogged (known to be needed but not requested yet) or Cancelled. Change it with the coloured dropdown at the top of the order.",
       "Tabs: All, Requested, Ordered, Received, Backlogged and Cancelled show one status at a time. All shows everything that is not archived. Archived holds the orders you have archived.",
       "To change several orders at once, tick them and use Move to status… in the bar that appears.",
@@ -475,10 +477,11 @@
     "icon": "fa-cart-shopping",
     "purpose": "One place to request what the lab needs and to see where each order is, instead of emails and sticky notes.",
     "uses": [
-      "Request a reagent, attach the supplier quote and let the person who orders pick it up.",
+      "Request a reagent, attach the supplier quote and other links, information and files related to the order.",
       "Mark an order Received when it arrives, so the list always shows what is still on its way.",
       "Keep a supplier's catalogue number or standing order details as a Reference of your own, or as Pinned for all for the whole team.",
-      "Keep a standard quote-request email as a template, copy it, fill in the supplier and the product, and send it from your mail program."
+      "Keep a standard quote-request email as a template, copy it, fill in the supplier and the product, and send it from your mail program.",
+      "Copy last month's order for the same supplier, adjust the quantity, and attach the previous quote with the arrow button instead of searching for the file."
     ],
     "news": "New: reusable attachments, reminders, notes with lists, the Pinned for all and Reference kinds, and shared text templates for supplier emails.",
     "shot": "The Orders page with a few orders at different stages and one order open"
