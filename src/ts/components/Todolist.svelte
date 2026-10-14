@@ -281,6 +281,16 @@
   let panelView: 'list' | 'calendar' = 'list';
   let calendarMonthCursor = new Date(initialDeadline.getFullYear(), initialDeadline.getMonth(), 1);
   let selectedCalendarDate = initialDeadlineDate;
+  type CompletedStep = {
+    entity_type: string;
+    entity_page: string;
+    entity_id: number;
+    entity_title: string;
+    step_id: number;
+    step_body: string;
+    finished_time: string;
+  };
+  let calendarCompletedSteps: CompletedStep[] = [];
   let calendarCompletedForDate: Todo[] = [];
   let calendarCompletedLoadedFor = '';
   let loadingCalendarCompleted = false;
@@ -598,6 +608,14 @@
       // to just this one day
       calendarCompletedForDate = page.filter(
         item => item.completed_at !== null && dateKey(new Date(item.completed_at)) === dateKeyValue,
+      );
+      // finished experiment/resource steps of that day, next to the tasks
+      const teamScope = localStorage.getItem(`${Model.Todolist}StepsShowTeam`) === '1';
+      const stepsResponse = await ApiC.getJson(
+        `unfinished_steps?completed=1&scope=${teamScope ? 'team' : 'user'}&completed_since=${encodeURIComponent(since.toISOString())}`,
+      ) as { completed_steps?: CompletedStep[] };
+      calendarCompletedSteps = (stepsResponse.completed_steps ?? []).filter(
+        step => dateKey(new Date(step.finished_time)) === dateKeyValue,
       );
       calendarCompletedLoadedFor = dateKeyValue;
     } catch (error) {
@@ -2277,14 +2295,25 @@
     <details class='todo-completed-history' on:toggle={toggleCalendarCompletedForDate}>
       <summary>
         <span>{t('Completed')}</span>
-        {#if calendarCompletedLoadedFor === selectedCalendarDate}<span class='badge badge-secondary'>{calendarCompletedForDate.length}</span>{/if}
+        {#if calendarCompletedLoadedFor === selectedCalendarDate}<span class='badge badge-secondary'>{calendarCompletedForDate.length + calendarCompletedSteps.length}</span>{/if}
       </summary>
       {#if loadingCalendarCompleted}
         <p class='todo-secondary-text mb-0'>{t('Loading')}…</p>
-      {:else if calendarCompletedForDate.length === 0}
+      {:else if calendarCompletedForDate.length === 0 && calendarCompletedSteps.length === 0}
         <p class='todo-secondary-text mb-0'>{t('No completed tasks for this day.')}</p>
       {:else}
         <ul class='list-group'>
+          {#each calendarCompletedSteps as step (`${step.entity_type}-${step.step_id}`)}
+            <li class='list-group-item todo-completed-entry'>
+              <div class='flex-grow-1 min-width-0'>
+                <div><i class='fas fa-list-check fa-fw mr-1' aria-hidden='true'></i>{step.step_body}</div>
+                <div class='small todo-secondary-text'>
+                  <a href={`${step.entity_page}?mode=view&id=${step.entity_id}`}>{step.entity_title}</a>
+                  · {formatDeadline(step.finished_time)}
+                </div>
+              </div>
+            </li>
+          {/each}
           {#each calendarCompletedForDate as item (item.id)}
             <li class='list-group-item todo-completed-entry'>
               <div class='flex-grow-1 min-width-0'>

@@ -12,7 +12,10 @@ declare(strict_types=1);
 
 namespace Elabftw\Models;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use Elabftw\Enums\BasePermissions;
+use Exception;
 use Elabftw\Enums\EntityType;
 use Elabftw\Enums\State;
 use Elabftw\Interfaces\QueryParamsInterface;
@@ -59,6 +62,16 @@ final class UnfinishedSteps extends AbstractRest
                 $this->getActiveReminderSteps(EntityType::Items),
             ));
         }
+        // Steps that were finished on or after a date, for the calendar's
+        // "Completed" list: a finished step has no deadline left, so it never
+        // shows up in the feed below.
+        if ($queryParams->getQuery()->getBoolean('completed')) {
+            $since = $this->parseSince((string) $queryParams->getQuery()->get('completed_since', ''));
+            return array('completed_steps' => array_merge(
+                $this->getCompletedSteps(EntityType::Experiments, $since),
+                $this->getCompletedSteps(EntityType::Items, $since),
+            ));
+        }
         $limit = $queryParams->getLimit() ?: 100;
         $offset = max(0, $queryParams->getQuery()->getInt('offset'));
         $experimentsSteps = $this->cleanUpResult($this->getSteps(EntityType::Experiments, $limit, $offset));
@@ -72,6 +85,67 @@ final class UnfinishedSteps extends AbstractRest
             'items' => $itemsSteps,
             'calendar' => $calendar,
         );
+    }
+
+    private function parseSince(string $value): string
+    {
+        try {
+            $date = $value === '' ? new DateTimeImmutable('-30 days') : new DateTimeImmutable($value);
+        } catch (Exception) {
+            $date = new DateTimeImmutable('-30 days');
+        }
+
+        return $date->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    }
+
+    /**
+     * Finished steps (with the time they were finished) of the user's, or the
+     * team's, entries. A step that is already shown as a completed to-do (its
+     * deadline's reflection) is left out so it is not listed twice.
+     */
+    private function getCompletedSteps(EntityType $model, string $since): array
+    {
+        $sql = sprintf(
+            "SELECT '%s' AS entity_type,
+                '%s' AS entity_page,
+                entity.id AS entity_id,
+                entity.title AS entity_title,
+                entity.userid AS entity_userid,
+                entity_steps.id AS step_id,
+                entity_steps.body AS step_body,
+                DATE_FORMAT(entity_steps.finished_time, '%%Y-%%m-%%dT%%H:%%i:%%sZ') AS finished_time
+            FROM %s AS entity
+            INNER JOIN %s_steps AS entity_steps
+                ON entity_steps.item_id = entity.id
+            JOIN users2teams
+                ON users2teams.users_id = entity.userid
+                AND users2teams.teams_id = :teamid
+            WHERE %s
+                AND entity.state = %d
+                AND entity_steps.finished = 1
+                AND entity_steps.finished_time IS NOT NULL
+                AND entity_steps.finished_time >= :since
+                AND NOT EXISTS (
+                    SELECT 1 FROM custom_step_todolist_links AS link
+                    WHERE link.entity_type = '%s' AND link.step_id = entity_steps.id
+                )
+            ORDER BY entity_steps.finished_time DESC
+            LIMIT 200",
+            $model->value,
+            $model->toPage(),
+            $model->value,
+            $model->value,
+            $this->teamScoped ? $this->getTeamWhereClause($model) : 'entity.userid = :userid',
+            State::Normal->value,
+            $model->value,
+        );
+        $req = $this->Db->prepare($sql);
+        $req->bindParam(':userid', $this->Users->userData['userid'], PDO::PARAM_INT);
+        $req->bindParam(':teamid', $this->Users->team, PDO::PARAM_INT);
+        $req->bindValue(':since', $since);
+        $this->Db->execute($req);
+
+        return $req->fetchAll();
     }
 
     private function getSteps(EntityType $model, int $limit, int $offset): array
