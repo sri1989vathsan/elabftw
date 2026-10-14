@@ -6326,7 +6326,13 @@ div > .sticky-navbar {
 // the feature is (positions are percentages of the picture, set per entry in
 // src/whats-new.json).
 .whats-new-shot {
+  // exactly as wide as its picture (centred), so the outline's percentages and the dimming
+  // around it are measured against the picture, not the empty space beside a small one
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 100%;
   position: relative;
+  width: fit-content;
 
   // Room under the picture for the outline's label, which can hang below it.
   &.has-label {
