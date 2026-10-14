@@ -128,3 +128,6 @@ Run on the dev instance with the accounts in `TEST-ACCOUNTS.md`.
 | N20 | "@" list: Tab takes the only match, or the highlighted one (first by default); Up/Down move the highlight; typing restarts it at the first name. Checked in the entry comment box | pass |
 | N21 | One permission rule on the server for every path (windows, Share, bulk bar, folder dialog, API): give edit also gives view; take edit away takes only edit; give view gives only view; take view away takes edit too; same for the base level | pass (API sequence on a test experiment) |
 | N22 | Assignee who cannot open the entry: still gets task and notification, with the entry's name | pass (by design change) |
+| N23 | Non-admin (Alice): a folder she does not own reports can_manage_permissions false, so the Permissions button stays hidden | pass |
+| N24 | Non-admin (Alice): setting permissions on someone else's folder through the API is refused (403) | pass |
+| N25 | Non-admin (Alice): applying permissions on her own folder that holds Bob's experiment updates hers, skips Bob's and reports updated 1 / skipped 1 (was a 403 before the fix) | pass |

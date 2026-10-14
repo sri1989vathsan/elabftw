@@ -17,6 +17,7 @@ use Elabftw\Elabftw\TwigFunctions;
 use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Action;
 use Elabftw\Enums\BasePermissions;
+use Elabftw\Exceptions\ForbiddenException;
 use Elabftw\Exceptions\IllegalActionException;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
@@ -984,7 +985,7 @@ final class ExperimentsFolders extends AbstractRest
             }
             $entity->patch(Action::Update, $payload);
             return true;
-        } catch (IllegalActionException | UnprocessableContentException | ImproperActionException | ResourceNotFoundException) {
+        } catch (ForbiddenException | IllegalActionException | UnprocessableContentException | ImproperActionException | ResourceNotFoundException) {
             return false;
         }
     }
