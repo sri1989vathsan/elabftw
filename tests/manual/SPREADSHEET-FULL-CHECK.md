@@ -63,6 +63,7 @@ are new in this round and have not been looked at in a browser yet unless it say
 | C7 | A well plate that has formulas: formulas still use spreadsheet names (column letter first, then row number), so `A2` is column A, row 2, which is not the well labelled A2 on the plate. Confirm that is acceptable, or tell me | inline, popup | | |
 | C8 | A normal spreadsheet is unchanged: letters across the top, numbers down the side | inline, popup | | |
 | C9 | Well plate and normal spreadsheet side by side in one entry | inline | | |
+| C11 | A wide spreadsheet (384-well plate, 24 columns): the editor frame itself must not scroll sideways or show empty space to the right; only the grid's own scroll bar moves. Check at several window widths, in Firefox especially (reported there) | inline | | |
 | C10 | Delete a step, comment or file with the new in-page confirmation; the spreadsheet trash icon still asks | inline | | |
 
 ## D. Cross-cutting (do these in every run)

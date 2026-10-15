@@ -2799,7 +2799,17 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // for it ever visually shows, reachable by clicking/placing the cursor
     // well past the last visible column -- max-width still caps it from
     // growing past the viewport, just no longer forces it to fill one.
+    // The hidden real table of a wide spreadsheet (a 384-well plate has 24
+    // columns) is still as wide as its columns, whatever max-width says:
+    // a table is never narrower than its columns. That made the editor's own
+    // frame scroll sideways, with a second scroll bar under the one the
+    // visible grid already has, though nothing wide is shown there. While
+    // the text holds a spreadsheet, the frame therefore does not scroll
+    // sideways itself: the grids bring their own scroll bar.
     hideSpreadsheetTablesStyle.textContent = `
+      html:has(table.elabftw-spreadsheet) {
+        overflow-x: hidden;
+      }
       table.elabftw-spreadsheet {
         box-sizing: border-box;
         table-layout: fixed !important;
