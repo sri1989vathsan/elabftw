@@ -225,6 +225,15 @@ async function spreadsheetSoak(options = {}) {
   }
 
   // ---- 3. right-click menus -------------------------------------------------------------
+  // The context menu acts on mouse down/up, so a bare click() does nothing: press it like a mouse would.
+  const clickMenuItem = item => {
+    const b = item.getBoundingClientRect();
+    const init = { bubbles: true, cancelable: true, view: window, clientX: b.x + 10, clientY: b.y + 8, button: 0, buttons: 1 };
+    item.dispatchEvent(new PointerEvent('pointerdown', init));
+    item.dispatchEvent(new MouseEvent('mousedown', init));
+    item.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
+    item.dispatchEvent(new MouseEvent('click', { ...init, buttons: 0 }));
+  };
   const openMenu = () => [...document.querySelectorAll('.jcontextmenu, .jss_contextmenu')]
     .find(menu => getComputedStyle(menu).display !== 'none' && menu.getBoundingClientRect().width > 0);
   async function menuCheck(root, target, where, label) {
@@ -325,7 +334,7 @@ async function spreadsheetSoak(options = {}) {
       }[kind];
       const item = menu && [...menu.querySelectorAll('a')].find(a => pattern.test(a.textContent));
       if (!item) { fail(`menu item ${pattern} not found`, { table: model.label, items: menu ? [...menu.querySelectorAll('a')].map(a => a.textContent.trim()).slice(0, 12) : 'no menu' }); await closeMenu(model.label, 'structure'); return; }
-      item.click();
+      clickMenuItem(item);
       clicked = true;
       await sleep(700);
     });
@@ -492,7 +501,7 @@ async function spreadsheetSoak(options = {}) {
       const menu = openMenu();
       const item = menu && [...menu.querySelectorAll('a')].find(a => (byRow ? /delete selected rows/i : /delete selected columns/i).test(a.textContent));
       if (!item) { fail('multi-delete menu item not found', { table: model.label }); await closeMenu(model.label, 'multi-delete'); return; }
-      item.click();
+      clickMenuItem(item);
       await sleep(700);
       doneMulti = true;
     });
