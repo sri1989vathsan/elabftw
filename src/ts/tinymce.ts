@@ -245,7 +245,7 @@ export function getTinymceBaseConfig(page: string): object {
     // Insert > Template… menu item still driven by the templates: callback below.
     // Kept next to insert-data-table (links/date/title/divider/note/spreadsheet
     // group) rather than off in the table-tools group.
-    toolbar1 = toolbar1.replace('insert-data-table', 'insert-data-table inserttemplate');
+    // (Insert template now lives in the Insert dropdown, not as its own toolbar button.)
   }
 
   const isDark = isDarkTheme();

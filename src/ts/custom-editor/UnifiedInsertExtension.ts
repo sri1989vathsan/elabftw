@@ -131,11 +131,7 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
           text: 'Links',
           getSubmenuItems: () => linkItems.map((_, index) => catalog[`link-${index}`]).filter(Boolean),
         },
-        {
-          type: 'nestedmenuitem',
-          text: 'Laboratory',
-          getSubmenuItems: () => [catalog.template].filter(Boolean),
-        },
+        ...(catalog.template ? [catalog.template] : []),
       );
       callback(items);
     },
