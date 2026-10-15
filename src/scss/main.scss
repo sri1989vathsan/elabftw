@@ -6355,6 +6355,17 @@ div > .sticky-navbar {
   position: relative;
 }
 
+// Tall screenshots (the calendar, the to-do panel) used to push the text of the card far down:
+// cap the height, keep the proportions, and let the frame shrink with the picture so the
+// outline's percentages still line up.
+.whats-new-shot-clip img {
+  display: block;
+  height: auto;
+  max-height: min(50vh, 400px);
+  max-width: 100%;
+  width: auto;
+}
+
 .whats-new-highlight {
   border: 3px solid var(--primary);
   border-radius: 6px;
