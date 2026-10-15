@@ -587,7 +587,7 @@ async function spreadsheetSoak(options = {}) {
     if (!doneMulti) return;
     // What really happened is read from the cells of the live grid (every row and column, nothing trimmed): a
     // multi-delete must remove whole rows or columns, in one block, and nothing else may change.
-    const nowGrid = domCells(api.overlayElement(uid));
+    const nowGrid = domCells(await live(uid));
     const size2 = byRow ? model.grid.length : model.grid[0].length;
     const exact = (x, y) => x.length === y.length && x.every((row, r) => row.length === y[r].length && row.every((v, c) => v === y[r][c]));
     const without = (a1, b1) => (byRow ? model.grid.filter((_, i) => i < a1 || i > b1) : model.grid.map(row => row.filter((_, i) => i < a1 || i > b1)));
