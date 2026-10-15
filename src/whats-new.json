@@ -590,8 +590,8 @@
       "fa-user-lock::Who can do what: you need edit rights on the entry to add, edit, tick or delete its steps. The people you give a step to can tick their own to-do without edit rights on the entry.",
       "fa-comment::The same @ list works in the comments of an experiment, template or resource: the person you mention is notified if they can read the entry."
     ],
-    "image": "",
-    "imageAlt": "",
+    "image": "guide-steps-c02761e6.png",
+    "imageAlt": "A step \"Load the gel @Bob Tester @Srivathsan Adivarahan\" in the Steps and tasks section of an experiment",
     "featured": false,
     "guide": true,
     "order": 82,
@@ -603,7 +603,14 @@
       "Put a deadline on a step so it shows in everyone's calendar."
     ],
     "news": "New: assign a step with @, the person gets it as a to-do, and finishing it tells you.",
-    "shot": "An experiment's Steps and tasks section with a step that mentions two people, next to one of their to-do lists showing it"
+    "shot": "An experiment's Steps and tasks section with a step that mentions two people, next to one of their to-do lists showing it",
+    "highlight": {
+      "x": 10.5,
+      "y": 31,
+      "w": 36,
+      "h": 8,
+      "label": "@ names in a step"
+    }
   },
   {
     "id": "guide-templates",
