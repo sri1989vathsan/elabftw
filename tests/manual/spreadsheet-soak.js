@@ -35,7 +35,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -114,7 +114,7 @@ async function spreadsheetSoak(options = {}) {
     return uid;
   }
 
-  async function editCell(root, r, c, value) {
+  async function editCell(root, r, c, value, key = 'Tab') {
     const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
     if (!td) throw new Error(`cell ${cellName(r, c)} not found`);
     const rect = td.getBoundingClientRect();
@@ -124,17 +124,23 @@ async function spreadsheetSoak(options = {}) {
     if (!box) throw new Error(`no cell editor opened for ${cellName(r, c)}`);
     box.value = value;
     box.dispatchEvent(new Event('input', { bubbles: true }));
-    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    // Tab by default: it moves on without changing the grid. Enter in a cell of the last row adds a row.
+    box.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
     await frames(2);
   }
 
-  async function typeInto(uid, r, c, value) {
+  async function typeInto(uid, r, c, value, key = 'Tab') {
     await timed('type-in-cell', async () => {
       const root = await live(uid);
-      await editCell(root, r, c, value);
+      await editCell(root, r, c, value, key);
     });
-    models.get(uid).grid[r][c] = value;
-    note('type-in-cell');
+    const model = models.get(uid);
+    model.grid[r][c] = value;
+    // Enter in a cell of the last row adds a row below it (up to 50 rows).
+    if (key === 'Enter' && r === model.grid.length - 1 && model.grid.length < 50) {
+      model.grid.push(Array.from({ length: model.grid[0].length }, () => ''));
+    }
+    note(key === 'Enter' ? 'type-with-enter' : 'type-in-cell');
   }
 
   // The diagnostics drop trailing empty rows and columns, so the record is cut the same way.
@@ -822,6 +828,35 @@ async function spreadsheetSoak(options = {}) {
       await measure('wide-plate: after menus');
       await save();
       await verify('wide-plate: saved', true); await measure('wide-plate: saved');
+    },
+    // Typing with Enter in the last row adds rows; typed values must survive that, and survive a row/column
+    // insert or delete done right after typing (before the grid has been redrawn). Data was lost here once:
+    // values typed through the editor box exist only in the editor's own copy until a redraw.
+    async 'enter-last-row'() {
+      const uid = await createTable('enter table', { rows: 3, cols: 3 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      for (let i = 0; i < 10; i++) {
+        const last = model().grid.length - 1;
+        await typeInto(uid, last, int(0, model().grid[0].length - 1), `E${i + 1}`, 'Enter');
+        await verify(`enter-last-row: Enter ${i + 1}, right after typing`, false);
+        if (i % 3 === 2) { await typeInto(uid, int(0, model().grid.length - 1), int(0, model().grid[0].length - 1), `T${i}`); }
+      }
+      await verify('enter-last-row: all Enter rows', true);
+      measure('enter-last-row: grown');
+      // typed values, then at once a row/column change
+      for (let i = 0; i < 6; i++) {
+        await typeInto(uid, int(0, model().grid.length - 1), int(0, model().grid[0].length - 1), `S${i + 1}`);
+        await structureOp(uid);
+        await verify(`enter-last-row: type then row/column change ${i + 1}`, false);
+      }
+      // and Enter in the last row followed at once by a popup
+      await typeInto(uid, model().grid.length - 1, 0, 'last-before-popup', 'Enter');
+      await popupEdit(uid, true, 2);
+      await verify('enter-last-row: popup after Enter', true);
+      await consistency('enter-last-row: inline, popup and stored HTML agree', true);
+      await save();
+      await verify('enter-last-row: saved', true);
     },
     async 'format-and-popup'() {
       const uid = await createTable('format table', { rows: 6, cols: 5 });
