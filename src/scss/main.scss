@@ -4623,6 +4623,36 @@ input[type='color'] {
   display: none;
 }
 
+/* While the More button is shown, its row keeps room for it, so it can never
+ * be drawn over the create/notification/help/profile icons on the right. */
+#main-nav:has(#navbarMoreItem:not([style*='display: none'])),
+#navbar-primary-nav:has(> #navbarMoreItem:not([style*='display: none'])) {
+  min-width: 2.75rem;
+}
+
+/* Narrow windows: tighter icons on the right so the profile menu and help
+ * always stay reachable next to the logo and More. */
+@media (max-width: 767.98px) {
+  #navbar-secondary-nav {
+    gap: 0;
+  }
+
+  #navbar-secondary-nav .nav-link,
+  #navbar-secondary-nav .btn.nav-link {
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+  }
+
+  #navbar-secondary-nav .fa-2x {
+    font-size: 1.3em;
+  }
+
+  #navbarMoreItem .nav-link {
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+  }
+}
+
 
 /* Holds a plain .dropdown-item placeholder link for each currently-hidden
  * #navbar-primary-nav item -- ordinary Bootstrap dropdown-item markup, so it
