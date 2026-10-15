@@ -2705,6 +2705,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   undoBtn: HTMLButtonElement;
   redoBtn: HTMLButtonElement;
   addRowBtn: HTMLButtonElement;
+  addRowsInput: HTMLInputElement;
   addColBtn: HTMLButtonElement;
   resizeBtn: HTMLButtonElement;
   rowsInput: HTMLInputElement;
@@ -2835,9 +2836,17 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   redoBtn.className = 'btn btn-sm btn-outline-secondary';
   const addRowBtn = document.createElement('button');
   addRowBtn.type = 'button';
-  addRowBtn.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i> <i class="fas fa-grip-lines" aria-hidden="true"></i>';
-  addRowBtn.title = 'Add one row at the bottom';
+  addRowBtn.textContent = 'Add rows';
+  addRowBtn.title = 'Add this many rows at the bottom';
   addRowBtn.className = 'btn btn-sm btn-outline-secondary';
+  const addRowsInput = document.createElement('input');
+  addRowsInput.type = 'number';
+  addRowsInput.min = '1';
+  addRowsInput.max = String(MAX_DIMENSION);
+  addRowsInput.value = '1';
+  addRowsInput.className = 'form-control form-control-sm';
+  addRowsInput.style.width = '4rem';
+  addRowsInput.setAttribute('aria-label', 'Number of rows to add');
   const addColBtn = document.createElement('button');
   addColBtn.type = 'button';
   addColBtn.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i> <i class="fas fa-columns" aria-hidden="true"></i>';
@@ -3480,7 +3489,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   buttonRow.className = 'inline-spreadsheet-actions';
   const gridButtons = document.createElement('div');
   gridButtons.className = 'inline-spreadsheet-grid-actions';
-  gridButtons.append(undoBtn, redoBtn, addRowBtn, addColBtn);
+  gridButtons.append(undoBtn, redoBtn, addRowsInput, addRowBtn, addColBtn);
   const rightButtons = document.createElement('div');
   rightButtons.className = 'd-flex ml-auto';
   const cancelBtn = document.createElement('button');
@@ -3520,6 +3529,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     undoBtn,
     redoBtn,
     addRowBtn,
+    addRowsInput,
     addColBtn,
     resizeBtn,
     rowsInput,
@@ -5870,7 +5880,14 @@ export function openSpreadsheetModal(
     ui.undoBtn.addEventListener('click', () => performCellUndo());
     ui.redoBtn.addEventListener('click', () => performCellRedo());
     ui.addRowBtn.addEventListener('click', () => {
-      resizeSpreadsheet(Math.min(MAX_DIMENSION, working.rows + 1), working.cols);
+      const count = Math.max(1, Math.round(Number(ui.addRowsInput.value) || 1));
+      resizeSpreadsheet(Math.min(MAX_DIMENSION, working.rows + count), working.cols);
+    });
+    ui.addRowsInput.addEventListener('keydown', keyEvent => {
+      if (keyEvent.key === 'Enter') {
+        keyEvent.preventDefault();
+        ui.addRowBtn.click();
+      }
     });
     ui.addColBtn.addEventListener('click', () => {
       resizeSpreadsheet(working.rows, Math.min(MAX_DIMENSION, working.cols + 1));
@@ -7299,6 +7316,48 @@ export function buildReadOnlySpreadsheetHost(
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   if (editable) installRowResizeGuide(sheetContainer);
   host.appendChild(sheetContainer);
+  if (editable) {
+    // Under the grid: how many rows, and a button to add them at the bottom.
+    const addRowsBar = document.createElement('div');
+    addRowsBar.className = 'elabftw-spreadsheet-add-rows';
+    const addRowsCount = document.createElement('input');
+    addRowsCount.type = 'number';
+    addRowsCount.min = '1';
+    addRowsCount.max = String(MAX_DIMENSION);
+    addRowsCount.value = '1';
+    addRowsCount.className = 'form-control form-control-sm';
+    addRowsCount.setAttribute('aria-label', 'Number of rows to add');
+    const addRowsButton = document.createElement('button');
+    addRowsButton.type = 'button';
+    addRowsButton.className = 'btn btn-sm btn-outline-secondary';
+    addRowsButton.textContent = 'Add rows';
+    addRowsButton.title = 'Add this many rows at the bottom';
+    addRowsButton.addEventListener('click', () => {
+      const mounted = getMountedWorksheet(sheetContainer);
+      const current = rawDataMirror.length;
+      const room = MAX_DIMENSION - current;
+      if (!mounted || room <= 0) {
+        addRowsButton.title = `A spreadsheet can have at most ${MAX_DIMENSION} rows`;
+        return;
+      }
+      const wanted = Math.round(Number(addRowsCount.value) || 1);
+      const count = Math.min(room, Math.max(1, wanted));
+      addRowsCount.value = String(count);
+      flushMirrorIntoWorksheet(mounted);
+      mounted.insertRow?.(count, current - 1, 0);
+    });
+    // typing in the box must not reach the grid or the page behind
+    ['keydown', 'keyup', 'keypress'].forEach(type => addRowsCount.addEventListener(type, keyEvent => {
+      keyEvent.stopPropagation();
+      if (type === 'keydown' && (keyEvent as KeyboardEvent).key === 'Enter') {
+        keyEvent.preventDefault();
+        addRowsButton.click();
+      }
+    }));
+    addRowsCount.addEventListener('mousedown', mouseEvent => mouseEvent.stopPropagation());
+    addRowsBar.append(addRowsCount, addRowsButton);
+    host.appendChild(addRowsBar);
+  }
   // jspreadsheet's own copy-to-clipboard reads each selected cell's
   // innerHTML -- which, for a row applyCellClipHeights has capped, is no
   // longer the cell's plain text but a <div class="jss-cell-clip"> tag

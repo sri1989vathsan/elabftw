@@ -6524,3 +6524,16 @@ div > .sticky-navbar {
     opacity: 1;
   }
 }
+
+/* The "number of rows + Add rows" bar under an editable spreadsheet. */
+.elabftw-spreadsheet-add-rows {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.4rem 0.25rem 0.2rem;
+
+  input {
+    text-align: center;
+    width: 4.5rem;
+  }
+}
