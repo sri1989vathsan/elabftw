@@ -2108,31 +2108,46 @@ function getWorksheet(instance: JssInstance): JssInstance {
 }
 
 /**
- * jspreadsheet-ce puts a few listeners on the window and the document while a grid is created
- * ("mousewheel", "touchmove" ...) and never takes them off when the grid is destroyed. Every grid ever
- * made in a session therefore kept running on each scroll and touch, which made a long session slower and
- * slower. These are collected while the grid is being created, so they can be removed with it.
- * Call startTrackingGlobalListeners() just before creating a grid and call what it returns right after:
- * that gives the function which removes those listeners again.
+ * jspreadsheet-ce puts two listeners on the page when a grid is created, a "mousewheel" on the window and a
+ * "touchmove" on the document, and never takes them off when the grid is destroyed. Every grid ever made in a
+ * session therefore kept running on each scroll and touch, which made a long session slower and slower.
+ * The library finishes its setup a moment after the creation call returns, so collecting goes on for a short
+ * while after it. Call startTrackingGlobalListeners() just before creating a grid and the function it returns
+ * right after: that gives the function which removes those two listeners again.
  */
-function startTrackingGlobalListeners(): () => () => void {
+type LibraryListener = [EventTarget, string, EventListenerOrEventListenerObject, boolean | AddEventListenerOptions | undefined];
+const libraryListenerCollectors = new Set<LibraryListener[]>();
+let libraryListenerPatchInstalled = false;
+const LIBRARY_SETUP_MS = 400;
+
+function installLibraryListenerPatch(): void {
+  if (libraryListenerPatchInstalled) return;
+  libraryListenerPatchInstalled = true;
   const proto = EventTarget.prototype;
   const original = proto.addEventListener;
-  const added: Array<[EventTarget, string, EventListenerOrEventListenerObject, boolean | AddEventListenerOptions | undefined]> = [];
   proto.addEventListener = function patchedAddEventListener(
     this: EventTarget,
     type: string,
     listener: EventListenerOrEventListenerObject | null,
     options?: boolean | AddEventListenerOptions,
   ): void {
-    if (listener && (this === window || this === document || this === document.body)) added.push([this, type, listener, options]);
+    if (libraryListenerCollectors.size > 0 && listener
+      && ((type === 'mousewheel' && this === window) || (type === 'touchmove' && this === document))) {
+      libraryListenerCollectors.forEach(collected => collected.push([this, type, listener, options]));
+    }
     original.call(this, type, listener, options);
   } as typeof proto.addEventListener;
-  return (): (() => void) => {
-    proto.addEventListener = original;
-    return (): void => {
-      added.splice(0).forEach(([target, type, listener, options]) => target.removeEventListener(type, listener, options));
-    };
+}
+
+function startTrackingGlobalListeners(): () => () => void {
+  installLibraryListenerPatch();
+  const collected: LibraryListener[] = [];
+  libraryListenerCollectors.add(collected);
+  const timer = window.setTimeout(() => libraryListenerCollectors.delete(collected), LIBRARY_SETUP_MS);
+  return (): (() => void) => () => {
+    window.clearTimeout(timer);
+    libraryListenerCollectors.delete(collected);
+    collected.splice(0).forEach(([target, type, listener, options]) => target.removeEventListener(type, listener, options));
   };
 }
 
