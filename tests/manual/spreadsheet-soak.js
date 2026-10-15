@@ -797,16 +797,18 @@ async function spreadsheetSoak(options = {}) {
       press(td); await sleep(250);
       const key = String.fromCharCode(97 + int(0, 25));
       const target = document.activeElement || root;
-      for (const el of [target, td, root]) {
-        el.dispatchEvent(new KeyboardEvent('keydown', { key, code: `Key${key.toUpperCase()}`, bubbles: true, cancelable: true }));
-      }
-      await sleep(300);
-      const box = visibleRescue();
+      // one key press, to whatever has the keyboard, like a real one
+      target.dispatchEvent(new KeyboardEvent('keydown', { key, code: `Key${key.toUpperCase()}`, bubbles: true, cancelable: true }));
+      // wait for the cell editor to open (up to 2 s) and record how long it took
+      let waited = 0; let box = null;
+      while (waited < 2000 && !(box = visibleRescue())) { await sleep(50); waited += 50; }
+      (timings['click-then-type-start'] ||= []).push(waited);
       const inCell = td.querySelector('input, textarea, [contenteditable=true]') || root.querySelector('.jss_editor input, .jss_editor textarea, td.editor');
       if (!box && !inCell) {
-        fail(`clicking ${cellName(r, c)} and typing "${key}" did not start editing`, { table: model.label });
+        fail(`clicking ${cellName(r, c)} and typing "${key}" did not start editing within 2 s`, { table: model.label });
         continue;
       }
+      if (waited > 700) fail(`clicking ${cellName(r, c)} and typing "${key}" took ${waited} ms to start editing`, { table: model.label });
       // Escape goes to the cell editor that has the keyboard, as a real key press would.
       (box || document.activeElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
       await sleep(350);
