@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'date-then-header', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1056,6 +1056,32 @@ async function spreadsheetSoak(options = {}) {
       editor.setContent(savedContent);
       layoutDirty = true;
       await sleep(900);
+    },
+    // Deleting several rows or columns at once: the grid, the saved table and the record must all agree
+    // after every delete, and a second delete straight after the first must not bring anything back.
+    async 'multi-delete'() {
+      const uid = await createTable('multi table', { rows: 9, cols: 9 });
+      if (!uid) return;
+      for (let r = 0; r < 9; r += 2) for (let c = 0; c < 9; c += 3) await typeInto(uid, r, c, `m${r}${c}`);
+      await verify('multi-delete: filled', true);
+      for (let i = 0; i < 8; i++) {
+        await multiDelete(uid);
+        await verify(`multi-delete ${i + 1}: right after`, false);
+        await verify(`multi-delete ${i + 1}: settled`, true);
+        const t = tableEl(uid);
+        const stored = [t.rows.length - 1, t.rows[0].cells.length - 1];
+        note('multi-delete-size-check');
+        const m = models.get(uid);
+        if (stored[0] !== m.grid.length || stored[1] !== m.grid[0].length) {
+          dataLoss.push({ context, table: m.label, problem: `after multi-delete ${i + 1} the saved table is ${stored[0]}x${stored[1]} but the grid is ${m.grid.length}x${m.grid[0].length}` });
+        }
+        // a quick second delete right away (before the table has caught up)
+        if (i % 2 === 1) { await multiDelete(uid); await verify(`multi-delete ${i + 1}b: settled`, true); }
+        if (m.grid.length < 5 || m.grid[0].length < 5) break;
+      }
+      await consistency('multi-delete: inline, popup and stored HTML agree', true);
+      await save();
+      await verify('multi-delete: saved', true);
     },
     async 'format-and-popup'() {
       const uid = await createTable('format table', { rows: 6, cols: 5 });
