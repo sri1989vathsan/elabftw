@@ -717,11 +717,11 @@ async function spreadsheetSoak(options = {}) {
       const inCell = td.querySelector('input, textarea, [contenteditable=true]') || root.querySelector('.jss_editor input, .jss_editor textarea, td.editor');
       if (!box && !inCell) {
         fail(`clicking ${cellName(r, c)} and typing "${key}" did not start editing`, { table: model.label });
-        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         continue;
       }
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      await sleep(250);
+      // Escape goes to the cell editor that has the keyboard, as a real key press would.
+      (box || document.activeElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await sleep(350);
     }
     await verify('click-to-type: nothing changed by starting and cancelling edits', true);
   }
