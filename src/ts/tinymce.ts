@@ -225,7 +225,7 @@ export function getTinymceBaseConfig(page: string): object {
   // Table alignment (outdent/indent) and sortable-table toggle live inside
   // the insert-data-table dropdown itself (see SpreadsheetExtension.ts)
   // rather than as their own toolbar buttons.
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough superscript subscript | forecolor backcolor format-painter remove-formatting | alignleft aligncenter alignright alignjustify | bullist numlist checklist | outdent indent elabftw-insert-menu | insert-link adddate experiment-title | horizontal-rule insert-note insert-data-table copy-table-or-selection | charmap emoticons codesample guide-help';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough superscript subscript | forecolor backcolor format-painter remove-formatting | alignleft aligncenter alignright alignjustify | bullist numlist checklist | outdent indent elabftw-insert-menu | insert-link adddate experiment-title insert-data-table | charmap emoticons codesample guide-help';
   if (!document.getElementById('documentTitle')) {
     toolbar1 = toolbar1.replace('experiment-title ', '');
   }
@@ -499,6 +499,11 @@ export function getTinymceBaseConfig(page: string): object {
       // SpreadsheetExtension.ts) added right after 'inserttable' so
       // "Spreadsheet" sits next to "Table", the same relationship they
       // already have in the insert-data-table toolbar button's own menu.
+      // Copy table / copy selection with formatting live here (and in the Table menu), not on the toolbar.
+      edit: {
+        title: 'Edit',
+        items: 'undo redo | cut copy paste pastetext | elabftw-copy-table elabftw-copy-selection | selectall | searchreplace',
+      },
       insert: {
         title: 'Insert',
         items: 'image link media codesample inserttable elabftw-insert-spreadsheet elabftw-insert-well-plate '

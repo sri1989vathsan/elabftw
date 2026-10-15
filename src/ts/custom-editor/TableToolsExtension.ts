@@ -234,6 +234,25 @@ export function registerTableToolsExtension(editor: Editor): void {
     });
   });
 
+  // The same two actions in the menu bar's Edit menu, next to Cut/Copy/Paste, where the toolbar
+  // dropdown used to be the only way to reach them.
+  editor.ui.registry.addMenuItem('elabftw-copy-table', {
+    text: 'Copy complete table',
+    icon: 'elabftw-copy-table',
+    onSetup: api => {
+      const update = (): void => api.setEnabled(!!selectedTable());
+      update();
+      editor.on('NodeChange', update);
+      return () => editor.off('NodeChange', update);
+    },
+    onAction: () => void copyWholeTable(),
+  });
+  editor.ui.registry.addMenuItem('elabftw-copy-selection', {
+    text: 'Copy selected text and tables',
+    icon: 'copy',
+    onAction: () => void copySelectedContent(),
+  });
+
   // One dropdown instead of two separate always-visible buttons: "copy the
   // whole table" only makes sense inside a table, so it's greyed out there
   // rather than needing its own toolbar slot.
