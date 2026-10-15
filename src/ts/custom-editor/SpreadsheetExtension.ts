@@ -2502,16 +2502,18 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       return table ? spreadsheetOverlays.get(table)?.el ?? null : null;
     },
     // For automated tests: add a scratch spreadsheet at the end of the text and remove it again.
-    insertScratch: (rows: number, cols: number): string | null => {
+    insertScratch: (rows: number, cols: number, options?: { plate?: number }): string | null => {
       const known = new Set(Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
         .map(table => ensureSpreadsheetUid(table)));
       editor.selection.select(editor.getBody(), true);
       editor.selection.collapse(false);
-      insertNewSpreadsheet(emptySpreadsheetData(cols, rows));
+      insertNewSpreadsheet(options?.plate ? createWellPlateSpreadsheetData(options.plate) : emptySpreadsheetData(cols, rows));
       const added = Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
         .find(table => !known.has(ensureSpreadsheetUid(table)));
       return added ? ensureSpreadsheetUid(added) : null;
     },
+    // The HTML of a spreadsheet as the clipboard would carry it when it is copied out of the text.
+    copyHtml: (uid: string): string | null => tableByUid(uid)?.outerHTML ?? null,
     removeTable: (uid: string): boolean => {
       const table = tableByUid(uid);
       if (!table) return false;
