@@ -3342,7 +3342,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   // Top / middle / bottom for the selected cells (the buttons further up are only the default for new cells).
   const verticalAlignmentButtons = createAlignmentButtons(cellFormatVerticalAlignSelect, [
     { value: 'top', label: 'Align selected cells to the top', icon: '<i class="fas fa-arrows-up-to-line" aria-hidden="true"></i>' },
-    { value: 'middle', label: 'Align selected cells to the middle', icon: '<i class="fas fa-up-down" aria-hidden="true"></i>' },
+    { value: 'middle', label: 'Align selected cells to the middle', icon: '<i class="fas fa-grip-lines" aria-hidden="true"></i>' },
     { value: 'bottom', label: 'Align selected cells to the bottom', icon: '<i class="fas fa-arrows-down-to-line" aria-hidden="true"></i>' },
   ]);
   const rowHeightInput = createInput(
@@ -7199,7 +7199,7 @@ export function buildReadOnlySpreadsheetHost(
       makeAlignButton('<i class="fas fa-align-right" aria-hidden="true"></i>', 'Align right', 'right'),
       makeAlignButton('<i class="fas fa-align-justify" aria-hidden="true"></i>', 'Justify', 'justify'),
       makeAlignButton('<i class="fas fa-arrows-up-to-line" aria-hidden="true"></i>', 'Align top', 'top', 'vertical-align'),
-      makeAlignButton('<i class="fas fa-up-down" aria-hidden="true"></i>', 'Align middle', 'middle', 'vertical-align'),
+      makeAlignButton('<i class="fas fa-grip-lines" aria-hidden="true"></i>', 'Align middle', 'middle', 'vertical-align'),
       makeAlignButton('<i class="fas fa-arrows-down-to-line" aria-hidden="true"></i>', 'Align bottom', 'bottom', 'vertical-align'),
       clearFormatButton,
       openFullEditorFromFormatBar,
