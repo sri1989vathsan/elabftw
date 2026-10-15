@@ -933,7 +933,7 @@
       "Subscribe from your own calendar: on the Calendar tab press Create private link, then add it to Google Calendar or Apple Calendar. The link is read-only and shows your task titles and deadlines, so keep it private. You can regenerate or revoke it at any time. Google Calendar needs the link to be reachable from the internet.",
       "Board cards assigned to you appear in this list as well. The Project boards button above the list opens the boards. When someone assigns you a task, you get a notification from the bell."
     ],
-    "imageAlt": "The To-do panel with the add-task box and tasks grouped by Today, Tomorrow and a later day",
+    "imageAlt": "The to-do panel adding a task with a custom weekly repeat on Monday and Thursday, with the Today button next to the date",
     "featured": false,
     "guide": true,
     "order": 35,
@@ -949,15 +949,15 @@
       "Make a chore that comes back, such as ordering buffer every Monday, repeat, and tick it off each time."
     ],
     "news": "New: one list for tasks and step deadlines with reminders, steps and comments on tasks, linked items, a completed and archived history, a calendar view, and a calendar subscription.",
-    "shot": "The To-do panel open next to a page, with the add-task box and the groups Overdue, Today and Tomorrow",
+    "shot": "Adding a task with Repeat set to every week on Monday and Thursday",
     "highlight": {
-      "x": 16.4,
-      "y": 22,
-      "w": 75.2,
-      "h": 8.9,
-      "label": "Add a task"
+      "x": 5,
+      "y": 65,
+      "w": 88,
+      "h": 27,
+      "label": "Repeat"
     },
-    "image": "guide-todo-58a3f88e.png",
+    "image": "guide-todo-repeat-0bf4a653.png",
     "screenshots": []
   },
   {
