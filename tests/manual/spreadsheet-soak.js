@@ -35,7 +35,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'date-then-header', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -866,6 +866,64 @@ async function spreadsheetSoak(options = {}) {
       await consistency('enter-last-row: inline, popup and stored HTML agree', true);
       await save();
       await verify('enter-last-row: saved', true);
+    },
+    // Text around a date: a header put under an inserted date must not bring an empty line with it.
+    // (Reported by the owner: "an empty line is inserted" when adding a header under a date.)
+    async 'date-then-header'() {
+      const body = () => editor.getBody();
+      const kinds = () => Array.from(body().children).map(el => {
+        const text = (el.textContent || '').replace(/[​\s]/g, '');
+        if (/^H[1-6]$/.test(el.tagName)) return el.querySelector('.elabftw-date-reference') ? 'DATE' : el.tagName;
+        if (el.tagName === 'P') return text === '' && !el.querySelector('img,table') ? 'EMPTY' : 'P';
+        return el.tagName;
+      });
+      const dateButton = () => [...document.querySelectorAll('.tox-split-button')].find(b => /Insert today/i.test(b.getAttribute('aria-label') || ''));
+      const titleButton = () => [...document.querySelectorAll('.tox-split-button')].find(b => /experiment title/i.test(b.getAttribute('aria-label') || ''));
+      const insertDate = async () => { dateButton().firstElementChild.click(); await sleep(450); };
+      const expectKinds = (label, expected) => {
+        const have = kinds();
+        note(`header-${label}`);
+        if (JSON.stringify(have) !== JSON.stringify(expected)) fail(`header under a date (${label}): expected ${expected.join(' ')} but found ${have.join(' ')}`, { html: body().innerHTML.replace(/<a class="elabftw-date-reference"[\s\S]*?<\/a>/g, '[date]').slice(0, 300) });
+      };
+      const fresh = async html => { editor.setContent(html); editor.focus(); editor.selection.select(editor.getBody(), true); editor.selection.collapse(false); await sleep(250); };
+
+      // 1. empty page: date, then the paragraph that follows becomes a Heading 2
+      await fresh('');
+      await insertDate();
+      editor.execCommand('mceToggleFormat', false, 'h2'); editor.insertContent('Header'); await sleep(250);
+      expectKinds('date then Heading 2 in the line below', ['DATE', 'H2']);
+      // 2. date, then the Insert title button
+      await fresh('');
+      await insertDate();
+      titleButton().firstElementChild.click(); await sleep(500);
+      const afterTitle = kinds();
+      note('header-title-button');
+      if (afterTitle.filter(k => k === 'EMPTY').length > 1 || afterTitle.indexOf('EMPTY') === 1) fail(`header under a date (title button): empty line between or more than one at the end: ${afterTitle.join(' ')}`);
+      // 3. text under the date; the caret goes into that line and it becomes a heading
+      await fresh('');
+      await insertDate();
+      editor.insertContent('Some notes'); await sleep(200);
+      editor.execCommand('mceToggleFormat', false, 'h2'); await sleep(250);
+      expectKinds('existing line under the date becomes Heading 2', ['DATE', 'H2']);
+      // 4. a heading inserted as content straight after the date
+      await fresh('');
+      await insertDate();
+      editor.insertContent('<h2>Inserted header</h2>'); await sleep(300);
+      const afterInsert = kinds();
+      note('header-insert-content');
+      if (afterInsert[1] === 'EMPTY') fail(`header under a date (inserted content): an empty line sits between them: ${afterInsert.join(' ')}`);
+      // 5. two dates with a header under each, written one after the other
+      await fresh('');
+      for (let i = 0; i < 3; i++) {
+        await insertDate();
+        editor.execCommand('mceToggleFormat', false, 'h2'); editor.insertContent(`Header ${i + 1}`); await sleep(200);
+        editor.execCommand('mceInsertNewLine'); editor.execCommand('mceToggleFormat', false, 'h2'); await sleep(150);
+      }
+      const many = kinds();
+      note('header-three-days');
+      const strayBetween = many.some((k, i) => k === 'EMPTY' && many[i - 1] === 'DATE');
+      if (strayBetween) fail(`header under a date (three days in a row): empty line directly under a date: ${many.join(' ')}`);
+      await fresh('');
     },
     async 'format-and-popup'() {
       const uid = await createTable('format table', { rows: 6, cols: 5 });
