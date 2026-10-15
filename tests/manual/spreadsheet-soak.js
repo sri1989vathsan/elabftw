@@ -35,7 +35,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -563,6 +563,155 @@ async function spreadsheetSoak(options = {}) {
     return copyUid;
   }
 
+  // ---- formatting, popup closing and click-to-type -------------------------------------------
+  const press = (el, extra = {}) => {
+    const rect = el.getBoundingClientRect();
+    const init = { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2, button: 0, buttons: 1, ...extra };
+    el.dispatchEvent(new PointerEvent('pointerdown', init));
+    el.dispatchEvent(new MouseEvent('mousedown', init));
+    el.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
+    el.dispatchEvent(new MouseEvent('click', { ...init, buttons: 0 }));
+  };
+  const isBold = td => /bold|700/.test(td.style.fontWeight || getComputedStyle(td).fontWeight);
+  const isItalic = td => /italic/.test(td.style.fontStyle || getComputedStyle(td).fontStyle);
+  const alignOf = td => td.style.textAlign || getComputedStyle(td).textAlign;
+  const findButton = (root, labels) => [...root.querySelectorAll('button, [title], [aria-label]')]
+    .find(b => labels.includes(b.title) || labels.includes(b.getAttribute('aria-label')));
+  const openFormatBar = root => {
+    const toggle = root.querySelector('.elabftw-spreadsheet-options-toggle');
+    if (toggle && !root.querySelector('.elabftw-spreadsheet-format-bar')?.offsetParent) toggle.click();
+  };
+  async function openPopupFor(uid) {
+    const root = await live(uid);
+    const button = root.querySelector('.elabftw-spreadsheet-readonly-open-editor');
+    if (!button) throw new Error('open-editor button not found');
+    button.click();
+    let dialog = null;
+    for (let i = 0; i < 60 && !(dialog = document.querySelector('.inline-spreadsheet-dialog')); i++) await sleep(50);
+    if (!dialog) throw new Error('popup did not open');
+    await sleep(450);
+    return dialog;
+  }
+  const popupOpen = () => !!document.querySelector('.inline-spreadsheet-dialog');
+  async function waitPopupGone() { for (let i = 0; i < 40 && popupOpen(); i++) await sleep(50); await sleep(500); }
+
+  // Formatting buttons inline and in the popup; look must show on screen, survive the popup's
+  // Update, and be written into the stored table.
+  async function formatting(uid) {
+    const model = models.get(uid);
+    note('formatting');
+    const savedLook = (r, c) => { const td = tableEl(uid).rows[r + 1]?.cells[c + 1]; return td ? { bold: /bold|700/.test(td.style.fontWeight), italic: /italic/.test(td.style.fontStyle), align: td.style.textAlign } : null; };
+    await timed('formatting', async () => {
+      let root = await live(uid);
+      openFormatBar(root); await sleep(450);
+      const steps = [
+        { r: 0, c: 0, label: ['Bold'], ok: td => isBold(td), what: 'bold' },
+        { r: 0, c: 1, label: ['Italic'], ok: td => isItalic(td), what: 'italic' },
+        { r: 1, c: 0, label: ['Align right'], ok: td => alignOf(td) === 'right', what: 'align right' },
+      ];
+      for (const step of steps) {
+        root = await live(uid);
+        press(root.querySelector(`td[data-x="${step.c}"][data-y="${step.r}"]`)); await sleep(200);
+        const button = findButton(root, step.label);
+        if (!button) { fail(`inline "${step.label[0]}" button not found`, { table: model.label }); continue; }
+        button.click(); await sleep(400);
+        root = await live(uid);
+        if (!step.ok(root.querySelector(`td[data-x="${step.c}"][data-y="${step.r}"]`))) fail(`inline ${step.what} did not show on the cell`, { table: model.label });
+      }
+      await sleep(config.settleMs);
+      const s0 = savedLook(0, 0); const s1 = savedLook(0, 1); const s2 = savedLook(1, 0);
+      if (!s0?.bold) dataLoss.push({ context, table: model.label, where: 'stored table', problem: 'bold formatting not saved' });
+      if (!s1?.italic) dataLoss.push({ context, table: model.label, where: 'stored table', problem: 'italic formatting not saved' });
+      if (s2?.align !== 'right') dataLoss.push({ context, table: model.label, where: 'stored table', problem: 'right alignment not saved' });
+      // the same buttons in the popup
+      const dialog = await openPopupFor(uid);
+      const popupSteps = [
+        { r: 1, c: 1, label: ['Bold', 'Bold selected cells'], ok: td => isBold(td), what: 'bold' },
+        { r: 2, c: 0, label: ['Italic', 'Italicize selected cells'], ok: td => isItalic(td), what: 'italic' },
+        { r: 2, c: 1, label: ['Align center'], ok: td => alignOf(td) === 'center', what: 'align center' },
+      ];
+      openFormatBar(dialog);
+      for (const step of popupSteps) {
+        const td = dialog.querySelector(`td[data-x="${step.c}"][data-y="${step.r}"]`);
+        if (!td) continue;
+        press(td); await sleep(200);
+        const button = findButton(dialog, step.label);
+        if (!button) { fail(`popup "${step.label[0]}" button not found`, { table: model.label }); continue; }
+        button.click(); await sleep(400);
+        if (!step.ok(dialog.querySelector(`td[data-x="${step.c}"][data-y="${step.r}"]`))) fail(`popup ${step.what} did not show on the cell`, { table: model.label });
+      }
+      [...dialog.querySelectorAll('button')].find(b => /^Update/.test(b.textContent.trim()))?.click();
+      await waitPopupGone();
+      root = await live(uid);
+      if (!isBold(root.querySelector('td[data-x="1"][data-y="1"]'))) dataLoss.push({ context, table: model.label, where: 'inline grid', problem: 'bold set in the popup was lost after Update' });
+      await sleep(config.settleMs);
+      if (!savedLook(1, 1)?.bold) dataLoss.push({ context, table: model.label, where: 'stored table', problem: 'bold set in the popup not saved' });
+      if (!isBold(root.querySelector('td[data-x="0"][data-y="0"]'))) dataLoss.push({ context, table: model.label, where: 'inline grid', problem: 'inline bold lost after the popup was used' });
+    });
+  }
+
+  // Closing the popup without saving must never delete, empty or move the table.
+  async function popupClosing(uid) {
+    const model = models.get(uid);
+    note('popup-closing');
+    const countBefore = api.snapshot(false).length;
+    for (const how of ['Cancel button', 'close (X) button', 'Escape key', 'click outside']) {
+      await timed('popup-close', async () => {
+        const dialog = await openPopupFor(uid);
+        const r = int(0, model.grid.length - 1); const c = int(0, model.grid[0].length - 1);
+        await editCell(dialog, r, c, `unsaved-${int(100, 999)}`); // typed but never applied
+        if (how === 'Cancel button') [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
+        else if (how === 'close (X) button') {
+          const x = [...dialog.querySelectorAll('button, [role=button], .close')].find(b => /^(close|×|✕|x)$/i.test((b.getAttribute('aria-label') || b.title || b.textContent || '').trim()));
+          if (x) x.click(); else { note('popup-no-x-button'); [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click(); }
+        } else if (how === 'Escape key') {
+          dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        } else {
+          const backdrop = document.elementFromPoint(4, 4);
+          if (backdrop && !dialog.contains(backdrop)) press(backdrop);
+        }
+        await waitPopupGone();
+        if (popupOpen()) { // closed some other way if this one does not close it: not a data problem
+          [...document.querySelector('.inline-spreadsheet-dialog').querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
+          await waitPopupGone();
+          note(`popup-did-not-close-by-${how.replace(/\W+/g, '-')}`);
+        }
+      });
+      if (!tableEl(uid)) dataLoss.push({ context, table: model.label, problem: `table deleted by closing the popup with the ${how}` });
+      if (api.snapshot(false).length !== countBefore) dataLoss.push({ context, table: model.label, problem: `spreadsheet count changed after closing the popup with the ${how}` });
+      await verify(`popup closed by ${how}`, true);
+    }
+  }
+
+  // A click on a cell, then typing, starts editing at once (no double-click needed).
+  async function clickToType(uid) {
+    const model = models.get(uid);
+    note('click-to-type');
+    const root = await live(uid);
+    for (let i = 0; i < 3; i++) {
+      const r = int(0, model.grid.length - 1); const c = int(0, model.grid[0].length - 1);
+      const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
+      press(td); await sleep(250);
+      const key = String.fromCharCode(97 + int(0, 25));
+      const target = document.activeElement || root;
+      for (const el of [target, td, root]) {
+        el.dispatchEvent(new KeyboardEvent('keydown', { key, code: `Key${key.toUpperCase()}`, bubbles: true, cancelable: true }));
+      }
+      await sleep(300);
+      const box = visibleRescue();
+      const inCell = td.querySelector('input, textarea, [contenteditable=true]') || root.querySelector('.jss_editor input, .jss_editor textarea, td.editor');
+      if (!box && !inCell) {
+        fail(`clicking ${cellName(r, c)} and typing "${key}" did not start editing`, { table: model.label });
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        continue;
+      }
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await sleep(250);
+    }
+    await verify('click-to-type: nothing changed by starting and cancelling edits', true);
+  }
+
   // ---- scenarios ------------------------------------------------------------------------
   const scenarios = {
     async 'plate-day'() {
@@ -659,6 +808,20 @@ async function spreadsheetSoak(options = {}) {
       measure('wide-plate: after menus');
       await save();
       await verify('wide-plate: saved', true); measure('wide-plate: saved');
+    },
+    async 'format-and-popup'() {
+      const uid = await createTable('format table', { rows: 6, cols: 5 });
+      if (!uid) return;
+      await typeInto(uid, 0, 0, 'head'); await typeInto(uid, 3, 3, '42');
+      await verify('format: filled', true);
+      await clickToType(uid);
+      await formatting(uid);
+      await verify('format: after formatting', true);
+      await popupClosing(uid);
+      await consistency('format: inline, popup and stored HTML agree', true);
+      measure('format: end');
+      await save();
+      await verify('format: saved', true);
     },
     async mixed() {
       const made = [];
