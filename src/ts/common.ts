@@ -376,6 +376,15 @@ if (navbar) {
       return;
     }
 
+    // On a very narrow window not even the "More" button fits next to the
+    // icons on the right: show only its icon so it never overlaps them.
+    moreItem.classList.remove('compact');
+    if (moreWidth > available) {
+      moreItem.classList.add('compact');
+      moreItem.style.display = '';
+      moreWidth = outerWidth(moreItem);
+    }
+
     // Otherwise the "More" button itself takes up some of the row -- work
     // out how many items (from the start) still fit alongside it.
     let shown = 0;
@@ -401,7 +410,17 @@ if (navbar) {
     moreItem.style.display = shown < items.length ? '' : 'none';
   };
 
+  // Until the fonts are in and the first fit has been worked out, the row is
+  // kept invisible so the links do not visibly jump into "More" after a refresh.
+  let revealed = false;
+  const reveal = (): void => {
+    if (revealed) return;
+    revealed = true;
+    primaryNav.classList.add('priority-ready');
+  };
   apply();
+  void document.fonts.ready.then(() => { apply(); reveal(); });
+  setTimeout(reveal, 700);
   const observer = new ResizeObserver(apply);
   observer.observe(primaryNav);
   const secondaryNav = document.getElementById('navbar-secondary-nav');

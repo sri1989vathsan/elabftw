@@ -62,6 +62,7 @@ async function spreadsheetSoak(options = {}) {
   window.confirm = () => true;
   const dataLoss = [];
   const failures = [];
+  let scrollJiggles = 0;
   const sizes = { checks: 0, widest: 0, taller: 0, shorter: 0, problems: [] };
   const menus = { checked: 0, problems: [] };
   const timings = {};
@@ -184,6 +185,7 @@ async function spreadsheetSoak(options = {}) {
   }
 
   // ---- 2. editor size -------------------------------------------------------------------
+  const lastSize = { frame: 0, content: 0 };
   function measure(label) {
     const container = editor.getContainer();
     const iframe = container.querySelector('iframe');
@@ -210,6 +212,7 @@ async function spreadsheetSoak(options = {}) {
       const rect = overlay.getBoundingClientRect();
       if (rect.width > 0 && (rect.left < box.left - 3 || rect.right > box.right + 3)) problems.push('a spreadsheet sticks out of the editor sideways');
     });
+    lastSize.frame = Math.round(frameHeight); lastSize.content = Math.round(contentHeight);
     problems.forEach(problem => { if (sizes.problems.length < 40) sizes.problems.push({ context: label, problem }); });
   }
 
@@ -320,6 +323,174 @@ async function spreadsheetSoak(options = {}) {
     if (kind === 'del-col') model.grid.forEach(row => row.splice(c, 1));
   }
 
+  // ---- consistency between the three copies: inline grid, popup, and the stored HTML -------
+  const storedData = table => {
+    try {
+      const raw = table.getAttribute('data-spreadsheet');
+      const json = JSON.parse(decodeURIComponent(escape(atob(raw))));
+      return (json.data || []).map(row => row.map(v => (v == null ? '' : String(v))));
+    } catch (error) { return null; }
+  };
+  const domCells = root => {
+    const out = [];
+    root.querySelectorAll('.jss_worksheet tbody tr').forEach((tr, r) => {
+      out[r] = [];
+      tr.querySelectorAll('td[data-x]').forEach(td => { out[r][Number(td.dataset.x)] = (td.textContent || '').trim(); });
+    });
+    return out;
+  };
+  const sameGrid = (a, b) => JSON.stringify(trim(a)) === JSON.stringify(trim(b));
+  async function consistency(label, withPopup) {
+    context = label;
+    await sleep(config.settleMs);
+    note('consistency');
+    for (const [uid, model] of models) {
+      const table = tableEl(uid);
+      if (!table) continue;
+      const stored = storedData(table);
+      if (!stored) fail('stored data in the HTML (data-spreadsheet) is unreadable', { table: model.label });
+      else if (!sameGrid(stored, model.grid) && !model.plate) dataLoss.push({ context, table: model.label, where: 'stored HTML (data-spreadsheet)', problem: 'differs from what was entered', have: JSON.stringify(trim(stored)).slice(0, 160) });
+      else if (model.plate && !sameGrid(stored.slice(0, model.grid.length).map(r => r.slice(0, model.grid[0].length)), model.grid)) dataLoss.push({ context, table: model.label, where: 'stored HTML (data-spreadsheet)', problem: 'differs from what was entered' });
+      const shown = extractShown(table);
+      if (shown && !sameGrid(shown, model.grid)) dataLoss.push({ context, table: model.label, where: 'visible table cells', problem: 'differ from what was entered' });
+      if (withPopup) {
+        const root = await live(uid);
+        const inline = domCells(root);
+        if (!sameGrid(inline, model.grid)) dataLoss.push({ context, table: model.label, where: 'inline grid cells on screen', problem: 'differ from what was entered' });
+        const button = root.querySelector('.elabftw-spreadsheet-readonly-open-editor');
+        if (button) {
+          button.click();
+          let dialog = null;
+          for (let i = 0; i < 60 && !(dialog = document.querySelector('.inline-spreadsheet-dialog')); i++) await sleep(50);
+          if (!dialog) { fail('popup did not open for the consistency check', { table: model.label }); continue; }
+          await sleep(500);
+          const inPopup = domCells(dialog);
+          if (!sameGrid(inPopup, model.grid)) dataLoss.push({ context, table: model.label, where: 'popup', problem: 'popup shows different data than the inline grid / stored table' });
+          const cancel = [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()));
+          cancel?.click();
+          for (let i = 0; i < 60 && document.querySelector('.inline-spreadsheet-dialog'); i++) await sleep(50);
+        }
+      }
+    }
+  }
+  // The text of the real table cells in the editor (without its header row and column).
+  function extractShown(table) {
+    return Array.from(table.rows).slice(1).map(tr => Array.from(tr.cells).slice(1).map(td => (td.textContent || '').trim()));
+  }
+
+  // ---- scrolling without jiggle ---------------------------------------------------------
+  // Scroll down and up in small steps; at every stop each spreadsheet's grid must sit exactly on its
+  // table (no drift), the editor must keep its height, and tables must keep their place in the text.
+  async function scrollCheck(label) {
+    context = label;
+    note('scroll-check');
+    const iframe = editor.getContainer().querySelector('iframe');
+    const doc = editor.getDoc();
+    const stops = [];
+    const height = () => document.documentElement.scrollHeight;
+    const start = window.scrollY;
+    const positions = () => Array.from(doc.querySelectorAll('table.elabftw-spreadsheet')).map(t => Math.round(t.getBoundingClientRect().top + doc.defaultView.scrollY));
+    const baseline = positions();
+    const frameBase = Math.round(iframe.getBoundingClientRect().height);
+    const heightBase = height();
+    const path = [];
+    for (let y = 0; y <= Math.min(heightBase, 4000); y += 160) path.push(y);
+    const reversed = path.slice().reverse();
+    await timed('scroll-pass', async () => {
+      for (const y of [...path, ...reversed]) {
+        window.scrollTo(0, y);
+        await frames(3);
+        await sleep(60);
+        const tables = Array.from(doc.querySelectorAll('table.elabftw-spreadsheet'));
+        const frameRect = iframe.getBoundingClientRect();
+        tables.forEach((table, i) => {
+          const uid = table.getAttribute('data-elabftw-spreadsheet-uid');
+          const overlay = uid ? api.overlayElement(uid) : null;
+          if (!overlay) return;
+          const t = table.getBoundingClientRect();
+          const o = overlay.getBoundingClientRect();
+          if (o.width === 0 || o.height === 0) return;
+          const dx = Math.abs(o.left - (frameRect.left + t.left));
+          const dy = Math.abs(o.top - (frameRect.top + t.top));
+          if (dx > 3 || dy > 3) stops.push({ y, table: i + 1, drift: `${Math.round(dx)}px across, ${Math.round(dy)}px down` });
+        });
+        const frame = Math.round(iframe.getBoundingClientRect().height);
+        if (Math.abs(frame - frameBase) > 2) stops.push({ y, problem: `editor height changed from ${frameBase} to ${frame} px while scrolling` });
+        const hNow = height();
+        if (Math.abs(hNow - heightBase) > 4) stops.push({ y, problem: `page height changed from ${heightBase} to ${hNow} px while scrolling` });
+      }
+    });
+    const after = positions();
+    if (JSON.stringify(after) !== JSON.stringify(baseline)) stops.push({ problem: `tables moved inside the text: ${JSON.stringify(baseline)} to ${JSON.stringify(after)}` });
+    window.scrollTo(0, start);
+    stops.slice(0, 6).forEach(stop => { if (sizes.problems.length < 40) sizes.problems.push({ context: `${label} (scrolling)`, problem: stop.problem || `grid ${stop.drift} off its table at scroll ${stop.y} (table ${stop.table})` }); });
+    scrollJiggles += stops.length;
+  }
+
+  // Select several rows or columns (click the first, shift-click the last) and delete them at once.
+  async function multiDelete(uid) {
+    const model = models.get(uid);
+    if (model.plate) return;
+    const byRow = random() < 0.5;
+    const size = byRow ? model.grid.length : model.grid[0].length;
+    if (size < 5) return;
+    const count = int(2, Math.min(3, size - 2));
+    const first = int(0, size - count);
+    const lastIdx = first + count - 1;
+    note(byRow ? 'multi-delete-rows' : 'multi-delete-columns');
+    measure('before multi-delete');
+    const before = { frame: lastSize.frame, content: lastSize.content };
+    await timed(byRow ? 'multi-delete-rows' : 'multi-delete-columns', async () => {
+      const root = await live(uid);
+      const cellAt = (r, c) => root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
+      const press = (el, extra = {}) => {
+        const rect = el.getBoundingClientRect();
+        const init = { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2, button: 0, buttons: 1, ...extra };
+        el.dispatchEvent(new PointerEvent('pointerdown', init));
+        el.dispatchEvent(new MouseEvent('mousedown', init));
+        el.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
+        el.dispatchEvent(new MouseEvent('click', { ...init, buttons: 0 }));
+      };
+      const from = byRow ? cellAt(first, 0) : cellAt(0, first);
+      const to = byRow ? cellAt(lastIdx, model.grid[0].length - 1) : cellAt(model.grid.length - 1, lastIdx);
+      press(from); await sleep(150);
+      press(to, { shiftKey: true }); await sleep(250);
+      const target = byRow ? cellAt(lastIdx, 0) : root.querySelector(`.jss_worksheet thead td[data-x="${lastIdx}"]`) || cellAt(0, lastIdx);
+      const rect = target.getBoundingClientRect();
+      const init = { bubbles: true, cancelable: true, view: window, clientX: rect.x + 12, clientY: rect.y + 8, button: 2, buttons: 2 };
+      target.dispatchEvent(new MouseEvent('contextmenu', init));
+      await sleep(300);
+      const menu = openMenu();
+      const item = menu && [...menu.querySelectorAll('a')].find(a => (byRow ? /delete selected rows/i : /delete selected columns/i).test(a.textContent));
+      if (!item) { fail('multi-delete menu item not found', { table: model.label }); await closeMenu(model.label, 'multi-delete'); return; }
+      item.click();
+      await sleep(700);
+    });
+    // what the model should look like if the selection covered exactly the chosen range
+    const snapshotNow = trim(api.snapshot(true).find(e => e.uid === uid)?.overlayData ?? []);
+    const expectedRows = byRow ? model.grid.filter((_, i) => i < first || i > lastIdx) : model.grid.map(row => row.filter((_, i) => i < first || i > lastIdx));
+    if (JSON.stringify(snapshotNow) === JSON.stringify(trim(expectedRows))) {
+      model.grid = expectedRows;
+    } else {
+      // The selection may have covered a different range than asked: accept it only when it is
+      // a pure removal of whole rows/columns; anything else is data loss.
+      const removedWhole = byRow
+        ? model.grid.some((_, skip) => false)
+        : false;
+      const candidates = [];
+      const size2 = byRow ? model.grid.length : model.grid[0].length;
+      for (let a = 0; a < size2; a++) for (let b = a; b < size2; b++) {
+        candidates.push(byRow ? model.grid.filter((_, i) => i < a || i > b) : model.grid.map(row => row.filter((_, i) => i < a || i > b)));
+      }
+      const match = candidates.find(c => JSON.stringify(trim(c)) === JSON.stringify(snapshotNow));
+      if (match && !removedWhole) { model.grid = match; dataLoss.push({ context, table: model.label, problem: `multi-delete removed a different range than selected (asked ${first}-${lastIdx})`, note: 'rows/columns outside the selection were lost' }); }
+      else dataLoss.push({ context, table: model.label, problem: 'multi-delete left data that is not a whole-row/column removal', have: JSON.stringify(snapshotNow).slice(0, 160) });
+      if (match === undefined) model.grid = expectedRows;
+    }
+    measure('after multi-delete');
+    if (lastSize.frame > before.frame + 4) sizes.problems.push({ context: 'after multi-delete', problem: `editor grew from ${before.frame} to ${lastSize.frame} px after deleting rows/columns` });
+  }
+
   async function popupEdit(uid, apply, edits) {
     const model = models.get(uid);
     note(apply ? 'popup-apply' : 'popup-cancel');
@@ -393,7 +564,9 @@ async function spreadsheetSoak(options = {}) {
       }
       await popupEdit(uid, true, 3);
       await verify('plate-day: popup applied', true);
+      await consistency('plate-day: inline, popup and stored HTML agree', true);
       await menuTour(uid);
+      await scrollCheck('plate-day');
       await save();
       await verify('plate-day: saved', true); measure('plate-day: saved');
     },
@@ -411,8 +584,10 @@ async function spreadsheetSoak(options = {}) {
         measure('back-to-back: typing');
       }
       for (const uid of made) await menuTour(uid);
+      await scrollCheck('back-to-back');
       await popupEdit(made[1], true, 2);
       await verify('back-to-back: popup applied', true);
+      await consistency('back-to-back: inline, popup and stored HTML agree', true);
       await save();
       await verify('back-to-back: saved', true); measure('back-to-back: saved');
     },
@@ -433,8 +608,11 @@ async function spreadsheetSoak(options = {}) {
       }
       await verify('spaced-out: edited top to bottom and back', false);
       for (const uid of made) await structureOp(uid);
+      for (const uid of made) await multiDelete(uid);
       await verify('spaced-out: rows and columns changed', true);
+      await consistency('spaced-out: inline, popup and stored HTML agree', true);
       await menuTour(made[made.length - 1]);
+      await scrollCheck('spaced-out');
       await save();
       await verify('spaced-out: saved', true); measure('spaced-out: saved');
     },
@@ -452,6 +630,7 @@ async function spreadsheetSoak(options = {}) {
       if (far) { await typeInto(far, 1, 2, 'only-in-copy-2'); }
       await typeInto(original, 2, 2, 'only-in-original');
       await verify('copy-paste: each edited alone (no leaking between them)', true);
+      await consistency('copy-paste: inline, popup and stored HTML agree', true);
       for (const uid of [original, right, far].filter(Boolean)) await menuTour(uid);
       await save();
       await verify('copy-paste: saved', true); measure('copy-paste: saved');
@@ -465,6 +644,7 @@ async function spreadsheetSoak(options = {}) {
       measure('wide-plate: typing');
       await verify('wide-plate: corners filled', true);
       await menuTour(uid);
+      await scrollCheck('wide-plate');
       measure('wide-plate: after menus');
       await save();
       await verify('wide-plate: saved', true); measure('wide-plate: saved');
@@ -484,9 +664,10 @@ async function spreadsheetSoak(options = {}) {
         let name = '';
         try {
           if (roll < 0.40) { name = 'type'; await typeInto(uid, int(0, model.grid.length - 1), int(0, model.grid[0].length - 1), random() < 0.2 ? `=${cellName(0, 0)}+1` : String(int(0, 999))); }
-          else if (roll < 0.50) { name = 'scroll'; window.scrollTo(0, 0); await sleep(int(150, 700)); await live(uid); }
+          else if (roll < 0.50) { name = 'scroll'; await scrollCheck(`mixed round ${round}`); await live(uid); }
           else if (roll < 0.62) { name = 'popup-apply'; await popupEdit(uid, true, int(1, 2)); }
           else if (roll < 0.70) { name = 'popup-cancel'; await popupEdit(uid, false, 1); }
+          else if (roll < 0.76) { name = 'multi-delete'; await multiDelete(uid); }
           else if (roll < 0.82) { name = 'rows-columns'; await structureOp(uid); }
           else if (roll < 0.90) { name = 'menu'; await menuTour(uid); }
           else { name = 'save'; await save(); }
@@ -498,6 +679,7 @@ async function spreadsheetSoak(options = {}) {
         await verify(`mixed round ${round} ${name}`, round % 6 === 0);
       }
       await verify('mixed: final', true);
+      await consistency('mixed: inline, popup and stored HTML agree', true);
     },
   };
 
@@ -566,6 +748,7 @@ async function spreadsheetSoak(options = {}) {
       : (dataLoss.length ? 'DATA LOSS FOUND' : 'PROBLEMS FOUND (no data lost)'),
     seed: config.seed, sessions: config.sessions, seconds: Math.round((performance.now() - t0) / 100) / 10,
     dataLoss: dataLoss.slice(0, 30), dataLossCount: dataLoss.length,
+    scrollJiggleEvents: scrollJiggles,
     editorSize: { checks: sizes.checks, widestEditorPx: sizes.widest, mostExtraHeightPx: sizes.taller, mostMissingHeightPx: sizes.shorter, problems: sizes.problems },
     menus: { checked: menus.checked, problems: menus.problems },
     slowingDown: { flagged: slower, perStep, heapGrowth, sessionEnds },

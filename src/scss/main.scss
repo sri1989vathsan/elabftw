@@ -4614,6 +4614,16 @@ input[type='color'] {
   flex-shrink: 0;
 }
 
+#navbar-primary-nav:not(.priority-ready) {
+  visibility: hidden;
+}
+
+/* very narrow window: only the ellipsis icon of the More button */
+#navbarMoreItem.compact .more-label {
+  display: none;
+}
+
+
 /* Holds a plain .dropdown-item placeholder link for each currently-hidden
  * #navbar-primary-nav item -- ordinary Bootstrap dropdown-item markup, so it
  * needs no styling of its own beyond a sensible minimum width. */
