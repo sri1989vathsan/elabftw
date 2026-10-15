@@ -377,6 +377,7 @@
       "fa-list-check::To-do list (the checklist icon): your tasks and step deadlines. A red number shows what is overdue or due soon.",
       "fa-calendar-days::Activity calendar (the calendar icon): a Day, Week or Month view of your deadlines and what you finished. A red number shows what is due soon.",
       "fa-bars-staggered::Table of contents (the lines icon): only on an experiment or resource page, it lists the headings so you can jump to one or show only the sections you pick.",
+      "fa-bars::On a narrow window the row of buttons would sit on top of your page, so it folds into one button in the top bar, to the left of the eLabFTW logo. Click it to show all the buttons, pick one to open its panel, and the row folds away again. A panel that is open keeps its own button visible so you can close it.",
       "fa-circle-info::The “i” at the bottom of the row opens this guide card."
     ],
     "imageAlt": "The left sidebar buttons: folders, quick search, quick actions, to-do, activity calendar and guide",
