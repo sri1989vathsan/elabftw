@@ -429,6 +429,29 @@ if (navbar) {
   document.fonts.addEventListener('loadingdone', apply);
 })();
 
+// Narrow windows: one button shows or hides the rest of the sidebar button rail (see main.scss).
+(function initSidepanelRailToggle(): void {
+  const rail = document.getElementById('sidepanel-buttons');
+  const toggle = document.getElementById('sidepanelRailToggle');
+  if (!rail || !toggle) {
+    return;
+  }
+  const setOpen = (open: boolean): void => {
+    rail.classList.toggle('rail-open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.querySelector('i')?.classList.toggle('fa-bars', !open);
+    toggle.querySelector('i')?.classList.toggle('fa-xmark', open);
+  };
+  toggle.addEventListener('click', () => setOpen(!rail.classList.contains('rail-open')));
+  // Choosing one of the buttons folds the rail up again.
+  rail.addEventListener('click', event => {
+    const button = (event.target as HTMLElement).closest('.sidepanel-btn');
+    if (button && button !== toggle) {
+      setOpen(false);
+    }
+  });
+})();
+
 const container = document.getElementById('container')!;
 
 on('set-theme', (el: HTMLElement) => {

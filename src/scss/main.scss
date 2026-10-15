@@ -1283,6 +1283,23 @@ tr:first-child td {
   }
 }
 
+/* Narrow windows: the rail of sidebar buttons would sit on top of the page, so it collapses into
+ * one button (#sidepanelRailToggle) that shows the others on demand. A button whose panel is
+ * open stays visible so the panel can always be closed. */
+.sidepanel-rail-toggle {
+  display: none;
+}
+
+@media (max-width: 991.98px) {
+  .sidepanel-rail-toggle {
+    display: block;
+  }
+
+  #sidepanel-buttons:not(.rail-open) > .sidepanel-btn:not(.sidepanel-rail-toggle):not(.sidepanel-opened) {
+    display: none;
+  }
+}
+
 .sidepanel-reminder-badge {
   font-size: 0.6rem;
   min-width: 1rem;
