@@ -501,7 +501,7 @@ export function getTinymceBaseConfig(page: string): object {
       // already have in the insert-data-table toolbar button's own menu.
       insert: {
         title: 'Insert',
-        items: 'image link media template codesample inserttable elabftw-insert-spreadsheet '
+        items: 'image link media template codesample inserttable elabftw-insert-spreadsheet elabftw-insert-well-plate '
           + 'accordion charmap emoticons hr pagebreak insertdatetime',
       },
     },

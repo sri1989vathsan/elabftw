@@ -1032,20 +1032,20 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   editor.ui.registry.addNestedMenuItem('elabftw-insert-spreadsheet', {
     text: 'Spreadsheet',
     icon: 'elabftw-spreadsheet-formula',
-    getSubmenuItems: () => [
-      ...buildSpreadsheetSubmenuItems(),
-      {
-        type: 'nestedmenuitem',
-        text: 'Well plate',
-        icon: 'elabftw-well-plate',
-        getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
-          type: 'menuitem',
-          text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
-          // straight into the text, like the size picker -- no popup to open first
-          onAction: () => insertNewSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
-        })),
-      },
-    ],
+    getSubmenuItems: () => buildSpreadsheetSubmenuItems(),
+  });
+
+  // Well plate has its own entry in the Insert menu, right after Spreadsheet
+  // (see tinymce.ts), instead of sitting inside the Spreadsheet submenu.
+  editor.ui.registry.addNestedMenuItem('elabftw-insert-well-plate', {
+    text: 'Well plate',
+    icon: 'elabftw-well-plate',
+    getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
+      type: 'menuitem',
+      text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
+      // straight into the text, like the size picker -- no popup to open first
+      onAction: () => insertNewSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
+    })),
   });
 
   editor.on('dblclick', event => {

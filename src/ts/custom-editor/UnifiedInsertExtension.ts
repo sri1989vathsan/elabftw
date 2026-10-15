@@ -92,7 +92,13 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
       register('title', buttonAsMenuItem(editor, 'experiment-title', 'Insert title'));
       register('divider', buttonAsMenuItem(editor, 'horizontal-rule', 'Insert divider'));
       noteItems.forEach((item, index) => register(`note-${index}`, item));
-      tableItems.forEach((item, index) => register(`table-${index}`, item));
+      // Spreadsheet and Well plate are entries of the Insert menu itself, next to
+      // Text, Tables, Links and Laboratory, not buried inside Tables
+      const isDirect = (item: AnyMenuItem): boolean => item.type === 'nestedmenuitem'
+        && (item.text === 'Spreadsheet' || item.text === 'Well plate');
+      const directItems = tableItems.filter(isDirect);
+      const plainTableItems = tableItems.filter(item => !isDirect(item));
+      plainTableItems.forEach((item, index) => register(`table-${index}`, item));
       linkItems.forEach((item, index) => register(`link-${index}`, item));
       register('template', buttonAsMenuItem(editor, 'inserttemplate', 'Insert template'));
 
@@ -117,8 +123,9 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
         {
           type: 'nestedmenuitem',
           text: 'Tables',
-          getSubmenuItems: () => tableItems.map((_, index) => catalog[`table-${index}`]).filter(Boolean),
+          getSubmenuItems: () => plainTableItems.map((_, index) => catalog[`table-${index}`]).filter(Boolean),
         },
+        ...directItems,
         {
           type: 'nestedmenuitem',
           text: 'Links',
