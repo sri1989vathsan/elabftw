@@ -204,7 +204,15 @@ final class StepMentions
         }
         $reflected = StepTodolistLinks::findTodolistId($type->value, $stepId);
         if ($reflected !== null) {
-            new Todolist($actor, $reflected)->syncFromLinkedStep(array('completed' => $finished));
+            // it is the to-do of whoever set the step's deadline (not the person ticking their own
+            // task), so it is updated as its owner: the actor has no right to change it
+            $req = $Db->prepare('SELECT userid FROM todolist WHERE id = :id');
+            $req->bindValue(':id', $reflected, PDO::PARAM_INT);
+            $Db->execute($req);
+            $owner = $req->fetchColumn();
+            if ($owner !== false) {
+                new Todolist(new Users((int) $owner, $actor->team), $reflected)->syncFromLinkedStep(array('completed' => $finished));
+            }
         }
 
         if (!$completed) {
