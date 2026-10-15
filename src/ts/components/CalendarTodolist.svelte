@@ -200,6 +200,7 @@
   let isRangeSelecting = false;
   let loading = true;
   let reminderTimer: number | undefined;
+  let autoRefreshTimer: number | undefined;
   let draggedTaskId: number | null = null;
   let dragOverDate = '';
   let calendarMonthLabel = '';
@@ -1093,6 +1094,13 @@
     // calendar grid (e.g. the drag ran past its edge) still ends the drag
     window.addEventListener('mouseup', endRangeSelect);
     reminderTimer = window.setInterval(checkReminders, 30000);
+    // Pick up what other people did (finished steps, new assignments) without pressing refresh: every
+    // 30 seconds, only while the calendar panel is open and the page is visible.
+    autoRefreshTimer = window.setInterval(() => {
+      const openPanel = document.getElementById('calendarActivityPanel');
+      if (document.hidden || !openPanel || openPanel.hasAttribute('hidden')) return;
+      void load();
+    }, 30000);
     void load();
     // load() only fetches the calendar/agenda data (loadCalendarExtras)
     // when the panel is already open at call time -- on eager mount that's
@@ -1126,6 +1134,7 @@
 
   onDestroy(() => {
     if (reminderTimer !== undefined) window.clearInterval(reminderTimer);
+    if (autoRefreshTimer !== undefined) window.clearInterval(autoRefreshTimer);
   });
 </script>
 
