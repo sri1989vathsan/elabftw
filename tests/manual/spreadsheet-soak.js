@@ -290,6 +290,7 @@ async function spreadsheetSoak(options = {}) {
     if ((kind.startsWith('row') && rows >= 14) || (kind.startsWith('col') && cols >= 10)) return;
     const r = int(0, rows - 1); const c = int(0, cols - 1);
     note(`menu-${kind}`);
+    let done = false;
     await timed(`menu-${kind}`, async () => {
       const root = await live(uid);
       const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
@@ -301,7 +302,12 @@ async function spreadsheetSoak(options = {}) {
       td.dispatchEvent(new MouseEvent('click', { ...init, buttons: 0 }));
       await sleep(150);
       const header = kind.includes('col') ? root.querySelector(`.jss_worksheet thead td[data-x="${c}"]`) : td;
-      header.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, view: window, clientX: header.getBoundingClientRect().x + 10, clientY: header.getBoundingClientRect().y + 8, button: 2 }));
+      const hr = header.getBoundingClientRect();
+      const rc = { bubbles: true, cancelable: true, view: window, clientX: hr.x + 10, clientY: hr.y + 8, button: 2, buttons: 2 };
+      header.dispatchEvent(new PointerEvent('pointerdown', rc));
+      header.dispatchEvent(new MouseEvent('mousedown', rc));
+      header.dispatchEvent(new MouseEvent('mouseup', { ...rc, buttons: 0 }));
+      header.dispatchEvent(new MouseEvent('contextmenu', rc));
       await sleep(300);
       const menu = openMenu();
       const pattern = {
@@ -313,7 +319,9 @@ async function spreadsheetSoak(options = {}) {
       if (!item) { fail(`menu item ${pattern} not found`, { table: model.label }); await closeMenu(model.label, 'structure'); return; }
       item.click();
       await sleep(600);
+      done = true;
     });
+    if (!done) return;
     const blank = n => Array.from({ length: n }, () => '');
     if (kind === 'row-after') model.grid.splice(r + 1, 0, blank(cols));
     if (kind === 'row-before') model.grid.splice(r, 0, blank(cols));
@@ -440,6 +448,7 @@ async function spreadsheetSoak(options = {}) {
     note(byRow ? 'multi-delete-rows' : 'multi-delete-columns');
     measure('before multi-delete');
     const before = { frame: lastSize.frame, content: lastSize.content };
+    let doneMulti = false;
     await timed(byRow ? 'multi-delete-rows' : 'multi-delete-columns', async () => {
       const root = await live(uid);
       const cellAt = (r, c) => root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
@@ -465,7 +474,9 @@ async function spreadsheetSoak(options = {}) {
       if (!item) { fail('multi-delete menu item not found', { table: model.label }); await closeMenu(model.label, 'multi-delete'); return; }
       item.click();
       await sleep(700);
+      doneMulti = true;
     });
+    if (!doneMulti) return;
     // what the model should look like if the selection covered exactly the chosen range
     const snapshotNow = trim(api.snapshot(true).find(e => e.uid === uid)?.overlayData ?? []);
     const expectedRows = byRow ? model.grid.filter((_, i) => i < first || i > lastIdx) : model.grid.map(row => row.filter((_, i) => i < first || i > lastIdx));
