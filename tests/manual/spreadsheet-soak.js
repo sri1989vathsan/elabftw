@@ -577,26 +577,26 @@ async function spreadsheetSoak(options = {}) {
       doneMulti = true;
     });
     if (!doneMulti) return;
-    // what the model should look like if the selection covered exactly the chosen range
-    const snapshotNow = trim(api.snapshot(true).find(e => e.uid === uid)?.overlayData ?? []);
-    const expectedRows = byRow ? model.grid.filter((_, i) => i < first || i > lastIdx) : model.grid.map(row => row.filter((_, i) => i < first || i > lastIdx));
-    if (JSON.stringify(snapshotNow) === JSON.stringify(trim(expectedRows))) {
-      model.grid = expectedRows;
+    // What really happened is read from the cells of the live grid (every row and column, nothing trimmed): a
+    // multi-delete must remove whole rows or columns, in one block, and nothing else may change.
+    const nowGrid = domCells(api.overlayElement(uid));
+    const size2 = byRow ? model.grid.length : model.grid[0].length;
+    const exact = (x, y) => x.length === y.length && x.every((row, r) => row.length === y[r].length && row.every((v, c) => v === y[r][c]));
+    const without = (a1, b1) => (byRow ? model.grid.filter((_, i) => i < a1 || i > b1) : model.grid.map(row => row.filter((_, i) => i < a1 || i > b1)));
+    const normalizedNow = nowGrid.map(row => Array.from(row, v => v ?? ''));
+    let matched = null;
+    for (let a1 = 0; a1 < size2 && !matched; a1++) for (let b1 = a1; b1 < size2 && !matched; b1++) {
+      if (exact(without(a1, b1), normalizedNow)) matched = [a1, b1];
+    }
+    note('multi-delete-checked');
+    if (matched) {
+      if (matched[0] !== first || matched[1] !== lastIdx) note('multi-delete-different-range');
+      model.grid = without(matched[0], matched[1]);
+    } else if (exact(model.grid, normalizedNow)) {
+      note('multi-delete-nothing-happened'); // the menu action did not take effect; the record stays as it was
     } else {
-      // The selection may have covered a different range than asked: accept it only when it is
-      // a pure removal of whole rows/columns; anything else is data loss.
-      const removedWhole = byRow
-        ? model.grid.some((_, skip) => false)
-        : false;
-      const candidates = [];
-      const size2 = byRow ? model.grid.length : model.grid[0].length;
-      for (let a = 0; a < size2; a++) for (let b = a; b < size2; b++) {
-        candidates.push(byRow ? model.grid.filter((_, i) => i < a || i > b) : model.grid.map(row => row.filter((_, i) => i < a || i > b)));
-      }
-      const match = candidates.find(c => JSON.stringify(trim(c)) === JSON.stringify(snapshotNow));
-      if (match && !removedWhole) { model.grid = match; note('multi-delete-different-range'); }
-      else dataLoss.push({ context, table: model.label, problem: 'multi-delete left data that is not a whole-row/column removal', have: JSON.stringify(snapshotNow).slice(0, 160) });
-      if (match === undefined) model.grid = expectedRows;
+      dataLoss.push({ context, table: model.label, problem: 'multi-delete left cells that are not the old ones minus a block of whole rows/columns', have: JSON.stringify(normalizedNow).slice(0, 200) });
+      model.grid = normalizedNow.map(row => row.slice());
     }
     await measure('after multi-delete');
     if (lastSize.frame > before.frame + 4) sizes.problems.push({ context: 'after multi-delete', problem: `editor grew from ${before.frame} to ${lastSize.frame} px after deleting rows/columns` });
