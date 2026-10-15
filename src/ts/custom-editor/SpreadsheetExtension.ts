@@ -2654,7 +2654,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // Retain a 250ms safety check for layout changes not represented by an
   // editor event. Interaction/transition bursts keep the original frame
   // rate; idle frames skip all DOM geometry reads and style writes.
-  const layoutEvents = ['scroll', 'resize', 'pointermove', 'pointerdown', 'input', 'transitionrun', 'transitionend', 'elabftw-spreadsheet-resync'];
+  const layoutEvents = ['scroll', 'resize', 'pointermove', 'pointerdown', 'input', 'transitionrun', 'transitionend', 'elabftw-spreadsheet-resync', 'elabftw-spreadsheet-layout'];
   layoutEvents.forEach(name => window.addEventListener(name, invalidateSpreadsheetLayout, true));
   // Backgrounding the tab/window doesn't pause native scrolling (compositor
   // driven), but browsers deliberately throttle requestAnimationFrame for a

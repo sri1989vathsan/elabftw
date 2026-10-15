@@ -8742,6 +8742,15 @@ export function buildReadOnlySpreadsheetHost(
   // Row/column insert, delete and resize: no single cell/value to reconcile
   // against the mirror -- jspreadsheet's own model is trusted wholesale for
   // the new shape, same as openSpreadsheetModal's syncMountedDimensions.
+  // Rows or columns were added or removed: the overlay's height has to be measured again at once (the editor's
+  // layout loop only re-measures after certain events, so the grid used to stay a little short for a moment, with
+  // the Add rows bar covering the last row), and once more shortly after, when the new rows have been drawn.
+  const requestOverlayRelayout = (): void => {
+    const relayout = (): void => { window.dispatchEvent(new Event('elabftw-spreadsheet-layout')); };
+    window.setTimeout(relayout, 0);
+    window.setTimeout(relayout, 250);
+    window.setTimeout(relayout, 800);
+  };
   const notifyStructuralChange = (changedWorksheet: JssInstance, resizedRow?: number): void => {
     // applyCellClipHeights (in notifyFromMirror's own repaint below) only
     // ever caps a row explicitly recorded here -- a row jspreadsheet
@@ -9036,14 +9045,16 @@ export function buildReadOnlySpreadsheetHost(
       oninsertrow: (changedWorksheet: JssInstance, inserted?: unknown): void => {
         notifyStructuralChange(changedWorksheet);
         styleNewlyInsertedRow(changedWorksheet, inserted);
+        requestOverlayRelayout();
       },
       oninsertcolumn: (changedWorksheet: JssInstance, inserted?: unknown): void => {
         notifyStructuralChange(changedWorksheet);
+        requestOverlayRelayout();
         styleNewlyInsertedColumn(changedWorksheet, inserted);
       },
       contextMenu: deleteWholeSelectionMenu,
-      ondeleterow: notifyStructuralChange,
-      ondeletecolumn: notifyStructuralChange,
+      ondeleterow: (changedWorksheet: JssInstance) => { notifyStructuralChange(changedWorksheet); requestOverlayRelayout(); },
+      ondeletecolumn: (changedWorksheet: JssInstance) => { notifyStructuralChange(changedWorksheet); requestOverlayRelayout(); },
       // jspreadsheet calls onresizerow(instance, row, newHeight, oldHeight) --
       // resizedRow here is genuinely a row index, unlike onresizecolumn's own
       // second argument (a column index), so only this one may pass it through.
