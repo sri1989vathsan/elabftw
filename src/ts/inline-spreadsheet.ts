@@ -3802,6 +3802,18 @@ export function openSpreadsheetModal(
     // calculated value (or #ERROR) in getData(). Keep a separate source of
     // truth so rendering never destroys what the user entered.
     let rawDataMirror = resizeData(working.data, working.rows, working.cols);
+    // Page-level listeners of this popup, taken off again when it closes (they used to stay behind each time
+    // a popup was opened, slowing every mouse event on the page down in a long session).
+    const popupPageListenerRemovers: Array<() => void> = [];
+    const listenWhilePopupOpen = (
+      target: Document | Window,
+      type: string,
+      handler: (event: Event) => void,
+      options?: boolean | AddEventListenerOptions,
+    ): void => {
+      target.addEventListener(type, handler, options);
+      popupPageListenerRemovers.push(() => target.removeEventListener(type, handler, options));
+    };
     // Cells typed through the editor box exist only in rawDataMirror until the grid is redrawn (the box
     // deliberately avoids setValue). Row/column inserts and deletes rebuild the mirror from the worksheet,
     // so copy any such values into the worksheet first, or they are lost.
@@ -4622,7 +4634,7 @@ export function openSpreadsheetModal(
       // selectionchange is a document-level event with no useful target of
       // its own, so re-check activeElement here rather than relying on
       // anything selection-change-specific about how it fired.
-      document.addEventListener('selectionchange', () => {
+      listenWhilePopupOpen(document, 'selectionchange', () => {
         if (document.activeElement !== el || el.hidden) return;
         const isReplacing = el.selectionStart !== el.selectionEnd;
         el.style.border = isReplacing ? '2px solid #f9a825' : '2px solid #4285f4';
@@ -4862,7 +4874,7 @@ export function openSpreadsheetModal(
     // actual fill from its OWN mouseup handler, synchronously calling
     // onbeforechange (below) per filled cell -- clearing fillDragSource
     // here needs to run strictly after all of that, not race it.
-    window.addEventListener('mouseup', () => {
+    listenWhilePopupOpen(window, 'mouseup', () => {
       window.setTimeout(() => { fillDragSource = null; }, 0);
     });
 
@@ -6072,6 +6084,7 @@ export function openSpreadsheetModal(
       ui.sheetHost.removeEventListener('pointerdown', onCellPointerDownAwayFromRescueInput, true);
       rescueInputEl?.remove();
       document.removeEventListener('keydown', onKey, true);
+      popupPageListenerRemovers.splice(0).forEach(remove => remove());
       ui.overlay.remove();
       restoreFocus(openerFocus);
     };
@@ -6295,7 +6308,7 @@ export function openSpreadsheetModal(
     // same reasoning as onCellSecondMousedown's own comment on window vs
     // sheetContainer -- this needs to see it regardless of which element
     // the pointer actually went down on.
-    document.addEventListener('pointerdown', event => {
+    listenWhilePopupOpen(document, 'pointerdown', event => {
       const target = event.target;
       // The cell-format toolbar (bold/italic/font/background/alignment --
       // see cellFormatBar) lives in this same dialog but outside
@@ -6686,6 +6699,26 @@ export function buildReadOnlySpreadsheetHost(
       .reduce((sum, width) => sum + width, 0);
 
   const naturalTableWidth = computeNaturalTableWidth(cols, colWidths, appearance.rowIndexWidth);
+  // Listeners put on the page or window by this grid. They are all taken off again when it is destroyed:
+  // anonymous ones used to stay behind every time a grid was created and removed, so a long session got
+  // slower and slower (every mouse event then ran through hundreds of dead handlers).
+  const pageListenerRemovers: Array<() => void> = [];
+  const listenOnWindow = <K extends keyof WindowEventMap>(
+    type: K,
+    handler: (event: WindowEventMap[K]) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void => {
+    window.addEventListener(type, handler, options);
+    pageListenerRemovers.push(() => window.removeEventListener(type, handler, options));
+  };
+  const listenOnDocument = <K extends keyof DocumentEventMap>(
+    type: K,
+    handler: (event: DocumentEventMap[K]) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void => {
+    document.addEventListener(type, handler, options);
+    pageListenerRemovers.push(() => document.removeEventListener(type, handler, options));
+  };
   const host = document.createElement('div');
   host.className = 'elabftw-spreadsheet-readonly-view';
   host.dataset.viewModeWidth = String(naturalTableWidth);
@@ -7432,7 +7465,7 @@ export function buildReadOnlySpreadsheetHost(
         fillDragSource = { col: selection[0], row: selection[1] };
       }
     }, true);
-    window.addEventListener('mouseup', () => {
+    listenOnWindow('mouseup', () => {
       window.setTimeout(() => { fillDragSource = null; }, 0);
     });
     // Clicking a cell to insert its reference into the formula bar must
@@ -7575,7 +7608,7 @@ export function buildReadOnlySpreadsheetHost(
     // keeps this scoped to this table's own instance specifically, the
     // same reasoning as pickReclaimTarget()'s own cross-table-collision
     // fix -- a window-level listener otherwise sees every table's clicks.
-    window.addEventListener('mousedown', event => {
+    listenOnWindow('mousedown', event => {
       if (event.button !== 0 || event.detail < 2) return;
       const cell = event.target instanceof Element
         ? event.target.closest<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]')
@@ -7602,7 +7635,7 @@ export function buildReadOnlySpreadsheetHost(
     // the dblclick handlers below, so this only swallows a mousedown that
     // would otherwise have armed a border resize, not an ordinary click
     // elsewhere in the header/row.
-    window.addEventListener('mousedown', event => {
+    listenOnWindow('mousedown', event => {
       if (event.button !== 0 || event.detail < 2) return;
       const header = event.target instanceof Element
         ? event.target.closest<HTMLElement>('.jss_worksheet > thead [data-x], .jss_worksheet > tbody .jss_row[data-y]')
@@ -8059,7 +8092,7 @@ export function buildReadOnlySpreadsheetHost(
     // plain caret. selectionchange is a document-level event with no
     // useful target of its own, so re-check activeElement here rather than
     // relying on anything selection-change-specific about how it fired.
-    document.addEventListener('selectionchange', () => {
+    listenOnDocument('selectionchange', () => {
       if (document.activeElement !== el || el.hidden) return;
       const isReplacing = el.selectionStart !== el.selectionEnd;
       el.style.border = isReplacing ? '2px solid #f9a825' : '2px solid #4285f4';
@@ -9153,6 +9186,7 @@ export function buildReadOnlySpreadsheetHost(
       releaseRescueKeys?.();
       if (onCellDoubleClick) window.removeEventListener('dblclick', onCellDoubleClick, true);
       window.removeEventListener('keydown', onDirectCellKey, true);
+      pageListenerRemovers.splice(0).forEach(remove => remove());
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
     },
   };
