@@ -4271,7 +4271,10 @@ export function openSpreadsheetModal(
       const editedValue = editor.value;
       updateRawDataMirrorCell(editedCol, editedRow, editedValue, false);
       worksheet.closeEditor(editedCell, true);
-      const targetRow = Math.min(working.rows - 1, editedRow + 1);
+      // Enter in a cell of the last row adds a row below it, as in Excel.
+      const addsRow = editedRow >= working.rows - 1 && working.rows < MAX_DIMENSION;
+      if (addsRow) worksheet.insertRow?.(1, editedRow, 0);
+      const targetRow = addsRow ? editedRow + 1 : Math.min(working.rows - 1, editedRow + 1);
       selectedRange = [editedCol, targetRow, editedCol, targetRow];
       worksheet.updateSelectionFromCoords?.(...selectedRange);
       scheduleFormulaResultRender();
@@ -4541,8 +4544,11 @@ export function openSpreadsheetModal(
       const commitRescueInputAndMove = (deltaCol: number, deltaRow: number): void => {
         if (rescueInputCol === null || rescueInputRow === null) return;
         const nextCol = Math.min(Math.max(rescueInputCol + deltaCol, 0), working.cols - 1);
-        const nextRow = Math.min(Math.max(rescueInputRow + deltaRow, 0), working.rows - 1);
+        // Enter in a cell of the last row adds a row below it, as in Excel.
+        const addsRow = deltaRow > 0 && rescueInputRow >= working.rows - 1 && working.rows < MAX_DIMENSION;
+        const nextRow = addsRow ? working.rows : Math.min(Math.max(rescueInputRow + deltaRow, 0), working.rows - 1);
         commitRescueInput();
+        if (addsRow) worksheet?.insertRow?.(1, working.rows - 1, 0);
         selectedRange = [nextCol, nextRow, nextCol, nextRow];
         worksheet?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
       };
@@ -7894,9 +7900,13 @@ export function buildReadOnlySpreadsheetHost(
       const maxCol = (rawDataMirror[0]?.length ?? cols) - 1;
       const maxRow = rawDataMirror.length - 1;
       const nextCol = Math.min(Math.max(rescueInputCol + deltaCol, 0), maxCol);
-      const nextRow = Math.min(Math.max(rescueInputRow + deltaRow, 0), maxRow);
+      // Enter in a cell of the last row adds a row below it, as in Excel.
+      const addsRow = deltaRow > 0 && editable && rescueInputRow >= maxRow && rawDataMirror.length < MAX_DIMENSION;
+      const nextRow = addsRow ? maxRow + 1 : Math.min(Math.max(rescueInputRow + deltaRow, 0), maxRow);
       commitRescueInput();
-      getMountedWorksheet(sheetContainer)?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
+      const mounted = getMountedWorksheet(sheetContainer);
+      if (addsRow) mounted?.insertRow?.(1, maxRow, 0);
+      mounted?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
     };
     releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
       if (event.key === 'Enter') {
