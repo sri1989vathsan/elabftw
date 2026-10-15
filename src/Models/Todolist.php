@@ -41,6 +41,7 @@ use function implode;
 use function in_array;
 use function is_array;
 use function json_decode;
+use function json_encode;
 use function mb_strlen;
 use function preg_match;
 use function preg_replace;
@@ -130,6 +131,9 @@ final class Todolist extends AbstractRest
         $this->setId($id);
         $this->syncAssignees($id, $assigneeUserids);
         $this->syncDeadlineNotification();
+        if (!empty($reqBody['repeat_rule'])) {
+            $this->update('repeat_rule', $reqBody['repeat_rule']);
+        }
         foreach ($assigneeUserids as $assignedUserid) {
             if ($assignedUserid !== $this->userid) {
                 $this->notifyAssignee($assignedUserid, $content);
@@ -315,7 +319,7 @@ final class Todolist extends AbstractRest
         $entityLinksSelect = $includeDetails ? $this->entityLinksSubquery() : 'JSON_ARRAY()';
         $sql = "SELECT t.id, t.body, {$notesSelect}
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
-                t.reminder_minutes,
+                t.reminder_minutes, t.repeat_rule,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
                 DATE_FORMAT(t.archived_at, '%Y-%m-%dT%H:%i:%sZ') AS archived_at,
                 DATE_FORMAT(t.updated_at, '%Y-%m-%dT%H:%i:%sZ') AS updated_at,
@@ -834,7 +838,7 @@ final class Todolist extends AbstractRest
         }
         $sql = "SELECT id, body, notes,
                 DATE_FORMAT(deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
-                reminder_minutes,
+                reminder_minutes, repeat_rule,
                 DATE_FORMAT(completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
                 creation_time, ordering, userid, team, assigned_userid
             FROM todolist
@@ -858,7 +862,7 @@ final class Todolist extends AbstractRest
     {
         $sql = "SELECT t.id, t.body, t.notes, t.description,
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
-                t.reminder_minutes,
+                t.reminder_minutes, t.repeat_rule,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
                 DATE_FORMAT(t.archived_at, '%Y-%m-%dT%H:%i:%sZ') AS archived_at,
                 DATE_FORMAT(t.updated_at, '%Y-%m-%dT%H:%i:%sZ') AS updated_at,
@@ -964,6 +968,15 @@ final class Todolist extends AbstractRest
         }
         $this->syncDeadlineNotification();
         $task = $this->readOne();
+        // a repeating task needs a deadline: without one the rule goes too
+        if (empty($task['deadline']) && !empty($task['repeat_rule'])) {
+            $this->update('repeat_rule', null);
+            $task['repeat_rule'] = null;
+        }
+        // completed just now: the next occurrence is created
+        if (empty($before['completed_at']) && !empty($task['completed_at'])) {
+            $this->spawnNextOccurrence($task);
+        }
         if (array_key_exists('column_id', $params) || array_key_exists('completed', $params)) {
             $this->syncLinkedStepFromCompletion(!empty($task['completed_at']));
             StepMentions::taskCompleted((int) $this->id, $this->requester, !empty($task['completed_at']));
@@ -1371,6 +1384,7 @@ final class Todolist extends AbstractRest
                 $this->getReminderMinutes($value),
                 PDO::PARAM_INT,
             ),
+            'repeat_rule' => array('repeat_rule', $this->getRepeatRule($value), PDO::PARAM_STR),
             'completed' => array('completed_at', $this->getCompletedAt($value), PDO::PARAM_STR),
             'archived' => array('archived_at', $this->getArchivedAt($value), PDO::PARAM_STR),
             'project_id' => array('project_id', $this->getProjectId($value), PDO::PARAM_INT),
@@ -1466,6 +1480,164 @@ final class Todolist extends AbstractRest
         } catch (Exception) {
             throw new ImproperActionException(_('Invalid to-do deadline.'));
         }
+    }
+
+    /**
+     * The repeat rule as a normalized JSON string, or null for "does not repeat".
+     * {"unit":"day|week|month|year","every":1-365,"until":"Y-m-d"|null,"count":null|1-1000}
+     * ("count" is how many more occurrences are wanted after this one).
+     */
+    private function getRepeatRule(mixed $value): ?string
+    {
+        if ($value === null || $value === '' || $value === 'none') {
+            return null;
+        }
+        $rule = is_array($value) ? $value : json_decode((string) $value, true);
+        if (!is_array($rule)) {
+            throw new ImproperActionException(_('Invalid repeat rule.'));
+        }
+        $unit = (string) ($rule['unit'] ?? '');
+        if (!in_array($unit, array('day', 'week', 'month', 'year'), true)) {
+            throw new ImproperActionException(_('Invalid repeat rule.'));
+        }
+        $every = filter_var($rule['every'] ?? 1, FILTER_VALIDATE_INT);
+        if ($every === false || $every < 1 || $every > 365) {
+            throw new ImproperActionException(_('A task can repeat every 1 to 365 days, weeks, months or years.'));
+        }
+        $until = null;
+        if (!empty($rule['until'])) {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $rule['until']) !== 1) {
+                throw new ImproperActionException(_('Invalid end date for the repeat.'));
+            }
+            $until = (string) $rule['until'];
+        }
+        $count = null;
+        if (isset($rule['count']) && $rule['count'] !== '' && $rule['count'] !== null) {
+            $count = filter_var($rule['count'], FILTER_VALIDATE_INT);
+            if ($count === false || $count < 0 || $count > 1000) {
+                throw new ImproperActionException(_('Invalid number of repeats.'));
+            }
+        }
+        if ($this->id !== null && !$this->hasDeadline()) {
+            throw new ImproperActionException(_('A repeating task needs a deadline.'));
+        }
+        if ($this->id !== null && $this->isStepManaged()) {
+            throw new ImproperActionException(_('A task created from a step cannot repeat: the step controls it.'));
+        }
+        return json_encode(array('unit' => $unit, 'every' => $every, 'until' => $until, 'count' => $count), JSON_THROW_ON_ERROR);
+    }
+
+    private function hasDeadline(): bool
+    {
+        return $this->deadlineOf((int) $this->id) !== null;
+    }
+
+    private function deadlineOf(int $taskId): ?string
+    {
+        $req = $this->Db->prepare('SELECT deadline FROM todolist WHERE id = :id');
+        $req->bindValue(':id', $taskId, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $deadline = $req->fetchColumn();
+        return $deadline === false || $deadline === null ? null : (string) $deadline;
+    }
+
+    /** Tasks that a step creates (an @mention, a step deadline) belong to the step and do not repeat. */
+    private function isStepManaged(): bool
+    {
+        foreach (array('custom_step_mentions', 'custom_step_todolist_links') as $table) {
+            $req = $this->Db->prepare(sprintf('SELECT 1 FROM %s WHERE todolist_id = :id LIMIT 1', $table));
+            $req->bindValue(':id', (int) $this->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            if ($req->fetchColumn() !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Completing a repeating task creates the next one: same text, people, project and links, with the
+     * deadline moved on from the previous deadline (not from the day it was ticked), and the rule carried
+     * over. Occurrences already in the past are skipped, so a task that was late does not start a pile.
+     * Completing the same task again (after reopening it) does not make a second copy.
+     */
+    private function spawnNextOccurrence(array $task): void
+    {
+        if (empty($task['repeat_rule']) || empty($task['deadline']) || $this->isStepManaged()) {
+            return;
+        }
+        $req = $this->Db->prepare('SELECT repeat_spawned_id FROM todolist WHERE id = :id');
+        $req->bindValue(':id', (int) $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        if ($req->fetchColumn() !== null) {
+            return;
+        }
+        $rule = json_decode((string) $task['repeat_rule'], true);
+        if (!is_array($rule)) {
+            return;
+        }
+        $remaining = $rule['count'] ?? null;
+        if ($remaining !== null && (int) $remaining < 1) {
+            return;
+        }
+        $next = $this->nextDeadline(new DateTimeImmutable((string) $task['deadline']), $rule);
+        if (!empty($rule['until']) && $next->format('Y-m-d') > (string) $rule['until']) {
+            return;
+        }
+        $rule['count'] = $remaining === null ? null : (int) $remaining - 1;
+        $creator = new self(new Users((int) $task['userid'], $this->team));
+        $newId = $creator->postAction(Action::Create, array(
+            'content' => $task['body'],
+            'notes' => $task['notes'] ?? null,
+            'description' => $task['description'] ?? null,
+            'deadline' => $next->format('Y-m-d\TH:i:s\Z'),
+            'reminder_minutes' => $task['reminder_minutes'],
+            'assignee_userids' => array_map('intval', array_column($task['assignees'] ?? array(), 'userid')) ?: null,
+            'project_id' => $task['project_id'],
+            'priority' => $task['priority'],
+            'repeat_rule' => $rule,
+        ));
+        $copy = $this->Db->prepare(
+            'INSERT IGNORE INTO todolist_entity_links (task_id, entity_type, entity_id, url, label)
+             SELECT :new_id, entity_type, entity_id, url, label FROM todolist_entity_links WHERE task_id = :old_id',
+        );
+        $copy->bindValue(':new_id', $newId, PDO::PARAM_INT);
+        $copy->bindValue(':old_id', (int) $this->id, PDO::PARAM_INT);
+        $this->Db->execute($copy);
+        $mark = $this->Db->prepare('UPDATE todolist SET repeat_spawned_id = :new_id WHERE id = :id');
+        $mark->bindValue(':new_id', $newId, PDO::PARAM_INT);
+        $mark->bindValue(':id', (int) $this->id, PDO::PARAM_INT);
+        $this->Db->execute($mark);
+    }
+
+    /** One step on from the given deadline, then on again while it is still in the past. */
+    private function nextDeadline(DateTimeImmutable $from, array $rule): DateTimeImmutable
+    {
+        $every = max(1, (int) ($rule['every'] ?? 1));
+        $unit = (string) ($rule['unit'] ?? 'day');
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $next = $from;
+        for ($i = 0; $i < 5000; $i++) {
+            $next = match ($unit) {
+                'week' => $next->modify(sprintf('+%d weeks', $every)),
+                'month' => $this->addMonths($next, $every),
+                'year' => $this->addMonths($next, 12 * $every),
+                default => $next->modify(sprintf('+%d days', $every)),
+            };
+            if ($next > $now) {
+                break;
+            }
+        }
+        return $next;
+    }
+
+    /** Adds months without spilling over: 31 January plus one month is the last day of February. */
+    private function addMonths(DateTimeImmutable $date, int $months): DateTimeImmutable
+    {
+        $day = (int) $date->format('j');
+        $first = $date->modify('first day of this month')->modify(sprintf('+%d months', $months));
+        $last = (int) $first->format('t');
+        return $first->setDate((int) $first->format('Y'), (int) $first->format('n'), min($day, $last));
     }
 
     private function getReminderMinutes(mixed $value): ?int
