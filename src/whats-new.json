@@ -606,10 +606,10 @@
     "news": "New: assign a step with @, the person gets it as a to-do, and finishing it tells you.",
     "shot": "An experiment's Steps and tasks section with a step that mentions two people, next to one of their to-do lists showing it",
     "highlight": {
-      "x": 10.5,
-      "y": 31,
-      "w": 36,
-      "h": 8,
+      "x": 11,
+      "y": 35.5,
+      "w": 37,
+      "h": 8.5,
       "label": "@ names in a step"
     }
   },
