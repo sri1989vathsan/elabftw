@@ -1,6 +1,7 @@
+{% import 'guide-info.html' as guide -%}
 {# STEPS #}
 {% set linkedTasksArr = linkedTasksArr|default([]) %}
-<h3 data-action='toggle-next' data-scroll-btn='fa-list-check' data-scroll-btn-label='{{ 'Steps and tasks'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' aria-controls='stepsDiv'><i class='fas fa-caret-right mr-2 fa-fw'></i> {{ 'Steps and tasks'|trans }} (<span id='stepsCount'>{{ Entity.entityData.steps|length + linkedTasksArr|length }}</span>)</h3>
+<h3 data-action='toggle-next' data-scroll-btn='fa-list-check' data-scroll-btn-label='{{ 'Steps and tasks'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' data-toggle-target='stepsDiv' aria-controls='stepsDiv'><i class='fas fa-caret-right mr-2 fa-fw'></i> {{ 'Steps and tasks'|trans }} (<span id='stepsCount'>{{ Entity.entityData.steps|length + linkedTasksArr|length }}</span>)</h3>{{ guide.info('guide-steps', 'Steps and tasks') }}
 <div id='stepsDiv' class='mt-2' hidden data-count-for='stepsCount' data-save-hidden='stepsDiv'>
   <div class='sortable' id='steps_div_{{ Entity.id }}' data-axis='y' data-table='{{ Entity.entityType.value }}_steps'>
     {# LOCK ALL STEPS #}

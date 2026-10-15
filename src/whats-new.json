@@ -573,6 +573,39 @@
     "screenshots": []
   },
   {
+    "id": "guide-steps",
+    "date": "2026-10-15",
+    "area": "Experiments",
+    "title": "Steps and tasks",
+    "summary": "Break an experiment into steps, give a step to colleagues with @, and see when it is done.",
+    "details": [
+      "fa-list-check::Steps and tasks sit under the main text of an experiment, template or resource. Type a step in the box at the bottom and press Enter or Add a step. Tick it when it is done: the time is kept. Drag a step by its handle to reorder it, click its text to edit it, and use the trash icon to remove it.",
+      "fa-clock::Open a step with the arrow on its right to set a deadline and a reminder. A step with a deadline shows in the to-do list and on that day in the Activity calendar.",
+      "fa-at::Give a step to someone: type @ in the step and pick a name. Move through the names with the arrow keys and press Tab (or click one). Mention several people and each of them gets the step. You become the assigner.",
+      "fa-list-check::What each person gets: a to-do of their own, called “Step: …”, linked to the experiment and carrying the step's deadline, and a notification that you assigned it. They can open the experiment from their to-do. Someone who cannot open the entry still gets the to-do and sees the entry's name.",
+      "fa-pen::Change the step later and their to-dos follow: edit the text and it updates; add a name and that person gets the step; take a name out and their to-do is removed; set, change or remove the deadline and it is copied or cleared on their to-dos. Deleting the step removes all of them.",
+      "fa-circle-check::Finishing: when any one of the people you mentioned ticks their to-do, or anyone with edit rights ticks the step on the experiment, the step is completed for everybody: the step is ticked and every assignee's to-do is done. Unticking reopens all of it.",
+      "fa-bell::Who is told when a step is completed: you (the assigner) and the other people it was given to, not the person who did it, and nobody else on the experiment. Choose web or email for these in Settings > Notifications (assigned a step, and a step was completed). Web is on by default and email is off.",
+      "fa-calendar-days::In the Activity calendar a step with a deadline appears on that day, and a finished step appears on the day it was completed, with a link to the experiment.",
+      "fa-user-lock::Who can do what: you need edit rights on the entry to add, edit, tick or delete its steps. The people you give a step to can tick their own to-do without edit rights on the entry.",
+      "fa-comment::The same @ list works in the comments of an experiment, template or resource: the person you mention is notified if they can read the entry."
+    ],
+    "image": "",
+    "imageAlt": "",
+    "featured": false,
+    "guide": true,
+    "order": 82,
+    "icon": "fa-list-check",
+    "purpose": "Hand a part of an experiment to a colleague and see when it is done, without chasing them.",
+    "uses": [
+      "Ask a colleague to prepare the buffers and be told when they are ready.",
+      "Give a step to two people and have it close for both as soon as one of them finishes.",
+      "Put a deadline on a step so it shows in everyone's calendar."
+    ],
+    "news": "New: assign a step with @, the person gets it as a to-do, and finishing it tells you.",
+    "shot": "An experiment's Steps and tasks section with a step that mentions two people, next to one of their to-do lists showing it"
+  },
+  {
     "id": "guide-templates",
     "date": "2026-10-12",
     "area": "Templates",

@@ -1,9 +1,10 @@
+{% import 'guide-info.html' as guide -%}
 {# STEPS #}
 {% set entityPage = entityPage|default(App.Request.getScriptName|split('/')|last|replace({'.php': ''})) %}
 <div id='stepsDiv'>
 {% set linkedTasksArr = linkedTasksArr|default([]) %}
 {% if Entity.entityData.steps or linkedTasksArr %}
-  <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' aria-controls='stepsDivContent'><i class='fas fa-caret-right mr-2 fa-fw'></i>{{ 'Steps and tasks'|trans }} ({{ Entity.entityData.steps|length + linkedTasksArr|length }})</h3>
+  <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' data-toggle-target='stepsDivContent' aria-controls='stepsDivContent'><i class='fas fa-caret-right mr-2 fa-fw'></i>{{ 'Steps and tasks'|trans }} ({{ Entity.entityData.steps|length + linkedTasksArr|length }})</h3>{{ guide.info('guide-steps', 'Steps and tasks') }}
   <div class='row mt-2' id='stepsDivContent' hidden data-save-hidden='stepsDivContent'>
     <div class='ml-3 mt-3 col-md-12'>
       {% for step in Entity.entityData.steps %}
