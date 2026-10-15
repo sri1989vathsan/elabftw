@@ -2107,6 +2107,35 @@ function getWorksheet(instance: JssInstance): JssInstance {
   return instance ?? null;
 }
 
+/**
+ * jspreadsheet-ce puts a few listeners on the window and the document while a grid is created
+ * ("mousewheel", "touchmove" ...) and never takes them off when the grid is destroyed. Every grid ever
+ * made in a session therefore kept running on each scroll and touch, which made a long session slower and
+ * slower. These are collected while the grid is being created, so they can be removed with it.
+ * Call startTrackingGlobalListeners() just before creating a grid and call what it returns right after:
+ * that gives the function which removes those listeners again.
+ */
+function startTrackingGlobalListeners(): () => () => void {
+  const proto = EventTarget.prototype;
+  const original = proto.addEventListener;
+  const added: Array<[EventTarget, string, EventListenerOrEventListenerObject, boolean | AddEventListenerOptions | undefined]> = [];
+  proto.addEventListener = function patchedAddEventListener(
+    this: EventTarget,
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    if (listener && (this === window || this === document || this === document.body)) added.push([this, type, listener, options]);
+    original.call(this, type, listener, options);
+  } as typeof proto.addEventListener;
+  return (): (() => void) => {
+    proto.addEventListener = original;
+    return (): void => {
+      added.splice(0).forEach(([target, type, listener, options]) => target.removeEventListener(type, listener, options));
+    };
+  };
+}
+
 function getMountedWorksheet(
   container: HTMLDivElement,
   instance?: JssInstance,
@@ -3802,6 +3831,7 @@ export function openSpreadsheetModal(
     // calculated value (or #ERROR) in getData(). Keep a separate source of
     // truth so rendering never destroys what the user entered.
     let rawDataMirror = resizeData(working.data, working.rows, working.cols);
+    let releaseJssPageListeners: (() => void) | null = null;
     // Page-level listeners of this popup, taken off again when it closes (they used to stay behind each time
     // a popup was opened, slowing every mouse event on the page down in a long session).
     const popupPageListenerRemovers: Array<() => void> = [];
@@ -4918,6 +4948,8 @@ export function openSpreadsheetModal(
             colWidths: { ...(spreadsheet.colWidths ?? {}), ...(liveColWidths ?? {}) },
           };
         }
+        releaseJssPageListeners?.();
+        releaseJssPageListeners = null;
         const destroy = (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy;
         destroy?.(sheetContainer);
       }
@@ -5140,6 +5172,7 @@ export function openSpreadsheetModal(
         }, 0);
       };
       installWellPlateHeaders(sheetContainer, () => working.kind);
+      const stopTrackingJssListeners = startTrackingGlobalListeners();
       const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
         worksheets: [{
           data: mountedData,
@@ -5365,6 +5398,7 @@ export function openSpreadsheetModal(
           }
         },
       });
+      releaseJssPageListeners = stopTrackingJssListeners();
       // jspreadsheet-ce v5 returns an initially empty array and populates it
       // asynchronously. Do not retain that array as the worksheet instance.
       worksheet = Array.isArray(instance) && instance.length === 0
@@ -6085,6 +6119,8 @@ export function openSpreadsheetModal(
       rescueInputEl?.remove();
       document.removeEventListener('keydown', onKey, true);
       popupPageListenerRemovers.splice(0).forEach(remove => remove());
+      releaseJssPageListeners?.();
+      releaseJssPageListeners = null;
       ui.overlay.remove();
       restoreFocus(openerFocus);
     };
@@ -8776,6 +8812,7 @@ export function buildReadOnlySpreadsheetHost(
   }>();
 
   installWellPlateHeaders(sheetContainer, () => extracted.kind);
+  const stopTrackingJssListeners = startTrackingGlobalListeners();
   (jspreadsheet as unknown as JssFactory)(sheetContainer, {
     worksheets: [{
       data: displayValues,
@@ -9098,6 +9135,7 @@ export function buildReadOnlySpreadsheetHost(
       },
     } : {}),
   });
+  const releaseJssPageListeners = stopTrackingJssListeners();
 
   // commitEditors=false only writes out a change already waiting in the 500ms
   // debounce, leaving a cell that is still being typed in untouched (used right
@@ -9187,6 +9225,7 @@ export function buildReadOnlySpreadsheetHost(
       if (onCellDoubleClick) window.removeEventListener('dblclick', onCellDoubleClick, true);
       window.removeEventListener('keydown', onDirectCellKey, true);
       pageListenerRemovers.splice(0).forEach(remove => remove());
+      releaseJssPageListeners();
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
     },
   };
