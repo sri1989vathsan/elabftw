@@ -16,6 +16,7 @@
   import { toRelative } from '../misc';
   import { applyMention, extractMentionQuery, wrapMentionsAsHtml, stripMentionHtml } from '../mentions';
   import { fetchLinkPreviewLabel, handleLinkPreviewPaste } from '../linkPreview';
+  import RepeatControl, { type RepeatRule } from './RepeatControl.svelte';
 
   // Closes the @mention dropdown on any click outside its own container --
   // it otherwise stayed open until a mention was picked, even after
@@ -81,6 +82,7 @@
     description: string | null;
     deadline: string | null;
     reminder_minutes: number | null;
+    repeat_rule?: string | null;
     creation_time: string;
     completed_at: string | null;
     archived_at: string | null;
@@ -317,6 +319,11 @@
   let editProjectId: number | null = null;
   let editDeadlineDate = '';
   let editDeadlineTime = '';
+  // repeat: the rule for a new task, and for the task being edited (the key re-creates the control on reset)
+  let repeatRule: RepeatRule | null = null;
+  let repeatKey = 0;
+  let editRepeatRule: RepeatRule | null = null;
+  let editRepeatKey = 0;
   let editReminderChoice = '60';
   let editCustomReminder = 120;
   let editReminderDate = '';
@@ -935,6 +942,8 @@
       editDeadlineTime = '';
     }
     setEditReminder(task.reminder_minutes, task.deadline ? new Date(task.deadline) : null);
+    editRepeatRule = parseRepeatRule(task.repeat_rule);
+    editRepeatKey += 1;
   }
 
   function openDetail(entry: SidebarEntry, startInEditMode = false): void {
@@ -997,6 +1006,50 @@
     detailEditing = false;
   }
 
+  function parseRepeatRule(value: string | null | undefined): RepeatRule | null {
+    if (!value) return null;
+    try {
+      const parsed = JSON.parse(value) as RepeatRule;
+      return parsed && parsed.unit ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // "Every 2 weeks, until 2026-12-31", for the task's details
+  function repeatSummary(value: string | null | undefined): string {
+    const rule = parseRepeatRule(value);
+    if (!rule) return '';
+    const names = { day: ['day', 'days'], week: ['week', 'weeks'], month: ['month', 'months'], year: ['year', 'years'] } as const;
+    const every = rule.every === 1 ? t(names[rule.unit][0]) : `${rule.every} ${t(names[rule.unit][1])}`;
+    const base = `${t('Repeats every')} ${every}`;
+    if (rule.until) return `${base}, ${t('until')} ${rule.until}`;
+    if (rule.count !== null && rule.count !== undefined) return `${base}, ${rule.count + 1} ${t('times in all')}`;
+    return base;
+  }
+
+  // The "Today" button next to a date: today's date, and a time if none is set yet (the next quarter hour)
+  function todayParts(currentTime: string): { date: string; time: string } {
+    const now = new Date();
+    const local = toLocalInput(now);
+    const hhmm = local.slice(11, 16);
+    const time = currentTime || timeOptions.find(option => option >= hhmm) || '09:00';
+    return { date: local.slice(0, 10), time };
+  }
+
+  function setDeadlineToday(): void {
+    const { date, time } = todayParts(deadlineTime);
+    deadlineDate = date;
+    deadlineTime = time;
+    persistDeadlineDefaults();
+  }
+
+  function setEditDeadlineToday(): void {
+    const { date, time } = todayParts(editDeadlineTime);
+    editDeadlineDate = date;
+    editDeadlineTime = time;
+  }
+
   async function saveEditing(id: number): Promise<void> {
     const content = editTitle.trim();
     if (!content) {
@@ -1034,6 +1087,7 @@
       notes: editNotes.trim() || null,
       description: editDescription.trim() || null,
       deadline: deadline?.toISOString() ?? null,
+      repeat_rule: deadline === null ? null : editRepeatRule,
       reminder_minutes: reminderMinutes,
       project_id: editProjectId,
     });
@@ -1494,7 +1548,10 @@
       deadline: deadline?.toISOString() ?? null,
       reminder_minutes: reminderMinutes,
       project_id: draftProjectId,
+      repeat_rule: deadline === null ? null : repeatRule,
     });
+    repeatRule = null;
+    repeatKey += 1;
     draft = '';
     draftNotes = '';
     draftProjectId = null;
@@ -1909,6 +1966,7 @@
               on:change={persistDeadlineDefaults}
             />
           </label>
+          <button type='button' class='btn btn-sm btn-outline-secondary align-self-end' on:click={setDeadlineToday} title={t('Set the date to today')}>{t('Today')}</button>
         {/if}
         <label class='mb-0'>
           <span class='small'>{t('Time')}</span>
@@ -1967,6 +2025,9 @@
           </label>
         </div>
       {/if}
+      {#key repeatKey}
+        <RepeatControl bind:rule={repeatRule} disabled={!deadlineDate || !deadlineTime} />
+      {/key}
       <div class='d-flex align-items-center flex-wrap' style='gap:0.5rem'>
         <button type='button' class='btn btn-primary btn-sm' disabled={!draft.trim()} on:click={create}>
           <i class='fas fa-plus fa-fw mr-1' aria-hidden='true'></i>{t('add-task')}
@@ -2273,6 +2334,7 @@
                 {#if entry.deadline}
                   <div class:font-weight-bold={isOverdue(entry)} class='small todo-item-deadline'>
                     <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(entry.deadline)}
+                    {#if entry.source === 'todo' && items.find(item => Number(item.id) === entry.id)?.repeat_rule}<i class='fas fa-repeat fa-fw ml-1' title={t('Repeats')} aria-hidden='true'></i>{/if}
                   </div>
                 {/if}
               </div>
@@ -2447,7 +2509,10 @@
           <div class='d-flex pm-dialog-row'>
             <div class='pm-dialog-field flex-grow-1'>
               <label class='pm-label' for='todo-detail-deadline-date'>{t('Deadline date')}</label>
-              <input id='todo-detail-deadline-date' type='date' class='form-control' bind:value={editDeadlineDate} />
+              <div class='d-flex' style='gap:0.35rem'>
+                <input id='todo-detail-deadline-date' type='date' class='form-control' bind:value={editDeadlineDate} />
+                <button type='button' class='btn btn-outline-secondary' on:click={setEditDeadlineToday} title={t('Set the date to today')}>{t('Today')}</button>
+              </div>
             </div>
             <div class='pm-dialog-field flex-grow-1'>
               <label class='pm-label' for='todo-detail-deadline-time'>{t('Deadline time')}</label>
@@ -2459,11 +2524,21 @@
               </select>
             </div>
           </div>
+          <div class='pm-dialog-field'>
+            {#key editRepeatKey}
+              <RepeatControl bind:rule={editRepeatRule} disabled={!editDeadlineDate || !editDeadlineTime} />
+            {/key}
+          </div>
         {:else}
           {#if detailEntry.deadline}
             <div class='small'>
               <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(detailEntry.deadline)}
             </div>
+            {#if repeatSummary(items.find(item => Number(item.id) === detailEntry.id)?.repeat_rule)}
+              <div class='small'>
+                <i class='fas fa-repeat fa-fw mr-1' aria-hidden='true'></i>{repeatSummary(items.find(item => Number(item.id) === detailEntry.id)?.repeat_rule)}
+              </div>
+            {/if}
           {/if}
           <div class='small mb-1 d-flex align-items-center flex-wrap'>
             {#if (detailEntry.assignees ?? []).length === 0}
