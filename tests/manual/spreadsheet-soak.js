@@ -1094,7 +1094,7 @@ async function spreadsheetSoak(options = {}) {
           else if (roll < 0.90) { name = 'menu'; await menuTour(uid); }
           else { name = 'save'; await save(); }
         } catch (error) {
-          fail(`${name}: ${error && error.message || error}`);
+          fail(`${name}: ${error && error.message || error}`, { stack: String(error && error.stack || '').split('\n').slice(0, 4).join(' | ') });
         }
         await sleep(pick([0, 30, 120, 450, 520, 700]));
         await measure(`mixed round ${round} ${name}`);
@@ -1114,7 +1114,7 @@ async function spreadsheetSoak(options = {}) {
       context = `session ${session} ${name}`;
       layoutDirty = true;
       window.spreadsheetSoakProgress = { session, sessions: config.sessions, scenario: name, dataLoss: dataLoss.length, failures: failures.length };
-      try { await scenarios[name](); } catch (error) { fail(`${name} stopped: ${error && error.message || error}`); }
+      try { await scenarios[name](); } catch (error) { fail(`${name} stopped: ${error && error.message || error}`, { stack: String(error && error.stack || '').split('\n').slice(0, 4).join(' | ') }); }
       if (!config.accumulate && name !== config.scenarios[config.scenarios.length - 1]) {
         // each scenario starts on a clean page, like opening a fresh experiment
         await sleep(config.settleMs);
