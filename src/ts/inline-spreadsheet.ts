@@ -3773,6 +3773,19 @@ export function openSpreadsheetModal(
     // calculated value (or #ERROR) in getData(). Keep a separate source of
     // truth so rendering never destroys what the user entered.
     let rawDataMirror = resizeData(working.data, working.rows, working.cols);
+    // Cells typed through the editor box exist only in rawDataMirror until the grid is redrawn (the box
+    // deliberately avoids setValue). Row/column inserts and deletes rebuild the mirror from the worksheet,
+    // so copy any such values into the worksheet first, or they are lost.
+    const flushMirrorIntoWorksheet = (target?: JssInstance | null): void => {
+      const liveWorksheet = target ?? worksheet;
+      const liveData = liveWorksheet?.getData?.();
+      if (!liveWorksheet || !Array.isArray(liveData)) return;
+      rawDataMirror.forEach((mirrorRow, rowIndex) => mirrorRow.forEach((value, colIndex) => {
+        if (String(liveData[rowIndex]?.[colIndex] ?? '') !== String(value ?? '')) {
+          liveWorksheet.setValueFromCoords?.(colIndex, rowIndex, value, true);
+        }
+      }));
+    };
     let selectedRange: CellRange | null = null;
     // The single formula cell a fill-handle (.jss_corner) drag started
     // from, armed on its mousedown -- see the onbeforechange override below
@@ -4548,7 +4561,10 @@ export function openSpreadsheetModal(
         const addsRow = deltaRow > 0 && rescueInputRow >= working.rows - 1 && working.rows < MAX_DIMENSION;
         const nextRow = addsRow ? working.rows : Math.min(Math.max(rescueInputRow + deltaRow, 0), working.rows - 1);
         commitRescueInput();
-        if (addsRow) worksheet?.insertRow?.(1, working.rows - 1, 0);
+        if (addsRow && worksheet) {
+          flushMirrorIntoWorksheet(worksheet);
+          worksheet.insertRow?.(1, working.rows - 1, 0);
+        }
         selectedRange = [nextCol, nextRow, nextCol, nextRow];
         worksheet?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
       };
@@ -5176,6 +5192,10 @@ export function openSpreadsheetModal(
           updateRawDataMirrorCell(changedCol, changedRow, value);
           scheduleFormulaResultRender();
         },
+        onbeforeinsertrow: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
+        onbeforeinsertcolumn: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
+        onbeforedeleterow: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
+        onbeforedeletecolumn: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
         oninsertrow: (changedWorksheet: JssInstance, inserted?: unknown): void => {
           if (acceptsGridChanges) hasChanges = true;
           syncMountedDimensions(changedWorksheet);
@@ -6572,6 +6592,19 @@ export function buildReadOnlySpreadsheetHost(
   // here so a formula survives being edited live instead of only through
   // the popup.
   let rawDataMirror = resizeData(extracted.data, rows, cols);
+  // Cells typed through the editor box exist only in rawDataMirror until the grid is redrawn (the box
+  // deliberately avoids setValue). Row/column inserts and deletes rebuild the mirror from the worksheet,
+  // so copy any such values into the worksheet first, or they are lost.
+  const flushMirrorIntoWorksheet = (target?: JssInstance | null): void => {
+    const liveWorksheet = target ?? getMountedWorksheet(sheetContainer);
+    const liveData = liveWorksheet?.getData?.();
+    if (!liveWorksheet || !Array.isArray(liveData)) return;
+    rawDataMirror.forEach((mirrorRow, rowIndex) => mirrorRow.forEach((value, colIndex) => {
+      if (String(liveData[rowIndex]?.[colIndex] ?? '') !== String(value ?? '')) {
+        liveWorksheet.setValueFromCoords?.(colIndex, rowIndex, value, true);
+      }
+    }));
+  };
   // Whether this table's data contains any formula cell at all -- checked
   // once here, then kept (cheaply) up to date below instead of rescanned.
   // renderFormulaResults' own full grid walk is skipped entirely while this
@@ -7912,7 +7945,12 @@ export function buildReadOnlySpreadsheetHost(
       const nextRow = addsRow ? maxRow + 1 : Math.min(Math.max(rescueInputRow + deltaRow, 0), maxRow);
       commitRescueInput();
       const mounted = getMountedWorksheet(sheetContainer);
-      if (addsRow) mounted?.insertRow?.(1, maxRow, 0);
+      if (addsRow && mounted) {
+        // Typed values live only in the mirror until the grid is redrawn: copy them into the worksheet
+        // first, because the row insert re-reads the worksheet and would otherwise drop them.
+        flushMirrorIntoWorksheet(mounted);
+        mounted.insertRow?.(1, maxRow, 0);
+      }
       mounted?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
     };
     releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
@@ -8823,6 +8861,10 @@ export function buildReadOnlySpreadsheetHost(
           nativeCellEdit = null;
         }
       },
+      onbeforeinsertrow: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
+      onbeforeinsertcolumn: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
+      onbeforedeleterow: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
+      onbeforedeletecolumn: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
       oninsertrow: (changedWorksheet: JssInstance, inserted?: unknown): void => {
         notifyStructuralChange(changedWorksheet);
         styleNewlyInsertedRow(changedWorksheet, inserted);
