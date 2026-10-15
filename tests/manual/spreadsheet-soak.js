@@ -351,6 +351,7 @@ async function spreadsheetSoak(options = {}) {
     // the grid redraws a little after the menu click: wait for the expected change, up to 5 s
     const wanted = { 'row-after': [1, 0], 'row-before': [1, 0], 'col-after': [0, 1], 'col-before': [0, 1], 'del-row': [-1, 0], 'del-col': [0, -1] }[kind];
     for (let i = 0; i < 50 && (sizeAfter[0] - sizeBefore[0] !== wanted[0] || sizeAfter[1] - sizeBefore[1] !== wanted[1]); i++) { await sleep(100); sizeAfter = domSize(); }
+    if (kind.startsWith('row')) await rowHeightsUniform(uid, kind);
     const blank = n => Array.from({ length: n }, () => '');
     const expect = { 'row-after': [1, 0], 'row-before': [1, 0], 'col-after': [0, 1], 'col-before': [0, 1], 'del-row': [-1, 0], 'del-col': [0, -1] }[kind];
     const dRows = sizeAfter[0] - sizeBefore[0]; const dCols = sizeAfter[1] - sizeBefore[1];
@@ -755,6 +756,39 @@ async function spreadsheetSoak(options = {}) {
     await verify('click-to-type: nothing changed by starting and cancelling edits', true);
   }
 
+  // Rows added by the Add rows button, Enter in the last row or the menu must be as tall as the others
+  // (they were 4 px shorter once, because the row-number cell of a new row had no padding).
+  async function rowHeightsUniform(uid, label) {
+    const root = api.overlayElement(uid);
+    if (!root) return;
+    await sleep(500);
+    const heights = [...root.querySelectorAll('.jss_worksheet tbody tr')].map(tr => Math.round(tr.getBoundingClientRect().height));
+    note('row-height-check');
+    if (heights.length && Math.max(...heights) - Math.min(...heights) > 1) {
+      fail(`rows are not all the same height after ${label}: ${heights.join(' ')}`, { table: models.get(uid)?.label });
+    }
+  }
+
+  // The "number of rows + Add rows" bar under the grid.
+  async function addRowsBar(uid, count) {
+    const model = models.get(uid);
+    if (model.plate) return;
+    const root = await live(uid);
+    const bar = root.querySelector('.elabftw-spreadsheet-add-rows');
+    if (!bar) { fail('the Add rows bar is missing under the grid', { table: model.label }); return; }
+    note('add-rows-bar');
+    await timed('add-rows-bar', async () => {
+      const input = bar.querySelector('input'); const button = bar.querySelector('button');
+      input.value = String(count); input.dispatchEvent(new Event('input', { bubbles: true }));
+      button.click();
+      await sleep(1400);
+    });
+    const room = 50 - model.grid.length;
+    const added = Math.max(0, Math.min(count, room));
+    for (let i = 0; i < added; i++) model.grid.push(Array.from({ length: model.grid[0].length }, () => ''));
+    await rowHeightsUniform(uid, `Add rows (${count})`);
+  }
+
   // ---- scenarios ------------------------------------------------------------------------
   const scenarios = {
     async 'plate-day'() {
@@ -866,6 +900,12 @@ async function spreadsheetSoak(options = {}) {
         if (i % 3 === 2) { await typeInto(uid, int(0, model().grid.length - 1), int(0, model().grid[0].length - 1), `T${i}`); }
       }
       await verify('enter-last-row: all Enter rows', true);
+      await rowHeightsUniform(uid, 'Enter in the last row');
+      await addRowsBar(uid, int(1, 4));
+      await verify('enter-last-row: after Add rows', true);
+      await addRowsBar(uid, 2);
+      await typeInto(uid, model().grid.length - 1, 0, 'in-new-row');
+      await verify('enter-last-row: typed in a row made by Add rows', true);
       measure('enter-last-row: grown');
       // typed values, then at once a row/column change
       for (let i = 0; i < 6; i++) {
