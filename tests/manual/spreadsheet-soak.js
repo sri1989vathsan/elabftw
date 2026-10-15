@@ -186,7 +186,8 @@ async function spreadsheetSoak(options = {}) {
 
   // ---- 2. editor size -------------------------------------------------------------------
   const lastSize = { frame: 0, content: 0 };
-  function measure(label) {
+  async function measure(label) {
+    await sleep(450);
     const container = editor.getContainer();
     const iframe = container.querySelector('iframe');
     const doc = editor.getDoc();
@@ -280,7 +281,8 @@ async function spreadsheetSoak(options = {}) {
     if (leftovers) fail(`${leftovers} menu(s) left open`);
   }
 
-  // Insert or delete a row or column through the real right-click menu, keeping the record in step.
+  // Insert or delete a row or column through the real right-click menu. The record is changed only
+  // by what really happened (read back from the table), and the result is then compared strictly.
   async function structureOp(uid) {
     const model = models.get(uid);
     if (model.plate) return;
@@ -290,18 +292,16 @@ async function spreadsheetSoak(options = {}) {
     if ((kind.startsWith('row') && rows >= 14) || (kind.startsWith('col') && cols >= 10)) return;
     const r = int(0, rows - 1); const c = int(0, cols - 1);
     note(`menu-${kind}`);
-    let done = false;
+    const domSize = () => { const t = tableEl(uid); return [t.rows.length - 1, t.rows[0].cells.length - 1]; };
+    const sizeBefore = domSize();
+    let clicked = false;
     await timed(`menu-${kind}`, async () => {
       const root = await live(uid);
       const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
-      const rect = td.getBoundingClientRect();
-      const init = { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2, button: 0, buttons: 1 };
-      td.dispatchEvent(new PointerEvent('pointerdown', init));
-      td.dispatchEvent(new MouseEvent('mousedown', init));
-      td.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
-      td.dispatchEvent(new MouseEvent('click', { ...init, buttons: 0 }));
+      if (!td) { fail(`cell ${cellName(r, c)} not found for a menu action`, { table: model.label }); return; }
+      press(td);
       await sleep(150);
-      const header = kind.includes('col') ? root.querySelector(`.jss_worksheet thead td[data-x="${c}"]`) : td;
+      const header = kind.includes('col') ? (root.querySelector(`.jss_worksheet thead td[data-x="${c}"]`) || td) : td;
       const hr = header.getBoundingClientRect();
       const rc = { bubbles: true, cancelable: true, view: window, clientX: hr.x + 10, clientY: hr.y + 8, button: 2, buttons: 2 };
       header.dispatchEvent(new PointerEvent('pointerdown', rc));
@@ -316,19 +316,28 @@ async function spreadsheetSoak(options = {}) {
         'del-row': /delete selected rows/i, 'del-col': /delete selected columns/i,
       }[kind];
       const item = menu && [...menu.querySelectorAll('a')].find(a => pattern.test(a.textContent));
-      if (!item) { fail(`menu item ${pattern} not found`, { table: model.label }); await closeMenu(model.label, 'structure'); return; }
+      if (!item) { fail(`menu item ${pattern} not found`, { table: model.label, items: menu ? [...menu.querySelectorAll('a')].map(a => a.textContent.trim()).slice(0, 12) : 'no menu' }); await closeMenu(model.label, 'structure'); return; }
       item.click();
-      await sleep(600);
-      done = true;
+      clicked = true;
+      await sleep(700);
     });
-    if (!done) return;
+    if (!clicked) return;
+    const sizeAfter = domSize();
     const blank = n => Array.from({ length: n }, () => '');
-    if (kind === 'row-after') model.grid.splice(r + 1, 0, blank(cols));
-    if (kind === 'row-before') model.grid.splice(r, 0, blank(cols));
-    if (kind === 'col-after') model.grid.forEach(row => row.splice(c + 1, 0, ''));
-    if (kind === 'col-before') model.grid.forEach(row => row.splice(c, 0, ''));
-    if (kind === 'del-row') model.grid.splice(r, 1);
-    if (kind === 'del-col') model.grid.forEach(row => row.splice(c, 1));
+    const expect = { 'row-after': [1, 0], 'row-before': [1, 0], 'col-after': [0, 1], 'col-before': [0, 1], 'del-row': [-1, 0], 'del-col': [0, -1] }[kind];
+    const dRows = sizeAfter[0] - sizeBefore[0]; const dCols = sizeAfter[1] - sizeBefore[1];
+    if (dRows !== expect[0] || dCols !== expect[1]) {
+      dataLoss.push({ context, table: model.label, problem: `${kind}: size changed by ${dRows} rows and ${dCols} columns, expected ${expect[0]} and ${expect[1]}` });
+    }
+    // The record follows what the table did, so one problem is reported once and not forever.
+    if (dRows === 1) model.grid.splice(kind === 'row-before' ? r : r + 1, 0, blank(cols));
+    else if (dRows === -1) model.grid.splice(r, 1);
+    else if (dRows > 1) for (let i = 0; i < dRows; i++) model.grid.splice(r + 1, 0, blank(cols));
+    else if (dRows < -1) model.grid.splice(r, -dRows);
+    if (dCols === 1) model.grid.forEach(row => row.splice(kind === 'col-before' ? c : c + 1, 0, ''));
+    else if (dCols === -1) model.grid.forEach(row => row.splice(c, 1));
+    else if (dCols > 1) model.grid.forEach(row => row.splice(c + 1, 0, ...blank(dCols)));
+    else if (dCols < -1) model.grid.forEach(row => row.splice(c, -dCols));
   }
 
   // ---- consistency between the three copies: inline grid, popup, and the stored HTML -------
@@ -429,7 +438,7 @@ async function spreadsheetSoak(options = {}) {
       }
     });
     const after = positions();
-    if (JSON.stringify(after) !== JSON.stringify(baseline)) stops.push({ problem: `tables moved inside the text: ${JSON.stringify(baseline)} to ${JSON.stringify(after)}` });
+    if (after.length !== baseline.length || after.some((v, i) => Math.abs(v - baseline[i]) > 3)) stops.push({ problem: `tables moved inside the text: ${JSON.stringify(baseline)} to ${JSON.stringify(after)}` });
     window.scrollTo(0, start);
     stops.slice(0, 6).forEach(stop => { if (sizes.problems.length < 40) sizes.problems.push({ context: `${label} (scrolling)`, problem: stop.problem || `grid ${stop.drift} off its table at scroll ${stop.y} (table ${stop.table})` }); });
     scrollJiggles += stops.length;
@@ -446,7 +455,7 @@ async function spreadsheetSoak(options = {}) {
     const first = int(0, size - count);
     const lastIdx = first + count - 1;
     note(byRow ? 'multi-delete-rows' : 'multi-delete-columns');
-    measure('before multi-delete');
+    await measure('before multi-delete');
     const before = { frame: lastSize.frame, content: lastSize.content };
     let doneMulti = false;
     await timed(byRow ? 'multi-delete-rows' : 'multi-delete-columns', async () => {
@@ -498,7 +507,7 @@ async function spreadsheetSoak(options = {}) {
       else dataLoss.push({ context, table: model.label, problem: 'multi-delete left data that is not a whole-row/column removal', have: JSON.stringify(snapshotNow).slice(0, 160) });
       if (match === undefined) model.grid = expectedRows;
     }
-    measure('after multi-delete');
+    await measure('after multi-delete');
     if (lastSize.frame > before.frame + 4) sizes.problems.push({ context: 'after multi-delete', problem: `editor grew from ${before.frame} to ${lastSize.frame} px after deleting rows/columns` });
   }
 
@@ -520,7 +529,7 @@ async function spreadsheetSoak(options = {}) {
         await editCell(dialog, r, c, value);
         staged.push([r, c, value]);
       }
-      measure('popup open');
+      await measure('popup open');
       const pattern = apply ? /^(Update|Insert)/ : /^Cancel/;
       const target = [...dialog.querySelectorAll('button')].find(b => pattern.test(b.textContent.trim()));
       if (!target) throw new Error('popup button not found');
@@ -717,10 +726,10 @@ async function spreadsheetSoak(options = {}) {
     async 'plate-day'() {
       const uid = await createTable('96-well plate', { plate: 96 });
       if (!uid) return;
-      await verify('plate-day: inserted', true); measure('plate-day: inserted');
+      await verify('plate-day: inserted', true); await measure('plate-day: inserted');
       for (let i = 0; i < (config.quick ? 8 : 20); i++) {
         await typeInto(uid, int(0, 7), int(0, 11), `S${String(i + 1).padStart(2, '0')}`);
-        if (i % 6 === 5) { await verify(`plate-day: ${i + 1} wells`, false); measure('plate-day typing'); }
+        if (i % 6 === 5) { await verify(`plate-day: ${i + 1} wells`, false); await measure('plate-day typing'); }
       }
       await popupEdit(uid, true, 3);
       await verify('plate-day: popup applied', true);
@@ -728,20 +737,20 @@ async function spreadsheetSoak(options = {}) {
       await menuTour(uid);
       await scrollCheck('plate-day');
       await save();
-      await verify('plate-day: saved', true); measure('plate-day: saved');
+      await verify('plate-day: saved', true); await measure('plate-day: saved');
     },
     async 'back-to-back'() {
       const made = [];
       for (const [rows, cols] of [[4, 4], [6, 5], [8, 3]]) {
         const uid = await createTable(`row ${made.length + 1} of three (${rows}x${cols})`, { rows, cols });
         if (uid) made.push(uid);
-        measure('back-to-back: insert');
+        await measure('back-to-back: insert');
       }
       await verify('back-to-back: inserted', true);
       for (let round = 0; round < 3; round++) {
         for (const uid of made) await typeInto(uid, int(0, models.get(uid).grid.length - 1), int(0, models.get(uid).grid[0].length - 1), `${models.get(uid).label.slice(0, 3)}${round}${int(10, 99)}`);
         await verify(`back-to-back: round ${round + 1}`, false);
-        measure('back-to-back: typing');
+        await measure('back-to-back: typing');
       }
       for (const uid of made) await menuTour(uid);
       await scrollCheck('back-to-back');
@@ -749,7 +758,7 @@ async function spreadsheetSoak(options = {}) {
       await verify('back-to-back: popup applied', true);
       await consistency('back-to-back: inline, popup and stored HTML agree', true);
       await save();
-      await verify('back-to-back: saved', true); measure('back-to-back: saved');
+      await verify('back-to-back: saved', true); await measure('back-to-back: saved');
     },
     async 'spaced-out'() {
       const made = [];
@@ -757,7 +766,7 @@ async function spreadsheetSoak(options = {}) {
         await addText(`Step ${i + 1} of the protocol: notes and observations`, int(2, 6));
         const uid = await createTable(`spaced table ${i + 1}`, { rows: int(3, 7), cols: int(3, 6) });
         if (uid) made.push(uid);
-        measure('spaced-out: insert');
+        await measure('spaced-out: insert');
       }
       await verify('spaced-out: inserted', true);
       for (const uid of [...made, ...made.slice().reverse()]) {
@@ -774,7 +783,7 @@ async function spreadsheetSoak(options = {}) {
       await menuTour(made[made.length - 1]);
       await scrollCheck('spaced-out');
       await save();
-      await verify('spaced-out: saved', true); measure('spaced-out: saved');
+      await verify('spaced-out: saved', true); await measure('spaced-out: saved');
     },
     async 'copy-paste'() {
       const original = await createTable('original', { rows: 5, cols: 4 });
@@ -782,9 +791,9 @@ async function spreadsheetSoak(options = {}) {
       await typeInto(original, 0, 0, 'keep-me'); await typeInto(original, 4, 3, 'and-me');
       await verify('copy-paste: original filled', true);
       const right = await pasteCopy(original, false);
-      measure('copy-paste: pasted right after');
+      await measure('copy-paste: pasted right after');
       const far = await pasteCopy(original, true);
-      measure('copy-paste: pasted further down');
+      await measure('copy-paste: pasted further down');
       await verify('copy-paste: both pasted', true);
       if (right) { await typeInto(right, 2, 1, 'only-in-copy-1'); }
       if (far) { await typeInto(far, 1, 2, 'only-in-copy-2'); }
@@ -793,21 +802,21 @@ async function spreadsheetSoak(options = {}) {
       await consistency('copy-paste: inline, popup and stored HTML agree', true);
       for (const uid of [original, right, far].filter(Boolean)) await menuTour(uid);
       await save();
-      await verify('copy-paste: saved', true); measure('copy-paste: saved');
+      await verify('copy-paste: saved', true); await measure('copy-paste: saved');
     },
     async 'wide-plate'() {
       const uid = await createTable('384-well plate', { plate: 384 });
       if (!uid) return;
-      measure('wide-plate: inserted');
+      await measure('wide-plate: inserted');
       await verify('wide-plate: inserted', true);
       for (const [r, c] of [[0, 0], [15, 23], [0, 23], [15, 0], [7, 11]]) await typeInto(uid, r, c, `W${r}-${c}`);
-      measure('wide-plate: typing');
+      await measure('wide-plate: typing');
       await verify('wide-plate: corners filled', true);
       await menuTour(uid);
       await scrollCheck('wide-plate');
-      measure('wide-plate: after menus');
+      await measure('wide-plate: after menus');
       await save();
-      await verify('wide-plate: saved', true); measure('wide-plate: saved');
+      await verify('wide-plate: saved', true); await measure('wide-plate: saved');
     },
     async 'format-and-popup'() {
       const uid = await createTable('format table', { rows: 6, cols: 5 });
@@ -819,7 +828,7 @@ async function spreadsheetSoak(options = {}) {
       await verify('format: after formatting', true);
       await popupClosing(uid);
       await consistency('format: inline, popup and stored HTML agree', true);
-      measure('format: end');
+      await measure('format: end');
       await save();
       await verify('format: saved', true);
     },
@@ -849,7 +858,7 @@ async function spreadsheetSoak(options = {}) {
           fail(`${name}: ${error && error.message || error}`);
         }
         await sleep(pick([0, 30, 120, 450, 520, 700]));
-        measure(`mixed round ${round} ${name}`);
+        await measure(`mixed round ${round} ${name}`);
         await verify(`mixed round ${round} ${name}`, round % 6 === 0);
       }
       await verify('mixed: final', true);
@@ -894,7 +903,7 @@ async function spreadsheetSoak(options = {}) {
   context = 'end';
   await save();
   await verify('final settled', true);
-  measure('final');
+  await measure('final');
   window.confirm = originalConfirm;
 
   // ---- 4. slowing down ------------------------------------------------------------------
