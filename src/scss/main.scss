@@ -1284,18 +1284,20 @@ tr:first-child td {
 }
 
 /* Narrow windows: the rail of sidebar buttons would sit on top of the page, so it collapses into
- * one button (#sidepanelRailToggle) that shows the others on demand. A button whose panel is
- * open stays visible so the panel can always be closed. */
-.sidepanel-rail-toggle {
+ * one button in the top bar, left of the logo (#sidepanelRailToggle), that shows the others on
+ * demand. A button whose panel is open stays visible so the panel can always be closed. */
+#sidepanelRailToggle {
+  color: var(--primary-fg, #fff);
   display: none;
+  padding: 0.25rem 0.5rem;
 }
 
 @media (max-width: 991.98px) {
-  .sidepanel-rail-toggle {
+  #sidepanelRailToggle {
     display: block;
   }
 
-  #sidepanel-buttons:not(.rail-open) > .sidepanel-btn:not(.sidepanel-rail-toggle):not(.sidepanel-opened) {
+  #sidepanel-buttons:not(.rail-open) > .sidepanel-btn:not(.sidepanel-opened) {
     display: none;
   }
 }
