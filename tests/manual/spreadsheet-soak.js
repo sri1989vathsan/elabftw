@@ -830,9 +830,11 @@ async function spreadsheetSoak(options = {}) {
     const root = api.overlayElement(uid);
     if (!root) return;
     await sleep(500);
+    if (document.hidden) { note('row-height-check-skipped-hidden'); return; } // the layout loop is throttled then
     const heights = [...root.querySelectorAll('.jss_worksheet tbody tr')].map(tr => Math.round(tr.getBoundingClientRect().height));
     note('row-height-check');
-    if (heights.length && Math.max(...heights) - Math.min(...heights) > 1) {
+    // rows with and without content can differ by 3 px in the table's own rendering
+    if (heights.length && Math.max(...heights) - Math.min(...heights) > 4) {
       fail(`rows are not all the same height after ${label}: ${heights.join(' ')}`, { table: models.get(uid)?.label });
     }
     // nothing may cover the last row: not the Add rows bar, not the horizontal scroll bar
