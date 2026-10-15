@@ -73,6 +73,32 @@ def main():
         check(f'{label}: completing makes exactly one next task', len(nxt) == 1, f'status {status}, {len(nxt)} open')
         check(f'{label}: due {expected}', bool(nxt) and day(nxt[0]) == expected, day(nxt[0]) if nxt else 'none')
 
+    # 1b. days of the week (1 = Monday ... 7 = Sunday); 11 March 2030 is a Monday
+    week_cases = [
+        ('Mon/Wed/Fri: from Monday to Wednesday', '2030-03-11T09:00:00Z', {'unit': 'week', 'every': 1, 'days': [1, 3, 5]}, '2030-03-13'),
+        ('Mon/Wed/Fri: from Friday to the next Monday', '2030-03-15T09:00:00Z', {'unit': 'week', 'every': 1, 'days': [1, 3, 5]}, '2030-03-18'),
+        ('every 2 weeks on Mon/Wed: from Wednesday two weeks on', '2030-03-13T09:00:00Z', {'unit': 'week', 'every': 2, 'days': [1, 3]}, '2030-03-25'),
+        ('weekdays: from Friday to Monday', '2030-03-15T09:00:00Z', {'unit': 'week', 'every': 1, 'days': [1, 2, 3, 4, 5]}, '2030-03-18'),
+        ('weekend days: from Saturday to Sunday', '2030-03-16T09:00:00Z', {'unit': 'week', 'every': 1, 'days': [6, 7]}, '2030-03-17'),
+    ]
+    for label, deadline, rule, expected in week_cases:
+        marker = f'ZZ repeat {label} {stamp}'
+        status, task_id = make(alice, marker, deadline, rule)
+        complete(alice, task_id)
+        time.sleep(0.4)
+        nxt = open_tasks(alice, marker)
+        check(f'{label}: due {expected}', len(nxt) == 1 and day(nxt[0]) == expected, f'status {status}: {[day(t) for t in nxt]}')
+    status, _, _ = alice.api('POST', 'todolist', {'content': 'x', 'deadline': '2030-03-11T09:00:00Z', 'repeat_rule': {'unit': 'week', 'every': 1, 'days': [0, 8]}})
+    check('a day of the week outside 1 to 7 is refused', status == 400, str(status))
+
+    # 1c. the person's time zone: 9:00 in Zurich stays 9:00 when the clocks change (31 March 2030)
+    marker = f'ZZ repeat zone {stamp}'
+    _, task_id = make(alice, marker, '2030-03-30T08:00:00Z', {'unit': 'day', 'every': 1, 'tz': 'Europe/Zurich'})
+    complete(alice, task_id)
+    time.sleep(0.4)
+    nxt = (open_tasks(alice, marker) or [{}])[0]
+    check('9:00 in Zurich stays 9:00 across the clock change (07:00 UTC)', (nxt.get('deadline') or '').startswith('2030-03-31T07:00'), str(nxt.get('deadline')))
+
     # 2. the time of day and what is carried over
     marker = f'ZZ repeat carry {stamp}'
     _, task_id = make(alice, marker, '2030-05-06T13:30:00Z', {'unit': 'day', 'every': 1}, notes='keep these notes', reminder_minutes=15)

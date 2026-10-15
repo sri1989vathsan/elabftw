@@ -46,6 +46,7 @@ use function mb_strlen;
 use function preg_match;
 use function preg_replace;
 use function preg_split;
+use function sort;
 use function sprintf;
 use function trim;
 
@@ -1484,7 +1485,7 @@ final class Todolist extends AbstractRest
 
     /**
      * The repeat rule as a normalized JSON string, or null for "does not repeat".
-     * {"unit":"day|week|month|year","every":1-365,"until":"Y-m-d"|null,"count":null|1-1000}
+     * {"unit":"day|week|month|year","every":1-365,"days":[1-7],"until":"Y-m-d"|null,"count":null|1-1000,"tz":"Europe/Zurich"}
      * ("count" is how many more occurrences are wanted after this one).
      */
     private function getRepeatRule(mixed $value): ?string
@@ -1518,13 +1519,30 @@ final class Todolist extends AbstractRest
                 throw new ImproperActionException(_('Invalid number of repeats.'));
             }
         }
+        // weekly only: the days of the week (1 = Monday ... 7 = Sunday) it falls on
+        $days = array();
+        if ($unit === 'week' && !empty($rule['days'])) {
+            foreach ((array) $rule['days'] as $weekday) {
+                $weekday = filter_var($weekday, FILTER_VALIDATE_INT);
+                if ($weekday === false || $weekday < 1 || $weekday > 7) {
+                    throw new ImproperActionException(_('Invalid day of the week for the repeat.'));
+                }
+                $days[$weekday] = $weekday;
+            }
+            sort($days);
+        }
+        // the person's time zone, so "every Monday at 9:00" stays that way when the clocks change
+        $tz = null;
+        if (!empty($rule['tz']) && in_array((string) $rule['tz'], DateTimeZone::listIdentifiers(), true)) {
+            $tz = (string) $rule['tz'];
+        }
         if ($this->id !== null && !$this->hasDeadline()) {
             throw new ImproperActionException(_('A repeating task needs a deadline.'));
         }
         if ($this->id !== null && $this->isStepManaged()) {
             throw new ImproperActionException(_('A task created from a step cannot repeat: the step controls it.'));
         }
-        return json_encode(array('unit' => $unit, 'every' => $every, 'until' => $until, 'count' => $count), JSON_THROW_ON_ERROR);
+        return json_encode(array('unit' => $unit, 'every' => $every, 'days' => $days, 'until' => $until, 'count' => $count, 'tz' => $tz), JSON_THROW_ON_ERROR);
     }
 
     private function hasDeadline(): bool
@@ -1580,7 +1598,7 @@ final class Todolist extends AbstractRest
         if ($remaining !== null && (int) $remaining < 1) {
             return;
         }
-        $next = $this->nextDeadline(new DateTimeImmutable((string) $task['deadline']), $rule);
+        $next = $this->nextDeadline(new DateTimeImmutable((string) $task['deadline'], new DateTimeZone('UTC')), $rule);
         if (!empty($rule['until']) && $next->format('Y-m-d') > (string) $rule['until']) {
             return;
         }
@@ -1590,7 +1608,7 @@ final class Todolist extends AbstractRest
             'content' => $task['body'],
             'notes' => $task['notes'] ?? null,
             'description' => $task['description'] ?? null,
-            'deadline' => $next->format('Y-m-d\TH:i:s\Z'),
+            'deadline' => $next->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z'),
             'reminder_minutes' => $task['reminder_minutes'],
             'assignee_userids' => array_map('intval', array_column($task['assignees'] ?? array(), 'userid')) ?: null,
             'project_id' => $task['project_id'],
@@ -1610,20 +1628,39 @@ final class Todolist extends AbstractRest
         $this->Db->execute($mark);
     }
 
-    /** One step on from the given deadline, then on again while it is still in the past. */
+    /**
+     * One step on from the given deadline, then on again while it is still in the past. Worked out in the
+     * person's own time zone, so the hour of day and the weekday do not move when the clocks change.
+     */
     private function nextDeadline(DateTimeImmutable $from, array $rule): DateTimeImmutable
     {
         $every = max(1, (int) ($rule['every'] ?? 1));
         $unit = (string) ($rule['unit'] ?? 'day');
+        $days = array_values(array_map('intval', (array) ($rule['days'] ?? array())));
+        $zone = new DateTimeZone(!empty($rule['tz']) ? (string) $rule['tz'] : 'UTC');
         $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
-        $next = $from;
+        $next = $from->setTimezone($zone);
         for ($i = 0; $i < 5000; $i++) {
-            $next = match ($unit) {
-                'week' => $next->modify(sprintf('+%d weeks', $every)),
-                'month' => $this->addMonths($next, $every),
-                'year' => $this->addMonths($next, 12 * $every),
-                default => $next->modify(sprintf('+%d days', $every)),
-            };
+            if ($unit === 'week' && $days !== array()) {
+                $weekday = (int) $next->format('N');
+                $later = null;
+                foreach ($days as $candidate) {
+                    if ($candidate > $weekday) {
+                        $later = $candidate;
+                        break;
+                    }
+                }
+                $next = $later !== null
+                    ? $next->modify(sprintf('+%d days', $later - $weekday))
+                    : $next->modify(sprintf('-%d days', $weekday - 1))->modify(sprintf('+%d weeks', $every))->modify(sprintf('+%d days', $days[0] - 1));
+            } else {
+                $next = match ($unit) {
+                    'week' => $next->modify(sprintf('+%d weeks', $every)),
+                    'month' => $this->addMonths($next, $every),
+                    'year' => $this->addMonths($next, 12 * $every),
+                    default => $next->modify(sprintf('+%d days', $every)),
+                };
+            }
             if ($next > $now) {
                 break;
             }
