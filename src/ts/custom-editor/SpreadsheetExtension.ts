@@ -1482,6 +1482,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           const toggleBarEl = overlay.querySelector('.elabftw-spreadsheet-readonly-toggle') as HTMLElement | null;
           const formulaBarEl = overlay.querySelector('.elabftw-spreadsheet-formula-bar') as HTMLElement | null;
           const formatBarEl = overlay.querySelector('.elabftw-spreadsheet-format-bar') as HTMLElement | null;
+          // the "number of rows + Add rows" bar under the grid: part of the overlay's height too
+          const addRowsBarEl = overlay.querySelector('.elabftw-spreadsheet-add-rows') as HTMLElement | null;
           const gridEl = overlay.querySelector('.elabftw-spreadsheet-readonly-grid') as HTMLElement | null;
           // Just the grid's own live scrollWidth, capped only by the editor's
           // content column below -- dragging a column border to widen it
@@ -1552,7 +1554,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // short) and leaving the horizontal scrollbar overlapping the
           // last one (visible area ending short), at once.
           const overlayHeight = naturalContentHeight + scrollbarHeight
-            + (toggleBarEl?.offsetHeight ?? 0) + (formulaBarEl?.offsetHeight ?? 0) + (formatBarEl?.offsetHeight ?? 0);
+            + (toggleBarEl?.offsetHeight ?? 0) + (formulaBarEl?.offsetHeight ?? 0) + (formatBarEl?.offsetHeight ?? 0)
+            + (addRowsBarEl?.offsetHeight ?? 0);
           overlay.style.height = `${overlayHeight}px`;
           // The overlay lives outside the iframe, so native iframe clipping
           // does not apply. Keep its pixels and hit targets within the editor.
