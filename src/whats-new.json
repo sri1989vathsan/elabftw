@@ -845,13 +845,13 @@
     "news": "New: one Insert menu (with templates in it), checklists, a format painter next to the colours, date, title and note tools with saved defaults, spreadsheets and well plates.",
     "shot": "The editor toolbar with the Insert menu open",
     "highlight": {
-      "x": 15.5,
-      "y": 52.5,
-      "w": 28.5,
-      "h": 26.5,
+      "x": 76,
+      "y": 54,
+      "w": 22.5,
+      "h": 38,
       "label": "Spreadsheet, Well plate and Insert template"
     },
-    "image": "guide-editor-toolbar-3c16e1a6.png",
+    "image": "guide-editor-toolbar-7814070f.png",
     "screenshots": []
   },
   {
