@@ -2261,6 +2261,18 @@ function inheritCellAlignment(container: HTMLElement | null | undefined, cell: H
 }
 
 
+/**
+ * A new row's number cell takes the look of its neighbour's. Without it the row-number cell has no padding
+ * or border of its own, which made rows added with Add rows or Insert row shorter than the others.
+ */
+function inheritRowHeaderStyle(container: HTMLElement | null | undefined, newRow: number): void {
+  const header = container?.querySelector<HTMLElement>(`.jss_worksheet > tbody > tr:nth-child(${newRow + 1}) > td.jss_row`);
+  if (!header) return;
+  const neighbourRow = newRow > 0 ? newRow - 1 : newRow + 1;
+  const neighbour = container?.querySelector<HTMLElement>(`.jss_worksheet > tbody > tr:nth-child(${neighbourRow + 1}) > td.jss_row`);
+  if (neighbour && neighbour.style.cssText) header.style.cssText = neighbour.style.cssText;
+}
+
 /** Show the native resize destination independently of table layout constraints. */
 function installRowResizeGuide(container: HTMLElement): void {
   container.addEventListener('mousedown', event => {
@@ -5049,6 +5061,7 @@ export function openSpreadsheetModal(
               cell.style.cssText = getAppearanceCellStyle(working.appearance, col, newRow);
               inheritCellAlignment(sheetContainer, cell, col, newRow > 0 ? newRow - 1 : newRow + 1);
             }
+            inheritRowHeaderStyle(sheetContainer, newRow);
           });
         }, 0);
       };
@@ -8702,6 +8715,7 @@ export function buildReadOnlySpreadsheetHost(
           cell.style.cssText = getAppearanceCellStyle(appearance, col, newRow);
           inheritCellAlignment(sheetContainer, cell, col, newRow > 0 ? newRow - 1 : newRow + 1);
         }
+        inheritRowHeaderStyle(sheetContainer, newRow);
       });
     }, 0);
   };
