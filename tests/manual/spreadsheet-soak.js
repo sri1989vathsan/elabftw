@@ -86,9 +86,17 @@ async function spreadsheetSoak(options = {}) {
     do { label = String.fromCharCode(65 + (n % 26)) + label; n = Math.floor(n / 26) - 1; } while (n >= 0);
     return label + (r + 1);
   };
+  // While the tab or pane is not on screen the browser slows animation frames and timers down a great deal, so
+  // steps that ran partly in the background are kept apart and left out of the slowdown comparison.
+  const hiddenRuns = {};
   const timed = async (name, fn) => {
     const start = performance.now();
-    try { return await fn(); } finally { (timings[name] ||= []).push(Math.round(performance.now() - start)); }
+    const hiddenAtStart = document.hidden;
+    try { return await fn(); } finally {
+      const took = Math.round(performance.now() - start);
+      if (hiddenAtStart || document.hidden) hiddenRuns[name] = (hiddenRuns[name] || 0) + 1;
+      else (timings[name] ||= []).push(took);
+    }
   };
   const fail = (problem, extra = {}) => failures.push({ context, problem, ...extra });
 
@@ -1214,7 +1222,7 @@ async function spreadsheetSoak(options = {}) {
     scrollJiggleEvents: scrollJiggles,
     editorSize: { checks: sizes.checks, widestEditorPx: sizes.widest, mostExtraHeightPx: sizes.taller, mostMissingHeightPx: sizes.shorter, problems: sizes.problems },
     menus: { checked: menus.checked, problems: menus.problems },
-    slowingDown: { flagged: slower, perStep, heapGrowth, sessionEnds },
+    slowingDown: { flagged: slower, perStep, heapGrowth, sessionEnds, stepsRunWhilePageHidden: hiddenRuns, note: 'steps that ran while the page was hidden are not counted in the timings' },
     otherFailures: failures.slice(0, 30), otherFailureCount: failures.length,
     steps: counts,
     editorSyncEvents: api.events().filter(event => ['stale-overlay-write', 'sync-mismatch', 'popup-write-mismatch', 'recovery-copy'].includes(event.ev)).length,
