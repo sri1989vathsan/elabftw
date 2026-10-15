@@ -1022,7 +1022,12 @@
     if (!rule) return '';
     const names = { day: ['day', 'days'], week: ['week', 'weeks'], month: ['month', 'months'], year: ['year', 'years'] } as const;
     const every = rule.every === 1 ? t(names[rule.unit][0]) : `${rule.every} ${t(names[rule.unit][1])}`;
-    const base = `${t('Repeats every')} ${every}`;
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const days = rule.days ?? [];
+    const onDays = rule.unit === 'week' && days.length > 0
+      ? (days.join(',') === '1,2,3,4,5' ? ` ${t('on weekdays')}` : ` ${t('on')} ${days.map(day => t(dayNames[day - 1])).join(', ')}`)
+      : '';
+    const base = `${t('Repeats every')} ${every}${onDays}`;
     if (rule.until) return `${base}, ${t('until')} ${rule.until}`;
     if (rule.count !== null && rule.count !== undefined) return `${base}, ${rule.count + 1} ${t('times in all')}`;
     return base;
