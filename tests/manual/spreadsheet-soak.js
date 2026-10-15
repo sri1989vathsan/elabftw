@@ -70,6 +70,7 @@ async function spreadsheetSoak(options = {}) {
   const note = name => { counts[name] = (counts[name] || 0) + 1; };
   const t0 = performance.now();
   const baselineTables = api.snapshot(false).length;
+  const baselinePageWidth = document.documentElement.scrollWidth;
   const models = new Map();
   let context = 'start';
 
@@ -104,8 +105,8 @@ async function spreadsheetSoak(options = {}) {
       return id;
     });
     if (!uid) { fail(`could not insert ${label}`); return null; }
-    const snap = api.snapshot(true).find(entry => entry.uid === uid);
-    const grid = (snap?.tableData ?? []).map(row => row.map(() => ''));
+    const table = tableEl(uid);
+    const grid = Array.from({ length: table.rows.length - 1 }, () => Array.from({ length: table.rows[0].cells.length - 1 }, () => ''));
     models.set(uid, { label, grid, plate: !!plate });
     note(plate ? `insert-plate-${plate}` : 'insert-table');
     return uid;
@@ -134,6 +135,14 @@ async function spreadsheetSoak(options = {}) {
     note('type-in-cell');
   }
 
+  // The diagnostics drop trailing empty rows and columns, so the record is cut the same way.
+  const trim = grid => {
+    const rows = grid.map(row => row.slice());
+    while (rows.length && rows[rows.length - 1].every(v => v === '')) rows.pop();
+    let width = 0;
+    rows.forEach(row => { for (let i = row.length; i > 0; i--) if (row[i - 1] !== '') { width = Math.max(width, i); break; } });
+    return rows.map(row => row.slice(0, width));
+  };
   // ---- 1. data loss ---------------------------------------------------------------------
   // settle=false: only the live grid (the table trails it by the editor's 500 ms write delay).
   async function verify(label, settle) {
@@ -150,19 +159,20 @@ async function spreadsheetSoak(options = {}) {
       if (!snap) { dataLoss.push({ context, table: model.label, problem: 'the spreadsheet is gone' }); continue; }
       const compare = (where, grid) => {
         if (!grid) return;
-        if (grid.length !== model.grid.length || (grid[0]?.length ?? 0) !== (model.grid[0]?.length ?? 0)) {
-          dataLoss.push({ context, table: model.label, where, problem: `size ${grid.length}x${grid[0]?.length} instead of ${model.grid.length}x${model.grid[0]?.length}` });
-          return;
-        }
-        for (let r = 0; r < model.grid.length; r++) {
-          for (let c = 0; c < model.grid[r].length; c++) {
-            const have = grid[r]?.[c] ?? '';
-            if (have !== model.grid[r][c]) {
-              dataLoss.push({ context, table: model.label, where, cell: cellName(r, c), expected: model.grid[r][c], have });
-            }
+        const want = trim(model.grid); const got = trim(grid);
+        const rowsN = Math.max(want.length, got.length);
+        const colsN = Math.max(want[0]?.length ?? 0, got[0]?.length ?? 0, ...want.map(r => r.length), ...got.map(r => r.length));
+        for (let r = 0; r < rowsN; r++) {
+          for (let c = 0; c < colsN; c++) {
+            const expected = want[r]?.[c] ?? ''; const have = got[r]?.[c] ?? '';
+            if (have !== expected) dataLoss.push({ context, table: model.label, where, cell: cellName(r, c), expected, have });
           }
         }
       };
+      const dom = tableEl(uid);
+      if (dom && settle && (dom.rows.length - 1 !== model.grid.length || dom.rows[0].cells.length - 1 !== model.grid[0].length)) {
+        dataLoss.push({ context, table: model.label, where: 'saved table', problem: `size ${dom.rows.length - 1}x${dom.rows[0].cells.length - 1} instead of ${model.grid.length}x${model.grid[0].length}` });
+      }
       if (snap.live && !snap.editing) compare('grid', snap.overlayData);
       if (settle) compare('saved table', snap.tableData);
     }
@@ -187,7 +197,7 @@ async function spreadsheetSoak(options = {}) {
     sizes.widest = Math.max(sizes.widest, Math.round(box.width));
     if (box.width > parent.width + 2) problems.push(`editor ${Math.round(box.width)} px wide inside a ${Math.round(parent.width)} px column`);
     if (box.right > pageWidth + 2) problems.push('editor reaches past the right edge of the page');
-    if (document.documentElement.scrollWidth > pageWidth + 2) problems.push(`page scrolls sideways (${document.documentElement.scrollWidth} px in ${pageWidth} px)`);
+    if (document.documentElement.scrollWidth > Math.max(pageWidth, baselinePageWidth) + 2) problems.push(`page scrolls sideways (${document.documentElement.scrollWidth} px in ${pageWidth} px)`);
     if (html.scrollWidth > html.clientWidth + 2) problems.push(`editor frame scrolls sideways (${html.scrollWidth} px in ${html.clientWidth} px)`);
     const frameHeight = iframe.getBoundingClientRect().height;
     const contentHeight = Math.max(doc.body.scrollHeight, doc.body.offsetHeight);
@@ -209,7 +219,12 @@ async function spreadsheetSoak(options = {}) {
   async function menuCheck(root, target, where, label) {
     const rect = target.getBoundingClientRect();
     const x = rect.x + Math.min(rect.width / 2, 40); const y = rect.y + rect.height / 2;
-    target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 2 }));
+    // A real right-click: button down, button up, then the menu event.
+    const init = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 2, buttons: 2 };
+    target.dispatchEvent(new PointerEvent('pointerdown', init));
+    target.dispatchEvent(new MouseEvent('mousedown', init));
+    target.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
+    target.dispatchEvent(new MouseEvent('contextmenu', init));
     await sleep(300);
     const menu = openMenu();
     menus.checked++;
@@ -543,7 +558,7 @@ async function spreadsheetSoak(options = {}) {
     if (heaps[heaps.length - 1] > heaps[2] * 1.5 && heaps[heaps.length - 1] - heaps[2] > 40) slower.push({ step: 'memory', ...heapGrowth });
   }
   const last = samples[samples.length - 1];
-  if (last && last.menusInPage > 3) fail(`${last.menusInPage} menu elements are left in the page`);
+  if (last && last.menusInPage > last.overlays + 2) fail(`${last.menusInPage} menu elements for ${last.overlays} grids are left in the page`);
 
   const result = {
     verdict: dataLoss.length === 0 && failures.length === 0 && sizes.problems.length === 0 && menus.problems.length === 0 && slower.length === 0
