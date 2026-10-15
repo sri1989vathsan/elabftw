@@ -411,7 +411,7 @@ async function spreadsheetSoak(options = {}) {
     const frameBase = Math.round(iframe.getBoundingClientRect().height);
     const heightBase = height();
     const path = [];
-    for (let y = 0; y <= Math.min(heightBase, 4000); y += 160) path.push(y);
+    for (let y = 0; y <= Math.min(heightBase, 3000); y += 240) path.push(y);
     const reversed = path.slice().reverse();
     await timed('scroll-pass', async () => {
       for (const y of [...path, ...reversed]) {
@@ -875,6 +875,19 @@ async function spreadsheetSoak(options = {}) {
       context = `session ${session} ${name}`;
       window.spreadsheetSoakProgress = { session, sessions: config.sessions, scenario: name, dataLoss: dataLoss.length, failures: failures.length };
       try { await scenarios[name](); } catch (error) { fail(`${name} stopped: ${error && error.message || error}`); }
+      if (!config.accumulate && name !== config.scenarios[config.scenarios.length - 1]) {
+        // each scenario starts on a clean page, like opening a fresh experiment
+        await sleep(config.settleMs);
+        const opened = !!document.querySelector('.inline-spreadsheet-dialog');
+        if (opened) fail('a popup was left open at the end of the scenario');
+        sessionStorage.setItem('spreadsheetSoak', JSON.stringify({
+          at: Date.now(), baseline: baselineTables,
+          expected: api.snapshot(true).filter(snap => models.has(snap.uid)).map(snap => ({ label: models.get(snap.uid).label, grid: models.get(snap.uid).grid })),
+        }));
+        for (const uid of [...models.keys()]) api.removeTable(uid);
+        models.clear();
+        await sleep(600);
+      }
       samples.push({
         session, scenario: name,
         heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null,
