@@ -131,3 +131,8 @@ Run on the dev instance with the accounts in `TEST-ACCOUNTS.md`.
 | N23 | Non-admin (Alice): a folder she does not own reports can_manage_permissions false, so the Permissions button stays hidden | pass |
 | N24 | Non-admin (Alice): setting permissions on someone else's folder through the API is refused (403) | pass |
 | N25 | Non-admin (Alice): applying permissions on her own folder that holds Bob's experiment updates hers, skips Bob's and reports updated 1 / skipped 1 (was a 403 before the fix) | pass |
+| N26 | Non-admin (Bob) cannot edit or delete Alice's order template (refused: only the author or a team admin); Bob can read it and create his own | pass |
+| N27 | Admin can edit and delete another member's order template | pass |
+| N28 | A "my reference" order is invisible to others: Bob gets 404 and it is not in his list; an admin also gets 404 (by design, author only) | pass |
+| N29 | Non-admin cannot add a step to, or change the permissions of, another member's entry (403) | pass |
+| N30 | Non-admin (Alice) grants Bob edit on her entry: Bob also gets view; Alice then assigns him a step and he gets the task and notification with Alice as assigner | pass |
