@@ -18,6 +18,9 @@
  * one after the other, spreadsheets spaced out with text between them, a copy of a spreadsheet pasted
  * right after it and further down, a 384-well plate (wide), and a mixed random working session.
  *
+ * Use a SCRATCH experiment: the test adds and removes its own spreadsheets in the text. (What was on the page
+ * before is left alone, and the date-and-header scenario puts the page's own text back when it is done.)
+ *
  * Run it from the browser console on an experiment's EDIT page (logged in), Firefox or Chrome:
  *
  *     const report = await spreadsheetSoak({ seed: 1, sessions: 3 });
@@ -72,6 +75,8 @@ async function spreadsheetSoak(options = {}) {
   const t0 = performance.now();
   window.spreadsheetSoakLive = { dataLoss, failures, sizes, menus };
   const baselineTables = api.snapshot(false).length;
+  const baselineUids = new Set(api.snapshot(false).map(snap => snap.uid));
+  let baselineGone = false;
   const baselinePageWidth = document.documentElement.scrollWidth;
   const models = new Map();
   let context = 'start';
@@ -159,9 +164,12 @@ async function spreadsheetSoak(options = {}) {
     const snaps = api.snapshot(true);
     const uids = snaps.map(snap => snap.uid);
     if (new Set(uids).size !== uids.length) fail('two spreadsheets share one id (a copy was not given its own)');
-    if (snaps.length !== baselineTables + models.size) {
-      dataLoss.push({ context, problem: `expected ${baselineTables + models.size} spreadsheets, found ${snaps.length}` });
-    }
+    // Spreadsheets that were on the page before the run are left alone; anything else that is not in the
+    // record is a leftover, and a recorded one that is missing is checked below.
+    const strangers = snaps.filter(snap => !models.has(snap.uid) && !baselineUids.has(snap.uid));
+    if (strangers.length) dataLoss.push({ context, problem: `${strangers.length} spreadsheet(s) on the page that the test did not make and that were not there at the start` });
+    const missingBefore = [...baselineUids].filter(uid => !snaps.some(snap => snap.uid === uid));
+    if (missingBefore.length && !baselineGone) { baselineGone = true; fail(`${missingBefore.length} spreadsheet(s) that were on the page before the run are gone (the test should not touch them)`); }
     for (const [uid, model] of models) {
       const snap = snaps.find(entry => entry.uid === uid);
       if (!snap) { dataLoss.push({ context, table: model.label, problem: 'the spreadsheet is gone' }); continue; }
@@ -377,6 +385,12 @@ async function spreadsheetSoak(options = {}) {
     return out;
   };
   const sameGrid = (a, b) => JSON.stringify(trim(a)) === JSON.stringify(trim(b));
+  // For what is shown on screen: a formula cell shows its result, so cells whose recorded value is a
+  // formula are left out of the comparison.
+  const sameShown = (shown, model) => {
+    const mask = grid => grid.map((row, r) => row.map((v, c) => (String(model[r]?.[c] ?? '').startsWith('=') ? '' : v)));
+    return sameGrid(mask(shown), mask(model));
+  };
   async function consistency(label, withPopup) {
     context = label;
     await sleep(config.settleMs);
@@ -389,11 +403,11 @@ async function spreadsheetSoak(options = {}) {
       else if (!sameGrid(stored, model.grid) && !model.plate) dataLoss.push({ context, table: model.label, where: 'stored HTML (data-spreadsheet)', problem: 'differs from what was entered', have: JSON.stringify(trim(stored)).slice(0, 160) });
       else if (model.plate && !sameGrid(stored.slice(0, model.grid.length).map(r => r.slice(0, model.grid[0].length)), model.grid)) dataLoss.push({ context, table: model.label, where: 'stored HTML (data-spreadsheet)', problem: 'differs from what was entered' });
       const shown = extractShown(table);
-      if (shown && !sameGrid(shown, model.grid)) dataLoss.push({ context, table: model.label, where: 'visible table cells', problem: 'differ from what was entered' });
+      if (shown && !sameShown(shown, model.grid)) dataLoss.push({ context, table: model.label, where: 'visible table cells', problem: 'differ from what was entered' });
       if (withPopup) {
         const root = await live(uid);
         const inline = domCells(root);
-        if (!sameGrid(inline, model.grid)) dataLoss.push({ context, table: model.label, where: 'inline grid cells on screen', problem: 'differ from what was entered' });
+        if (!sameShown(inline, model.grid)) dataLoss.push({ context, table: model.label, where: 'inline grid cells on screen', problem: 'differ from what was entered' });
         const button = root.querySelector('.elabftw-spreadsheet-readonly-open-editor');
         if (button) {
           button.click();
@@ -402,7 +416,7 @@ async function spreadsheetSoak(options = {}) {
           if (!dialog) { fail('popup did not open for the consistency check', { table: model.label }); continue; }
           await sleep(500);
           const inPopup = domCells(dialog);
-          if (!sameGrid(inPopup, model.grid)) dataLoss.push({ context, table: model.label, where: 'popup', problem: 'popup shows different data than the inline grid / stored table' });
+          if (!sameShown(inPopup, model.grid)) dataLoss.push({ context, table: model.label, where: 'popup', problem: 'popup shows different data than the inline grid / stored table' });
           const cancel = [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()));
           cancel?.click();
           for (let i = 0; i < 60 && document.querySelector('.inline-spreadsheet-dialog'); i++) await sleep(50);
@@ -885,6 +899,8 @@ async function spreadsheetSoak(options = {}) {
         note(`header-${label}`);
         if (JSON.stringify(have) !== JSON.stringify(expected)) fail(`header under a date (${label}): expected ${expected.join(' ')} but found ${have.join(' ')}`, { html: body().innerHTML.replace(/<a class="elabftw-date-reference"[\s\S]*?<\/a>/g, '[date]').slice(0, 300) });
       };
+      // This scenario needs a clean page, so what is on it is put aside and put back at the end.
+      const savedContent = editor.getContent();
       const fresh = async html => { editor.setContent(html); editor.focus(); editor.selection.select(editor.getBody(), true); editor.selection.collapse(false); await sleep(250); };
 
       // 1. empty page: date, then the paragraph that follows becomes a Heading 2
@@ -923,7 +939,8 @@ async function spreadsheetSoak(options = {}) {
       note('header-three-days');
       const strayBetween = many.some((k, i) => k === 'EMPTY' && many[i - 1] === 'DATE');
       if (strayBetween) fail(`header under a date (three days in a row): empty line directly under a date: ${many.join(' ')}`);
-      await fresh('');
+      editor.setContent(savedContent);
+      await sleep(900);
     },
     async 'format-and-popup'() {
       const uid = await createTable('format table', { rows: 6, cols: 5 });
