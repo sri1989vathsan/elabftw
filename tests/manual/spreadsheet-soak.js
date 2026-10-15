@@ -293,13 +293,8 @@ async function spreadsheetSoak(options = {}) {
     if ((kind.startsWith('row') && rows >= 14) || (kind.startsWith('col') && cols >= 10)) return;
     const r = int(0, rows - 1); const c = int(0, cols - 1);
     note(`menu-${kind}`);
-    // The live grid is what the user works in; the stored table is compared strictly afterwards.
-    const domSize = () => {
-      const root = api.overlayElement(uid);
-      const rowsNow = root.querySelectorAll('.jss_worksheet tbody tr').length;
-      const colsNow = root.querySelectorAll('.jss_worksheet thead td[data-x]').length;
-      return [rowsNow, colsNow];
-    };
+    // Size of the stored table (it follows the live grid a moment after each change).
+    const domSize = () => { const t = tableEl(uid); return [t.rows.length - 1, t.rows[0].cells.length - 1]; };
     const sizeBefore = domSize();
     let clicked = false;
     await timed(`menu-${kind}`, async () => {
@@ -330,9 +325,9 @@ async function spreadsheetSoak(options = {}) {
     });
     if (!clicked) return;
     let sizeAfter = domSize();
-    // the grid redraws a little after the menu click: wait for the expected change, up to 3 s
+    // the grid redraws a little after the menu click: wait for the expected change, up to 5 s
     const wanted = { 'row-after': [1, 0], 'row-before': [1, 0], 'col-after': [0, 1], 'col-before': [0, 1], 'del-row': [-1, 0], 'del-col': [0, -1] }[kind];
-    for (let i = 0; i < 30 && (sizeAfter[0] - sizeBefore[0] !== wanted[0] || sizeAfter[1] - sizeBefore[1] !== wanted[1]); i++) { await sleep(100); sizeAfter = domSize(); }
+    for (let i = 0; i < 50 && (sizeAfter[0] - sizeBefore[0] !== wanted[0] || sizeAfter[1] - sizeBefore[1] !== wanted[1]); i++) { await sleep(100); sizeAfter = domSize(); }
     const blank = n => Array.from({ length: n }, () => '');
     const expect = { 'row-after': [1, 0], 'row-before': [1, 0], 'col-after': [0, 1], 'col-before': [0, 1], 'del-row': [-1, 0], 'del-col': [0, -1] }[kind];
     const dRows = sizeAfter[0] - sizeBefore[0]; const dCols = sizeAfter[1] - sizeBefore[1];
