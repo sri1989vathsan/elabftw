@@ -5068,6 +5068,7 @@ export function openSpreadsheetModal(
           scheduleFormulaResultRender();
         }, 0);
       };
+      installWellPlateHeaders(sheetContainer, () => working.kind);
       const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
         worksheets: [{
           data: mountedData,
@@ -8603,6 +8604,7 @@ export function buildReadOnlySpreadsheetHost(
     zIndex: string;
   }>();
 
+  installWellPlateHeaders(sheetContainer, () => extracted.kind);
   (jspreadsheet as unknown as JssFactory)(sheetContainer, {
     worksheets: [{
       data: displayValues,
@@ -9395,6 +9397,51 @@ function getCoordinateStyleAttribute(
 }
 
 /** Convert column index to letter label (0=A, 25=Z, 26=AA). */
+/**
+ * Well plates are named the way plates are read: letters down the side (rows
+ * A, B, C...) and numbers across the top (columns 1, 2, 3...), the opposite of
+ * a normal sheet. The saved table already writes them like that; this does the
+ * same for the live grid, whose headers jspreadsheet draws itself. They are
+ * rewritten whenever the grid redraws (rows or columns added or removed...).
+ * Formulas keep spreadsheet cell names: column letter first, then row number.
+ */
+function installWellPlateHeaders(container: HTMLElement, getKind: () => string | undefined): void {
+  let wasPlate = false;
+  let scheduled = false;
+  const setText = (element: Element, text: string): void => {
+    const first = element.firstChild;
+    if (first && first.nodeType === Node.TEXT_NODE) {
+      if (first.nodeValue !== text) first.nodeValue = text;
+    } else if (element.textContent !== text) {
+      element.textContent = text;
+    }
+  };
+  const apply = (): void => {
+    scheduled = false;
+    const plate = getKind() === 'well-plate';
+    if (!plate && !wasPlate) return;
+    container.querySelectorAll('.jss_worksheet > thead > tr > [data-x]').forEach(header => {
+      const x = Number.parseInt((header as HTMLElement).dataset.x ?? '', 10);
+      if (Number.isInteger(x)) setText(header, plate ? String(x + 1) : colLabel(x));
+    });
+    container.querySelectorAll('.jss_worksheet > tbody td.jss_row[data-y]').forEach(header => {
+      const y = Number.parseInt((header as HTMLElement).dataset.y ?? '', 10);
+      if (!Number.isInteger(y)) return;
+      // a row whose number is wrapped for a manually set height keeps its wrapper
+      const target = header.querySelector('.jss-cell-clip') ?? header;
+      setText(target, plate ? colLabel(y) : String(y + 1));
+    });
+    wasPlate = plate;
+  };
+  const schedule = (): void => {
+    if (scheduled) return;
+    scheduled = true;
+    window.requestAnimationFrame(apply);
+  };
+  new MutationObserver(schedule).observe(container, { childList: true, subtree: true, characterData: true });
+  schedule();
+}
+
 function colLabel(index: number): string {
   let label = '';
   let current = index;
