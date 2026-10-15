@@ -106,6 +106,7 @@ async function spreadsheetSoak(options = {}) {
   };
 
   async function createTable(label, { rows = 5, cols = 4, plate = 0 } = {}) {
+    layoutDirty = true;
     const uid = await timed('insert-table', async () => {
       const id = api.insertScratch(rows, cols, plate ? { plate } : undefined);
       await sleep(700);
@@ -157,6 +158,58 @@ async function spreadsheetSoak(options = {}) {
     rows.forEach(row => { for (let i = row.length; i > 0; i--) if (row[i - 1] !== '') { width = Math.max(width, i); break; } });
     return rows.map(row => row.slice(0, width));
   };
+  // ---- anomalies: stray spaces, stray blank lines, text that moved, tables that vanished -------------
+  // The text outside the spreadsheets must only change when the test itself changes it, and nothing may
+  // appear around a table on its own (an empty line, a spacer, a non-breaking space).
+  let layoutDirty = true;           // set whenever the test itself inserts, pastes or writes text
+  let lastOutside = null;
+  const outsideSignature = () => {
+    const kids = Array.from(editor.getBody().children).filter(el => !el.hasAttribute('data-mce-bogus') && !el.hasAttribute('data-elabftw-spreadsheet-spacer'));
+    const parts = kids.map(el => {
+      if (el.tagName === 'TABLE' && el.classList.contains('elabftw-spreadsheet')) return 'TABLE';
+      const text = (el.textContent || '').replace(/[​﻿]/g, '');
+      const empty = text.replace(/[\s ]/g, '') === '' && !el.querySelector('img, table, hr');
+      return empty ? `${el.tagName}:EMPTY` : `${el.tagName}:${text}`;
+    });
+    return { parts, empties: parts.filter(p => p.endsWith(':EMPTY')).length, tables: parts.filter(p => p === 'TABLE').length, spacers: editor.getBody().querySelectorAll('[data-elabftw-spreadsheet-spacer]').length };
+  };
+  function layoutCheck(label) {
+    const now = outsideSignature();
+    note('layout-check');
+    if (lastOutside && !layoutDirty) {
+      const same = JSON.stringify(now.parts) === JSON.stringify(lastOutside.parts);
+      if (!same) {
+        // describe the first difference in words
+        const a = lastOutside.parts; const b = now.parts; let i = 0;
+        while (i < Math.min(a.length, b.length) && a[i] === b[i]) i++;
+        dataLoss.push({ context: label, problem: `the text around the spreadsheets changed by itself at block ${i + 1}: ${JSON.stringify(a[i] ?? '(end)')} became ${JSON.stringify(b[i] ?? '(end)')}`, empties: `${lastOutside.empties} to ${now.empties}`, tables: `${lastOutside.tables} to ${now.tables}` });
+      }
+      if (now.spacers > now.tables) dataLoss.push({ context: label, problem: `${now.spacers} layout spacers for ${now.tables} spreadsheets (spacers piling up)` });
+    }
+    lastOutside = now;
+    layoutDirty = false;
+  }
+  // Cells are compared exactly (no trimming): a space, a non-breaking space or a hidden character that
+  // was not typed is an anomaly.
+  function exactCellCheck(uid, label) {
+    const model = models.get(uid);
+    const table = tableEl(uid);
+    if (!model || !table) return;
+    let stored = null;
+    try { stored = JSON.parse(decodeURIComponent(escape(atob(table.getAttribute('data-spreadsheet'))))).data; } catch (error) { return; }
+    note('exact-cell-check');
+    (stored || []).forEach((row, r) => (row || []).forEach((value, c) => {
+      const text = value == null ? '' : String(value);
+      if (/^\s|\s$| |​|﻿|  /.test(text) && text !== (model.grid[r]?.[c] ?? '')) {
+        dataLoss.push({ context: label, table: model.label, where: 'stored cell', cell: cellName(r, c), problem: `extra whitespace or hidden character in the cell: ${JSON.stringify(text)}` });
+      }
+      const expected = model.grid[r]?.[c] ?? '';
+      if (r < model.grid.length && c < (model.grid[0]?.length ?? 0) && text !== expected && text.trim() === expected.trim() && text !== expected) {
+        dataLoss.push({ context: label, table: model.label, where: 'stored cell', cell: cellName(r, c), problem: `differs only by spaces: expected ${JSON.stringify(expected)} found ${JSON.stringify(text)}` });
+      }
+    }));
+  }
+
   // ---- 1. data loss ---------------------------------------------------------------------
   // settle=false: only the live grid (the table trails it by the editor's 500 ms write delay).
   async function verify(label, settle) {
@@ -194,6 +247,8 @@ async function spreadsheetSoak(options = {}) {
       if (settle) compare('saved table', snap.tableData);
     }
     if (settle) {
+      for (const uid of models.keys()) exactCellCheck(uid, context);
+      layoutCheck(context);
       for (const check of api.verify('soak-check')) {
         if (!['ok', 'skipped'].includes(check.status) && models.has(check.uid)) fail(`editor reported ${check.status}`, { table: models.get(check.uid).label });
       }
@@ -581,6 +636,7 @@ async function spreadsheetSoak(options = {}) {
   }
 
   const addText = async (text, count = 1) => {
+    layoutDirty = true;
     editor.selection.select(editor.getBody(), true);
     editor.selection.collapse(false);
     editor.insertContent(Array.from({ length: count }, (_, i) => `<p>${text} ${i + 1}</p>`).join(''));
@@ -593,6 +649,7 @@ async function spreadsheetSoak(options = {}) {
     if (spaced) await addText('Some notes between the two tables', 4);
     editor.selection.select(editor.getBody(), true);
     editor.selection.collapse(false);
+    layoutDirty = true;
     const before = new Set(api.snapshot(false).map(snap => snap.uid));
     await timed('paste-table', async () => { editor.insertContent(html); await sleep(900); });
     note(spaced ? 'paste-spaced' : 'paste-right-after');
@@ -955,6 +1012,7 @@ async function spreadsheetSoak(options = {}) {
       };
       // This scenario needs a clean page, so what is on it is put aside and put back at the end.
       const savedContent = editor.getContent();
+      layoutDirty = true;
       const fresh = async html => { editor.setContent(html); editor.focus(); editor.selection.select(editor.getBody(), true); editor.selection.collapse(false); await sleep(250); };
 
       // 1. empty page: date, then the paragraph that follows becomes a Heading 2
@@ -994,6 +1052,7 @@ async function spreadsheetSoak(options = {}) {
       const strayBetween = many.some((k, i) => k === 'EMPTY' && many[i - 1] === 'DATE');
       if (strayBetween) fail(`header under a date (three days in a row): empty line directly under a date: ${many.join(' ')}`);
       editor.setContent(savedContent);
+      layoutDirty = true;
       await sleep(900);
     },
     async 'format-and-popup'() {
@@ -1051,6 +1110,7 @@ async function spreadsheetSoak(options = {}) {
     for (const name of config.scenarios) {
       if (!scenarios[name]) continue;
       context = `session ${session} ${name}`;
+      layoutDirty = true;
       window.spreadsheetSoakProgress = { session, sessions: config.sessions, scenario: name, dataLoss: dataLoss.length, failures: failures.length };
       try { await scenarios[name](); } catch (error) { fail(`${name} stopped: ${error && error.message || error}`); }
       if (!config.accumulate && name !== config.scenarios[config.scenarios.length - 1]) {
@@ -1064,6 +1124,7 @@ async function spreadsheetSoak(options = {}) {
         }));
         for (const uid of [...models.keys()]) api.removeTable(uid);
         models.clear();
+        layoutDirty = true;
         await sleep(600);
       }
       samples.push({
