@@ -116,6 +116,7 @@ async function spreadsheetSoak(options = {}) {
     const grid = Array.from({ length: table.rows.length - 1 }, () => Array.from({ length: table.rows[0].cells.length - 1 }, () => ''));
     models.set(uid, { label, grid, plate: !!plate });
     note(plate ? `insert-plate-${plate}` : 'insert-table');
+    if (!plate) { try { api.mountLive(uid); await sleep(400); await rowHeightsUniform(uid, 'a new spreadsheet'); } catch (error) { /* checked again later */ } }
     return uid;
   }
 
@@ -766,6 +767,19 @@ async function spreadsheetSoak(options = {}) {
     note('row-height-check');
     if (heights.length && Math.max(...heights) - Math.min(...heights) > 1) {
       fail(`rows are not all the same height after ${label}: ${heights.join(' ')}`, { table: models.get(uid)?.label });
+    }
+    // nothing may cover the last row: not the Add rows bar, not the horizontal scroll bar
+    const rowsEls = root.querySelectorAll('.jss_worksheet tbody tr');
+    const lastRow = rowsEls[rowsEls.length - 1];
+    const bar = root.querySelector('.elabftw-spreadsheet-add-rows');
+    const grid = root.querySelector('.elabftw-spreadsheet-readonly-grid');
+    if (lastRow && grid) {
+      const content = root.querySelector('.jss_content');
+      const scrollbar = content ? content.offsetHeight - content.clientHeight : 0;
+      const lastBottom = lastRow.getBoundingClientRect().bottom;
+      const gridBottom = grid.getBoundingClientRect().bottom - Math.max(0, grid.offsetHeight - grid.clientHeight);
+      if (lastBottom > gridBottom + 1) fail(`the last row is cut off at the bottom of the grid by ${Math.round(lastBottom - gridBottom)} px (${label})`, { table: models.get(uid)?.label });
+      if (bar && lastBottom > bar.getBoundingClientRect().top + 1) fail(`the Add rows bar covers ${Math.round(lastBottom - bar.getBoundingClientRect().top)} px of the last row (${label})`, { table: models.get(uid)?.label });
     }
   }
 
