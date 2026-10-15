@@ -3314,10 +3314,12 @@ body.html-tool-workspace-resizing * {
   --spreadsheet-column-index-height: 30px;
   --spreadsheet-row-index-width: 42px;
 
-  flex: 1 1 220px;
+  // flex-basis auto, so the height set in the script is used (a pixel basis here kept the grid at its
+  // minimum height whenever the dialog's own height was automatic).
+  flex: 0 1 auto;
   height: 400px;
   margin: 0 0.65rem 0.5rem;
-  max-height: 70vh;
+  max-height: none;
   max-width: 100%;
   min-height: 220px;
   min-width: min(320px, 100%);

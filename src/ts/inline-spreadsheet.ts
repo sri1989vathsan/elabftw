@@ -4885,6 +4885,13 @@ export function openSpreadsheetModal(
       const mountedContainer = sheetContainer;
       const mountedRows = working.rows;
       const mountedCols = working.cols;
+      // Popup grid area: as tall as its rows need, up to what the window leaves under the dialog's own
+      // header, toolbars and buttons, and never shorter than a few rows.
+      {
+        const rowsNeed = mountedRows * 34 + 64;
+        const windowRoom = Math.max(220, Math.round(window.innerHeight * 0.96 - 340));
+        ui.sheetHost.style.height = `${Math.max(220, Math.min(rowsNeed, windowRoom))}px`;
+      }
       const initialRowHeights = normalizeRowHeights(working.rowHeights, mountedRows);
       const initialColWidths = normalizeColWidths(working.colWidths, mountedCols);
       const mountedData = resizeData(working.data, mountedRows, mountedCols);
