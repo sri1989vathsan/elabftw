@@ -15,11 +15,26 @@ export default class FoldersPanel extends SidePanel {
     // the whole panel element -- same "leave this page and lose unsaved
     // edits?" guard as the Search panel's result links (FavoriteFilters).
     document.addEventListener('click', event => {
+      if ((event.target as HTMLElement)?.closest('[data-action="refresh-folders"]')) {
+        const icon = (event.target as HTMLElement).closest('[data-action="refresh-folders"]')?.querySelector('i');
+        icon?.classList.add('fa-spin');
+        void this.refresh().finally(() => icon?.classList.remove('fa-spin'));
+      }
+    });
+    document.addEventListener('click', event => {
       const link = (event.target as HTMLElement)?.closest<HTMLAnchorElement>(`#${this.panelId} a[href]`);
       if (!link) return;
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       if (!confirmLeaveEditing()) event.preventDefault();
     });
+  }
+
+  /** The refresh button: forget the short-lived cached copy and load the folder tree again. */
+  refresh(): Promise<void> {
+    sessionStorage.removeItem('folders-panel-html-v3');
+    sessionStorage.removeItem('folders-panel-html-v3-at');
+    this.loading = this.loadPanel();
+    return this.loading;
   }
 
   show(): void {
