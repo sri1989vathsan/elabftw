@@ -70,6 +70,7 @@ async function spreadsheetSoak(options = {}) {
   const counts = {};
   const note = name => { counts[name] = (counts[name] || 0) + 1; };
   const t0 = performance.now();
+  window.spreadsheetSoakLive = { dataLoss, failures, sizes, menus };
   const baselineTables = api.snapshot(false).length;
   const baselinePageWidth = document.documentElement.scrollWidth;
   const models = new Map();
