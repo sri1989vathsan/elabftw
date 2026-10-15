@@ -540,6 +540,8 @@
     "details": [
       "Scroll below the main text. Each section opens and closes on its own.",
       "fa-list-check::Steps and tasks: a checklist for the experiment, with deadlines that also show in your calendar.",
+      "fa-at::Mention people in a step: type @ in the add-a-step box or in a step's text, then pick a name with the arrow keys and Tab (or the mouse). Each person you mention gets the step as a to-do of their own, linked to the experiment and with the step's deadline, and a notification that you assigned it.",
+      "fa-circle-check::When a step is done: if one of the people you mentioned ticks their to-do, the step is completed on the experiment and on everyone else's to-do as well, and you and the other assignees are told. Ticking the step on the experiment does the same. Taking a name out of the step removes that person's to-do, and deleting the step removes them all.",
       "Data: link the network folder where the experiment’s raw data lives. Paste the path (smb://server/share/folder or \\\\server\\share\\folder), add an optional label such as “Raw data folder” and press Add.",
       "Each data link has buttons to open it on a Mac, to copy the Windows path to paste into Explorer, and to insert a reference to it in the main text. Remove a link with the trash icon while editing.",
       "fa-link::Links: other experiments, associated templates, resources, orders, web addresses and LabCollector entries this one relates to.",
