@@ -3330,6 +3330,12 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     { value: 'right', label: 'Align right', icon: '<i class="fas fa-align-right" aria-hidden="true"></i>' },
     { value: 'justify', label: 'Justify', icon: '<i class="fas fa-align-justify" aria-hidden="true"></i>' },
   ]);
+  // Top / middle / bottom for the selected cells (the buttons further up are only the default for new cells).
+  const verticalAlignmentButtons = createAlignmentButtons(cellFormatVerticalAlignSelect, [
+    { value: 'top', label: 'Align selected cells to the top', icon: '<i class="fas fa-arrow-up-to-line" aria-hidden="true"></i>' },
+    { value: 'middle', label: 'Align selected cells to the middle', icon: '<i class="fas fa-arrows-up-down" aria-hidden="true"></i>' },
+    { value: 'bottom', label: 'Align selected cells to the bottom', icon: '<i class="fas fa-arrow-down-to-line" aria-hidden="true"></i>' },
+  ]);
   const rowHeightInput = createInput(
     'number',
     String(MIN_DATA_ROW_HEIGHT),
@@ -3355,6 +3361,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
       cellFormatNoTextColorInput,
     ),
     horizontalAlignmentButtons,
+    verticalAlignmentButtons,
   );
 
   const clearCellFormatBtn = document.createElement('button');
@@ -7133,14 +7140,14 @@ export function buildReadOnlySpreadsheetHost(
     textColorInput.addEventListener('input', () => applySelectedStyleProperty('color', textColorInput.value));
     noTextColorButton.addEventListener('click', () => applySelectedStyleProperty('color', ''));
 
-    const makeAlignButton = (icon: string, label: string, value: string): HTMLButtonElement => {
+    const makeAlignButton = (icon: string, label: string, value: string, property = 'text-align'): HTMLButtonElement => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'elabftw-spreadsheet-format-bar-icon-btn';
       button.innerHTML = icon;
       button.title = label;
       button.setAttribute('aria-label', label);
-      button.addEventListener('click', () => applySelectedStyleProperty('text-align', value));
+      button.addEventListener('click', () => applySelectedStyleProperty(property, value));
       return button;
     };
 
@@ -7174,6 +7181,9 @@ export function buildReadOnlySpreadsheetHost(
       makeAlignButton('<i class="fas fa-align-center" aria-hidden="true"></i>', 'Align center', 'center'),
       makeAlignButton('<i class="fas fa-align-right" aria-hidden="true"></i>', 'Align right', 'right'),
       makeAlignButton('<i class="fas fa-align-justify" aria-hidden="true"></i>', 'Justify', 'justify'),
+      makeAlignButton('<i class="fas fa-arrow-up-to-line" aria-hidden="true"></i>', 'Align top', 'top', 'vertical-align'),
+      makeAlignButton('<i class="fas fa-arrows-up-down" aria-hidden="true"></i>', 'Align middle', 'middle', 'vertical-align'),
+      makeAlignButton('<i class="fas fa-arrow-down-to-line" aria-hidden="true"></i>', 'Align bottom', 'bottom', 'vertical-align'),
       clearFormatButton,
       openFullEditorFromFormatBar,
     );
