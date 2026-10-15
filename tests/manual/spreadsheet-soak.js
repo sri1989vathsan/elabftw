@@ -1,0 +1,595 @@
+/**
+ * Soak test for spreadsheets in the editor: realistic working sessions, repeated.
+ *
+ * What it checks, in order of importance:
+ *   1. DATA LOSS. Every cell typed (or kept through an insert/delete of rows and columns, a popup
+ *      Update, a copy and paste, a save) is compared with the script's own record, in the live grid
+ *      and in the saved table, after every step; and once more after the page is reloaded.
+ *   2. Editor size. After each step the editor's width and height are measured: the frame must not
+ *      be wider than the page or scroll sideways, grids must stay inside it, and the editor must not
+ *      be much taller than its content (or cut it off).
+ *   3. Right-click menus. Right-click a cell, a row number and a column letter, at the top and at the
+ *      bottom of the screen: the menu must be fully on screen, next to the pointer, on top of
+ *      everything else, close again, and leave nothing behind.
+ *   4. Slowing down. Time of every kind of step, memory, page size and leftover grids are tracked
+ *      across the sessions; the first and the last part of the run are compared.
+ *
+ * Scenarios (each is a typical way of working): a 96-well plate day, several spreadsheets inserted
+ * one after the other, spreadsheets spaced out with text between them, a copy of a spreadsheet pasted
+ * right after it and further down, a 384-well plate (wide), and a mixed random working session.
+ *
+ * Run it from the browser console on an experiment's EDIT page (logged in), Firefox or Chrome:
+ *
+ *     const report = await spreadsheetSoak({ seed: 1, sessions: 3 });
+ *     console.log(JSON.stringify(report, null, 2));
+ *
+ * Options: seed, sessions (how many times the whole set is repeated), randomRounds (steps in the mixed
+ * scenario, default 30), scenarios (names to run), settleMs, quick (shorter waits, fewer rounds).
+ * A long run can be started without waiting: spreadsheetSoak({...}); then read
+ * window.spreadsheetSoakProgress while it runs and window.spreadsheetSoakReport when it is done.
+ *
+ * Afterwards reload the page and run:   const after = await spreadsheetSoakAfterReload();
+ * It compares what was saved with the record, then removes the scratch tables.
+ * Only cell text that this script itself typed is ever held by it.
+ */
+async function spreadsheetSoak(options = {}) {
+  const config = {
+    seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'mixed'],
+    ...options,
+  };
+  if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
+  const api = window.elabftwSpreadsheetDiagnostics;
+  if (!api) throw new Error('The spreadsheet diagnostics are not loaded: open an experiment in edit mode.');
+  const editor = tinymce.activeEditor;
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const frames = n => new Promise(resolve => {
+    let i = 0;
+    const next = () => {
+      if (++i >= n) { resolve(); return; }
+      let fired = false;
+      requestAnimationFrame(() => { fired = true; next(); });
+      setTimeout(() => { if (!fired) { fired = true; next(); } }, 120);
+    };
+    next();
+  });
+  let rngState = config.seed >>> 0 || 1;
+  const random = () => { rngState = (Math.imul(rngState, 1664525) + 1013904223) >>> 0; return rngState / 4294967296; };
+  const int = (min, max) => min + Math.floor(random() * (max - min + 1));
+  const pick = list => list[Math.floor(random() * list.length)];
+
+  const originalConfirm = window.confirm;
+  window.confirm = () => true;
+  const dataLoss = [];
+  const failures = [];
+  const sizes = { checks: 0, widest: 0, taller: 0, shorter: 0, problems: [] };
+  const menus = { checked: 0, problems: [] };
+  const timings = {};
+  const samples = [];
+  const counts = {};
+  const note = name => { counts[name] = (counts[name] || 0) + 1; };
+  const t0 = performance.now();
+  const baselineTables = api.snapshot(false).length;
+  const models = new Map();
+  let context = 'start';
+
+  const cellName = (r, c) => {
+    let label = ''; let n = c;
+    do { label = String.fromCharCode(65 + (n % 26)) + label; n = Math.floor(n / 26) - 1; } while (n >= 0);
+    return label + (r + 1);
+  };
+  const timed = async (name, fn) => {
+    const start = performance.now();
+    try { return await fn(); } finally { (timings[name] ||= []).push(Math.round(performance.now() - start)); }
+  };
+  const fail = (problem, extra = {}) => failures.push({ context, problem, ...extra });
+
+  // ---- tables ---------------------------------------------------------------------------
+  const tableEl = uid => editor.getBody().querySelector(`table.elabftw-spreadsheet[data-elabftw-spreadsheet-uid="${uid}"]`);
+  const visibleRescue = () => [...document.querySelectorAll('.elabftw-spreadsheet-rescue-input')].find(el => !el.hidden);
+  const live = async uid => {
+    const table = tableEl(uid);
+    if (!table) throw new Error(`table ${uid} is missing`);
+    table.scrollIntoView({ block: 'center' });
+    await sleep(300);
+    api.mountLive(uid);
+    await sleep(450);
+    return api.overlayElement(uid);
+  };
+
+  async function createTable(label, { rows = 5, cols = 4, plate = 0 } = {}) {
+    const uid = await timed('insert-table', async () => {
+      const id = api.insertScratch(rows, cols, plate ? { plate } : undefined);
+      await sleep(700);
+      return id;
+    });
+    if (!uid) { fail(`could not insert ${label}`); return null; }
+    const snap = api.snapshot(true).find(entry => entry.uid === uid);
+    const grid = (snap?.tableData ?? []).map(row => row.map(() => ''));
+    models.set(uid, { label, grid, plate: !!plate });
+    note(plate ? `insert-plate-${plate}` : 'insert-table');
+    return uid;
+  }
+
+  async function editCell(root, r, c, value) {
+    const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
+    if (!td) throw new Error(`cell ${cellName(r, c)} not found`);
+    const rect = td.getBoundingClientRect();
+    td.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 }));
+    let box = null;
+    for (let i = 0; i < 40 && !(box = visibleRescue()); i++) await sleep(25);
+    if (!box) throw new Error(`no cell editor opened for ${cellName(r, c)}`);
+    box.value = value;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await frames(2);
+  }
+
+  async function typeInto(uid, r, c, value) {
+    await timed('type-in-cell', async () => {
+      const root = await live(uid);
+      await editCell(root, r, c, value);
+    });
+    models.get(uid).grid[r][c] = value;
+    note('type-in-cell');
+  }
+
+  // ---- 1. data loss ---------------------------------------------------------------------
+  // settle=false: only the live grid (the table trails it by the editor's 500 ms write delay).
+  async function verify(label, settle) {
+    context = label;
+    if (settle) await sleep(config.settleMs);
+    const snaps = api.snapshot(true);
+    const uids = snaps.map(snap => snap.uid);
+    if (new Set(uids).size !== uids.length) fail('two spreadsheets share one id (a copy was not given its own)');
+    if (snaps.length !== baselineTables + models.size) {
+      dataLoss.push({ context, problem: `expected ${baselineTables + models.size} spreadsheets, found ${snaps.length}` });
+    }
+    for (const [uid, model] of models) {
+      const snap = snaps.find(entry => entry.uid === uid);
+      if (!snap) { dataLoss.push({ context, table: model.label, problem: 'the spreadsheet is gone' }); continue; }
+      const compare = (where, grid) => {
+        if (!grid) return;
+        if (grid.length !== model.grid.length || (grid[0]?.length ?? 0) !== (model.grid[0]?.length ?? 0)) {
+          dataLoss.push({ context, table: model.label, where, problem: `size ${grid.length}x${grid[0]?.length} instead of ${model.grid.length}x${model.grid[0]?.length}` });
+          return;
+        }
+        for (let r = 0; r < model.grid.length; r++) {
+          for (let c = 0; c < model.grid[r].length; c++) {
+            const have = grid[r]?.[c] ?? '';
+            if (have !== model.grid[r][c]) {
+              dataLoss.push({ context, table: model.label, where, cell: cellName(r, c), expected: model.grid[r][c], have });
+            }
+          }
+        }
+      };
+      if (snap.live && !snap.editing) compare('grid', snap.overlayData);
+      if (settle) compare('saved table', snap.tableData);
+    }
+    if (settle) {
+      for (const check of api.verify('soak-check')) {
+        if (!['ok', 'skipped'].includes(check.status) && models.has(check.uid)) fail(`editor reported ${check.status}`, { table: models.get(check.uid).label });
+      }
+    }
+  }
+
+  // ---- 2. editor size -------------------------------------------------------------------
+  function measure(label) {
+    const container = editor.getContainer();
+    const iframe = container.querySelector('iframe');
+    const doc = editor.getDoc();
+    const html = doc.documentElement;
+    const box = container.getBoundingClientRect();
+    const parent = container.parentElement.getBoundingClientRect();
+    const pageWidth = document.documentElement.clientWidth;
+    const problems = [];
+    sizes.checks++;
+    sizes.widest = Math.max(sizes.widest, Math.round(box.width));
+    if (box.width > parent.width + 2) problems.push(`editor ${Math.round(box.width)} px wide inside a ${Math.round(parent.width)} px column`);
+    if (box.right > pageWidth + 2) problems.push('editor reaches past the right edge of the page');
+    if (document.documentElement.scrollWidth > pageWidth + 2) problems.push(`page scrolls sideways (${document.documentElement.scrollWidth} px in ${pageWidth} px)`);
+    if (html.scrollWidth > html.clientWidth + 2) problems.push(`editor frame scrolls sideways (${html.scrollWidth} px in ${html.clientWidth} px)`);
+    const frameHeight = iframe.getBoundingClientRect().height;
+    const contentHeight = Math.max(doc.body.scrollHeight, doc.body.offsetHeight);
+    const extra = Math.round(frameHeight - contentHeight);
+    sizes.taller = Math.max(sizes.taller, extra);
+    sizes.shorter = Math.min(sizes.shorter, extra);
+    if (extra > 160) problems.push(`editor is ${extra} px taller than its content`);
+    if (extra < -6) problems.push(`editor is ${-extra} px shorter than its content (cut off)`);
+    document.querySelectorAll('.elabftw-spreadsheet-editor-overlay').forEach(overlay => {
+      const rect = overlay.getBoundingClientRect();
+      if (rect.width > 0 && (rect.left < box.left - 3 || rect.right > box.right + 3)) problems.push('a spreadsheet sticks out of the editor sideways');
+    });
+    problems.forEach(problem => { if (sizes.problems.length < 40) sizes.problems.push({ context: label, problem }); });
+  }
+
+  // ---- 3. right-click menus -------------------------------------------------------------
+  const openMenu = () => [...document.querySelectorAll('.jcontextmenu, .jss_contextmenu')]
+    .find(menu => getComputedStyle(menu).display !== 'none' && menu.getBoundingClientRect().width > 0);
+  async function menuCheck(root, target, where, label) {
+    const rect = target.getBoundingClientRect();
+    const x = rect.x + Math.min(rect.width / 2, 40); const y = rect.y + rect.height / 2;
+    target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 2 }));
+    await sleep(300);
+    const menu = openMenu();
+    menus.checked++;
+    const problem = text => { if (menus.problems.length < 40) menus.problems.push({ context, target: label, where, problem: text }); };
+    if (!menu) { problem('no menu appeared'); return null; }
+    const m = menu.getBoundingClientRect();
+    if (m.left < -1 || m.top < -1 || m.right > innerWidth + 1 || m.bottom > innerHeight + 1) problem(`menu partly off screen (${Math.round(m.left)},${Math.round(m.top)} to ${Math.round(m.right)},${Math.round(m.bottom)} in ${innerWidth}x${innerHeight})`);
+    const gapX = x < m.left ? m.left - x : (x > m.right ? x - m.right : 0);
+    const gapY = y < m.top ? m.top - y : (y > m.bottom ? y - m.bottom : 0);
+    if (Math.max(gapX, gapY) > 90) problem(`menu ${Math.round(Math.max(gapX, gapY))} px away from the pointer`);
+    const probeX = m.left + m.width / 2; const probeY = Math.min(m.bottom - 4, m.top + 12);
+    const top = document.elementFromPoint(probeX, probeY);
+    if (!top || !menu.contains(top)) problem(`menu is covered by ${top ? (top.className || top.tagName) : 'nothing'}`);
+    if (menu.querySelectorAll('a, button, li').length === 0) problem('menu has no items');
+    return menu;
+  }
+  async function closeMenu(label, where) {
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await sleep(250);
+    if (openMenu()) { menus.checked++; if (menus.problems.length < 40) menus.problems.push({ context, target: label, where, problem: 'menu did not close' }); }
+  }
+  async function menuTour(uid) {
+    note('menu-tour');
+    await timed('menu-tour', async () => {
+      const table = tableEl(uid);
+      for (const where of ['top of screen', 'bottom of screen']) {
+        table.scrollIntoView({ block: where === 'top of screen' ? 'start' : 'end' });
+        window.scrollBy(0, where === 'top of screen' ? -120 : 120);
+        await sleep(350);
+        api.mountLive(uid);
+        await sleep(400);
+        const root = api.overlayElement(uid);
+        if (!root) { fail('no live grid for the menu check'); continue; }
+        const targets = [
+          ['cell', root.querySelector('.jss_worksheet tbody td[data-x][data-y]')],
+          ['row number', root.querySelector('.jss_worksheet tbody td.jss_row')],
+          ['column letter', root.querySelector('.jss_worksheet thead td[data-x]')],
+        ];
+        for (const [label, target] of targets) {
+          if (!target) continue;
+          const r = target.getBoundingClientRect();
+          if (r.bottom < 0 || r.top > innerHeight) continue; // not on screen from here
+          await menuCheck(root, target, where, models.get(uid).label + ' ' + label);
+          await closeMenu(models.get(uid).label + ' ' + label, where);
+        }
+      }
+    });
+    const leftovers = [...document.querySelectorAll('.jcontextmenu, .jss_contextmenu')].filter(menu => getComputedStyle(menu).display !== 'none').length;
+    if (leftovers) fail(`${leftovers} menu(s) left open`);
+  }
+
+  // Insert or delete a row or column through the real right-click menu, keeping the record in step.
+  async function structureOp(uid) {
+    const model = models.get(uid);
+    if (model.plate) return;
+    const rows = model.grid.length; const cols = model.grid[0].length;
+    const kind = pick(['row-after', 'row-before', 'col-after', 'col-before', 'del-row', 'del-col']);
+    if ((kind === 'del-row' && rows <= 2) || (kind === 'del-col' && cols <= 2)) return;
+    if ((kind.startsWith('row') && rows >= 14) || (kind.startsWith('col') && cols >= 10)) return;
+    const r = int(0, rows - 1); const c = int(0, cols - 1);
+    note(`menu-${kind}`);
+    await timed(`menu-${kind}`, async () => {
+      const root = await live(uid);
+      const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
+      const rect = td.getBoundingClientRect();
+      const init = { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2, button: 0, buttons: 1 };
+      td.dispatchEvent(new PointerEvent('pointerdown', init));
+      td.dispatchEvent(new MouseEvent('mousedown', init));
+      td.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
+      td.dispatchEvent(new MouseEvent('click', { ...init, buttons: 0 }));
+      await sleep(150);
+      const header = kind.includes('col') ? root.querySelector(`.jss_worksheet thead td[data-x="${c}"]`) : td;
+      header.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, view: window, clientX: header.getBoundingClientRect().x + 10, clientY: header.getBoundingClientRect().y + 8, button: 2 }));
+      await sleep(300);
+      const menu = openMenu();
+      const pattern = {
+        'row-after': /insert a new row after/i, 'row-before': /insert a new row before/i,
+        'col-after': /insert a new column after/i, 'col-before': /insert a new column before/i,
+        'del-row': /delete selected rows/i, 'del-col': /delete selected columns/i,
+      }[kind];
+      const item = menu && [...menu.querySelectorAll('a')].find(a => pattern.test(a.textContent));
+      if (!item) { fail(`menu item ${pattern} not found`, { table: model.label }); await closeMenu(model.label, 'structure'); return; }
+      item.click();
+      await sleep(600);
+    });
+    const blank = n => Array.from({ length: n }, () => '');
+    if (kind === 'row-after') model.grid.splice(r + 1, 0, blank(cols));
+    if (kind === 'row-before') model.grid.splice(r, 0, blank(cols));
+    if (kind === 'col-after') model.grid.forEach(row => row.splice(c + 1, 0, ''));
+    if (kind === 'col-before') model.grid.forEach(row => row.splice(c, 0, ''));
+    if (kind === 'del-row') model.grid.splice(r, 1);
+    if (kind === 'del-col') model.grid.forEach(row => row.splice(c, 1));
+  }
+
+  async function popupEdit(uid, apply, edits) {
+    const model = models.get(uid);
+    note(apply ? 'popup-apply' : 'popup-cancel');
+    await timed(apply ? 'popup-apply' : 'popup-cancel', async () => {
+      const root = await live(uid);
+      const button = root.querySelector('.elabftw-spreadsheet-readonly-open-editor');
+      if (!button) throw new Error('open-editor button not found');
+      button.click();
+      let dialog = null;
+      for (let i = 0; i < 60 && !(dialog = document.querySelector('.inline-spreadsheet-dialog')); i++) await sleep(50);
+      if (!dialog) throw new Error('popup did not open');
+      await sleep(400);
+      const staged = [];
+      for (let i = 0; i < edits; i++) {
+        const r = int(0, model.grid.length - 1); const c = int(0, model.grid[0].length - 1); const value = `p${int(100, 999)}`;
+        await editCell(dialog, r, c, value);
+        staged.push([r, c, value]);
+      }
+      measure('popup open');
+      const pattern = apply ? /^(Update|Insert)/ : /^Cancel/;
+      const target = [...dialog.querySelectorAll('button')].find(b => pattern.test(b.textContent.trim()));
+      if (!target) throw new Error('popup button not found');
+      target.click();
+      for (let i = 0; i < 60 && document.querySelector('.inline-spreadsheet-dialog'); i++) await sleep(50);
+      if (apply) staged.forEach(([r, c, value]) => { model.grid[r][c] = value; });
+    });
+  }
+
+  async function save() {
+    note('save');
+    await timed('save', async () => { editor.execCommand('mceSave'); await sleep(1100); });
+  }
+
+  const addText = async (text, count = 1) => {
+    editor.selection.select(editor.getBody(), true);
+    editor.selection.collapse(false);
+    editor.insertContent(Array.from({ length: count }, (_, i) => `<p>${text} ${i + 1}</p>`).join(''));
+    await sleep(250);
+  };
+
+  async function pasteCopy(uid, spaced) {
+    const html = api.copyHtml(uid);
+    if (!html) { fail('could not copy the spreadsheet'); return null; }
+    if (spaced) await addText('Some notes between the two tables', 4);
+    editor.selection.select(editor.getBody(), true);
+    editor.selection.collapse(false);
+    const before = new Set(api.snapshot(false).map(snap => snap.uid));
+    await timed('paste-table', async () => { editor.insertContent(html); await sleep(900); });
+    note(spaced ? 'paste-spaced' : 'paste-right-after');
+    const after = api.snapshot(true);
+    const added = after.filter(snap => !before.has(snap.uid));
+    if (added.length !== 1) {
+      fail(`pasting one spreadsheet gave ${added.length} new ones (ids shared: ${after.length - new Set(after.map(s => s.uid)).size})`);
+      // keep the record in step with what is there, so later checks stay meaningful
+      return null;
+    }
+    const copyUid = added[0].uid;
+    models.set(copyUid, { label: `${models.get(uid).label} (copy${spaced ? ', spaced' : ''})`, grid: models.get(uid).grid.map(row => row.slice()), plate: models.get(uid).plate });
+    return copyUid;
+  }
+
+  // ---- scenarios ------------------------------------------------------------------------
+  const scenarios = {
+    async 'plate-day'() {
+      const uid = await createTable('96-well plate', { plate: 96 });
+      if (!uid) return;
+      await verify('plate-day: inserted', true); measure('plate-day: inserted');
+      for (let i = 0; i < (config.quick ? 8 : 20); i++) {
+        await typeInto(uid, int(0, 7), int(0, 11), `S${String(i + 1).padStart(2, '0')}`);
+        if (i % 6 === 5) { await verify(`plate-day: ${i + 1} wells`, false); measure('plate-day typing'); }
+      }
+      await popupEdit(uid, true, 3);
+      await verify('plate-day: popup applied', true);
+      await menuTour(uid);
+      await save();
+      await verify('plate-day: saved', true); measure('plate-day: saved');
+    },
+    async 'back-to-back'() {
+      const made = [];
+      for (const [rows, cols] of [[4, 4], [6, 5], [8, 3]]) {
+        const uid = await createTable(`row ${made.length + 1} of three (${rows}x${cols})`, { rows, cols });
+        if (uid) made.push(uid);
+        measure('back-to-back: insert');
+      }
+      await verify('back-to-back: inserted', true);
+      for (let round = 0; round < 3; round++) {
+        for (const uid of made) await typeInto(uid, int(0, models.get(uid).grid.length - 1), int(0, models.get(uid).grid[0].length - 1), `${models.get(uid).label.slice(0, 3)}${round}${int(10, 99)}`);
+        await verify(`back-to-back: round ${round + 1}`, false);
+        measure('back-to-back: typing');
+      }
+      for (const uid of made) await menuTour(uid);
+      await popupEdit(made[1], true, 2);
+      await verify('back-to-back: popup applied', true);
+      await save();
+      await verify('back-to-back: saved', true); measure('back-to-back: saved');
+    },
+    async 'spaced-out'() {
+      const made = [];
+      for (let i = 0; i < 4; i++) {
+        await addText(`Step ${i + 1} of the protocol: notes and observations`, int(2, 6));
+        const uid = await createTable(`spaced table ${i + 1}`, { rows: int(3, 7), cols: int(3, 6) });
+        if (uid) made.push(uid);
+        measure('spaced-out: insert');
+      }
+      await verify('spaced-out: inserted', true);
+      for (const uid of [...made, ...made.slice().reverse()]) {
+        const model = models.get(uid);
+        await typeInto(uid, int(0, model.grid.length - 1), int(0, model.grid[0].length - 1), `v${int(100, 999)}`);
+        window.scrollTo(0, int(0, 400));
+        await sleep(int(100, 500));
+      }
+      await verify('spaced-out: edited top to bottom and back', false);
+      for (const uid of made) await structureOp(uid);
+      await verify('spaced-out: rows and columns changed', true);
+      await menuTour(made[made.length - 1]);
+      await save();
+      await verify('spaced-out: saved', true); measure('spaced-out: saved');
+    },
+    async 'copy-paste'() {
+      const original = await createTable('original', { rows: 5, cols: 4 });
+      if (!original) return;
+      await typeInto(original, 0, 0, 'keep-me'); await typeInto(original, 4, 3, 'and-me');
+      await verify('copy-paste: original filled', true);
+      const right = await pasteCopy(original, false);
+      measure('copy-paste: pasted right after');
+      const far = await pasteCopy(original, true);
+      measure('copy-paste: pasted further down');
+      await verify('copy-paste: both pasted', true);
+      if (right) { await typeInto(right, 2, 1, 'only-in-copy-1'); }
+      if (far) { await typeInto(far, 1, 2, 'only-in-copy-2'); }
+      await typeInto(original, 2, 2, 'only-in-original');
+      await verify('copy-paste: each edited alone (no leaking between them)', true);
+      for (const uid of [original, right, far].filter(Boolean)) await menuTour(uid);
+      await save();
+      await verify('copy-paste: saved', true); measure('copy-paste: saved');
+    },
+    async 'wide-plate'() {
+      const uid = await createTable('384-well plate', { plate: 384 });
+      if (!uid) return;
+      measure('wide-plate: inserted');
+      await verify('wide-plate: inserted', true);
+      for (const [r, c] of [[0, 0], [15, 23], [0, 23], [15, 0], [7, 11]]) await typeInto(uid, r, c, `W${r}-${c}`);
+      measure('wide-plate: typing');
+      await verify('wide-plate: corners filled', true);
+      await menuTour(uid);
+      measure('wide-plate: after menus');
+      await save();
+      await verify('wide-plate: saved', true); measure('wide-plate: saved');
+    },
+    async mixed() {
+      const made = [];
+      for (let i = 0; i < 3; i++) {
+        if (i) await addText('Results from the next run', int(1, 3));
+        const uid = await createTable(`mixed ${i + 1}`, { rows: int(4, 8), cols: int(3, 6) });
+        if (uid) made.push(uid);
+      }
+      for (let round = 1; round <= config.randomRounds; round++) {
+        const uid = pick(made);
+        const model = models.get(uid);
+        const roll = random();
+        context = `mixed round ${round}`;
+        let name = '';
+        try {
+          if (roll < 0.40) { name = 'type'; await typeInto(uid, int(0, model.grid.length - 1), int(0, model.grid[0].length - 1), random() < 0.2 ? `=${cellName(0, 0)}+1` : String(int(0, 999))); }
+          else if (roll < 0.50) { name = 'scroll'; window.scrollTo(0, 0); await sleep(int(150, 700)); await live(uid); }
+          else if (roll < 0.62) { name = 'popup-apply'; await popupEdit(uid, true, int(1, 2)); }
+          else if (roll < 0.70) { name = 'popup-cancel'; await popupEdit(uid, false, 1); }
+          else if (roll < 0.82) { name = 'rows-columns'; await structureOp(uid); }
+          else if (roll < 0.90) { name = 'menu'; await menuTour(uid); }
+          else { name = 'save'; await save(); }
+        } catch (error) {
+          fail(`${name}: ${error && error.message || error}`);
+        }
+        await sleep(pick([0, 30, 120, 450, 520, 700]));
+        measure(`mixed round ${round} ${name}`);
+        await verify(`mixed round ${round} ${name}`, round % 6 === 0);
+      }
+      await verify('mixed: final', true);
+    },
+  };
+
+  // ---- the run --------------------------------------------------------------------------
+  const sessionEnds = [];
+  for (let session = 1; session <= config.sessions; session++) {
+    const nodesAtStart = document.getElementsByTagName('*').length + editor.getDoc().getElementsByTagName('*').length;
+    for (const name of config.scenarios) {
+      if (!scenarios[name]) continue;
+      context = `session ${session} ${name}`;
+      window.spreadsheetSoakProgress = { session, sessions: config.sessions, scenario: name, dataLoss: dataLoss.length, failures: failures.length };
+      try { await scenarios[name](); } catch (error) { fail(`${name} stopped: ${error && error.message || error}`); }
+      samples.push({
+        session, scenario: name,
+        heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null,
+        nodes: document.getElementsByTagName('*').length + editor.getDoc().getElementsByTagName('*').length,
+        overlays: document.querySelectorAll('.elabftw-spreadsheet-editor-overlay').length,
+        menusInPage: document.querySelectorAll('.jcontextmenu, .jss_contextmenu').length,
+      });
+    }
+    // Keep the last session's tables for the reload check; clear the others so every session starts alike.
+    if (session < config.sessions || !config.keepTables) {
+      const order = api.snapshot(true);
+      sessionStorage.setItem('spreadsheetSoak', JSON.stringify({
+        at: Date.now(), baseline: baselineTables,
+        expected: order.filter(snap => models.has(snap.uid)).map(snap => ({ label: models.get(snap.uid).label, grid: models.get(snap.uid).grid })),
+      }));
+    }
+    if (session < config.sessions) {
+      for (const uid of [...models.keys()]) { api.removeTable(uid); }
+      models.clear();
+      await sleep(1200);
+      const nodesAtEnd = document.getElementsByTagName('*').length + editor.getDoc().getElementsByTagName('*').length;
+      sessionEnds.push({ session, nodesAtStart, nodesAtEnd, left: nodesAtEnd - nodesAtStart });
+      if (nodesAtEnd - nodesAtStart > 300) fail(`session ${session} left ${nodesAtEnd - nodesAtStart} extra page elements behind after its tables were removed`);
+    }
+  }
+  context = 'end';
+  await save();
+  await verify('final settled', true);
+  measure('final');
+  window.confirm = originalConfirm;
+
+  // ---- 4. slowing down ------------------------------------------------------------------
+  const median = list => { const s = list.slice().sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0; };
+  const slower = [];
+  const perStep = {};
+  for (const [name, list] of Object.entries(timings)) {
+    const third = Math.max(3, Math.floor(list.length / 3));
+    const first = median(list.slice(0, third)); const last = median(list.slice(-third));
+    perStep[name] = { runs: list.length, firstThirdMs: first, lastThirdMs: last, slowestMs: Math.max(...list) };
+    if (list.length >= 9 && last > first * 1.6 && last - first > 60) slower.push({ step: name, firstThirdMs: first, lastThirdMs: last });
+  }
+  const heaps = samples.map(s => s.heapMB).filter(v => v !== null);
+  let heapGrowth = null;
+  if (heaps.length >= 6) {
+    heapGrowth = { startMB: heaps[2], endMB: heaps[heaps.length - 1] };
+    if (heaps[heaps.length - 1] > heaps[2] * 1.5 && heaps[heaps.length - 1] - heaps[2] > 40) slower.push({ step: 'memory', ...heapGrowth });
+  }
+  const last = samples[samples.length - 1];
+  if (last && last.menusInPage > 3) fail(`${last.menusInPage} menu elements are left in the page`);
+
+  const result = {
+    verdict: dataLoss.length === 0 && failures.length === 0 && sizes.problems.length === 0 && menus.problems.length === 0 && slower.length === 0
+      ? 'CLEAN: no data lost, sizes and menus correct, nothing slowed down'
+      : (dataLoss.length ? 'DATA LOSS FOUND' : 'PROBLEMS FOUND (no data lost)'),
+    seed: config.seed, sessions: config.sessions, seconds: Math.round((performance.now() - t0) / 100) / 10,
+    dataLoss: dataLoss.slice(0, 30), dataLossCount: dataLoss.length,
+    editorSize: { checks: sizes.checks, widestEditorPx: sizes.widest, mostExtraHeightPx: sizes.taller, mostMissingHeightPx: sizes.shorter, problems: sizes.problems },
+    menus: { checked: menus.checked, problems: menus.problems },
+    slowingDown: { flagged: slower, perStep, heapGrowth, sessionEnds },
+    otherFailures: failures.slice(0, 30), otherFailureCount: failures.length,
+    steps: counts,
+    editorSyncEvents: api.events().filter(event => ['stale-overlay-write', 'sync-mismatch', 'popup-write-mismatch', 'recovery-copy'].includes(event.ev)).length,
+    samples,
+    next: 'Reload the page and run spreadsheetSoakAfterReload().',
+  };
+  window.spreadsheetSoakReport = result;
+  return result;
+}
+
+async function spreadsheetSoakAfterReload(options = {}) {
+  const api = window.elabftwSpreadsheetDiagnostics;
+  const stored = JSON.parse(sessionStorage.getItem('spreadsheetSoak') || 'null');
+  if (!api || !stored) throw new Error('Nothing to check: run spreadsheetSoak() first, then reload.');
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  const tables = api.snapshot(true);
+  const mine = tables.slice(stored.baseline);
+  const problems = [];
+  if (mine.length !== stored.expected.length) problems.push({ problem: `${stored.expected.length} spreadsheets were saved, ${mine.length} came back` });
+  stored.expected.forEach((expected, index) => {
+    const have = mine[index]?.tableData;
+    if (!have) { problems.push({ table: expected.label, problem: 'missing after reload' }); return; }
+    if (have.length !== expected.grid.length || (have[0]?.length ?? 0) !== (expected.grid[0]?.length ?? 0)) {
+      problems.push({ table: expected.label, problem: `size ${have.length}x${have[0]?.length} instead of ${expected.grid.length}x${expected.grid[0]?.length}` });
+      return;
+    }
+    for (let r = 0; r < expected.grid.length; r++) {
+      for (let c = 0; c < expected.grid[r].length; c++) {
+        if ((have[r][c] ?? '') !== expected.grid[r][c]) problems.push({ table: expected.label, cell: `${String.fromCharCode(65 + (c % 26))}${r + 1}`, expected: expected.grid[r][c], saved: have[r][c] ?? '' });
+      }
+    }
+  });
+  if (!options.keepTables && problems.length === 0) {
+    mine.forEach(snap => api.removeTable(snap.uid));
+    tinymce.activeEditor.execCommand('mceSave');
+  }
+  sessionStorage.removeItem('spreadsheetSoak');
+  return { ok: problems.length === 0, dataLossAfterReload: problems.slice(0, 30), count: problems.length, scratchTablesRemoved: !options.keepTables && problems.length === 0 };
+}
