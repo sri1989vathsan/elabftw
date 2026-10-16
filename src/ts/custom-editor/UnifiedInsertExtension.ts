@@ -57,8 +57,6 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
         if (item) catalog[id] = { ...item, text: item.text ?? id };
       };
 
-      register('date', buttonAsMenuItem(editor, 'adddate', 'Insert date'));
-      register('title', buttonAsMenuItem(editor, 'experiment-title', 'Insert title'));
       register('divider', buttonAsMenuItem(editor, 'horizontal-rule', 'Insert divider'));
       noteItems.forEach((item, index) => register(`note-${index}`, item));
       // Spreadsheet and Well plate are entries of the Insert menu itself, next to
@@ -73,9 +71,10 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
 
       const items: AnyMenuItem[] = [];
       items.push(
-        // title, date, note and divider sit directly in the menu, not under a "Text" submenu
+        // note and divider sit directly in the menu, not under a "Text" submenu; title and date have their
+        // own toolbar buttons, so they are not repeated here
         ...[
-          catalog.title, catalog.date, ...noteItems.map((_, index) => catalog[`note-${index}`]), catalog.divider,
+          ...noteItems.map((_, index) => catalog[`note-${index}`]), catalog.divider,
         ].filter(Boolean),
         {
           type: 'nestedmenuitem',
