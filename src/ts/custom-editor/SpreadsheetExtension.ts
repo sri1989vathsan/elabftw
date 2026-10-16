@@ -1352,6 +1352,22 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     editor.execCommand('mceAutoResize');
   };
 
+  // Sets the editor's height to fit its content without going through mceAutoResize, which takes the keyboard
+  // focus into the editor. That is why the normal resize waits while a spreadsheet is being used (see
+  // runPendingAutoResize): rows added with the Add rows button, or a row that grew as text was typed, then left
+  // the editor too short until the next click. This one only sets a height, so it can run at once.
+  const fitEditorHeightWithoutFocus = (): void => {
+    const iframe = editor.iframeElement as HTMLIFrameElement | null;
+    const doc = editor.getDoc();
+    if (!iframe || !doc?.body) return;
+    const bodyStyle = doc.defaultView?.getComputedStyle(doc.body);
+    const margins = (Number.parseFloat(bodyStyle?.marginTop ?? '0') || 0) + (Number.parseFloat(bodyStyle?.marginBottom ?? '0') || 0);
+    const minHeight = Number(editor.options.get('min_height')) || 0;
+    const needed = Math.max(minHeight, Math.ceil(doc.body.offsetHeight + margins));
+    if (Math.abs(iframe.getBoundingClientRect().height - needed) < 2) return;
+    iframe.style.height = `${needed}px`;
+  };
+
   const dispatchKeyupForAutosave = (): void => {
     if (spreadsheetInteractionOngoing()) {
       keyupDispatchPending = true;
@@ -1678,6 +1694,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
             if (autoResizeDebounce !== null) clearTimeout(autoResizeDebounce);
             autoResizeDebounce = setTimeout(() => {
               autoResizeDebounce = null;
+              fitEditorHeightWithoutFocus();
               autoResizePending = true;
               runPendingAutoResize();
             }, 200);
