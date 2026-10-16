@@ -9459,7 +9459,12 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivEle
     row.dataset.y = String(rowIndex);
     const savedHeight = saved?.rowHeights?.[String(rowIndex)];
     if (savedHeight) row.style.height = `${savedHeight}px`;
-    else if (sourceRow.getAttribute('style')) row.setAttribute('style', sourceRow.getAttribute('style') ?? '');
+    else if (sourceRow.getAttribute('style')) {
+      // The saved table's rows carry the library's 34 px default, which the live grid does not use (its rows
+      // are as tall as their content): copying it made every row jump when the preview became the grid.
+      const copied = (sourceRow.getAttribute('style') ?? '').replace(/(^|;)\s*height\s*:\s*34px\s*;?/i, '$1');
+      if (copied.trim()) row.setAttribute('style', copied);
+    }
     Array.from(sourceRow.children).forEach((source, index) => {
       const cell = document.createElement('td');
       if (index === 0) {
