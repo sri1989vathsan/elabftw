@@ -196,6 +196,7 @@ export function registerNoteExtension(editor: Editor): void {
   // locating the toolbar button by its (English, wording-dependent)
   // tooltip/aria-label -- see CommandPalette.class.ts.
   editor.addCommand('elabftwInsertNote', insertUsingDefaults);
+  editor.addCommand('elabftwNoteOptions', openDialog);
 
   editor.ui.registry.addSplitButton('insert-note', {
     icon: 'comment-add',

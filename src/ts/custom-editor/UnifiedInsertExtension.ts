@@ -41,11 +41,16 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
     text: 'Insert',
     tooltip: 'Insert (text, tables, links, laboratory)',
     fetch: async callback => {
-      const [tableItems, linkItems, noteItems] = await Promise.all([
+      const [tableItems, linkItems] = await Promise.all([
         fetchRegisteredItems(editor, 'insert-data-table'),
         fetchRegisteredItems(editor, 'insert-link'),
-        fetchRegisteredItems(editor, 'insert-note'),
       ]);
+      // The note button is a split button whose entries are choice items (acted on through onItemAction), which
+      // a submenu cannot show: plain menu items that run its commands instead.
+      const noteItems: AnyMenuItem[] = [
+        { type: 'menuitem', text: 'Insert note', icon: 'comment-add', onAction: () => editor.execCommand('elabftwInsertNote') },
+        { type: 'menuitem', text: 'Note options…', icon: 'edit-block', onAction: () => editor.execCommand('elabftwNoteOptions') },
+      ];
 
       const catalog: Record<string, AnyMenuItem> = {};
       const register = (id: string, item: AnyMenuItem | null): void => {
