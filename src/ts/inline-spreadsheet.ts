@@ -2246,18 +2246,50 @@ function applyCoordinateHeaderStyle(container: HTMLElement, appearance: Spreadsh
  * correctly positioned -- sidesteps both problems at once instead of
  * needing each caller to reindex stored keys by hand.
  */
+// The popup's grid (jspreadsheet-ce) gives every row an explicit height of 34 px, while the grid in the text
+// leaves rows at their natural height (about 29 px). That library default is not something the person chose,
+// so it is never saved: saving it made every row of the table taller after the popup's Update, and rows
+// added afterwards came out shorter than the ones around them.
+const JSS_DEFAULT_ROW_HEIGHT = 34;
+
 function readRenderedRowHeights(container: HTMLElement): RowHeights | undefined {
   const rowHeights: RowHeights = {};
+  let sawRows = false;
   container.querySelectorAll<HTMLTableRowElement>('.jss_worksheet > tbody > tr')
     .forEach((row, rowIndex) => {
       const height = Number.parseFloat(row.style.height || row.getAttribute('height') || '');
       if (!Number.isFinite(height)) return;
+      sawRows = true;
+      if (Math.round(height) === JSS_DEFAULT_ROW_HEIGHT) return;
       rowHeights[String(rowIndex)] = Math.max(
         MIN_DATA_ROW_HEIGHT,
         Math.min(MAX_DATA_ROW_HEIGHT, Math.round(height)),
       );
     });
-  return Object.keys(rowHeights).length > 0 ? rowHeights : undefined;
+  // rows were measured but all at the default: no row has a height of its own
+  return Object.keys(rowHeights).length > 0 ? rowHeights : (sawRows ? {} : undefined);
+}
+
+/**
+ * The stored row heights brought up to date with what is on screen: a row measured at its own height
+ * replaces the old entry, a row at the library default drops its entry (it is back to natural).
+ */
+function mergeRenderedRowHeights(existing: RowHeights | undefined, container: HTMLElement): RowHeights {
+  const merged: RowHeights = { ...(existing ?? {}) };
+  container.querySelectorAll<HTMLTableRowElement>('.jss_worksheet > tbody > tr')
+    .forEach((row, rowIndex) => {
+      const height = Number.parseFloat(row.style.height || row.getAttribute('height') || '');
+      if (!Number.isFinite(height)) return;
+      if (Math.round(height) === JSS_DEFAULT_ROW_HEIGHT) {
+        delete merged[String(rowIndex)];
+        return;
+      }
+      merged[String(rowIndex)] = Math.max(
+        MIN_DATA_ROW_HEIGHT,
+        Math.min(MAX_DATA_ROW_HEIGHT, Math.round(height)),
+      );
+    });
+  return merged;
 }
 
 /** RowHeights (string-keyed, as saved/serialized) -> the Map applyCellClipHeights below takes. */
@@ -3975,11 +4007,10 @@ export function openSpreadsheetModal(
 
     const captureRenderedRowHeights = (): void => {
       if (!sheetContainer) return;
-      const liveRowHeights = readRenderedRowHeights(sheetContainer);
       working = normalizeSpreadsheetData({
         ...working,
         data: readRawData(),
-        rowHeights: { ...(working.rowHeights ?? {}), ...(liveRowHeights ?? {}) },
+        rowHeights: mergeRenderedRowHeights(working.rowHeights, sheetContainer),
       });
     };
 
@@ -4959,7 +4990,7 @@ export function openSpreadsheetModal(
         if (liveRowHeights || liveColWidths) {
           spreadsheet = {
             ...spreadsheet,
-            rowHeights: { ...(spreadsheet.rowHeights ?? {}), ...(liveRowHeights ?? {}) },
+            rowHeights: sheetContainer ? mergeRenderedRowHeights(spreadsheet.rowHeights, sheetContainer) : spreadsheet.rowHeights,
             colWidths: { ...(spreadsheet.colWidths ?? {}), ...(liveColWidths ?? {}) },
           };
         }
