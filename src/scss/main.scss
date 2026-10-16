@@ -6537,3 +6537,8 @@ div > .sticky-navbar {
     width: 4.5rem;
   }
 }
+
+/* The Spreadsheet tools button of the editor toolbar is only there while a spreadsheet is selected. */
+.tox-tinymce:not(.elabftw-spreadsheet-selected) .tox-tbtn[aria-label^='Spreadsheet tools'] {
+  display: none;
+}

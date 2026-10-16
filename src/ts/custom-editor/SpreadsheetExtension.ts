@@ -564,6 +564,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // clicking an ordinary table would visibly select it.
   const setActiveSpreadsheetTable = (table: HTMLTableElement | null): void => {
     lastActiveSpreadsheetTable = table;
+    window.setTimeout(() => window.dispatchEvent(new Event('elabftw-spreadsheet-active')), 0);
     spreadsheetOverlays.forEach(({ el }, otherTable) => {
       el.classList.toggle('is-active-table', otherTable === table);
     });
@@ -891,21 +892,64 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // see CommandPalette.class.ts.
   editor.addCommand('elabftwInsertTable', openStandardTableDialog);
 
+  // What is selected right now: the node under the caret, the table around it (also after "Indent table",
+  // when the caret sits on the margin wrapper) and, failing that, the spreadsheet last clicked.
+  const currentTableContext = () => {
+    const selectedNode = editor.selection.getNode();
+    const selectedCell = selectedNode.closest('td,th') as HTMLTableCellElement | null;
+    const activeSpreadsheetTable = lastActiveSpreadsheetTable && editor.getBody().contains(lastActiveSpreadsheetTable)
+      ? lastActiveSpreadsheetTable
+      : null;
+    const wrappedTable = selectedNode.closest('.elabftw-table-indent')?.querySelector('table') as HTMLTableElement | null | undefined;
+    const selectedTable = (selectedNode.closest('table') as HTMLTableElement | null) ?? wrappedTable ?? activeSpreadsheetTable;
+    const existingTable = (selectedNode.closest('table.elabftw-spreadsheet') as HTMLTableElement | null)
+      ?? (wrappedTable?.classList.contains('elabftw-spreadsheet') ? wrappedTable : null)
+      ?? activeSpreadsheetTable;
+    return { selectedCell, selectedTable, existingTable };
+  };
+
+  // Inserting: a table, a spreadsheet, a well plate. The toolbar no longer shows this button; the Insert
+  // dropdown (UnifiedInsertExtension) builds its Tables / Spreadsheet / Well plate entries from it.
   editor.ui.registry.addMenuButton('insert-data-table', {
     icon: 'table',
     tooltip: 'Insert a table, spreadsheet or well plate',
     fetch: callback => {
-      const selectedNode = editor.selection.getNode();
-      const selectedCell = selectedNode.closest('td,th') as HTMLTableCellElement | null;
-      const activeSpreadsheetTable = lastActiveSpreadsheetTable && editor.getBody().contains(lastActiveSpreadsheetTable)
-        ? lastActiveSpreadsheetTable
-        : null;
-      // After "Indent table" the caret can sit on the margin wrapper around the table rather than inside it
-      const wrappedTable = selectedNode.closest('.elabftw-table-indent')?.querySelector('table') as HTMLTableElement | null | undefined;
-      const selectedTable = (selectedNode.closest('table') as HTMLTableElement | null) ?? wrappedTable ?? activeSpreadsheetTable;
-      const existingTable = (selectedNode.closest('table.elabftw-spreadsheet') as HTMLTableElement | null)
-        ?? (wrappedTable?.classList.contains('elabftw-spreadsheet') ? wrappedTable : null)
-        ?? activeSpreadsheetTable;
+      callback([
+        {
+          type: 'menuitem',
+          text: 'Table…',
+          icon: 'table',
+          onAction: openStandardTableDialog,
+        },
+        {
+          type: 'nestedmenuitem',
+          text: 'Spreadsheet',
+          icon: 'elabftw-spreadsheet-formula',
+          getSubmenuItems: buildSpreadsheetSubmenuItems,
+        },
+        {
+          type: 'nestedmenuitem',
+          text: 'Well plate',
+          icon: 'elabftw-well-plate',
+          getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
+            type: 'menuitem',
+            text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
+            // straight into the text, like the size picker -- no popup to open first
+            onAction: () => insertNewSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
+          })),
+        },
+      ]);
+    },
+  });
+
+  // The toolbar's spreadsheet button: editing and formatting the selected spreadsheet, nothing for inserting
+  // (that is in the Insert dropdown). It is only on the toolbar while a spreadsheet is selected (see
+  // syncSpreadsheetToolsVisibility below).
+  editor.ui.registry.addMenuButton('spreadsheet-tools', {
+    icon: 'elabftw-spreadsheet-formula',
+    tooltip: 'Spreadsheet tools: edit and format the selected spreadsheet',
+    fetch: callback => {
+      const { selectedCell, selectedTable, existingTable } = currentTableContext();
       const items = [];
       if (existingTable) {
         items.push({
@@ -940,31 +984,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
             editor.nodeChanged();
           },
         });
-        items.push({ type: 'separator' as const });
       }
-      items.push({
-        type: 'menuitem',
-        text: 'Table…',
-        icon: 'table',
-        onAction: openStandardTableDialog,
-      },
-      {
-        type: 'nestedmenuitem',
-        text: 'Spreadsheet',
-        icon: 'elabftw-spreadsheet-formula',
-        getSubmenuItems: buildSpreadsheetSubmenuItems,
-      },
-      {
-        type: 'nestedmenuitem',
-        text: 'Well plate',
-        icon: 'elabftw-well-plate',
-        getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
-          type: 'menuitem',
-          text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
-          // straight into the text, like the size picker -- no popup to open first
-          onAction: () => insertNewSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
-        })),
-      });
       if (selectedTable) {
         items.push(
           { type: 'separator' as const },
@@ -1020,6 +1040,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       callback(items);
     },
   });
+
+  // The Spreadsheet tools button is shown on the toolbar only while a spreadsheet is selected: a class on the
+  // editor's container, which the stylesheet turns into showing or hiding the button.
+  const syncSpreadsheetToolsVisibility = (): void => {
+    const container = editor.getContainer();
+    if (!container) return;
+    container.classList.toggle('elabftw-spreadsheet-selected', currentTableContext().existingTable !== null);
+  };
+  editor.on('NodeChange SelectionChange SetContent init', syncSpreadsheetToolsVisibility);
+  window.addEventListener('elabftw-spreadsheet-active', syncSpreadsheetToolsVisibility);
 
   // Same "Spreadsheet" submenu as the insert-data-table toolbar button just
   // above, surfaced in TinyMCE's own classic Insert menu (File/Edit/View/
