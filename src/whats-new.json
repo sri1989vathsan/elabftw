@@ -117,13 +117,13 @@
       "Copy the whole table in one click, and auto-fit rows or columns to their content.",
       "Row heights now grow when a narrower column needs more wrapped lines."
     ],
-    "image": "spreadsheet-insert-and-view.jpg",
+    "image": "spreadsheet-insert-and-view-cf3e9c49.png",
     "imageAlt": "The Insert menu with the Spreadsheet size grid and its options, outlined",
     "highlight": {
-      "x": 42.4,
-      "y": 19.4,
-      "w": 56.5,
-      "h": 78.3,
+      "x": 60.6,
+      "y": 37.9,
+      "w": 34.9,
+      "h": 58,
       "label": "Drag to pick a size"
     }
   },
@@ -198,7 +198,13 @@
       "w": 25.6,
       "h": 15.4,
       "label": "Selected cell with its fill handle"
-    }
+    },
+    "screenshots": [
+      {
+        "image": "spreadsheet-editing-plate-13b3f11b.png",
+        "caption": "A normal spreadsheet has the Add rows bar under it. A well plate keeps its size, so it has none, and both show their row and column labels"
+      }
+    ]
   },
   {
     "id": "navigation",
@@ -872,7 +878,20 @@
       "label": "Spreadsheet, Well plate, Image, Links and Insert template"
     },
     "image": "guide-editor-toolbar-8c4c9482.png",
-    "screenshots": []
+    "screenshots": [
+      {
+        "image": "guide-editor-note-options-5bdcb685.png",
+        "caption": "Note options appears on the toolbar while your cursor is inside a note"
+      },
+      {
+        "image": "guide-editor-note-dialog-b11a9863.png",
+        "caption": "Note options: change the note's title, whether it is in the Table of Contents, and the heading level"
+      },
+      {
+        "image": "guide-editor-spreadsheet-tools-13a25130.png",
+        "caption": "Spreadsheet tools appears while a spreadsheet is selected: edit and format it from here. A well plate below has its size fixed, so it has no Add rows bar"
+      }
+    ]
   },
   {
     "id": "guide-collaboration",
