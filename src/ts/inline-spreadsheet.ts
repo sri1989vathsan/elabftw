@@ -9380,6 +9380,16 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivEle
 
   const toggleBar = document.createElement('div');
   toggleBar.className = 'elabftw-spreadsheet-readonly-toggle';
+  // The live grid's bar starts with the options chevron; without it here a narrow table's bar fitted on one row
+  // in the preview and wrapped onto two in the grid, so the table changed height when it was clicked or scrolled
+  // into view.
+  const previewChevron = document.createElement('button');
+  previewChevron.type = 'button';
+  previewChevron.tabIndex = -1;
+  previewChevron.className = 'elabftw-spreadsheet-options-toggle';
+  previewChevron.setAttribute('aria-hidden', 'true');
+  previewChevron.innerHTML = '<i class="fas fa-chevron-right fa-fw" aria-hidden="true"></i>';
+  toggleBar.appendChild(previewChevron);
   const caption = table.querySelector('caption')?.textContent?.trim();
   if (caption) {
     const label = document.createElement('span');
@@ -9491,6 +9501,20 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivEle
   container.appendChild(content);
   grid.appendChild(container);
   host.appendChild(grid);
+  // The live grid has the Add rows bar under it (not a well plate, whose size is fixed). An invisible copy here
+  // keeps the preview as tall as the grid that replaces it: otherwise the room reserved for the table shrank by
+  // the bar's height whenever a table was scrolled out of reach and came back as a preview, and the text below
+  // jumped up and down.
+  if (table.dataset.spreadsheetStyle !== 'well-plate') {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'elabftw-spreadsheet-add-rows';
+    placeholder.setAttribute('aria-hidden', 'true');
+    placeholder.style.visibility = 'hidden';
+    placeholder.style.pointerEvents = 'none';
+    placeholder.innerHTML = '<input type="number" class="form-control form-control-sm" tabindex="-1" disabled value="1">'
+      + '<button type="button" class="btn btn-sm btn-outline-secondary" tabindex="-1" disabled>Add rows</button>';
+    host.appendChild(placeholder);
+  }
   return host;
 }
 
