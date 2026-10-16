@@ -497,7 +497,7 @@ export default class ExperimentTitleEditor {
     const status = document.createElement('span');
     status.className = 'date-reference-target-status';
     status.setAttribute('aria-live', 'polite');
-    const initialStatus = 'Ctrl+Alt+T inserts the title using the saved defaults.';
+    const initialStatus = 'Ctrl+Alt+T opens this window.';
     status.textContent = initialStatus;
 
     // Transparently move presets created by older versions from this browser

@@ -89,7 +89,9 @@ export function registerDateTitleExtension(editor: Editor): void {
   // of locating the toolbar button by its (English, wording-dependent)
   // tooltip/aria-label -- see CommandPalette.class.ts.
   editor.addCommand('elabftwInsertDateToday', () => dateReferenceEditor.insertToday());
-  editor.addCommand('elabftwInsertExperimentTitle', () => experimentTitleEditor.insertUsingDefaults());
+  // A title changes a lot from one place to the next, so it is never put in with preset values: the title
+  // window opens each time (today's date, by contrast, is inserted straight away).
+  editor.addCommand('elabftwInsertExperimentTitle', () => experimentTitleEditor.openDialog());
 
   editor.ui.registry.addSplitButton('adddate', {
     icon: 'elabftw-calendar',
@@ -169,40 +171,24 @@ export function registerDateTitleExtension(editor: Editor): void {
 
   editor.ui.registry.addSplitButton('experiment-title', {
     icon: 'elabftw-heading',
-    tooltip: 'Insert experiment title as a heading (Ctrl+Alt+T)',
-    onAction: () => experimentTitleEditor.insertUsingDefaults(),
+    tooltip: 'Insert title: opens a window to set its text and style (Ctrl+Alt+T)',
+    onAction: () => experimentTitleEditor.openDialog(),
     onItemAction: (_api, value) => {
-      if (value === 'insert') {
-        experimentTitleEditor.insertUsingDefaults();
-      } else if (value === 'options') {
-        experimentTitleEditor.openDialog();
-      } else if (value.startsWith('preset:')) {
+      if (value.startsWith('preset:')) {
         experimentTitleEditor.applySavedStyle(decodeURIComponent(value.slice(7)));
       }
     },
     fetch: callback => {
-      const items = [
-        {
-          type: 'choiceitem' as const,
-          text: 'Insert title',
-          value: 'insert',
-        },
-        {
-          type: 'choiceitem' as const,
-          text: 'Title options…',
-          value: 'options',
-        },
-      ];
       const presets = experimentTitleEditor.getSavedStyleNames();
-      if (presets.length > 0) {
-        items.push({ type: 'separator' as const } as unknown as typeof items[number]);
-        presets.forEach(name => items.push({
-          type: 'choiceitem' as const,
-          text: `Style: ${name}`,
-          value: `preset:${encodeURIComponent(name)}`,
-        }));
+      if (presets.length === 0) {
+        callback([{ type: 'choiceitem' as const, text: 'No saved styles yet', value: 'none', enabled: false }]);
+        return;
       }
-      callback(items);
+      callback(presets.map(name => ({
+        type: 'choiceitem' as const,
+        text: `Style: ${name}`,
+        value: `preset:${encodeURIComponent(name)}`,
+      })));
     },
   });
 
@@ -241,8 +227,8 @@ export function registerDateTitleExtension(editor: Editor): void {
   );
   editor.addShortcut(
     'ctrl+alt+t',
-    'insert experiment title as a heading',
-    () => experimentTitleEditor.insertUsingDefaults(),
+    'insert a title (opens the title window)',
+    () => experimentTitleEditor.openDialog(),
   );
   editor.addShortcut(
     'ctrl+shift+h',

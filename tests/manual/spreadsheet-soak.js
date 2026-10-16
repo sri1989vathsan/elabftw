@@ -1022,7 +1022,7 @@ async function spreadsheetSoak(options = {}) {
         return el.tagName;
       });
       const dateButton = () => [...document.querySelectorAll('.tox-split-button')].find(b => /Insert today/i.test(b.getAttribute('aria-label') || ''));
-      const titleButton = () => [...document.querySelectorAll('.tox-split-button')].find(b => /experiment title/i.test(b.getAttribute('aria-label') || ''));
+      const titleButton = () => [...document.querySelectorAll('.tox-split-button')].find(b => /Insert title/i.test(b.getAttribute('aria-label') || ''));
       const insertDate = async () => { dateButton().firstElementChild.click(); await sleep(450); };
       const expectKinds = (label, expected) => {
         const have = kinds();
@@ -1042,7 +1042,14 @@ async function spreadsheetSoak(options = {}) {
       // 2. date, then the Insert title button
       await fresh('');
       await insertDate();
-      titleButton().firstElementChild.click(); await sleep(500);
+      titleButton().firstElementChild.click(); await sleep(600);
+      // the button opens the title window; Insert title in it puts the heading in
+      const titleWindow = document.querySelector('.date-reference-overlay');
+      if (!titleWindow) fail('the Insert title button did not open the title window');
+      else {
+        [...titleWindow.querySelectorAll('button')].find(b => /^Insert title$/.test(b.textContent.trim()))?.click();
+        await sleep(600);
+      }
       const afterTitle = kinds();
       note('header-title-button');
       if (afterTitle.filter(k => k === 'EMPTY').length > 1 || afterTitle.indexOf('EMPTY') === 1) fail(`header under a date (title button): empty line between or more than one at the end: ${afterTitle.join(' ')}`);
