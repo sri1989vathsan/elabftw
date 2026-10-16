@@ -1666,7 +1666,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // spacer is still settling, with no dependency on fixed timing
           // elsewhere -- and is a no-op call otherwise (skipped whenever
           // the height is already correct), so it doesn't run every frame.
-          if (spacer.dataset.lastHeight !== String(heightDifference)) {
+          // The editor also has to be resized when the spreadsheet itself grows or shrinks (rows added or
+          // deleted): then the grid and the hidden table grow by the same amount, so their difference, and
+          // with it the spacer, stays the same, and nothing used to tell the editor until the next click.
+          const sizeKey = `${heightDifference}:${Math.round(overlayHeight)}`;
+          if (spacer.dataset.lastSize !== sizeKey) {
+            spacer.dataset.lastSize = sizeKey;
             spacer.dataset.lastHeight = String(heightDifference);
             spacer.style.height = `${spacerHeight}px`;
             spacer.style.marginTop = `${Math.min(0, heightDifference)}px`;
