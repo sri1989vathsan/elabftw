@@ -1691,6 +1691,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
             spacer.dataset.lastHeight = String(heightDifference);
             spacer.style.height = `${spacerHeight}px`;
             spacer.style.marginTop = `${Math.min(0, heightDifference)}px`;
+            // Make the editor as tall as the new content in this same frame, so the text under the table
+            // moves once, together with the table, instead of after the 200 ms settle below (which made an
+            // insert look like it jumped in two steps).
+            fitEditorHeightWithoutFocus();
             if (autoResizeDebounce !== null) clearTimeout(autoResizeDebounce);
             autoResizeDebounce = setTimeout(() => {
               autoResizeDebounce = null;
