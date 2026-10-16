@@ -472,7 +472,10 @@ async function spreadsheetSoak(options = {}) {
       const shown = extractShown(table);
       if (shown && !sameShown(shown, model.grid)) dataLoss.push({ context, table: model.label, where: 'visible table cells', problem: 'differ from what was entered' });
       if (withPopup) {
-        const root = await live(uid);
+        let root = await live(uid);
+        // a grid that does not come up is a finding of its own, not a reason to stop the whole run
+        for (let attempt = 0; attempt < 3 && !root; attempt++) { await sleep(600); root = await live(uid); }
+        if (!root) { fail('the inline grid did not come up (no live overlay) when it was scrolled into view', { table: model.label }); continue; }
         const inline = domCells(root);
         if (!sameShown(inline, model.grid)) dataLoss.push({ context, table: model.label, where: 'inline grid cells on screen', problem: 'differ from what was entered' });
         const button = root.querySelector('.elabftw-spreadsheet-readonly-open-editor');
@@ -883,18 +886,33 @@ async function spreadsheetSoak(options = {}) {
     await measure(`after Add rows (${count}): the editor must fit the table without a click`);
   }
 
+  // A well plate keeps its labels (1, 2, 3 across; A, B, C down) and its size: no Add rows bar, and Enter in the
+  // last row adds nothing.
+  const plateCheck = async (uid, context) => {
+    const root = await live(uid);
+    const model = models.get(uid);
+    if (!root || !model) return;
+    const cols = [...root.querySelectorAll('.jss_worksheet > thead > tr > [data-x]')].map(el => el.textContent.trim());
+    const rows = [...root.querySelectorAll('.jss_worksheet > tbody td.jss_row[data-y]')].map(el => el.textContent.trim());
+    if (cols.length === 0 || cols.some((text, i) => text !== String(i + 1))) fail(`${context}: the plate's column headers are not 1, 2, 3...`, { have: cols.slice(0, 6).join(',') });
+    if (rows.length === 0 || rows.some((text, i) => text !== String.fromCharCode(65 + (i % 26)))) fail(`${context}: the plate's row headers are not A, B, C...`, { have: rows.slice(0, 6).join(',') });
+    if (root.querySelector('.elabftw-spreadsheet-add-rows')) fail(`${context}: a well plate shows the Add rows bar`);
+  };
+
   // ---- scenarios ------------------------------------------------------------------------
   const scenarios = {
     async 'plate-day'() {
       const uid = await createTable('96-well plate', { plate: 96 });
       if (!uid) return;
       await verify('plate-day: inserted', true); await measure('plate-day: inserted');
+      await plateCheck(uid, 'plate-day: inserted');
       for (let i = 0; i < (config.quick ? 8 : 20); i++) {
         await typeInto(uid, int(0, 7), int(0, 11), `S${String(i + 1).padStart(2, '0')}`);
         if (i % 6 === 5) { await verify(`plate-day: ${i + 1} wells`, false); await measure('plate-day typing'); }
       }
       await popupEdit(uid, true, 3);
       await verify('plate-day: popup applied', true);
+      await plateCheck(uid, 'plate-day: popup applied');
       await consistency('plate-day: inline, popup and stored HTML agree', true);
       await menuTour(uid);
       await scrollCheck('plate-day');
@@ -971,10 +989,12 @@ async function spreadsheetSoak(options = {}) {
       if (!uid) return;
       await measure('wide-plate: inserted');
       await verify('wide-plate: inserted', true);
+      await plateCheck(uid, 'wide-plate: inserted');
       for (const [r, c] of [[0, 0], [15, 23], [0, 23], [15, 0], [7, 11]]) await typeInto(uid, r, c, `W${r}-${c}`);
       await measure('wide-plate: typing');
       await verify('wide-plate: corners filled', true);
       await menuTour(uid);
+      await plateCheck(uid, 'wide-plate: after menus');
       await scrollCheck('wide-plate');
       await measure('wide-plate: after menus');
       await save();
