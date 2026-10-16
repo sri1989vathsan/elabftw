@@ -106,11 +106,17 @@ async function spreadsheetSoak(options = {}) {
   const live = async uid => {
     const table = tableEl(uid);
     if (!table) throw new Error(`table ${uid} is missing`);
-    table.scrollIntoView({ block: 'center' });
-    await sleep(300);
-    api.mountLive(uid);
-    await sleep(450);
-    return api.overlayElement(uid);
+    // Asked for again a few times: on a busy machine (two soaks at once, a slow page) the grid can take longer
+    // than one short wait to come up, which stopped whole scenarios with "root is null".
+    for (let attempt = 0; attempt < 5; attempt++) {
+      table.scrollIntoView({ block: 'center' });
+      await sleep(attempt === 0 ? 300 : 700);
+      api.mountLive(uid);
+      await sleep(attempt === 0 ? 450 : 900);
+      const overlay = api.overlayElement(uid);
+      if (overlay) { if (attempt > 0) note('grid-needed-retry'); return overlay; }
+    }
+    throw new Error(`the grid of table ${uid} did not come up after 5 tries`);
   };
 
   async function createTable(label, { rows = 5, cols = 4, plate = 0 } = {}) {
