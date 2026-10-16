@@ -894,6 +894,58 @@
     ]
   },
   {
+    "id": "guide-spreadsheets",
+    "date": "2026-10-16",
+    "area": "Experiments",
+    "title": "Spreadsheets and well plates",
+    "summary": "Put a spreadsheet or a well plate in the text of an experiment, fill it in like a normal sheet, and keep your plate layout fixed.",
+    "details": [
+      "fa-plus::Insert: open Insert, then Spreadsheet and drag over the squares to pick the size, or choose Custom spreadsheet for a size or options the squares cannot reach. Well plate gives a ready 6, 12, 24, 48, 96 or 384-well plate. Tables is for plain text tables.",
+      "fa-hand-pointer::Click a table to work in it. Until you click, a light preview with the row and column labels is shown, so a page with many tables stays quick to scroll. The cells you select stay selected when you scroll the page.",
+      "fa-keyboard::Typing: Tab and Enter move between cells. Enter in a cell of the last row adds a row below it. Shift+Enter opens the Spreadsheet Editor, a larger window for the same table.",
+      "fa-table::Spreadsheet tools: this button is only on the editor toolbar while a spreadsheet is selected. It edits and formats that spreadsheet: edit it, open it in the Spreadsheet Editor, autofit column widths and row heights, change the table and cell style, indent or outdent it and make it sortable.",
+      "fa-plus::Add rows: under a spreadsheet, type how many rows you want and press Add rows to add them at the bottom, up to 50 rows in all. Right-click a row number or column letter to insert a row or column, or delete the selected ones; select several first to delete them together.",
+      "fa-grip::A well plate keeps its size. It has no Add rows bar, Enter in its last row adds nothing, and the right-click menu has no insert or delete. In the Spreadsheet Editor the row and column boxes and the Add rows and add-column buttons are greyed out. To change the size, pick another plate size in the size list, or choose Custom to turn the plate into an ordinary spreadsheet.",
+      "fa-up-right-and-down-left-from-center::Spreadsheet Editor: the larger window has the formula bar, fill, fonts, colours, alignment (including top, middle and bottom), and the table and cell appearance. Update saves your changes and Cancel drops them.",
+      "fa-calculator::Formulas: start a cell with = to calculate, for example =A1+B1. Dragging the fill handle copies a formula down or across, and a reference written with a dollar sign stays fixed.",
+      "fa-copy::Copy table: in the Edit menu of the menu bar. Copy complete table copies a whole table with its formatting, ready to paste into another program.",
+      "fa-rotate-left::Undo: Ctrl+Z in a spreadsheet only undoes spreadsheet edits, and in the text it leaves the tables alone."
+    ],
+    "imageAlt": "The Insert menu open on Spreadsheet, with the squares for picking a size",
+    "featured": false,
+    "guide": true,
+    "order": 86,
+    "icon": "fa-table",
+    "purpose": "Record plate layouts, measurements and calculations next to your notes, in a table that behaves like a spreadsheet.",
+    "uses": [
+      "Insert a 96-well plate for the day's experiment and type the sample names into the wells.",
+      "Insert a spreadsheet for a dilution series, and add a formula to calculate each concentration.",
+      "Add 10 rows at once under a results table with Add rows when the measurements keep coming.",
+      "Keep a plate's layout fixed so a well can never move to a different position by accident.",
+      "Open the Spreadsheet Editor to format a results table before you copy it into a report."
+    ],
+    "news": "New: spreadsheets and well plates in one place: pick a size from the Insert menu, tools that appear when a table is selected, and plates that keep their size.",
+    "shot": "The Insert menu with the squares for picking a spreadsheet size",
+    "highlight": {
+      "x": 60.6,
+      "y": 37.9,
+      "w": 34.9,
+      "h": 58,
+      "label": "Drag to pick a size"
+    },
+    "image": "spreadsheet-insert-and-view-cf3e9c49.png",
+    "screenshots": [
+      {
+        "image": "guide-editor-spreadsheet-tools-13a25130.png",
+        "caption": "Spreadsheet tools appears while a spreadsheet is selected. The well plate below has no Add rows bar, because its size is fixed"
+      },
+      {
+        "image": "spreadsheet-editing-plate-13b3f11b.png",
+        "caption": "A normal spreadsheet has the Add rows bar under it. A well plate keeps its size, so it has none. Both show their row and column labels"
+      }
+    ]
+  },
+  {
     "id": "guide-collaboration",
     "date": "2026-10-13",
     "area": "Boards",
