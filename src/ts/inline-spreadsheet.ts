@@ -5237,6 +5237,8 @@ export function openSpreadsheetModal(
       ui.colsInput.disabled = plateLocked;
       ui.addRowBtn.disabled = plateLocked;
       ui.addRowsInput.disabled = plateLocked;
+      ui.addColBtn.disabled = plateLocked;
+      ui.resizeBtn.disabled = plateLocked;
       ui.addRowBtn.title = plateLocked
         ? 'A well plate has a fixed size. Choose Custom in the size list to change it.'
         : 'Add this many rows at the bottom';
@@ -6027,6 +6029,7 @@ export function openSpreadsheetModal(
       }
     });
     ui.addColBtn.addEventListener('click', () => {
+      if (working.kind === 'well-plate') return;
       resizeSpreadsheet(working.rows, Math.min(MAX_DIMENSION, working.cols + 1));
     });
 
