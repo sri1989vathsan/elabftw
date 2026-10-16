@@ -1,6 +1,11 @@
 {# One step of a guide card. A step may start with "fa-icon-name::" to show that icon before the text, e.g. "fa-bold::Bold: ...". #}
+{# Two steps may start with "toolbar-format-painter::" or "toolbar-clear-formatting::": the editor's own drawn icons, so the guide shows the same picture as the button. #}
 {% macro item(text) %}
-  {%- if text starts with 'fa-' and '::' in text -%}
+  {%- if text starts with 'toolbar-format-painter::' -%}
+    <svg class='guide-step-icon guide-toolbar-icon mr-1' width='18' height='18' viewBox='0 0 24 24' aria-hidden='true'><path d='M5 8 7.3 3 9.7 8 12 3 14.3 8 16.7 3 19 8 19 9.5 14.5 12 14.5 18.5A2 2 0 0 1 12.5 20.5H11.5A2 2 0 0 1 9.5 18.5L9.5 12 5 9.5Z' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linejoin='round'/><path d='M6.3 9.3H17.7M7.6 10.6H16.4' fill='none' stroke='currentColor' stroke-width='1' stroke-linecap='round'/><ellipse cx='12' cy='16.3' rx='1.3' ry='1.8' fill='none' stroke='currentColor' stroke-width='1.3'/></svg>{{ (text|split('::', 2))[1] }}
+  {%- elseif text starts with 'toolbar-clear-formatting::' -%}
+    <svg class='guide-step-icon guide-toolbar-icon mr-1' width='18' height='18' viewBox='0 0 24 24' aria-hidden='true'><path d='M5 8 7.3 3 9.7 8 12 3 14.3 8 16.7 3 19 8 19 9.5 14.5 12 14.5 18.5A2 2 0 0 1 12.5 20.5H11.5A2 2 0 0 1 9.5 18.5L9.5 12 5 9.5Z' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linejoin='round'/><path d='M6.3 9.3H17.7M7.6 10.6H16.4' fill='none' stroke='currentColor' stroke-width='1' stroke-linecap='round'/><ellipse cx='12' cy='16.3' rx='1.3' ry='1.8' fill='none' stroke='currentColor' stroke-width='1.3'/><path d='M3 21 21 3' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'/></svg>{{ (text|split('::', 2))[1] }}
+  {%- elseif text starts with 'fa-' and '::' in text -%}
     {%- set parts = text|split('::', 2) -%}
     {%- if parts[0] matches '/^fa-[a-z0-9-]+$/' -%}
       <i class='fas {{ parts[0] }} fa-fw mr-1 guide-step-icon' aria-hidden='true'></i>{{ parts[1] }}
