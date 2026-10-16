@@ -2254,7 +2254,7 @@ function applyCoordinateHeaderStyle(container: HTMLElement, appearance: Spreadsh
 // added afterwards came out shorter than the ones around them.
 const JSS_DEFAULT_ROW_HEIGHT = 34;
 
-function readRenderedRowHeights(container: HTMLElement): RowHeights | undefined {
+function readRenderedRowHeights(container: HTMLElement, ignoreLibraryDefault = true): RowHeights | undefined {
   const rowHeights: RowHeights = {};
   let sawRows = false;
   container.querySelectorAll<HTMLTableRowElement>('.jss_worksheet > tbody > tr')
@@ -2262,7 +2262,8 @@ function readRenderedRowHeights(container: HTMLElement): RowHeights | undefined 
       const height = Number.parseFloat(row.style.height || row.getAttribute('height') || '');
       if (!Number.isFinite(height)) return;
       sawRows = true;
-      if (Math.round(height) === JSS_DEFAULT_ROW_HEIGHT) return;
+      // only the popup's grid has that default: in the grid in the text every height is one the person set
+      if (ignoreLibraryDefault && Math.round(height) === JSS_DEFAULT_ROW_HEIGHT) return;
       rowHeights[String(rowIndex)] = Math.max(
         MIN_DATA_ROW_HEIGHT,
         Math.min(MAX_DATA_ROW_HEIGHT, Math.round(height)),
@@ -8716,7 +8717,7 @@ export function buildReadOnlySpreadsheetHost(
     if (!options.onChange) return;
     const nextRows = data.length;
     const nextCols = data.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
-    const liveRowHeights = readRenderedRowHeights(sheetContainer);
+    const liveRowHeights = readRenderedRowHeights(sheetContainer, false);
     const liveColWidths = readRenderedColWidths(sheetContainer);
     // getStyle() is jspreadsheet-ce's own live cellName->style map, kept
     // up to date by the cell-format toolbar's setStyle() calls below --
