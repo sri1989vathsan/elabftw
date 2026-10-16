@@ -39,10 +39,11 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
   editor.ui.registry.addMenuButton('elabftw-insert-menu', {
     icon: 'plus',
     text: 'Insert',
-    tooltip: 'Insert (note, divider, tables, spreadsheets, templates)',
+    tooltip: 'Insert (note, divider, tables, spreadsheets, links, templates)',
     fetch: async callback => {
-      const [tableItems, dividerItems] = await Promise.all([
+      const [tableItems, linkItems, dividerItems] = await Promise.all([
         fetchRegisteredItems(editor, 'insert-data-table'),
+        fetchRegisteredItems(editor, 'insert-link'),
         fetchRegisteredItems(editor, 'horizontal-rule'),
       ]);
       // The note button is a split button whose entries are choice items (acted on through onItemAction), which
@@ -74,6 +75,7 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
       const directItems = tableItems.filter(isDirect);
       const plainTableItems = tableItems.filter(item => !isDirect(item));
       plainTableItems.forEach((item, index) => register(`table-${index}`, item));
+      linkItems.forEach((item, index) => register(`link-${index}`, item));
       register('template', buttonAsMenuItem(editor, 'inserttemplate', 'Insert template'));
 
       const items: AnyMenuItem[] = [];
@@ -89,7 +91,11 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
           getSubmenuItems: () => plainTableItems.map((_, index) => catalog[`table-${index}`]).filter(Boolean),
         },
         ...directItems,
-        // links have their own toolbar button, so they are not repeated here
+        {
+          type: 'nestedmenuitem',
+          text: 'Links',
+          getSubmenuItems: () => linkItems.map((_, index) => catalog[`link-${index}`]).filter(Boolean),
+        },
         ...(catalog.template ? [catalog.template] : []),
       );
       callback(items);
