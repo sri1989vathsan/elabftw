@@ -2,7 +2,7 @@
  * @author eLabFTW contributors
  * @license AGPL-3.0
  */
-import { confirmLeaveEditing } from './misc';
+import { confirmLeaveEditing, initPermissionsTomSelects } from './misc';
 import SidePanel from './SidePanel.class';
 
 export default class FoldersPanel extends SidePanel {
@@ -45,7 +45,7 @@ export default class FoldersPanel extends SidePanel {
   }
 
   private async loadPanel(): Promise<void> {
-    const cacheKey = 'folders-panel-html-v3';
+    const cacheKey = 'folders-panel-html-v4';
     const cached = sessionStorage.getItem(cacheKey);
     const cachedAt = Number(sessionStorage.getItem(`${cacheKey}-at`) ?? 0);
     let fragmentHtml = cachedAt > Date.now() - 30000 ? cached : null;
@@ -60,6 +60,7 @@ export default class FoldersPanel extends SidePanel {
         responseDocument.getElementById(this.panelId)?.outerHTML ?? '',
         responseDocument.getElementById('editExperimentFolderModal')?.outerHTML ?? '',
         responseDocument.getElementById('folderExportModal')?.outerHTML ?? '',
+        responseDocument.getElementById('folderPermissionsModal')?.outerHTML ?? '',
       ].join('');
       sessionStorage.setItem(cacheKey, fragmentHtml);
       sessionStorage.setItem(`${cacheKey}-at`, String(Date.now()));
@@ -70,11 +71,14 @@ export default class FoldersPanel extends SidePanel {
     if (!freshPanel || !currentPanel) return;
     freshPanel.removeAttribute('hidden');
     currentPanel.replaceWith(freshPanel);
-    ['editExperimentFolderModal', 'folderExportModal'].forEach(id => {
+    ['editExperimentFolderModal', 'folderExportModal', 'folderPermissionsModal'].forEach(id => {
       if (document.getElementById(id)) return;
       const modal = documentCopy.getElementById(id);
       if (modal) document.body.append(modal);
     });
+    // A window added after the page loaded has not had its Teams / User Groups / Users pickers set up yet.
+    const permissionsModal = document.getElementById('folderPermissionsModal');
+    if (permissionsModal) initPermissionsTomSelects(permissionsModal);
     document.dispatchEvent(new CustomEvent('elabftw:folders-panel-loaded'));
   }
 }

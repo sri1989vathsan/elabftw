@@ -851,9 +851,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const label = document.getElementById('folderPermissionsApplyLabel');
     if (label?.dataset.default) label.textContent = label.dataset.default;
   };
-  const permissionsModal = document.getElementById('folderPermissionsModal');
-  permissionsModal?.addEventListener('change', resetApplyConfirm);
-  $('#folderPermissionsModal').on('hidden.bs.modal', resetApplyConfirm);
+  // delegated: on a page where the folder panel is loaded after the page, this window does not exist yet here
+  document.addEventListener('change', (event: Event) => {
+    if ((event.target as Element | null)?.closest('#folderPermissionsModal')) resetApplyConfirm();
+  });
+  $(document).on('hidden.bs.modal', '#folderPermissionsModal', resetApplyConfirm);
 
   on('apply-folder-permissions', () => {
     const folderId = (document.getElementById('folderPermissionsFolderId') as HTMLInputElement).value;
