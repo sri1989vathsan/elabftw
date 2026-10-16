@@ -636,6 +636,13 @@ async function spreadsheetSoak(options = {}) {
       for (let i = 0; i < 60 && document.querySelector('.inline-spreadsheet-dialog'); i++) await sleep(50);
       if (apply) staged.forEach(([r, c, value]) => { model.grid[r][c] = value; });
     });
+    // pressing Update must not change how tall the rows are (the popup's own 34 px rows were once saved)
+    if (apply) {
+      await sleep(2000);
+      await rowHeightsUniform(uid, 'the popup Update');
+      const stored = (() => { try { return JSON.parse(decodeURIComponent(escape(atob(tableEl(uid).getAttribute('data-spreadsheet'))))).rowHeights; } catch (error) { return null; } })();
+      if (stored && Object.values(stored).some(h => Math.round(Number(h)) === 34)) fail(`the popup Update saved the library default row height (34 px) as a chosen height: ${JSON.stringify(stored)}`, { table: model.label });
+    }
   }
 
   async function save() {
