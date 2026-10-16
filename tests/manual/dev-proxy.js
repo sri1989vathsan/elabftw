@@ -19,6 +19,10 @@ const TARGET_PORT = Number(process.env.TARGET_PORT || 3150);
 const FROM = `https://localhost:${TARGET_PORT}`;
 const TO = `http://localhost:${LISTEN}`;
 const TESTS_DIR = __dirname;
+// Optional: ASSETS_DIR=/some/folder serves /assets/* from there when the file exists (e.g. an older build's
+// scripts and styles, to compare it with the current one on the same page and server). Start a second copy of
+// this proxy on another port for that (PROXY_PORT=8974), leaving the normal one untouched.
+const ASSETS_DIR = process.env.ASSETS_DIR ? path.resolve(process.env.ASSETS_DIR) : '';
 
 const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.js': 'text/javascript', '.md': 'text/plain', '.json': 'application/json' };
 
@@ -31,6 +35,14 @@ http.createServer((req, res) => {
       res.end(data);
     });
     return;
+  }
+  if (ASSETS_DIR && req.url.startsWith('/assets/')) {
+    const file = path.resolve(ASSETS_DIR, decodeURIComponent(req.url.slice('/assets/'.length).split('?')[0]));
+    if (file.startsWith(ASSETS_DIR + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) {
+      res.writeHead(200, { 'content-type': mime[path.extname(file)] || (file.endsWith('.css') ? 'text/css' : 'application/octet-stream'), 'cache-control': 'no-store' });
+      fs.createReadStream(file).pipe(res);
+      return;
+    }
   }
   const headers = { ...req.headers, host: `localhost:${TARGET_PORT}`, 'accept-encoding': 'identity' };
   if (headers.origin) headers.origin = headers.origin.replace(TO, FROM);
