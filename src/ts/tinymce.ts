@@ -234,8 +234,7 @@ export function getTinymceBaseConfig(page: string): object {
   if (page === 'edit') {
     fileMenuItems = 'restoredraft | saveAndGoBack ' + fileMenuItems;
     plugins += ' autosave';
-    // add Image button in toolbar
-    toolbar1 = toolbar1.replace('insert-link', 'insert-link image');
+    // Image is an entry of the Insert dropdown (see UnifiedInsertExtension.ts), not a toolbar button;
     // let Image in menu
     removedMenuItems = 'newdocument, anchor';
   }

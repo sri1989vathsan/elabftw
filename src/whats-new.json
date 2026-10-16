@@ -821,8 +821,9 @@
     "summary": "New buttons above the text of an experiment: one Insert menu, dates, titles, notes, checklists, spreadsheets and more.",
     "details": [
       "fa-floppy-disk::Save: the first button saves the experiment, and the bar shows whether your changes are saved. Save and go back is in the File menu.",
-      "fa-plus::Insert: one menu for everything you can add. It lists Insert note, Divider, Tables, Spreadsheet, Well plate, Links and Insert template. Title and date have their own buttons next to it. Insert template is only here, not as a separate button.",
+      "fa-plus::Insert: one menu for everything you can add. It lists Insert note, Divider, Tables, Spreadsheet, Well plate, Image, Links and Insert template. Title and date have their own buttons next to it. Insert template is only here, not as a separate button.",
       "fa-list-check::Checklist: turns lines into tick boxes. Type [ ] and a space to start one, then click a box to tick it.",
+      "fa-image::Image: in the Insert menu. Opens the picture window to add an image from your computer or a web address, with a description and size.",
       "fa-link::Links: in the Insert menu, under Links. Add a web link, upload and link a file or folder, refer to a file or folder on a shared drive, or link a LabCollector item.",
       "fa-calendar-day::Day: inserts today's date in your saved format, and links your notes to the Activity calendar: the headings you write after an inserted date appear on that day in the calendar, until you insert the next date. The arrow gives Custom date, Log entry (date and time), and Edit, Copy link and Delete for a date you selected. Double-click a date to edit it.",
       "fa-heading::Insert title (the heading button): opens a window where you set the title text and style (font, size, colour, alignment, how it appears in the table of contents) and press Insert title. Press Save style to keep the style under a name; with a title or text selected, open the arrow beside the button and choose a saved style to apply it to the selection. Ctrl+Alt+T opens the same window.",
@@ -843,7 +844,7 @@
       "fa-thumbtack::On a long experiment the toolbar stays at the top as you scroll and slides smoothly with the top bar.",
       "fa-circle-info::The “i” at the very end of the toolbar opens this guide card."
     ],
-    "imageAlt": "The editor toolbar with the Insert menu open, listing Insert note, Divider, Tables, Spreadsheet, Well plate, Links and Insert template",
+    "imageAlt": "The editor toolbar with the Insert menu open, listing Insert note, Divider, Tables, Spreadsheet, Well plate, Image, Links and Insert template",
     "featured": false,
     "guide": true,
     "order": 85,

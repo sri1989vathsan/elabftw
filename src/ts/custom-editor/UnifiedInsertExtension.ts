@@ -39,7 +39,7 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
   editor.ui.registry.addMenuButton('elabftw-insert-menu', {
     icon: 'plus',
     text: 'Insert',
-    tooltip: 'Insert (note, divider, tables, spreadsheets, links, templates)',
+    tooltip: 'Insert (note, divider, tables, spreadsheets, image, links, templates)',
     fetch: async callback => {
       const [tableItems, linkItems, dividerItems] = await Promise.all([
         fetchRegisteredItems(editor, 'insert-data-table'),
@@ -91,6 +91,7 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
           getSubmenuItems: () => plainTableItems.map((_, index) => catalog[`table-${index}`]).filter(Boolean),
         },
         ...directItems,
+        { type: 'menuitem', text: 'Image', icon: 'image', onAction: () => editor.execCommand('mceImage') },
         {
           type: 'nestedmenuitem',
           text: 'Links',
