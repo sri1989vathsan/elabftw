@@ -148,7 +148,10 @@ const deleteWholeSelectionMenu = (
   y: unknown,
   _event: unknown,
   items: JssMenuItem[],
+  sizeLocked = false,
 ): JssMenuItem[] => {
+  // A well plate has a fixed size: nothing that adds or removes rows or columns.
+  if (sizeLocked) return items.filter(item => !/^(Insert|Delete)\b.*\b(row|column)s?\b/i.test(item.title ?? ''));
   const range = worksheet?.selectedCell as number[] | null | undefined;
   if (!Array.isArray(range) || range.length < 4) return items;
   const clickedX = Number.parseInt(String(x), 10);
@@ -4412,7 +4415,7 @@ export function openSpreadsheetModal(
       updateRawDataMirrorCell(editedCol, editedRow, editedValue, false);
       worksheet.closeEditor(editedCell, true);
       // Enter in a cell of the last row adds a row below it, as in Excel.
-      const addsRow = editedRow >= working.rows - 1 && working.rows < MAX_DIMENSION;
+      const addsRow = editedRow >= working.rows - 1 && working.rows < MAX_DIMENSION && working.kind !== 'well-plate';
       if (addsRow) worksheet.insertRow?.(1, editedRow, 0);
       const targetRow = addsRow ? editedRow + 1 : Math.min(working.rows - 1, editedRow + 1);
       selectedRange = [editedCol, targetRow, editedCol, targetRow];
@@ -4685,7 +4688,7 @@ export function openSpreadsheetModal(
         if (rescueInputCol === null || rescueInputRow === null) return;
         const nextCol = Math.min(Math.max(rescueInputCol + deltaCol, 0), working.cols - 1);
         // Enter in a cell of the last row adds a row below it, as in Excel.
-        const addsRow = deltaRow > 0 && rescueInputRow >= working.rows - 1 && working.rows < MAX_DIMENSION;
+        const addsRow = deltaRow > 0 && rescueInputRow >= working.rows - 1 && working.rows < MAX_DIMENSION && working.kind !== 'well-plate';
         const nextRow = addsRow ? working.rows : Math.min(Math.max(rescueInputRow + deltaRow, 0), working.rows - 1);
         commitRescueInput();
         if (addsRow && worksheet) {
@@ -5228,6 +5231,15 @@ export function openSpreadsheetModal(
         }, 0);
       };
       installWellPlateHeaders(sheetContainer, () => working.kind);
+      // A well plate keeps its size: no way to add or remove rows or columns (tab, enter, menu, buttons).
+      const plateLocked = working.kind === 'well-plate';
+      ui.rowsInput.disabled = plateLocked;
+      ui.colsInput.disabled = plateLocked;
+      ui.addRowBtn.disabled = plateLocked;
+      ui.addRowsInput.disabled = plateLocked;
+      ui.addRowBtn.title = plateLocked
+        ? 'A well plate has a fixed size. Choose Custom in the size list to change it.'
+        : 'Add this many rows at the bottom';
       const stopTrackingJssListeners = startTrackingGlobalListeners();
       const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
         worksheets: [{
@@ -5251,10 +5263,10 @@ export function openSpreadsheetModal(
           tableOverflow: true,
           tableWidth: '100%',
           tableHeight: '100%',
-          allowInsertRow: true,
-          allowInsertColumn: true,
-          allowDeleteRow: true,
-          allowDeleteColumn: true,
+          allowInsertRow: !plateLocked,
+          allowInsertColumn: !plateLocked,
+          allowDeleteRow: !plateLocked,
+          allowDeleteColumn: !plateLocked,
           rowResize: true,
           columnSorting: false,
           selectionCopy: true,
@@ -5337,7 +5349,8 @@ export function openSpreadsheetModal(
           syncMountedDimensions(changedWorksheet);
           styleNewlyInsertedColumn(changedWorksheet, inserted);
         },
-        contextMenu: deleteWholeSelectionMenu,
+        contextMenu: (...menuArgs: Parameters<typeof deleteWholeSelectionMenu>) =>
+          deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked),
         ondeleterow: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
           syncMountedDimensions(changedWorksheet);
@@ -5684,6 +5697,7 @@ export function openSpreadsheetModal(
     };
 
     const applyDimensions = (): void => {
+      if (working.kind === 'well-plate') return;
       const rows = clampDimension(parseInt(ui.rowsInput.value, 10), working.rows);
       const cols = clampDimension(parseInt(ui.colsInput.value, 10), working.cols);
       resizeSpreadsheet(rows, cols);
@@ -5698,8 +5712,14 @@ export function openSpreadsheetModal(
     ui.presetSelect.addEventListener('change', () => {
       const preset = spreadsheetPresetFromValue(ui.presetSelect.value);
       if (!preset) {
-        working.kind = 'standard';
-        working.plateSize = undefined;
+        // Custom: the plate size is no longer fixed, so redraw the grid with insert/delete available again.
+        mountSpreadsheet({
+          ...working,
+          data: readRawData(),
+          cellStyles: readCellStyles(),
+          kind: 'standard',
+          plateSize: undefined,
+        });
         return;
       }
       ui.captionInput.value = preset.caption ?? '';
@@ -6035,7 +6055,7 @@ export function openSpreadsheetModal(
       const targetCol = startCol;
       const targetRow = endRow + 1;
       const rowCount = readRawData().length;
-      if (targetRow >= rowCount) {
+      if (targetRow >= rowCount && working.kind !== 'well-plate') {
         worksheet?.insertRow?.(1, endRow, 0);
         ui.rowsInput.value = String(Math.min(MAX_DIMENSION, rowCount + 1));
       }
@@ -6713,6 +6733,8 @@ export function buildReadOnlySpreadsheetHost(
   options: SpreadsheetHostOptions = {},
 ): SpreadsheetHostHandle {
   const editable = options.editable ?? false;
+  // A well plate keeps its size: no inserting or deleting rows or columns, by key, menu or button.
+  const plateLocked = extracted.kind === 'well-plate';
   const rows = Math.max(1, extracted.rows);
   const cols = Math.max(1, extracted.cols);
   const appearance = normalizeAppearance(extracted.appearance);
@@ -7456,7 +7478,7 @@ export function buildReadOnlySpreadsheetHost(
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   if (editable) installRowResizeGuide(sheetContainer);
   host.appendChild(sheetContainer);
-  if (editable) {
+  if (editable && !plateLocked) {
     // Under the grid: how many rows, and a button to add them at the bottom.
     const addRowsBar = document.createElement('div');
     addRowsBar.className = 'elabftw-spreadsheet-add-rows';
@@ -8150,7 +8172,7 @@ export function buildReadOnlySpreadsheetHost(
       const maxRow = rawDataMirror.length - 1;
       const nextCol = Math.min(Math.max(rescueInputCol + deltaCol, 0), maxCol);
       // Enter in a cell of the last row adds a row below it, as in Excel.
-      const addsRow = deltaRow > 0 && editable && rescueInputRow >= maxRow && rawDataMirror.length < MAX_DIMENSION;
+      const addsRow = deltaRow > 0 && editable && !plateLocked && rescueInputRow >= maxRow && rawDataMirror.length < MAX_DIMENSION;
       const nextRow = addsRow ? maxRow + 1 : Math.min(Math.max(rescueInputRow + deltaRow, 0), maxRow);
       commitRescueInput();
       const mounted = getMountedWorksheet(sheetContainer);
@@ -8901,10 +8923,10 @@ export function buildReadOnlySpreadsheetHost(
       tableOverflow: !editable,
       ...(editable ? {} : { tableWidth: '100%', tableHeight: '100%' }),
       editable,
-      allowInsertRow: editable,
-      allowInsertColumn: editable,
-      allowDeleteRow: editable,
-      allowDeleteColumn: editable,
+      allowInsertRow: editable && !plateLocked,
+      allowInsertColumn: editable && !plateLocked,
+      allowDeleteRow: editable && !plateLocked,
+      allowDeleteColumn: editable && !plateLocked,
       rowResize: editable,
       columnSorting: false,
       selectionCopy: true,
@@ -9095,7 +9117,8 @@ export function buildReadOnlySpreadsheetHost(
         requestOverlayRelayout();
         styleNewlyInsertedColumn(changedWorksheet, inserted);
       },
-      contextMenu: deleteWholeSelectionMenu,
+      contextMenu: (...menuArgs: Parameters<typeof deleteWholeSelectionMenu>) =>
+        deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked),
       ondeleterow: (changedWorksheet: JssInstance) => { notifyStructuralChange(changedWorksheet); requestOverlayRelayout(); },
       ondeletecolumn: (changedWorksheet: JssInstance) => { notifyStructuralChange(changedWorksheet); requestOverlayRelayout(); },
       // jspreadsheet calls onresizerow(instance, row, newHeight, oldHeight) --
