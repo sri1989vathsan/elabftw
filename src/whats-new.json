@@ -184,7 +184,11 @@
       "Fixed cell formatting in the popup and a case where saving could blank cells.",
       "Add rows: under a spreadsheet, type how many rows you want and press Add rows to add them at the bottom, up to 50 rows in all. The popup has the same box next to its buttons. Pressing Enter in a cell of the last row also adds a row.",
       "Vertical alignment: select cells and press the top, middle or bottom button next to the left, center, right and justify buttons, in the page and in the popup.",
-      "Typing and then adding or deleting a row or column straight away no longer loses what you typed."
+      "Typing and then adding or deleting a row or column straight away no longer loses what you typed.",
+      "Well plates keep their size: rows and columns cannot be added or deleted with Enter, the right-click menu, Add rows or the size boxes, in the page or in the popup. To change the size, pick another plate size in the popup, or choose Custom in its size list to turn the plate into an ordinary spreadsheet.",
+      "The cells you select stay selected when you scroll the page.",
+      "A plate or spreadsheet shows its row and column labels (1, 2, 3 and A, B, C) before you click it, also for older ones that were saved without them, and rows keep their height when the preview becomes the grid.",
+      "A table below the one you add rows to no longer jumps for a moment, and the editor no longer slides a wide plate out of view sideways."
     ],
     "image": "spreadsheet-editing.jpg",
     "imageAlt": "A spreadsheet with a selected cell and its fill handle, outlined, under the spreadsheet toolbar",
@@ -814,7 +818,7 @@
     "date": "2026-10-13",
     "area": "Experiments",
     "title": "The editor toolbar",
-    "summary": "New buttons above the text of an experiment: one Insert menu, dates, titles, notes, checklists, spreadsheets, links and more.",
+    "summary": "New buttons above the text of an experiment: one Insert menu, dates, titles, notes, checklists, spreadsheets and more.",
     "details": [
       "fa-floppy-disk::Save: the first button saves the experiment, and the bar shows whether your changes are saved. Save and go back is in the File menu.",
       "fa-plus::Insert: one menu for everything you can add. It lists Insert note, Divider, Tables, Spreadsheet, Well plate, Links and Insert template. Title and date have their own buttons next to it. Insert template is only here, not as a separate button.",
@@ -846,7 +850,7 @@
     "icon": "fa-screwdriver-wrench",
     "purpose": "Find every editing tool in one place, and write and structure an experiment faster with fewer clicks.",
     "uses": [
-      "Press Insert, then Text, then Log entry each time you return to an experiment so that your notes read as a dated record.",
+      "Open the arrow beside Day and choose Log entry each time you return to an experiment so that your notes read as a dated record.",
       "Press Day before each new day's notes, so that every heading under it lands on the right day in the Activity calendar.",
       "Start a protocol step list with a checklist, then tick the boxes off at the bench.",
       "Insert a note box with a clear title for a warning or a deviation so that it shows up in the table of contents.",
@@ -857,7 +861,7 @@
       "Mark the templates you use all the time with a star, then use the Favourites tab.",
       "Save a title style (for example a bold blue heading for each day), then select a heading and apply it from the arrow beside the heading button."
     ],
-    "news": "New: one Insert menu (with templates in it), checklists, a format painter next to the colours, date, title and note tools with saved defaults, spreadsheets and well plates.",
+    "news": "New: one Insert menu (note, divider, tables, spreadsheets, well plates, links and templates), a Note options button that appears while a note is selected, Spreadsheet tools that appear while a spreadsheet is selected, checklists, and a format painter next to the colours.",
     "shot": "The editor toolbar with the Insert menu open",
     "highlight": {
       "x": 76,
