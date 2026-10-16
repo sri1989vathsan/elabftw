@@ -830,6 +830,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       $('#editExperimentFolderModal').modal('hide');
       $('#folderPermissionsModal').modal('show');
+    }).catch((error: unknown) => {
+      // Without this the button did nothing at all when the folder could not be read (a session that had expired,
+      // for example, right after the app was restarted).
+      notify.error(error instanceof Error && /auth|401/i.test(error.message)
+        ? 'Your session has expired. Reload the page and log in again.'
+        : 'Could not open the folder permissions. Reload the page and try again.');
     });
   });
 
