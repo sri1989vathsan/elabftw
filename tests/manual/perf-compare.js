@@ -156,7 +156,7 @@ window.perfCompare = async function perfCompare({ label = 'run', tables = 8, row
       td.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 }));
       // the editor is an input in the cell itself, or the page's own rescue input, or the library's editor box
       const findBox = () => td.querySelector('input, textarea, [contenteditable="true"]')
-        || Array.from(document.querySelectorAll('.elabftw-spreadsheet-rescue-input')).find(e => !e.hidden && e.offsetParent !== null)
+        || Array.from(document.querySelectorAll('.elabftw-spreadsheet-rescue-input')).find(e => !e.hidden)
         || document.querySelector('.jss_editor input, .jss_editor textarea, td.editor input, td.editor textarea');
       const box = await until(findBox, 3000);
       if (!box.value) { failed++; continue; }
