@@ -74,7 +74,9 @@ export default class FoldersPanel extends SidePanel {
     ['editExperimentFolderModal', 'folderExportModal', 'folderPermissionsModal'].forEach(id => {
       if (document.getElementById(id)) return;
       const modal = documentCopy.getElementById(id);
-      if (modal) document.body.append(modal);
+      // Inside #container, like the windows built into the page: the page's button handling only reaches
+      // buttons inside it, so a window added to the end of <body> had dead buttons (Permissions, Save...).
+      if (modal) (document.getElementById('container') ?? document.body).append(modal);
     });
     // A window added after the page loaded has not had its Teams / User Groups / Users pickers set up yet.
     const permissionsModal = document.getElementById('folderPermissionsModal');
