@@ -73,13 +73,10 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
 
       const items: AnyMenuItem[] = [];
       items.push(
-        {
-          type: 'nestedmenuitem',
-          text: 'Text',
-          getSubmenuItems: () => [
-            catalog.title, catalog.date, ...noteItems.map((_, index) => catalog[`note-${index}`]), catalog.divider,
-          ].filter(Boolean),
-        },
+        // title, date, note and divider sit directly in the menu, not under a "Text" submenu
+        ...[
+          catalog.title, catalog.date, ...noteItems.map((_, index) => catalog[`note-${index}`]), catalog.divider,
+        ].filter(Boolean),
         {
           type: 'nestedmenuitem',
           text: 'Tables',
