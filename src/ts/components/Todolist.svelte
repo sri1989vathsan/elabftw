@@ -1829,6 +1829,26 @@
     };
     window.addEventListener('todolist-changed', reload);
     window.addEventListener('todolist-scope-changed', reload);
+    // A task linked to an experiment (in its Steps and tasks section) opens its popup right there, on the
+    // experiment page, instead of leaving for the Boards page. Ctrl/Cmd/Shift-click and middle-click still follow
+    // the link, and so does a task that cannot be loaded.
+    const openLinkedTaskHere = (event: MouseEvent): void => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = (event.target as Element | null)?.closest<HTMLAnchorElement>('a[data-open-task-popup]');
+      if (!link) return;
+      const linkedId = Number.parseInt(link.dataset.openTaskPopup ?? '', 10);
+      if (!Number.isInteger(linkedId)) return;
+      event.preventDefault();
+      void (async () => {
+        try {
+          const task = await ApiC.getJson(`${Model.Todolist}/${linkedId}`) as Todo;
+          openDetail(mapTodoToEntry(task));
+        } catch {
+          window.location.href = link.href;
+        }
+      })();
+    };
+    document.addEventListener('click', openLinkedTaskHere);
     // Deep-linked from a to-do deadline notification (?open=todolist&task=ID,
     // wired up in common.ts/Transform.php): open that task's own detail
     // dialog once it's loaded, rather than leaving the reminder pointing at
@@ -1894,6 +1914,7 @@
       window.clearInterval(refreshTimer);
       window.removeEventListener('todolist-changed', reload);
       window.removeEventListener('todolist-scope-changed', reload);
+      document.removeEventListener('click', openLinkedTaskHere);
       window.removeEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
       window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: null }));
     };
