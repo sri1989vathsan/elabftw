@@ -594,7 +594,8 @@ async function spreadsheetSoak(options = {}) {
     // multi-delete must remove whole rows or columns, in one block, and nothing else may change.
     const nowGrid = domCells(await live(uid));
     const size2 = byRow ? model.grid.length : model.grid[0].length;
-    const exact = (x, y) => x.length === y.length && x.every((row, r) => row.length === y[r].length && row.every((v, c) => v === y[r][c]));
+    // A formula in the record shows its result in the grid (=A1+1 as 861), so formula cells match whatever is shown.
+    const exact = (x, y) => x.length === y.length && x.every((row, r) => row.length === y[r].length && row.every((v, c) => String(v ?? '').startsWith('=') || v === y[r][c]));
     const without = (a1, b1) => (byRow ? model.grid.filter((_, i) => i < a1 || i > b1) : model.grid.map(row => row.filter((_, i) => i < a1 || i > b1)));
     const normalizedNow = nowGrid.map(row => Array.from(row, v => v ?? ''));
     let matched = null;
