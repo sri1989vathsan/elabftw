@@ -1471,7 +1471,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       profiler.count('overlays positioned', spreadsheetOverlays.size);
       const iframeRect = iframe.getBoundingClientRect();
       const maxContentWidth = editor.getBody().getBoundingClientRect().width;
-      Array.from(spreadsheetOverlays.entries()).forEach(([table, { el: overlay, syncActiveEditor }]) => {
+      // Top to bottom, not in the order the overlays were created: a table's spacer (the room reserved for
+      // its grid) moves everything below it, so the tables under it must read their position after it has
+      // been updated. Otherwise a lower grid is placed for one frame at its old spot, on top of the table above.
+      Array.from(spreadsheetOverlays.entries()).sort(
+        ([first], [second]) => (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1),
+      ).forEach(([table, { el: overlay, syncActiveEditor }]) => {
         try {
           if (!table.isConnected || !editor.getBody().contains(table)) {
             removeOverlay(table);
