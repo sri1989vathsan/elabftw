@@ -267,6 +267,8 @@ async function spreadsheetSoak(options = {}) {
   const lastSize = { frame: 0, content: 0 };
   async function measure(label) {
     await sleep(450);
+    // a hidden page does not redraw, so the editor has not been resized yet: nothing to judge then
+    if (document.hidden) { note('size-check-skipped-hidden'); return; }
     const container = editor.getContainer();
     const iframe = container.querySelector('iframe');
     const doc = editor.getDoc();
