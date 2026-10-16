@@ -9335,8 +9335,33 @@ export function buildReadOnlySpreadsheetHost(
  * grid applies unchanged and swapping in the live grid does not shift
  * anything. Returns null for kinds it does not mirror (notebook).
  */
+/**
+ * The coordinate labels of a saved table (1, 2, 3 across and A, B, C down for a well plate; the other way round
+ * for a spreadsheet) are fixed by the layout, never by what is stored. A saved table whose label cells were
+ * found empty (an older plate, seen in Firefox) showed a preview without headers until it was clicked, so the
+ * labels are written back whenever they are missing or wrong.
+ */
+export function restoreCoordinateLabels(table: HTMLTableElement): void {
+  if (table.dataset.spreadsheetStyle === 'notebook') return;
+  const plate = table.dataset.spreadsheetStyle === 'well-plate';
+  const headRow = table.querySelector('thead > tr');
+  if (!headRow) return;
+  Array.from(headRow.children).forEach((cell, index) => {
+    if (index === 0) return;
+    const label = plate ? String(index) : colLabel(index - 1);
+    if (cell.textContent !== label) cell.textContent = label;
+  });
+  Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody > tr')).forEach((row, rowIndex) => {
+    const cell = row.children[0];
+    if (!cell || cell.tagName !== 'TH') return;
+    const label = plate ? colLabel(rowIndex) : String(rowIndex + 1);
+    if (cell.textContent !== label) cell.textContent = label;
+  });
+}
+
 export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivElement | null {
   if (table.dataset.spreadsheetStyle === 'notebook') return null;
+  restoreCoordinateLabels(table);
   const headRow = table.querySelector('thead > tr');
   const bodyRows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody > tr'));
   if (!headRow) return null;
