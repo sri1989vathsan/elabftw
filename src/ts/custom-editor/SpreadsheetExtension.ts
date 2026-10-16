@@ -2890,6 +2890,17 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     `;
     editorDocument.head.appendChild(hideSpreadsheetTablesStyle);
     editor.on('remove', () => hideSpreadsheetTablesStyle.remove());
+    // overflow-x:hidden above does not stop scrolling done by script (the caret being brought into view,
+    // scrollIntoView on a wide table): the frame slid sideways and the grids, which are placed from the hidden
+    // tables' positions, went out of sight. Snap back whenever that happens.
+    const keepFrameFromScrollingSideways = (): void => {
+      if (!editorDocument.querySelector('table.elabftw-spreadsheet')) return;
+      [editorDocument.documentElement, editorDocument.body].forEach(element => {
+        if (element && element.scrollLeft !== 0) element.scrollLeft = 0;
+      });
+    };
+    editorDocument.addEventListener('scroll', keepFrameFromScrollingSideways, true);
+    editor.getWin().addEventListener('scroll', keepFrameFromScrollingSideways);
     // jspreadsheet-ce closes its own context menu (and clears its own
     // selection) on mousedown against `document` -- but that's the
     // *outer* page document the overlay itself lives in, not this
