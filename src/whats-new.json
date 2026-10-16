@@ -865,13 +865,13 @@
     "news": "New: one Insert menu (note, divider, tables, spreadsheets, well plates, links and templates), a Note options button that appears while a note is selected, Spreadsheet tools that appear while a spreadsheet is selected, checklists, and a format painter next to the colours.",
     "shot": "The editor toolbar with the Insert menu open",
     "highlight": {
-      "x": 76,
-      "y": 54,
-      "w": 22.5,
-      "h": 38,
-      "label": "Spreadsheet, Well plate and Insert template"
+      "x": 21.5,
+      "y": 62,
+      "w": 39.8,
+      "h": 35.5,
+      "label": "Spreadsheet, Well plate, Image, Links and Insert template"
     },
-    "image": "guide-editor-toolbar-7814070f.png",
+    "image": "guide-editor-toolbar-8c4c9482.png",
     "screenshots": []
   },
   {
