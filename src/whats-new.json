@@ -763,7 +763,7 @@
       "To read only some parts, open Select headings to filter or print and tick the headings you want. The experiment then shows just those sections and hides the rest, until you clear the selection.",
       "fa-print::Press Print selection or Copy filtered content to get only those parts. Switch spreadsheets and pictures on or off."
     ],
-    "imageAlt": "An experiment with the Table of Contents panel open and three headings ticked, showing only those parts of the text",
+    "imageAlt": "An experiment with the Table of Contents panel open: the heading filter box, the list of headings with Goal, Procedure and Results ticked, the Print selection and Copy filtered content buttons, and the page showing only those three sections",
     "featured": false,
     "guide": true,
     "order": 150,
@@ -775,15 +775,15 @@
       "Tick only the Results headings to read them without scrolling past the methods."
     ],
     "news": "New: a contents tab with section filters, print and copy.",
-    "shot": "An experiment with the Table of Contents panel open and a few headings selected",
+    "shot": "An experiment with the Table of Contents panel open, three headings ticked in the list and only those sections shown",
     "highlight": {
-      "x": 5,
-      "y": 30,
-      "w": 24,
-      "h": 49,
+      "x": 5.5,
+      "y": 29.4,
+      "w": 30.5,
+      "h": 51,
       "label": "Tick headings to filter, print or copy"
     },
-    "image": "guide-toc-a91695b1.png",
+    "image": "guide-toc-155544b1.png",
     "screenshots": []
   },
   {
