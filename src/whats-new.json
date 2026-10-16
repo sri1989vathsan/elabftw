@@ -596,6 +596,7 @@
     "summary": "Break an experiment into steps, give a step to colleagues with @, and see when it is done.",
     "details": [
       "fa-list-check::Steps and tasks sit under the main text of an experiment, template or resource. Type a step in the box at the bottom and press Enter or Add a step. Tick it when it is done: the time is kept. Drag a step by its handle to reorder it, click its text to edit it, and use the trash icon to remove it.",
+      "fa-list-check::Tasks linked to the experiment are listed under its steps. Click one to open its popup right on the experiment page; Ctrl or Cmd and click opens it on the Boards page instead.",
       "fa-clock::Open a step with the arrow on its right to set a deadline and a reminder. A step with a deadline shows in the to-do list and on that day in the Activity calendar.",
       "fa-at::Give a step to someone: type @ in the step and pick a name. Move through the names with the arrow keys and press Tab (or click one). Mention several people and each of them gets the step. You become the assigner.",
       "fa-list-check::What each person gets: a to-do of their own, called “Step: …”, linked to the experiment and carrying the step's deadline, and a notification that you assigned it. They can open the experiment from their to-do. Someone who cannot open the entry still gets the to-do and sees the entry's name.",
