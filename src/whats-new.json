@@ -817,7 +817,7 @@
     "summary": "New buttons above the text of an experiment: one Insert menu, dates, titles, notes, checklists, spreadsheets, links and more.",
     "details": [
       "fa-floppy-disk::Save: the first button saves the experiment, and the bar shows whether your changes are saved. Save and go back is in the File menu.",
-      "fa-plus::Insert: one menu for everything you can add. It lists what you used recently, then Text (title, date, notes, divider), Tables, Spreadsheet, Well plate, Links and Insert template. Insert template is only here, not as a separate button.",
+      "fa-plus::Insert: one menu for everything you can add. It lists Text (title, date, notes, divider), Tables, Spreadsheet, Well plate, Links and Insert template. Insert template is only here, not as a separate button.",
       "fa-list-check::Checklist: turns lines into tick boxes. Type [ ] and a space to start one, then click a box to tick it.",
       "fa-link::Links: add a web link, upload and link a file or folder, refer to a file or folder on a shared drive, or link a LabCollector item.",
       "fa-calendar-day::Day: inserts today's date in your saved format, and links your notes to the Activity calendar: the headings you write after an inserted date appear on that day in the calendar, until you insert the next date. The arrow gives Custom date, Log entry (date and time), and Edit, Copy link and Delete for a date you selected. Double-click a date to edit it.",

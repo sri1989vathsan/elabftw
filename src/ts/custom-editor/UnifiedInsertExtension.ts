@@ -11,42 +11,6 @@ import { Editor } from 'tinymce/tinymce';
 /* eslint-disable-next-line */
 type AnyMenuItem = any;
 
-const RECENT_KEY = 'elabftw-recent-insert-actions';
-const MAX_RECENT = 4;
-
-function getRecentIds(): string[] {
-  try {
-    const raw = window.localStorage.getItem(RECENT_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter(id => typeof id === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function recordRecentId(id: string): void {
-  try {
-    const next = [id, ...getRecentIds().filter(existing => existing !== id)].slice(0, MAX_RECENT);
-    window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-  } catch {
-    // localStorage unavailable (private browsing, quota) -- recents are a
-    // convenience, not worth surfacing an error for.
-  }
-}
-
-/** Wrap a leaf menu item's onAction so using it (from anywhere) marks it recently used. */
-function trackRecent(id: string, item: AnyMenuItem): AnyMenuItem {
-  if (typeof item.onAction !== 'function') return item;
-  const original = item.onAction;
-  return {
-    ...item,
-    onAction: (api: AnyMenuItem) => {
-      recordRecentId(id);
-      original(api);
-    },
-  };
-}
-
 /** Pull the already-built submenu items out of a registered addMenuButton/addSplitButton spec. */
 function fetchRegisteredItems(editor: Editor, name: string): Promise<AnyMenuItem[]> {
   return new Promise(resolve => {
@@ -85,7 +49,7 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
 
       const catalog: Record<string, AnyMenuItem> = {};
       const register = (id: string, item: AnyMenuItem | null): void => {
-        if (item) catalog[id] = trackRecent(id, { ...item, text: item.text ?? id });
+        if (item) catalog[id] = { ...item, text: item.text ?? id };
       };
 
       register('date', buttonAsMenuItem(editor, 'adddate', 'Insert date'));
@@ -102,16 +66,7 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
       linkItems.forEach((item, index) => register(`link-${index}`, item));
       register('template', buttonAsMenuItem(editor, 'inserttemplate', 'Insert template'));
 
-      const recentItems = getRecentIds()
-        .map(id => catalog[id])
-        .filter((item): item is AnyMenuItem => Boolean(item));
-
       const items: AnyMenuItem[] = [];
-      if (recentItems.length > 0) {
-        items.push({ type: 'menuitem', text: 'Recently used', enabled: false });
-        items.push(...recentItems);
-        items.push({ type: 'separator' });
-      }
       items.push(
         {
           type: 'nestedmenuitem',
