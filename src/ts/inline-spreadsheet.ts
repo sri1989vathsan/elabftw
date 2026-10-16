@@ -6608,10 +6608,15 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
       // before colWidths/rowHeights existed) keeps the popup and the main
       // table's own resizing functionally separate, each conserving only
       // the changes made in that view.
+      // 34 px is the grid library's own default (see JSS_DEFAULT_ROW_HEIGHT), never a height the person chose:
+      // tables saved with it (the hidden table's rows carry it, and older data stored it) came back with rows
+      // 5 px taller than a freshly inserted spreadsheet and than the rows added to them afterwards.
       rowHeights: normalizeRowHeights(
-        decoded.rowHeights && Object.keys(decoded.rowHeights).length > 0
-          ? decoded.rowHeights
-          : (extractedRowHeights ?? {}),
+        withoutDefaultRowHeights(
+          decoded.rowHeights && Object.keys(decoded.rowHeights).length > 0
+            ? decoded.rowHeights
+            : (extractedRowHeights ?? {}),
+        ) ?? {},
         rows,
       ),
       colWidths: normalizeColWidths(
@@ -6644,7 +6649,7 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
       ? parseInt(tableElement.dataset.wellPlate ?? '', 10) || undefined
       : undefined,
     cellStyles: extractCellStyles(tableElement, kind, rows, cols),
-    rowHeights: extractRowHeights(tableElement, kind, rows),
+    rowHeights: withoutDefaultRowHeights(extractRowHeights(tableElement, kind, rows)),
     colWidths: extractColWidths(tableElement, kind, cols),
     tableStyle: stripFixedTableHeight(
       tableElement.getAttribute('style') ?? undefined,
