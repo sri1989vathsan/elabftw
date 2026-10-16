@@ -416,6 +416,8 @@ async function spreadsheetSoak(options = {}) {
     const wanted = { 'row-after': [1, 0], 'row-before': [1, 0], 'col-after': [0, 1], 'col-before': [0, 1], 'del-row': [-1, 0], 'del-col': [0, -1] }[kind];
     for (let i = 0; i < 50 && (sizeAfter[0] - sizeBefore[0] !== wanted[0] || sizeAfter[1] - sizeBefore[1] !== wanted[1]); i++) { await sleep(100); sizeAfter = domSize(); }
     if (kind.startsWith('row')) await rowHeightsUniform(uid, kind);
+    await sleep(600);
+    await measure(`after ${kind}: the editor must fit the table without a click`);
     const blank = n => Array.from({ length: n }, () => '');
     const expect = { 'row-after': [1, 0], 'row-before': [1, 0], 'col-after': [0, 1], 'col-before': [0, 1], 'del-row': [-1, 0], 'del-col': [0, -1] }[kind];
     const dRows = sizeAfter[0] - sizeBefore[0]; const dCols = sizeAfter[1] - sizeBefore[1];
@@ -877,6 +879,8 @@ async function spreadsheetSoak(options = {}) {
     const added = Math.max(0, Math.min(count, room));
     for (let i = 0; i < added; i++) model.grid.push(Array.from({ length: model.grid[0].length }, () => ''));
     await rowHeightsUniform(uid, `Add rows (${count})`);
+    await sleep(600);
+    await measure(`after Add rows (${count}): the editor must fit the table without a click`);
   }
 
   // ---- scenarios ------------------------------------------------------------------------
