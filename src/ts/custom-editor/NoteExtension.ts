@@ -192,11 +192,84 @@ export function registerNoteExtension(editor: Editor): void {
     });
   };
 
+  const findSelectedNote = (): HTMLElement | null =>
+    editor.dom.getParent(editor.selection.getNode(), '.elabftw-note-block') as HTMLElement | null;
+
+  // Options of the note the cursor is in: its title, whether the title is in the Table of Contents, and the
+  // heading level. Changes only the note's heading; the text inside the note is left as it is.
+  const openOptionsDialog = (): void => {
+    const note = findSelectedNote();
+    if (!note) {
+      editor.notificationManager.open({ text: 'Place the cursor inside a note first.', type: 'info', timeout: 2500 });
+      return;
+    }
+    const heading = note.querySelector<HTMLElement>(':scope > .elabftw-note-heading');
+    const levelMatch = heading ? /^H([2-6])$/.exec(heading.tagName) : null;
+    const initialData = {
+      title: heading?.textContent?.trim() || 'Note',
+      includeInToc: levelMatch !== null,
+      headingLevel: levelMatch ? levelMatch[1] : getNoteDefaults().headingLevel,
+    };
+    editor.windowManager.open({
+      title: 'Note options',
+      size: 'normal',
+      body: {
+        type: 'panel',
+        items: [
+          { type: 'input', name: 'title', label: 'Note title' },
+          { type: 'checkbox', name: 'includeInToc', label: 'Include note title in the Table of Contents' },
+          {
+            type: 'selectbox',
+            name: 'headingLevel',
+            label: 'Heading level (when included)',
+            items: [2, 3, 4, 5, 6].map(level => ({ text: `Heading ${level}`, value: String(level) })),
+          },
+        ],
+      },
+      initialData,
+      buttons: [
+        { type: 'cancel', text: 'Cancel' },
+        { type: 'submit', text: 'Apply', primary: true },
+      ],
+      onSubmit: api => {
+        const data = api.getData() as { title: string; includeInToc: boolean; headingLevel: string };
+        const title = data.title.trim() || 'Note';
+        const level = /^[2-6]$/.test(data.headingLevel) ? data.headingLevel : '3';
+        const next = data.includeInToc
+          ? editor.dom.create(
+            `h${level}`,
+            { class: 'elabftw-note-heading', id: heading?.id || createNoteId(editor, title) },
+            escapeHTML(title),
+          )
+          : editor.dom.create('div', { class: 'elabftw-note-heading' }, escapeHTML(title));
+        editor.undoManager.transact(() => {
+          if (heading) heading.replaceWith(next);
+          else note.prepend(next);
+        });
+        editor.nodeChanged();
+        window.dispatchEvent(new CustomEvent('editor-headings-changed'));
+        api.close();
+      },
+    });
+  };
+
+  // The Note options button is shown on the toolbar only while the cursor is in a note: a class on the editor's
+  // container, which the stylesheet turns into showing or hiding the button (like Spreadsheet tools).
+  const syncNoteOptionsVisibility = (): void => {
+    editor.getContainer()?.classList.toggle('elabftw-note-selected', findSelectedNote() !== null);
+  };
+  editor.on('NodeChange SelectionChange SetContent init', syncNoteOptionsVisibility);
+  editor.ui.registry.addButton('note-options', {
+    icon: 'edit-block',
+    tooltip: 'Note options: title, table of contents entry and heading level of the selected note',
+    onAction: openOptionsDialog,
+  });
+
   // Named command so the command palette can invoke this directly instead of
   // locating the toolbar button by its (English, wording-dependent)
   // tooltip/aria-label -- see CommandPalette.class.ts.
   editor.addCommand('elabftwInsertNote', insertUsingDefaults);
-  editor.addCommand('elabftwNoteOptions', openDialog);
+  editor.addCommand('elabftwNoteOptions', openOptionsDialog);
 
   editor.ui.registry.addSplitButton('insert-note', {
     icon: 'comment-add',

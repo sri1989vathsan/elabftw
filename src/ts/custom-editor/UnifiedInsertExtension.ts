@@ -47,10 +47,10 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
         fetchRegisteredItems(editor, 'horizontal-rule'),
       ]);
       // The note button is a split button whose entries are choice items (acted on through onItemAction), which
-      // a submenu cannot show: plain menu items that run its commands instead.
+      // a submenu cannot show: a plain menu item that runs its command instead. The note's own options are on
+      // the toolbar (Note options), shown while the cursor is in a note.
       const noteItems: AnyMenuItem[] = [
         { type: 'menuitem', text: 'Insert note', icon: 'comment-add', onAction: () => editor.execCommand('elabftwInsertNote') },
-        { type: 'menuitem', text: 'Note options…', icon: 'edit-block', onAction: () => editor.execCommand('elabftwNoteOptions') },
       ];
 
       const catalog: Record<string, AnyMenuItem> = {};

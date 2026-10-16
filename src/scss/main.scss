@@ -6542,3 +6542,8 @@ div > .sticky-navbar {
 .tox-tinymce:not(.elabftw-spreadsheet-selected) .tox-tbtn[aria-label^='Spreadsheet tools'] {
   display: none;
 }
+
+/* Likewise the Note options button: only while the cursor is inside a note. */
+.tox-tinymce:not(.elabftw-note-selected) .tox-tbtn[aria-label^='Note options'] {
+  display: none;
+}

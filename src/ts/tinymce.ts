@@ -225,7 +225,7 @@ export function getTinymceBaseConfig(page: string): object {
   // Table alignment (outdent/indent) and sortable-table toggle live inside
   // the insert-data-table dropdown itself (see SpreadsheetExtension.ts)
   // rather than as their own toolbar buttons.
-  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough superscript subscript | forecolor backcolor format-painter remove-formatting | alignleft aligncenter alignright alignjustify | bullist numlist checklist | outdent indent elabftw-insert-menu | insert-link adddate experiment-title spreadsheet-tools | charmap emoticons codesample guide-help';
+  let toolbar1 = 'custom-save preview | undo redo | styles fontsize bold italic underline strikethrough superscript subscript | forecolor backcolor format-painter remove-formatting | alignleft aligncenter alignright alignjustify | bullist numlist checklist | outdent indent elabftw-insert-menu | insert-link adddate experiment-title spreadsheet-tools note-options | charmap emoticons codesample guide-help';
   if (!document.getElementById('documentTitle')) {
     toolbar1 = toolbar1.replace('experiment-title ', '');
   }
