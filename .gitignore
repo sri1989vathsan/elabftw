@@ -43,3 +43,7 @@ src/ts/langs/*.js
 
 # What's new screenshot inbox (originals stay local)
 whats-new-screenshots/inbox/
+
+# Python bytecode from the manual test scripts
+__pycache__/
+*.pyc
