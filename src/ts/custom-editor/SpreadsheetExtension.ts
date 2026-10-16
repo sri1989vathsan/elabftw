@@ -2964,8 +2964,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // it looks like it's tracking the mouse across the scrolled page.
     // Simplest correct behavior: just close it, same as any other
     // "something happened elsewhere" dismissal already wired above.
-    window.addEventListener('scroll', relayMousedownToCloseMenus, { capture: true, passive: true });
-    editorDocument.addEventListener('scroll', relayMousedownToCloseMenus, { capture: true, passive: true });
+    // Only when a menu is open: the relayed mousedown also reads as "a click outside the grid" to
+    // jspreadsheet-ce, which clears the selected cells, so sending it on every scroll event made a selection
+    // vanish as soon as the page (or the grid itself) was scrolled.
+    const closeMenusOnScroll = (): void => {
+      const menuOpen = Array.from(document.querySelectorAll<HTMLElement>('.jcontextmenu, .jss_contextmenu'))
+        .some(menu => getComputedStyle(menu).display !== 'none');
+      if (menuOpen) relayMousedownToCloseMenus();
+    };
+    window.addEventListener('scroll', closeMenusOnScroll, { capture: true, passive: true });
+    editorDocument.addEventListener('scroll', closeMenusOnScroll, { capture: true, passive: true });
     // Drops the z-index bump (see closeAnyOpenContextMenuOverlay's own
     // comment) on every one of the same "close the menu" triggers above --
     // the synthetic mousedown relayMousedownToCloseMenus dispatches on
@@ -2992,8 +3000,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       editorDocument.removeEventListener('mousedown', relayMousedownToCloseMenus);
       editorDocument.removeEventListener('mousemove', relayMouseMoveForActiveDrag);
       editorDocument.removeEventListener('mouseup', relayMouseMoveForActiveDrag);
-      window.removeEventListener('scroll', relayMousedownToCloseMenus, { capture: true });
-      editorDocument.removeEventListener('scroll', relayMousedownToCloseMenus, { capture: true });
+      window.removeEventListener('scroll', closeMenusOnScroll, { capture: true });
+      editorDocument.removeEventListener('scroll', closeMenusOnScroll, { capture: true });
       document.removeEventListener('mousedown', clearActiveTableUnlessClickedOnOne);
       document.removeEventListener('mousedown', closeAnyOpenContextMenuOverlay);
     });
