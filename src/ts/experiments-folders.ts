@@ -829,6 +829,7 @@ document.addEventListener('DOMContentLoaded', () => {
           : `${folder.permission_item_count} item(s) in this folder and its subfolders will be changed.`;
       }
       $('#editExperimentFolderModal').modal('hide');
+      resetApplyConfirm();
       $('#folderPermissionsModal').modal('show');
     }).catch((error: unknown) => {
       // Without this the button did nothing at all when the folder could not be read (a session that had expired,
@@ -839,12 +840,38 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // Applying replaces the permissions of many items, so it asks first. The question is shown inside the window and
+  // the button is pressed a second time to confirm: a native confirm() box is silently refused by Firefox once
+  // the page has been asked not to show more dialogs, which made Apply do nothing from then on.
+  let applyConfirmPending = false;
+  const resetApplyConfirm = (): void => {
+    applyConfirmPending = false;
+    const box = document.getElementById('folderPermissionsConfirm');
+    if (box) box.hidden = true;
+    const label = document.getElementById('folderPermissionsApplyLabel');
+    if (label?.dataset.default) label.textContent = label.dataset.default;
+  };
+  const permissionsModal = document.getElementById('folderPermissionsModal');
+  permissionsModal?.addEventListener('change', resetApplyConfirm);
+  $('#folderPermissionsModal').on('hidden.bs.modal', resetApplyConfirm);
+
   on('apply-folder-permissions', () => {
     const folderId = (document.getElementById('folderPermissionsFolderId') as HTMLInputElement).value;
     if (!folderId) return;
     const includeSubfolders = (document.getElementById('folderPermissionsIncludeSubfolders') as HTMLInputElement).checked;
-    const countText = document.getElementById('folderPermissionsCount')?.textContent ?? '';
-    if (!confirm(`${countText}\n\nThis replaces the permissions of those items${includeSubfolders ? '' : ' (this folder only)'}. Continue?`)) return;
+    if (!applyConfirmPending) {
+      applyConfirmPending = true;
+      const countText = document.getElementById('folderPermissionsCount')?.textContent ?? '';
+      const box = document.getElementById('folderPermissionsConfirm');
+      if (box) {
+        box.textContent = `${countText} This replaces the permissions of those items${includeSubfolders ? '' : ' (this folder only)'}. Press the button again to confirm.`;
+        box.hidden = false;
+      }
+      const label = document.getElementById('folderPermissionsApplyLabel');
+      if (label) label.textContent = 'Yes, apply';
+      return;
+    }
+    resetApplyConfirm();
     ApiC.patch(`experiments_folders/${folderId}`, {
       action: 'set_folder_permissions',
       canread_base: readFolderPermissionsBase('folderRead'),
@@ -859,6 +886,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const skipped = result.skipped > 0 ? `, ${result.skipped} left as they were (archived, locked, or not yours to edit)` : '';
         notify.success(`Permissions applied: ${result.updated} item(s) updated${skipped}.`);
       }
+    }).catch((error: unknown) => {
+      notify.error(error instanceof Error ? error.message : 'The permissions could not be applied.');
     });
   });
 

@@ -61,10 +61,11 @@
           <label class='custom-control-label' for='folderPermissionsIncludeSubfolders'>{{ 'Include subfolders'|trans }}</label>
         </div>
         <p class='smallgray mb-0' id='folderPermissionsCount'></p>
+        <div class='alert alert-warning mt-3 mb-0' id='folderPermissionsConfirm' role='alert' hidden></div>
       </div>
       <div class='modal-footer'>
         <button type='button' class='btn btn-ghost' data-dismiss='modal'>{{ 'Cancel'|trans }}</button>
-        <button type='button' class='btn btn-primary' data-action='apply-folder-permissions'><i class='fas fa-check fa-fw mr-1'></i>{{ 'Apply to this folder'|trans }}</button>
+        <button type='button' class='btn btn-primary' data-action='apply-folder-permissions'><i class='fas fa-check fa-fw mr-1'></i><span id='folderPermissionsApplyLabel' data-default='{{ 'Apply to this folder'|trans }}'>{{ 'Apply to this folder'|trans }}</span></button>
       </div>
     </div>
   </div>
