@@ -2294,6 +2294,13 @@ function mergeRenderedRowHeights(existing: RowHeights | undefined, container: HT
   return merged;
 }
 
+/** The row heights that are really the person's: the library's own default height is dropped. */
+function withoutDefaultRowHeights(rowHeights: RowHeights | undefined): RowHeights | undefined {
+  if (!rowHeights) return undefined;
+  const kept = Object.fromEntries(Object.entries(rowHeights).filter(([, height]) => Math.round(Number(height)) !== JSS_DEFAULT_ROW_HEIGHT));
+  return Object.keys(kept).length > 0 ? kept : undefined;
+}
+
 /** RowHeights (string-keyed, as saved/serialized) -> the Map applyCellClipHeights below takes. */
 function toRowHeightsMap(rowHeights: RowHeights | undefined): Map<number, number> {
   return new Map(Object.entries(rowHeights ?? {}).map(([key, value]) => [Number(key), value]));
@@ -6363,7 +6370,7 @@ export function openSpreadsheetModal(
         caption: ui.captionInput.value.trim(),
         plateSize: working.kind === 'well-plate' ? working.plateSize : undefined,
         cellStyles: readCellStyles(rows, cols),
-        rowHeights: normalizeRowHeights(working.rowHeights, rows),
+        rowHeights: withoutDefaultRowHeights(normalizeRowHeights(working.rowHeights, rows)),
         colWidths: normalizeColWidths(working.colWidths, cols),
         tableStyle: working.tableStyle,
         captionStyle: working.captionStyle,
