@@ -625,6 +625,23 @@ document.addEventListener('DOMContentLoaded', () => {
     el.setAttribute('aria-expanded', String(isOpen));
   });
 
+  // The Can see / Can edit tabs of the folder permissions window. The page does not load Bootstrap's tab
+  // plugin (only its modal), so data-toggle="tab" did nothing: switch the tab and its panel here.
+  document.addEventListener('click', (event: Event) => {
+    const tab = (event.target as Element | null)?.closest<HTMLElement>('#folderPermissionsModal [data-toggle="tab"]');
+    if (!tab) return;
+    event.preventDefault();
+    const modal = tab.closest('#folderPermissionsModal');
+    modal?.querySelectorAll<HTMLElement>('[data-toggle="tab"]').forEach(other => {
+      const selected = other === tab;
+      other.classList.toggle('active', selected);
+      other.setAttribute('aria-selected', String(selected));
+      const panel = modal.querySelector(other.getAttribute('href') ?? '');
+      panel?.classList.toggle('active', selected);
+      panel?.classList.toggle('show', selected);
+    });
+  });
+
   // clicking anywhere outside an open "more" panel (and its toggle button) closes it
   document.addEventListener('click', (event: Event) => {
     const target = event.target;
