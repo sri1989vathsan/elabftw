@@ -5361,7 +5361,9 @@ export function openSpreadsheetModal(
             ) {
               return;
             }
-            rowHeights[String(safeRow)] = safeHeight;
+            // the library's own default is not a height the person chose: back to natural
+            if (safeHeight === JSS_DEFAULT_ROW_HEIGHT) delete rowHeights[String(safeRow)];
+            else rowHeights[String(safeRow)] = safeHeight;
           });
           worksheet = changedWorksheet;
           working = normalizeSpreadsheetData({
