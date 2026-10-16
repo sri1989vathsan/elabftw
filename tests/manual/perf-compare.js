@@ -15,6 +15,11 @@
  *   - edit-open: from a double-click to the cell editor being there, and edit-commit: from Enter to the value shown
  *     (40 edits; the first 10 against the last 10 shows whether it slows down while you work)
  *   - popup-open / popup-close: opening and closing the full editor window
+ *   - mount: from putting the tables in the text until the first grid shows
+ *   - jiggle (while scrolling): frames where a grid sits more than 1.5 px away from the table it stands for, the
+ *     worst such offset, and how often (and by how much) the page height changes under you
+ *   - memory: JavaScript heap (Chrome-based browsers only) and number of page elements, at the start, after the
+ *     scroll and at the end
  */
 window.perfCompare = async function perfCompare({ label = 'run', tables = 8, rows = 10, cols = 6, edits = 40, popups = 5 } = {}) {
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -52,17 +57,49 @@ window.perfCompare = async function perfCompare({ label = 'run', tables = 8, row
   };
   const top = () => iframe.getBoundingClientRect().top + window.scrollY;
   const result = { label, userAgent: navigator.userAgent.slice(-40), tables, rows, cols };
+  const heapMb = () => (performance.memory ? Math.round(performance.memory.usedJSHeapSize / 104857.6) / 10 : null);
+  const elementCount = () => document.getElementsByTagName('*').length + doc.getElementsByTagName('*').length;
+  const memory = {};
 
   // set up: several spreadsheets with text between them
-  editor.setContent('<p>Speed test.</p>' + Array.from({ length: tables }, (_, i) => tableHtml(i)).join(''));
+  const html = '<p>Speed test.</p>' + Array.from({ length: tables }, (_, i) => tableHtml(i)).join('');
+  editor.setContent('<p>Warm-up.</p>');
+  await sleep(800);
+  window.scrollTo(0, top() - 150);
+  await sleep(300);
+  const mountStart = now();
+  editor.setContent(html);
+  const firstGrid = await until(() => overlays().length > 0 && overlays()[0].querySelector('.jss_worksheet td[data-x]'), 10000);
+  result.mount = { firstGridMs: firstGrid.value ? round(now() - mountStart) : null };
   window.scrollTo(0, 0);
   await sleep(2500);
+  memory.start = { heapMb: heapMb(), elements: elementCount() };
 
   // 1. scrolling: frame times while moving past all the tables
   const frames = [];
+  const jiggle = { frames: 0, offsetFrames: 0, worstOffsetPx: 0, heightChanges: 0, totalHeightShiftPx: 0 };
+  let prevPage = document.documentElement.scrollHeight;
+  let prevFrame = iframe.getBoundingClientRect().height;
+  const tableTops = () => { const top0 = iframe.getBoundingClientRect().top; return Array.from(doc.querySelectorAll('table.elabftw-spreadsheet')).map(t => top0 + t.getBoundingClientRect().top); };
+  const sampleJiggle = () => {
+    const page = document.documentElement.scrollHeight;
+    const frame = iframe.getBoundingClientRect().height;
+    if (Math.abs(page - prevPage) > 0.5 || Math.abs(frame - prevFrame) > 0.5) { jiggle.heightChanges++; jiggle.totalHeightShiftPx += Math.abs(page - prevPage); }
+    prevPage = page; prevFrame = frame;
+    const tops = tableTops();
+    overlays().forEach(o => {
+      const ot = o.getBoundingClientRect().top;
+      if (ot < -2000 || ot > innerHeight + 2000) return;
+      const best = Math.min(...tops.map(t => Math.abs(ot - t)));
+      if (!Number.isFinite(best)) return;
+      jiggle.frames++;
+      if (best > 1.5) jiggle.offsetFrames++;
+      jiggle.worstOffsetPx = Math.max(jiggle.worstOffsetPx, Math.round(best));
+    });
+  };
   let last = now();
   let running = true;
-  const tick = () => { if (!running) return; const t = now(); frames.push(t - last); last = t; requestAnimationFrame(tick); };
+  const tick = () => { if (!running) return; const t = now(); frames.push(t - last); last = t; sampleJiggle(); requestAnimationFrame(tick); };
   requestAnimationFrame(tick);
   window.scrollTo(0, top() - 150);
   await sleep(800);
@@ -73,6 +110,8 @@ window.perfCompare = async function perfCompare({ label = 'run', tables = 8, row
   running = false;
   const used = frames.slice(5);
   result.scrolling = { frames: used.length, medianMs: round(median(used)), p95Ms: round(pct(used, 0.95)), worstMs: round(Math.max(...used)), over33ms: used.filter(v => v > 33.5).length };
+  result.jiggle = jiggle;
+  memory.afterScroll = { heapMb: heapMb(), elements: elementCount() };
 
   // 2. activate: press on a preview until the live grid has cells
   window.scrollTo(0, top() - 150);
@@ -153,6 +192,9 @@ window.perfCompare = async function perfCompare({ label = 'run', tables = 8, row
   result.popupOpen = { runs: popupOpen.length, medianMs: round(median(popupOpen)), allMs: popupOpen.map(round) };
   result.popupClose = { runs: popupClose.length, medianMs: round(median(popupClose)) };
 
+  await sleep(500);
+  memory.end = { heapMb: heapMb(), elements: elementCount() };
+  result.memory = memory;
   editor.setContent('<p>Speed test finished (nothing was saved).</p>');
   return result;
 };
