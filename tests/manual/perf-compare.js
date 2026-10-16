@@ -154,10 +154,14 @@ window.perfCompare = async function perfCompare({ label = 'run', tables = 8, row
       const rect = td.getBoundingClientRect();
       const start = now();
       td.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 }));
-      const box = await until(() => Array.from(document.querySelectorAll('.elabftw-spreadsheet-rescue-input, .jss_editor input, .jss_editor textarea')).find(e => e.offsetParent !== null && !e.hidden), 3000);
+      // the editor is an input in the cell itself, or the page's own rescue input, or the library's editor box
+      const findBox = () => td.querySelector('input, textarea, [contenteditable="true"]')
+        || Array.from(document.querySelectorAll('.elabftw-spreadsheet-rescue-input')).find(e => !e.hidden && e.offsetParent !== null)
+        || document.querySelector('.jss_editor input, .jss_editor textarea, td.editor input, td.editor textarea');
+      const box = await until(findBox, 3000);
       if (!box.value) { failed++; continue; }
       open.push(now() - start);
-      box.value.value = value;
+      if (box.value.isContentEditable && !('value' in box.value)) box.value.textContent = value; else box.value.value = value;
       box.value.dispatchEvent(new Event('input', { bubbles: true }));
       const commitStart = now();
       box.value.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
