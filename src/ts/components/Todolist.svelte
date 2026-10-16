@@ -1838,7 +1838,10 @@
       10,
     );
     const initialLoad = load();
-    if (Number.isInteger(requestedTaskId)) {
+    // The Boards page opens that task's popup itself, from the same ?task= link: opening this one too put two
+    // identical dialogs on top of each other there.
+    const onBoardsPage = document.getElementById('projectManagementRoot') !== null;
+    if (Number.isInteger(requestedTaskId) && !onBoardsPage) {
       // load() resolving doesn't guarantee the reactive `entries` block
       // (derived from the items/unfinished state load() just set) has
       // actually recomputed yet -- Svelte flushes reactive statements on
