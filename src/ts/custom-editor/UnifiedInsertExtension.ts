@@ -41,9 +41,10 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
     text: 'Insert',
     tooltip: 'Insert (text, tables, links, laboratory)',
     fetch: async callback => {
-      const [tableItems, linkItems] = await Promise.all([
+      const [tableItems, linkItems, dividerItems] = await Promise.all([
         fetchRegisteredItems(editor, 'insert-data-table'),
         fetchRegisteredItems(editor, 'insert-link'),
+        fetchRegisteredItems(editor, 'horizontal-rule'),
       ]);
       // The note button is a split button whose entries are choice items (acted on through onItemAction), which
       // a submenu cannot show: plain menu items that run its commands instead.
@@ -57,7 +58,15 @@ export function registerUnifiedInsertExtension(editor: Editor): void {
         if (item) catalog[id] = { ...item, text: item.text ?? id };
       };
 
-      register('divider', buttonAsMenuItem(editor, 'horizontal-rule', 'Insert divider'));
+      // the divider button is a menu of line styles (single or double, solid or dashed): a submenu here
+      if (dividerItems.length > 0) {
+        catalog.divider = {
+          type: 'nestedmenuitem',
+          text: 'Divider',
+          icon: 'horizontal-rule',
+          getSubmenuItems: () => dividerItems,
+        };
+      }
       noteItems.forEach((item, index) => register(`note-${index}`, item));
       // Spreadsheet and Well plate are entries of the Insert menu itself, next to
       // Text, Tables, Links and Laboratory, not buried inside Tables
