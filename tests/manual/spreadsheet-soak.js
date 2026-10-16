@@ -1029,7 +1029,7 @@ async function spreadsheetSoak(options = {}) {
         await verify(`enter-last-row: type then row/column change ${i + 1}`, false);
       }
       // and Enter in the last row followed at once by a popup
-      await typeInto(uid, model().grid.length - 1, 0, 'last-before-popup', 'Enter');
+      await typeInto(uid, model().grid.length - 1, 0, 'LBP', 'Enter');
       await popupEdit(uid, true, 2);
       await verify('enter-last-row: popup after Enter', true);
       await consistency('enter-last-row: inline, popup and stored HTML agree', true);
