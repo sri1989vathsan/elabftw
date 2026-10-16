@@ -1300,7 +1300,9 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
     if (sourceCells.length === 0) return;
     const rowIndex = rows.length;
     const rowHeight = Number.parseFloat(tableRow.style.height);
-    if (Number.isFinite(rowHeight)) {
+    // 34 px is the grid library's own default row height, not a height the person chose (see
+    // JSS_DEFAULT_ROW_HEIGHT): reading it back as one made every row look resized.
+    if (Number.isFinite(rowHeight) && Math.round(rowHeight) !== JSS_DEFAULT_ROW_HEIGHT) {
       rowHeights[String(rowIndex)] = Math.max(
         MIN_DATA_ROW_HEIGHT,
         Math.min(MAX_DATA_ROW_HEIGHT, Math.round(rowHeight)),
