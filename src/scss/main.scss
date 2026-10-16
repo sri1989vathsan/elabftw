@@ -6547,3 +6547,8 @@ div > .sticky-navbar {
 .tox-tinymce:not(.elabftw-note-selected) .tox-tbtn[aria-label^='Note options'] {
   display: none;
 }
+
+/* And the Image options button: only while an image is selected. */
+.tox-tinymce:not(.elabftw-image-selected) .tox-tbtn[aria-label^='Image options'] {
+  display: none;
+}

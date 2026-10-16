@@ -36,6 +36,21 @@ function buttonAsMenuItem(editor: Editor, name: string, text: string): AnyMenuIt
 }
 
 export function registerUnifiedInsertExtension(editor: Editor): void {
+  // Insert/edit image: not a permanent toolbar button (Image is in the Insert dropdown), but one that appears
+  // while an image is selected and opens the image window for that image, like Spreadsheet tools and Note options.
+  const imageIsSelected = (): boolean => {
+    const node = editor.selection.getNode();
+    return node.nodeName === 'IMG' || (node.nodeName === 'FIGURE' && node.classList.contains('image'));
+  };
+  editor.on('NodeChange SelectionChange SetContent init', () => {
+    editor.getContainer()?.classList.toggle('elabftw-image-selected', imageIsSelected());
+  });
+  editor.ui.registry.addButton('image-options', {
+    icon: 'image',
+    tooltip: 'Image options: edit the selected image',
+    onAction: () => editor.execCommand('mceImage'),
+  });
+
   editor.ui.registry.addMenuButton('elabftw-insert-menu', {
     icon: 'plus',
     text: 'Insert',
