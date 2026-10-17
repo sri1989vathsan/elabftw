@@ -512,6 +512,8 @@ async function spreadsheetSoak(options = {}) {
   // table (no drift), the editor must keep its height, and tables must keep their place in the text.
   async function scrollCheck(label) {
     context = label;
+    // grids are placed and the editor resized by a loop that only runs while the page is drawn
+    if (document.hidden) { note('scroll-check-skipped-hidden'); return; }
     note('scroll-check');
     const iframe = editor.getContainer().querySelector('iframe');
     const doc = editor.getDoc();
@@ -901,6 +903,9 @@ async function spreadsheetSoak(options = {}) {
     const root = await live(uid);
     const model = models.get(uid);
     if (!root || !model) return;
+    // the labels (1, 2, 3 and A, B, C) are written on an animation frame, which a hidden page does not run
+    if (document.hidden) { note('plate-check-skipped-hidden'); return; }
+    await frames(3);
     const cols = [...root.querySelectorAll('.jss_worksheet > thead > tr > [data-x]')].map(el => el.textContent.trim());
     const rows = [...root.querySelectorAll('.jss_worksheet > tbody td.jss_row[data-y]')].map(el => el.textContent.trim());
     if (cols.length === 0 || cols.some((text, i) => text !== String(i + 1))) fail(`${context}: the plate's column headers are not 1, 2, 3...`, { have: cols.slice(0, 6).join(',') });
@@ -1262,10 +1267,14 @@ async function spreadsheetSoak(options = {}) {
   const last = samples[samples.length - 1];
   if (last && last.menusInPage > last.overlays + 2) fail(`${last.menusInPage} menu elements for ${last.overlays} grids are left in the page`);
 
+  const hiddenTotal = Object.values(hiddenRuns || {}).reduce((sum, n) => sum + n, 0);
+  const shownTotal = Object.values(perStep || {}).reduce((sum, v) => sum + (v.runs || 0), 0);
+  const hiddenShare = hiddenTotal + shownTotal > 0 ? hiddenTotal / (hiddenTotal + shownTotal) : 0;
   const result = {
-    verdict: dataLoss.length === 0 && failures.length === 0 && sizes.problems.length === 0 && menus.problems.length === 0 && slower.length === 0
+    hiddenShare: Math.round(hiddenShare * 100),
+    verdict: (hiddenShare > 0.2 ? `INCONCLUSIVE: the page was hidden for ${Math.round(hiddenShare * 100)}% of the steps (screen asleep, window covered or tab in the background), so size and position checks mean little. ` : '') + (dataLoss.length === 0 && failures.length === 0 && sizes.problems.length === 0 && menus.problems.length === 0 && slower.length === 0
       ? 'CLEAN: no data lost, sizes and menus correct, nothing slowed down'
-      : (dataLoss.length ? 'DATA LOSS FOUND' : 'PROBLEMS FOUND (no data lost)'),
+      : (dataLoss.length ? 'DATA LOSS FOUND' : 'PROBLEMS FOUND (no data lost)')),
     seed: config.seed, sessions: config.sessions, seconds: Math.round((performance.now() - t0) / 100) / 10,
     dataLoss: dataLoss.slice(0, 30), dataLossCount: dataLoss.length,
     scrollJiggleEvents: scrollJiggles,
