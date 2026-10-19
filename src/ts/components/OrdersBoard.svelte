@@ -45,6 +45,7 @@
     notes: string | null;
     procurement_id: string | null;
     order_number: string | null;
+    order_date: string | null;
     status: OrderStatus;
     archived: boolean;
     pinned: boolean;
@@ -1465,6 +1466,7 @@
   async function loadTeamMembers(): Promise<void> {
     try {
       teamMembers = await ApiC.getJson('users?currentTeam=1') as TeamMember[];
+      teamMembers.sort((a, b) => a.fullname.localeCompare(b.fullname, undefined, { sensitivity: 'base' }) || a.userid - b.userid);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not load team members.');
     }
@@ -2140,6 +2142,9 @@
                 {/if}
                 {#if item.order_number}
                   <span class="badge badge-light" title={t('Bestellung Nr., extracted from an uploaded order confirmation PDF')}>{t('Order #')}: {item.order_number}</span>
+                {/if}
+                {#if item.order_date}
+                  <span class="badge badge-light" title={t('Bestelldatum, extracted from an uploaded order confirmation PDF')}>{t('Order date')}: {item.order_date}</span>
                 {/if}
                 <span class="orders-labcollector-toggle">
                   <button

@@ -462,7 +462,7 @@ final class Orders extends AbstractRest
      */
     private static function selectSql(): string
     {
-        return 'SELECT o.id, o.title, o.notes, o.procurement_id, o.order_number, o.status, o.archived, o.pinned, o.common, o.created_at, o.userid,
+        return 'SELECT o.id, o.title, o.notes, o.procurement_id, o.order_number, o.order_date, o.status, o.archived, o.pinned, o.common, o.created_at, o.userid,
                 o.labcollector_type, o.labcollector_id,
                 DATE_FORMAT(o.reminder_at, "%Y-%m-%dT%H:%i:%sZ") AS reminder_at,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname,

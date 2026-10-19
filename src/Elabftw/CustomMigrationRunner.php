@@ -132,6 +132,7 @@ final class CustomMigrationRunner
         '091_notif_step_finished.sql',
         '092_step_mentions_assigner.sql',
         '093_todolist_repeat.sql',
+        '094_order_date.sql',
     );
 
     private Db $Db;

@@ -317,6 +317,24 @@ final class OrderUploads extends AbstractRest
      * user having to type them in by hand. Best-effort: a PDF that isn't in
      * this format just leaves the fields unset.
      */
+    public static function extractOrderDate(string $text): ?string
+    {
+        // Accept both PDF text orders: value-label and label-value.
+        $date = '(\d{1,2}\.\d{1,2}\.\d{4}|\d{4}-\d{2}-\d{2})';
+        if (preg_match('/Bestelldatum\s*:?\s*' . $date . '(?!\d)/iu', $text, $matches) !== 1
+            && preg_match('/(?<!\d)' . $date . '\s*Bestelldatum/iu', $text, $matches) !== 1
+        ) {
+            return null;
+        }
+        $value = $matches[1];
+        $parsed = \DateTimeImmutable::createFromFormat(str_contains($value, '.') ? '!j.n.Y' : '!Y-m-d', $value);
+        $errors = \DateTimeImmutable::getLastErrors();
+        if ($parsed === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
+            return null;
+        }
+        return $parsed->format('Y-m-d');
+    }
+
     private static function extractProcurementTags(Db $Db, int $orderId, string $text): void
     {
         // ETH Zurich's form draws each value directly before its own label
@@ -335,16 +353,19 @@ final class OrderUploads extends AbstractRest
         ) {
             $orderNumber = $matches[1];
         }
-        if ($procurementId === null && $orderNumber === null) {
+        $orderDate = self::extractOrderDate($text);
+        if ($procurementId === null && $orderNumber === null && $orderDate === null) {
             return;
         }
         $sql = 'UPDATE custom_orders SET
                 procurement_id = COALESCE(:procurement_id, procurement_id),
-                order_number = COALESCE(:order_number, order_number)
+                order_number = COALESCE(:order_number, order_number),
+                order_date = COALESCE(:order_date, order_date)
             WHERE id = :order_id';
         $req = $Db->prepare($sql);
         $req->bindValue(':procurement_id', $procurementId, $procurementId === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':order_number', $orderNumber, $orderNumber === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':order_date', $orderDate, $orderDate === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':order_id', $orderId, PDO::PARAM_INT);
         $Db->execute($req);
 
