@@ -16,6 +16,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -33,13 +34,22 @@ final class OrdersExtractPdfCommand extends Command
     {
         $this->setDescription('Extract text from a pending order attachment PDF')
             ->setHelp('Without an ID as argument, this command will process all uploads still pending extraction.')
-            ->addArgument('id', InputArgument::OPTIONAL, 'The order upload id to process');
+            ->addArgument('id', InputArgument::OPTIONAL, 'The order upload id to process')
+            ->addOption('rebuild-tags', null, InputOption::VALUE_NONE, 'Rebuild attachment tags from cached PDF text without changing order statuses');
     }
 
     #[Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $id = $input->getArgument('id');
+        if ($input->getOption('rebuild-tags')) {
+            if ($id !== null) {
+                $output->writeln('Use --rebuild-tags without an upload ID.');
+                return Command::INVALID;
+            }
+            OrderUploads::rebuildProcurementTags();
+            return Command::SUCCESS;
+        }
         if ($id) {
             OrderUploads::extractOne((int) $id);
             return Command::SUCCESS;

@@ -476,6 +476,9 @@ final class Orders extends AbstractRest
                     SELECT JSON_ARRAYAGG(JSON_OBJECT(
                         "id", upload.id,
                         "real_name", upload.real_name,
+                        "procurement_id", upload.procurement_id,
+                        "order_number", upload.order_number,
+                        "order_date", upload.order_date,
                         "long_name", upload.long_name,
                         "storage", upload.storage,
                         "filesize", upload.filesize,

@@ -215,7 +215,7 @@ final class OrderUploads extends AbstractRest
         // skipping it (as this used to) left every copied attachment's
         // order permanently missing its procurement ID tag.
         if ($extractedText !== null) {
-            self::extractProcurementTags($this->Db, (int) $this->Order->id, $extractedText);
+            self::extractProcurementTags($this->Db, (int) $this->Order->id, $extractedText, (int) $this->Db->lastInsertId());
         }
         $this->advanceOnAttachment();
 
@@ -305,7 +305,7 @@ final class OrderUploads extends AbstractRest
         $Db->execute($req);
 
         if ($extractedText !== null) {
-            self::extractProcurementTags($Db, (int) $upload['order_id'], $extractedText);
+            self::extractProcurementTags($Db, (int) $upload['order_id'], $extractedText, $uploadId);
         }
     }
 
@@ -350,7 +350,24 @@ final class OrderUploads extends AbstractRest
         return null;
     }
 
-    private static function extractProcurementTags(Db $Db, int $orderId, string $text): void
+    public static function rebuildProcurementTags(): void
+    {
+        $Db = Db::getConnection();
+        $afterId = 0;
+        do {
+            $req = $Db->prepare('SELECT id, order_id, extracted_text FROM custom_order_uploads
+                WHERE id > :after_id AND extracted_text IS NOT NULL ORDER BY id LIMIT 100');
+            $req->bindValue(':after_id', $afterId, PDO::PARAM_INT);
+            $Db->execute($req);
+            $uploads = $req->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($uploads as $upload) {
+                $afterId = (int) $upload['id'];
+                self::extractProcurementTags($Db, (int) $upload['order_id'], (string) $upload['extracted_text'], $afterId, false);
+            }
+        } while (count($uploads) === 100);
+    }
+
+    private static function extractProcurementTags(Db $Db, int $orderId, string $text, int $uploadId, bool $advanceStatus = true): void
     {
         // ETH Zurich's form draws each value directly before its own label
         // with no separator (e.g. "26036220Beschaffungs-ID"), not after it
@@ -372,6 +389,14 @@ final class OrderUploads extends AbstractRest
         ) {
             $misreadMonth = $matches[1];
         }
+        $uploadReq = $Db->prepare('UPDATE custom_order_uploads SET procurement_id = :procurement_id,
+            order_number = :order_number, order_date = :order_date WHERE id = :id AND order_id = :order_id');
+        $uploadReq->bindValue(':procurement_id', $procurementId, $procurementId === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $uploadReq->bindValue(':order_number', $orderNumber, $orderNumber === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $uploadReq->bindValue(':order_date', $orderDate, $orderDate === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $uploadReq->bindValue(':id', $uploadId, PDO::PARAM_INT);
+        $uploadReq->bindValue(':order_id', $orderId, PDO::PARAM_INT);
+        $Db->execute($uploadReq);
         if ($procurementId === null && $orderNumber === null && $orderDate === null) {
             return;
         }
@@ -395,7 +420,7 @@ final class OrderUploads extends AbstractRest
         // ever moves a *requested* order -- one already backlogged/received/
         // cancelled/reference is left alone even if it later gets a
         // procurement ID (e.g. a second, corrected attachment).
-        if ($procurementId !== null) {
+        if ($procurementId !== null && $advanceStatus) {
             $advanceSql = "UPDATE custom_orders AS o
                 INNER JOIN teams AS tm ON tm.id = o.team
                 SET o.status = 'ordered', o.status_changed_at = NOW()
@@ -436,7 +461,7 @@ final class OrderUploads extends AbstractRest
     {
         return 'SELECT upload.id, upload.real_name, upload.long_name, upload.storage, upload.filesize, upload.created_at, upload.userid,
                 (upload.extracted_text IS NOT NULL) AS has_extracted_text,
-                upload.extraction_status,
+                upload.extraction_status, upload.procurement_id, upload.order_number, upload.order_date,
                 CONCAT(author.firstname, " ", author.lastname) AS author_fullname
             FROM custom_order_uploads AS upload
             INNER JOIN custom_orders AS o ON o.id = upload.order_id AND o.team = :team

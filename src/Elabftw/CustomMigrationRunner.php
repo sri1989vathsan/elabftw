@@ -133,6 +133,7 @@ final class CustomMigrationRunner
         '092_step_mentions_assigner.sql',
         '093_todolist_repeat.sql',
         '094_order_date.sql',
+        '095_order_upload_procurement_tags.sql',
     );
 
     private Db $Db;

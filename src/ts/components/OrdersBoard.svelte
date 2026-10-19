@@ -8,6 +8,7 @@
   import { applyMention, extractMentionQuery, wrapMentionsAsHtml, stripMentionHtml } from '../mentions';
   import { handleLinkPreviewPaste, upgradeNoteLinks } from '../linkPreview';
   import { buildLabCollectorUrl } from '../labcollector-link';
+  import { orderProcurementGroups } from '../OrderProcurementTags';
 
   // Closes a results dropdown on any click outside its own container --
   // none of the search-result/mention dropdowns below had this, so they
@@ -128,6 +129,9 @@
     storage: number;
     filesize: number | null;
     has_extracted_text: boolean;
+    procurement_id: string | null;
+    order_number: string | null;
+    order_date: string | null;
     // PDF text extraction runs in the background after upload (see
     // OrderUploads::extractOne()) -- 'none' for non-PDFs, 'pending' until
     // the async job runs, then 'done'/'failed'
@@ -2137,15 +2141,18 @@
                 {#each item.items as linkedItem (linkedItem.id)}
                   <span class="badge badge-info"><i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{linkedItem.title}</span>
                 {/each}
-                {#if item.procurement_id}
-                  <span class="badge badge-light" title={t('Beschaffungs-ID, extracted from an uploaded order confirmation PDF')}>{t('Procurement ID')}: {item.procurement_id}</span>
-                {/if}
-                {#if item.order_number}
-                  <span class="badge badge-light" title={t('Bestellung Nr., extracted from an uploaded order confirmation PDF')}>{t('Order #')}: {item.order_number}</span>
-                {/if}
-                {#if item.order_date}
-                  <span class="badge badge-light" title={t('Bestelldatum, extracted from an uploaded order confirmation PDF')}>{t('Order date')}: {item.order_date}</span>
-                {/if}
+                {#each orderProcurementGroups(item) as tags (tags.key)}
+                  {#if tags.procurement_id || tags.order_number || tags.order_date}
+                    <div class="orders-tag-group" class:orders-tag-group-file={!!tags.source}>
+                      {#if tags.source}
+                        <span class="orders-tag-source orders-muted" title={tags.source}><i class="fas fa-file fa-fw mr-1" aria-hidden="true"></i>{tags.source}</span>
+                      {/if}
+                      {#if tags.procurement_id}<span class="badge badge-light">{t('Procurement ID')}: {tags.procurement_id}</span>{/if}
+                      {#if tags.order_number}<span class="badge badge-light">{t('Order #')}: {tags.order_number}</span>{/if}
+                      {#if tags.order_date}<span class="badge badge-light">{t('Order date')}: {tags.order_date}</span>{/if}
+                    </div>
+                  {/if}
+                {/each}
                 <span class="orders-labcollector-toggle">
                   <button
                     type="button"
@@ -3037,6 +3044,30 @@
   .orders-upload a:first-of-type {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  /* One group per confirmation file. With several files each group takes
+     its own full-width line and the (possibly very long) filename is
+     truncated on its own row above the IDs, instead of sharing a line
+     with them and cramming everything together. */
+  .orders-tag-group {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .orders-tag-group-file {
+    flex-basis: 100%;
+  }
+
+  .orders-tag-source {
+    flex-basis: 100%;
+    font-size: 0.75rem;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .orders-comment-list {
