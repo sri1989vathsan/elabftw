@@ -320,19 +320,34 @@ final class OrderUploads extends AbstractRest
     public static function extractOrderDate(string $text): ?string
     {
         // Accept both PDF text orders: value-label and label-value.
-        $date = '(\d{1,2}\.\d{1,2}\.\d{4}|\d{4}-\d{2}-\d{2})';
+        $date = '(\d{1,2}\.\d{1,2}\.\d{4}|\d{4}-\d{2}-\d{2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\h+\d{1,2},\h+\d{4})';
         if (preg_match('/Bestelldatum\s*:?\s*' . $date . '(?!\d)/iu', $text, $matches) !== 1
             && preg_match('/(?<!\d)' . $date . '\s*Bestelldatum/iu', $text, $matches) !== 1
         ) {
             return null;
         }
         $value = $matches[1];
-        $parsed = \DateTimeImmutable::createFromFormat(str_contains($value, '.') ? '!j.n.Y' : '!Y-m-d', $value);
+        $format = str_contains($value, ',') ? '!M j, Y' : (str_contains($value, '.') ? '!j.n.Y' : '!Y-m-d');
+        $value = preg_replace('/\h+/u', ' ', $value) ?? $value;
+        $parsed = \DateTimeImmutable::createFromFormat($format, $value);
         $errors = \DateTimeImmutable::getLastErrors();
         if ($parsed === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
             return null;
         }
         return $parsed->format('Y-m-d');
+    }
+
+    public static function extractOrderNumber(string $text): ?string
+    {
+        // This procurement form uses numeric order numbers. A blank field
+        // must not consume the next word (e.g. "Sep") or a date. Restrict
+        // whitespace to the same line so another field cannot supply it.
+        if (preg_match('/(?<![\w.\/-])(\d+)\h*Bestellung\h*(?:Nr|No)\b\.?/iu', $text, $matches) === 1
+            || preg_match('/Bestellung\h*(?:Nr|No)\b\.?\h*:?\h*(\d+)(?![\w.\/-])/iu', $text, $matches) === 1
+        ) {
+            return $matches[1];
+        }
+        return null;
     }
 
     private static function extractProcurementTags(Db $Db, int $orderId, string $text): void
@@ -342,29 +357,33 @@ final class OrderUploads extends AbstractRest
         // -- so that ordering is tried first, falling back to label-then-
         // value in case some other supplier's PDF lays it out the other way.
         $procurementId = null;
-        $orderNumber = null;
+        $orderNumber = self::extractOrderNumber($text);
         if (preg_match('/(\d+)\s{0,1}Beschaffungs-ID/i', $text, $matches) === 1
             || preg_match('/Beschaffungs-ID\s+(\S+)/i', $text, $matches) === 1
         ) {
             $procurementId = $matches[1];
         }
-        if (preg_match('/(\d+)\s{0,1}Bestellung\s*(?:Nr|No)\.?/i', $text, $matches) === 1
-            || preg_match('/Bestellung\s*(?:Nr|No)\.?\s+(\S+)/i', $text, $matches) === 1
-        ) {
-            $orderNumber = $matches[1];
-        }
         $orderDate = self::extractOrderDate($text);
+        // Repair only the exact month token misread by the old fallback in
+        // this PDF. Do not erase a valid number obtained from another upload.
+        $misreadMonth = null;
+        if ($orderNumber === null && $orderDate !== null
+            && preg_match('/Bestellung\h*(?:Nr|No)\b\.?\s+((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))\h+\d{1,2},\h+\d{4}\s*Bestelldatum/iu', $text, $matches) === 1
+        ) {
+            $misreadMonth = $matches[1];
+        }
         if ($procurementId === null && $orderNumber === null && $orderDate === null) {
             return;
         }
         $sql = 'UPDATE custom_orders SET
                 procurement_id = COALESCE(:procurement_id, procurement_id),
-                order_number = COALESCE(:order_number, order_number),
+                order_number = COALESCE(:order_number, CASE WHEN order_number = :misread_month THEN NULL ELSE order_number END),
                 order_date = COALESCE(:order_date, order_date)
             WHERE id = :order_id';
         $req = $Db->prepare($sql);
         $req->bindValue(':procurement_id', $procurementId, $procurementId === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':order_number', $orderNumber, $orderNumber === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':misread_month', $misreadMonth, $misreadMonth === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':order_date', $orderDate, $orderDate === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':order_id', $orderId, PDO::PARAM_INT);
         $Db->execute($req);
