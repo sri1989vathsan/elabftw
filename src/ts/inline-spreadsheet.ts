@@ -309,8 +309,14 @@ const PRESERVED_STYLE_PROPERTIES = new Set([
 // column's source-app layout through those exact same properties, not
 // anything the person pasting actually asked to preserve. See
 // stripSizingProperties' own call site in parseClipboardHtmlTable.
+// Padding and line-height are source-app layout too (Excel/Sheets/Word cells carry tight padding of their own),
+// so keeping them made pasted rows shorter than those of a freshly inserted spreadsheet, which uses the
+// appearance's cell padding.
+const EXTERNAL_PASTE_SIZING_PROPERTIES = new Set(['width', 'height', 'line-height']);
 const EXTERNAL_PASTE_STYLE_PROPERTIES = new Set(
-  Array.from(PRESERVED_STYLE_PROPERTIES).filter(property => property !== 'width' && property !== 'height'),
+  Array.from(PRESERVED_STYLE_PROPERTIES).filter(property => (
+    !EXTERNAL_PASTE_SIZING_PROPERTIES.has(property) && !property.startsWith('padding')
+  )),
 );
 function stripSizingProperties(style: string | undefined): string | undefined {
   return sanitizeStyle(style, EXTERNAL_PASTE_STYLE_PROPERTIES);
