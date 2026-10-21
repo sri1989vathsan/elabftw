@@ -3031,6 +3031,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       const insertedTable = Array.from(body.querySelectorAll('table.elabftw-spreadsheet'))
         .find(table => !tablesBefore.has(table));
       if (!insertedTable) return;
+      // Give the table its id and cell history now, like insertNewSpreadsheet does, so the undo snapshot
+      // taken when the surrounding transact ends already carries the id. Left to enhanceTable, the id was
+      // added only after that snapshot, and the first rebuild of the table from history (any undo/redo of
+      // the text around it) gave it a new id and dropped its cell undo history.
+      const pastedUid = ensureSpreadsheetUid(insertedTable);
+      if (!tableCellHistories.has(pastedUid)) tableCellHistories.set(pastedUid, { undo: [], redo: [] });
+      latestTableContent.set(pastedUid, insertedTable.outerHTML);
       // TinyMCE's own table-insert default otherwise leaves the cursor
       // inside the table's first cell, so the very next keystroke lands in
       // a cell instead of the surrounding text. Move it to a line of its
