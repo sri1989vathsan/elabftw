@@ -2873,8 +2873,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // the text holds a spreadsheet, the frame therefore does not scroll
     // sideways itself: the grids bring their own scroll bar.
     hideSpreadsheetTablesStyle.textContent = `
+      /* overflow-y must be spelled out: with only overflow-x set, overflow-y computes to auto, and html's overflow
+         then wins over the overflow-y:hidden TinyMCE's autoresize puts on body. Any content a pixel taller than the
+         frame (before the next autoresize adds its bottom margin, i.e. before a click) showed a vertical scroll bar. */
       html:has(table.elabftw-spreadsheet) {
         overflow-x: hidden;
+        overflow-y: hidden;
       }
       table.elabftw-spreadsheet {
         box-sizing: border-box;
