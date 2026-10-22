@@ -3856,6 +3856,11 @@ body.html-tool-workspace-resizing * {
   gap: 0.35rem;
 }
 
+/* Held drag-selection: the fill handle must not catch the pointer (see inline-spreadsheet.ts) */
+body.jss-selecting .jss_corner {
+  pointer-events: none;
+}
+
 /* Ensure jspreadsheet dropdown menus inside the overlay render on top */
 /* stylelint-disable-next-line selector-class-pattern */
 .jss_container {

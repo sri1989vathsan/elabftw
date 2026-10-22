@@ -2261,6 +2261,28 @@ function applyCoordinateHeaderStyle(container: HTMLElement, appearance: Spreadsh
 // leaves rows at their natural height (about 29 px). That library default is not something the person chose,
 // so it is never saved: saving it made every row of the table taller after the popup's Update, and rows
 // added afterwards came out shorter than the ones around them.
+// The grid's fill handle (.jss_corner) sits at the selection's bottom-right and moves with it, so a drag-
+// selection keeps running the pointer over it. A pointer over the handle sends its mouseover to the handle
+// instead of a cell, and the selection stops following the pointer. While a drag that did not start on the
+// handle is held, the handle is therefore made transparent to the pointer (see .jss-selecting in main.scss).
+if (typeof document !== 'undefined' && !document.body?.dataset.jssSelectingGuard) {
+  const installSelectingGuard = (): void => {
+    if (document.body.dataset.jssSelectingGuard) return;
+    document.body.dataset.jssSelectingGuard = '1';
+    document.addEventListener('mousedown', event => {
+      const target = event.target;
+      if (event.button !== 0 || !(target instanceof Element)) return;
+      if (target.closest('.jss_corner') || !target.closest('.jss_worksheet')) return;
+      document.body.classList.add('jss-selecting');
+    }, true);
+    const release = (): void => document.body.classList.remove('jss-selecting');
+    window.addEventListener('mouseup', release, true);
+    window.addEventListener('blur', release);
+    document.addEventListener('dragend', release, true);
+  };
+  if (document.body) installSelectingGuard();
+  else document.addEventListener('DOMContentLoaded', installSelectingGuard, { once: true });
+}
 const JSS_DEFAULT_ROW_HEIGHT = 34;
 
 function readRenderedRowHeights(container: HTMLElement, ignoreLibraryDefault = true): RowHeights | undefined {
