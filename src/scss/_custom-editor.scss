@@ -240,7 +240,7 @@ body.mce-content-body {
  * !important always beats inline style regardless of its value — so the only
  * way to keep this rule from also freezing the ghost's height is to make it
  * not match the ghost at all. */
-:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet:not(.mce-clonedresizable) {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table.elabftw-spreadsheet:not(.mce-clonedresizable) {
   border-collapse: collapse;
   font-size: 0.9em;
   height: auto !important;
@@ -251,30 +251,30 @@ body.mce-content-body {
   width: max-content;
 }
 
-:where(#body_view, body.mce-content-body) table.elabftw-pasted-table {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table.elabftw-pasted-table {
   max-width: 100%;
   width: max-content;
 }
 
-:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet td,
-:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet th {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table.elabftw-spreadsheet td,
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table.elabftw-spreadsheet th {
   border: 1px solid var(--secondary-muted, #ccd2d8);
   min-width: 2rem;
   padding: 0.35rem 0.5rem;
   white-space: pre-wrap;
 }
 
-:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet tr:nth-child(even) {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table.elabftw-spreadsheet tr:nth-child(even) {
   background-color: var(--zebrarow, rgba(0, 0, 0, 0.03));
 }
 
-:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet:hover {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table.elabftw-spreadsheet:hover {
   cursor: pointer;
   outline: 2px dashed var(--primary, #29aeb9);
   outline-offset: 2px;
 }
 
-:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet .spreadsheet-coordinate {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table.elabftw-spreadsheet .spreadsheet-coordinate {
   background-color: var(--superlight, #f0f2f4);
   color: var(--medium);
   font-size: 0.85em;
@@ -285,27 +285,27 @@ body.mce-content-body {
 /* Coordinate headers are structural spreadsheet controls, not data cells.
  * Keep their saved dimensions stable while the surrounding table, rows, or
  * columns are resized. The values remain adjustable in Spreadsheet appearance. */
-:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet[style*='--spreadsheet-'] > thead > tr > .spreadsheet-coordinate {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table.elabftw-spreadsheet[style*='--spreadsheet-'] > thead > tr > .spreadsheet-coordinate {
   height: var(--spreadsheet-column-index-height) !important;
   max-height: var(--spreadsheet-column-index-height) !important;
   min-height: var(--spreadsheet-column-index-height) !important;
 }
 
-:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet[style*='--spreadsheet-'] > thead > tr > .spreadsheet-coordinate:first-child,
-:where(#body_view, body.mce-content-body) table.elabftw-spreadsheet[style*='--spreadsheet-'] > tbody > tr > .spreadsheet-coordinate:first-child {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table.elabftw-spreadsheet[style*='--spreadsheet-'] > thead > tr > .spreadsheet-coordinate:first-child,
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table.elabftw-spreadsheet[style*='--spreadsheet-'] > tbody > tr > .spreadsheet-coordinate:first-child {
   box-sizing: border-box;
   max-width: var(--spreadsheet-row-index-width) !important;
   min-width: var(--spreadsheet-row-index-width) !important;
   width: var(--spreadsheet-row-index-width) !important;
 }
 
-:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table[data-spreadsheet-style='notebook'] {
   border-collapse: separate;
   border-spacing: 0;
   max-width: 100%;
 }
 
-:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] > caption {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table[data-spreadsheet-style='notebook'] > caption {
   background-color: var(--superlight, #f0f2f4);
   border: 1px solid var(--secondary-muted, #ccd2d8);
   border-bottom: 0;
@@ -313,25 +313,25 @@ body.mce-content-body {
   padding: 0.65rem 0.75rem;
 }
 
-:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='notebook'] thead th {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table[data-spreadsheet-style='notebook'] thead th {
   background-color: var(--firstlevel, #e6eaed);
   font-weight: 700;
   text-align: left;
 }
 
-:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='well-plate'] {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table[data-spreadsheet-style='well-plate'] {
   max-width: 100%;
 }
 
-:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='well-plate'] td,
-:where(#body_view, body.mce-content-body) table[data-spreadsheet-style='well-plate'] th {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table[data-spreadsheet-style='well-plate'] td,
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table[data-spreadsheet-style='well-plate'] th {
   min-width: 2.5rem;
   padding: 0.3rem;
   text-align: center;
 }
 
-:where(#body_view, body.mce-content-body) td[data-formula],
-:where(#body_view, body.mce-content-body) th[data-formula] {
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) td[data-formula],
+:where(#body_view, body.mce-content-body, #tocPrintSelectionBody) th[data-formula] {
   background-color: color-mix(in srgb, var(--primary, #167b85) 8%, transparent);
   box-shadow: inset 3px 0 var(--primary, #167b85);
 }
