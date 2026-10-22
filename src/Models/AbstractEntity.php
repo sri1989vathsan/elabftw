@@ -1466,6 +1466,19 @@ abstract class AbstractEntity extends AbstractRest
 
         $fresh = new $this($this->Users, $newId);
 
+        // Permanent links to a passage of this entry's own text (date badges, headings) carry the id of the
+        // entry they were made in: in a copy they must lead to the copy, not back to the original.
+        if ($sourceEntity->entityType === $this->entityType) {
+            $repointed = self::repointOwnPassageLinks((string) $source['body'], $sourceId, $newId);
+            if ($repointed !== $source['body']) {
+                $sql = sprintf('UPDATE %s SET body = :body WHERE id = :id', $this->entityType->value);
+                $req = $this->Db->prepare($sql);
+                $req->bindValue(':body', $repointed);
+                $req->bindParam(':id', $newId, PDO::PARAM_INT);
+                $this->Db->execute($req);
+            }
+        }
+
         if ($fromTemplate && $toTemplate) {
             $fresh->patch(Action::Update, array(
                 'canread_target' => $source['canread_target'],
@@ -1491,6 +1504,31 @@ abstract class AbstractEntity extends AbstractRest
             $sourceEntity->Uploads->duplicate($fresh);
         }
         return $newId;
+    }
+
+    /**
+     * Point links like ...?mode=view&id=OLD#anchor to the new id, but only where #anchor is an element of the body
+     * itself; a link to somebody else's passage that happens to be in the same entity keeps its target.
+     */
+    private static function repointOwnPassageLinks(string $body, int $oldId, int $newId): string
+    {
+        return preg_replace_callback(
+            '/(href=")([^"#]*)#([^"]+)(")/',
+            function (array $m) use ($body, $oldId, $newId): string {
+                [$all, $open, $url, $fragment, $close] = $m;
+                $decodedUrl = html_entity_decode($url);
+                if (!preg_match('/[?&]id=' . $oldId . '(?:&|$)/', $decodedUrl) || !str_contains($decodedUrl, 'mode=view')) {
+                    return $all;
+                }
+                $anchor = preg_quote(html_entity_decode(rawurldecode($fragment)), '/');
+                if (!preg_match('/\sid=["\']' . $anchor . '["\']/', $body)) {
+                    return $all;
+                }
+                $newUrl = preg_replace('/([?&](?:amp;)?id=)' . $oldId . '(?=&|$)/', '${1}' . $newId, $url);
+                return $open . $newUrl . '#' . $fragment . $close;
+            },
+            $body,
+        ) ?? $body;
     }
 
     protected function getTagsHydrationData(array $entityIds): array
