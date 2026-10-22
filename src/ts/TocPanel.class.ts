@@ -898,6 +898,11 @@ export default class TocPanel extends SidePanel {
 
         if (element.querySelector(HEADING_SELECTOR)) {
           filterChildren(element);
+          // A container that ends up with nothing visible (a note whose heading and text are both filtered
+          // out) would otherwise stay behind as an empty, still-styled bar.
+          const everythingHidden = Array.from(element.children)
+            .every(child => child.classList.contains(FILTER_HIDDEN_CLASS));
+          element.classList.toggle(FILTER_HIDDEN_CLASS, everythingHidden);
           return;
         }
         element.classList.toggle(FILTER_HIDDEN_CLASS, !showSectionContent);
