@@ -7055,14 +7055,33 @@ export function buildReadOnlySpreadsheetHost(
   copyTableButton.addEventListener('click', event => {
     event.stopPropagation();
     const rowEls = Array.from(sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr'));
+    const htmlRows: string[] = [];
     const textRows = rowEls.map(rowEl => {
       const cells = Array.from(rowEl.querySelectorAll<HTMLElement>(':scope > td[data-x][data-y]'));
+      // The cells' own inline styles carry the formatting (bold, colours, alignment, borders): copy them along
+      // as HTML, like a selection copied from the full editor, so pasting elsewhere keeps the look.
+      const htmlCells = cells.map(cell => {
+        const style = sanitizeStyle(cell.getAttribute('style') ?? undefined, PRESERVED_STYLE_PROPERTIES);
+        return `<td${style ? ` style="${escapeHTMLAttribute(style)}"` : ''}>${escapeHTML((cell.textContent ?? '').trim())}</td>`;
+      });
+      const rowHeight = Number.parseFloat(rowEl.style.height);
+      htmlRows.push(`<tr${Number.isFinite(rowHeight) ? ` style="height:${rowHeight}px"` : ''}>${htmlCells.join('')}</tr>`);
       return cells.map(cell => {
         const text = (cell.textContent ?? '').trim();
         return /[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
       }).join('\t');
     });
-    navigator.clipboard?.writeText(textRows.join('\n'))?.catch(() => {});
+    const plain = textRows.join('\n');
+    const html = `<table><tbody>${htmlRows.join('')}</tbody></table>`;
+    const writePlain = (): void => { navigator.clipboard?.writeText(plain)?.catch(() => {}); };
+    if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
+      writePlain();
+      return;
+    }
+    navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([html], { type: 'text/html' }),
+      'text/plain': new Blob([plain], { type: 'text/plain' }),
+    })]).catch(writePlain);
   });
 
   if (editable) {
@@ -7586,20 +7605,27 @@ export function buildReadOnlySpreadsheetHost(
     const startRow = Math.min(selStartRow, selEndRow);
     const endRow = Math.max(selStartRow, selEndRow);
     const textRows: string[] = [];
+    const htmlRows: string[] = [];
     for (let row = startRow; row <= endRow; row++) {
       const textCells: string[] = [];
+      const htmlCells: string[] = [];
       for (let col = startCol; col <= endCol; col++) {
         const cell = sheetContainer.querySelector<HTMLElement>(
           `.jss_worksheet > tbody td[data-x="${col}"][data-y="${row}"]`,
         );
         const text = (cell?.textContent ?? '').trim();
         textCells.push(/[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text);
+        const style = sanitizeStyle(cell?.getAttribute('style') ?? undefined, PRESERVED_STYLE_PROPERTIES);
+        htmlCells.push(`<td${style ? ` style="${escapeHTMLAttribute(style)}"` : ''}>${escapeHTML(text)}</td>`);
       }
       textRows.push(textCells.join('\t'));
+      htmlRows.push(`<tr>${htmlCells.join('')}</tr>`);
     }
     event.preventDefault();
     event.stopImmediatePropagation();
     event.clipboardData.setData('text/plain', textRows.join('\n'));
+    // With the cells' formatting, like a selection copied from the full editor.
+    event.clipboardData.setData('text/html', `<table><tbody>${htmlRows.join('')}</tbody></table>`);
   }, true);
   // Mirrors openSpreadsheetModal's own fillDragSource -- see its comment.
   let fillDragSource: { col: number; row: number } | null = null;
