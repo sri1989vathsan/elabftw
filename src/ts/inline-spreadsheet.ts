@@ -3344,6 +3344,9 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
 
   const cellFormatBar = document.createElement('div');
   cellFormatBar.className = 'inline-spreadsheet-cell-format';
+  // Same as the inline grid's format bar: a press on a control must not reach jspreadsheet's document-level
+  // handler, which clears the visible selection.
+  cellFormatBar.addEventListener('mousedown', event => event.stopPropagation());
   const cellStyleRow = document.createElement('div');
   cellStyleRow.className = 'inline-spreadsheet-cell-format-row';
   const cellFormatColorInput = createInput(
@@ -5845,6 +5848,7 @@ export function openSpreadsheetModal(
     const updateSelectedCells = (
       updateStyle: (style: string | undefined) => string | undefined,
       successMessage: string,
+      updateNeighborEdge?: (style: string | undefined, side: 'right' | 'bottom') => string | undefined,
     ): void => {
       const selection = getSelectedRange();
       if (!selection) {
@@ -5874,6 +5878,20 @@ export function openSpreadsheetModal(
           }
         }
       }
+      // Table borders collapse: where two cells share an edge with the same width and style, the cell further
+      // left/up wins. A new colour/style/width on the selection's left and top edges was therefore hidden
+      // behind the neighbour's old one. Give those neighbours' touching side the same value.
+      if (updateNeighborEdge) {
+        const touch = (col: number, row: number, side: 'right' | 'bottom'): void => {
+          if (col < 0 || row < 0) return;
+          const cellName = `${colLabel(col)}${row + 1}`;
+          const style = updateNeighborEdge(cellStyles[cellName], side);
+          if (style) cellStyles[cellName] = style;
+          else delete cellStyles[cellName];
+        };
+        for (let row = startRow; row <= endRow; row++) touch(startCol - 1, row, 'right');
+        for (let col = startCol; col <= endCol; col++) touch(col, startRow - 1, 'bottom');
+      }
 
       mountSpreadsheet({
         ...working,
@@ -5890,9 +5908,13 @@ export function openSpreadsheetModal(
       value: string,
       successMessage: string,
     ): void => {
+      const borderAspect = /^border-(color|style|width)$/.exec(property)?.[1];
       updateSelectedCells(
         style => updateQuickStyleProperty(style, property, value),
         successMessage,
+        borderAspect
+          ? (style, side) => updateQuickStyleProperty(style, `border-${side}-${borderAspect}`, value)
+          : undefined,
       );
     };
     ui.cellFormatColorInput.addEventListener('change', () => {
@@ -7255,6 +7277,7 @@ export function buildReadOnlySpreadsheetHost(
     // repaints the affected cells.
     const applySelectedCellStyle = (
       updateStyle: (style: string | undefined) => string | undefined,
+      updateNeighborEdge?: (style: string | undefined, side: 'right' | 'bottom') => string | undefined,
     ): void => {
       if (!lastKnownSelection) return;
       const [c1, r1, c2, r2] = lastKnownSelection;
@@ -7288,14 +7311,38 @@ export function buildReadOnlySpreadsheetHost(
           }
         }
       }
+      // Collapsed borders: the neighbour left of / above the selection wins a tie on the shared edge, so it
+      // gets the same border value on its touching side (see the popup's updateSelectedCells).
+      if (updateNeighborEdge) {
+        const touch = (col: number, row: number, side: 'right' | 'bottom'): void => {
+          if (col < 0 || row < 0) return;
+          const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
+          if (!cell) return;
+          const style = updateNeighborEdge(cell.getAttribute('style') ?? undefined, side);
+          if (style) cell.setAttribute('style', style);
+          else cell.removeAttribute('style');
+        };
+        for (let row = startRow; row <= endRow; row++) touch(startCol - 1, row, 'right');
+        for (let col = startCol; col <= endCol; col++) touch(col, startRow - 1, 'bottom');
+      }
       notifyFromMirror();
     };
     const applySelectedStyleProperty = (property: string, value: string): void => {
-      applySelectedCellStyle(style => updateQuickStyleProperty(style, property, value));
+      const borderAspect = /^border-(color|style|width)$/.exec(property)?.[1];
+      applySelectedCellStyle(
+        style => updateQuickStyleProperty(style, property, value),
+        borderAspect
+          ? (style, side) => updateQuickStyleProperty(style, `border-${side}-${borderAspect}`, value)
+          : undefined,
+      );
     };
 
     const formatBarEl = document.createElement('div');
     formatBarEl.className = 'elabftw-spreadsheet-format-bar';
+    // jspreadsheet clears its selection on any mousedown that reaches the document outside the grid, which
+    // blanked the highlighted cells as soon as a formatting control was pressed. The bar is not "outside" in
+    // any sense that matters, so the press stops here (it still gets its normal focus and click behaviour).
+    formatBarEl.addEventListener('mousedown', event => event.stopPropagation());
 
     const fillColorInput = createInput('color', '#ffffff', 'Selected cell background color');
     const noFillButton = document.createElement('button');
