@@ -641,6 +641,13 @@ export function getTinymceBaseConfig(page: string): object {
           clearTimeout(typingTimer);
           typingTimer = setTimeout(doneTyping, doneTypingInterval);
         });
+        // A cell committed in a spreadsheet grid counts as typing too (see dispatchKeyupForAutosave)
+        const restartAutosave = (): void => {
+          clearTimeout(typingTimer);
+          typingTimer = setTimeout(doneTyping, doneTypingInterval);
+        };
+        window.addEventListener('elabftw-spreadsheet-edited', restartAutosave);
+        editor.on('remove', () => window.removeEventListener('elabftw-spreadsheet-edited', restartAutosave));
       }
 
     },

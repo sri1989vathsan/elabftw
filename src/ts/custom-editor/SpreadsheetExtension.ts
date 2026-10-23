@@ -1369,6 +1369,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
 
   const dispatchKeyupForAutosave = (): void => {
+    // While a grid is in use the real 'keyup' below is held back (it would pull focus into the page editor), which
+    // used to leave the autosave timer unstarted for as long as the user stayed in the grid. This one only starts
+    // that timer, so edits made in a grid are saved a few seconds later without leaving it.
+    window.dispatchEvent(new CustomEvent('elabftw-spreadsheet-edited'));
     if (spreadsheetInteractionOngoing()) {
       keyupDispatchPending = true;
       return;
