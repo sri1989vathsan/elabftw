@@ -2334,7 +2334,18 @@ const FILLER_COLUMN_WIDTH = 100;
  * continuing the real ones, so an active table reads as part of a larger sheet. Purely visual: it takes no pointer
  * input and holds no data. Cheap to call often: the markup is only rebuilt when the geometry changed.
  */
-export function syncGridFiller(gridEl: HTMLElement | null, visible: boolean): void {
+const gridFillerActivators = new WeakMap<HTMLElement, (col: number, row: number) => void>();
+
+/** What a click on an empty lettered column does for this grid: add the columns up to it and select that cell. */
+export function setGridFillerActivator(gridEl: HTMLElement, activate: (col: number, row: number) => void): void {
+  gridFillerActivators.set(gridEl, activate);
+}
+
+export function syncGridFiller(
+  gridEl: HTMLElement | null,
+  visible: boolean,
+  activate?: (col: number, row: number) => void,
+): void {
   if (!gridEl) return;
   let filler = gridEl.querySelector<HTMLElement>(':scope > .elabftw-spreadsheet-filler');
   const worksheetEl = gridEl.querySelector<HTMLElement>('.jss_worksheet');
@@ -2357,19 +2368,32 @@ export function syncGridFiller(gridEl: HTMLElement | null, visible: boolean): vo
   const left = Math.round(sheetRect.right - gridRect.left + gridEl.scrollLeft);
   const top = Math.round(sheetRect.top - gridRect.top + gridEl.scrollTop);
   const key = [free, left, top, headerHeight, rowHeights.join(','), dataCols, Math.round(sheetRect.height)].join('|');
+  if (filler) (filler as HTMLElement & { fillerActivate?: typeof activate }).fillerActivate = activate ?? gridFillerActivators.get(gridEl);
   if (filler?.dataset.key === key) return;
   if (!filler) {
     filler = document.createElement('div');
     filler.className = 'elabftw-spreadsheet-filler';
     filler.setAttribute('aria-hidden', 'true');
     gridEl.appendChild(filler);
+    // pressing an empty cell starts a new column there: handed to whoever owns the grid
+    const created = filler as HTMLElement & { fillerActivate?: typeof activate };
+    created.fillerActivate = activate ?? gridFillerActivators.get(gridEl);
+    filler.addEventListener('pointerdown', event => {
+      const cell = (event.target as Element).closest<HTMLElement>('.fc[data-i][data-r]');
+      if (!cell || !created.fillerActivate) return;
+      event.preventDefault();
+      event.stopPropagation();
+      created.fillerActivate(Number(created.dataset.cols) + Number(cell.dataset.i), Number(cell.dataset.r));
+    });
   }
+  filler.dataset.cols = String(dataCols);
   filler.dataset.key = key;
   filler.style.cssText = `left:${left}px;top:${top}px;width:${free}px;height:${Math.round(sheetRect.height)}px;counter-reset:fcol ${dataCols}`;
   const count = Math.ceil(free / FILLER_COLUMN_WIDTH);
-  const cells = '<span class="fc"></span>'.repeat(count);
-  filler.innerHTML = `<div class="fc-row fc-head" style="height:${headerHeight}px">${cells}</div>`
-    + rowHeights.map(height => `<div class="fc-row" style="height:${height}px">${cells}</div>`).join('');
+  const headerCells = '<span class="fc"></span>'.repeat(count);
+  const rowCells = (row: number): string => Array.from({ length: count }, (_, i) => `<span class="fc" data-i="${i}" data-r="${row}"></span>`).join('');
+  filler.innerHTML = `<div class="fc-row fc-head" style="height:${headerHeight}px">${headerCells}</div>`
+    + rowHeights.map((height, row) => `<div class="fc-row" style="height:${height}px">${rowCells(row)}</div>`).join('');
 }
 
 const JSS_DEFAULT_ROW_HEIGHT = 34;
@@ -4016,7 +4040,20 @@ export function openSpreadsheetModal(
     // a popup was opened, slowing every mouse event on the page down in a long session).
     const popupPageListenerRemovers: Array<() => void> = [];
     // the empty lettered columns beside a narrow grid (see syncGridFiller)
-    const fillerTimer = window.setInterval(() => syncGridFiller(sheetContainer, true), 400);
+    const activateFillerCell = (targetCol: number, row: number): void => {
+      if (!worksheet || working.kind === 'well-plate') return;
+      commitRescueInput();
+      const currentCols = Math.max(working.cols, rawDataMirror.reduce((max, mirrorRow) => Math.max(max, mirrorRow.length), 0));
+      const missing = Math.min(targetCol + 1, MAX_DIMENSION) - currentCols;
+      if (missing > 0) {
+        flushMirrorIntoWorksheet(worksheet);
+        worksheet.insertColumn?.(missing, currentCols - 1, false);
+      }
+      const col = Math.min(targetCol, MAX_DIMENSION - 1);
+      selectedRange = [col, row, col, row];
+      window.setTimeout(() => worksheet?.updateSelectionFromCoords?.(col, row, col, row), 0);
+    };
+    const fillerTimer = window.setInterval(() => syncGridFiller(sheetContainer, true, activateFillerCell), 400);
     popupPageListenerRemovers.push(() => window.clearInterval(fillerTimer));
     const listenWhilePopupOpen = (
       target: Document | Window,
@@ -8741,6 +8778,29 @@ export function buildReadOnlySpreadsheetHost(
     openCellEditor(col, row, value, false);
   };
   if (editable) window.addEventListener('keydown', onDirectCellKey, true);
+  if (editable && !plateLocked) {
+    // The empty lettered columns beside the grid: pressing one adds the columns up to it and selects that cell,
+    // so typing there simply continues the sheet.
+    setGridFillerActivator(sheetContainer, (targetCol, row) => {
+      const mounted = getMountedWorksheet(sheetContainer);
+      if (!mounted) return;
+      commitRescueInput();
+      commitFormulaInput();
+      const currentCols = rawDataMirror.reduce((max, mirrorRow) => Math.max(max, mirrorRow.length), 0);
+      const missing = Math.min(targetCol + 1, MAX_DIMENSION) - currentCols;
+      if (missing > 0) {
+        // typed values live only in the mirror until the grid is redrawn; the insert re-reads the worksheet
+        flushMirrorIntoWorksheet(mounted);
+        mounted.insertColumn?.(missing, currentCols - 1, false);
+      }
+      const col = Math.min(targetCol, MAX_DIMENSION - 1);
+      const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea');
+      window.setTimeout(() => {
+        mounted.updateSelectionFromCoords?.(col, row, col, row);
+        sink?.focus({ preventScroll: true });
+      }, 0);
+    });
+  }
   if (editable) {
     const sinkRescue = rescueSinkText(target => sheetContainer.contains(target), {
       singleCell: () => (lastKnownSelection && lastKnownSelection[0] === lastKnownSelection[2] && lastKnownSelection[1] === lastKnownSelection[3]

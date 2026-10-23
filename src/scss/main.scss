@@ -3862,6 +3862,11 @@ body.html-tool-workspace-resizing * {
     display: flex;
   }
 
+  .fc[data-i] {
+    cursor: cell;
+    pointer-events: auto;
+  }
+
   .fc {
     border-bottom: 1px solid var(--secondary-muted, #dee2e6);
     border-right: 1px solid var(--secondary-muted, #dee2e6);
