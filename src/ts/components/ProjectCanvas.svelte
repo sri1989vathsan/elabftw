@@ -136,7 +136,8 @@
     let cursorY = OUTER_PAD;
     let rowHeight = 0;
     const maxWidth = Math.max(canvasWidth, 560);
-    for (const project of visibleTree) {
+    // from `visible` right now: the reactive visibleTree is only refreshed after the current handler returns
+    for (const project of tree.filter(item => visible.includes(item.id))) {
       const own = nodes.filter(node => node.project_id === project.id);
       let minX = 0;
       let minY = 0;
@@ -264,6 +265,13 @@
 
   function showAll(): void {
     visible = tree.map(project => project.id);
+    relayout();
+  }
+
+  function hideAll(): void {
+    visible = [];
+    selectedEdge = null;
+    popup = null;
     relayout();
   }
 
@@ -530,7 +538,10 @@
         </button>
       {/each}
       {#if tree.length > 1}
-        <button type="button" class="btn btn-sm btn-ghost mt-2" on:click={showAll}>{t('Show all together')}</button>
+        <div class="pmc-tree-actions">
+          <button type="button" class="btn btn-sm btn-ghost" on:click={showAll}>{t('Show all')}</button>
+          <button type="button" class="btn btn-sm btn-ghost" on:click={hideAll}>{t('Hide all')}</button>
+        </div>
       {/if}
     </aside>
 

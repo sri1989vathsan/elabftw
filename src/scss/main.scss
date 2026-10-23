@@ -5682,6 +5682,12 @@ div > .sticky-navbar {
   }
 }
 
+.pmc-tree-actions {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+
 .pmc-tree-name {
   flex: 1;
   min-width: 0;
