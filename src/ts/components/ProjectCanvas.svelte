@@ -205,13 +205,15 @@
     if (reset || originsAdded) saveCustom();
   }
 
-  function screenX(node: CanvasNode): number {
-    const l = layout[node.project_id];
+  // `at` is the layout the position is read from. The template passes it explicitly: Svelte only re-runs a
+  // template expression when a variable written in the expression itself changes, not one used inside a function.
+  function screenX(node: CanvasNode, at: typeof layout = layout): number {
+    const l = at[node.project_id];
     return l ? l.fx + GROUP_PAD + node.x - l.ox : node.x;
   }
 
-  function screenY(node: CanvasNode): number {
-    const l = layout[node.project_id];
+  function screenY(node: CanvasNode, at: typeof layout = layout): number {
+    const l = at[node.project_id];
     return l ? l.fy + GROUP_PAD + GROUP_LABEL + node.y - l.oy : node.y;
   }
 
@@ -658,7 +660,7 @@
           class:pmc-remove={tool === 'remove'}
           data-id={node.id}
           use:measure={node.id}
-          style="left:{screenX(node)}px;top:{screenY(node)}px;width:{NODE_W}px"
+          style="left:{screenX(node, layout)}px;top:{screenY(node, layout)}px;width:{NODE_W}px"
           on:pointerdown={(event) => startDrag(event, node)}
           role="button"
           tabindex="0"
