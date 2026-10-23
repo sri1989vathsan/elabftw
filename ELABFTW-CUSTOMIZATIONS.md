@@ -541,6 +541,18 @@ spreadsheet toolbar has an **Edit title** button that changes the caption in pla
 - `src/ts/inline-spreadsheet.ts` — the Edit title button; the table id is kept across view-mode swaps
 - `src/ts/custom-editor/SpreadsheetExtension.ts` — keeps the table's `id` when an edit rewrites its attributes
 
+## Project canvas (Boards)
+
+A free-form canvas next to the column board. A card is a question, a pointer to an existing to-do task, or a pointer to an experiment; arrows connect cards. The canvas toggle (diagram icon) sits in the Boards toolbar and is remembered per browser.
+
+- Each project (and subproject) keeps its own coordinate space. The canvas shows a project with a tree on the left; ticking several subprojects shows them side by side in labelled frames, offset only on screen (the offset is never saved).
+- Task and experiment cards show live data (assignees, deadline, steps, comments, column; experiment status). A click on a task opens the board's usual task dialog; questions and experiments have their own popup. A question can be converted into a real task.
+- A task or experiment can be on a project's canvas once. A task that no longer exists leaves a placeholder card.
+
+- `src/sql/custom/096_project_canvas.sql` — `todolist_canvas_nodes`, `todolist_canvas_edges` (registered in `CustomMigrationRunner`)
+- `src/Models/TodolistCanvas.php`, `src/Models/TodolistCanvasEdges.php` — API endpoints `todolist_canvas` (`GET ?project_id=&include_subprojects=1`) and `todolist_canvas_edges`; project access follows the board rules
+- `src/ts/components/ProjectCanvas.svelte`, toggle in `ProjectManagementBoard.svelte`; styles are `.pmc-*` in `src/scss/main.scss`
+
 ## General Merge Notes
 
 - eLabFTW uses Yarn PnP (no `node_modules` directory) — packages are in zip archives
