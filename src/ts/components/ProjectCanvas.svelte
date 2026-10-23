@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { afterUpdate, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import { ApiC } from '../api';
   import { askConfirm } from '../confirm-dialog';
   import i18next from '../i18n';
@@ -229,25 +229,18 @@
 
   $: arrowData = arrows(shown, edges, layout, heights);
 
-  // Real card heights are only known after rendering: store them once and lay out again.
-  let measureQueued = false;
-  afterUpdate(() => {
-    if (measureQueued || !canvasEl) return;
-    const measured: Record<number, number> = {};
-    let changed = false;
-    canvasEl.querySelectorAll<HTMLElement>('.pmc-node').forEach(element => {
-      const id = Number(element.dataset.id);
+  // Real card heights are only known after rendering, and can change later (fonts, wrapped titles): every card
+  // reports its size here, and the layout follows.
+  function measure(element: HTMLElement, id: number): { destroy(): void } {
+    const observer = new ResizeObserver(() => {
       const height = element.offsetHeight;
-      measured[id] = height;
-      if (Math.abs((heights[id] ?? 0) - height) > 1) changed = true;
+      if (Math.abs((heights[id] ?? 0) - height) <= 1) return;
+      heights = { ...heights, [id]: height };
+      if (dragging === null) relayout();
     });
-    if (changed) {
-      measureQueued = true;
-      heights = { ...heights, ...measured };
-      relayout();
-      void Promise.resolve().then(() => { measureQueued = false; });
-    }
-  });
+    observer.observe(element);
+    return { destroy: () => observer.disconnect() };
+  }
 
   onMount(() => {
     const observer = new ResizeObserver(entries => {
@@ -579,6 +572,7 @@
           class:pmc-dragging={dragging === node.id}
           class:pmc-remove={tool === 'remove'}
           data-id={node.id}
+          use:measure={node.id}
           style="left:{screenX(node)}px;top:{screenY(node)}px;width:{NODE_W}px"
           on:pointerdown={(event) => startDrag(event, node)}
           role="button"
