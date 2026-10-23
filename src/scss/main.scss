@@ -3861,6 +3861,11 @@ body.jss-selecting .jss_corner {
   pointer-events: none;
 }
 
+/* Values sit in the vertical middle of a cell in the live grids too (a cell's own style can still override this) */
+.jss_worksheet > tbody > tr > td {
+  vertical-align: middle;
+}
+
 /* Ensure jspreadsheet dropdown menus inside the overlay render on top */
 /* stylelint-disable-next-line selector-class-pattern */
 .jss_container {

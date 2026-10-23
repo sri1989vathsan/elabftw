@@ -312,7 +312,8 @@ const PRESERVED_STYLE_PROPERTIES = new Set([
 // Padding and line-height are source-app layout too (Excel/Sheets/Word cells carry tight padding of their own),
 // so keeping them made pasted rows shorter than those of a freshly inserted spreadsheet, which uses the
 // appearance's cell padding.
-const EXTERNAL_PASTE_SIZING_PROPERTIES = new Set(['width', 'height', 'line-height']);
+// vertical-align too: pasted values are centred vertically like everywhere else, whatever the source app used
+const EXTERNAL_PASTE_SIZING_PROPERTIES = new Set(['width', 'height', 'line-height', 'vertical-align']);
 const EXTERNAL_PASTE_STYLE_PROPERTIES = new Set(
   Array.from(PRESERVED_STYLE_PROPERTIES).filter(property => (
     !EXTERNAL_PASTE_SIZING_PROPERTIES.has(property) && !property.startsWith('padding')
@@ -1592,6 +1593,8 @@ function getAppearanceCellStyle(
         : `border:${cellStyle.borderWidth}px ${cellStyle.borderStyle} ${cellStyle.borderColor}`)
       : `border:${appearance.borderWidth}px solid ${appearance.borderColor}`,
     `padding:${appearance.cellPadding}px`,
+    // Values sit in the vertical middle of their cell, in every table: created, pasted, and rows/columns added later
+    'vertical-align:middle',
   ];
   if (includeBackground && hasAlternateBackground(appearance, col, row)) {
     declarations.push(`background-color:${getAppearanceBackground(appearance, col, row)}`);
@@ -4922,7 +4925,12 @@ export function openSpreadsheetModal(
         || rescueInputCol === null || rescueInputRow === null
         || !(event.target instanceof Element)) return;
       const targetCell = event.target.closest<HTMLElement>('td[data-x][data-y]');
-      if (!targetCell) return;
+      if (!targetCell) {
+        // a column header or resize handle: it never moves focus off the editor box by itself, and the resize
+        // that follows used to run while the typed text was still uncommitted
+        commitRescueInput();
+        return;
+      }
       const targetCol = Number.parseInt(targetCell.dataset.x ?? '', 10);
       const targetRow = Number.parseInt(targetCell.dataset.y ?? '', 10);
       if (targetCol === rescueInputCol && targetRow === rescueInputRow) return;
@@ -7341,6 +7349,9 @@ export function buildReadOnlySpreadsheetHost(
       updateStyle: (style: string | undefined) => string | undefined,
       updateNeighborEdge?: (style: string | undefined, side: 'right' | 'bottom') => string | undefined,
     ): void => {
+      // text still being typed must reach the cell before the format is applied
+      commitRescueInput();
+      commitFormulaInput();
       if (!lastKnownSelection) return;
       const [c1, r1, c2, r2] = lastKnownSelection;
       const startCol = Math.min(c1, c2);
@@ -8687,7 +8698,12 @@ export function buildReadOnlySpreadsheetHost(
         || rescueInputCol === null || rescueInputRow === null
         || !(event.target instanceof Element)) return;
       const targetCell = event.target.closest<HTMLElement>('td[data-x][data-y]');
-      if (!targetCell) return;
+      if (!targetCell) {
+        // a column header or resize handle: it never moves focus off the editor box by itself, and the resize
+        // that follows used to run while the typed text was still uncommitted
+        commitRescueInput();
+        return;
+      }
       const targetCol = Number.parseInt(targetCell.dataset.x ?? '', 10);
       const targetRow = Number.parseInt(targetCell.dataset.y ?? '', 10);
       if (targetCol === rescueInputCol && targetRow === rescueInputRow) return;
@@ -9015,10 +9031,17 @@ export function buildReadOnlySpreadsheetHost(
         : NaN;
       if (Number.isFinite(newHeight)) manuallyResizedRows.set(resizedRow, newHeight);
     }
+    // Anything typed through the editor box exists only in rawDataMirror until the grid is redrawn (see
+    // commitRescueInput), so replacing the mirror with the worksheet's own data wipes it. A resize or an autofit
+    // moves no cell: when the grid has the same shape as the mirror, the mirror stays as it is. Inserts and deletes
+    // flush the mirror into the worksheet first (onbefore* handlers), so rebuilding from the worksheet is safe there.
     const liveData = changedWorksheet?.getData?.();
-    if (Array.isArray(liveData)) {
+    const liveCols = Array.isArray(liveData) ? liveData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0) : 0;
+    const mirrorCols = rawDataMirror.reduce((max, row) => Math.max(max, row.length), 0);
+    const nothingMoved = Array.isArray(liveData) && liveData.length === rawDataMirror.length && liveCols === mirrorCols;
+    if (Array.isArray(liveData) && !nothingMoved) {
       const rows = liveData.length;
-      const cols = liveData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
+      const cols = liveCols;
       rawDataMirror = resizeData(liveData, rows, cols);
       // A row/column insert or delete replaces rawDataMirror wholesale
       // (rather than a single tracked cell), so hasAnyFormulaCell can't be

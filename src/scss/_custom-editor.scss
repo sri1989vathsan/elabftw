@@ -262,6 +262,7 @@ body.mce-content-body {
   min-width: 2rem;
   padding: 0.35rem 0.5rem;
   white-space: pre-wrap;
+  vertical-align: middle;
 }
 
 :where(#body_view, body.mce-content-body, #tocPrintSelectionBody) table.elabftw-spreadsheet tr:nth-child(even) {
