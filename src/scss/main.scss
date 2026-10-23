@@ -5727,6 +5727,9 @@ div > .sticky-navbar {
 
 .pmc-frame-label {
   align-items: center;
+  cursor: grab;
+  pointer-events: auto;
+  user-select: none;
   background: var(--mainbackground);
   display: inline-flex;
   font-size: 0.75rem;

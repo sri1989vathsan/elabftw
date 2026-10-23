@@ -91,6 +91,11 @@
   let canvasHeight = 420;
   let dragging: number | null = null;
   let loadedRoot: number | null = null;
+  // Stable per-project origin (the project-space point shown at the frame's top-left), so moving a card never
+  // re-centres its group; and frame positions the user placed by hand, remembered per browser and board.
+  let origins: Record<number, { ox: number; oy: number }> = {};
+  let custom: Record<number, { fx: number; fy: number }> = {};
+  let customLoadedFor: number | null = null;
 
   $: root = projects.find(project => project.id === rootId) ?? null;
   $: tree = root ? [root, ...projects.filter(project => project.parent_id === rootId)] : [];
@@ -128,40 +133,76 @@
     }
   }
 
-  // Each project keeps its own coordinate space; side by side on screen they only get an offset. The offset is
-  // worked out here (not on every render) so a card being dragged cannot make its whole group jump.
-  function relayout(): void {
+  function loadCustom(): void {
+    if (customLoadedFor === rootId) return;
+    customLoadedFor = rootId;
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(`pmc-groups-${rootId}`) ?? '{}') as { o?: typeof origins; c?: typeof custom };
+      origins = stored.o ?? {};
+      custom = stored.c ?? {};
+    } catch {
+      origins = {};
+      custom = {};
+    }
+  }
+
+  function saveCustom(): void {
+    try {
+      window.localStorage.setItem(`pmc-groups-${rootId}`, JSON.stringify({ o: origins, c: custom }));
+    } catch {
+      // positions of the frames are then simply not remembered
+    }
+  }
+
+  // Each project keeps its own coordinate space; side by side on screen they only get an offset. Frames are
+  // packed left to right unless the user has moved one. The origin of a project is only reset on request
+  // (reset = true: first view, Fit), so moving a card never makes its group jump.
+  function relayout(reset = false): void {
+    loadCustom();
+    if (reset) {
+      origins = {};
+      custom = {};
+    }
+    let originsAdded = false;
     const next: typeof layout = {};
     let cursorX = OUTER_PAD;
     let cursorY = OUTER_PAD;
     let rowHeight = 0;
+    let bottom = 0;
     const maxWidth = Math.max(canvasWidth, 560);
     // from `visible` right now: the reactive visibleTree is only refreshed after the current handler returns
     for (const project of tree.filter(item => visible.includes(item.id))) {
       const own = nodes.filter(node => node.project_id === project.id);
-      let minX = 0;
-      let minY = 0;
-      let width = 220;
-      let height = 70;
-      if (own.length > 0) {
-        minX = Math.min(...own.map(node => node.x));
-        minY = Math.min(...own.map(node => node.y));
-        width = Math.max(...own.map(node => node.x + NODE_W)) - minX;
-        height = Math.max(...own.map(node => node.y + nodeHeight(node))) - minY;
+      if (!origins[project.id]) {
+        origins[project.id] = own.length > 0
+          ? { ox: Math.min(...own.map(node => node.x)), oy: Math.min(...own.map(node => node.y)) }
+          : { ox: 0, oy: 0 };
+        originsAdded = true;
       }
+      const { ox, oy } = origins[project.id];
+      const width = own.length > 0 ? Math.max(NODE_W, Math.max(...own.map(node => node.x + NODE_W)) - ox) : 220;
+      const height = own.length > 0 ? Math.max(70, Math.max(...own.map(node => node.y + nodeHeight(node))) - oy) : 70;
       const frameW = width + GROUP_PAD * 2;
       const frameH = height + GROUP_PAD * 2 + GROUP_LABEL;
+      const placed = custom[project.id];
+      if (placed) {
+        next[project.id] = { ox, oy, fx: placed.fx, fy: placed.fy };
+        bottom = Math.max(bottom, placed.fy + frameH);
+        continue;
+      }
       if (cursorX + frameW > maxWidth && cursorX > OUTER_PAD) {
         cursorX = OUTER_PAD;
         cursorY += rowHeight + GROUP_GAP;
         rowHeight = 0;
       }
-      next[project.id] = { ox: minX, oy: minY, fx: cursorX, fy: cursorY };
+      next[project.id] = { ox, oy, fx: cursorX, fy: cursorY };
       cursorX += frameW + GROUP_GAP;
       rowHeight = Math.max(rowHeight, frameH);
+      bottom = Math.max(bottom, cursorY + rowHeight);
     }
     layout = next;
-    canvasHeight = Math.max(420, cursorY + rowHeight + OUTER_PAD);
+    canvasHeight = Math.max(420, bottom + OUTER_PAD);
+    if (reset || originsAdded) saveCustom();
   }
 
   function screenX(node: CanvasNode): number {
@@ -176,8 +217,8 @@
 
   type Frame = { id: number; name: string; color: string; x: number; y: number; w: number; h: number };
 
-  function frames(list: CanvasNode[], layoutNow: typeof layout, _heights: typeof heights): Frame[] {
-    return visibleTree.map(project => {
+  function frames(projectsShown: Proj[], list: CanvasNode[], layoutNow: typeof layout, _heights: typeof heights): Frame[] {
+    return projectsShown.map(project => {
       const own = list.filter(node => node.project_id === project.id);
       const l = layoutNow[project.id];
       if (!l) return null;
@@ -192,7 +233,7 @@
     }).filter((frame): frame is Frame => frame !== null);
   }
 
-  $: frameList = frames(shown, layout, heights);
+  $: frameList = frames(visibleTree, shown, layout, heights);
 
   type Arrow = { id: number; d: string; mx: number; my: number };
 
@@ -301,8 +342,9 @@
       const dy = e.clientY - startY;
       if (!moved && Math.hypot(dx, dy) < 4) return;
       moved = true;
-      node.x = Math.round(originX + dx);
-      node.y = Math.round(originY + dy);
+      const o = origins[node.project_id] ?? { ox: -20000, oy: -20000 };
+      node.x = Math.max(o.ox, Math.round(originX + dx));
+      node.y = Math.max(o.oy, Math.round(originY + dy));
       nodes = nodes;
     };
     const up = async (): Promise<void> => {
@@ -318,6 +360,38 @@
         }
       } else {
         openCard(node);
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  // A frame is moved by its label; the cards inside travel with it. Where it was put is remembered.
+  function startFrameDrag(event: PointerEvent, frame: Frame): void {
+    if (event.button !== 0) return;
+    const l = layout[frame.id];
+    if (!l) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const originFx = l.fx;
+    const originFy = l.fy;
+    dragging = -frame.id;
+    const move = (e: PointerEvent): void => {
+      const current = layout[frame.id];
+      if (!current) return;
+      current.fx = Math.round(originFx + e.clientX - startX);
+      current.fy = Math.round(originFy + e.clientY - startY);
+      layout = layout;
+    };
+    const up = (): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      dragging = null;
+      const final = layout[frame.id];
+      if (final) {
+        custom[frame.id] = { fx: final.fx, fy: final.fy };
+        saveCustom();
       }
     };
     window.addEventListener('pointermove', move);
@@ -507,7 +581,7 @@
     <button type="button" class="btn btn-sm btn-ghost" on:click={openExperimentPicker}><i class="fas fa-flask fa-fw mr-1" aria-hidden="true"></i>{t('Experiment')}</button>
     <button type="button" class="btn btn-sm" class:btn-primary={tool === 'connect'} class:btn-ghost={tool !== 'connect'} on:click={() => setTool(tool === 'connect' ? 'select' : 'connect')}><i class="fas fa-arrow-right fa-fw mr-1" aria-hidden="true"></i>{t('Connect')}</button>
     <button type="button" class="btn btn-sm" class:btn-primary={tool === 'remove'} class:btn-ghost={tool !== 'remove'} on:click={() => setTool(tool === 'remove' ? 'select' : 'remove')}><i class="fas fa-xmark fa-fw mr-1" aria-hidden="true"></i>{t('Remove')}</button>
-    <button type="button" class="btn btn-sm btn-ghost" on:click={relayout}><i class="fas fa-crosshairs fa-fw mr-1" aria-hidden="true"></i>{t('Fit')}</button>
+    <button type="button" class="btn btn-sm btn-ghost" on:click={() => relayout(true)}><i class="fas fa-crosshairs fa-fw mr-1" aria-hidden="true"></i>{t('Fit')}</button>
     {#if visibleTree.length > 1}
       <label class="pmc-addto">
         <span class="pm-muted">{t('Add to')}</span>
@@ -554,7 +628,7 @@
 
       {#each frameList as frame (frame.id)}
         <div class="pmc-frame" style="left:{frame.x}px;top:{frame.y}px;width:{frame.w}px;height:{frame.h}px;border-color:{frame.color}">
-          <span class="pmc-frame-label" style="color:{frame.color}"><span class="pmc-dot" style="background:{frame.color}"></span>{frame.name}</span>
+          <span class="pmc-frame-label" style="color:{frame.color}" title={t('Drag to move this project')} on:pointerdown={(event) => startFrameDrag(event, frame)} role="presentation"><span class="pmc-dot" style="background:{frame.color}"></span>{frame.name}</span>
         </div>
       {/each}
 
