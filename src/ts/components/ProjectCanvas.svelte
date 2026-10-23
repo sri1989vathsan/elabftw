@@ -227,10 +227,10 @@
       if (own.length === 0) {
         return { id: project.id, name: project.name, color: colorOf(project.id), x: l.fx, y: l.fy, w: 220 + GROUP_PAD * 2, h: 70 + GROUP_PAD * 2 + GROUP_LABEL };
       }
-      const x1 = Math.min(...own.map(screenX));
-      const y1 = Math.min(...own.map(screenY));
-      const x2 = Math.max(...own.map(node => screenX(node) + NODE_W));
-      const y2 = Math.max(...own.map(node => screenY(node) + nodeHeight(node)));
+      const x1 = Math.min(...own.map(node => screenX(node, layoutNow)));
+      const y1 = Math.min(...own.map(node => screenY(node, layoutNow)));
+      const x2 = Math.max(...own.map(node => screenX(node, layoutNow) + NODE_W));
+      const y2 = Math.max(...own.map(node => screenY(node, layoutNow) + nodeHeight(node)));
       return { id: project.id, name: project.name, color: colorOf(project.id), x: x1 - GROUP_PAD, y: y1 - GROUP_PAD - GROUP_LABEL, w: x2 - x1 + GROUP_PAD * 2, h: y2 - y1 + GROUP_PAD * 2 + GROUP_LABEL };
     }).filter((frame): frame is Frame => frame !== null);
   }
@@ -239,18 +239,18 @@
 
   type Arrow = { id: number; d: string; mx: number; my: number };
 
-  function edgePoint(node: CanvasNode, towardX: number, towardY: number): [number, number] {
+  function edgePoint(node: CanvasNode, towardX: number, towardY: number, at: typeof layout): [number, number] {
     const w = NODE_W;
     const h = nodeHeight(node);
-    const cx = screenX(node) + w / 2;
-    const cy = screenY(node) + h / 2;
+    const cx = screenX(node, at) + w / 2;
+    const cy = screenY(node, at) + h / 2;
     const dx = towardX - cx;
     const dy = towardY - cy;
     const scale = Math.min(w / 2 / Math.abs(dx || 0.001), h / 2 / Math.abs(dy || 0.001));
     return [cx + dx * scale, cy + dy * scale];
   }
 
-  function arrows(list: CanvasNode[], edgeList: CanvasEdge[], _layout: typeof layout, _heights: typeof heights): { items: Arrow[]; hidden: number } {
+  function arrows(list: CanvasNode[], edgeList: CanvasEdge[], layoutNow: typeof layout, _heights: typeof heights): { items: Arrow[]; hidden: number } {
     const byId = new Map(list.map(node => [node.id, node]));
     const items: Arrow[] = [];
     let hidden = 0;
@@ -261,10 +261,10 @@
         hidden += 1;
         continue;
       }
-      const fromCentre: [number, number] = [screenX(from) + NODE_W / 2, screenY(from) + nodeHeight(from) / 2];
-      const toCentre: [number, number] = [screenX(to) + NODE_W / 2, screenY(to) + nodeHeight(to) / 2];
-      const [px, py] = edgePoint(from, toCentre[0], toCentre[1]);
-      const [qx, qy] = edgePoint(to, fromCentre[0], fromCentre[1]);
+      const fromCentre: [number, number] = [screenX(from, layoutNow) + NODE_W / 2, screenY(from, layoutNow) + nodeHeight(from) / 2];
+      const toCentre: [number, number] = [screenX(to, layoutNow) + NODE_W / 2, screenY(to, layoutNow) + nodeHeight(to) / 2];
+      const [px, py] = edgePoint(from, toCentre[0], toCentre[1], layoutNow);
+      const [qx, qy] = edgePoint(to, fromCentre[0], fromCentre[1], layoutNow);
       const mx = (px + qx) / 2;
       items.push({ id: edge.id, d: `M${px} ${py} Q${mx} ${py} ${qx} ${qy}`, mx: (px + 2 * mx + qx) / 4, my: (py + 2 * py + qy) / 4 });
     }
