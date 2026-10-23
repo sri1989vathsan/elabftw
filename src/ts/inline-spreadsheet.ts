@@ -2283,6 +2283,47 @@ if (typeof document !== 'undefined' && !document.body?.dataset.jssSelectingGuard
   if (document.body) installSelectingGuard();
   else document.addEventListener('DOMContentLoaded', installSelectingGuard, { once: true });
 }
+/**
+ * Text that reaches the grid's hidden keyboard input (.jss_textarea) without the key presses the type-to-edit
+ * handlers listen for -- dead keys (e, a accents), input methods, dictation, autocorrect, a mobile keyboard -- used
+ * to stay in that hidden box and be dropped by the next click or Enter, so the cell kept its old value. This
+ * hands such text to the cell editor of the selected cell instead.
+ */
+function rescueSinkText(
+  inContainer: (target: Element) => boolean,
+  options: {
+    singleCell: () => [number, number] | null;
+    editorOpen: () => boolean;
+    open: (col: number, row: number, value: string) => void;
+  },
+): { handleInput: (event: Event) => void; handleCompositionEnd: (event: Event) => void } {
+  const TEXT_INPUT_TYPES = new Set(['insertText', 'insertCompositionText', 'insertFromComposition', 'insertReplacementText']);
+  const flush = (sink: HTMLTextAreaElement): void => {
+    if (options.editorOpen()) return;
+    const value = sink.value;
+    if (value === '') return;
+    const cell = options.singleCell();
+    if (!cell) return;
+    sink.value = '';
+    options.open(cell[0], cell[1], value);
+  };
+  return {
+    handleInput: (event: Event): void => {
+      const target = event.target;
+      if (!(target instanceof HTMLTextAreaElement) || !target.classList.contains('jss_textarea') || !inContainer(target)) return;
+      const input = event as InputEvent;
+      if (input.isComposing || !TEXT_INPUT_TYPES.has(input.inputType)) return;
+      flush(target);
+    },
+    handleCompositionEnd: (event: Event): void => {
+      const target = event.target;
+      if (!(target instanceof HTMLTextAreaElement) || !target.classList.contains('jss_textarea') || !inContainer(target)) return;
+      // the final text is written to the box just after this event
+      window.setTimeout(() => flush(target), 0);
+    },
+  };
+}
+
 const JSS_DEFAULT_ROW_HEIGHT = 34;
 
 function readRenderedRowHeights(container: HTMLElement, ignoreLibraryDefault = true): RowHeights | undefined {
@@ -6475,6 +6516,27 @@ export function openSpreadsheetModal(
     // same reasoning as onCellSecondMousedown's own comment on window vs
     // sheetContainer -- this needs to see it regardless of which element
     // the pointer actually went down on.
+    // Text that reaches the grid's hidden input without key presses (dead keys, input methods, dictation) must
+    // not be dropped: hand it to the editor of the selected cell (see rescueSinkText).
+    const popupSinkRescue = rescueSinkText(target => sheetContainer !== null && sheetContainer.contains(target), {
+      singleCell: () => {
+        if (selectedRange === null) getSelectedRange();
+        if (selectedRange !== null && selectedRange[0] === selectedRange[2] && selectedRange[1] === selectedRange[3]) {
+          return [selectedRange[0], selectedRange[1]];
+        }
+        const active = sheetContainer?.querySelectorAll<HTMLElement>('td[data-x][data-y].highlight-selected');
+        if (active && active.length === 1) {
+          const col = Number.parseInt(active[0].dataset.x ?? '', 10);
+          const row = Number.parseInt(active[0].dataset.y ?? '', 10);
+          if (Number.isInteger(col) && Number.isInteger(row)) return [col, row];
+        }
+        return null;
+      },
+      editorOpen: () => !!rescueInputEl && !rescueInputEl.hidden,
+      open: (col, row, value) => openCellEditor(col, row, value, false),
+    });
+    listenWhilePopupOpen(document, 'input', popupSinkRescue.handleInput, true);
+    listenWhilePopupOpen(document, 'compositionend', popupSinkRescue.handleCompositionEnd, true);
     listenWhilePopupOpen(document, 'pointerdown', event => {
       const target = event.target;
       // The cell-format toolbar (bold/italic/font/background/alignment --
@@ -8588,6 +8650,17 @@ export function buildReadOnlySpreadsheetHost(
     openCellEditor(col, row, value, false);
   };
   if (editable) window.addEventListener('keydown', onDirectCellKey, true);
+  if (editable) {
+    const sinkRescue = rescueSinkText(target => sheetContainer.contains(target), {
+      singleCell: () => (lastKnownSelection && lastKnownSelection[0] === lastKnownSelection[2] && lastKnownSelection[1] === lastKnownSelection[3]
+        ? [lastKnownSelection[0], lastKnownSelection[1]]
+        : null),
+      editorOpen: () => !!rescueInputEl && !rescueInputEl.hidden,
+      open: (col, row, value) => openCellEditor(col, row, value, false),
+    });
+    listenOnDocument('input', sinkRescue.handleInput, true);
+    listenOnDocument('compositionend', sinkRescue.handleCompositionEnd, true);
+  }
   if (editable) {
     // Clicking a cell selects it, but in Chromium keyboard focus can stay in the
     // page editor from before (its old caret), so typing lands in the page text
