@@ -124,7 +124,7 @@ final class TodolistCanvas extends AbstractRest
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $this->Db->execute($req);
-        $row = $this->Db->fetch($req);
+        $row = $req->fetch();
         if ($row === false) {
             return array();
         }
@@ -228,7 +228,7 @@ final class TodolistCanvas extends AbstractRest
         $req->bindValue(':id', $nodeId, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $this->Db->execute($req);
-        $row = $this->Db->fetch($req);
+        $row = $req->fetch();
         if ($row === false) {
             throw new ImproperActionException(_('Card not found.'));
         }

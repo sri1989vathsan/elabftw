@@ -63,7 +63,7 @@ final class TodolistCanvasEdges extends AbstractRest
         $req->bindValue(':from', $from, PDO::PARAM_INT);
         $req->bindValue(':to', $to, PDO::PARAM_INT);
         $this->Db->execute($req);
-        $existing = $this->Db->fetch($req);
+        $existing = $req->fetch();
         if ($existing !== false) {
             return (int) $existing['id'];
         }
@@ -83,7 +83,7 @@ final class TodolistCanvasEdges extends AbstractRest
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $this->Db->execute($req);
-        $row = $this->Db->fetch($req);
+        $row = $req->fetch();
         if ($row === false) {
             throw new ImproperActionException(_('Arrow not found.'));
         }
