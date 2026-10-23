@@ -2327,6 +2327,51 @@ function rescueSinkText(
   };
 }
 
+const FILLER_COLUMN_WIDTH = 100;
+
+/**
+ * The room to the right of a grid that is narrower than its box is drawn as empty, lettered columns (D, E, F...)
+ * continuing the real ones, so an active table reads as part of a larger sheet. Purely visual: it takes no pointer
+ * input and holds no data. Cheap to call often: the markup is only rebuilt when the geometry changed.
+ */
+export function syncGridFiller(gridEl: HTMLElement | null, visible: boolean): void {
+  if (!gridEl) return;
+  let filler = gridEl.querySelector<HTMLElement>(':scope > .elabftw-spreadsheet-filler');
+  const worksheetEl = gridEl.querySelector<HTMLElement>('.jss_worksheet');
+  if (!visible || !worksheetEl) {
+    filler?.remove();
+    return;
+  }
+  const gridRect = gridEl.getBoundingClientRect();
+  const sheetRect = worksheetEl.getBoundingClientRect();
+  const free = Math.floor(gridRect.right - sheetRect.right);
+  if (free < 24) {
+    filler?.remove();
+    return;
+  }
+  const headerRow = worksheetEl.querySelector<HTMLElement>(':scope > thead > tr');
+  const rowEls = Array.from(worksheetEl.querySelectorAll<HTMLElement>(':scope > tbody > tr'));
+  const headerHeight = headerRow?.offsetHeight ?? 24;
+  const rowHeights = rowEls.map(row => row.offsetHeight);
+  const dataCols = worksheetEl.querySelectorAll(':scope > thead td[data-x]').length;
+  const left = Math.round(sheetRect.right - gridRect.left + gridEl.scrollLeft);
+  const top = Math.round(sheetRect.top - gridRect.top + gridEl.scrollTop);
+  const key = [free, left, top, headerHeight, rowHeights.join(','), dataCols, Math.round(sheetRect.height)].join('|');
+  if (filler?.dataset.key === key) return;
+  if (!filler) {
+    filler = document.createElement('div');
+    filler.className = 'elabftw-spreadsheet-filler';
+    filler.setAttribute('aria-hidden', 'true');
+    gridEl.appendChild(filler);
+  }
+  filler.dataset.key = key;
+  filler.style.cssText = `left:${left}px;top:${top}px;width:${free}px;height:${Math.round(sheetRect.height)}px;counter-reset:fcol ${dataCols}`;
+  const count = Math.ceil(free / FILLER_COLUMN_WIDTH);
+  const cells = '<span class="fc"></span>'.repeat(count);
+  filler.innerHTML = `<div class="fc-row fc-head" style="height:${headerHeight}px">${cells}</div>`
+    + rowHeights.map(height => `<div class="fc-row" style="height:${height}px">${cells}</div>`).join('');
+}
+
 const JSS_DEFAULT_ROW_HEIGHT = 34;
 
 function readRenderedRowHeights(container: HTMLElement, ignoreLibraryDefault = true): RowHeights | undefined {
@@ -3970,6 +4015,9 @@ export function openSpreadsheetModal(
     // Page-level listeners of this popup, taken off again when it closes (they used to stay behind each time
     // a popup was opened, slowing every mouse event on the page down in a long session).
     const popupPageListenerRemovers: Array<() => void> = [];
+    // the empty lettered columns beside a narrow grid (see syncGridFiller)
+    const fillerTimer = window.setInterval(() => syncGridFiller(sheetContainer, true), 400);
+    popupPageListenerRemovers.push(() => window.clearInterval(fillerTimer));
     const listenWhilePopupOpen = (
       target: Document | Window,
       type: string,
@@ -4489,10 +4537,8 @@ export function openSpreadsheetModal(
       const editedValue = editor.value;
       updateRawDataMirrorCell(editedCol, editedRow, editedValue, false);
       worksheet.closeEditor(editedCell, true);
-      // Enter in a cell of the last row adds a row below it, as in Excel.
-      const addsRow = editedRow >= working.rows - 1 && working.rows < MAX_DIMENSION && working.kind !== 'well-plate';
-      if (addsRow) worksheet.insertRow?.(1, editedRow, 0);
-      const targetRow = addsRow ? editedRow + 1 : Math.min(working.rows - 1, editedRow + 1);
+      // Enter commits and stays in the cell; a further Enter moves down (and adds a row at the end)
+      const targetRow = editedRow;
       selectedRange = [editedCol, targetRow, editedCol, targetRow];
       worksheet.updateSelectionFromCoords?.(...selectedRange);
       scheduleFormulaResultRender();
@@ -4776,7 +4822,8 @@ export function openSpreadsheetModal(
       releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
         if (event.key === 'Enter') {
           event.preventDefault();
-          commitRescueInputAndMove(0, event.shiftKey ? -1 : 1);
+          // Enter commits and stays in the cell; a further Enter (see the non-editing handlers) moves on
+          commitRescueInputAndMove(0, event.shiftKey ? -1 : 0);
         } else if (event.key === 'Tab') {
           event.preventDefault();
           commitRescueInputAndMove(event.shiftKey ? -1 : 1, 0);
@@ -6364,6 +6411,22 @@ export function openSpreadsheetModal(
           const f2Col = selectedRange![0];
           const f2Row = selectedRange![1];
           openCellEditor(f2Col, f2Row, String(rawDataMirror[f2Row]?.[f2Col] ?? ''), false);
+          return;
+        }
+        if (event.key === 'Enter' && !event.shiftKey && hasSingleCellSelection && worksheet) {
+          // A second Enter, with the cell only selected: move down, and at the last row add a new row and move into it
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const enterCol = selectedRange![0];
+          const enterRow = selectedRange![1];
+          const addsRow = enterRow >= working.rows - 1 && working.rows < MAX_DIMENSION && working.kind !== 'well-plate';
+          if (addsRow) {
+            flushMirrorIntoWorksheet(worksheet);
+            worksheet.insertRow?.(1, working.rows - 1, 0);
+          }
+          const nextRow = addsRow ? working.rows : Math.min(enterRow + 1, working.rows - 1);
+          selectedRange = [enterCol, nextRow, enterCol, nextRow];
+          worksheet.updateSelectionFromCoords?.(enterCol, nextRow, enterCol, nextRow);
           return;
         }
       }
@@ -8369,7 +8432,8 @@ export function buildReadOnlySpreadsheetHost(
     releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        commitRescueInputAndMove(0, event.shiftKey ? -1 : 1);
+        // Enter commits and stays in the cell; a further Enter (see the non-editing handlers) moves on
+        commitRescueInputAndMove(0, event.shiftKey ? -1 : 0);
       } else if (event.key === 'Tab') {
         event.preventDefault();
         commitRescueInputAndMove(event.shiftKey ? -1 : 1, 0);
@@ -8644,6 +8708,22 @@ export function buildReadOnlySpreadsheetHost(
       event.preventDefault();
       event.stopImmediatePropagation();
       openCellEditor(col, row, String(rawDataMirror[row]?.[col] ?? ''), false);
+      return;
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      // A second Enter, with the cell only selected: move down, and at the last row add a new row and move into it
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const maxRow = rawDataMirror.length - 1;
+      const addsRow = editable && !plateLocked && row >= maxRow && rawDataMirror.length < MAX_DIMENSION;
+      const mounted = getMountedWorksheet(sheetContainer);
+      if (addsRow && mounted) {
+        // typed values live only in the mirror until the grid is redrawn; the row insert re-reads the worksheet
+        flushMirrorIntoWorksheet(mounted);
+        mounted.insertRow?.(1, maxRow, 0);
+      }
+      const nextRow = addsRow ? maxRow + 1 : Math.min(row + 1, maxRow);
+      mounted?.updateSelectionFromCoords?.(col, nextRow, col, nextRow);
       return;
     }
     const printable = event.key.length === 1;

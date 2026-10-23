@@ -14,6 +14,7 @@ import {
   spreadsheetFromClipboard,
   spreadsheetFromFlattenedClipboard,
   spreadsheetToHTML,
+  syncGridFiller,
   SpreadsheetData,
   SpreadsheetCellHistory,
   WELL_PLATE_PRESETS,
@@ -1474,7 +1475,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       if (!iframe || spreadsheetOverlays.size === 0) return;
       profiler.count('overlays positioned', spreadsheetOverlays.size);
       const iframeRect = iframe.getBoundingClientRect();
-      const maxContentWidth = editor.getBody().getBoundingClientRect().width;
+      // The editor's content column (inside the body's own padding): a spreadsheet is as wide as the main text
+      const bodyEl = editor.getBody();
+      const bodyRect = bodyEl.getBoundingClientRect();
+      const bodyStyle = editor.getWin().getComputedStyle(bodyEl);
+      const bodyInsetLeft = (Number.parseFloat(bodyStyle.paddingLeft) || 0) + (Number.parseFloat(bodyStyle.borderLeftWidth) || 0);
+      const bodyInsetRight = (Number.parseFloat(bodyStyle.paddingRight) || 0) + (Number.parseFloat(bodyStyle.borderRightWidth) || 0);
+      const maxContentWidth = Math.max(200, bodyRect.width - bodyInsetLeft - bodyInsetRight);
+      const contentLeft = bodyRect.left + bodyInsetLeft;
       // Top to bottom, not in the order the overlays were created: a table's spacer (the room reserved for
       // its grid) moves everything below it, so the tables under it must read their position after it has
       // been updated. Otherwise a lower grid is placed for one frame at its old spot, on top of the table above.
@@ -1522,7 +1530,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // with where the overlay is actually painted.
           const pageScrollX = window.scrollX;
           const pageScrollY = window.scrollY;
-          const pageX = Math.round(iframeRect.left + tableRect.left + pageScrollX);
+          const pageX = Math.round(iframeRect.left + contentLeft + pageScrollX);
           const pageY = Math.round(iframeRect.top + tableRect.top + pageScrollY);
           overlay.style.transform = `translate(${pageX}px, ${pageY}px)`;
           // Viewport position, for the clip below.
@@ -1575,7 +1583,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
             measureUnwrappedWidth(formatBarEl),
             measureUnwrappedWidth(formulaBarEl),
           );
-          overlay.style.width = `${Math.min(Math.max(naturalContentWidth, toolbarMinWidth), maxContentWidth)}px`;
+          // Full width of the main text, whatever the columns add up to: the grid keeps its own columns and the
+          // rest is empty room (drawn as extra lettered columns while the table is active). A grid wider than the
+          // text still scrolls inside this box.
+          void naturalContentWidth;
+          void toolbarMinWidth;
+          overlay.style.width = `${maxContentWidth}px`;
+          syncGridFiller(gridEl, overlay.classList.contains('is-active-table'));
           // Read AFTER the width above is applied, not before: setting a
           // narrower width can itself toggle the horizontal scrollbar on,
           // which changes both of these -- reading naturalContentHeight

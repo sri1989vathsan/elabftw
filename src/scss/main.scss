@@ -3840,6 +3840,52 @@ body.html-tool-workspace-resizing * {
   overflow-y: hidden;
 }
 
+/* Room to the right of a grid narrower than its box: grey, with empty lettered columns while the table is active
+   (drawn by syncGridFiller in inline-spreadsheet.ts; the popup uses it too) */
+.elabftw-spreadsheet-readonly-grid,
+.inline-spreadsheet-grid {
+  position: relative;
+}
+
+.elabftw-spreadsheet-editor-overlay .elabftw-spreadsheet-readonly-grid {
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.elabftw-spreadsheet-filler {
+  counter-reset: fcol;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+
+  .fc-row {
+    display: flex;
+  }
+
+  .fc {
+    border-bottom: 1px solid var(--secondary-muted, #dee2e6);
+    border-right: 1px solid var(--secondary-muted, #dee2e6);
+    box-sizing: border-box;
+    flex: none;
+    width: 100px;
+  }
+
+  .fc-head .fc {
+    align-items: center;
+    background: rgba(127, 127, 127, 0.12);
+    color: var(--medium);
+    counter-increment: fcol;
+    display: flex;
+    font-size: 0.8rem;
+    font-weight: 700;
+    justify-content: center;
+
+    &::before {
+      content: counter(fcol, upper-alpha);
+    }
+  }
+}
+
 .inline-spreadsheet-actions {
   align-items: center;
   background-color: var(--firstlevel);
