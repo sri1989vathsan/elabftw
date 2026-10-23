@@ -91,6 +91,8 @@ use Elabftw\Models\TodolistColumns;
 use Elabftw\Models\TodolistComments;
 use Elabftw\Models\TodolistEntityLinks;
 use Elabftw\Models\TodolistSteps;
+use Elabftw\Models\TodolistCanvas;
+use Elabftw\Models\TodolistCanvasEdges;
 use Elabftw\Models\TodolistProjects;
 use Elabftw\Models\TodolistProjectEntityLinks;
 use Elabftw\Models\UnfinishedSteps;
@@ -410,6 +412,8 @@ final class Apiv2Controller extends AbstractApiController
             ApiEndpoint::Teams => new Teams($this->requester, $this->id),
             ApiEndpoint::Todolist => new Todolist($this->requester, $this->id),
             ApiEndpoint::TodolistColumns => new TodolistColumns($this->requester, $this->id),
+            ApiEndpoint::TodolistCanvas => new TodolistCanvas($this->requester, $this->id),
+            ApiEndpoint::TodolistCanvasEdges => new TodolistCanvasEdges($this->requester, $this->id),
             ApiEndpoint::TodolistProjects => new TodolistProjects($this->requester, $this->id),
             ApiEndpoint::UnfinishedSteps => new UnfinishedSteps(
                 $this->requester,

@@ -57,6 +57,8 @@ enum ApiEndpoint: string
     case Todolist = 'todolist';
     case TodolistColumns = 'todolist_columns';
 
+    case TodolistCanvas = 'todolist_canvas';
+    case TodolistCanvasEdges = 'todolist_canvas_edges';
     case TodolistProjects = 'todolist_projects';
     case UnfinishedSteps = 'unfinished_steps';
     case Users = 'users';
