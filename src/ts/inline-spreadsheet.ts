@@ -6467,7 +6467,9 @@ export function openSpreadsheetModal(
           return;
         }
       }
-      if (!targetIsTextControl
+      // The grid's own hidden input counts as "no editor yet": typing straight over a selected cell must open the
+      // same stable editor as a double-click does (with the same Enter behaviour), not jspreadsheet's native one.
+      if ((!targetIsTextControl || targetIsGridSink)
         && (!rescueInputEl || rescueInputEl.hidden)
         && hasSingleCellSelection
         && (isPrintableKey || event.key === 'Backspace')) {
