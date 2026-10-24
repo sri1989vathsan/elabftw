@@ -138,6 +138,8 @@ async function spreadsheetSoak(options = {}) {
   async function editCell(root, r, c, value, key = 'Tab') {
     const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
     if (!td) throw new Error(`cell ${cellName(r, c)} not found`);
+    // a real double click is two presses of the cell first: they select it and tell the page editor that a grid is in use
+    press(td); await sleep(80);
     const rect = td.getBoundingClientRect();
     td.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 }));
     let box = null;
@@ -679,7 +681,11 @@ async function spreadsheetSoak(options = {}) {
       await sleep(300);
       const menu = openMenu();
       const item = menu && [...menu.querySelectorAll('a')].find(a => (byRow ? /delete selected rows/i : /delete selected columns/i).test(a.textContent));
-      if (!item) { fail('multi-delete menu item not found', { table: model.label }); await closeMenu(model.label, 'multi-delete'); return; }
+      if (!item) {
+        const seen = [...document.querySelectorAll('.jcontextmenu, .jss_contextmenu')].map(m => ({ display: getComputedStyle(m).display, width: Math.round(m.getBoundingClientRect().width), items: [...m.querySelectorAll('a')].map(a => a.textContent.trim()).slice(0, 6) }));
+        fail('multi-delete menu item not found', { table: model.label, byRow, highlighted: root.querySelectorAll('td.highlight').length, menus: seen, rescueOpen: !!visibleRescue(), active: (document.activeElement?.className || document.activeElement?.tagName || '').toString().slice(0, 40) });
+        await closeMenu(model.label, 'multi-delete'); return;
+      }
       clickMenuItem(item);
       await sleep(700);
       doneMulti = true;
@@ -1341,7 +1347,15 @@ async function spreadsheetSoak(options = {}) {
         // drawn by the layout loop, which runs slower while the page is hidden: wait up to 4 s
         for (let i = 0; i < 40 && !(filler = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-filler')); i++) await sleep(100);
         root = api.overlayElement(uid) || root;
-        if (!filler) { fail('no grey columns beside the active grid', { table: model().label }); break; }
+        if (!filler) {
+          // a grid that already fills the width has no room left for grey columns: not a fault
+          const grid = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-readonly-grid');
+          const sheet = (api.overlayElement(uid) || root).querySelector('.jss_worksheet');
+          const free = grid && sheet ? Math.floor(grid.getBoundingClientRect().right - sheet.getBoundingClientRect().right) : 999;
+          if (free < 24) { note('filler-no-room'); break; }
+          fail('no grey columns beside the active grid', { table: model().label, free });
+          break;
+        }
         const cols = model().grid[0].length;
         // any grey cell that is there (how many depends on the width of the page)
         const cell = pick([...filler.querySelectorAll('.fc[data-i][data-r]')]);
