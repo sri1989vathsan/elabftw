@@ -8470,6 +8470,9 @@ export function buildReadOnlySpreadsheetHost(
         mounted.insertRow?.(1, maxRow, 0);
       }
       mounted?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
+      // a programmatic selection does not reliably fire onselection: without this the next Enter, or typing over the
+      // cell, would act on the cell that was selected before a Tab or Shift+Enter moved on
+      lastKnownSelection = [nextCol, nextRow, nextCol, nextRow];
       // The editor box closing leaves keyboard focus on <body>; hand it back to the grid so the next key (a second
       // Enter, an arrow, typing over the cell) reaches it.
       const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea');
@@ -8743,6 +8746,11 @@ export function buildReadOnlySpreadsheetHost(
     if ((target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
       || (target instanceof HTMLElement && target.isContentEditable))
       && !target.classList.contains('jss_textarea')) return;
+    // the grid's own current selection wins over the record, which a programmatic selection may have left stale
+    const liveSelection = getMountedWorksheet(sheetContainer)?.getSelection?.();
+    if (Array.isArray(liveSelection) && liveSelection.length >= 4 && liveSelection.slice(0, 4).every(value => Number.isInteger(value))) {
+      lastKnownSelection = liveSelection.slice(0, 4) as CellRange;
+    }
     if (!lastKnownSelection) return;
     if (event.key === 'Delete') {
       event.preventDefault();
@@ -8773,6 +8781,7 @@ export function buildReadOnlySpreadsheetHost(
       }
       const nextRow = addsRow ? maxRow + 1 : Math.min(row + 1, maxRow);
       mounted?.updateSelectionFromCoords?.(col, nextRow, col, nextRow);
+      lastKnownSelection = [col, nextRow, col, nextRow];
       return;
     }
     const printable = event.key.length === 1;
@@ -8807,8 +8816,10 @@ export function buildReadOnlySpreadsheetHost(
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
       const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea');
+      lastKnownSelection = [col, row, col, row];
       window.setTimeout(() => {
         mounted.updateSelectionFromCoords?.(col, row, col, row);
+        lastKnownSelection = [col, row, col, row];
         sink?.focus({ preventScroll: true });
       }, 0);
     });

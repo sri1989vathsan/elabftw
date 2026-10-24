@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'sink-text', 'format-after-typing', 'filler-click', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1437,6 +1437,32 @@ async function spreadsheetSoak(options = {}) {
       await enterAgain(uid);
       await verify('paste-external: edited', true);
       await consistency('paste-external: inline, popup and stored HTML agree', true);
+    },
+    // After Tab (or Shift+Enter) the cursor is on another cell, and typing or Enter must act on that one.
+    async 'tab-then-type'() {
+      const uid = await createTable('tab then type', { rows: 5, cols: 5 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      for (let round = 1; round <= 6; round++) {
+        const r = int(0, model().grid.length - 1); const c = int(0, model().grid[0].length - 3);
+        await typeDirect(uid, r, c, `T${round}a`, 'Tab');
+        await sleep(200);
+        const sel = selectedCells(api.overlayElement(uid));
+        if (sel.length !== 1 || sel[0][0] !== c + 1 || sel[0][1] !== r) { dataLoss.push({ context, table: model().label, problem: `after Tab from ${cellName(r, c)} the cursor should be on ${cellName(r, c + 1)}, it is on ${JSON.stringify(sel)}` }); }
+        // typing straight on, without touching the mouse
+        const first = 'q';
+        (document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', { key: first, code: 'KeyQ', bubbles: true, cancelable: true }));
+        let box = null;
+        for (let i = 0; i < 40 && !(box = visibleRescue()); i++) await sleep(25);
+        if (!box) { fail(`typing right after Tab from ${cellName(r, c)} did not open an editor`, { table: model().label }); continue; }
+        box.value = `T${round}b`; box.dispatchEvent(new Event('input', { bubbles: true }));
+        box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await frames(2);
+        model().grid[r][c + 1] = `T${round}b`;
+        note('tab-then-type');
+        await verify(`tab-then-type round ${round}`, round % 3 === 0);
+      }
+      await verify('tab-then-type: final', true);
     },
     async mixed() {
       const made = [];

@@ -568,6 +568,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     window.setTimeout(() => window.dispatchEvent(new Event('elabftw-spreadsheet-active')), 0);
     spreadsheetOverlays.forEach(({ el }, otherTable) => {
       el.classList.toggle('is-active-table', otherTable === table);
+      // the empty lettered columns appear (and go) with the activation, not a frame later
+      syncGridFiller(el.querySelector<HTMLElement>('.elabftw-spreadsheet-readonly-grid'), otherTable === table);
     });
   };
   // jspreadsheet-ce appends its context menu as a child of its own root
