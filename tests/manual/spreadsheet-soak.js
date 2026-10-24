@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'sink-text', 'format-after-typing', 'filler-click', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -157,11 +157,96 @@ async function spreadsheetSoak(options = {}) {
     });
     const model = models.get(uid);
     model.grid[r][c] = value;
-    // Enter in a cell of the last row adds a row below it (up to 50 rows).
-    if (key === 'Enter' && r === model.grid.length - 1 && model.grid.length < 50) {
-      model.grid.push(Array.from({ length: model.grid[0].length }, () => ''));
-    }
+    // Enter commits and stays in the cell; only a second Enter (see enterAgain) moves down or adds a row.
     note(key === 'Enter' ? 'type-with-enter' : 'type-in-cell');
+  }
+
+  // ---- newer interactions: typing straight over a cell, a second Enter, resizing, text without key presses ----
+  const selectedCells = root => [...root.querySelectorAll('td.highlight-selected')].map(t => [Number(t.dataset.x), Number(t.dataset.y)]);
+  const blankRow = n => Array.from({ length: n }, () => '');
+  async function selectCell(uid, r, c) {
+    const root = await live(uid);
+    const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
+    if (!td) throw new Error(`cell ${cellName(r, c)} not found`);
+    press(td); await sleep(220);
+    return root;
+  }
+  // Typing straight over a selected cell: the first key is a real keydown (it opens the stable editor), the rest of
+  // the text goes into the box. finish: 'Enter' | 'Tab' | null (leave the editor open, as when a resize follows).
+  async function typeDirect(uid, r, c, value, finish = 'Enter') {
+    const model = models.get(uid);
+    const root = await selectCell(uid, r, c);
+    const first = value[0];
+    (document.activeElement || root).dispatchEvent(new KeyboardEvent('keydown', { key: first, code: `Key${first.toUpperCase()}`, bubbles: true, cancelable: true }));
+    let box = null;
+    for (let i = 0; i < 40 && !(box = visibleRescue()); i++) await sleep(25);
+    if (!box) { fail(`typing "${first}" over ${cellName(r, c)} did not open the editor`, { table: model.label }); return false; }
+    box.value = value;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    if (finish) box.dispatchEvent(new KeyboardEvent('keydown', { key: finish, bubbles: true, cancelable: true }));
+    await frames(2);
+    model.grid[r][c] = value;
+    note(finish ? 'type-direct' : 'type-direct-left-open');
+    if (finish === 'Enter') {
+      await sleep(120);
+      const sel = selectedCells(api.overlayElement(uid) || root);
+      if (sel.length !== 1 || sel[0][0] !== c || sel[0][1] !== r) dataLoss.push({ context, table: model.label, problem: `Enter in ${cellName(r, c)} should keep the cursor there, it is on ${JSON.stringify(sel)}` });
+    }
+    return true;
+  }
+  // A second Enter with the cell only selected: down one cell, and a new row at the last row.
+  async function enterAgain(uid) {
+    const model = models.get(uid);
+    const root = await live(uid);
+    const before = selectedCells(root);
+    if (before.length !== 1) { fail('enterAgain needs one selected cell', { table: model.label, selected: before }); return; }
+    const [c, r] = before[0];
+    const last = r === model.grid.length - 1;
+    (document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await sleep(500);
+    const after = selectedCells(api.overlayElement(uid) || root);
+    if (last && model.grid.length < 50) model.grid.push(blankRow(model.grid[0].length));
+    const wantRow = last && model.grid.length - 1 > r ? r + 1 : Math.min(r + 1, model.grid.length - 1);
+    if (after.length !== 1 || after[0][0] !== c || after[0][1] !== wantRow) {
+      dataLoss.push({ context, table: model.label, problem: `a second Enter in ${cellName(r, c)} should select ${cellName(wantRow, c)}, selection is ${JSON.stringify(after)}` });
+    }
+    note('enter-again');
+  }
+  // Drag the right edge of a column header, falling back to a double click on it (autofit): both end in the same
+  // resize callback, which is what used to replace typed values with older ones.
+  async function resizeColumn(uid, c) {
+    const root = await live(uid);
+    const header = root.querySelector(`.jss_worksheet thead td[data-x="${c}"]`);
+    if (!header) { fail(`column header ${c} not found`); return false; }
+    const rect = header.getBoundingClientRect();
+    const x = rect.right - 2; const y = rect.top + rect.height / 2;
+    const init = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 0, buttons: 1 };
+    const widthBefore = Math.round(rect.width);
+    header.dispatchEvent(new PointerEvent('pointerdown', init));
+    header.dispatchEvent(new MouseEvent('mousedown', init));
+    for (let i = 1; i <= 5; i++) { header.dispatchEvent(new MouseEvent('mousemove', { ...init, clientX: x + i * 12 })); await sleep(15); }
+    header.dispatchEvent(new MouseEvent('mouseup', { ...init, clientX: x + 60, buttons: 0 }));
+    await sleep(500);
+    let widthAfter = Math.round((api.overlayElement(uid) || root).querySelector(`.jss_worksheet thead td[data-x="${c}"]`).getBoundingClientRect().width);
+    if (widthAfter === widthBefore) {
+      note('resize-drag-not-applied');
+      const again = (api.overlayElement(uid) || root).querySelector(`.jss_worksheet thead td[data-x="${c}"]`);
+      const r2 = again.getBoundingClientRect();
+      again.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window, clientX: r2.right - 2, clientY: r2.top + r2.height / 2, button: 0 }));
+      await sleep(500);
+      widthAfter = Math.round((api.overlayElement(uid) || root).querySelector(`.jss_worksheet thead td[data-x="${c}"]`).getBoundingClientRect().width);
+    }
+    note('resize-column');
+    return widthAfter !== widthBefore;
+  }
+  // Every cell of the grid and of the stored table sits in the vertical middle.
+  function verticalAlignCheck(uid, label) {
+    const root = api.overlayElement(uid); const table = tableEl(uid); const model = models.get(uid);
+    const off = [];
+    root?.querySelectorAll('.jss_worksheet tbody td[data-x]').forEach(td => { if (getComputedStyle(td).verticalAlign !== 'middle') off.push(`grid ${td.dataset.x},${td.dataset.y}`); });
+    table?.querySelectorAll('td').forEach((td, i) => { if (getComputedStyle(td).verticalAlign !== 'middle') off.push(`table cell ${i}`); });
+    note('vertical-align-check');
+    if (off.length) fail(`${label}: ${off.length} cells are not vertically centred (${off.slice(0, 4).join(', ')})`, { table: model?.label });
   }
 
   // The diagnostics drop trailing empty rows and columns, so the record is cut the same way.
@@ -1024,6 +1109,7 @@ async function spreadsheetSoak(options = {}) {
       for (let i = 0; i < 10; i++) {
         const last = model().grid.length - 1;
         await typeInto(uid, last, int(0, model().grid[0].length - 1), `E${i + 1}`, 'Enter');
+        await enterAgain(uid); // the second Enter, on the last row, adds the row
         await verify(`enter-last-row: Enter ${i + 1}, right after typing`, false);
         if (i % 3 === 2) { await typeInto(uid, int(0, model().grid.length - 1), int(0, model().grid[0].length - 1), `T${i}`); }
       }
@@ -1043,6 +1129,7 @@ async function spreadsheetSoak(options = {}) {
       }
       // and Enter in the last row followed at once by a popup
       await typeInto(uid, model().grid.length - 1, 0, 'LBP', 'Enter');
+      await enterAgain(uid);
       await popupEdit(uid, true, 2);
       await verify('enter-last-row: popup after Enter', true);
       await consistency('enter-last-row: inline, popup and stored HTML agree', true);
@@ -1159,6 +1246,196 @@ async function spreadsheetSoak(options = {}) {
       await save();
       await verify('format: saved', true);
     },
+    // Reported data loss: header cells typed, the column width changed straight after, and the typed text
+    // replaced by older grid data. Some rounds leave the last cell's editor open when the resize starts.
+    async 'type-then-resize'() {
+      const uid = await createTable('resize table', { rows: 6, cols: 5 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      for (let round = 1; round <= 8; round++) {
+        const cells = int(2, 4);
+        for (let j = 0; j < cells; j++) {
+          const leaveOpen = j === cells - 1 && round % 2 === 0;
+          await typeDirect(uid, int(0, model().grid.length - 1), int(0, model().grid[0].length - 1), `R${round}x${j}`, leaveOpen ? null : 'Enter');
+        }
+        await resizeColumn(uid, int(0, model().grid[0].length - 1));
+        await verify(`type-then-resize round ${round}`, round % 3 === 0);
+      }
+      await verify('type-then-resize: final', true);
+      verticalAlignCheck(uid, 'after resizes');
+      await consistency('type-then-resize: inline, popup and stored HTML agree', true);
+      await save();
+      await verify('type-then-resize: saved', true);
+    },
+    // Enter commits and stays; a second Enter moves down; at the last row it adds a row.
+    async 'enter-semantics'() {
+      const uid = await createTable('enter semantics', { rows: 4, cols: 3 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      await typeDirect(uid, 1, 1, 'mid', 'Enter');
+      await enterAgain(uid);
+      await enterAgain(uid);
+      await verify('enter-semantics: moved down', true);
+      for (let i = 0; i < 4; i++) await enterAgain(uid);
+      await verify('enter-semantics: rows added by Enter', true);
+      verticalAlignCheck(uid, 'rows added by Enter');
+      await typeDirect(uid, model().grid.length - 1, 2, 'tail', 'Enter');
+      await typeDirect(uid, 0, 0, 'tabbed', 'Tab');
+      await verify('enter-semantics: typed after growing', true);
+      await consistency('enter-semantics: inline, popup and stored HTML agree', true);
+    },
+    // Text that reaches the grid's hidden input without key presses (input methods, dead keys, dictation).
+    async 'sink-text'() {
+      const uid = await createTable('sink table', { rows: 5, cols: 4 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      for (let round = 1; round <= 6; round++) {
+        const r = int(0, model().grid.length - 1); const c = int(0, model().grid[0].length - 1);
+        const root = await selectCell(uid, r, c);
+        const sink = root.querySelector('.jss_textarea');
+        if (!sink) { fail('the grid has no hidden input'); break; }
+        sink.focus();
+        const text = pick(['µg/µL', 'Ratio:Primer', '#oligos in panel', 'Total DNA (µg)', 'é à ü']) + ` ${round}`;
+        sink.value = text;
+        sink.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+        let box = null;
+        for (let i = 0; i < 40 && !(box = visibleRescue()); i++) await sleep(25);
+        if (!box || box.value !== text) { fail(`text put in the hidden input was not handed to the cell editor (${box ? JSON.stringify(box.value) : 'no editor'})`, { table: model().label, cell: cellName(r, c) }); continue; }
+        box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await frames(2);
+        model().grid[r][c] = text;
+        note('sink-text');
+        await verify(`sink-text round ${round}`, false);
+      }
+      await verify('sink-text: final', true);
+    },
+    // A format button pressed while a cell is still being typed in must keep the text.
+    async 'format-after-typing'() {
+      const uid = await createTable('format after typing', { rows: 5, cols: 4 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      for (let round = 1; round <= 5; round++) {
+        const r = int(0, model().grid.length - 1); const c = int(0, model().grid[0].length - 1);
+        if (!await typeDirect(uid, r, c, `Fmt${round}`, null)) continue;
+        const root = api.overlayElement(uid);
+        openFormatBar(root); await sleep(300);
+        const button = findButton(root, ['Bold']);
+        if (!button) { fail('the Bold button was not found'); continue; }
+        button.click();
+        await sleep(700);
+        const td = (api.overlayElement(uid) || root).querySelector(`td[data-x="${c}"][data-y="${r}"]`);
+        if (!isBold(td)) fail(`bold did not show on ${cellName(r, c)} typed a moment before`, { table: model().label });
+        await verify(`format-after-typing round ${round}`, false);
+      }
+      await verify('format-after-typing: final', true);
+      await consistency('format-after-typing: inline, popup and stored HTML agree', true);
+    },
+    // The grey columns beside the grid: a click adds the columns up to it and typing there works.
+    async 'filler-click'() {
+      const uid = await createTable('filler table', { rows: 4, cols: 3 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      for (let round = 1; round <= 3; round++) {
+        let root = await selectCell(uid, 0, 0);
+        let filler = null;
+        // drawn by the layout loop, which runs slower while the page is hidden: wait up to 4 s
+        for (let i = 0; i < 40 && !(filler = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-filler')); i++) await sleep(100);
+        root = api.overlayElement(uid) || root;
+        if (!filler) { fail('no grey columns beside the active grid', { table: model().label }); break; }
+        const cols = model().grid[0].length; const i = int(0, 2); const rr = int(0, model().grid.length - 1);
+        const cell = filler.querySelector(`.fc[data-i="${i}"][data-r="${rr}"]`);
+        if (!cell) { fail('the grey cell to click was not found'); break; }
+        cell.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+        await sleep(1000);
+        root = api.overlayElement(uid) || root;
+        const gotCols = root.querySelectorAll('.jss_worksheet thead td[data-x]').length;
+        if (gotCols !== cols + i + 1) dataLoss.push({ context, table: model().label, problem: `clicking a grey cell should leave ${cols + i + 1} columns, there are ${gotCols}` });
+        model().grid.forEach(row => { while (row.length < gotCols) row.push(''); });
+        await typeDirect(uid, rr, gotCols - 1, `new${round}`, 'Enter');
+        await verify(`filler-click round ${round}`, true);
+      }
+      verticalAlignCheck(uid, 'columns added by the grey cells');
+      await consistency('filler-click: inline, popup and stored HTML agree', true);
+    },
+    // Edits made inside a grid are saved without having to leave it.
+    async 'autosave-in-grid'() {
+      const uid = await createTable('autosave table', { rows: 4, cols: 3 });
+      if (!uid) return;
+      const token = `AS${Math.random().toString(36).slice(2, 8)}`;
+      await typeDirect(uid, 1, 1, token, 'Enter');
+      await sleep(11500);
+      const id = new URLSearchParams(location.search).get('id');
+      const body = (await (await fetch(`/api/v2/experiments/${id}`)).json()).body || '';
+      note('autosave-check');
+      if (!body.includes(token)) dataLoss.push({ context, table: models.get(uid).label, problem: `"${token}", typed in the grid, was not saved within 11 s of staying in the grid` });
+    },
+    // Typing straight over cells in the popup: Enter stays, a second Enter moves down / adds a row, Update keeps all.
+    async 'popup-direct-typing'() {
+      const uid = await createTable('popup direct', { rows: 4, cols: 3 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      const dialog = await openPopupFor(uid);
+      const popupCell = (c, r) => dialog.querySelector(`.jss_worksheet td[data-x="${c}"][data-y="${r}"]`);
+      const popupSelected = () => selectedCells(dialog);
+      const typeInPopup = async (r, c, value) => {
+        press(popupCell(c, r)); await sleep(300);
+        (document.activeElement || dialog).dispatchEvent(new KeyboardEvent('keydown', { key: value[0], code: `Key${value[0].toUpperCase()}`, bubbles: true, cancelable: true }));
+        let box = null;
+        for (let i = 0; i < 40 && !(box = visibleRescue()); i++) await sleep(25);
+        if (!box) { fail(`typing over ${cellName(r, c)} in the popup did not open the editor`, { table: model().label }); return false; }
+        box.value = value; box.dispatchEvent(new Event('input', { bubbles: true }));
+        box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await sleep(500);
+        model().grid[r][c] = value;
+        const sel = popupSelected();
+        if (sel.length !== 1 || sel[0][0] !== c || sel[0][1] !== r) dataLoss.push({ context, table: model().label, where: 'popup', problem: `Enter in ${cellName(r, c)} should keep the cursor there, it is on ${JSON.stringify(sel)}` });
+        if (popupCell(c, r).textContent.trim() !== value) dataLoss.push({ context, table: model().label, where: 'popup', cell: cellName(r, c), expected: value, have: popupCell(c, r).textContent.trim() });
+        note('popup-type-direct');
+        return true;
+      };
+      await typeInPopup(1, 1, 'pp1');
+      (document.activeElement || dialog).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await sleep(500);
+      const sel = popupSelected();
+      if (sel.length !== 1 || sel[0][0] !== 1 || sel[0][1] !== 2) dataLoss.push({ context, where: 'popup', problem: `a second Enter should select B3 in the popup, selection is ${JSON.stringify(sel)}` });
+      await typeInPopup(2, 0, 'pp2');
+      const lastRow = dialog.querySelectorAll('.jss_worksheet tbody tr').length - 1;
+      press(popupCell(0, lastRow)); await sleep(300);
+      (document.activeElement || dialog).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await sleep(900);
+      const rowsNow = dialog.querySelectorAll('.jss_worksheet tbody tr').length;
+      if (rowsNow !== lastRow + 2) dataLoss.push({ context, where: 'popup', problem: `a second Enter on the last row should add a row (${lastRow + 1} to ${lastRow + 2}), there are ${rowsNow}` });
+      model().grid.push(blankRow(model().grid[0].length));
+      const update = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Update');
+      if (!update) { fail('the popup has no Update button'); } else { update.click(); await waitPopupGone(); }
+      await verify('popup-direct-typing: after Update', true);
+      verticalAlignCheck(uid, 'after the popup');
+      await consistency('popup-direct-typing: inline, popup and stored HTML agree', true);
+    },
+    // A table pasted from another application: centred vertically whatever it came with, and editable at once.
+    async 'paste-external'() {
+      layoutDirty = true;
+      const before = new Set(api.snapshot(false).map(snap => snap.uid));
+      const cellStyle = 'padding:0px 1px;vertical-align:bottom;line-height:12px;height:15px;font-weight:bold';
+      const rows = [['Item', 'Amount'], ['Urea', '12.6g'], ['TBE', '3ml']];
+      const html = `<table><tbody>${rows.map(row => `<tr>${row.map(v => `<td style="${cellStyle}">${v}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      editor.selection.select(editor.getBody(), true); editor.selection.collapse(false);
+      const dt = new DataTransfer(); dt.setData('text/html', html); dt.setData('text/plain', rows.map(r => r.join('\t')).join('\n'));
+      editor.getDoc().dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      await sleep(1200);
+      const added = api.snapshot(true).filter(snap => !before.has(snap.uid));
+      if (added.length !== 1) { fail(`an external paste made ${added.length} spreadsheets, expected 1`); return; }
+      const uid = added[0].uid;
+      models.set(uid, { label: 'external paste', grid: rows.map(r => r.slice()), plate: false });
+      await live(uid);
+      await verify('paste-external: pasted', true);
+      verticalAlignCheck(uid, 'pasted from another application');
+      await rowHeightsUniform(uid, 'an external paste');
+      await typeDirect(uid, 1, 1, 'edited', 'Enter');
+      await enterAgain(uid);
+      await verify('paste-external: edited', true);
+      await consistency('paste-external: inline, popup and stored HTML agree', true);
+    },
     async mixed() {
       const made = [];
       for (let i = 0; i < 3; i++) {
@@ -1179,6 +1456,7 @@ async function spreadsheetSoak(options = {}) {
           else if (roll < 0.70) { name = 'popup-cancel'; await popupEdit(uid, false, 1); }
           else if (roll < 0.76) { name = 'multi-delete'; await multiDelete(uid); }
           else if (roll < 0.82) { name = 'rows-columns'; await structureOp(uid); }
+          else if (roll < 0.86) { name = 'type-then-resize'; await typeDirect(uid, int(0, model.grid.length - 1), int(0, model.grid[0].length - 1), `M${round}`, random() < 0.5 ? 'Enter' : null); await resizeColumn(uid, int(0, model.grid[0].length - 1)); }
           else if (roll < 0.90) { name = 'menu'; await menuTour(uid); }
           else { name = 'save'; await save(); }
         } catch (error) {

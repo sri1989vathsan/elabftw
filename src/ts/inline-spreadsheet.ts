@@ -4855,6 +4855,12 @@ export function openSpreadsheetModal(
         }
         selectedRange = [nextCol, nextRow, nextCol, nextRow];
         worksheet?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
+        // keyboard focus goes back to the grid, so the next key (a second Enter, typing over the cell) reaches it
+        const sink = sheetContainer?.querySelector<HTMLElement>('.jss_textarea');
+        window.setTimeout(() => {
+          if (document.activeElement && document.activeElement !== document.body) return;
+          sink?.focus({ preventScroll: true });
+        }, 0);
       };
       releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
         if (event.key === 'Enter') {
@@ -8467,6 +8473,14 @@ export function buildReadOnlySpreadsheetHost(
         mounted.insertRow?.(1, maxRow, 0);
       }
       mounted?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
+      // The editor box closing leaves keyboard focus on <body>; hand it back to the grid so the next key (a second
+      // Enter, an arrow, typing over the cell) reaches it.
+      const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea');
+      window.setTimeout(() => {
+        if (document.activeElement && document.activeElement !== document.body) return;
+        sink?.focus({ preventScroll: true });
+        lastFocusWasInGrid = true;
+      }, 0);
     };
     releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
       if (event.key === 'Enter') {
