@@ -1342,9 +1342,11 @@ async function spreadsheetSoak(options = {}) {
         for (let i = 0; i < 40 && !(filler = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-filler')); i++) await sleep(100);
         root = api.overlayElement(uid) || root;
         if (!filler) { fail('no grey columns beside the active grid', { table: model().label }); break; }
-        const cols = model().grid[0].length; const i = int(0, 2); const rr = int(0, model().grid.length - 1);
-        const cell = filler.querySelector(`.fc[data-i="${i}"][data-r="${rr}"]`);
-        if (!cell) { fail('the grey cell to click was not found'); break; }
+        const cols = model().grid[0].length;
+        // any grey cell that is there (how many depends on the width of the page)
+        const cell = pick([...filler.querySelectorAll('.fc[data-i][data-r]')]);
+        if (!cell) { fail('there are no grey cells to click'); break; }
+        const i = Number(cell.dataset.i); const rr = Number(cell.dataset.r);
         cell.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
         await sleep(1000);
         root = api.overlayElement(uid) || root;

@@ -4857,10 +4857,7 @@ export function openSpreadsheetModal(
         worksheet?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
         // keyboard focus goes back to the grid, so the next key (a second Enter, typing over the cell) reaches it
         const sink = sheetContainer?.querySelector<HTMLElement>('.jss_textarea');
-        window.setTimeout(() => {
-          if (document.activeElement && document.activeElement !== document.body) return;
-          sink?.focus({ preventScroll: true });
-        }, 0);
+        window.setTimeout(() => sink?.focus({ preventScroll: true }), 0);
       };
       releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
         if (event.key === 'Enter') {
@@ -8477,7 +8474,6 @@ export function buildReadOnlySpreadsheetHost(
       // Enter, an arrow, typing over the cell) reaches it.
       const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea');
       window.setTimeout(() => {
-        if (document.activeElement && document.activeElement !== document.body) return;
         sink?.focus({ preventScroll: true });
         lastFocusWasInGrid = true;
       }, 0);
