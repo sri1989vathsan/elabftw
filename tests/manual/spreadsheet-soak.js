@@ -1320,8 +1320,11 @@ async function spreadsheetSoak(options = {}) {
       const uid = await createTable('format after typing', { rows: 5, cols: 4 });
       if (!uid) return;
       const model = () => models.get(uid);
+      const used = new Set(); // Bold is a toggle: a second press on the same cell would turn it off again
       for (let round = 1; round <= 5; round++) {
-        const r = int(0, model().grid.length - 1); const c = int(0, model().grid[0].length - 1);
+        let r = int(0, model().grid.length - 1); let c = int(0, model().grid[0].length - 1);
+        for (let tries = 0; used.has(`${r},${c}`) && tries < 30; tries++) { r = int(0, model().grid.length - 1); c = int(0, model().grid[0].length - 1); }
+        used.add(`${r},${c}`);
         if (!await typeDirect(uid, r, c, `Fmt${round}`, null)) continue;
         const root = api.overlayElement(uid);
         openFormatBar(root); await sleep(300);
