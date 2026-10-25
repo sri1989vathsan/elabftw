@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'copy-table-format', 'border-neighbors', 'drag-select', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -249,6 +249,76 @@ async function spreadsheetSoak(options = {}) {
     table?.querySelectorAll('td').forEach((td, i) => { if (getComputedStyle(td).verticalAlign !== 'middle') off.push(`table cell ${i}`); });
     note('vertical-align-check');
     if (off.length) fail(`${label}: ${off.length} cells are not vertically centred (${off.slice(0, 4).join(', ')})`, { table: model?.label });
+  }
+
+  // Text through the grid's hidden input (input methods, dictation), committed with Enter.
+  async function sinkTextInto(uid, r, c, text) {
+    const model = models.get(uid);
+    const root = await selectCell(uid, r, c);
+    const sink = root.querySelector('.jss_textarea');
+    if (!sink) { fail('the grid has no hidden input', { table: model.label }); return false; }
+    sink.focus(); sink.value = text;
+    sink.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+    let box = null;
+    for (let i = 0; i < 40 && !(box = visibleRescue()); i++) await sleep(25);
+    if (!box || box.value !== text) { fail(`text put in the hidden input was not handed to the cell editor (${box ? JSON.stringify(box.value) : 'no editor'})`, { table: model.label, cell: cellName(r, c) }); return false; }
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await frames(2);
+    model.grid[r][c] = text;
+    note('sink-text');
+    return true;
+  }
+  // A click on a grey cell beside the grid: adds the columns up to it. false when the grid already fills the width.
+  async function fillerAdd(uid) {
+    const model = models.get(uid);
+    let root = await selectCell(uid, 0, 0);
+    let filler = null;
+    for (let i = 0; i < 40 && !(filler = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-filler')); i++) await sleep(100);
+    root = api.overlayElement(uid) || root;
+    if (!filler) { note('filler-no-room'); return false; }
+    const cols = model.grid[0].length;
+    const cell = pick([...filler.querySelectorAll('.fc[data-i][data-r]')]);
+    if (!cell) return false;
+    const i = Number(cell.dataset.i); const rr = Number(cell.dataset.r);
+    cell.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+    await sleep(1000);
+    root = api.overlayElement(uid) || root;
+    const gotCols = root.querySelectorAll('.jss_worksheet thead td[data-x]').length;
+    if (gotCols !== Math.min(cols + i + 1, 50)) dataLoss.push({ context, table: model.label, problem: `clicking a grey cell should leave ${Math.min(cols + i + 1, 50)} columns, there are ${gotCols}` });
+    model.grid.forEach(row => { while (row.length < gotCols) row.push(''); });
+    note('filler-click');
+    return true;
+  }
+  // A table pasted from another application (all cells carry the source's own tight style).
+  async function pasteExternal(rows, label) {
+    layoutDirty = true;
+    const before = new Set(api.snapshot(false).map(snap => snap.uid));
+    const cellStyle = 'padding:0px 1px;vertical-align:bottom;line-height:12px;height:15px';
+    const html = `<table><tbody>${rows.map(row => `<tr>${row.map(v => `<td style="${cellStyle}">${v}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    editor.selection.select(editor.getBody(), true); editor.selection.collapse(false);
+    const dt = new DataTransfer(); dt.setData('text/html', html); dt.setData('text/plain', rows.map(r => r.join('\t')).join('\n'));
+    editor.getDoc().dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    await sleep(1200);
+    const added = api.snapshot(true).filter(snap => !before.has(snap.uid));
+    if (added.length !== 1) { fail(`an external paste made ${added.length} spreadsheets, expected 1`); return null; }
+    const uid = added[0].uid;
+    models.set(uid, { label, grid: rows.map(r => r.slice()), plate: false });
+    return uid;
+  }
+  async function undoKey(uid, shift) {
+    const root = api.overlayElement(uid);
+    const target = document.activeElement && root.contains(document.activeElement) ? document.activeElement : root.querySelector('.jss_textarea');
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, shiftKey: !!shift, bubbles: true, cancelable: true }));
+    await sleep(380);
+  }
+  async function boldCell(uid, r, c, leaveTypingOpen) {
+    const root0 = api.overlayElement(uid) || await live(uid);
+    openFormatBar(root0); await sleep(300);
+    if (!leaveTypingOpen) { press(root0.querySelector(`td[data-x="${c}"][data-y="${r}"]`)); await sleep(200); }
+    const button = findButton(root0, ['Bold']);
+    if (!button) { fail('the Bold button was not found'); return null; }
+    button.click(); await sleep(600);
+    return (api.overlayElement(uid) || root0).querySelector(`td[data-x="${c}"][data-y="${r}"]`);
   }
 
   // The diagnostics drop trailing empty rows and columns, so the record is cut the same way.
@@ -1481,6 +1551,145 @@ async function spreadsheetSoak(options = {}) {
       }
       await verify('tab-then-type: final', true);
     },
+    // Ctrl+Z / Ctrl+Shift+Z in the grid, on an inserted table and on one pasted from another application.
+    async 'undo-redo'() {
+      const run = async (uid, label) => {
+        const model = () => models.get(uid);
+        const history = [];
+        const typeTracked = async (r, c, value) => {
+          const old = model().grid[r][c];
+          if (await typeDirect(uid, r, c, value, 'Enter')) history.push([r, c, old, value]);
+        };
+        await typeTracked(0, 0, `${label}1`); await typeTracked(1, 1, `${label}2`); await typeTracked(2, 2, `${label}3`); await typeTracked(1, 1, `${label}2b`);
+        let at = history.length;
+        for (let k = 0; k < 3; k++) { await undoKey(uid, false); const [r, c, old] = history[--at]; model().grid[r][c] = old; }
+        await verify(`undo-redo ${label}: after 3 undos`, true);
+        for (let k = 0; k < 2; k++) { await undoKey(uid, true); const [r, c, , value] = history[at++]; model().grid[r][c] = value; }
+        await verify(`undo-redo ${label}: after 2 redos`, true);
+        // a new edit after undoing: the rest of the redo list is gone
+        history.length = at;
+        await typeTracked(3, 0, `${label}new`);
+        at = history.length;
+        await undoKey(uid, true); // nothing left to redo: must change nothing
+        await verify(`undo-redo ${label}: redo after a new edit changes nothing`, true);
+        await undoKey(uid, false); { const [r, c, old] = history[--at]; model().grid[r][c] = old; }
+        await verify(`undo-redo ${label}: undo of the new edit`, true);
+      };
+      const made = await createTable('undo table', { rows: 5, cols: 4 });
+      if (made) await run(made, 'ins');
+      const pasted = await pasteExternal([['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h'], ['i', 'j', 'k', 'l'], ['m', 'n', 'o', 'p'], ['q', 'r', 's', 't']], 'pasted for undo');
+      if (pasted) { await live(pasted); await run(pasted, 'pas'); }
+      await consistency('undo-redo: inline, popup and stored HTML agree', true);
+    },
+    // The Copy table button and a selection copy must carry the values and the formatting.
+    async 'copy-table-format'() {
+      const uid = await createTable('copy table', { rows: 4, cols: 3 });
+      if (!uid) return;
+      const captured = [];
+      let stubbed = false;
+      try {
+        Object.defineProperty(navigator.clipboard, 'write', { configurable: true, writable: true, value: async items => {
+          for (const item of items) { const entry = {}; for (const type of item.types) entry[type] = await (await item.getType(type)).text(); captured.push(entry); }
+        } });
+        stubbed = true;
+      } catch (error) { note('copy-table-skipped-no-clipboard'); }
+      await typeInto(uid, 0, 0, 'Reagent'); await typeInto(uid, 1, 0, 'Tris'); await typeInto(uid, 1, 1, '121.1g'); await typeInto(uid, 2, 2, '0.02M');
+      const td = await boldCell(uid, 0, 0, false);
+      if (td && !isBold(td)) fail('bold did not show before copying', { table: models.get(uid).label });
+      const root = await live(uid);
+      if (stubbed) {
+        root.querySelector('.elabftw-spreadsheet-readonly-copy-table').click();
+        await sleep(800);
+        const copy = captured[0];
+        if (!copy) dataLoss.push({ context, problem: 'the Copy table button wrote nothing to the clipboard' });
+        else {
+          ['Reagent', 'Tris', '121.1g', '0.02M'].forEach(v => { if (!(copy['text/html'] || '').includes(v)) dataLoss.push({ context, problem: `"${v}" is missing from the copied table (html)` }); if (!(copy['text/plain'] || '').includes(v)) dataLoss.push({ context, problem: `"${v}" is missing from the copied table (text)` }); });
+          if (!/font-weight\s*:\s*(bold|700)/i.test(copy['text/html'] || '')) dataLoss.push({ context, problem: 'the formatting (bold) is missing from the copied table' });
+          if (!(copy['text/plain'] || '').includes('\t')) dataLoss.push({ context, problem: 'the plain-text copy has no tab separators' });
+        }
+        note('copy-table-button');
+      }
+      // a selection copy through the copy event
+      press(root.querySelector('td[data-x="0"][data-y="0"]')); await sleep(200);
+      press(root.querySelector('td[data-x="1"][data-y="1"]'), { shiftKey: true }); await sleep(250);
+      const dt = new DataTransfer();
+      root.querySelector('.elabftw-spreadsheet-readonly-grid').dispatchEvent(new ClipboardEvent('copy', { clipboardData: dt, bubbles: true, cancelable: true }));
+      note('selection-copy');
+      if (!dt.getData('text/plain').includes('Reagent') || !dt.getData('text/plain').includes('121.1g')) dataLoss.push({ context, problem: `the selection copy lost values: ${JSON.stringify(dt.getData('text/plain'))}` });
+      if (!/<table/i.test(dt.getData('text/html')) || !/font-weight/i.test(dt.getData('text/html'))) dataLoss.push({ context, problem: 'the selection copy has no HTML table with the bold formatting' });
+      await verify('copy-table-format: values unchanged by copying', true);
+    },
+    // A border colour on a cell must show on every edge of it, also those the neighbour would otherwise win.
+    async 'border-neighbors'() {
+      const uid = await createTable('border table', { rows: 5, cols: 5 });
+      if (!uid) return;
+      await typeInto(uid, 2, 2, 'mid');
+      const dialog = await openPopupFor(uid);
+      const cellAt = (c, r) => dialog.querySelector(`.jss_worksheet td[data-x="${c}"][data-y="${r}"]`);
+      press(cellAt(2, 2)); await sleep(350);
+      const colour = [...dialog.querySelectorAll('input[type="color"]')].find(input => /selected cell border/i.test(`${input.title} ${input.getAttribute('aria-label')} ${input.closest('[title]')?.title || ''} ${input.closest('[aria-label]')?.getAttribute('aria-label') || ''}`));
+      if (!colour) { fail('the popup has no border colour control'); const x = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Cancel'); x && x.click(); await waitPopupGone(); return; }
+      colour.value = '#ff0000'; colour.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(1000);
+      const red = 'rgb(255, 0, 0)';
+      const edge = (c, r, side) => getComputedStyle(cellAt(c, r))[`border${side}Color`];
+      const checks = [['the cell itself, top', edge(2, 2, 'Top')], ['the cell itself, left', edge(2, 2, 'Left')], ['the cell itself, bottom', edge(2, 2, 'Bottom')], ['the cell itself, right', edge(2, 2, 'Right')], ['the cell to the left (its right edge)', edge(1, 2, 'Right')], ['the cell above (its bottom edge)', edge(2, 1, 'Bottom')]];
+      checks.forEach(([where, got]) => { if (got !== red) dataLoss.push({ context, where: 'popup', problem: `border colour on ${where} is ${got}, expected ${red}` }); });
+      note('border-colour');
+      if (cellAt(2, 2).textContent.trim() !== 'mid') dataLoss.push({ context, where: 'popup', problem: 'the cell value changed while formatting' });
+      const update = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Update');
+      if (update) { update.click(); await waitPopupGone(); }
+      await sleep(config.settleMs);
+      const table = tableEl(uid);
+      const savedEdge = (r, c, side) => getComputedStyle(table.rows[r + 1].cells[c + 1])[`border${side}Color`];
+      [['saved table, the cell, top', savedEdge(2, 2, 'Top')], ['saved table, the cell to the left (right edge)', savedEdge(2, 1, 'Right')], ['saved table, the cell above (bottom edge)', savedEdge(1, 2, 'Bottom')]].forEach(([where, got]) => { if (got !== red) dataLoss.push({ context, where, problem: `border colour is ${got}, expected ${red}` }); });
+      await verify('border-neighbors: values unchanged', true);
+    },
+    // Dragging over cells: the selection follows, the fill handle lets go of the pointer meanwhile and comes back.
+    async 'drag-select'() {
+      const uid = await createTable('drag table', { rows: 7, cols: 6 });
+      if (!uid) return;
+      const model = models.get(uid);
+      for (let round = 1; round <= 6; round++) {
+        const root = await live(uid);
+        const r1 = int(0, 6); const c1 = int(0, 5); const r2 = int(0, 6); const c2 = int(0, 5);
+        const start = root.querySelector(`td[data-x="${c1}"][data-y="${r1}"]`);
+        const rect = start.getBoundingClientRect();
+        const init = { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2, button: 0, buttons: 1 };
+        start.dispatchEvent(new PointerEvent('pointerdown', init)); start.dispatchEvent(new MouseEvent('mousedown', init));
+        await sleep(120);
+        const guard = document.body.classList.contains('jss-selecting');
+        // walk over the cells of the rectangle, row by row
+        for (let r = Math.min(r1, r2); r <= Math.max(r1, r2); r++) for (let c = Math.min(c1, c2); c <= Math.max(c1, c2); c++) {
+          const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
+          const tr = td.getBoundingClientRect();
+          td.dispatchEvent(new MouseEvent('mouseover', { ...init, clientX: tr.x + tr.width / 2, clientY: tr.y + tr.height / 2 }));
+          td.dispatchEvent(new MouseEvent('mousemove', { ...init, clientX: tr.x + tr.width / 2, clientY: tr.y + tr.height / 2 }));
+        }
+        // the last cell the pointer is over is the far corner of the drag
+        { const endCell = root.querySelector(`td[data-x="${c2}"][data-y="${r2}"]`); const er = endCell.getBoundingClientRect();
+          endCell.dispatchEvent(new MouseEvent('mouseover', { ...init, clientX: er.x + er.width / 2, clientY: er.y + er.height / 2 }));
+          endCell.dispatchEvent(new MouseEvent('mousemove', { ...init, clientX: er.x + er.width / 2, clientY: er.y + er.height / 2 })); }
+        await sleep(150);
+        const corner = root.querySelector('.jss_corner');
+        const cornerWhileHeld = corner ? getComputedStyle(corner).pointerEvents : 'no corner';
+        const end = root.querySelector(`td[data-x="${c2}"][data-y="${r2}"]`);
+        window.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
+        end.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
+        await sleep(250);
+        const cells = [...root.querySelectorAll('td.highlight')];
+        const want = (Math.abs(r2 - r1) + 1) * (Math.abs(c2 - c1) + 1);
+        if (cells.length !== want) dataLoss.push({ context, table: model.label, problem: `dragging ${cellName(r1, c1)} to ${cellName(r2, c2)} selected ${cells.length} cells, expected ${want}` });
+        if (!guard) fail('the grid did not note that a drag-selection was held');
+        if (cornerWhileHeld !== 'none') fail(`the fill handle still took the pointer during a held drag (${cornerWhileHeld})`);
+        if (document.body.classList.contains('jss-selecting')) fail('the drag guard stayed on after the button was released');
+        const after = corner ? getComputedStyle(root.querySelector('.jss_corner') || corner).pointerEvents : 'auto';
+        if (after === 'none') fail('the fill handle stayed unusable after the drag ended');
+        note('drag-select');
+        await typeDirect(uid, r2, c2, `D${round}`, 'Enter');
+      }
+      await verify('drag-select: final', true);
+    },
     async mixed() {
       const made = [];
       for (let i = 0; i < 3; i++) {
@@ -1495,15 +1704,30 @@ async function spreadsheetSoak(options = {}) {
         context = `mixed round ${round}`;
         let name = '';
         try {
-          if (roll < 0.40) { name = 'type'; await typeInto(uid, int(0, model.grid.length - 1), int(0, model.grid[0].length - 1), random() < 0.2 ? `=${cellName(0, 0)}+1` : String(int(0, 999))); }
-          else if (roll < 0.50) { name = 'scroll'; await scrollCheck(`mixed round ${round}`); await live(uid); }
-          else if (roll < 0.62) { name = 'popup-apply'; await popupEdit(uid, true, int(1, 2)); }
-          else if (roll < 0.70) { name = 'popup-cancel'; await popupEdit(uid, false, 1); }
-          else if (roll < 0.76) { name = 'multi-delete'; await multiDelete(uid); }
-          else if (roll < 0.82) { name = 'rows-columns'; await structureOp(uid); }
-          else if (roll < 0.86) { name = 'type-then-resize'; await typeDirect(uid, int(0, model.grid.length - 1), int(0, model.grid[0].length - 1), `M${round}`, random() < 0.5 ? 'Enter' : null); await resizeColumn(uid, int(0, model.grid[0].length - 1)); }
-          else if (roll < 0.90) { name = 'menu'; await menuTour(uid); }
-          else { name = 'save'; await save(); }
+          const rr = int(0, model.grid.length - 1); const cc = int(0, model.grid[0].length - 1);
+          const ops = [
+            [22, 'type', async () => typeInto(uid, rr, cc, random() < 0.2 ? `=${cellName(0, 0)}+1` : String(int(0, 999)))],
+            [12, 'type-direct-enter', async () => typeDirect(uid, rr, cc, `D${round}`, 'Enter')],
+            [6, 'type-direct-tab', async () => typeDirect(uid, rr, Math.min(cc, model.grid[0].length - 2), `T${round}`, 'Tab')],
+            [10, 'type-then-resize', async () => { await typeDirect(uid, rr, cc, `M${round}`, random() < 0.5 ? 'Enter' : null); await resizeColumn(uid, int(0, model.grid[0].length - 1)); }],
+            [5, 'type-then-bold', async () => { if (await typeDirect(uid, rr, cc, `B${round}`, null)) await boldCell(uid, rr, cc, true); }],
+            [5, 'enter-again', async () => { await selectCell(uid, rr, cc); await enterAgain(uid); }],
+            [5, 'sink-text', async () => sinkTextInto(uid, rr, cc, pick(['µg/µL', 'Ratio:Primer', '#oligos in panel', 'é à ü']) + ` ${round}`)],
+            [3, 'filler', async () => fillerAdd(uid)],
+            [3, 'add-rows-bar', async () => addRowsBar(uid, int(1, 2))],
+            [4, 'scroll', async () => { await scrollCheck(`mixed round ${round}`); await live(uid); }],
+            [4, 'popup-apply', async () => popupEdit(uid, true, int(1, 2))],
+            [3, 'popup-cancel', async () => popupEdit(uid, false, 1)],
+            [3, 'multi-delete', async () => multiDelete(uid)],
+            [5, 'rows-columns', async () => structureOp(uid)],
+            [3, 'menu', async () => menuTour(uid)],
+            [4, 'save', async () => save()],
+          ];
+          let pickRoll = int(1, ops.reduce((sum, op) => sum + op[0], 0));
+          let chosen = ops[0];
+          for (const op of ops) { if (pickRoll <= op[0]) { chosen = op; break; } pickRoll -= op[0]; }
+          name = chosen[1];
+          await chosen[2]();
         } catch (error) {
           fail(`${name}: ${error && error.message || error}`, { stack: String(error && error.stack || '').split('\n').slice(0, 4).join(' | ') });
         }
