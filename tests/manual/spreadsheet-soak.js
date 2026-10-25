@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'copy-table-format', 'border-neighbors', 'drag-select', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'copy-table-format', 'default-border-apply', 'drag-select', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1619,31 +1619,53 @@ async function spreadsheetSoak(options = {}) {
       if (!/<table/i.test(dt.getData('text/html')) || !/font-weight/i.test(dt.getData('text/html'))) dataLoss.push({ context, problem: 'the selection copy has no HTML table with the bold formatting' });
       await verify('copy-table-format: values unchanged by copying', true);
     },
-    // A border colour on a cell must show on every edge of it, also those the neighbour would otherwise win.
-    async 'border-neighbors'() {
-      const uid = await createTable('border table', { rows: 5, cols: 5 });
+    // The table-wide default border (colour, style, width) and Apply appearance: every cell whose border is still
+    // the previous default must follow, each time (it used to change only the cells that had no border of their own).
+    async 'default-border-apply'() {
+      const uid = await createTable('default border', { rows: 4, cols: 4 });
       if (!uid) return;
-      await typeInto(uid, 2, 2, 'mid');
+      await typeInto(uid, 1, 1, 'x');
       const dialog = await openPopupFor(uid);
-      const cellAt = (c, r) => dialog.querySelector(`.jss_worksheet td[data-x="${c}"][data-y="${r}"]`);
-      press(cellAt(2, 2)); await sleep(350);
-      const colour = [...dialog.querySelectorAll('input[type="color"]')].find(input => /selected cell border/i.test(`${input.title} ${input.getAttribute('aria-label')} ${input.closest('[title]')?.title || ''} ${input.closest('[aria-label]')?.getAttribute('aria-label') || ''}`));
-      if (!colour) { fail('the popup has no border colour control'); const x = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Cancel'); x && x.click(); await waitPopupGone(); return; }
-      colour.value = '#ff0000'; colour.dispatchEvent(new Event('change', { bubbles: true }));
-      await sleep(1000);
-      const red = 'rgb(255, 0, 0)';
-      const edge = (c, r, side) => getComputedStyle(cellAt(c, r))[`border${side}Color`];
-      const checks = [['the cell itself, top', edge(2, 2, 'Top')], ['the cell itself, left', edge(2, 2, 'Left')], ['the cell itself, bottom', edge(2, 2, 'Bottom')], ['the cell itself, right', edge(2, 2, 'Right')], ['the cell to the left (its right edge)', edge(1, 2, 'Right')], ['the cell above (its bottom edge)', edge(2, 1, 'Bottom')]];
-      checks.forEach(([where, got]) => { if (got !== red) dataLoss.push({ context, where: 'popup', problem: `border colour on ${where} is ${got}, expected ${red}` }); });
-      note('border-colour');
-      if (cellAt(2, 2).textContent.trim() !== 'mid') dataLoss.push({ context, where: 'popup', problem: 'the cell value changed while formatting' });
+      const details = [...dialog.querySelectorAll('details')].find(d => /Table and cell appearance/i.test(d.textContent));
+      if (details) { details.open = true; await sleep(200); }
+      const labelOf = el => `${el.title} ${el.getAttribute('aria-label') || ''}`;
+      const colour = () => [...dialog.querySelectorAll('input[type="color"]')].find(i => labelOf(i).trim() === 'Default border color Default border color');
+      const styleSel = () => [...dialog.querySelectorAll('select')].find(el => /default cell border style/i.test(labelOf(el)));
+      const widthIn = () => [...dialog.querySelectorAll('input[type="number"]')].find(el => /default cell border width/i.test(labelOf(el)));
+      const applyBtn = () => [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Apply appearance');
+      if (!colour() || !styleSel() || !widthIn() || !applyBtn()) {
+        fail('the popup is missing a default border control', { colour: !!colour(), style: !!styleSel(), width: !!widthIn(), apply: !!applyBtn() });
+        const cancel = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Cancel'); cancel && cancel.click(); await waitPopupGone(); return;
+      }
+      const set = (el, value) => { el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
+      const wrong = (cells, expected) => {
+        const bad = [];
+        cells.forEach(td => {
+          const cs = getComputedStyle(td);
+          ['Top', 'Right', 'Bottom', 'Left'].forEach(side => {
+            const got = `${cs[`border${side}Color`]} ${cs[`border${side}Style`]} ${cs[`border${side}Width`]}`;
+            if (got !== expected) bad.push(`${side}: ${got}`);
+          });
+        });
+        return bad;
+      };
+      const rounds = [['#ff0000', 'solid', '1', 'rgb(255, 0, 0) solid 1px'], ['#0000ff', 'dashed', '2', 'rgb(0, 0, 255) dashed 2px'], ['#00aa00', 'solid', '1', 'rgb(0, 170, 0) solid 1px']];
+      for (const [hex, style, width, expected] of rounds) {
+        set(colour(), hex); set(styleSel(), style); set(widthIn(), width);
+        applyBtn().click();
+        await sleep(1100);
+        const cells = [...dialog.querySelectorAll('.jss_worksheet tbody td[data-x]')];
+        const bad = wrong(cells, expected);
+        if (bad.length) dataLoss.push({ context, where: 'popup', problem: `after Apply appearance (${hex} ${style} ${width}px) ${bad.length} cell edges kept an older border, e.g. ${bad.slice(0, 3).join(' | ')}` });
+        note('default-border-applied');
+      }
+      if ([...dialog.querySelectorAll('.jss_worksheet tbody td[data-x]')].find(td => td.dataset.x === '1' && td.dataset.y === '1')?.textContent.trim() !== 'x') dataLoss.push({ context, where: 'popup', problem: 'a cell value changed while the appearance was applied' });
       const update = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Update');
       if (update) { update.click(); await waitPopupGone(); }
       await sleep(config.settleMs);
-      const table = tableEl(uid);
-      const savedEdge = (r, c, side) => getComputedStyle(table.rows[r + 1].cells[c + 1])[`border${side}Color`];
-      [['saved table, the cell, top', savedEdge(2, 2, 'Top')], ['saved table, the cell to the left (right edge)', savedEdge(2, 1, 'Right')], ['saved table, the cell above (bottom edge)', savedEdge(1, 2, 'Bottom')]].forEach(([where, got]) => { if (got !== red) dataLoss.push({ context, where, problem: `border colour is ${got}, expected ${red}` }); });
-      await verify('border-neighbors: values unchanged', true);
+      const saved = wrong([...tableEl(uid).querySelectorAll('tbody td')], rounds[2][3]);
+      if (saved.length) dataLoss.push({ context, where: 'saved table', problem: `${saved.length} saved cell edges do not have the last border (${rounds[2][3]}), e.g. ${saved.slice(0, 3).join(' | ')}` });
+      await verify('default-border-apply: values unchanged', true);
     },
     // Dragging over cells: the selection follows, the fill handle lets go of the pointer meanwhile and comes back.
     async 'drag-select'() {

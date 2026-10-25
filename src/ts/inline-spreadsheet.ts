@@ -1535,6 +1535,36 @@ function stripCellBackgroundOverrides(styles: CellStyles | undefined): CellStyle
   return result;
 }
 
+/**
+ * Every cell is saved with its own border (written from the default at the time), so a new default border colour,
+ * style or width never reached them: only cells without any border of their own changed, which looked like
+ * "the new setting does not replace the previous one". A cell whose border still equals the OLD default gets its
+ * border properties dropped here, so the new default applies; a deliberately different border is kept.
+ */
+function stripDefaultCellBorders(styles: CellStyles | undefined, previous: SpreadsheetAppearance): CellStyles | undefined {
+  if (!styles) return undefined;
+  const sides = ['top', 'right', 'bottom', 'left'];
+  const signature = (style: string): string => {
+    const element = document.createElement('span');
+    element.setAttribute('style', style);
+    return sides.map(side => `${element.style.getPropertyValue(`border-${side}-width`)}|${element.style.getPropertyValue(`border-${side}-style`)}|${element.style.getPropertyValue(`border-${side}-color`)}`).join(';');
+  };
+  const oldDefault = signature(getAppearanceCellStyle(previous, 0, 0, false));
+  const result: CellStyles = {};
+  Object.entries(styles).forEach(([cellName, style]) => {
+    const element = document.createElement('span');
+    element.setAttribute('style', style);
+    if (signature(style) === oldDefault) {
+      const names: string[] = [];
+      for (let index = 0; index < element.style.length; index++) names.push(element.style.item(index));
+      names.filter(name => name.startsWith('border')).forEach(name => element.style.removeProperty(name));
+    }
+    const kept = element.getAttribute('style');
+    if (kept) result[cellName] = kept;
+  });
+  return result;
+}
+
 function normalizeCellStyles(
   candidate: CellStyles | undefined,
   rows: number,
@@ -5946,7 +5976,7 @@ export function openSpreadsheetModal(
       const updated: SpreadsheetData = {
         ...working,
         data: resizeData(readRawData(), working.rows, working.cols),
-        cellStyles: stripCellBackgroundOverrides(readCellStyles()),
+        cellStyles: stripDefaultCellBorders(stripCellBackgroundOverrides(readCellStyles()), normalizeAppearance(working.appearance)),
         appearance,
       };
       mountSpreadsheet(updated);
@@ -5957,7 +5987,7 @@ export function openSpreadsheetModal(
       const updated: SpreadsheetData = {
         ...working,
         data: resizeData(readRawData(), working.rows, working.cols),
-        cellStyles: stripCellBackgroundOverrides(readCellStyles()),
+        cellStyles: stripDefaultCellBorders(stripCellBackgroundOverrides(readCellStyles()), normalizeAppearance(working.appearance)),
         appearance,
       };
       mountSpreadsheet(updated);
