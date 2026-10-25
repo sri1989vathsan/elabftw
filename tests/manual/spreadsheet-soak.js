@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'copy-table-format', 'default-border-apply', 'drag-select', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'copy-table-format', 'default-border-apply', 'drag-select', 'formulas-and-structure', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1711,6 +1711,40 @@ async function spreadsheetSoak(options = {}) {
         await typeDirect(uid, r2, c2, `D${round}`, 'Enter');
       }
       await verify('drag-select: final', true);
+    },
+    // Formulas and row/column changes: a spreadsheet rewrites the references of a formula when cells move (=A1+1
+    // becomes =B1+1 after a column is inserted before A), so the text may change, but a formula cell must never lose
+    // its formula, and no other cell may change.
+    async 'formulas-and-structure'() {
+      const uid = await createTable('formula table', { rows: 7, cols: 7 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      await typeInto(uid, 0, 0, '2'); await typeInto(uid, 0, 1, '3'); await typeInto(uid, 1, 0, '5');
+      for (const [r, c, f] of [[2, 0, '=A1+1'], [2, 2, '=A1+B1'], [3, 3, '=SUM(A1:B1)'], [5, 4, '=A1*2'], [6, 6, '=A2*2']]) await typeInto(uid, r, c, f);
+      const resync = (label) => {
+        const snap = api.snapshot(true).find(entry => entry.uid === uid);
+        const grid = snap?.overlayData || snap?.tableData;
+        if (!grid) return;
+        model().grid.forEach((row, r) => row.forEach((value, c) => {
+          if (typeof value === 'string' && value.startsWith('=')) {
+            const have = String(grid[r]?.[c] ?? '');
+            if (have.startsWith('=')) model().grid[r][c] = have; // references were rewritten: accepted
+            else dataLoss.push({ context: label, table: model().label, cell: cellName(r, c), problem: `the formula ${value} in ${cellName(r, c)} is gone (the cell holds ${JSON.stringify(have)})` });
+          }
+        }));
+      };
+      await verify('formulas-and-structure: filled', true);
+      for (let round = 1; round <= 14; round++) {
+        const roll = random();
+        if (roll < 0.6) await structureOp(uid);
+        else if (roll < 0.8) await multiDelete(uid);
+        else await typeInto(uid, int(0, model().grid.length - 1), int(0, model().grid[0].length - 1), pick(['7', '=A1+1', 'text']));
+        await sleep(400);
+        resync(`formulas-and-structure round ${round}`);
+        await verify(`formulas-and-structure round ${round}`, round % 4 === 0);
+      }
+      resync('formulas-and-structure: final');
+      await verify('formulas-and-structure: final', true);
     },
     async mixed() {
       const made = [];
