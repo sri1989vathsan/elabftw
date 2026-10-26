@@ -14,6 +14,7 @@ import { ApiC } from './api';
 import { captureFocus, restoreFocus } from './a11y';
 import { entity } from './getEntity';
 import { createSpreadsheetRepaintQueue } from './custom-editor/SpreadsheetPerformance';
+import { buildWellPlateHost } from './well-plate-view';
 
 type CellValue = string | number | boolean | null;
 type AOA = CellValue[][];
@@ -184,6 +185,8 @@ export interface SpreadsheetData {
   kind?: SpreadsheetKind;
   caption?: string;
   plateSize?: number;
+  /** Named colour groups of a well plate; a well belongs to the group whose colour is its cell background. */
+  plateGroups?: Array<{ name: string; color: string }>;
   /** Inline styles keyed by spreadsheet coordinates such as A1 or C4. */
   cellStyles?: CellStyles;
   /** Explicit data-row heights in pixels, keyed by zero-based row index. */
@@ -615,7 +618,7 @@ export function createWellPlateSpreadsheetData(wells: number): SpreadsheetData {
   };
 }
 
-function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): SpreadsheetData {
+export function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): SpreadsheetData {
   const candidateData = Array.isArray(candidate.data) ? candidate.data : [[]];
   const dataRows = candidateData.length;
   const dataCols = candidateData.reduce(
@@ -640,6 +643,12 @@ function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): Spreadsh
     caption: typeof candidate.caption === 'string' ? candidate.caption : '',
     plateSize: kind === 'well-plate' && Number.isInteger(candidate.plateSize)
       ? candidate.plateSize
+      : undefined,
+    plateGroups: kind === 'well-plate' && Array.isArray(candidate.plateGroups)
+      ? candidate.plateGroups
+        .filter(group => group && typeof group.name === 'string' && typeof group.color === 'string')
+        .slice(0, 40)
+        .map(group => ({ name: group.name.slice(0, 60), color: group.color.slice(0, 32) }))
       : undefined,
     cellStyles: normalizeCellStyles(candidate.cellStyles, rows, cols),
     rowHeights: normalizeRowHeights(candidate.rowHeights, rows),
@@ -6991,6 +7000,11 @@ export interface SpreadsheetHostHandle {
 // live instance getData() can be called on).
 const spreadsheetHostData = new WeakMap<HTMLElement, SpreadsheetData>();
 
+/** Lets another grid implementation (the well-plate view) take part in the print/copy regeneration above. */
+export function registerSpreadsheetHostData(host: HTMLElement, data: SpreadsheetData): void {
+  spreadsheetHostData.set(host, data);
+}
+
 export function buildReadOnlySpreadsheetHost(
   extracted: SpreadsheetData,
   options: SpreadsheetHostOptions = {},
@@ -9946,7 +9960,10 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
       if (entry.isIntersecting) {
         if (!(el instanceof HTMLTableElement)) return; // already mounted
         const html = el.outerHTML;
-        const { host, destroy } = buildReadOnlySpreadsheetHost(extractFromTable(el));
+        const extractedForView = extractFromTable(el);
+        const { host, destroy } = extractedForView.kind === 'well-plate'
+          ? buildWellPlateHost(extractedForView)
+          : buildReadOnlySpreadsheetHost(extractedForView);
         host.classList.toggle(FILTER_HIDDEN_CLASS, el.classList.contains(FILTER_HIDDEN_CLASS));
         // The table of contents links to a spreadsheet by id; keep it across the swap.
         if (el.id) host.id = el.id;
@@ -10201,7 +10218,7 @@ function installWellPlateHeaders(container: HTMLElement, getKind: () => string |
   schedule();
 }
 
-function colLabel(index: number): string {
+export function colLabel(index: number): string {
   let label = '';
   let current = index;
   do {

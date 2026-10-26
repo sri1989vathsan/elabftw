@@ -6968,3 +6968,252 @@ div > .sticky-navbar {
 .tox-tinymce:not(.elabftw-image-selected) .tox-tbtn[aria-label^='Image options'] {
   display: none;
 }
+
+/* WELL PLATE (compact view in the text and the plate popup) */
+.wp-plate {
+  box-sizing: border-box;
+  padding: 0.5rem 0.25rem 0.6rem;
+  width: max-content;
+  max-width: 100%;
+}
+
+.wp-grid {
+  display: grid;
+  gap: 4px;
+  user-select: none;
+  width: max-content;
+}
+
+.wp-label {
+  align-items: center;
+  color: var(--bw-fg-muted, #677089);
+  display: flex;
+  font-family: monospace;
+  font-size: 11px;
+  justify-content: center;
+  min-width: 14px;
+}
+
+.wp-dialog-plate .wp-label[data-row],
+.wp-dialog-plate .wp-label[data-col] {
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: rgba(128, 128, 128, 0.25);
+  }
+}
+
+.wp-well {
+  border: 2px solid transparent;
+  border-radius: 50%;
+  box-sizing: border-box;
+  height: var(--wp-size);
+  width: var(--wp-size);
+  background-color: rgba(128, 128, 128, 0.18);
+
+  &.is-empty {
+    background-color: transparent;
+    border: 1px dashed rgba(128, 128, 128, 0.6);
+  }
+
+  &.has-content {
+    background-color: rgba(128, 128, 128, 0.45);
+  }
+
+  &.is-dimmed {
+    opacity: 0.2;
+  }
+
+  &.is-selected {
+    border-color: #2a6df4;
+    box-shadow: 0 0 0 2px #2a6df4;
+  }
+}
+
+.wp-plate .wp-grid.is-clickable,
+.wp-plate .is-clickable {
+  cursor: pointer;
+}
+
+.wp-legend {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 4px 14px;
+  margin-top: 8px;
+}
+
+.wp-legend-item {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: inherit;
+  display: inline-flex;
+  font: inherit;
+  gap: 6px;
+  padding: 0;
+
+  &.is-dimmed {
+    opacity: 0.4;
+  }
+}
+
+button.wp-legend-item {
+  cursor: pointer;
+}
+
+.wp-dot {
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  height: 10px;
+  width: 10px;
+}
+
+.wp-tooltip {
+  background-color: #161a25;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  color: #f0f2f8;
+  font-size: 12px;
+  max-width: 260px;
+  padding: 8px 10px;
+  pointer-events: none;
+  position: fixed;
+  z-index: 10100;
+}
+
+.wp-tooltip-head {
+  font-family: monospace;
+  font-weight: 700;
+}
+
+.wp-tooltip-group {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.wp-tooltip-body {
+  margin-top: 5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+
+  &.is-empty {
+    color: #99a1b8;
+    font-style: italic;
+  }
+}
+
+.inline-spreadsheet-dialog.wp-dialog {
+  min-height: 0;
+  resize: none;
+  width: min(94vw, 1000px);
+}
+
+.wp-dialog-body {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.75rem 0.9rem;
+}
+
+@media (max-width: 760px) {
+  .wp-dialog-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.wp-dialog-plate {
+  overflow: auto;
+}
+
+.wp-dialog-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+
+  h6 {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    margin: 0 0 6px;
+    text-transform: uppercase;
+  }
+}
+
+.wp-group {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.wp-group-color {
+  border: 0;
+  flex: none;
+  height: 26px;
+  padding: 0;
+  width: 26px;
+}
+
+.wp-group-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.wp-group-count {
+  font-family: monospace;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.wp-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.wp-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.wp-swatch {
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  height: 22px;
+  padding: 0;
+  width: 22px;
+
+  &[aria-pressed='true'] {
+    border-color: var(--strongest, #000);
+  }
+}
+
+.wp-hint {
+  font-size: 12px;
+  margin: 6px 0 0;
+  opacity: 0.7;
+}
+
+.wp-dialog-footer {
+  align-items: center;
+  border-top: 1px solid var(--secondary, #ccc);
+  display: flex;
+  gap: 8px;
+  padding: 0.6rem 0.9rem;
+}
+
+.wp-spacer {
+  flex: 1 1 auto;
+}

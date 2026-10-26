@@ -19,6 +19,7 @@ import {
   SpreadsheetCellHistory,
   WELL_PLATE_PRESETS,
 } from '../inline-spreadsheet';
+import { buildWellPlateHost, openWellPlateModal } from '../well-plate-view';
 import { escapeHTML } from '../misc';
 import { RICH_SELECTION_ATTRIBUTE } from '../ClipboardContent';
 import TableIndentation from '../TableIndentation.class';
@@ -710,11 +711,15 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       openedHash = hashCells(openedFrom.data);
       if (uid) diag.log('popup-open', uid, { rev: openedRevision, hash: openedHash });
     });
-    openSpreadsheetModal(
-      openedFrom,
-      existingTable !== null,
-      uid ? tableCellHistories.get(uid) : undefined,
-    ).then(({ raw, computed, history }) => {
+    const modalHistory = uid ? tableCellHistories.get(uid) : undefined;
+    const spreadsheetPopup = (data: SpreadsheetData) => openSpreadsheetModal(data, existingTable !== null, modalHistory);
+    // A well plate opens in its own popup first; it can hand over to the general spreadsheet popup.
+    const popup = openedFrom.kind === 'well-plate'
+      ? openWellPlateModal(openedFrom, existingTable !== null).then(result => (result.openSpreadsheet
+        ? spreadsheetPopup(result.raw)
+        : { raw: result.raw, computed: result.raw.data, history: modalHistory ?? { undo: [], redo: [] } }))
+      : spreadsheetPopup(openedFrom);
+    popup.then(({ raw, computed, history }) => {
       if (existingTable && uid && existingTable.isConnected) {
         diagnose('popup apply', () => {
           const nowHash = hashCells(extractCached(existingTable).data);
@@ -1543,7 +1548,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // catches the -- until then stale -- real table's own rect up) --
           // width is capped at the editor's readable content column, so a
           // wide table scrolls horizontally instead of overflowing it.
-          const worksheetEl = overlay.querySelector('.jss_worksheet') as HTMLElement | null;
+          const worksheetEl = overlay.querySelector('.jss_worksheet, .wp-plate') as HTMLElement | null;
           const toggleBarEl = overlay.querySelector('.elabftw-spreadsheet-readonly-toggle') as HTMLElement | null;
           const formulaBarEl = overlay.querySelector('.elabftw-spreadsheet-formula-bar') as HTMLElement | null;
           const formatBarEl = overlay.querySelector('.elabftw-spreadsheet-format-bar') as HTMLElement | null;
@@ -1963,6 +1968,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const mountPreview = (table: HTMLTableElement): void => {
     if (!editor.getBody().contains(table)) return;
     if (spreadsheetOverlays.has(table)) return;
+    // A compact plate is cheap to build, so it is mounted live straight away (no cheap stand-in needed).
+    if (table.dataset.spreadsheetStyle === 'well-plate') {
+      enhanceTable(table);
+      return;
+    }
     const mountStartedAt = profiler.start();
     // Built from the grid's own markup and classes so it looks identical.
     // Notebook-style tables aren't mirrored there; they get a plain cloned
@@ -2111,7 +2121,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const hostStartedAt = profiler.start();
     const {
       host: overlay, flush, destroy, syncActiveEditor, getData, isEditing,
-    } = buildReadOnlySpreadsheetHost(extracted, {
+    } = (extracted.kind === 'well-plate' ? buildWellPlateHost : buildReadOnlySpreadsheetHost)(extracted, {
       editable: true,
       initialSelection,
       cellHistory: tableCellHistories.get(tableUid),
