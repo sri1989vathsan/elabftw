@@ -90,7 +90,7 @@ function wellValue(data: SpreadsheetData, row: number, col: number): string {
 
 function wellSize(data: SpreadsheetData, popup: boolean): number {
   const count = data.rows * data.cols;
-  const base = count <= 24 ? 38 : count <= 48 ? 34 : count <= 96 ? 28 : 17;
+  const base = count <= 24 ? 50 : count <= 48 ? 44 : count <= 96 ? 36 : 21;
   return popup ? Math.round(base * 1.15) : base;
 }
 
