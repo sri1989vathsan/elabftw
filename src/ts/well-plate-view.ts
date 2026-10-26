@@ -73,14 +73,14 @@ function groupsWithCounts(data: SpreadsheetData): Array<PlateGroup & { count: nu
   const named = (data.plateGroups ?? []).map(group => ({ ...group, color: normalizeColor(group.color) }));
   const result = named.map(group => ({ ...group, count: counts.get(group.color) ?? 0 }));
   counts.forEach((count, color) => {
-    if (!named.some(group => group.color === color)) result.push({ name: color, color, count });
+    if (!named.some(group => group.color === color)) result.push({ name: '', color, count });
   });
   return result;
 }
 
 function groupNameFor(data: SpreadsheetData, color: string | null): string | null {
   if (!color) return null;
-  return groupsWithCounts(data).find(group => group.color === color)?.name ?? color;
+  return groupsWithCounts(data).find(group => group.color === color)?.name ?? '';
 }
 
 function wellValue(data: SpreadsheetData, row: number, col: number): string {
@@ -110,13 +110,14 @@ function showTooltip(event: MouseEvent, data: SpreadsheetData, row: number, col:
   heading.textContent = wellName(row, col);
   tooltipEl.appendChild(heading);
   const group = groupNameFor(data, color);
-  if (group && color) {
+  if (color) {
     const line = document.createElement('div');
     line.className = 'wp-tooltip-group';
     const dot = document.createElement('i');
     dot.className = 'wp-dot';
     dot.style.background = color;
-    line.append(dot, document.createTextNode(group));
+    line.append(dot);
+    if (group) line.append(document.createTextNode(group));
     tooltipEl.appendChild(line);
   }
   const body = document.createElement('div');
@@ -217,7 +218,7 @@ function renderLegend(root: HTMLElement, data: SpreadsheetData, dimmed?: Set<str
     dot.className = 'wp-dot';
     dot.style.background = group.color;
     const text = document.createElement('span');
-    text.textContent = `${group.name} (${group.count})`;
+    text.textContent = `${group.name || 'Unnamed'} (${group.count})`;
     item.append(dot, text);
     if (onToggle) {
       item.addEventListener('click', event => {
@@ -456,8 +457,9 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
         name.value = group.name;
         name.maxLength = 60;
         name.setAttribute('aria-label', 'Group name');
+        name.placeholder = 'Group name';
         name.addEventListener('change', () => {
-          const next = name.value.trim() || group.color;
+          const next = name.value.trim();
           working.plateGroups = groupsWithCounts(working).map(entry => ({
             name: entry.color === group.color ? next : entry.name,
             color: entry.color,
