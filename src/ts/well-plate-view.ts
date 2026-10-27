@@ -172,8 +172,10 @@ export function applyPlateColumns(data: SpreadsheetData): void {
 
 function wellSize(data: SpreadsheetData, popup: boolean): number {
   const count = data.rows * data.cols;
-  // the small plates have few wells, so they are drawn big; 96 and 384 wells have to stay compact
-  const base = count <= 6 ? 96 : count <= 12 ? 84 : count <= 24 ? 68 : count <= 48 ? 56 : count <= 96 ? 36 : 21;
+  // Every plate up to 96 wells is as wide as the 96-well plate (12 columns of 36 px wells and 4 px gaps): the fewer
+  // columns, the bigger the wells. A 384-well plate keeps small wells and is wider than that.
+  const wideEnough = 12 * (36 + 4);
+  const base = count > 96 ? 21 : Math.round(wideEnough / Math.max(1, data.cols) - 4);
   return popup ? Math.round(base * 1.15) : base;
 }
 
