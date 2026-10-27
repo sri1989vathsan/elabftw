@@ -185,7 +185,11 @@
             <td>{row.requesters ?? '—'}</td>
             <td>{row.order_count}</td>
             <td>
-              <span class={`badge ${progressClass(row)}`} title={row.last_collected_at ? `${t('Last collected')}: ${row.last_collected_at}` : ''}>{progressLabel(row)}</span>
+              {#if row.items_total === null}
+                <span class="text-muted" title={t('No confirmation with a basket is attached to these orders.')}>—</span>
+              {:else}
+                <span class={`badge ${progressClass(row)}`} title={row.last_collected_at ? `${t('Last collected')}: ${row.last_collected_at}` : ''}>{progressLabel(row)}</span>
+              {/if}
             </td>
             <td>
               <!-- every signed sheet linked to this procurement ID (dropped on the orders page or taken from the synced folder) -->
