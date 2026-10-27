@@ -287,8 +287,18 @@ const deleteWholeSelectionMenu = (
     },
   };
   const pasteIndex = items.findIndex(item => /^Paste\b/i.test(item.title ?? ''));
-  if (pasteIndex >= 0) items.splice(pasteIndex + 1, 0, pasteTransposedItem);
-  else items.push(pasteTransposedItem);
+  if (pasteIndex >= 0) {
+    // The grid's own Paste entry reads the clipboard directly and does nothing when the browser does not allow that;
+    // it asks in the same small box instead.
+    items[pasteIndex].onclick = (): void => {
+      void readClipboardText().then(text => {
+        if (text !== '') worksheet.paste?.(clickedX, clickedY, text);
+      });
+    };
+    items.splice(pasteIndex + 1, 0, pasteTransposedItem);
+  } else {
+    items.push(pasteTransposedItem);
+  }
   for (const item of items) {
     if (item.title === 'Delete selected rows' && maxY > minY && clickedY >= minY && clickedY <= maxY) {
       item.onclick = (): void => worksheet.deleteRow(minY, maxY - minY + 1);
