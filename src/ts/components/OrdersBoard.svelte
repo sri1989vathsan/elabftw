@@ -791,6 +791,8 @@
     status: 'attached' | 'no_order' | 'unreadable' | 'not_pdf' | 'error';
   };
   let sheetDragOver = false;
+  // files are being dragged somewhere over the page: the drop area shows its rectangle, as the attachment areas do
+  let sheetFileDragging = false;
   let sheetBusy = false;
   let sheetResults: SheetResult[] = [];
 
@@ -1558,7 +1560,27 @@
     mentionCandidates = mentionCandidates;
   }
 
+  function isFileDrag(event: DragEvent): boolean {
+    return Array.from(event.dataTransfer?.types ?? []).includes('Files');
+  }
+
+  const onPageDragEnter = (event: DragEvent): void => {
+    if (isFileDrag(event)) sheetFileDragging = true;
+  };
+  const onPageDragLeave = (event: DragEvent): void => {
+    // leaving the window altogether
+    if (event.relatedTarget === null) sheetFileDragging = false;
+  };
+  const onPageDragEnd = (): void => {
+    sheetFileDragging = false;
+    sheetDragOver = false;
+  };
+
   onMount(() => {
+    window.addEventListener('dragenter', onPageDragEnter);
+    window.addEventListener('dragleave', onPageDragLeave);
+    window.addEventListener('drop', onPageDragEnd);
+    window.addEventListener('dragend', onPageDragEnd);
     // a notification (mention in a comment) links here with ?order=<id>
     // -- make sure that order is actually visible (it may be in a
     // different status tab, or not "mine") before opening its comments
@@ -1604,7 +1626,13 @@
     // (see the loading && visibleItems.length === 0 guard below), so this
     // doesn't cause any visible jump.
     const refreshInterval = setInterval(() => { void load(); }, 60000);
-    return () => clearInterval(refreshInterval);
+    return () => {
+      clearInterval(refreshInterval);
+      window.removeEventListener('dragenter', onPageDragEnter);
+      window.removeEventListener('dragleave', onPageDragLeave);
+      window.removeEventListener('drop', onPageDragEnd);
+      window.removeEventListener('dragend', onPageDragEnd);
+    };
   });
 </script>
 
@@ -1863,6 +1891,7 @@
 
   <div
     class="orders-sheet-drop mt-2"
+    class:orders-sheet-drop-active={sheetFileDragging}
     class:orders-sheet-drop-over={sheetDragOver}
     role="region"
     aria-label={t('Drop shop sheets')}
@@ -1871,7 +1900,7 @@
     on:drop={onSheetsDropped}
   >
     <i class="fas fa-file-pdf fa-fw mr-1" aria-hidden="true"></i>
-    <span>{t('Drop the signed shop sheets (PDF) here. Each one is attached to the orders with the same procurement number (the number after Rüstschein), and the people who placed them are notified.')}</span>
+    <span>{t('Drop the signed collection sheets (PDF) here. Each one is attached to the orders with the same procurement number (the number after Rüstschein), and the people who placed them are notified.')}</span>
     <label class="btn btn-ghost btn-sm mb-0 ml-2">
       {t('Choose files')}
       <input type="file" accept="application/pdf,.pdf" multiple class="orders-file-input" on:change={onSheetsSelected} />
@@ -3099,6 +3128,26 @@
     border: 1px dashed transparent;
     border-radius: 0.35rem;
     padding: 0.2rem;
+  }
+
+  /* the drop area for the collection sheets: a rectangle while files are dragged over the page, filled when over it */
+  .orders-sheet-drop {
+    align-items: center;
+    border: 2px dashed transparent;
+    border-radius: 0.35rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  .orders-sheet-drop-active {
+    border-color: rgba(var(--primary-rgb, 0, 123, 255), 0.6);
+  }
+
+  .orders-sheet-drop-over {
+    background: rgba(var(--primary-rgb, 0, 123, 255), 0.1);
+    border-color: var(--primary);
   }
 
   .orders-attachments-drag-over {
