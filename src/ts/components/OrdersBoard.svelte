@@ -804,6 +804,9 @@
       try {
         const formData = new FormData();
         formData.set('file', file);
+        // the result below is the notification: no extra "Saved" or error toast from the request itself
+        formData.set('notifOnSaved', '0');
+        formData.set('notifOnError', '0');
         const response = await ApiC.post('order_sheets', formData);
         result = await response.json() as SheetResult;
       } catch {
