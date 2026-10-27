@@ -65,6 +65,12 @@ final class OrderProcurements extends AbstractRest
             $conditions[] = 'o.userid = :viewer';
             $bind[':viewer'] = array($viewer, PDO::PARAM_INT);
         }
+        // one person's orders (the whole tab is open to the team, so this is a convenience, not a privilege)
+        $filterUser = $query->getInt('userid');
+        if ($filterUser > 0 && !$mine) {
+            $conditions[] = 'o.userid = :filter_user';
+            $bind[':filter_user'] = array($filterUser, PDO::PARAM_INT);
+        }
         $search = trim($query->getString('q'));
         if ($search !== '') {
             $conditions[] = "(o.procurement_id LIKE :q OR o.order_number LIKE :q OR o.title LIKE :q
@@ -111,7 +117,7 @@ final class OrderProcurements extends AbstractRest
         $items = array();
         foreach ($rows as $row) {
             $procurementId = (string) $row['procurement_id'];
-            $orders = $this->ordersOf($team, $procurementId, $mine ? $viewer : null);
+            $orders = $this->ordersOf($team, $procurementId, $mine ? $viewer : ($filterUser > 0 ? $filterUser : null));
             $progress = $this->progressOf($team, $procurementId);
             $detail = $this->itemsAndSheets($team, $procurementId);
             $items[] = array(

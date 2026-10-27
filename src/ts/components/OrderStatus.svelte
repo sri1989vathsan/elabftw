@@ -4,6 +4,7 @@
   import i18next from '../i18n';
   import { Notification as AppNotification } from '../Notifications.class';
 
+  type TeamMember = { userid: number; fullname: string };
   type ProcurementOrder = { id: number; title: string; status: string; requester: string };
   type Procurement = {
     procurement_id: string;
@@ -33,6 +34,8 @@
   let total = 0;
   let loading = true;
   let owner: 'mine' | 'all' = 'mine';
+  let teamMembers: TeamMember[] = [];
+  let selectedUserId: number | null = null;
   let query = '';
   let dateFrom = '';
   let dateTo = '';
@@ -45,6 +48,7 @@
     loading = true;
     try {
       const params = new URLSearchParams({ limit: String(pageSize), offset: String(pageOffset), owner });
+      if (owner === 'all' && selectedUserId !== null) params.set('userid', String(selectedUserId));
       if (query.trim() !== '') params.set('q', query.trim());
       if (dateFrom !== '') params.set('date_from', dateFrom);
       if (dateTo !== '') params.set('date_to', dateTo);
@@ -70,7 +74,23 @@
 
   function setOwner(next: 'mine' | 'all'): void {
     owner = next;
+    selectedUserId = null;
     onFilterChange();
+  }
+
+  // picking a person shows that person's orders: it is a view of everyone's, filtered
+  function onUserChange(): void {
+    owner = 'all';
+    onFilterChange();
+  }
+
+  async function loadTeamMembers(): Promise<void> {
+    try {
+      teamMembers = await ApiC.getJson('users?currentTeam=1') as TeamMember[];
+      teamMembers.sort((a, b) => a.fullname.localeCompare(b.fullname, undefined, { sensitivity: 'base' }) || a.userid - b.userid);
+    } catch {
+      teamMembers = [];
+    }
   }
 
   function clearFilters(): void {
@@ -110,6 +130,7 @@
   // changes made in the orders (a deletion, a new status, a sheet dropped) show here without reloading the page
   onMount(() => {
     void load();
+    void loadTeamMembers();
     const refresh = setInterval(() => { void load(); }, 30000);
     const onVisible = (): void => {
       if (document.visibilityState === 'visible') void load();
@@ -134,6 +155,12 @@
         <i class="fas fa-users fa-fw mr-1" aria-hidden="true"></i>{t('Everyone')}
       </button>
     </div>
+    <select class="form-control form-control-sm order-status-user" style="width:auto" bind:value={selectedUserId} on:change={onUserChange} title={t('Show the orders of one person')}>
+      <option value={null}>{t('All users')}</option>
+      {#each teamMembers as member (member.userid)}
+        <option value={member.userid}>{member.fullname}</option>
+      {/each}
+    </select>
     <input
       type="search"
       class="form-control form-control-sm order-status-search"
