@@ -139,7 +139,7 @@
           <th scope="col">{t('Requested by')}</th>
           <th scope="col">{t('Orders')}</th>
           <th scope="col">{t('Items collected')}</th>
-          <th scope="col">{t('Signed sheets')}</th>
+          <th scope="col">{t('Signed Sheets')}</th>
         </tr>
       </thead>
       <tbody>
@@ -160,18 +160,20 @@
               <span class={`badge ${progressClass(row)}`} title={row.last_collected_at ? `${t('Last collected')}: ${row.last_collected_at}` : ''}>{progressLabel(row)}</span>
             </td>
             <td>
-              <!-- only the signed sheets that came in through the drop area or the synced folder -->
+              <!-- every signed sheet linked to this procurement ID (dropped on the orders page or taken from the synced folder) -->
               {#each row.sheets as sheet (sheet.id)}
-                {#if sheet.download}
-                  <a
-                    class="order-status-pdf"
-                    href={`app/download.php?f=${encodeURIComponent(sheet.download.long_name)}&storage=${sheet.download.storage}&name=${encodeURIComponent(sheet.name)}`}
-                    title={`${sheet.name} (${sheet.collected_at})`}
-                    on:click|stopPropagation
-                  ><i class="fas fa-file-pdf fa-fw text-danger" aria-hidden="true"></i><span class="sr-only">{sheet.name}</span></a>
-                {:else}
-                  <i class="fas fa-file-pdf fa-fw text-muted" title={sheet.name} aria-hidden="true"></i>
-                {/if}
+                <div class="order-status-sheet">
+                  <i class="fas fa-file-pdf fa-fw text-danger" aria-hidden="true"></i>
+                  {#if sheet.download}
+                    <a
+                      href={`app/download.php?f=${encodeURIComponent(sheet.download.long_name)}&storage=${sheet.download.storage}&name=${encodeURIComponent(sheet.name)}`}
+                      title={sheet.collected_at}
+                      on:click|stopPropagation
+                    >{sheet.name}</a>
+                  {:else}
+                    <span title={sheet.collected_at}>{sheet.name}</span>
+                  {/if}
+                </div>
               {:else}
                 <span class="text-muted">—</span>
               {/each}
@@ -277,8 +279,8 @@
     cursor: pointer;
   }
 
-  .order-status-pdf {
-    margin-right: 0.15rem;
+  .order-status-sheet {
+    overflow-wrap: anywhere;
   }
 
   .order-status-sections {
