@@ -28,7 +28,7 @@
     };
   }
 
-  type OrderStatus = 'requested' | 'ordered' | 'received' | 'collected' | 'backlogged' | 'cancelled' | 'pinned_all' | 'my_reference';
+  type OrderStatus = 'requested' | 'ordered' | 'collected' | 'received' | 'backlogged' | 'cancelled' | 'pinned_all' | 'my_reference';
 
   type TeamMember = {
     userid: number;
@@ -157,7 +157,7 @@
   // 'pinned_all' (shown as "Pinned") is only set when an order is created, and
   // is locked afterwards: the selects below leave it out for every other order
   // and disable it on a pinned one.
-  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'collected', 'backlogged', 'cancelled', 'pinned_all', 'my_reference'];
+  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'collected', 'received', 'backlogged', 'cancelled', 'pinned_all', 'my_reference'];
   // 'pinned_all' (shown as "Pinned for all") and 'my_reference' (shown as "Reference", only its
   // author sees it) are always pinned and never change status
   const PINNED_STATUSES: OrderStatus[] = ['pinned_all', 'my_reference'];
@@ -168,8 +168,8 @@
       backlogged: t('Backlogged'),
       requested: t('Requested'),
       ordered: t('Ordered'),
-      received: t('Received'),
       collected: t('Collected'),
+      received: t('In storage'),
       cancelled: t('Cancelled'),
       pinned_all: t('Pinned for all'),
       my_reference: t('Reference'),
@@ -1837,11 +1837,11 @@
       <button type="button" class={statusFilter === 'ordered' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('ordered')}>
         {t('Ordered')}
       </button>
-      <button type="button" class={statusFilter === 'received' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('received')}>
-        {t('Received')}
-      </button>
       <button type="button" class={statusFilter === 'collected' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('collected')}>
         {t('Collected')}
+      </button>
+      <button type="button" class={statusFilter === 'received' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('received')}>
+        {t('In storage')}
       </button>
       <button type="button" class={statusFilter === 'backlogged' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('backlogged')}>
         {t('Backlogged')}

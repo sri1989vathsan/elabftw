@@ -68,15 +68,20 @@ final class ScanReader
             ));
             $render->setTimeout(90);
             $render->run();
+            // TEMP-DEBUG
+            @file_put_contents('/var/lib/elabftw/order-sheets/.ocr-debug', date('c') . ' gs exit=' . $render->getExitCode() . ' err=' . substr($render->getErrorOutput(), 0, 300) . ' env_path=' . (getenv('PATH') ?: '-') . ' tmp=' . $dir . "\n", FILE_APPEND);
             foreach (glob($dir . '/page*.png') ?: array() as $png) {
                 $ocr = new Process(array('tesseract', $png, 'stdout', '-l', 'deu+eng', '--psm', '6'));
                 $ocr->setTimeout(90);
                 $ocr->run();
+                // TEMP-DEBUG
+                @file_put_contents('/var/lib/elabftw/order-sheets/.ocr-debug', date('c') . ' tess exit=' . $ocr->getExitCode() . ' err=' . substr($ocr->getErrorOutput(), 0, 300) . "\n", FILE_APPEND);
                 if ($ocr->isSuccessful()) {
                     $text .= "\n" . $ocr->getOutput();
                 }
             }
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            @file_put_contents('/var/lib/elabftw/order-sheets/.ocr-debug', date('c') . ' EXC ' . $e->getMessage() . "\n", FILE_APPEND); // TEMP-DEBUG
             // the tools are missing or failed: the caller treats "no number" as unreadable
         } finally {
             foreach (glob($dir . '/*') ?: array() as $file) {

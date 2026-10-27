@@ -7,13 +7,13 @@
   import { ApiC } from '../api';
   import i18next from '../i18n';
 
-  type Status = 'requested' | 'ordered' | 'received' | 'collected' | 'backlogged' | 'cancelled';
+  type Status = 'requested' | 'ordered' | 'collected' | 'received' | 'backlogged' | 'cancelled';
   type Rule = { status: Status; days: number };
 
   // Order matches statusLabel() in OrdersBoard.svelte -- 'reference' is
   // deliberately excluded, those are pinned catalog entries with no real
   // lifecycle to measure "time in status" from.
-  const ALL_STATUSES: Status[] = ['requested', 'ordered', 'received', 'collected', 'backlogged', 'cancelled'];
+  const ALL_STATUSES: Status[] = ['requested', 'ordered', 'collected', 'received', 'backlogged', 'cancelled'];
 
   let { endpoint, rules: initialRules }: { endpoint: string; rules: string } = $props();
 
@@ -38,8 +38,8 @@
     return {
       requested: t('Requested'),
       ordered: t('Ordered'),
-      received: t('Received'),
       collected: t('Collected'),
+      received: t('In storage'),
       backlogged: t('Backlogged'),
       cancelled: t('Cancelled'),
     }[status];

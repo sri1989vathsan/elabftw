@@ -143,7 +143,7 @@
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'orders_autoadvance_on_procurement_id',
       'label': 'Automatically move an order from Requested to Ordered once a procurement ID is detected'|trans,
-      'help': 'Only applies to a Requested order -- one already Backlogged, Received, Cancelled or a Reference is left alone.'|trans} %}
+      'help': 'Only applies to a Requested order -- one already Backlogged, In storage, Cancelled or a Reference is left alone.'|trans} %}
 
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'orders_autoadvance_on_attachment',
