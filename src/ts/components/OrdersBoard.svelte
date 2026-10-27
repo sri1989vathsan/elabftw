@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { notify } from '../notify';
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
