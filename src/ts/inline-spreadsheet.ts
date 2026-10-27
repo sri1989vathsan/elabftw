@@ -9046,7 +9046,11 @@ export function buildReadOnlySpreadsheetHost(
   if (editable) {
     pageListenerRemovers.push(installTransposedPaste(host, () => {
       const mounted = getMountedWorksheet(sheetContainer);
-      const selection = lastKnownSelection;
+      // the grid's own selection when it has one (a programmatic selection does not always reach lastKnownSelection)
+      const live = mounted?.getSelection?.();
+      const selection: CellRange | null = Array.isArray(live) && live.length >= 4 && live.slice(0, 4).every(Number.isInteger)
+        ? live.slice(0, 4) as CellRange
+        : lastKnownSelection;
       return mounted && selection
         ? { worksheet: mounted, col: Math.min(selection[0], selection[2]), row: Math.min(selection[1], selection[3]) }
         : null;
