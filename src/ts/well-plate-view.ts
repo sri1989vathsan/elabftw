@@ -172,7 +172,8 @@ export function applyPlateColumns(data: SpreadsheetData): void {
 
 function wellSize(data: SpreadsheetData, popup: boolean): number {
   const count = data.rows * data.cols;
-  const base = count <= 24 ? 50 : count <= 48 ? 44 : count <= 96 ? 36 : 21;
+  // the small plates have few wells, so they are drawn big; 96 and 384 wells have to stay compact
+  const base = count <= 6 ? 96 : count <= 12 ? 84 : count <= 24 ? 68 : count <= 48 ? 56 : count <= 96 ? 36 : 21;
   return popup ? Math.round(base * 1.15) : base;
 }
 
