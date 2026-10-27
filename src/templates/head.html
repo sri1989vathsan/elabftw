@@ -157,7 +157,7 @@
             {% endif %}
 
             {% if not App.isAnonymous() %}
-            {% set isActive = scriptName in ['orders.php', 'order-templates.php'] %}
+            {% set isActive = scriptName in ['orders.php', 'order-templates.php', 'order-status.php'] %}
             <a class='nav-item nav-link {{ isActive ? 'active' }}'
                 href='orders.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-cart-shopping mr-1'></i>{{ 'Orders'|trans }}</a>
             {% endif %}

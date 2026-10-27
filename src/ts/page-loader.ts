@@ -145,6 +145,13 @@ if (document.getElementById('ordersRoot')) {
   );
 }
 
+if (document.getElementById('orderStatusRoot')) {
+  void import(
+    /* webpackChunkName: 'order-status' */
+    './order-status'
+  );
+}
+
 if (document.getElementById('orderTemplatesRoot')) {
   void import(
     /* webpackChunkName: 'order-templates' */

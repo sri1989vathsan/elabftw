@@ -35,6 +35,7 @@ enum ApiEndpoint: string
     case Feedback = 'feedback';
     case Orders = 'orders';
     case OrderSheets = 'order_sheets';
+    case OrderStatus = 'order_status';
     case OrderTemplates = 'order_templates';
     case FavFilters = 'favfilters';
     case TemplateFavorites = 'templatefavorites';

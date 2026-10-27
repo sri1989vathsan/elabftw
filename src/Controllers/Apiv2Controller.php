@@ -85,6 +85,7 @@ use Elabftw\Models\OrderTemplates;
 use Elabftw\Models\OrderTemplateUploads;
 use Elabftw\Models\Orders;
 use Elabftw\Models\OrderComments;
+use Elabftw\Models\OrderProcurements;
 use Elabftw\Models\OrderSheets;
 use Elabftw\Models\OrderUploads;
 use Elabftw\Models\Todolist;
@@ -406,6 +407,7 @@ final class Apiv2Controller extends AbstractApiController
             ApiEndpoint::Feedback => new Feedback($this->requester, $this->id),
             ApiEndpoint::Orders => new Orders($this->requester, $this->id),
             ApiEndpoint::OrderSheets => new OrderSheets($this->requester, $this->id),
+            ApiEndpoint::OrderStatus => new OrderProcurements($this->requester, $this->id),
             ApiEndpoint::OrderTemplates => new OrderTemplates($this->requester, $this->id),
             ApiEndpoint::FavFilters => new FavFilters($this->requester, $this->id),
             ApiEndpoint::FavTags => new FavTags($this->requester, $this->id),

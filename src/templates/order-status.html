@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% import 'guide-info.html' as guide -%}
+
+{% block body %}
+<h1><i class='fas fa-cart-shopping mr-2'></i>{{ 'Orders'|trans }}{{ guide.info('guide-orders', 'Orders') }}</h1>
+{% include 'orders-tabs.html' with {'active': 'status'} %}
+<p class='text-muted'>{{ 'Every procurement with its orders and how many of its items were collected, as recognised on the signed collection sheets.'|trans }}</p>
+<div id='orderStatusRoot'></div>
+{% endblock %}

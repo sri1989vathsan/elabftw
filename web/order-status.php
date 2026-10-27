@@ -1,0 +1,43 @@
+<?php
+
+/**
+ * @author eLabFTW contributors
+ * @copyright 2026 eLabFTW contributors
+ * @see https://www.elabftw.net Official website
+ * @license AGPL-3.0
+ * @package elabftw
+ */
+
+declare(strict_types=1);
+
+namespace Elabftw\Elabftw;
+
+use Elabftw\Exceptions\AppException;
+use Elabftw\Exceptions\IllegalActionException;
+use Exception;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Order status overview for team admins: every procurement with its orders and how much of it was collected.
+ */
+require_once 'app/init.inc.php';
+
+$Response = new Response();
+
+try {
+    if (!$App->Users->isAdmin) {
+        throw new IllegalActionException('Only a team admin can see the order status overview.');
+    }
+    $Response->prepare($App->Request);
+    $Response->setContent($App->render('order-status.html', array(
+        'pageTitle' => _('Order status'),
+        'hideTitle' => true,
+    )));
+    $Response->headers->set('Cache-Control', 'no-store');
+} catch (AppException $e) {
+    $Response = $e->getResponseFromException($App);
+} catch (Exception $e) {
+    $Response = $App->getResponseFromException($e);
+} finally {
+    $Response->send();
+}
