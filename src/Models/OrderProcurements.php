@@ -166,7 +166,7 @@ final class OrderProcurements extends AbstractRest
      */
     private function progressOf(int $team, string $procurementId): array
     {
-        $count = $this->Db->prepare('SELECT COUNT(*) AS collected, MAX(created_at) AS last_at FROM custom_order_sheet_items
+        $count = $this->Db->prepare('SELECT COUNT(DISTINCT item_index) AS collected, MAX(created_at) AS last_at FROM custom_order_sheet_items
             WHERE team = :team AND procurement_id = :procurement_id');
         $count->bindValue(':team', $team, PDO::PARAM_INT);
         $count->bindValue(':procurement_id', $procurementId);
@@ -183,7 +183,7 @@ final class OrderProcurements extends AbstractRest
         $text = $confirmation->fetchColumn();
         $total = $text === false ? 0 : count(ScanReader::basketItems((string) $text));
         return array(
-            'collected' => (int) ($counted['collected'] ?? 0),
+            'collected' => $total > 0 ? min((int) ($counted['collected'] ?? 0), $total) : (int) ($counted['collected'] ?? 0),
             'total' => $total > 0 ? $total : null,
             'last_collected_at' => $counted['last_at'] ?? null,
         );
