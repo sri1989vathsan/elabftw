@@ -10,7 +10,7 @@ services:
       - -c
       - >-
         chown ${ELABFTW_RUN_UID:-1000}:${ELABFTW_RUN_GID:-1000}
-        /var/lib/elabftw/uploads /var/lib/elabftw/exports
+        /var/lib/elabftw/uploads /var/lib/elabftw/exports /var/lib/elabftw/order-sheets
     cap_drop:
       - ALL
     cap_add:
@@ -18,6 +18,7 @@ services:
     volumes:
       - elabftw-uploads:/var/lib/elabftw/uploads
       - elabftw-exports:/var/lib/elabftw/exports
+      - ${ORDER_SHEETS_HOST_DIR:-elabftw-order-sheets}:/var/lib/elabftw/order-sheets
 
   migration-init:
     image: elabftw/elabimg:codex-orders-tracking-restructured
@@ -149,6 +150,9 @@ services:
     volumes:
       - elabftw-uploads:/var/lib/elabftw/uploads
       - elabftw-exports:/var/lib/elabftw/exports
+      # The watched folder for the signed shop sheets (see Commands/OrdersImportSheetsCommand.php): a plain volume by
+      # default, or a folder of the host (a scanner share, say) when ORDER_SHEETS_HOST_DIR is set to its path
+      - ${ORDER_SHEETS_HOST_DIR:-elabftw-order-sheets}:/var/lib/elabftw/order-sheets
       # Dev-loop bind mounts: pure PHP/Twig source, read-only. These apply
       # instantly (no rebuild) since PHP-FPM reads files per-request and
       # Twig auto-recompiles on mtime change. Deliberately NOT mounting
@@ -295,4 +299,5 @@ networks:
 volumes:
   elabftw-uploads:
   elabftw-exports:
+  elabftw-order-sheets:
   elabftw-mysql:

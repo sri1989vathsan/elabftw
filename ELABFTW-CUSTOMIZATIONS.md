@@ -570,3 +570,11 @@ A free-form canvas next to the column board. A card is a question, a pointer to 
   `collected` (migration 097) and the people who placed them get the notification "Orders from this procurement have
   been received: Please check if your order has been collected." (`OrderChanged` with reason `received`).
 - Dropping the same sheet again does not attach it twice. Pinned and cancelled orders keep their status.
+
+### Watched folder for shop sheets
+
+`orders:import-sheets` (every minute, see `chronos.go`) takes new PDFs from `ORDER_SHEETS_DIR`
+(default `/var/lib/elabftw/order-sheets`, the `elabftw-order-sheets` volume, or the host folder in `ORDER_SHEETS_HOST_DIR`)
+and treats them like a drop on the orders page. Handled files move to `done/`, `unmatched/` (no order has that number
+yet: tried again each run) or `unreadable/`. `ORDER_SHEETS_USERID` is the account the attachments are attributed to
+(default: the first sysadmin).

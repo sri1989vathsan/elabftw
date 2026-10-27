@@ -41,6 +41,7 @@ func main() {
 	go scheduleDaily(ctx, 3, 37, []string{"idps:refresh"})
 	go scheduleDaily(ctx, 4, 15, []string{"orders:autoarchive"})
 	go scheduleEveryMinute(ctx, []string{"notifications:send"})
+	go scheduleEveryMinute(ctx, []string{"orders:import-sheets"})
 	log.Println("scheduled tasks started")
 
 	// wait until context is canceled

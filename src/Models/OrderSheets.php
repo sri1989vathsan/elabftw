@@ -52,7 +52,7 @@ final class OrderSheets extends AbstractRest
     /**
      * @return array{file: string, procurement_id: string|null, orders: list<array{id: int, title: string}>, notified: int, collected?: int, status: string}
      */
-    public function process(UploadedFile $file): array
+    public function process(UploadedFile $file, ?string $knownProcurementId = null): array
     {
         $realName = $file->getClientOriginalName();
         $result = array('file' => $realName, 'procurement_id' => null, 'orders' => array(), 'notified' => 0, 'status' => 'unreadable');
@@ -60,7 +60,8 @@ final class OrderSheets extends AbstractRest
             $result['status'] = 'not_pdf';
             return $result;
         }
-        $procurementId = ScanReader::procurementIdFromPdf($file->getPathname());
+        // a sheet kept in the watched folder's unmatched list already has its number in the name: no second OCR
+        $procurementId = $knownProcurementId ?? ScanReader::procurementIdFromPdf($file->getPathname());
         if ($procurementId === null) {
             return $result;
         }
