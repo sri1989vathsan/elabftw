@@ -376,6 +376,14 @@ const DEFAULT_ROWS = 5;
 // The most rows or columns a spreadsheet can have. A well plate's table has a row for every well and a header (385 for
 // a 384-well plate), so the old limit of 50 cut those tables short.
 const MAX_DIMENSION = 400;
+
+// The grid's hidden keyboard input (.jss_textarea) can sit far above or below the visible part of the page; a plain
+// focus() scrolls the page to it, which threw the reader away from the table they were typing in. Focusing it must
+// never scroll.
+const nativeTextAreaFocus = HTMLTextAreaElement.prototype.focus;
+HTMLTextAreaElement.prototype.focus = function focusWithoutScrollingGridInput(this: HTMLTextAreaElement, options?: FocusOptions): void {
+  nativeTextAreaFocus.call(this, this.classList.contains('jss_textarea') ? { ...options, preventScroll: true } : options);
+};
 const MAX_TABLE_BORDER = 20;
 const MIN_DATA_ROW_HEIGHT = 20;
 const MAX_DATA_ROW_HEIGHT = 500;
