@@ -569,7 +569,7 @@ A free-form canvas next to the column board. A card is a question, a pointer to 
   team with that procurement ID (`src/Models/OrderSheets.php`, endpoint `api/v2/order_sheets`), those orders become
   `collected` (migration 097) and the people who placed them get the notification "Orders from this procurement have
   been received: Please check if your order has been collected." (`OrderChanged` with reason `received`).
-- Dropping the same sheet again does not attach it twice. Only requested and ordered orders become collected; any other status stays.
+- Dropping the same sheet again does not attach it twice. Only ordered orders become collected; any other status stays.
 
 ### Watched folder for shop sheets
 
