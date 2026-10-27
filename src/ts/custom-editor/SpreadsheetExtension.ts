@@ -665,6 +665,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       editor.selection.setCursorLocation(paragraph, 0);
     }
     editor.undoManager.add();
+    // Inserting is a change like any other: without this the page stayed "unsaved" until the next keystroke,
+    // because the autosave timer only starts from a keyup
+    editor.setDirty(true);
+    editor.dispatch('keyup');
   };
 
   // Shared by the insert-data-table toolbar dropdown and the classic Insert
