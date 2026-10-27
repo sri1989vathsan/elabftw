@@ -112,9 +112,9 @@
 
   // green when everything was collected, amber when part of it was, grey when nothing yet or unknown
   function progressClass(row: Procurement): string {
-    if (row.items_total === null) return 'badge-secondary';
+    if (row.items_total === null) return 'badge-light border';
     if (row.items_collected >= row.items_total) return 'badge-success';
-    return row.items_collected > 0 ? 'badge-warning' : 'badge-secondary';
+    return row.items_collected > 0 ? 'badge-warning' : 'badge-light border';
   }
 
   function statusLabel(status: string): string {
