@@ -141,8 +141,8 @@ final class ScanReader
         if (preg_match('/Gesamtpreis/u', $text, $header, PREG_OFFSET_CAPTURE) === 1) {
             $text = substr($text, $header[0][1] + 11);
         }
-        // every item row ends with its quantity, unit price and total price: "1each 400,51CHF1 each 400.51"
-        if (preg_match_all('/\d+\s*each\s+[\d.,\x{2019}\']+\s*CHF\s*\d+\s*each\s+[\d.,\x{2019}\']+/iu', $text, $rows, PREG_OFFSET_CAPTURE) === 0) {
+        // every item row ends with its quantity, unit price and total price, whatever the unit: "1each 400,51CHF1 each 400.51", "2.000Piece 699,41CHF 1 Piece 1,398.81"
+        if (preg_match_all('/[\d.,]+\s*[A-Za-z]+\s*[\d.,\x{2019}\']+\s*[A-Z]{3}\s*\d+\s*[A-Za-z]+\s+[\d.,\x{2019}\']+/u', $text, $rows, PREG_OFFSET_CAPTURE) === 0) {
             return array();
         }
         $items = array();
