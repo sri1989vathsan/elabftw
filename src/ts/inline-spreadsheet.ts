@@ -227,13 +227,17 @@ const deleteWholeSelectionMenu = (
   const maxX = Math.max(firstX, lastX);
   const minY = Math.min(firstY, lastY);
   const maxY = Math.max(firstY, lastY);
-  items.push({
+  // right under the normal Paste entry
+  const pasteTransposedItem: JssMenuItem = {
     title: 'Paste transposed',
     onclick: (): void => {
       // from the right-click menu the clipboard has to be read; Ctrl/Cmd+Shift+V works without that permission
       void navigator.clipboard?.readText?.().then(text => pasteTransposed(worksheet, clickedX, clickedY, text)).catch(() => undefined);
     },
-  });
+  };
+  const pasteIndex = items.findIndex(item => /^Paste\b/i.test(item.title ?? ''));
+  if (pasteIndex >= 0) items.splice(pasteIndex + 1, 0, pasteTransposedItem);
+  else items.push(pasteTransposedItem);
   for (const item of items) {
     if (item.title === 'Delete selected rows' && maxY > minY && clickedY >= minY && clickedY <= maxY) {
       item.onclick = (): void => worksheet.deleteRow(minY, maxY - minY + 1);
