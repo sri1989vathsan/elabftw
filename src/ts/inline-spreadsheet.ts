@@ -197,13 +197,23 @@ async function readClipboardText(): Promise<string> {
 
 /** Pastes the clipboard text transposed with its top-left cell at (col, row); the grid grows as a normal paste does. */
 function pasteTransposed(worksheet: JssInstance, col: number, row: number, text: string): void {
-  if (!worksheet || text === '') return;
-  const transposed = transposeClipboardText(text);
-  if (typeof worksheet.paste === 'function') {
-    worksheet.paste(col, row, transposed);
-    return;
+  pasteTextAt(worksheet, col, row, text === '' ? '' : transposeClipboardText(text));
+}
+
+/** Pastes tab-separated text with its top-left cell at (col, row). */
+function pasteTextAt(worksheet: JssInstance, col: number, row: number, text: string): void {
+  if (!worksheet || text === '' || !Number.isInteger(col) || !Number.isInteger(row)) return;
+  // the grid's own paste needs a selected cell, and a menu click (or the box that asks for the text) clears it
+  worksheet.updateSelectionFromCoords?.(col, row, col, row);
+  try {
+    if (typeof worksheet.paste === 'function') {
+      worksheet.paste(col, row, text);
+      return;
+    }
+  } catch {
+    // fall back to setting the cells one by one
   }
-  transposed.split('\n').forEach((line, rowOffset) => line.split('\t').forEach((value, colOffset) => {
+  text.split('\n').forEach((line, rowOffset) => line.split('\t').forEach((value, colOffset) => {
     worksheet.setValueFromCoords?.(col + colOffset, row + rowOffset, value, true);
   }));
 }
@@ -291,9 +301,7 @@ const deleteWholeSelectionMenu = (
     // The grid's own Paste entry reads the clipboard directly and does nothing when the browser does not allow that;
     // it asks in the same small box instead.
     items[pasteIndex].onclick = (): void => {
-      void readClipboardText().then(text => {
-        if (text !== '') worksheet.paste?.(clickedX, clickedY, text);
-      });
+      void readClipboardText().then(text => pasteTextAt(worksheet, clickedX, clickedY, text));
     };
     items.splice(pasteIndex + 1, 0, pasteTransposedItem);
   } else {
