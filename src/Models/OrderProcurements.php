@@ -10,7 +10,6 @@ declare(strict_types=1);
 
 namespace Elabftw\Models;
 
-use Elabftw\Exceptions\IllegalActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\ScanReader;
@@ -27,7 +26,7 @@ use function preg_match;
 use function trim;
 
 /**
- * The "Order Status" overview for team admins: one row per procurement (the orders that share a procurement ID) with
+ * The "Order Status" overview for the team: one row per procurement (the orders that share a procurement ID) with
  * its order numbers, order date, requesters, the orders themselves and how many of its items were collected, as
  * recognised on the collection sheets (see OrderSheets). Searchable and filterable by the order date.
  */
@@ -52,9 +51,6 @@ final class OrderProcurements extends AbstractRest
     #[Override]
     public function readAll(?QueryParamsInterface $queryParams = null): array
     {
-        if (!$this->requester->isAdmin) {
-            throw new IllegalActionException('Only a team admin can see the order status overview.');
-        }
         $queryParams ??= $this->getQueryParams();
         $query = $queryParams->getQuery();
         $team = (int) $this->requester->userData['team'];
