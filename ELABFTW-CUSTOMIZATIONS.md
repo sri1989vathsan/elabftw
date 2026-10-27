@@ -553,6 +553,56 @@ A free-form canvas next to the column board. A card is a question, a pointer to 
 - `src/Models/TodolistCanvas.php`, `src/Models/TodolistCanvasEdges.php` — API endpoints `todolist_canvas` (`GET ?project_id=&include_subprojects=1`) and `todolist_canvas_edges`; project access follows the board rules
 - `src/ts/components/ProjectCanvas.svelte`, toggle in `ProjectManagementBoard.svelte`; styles are `.pmc-*` in `src/scss/main.scss`
 
+### Steps, @mentions and tasks on the boards
+
+(Code: `src/Models/StepMentions.php`, `Steps.php`, `Comments.php`, `src/ts/comment-mentions.ts`; migrations 089-092.)
+
+- **Comments**: `@Full Name` notifies the person (setting `notif_mentioned_entry`) if they can read the entry.
+- **Steps**: an `@Name` in a step makes the step's author the assigner and each mentioned person an assignee with their own to-do task
+  (linked to the entry, deadline copied) and a notification. Editing the step updates the tasks; removing a name removes that task;
+  deleting the step removes them; clearing the step's deadline clears it on the tasks. Assignees who cannot open the entry still get the task and a nameless notification.
+- **Completion**: one assignee ticking their task, or anyone ticking the step, completes the step and every other assignee's task.
+  The assigner and the other assignees are notified; reopening reopens everything.
+- In every `@` box Up/Down move, Tab takes the highlighted name. A task linked to an experiment opens its popup on the experiment page.
+- Boards: the card list under "All links" opens inside its row, an item linked from several cards shows how many; to-dos can repeat
+  (daily, weekly, days of the week, monthly, yearly, every N, optional end) and the next one is created on completion.
+
+## Well plates and recent spreadsheet changes
+
+### Well plates
+
+A well plate (6, 12, 24, 48, 96 or 384 wells) is a spreadsheet table with `kind: 'well-plate'` (the Insert menu's spreadsheet
+grid and the plate submenu create it). Its size is fixed: no inserting or deleting rows or columns, by key, menu or button, inline or in the popup.
+
+- **Compact view in the text** (`src/ts/well-plate-view.ts`, styles `.wp-*` in `src/scss/main.scss`): round wells, hover shows
+  a well's contents, a legend lists the colour groups as a dot and the group name only. Every plate up to 96 wells is as wide
+  as the 96-well plate (wells are bigger on the small plates); the 384-well plate stays smaller.
+- **Groups**: a well's group is its cell background colour. The plate popup has a group list and a new-group box (Tab moves between
+  group names); Ctrl/Cmd/Shift select wells.
+- **Plate / Spreadsheet switch**: the buttons in the table header switch between the plate and the grid. The choice is saved with the
+  table (`plateView`) and is what is printed.
+- **Plate table and dynamic groups**: each well can carry a row of a plate table (`plateTable`: `columns`, `rows` keyed by well, e.g. `A1`).
+  "Colour by" and "Label by" (`plateGroupBy`, `plateLabelBy`) colour or label the wells by any column of that table. The table opens
+  as a full spreadsheet; "Back to plate view" returns.
+- **Insert from CSV / XLSX**: in every Insert menu (toolbar, context menu, slash command). It always asks for the plate size, because
+  partly filled plates are common (`plateTableSource` records the file name).
+- Data: `data-spreadsheet` holds `kind`, `plateSize`, `plateGroups`, `plateView`, `plateTable`, `plateGroupBy`, `plateLabelBy`,
+  `plateTableSource`; normalised by `normalizePlateTable` in `src/ts/inline-spreadsheet.ts`.
+
+### Spreadsheet changes (October 2026)
+
+- Up to 400 rows and columns (a 384-well plate's table needs 385 rows).
+- **Paste transposed**: Ctrl/Cmd+Shift+V and "Paste transposed" in the right-click menu, in the inline grid and the popup. When the browser
+  does not let the page read the clipboard, a small box asks to press Ctrl/Cmd+V. Right-click **Paste** works the same way
+  (a menu click clears the grid's selection, so the clicked cell is selected before pasting).
+- Undo and redo also cover formatting changes (inline grid and popup).
+- Enter while editing commits and moves down; in the last row it stays and a further Enter adds a row. Autosave starts after an insert, a paste and every grid edit.
+- The editor frame grows to fit its text when the built-in autoresize stops short (no scrolling inside the editor after quick typing).
+- A notebook-style table's preview is sized from its own rows (no blank gap under long tables).
+- Typing into a grid keeps the page where it is: the grid's hidden input (`.jss_textarea`) can sit far from the visible cell and the browser
+  scrolled to its caret. `inline-spreadsheet.ts` focuses it with `preventScroll` and puts the page back after typed text (keydown and `beforeinput`).
+- Test checklists: `tests/manual/SPREADSHEET-FULL-CHECK.md`, `tests/manual/TEST-LIST.md`.
+
 ## General Merge Notes
 
 - eLabFTW uses Yarn PnP (no `node_modules` directory) — packages are in zip archives
@@ -585,3 +635,22 @@ The article numbers read from a collection sheet are compared (allowing for OCR 
 ("Warenkorb") in the procurement's confirmation PDF, attached to one of its orders. The items seen so far are kept per
 procurement (`custom_order_sheet_items`, migration 098), so a second sheet for the same procurement adds to them. The
 notification and the drop result show the count ("3/4 items collected"). Without a confirmation PDF there is no count.
+
+### Collected notification, statuses and the Order Status tab
+
+- The notification now reads "Orders from Procurement 26049739 (order names) has been collected. Please check if your item has been
+  delivered." (plus the count, e.g. "3/4 items collected"). It has its own in-app and email settings in the profile
+  (`notif_order_collected`, `notif_order_collected_email`, migration 101); the general "my order was updated" settings are separate.
+- Status `received` is shown as **In storage** and sits after **Collected**. Only an ordered order becomes collected.
+- **Order Status** tab (everyone in the team, `web/order-status.php`, `src/ts/components/OrderStatus.svelte`): every procurement with its order
+  numbers, dates, requesters and *Items collected*, searchable, date range, **My orders / Everyone** and a users dropdown. A row expands
+  to the orders, the items with the sheets that collected them and the **Signed Sheets** (file names, openable PDFs). Refreshes every 30 s and when
+  the tab is shown again; changes made on the Orders page (a deletion, for example) show up here too. Pagination above and below.
+- **Collection sheets**: the drop area is called collection sheets and shows a rectangle while files are dragged over the page; each result is a notification.
+  Everyone with an order on the sheet is notified, whoever drops it.
+- **Reading scans** (`ScanReader.php`): the sheet is rendered at 300 dpi and read in two Tesseract modes (line by line and sparse text), so article numbers
+  between the table's rules are found. A garbled article number is matched with a few differing characters, or by the item's description.
+  The basket reader accepts any unit, currency and price format.
+- Dropping the same sheet twice, even under another file name (`Scan.pdf` and `Scan[1].pdf`), attaches it once and notifies once
+  (`OrderSheets::identicalUpload` compares the content).
+- Sheets recorded before their item list could be read are matched again (`orders:import-sheets` does it each run).
