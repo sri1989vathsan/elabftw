@@ -272,13 +272,15 @@ export function buildWellPlateHost(extracted: SpreadsheetData, options: Spreadsh
 
   const toggleBar = document.createElement('div');
   toggleBar.className = 'elabftw-spreadsheet-readonly-toggle';
-  if (data.caption) {
-    const label = document.createElement('span');
-    label.className = 'elabftw-spreadsheet-title';
-    label.textContent = data.caption;
-    label.title = data.caption;
-    toggleBar.appendChild(label);
-  }
+  const titleEl = document.createElement('span');
+  titleEl.className = 'elabftw-spreadsheet-title';
+  const showTitle = (): void => {
+    titleEl.textContent = data.caption ?? '';
+    titleEl.title = data.caption ?? '';
+    titleEl.hidden = !data.caption;
+  };
+  showTitle();
+  toggleBar.appendChild(titleEl);
   const addButton = (className: string, title: string, icon: string, action: () => void): void => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -292,6 +294,47 @@ export function buildWellPlateHost(extracted: SpreadsheetData, options: Spreadsh
     });
     toggleBar.appendChild(button);
   };
+  if (options.onChange) {
+    // Edit the title in place (the same box the spreadsheet grid uses); saved like any other edit.
+    addButton('elabftw-spreadsheet-readonly-edit-title', 'Edit the plate title', 'fa-heading', () => {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'elabftw-spreadsheet-title-input';
+      input.maxLength = 120;
+      input.value = data.caption ?? '';
+      input.setAttribute('aria-label', 'Plate title');
+      titleEl.hidden = true;
+      titleEl.after(input);
+      let finished = false;
+      const finish = (commit: boolean): void => {
+        if (finished) return;
+        finished = true;
+        const title = input.value.replace(/\s+/g, ' ').trim();
+        input.remove();
+        if (commit && title !== (data.caption ?? '')) {
+          data.caption = title;
+          options.onChange?.(data);
+        }
+        showTitle();
+      };
+      ['keydown', 'keyup', 'keypress'].forEach(type => input.addEventListener(type, keyEvent => {
+        keyEvent.stopPropagation();
+        if (type !== 'keydown') return;
+        const key = (keyEvent as KeyboardEvent).key;
+        if (key === 'Enter') {
+          keyEvent.preventDefault();
+          finish(true);
+        } else if (key === 'Escape') {
+          keyEvent.preventDefault();
+          finish(false);
+        }
+      }));
+      input.addEventListener('blur', () => finish(true));
+      input.addEventListener('mousedown', mouseEvent => mouseEvent.stopPropagation());
+      input.focus();
+      input.select();
+    });
+  }
   if (options.onShowSheet) toggleBar.appendChild(createPlateViewSwitch('plate', () => undefined, options.onShowSheet));
   if (options.onOpenFullEditor) {
     addButton('elabftw-spreadsheet-readonly-open-editor', 'Edit plate: select wells, set groups and colours', 'fa-up-right-and-down-left-from-center', options.onOpenFullEditor);
@@ -381,7 +424,7 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
     legendRoot.className = 'wp-legend';
     const hint = document.createElement('p');
     hint.className = 'wp-hint';
-    hint.textContent = 'Click or drag to select wells. Click a letter or number to select a row or column. Shift adds to the selection.';
+    hint.textContent = 'Click or drag to select wells. Ctrl/Cmd-click toggles wells, Shift-click extends from the last well. Click a letter or number for a row or column.';
     const sheetsRoot = document.createElement('div');
     sheetsRoot.className = 'wp-sheets';
     left.append(plateRoot, legendRoot, hint, sheetsRoot);
@@ -495,6 +538,7 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
         color.value = /^#[0-9a-f]{6}$/.test(group.color) ? group.color : '#7d8499';
         color.className = 'wp-group-color';
         color.title = 'Change this group\'s colour';
+        color.tabIndex = -1;
         color.addEventListener('change', () => {
           const next = normalizeColor(color.value);
           for (let r = 0; r < working.rows; r++) {
@@ -525,7 +569,12 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
             name: entry.color === group.color ? next : entry.name,
             color: entry.color,
           }));
-          paint();
+          // Not a full repaint: rebuilding the list here would drop the focus Tab just moved to the next name.
+          renderLegend(legendRoot, working, dimmed, color => {
+            if (dimmed.has(color)) dimmed.delete(color);
+            else dimmed.add(color);
+            paint();
+          });
         });
         const count = document.createElement('span');
         count.className = 'wp-group-count';
@@ -534,6 +583,7 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
         assign.type = 'button';
         assign.className = 'btn btn-sm btn-secondary';
         assign.textContent = selected.size > 0 ? 'Assign' : 'Select';
+        assign.tabIndex = -1;
         assign.title = selected.size > 0 ? 'Put the selected wells in this group' : 'Select all wells of this group';
         assign.addEventListener('click', () => {
           if (selected.size > 0) {
@@ -728,24 +778,52 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
       return keys;
     };
 
+    // Selection like a file list: plain click replaces, Ctrl/Cmd toggles (and drags add or remove a block),
+    // Shift extends from the last clicked well.
+    let baseSelection = new Set<string>();
+    let dragMode: 'add' | 'remove' = 'add';
+    const applyBlock = (to: [number, number]): void => {
+      if (!anchor) return;
+      const block = rectangle(anchor, to);
+      selected = new Set(baseSelection);
+      block.forEach(key => {
+        if (dragMode === 'remove') selected.delete(key);
+        else selected.add(key);
+      });
+    };
+    plateRoot.addEventListener('contextmenu', event => {
+      // Ctrl+click opens the context menu on a Mac; it is a selection gesture here.
+      if (event.ctrlKey) event.preventDefault();
+    });
     plateRoot.addEventListener('mousedown', event => {
       const target = event.target as Element;
       const well = target.closest<HTMLElement>('.wp-well');
       const label = target.closest<HTMLElement>('.wp-label');
-      const base = event.shiftKey ? new Set(selected) : new Set<string>();
+      const toggle = event.ctrlKey || event.metaKey;
       if (well) {
         event.preventDefault();
-        anchor = [Number(well.dataset.row), Number(well.dataset.col)];
+        const position: [number, number] = [Number(well.dataset.row), Number(well.dataset.col)];
+        if (event.shiftKey && anchor) {
+          dragMode = 'add';
+        } else {
+          baseSelection = toggle ? new Set(selected) : new Set<string>();
+          anchor = position;
+          dragMode = toggle && baseSelection.has(wellKey(position[0], position[1])) ? 'remove' : 'add';
+        }
         dragging = true;
-        selected = new Set([...base, wellKey(anchor[0], anchor[1])]);
+        applyBlock(position);
         paint();
-      } else if (label?.dataset.row !== undefined) {
-        const row = Number(label.dataset.row);
-        selected = new Set([...base, ...rectangle([row, 0], [row, working.cols - 1])]);
-        paint();
-      } else if (label?.dataset.col !== undefined) {
-        const col = Number(label.dataset.col);
-        selected = new Set([...base, ...rectangle([0, col], [working.rows - 1, col])]);
+      } else if (label?.dataset.row !== undefined || label?.dataset.col !== undefined) {
+        const keys = label.dataset.row !== undefined
+          ? rectangle([Number(label.dataset.row), 0], [Number(label.dataset.row), working.cols - 1])
+          : rectangle([0, Number(label.dataset.col)], [working.rows - 1, Number(label.dataset.col)]);
+        const extend = event.shiftKey || toggle;
+        const allIn = Array.from(keys).every(key => selected.has(key));
+        selected = extend ? new Set(selected) : new Set<string>();
+        keys.forEach(key => {
+          if (toggle && allIn) selected.delete(key);
+          else selected.add(key);
+        });
         paint();
       }
     });
@@ -753,9 +831,9 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
       if (!dragging || !anchor) return;
       const well = (event.target as Element).closest<HTMLElement>('.wp-well');
       if (!well) return;
-      const next = rectangle(anchor, [Number(well.dataset.row), Number(well.dataset.col)]);
-      if (next.size === selected.size && Array.from(next).every(key => selected.has(key))) return;
-      selected = next;
+      const before = selected;
+      applyBlock([Number(well.dataset.row), Number(well.dataset.col)]);
+      if (before.size === selected.size && Array.from(selected).every(key => before.has(key))) return;
       // Update classes in place: a full repaint here would replace the element under the pointer mid-drag.
       plateRoot.querySelectorAll<HTMLElement>('.wp-well').forEach(el => {
         el.classList.toggle('is-selected', selected.has(wellKey(Number(el.dataset.row), Number(el.dataset.col))));

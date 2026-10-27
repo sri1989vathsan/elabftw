@@ -7360,3 +7360,13 @@ button.wp-legend-item {
 .wp-dialog [hidden] {
   display: none !important;
 }
+
+.elabftw-well-plate-view .elabftw-spreadsheet-title[hidden] {
+  display: none;
+}
+
+.wp-well,
+.wp-dot {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}

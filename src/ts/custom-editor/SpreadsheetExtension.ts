@@ -712,12 +712,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       if (uid) diag.log('popup-open', uid, { rev: openedRevision, hash: openedHash });
     });
     const modalHistory = uid ? tableCellHistories.get(uid) : undefined;
-    const spreadsheetPopup = (data: SpreadsheetData) => openSpreadsheetModal(data, existingTable !== null, modalHistory);
-    // A well plate opens in its own popup first; it can hand over to the general spreadsheet popup.
-    const popup = openedFrom.kind === 'well-plate'
-      ? openWellPlateModal(openedFrom, existingTable !== null).then(result => (result.openSpreadsheet
+    type PopupResult = { raw: SpreadsheetData; computed: SpreadsheetData["data"]; history: SpreadsheetCellHistory };
+    // A well plate has two popups that can hand over to each other, keeping the edits.
+    const spreadsheetPopup = (data: SpreadsheetData): Promise<PopupResult> => openSpreadsheetModal(data, existingTable !== null, modalHistory)
+      .then(result => (result.backToPlate ? platePopup(result.raw) : result));
+    const platePopup = (data: SpreadsheetData): Promise<PopupResult> => openWellPlateModal(data, existingTable !== null)
+      .then(result => (result.openSpreadsheet
         ? spreadsheetPopup(result.raw)
-        : { raw: result.raw, computed: result.raw.data, history: modalHistory ?? { undo: [], redo: [] } }))
+        : { raw: result.raw, computed: result.raw.data, history: modalHistory ?? { undo: [], redo: [] } }));
+    const popup: Promise<PopupResult> = openedFrom.kind === 'well-plate'
+      ? platePopup(openedFrom)
       : spreadsheetPopup(openedFrom);
     popup.then(({ raw, computed, history }) => {
       if (existingTable && uid && existingTable.isConnected) {
@@ -1969,7 +1973,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     if (!editor.getBody().contains(table)) return;
     if (spreadsheetOverlays.has(table)) return;
     // A compact plate is cheap to build, so it is mounted live straight away (no cheap stand-in needed).
-    if (table.dataset.spreadsheetStyle === 'well-plate' && !plateSpreadsheetView.has(table)) {
+    if (table.dataset.spreadsheetStyle === 'well-plate' && extractCached(table).plateView !== 'sheet') {
       enhanceTable(table);
       return;
     }
@@ -2002,6 +2006,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     overlay.classList.add('elabftw-spreadsheet-editor-overlay', 'elabftw-spreadsheet-preview');
     overlay.addEventListener('pointerdown', event => {
       if (!(event.target instanceof Element)) return;
+      // The Plate / Spreadsheet switch works straight from the preview, without activating the grid first.
+      const switchButton = event.target.closest<HTMLButtonElement>('.wp-view-switch button');
+      if (switchButton) {
+        event.preventDefault();
+        switchPlateView(table, switchButton.textContent === 'Plate' ? 'plate' : 'sheet');
+        return;
+      }
       const cell = event.target.closest<HTMLElement>('td[data-x][data-y]');
       const selection = cell
         ? { col: Number(cell.dataset.x), row: Number(cell.dataset.y) }
@@ -2070,8 +2081,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
   const pendingInitialSelection = new WeakMap<HTMLTableElement, { col: number; row: number } | undefined>();
 
-  // Well plates shown as the editable spreadsheet grid instead of the compact plate (kept while editing).
-  const plateSpreadsheetView = new WeakSet<HTMLTableElement>();
+  // The Plate / Spreadsheet switch: the choice is saved with the table, so it also holds after a reload
+  // and on view pages.
+  const switchPlateView = (table: HTMLTableElement, view: 'plate' | 'sheet'): void => {
+    spreadsheetOverlays.get(table)?.flush();
+    const data = { ...extractFromTable(table), plateView: view === 'sheet' ? 'sheet' as const : undefined };
+    writeOverlayChange(table, ensureSpreadsheetUid(table), data);
+    refreshTableOverlay(table);
+  };
 
   const refreshTableOverlay = (table: HTMLTableElement): void => {
     diag.log('refresh', table.getAttribute('data-elabftw-spreadsheet-uid') ?? '', {});
@@ -2124,19 +2141,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const hostStartedAt = profiler.start();
     const {
       host: overlay, flush, destroy, syncActiveEditor, getData, isEditing,
-    } = (extracted.kind === 'well-plate' && !plateSpreadsheetView.has(table) ? buildWellPlateHost : buildReadOnlySpreadsheetHost)(extracted, {
+    } = (extracted.kind === 'well-plate' && extracted.plateView !== 'sheet' ? buildWellPlateHost : buildReadOnlySpreadsheetHost)(extracted, {
       editable: true,
       // Plate <-> spreadsheet switch in the title bar (a well plate can be shown either way in the text).
-      onShowSheet: () => {
-        flushOverlay?.();
-        plateSpreadsheetView.add(table);
-        refreshTableOverlay(table);
-      },
-      onShowPlate: extracted.kind === 'well-plate' ? () => {
-        flushOverlay?.();
-        plateSpreadsheetView.delete(table);
-        refreshTableOverlay(table);
-      } : undefined,
+      onShowSheet: () => switchPlateView(table, 'sheet'),
+      onShowPlate: extracted.kind === 'well-plate' ? () => switchPlateView(table, 'plate') : undefined,
       initialSelection,
       cellHistory: tableCellHistories.get(tableUid),
       onChange: data => writeOverlayChange(table, tableUid, data),

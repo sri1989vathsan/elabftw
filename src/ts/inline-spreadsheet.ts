@@ -187,6 +187,8 @@ export interface SpreadsheetData {
   plateSize?: number;
   /** Named colour groups of a well plate; a well belongs to the group whose colour is its cell background. */
   plateGroups?: Array<{ name: string; color: string }>;
+  /** How a well plate is shown in the text and on view pages; the compact plate unless set to 'sheet'. */
+  plateView?: 'plate' | 'sheet';
   /** Extra columns per plate group (keyed by the group's colour); rows are the group's wells, keyed by well name. */
   plateSheets?: Record<string, { columns: string[]; rows: Record<string, string[]> }>;
   /** Inline styles keyed by spreadsheet coordinates such as A1 or C4. */
@@ -652,6 +654,7 @@ export function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): S
         .slice(0, 40)
         .map(group => ({ name: group.name.slice(0, 60), color: group.color.slice(0, 32) }))
       : undefined,
+    plateView: kind === 'well-plate' && candidate.plateView === 'sheet' ? 'sheet' : undefined,
     plateSheets: kind === 'well-plate' ? normalizePlateSheets(candidate.plateSheets) : undefined,
     cellStyles: normalizeCellStyles(candidate.cellStyles, rows, cols),
     rowHeights: normalizeRowHeights(candidate.rowHeights, rows),
@@ -3002,6 +3005,8 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   sheetHost: HTMLDivElement;
   insertBtn: HTMLButtonElement;
   cancelBtn: HTMLButtonElement;
+  /** Well plates only: save and go back to the plate popup. */
+  plateBtn: HTMLButtonElement | null;
   undoBtn: HTMLButtonElement;
   redoBtn: HTMLButtonElement;
   addRowBtn: HTMLButtonElement;
@@ -3803,6 +3808,15 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   insertBtn.type = 'button';
   insertBtn.textContent = isEditing ? 'Update' : 'Insert';
   insertBtn.className = 'btn btn-sm btn-primary';
+  let plateBtn: HTMLButtonElement | null = null;
+  if (initial.kind === 'well-plate') {
+    plateBtn = document.createElement('button');
+    plateBtn.type = 'button';
+    plateBtn.textContent = 'Back to plate view';
+    plateBtn.title = 'Keep these changes and return to the plate popup (groups, colours, group sheets)';
+    plateBtn.className = 'btn btn-sm btn-secondary mr-3';
+    rightButtons.append(plateBtn);
+  }
   rightButtons.append(cancelBtn, insertBtn);
   buttonRow.append(gridButtons, rightButtons);
   dialog.appendChild(buttonRow);
@@ -3829,6 +3843,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
     sheetHost,
     insertBtn,
     cancelBtn,
+    plateBtn,
     undoBtn,
     redoBtn,
     addRowBtn,
@@ -4078,7 +4093,7 @@ export function openSpreadsheetModal(
   initialData: SpreadsheetData,
   isEditing = false,
   initialHistory?: SpreadsheetCellHistory,
-): Promise<{ raw: SpreadsheetData; computed: AOA; history: SpreadsheetCellHistory }> {
+): Promise<{ raw: SpreadsheetData; computed: AOA; history: SpreadsheetCellHistory; backToPlate?: boolean }> {
   return new Promise((resolve, reject) => {
     let working = normalizeSpreadsheetData({
       ...initialData,
@@ -6634,7 +6649,7 @@ export function openSpreadsheetModal(
       }
     };
 
-    ui.insertBtn.addEventListener('click', () => {
+    const finish = (backToPlate: boolean): void => {
       // readRawData() below only prefers rawDataMirror's own value over
       // worksheet.getData()'s for a formula still being composed -- a plain
       // value sitting in an open rescue input, never having reached
@@ -6655,6 +6670,9 @@ export function openSpreadsheetModal(
         kind: working.kind,
         caption: ui.captionInput.value.trim(),
         plateSize: working.kind === 'well-plate' ? working.plateSize : undefined,
+        plateGroups: working.plateGroups,
+        plateSheets: working.plateSheets,
+        plateView: working.plateView,
         cellStyles: readCellStyles(rows, cols),
         rowHeights: withoutDefaultRowHeights(normalizeRowHeights(working.rowHeights, rows)),
         colWidths: normalizeColWidths(working.colWidths, cols),
@@ -6667,8 +6685,10 @@ export function openSpreadsheetModal(
         ? resizeData(getComputedDataFromDOM(sheetContainer), rows, cols)
         : result.data;
       cleanup();
-      resolve({ raw: result, computed, history: { undo: cellUndoStack, redo: cellRedoStack } });
-    });
+      resolve({ raw: result, computed, history: { undo: cellUndoStack, redo: cellRedoStack }, backToPlate });
+    };
+    ui.insertBtn.addEventListener('click', () => finish(false));
+    ui.plateBtn?.addEventListener('click', () => finish(true));
 
     ui.cancelBtn.addEventListener('click', () => cancel());
     ui.overlay.addEventListener('click', event => {
@@ -9832,6 +9852,10 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivEle
     ['autofit-columns', 'fa-arrows-alt-h'], ['copy-table', 'fa-copy'], ['edit-title', 'fa-heading'],
     ['open-editor', 'fa-up-right-and-down-left-from-center'], ['delete', 'fa-trash'],
   ].forEach(([name, icon]) => {
+    // Same place as in the live grid's bar; a press on it is handled by whoever mounts the preview.
+    if (name === 'open-editor' && table.dataset.spreadsheetStyle === 'well-plate') {
+      toggleBar.appendChild(createPlateViewSwitch('sheet', () => undefined, () => undefined));
+    }
     const button = document.createElement('button');
     button.type = 'button';
     button.tabIndex = -1;
@@ -9986,7 +10010,7 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
         if (!(el instanceof HTMLTableElement)) return; // already mounted
         const html = el.outerHTML;
         const extractedForView = extractFromTable(el);
-        const { host, destroy } = extractedForView.kind === 'well-plate'
+        const { host, destroy } = extractedForView.kind === 'well-plate' && extractedForView.plateView !== 'sheet'
           ? buildWellPlateHost(extractedForView)
           : buildReadOnlySpreadsheetHost(extractedForView);
         host.classList.toggle(FILTER_HIDDEN_CLASS, el.classList.contains(FILTER_HIDDEN_CLASS));
@@ -10037,6 +10061,13 @@ export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clon
     const clone = clones[index];
     const extracted = spreadsheetHostData.get(originalHost);
     if (!clone || !extracted) return;
+    // A well plate shown as the compact plate prints as the compact plate (without its buttons); one shown as a
+    // spreadsheet is regenerated as a table below.
+    if (extracted.kind === 'well-plate' && extracted.plateView !== 'sheet') {
+      clone.querySelectorAll('.elabftw-spreadsheet-readonly-toggle button, .wp-view-switch').forEach(node => node.remove());
+      clone.querySelectorAll('.wp-legend-item').forEach(node => node.removeAttribute('title'));
+      return;
+    }
     // View-mode grids are read-only, so this never actually differs from
     // the stashed snapshot -- reading it live anyway keeps this correct
     // rather than relying on that always being true.
