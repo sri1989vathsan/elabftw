@@ -200,9 +200,8 @@ final class OrderProcurements extends AbstractRest
         $text = $confirmation->fetchColumn();
         $basket = $text === false ? array() : ScanReader::basketRows((string) $text);
 
-        $sheetsReq = $this->Db->prepare('SELECT s.id, s.sheet_name, s.created_at, s.items_found, s.upload_id,
-                up.long_name, up.storage, up.order_id
-            FROM custom_order_sheets AS s LEFT JOIN custom_order_uploads AS up ON up.id = s.upload_id
+        $sheetsReq = $this->Db->prepare('SELECT s.id, s.sheet_name, s.filesize, s.created_at, s.items_found
+            FROM custom_order_sheets AS s
             WHERE s.team = :team AND s.procurement_id = :procurement_id ORDER BY s.created_at, s.id');
         $sheetsReq->bindValue(':team', $team, PDO::PARAM_INT);
         $sheetsReq->bindValue(':procurement_id', $procurementId);
@@ -228,16 +227,27 @@ final class OrderProcurements extends AbstractRest
         foreach ($basket as $index => $row) {
             $items[] = array('index' => $index, 'label' => $row['label'], 'sheets' => $sheetsOfItem[$index] ?? array());
         }
+        // the file of a sheet is looked up on the orders that still exist: deleting one order must not break the link
+        $fileReq = $this->Db->prepare('SELECT up.long_name, up.storage FROM custom_order_uploads AS up
+            INNER JOIN custom_orders AS o ON o.id = up.order_id
+            WHERE o.team = :team AND o.procurement_id = :procurement_id AND up.real_name = :real_name AND up.filesize = :filesize
+            ORDER BY up.id LIMIT 1');
         $sheets = array();
         foreach ($sheetRows as $sheet) {
+            $fileReq->bindValue(':team', $team, PDO::PARAM_INT);
+            $fileReq->bindValue(':procurement_id', $procurementId);
+            $fileReq->bindValue(':real_name', (string) $sheet['sheet_name']);
+            $fileReq->bindValue(':filesize', (int) $sheet['filesize'], PDO::PARAM_INT);
+            $this->Db->execute($fileReq);
+            $file = $fileReq->fetch(PDO::FETCH_ASSOC);
             $found = $itemsOfSheet[(int) $sheet['id']] ?? array();
             $sheets[] = array(
                 'id' => (int) $sheet['id'],
                 'name' => (string) $sheet['sheet_name'],
                 'collected_at' => $sheet['created_at'],
-                'download' => $sheet['long_name'] === null ? null : array(
-                    'long_name' => (string) $sheet['long_name'],
-                    'storage' => (int) $sheet['storage'],
+                'download' => $file === false ? null : array(
+                    'long_name' => (string) $file['long_name'],
+                    'storage' => (int) $file['storage'],
                 ),
                 'items' => array_map(static fn (int $i): string => $basket[$i]['label'] ?? '#' . ($i + 1), $found),
             );

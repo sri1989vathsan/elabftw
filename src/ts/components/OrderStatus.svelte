@@ -101,7 +101,21 @@
   $: firstShown = total === 0 ? 0 : pageOffset + 1;
   $: lastShown = Math.min(total, pageOffset + rows.length);
 
-  onMount(() => { void load(); });
+  // changes made in the orders (a deletion, a new status, a sheet dropped) show here without reloading the page
+  onMount(() => {
+    void load();
+    const refresh = setInterval(() => { void load(); }, 30000);
+    const onVisible = (): void => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      clearInterval(refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  });
 </script>
 
 <div class="order-status">
