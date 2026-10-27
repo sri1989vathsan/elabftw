@@ -116,8 +116,8 @@ final class OrdersImportSheetsCommand extends Command
         $Db = Db::getConnection();
         $configured = (int) (getenv('ORDER_SHEETS_USERID') ?: 0);
         $sql = $configured > 0
-            ? 'SELECT userid FROM users WHERE userid = :id AND archived = 0'
-            : 'SELECT userid FROM users WHERE is_sysadmin = 1 AND archived = 0 ORDER BY userid LIMIT 1';
+            ? 'SELECT userid FROM users WHERE userid = :id'
+            : 'SELECT userid FROM users WHERE is_sysadmin = 1 ORDER BY userid LIMIT 1';
         $req = $Db->prepare($sql);
         if ($configured > 0) {
             $req->bindValue(':id', $configured, PDO::PARAM_INT);
