@@ -28,9 +28,12 @@ use function pathinfo;
 use function levenshtein;
 use function mb_strtoupper;
 use function preg_replace;
+use function array_column;
 use function array_fill;
 use function array_filter;
 use function explode;
+use function implode;
+use function mb_strimwidth;
 use function file_put_contents;
 use function sprintf;
 use function sys_get_temp_dir;
@@ -131,7 +134,8 @@ final class OrderSheets extends AbstractRest
         }
         // one notification per person (not per order), whoever dropped the sheet: everyone with an order on it is told
         foreach ($byOwner as $ownerId => $owned) {
-            $title = $owned[0]['title'] . (count($owned) > 1 ? sprintf(' (+%d)', count($owned) - 1) : '');
+            // the order names this person has on the procurement, kept short
+            $title = mb_strimwidth(implode(', ', array_column($owned, 'title')), 0, 120, '…');
             (new OrderChanged(
                 new Users($ownerId, $team),
                 $this->requester,
@@ -139,6 +143,7 @@ final class OrderSheets extends AbstractRest
                 $title,
                 'received',
                 $progress === null ? null : sprintf('%d/%d', $progress['collected'], $progress['total']),
+                $procurementId,
             ))->create();
             $result['notified']++;
         }

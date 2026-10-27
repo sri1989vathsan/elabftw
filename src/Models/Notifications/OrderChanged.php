@@ -39,6 +39,8 @@ final class OrderChanged extends AbstractNotifications implements MailableInterf
         private string $reason,
         // for 'received': how many items of the procurement are collected so far, e.g. "3/4"
         private ?string $progress = null,
+        // for 'received': the procurement the collected orders belong to
+        private ?string $procurementId = null,
     ) {
         parent::__construct($targetUser);
     }
@@ -61,7 +63,7 @@ final class OrderChanged extends AbstractNotifications implements MailableInterf
                 'subject' => _('Your order has been received.'),
                 'body' => sprintf(
                     "%s\n\n%s\n%s",
-                    self::receivedMessage() . ($this->progress !== null ? sprintf(' (%s)', sprintf(_('%s items collected'), $this->progress)) : ''),
+                    self::receivedText($this->procurementId, $this->title, $this->progress),
                     sprintf(_('Order: %s'), $this->title),
                     Env::asUrl('SITE_URL') . '/orders.php?order=' . $this->orderId,
                 ),
@@ -86,13 +88,24 @@ final class OrderChanged extends AbstractNotifications implements MailableInterf
             'title' => $this->title,
             'reason' => $this->reason,
             'progress' => $this->progress,
+            'procurement_id' => $this->procurementId,
             'actor_fullname' => $this->actor->userData['fullname'],
         );
     }
 
+    /** The older wording, kept for notifications stored before the procurement number was part of them. */
     public static function receivedMessage(): string
     {
         return _('Orders from this procurement have been received: Please check if your order has been collected.');
+    }
+
+    /** "Orders from Procurement 26049739 (Order name) has been collected. Please check if your item has been delivered." */
+    public static function receivedText(?string $procurementId, string $title, ?string $progress): string
+    {
+        $text = $procurementId === null || $procurementId === ''
+            ? sprintf('%s (%s)', self::receivedMessage(), $title)
+            : sprintf(_('Orders from Procurement %1$s (%2$s) has been collected. Please check if your item has been delivered.'), $procurementId, $title);
+        return $text . ($progress !== null && $progress !== '' ? sprintf(' (%s)', sprintf(_('%s items collected'), $progress)) : '');
     }
 
     // mirrors Transform.php's own copy of this -- kept here rather than
