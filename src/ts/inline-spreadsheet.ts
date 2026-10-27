@@ -4959,14 +4959,9 @@ export function openSpreadsheetModal(
       const commitRescueInputAndMove = (deltaCol: number, deltaRow: number): void => {
         if (rescueInputCol === null || rescueInputRow === null) return;
         const nextCol = Math.min(Math.max(rescueInputCol + deltaCol, 0), working.cols - 1);
-        // Enter in a cell of the last row adds a row below it, as in Excel.
-        const addsRow = deltaRow > 0 && rescueInputRow >= working.rows - 1 && working.rows < MAX_DIMENSION && working.kind !== 'well-plate';
-        const nextRow = addsRow ? working.rows : Math.min(Math.max(rescueInputRow + deltaRow, 0), working.rows - 1);
+        // Enter in the last row stays there; a further Enter (second-Enter handler) adds the new row.
+        const nextRow = Math.min(Math.max(rescueInputRow + deltaRow, 0), working.rows - 1);
         commitRescueInput();
-        if (addsRow && worksheet) {
-          flushMirrorIntoWorksheet(worksheet);
-          worksheet.insertRow?.(1, working.rows - 1, 0);
-        }
         selectedRange = [nextCol, nextRow, nextCol, nextRow];
         worksheet?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
         // keyboard focus goes back to the grid, so the next key (a second Enter, typing over the cell) reaches it
@@ -4976,8 +4971,8 @@ export function openSpreadsheetModal(
       releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
         if (event.key === 'Enter') {
           event.preventDefault();
-          // Enter commits and stays in the cell; a further Enter (see the non-editing handlers) moves on
-          commitRescueInputAndMove(0, event.shiftKey ? -1 : 0);
+          // Enter commits and moves to the next row; in the last row it stays, and a further Enter adds a row
+          commitRescueInputAndMove(0, event.shiftKey ? -1 : 1);
         } else if (event.key === 'Tab') {
           event.preventDefault();
           commitRescueInputAndMove(event.shiftKey ? -1 : 1, 0);
@@ -8636,17 +8631,10 @@ export function buildReadOnlySpreadsheetHost(
       const maxCol = (rawDataMirror[0]?.length ?? cols) - 1;
       const maxRow = rawDataMirror.length - 1;
       const nextCol = Math.min(Math.max(rescueInputCol + deltaCol, 0), maxCol);
-      // Enter in a cell of the last row adds a row below it, as in Excel.
-      const addsRow = deltaRow > 0 && editable && !plateLocked && rescueInputRow >= maxRow && rawDataMirror.length < MAX_DIMENSION;
-      const nextRow = addsRow ? maxRow + 1 : Math.min(Math.max(rescueInputRow + deltaRow, 0), maxRow);
+      // Enter in the last row stays there; a further Enter (second-Enter handler) adds the new row.
+      const nextRow = Math.min(Math.max(rescueInputRow + deltaRow, 0), maxRow);
       commitRescueInput();
       const mounted = getMountedWorksheet(sheetContainer);
-      if (addsRow && mounted) {
-        // Typed values live only in the mirror until the grid is redrawn: copy them into the worksheet
-        // first, because the row insert re-reads the worksheet and would otherwise drop them.
-        flushMirrorIntoWorksheet(mounted);
-        mounted.insertRow?.(1, maxRow, 0);
-      }
       mounted?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
       // a programmatic selection does not reliably fire onselection: without this the next Enter, or typing over the
       // cell, would act on the cell that was selected before a Tab or Shift+Enter moved on
@@ -8662,8 +8650,8 @@ export function buildReadOnlySpreadsheetHost(
     releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        // Enter commits and stays in the cell; a further Enter (see the non-editing handlers) moves on
-        commitRescueInputAndMove(0, event.shiftKey ? -1 : 0);
+        // Enter commits and moves to the next row; in the last row it stays, and a further Enter adds a row
+        commitRescueInputAndMove(0, event.shiftKey ? -1 : 1);
       } else if (event.key === 'Tab') {
         event.preventDefault();
         commitRescueInputAndMove(event.shiftKey ? -1 : 1, 0);
