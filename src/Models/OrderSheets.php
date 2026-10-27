@@ -83,7 +83,8 @@ final class OrderSheets extends AbstractRest
         foreach ($orders as $order) {
             $orderId = (int) $order['id'];
             // dropping the same sheet twice must not attach it twice
-            if (!$this->alreadyAttached($orderId, $realName, (int) $file->getSize())) {
+            $isNew = !$this->alreadyAttached($orderId, $realName, (int) $file->getSize());
+            if ($isNew) {
                 (new OrderUploads($this->requester, new Orders($this->requester, $orderId)))->postAction(
                     Action::Create,
                     array('file' => $file, 'real_name' => $realName, 'silent' => true),
@@ -92,7 +93,10 @@ final class OrderSheets extends AbstractRest
             // the goods are here: the order becomes "collected" (pinned and cancelled orders keep their status)
             $collected += $this->markCollected($orderId);
             $result['orders'][] = array('id' => $orderId, 'title' => (string) $order['title']);
-            $byOwner[(int) $order['userid']][] = array('id' => $orderId, 'title' => (string) $order['title']);
+            // only a sheet that was not attached before counts as news for the person who placed the order
+            if ($isNew) {
+                $byOwner[(int) $order['userid']][] = array('id' => $orderId, 'title' => (string) $order['title']);
+            }
         }
         // one notification per person (not per order); nobody is told about their own drop
         foreach ($byOwner as $ownerId => $owned) {
