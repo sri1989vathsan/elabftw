@@ -150,6 +150,51 @@ export function transposeClipboardText(text: string): string {
   return transposed.join('\n');
 }
 
+/** A small box to paste into (Ctrl/Cmd+V) when the browser does not let the page read the clipboard by itself. */
+function askForClipboardText(): Promise<string> {
+  return new Promise(resolve => {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;z-index:10060;left:50%;top:30%;transform:translateX(-50%);padding:0.75rem;'
+      + 'background:var(--mainbackground,#fff);color:var(--strongest,#000);border:1px solid var(--secondary,#999);'
+      + 'border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,0.3);font-size:0.85rem';
+    const label = document.createElement('div');
+    label.textContent = 'Press Ctrl/Cmd+V to paste transposed (Esc to cancel)';
+    const field = document.createElement('textarea');
+    field.rows = 2;
+    field.style.cssText = 'display:block;margin-top:0.4rem;width:18rem';
+    box.append(label, field);
+    const finish = (text: string): void => {
+      box.remove();
+      resolve(text);
+    };
+    field.addEventListener('paste', event => {
+      event.preventDefault();
+      finish(event.clipboardData?.getData('text/plain') ?? '');
+    });
+    field.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.key === 'Escape') finish('');
+    });
+    field.addEventListener('mousedown', event => event.stopPropagation());
+    document.body.appendChild(box);
+    field.focus();
+  });
+}
+
+/** The clipboard text: read directly when the browser allows it, otherwise asked for in a small box. */
+async function readClipboardText(): Promise<string> {
+  try {
+    const direct = await Promise.race([
+      navigator.clipboard?.readText?.() ?? Promise.resolve(''),
+      new Promise<string>(resolve => { setTimeout(() => resolve(''), 1200); }),
+    ]);
+    if (direct) return direct;
+  } catch {
+    // not allowed here: ask for it instead
+  }
+  return askForClipboardText();
+}
+
 /** Pastes the clipboard text transposed with its top-left cell at (col, row); the grid grows as a normal paste does. */
 function pasteTransposed(worksheet: JssInstance, col: number, row: number, text: string): void {
   if (!worksheet || text === '') return;
@@ -184,8 +229,13 @@ function installTransposedPaste(
     pending = false;
     const target = event.target;
     // text being typed in a cell keeps its normal paste
-    if (!(target instanceof Node) || !container.contains(target)
-      || (target instanceof Element && target.closest('.jss_worksheet td.editor'))) return;
+    if (target instanceof Element && target.closest('.jss_worksheet td.editor')) return;
+    // The key press is for this grid when focus is inside it, or when focus is on the page itself (after a click on a
+    // cell it often is) and this is the grid in use: the grid's own paste works the same way.
+    const inside = target instanceof Node && container.contains(target);
+    const onPage = target === document.body || target === document.documentElement || target === document;
+    const inUse = container.classList.contains('is-active-table') || container.closest('.inline-spreadsheet-dialog') !== null;
+    if (!inside && !(onPage && inUse)) return;
     const text = event.clipboardData?.getData('text/plain') ?? '';
     const start = getTarget();
     if (!start || text === '') return;
@@ -231,8 +281,9 @@ const deleteWholeSelectionMenu = (
   const pasteTransposedItem: JssMenuItem = {
     title: 'Paste transposed',
     onclick: (): void => {
-      // from the right-click menu the clipboard has to be read; Ctrl/Cmd+Shift+V works without that permission
-      void navigator.clipboard?.readText?.().then(text => pasteTransposed(worksheet, clickedX, clickedY, text)).catch(() => undefined);
+      // from the right-click menu the clipboard has to be read: directly when the browser allows it, otherwise in a small
+      // box to paste into (Ctrl/Cmd+Shift+V works without either)
+      void readClipboardText().then(text => pasteTransposed(worksheet, clickedX, clickedY, text));
     },
   };
   const pasteIndex = items.findIndex(item => /^Paste\b/i.test(item.title ?? ''));
