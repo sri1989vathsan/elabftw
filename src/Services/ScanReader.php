@@ -62,26 +62,22 @@ final class ScanReader
         }
         $text = '';
         try {
+            // an explicit working directory: a scheduled run inherits one that may no longer exist
             $render = new Process(array(
                 'gs', '-q', '-dSAFER', '-dBATCH', '-dNOPAUSE', '-sDEVICE=pnggray', '-r200',
                 '-dFirstPage=1', '-dLastPage=1', '-sOutputFile=' . $dir . '/page%d.png', $path,
-            ));
+            ), $dir);
             $render->setTimeout(90);
             $render->run();
-            // TEMP-DEBUG
-            @file_put_contents('/var/lib/elabftw/order-sheets/.ocr-debug', date('c') . ' gs exit=' . $render->getExitCode() . ' err=' . substr($render->getErrorOutput(), 0, 300) . ' env_path=' . (getenv('PATH') ?: '-') . ' tmp=' . $dir . "\n", FILE_APPEND);
             foreach (glob($dir . '/page*.png') ?: array() as $png) {
-                $ocr = new Process(array('tesseract', $png, 'stdout', '-l', 'deu+eng', '--psm', '6'));
+                $ocr = new Process(array('tesseract', $png, 'stdout', '-l', 'deu+eng', '--psm', '6'), $dir);
                 $ocr->setTimeout(90);
                 $ocr->run();
-                // TEMP-DEBUG
-                @file_put_contents('/var/lib/elabftw/order-sheets/.ocr-debug', date('c') . ' tess exit=' . $ocr->getExitCode() . ' err=' . substr($ocr->getErrorOutput(), 0, 300) . "\n", FILE_APPEND);
                 if ($ocr->isSuccessful()) {
                     $text .= "\n" . $ocr->getOutput();
                 }
             }
-        } catch (Throwable $e) {
-            @file_put_contents('/var/lib/elabftw/order-sheets/.ocr-debug', date('c') . ' EXC ' . $e->getMessage() . "\n", FILE_APPEND); // TEMP-DEBUG
+        } catch (Throwable) {
             // the tools are missing or failed: the caller treats "no number" as unreadable
         } finally {
             foreach (glob($dir . '/*') ?: array() as $file) {
