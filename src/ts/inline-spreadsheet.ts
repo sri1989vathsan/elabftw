@@ -61,6 +61,20 @@ export interface SpreadsheetCellHistory {
 }
 const MAX_CELL_HISTORY = 200;
 
+/**
+ * The undo history remembers cells by position, so a row or column inserted or deleted afterwards would send an
+ * undo to the wrong cell (and blank a formula that had moved). An insert shifts the remembered positions along;
+ * a delete does not report which rows went, so the history is dropped.
+ */
+function shiftCellHistory(stacks: CellHistoryEntry[][], axis: 'row' | 'col', insertedAt: number[]): void {
+  const sorted = [...insertedAt].sort((a, b) => a - b);
+  stacks.forEach(stack => stack.forEach(entry => entry.forEach(change => {
+    sorted.forEach(index => {
+      if (change[axis] >= index) change[axis] += 1;
+    });
+  })));
+}
+
 interface ClipboardTable {
   data: AOA;
   cellStyles?: CellStyles;
@@ -5808,11 +5822,13 @@ export function openSpreadsheetModal(
         onbeforedeletecolumn: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
         oninsertrow: (changedWorksheet: JssInstance, inserted?: unknown): void => {
           if (acceptsGridChanges) hasChanges = true;
+          shiftCellHistory([cellUndoStack, cellRedoStack], 'row', insertedIndexes(inserted, 'row', Number.MAX_SAFE_INTEGER));
           syncMountedDimensions(changedWorksheet);
           styleNewlyInsertedRow(changedWorksheet, inserted);
         },
         oninsertcolumn: (changedWorksheet: JssInstance, inserted?: unknown): void => {
           if (acceptsGridChanges) hasChanges = true;
+          shiftCellHistory([cellUndoStack, cellRedoStack], 'col', insertedIndexes(inserted, 'column', Number.MAX_SAFE_INTEGER));
           syncMountedDimensions(changedWorksheet);
           styleNewlyInsertedColumn(changedWorksheet, inserted);
         },
@@ -5820,10 +5836,14 @@ export function openSpreadsheetModal(
           deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked),
         ondeleterow: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
+          cellUndoStack.length = 0;
+          cellRedoStack.length = 0;
           syncMountedDimensions(changedWorksheet);
         },
         ondeletecolumn: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
+          cellUndoStack.length = 0;
+          cellRedoStack.length = 0;
           syncMountedDimensions(changedWorksheet);
         },
         onpaste: (changedWorksheet: JssInstance): void => {
@@ -9856,19 +9876,31 @@ export function buildReadOnlySpreadsheetHost(
       onbeforedeleterow: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
       onbeforedeletecolumn: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
       oninsertrow: (changedWorksheet: JssInstance, inserted?: unknown): void => {
+        shiftCellHistory([cellUndoStack, cellRedoStack], 'row', insertedIndexes(inserted, 'row', Number.MAX_SAFE_INTEGER));
         notifyStructuralChange(changedWorksheet);
         styleNewlyInsertedRow(changedWorksheet, inserted);
         requestOverlayRelayout();
       },
       oninsertcolumn: (changedWorksheet: JssInstance, inserted?: unknown): void => {
+        shiftCellHistory([cellUndoStack, cellRedoStack], 'col', insertedIndexes(inserted, 'column', Number.MAX_SAFE_INTEGER));
         notifyStructuralChange(changedWorksheet);
         requestOverlayRelayout();
         styleNewlyInsertedColumn(changedWorksheet, inserted);
       },
       contextMenu: (...menuArgs: Parameters<typeof deleteWholeSelectionMenu>) =>
         deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked),
-      ondeleterow: (changedWorksheet: JssInstance) => { notifyStructuralChange(changedWorksheet); requestOverlayRelayout(); },
-      ondeletecolumn: (changedWorksheet: JssInstance) => { notifyStructuralChange(changedWorksheet); requestOverlayRelayout(); },
+      ondeleterow: (changedWorksheet: JssInstance) => {
+        cellUndoStack.length = 0;
+        cellRedoStack.length = 0;
+        notifyStructuralChange(changedWorksheet);
+        requestOverlayRelayout();
+      },
+      ondeletecolumn: (changedWorksheet: JssInstance) => {
+        cellUndoStack.length = 0;
+        cellRedoStack.length = 0;
+        notifyStructuralChange(changedWorksheet);
+        requestOverlayRelayout();
+      },
       // jspreadsheet calls onresizerow(instance, row, newHeight, oldHeight) --
       // resizedRow here is genuinely a row index, unlike onresizecolumn's own
       // second argument (a column index), so only this one may pass it through.
