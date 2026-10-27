@@ -126,7 +126,7 @@
           <th scope="col">{t('Order date')}</th>
           <th scope="col">{t('Requested by')}</th>
           <th scope="col">{t('Orders')}</th>
-          <th scope="col">{t('Collected')}</th>
+          <th scope="col">{t('Items collected')}</th>
         </tr>
       </thead>
       <tbody>
