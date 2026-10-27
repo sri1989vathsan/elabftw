@@ -583,6 +583,7 @@ final class Apiv2Controller extends AbstractApiController
                 $this->Model instanceof Branding ||
                 $this->Model instanceof HtmlTools ||
                 $this->Model instanceof OrderUploads ||
+                $this->Model instanceof OrderSheets ||
                 $this->Model instanceof OrderTemplateUploads ||
                 $this->Model instanceof AnnouncementUploads
             )) {
