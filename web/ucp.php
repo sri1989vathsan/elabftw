@@ -91,6 +91,10 @@ try {
             'setting' => 'notif_order_changed',
         ),
         array(
+            'designation' => _('My order was collected (the signed collection sheet for its procurement arrived)'),
+            'setting' => 'notif_order_collected',
+        ),
+        array(
             'designation' => _('Assigned a task'),
             'setting' => 'notif_task_assigned',
         ),

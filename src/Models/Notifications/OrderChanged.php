@@ -52,7 +52,9 @@ final class OrderChanged extends AbstractNotifications implements MailableInterf
     protected function getPref(): array
     {
         $userData = $this->targetUser->userData;
-        return array($userData[self::PREF], $userData[self::PREF . '_email']);
+        // "my order was collected" has its own pair of settings, apart from the general "my order was updated"
+        $pref = $this->reason === 'received' ? 'notif_order_collected' : self::PREF;
+        return array($userData[$pref] ?? 1, $userData[$pref . '_email'] ?? 0);
     }
 
     #[Override]

@@ -91,6 +91,8 @@ final class UserParams extends ContentParams
             UsersColumn::NotifTaskAssigned->value,
             UsersColumn::NotifOrderStatusChangedEmail->value,
             UsersColumn::NotifOrderStatusChanged->value,
+            UsersColumn::NotifOrderCollectedEmail->value,
+            UsersColumn::NotifOrderCollected->value,
             UsersColumn::NotifUserCreatedEmail->value,
             UsersColumn::NotifUserCreated->value,
             UsersColumn::NotifUserNeedValidationEmail->value,
