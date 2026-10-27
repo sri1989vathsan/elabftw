@@ -58,6 +58,13 @@ final class OrderProcurements extends AbstractRest
         $conditions = array('o.team = :team', "o.procurement_id IS NOT NULL", "o.procurement_id <> ''", "o.status NOT IN ('my_reference')");
         $bind = array(':team' => array($team, PDO::PARAM_INT));
 
+        // "mine" keeps only the orders the viewer requested (a procurement with none of theirs is left out)
+        $mine = $query->getString('owner') === 'mine';
+        $viewer = (int) $this->requester->userid;
+        if ($mine) {
+            $conditions[] = 'o.userid = :viewer';
+            $bind[':viewer'] = array($viewer, PDO::PARAM_INT);
+        }
         $search = trim($query->getString('q'));
         if ($search !== '') {
             $conditions[] = "(o.procurement_id LIKE :q OR o.order_number LIKE :q OR o.title LIKE :q
@@ -104,7 +111,7 @@ final class OrderProcurements extends AbstractRest
         $items = array();
         foreach ($rows as $row) {
             $procurementId = (string) $row['procurement_id'];
-            $orders = $this->ordersOf($team, $procurementId);
+            $orders = $this->ordersOf($team, $procurementId, $mine ? $viewer : null);
             $progress = $this->progressOf($team, $procurementId);
             $detail = $this->itemsAndSheets($team, $procurementId);
             $items[] = array(
@@ -131,13 +138,17 @@ final class OrderProcurements extends AbstractRest
     }
 
     /** @return list<array{id: int, title: string, status: string, requester: string}> */
-    private function ordersOf(int $team, string $procurementId): array
+    private function ordersOf(int $team, string $procurementId, ?int $onlyUserid = null): array
     {
         $req = $this->Db->prepare("SELECT o.id, o.title, o.status, CONCAT(u.firstname, ' ', u.lastname) AS requester
             FROM custom_orders AS o INNER JOIN users AS u ON u.userid = o.userid
-            WHERE o.team = :team AND o.procurement_id = :procurement_id AND o.status <> 'my_reference' ORDER BY o.id");
+            WHERE o.team = :team AND o.procurement_id = :procurement_id AND o.status <> 'my_reference'"
+            . ($onlyUserid === null ? '' : ' AND o.userid = :only_userid') . ' ORDER BY o.id');
         $req->bindValue(':team', $team, PDO::PARAM_INT);
         $req->bindValue(':procurement_id', $procurementId);
+        if ($onlyUserid !== null) {
+            $req->bindValue(':only_userid', $onlyUserid, PDO::PARAM_INT);
+        }
         $this->Db->execute($req);
         return array_map(static fn (array $order): array => array(
             'id' => (int) $order['id'],

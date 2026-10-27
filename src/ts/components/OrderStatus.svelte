@@ -32,6 +32,7 @@
   let rows: Procurement[] = [];
   let total = 0;
   let loading = true;
+  let owner: 'mine' | 'all' = 'mine';
   let query = '';
   let dateFrom = '';
   let dateTo = '';
@@ -43,7 +44,7 @@
   async function load(): Promise<void> {
     loading = true;
     try {
-      const params = new URLSearchParams({ limit: String(pageSize), offset: String(pageOffset) });
+      const params = new URLSearchParams({ limit: String(pageSize), offset: String(pageOffset), owner });
       if (query.trim() !== '') params.set('q', query.trim());
       if (dateFrom !== '') params.set('date_from', dateFrom);
       if (dateTo !== '') params.set('date_to', dateTo);
@@ -65,6 +66,11 @@
   function onFilterChange(): void {
     pageOffset = 0;
     void load();
+  }
+
+  function setOwner(next: 'mine' | 'all'): void {
+    owner = next;
+    onFilterChange();
   }
 
   function clearFilters(): void {
@@ -120,6 +126,14 @@
 
 <div class="order-status">
   <div class="d-flex flex-wrap align-items-center mb-3" style="gap:0.5rem">
+    <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by owner')}>
+      <button type="button" class={owner === 'mine' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => setOwner('mine')}>
+        <i class="fas fa-user fa-fw mr-1" aria-hidden="true"></i>{t('My orders')}
+      </button>
+      <button type="button" class={owner === 'all' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => setOwner('all')}>
+        <i class="fas fa-users fa-fw mr-1" aria-hidden="true"></i>{t('Everyone')}
+      </button>
+    </div>
     <input
       type="search"
       class="form-control form-control-sm order-status-search"
