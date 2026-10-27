@@ -34,6 +34,7 @@ use function array_filter;
 use function explode;
 use function implode;
 use function mb_strimwidth;
+use function file_get_contents;
 use function file_put_contents;
 use function sprintf;
 use function sys_get_temp_dir;
@@ -106,10 +107,19 @@ final class OrderSheets extends AbstractRest
         $byOwner = array();
         $collected = 0;
         $firstUploadId = null;
+        $sheetName = null;
         foreach ($orders as $order) {
             $orderId = (int) $order['id'];
             // dropping the same sheet twice must not attach it twice
             $existingUploadId = $this->attachedUploadId($orderId, $realName, (int) $file->getSize());
+            if ($existingUploadId === null) {
+                // the same scan under another name ("Scan.pdf" and "Scan[1].pdf") is the same sheet
+                $identical = $this->identicalUpload($orderId, $file);
+                if ($identical !== null) {
+                    $existingUploadId = $identical['id'];
+                    $sheetName ??= $identical['real_name'];
+                }
+            }
             $isNew = $existingUploadId === null;
             if ($isNew) {
                 $existingUploadId = (new OrderUploads($this->requester, new Orders($this->requester, $orderId)))->postAction(
@@ -127,8 +137,9 @@ final class OrderSheets extends AbstractRest
             }
         }
         // the sheet itself, and the items found on it
-        $sheetId = $this->saveSheet($team, $procurementId, $realName, (int) $file->getSize(), $firstUploadId);
-        $progress = $this->recordCollectedItems($procurementId, $text, $realName, $sheetId);
+        $sheetName ??= $realName;
+        $sheetId = $this->saveSheet($team, $procurementId, $sheetName, (int) $file->getSize(), $firstUploadId);
+        $progress = $this->recordCollectedItems($procurementId, $text, $sheetName, $sheetId);
         if ($progress !== null) {
             $result['items'] = $progress;
         }
@@ -291,6 +302,32 @@ final class OrderSheets extends AbstractRest
         $this->Db->execute($req);
         $id = $req->fetchColumn();
         return $id === false ? null : (int) $id;
+    }
+
+    /**
+     * An upload of this order with the same size and the very same content as the file, whatever its name.
+     *
+     * @return array{id: int, real_name: string}|null
+     */
+    private function identicalUpload(int $orderId, UploadedFile $file): ?array
+    {
+        $req = $this->Db->prepare('SELECT id, real_name, long_name, storage FROM custom_order_uploads
+            WHERE order_id = :order_id AND filesize = :filesize ORDER BY id');
+        $req->bindValue(':order_id', $orderId, PDO::PARAM_INT);
+        $req->bindValue(':filesize', (int) $file->getSize(), PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $content = null;
+        foreach ($req->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            try {
+                $content ??= (string) file_get_contents($file->getPathname());
+                if (Storage::from((int) $row['storage'])->getStorage()->getFs()->read((string) $row['long_name']) === $content) {
+                    return array('id' => (int) $row['id'], 'real_name' => (string) $row['real_name']);
+                }
+            } catch (Throwable) {
+                // an unreadable stored file is not a match
+            }
+        }
+        return null;
     }
 
     /**
