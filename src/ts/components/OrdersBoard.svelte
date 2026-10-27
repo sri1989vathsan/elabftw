@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { notify } from '../notify';
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
@@ -794,24 +795,34 @@
   // files are being dragged somewhere over the page: the drop area shows its rectangle, as the attachment areas do
   let sheetFileDragging = false;
   let sheetBusy = false;
-  let sheetResults: SheetResult[] = [];
 
   async function processSheets(files: File[]): Promise<void> {
     if (files.length === 0) return;
     sheetBusy = true;
-    sheetResults = [];
+    let anyAttached = false;
     for (const file of files) {
+      let result: SheetResult;
       try {
         const formData = new FormData();
         formData.set('file', file);
         const response = await ApiC.post('order_sheets', formData);
-        sheetResults = [...sheetResults, await response.json() as SheetResult];
+        result = await response.json() as SheetResult;
       } catch {
-        sheetResults = [...sheetResults, { file: file.name, procurement_id: null, orders: [], notified: 0, status: 'error' }];
+        result = { file: file.name, procurement_id: null, orders: [], notified: 0, status: 'error' };
+      }
+      // the outcome of each file is a notification (green when attached, orange or red otherwise)
+      const message = `${result.file}: ${sheetMessage(result)}${result.orders.length > 0 ? ` — ${result.orders.map(order => order.title).join(', ')}` : ''}`;
+      if (result.status === 'attached') {
+        anyAttached = true;
+        notify.success(message);
+      } else if (result.status === 'error') {
+        notify.error(message);
+      } else {
+        notify.warning(message);
       }
     }
     sheetBusy = false;
-    if (sheetResults.some(result => result.status === 'attached')) void load();
+    if (anyAttached) void load();
   }
 
   function onSheetsDropped(event: DragEvent): void {
@@ -1907,21 +1918,6 @@
     </label>
     {#if sheetBusy}<span class="orders-muted small ml-2">{t('Reading the sheets…')}</span>{/if}
   </div>
-  {#if sheetResults.length > 0}
-    <ul class="orders-sheet-results list-unstyled mt-2 mb-0">
-      {#each sheetResults as result (result.file)}
-        <li class={`orders-sheet-result orders-sheet-${result.status}`}>
-          <i class={result.status === 'attached' ? 'fas fa-circle-check fa-fw' : 'fas fa-triangle-exclamation fa-fw'} aria-hidden="true"></i>
-          <strong>{result.file}</strong>: {sheetMessage(result)}
-          {#if result.orders.length > 0}
-            <span class="orders-muted small">— {result.orders.map(order => order.title).join(', ')}</span>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-    <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={() => { sheetResults = []; }}>{t('Dismiss')}</button>
-  {/if}
-
   <div class="d-flex flex-wrap align-items-center mt-2 mb-3 orders-toolbar-row" style="gap:0.5rem">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by owner')}>
       <button type="button" class={ownerFilter === 'mine' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => setOwnerFilter('mine')}>
