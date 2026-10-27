@@ -14,17 +14,28 @@ use Elabftw\Enums\Action;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Models\Notifications\OrderChanged;
 use Elabftw\Models\Users\Users;
+use Elabftw\Enums\Storage;
 use Elabftw\Services\ScanReader;
 use Override;
 use PDO;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Throwable;
 
 use function array_key_exists;
 use function count;
 use function mb_strtolower;
 use function pathinfo;
 use function levenshtein;
+use function mb_strtoupper;
+use function preg_replace;
+use function array_fill;
+use function array_filter;
+use function explode;
+use function file_put_contents;
 use function sprintf;
+use function sys_get_temp_dir;
+use function tempnam;
+use function unlink;
 use function str_contains;
 use function strlen;
 use function substr;
@@ -161,9 +172,24 @@ final class OrderSheets extends AbstractRest
         $tokens = ScanReader::articleTokens($sheetText);
         $insert = $this->Db->prepare('INSERT IGNORE INTO custom_order_sheet_items (team, procurement_id, item_index, sheet_id, article, sheet_name)
             VALUES (:team, :procurement_id, :item_index, :sheet_id, :article, :sheet_name)');
+        $sheetLines = array();
+        foreach (explode("\n", $sheetText) as $line) {
+            $line = (string) preg_replace('/[^A-Z0-9]/', '', mb_strtoupper($line));
+            if (strlen($line) >= 12) {
+                $sheetLines[] = $line;
+            }
+        }
         foreach ($items as $index => $itemText) {
-            foreach ($tokens as $token) {
-                if (self::articleMatches($itemText, $token)) {
+            // the article number first; when a scan garbles it (a crease or a stamp through the cell), the item's
+            // description printed next to it is compared instead
+            $candidates = $tokens;
+            if (!array_filter($tokens, static fn (string $token): bool => self::articleMatches($itemText, $token))
+                && self::descriptionMatches($itemText, $sheetLines)
+            ) {
+                $candidates = array('(description)');
+            }
+            foreach ($candidates as $token) {
+                if ($token === '(description)' || self::articleMatches($itemText, $token)) {
                     $insert->bindValue(':team', $team, PDO::PARAM_INT);
                     $insert->bindValue(':procurement_id', $procurementId);
                     $insert->bindValue(':item_index', $index, PDO::PARAM_INT);
@@ -175,7 +201,9 @@ final class OrderSheets extends AbstractRest
                 }
             }
         }
-        $found = $this->Db->prepare('UPDATE custom_order_sheets SET items_found = (SELECT COUNT(DISTINCT item_index) FROM custom_order_sheet_items WHERE sheet_id = :sheet_id) WHERE id = :sheet_id2');
+        $found = $this->Db->prepare('UPDATE custom_order_sheets SET basket_seen = :basket_seen,
+            items_found = (SELECT COUNT(DISTINCT item_index) FROM custom_order_sheet_items WHERE sheet_id = :sheet_id) WHERE id = :sheet_id2');
+        $found->bindValue(':basket_seen', count($items), PDO::PARAM_INT);
         $found->bindValue(':sheet_id', $sheetId, PDO::PARAM_INT);
         $found->bindValue(':sheet_id2', $sheetId, PDO::PARAM_INT);
         $this->Db->execute($found);
@@ -210,6 +238,34 @@ final class OrderSheets extends AbstractRest
         return false;
     }
 
+    /**
+     * Whether a line of the sheet shares a long run of characters with the text of a basket row: the description of
+     * an item is printed on both. At least twelve letters and digits in a row, so a few common words do not count.
+     *
+     * @param list<string> $sheetLines the lines of the sheet, reduced to upper case letters and digits
+     */
+    private static function descriptionMatches(string $itemText, array $sheetLines): bool
+    {
+        $item = (string) preg_replace('/[^A-Z0-9]/', '', $itemText);
+        $itemLength = strlen($item);
+        foreach ($sheetLines as $line) {
+            $lineLength = strlen($line);
+            // longest common run of characters, with a rolling row
+            $previous = array_fill(0, $itemLength + 1, 0);
+            for ($i = 1; $i <= $lineLength; $i++) {
+                $current = array(0);
+                for ($j = 1; $j <= $itemLength; $j++) {
+                    $current[$j] = $line[$i - 1] === $item[$j - 1] ? $previous[$j - 1] + 1 : 0;
+                    if ($current[$j] >= 12) {
+                        return true;
+                    }
+                }
+                $previous = $current;
+            }
+        }
+        return false;
+    }
+
     private function markCollected(int $orderId): int
     {
         $req = $this->Db->prepare("UPDATE custom_orders SET status = 'collected', status_changed_at = NOW()
@@ -230,6 +286,75 @@ final class OrderSheets extends AbstractRest
         $this->Db->execute($req);
         $id = $req->fetchColumn();
         return $id === false ? null : (int) $id;
+    }
+
+    /**
+     * Matches the sheets that were recorded before the confirmation's item list could be read (or when it had another
+     * number of items) against it again, reading each stored sheet once more. Called on a schedule.
+     *
+     * @return int how many sheets were looked at again
+     */
+    public function rescan(): int
+    {
+        $team = (int) $this->requester->userData['team'];
+        $req = $this->Db->prepare('SELECT id, procurement_id, sheet_name, filesize, basket_seen FROM custom_order_sheets WHERE team = :team');
+        $req->bindValue(':team', $team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $done = 0;
+        foreach ($req->fetchAll(PDO::FETCH_ASSOC) as $sheet) {
+            $procurementId = (string) $sheet['procurement_id'];
+            $basketSize = $this->basketSize($team, $procurementId);
+            if ($basketSize === 0 || (int) ($sheet['basket_seen'] ?? -1) === $basketSize) {
+                continue;
+            }
+            $file = $this->storedFile($team, $procurementId, (string) $sheet['sheet_name'], (int) $sheet['filesize']);
+            if ($file === null) {
+                continue;
+            }
+            $tmp = tempnam(sys_get_temp_dir(), 'sheet_');
+            if ($tmp === false) {
+                continue;
+            }
+            try {
+                file_put_contents($tmp, Storage::from($file['storage'])->getStorage()->getFs()->read($file['long_name']));
+                $this->recordCollectedItems($procurementId, ScanReader::textFromPdf($tmp), (string) $sheet['sheet_name'], (int) $sheet['id']);
+                $done++;
+            } catch (Throwable) {
+                // an unreadable stored file is left for the next run
+            } finally {
+                @unlink($tmp);
+            }
+        }
+        return $done;
+    }
+
+    private function basketSize(int $team, string $procurementId): int
+    {
+        $req = $this->Db->prepare("SELECT u.extracted_text FROM custom_order_uploads AS u
+            INNER JOIN custom_orders AS o ON o.id = u.order_id
+            WHERE o.team = :team AND (u.procurement_id = :procurement_id OR o.procurement_id = :procurement_id)
+                AND u.extracted_text LIKE '%Warenkorb%' ORDER BY u.id DESC LIMIT 1");
+        $req->bindValue(':team', $team, PDO::PARAM_INT);
+        $req->bindValue(':procurement_id', $procurementId);
+        $this->Db->execute($req);
+        $text = $req->fetchColumn();
+        return $text === false ? 0 : count(ScanReader::basketItems((string) $text));
+    }
+
+    /** @return array{long_name: string, storage: int}|null */
+    private function storedFile(int $team, string $procurementId, string $name, int $size): ?array
+    {
+        $req = $this->Db->prepare('SELECT up.long_name, up.storage FROM custom_order_uploads AS up
+            INNER JOIN custom_orders AS o ON o.id = up.order_id
+            WHERE o.team = :team AND o.procurement_id = :procurement_id AND up.real_name = :real_name AND up.filesize = :filesize
+            ORDER BY up.id LIMIT 1');
+        $req->bindValue(':team', $team, PDO::PARAM_INT);
+        $req->bindValue(':procurement_id', $procurementId);
+        $req->bindValue(':real_name', $name);
+        $req->bindValue(':filesize', $size, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $row = $req->fetch(PDO::FETCH_ASSOC);
+        return $row === false ? null : array('long_name' => (string) $row['long_name'], 'storage' => (int) $row['storage']);
     }
 
     /** Records the sheet (once per procurement, name and size) and returns its id. */

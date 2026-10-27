@@ -138,6 +138,7 @@ final class CustomMigrationRunner
         '097_order_collected_status.sql',
         '098_order_sheet_items.sql',
         '099_order_sheets.sql',
+        '100_order_sheet_basket_seen.sql',
     );
 
     private Db $Db;

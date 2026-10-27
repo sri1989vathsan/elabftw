@@ -64,16 +64,21 @@ final class OrdersImportSheetsCommand extends Command
         if (!is_dir($dir)) {
             return Command::SUCCESS;
         }
-        $files = array_merge(glob($dir . '/*.[pP][dD][fF]') ?: array(), glob($dir . '/unmatched/*.[pP][dD][fF]') ?: array());
-        if ($files === array()) {
-            return Command::SUCCESS;
-        }
         $requester = $this->requester();
         if ($requester === null) {
             $output->writeln('No user to attribute the sheets to (set ORDER_SHEETS_USERID).');
             return Command::FAILURE;
         }
         $sheets = new OrderSheets($requester);
+        // sheets recorded before their procurement's item list was readable are matched again
+        $rescanned = $sheets->rescan();
+        if ($rescanned > 0) {
+            $output->writeln(sprintf('%d recorded sheet(s) matched again against their confirmation.', $rescanned));
+        }
+        $files = array_merge(glob($dir . '/*.[pP][dD][fF]') ?: array(), glob($dir . '/unmatched/*.[pP][dD][fF]') ?: array());
+        if ($files === array()) {
+            return Command::SUCCESS;
+        }
         foreach ($files as $path) {
             // a scanner may still be writing the file
             if (time() - (int) filemtime($path) < self::SETTLE_SECONDS) {
