@@ -99,11 +99,8 @@ final class OrderSheets extends AbstractRest
                 $byOwner[(int) $order['userid']][] = array('id' => $orderId, 'title' => (string) $order['title']);
             }
         }
-        // one notification per person (not per order); nobody is told about their own drop
+        // one notification per person (not per order), whoever dropped the sheet: everyone with an order on it is told
         foreach ($byOwner as $ownerId => $owned) {
-            if ($ownerId === (int) $this->requester->userid) {
-                continue;
-            }
             $title = $owned[0]['title'] . (count($owned) > 1 ? sprintf(' (+%d)', count($owned) - 1) : '');
             (new OrderChanged(new Users($ownerId, $team), $this->requester, $owned[0]['id'], $title, 'received'))->create();
             $result['notified']++;
