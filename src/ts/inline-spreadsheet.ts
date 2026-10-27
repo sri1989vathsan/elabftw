@@ -5154,6 +5154,7 @@ export function openSpreadsheetModal(
         worksheet?.updateSelectionFromCoords?.(nextCol, nextRow, nextCol, nextRow);
         // keyboard focus goes back to the grid, so the next key (a second Enter, typing over the cell) reaches it
         const sink = sheetContainer?.querySelector<HTMLElement>('.jss_textarea');
+        sink?.focus({ preventScroll: true });
         window.setTimeout(() => sink?.focus({ preventScroll: true }), 0);
       };
       releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
@@ -8836,11 +8837,15 @@ export function buildReadOnlySpreadsheetHost(
       lastKnownSelection = [nextCol, nextRow, nextCol, nextRow];
       // The editor box closing leaves keyboard focus on <body>; hand it back to the grid so the next key (a second
       // Enter, an arrow, typing over the cell) reaches it.
+      // Straight away as well as after the tick: in the gap focus sits on <body> and a quick typist's next characters
+      // were dropped.
       const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea');
-      window.setTimeout(() => {
+      const focusSink = (): void => {
         sink?.focus({ preventScroll: true });
         lastFocusWasInGrid = true;
-      }, 0);
+      };
+      focusSink();
+      window.setTimeout(focusSink, 0);
     };
     releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
       if (event.key === 'Enter') {
