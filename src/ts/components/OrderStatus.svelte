@@ -139,13 +139,14 @@
           <th scope="col">{t('Requested by')}</th>
           <th scope="col">{t('Orders')}</th>
           <th scope="col">{t('Items collected')}</th>
+          <th scope="col">{t('Signed sheets')}</th>
         </tr>
       </thead>
       <tbody>
         {#if loading && rows.length === 0}
-          <tr><td colspan="7" class="text-muted">{t('Loading')}…</td></tr>
+          <tr><td colspan="8" class="text-muted">{t('Loading')}…</td></tr>
         {:else if rows.length === 0}
-          <tr><td colspan="7" class="text-muted">{t('No procurements found.')}</td></tr>
+          <tr><td colspan="8" class="text-muted">{t('No procurements found.')}</td></tr>
         {/if}
         {#each rows as row, index (row.procurement_id)}
           <tr class="order-status-row" on:click={() => toggle(row.procurement_id)}>
@@ -158,11 +159,28 @@
             <td>
               <span class={`badge ${progressClass(row)}`} title={row.last_collected_at ? `${t('Last collected')}: ${row.last_collected_at}` : ''}>{progressLabel(row)}</span>
             </td>
+            <td>
+              <!-- only the signed sheets that came in through the drop area or the synced folder -->
+              {#each row.sheets as sheet (sheet.id)}
+                {#if sheet.download}
+                  <a
+                    class="order-status-pdf"
+                    href={`app/download.php?f=${encodeURIComponent(sheet.download.long_name)}&storage=${sheet.download.storage}&name=${encodeURIComponent(sheet.name)}`}
+                    title={`${sheet.name} (${sheet.collected_at})`}
+                    on:click|stopPropagation
+                  ><i class="fas fa-file-pdf fa-fw text-danger" aria-hidden="true"></i><span class="sr-only">{sheet.name}</span></a>
+                {:else}
+                  <i class="fas fa-file-pdf fa-fw text-muted" title={sheet.name} aria-hidden="true"></i>
+                {/if}
+              {:else}
+                <span class="text-muted">—</span>
+              {/each}
+            </td>
           </tr>
           {#if expanded.has(row.procurement_id)}
             <tr class="order-status-detail">
               <td></td>
-              <td colspan="6">
+              <td colspan="7">
                 <div class="order-status-sections">
                   <section>
                     <h6>{t('Orders')}</h6>
@@ -257,6 +275,10 @@
 
   .order-status-row {
     cursor: pointer;
+  }
+
+  .order-status-pdf {
+    margin-right: 0.15rem;
   }
 
   .order-status-sections {
