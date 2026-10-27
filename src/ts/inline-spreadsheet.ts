@@ -387,7 +387,7 @@ HTMLTextAreaElement.prototype.focus = function focusWithoutScrollingGridInput(th
 // Typing into a focused textarea makes the browser scroll the page to its caret, and the grid's hidden input can be
 // hundreds of pixels away from the visible cell: the first typed character threw the page to it. Text keys pressed
 // in the grid keep the page where it was.
-const GRID_FOCUS_SELECTOR = '.jss_textarea, .jss_container, .elabftw-spreadsheet-readonly-view';
+const GRID_FOCUS_SELECTOR = '.jss_textarea, .jss_container, .elabftw-spreadsheet-readonly-view, .elabftw-spreadsheet-rescue-input';
 let gridTextKey: { x: number; y: number; at: number } | null = null;
 document.addEventListener('keydown', event => {
   const target = event.target;
