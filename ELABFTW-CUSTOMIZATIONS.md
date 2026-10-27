@@ -578,3 +578,10 @@ A free-form canvas next to the column board. A card is a question, a pointer to 
 and treats them like a drop on the orders page. Handled files move to `done/`, `unmatched/` (no order has that number
 yet: tried again each run) or `unreadable/`. `ORDER_SHEETS_USERID` is the account the attachments are attributed to
 (default: the first sysadmin).
+
+### Items collected per procurement
+
+The article numbers read from a collection sheet are compared (allowing for OCR misreads) with the rows of the basket
+("Warenkorb") in the procurement's confirmation PDF, attached to one of its orders. The items seen so far are kept per
+procurement (`custom_order_sheet_items`, migration 098), so a second sheet for the same procurement adds to them. The
+notification and the drop result show the count ("3/4 items collected"). Without a confirmation PDF there is no count.

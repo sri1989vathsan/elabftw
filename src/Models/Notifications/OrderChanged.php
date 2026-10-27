@@ -37,6 +37,8 @@ final class OrderChanged extends AbstractNotifications implements MailableInterf
         private string $title,
         // 'content' | 'file' | 'comment' | 'received' (the shop sheet for the order's procurement arrived)
         private string $reason,
+        // for 'received': how many items of the procurement are collected so far, e.g. "3/4"
+        private ?string $progress = null,
     ) {
         parent::__construct($targetUser);
     }
@@ -59,7 +61,7 @@ final class OrderChanged extends AbstractNotifications implements MailableInterf
                 'subject' => _('Your order has been received.'),
                 'body' => sprintf(
                     "%s\n\n%s\n%s",
-                    self::receivedMessage(),
+                    self::receivedMessage() . ($this->progress !== null ? sprintf(' (%s)', sprintf(_('%s items collected'), $this->progress)) : ''),
                     sprintf(_('Order: %s'), $this->title),
                     Env::asUrl('SITE_URL') . '/orders.php?order=' . $this->orderId,
                 ),
@@ -83,6 +85,7 @@ final class OrderChanged extends AbstractNotifications implements MailableInterf
             'order_id' => $this->orderId,
             'title' => $this->title,
             'reason' => $this->reason,
+            'progress' => $this->progress,
             'actor_fullname' => $this->actor->userData['fullname'],
         );
     }

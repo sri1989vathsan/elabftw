@@ -269,8 +269,9 @@ final class Transform
                     (int) $notif['body']['order_id'],
                     $notif['body']['reason'] === 'received'
                     ? sprintf(
-                        '%s (%s)',
+                        '%s%s (%s)',
                         OrderChanged::receivedMessage(),
+                        empty($notif['body']['progress']) ? '' : sprintf(' (%s)', sprintf(_('%s items collected'), htmlspecialchars((string) $notif['body']['progress'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'))),
                         htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
                     )
                     : sprintf(

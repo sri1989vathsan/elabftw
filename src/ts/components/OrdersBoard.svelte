@@ -788,6 +788,7 @@
     orders: Array<{ id: number; title: string }>;
     notified: number;
     collected?: number;
+    items?: { collected: number; total: number };
     status: 'attached' | 'no_order' | 'unreadable' | 'not_pdf' | 'error';
   };
   let sheetDragOver = false;
@@ -841,7 +842,7 @@
 
   function sheetMessage(result: SheetResult): string {
     switch (result.status) {
-    case 'attached': return `${t('Attached to')} ${result.orders.length} ${result.orders.length === 1 ? t('order') : t('orders')} (${t('Procurement ID')} ${result.procurement_id})${result.collected ? `, ${result.collected} ${t('set to Collected')}` : ''}${result.notified > 0 ? `, ${result.notified} ${result.notified === 1 ? t('person notified') : t('people notified')}` : ''}`;
+    case 'attached': return `${t('Attached to')} ${result.orders.length} ${result.orders.length === 1 ? t('order') : t('orders')} (${t('Procurement ID')} ${result.procurement_id})${result.items ? `, ${result.items.collected}/${result.items.total} ${t('items collected')}` : ''}${result.collected ? `, ${result.collected} ${t('set to Collected')}` : ''}${result.notified > 0 ? `, ${result.notified} ${result.notified === 1 ? t('person notified') : t('people notified')}` : ''}`;
     case 'no_order': return `${t('No order has the procurement ID')} ${result.procurement_id}`;
     case 'not_pdf': return t('Not a PDF');
     case 'unreadable': return t('Could not read a Rüstschein number from this file');
