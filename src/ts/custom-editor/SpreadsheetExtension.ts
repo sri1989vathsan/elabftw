@@ -3151,6 +3151,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         next = p;
       }
       editor.selection.setCursorLocation(next, 0);
+      // a paste from the context menu has no key press: start the autosave timer here as well
+      editor.setDirty(true);
+      editor.dispatch('keyup');
     };
     const spreadsheetPasteHandler = (event: ClipboardEvent): void => {
       const clipboard = event.clipboardData;
