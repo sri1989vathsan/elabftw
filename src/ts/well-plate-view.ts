@@ -1108,8 +1108,8 @@ function detectWellColumn(rows: string[][]): number {
   return best;
 }
 
-/** The standard plates that are big enough for the wells found, smallest first. */
-function fittingPresets(rows: string[][], wellColumn: number): typeof WELL_PLATE_PRESETS {
+/** The last well row and column used in the file (zero-based; -1 when there are none). */
+function wellExtent(rows: string[][], wellColumn: number): [number, number] {
   let maxRow = -1;
   let maxCol = -1;
   rows.slice(1).forEach(row => {
@@ -1118,6 +1118,12 @@ function fittingPresets(rows: string[][], wellColumn: number): typeof WELL_PLATE
     maxRow = Math.max(maxRow, well[0]);
     maxCol = Math.max(maxCol, well[1]);
   });
+  return [maxRow, maxCol];
+}
+
+/** The standard plates that are big enough for the wells found, smallest first. */
+function fittingPresets(rows: string[][], wellColumn: number): typeof WELL_PLATE_PRESETS {
+  const [maxRow, maxCol] = wellExtent(rows, wellColumn);
   return WELL_PLATE_PRESETS.filter(preset => preset.rows > maxRow && preset.cols > maxCol);
 }
 
@@ -1252,8 +1258,9 @@ export async function openPlateImportDialog(file: File): Promise<SpreadsheetData
     const refresh = (resizeChoices: boolean): void => {
       const wellColumn = Number(wellSelect.value);
       const fits = wellColumn >= 0 ? fittingPresets(sheet.rows, wellColumn) : [];
+      // The size is always chosen by the person (a half-empty plate is common), never assumed.
       if (resizeChoices || sizeSelect.options.length === 0) {
-        fillSelect(sizeSelect, fits.map((preset): [string, string] => [String(preset.wells), `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`]), String(fits[0]?.wells ?? ''));
+        fillSelect(sizeSelect, [['', 'Choose the plate size…'], ...fits.map((preset): [string, string] => [String(preset.wells), `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`])], '');
       }
       const ready = wellColumn >= 0 && fits.length > 0 && sizeSelect.value !== '';
       insertButton.disabled = !ready;
@@ -1267,9 +1274,15 @@ export async function openPlateImportDialog(file: File): Promise<SpreadsheetData
         info.textContent = 'The well IDs in this column do not fit a standard plate (up to 16 × 24). Check the Well ID column.';
         return;
       }
+      const [lastRow, lastCol] = wellExtent(sheet.rows, wellColumn);
+      const found = `Wells up to ${wellName(lastRow, lastCol)} were found (they fit ${fits.map(preset => preset.wells).join(', ')} wells).`;
+      if (sizeSelect.value === '') {
+        info.textContent = `${found} Choose the size of the plate you used; a partly filled plate is fine.`;
+        return;
+      }
       const data = buildPlateFromRows(sheet.rows, wellColumn, Number(sizeSelect.value), titleInput.value.trim(), colourSelect.value, labelSelect.value);
-      const found = Object.keys(data.plateTable?.rows ?? {}).length;
-      info.textContent = `${found} of ${sheet.rows.length - 1} rows placed on a ${data.plateSize}-well plate${fits.length > 1 ? ` (${fits[0].wells}-well is the smallest that fits; you can pick a bigger one)` : ''}. The other columns become the plate's table.`;
+      const placed = Object.keys(data.plateTable?.rows ?? {}).length;
+      info.textContent = `${placed} of ${sheet.rows.length - 1} rows placed on a ${data.plateSize}-well plate. The other columns become the plate's table.`;
       renderPlate(previewGrid, data, { popup: false, size: data.rows * data.cols > 96 ? 12 : 20 });
       renderLegend(previewLegend, data);
     };
