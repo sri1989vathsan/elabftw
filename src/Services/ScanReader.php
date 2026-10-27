@@ -14,6 +14,7 @@ use Smalot\PdfParser\Parser as PdfParser;
 use Symfony\Component\Process\Process;
 use Throwable;
 
+use function array_column;
 use function file_exists;
 use function glob;
 use function is_dir;
@@ -22,6 +23,7 @@ use function mkdir;
 use function preg_match;
 use function rmdir;
 use function sys_get_temp_dir;
+use function trim;
 use function uniqid;
 use function unlink;
 
@@ -121,6 +123,16 @@ final class ScanReader
     /** @return list<string> */
     public static function basketItems(string $confirmationText): array
     {
+        return array_column(self::basketRows($confirmationText), 'key');
+    }
+
+    /**
+     * The same rows with a readable label for each (supplier, article number and description as printed).
+     *
+     * @return list<array{key: string, label: string}>
+     */
+    public static function basketRows(string $confirmationText): array
+    {
         if (preg_match('/Warenkorb(.*)$/su', $confirmationText, $basket) !== 1) {
             return array();
         }
@@ -137,7 +149,12 @@ final class ScanReader
         $start = 0;
         foreach ($rows[0] as [$row, $offset]) {
             $end = $offset + strlen($row);
-            $items[] = mb_strtoupper((string) preg_replace('/\s+/u', '', substr($text, $start, $end - $start)));
+            $chunk = substr($text, $start, $end - $start);
+            $label = trim((string) preg_replace('/\s+/u', ' ', substr($chunk, 0, strlen($chunk) - strlen($row))));
+            $items[] = array(
+                'key' => mb_strtoupper((string) preg_replace('/\s+/u', '', $chunk)),
+                'label' => $label !== '' ? $label : trim((string) preg_replace('/\s+/u', ' ', $chunk)),
+            );
             $start = $end;
         }
         return $items;

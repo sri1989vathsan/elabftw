@@ -89,22 +89,21 @@ final class OrderSheets extends AbstractRest
         }
 
         $text ??= ScanReader::textFromPdf($file->getPathname());
-        $progress = $this->recordCollectedItems($procurementId, $text, $realName);
-        if ($progress !== null) {
-            $result['items'] = $progress;
-        }
         $byOwner = array();
         $collected = 0;
+        $firstUploadId = null;
         foreach ($orders as $order) {
             $orderId = (int) $order['id'];
             // dropping the same sheet twice must not attach it twice
-            $isNew = !$this->alreadyAttached($orderId, $realName, (int) $file->getSize());
+            $existingUploadId = $this->attachedUploadId($orderId, $realName, (int) $file->getSize());
+            $isNew = $existingUploadId === null;
             if ($isNew) {
-                (new OrderUploads($this->requester, new Orders($this->requester, $orderId)))->postAction(
+                $existingUploadId = (new OrderUploads($this->requester, new Orders($this->requester, $orderId)))->postAction(
                     Action::Create,
                     array('file' => $file, 'real_name' => $realName, 'silent' => true),
                 );
             }
+            $firstUploadId ??= $existingUploadId;
             // the goods are here: only an ordered order becomes "collected"; any other status stays as it is
             $collected += $this->markCollected($orderId);
             $result['orders'][] = array('id' => $orderId, 'title' => (string) $order['title']);
@@ -112,6 +111,12 @@ final class OrderSheets extends AbstractRest
             if ($isNew) {
                 $byOwner[(int) $order['userid']][] = array('id' => $orderId, 'title' => (string) $order['title']);
             }
+        }
+        // the sheet itself, and the items found on it
+        $sheetId = $this->saveSheet($team, $procurementId, $realName, (int) $file->getSize(), $firstUploadId);
+        $progress = $this->recordCollectedItems($procurementId, $text, $realName, $sheetId);
+        if ($progress !== null) {
+            $result['items'] = $progress;
         }
         // one notification per person (not per order), whoever dropped the sheet: everyone with an order on it is told
         foreach ($byOwner as $ownerId => $owned) {
@@ -138,7 +143,7 @@ final class OrderSheets extends AbstractRest
      *
      * @return array{collected: int, total: int}|null
      */
-    private function recordCollectedItems(string $procurementId, string $sheetText, string $sheetName): ?array
+    private function recordCollectedItems(string $procurementId, string $sheetText, string $sheetName, int $sheetId): ?array
     {
         $team = (int) $this->requester->userData['team'];
         $req = $this->Db->prepare("SELECT u.extracted_text FROM custom_order_uploads AS u
@@ -154,14 +159,15 @@ final class OrderSheets extends AbstractRest
             return null;
         }
         $tokens = ScanReader::articleTokens($sheetText);
-        $insert = $this->Db->prepare('INSERT IGNORE INTO custom_order_sheet_items (team, procurement_id, item_index, article, sheet_name)
-            VALUES (:team, :procurement_id, :item_index, :article, :sheet_name)');
+        $insert = $this->Db->prepare('INSERT IGNORE INTO custom_order_sheet_items (team, procurement_id, item_index, sheet_id, article, sheet_name)
+            VALUES (:team, :procurement_id, :item_index, :sheet_id, :article, :sheet_name)');
         foreach ($items as $index => $itemText) {
             foreach ($tokens as $token) {
                 if (self::articleMatches($itemText, $token)) {
                     $insert->bindValue(':team', $team, PDO::PARAM_INT);
                     $insert->bindValue(':procurement_id', $procurementId);
                     $insert->bindValue(':item_index', $index, PDO::PARAM_INT);
+                    $insert->bindValue(':sheet_id', $sheetId, PDO::PARAM_INT);
                     $insert->bindValue(':article', $token);
                     $insert->bindValue(':sheet_name', $sheetName);
                     $this->Db->execute($insert);
@@ -169,7 +175,11 @@ final class OrderSheets extends AbstractRest
                 }
             }
         }
-        $count = $this->Db->prepare('SELECT COUNT(*) FROM custom_order_sheet_items WHERE team = :team AND procurement_id = :procurement_id');
+        $found = $this->Db->prepare('UPDATE custom_order_sheets SET items_found = (SELECT COUNT(DISTINCT item_index) FROM custom_order_sheet_items WHERE sheet_id = :sheet_id) WHERE id = :sheet_id2');
+        $found->bindValue(':sheet_id', $sheetId, PDO::PARAM_INT);
+        $found->bindValue(':sheet_id2', $sheetId, PDO::PARAM_INT);
+        $this->Db->execute($found);
+        $count = $this->Db->prepare('SELECT COUNT(DISTINCT item_index) FROM custom_order_sheet_items WHERE team = :team AND procurement_id = :procurement_id');
         $count->bindValue(':team', $team, PDO::PARAM_INT);
         $count->bindValue(':procurement_id', $procurementId);
         $this->Db->execute($count);
@@ -210,14 +220,30 @@ final class OrderSheets extends AbstractRest
         return $req->rowCount();
     }
 
-    private function alreadyAttached(int $orderId, string $realName, int $size): bool
+    private function attachedUploadId(int $orderId, string $realName, int $size): ?int
     {
-        $req = $this->Db->prepare('SELECT COUNT(*) FROM custom_order_uploads
-            WHERE order_id = :order_id AND real_name = :real_name AND filesize = :filesize');
+        $req = $this->Db->prepare('SELECT id FROM custom_order_uploads
+            WHERE order_id = :order_id AND real_name = :real_name AND filesize = :filesize ORDER BY id LIMIT 1');
         $req->bindValue(':order_id', $orderId, PDO::PARAM_INT);
         $req->bindValue(':real_name', $realName);
         $req->bindValue(':filesize', $size, PDO::PARAM_INT);
         $this->Db->execute($req);
-        return (int) $req->fetchColumn() > 0;
+        $id = $req->fetchColumn();
+        return $id === false ? null : (int) $id;
+    }
+
+    /** Records the sheet (once per procurement, name and size) and returns its id. */
+    private function saveSheet(int $team, string $procurementId, string $realName, int $size, ?int $uploadId): int
+    {
+        $req = $this->Db->prepare('INSERT INTO custom_order_sheets (team, procurement_id, sheet_name, filesize, upload_id)
+            VALUES (:team, :procurement_id, :sheet_name, :filesize, :upload_id)
+            ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id), upload_id = COALESCE(upload_id, VALUES(upload_id))');
+        $req->bindValue(':team', $team, PDO::PARAM_INT);
+        $req->bindValue(':procurement_id', $procurementId);
+        $req->bindValue(':sheet_name', $realName);
+        $req->bindValue(':filesize', $size, PDO::PARAM_INT);
+        $req->bindValue(':upload_id', $uploadId, $uploadId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return (int) $this->Db->lastInsertId();
     }
 }

@@ -17,6 +17,7 @@ use Elabftw\Services\ScanReader;
 use Override;
 use PDO;
 
+use function array_column;
 use function array_map;
 use function count;
 use function implode;
@@ -109,6 +110,7 @@ final class OrderProcurements extends AbstractRest
             $procurementId = (string) $row['procurement_id'];
             $orders = $this->ordersOf($team, $procurementId);
             $progress = $this->progressOf($team, $procurementId);
+            $detail = $this->itemsAndSheets($team, $procurementId);
             $items[] = array(
                 'procurement_id' => $procurementId,
                 'order_numbers' => $row['order_numbers'] ?? '',
@@ -119,6 +121,8 @@ final class OrderProcurements extends AbstractRest
                 'items_collected' => $progress['collected'],
                 'items_total' => $progress['total'],
                 'last_collected_at' => $progress['last_collected_at'],
+                'items' => $detail['items'],
+                'sheets' => $detail['sheets'],
             );
         }
         return array('total' => $total, 'items' => $items);
@@ -176,6 +180,69 @@ final class OrderProcurements extends AbstractRest
             'total' => $total > 0 ? $total : null,
             'last_collected_at' => $counted['last_at'] ?? null,
         );
+    }
+
+    /**
+     * Every item of the procurement's basket with the sheets it was collected on, and every signed sheet with the
+     * items found on it.
+     *
+     * @return array{items: list<array{index: int, label: string, sheets: list<string>}>, sheets: list<array<string, mixed>>}
+     */
+    private function itemsAndSheets(int $team, string $procurementId): array
+    {
+        $confirmation = $this->Db->prepare("SELECT u.extracted_text FROM custom_order_uploads AS u
+            INNER JOIN custom_orders AS o ON o.id = u.order_id
+            WHERE o.team = :team AND (u.procurement_id = :procurement_id OR o.procurement_id = :procurement_id)
+                AND u.extracted_text LIKE '%Warenkorb%' ORDER BY u.id DESC LIMIT 1");
+        $confirmation->bindValue(':team', $team, PDO::PARAM_INT);
+        $confirmation->bindValue(':procurement_id', $procurementId);
+        $this->Db->execute($confirmation);
+        $text = $confirmation->fetchColumn();
+        $basket = $text === false ? array() : ScanReader::basketRows((string) $text);
+
+        $sheetsReq = $this->Db->prepare('SELECT s.id, s.sheet_name, s.created_at, s.items_found, s.upload_id,
+                up.long_name, up.storage, up.order_id
+            FROM custom_order_sheets AS s LEFT JOIN custom_order_uploads AS up ON up.id = s.upload_id
+            WHERE s.team = :team AND s.procurement_id = :procurement_id ORDER BY s.created_at, s.id');
+        $sheetsReq->bindValue(':team', $team, PDO::PARAM_INT);
+        $sheetsReq->bindValue(':procurement_id', $procurementId);
+        $this->Db->execute($sheetsReq);
+        $sheetRows = $sheetsReq->fetchAll(PDO::FETCH_ASSOC);
+
+        $linkReq = $this->Db->prepare('SELECT sheet_id, item_index FROM custom_order_sheet_items
+            WHERE team = :team AND procurement_id = :procurement_id ORDER BY item_index');
+        $linkReq->bindValue(':team', $team, PDO::PARAM_INT);
+        $linkReq->bindValue(':procurement_id', $procurementId);
+        $this->Db->execute($linkReq);
+        $itemsOfSheet = array();
+        $sheetsOfItem = array();
+        $names = array_column($sheetRows, 'sheet_name', 'id');
+        foreach ($linkReq->fetchAll(PDO::FETCH_ASSOC) as $link) {
+            $itemsOfSheet[(int) $link['sheet_id']][] = (int) $link['item_index'];
+            if (isset($names[$link['sheet_id']])) {
+                $sheetsOfItem[(int) $link['item_index']][] = (string) $names[$link['sheet_id']];
+            }
+        }
+
+        $items = array();
+        foreach ($basket as $index => $row) {
+            $items[] = array('index' => $index, 'label' => $row['label'], 'sheets' => $sheetsOfItem[$index] ?? array());
+        }
+        $sheets = array();
+        foreach ($sheetRows as $sheet) {
+            $found = $itemsOfSheet[(int) $sheet['id']] ?? array();
+            $sheets[] = array(
+                'id' => (int) $sheet['id'],
+                'name' => (string) $sheet['sheet_name'],
+                'collected_at' => $sheet['created_at'],
+                'download' => $sheet['long_name'] === null ? null : array(
+                    'long_name' => (string) $sheet['long_name'],
+                    'storage' => (int) $sheet['storage'],
+                ),
+                'items' => array_map(static fn (int $i): string => $basket[$i]['label'] ?? '#' . ($i + 1), $found),
+            );
+        }
+        return array('items' => $items, 'sheets' => $sheets);
     }
 
     private function validDate(string $value): ?string

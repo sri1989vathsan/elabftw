@@ -15,6 +15,14 @@
     items_collected: number;
     items_total: number | null;
     last_collected_at: string | null;
+    items: Array<{ index: number; label: string; sheets: string[] }>;
+    sheets: Array<{
+      id: number;
+      name: string;
+      collected_at: string;
+      download: { long_name: string; storage: number } | null;
+      items: string[];
+    }>;
   };
 
   const t = i18next.t.bind(i18next);
@@ -116,6 +124,10 @@
     <span class="ml-auto small text-muted">{firstShown}–{lastShown} {t('of')} {total}</span>
   </div>
 
+  <div class="d-flex justify-content-end mb-2">
+    {@render pagination()}
+  </div>
+
   <div class="table-responsive">
     <table class="table table-sm table-hover order-status-table">
       <thead>
@@ -151,15 +163,63 @@
             <tr class="order-status-detail">
               <td></td>
               <td colspan="6">
-                <ul class="list-unstyled mb-0">
-                  {#each row.orders as order (order.id)}
-                    <li>
-                      <a href={`orders.php?order=${order.id}`}>{order.title}</a>
-                      <span class="badge badge-light ml-1">{statusLabel(order.status)}</span>
-                      <span class="text-muted small ml-1">{order.requester}</span>
-                    </li>
-                  {/each}
-                </ul>
+                <div class="order-status-sections">
+                  <section>
+                    <h6>{t('Orders')}</h6>
+                    <ul class="list-unstyled mb-0">
+                      {#each row.orders as order (order.id)}
+                        <li>
+                          <a href={`orders.php?order=${order.id}`}>{order.title}</a>
+                          <span class="badge badge-light ml-1">{statusLabel(order.status)}</span>
+                          <span class="text-muted small ml-1">{order.requester}</span>
+                        </li>
+                      {/each}
+                    </ul>
+                  </section>
+                  <section>
+                    <h6>{t('Items')}</h6>
+                    {#if row.items.length === 0}
+                      <p class="text-muted small mb-0">{t('No confirmation with a basket is attached to these orders.')}</p>
+                    {:else}
+                      <ul class="list-unstyled mb-0">
+                        {#each row.items as item (item.index)}
+                          <li>
+                            <i class={item.sheets.length > 0 ? 'fas fa-circle-check fa-fw text-success' : 'far fa-circle fa-fw text-muted'} aria-hidden="true"></i>
+                            {item.label}
+                            {#if item.sheets.length > 0}<span class="text-muted small">— {item.sheets.join(', ')}</span>{/if}
+                          </li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  </section>
+                  <section>
+                    <h6>{t('Signed sheets')}</h6>
+                    {#if row.sheets.length === 0}
+                      <p class="text-muted small mb-0">{t('No signed sheet yet.')}</p>
+                    {:else}
+                      <ul class="list-unstyled mb-0">
+                        {#each row.sheets as sheet (sheet.id)}
+                          <li class="mb-1">
+                            <i class="fas fa-file-pdf fa-fw text-danger" aria-hidden="true"></i>
+                            {#if sheet.download}
+                              <a href={`app/download.php?f=${encodeURIComponent(sheet.download.long_name)}&storage=${sheet.download.storage}&name=${encodeURIComponent(sheet.name)}`}>{sheet.name}</a>
+                            {:else}
+                              {sheet.name}
+                            {/if}
+                            <span class="text-muted small">{sheet.collected_at}</span>
+                            {#if sheet.items.length > 0}
+                              <ul class="small mb-0 pl-4">
+                                {#each sheet.items as label, position (position)}<li>{label}</li>{/each}
+                              </ul>
+                            {:else}
+                              <span class="text-muted small">— {t('no item recognised')}</span>
+                            {/if}
+                          </li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  </section>
+                </div>
               </td>
             </tr>
           {/if}
@@ -168,22 +228,26 @@
     </table>
   </div>
 
-  <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
-    <select class="form-control form-control-sm" style="width:auto" bind:value={pageSize} on:change={onFilterChange} title={t('Items per page')}>
-      {#each PAGE_SIZES as size (size)}
-        <option value={size}>{size} {t('/ page')}</option>
-      {/each}
-    </select>
-    <div class="btn-group btn-group-sm" role="group" aria-label={t('Pagination')}>
-      <button type="button" class="btn btn-sm btn-ghost" disabled={pageOffset === 0} on:click={() => { pageOffset = Math.max(0, pageOffset - pageSize); void load(); }}>
-        <i class="fas fa-chevron-left fa-fw" aria-hidden="true"></i>{t('Previous')}
-      </button>
-      <button type="button" class="btn btn-sm btn-ghost" disabled={pageOffset + pageSize >= total} on:click={() => { pageOffset += pageSize; void load(); }}>
-        {t('Next')}<i class="fas fa-chevron-right fa-fw" aria-hidden="true"></i>
-      </button>
-    </div>
+  {@render pagination()}
+</div>
+
+{#snippet pagination()}
+<div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
+  <select class="form-control form-control-sm" style="width:auto" bind:value={pageSize} on:change={onFilterChange} title={t('Items per page')}>
+    {#each PAGE_SIZES as size (size)}
+      <option value={size}>{size} {t('/ page')}</option>
+    {/each}
+  </select>
+  <div class="btn-group btn-group-sm" role="group" aria-label={t('Pagination')}>
+    <button type="button" class="btn btn-sm btn-ghost" disabled={pageOffset === 0} on:click={() => { pageOffset = Math.max(0, pageOffset - pageSize); void load(); }}>
+      <i class="fas fa-chevron-left fa-fw" aria-hidden="true"></i>{t('Previous')}
+    </button>
+    <button type="button" class="btn btn-sm btn-ghost" disabled={pageOffset + pageSize >= total} on:click={() => { pageOffset += pageSize; void load(); }}>
+      {t('Next')}<i class="fas fa-chevron-right fa-fw" aria-hidden="true"></i>
+    </button>
   </div>
 </div>
+{/snippet}
 
 <style>
   .order-status-search {
@@ -193,5 +257,17 @@
 
   .order-status-row {
     cursor: pointer;
+  }
+
+  .order-status-sections {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  }
+
+  .order-status-sections h6 {
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
 </style>
