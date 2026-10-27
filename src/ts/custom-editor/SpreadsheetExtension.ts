@@ -1678,9 +1678,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // that much too short, so a new spreadsheet always scrolled a
           // little and its first or last row was partly cut off.
           const containerEl = overlay.querySelector('.jss_container') as HTMLElement | null;
+          // A plain cloned preview (notebook-style table) is as tall as its own rows, not as the hidden real table,
+          // which can wrap its text differently and be far taller (a long blank gap under the preview).
+          const previewBodyEl = overlay.querySelector('.elabftw-spreadsheet-preview-body') as HTMLElement | null;
           const naturalContentHeight = worksheetEl
             ? Math.max(worksheetEl.scrollHeight, containerEl?.offsetHeight ?? 0)
-            : tableRect.height;
+            : (previewBodyEl ? previewBodyEl.offsetHeight : tableRect.height);
           // A horizontal scrollbar (overflow-x:auto on the grid area, needed
           // whenever the table is wider than maxContentWidth) takes up its own
           // slice of vertical space that scrollHeight above doesn't know
