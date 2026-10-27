@@ -91,7 +91,7 @@ final class OrderSheets extends AbstractRest
                     array('file' => $file, 'real_name' => $realName, 'silent' => true),
                 );
             }
-            // the goods are here: the order becomes "collected" (pinned and cancelled orders keep their status)
+            // the goods are here: a requested or ordered order becomes "collected"; any other status stays as it is
             $collected += $this->markCollected($orderId);
             $result['orders'][] = array('id' => $orderId, 'title' => (string) $order['title']);
             // only a sheet that was not attached before counts as news for the person who placed the order
@@ -113,7 +113,7 @@ final class OrderSheets extends AbstractRest
     private function markCollected(int $orderId): int
     {
         $req = $this->Db->prepare("UPDATE custom_orders SET status = 'collected', status_changed_at = NOW()
-            WHERE id = :id AND team = :team AND status NOT IN ('collected', 'cancelled', 'pinned_all', 'my_reference')");
+            WHERE id = :id AND team = :team AND status IN ('requested', 'ordered')");
         $req->bindValue(':id', $orderId, PDO::PARAM_INT);
         $req->bindValue(':team', (int) $this->requester->userData['team'], PDO::PARAM_INT);
         $this->Db->execute($req);
