@@ -147,4 +147,4 @@ Run on the dev instance with the accounts in `TEST-ACCOUNTS.md`.
 | N39 | Orders with those numbers: sheets attached, only ordered orders become collected, items found per sheet (4/4, 1/2, ...); numbers with no order stay in unmatched/ | pass |
 | N40 | The same scan under two names (Scan_10-23.pdf and Scan_10-23[1].pdf): attached once, one sheet row, one notification | fixed (compared name and size only); pass |
 | N41 | Well plate (48): typed values, background colours, Plate/Spreadsheet choice survive reload, rebuild and a new login | pass |
-| N42 | Typing in a grid keeps the page where it is, and keystrokes after Enter are kept (real clicks and typing, build 47) | see below |
+| N42 | Typing in a grid keeps the page where it is, and keystrokes after Enter and Tab are kept (real clicks and typing in a 48-well plate grid, builds 43-47: the page jumped about 700 px and text typed after the first Enter was lost until the guard also covered the temporary cell editor) | fixed; pass in build 47 (Chromium; Firefox still to be checked by the owner) |
