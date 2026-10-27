@@ -1427,6 +1427,24 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     iframe.style.height = `${needed}px`;
   };
 
+  // The editor's own autoresize can stop short after quick typing (e.g. holding Enter): the frame then stays shorter
+  // than the text and the text scrolls inside it. Whenever the content is taller than the frame, grow the frame by
+  // exactly the excess. Grow only, so it never fights the normal resize.
+  let growToContentTimer: ReturnType<typeof setTimeout> | null = null;
+  const growEditorToContent = (): void => {
+    growToContentTimer = null;
+    if (editor.removed) return;
+    const iframe = editor.iframeElement as HTMLIFrameElement | null;
+    const root = editor.getDoc()?.documentElement;
+    if (!iframe || !root) return;
+    const excess = root.scrollHeight - root.clientHeight;
+    if (excess > 1) iframe.style.height = `${Math.ceil(iframe.getBoundingClientRect().height + excess)}px`;
+  };
+  editor.on('input keyup NodeChange SetContent Undo Redo', () => {
+    if (growToContentTimer !== null) clearTimeout(growToContentTimer);
+    growToContentTimer = setTimeout(growEditorToContent, 300);
+  });
+
   const dispatchKeyupForAutosave = (): void => {
     // While a grid is in use the real 'keyup' below is held back (it would pull focus into the page editor), which
     // used to leave the autosave timer unstarted for as long as the user stayed in the grid. This one only starts
