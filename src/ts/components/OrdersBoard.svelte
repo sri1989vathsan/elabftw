@@ -1914,7 +1914,7 @@
     on:drop={onSheetsDropped}
   >
     <i class="fas fa-file-pdf fa-fw mr-1" aria-hidden="true"></i>
-    <span>{t('Drop the signed collection sheets (PDF) here. Each one is attached to the orders with the same procurement number (the number after Rüstschein), and the people who placed them are notified.')}</span>
+    <span>{t('Drop the signed collection sheets (PDF) here.')}</span>
     <label class="btn btn-ghost btn-sm mb-0 ml-2">
       {t('Choose files')}
       <input type="file" accept="application/pdf,.pdf" multiple class="orders-file-input" on:change={onSheetsSelected} />
