@@ -49,6 +49,10 @@ interface CellValueChange {
   row: number;
   oldValue: string;
   newValue: string;
+  /** A formatting change instead of a value change: the cell's style before and after ('' = no style). */
+  style?: true;
+  oldStyle?: string;
+  newStyle?: string;
 }
 type CellHistoryEntry = CellValueChange[];
 export interface SpreadsheetCellHistory {
@@ -4805,6 +4809,28 @@ export function openSpreadsheetModal(
     // every other edit in this file already uses (see commitRescueInput's
     // own comment on why this never calls worksheet.setValue() directly).
     const applyCellHistoryEntry = (changes: CellHistoryEntry, useOldValue: boolean): void => {
+      if (changes[0]?.style) {
+        // formatting: put the cells' styles back and draw the grid again, like applying a format does
+        const rawData = readRawData();
+        const rows = clampDimension(rawData.length, working.rows);
+        const cols = clampDimension(rawData.reduce((max, row) => Math.max(max, row.length), 0), working.cols);
+        const cellStyles = readCellStyles(rows, cols) ?? {};
+        changes.forEach(({ col, row, oldStyle, newStyle }) => {
+          const name = `${colLabel(col)}${row + 1}`;
+          const style = useOldValue ? oldStyle : newStyle;
+          if (style) cellStyles[name] = style;
+          else delete cellStyles[name];
+        });
+        mountSpreadsheet({
+          ...working,
+          data: resizeData(rawData, rows, cols),
+          rows,
+          cols,
+          cellStyles: Object.keys(cellStyles).length > 0 ? cellStyles : undefined,
+        });
+        hasChanges = true;
+        return;
+      }
       changes.forEach(({ col, row, oldValue, newValue }) => {
         const value = useOldValue ? oldValue : newValue;
         updateRawDataMirrorCell(col, row, value, false);
@@ -6090,6 +6116,7 @@ export function openSpreadsheetModal(
         working.cols,
       );
       const cellStyles = readCellStyles(rows, cols) ?? {};
+      const stylesBefore = { ...cellStyles };
 
       for (let row = startRow; row <= endRow; row++) {
         for (let col = startCol; col <= endCol; col++) {
@@ -6117,6 +6144,19 @@ export function openSpreadsheetModal(
         for (let col = startCol; col <= endCol; col++) touch(col, startRow - 1, 'bottom');
       }
 
+      // one undo step for the whole format change
+      const styleChanges: CellHistoryEntry = [];
+      new Set([...Object.keys(stylesBefore), ...Object.keys(cellStyles)]).forEach(name => {
+        if ((stylesBefore[name] ?? '') === (cellStyles[name] ?? '')) return;
+        const match = /^([A-Z]+)(\d+)$/.exec(name);
+        if (!match) return;
+        const col = match[1].split('').reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0) - 1;
+        styleChanges.push({
+          col, row: Number(match[2]) - 1, oldValue: '', newValue: '', style: true,
+          oldStyle: stylesBefore[name] ?? '', newStyle: cellStyles[name] ?? '',
+        });
+      });
+      pushCellHistoryEntry(styleChanges);
       mountSpreadsheet({
         ...working,
         data: resizeData(rawData, rows, cols),
@@ -7582,6 +7622,19 @@ export function buildReadOnlySpreadsheetHost(
       // attribute instead, bypassing that toggle entirely -- the same
       // "DOM-only" workaround applySpreadsheetColWidths() already uses
       // for an analogous jspreadsheet-ce quirk with setWidth().
+      // the styles before, to record one undo step for the whole format change (cells and border neighbours)
+      const stylesBefore = new Map<string, string>();
+      const remember = (col: number, row: number): void => {
+        const key = `${col},${row}`;
+        if (stylesBefore.has(key)) return;
+        const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
+        if (cell) stylesBefore.set(key, cell.getAttribute('style') ?? '');
+      };
+      for (let row = startRow; row <= endRow; row++) {
+        for (let col = startCol; col <= endCol; col++) remember(col, row);
+      }
+      for (let row = startRow; row <= endRow; row++) remember(startCol - 1, row);
+      for (let col = startCol; col <= endCol; col++) remember(col, startRow - 1);
       for (let row = startRow; row <= endRow; row++) {
         for (let col = startCol; col <= endCol; col++) {
           const cell = sheetContainer.querySelector<HTMLElement>(
@@ -7610,6 +7663,14 @@ export function buildReadOnlySpreadsheetHost(
         for (let row = startRow; row <= endRow; row++) touch(startCol - 1, row, 'right');
         for (let col = startCol; col <= endCol; col++) touch(col, startRow - 1, 'bottom');
       }
+      const styleChanges: CellHistoryEntry = [];
+      stylesBefore.forEach((before, key) => {
+        const [col, row] = key.split(',').map(Number);
+        const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
+        const after = cell?.getAttribute('style') ?? '';
+        if (after !== before) styleChanges.push({ col, row, oldValue: '', newValue: '', style: true, oldStyle: before, newStyle: after });
+      });
+      pushCellHistoryEntry(styleChanges);
       notifyFromMirror();
     };
     const applySelectedStyleProperty = (property: string, value: string): void => {
@@ -8415,7 +8476,17 @@ export function buildReadOnlySpreadsheetHost(
     cellRedoStack.length = 0;
   };
   const applyCellHistoryEntry = (changes: CellHistoryEntry, useOldValue: boolean): void => {
-    changes.forEach(({ col, row, oldValue, newValue }) => {
+    changes.forEach(({ col, row, oldValue, newValue, style: isStyle, oldStyle, newStyle }) => {
+      if (isStyle) {
+        // formatting: the style lives on the cell itself
+        const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`);
+        const styleText = useOldValue ? oldStyle : newStyle;
+        if (cell) {
+          if (styleText) cell.setAttribute('style', styleText);
+          else cell.removeAttribute('style');
+        }
+        return;
+      }
       const value = useOldValue ? oldValue : newValue;
       updateRawDataMirrorCell(col, row, value, false);
       previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, value);
