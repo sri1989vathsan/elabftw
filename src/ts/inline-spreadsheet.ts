@@ -396,6 +396,13 @@ document.addEventListener('keydown', event => {
     gridTextKey = { x: window.scrollX, y: window.scrollY, at: performance.now() };
   }
 }, true);
+// text that arrives without a key press (input methods, dictation, pasted keystrokes) scrolls the same way
+document.addEventListener('beforeinput', event => {
+  const target = event.target;
+  if (target instanceof Element && target.closest(GRID_FOCUS_SELECTOR)) {
+    gridTextKey = { x: window.scrollX, y: window.scrollY, at: performance.now() };
+  }
+}, true);
 window.addEventListener('scroll', () => {
   if (!gridTextKey || performance.now() - gridTextKey.at > 600) return;
   const active = document.activeElement;
