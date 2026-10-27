@@ -141,6 +141,67 @@ type JssFactory = (element: HTMLDivElement, options: object) => JssInstance;
 
 type JssMenuItem = { title?: string; onclick?: () => void };
 
+/** Clipboard text (tab-separated cells, one row per line) with its rows and columns swapped. */
+export function transposeClipboardText(text: string): string {
+  const rows = text.replace(/\r\n?/g, '\n').replace(/\n$/, '').split('\n').map(line => line.split('\t'));
+  const width = rows.reduce((widest, row) => Math.max(widest, row.length), 0);
+  const transposed: string[] = [];
+  for (let col = 0; col < width; col++) transposed.push(rows.map(row => row[col] ?? '').join('\t'));
+  return transposed.join('\n');
+}
+
+/** Pastes the clipboard text transposed with its top-left cell at (col, row); the grid grows as a normal paste does. */
+function pasteTransposed(worksheet: JssInstance, col: number, row: number, text: string): void {
+  if (!worksheet || text === '') return;
+  const transposed = transposeClipboardText(text);
+  if (typeof worksheet.paste === 'function') {
+    worksheet.paste(col, row, transposed);
+    return;
+  }
+  transposed.split('\n').forEach((line, rowOffset) => line.split('\t').forEach((value, colOffset) => {
+    worksheet.setValueFromCoords?.(col + colOffset, row + rowOffset, value, true);
+  }));
+}
+
+/**
+ * Paste transposed from the keyboard: Ctrl/Cmd+Shift+V inside the grid. The browser then fires the usual paste event
+ * (with the clipboard in it), which is taken over here instead of pasting as it is. Returns the function that removes it.
+ */
+function installTransposedPaste(
+  container: HTMLElement,
+  getTarget: () => { worksheet: JssInstance; col: number; row: number } | null,
+): () => void {
+  let pending = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const onKey = (event: KeyboardEvent): void => {
+    if (!(event.ctrlKey || event.metaKey) || !event.shiftKey || event.altKey || event.key.toLowerCase() !== 'v') return;
+    pending = true;
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(() => { pending = false; }, 1500);
+  };
+  const onPaste = (event: ClipboardEvent): void => {
+    if (!pending) return;
+    pending = false;
+    const target = event.target;
+    // text being typed in a cell keeps its normal paste
+    if (!(target instanceof Node) || !container.contains(target)
+      || (target instanceof Element && target.closest('.jss_worksheet td.editor'))) return;
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    const start = getTarget();
+    if (!start || text === '') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    pasteTransposed(start.worksheet, start.col, start.row, text);
+  };
+  document.addEventListener('keydown', onKey, true);
+  document.addEventListener('paste', onPaste, true);
+  return () => {
+    document.removeEventListener('keydown', onKey, true);
+    document.removeEventListener('paste', onPaste, true);
+    if (timer !== null) clearTimeout(timer);
+  };
+}
+
 /**
  * The grid's own "Delete selected rows/columns" only removes the whole selection when
  * entire rows/columns were picked through their headers; a range of cells (what dragging
@@ -166,6 +227,13 @@ const deleteWholeSelectionMenu = (
   const maxX = Math.max(firstX, lastX);
   const minY = Math.min(firstY, lastY);
   const maxY = Math.max(firstY, lastY);
+  items.push({
+    title: 'Paste transposed',
+    onclick: (): void => {
+      // from the right-click menu the clipboard has to be read; Ctrl/Cmd+Shift+V works without that permission
+      void navigator.clipboard?.readText?.().then(text => pasteTransposed(worksheet, clickedX, clickedY, text)).catch(() => undefined);
+    },
+  });
   for (const item of items) {
     if (item.title === 'Delete selected rows' && maxY > minY && clickedY >= minY && clickedY <= maxY) {
       item.onclick = (): void => worksheet.deleteRow(minY, maxY - minY + 1);
@@ -5986,6 +6054,13 @@ export function openSpreadsheetModal(
     document.addEventListener('mouseup', onRowResizePointerUp, true);
     ui.sheetHost.addEventListener('copy', onSpreadsheetCopy, true);
     ui.sheetHost.addEventListener('paste', onSpreadsheetPaste, true);
+    // Ctrl/Cmd+Shift+V pastes the clipboard transposed, with its top-left cell at the selected cell
+    popupPageListenerRemovers.push(installTransposedPaste(ui.sheetHost, () => {
+      const selection = getSelectedRange();
+      return worksheet && selection
+        ? { worksheet, col: Math.min(selection[0], selection[2]), row: Math.min(selection[1], selection[3]) }
+        : null;
+    }));
 
     ui.presetSelect.addEventListener('change', () => {
       const preset = spreadsheetPresetFromValue(ui.presetSelect.value);
@@ -8965,6 +9040,16 @@ export function buildReadOnlySpreadsheetHost(
     openCellEditor(col, row, value, false);
   };
   if (editable) window.addEventListener('keydown', onDirectCellKey, true);
+  // Ctrl/Cmd+Shift+V pastes the clipboard transposed, with its top-left cell at the selected cell
+  if (editable) {
+    pageListenerRemovers.push(installTransposedPaste(host, () => {
+      const mounted = getMountedWorksheet(sheetContainer);
+      const selection = lastKnownSelection;
+      return mounted && selection
+        ? { worksheet: mounted, col: Math.min(selection[0], selection[2]), row: Math.min(selection[1], selection[3]) }
+        : null;
+    }));
+  }
   if (editable && !plateLocked) {
     // The empty lettered columns beside the grid: pressing one adds the columns up to it and selects that cell,
     // so typing there simply continues the sheet.
