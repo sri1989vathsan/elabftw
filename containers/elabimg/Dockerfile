@@ -253,6 +253,9 @@ RUN apk upgrade -U -a && apk add --no-cache \
     php84-xmlwriter \
     php84-zip \
     php84-zlib \
+    tesseract-ocr \
+    tesseract-ocr-data-deu \
+    tesseract-ocr-data-eng \
     tzdata \
     unzip
 

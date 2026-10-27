@@ -57,7 +57,7 @@ final class Orders extends AbstractRest
 {
     use SetIdTrait;
 
-    public const array STATUSES = array('requested', 'ordered', 'received', 'backlogged', 'cancelled', 'pinned_all', 'my_reference');
+    public const array STATUSES = array('requested', 'ordered', 'received', 'collected', 'backlogged', 'cancelled', 'pinned_all', 'my_reference');
 
     // always pinned, and the status never changes once set: 'pinned_all' is shared with the whole
     // team (shown as "Pinned for all"), 'my_reference' (shown as "Reference") is only visible to its author.
@@ -67,7 +67,7 @@ final class Orders extends AbstractRest
     // 'pinned_all' excluded: those are pinned catalog entries with no real
     // lifecycle to measure "time in status" from (see updateStatus() and
     // postAction()'s own comments) -- not a sensible auto-archive trigger.
-    public const array AUTOARCHIVABLE_STATUSES = array('requested', 'ordered', 'received', 'backlogged', 'cancelled');
+    public const array AUTOARCHIVABLE_STATUSES = array('requested', 'ordered', 'received', 'collected', 'backlogged', 'cancelled');
 
     // same module list/URL scheme as the LabCollector link already
     // insertable into an entity's body -- see buildLabCollectorUrl() in

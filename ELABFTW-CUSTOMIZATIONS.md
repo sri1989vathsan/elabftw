@@ -560,3 +560,13 @@ A free-form canvas next to the column board. A card is a question, a pointer to 
 - Dev rebuild: `docker exec elabftw bash -c 'NODE_OPTIONS="--max-old-space-size=4096" yarn build:dev --watch'`
 - Global event delegation: all `[data-action]` clicks are intercepted by `#container` listener in `src/ts/common.ts` — use `on(action, fn)` from `src/ts/handlers.ts`, not direct `addEventListener`
 - HTMLPurifier config in `src/Services/Filter.php` must whitelist any new HTML attributes/classes
+
+## Orders: shop sheet drop area and the "Collected" status
+
+- The orders page has a drop area for the signed shop sheets ("Rüstschein" PDFs). For each PDF the procurement number
+  after "Rüstschein" is read (`src/Services/ScanReader.php`: the text layer first, then OCR with Ghostscript and
+  Tesseract, which are in the image: see `containers/elabimg/Dockerfile`), the PDF is attached to every order of the
+  team with that procurement ID (`src/Models/OrderSheets.php`, endpoint `api/v2/order_sheets`), those orders become
+  `collected` (migration 097) and the people who placed them get the notification "Orders from this procurement have
+  been received: Please check if your order has been collected." (`OrderChanged` with reason `received`).
+- Dropping the same sheet again does not attach it twice. Pinned and cancelled orders keep their status.

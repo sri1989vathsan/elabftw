@@ -78,6 +78,7 @@ final class OrderStatusChanged extends AbstractNotifications implements Mailable
             'requested' => _('Requested'),
             'ordered' => _('Ordered'),
             'received' => _('Received'),
+            'collected' => _('Collected'),
             'cancelled' => _('Cancelled'),
             'pinned_all' => _('Pinned for all'),
             'my_reference' => _('Reference'),

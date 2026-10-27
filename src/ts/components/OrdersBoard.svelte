@@ -28,7 +28,7 @@
     };
   }
 
-  type OrderStatus = 'requested' | 'ordered' | 'received' | 'backlogged' | 'cancelled' | 'pinned_all' | 'my_reference';
+  type OrderStatus = 'requested' | 'ordered' | 'received' | 'collected' | 'backlogged' | 'cancelled' | 'pinned_all' | 'my_reference';
 
   type TeamMember = {
     userid: number;
@@ -157,7 +157,7 @@
   // 'pinned_all' (shown as "Pinned") is only set when an order is created, and
   // is locked afterwards: the selects below leave it out for every other order
   // and disable it on a pinned one.
-  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'backlogged', 'cancelled', 'pinned_all', 'my_reference'];
+  const STATUSES: OrderStatus[] = ['requested', 'ordered', 'received', 'collected', 'backlogged', 'cancelled', 'pinned_all', 'my_reference'];
   // 'pinned_all' (shown as "Pinned for all") and 'my_reference' (shown as "Reference", only its
   // author sees it) are always pinned and never change status
   const PINNED_STATUSES: OrderStatus[] = ['pinned_all', 'my_reference'];
@@ -169,6 +169,7 @@
       requested: t('Requested'),
       ordered: t('Ordered'),
       received: t('Received'),
+      collected: t('Collected'),
       cancelled: t('Cancelled'),
       pinned_all: t('Pinned for all'),
       my_reference: t('Reference'),
@@ -778,6 +779,60 @@
   }
 
   let newFilesDragOver = false;
+
+  // Shop sheets ("Rüstschein" PDFs): dropped anywhere in this area, each PDF is matched to the orders with the same
+  // procurement ID on the server, attached to them, and the people who placed them are notified
+  type SheetResult = {
+    file: string;
+    procurement_id: string | null;
+    orders: Array<{ id: number; title: string }>;
+    notified: number;
+    collected?: number;
+    status: 'attached' | 'no_order' | 'unreadable' | 'not_pdf' | 'error';
+  };
+  let sheetDragOver = false;
+  let sheetBusy = false;
+  let sheetResults: SheetResult[] = [];
+
+  async function processSheets(files: File[]): Promise<void> {
+    if (files.length === 0) return;
+    sheetBusy = true;
+    sheetResults = [];
+    for (const file of files) {
+      try {
+        const formData = new FormData();
+        formData.set('file', file);
+        const response = await ApiC.post('order_sheets', formData);
+        sheetResults = [...sheetResults, await response.json() as SheetResult];
+      } catch {
+        sheetResults = [...sheetResults, { file: file.name, procurement_id: null, orders: [], notified: 0, status: 'error' }];
+      }
+    }
+    sheetBusy = false;
+    if (sheetResults.some(result => result.status === 'attached')) void load();
+  }
+
+  function onSheetsDropped(event: DragEvent): void {
+    event.preventDefault();
+    sheetDragOver = false;
+    void processSheets(Array.from(event.dataTransfer?.files ?? []));
+  }
+
+  function onSheetsSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    void processSheets(Array.from(input.files ?? []));
+    input.value = '';
+  }
+
+  function sheetMessage(result: SheetResult): string {
+    switch (result.status) {
+    case 'attached': return `${t('Attached to')} ${result.orders.length} ${result.orders.length === 1 ? t('order') : t('orders')} (${t('Procurement ID')} ${result.procurement_id})${result.collected ? `, ${result.collected} ${t('set to Collected')}` : ''}${result.notified > 0 ? `, ${result.notified} ${result.notified === 1 ? t('person notified') : t('people notified')}` : ''}`;
+    case 'no_order': return `${t('No order has the procurement ID')} ${result.procurement_id}`;
+    case 'not_pdf': return t('Not a PDF');
+    case 'unreadable': return t('Could not read a Rüstschein number from this file');
+    default: return t('Something went wrong with this file');
+    }
+  }
 
   function onNewFilesDragOver(event: DragEvent): void {
     event.preventDefault();
@@ -1785,6 +1840,9 @@
       <button type="button" class={statusFilter === 'received' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('received')}>
         {t('Received')}
       </button>
+      <button type="button" class={statusFilter === 'collected' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('collected')}>
+        {t('Collected')}
+      </button>
       <button type="button" class={statusFilter === 'backlogged' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectTab('backlogged')}>
         {t('Backlogged')}
       </button>
@@ -1802,6 +1860,38 @@
       </button>
     </div>
   </div>
+
+  <div
+    class="orders-sheet-drop mt-2"
+    class:orders-sheet-drop-over={sheetDragOver}
+    role="region"
+    aria-label={t('Drop shop sheets')}
+    on:dragover|preventDefault={() => { sheetDragOver = true; }}
+    on:dragleave={() => { sheetDragOver = false; }}
+    on:drop={onSheetsDropped}
+  >
+    <i class="fas fa-file-pdf fa-fw mr-1" aria-hidden="true"></i>
+    <span>{t('Drop the signed shop sheets (PDF) here. Each one is attached to the orders with the same procurement number (the number after Rüstschein), and the people who placed them are notified.')}</span>
+    <label class="btn btn-ghost btn-sm mb-0 ml-2">
+      {t('Choose files')}
+      <input type="file" accept="application/pdf,.pdf" multiple class="orders-file-input" on:change={onSheetsSelected} />
+    </label>
+    {#if sheetBusy}<span class="orders-muted small ml-2">{t('Reading the sheets…')}</span>{/if}
+  </div>
+  {#if sheetResults.length > 0}
+    <ul class="orders-sheet-results list-unstyled mt-2 mb-0">
+      {#each sheetResults as result (result.file)}
+        <li class={`orders-sheet-result orders-sheet-${result.status}`}>
+          <i class={result.status === 'attached' ? 'fas fa-circle-check fa-fw' : 'fas fa-triangle-exclamation fa-fw'} aria-hidden="true"></i>
+          <strong>{result.file}</strong>: {sheetMessage(result)}
+          {#if result.orders.length > 0}
+            <span class="orders-muted small">— {result.orders.map(order => order.title).join(', ')}</span>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+    <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={() => { sheetResults = []; }}>{t('Dismiss')}</button>
+  {/if}
 
   <div class="d-flex flex-wrap align-items-center mt-2 mb-3 orders-toolbar-row" style="gap:0.5rem">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Filter by owner')}>
@@ -2803,6 +2893,11 @@
   .orders-status-select-received {
     color: #fff;
     background-color: #28a745;
+  }
+
+  .orders-status-select-collected {
+    color: #fff;
+    background-color: #17806d;
   }
 
   .orders-status-select-cancelled {

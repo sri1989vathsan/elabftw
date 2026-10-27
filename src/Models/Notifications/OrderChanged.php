@@ -35,7 +35,7 @@ final class OrderChanged extends AbstractNotifications implements MailableInterf
         private Users $actor,
         private int $orderId,
         private string $title,
-        // 'content' | 'file' | 'comment'
+        // 'content' | 'file' | 'comment' | 'received' (the shop sheet for the order's procurement arrived)
         private string $reason,
     ) {
         parent::__construct($targetUser);
@@ -54,6 +54,17 @@ final class OrderChanged extends AbstractNotifications implements MailableInterf
     #[Override]
     public function getEmail(): array
     {
+        if ($this->reason === 'received') {
+            return array(
+                'subject' => _('Your order has been received.'),
+                'body' => sprintf(
+                    "%s\n\n%s\n%s",
+                    self::receivedMessage(),
+                    sprintf(_('Order: %s'), $this->title),
+                    Env::asUrl('SITE_URL') . '/orders.php?order=' . $this->orderId,
+                ),
+            );
+        }
         return array(
             'subject' => _('Your order was updated.'),
             'body' => sprintf(
@@ -74,6 +85,11 @@ final class OrderChanged extends AbstractNotifications implements MailableInterf
             'reason' => $this->reason,
             'actor_fullname' => $this->actor->userData['fullname'],
         );
+    }
+
+    public static function receivedMessage(): string
+    {
+        return _('Orders from this procurement have been received: Please check if your order has been collected.');
     }
 
     // mirrors Transform.php's own copy of this -- kept here rather than

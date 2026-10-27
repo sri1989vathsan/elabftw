@@ -128,7 +128,8 @@ final class OrderUploads extends AbstractRest
         $this->Db->execute($req);
         $uploadId = (int) $this->Db->lastInsertId();
 
-        if ((int) $order['userid'] !== $this->Users->userid) {
+        // 'silent': the shop-sheet drop sends its own, more specific notification instead
+        if (empty($reqBody['silent']) && (int) $order['userid'] !== $this->Users->userid) {
             (new OrderChanged(
                 new Users((int) $order['userid'], $this->Users->team),
                 $this->Users,

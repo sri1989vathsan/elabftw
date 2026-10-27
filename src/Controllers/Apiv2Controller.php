@@ -85,6 +85,7 @@ use Elabftw\Models\OrderTemplates;
 use Elabftw\Models\OrderTemplateUploads;
 use Elabftw\Models\Orders;
 use Elabftw\Models\OrderComments;
+use Elabftw\Models\OrderSheets;
 use Elabftw\Models\OrderUploads;
 use Elabftw\Models\Todolist;
 use Elabftw\Models\TodolistColumns;
@@ -243,12 +244,16 @@ final class Apiv2Controller extends AbstractApiController
     private function handlePost(): Response
     {
         // special case for POST/uploads where we get the information from the "files" attribute
-        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools || $this->Model instanceof OrderUploads || $this->Model instanceof OrderTemplateUploads || $this->Model instanceof AnnouncementUploads) && $this->action === Action::Create) {
+        if (($this->Model instanceof Uploads || $this->Model instanceof ImportHandler || $this->Model instanceof HtmlTools || $this->Model instanceof OrderUploads || $this->Model instanceof OrderSheets || $this->Model instanceof OrderTemplateUploads || $this->Model instanceof AnnouncementUploads) && $this->action === Action::Create) {
             $file = $this->Request->files->get('file');
             // this was added to prevent: Uncaught Error: Call to a member function getClientOriginalName() on null
             // not sure what triggers it though
             if ($file === null) {
                 throw new ImproperActionException('Error reading file!');
+            }
+            if ($this->Model instanceof OrderSheets) {
+                // the outcome (number read, orders matched, people notified) goes back in the body
+                return new JsonResponse($this->Model->process($file), Response::HTTP_CREATED);
             }
             $this->reqBody['real_name'] = $file->getClientOriginalName();
             $this->reqBody['file'] = $file;
@@ -400,6 +405,7 @@ final class Apiv2Controller extends AbstractApiController
             ApiEndpoint::FavCategories => new FavCategories($this->requester, $this->id),
             ApiEndpoint::Feedback => new Feedback($this->requester, $this->id),
             ApiEndpoint::Orders => new Orders($this->requester, $this->id),
+            ApiEndpoint::OrderSheets => new OrderSheets($this->requester, $this->id),
             ApiEndpoint::OrderTemplates => new OrderTemplates($this->requester, $this->id),
             ApiEndpoint::FavFilters => new FavFilters($this->requester, $this->id),
             ApiEndpoint::FavTags => new FavTags($this->requester, $this->id),

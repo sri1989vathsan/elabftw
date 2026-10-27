@@ -14,6 +14,7 @@ namespace Elabftw\Services;
 
 use Elabftw\Elabftw\App;
 use Elabftw\Elabftw\BuildInfo;
+use Elabftw\Models\Notifications\OrderChanged;
 use Elabftw\Enums\Notifications;
 use Elabftw\Exceptions\ImproperActionException;
 
@@ -266,7 +267,13 @@ final class Transform
                     '<span data-action="ack-notif" data-id="%d" data-href="orders.php?order=%d">%s</span>' . $relativeMoment,
                     (int) $notif['id'],
                     (int) $notif['body']['order_id'],
-                    sprintf(
+                    $notif['body']['reason'] === 'received'
+                    ? sprintf(
+                        '%s (%s)',
+                        OrderChanged::receivedMessage(),
+                        htmlspecialchars($notif['body']['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    )
+                    : sprintf(
                         '%s %s: %s',
                         $notif['body']['actor_fullname'],
                         match ($notif['body']['reason']) {

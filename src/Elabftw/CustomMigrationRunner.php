@@ -135,6 +135,7 @@ final class CustomMigrationRunner
         '094_order_date.sql',
         '095_order_upload_procurement_tags.sql',
         '096_project_canvas.sql',
+        '097_order_collected_status.sql',
     );
 
     private Db $Db;
