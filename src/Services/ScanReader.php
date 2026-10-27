@@ -89,17 +89,21 @@ final class ScanReader
         try {
             // an explicit working directory: a scheduled run inherits one that may no longer exist
             $render = new Process(array(
-                'gs', '-q', '-dSAFER', '-dBATCH', '-dNOPAUSE', '-sDEVICE=pnggray', '-r200',
+                'gs', '-q', '-dSAFER', '-dBATCH', '-dNOPAUSE', '-sDEVICE=pnggray', '-r300',
                 '-dFirstPage=1', '-dLastPage=1', '-sOutputFile=' . $dir . '/page%d.png', $path,
             ), $dir);
             $render->setTimeout(90);
             $render->run();
             foreach (glob($dir . '/page*.png') ?: array() as $png) {
-                $ocr = new Process(array('tesseract', $png, 'stdout', '-l', 'deu+eng', '--psm', '6'), $dir);
-                $ocr->setTimeout(90);
-                $ocr->run();
-                if ($ocr->isSuccessful()) {
-                    $text .= "\n" . $ocr->getOutput();
+                // Two reading modes, their text joined: line by line (6) keeps a row together, sparse text (11) reads
+                // numbers sitting between the table's rules that the first one skips or garbles.
+                foreach (array('6', '11') as $mode) {
+                    $ocr = new Process(array('tesseract', $png, 'stdout', '-l', 'deu+eng', '--psm', $mode), $dir);
+                    $ocr->setTimeout(90);
+                    $ocr->run();
+                    if ($ocr->isSuccessful()) {
+                        $text .= "\n" . $ocr->getOutput();
+                    }
                 }
             }
         } catch (Throwable) {
