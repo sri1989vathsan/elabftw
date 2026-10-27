@@ -1969,7 +1969,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     if (!editor.getBody().contains(table)) return;
     if (spreadsheetOverlays.has(table)) return;
     // A compact plate is cheap to build, so it is mounted live straight away (no cheap stand-in needed).
-    if (table.dataset.spreadsheetStyle === 'well-plate') {
+    if (table.dataset.spreadsheetStyle === 'well-plate' && !plateSpreadsheetView.has(table)) {
       enhanceTable(table);
       return;
     }
@@ -2070,6 +2070,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   };
   const pendingInitialSelection = new WeakMap<HTMLTableElement, { col: number; row: number } | undefined>();
 
+  // Well plates shown as the editable spreadsheet grid instead of the compact plate (kept while editing).
+  const plateSpreadsheetView = new WeakSet<HTMLTableElement>();
+
   const refreshTableOverlay = (table: HTMLTableElement): void => {
     diag.log('refresh', table.getAttribute('data-elabftw-spreadsheet-uid') ?? '', {});
     // The backing table already contains the replacement. Never flush the
@@ -2121,8 +2124,19 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const hostStartedAt = profiler.start();
     const {
       host: overlay, flush, destroy, syncActiveEditor, getData, isEditing,
-    } = (extracted.kind === 'well-plate' ? buildWellPlateHost : buildReadOnlySpreadsheetHost)(extracted, {
+    } = (extracted.kind === 'well-plate' && !plateSpreadsheetView.has(table) ? buildWellPlateHost : buildReadOnlySpreadsheetHost)(extracted, {
       editable: true,
+      // Plate <-> spreadsheet switch in the title bar (a well plate can be shown either way in the text).
+      onShowSheet: () => {
+        flushOverlay?.();
+        plateSpreadsheetView.add(table);
+        refreshTableOverlay(table);
+      },
+      onShowPlate: extracted.kind === 'well-plate' ? () => {
+        flushOverlay?.();
+        plateSpreadsheetView.delete(table);
+        refreshTableOverlay(table);
+      } : undefined,
       initialSelection,
       cellHistory: tableCellHistories.get(tableUid),
       onChange: data => writeOverlayChange(table, tableUid, data),

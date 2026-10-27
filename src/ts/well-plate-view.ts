@@ -125,6 +125,15 @@ function showTooltip(event: MouseEvent, data: SpreadsheetData, row: number, col:
   body.textContent = value === '' ? 'empty' : (value.length > 300 ? `${value.slice(0, 300)}…` : value);
   if (value === '') body.classList.add('is-empty');
   tooltipEl.appendChild(body);
+  const sheet = color ? data.plateSheets?.[color] : undefined;
+  sheet?.columns.forEach((column, index) => {
+    const extra = sheet.rows[wellName(row, col)]?.[index]?.trim();
+    if (!extra) return;
+    const line = document.createElement('div');
+    line.className = 'wp-tooltip-extra';
+    line.textContent = `${column}: ${extra}`;
+    tooltipEl?.appendChild(line);
+  });
   if (!tooltipEl.isConnected) document.body.appendChild(tooltipEl);
   moveTooltip(event);
 }
@@ -230,6 +239,27 @@ function renderLegend(root: HTMLElement, data: SpreadsheetData, dimmed?: Set<str
   });
 }
 
+/** The small "Plate | Spreadsheet" switch in a plate's title bar. */
+export function createPlateViewSwitch(active: 'plate' | 'sheet', onPlate: () => void, onSheet: () => void): HTMLElement {
+  const group = document.createElement('span');
+  group.className = 'wp-view-switch';
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-label', 'View');
+  ([['plate', 'Plate', onPlate], ['sheet', 'Spreadsheet', onSheet]] as const).forEach(([name, label, action]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.classList.toggle('is-active', name === active);
+    button.setAttribute('aria-pressed', String(name === active));
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      if (name !== active) action();
+    });
+    group.appendChild(button);
+  });
+  return group;
+}
+
 /**
  * The compact plate shown in the main text and on view pages. Same handle as the spreadsheet grid host so the
  * editor overlay can mount either one. Editing happens in the plate popup (onOpenFullEditor).
@@ -262,6 +292,7 @@ export function buildWellPlateHost(extracted: SpreadsheetData, options: Spreadsh
     });
     toggleBar.appendChild(button);
   };
+  if (options.onShowSheet) toggleBar.appendChild(createPlateViewSwitch('plate', () => undefined, options.onShowSheet));
   if (options.onOpenFullEditor) {
     addButton('elabftw-spreadsheet-readonly-open-editor', 'Edit plate: select wells, set groups and colours', 'fa-up-right-and-down-left-from-center', options.onOpenFullEditor);
   }
@@ -318,12 +349,15 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
       data: initial.data.map(row => [...row]),
       cellStyles: { ...(initial.cellStyles ?? {}) },
       plateGroups: (initial.plateGroups ?? []).map(group => ({ ...group })),
+      plateSheets: JSON.parse(JSON.stringify(initial.plateSheets ?? {})),
     });
     working.displayData = undefined;
     let selected = new Set<string>();
     let anchor: [number, number] | null = null;
     let dragging = false;
     let activeColor = PALETTE[5];
+    let mode: 'plate' | 'sheets' = 'plate';
+    let sheetColor: string | null = null;
     const dimmed = new Set<string>();
 
     const overlay = document.createElement('div');
@@ -348,16 +382,39 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
     const hint = document.createElement('p');
     hint.className = 'wp-hint';
     hint.textContent = 'Click or drag to select wells. Click a letter or number to select a row or column. Shift adds to the selection.';
-    left.append(plateRoot, legendRoot, hint);
+    const sheetsRoot = document.createElement('div');
+    sheetsRoot.className = 'wp-sheets';
+    left.append(plateRoot, legendRoot, hint, sheetsRoot);
+
+    const modeBar = document.createElement('div');
+    modeBar.className = 'wp-mode-bar';
+    const modeButtons = ([['plate', 'Plate'], ['sheets', 'Group sheets']] as const).map(([name, label]) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.addEventListener('click', () => {
+        mode = name;
+        selected = new Set();
+        paint();
+      });
+      modeBar.appendChild(button);
+      return [name, button] as const;
+    });
+    dialog.appendChild(modeBar);
 
     const side = document.createElement('div');
     side.className = 'wp-dialog-side';
     side.innerHTML = `
-      <section><h6>Groups</h6><div class="wp-group-list"></div>
-        <div class="wp-row"><input class="form-control form-control-sm wp-new-name" placeholder="New group name" aria-label="New group name" maxlength="60"><button type="button" class="btn btn-sm btn-secondary wp-add-group">Add</button></div>
-        <div class="wp-palette" role="group" aria-label="Group colour"></div>
+      <section class="wp-box"><h6>Groups</h6><div class="wp-group-list"></div>
+        <p class="wp-hint">With wells selected, press Assign to put them in a group.</p>
       </section>
-      <section><h6 class="wp-selection-title">Selection</h6>
+      <section class="wp-box wp-box-new"><h6>Create a new group</h6>
+        <input class="form-control form-control-sm wp-new-name" placeholder="Group name" aria-label="New group name" maxlength="60">
+        <div class="wp-palette" role="group" aria-label="Group colour"></div>
+        <div class="wp-row"><button type="button" class="btn btn-sm btn-primary wp-add-group">Create group</button></div>
+        <p class="wp-hint">Only creates the group. Assign wells from the list above.</p>
+      </section>
+      <section class="wp-box"><h6 class="wp-selection-title">Selection</h6>
         <p class="wp-hint wp-selection-info"></p>
         <textarea class="form-control form-control-sm wp-contents" rows="3" aria-label="Contents of the selected wells" placeholder="Contents of the selected wells"></textarea>
         <div class="wp-row"><button type="button" class="btn btn-sm btn-secondary wp-apply">Set contents</button>
@@ -445,6 +502,10 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
               if (wellColor(working, r, c) === group.color) setWellColor(working, r, c, next);
             }
           }
+          if (working.plateSheets?.[group.color]) {
+            working.plateSheets[next] = working.plateSheets[group.color];
+            delete working.plateSheets[group.color];
+          }
           working.plateGroups = groupsWithCounts(working).map(entry => ({
             name: entry.color === next && entry.name === group.name ? group.name : entry.name,
             color: entry.color === group.color ? next : entry.color,
@@ -511,7 +572,144 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
       });
     };
 
+    /** One tab per group: its wells as fixed rows (well, contents) plus columns the person adds. */
+    function renderSheets(): void {
+      sheetsRoot.replaceChildren();
+      const groups = groupsWithCounts(working);
+      if (!sheetColor || !groups.some(group => group.color === sheetColor)) sheetColor = groups[0]?.color ?? null;
+      const tabs = document.createElement('div');
+      tabs.className = 'wp-sheet-tabs';
+      groups.forEach(group => {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = 'wp-sheet-tab';
+        tab.classList.toggle('is-active', group.color === sheetColor);
+        const dot = document.createElement('i');
+        dot.className = 'wp-dot';
+        dot.style.background = group.color;
+        tab.append(dot, document.createTextNode(`${group.name || 'Unnamed'} (${group.count})`));
+        tab.addEventListener('click', () => {
+          sheetColor = group.color;
+          renderSheets();
+        });
+        tabs.appendChild(tab);
+      });
+      sheetsRoot.appendChild(tabs);
+      if (!sheetColor) {
+        const empty = document.createElement('p');
+        empty.className = 'wp-hint';
+        empty.textContent = 'No groups yet. Create a group and assign wells on the Plate tab first.';
+        sheetsRoot.appendChild(empty);
+        return;
+      }
+      const color = sheetColor;
+      const sheet = (working.plateSheets ??= {})[color] ??= { columns: [], rows: {} };
+      const wells: Array<[number, number]> = [];
+      for (let r = 0; r < working.rows; r++) {
+        for (let c = 0; c < working.cols; c++) if (wellColor(working, r, c) === color) wells.push([r, c]);
+      }
+      const table = document.createElement('table');
+      table.className = 'wp-sheet';
+      const head = table.createTHead().insertRow();
+      const addHead = (content: string | HTMLElement): HTMLTableCellElement => {
+        const cell = document.createElement('th');
+        if (typeof content === 'string') cell.textContent = content;
+        else cell.appendChild(content);
+        head.appendChild(cell);
+        return cell;
+      };
+      addHead('Well');
+      addHead('Contents');
+      sheet.columns.forEach((column, index) => {
+        const wrap = document.createElement('span');
+        wrap.className = 'wp-col-head';
+        const input = document.createElement('input');
+        input.value = column;
+        input.maxLength = 60;
+        input.setAttribute('aria-label', 'Column name');
+        input.addEventListener('input', () => {
+          sheet.columns[index] = input.value;
+        });
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = '×';
+        remove.title = 'Remove this column';
+        remove.addEventListener('click', () => {
+          sheet.columns.splice(index, 1);
+          Object.values(sheet.rows).forEach(cells => cells.splice(index, 1));
+          renderSheets();
+        });
+        wrap.append(input, remove);
+        addHead(wrap);
+      });
+      const bodyEl = table.createTBody();
+      wells.forEach(([row, col]) => {
+        const name = wellName(row, col);
+        const tr = bodyEl.insertRow();
+        const key = tr.insertCell();
+        key.className = 'wp-sheet-well';
+        key.textContent = name;
+        const mainCell = tr.insertCell();
+        const main = document.createElement('input');
+        main.value = String(working.data[row]?.[col] ?? '');
+        main.setAttribute('aria-label', `Contents of ${name}`);
+        main.addEventListener('input', () => {
+          working.data[row][col] = main.value;
+        });
+        mainCell.appendChild(main);
+        sheet.columns.forEach((_, index) => {
+          const cell = tr.insertCell();
+          const input = document.createElement('input');
+          input.value = sheet.rows[name]?.[index] ?? '';
+          input.setAttribute('aria-label', `${sheet.columns[index]} of ${name}`);
+          input.addEventListener('input', () => {
+            const cells = sheet.rows[name] ??= [];
+            while (cells.length < sheet.columns.length) cells.push('');
+            cells[index] = input.value;
+          });
+          cell.appendChild(input);
+        });
+      });
+      const scroller = document.createElement('div');
+      scroller.className = 'wp-sheet-scroll';
+      scroller.appendChild(table);
+      sheetsRoot.appendChild(scroller);
+      const bar = document.createElement('div');
+      bar.className = 'wp-row';
+      const addColumn = document.createElement('button');
+      addColumn.type = 'button';
+      addColumn.className = 'btn btn-sm btn-secondary';
+      addColumn.textContent = '+ Column';
+      addColumn.disabled = sheet.columns.length >= 20;
+      addColumn.addEventListener('click', () => {
+        sheet.columns.push(`Column ${sheet.columns.length + 1}`);
+        renderSheets();
+      });
+      const note = document.createElement('span');
+      note.className = 'wp-hint';
+      note.textContent = wells.length === 0
+        ? 'No wells in this group yet. Assign wells on the Plate tab.'
+        : `${wells.length} row${wells.length === 1 ? '' : 's'}, one per well of this group. Change the wells on the Plate tab.`;
+      bar.append(addColumn, note);
+      sheetsRoot.appendChild(bar);
+    }
+
     function paint(): void {
+      const sheets = mode === 'sheets';
+      modeButtons.forEach(([name, button]) => {
+        button.classList.toggle('is-active', name === mode);
+        button.setAttribute('aria-pressed', String(name === mode));
+      });
+      plateRoot.hidden = sheets;
+      legendRoot.hidden = sheets;
+      hint.hidden = sheets;
+      sheetsRoot.hidden = !sheets;
+      side.hidden = sheets;
+      body.classList.toggle('is-sheets', sheets);
+      if (sheets) {
+        renderSheets();
+        return;
+      }
       renderPlate(plateRoot, working, { popup: true, selected, dimmed });
       renderLegend(legendRoot, working, dimmed, color => {
         if (dimmed.has(color)) dimmed.delete(color);
@@ -582,8 +780,7 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
         { name, color },
       ];
       newName.value = '';
-      if (selected.size > 0) assignColor(color);
-      else paint();
+      paint();
     });
     newName.addEventListener('keydown', event => {
       if (event.key === 'Enter') {

@@ -7217,3 +7217,146 @@ button.wp-legend-item {
 .wp-spacer {
   flex: 1 1 auto;
 }
+
+/* well plate: view switch, popup boxes and group sheets */
+.wp-view-switch,
+.wp-mode-bar {
+  display: inline-flex;
+
+  button {
+    background: transparent;
+    border: 1px solid var(--secondary, #ccc);
+    color: inherit;
+    cursor: pointer;
+    font-size: 12px;
+    margin-left: -1px;
+    padding: 2px 10px;
+
+    &:first-child {
+      border-radius: 6px 0 0 6px;
+      margin-left: 0;
+    }
+
+    &:last-child {
+      border-radius: 0 6px 6px 0;
+    }
+
+    &.is-active {
+      background-color: #2a6df4;
+      border-color: #2a6df4;
+      color: #fff;
+    }
+  }
+}
+
+.wp-view-switch {
+  margin-left: 0.5rem;
+}
+
+.wp-mode-bar {
+  padding: 0.5rem 0.9rem 0;
+}
+
+.wp-dialog-body.is-sheets {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.wp-box {
+  border: 1px solid var(--secondary, #ccc);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.wp-box-new {
+  background-color: rgba(42, 109, 244, 0.07);
+  border-style: dashed;
+}
+
+.wp-tooltip-extra {
+  margin-top: 2px;
+}
+
+.wp-sheet-tabs {
+  border-bottom: 1px solid var(--secondary, #ccc);
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.wp-sheet-tab {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  padding: 6px 12px;
+
+  &.is-active {
+    border-bottom-color: #2a6df4;
+    font-weight: 600;
+  }
+}
+
+.wp-sheet-scroll {
+  max-height: 55vh;
+  overflow: auto;
+}
+
+.wp-sheet {
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    border: 1px solid var(--secondary, #ccc);
+    padding: 0;
+  }
+
+  th {
+    background-color: var(--firstlevel, #eee);
+    font-size: 12px;
+    padding: 4px 8px;
+    text-align: left;
+  }
+
+  input {
+    background: transparent;
+    border: 0;
+    box-sizing: border-box;
+    color: inherit;
+    min-width: 140px;
+    padding: 4px 8px;
+    width: 100%;
+  }
+}
+
+.wp-sheet-well {
+  color: #677089;
+  font-family: monospace;
+  padding: 4px 8px !important;
+}
+
+.wp-col-head {
+  align-items: center;
+  display: flex;
+
+  input {
+    font-weight: 600;
+    min-width: 100px;
+    padding: 0;
+  }
+
+  button {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    opacity: 0.6;
+  }
+}
+
+.wp-dialog [hidden] {
+  display: none !important;
+}

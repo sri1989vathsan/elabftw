@@ -14,7 +14,7 @@ import { ApiC } from './api';
 import { captureFocus, restoreFocus } from './a11y';
 import { entity } from './getEntity';
 import { createSpreadsheetRepaintQueue } from './custom-editor/SpreadsheetPerformance';
-import { buildWellPlateHost } from './well-plate-view';
+import { buildWellPlateHost, createPlateViewSwitch } from './well-plate-view';
 
 type CellValue = string | number | boolean | null;
 type AOA = CellValue[][];
@@ -187,6 +187,8 @@ export interface SpreadsheetData {
   plateSize?: number;
   /** Named colour groups of a well plate; a well belongs to the group whose colour is its cell background. */
   plateGroups?: Array<{ name: string; color: string }>;
+  /** Extra columns per plate group (keyed by the group's colour); rows are the group's wells, keyed by well name. */
+  plateSheets?: Record<string, { columns: string[]; rows: Record<string, string[]> }>;
   /** Inline styles keyed by spreadsheet coordinates such as A1 or C4. */
   cellStyles?: CellStyles;
   /** Explicit data-row heights in pixels, keyed by zero-based row index. */
@@ -650,6 +652,7 @@ export function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): S
         .slice(0, 40)
         .map(group => ({ name: group.name.slice(0, 60), color: group.color.slice(0, 32) }))
       : undefined,
+    plateSheets: kind === 'well-plate' ? normalizePlateSheets(candidate.plateSheets) : undefined,
     cellStyles: normalizeCellStyles(candidate.cellStyles, rows, cols),
     rowHeights: normalizeRowHeights(candidate.rowHeights, rows),
     colWidths: normalizeColWidths(candidate.colWidths, cols),
@@ -662,6 +665,22 @@ export function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): S
       ? normalizeAppearance(candidate.appearance)
       : undefined,
   };
+}
+
+function normalizePlateSheets(candidate: unknown): SpreadsheetData['plateSheets'] {
+  if (!candidate || typeof candidate !== 'object') return undefined;
+  const result: NonNullable<SpreadsheetData['plateSheets']> = {};
+  Object.entries(candidate as Record<string, unknown>).slice(0, 40).forEach(([color, value]) => {
+    const sheet = value as { columns?: unknown; rows?: unknown } | null;
+    if (!sheet || !Array.isArray(sheet.columns)) return;
+    const columns = sheet.columns.filter((name): name is string => typeof name === 'string').slice(0, 20).map(name => name.slice(0, 60));
+    const rows: Record<string, string[]> = {};
+    Object.entries((sheet.rows && typeof sheet.rows === 'object' ? sheet.rows : {}) as Record<string, unknown>).slice(0, 2000).forEach(([well, cells]) => {
+      if (Array.isArray(cells)) rows[well.slice(0, 8)] = columns.map((_, index) => String(cells[index] ?? '').slice(0, 500));
+    });
+    if (columns.length > 0) result[color.slice(0, 32)] = { columns, rows };
+  });
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function normalizeRowHeights(
@@ -6961,6 +6980,9 @@ export interface SpreadsheetHostOptions {
    * itself already uses double-click to start editing a cell in place.
    */
   onOpenFullEditor?: () => void;
+  /** Well plates only: the Plate / Spreadsheet switch in the title bar. */
+  onShowSheet?: () => void;
+  onShowPlate?: () => void;
   /**
    * When provided, adds a small delete button to the toggle bar -- the
    * real table sits hidden behind this overlay entirely (visibility:
@@ -7399,6 +7421,9 @@ export function buildReadOnlySpreadsheetHost(
     });
   }
 
+  if (options.onShowPlate) {
+    toggleBar.appendChild(createPlateViewSwitch('sheet', options.onShowPlate, () => undefined));
+  }
   if (options.onOpenFullEditor) {
     const openFullEditorButton = document.createElement('button');
     openFullEditorButton.type = 'button';
