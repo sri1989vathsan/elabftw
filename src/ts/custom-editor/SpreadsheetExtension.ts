@@ -19,7 +19,13 @@ import {
   SpreadsheetCellHistory,
   WELL_PLATE_PRESETS,
 } from '../inline-spreadsheet';
-import { buildWellPlateHost, openWellPlateModal } from '../well-plate-view';
+import {
+  applyTableToPlate,
+  buildWellPlateHost,
+  openPlateImportDialog,
+  openWellPlateModal,
+  plateTableAsSpreadsheet,
+} from '../well-plate-view';
 import { escapeHTML } from '../misc';
 import { RICH_SELECTION_ATTRIBUTE } from '../ClipboardContent';
 import TableIndentation from '../TableIndentation.class';
@@ -716,10 +722,25 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // A well plate has two popups that can hand over to each other, keeping the edits.
     const spreadsheetPopup = (data: SpreadsheetData): Promise<PopupResult> => openSpreadsheetModal(data, existingTable !== null, modalHistory)
       .then(result => (result.backToPlate ? platePopup(result.raw) : result));
+    // The plate's table opens as a data table in the general spreadsheet popup (formulas, selection, insert and
+    // delete rows and columns); on the way back its results become the plate's table.
+    const tablePopup = (plate: SpreadsheetData): Promise<PopupResult> => openSpreadsheetModal(
+      plateTableAsSpreadsheet(plate),
+      true,
+      undefined,
+      { backToPlate: true },
+    ).then(result => {
+      const updated = applyTableToPlate(plate, result.raw.data, result.computed);
+      return result.backToPlate
+        ? platePopup(updated)
+        : { raw: updated, computed: updated.data, history: modalHistory ?? { undo: [], redo: [] } };
+    });
     const platePopup = (data: SpreadsheetData): Promise<PopupResult> => openWellPlateModal(data, existingTable !== null)
-      .then(result => (result.openSpreadsheet
-        ? spreadsheetPopup(result.raw)
-        : { raw: result.raw, computed: result.raw.data, history: modalHistory ?? { undo: [], redo: [] } }));
+      .then(result => {
+        if (result.openTable) return tablePopup(result.raw);
+        if (result.openSpreadsheet) return spreadsheetPopup(result.raw);
+        return { raw: result.raw, computed: result.raw.data, history: modalHistory ?? { undo: [], redo: [] } };
+      });
     const popup: Promise<PopupResult> = openedFrom.kind === 'well-plate'
       ? platePopup(openedFrom)
       : spreadsheetPopup(openedFrom);
@@ -922,6 +943,38 @@ export function registerSpreadsheetExtension(editor: Editor): void {
 
   // Inserting: a table, a spreadsheet, a well plate. The toolbar no longer shows this button; the Insert
   // dropdown (UnifiedInsertExtension) builds its Tables / Spreadsheet / Well plate entries from it.
+  // The Well plate submenu (sizes, then Insert from file) shared by every Insert dropdown.
+  const buildWellPlateSubmenuItems = () => [
+    ...WELL_PLATE_PRESETS.map(preset => ({
+      type: 'menuitem' as const,
+      text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
+      // straight into the text, like the size picker -- no popup to open first
+      onAction: () => insertNewSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
+    })),
+    { type: 'separator' as const },
+    {
+      type: 'menuitem' as const,
+      text: 'Insert from file…',
+      icon: 'upload',
+      onAction: () => {
+        // a table of wells (CSV, TSV or XLSX): well IDs plus one column per condition
+        const picker = document.createElement('input');
+        picker.type = 'file';
+        picker.accept = '.csv,.tsv,.txt,.xlsx,.xls';
+        picker.addEventListener('change', () => {
+          const file = picker.files?.[0];
+          if (!file) return;
+          openPlateImportDialog(file)
+            .then(data => {
+              if (data) insertNewSpreadsheet(data);
+            })
+            .catch((error: Error) => editor.notificationManager.open({ text: error.message, type: 'error' }));
+        });
+        picker.click();
+      },
+    },
+  ];
+
   editor.ui.registry.addMenuButton('insert-data-table', {
     icon: 'table',
     tooltip: 'Insert a table, spreadsheet or well plate',
@@ -943,12 +996,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           type: 'nestedmenuitem',
           text: 'Well plate',
           icon: 'elabftw-well-plate',
-          getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
-            type: 'menuitem',
-            text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
-            // straight into the text, like the size picker -- no popup to open first
-            onAction: () => insertNewSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
-          })),
+          getSubmenuItems: buildWellPlateSubmenuItems,
         },
       ]);
     },
@@ -1082,12 +1130,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   editor.ui.registry.addNestedMenuItem('elabftw-insert-well-plate', {
     text: 'Well plate',
     icon: 'elabftw-well-plate',
-    getSubmenuItems: () => WELL_PLATE_PRESETS.map(preset => ({
-      type: 'menuitem',
-      text: `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`,
-      // straight into the text, like the size picker -- no popup to open first
-      onAction: () => insertNewSpreadsheet(createWellPlateSpreadsheetData(preset.wells)),
-    })),
+    getSubmenuItems: buildWellPlateSubmenuItems,
   });
 
   editor.on('dblclick', event => {

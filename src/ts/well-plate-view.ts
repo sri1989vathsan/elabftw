@@ -6,13 +6,16 @@
  * spreadsheet (one cell per well); a well's group is the background colour of its cell, so the spreadsheet
  * popup, printing and this view always agree.
  */
+import { read, utils } from '@e965/xlsx';
 import {
+  createWellPlateSpreadsheetData,
   SpreadsheetData,
   SpreadsheetHostHandle,
   SpreadsheetHostOptions,
   colLabel,
   normalizeSpreadsheetData,
   registerSpreadsheetHostData,
+  WELL_PLATE_PRESETS,
 } from './inline-spreadsheet';
 
 export interface PlateGroup {
@@ -88,6 +91,85 @@ function wellValue(data: SpreadsheetData, row: number, col: number): string {
   return String(shown);
 }
 
+// More colours than the palette offers, so a column with many values still gets distinct groups.
+const GROUP_COLORS = [...PALETTE, '#0b7285', '#a61e4d', '#5f3dc4', '#868e96', '#2b8a3e', '#c2255c', '#1864ab', '#e67700'];
+
+function colorForIndex(index: number): string {
+  if (index < GROUP_COLORS.length) return GROUP_COLORS[index];
+  const hue = (index * 47) % 360;
+  const channel = (n: number): string => {
+    const k = (n + hue / 30) % 12;
+    const value = 0.5 - 0.35 * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(value * 255).toString(16).padStart(2, '0');
+  };
+  return `#${channel(0)}${channel(8)}${channel(4)}`;
+}
+
+/** Colours the wells by a column of the plate's table (a dynamic group): one group per distinct value. */
+export function regroupByColumn(data: SpreadsheetData, column: string | null): void {
+  const index = column && data.plateTable ? data.plateTable.columns.indexOf(column) : -1;
+  if (!column || !data.plateTable || index < 0) {
+    data.plateGroupBy = undefined;
+    return;
+  }
+  const valueOf = (row: number, col: number): string => (data.plateTable?.rows[wellName(row, col)]?.[index] ?? '').trim();
+  const known = new Map((data.plateGroups ?? []).map(group => [group.name, normalizeColor(group.color)]));
+  const order: string[] = [];
+  for (let row = 0; row < data.rows; row++) {
+    for (let col = 0; col < data.cols; col++) {
+      const value = valueOf(row, col);
+      if (value && !order.includes(value)) order.push(value);
+    }
+  }
+  // a value keeps the colour it already had; new values take the next colour not in use
+  const used = new Set<string>();
+  const colors = new Map<string, string>();
+  order.forEach(value => {
+    const previous = known.get(value);
+    if (previous && !used.has(previous)) {
+      colors.set(value, previous);
+      used.add(previous);
+    }
+  });
+  let next = 0;
+  order.forEach(value => {
+    if (colors.has(value)) return;
+    while (used.has(colorForIndex(next))) next++;
+    colors.set(value, colorForIndex(next));
+    used.add(colorForIndex(next));
+  });
+  for (let row = 0; row < data.rows; row++) {
+    for (let col = 0; col < data.cols; col++) {
+      const value = valueOf(row, col);
+      setWellColor(data, row, col, value ? colors.get(value) ?? null : null);
+    }
+  }
+  data.plateGroups = order.map(value => ({ name: value, color: colors.get(value) ?? '#7d8499' }));
+  data.plateGroupBy = column;
+}
+
+/** Writes the value of a table column into each well's cell: the text shown in the spreadsheet view of the plate. */
+export function labelWellsByColumn(data: SpreadsheetData, column: string | null): void {
+  const index = column && data.plateTable ? data.plateTable.columns.indexOf(column) : -1;
+  if (!column || !data.plateTable || index < 0) {
+    data.plateLabelBy = undefined;
+    return;
+  }
+  for (let row = 0; row < data.rows; row++) {
+    for (let col = 0; col < data.cols; col++) {
+      data.data[row][col] = data.plateTable.rows[wellName(row, col)]?.[index] ?? '';
+    }
+  }
+  data.displayData = data.data.map(row => [...row]);
+  data.plateLabelBy = column;
+}
+
+/** Re-applies the column choices (colour and label) after the table or the choices changed. */
+export function applyPlateColumns(data: SpreadsheetData): void {
+  if (data.plateGroupBy) regroupByColumn(data, data.plateGroupBy);
+  if (data.plateLabelBy) labelWellsByColumn(data, data.plateLabelBy);
+}
+
 function wellSize(data: SpreadsheetData, popup: boolean): number {
   const count = data.rows * data.cols;
   const base = count <= 24 ? 50 : count <= 48 ? 44 : count <= 96 ? 36 : 21;
@@ -125,15 +207,16 @@ function showTooltip(event: MouseEvent, data: SpreadsheetData, row: number, col:
   body.textContent = value === '' ? 'empty' : (value.length > 300 ? `${value.slice(0, 300)}…` : value);
   if (value === '') body.classList.add('is-empty');
   tooltipEl.appendChild(body);
-  const sheet = color ? data.plateSheets?.[color] : undefined;
-  sheet?.columns.forEach((column, index) => {
-    const extra = sheet.rows[wellName(row, col)]?.[index]?.trim();
+  const tableCells = data.plateTable?.rows[wellName(row, col)];
+  data.plateTable?.columns.forEach((column, index) => {
+    const extra = tableCells?.[index]?.trim();
     if (!extra) return;
     const line = document.createElement('div');
     line.className = 'wp-tooltip-extra';
     line.textContent = `${column}: ${extra}`;
     tooltipEl?.appendChild(line);
   });
+  if (value === '' && tableCells?.some(cell => cell.trim() !== '')) body.remove();
   if (!tooltipEl.isConnected) document.body.appendChild(tooltipEl);
   moveTooltip(event);
 }
@@ -158,11 +241,12 @@ interface PlateOptions {
   onSelect?: (selected: Set<string>) => void;
   onClick?: () => void;
   dimmed?: Set<string>;
+  size?: number;
 }
 
 /** Draws the plate (lettered rows, numbered columns, round wells) into `root`. */
 function renderPlate(root: HTMLElement, data: SpreadsheetData, options: PlateOptions): void {
-  const size = wellSize(data, options.popup);
+  const size = options.size ?? wellSize(data, options.popup);
   root.replaceChildren();
   root.classList.add('wp-grid');
   root.style.setProperty('--wp-size', `${size}px`);
@@ -335,6 +419,47 @@ export function buildWellPlateHost(extracted: SpreadsheetData, options: Spreadsh
       input.select();
     });
   }
+  let repaintPlate: () => void = () => undefined;
+  const tableColumns = data.plateTable?.columns ?? [];
+  if (options.onChange && tableColumns.length > 0) {
+    // Colour and label the wells by any column of the plate's table; saved like any other edit.
+    const addChoice = (label: string, title: string, manualText: string, current: string | undefined, apply: (column: string) => void, clear: () => void): void => {
+      const wrap = document.createElement('label');
+      wrap.className = 'wp-choice';
+      wrap.title = title;
+      wrap.append(document.createTextNode(`${label} `));
+      const select = document.createElement('select');
+      select.setAttribute('aria-label', label);
+      const manual = document.createElement('option');
+      manual.value = '';
+      manual.textContent = manualText;
+      select.appendChild(manual);
+      tableColumns.forEach(column => {
+        const option = document.createElement('option');
+        option.value = column;
+        option.textContent = column || '(unnamed column)';
+        select.appendChild(option);
+      });
+      select.value = current && tableColumns.includes(current) ? current : '';
+      select.addEventListener('mousedown', event => event.stopPropagation());
+      select.addEventListener('change', () => {
+        if (select.value) apply(select.value);
+        else clear();
+        data.displayData = data.data.map(row => [...row]);
+        options.onChange?.(data);
+        repaintPlate();
+      });
+      wrap.appendChild(select);
+      wrap.addEventListener('click', event => event.stopPropagation());
+      toggleBar.appendChild(wrap);
+    };
+    addChoice('Colour by', 'Colour the wells by the values of a column of the plate table (one group per value)', 'Manual', data.plateGroupBy, column => regroupByColumn(data, column), () => {
+      data.plateGroupBy = undefined;
+    });
+    addChoice('Label by', 'Show the values of a column of the plate table as the text of each well (visible in the spreadsheet view)', 'Typed', data.plateLabelBy, column => labelWellsByColumn(data, column), () => {
+      data.plateLabelBy = undefined;
+    });
+  }
   if (options.onShowSheet) toggleBar.appendChild(createPlateViewSwitch('plate', () => undefined, options.onShowSheet));
   if (options.onOpenFullEditor) {
     addButton('elabftw-spreadsheet-readonly-open-editor', 'Edit plate: select wells, set groups and colours', 'fa-up-right-and-down-left-from-center', options.onOpenFullEditor);
@@ -363,6 +488,7 @@ export function buildWellPlateHost(extracted: SpreadsheetData, options: Spreadsh
     });
   };
   paint();
+  repaintPlate = paint;
   if (options.onOpenFullEditor) plate.classList.add('is-clickable');
   content.append(plate, legend);
   gridArea.appendChild(content);
@@ -378,10 +504,57 @@ export function buildWellPlateHost(extracted: SpreadsheetData, options: Spreadsh
   };
 }
 
+const tableCellText = (value: unknown): string => String(value ?? '').trim();
+
+/** The plate table as a data table (header row, then one row per well) for the general spreadsheet popup. */
+export function plateTableAsSpreadsheet(plate: SpreadsheetData): SpreadsheetData {
+  const wells: string[] = [];
+  for (let row = 0; row < plate.rows; row++) {
+    for (let col = 0; col < plate.cols; col++) wells.push(wellName(row, col));
+  }
+  const columns = plate.plateTable?.columns ?? ['Sample', 'Condition'];
+  let grid: string[][];
+  if (plate.plateTableSource && plate.plateTableSource.length > 0) {
+    grid = plate.plateTableSource.map(row => [...row]);
+  } else {
+    grid = [['Well ID', ...columns], ...wells.map(well => [well, ...columns.map((_, index) => plate.plateTable?.rows[well]?.[index] ?? '')])];
+  }
+  const cols = Math.max(2, grid.reduce((max, row) => Math.max(max, row.length), 0));
+  grid = grid.map(row => Array.from({ length: cols }, (_, index) => row[index] ?? ''));
+  return {
+    data: grid,
+    rows: grid.length,
+    cols,
+    kind: 'notebook',
+    caption: plate.caption ? `${plate.caption}: table` : 'Plate table',
+  };
+}
+
+/** Puts an edited plate table back on the plate: the results become the table, the raw cells (formulas) are kept. */
+export function applyTableToPlate(plate: SpreadsheetData, raw: SpreadsheetData['data'], computed: SpreadsheetData['data']): SpreadsheetData {
+  const next = normalizeSpreadsheetData({ ...plate, displayData: undefined });
+  const header = (computed[0] ?? []).map(tableCellText);
+  const names = header.slice(1).map((name, index) => name || `Column ${index + 1}`);
+  const rows: Record<string, string[]> = {};
+  computed.slice(1).forEach(cells => {
+    const well = parseWellId(tableCellText(cells[0]));
+    if (!well || well[0] >= next.rows || well[1] >= next.cols) return;
+    rows[wellName(well[0], well[1])] = names.map((_, index) => tableCellText(cells[index + 1]));
+  });
+  next.plateTable = names.length > 0 ? { columns: names, rows } : undefined;
+  next.plateTableSource = raw.map(row => row.map(cell => String(cell ?? '')));
+  if (next.plateGroupBy && !names.includes(next.plateGroupBy)) next.plateGroupBy = undefined;
+  if (next.plateLabelBy && !names.includes(next.plateLabelBy)) next.plateLabelBy = undefined;
+  applyPlateColumns(next);
+  return normalizeSpreadsheetData(next);
+}
+
 export interface WellPlateModalResult {
   raw: SpreadsheetData;
   /** True when the person asked to continue in the general spreadsheet popup. */
   openSpreadsheet: boolean;
+  /** True when the person asked for the plate table as a spreadsheet. */
+  openTable: boolean;
 }
 
 /** The plate popup: select wells (drag, row/column headers, shift), then set group, colour or contents. */
@@ -392,15 +565,13 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
       data: initial.data.map(row => [...row]),
       cellStyles: { ...(initial.cellStyles ?? {}) },
       plateGroups: (initial.plateGroups ?? []).map(group => ({ ...group })),
-      plateSheets: JSON.parse(JSON.stringify(initial.plateSheets ?? {})),
+      plateTable: initial.plateTable ? JSON.parse(JSON.stringify(initial.plateTable)) : undefined,
     });
     working.displayData = undefined;
     let selected = new Set<string>();
     let anchor: [number, number] | null = null;
     let dragging = false;
     let activeColor = PALETTE[5];
-    let mode: 'plate' | 'sheets' = 'plate';
-    let sheetColor: string | null = null;
     const dimmed = new Set<string>();
 
     const overlay = document.createElement('div');
@@ -425,30 +596,36 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
     const hint = document.createElement('p');
     hint.className = 'wp-hint';
     hint.textContent = 'Click or drag to select wells. Ctrl/Cmd-click toggles wells, Shift-click extends from the last well. Click a letter or number for a row or column.';
-    const sheetsRoot = document.createElement('div');
-    sheetsRoot.className = 'wp-sheets';
-    left.append(plateRoot, legendRoot, hint, sheetsRoot);
+    left.append(plateRoot, legendRoot, hint);
 
+    // Plate | Table: the table opens as a full spreadsheet (formulas, selection, insert and delete rows or columns).
     const modeBar = document.createElement('div');
     modeBar.className = 'wp-mode-bar';
-    const modeButtons = ([['plate', 'Plate'], ['sheets', 'Group sheets']] as const).map(([name, label]) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = label;
-      button.addEventListener('click', () => {
-        mode = name;
-        selected = new Set();
-        paint();
-      });
-      modeBar.appendChild(button);
-      return [name, button] as const;
-    });
+    const plateTab = document.createElement('button');
+    plateTab.type = 'button';
+    plateTab.textContent = 'Plate';
+    plateTab.classList.add('is-active');
+    plateTab.setAttribute('aria-pressed', 'true');
+    const tableTab = document.createElement('button');
+    tableTab.type = 'button';
+    tableTab.textContent = 'Table';
+    tableTab.title = 'Open the plate table as a spreadsheet (keeps your changes here)';
+    tableTab.setAttribute('aria-pressed', 'false');
+    modeBar.append(plateTab, tableTab);
     dialog.appendChild(modeBar);
 
     const side = document.createElement('div');
     side.className = 'wp-dialog-side';
     side.innerHTML = `
-      <section class="wp-box"><h6>Groups</h6><div class="wp-group-list"></div>
+      <section class="wp-box"><h6>Colour wells by</h6>
+        <select class="form-control form-control-sm wp-groupby" aria-label="Colour wells by"></select>
+        <p class="wp-hint wp-groupby-hint"></p>
+      </section>
+      <section class="wp-box"><h6>Label wells by</h6>
+        <select class="form-control form-control-sm wp-labelby" aria-label="Label wells by"></select>
+        <p class="wp-hint wp-labelby-hint"></p>
+      </section>
+      <section class="wp-box wp-box-groups"><h6>Groups</h6><div class="wp-group-list"></div>
         <p class="wp-hint">With wells selected, press Assign to put them in a group.</p>
       </section>
       <section class="wp-box wp-box-new"><h6>Create a new group</h6>
@@ -492,8 +669,12 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
     const palette = side.querySelector<HTMLElement>('.wp-palette');
     const selectionTitle = side.querySelector<HTMLElement>('.wp-selection-title');
     const selectionInfo = side.querySelector<HTMLElement>('.wp-selection-info');
+    const groupBySelect = side.querySelector<HTMLSelectElement>('.wp-groupby');
+    const groupByHint = side.querySelector<HTMLElement>('.wp-groupby-hint');
+    const labelBySelect = side.querySelector<HTMLSelectElement>('.wp-labelby');
+    const labelByHint = side.querySelector<HTMLElement>('.wp-labelby-hint');
     const contents = side.querySelector<HTMLTextAreaElement>('.wp-contents');
-    if (!groupList || !newName || !palette || !selectionTitle || !selectionInfo || !contents) {
+    if (!groupList || !newName || !palette || !selectionTitle || !selectionInfo || !contents || !groupBySelect || !groupByHint || !labelBySelect || !labelByHint) {
       reject(new Error('well plate dialog could not be built'));
       return;
     }
@@ -546,10 +727,6 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
               if (wellColor(working, r, c) === group.color) setWellColor(working, r, c, next);
             }
           }
-          if (working.plateSheets?.[group.color]) {
-            working.plateSheets[next] = working.plateSheets[group.color];
-            delete working.plateSheets[group.color];
-          }
           working.plateGroups = groupsWithCounts(working).map(entry => ({
             name: entry.color === next && entry.name === group.name ? group.name : entry.name,
             color: entry.color === group.color ? next : entry.color,
@@ -562,6 +739,7 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
         name.value = group.name;
         name.maxLength = 60;
         name.setAttribute('aria-label', 'Group name');
+        name.readOnly = !!working.plateGroupBy;
         name.placeholder = 'Group name';
         name.addEventListener('change', () => {
           const next = name.value.trim();
@@ -598,7 +776,8 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
           }
           paint();
         });
-        row.append(color, name, count, assign);
+        if (working.plateGroupBy) row.append(color, name, count);
+        else row.append(color, name, count, assign);
         groupList.appendChild(row);
       });
     };
@@ -616,150 +795,65 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
       eachSelected((row, col) => values.add(String(working.data[row]?.[col] ?? '')));
       contents.value = values.size === 1 ? Array.from(values)[0] : '';
       contents.placeholder = values.size > 1 ? '(different contents)' : 'Contents of the selected wells';
-      contents.disabled = selected.size === 0;
+      contents.disabled = selected.size === 0 || !!working.plateLabelBy;
       side.querySelectorAll<HTMLButtonElement>('.wp-apply, .wp-clear-group').forEach(button => {
-        button.disabled = selected.size === 0;
+        button.disabled = selected.size === 0 || (!!working.plateLabelBy && button.classList.contains('wp-apply'));
       });
     };
 
-    /** One tab per group: its wells as fixed rows (well, contents) plus columns the person adds. */
-    function renderSheets(): void {
-      sheetsRoot.replaceChildren();
-      const groups = groupsWithCounts(working);
-      if (!sheetColor || !groups.some(group => group.color === sheetColor)) sheetColor = groups[0]?.color ?? null;
-      const tabs = document.createElement('div');
-      tabs.className = 'wp-sheet-tabs';
-      groups.forEach(group => {
-        const tab = document.createElement('button');
-        tab.type = 'button';
-        tab.className = 'wp-sheet-tab';
-        tab.classList.toggle('is-active', group.color === sheetColor);
-        const dot = document.createElement('i');
-        dot.className = 'wp-dot';
-        dot.style.background = group.color;
-        tab.append(dot, document.createTextNode(`${group.name || 'Unnamed'} (${group.count})`));
-        tab.addEventListener('click', () => {
-          sheetColor = group.color;
-          renderSheets();
-        });
-        tabs.appendChild(tab);
+    const paintGroupBy = (): void => {
+      const columns = working.plateTable?.columns ?? [];
+      groupBySelect.replaceChildren();
+      const manual = document.createElement('option');
+      manual.value = '';
+      manual.textContent = 'Manual (colours set by hand)';
+      groupBySelect.appendChild(manual);
+      columns.forEach(column => {
+        const option = document.createElement('option');
+        option.value = column;
+        option.textContent = column || '(unnamed column)';
+        groupBySelect.appendChild(option);
       });
-      sheetsRoot.appendChild(tabs);
-      if (!sheetColor) {
-        const empty = document.createElement('p');
-        empty.className = 'wp-hint';
-        empty.textContent = 'No groups yet. Create a group and assign wells on the Plate tab first.';
-        sheetsRoot.appendChild(empty);
-        return;
-      }
-      const color = sheetColor;
-      const sheet = (working.plateSheets ??= {})[color] ??= { columns: [], rows: {} };
-      const wells: Array<[number, number]> = [];
-      for (let r = 0; r < working.rows; r++) {
-        for (let c = 0; c < working.cols; c++) if (wellColor(working, r, c) === color) wells.push([r, c]);
-      }
-      const table = document.createElement('table');
-      table.className = 'wp-sheet';
-      const head = table.createTHead().insertRow();
-      const addHead = (content: string | HTMLElement): HTMLTableCellElement => {
-        const cell = document.createElement('th');
-        if (typeof content === 'string') cell.textContent = content;
-        else cell.appendChild(content);
-        head.appendChild(cell);
-        return cell;
-      };
-      addHead('Well');
-      addHead('Contents');
-      sheet.columns.forEach((column, index) => {
-        const wrap = document.createElement('span');
-        wrap.className = 'wp-col-head';
-        const input = document.createElement('input');
-        input.value = column;
-        input.maxLength = 60;
-        input.setAttribute('aria-label', 'Column name');
-        input.addEventListener('input', () => {
-          sheet.columns[index] = input.value;
-        });
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.textContent = '×';
-        remove.title = 'Remove this column';
-        remove.addEventListener('click', () => {
-          sheet.columns.splice(index, 1);
-          Object.values(sheet.rows).forEach(cells => cells.splice(index, 1));
-          renderSheets();
-        });
-        wrap.append(input, remove);
-        addHead(wrap);
+      groupBySelect.value = working.plateGroupBy && columns.includes(working.plateGroupBy) ? working.plateGroupBy : '';
+      groupByHint.textContent = columns.length === 0
+        ? 'Add columns in the Table tab to colour the wells by them.'
+        : working.plateGroupBy
+          ? `One group for each value of "${working.plateGroupBy}". Edit the Table tab to change them.`
+          : 'Colours are set by hand. Pick a column to colour by its values.';
+      side.classList.toggle('is-dynamic', !!working.plateGroupBy);
+      labelBySelect.replaceChildren();
+      const typed = document.createElement('option');
+      typed.value = '';
+      typed.textContent = 'Typed by hand';
+      labelBySelect.appendChild(typed);
+      columns.forEach(column => {
+        const option = document.createElement('option');
+        option.value = column;
+        option.textContent = column || '(unnamed column)';
+        labelBySelect.appendChild(option);
       });
-      const bodyEl = table.createTBody();
-      wells.forEach(([row, col]) => {
-        const name = wellName(row, col);
-        const tr = bodyEl.insertRow();
-        const key = tr.insertCell();
-        key.className = 'wp-sheet-well';
-        key.textContent = name;
-        const mainCell = tr.insertCell();
-        const main = document.createElement('input');
-        main.value = String(working.data[row]?.[col] ?? '');
-        main.setAttribute('aria-label', `Contents of ${name}`);
-        main.addEventListener('input', () => {
-          working.data[row][col] = main.value;
-        });
-        mainCell.appendChild(main);
-        sheet.columns.forEach((_, index) => {
-          const cell = tr.insertCell();
-          const input = document.createElement('input');
-          input.value = sheet.rows[name]?.[index] ?? '';
-          input.setAttribute('aria-label', `${sheet.columns[index]} of ${name}`);
-          input.addEventListener('input', () => {
-            const cells = sheet.rows[name] ??= [];
-            while (cells.length < sheet.columns.length) cells.push('');
-            cells[index] = input.value;
-          });
-          cell.appendChild(input);
-        });
-      });
-      const scroller = document.createElement('div');
-      scroller.className = 'wp-sheet-scroll';
-      scroller.appendChild(table);
-      sheetsRoot.appendChild(scroller);
-      const bar = document.createElement('div');
-      bar.className = 'wp-row';
-      const addColumn = document.createElement('button');
-      addColumn.type = 'button';
-      addColumn.className = 'btn btn-sm btn-secondary';
-      addColumn.textContent = '+ Column';
-      addColumn.disabled = sheet.columns.length >= 20;
-      addColumn.addEventListener('click', () => {
-        sheet.columns.push(`Column ${sheet.columns.length + 1}`);
-        renderSheets();
-      });
-      const note = document.createElement('span');
-      note.className = 'wp-hint';
-      note.textContent = wells.length === 0
-        ? 'No wells in this group yet. Assign wells on the Plate tab.'
-        : `${wells.length} row${wells.length === 1 ? '' : 's'}, one per well of this group. Change the wells on the Plate tab.`;
-      bar.append(addColumn, note);
-      sheetsRoot.appendChild(bar);
-    }
+      labelBySelect.value = working.plateLabelBy && columns.includes(working.plateLabelBy) ? working.plateLabelBy : '';
+      labelByHint.textContent = working.plateLabelBy
+        ? `Each well shows its "${working.plateLabelBy}" value in the spreadsheet view. Contents can no longer be typed per well.`
+        : 'The text each well shows in the spreadsheet view. Pick a column of the table, or type it per well.';
+      contents.disabled = selected.size === 0 || !!working.plateLabelBy;
+    };
+    labelBySelect.addEventListener('change', () => {
+      if (labelBySelect.value) labelWellsByColumn(working, labelBySelect.value);
+      else working.plateLabelBy = undefined;
+      paint();
+    });
+    groupBySelect.addEventListener('change', () => {
+      if (groupBySelect.value) regroupByColumn(working, groupBySelect.value);
+      else working.plateGroupBy = undefined;
+      selected = new Set();
+      paint();
+    });
 
     function paint(): void {
-      const sheets = mode === 'sheets';
-      modeButtons.forEach(([name, button]) => {
-        button.classList.toggle('is-active', name === mode);
-        button.setAttribute('aria-pressed', String(name === mode));
-      });
-      plateRoot.hidden = sheets;
-      legendRoot.hidden = sheets;
-      hint.hidden = sheets;
-      sheetsRoot.hidden = !sheets;
-      side.hidden = sheets;
-      body.classList.toggle('is-sheets', sheets);
-      if (sheets) {
-        renderSheets();
-        return;
-      }
+      // the colours and labels follow the table columns they are set from
+      applyPlateColumns(working);
+      paintGroupBy();
       renderPlate(plateRoot, working, { popup: true, selected, dimmed });
       renderLegend(legendRoot, working, dimmed, color => {
         if (dimmed.has(color)) dimmed.delete(color);
@@ -880,9 +974,13 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
       hideTooltip();
       overlay.remove();
     };
-    const result = (openSpreadsheet: boolean): WellPlateModalResult => ({
-      raw: normalizeSpreadsheetData({ ...working, displayData: undefined }),
+    const result = (openSpreadsheet: boolean, openTable = false): WellPlateModalResult => ({
+      raw: (() => {
+        applyPlateColumns(working);
+        return normalizeSpreadsheetData({ ...working, displayData: undefined });
+      })(),
       openSpreadsheet,
+      openTable,
     });
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) {
@@ -905,9 +1003,314 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
       resolve(result(true));
     });
 
+    tableTab.addEventListener('click', () => {
+      close();
+      resolve(result(false, true));
+    });
+
     paintPalette();
     paint();
     document.body.appendChild(overlay);
+    dialog.focus({ preventScroll: true });
+  });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Insert a plate from a file (CSV, TSV or XLSX): a table with one row per well and a column of well IDs.
+// ---------------------------------------------------------------------------------------------------------------
+
+const WELL_ID = /^([A-Za-z]{1,2})\s*0*(\d{1,2})$/;
+
+function parseWellId(text: string): [number, number] | null {
+  const match = WELL_ID.exec(text.trim());
+  if (!match) return null;
+  const letters = match[1].toUpperCase();
+  const row = letters.length === 1 ? letters.charCodeAt(0) - 65 : (letters.charCodeAt(0) - 64) * 26 + (letters.charCodeAt(1) - 65);
+  const col = Number(match[2]) - 1;
+  return col >= 0 && col < 48 && row >= 0 && row < 32 ? [row, col] : null;
+}
+
+function parseDelimited(text: string): string[][] {
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? '';
+  const delimiter = [',', ';', '\t'].map(candidate => [candidate, firstLine.split(candidate).length] as const)
+    .sort((a, b) => b[1] - a[1])[0][0];
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quoted) {
+      if (char === '"' && text[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        cell += char;
+      }
+    } else if (char === '"') {
+      quoted = true;
+    } else if (char === delimiter) {
+      row.push(cell);
+      cell = '';
+    } else if (char === '\n' || char === '\r') {
+      if (char === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = '';
+    } else {
+      cell += char;
+    }
+  }
+  if (cell !== '' || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows.map(cells => cells.map(value => value.trim())).filter(cells => cells.some(value => value !== ''));
+}
+
+interface ImportSheet {
+  name: string;
+  rows: string[][];
+}
+
+async function readImportSheets(file: File): Promise<ImportSheet[]> {
+  if (/\.(csv|tsv|txt)$/i.test(file.name)) {
+    return [{ name: file.name, rows: parseDelimited(await file.text()) }];
+  }
+  // formatted text (raw: false), so a value such as 01:50 stays as typed
+  const book = read(await file.arrayBuffer(), { type: 'array' });
+  return book.SheetNames.map(name => ({
+    name,
+    rows: (utils.sheet_to_json<unknown[]>(book.Sheets[name], { header: 1, raw: false, defval: '' }) as unknown[][])
+      .map(cells => cells.map(value => String(value ?? '').trim()))
+      .filter(cells => cells.some(value => value !== '')),
+  })).filter(sheet => sheet.rows.length > 1);
+}
+
+function detectWellColumn(rows: string[][]): number {
+  const header = rows[0] ?? [];
+  const body = rows.slice(1);
+  let best = -1;
+  let bestScore = 0;
+  header.forEach((name, col) => {
+    const filled = body.filter(row => (row[col] ?? '') !== '');
+    const hits = filled.filter(row => parseWellId(row[col] ?? '')).length;
+    if (filled.length === 0 || hits / filled.length < 0.6) return;
+    const score = hits + (/well/i.test(name) ? 0.5 : 0);
+    if (score > bestScore) {
+      best = col;
+      bestScore = score;
+    }
+  });
+  return best;
+}
+
+/** The standard plates that are big enough for the wells found, smallest first. */
+function fittingPresets(rows: string[][], wellColumn: number): typeof WELL_PLATE_PRESETS {
+  let maxRow = -1;
+  let maxCol = -1;
+  rows.slice(1).forEach(row => {
+    const well = parseWellId(row[wellColumn] ?? '');
+    if (!well) return;
+    maxRow = Math.max(maxRow, well[0]);
+    maxCol = Math.max(maxCol, well[1]);
+  });
+  return WELL_PLATE_PRESETS.filter(preset => preset.rows > maxRow && preset.cols > maxCol);
+}
+
+function buildPlateFromRows(rows: string[][], wellColumn: number, wells: number, title: string, colourBy: string, labelBy: string): SpreadsheetData {
+  const preset = WELL_PLATE_PRESETS.find(candidate => candidate.wells === wells) ?? WELL_PLATE_PRESETS[4];
+  const data = createWellPlateSpreadsheetData(preset.wells);
+  data.caption = title;
+  const header = rows[0] ?? [];
+  const sourceColumns = header.map((name, index) => index).filter(index => index !== wellColumn);
+  const columns = sourceColumns.map(index => header[index] || `Column ${index + 1}`);
+  const table: { columns: string[]; rows: Record<string, string[]> } = { columns, rows: {} };
+  rows.slice(1).forEach(row => {
+    const well = parseWellId(row[wellColumn] ?? '');
+    if (!well || well[0] >= preset.rows || well[1] >= preset.cols) return;
+    table.rows[wellName(well[0], well[1])] = sourceColumns.map(index => row[index] ?? '');
+  });
+  data.plateTable = table;
+  regroupByColumn(data, colourBy || null);
+  labelWellsByColumn(data, labelBy || null);
+  return data;
+}
+
+/** Reads a table file, detects the well IDs and the plate size, and lets the person confirm or change them. */
+export async function openPlateImportDialog(file: File): Promise<SpreadsheetData | null> {
+  const sheets = await readImportSheets(file);
+  if (sheets.length === 0 || sheets.every(sheet => sheet.rows.length < 2)) {
+    throw new Error('The file has no table to read: it needs a header row and one row per well.');
+  }
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'inline-spreadsheet-overlay';
+    const dialog = document.createElement('div');
+    dialog.className = 'inline-spreadsheet-dialog wp-dialog wp-import';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-label', 'Insert plate from file');
+    dialog.tabIndex = -1;
+    const title = document.createElement('h5');
+    title.textContent = 'Insert plate from file';
+    dialog.appendChild(title);
+    const body = document.createElement('div');
+    body.className = 'wp-import-body';
+    const fields = document.createElement('div');
+    fields.className = 'wp-import-fields';
+    const preview = document.createElement('div');
+    preview.className = 'wp-import-preview';
+    body.append(fields, preview);
+    dialog.appendChild(body);
+
+    const makeField = (label: string, control: HTMLElement): void => {
+      const text = document.createElement('span');
+      text.textContent = label;
+      fields.append(text, control);
+    };
+    const makeSelect = (): HTMLSelectElement => {
+      const select = document.createElement('select');
+      select.className = 'form-control form-control-sm';
+      return select;
+    };
+    const fillSelect = (select: HTMLSelectElement, options: Array<[string, string]>, value: string): void => {
+      select.replaceChildren();
+      options.forEach(([optionValue, text]) => {
+        const option = document.createElement('option');
+        option.value = optionValue;
+        option.textContent = text;
+        select.appendChild(option);
+      });
+      select.value = value;
+    };
+
+    const fileLine = document.createElement('span');
+    makeField('File', fileLine);
+    const sheetSelect = makeSelect();
+    if (sheets.length > 1) makeField('Sheet', sheetSelect);
+    const wellSelect = makeSelect();
+    makeField('Well ID column', wellSelect);
+    const sizeSelect = makeSelect();
+    makeField('Plate size', sizeSelect);
+    const colourSelect = makeSelect();
+    makeField('Colour wells by', colourSelect);
+    const labelSelect = makeSelect();
+    makeField('Label wells by', labelSelect);
+    const titleInput = document.createElement('input');
+    titleInput.className = 'form-control form-control-sm';
+    titleInput.maxLength = 120;
+    titleInput.value = file.name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ');
+    makeField('Title', titleInput);
+    const info = document.createElement('p');
+    info.className = 'wp-hint wp-import-info';
+    const previewGrid = document.createElement('div');
+    const previewLegend = document.createElement('div');
+    previewLegend.className = 'wp-legend wp-legend-column';
+    preview.append(previewGrid, previewLegend);
+    body.appendChild(info);
+
+    const footer = document.createElement('div');
+    footer.className = 'wp-dialog-footer';
+    const spacer = document.createElement('span');
+    spacer.className = 'wp-spacer';
+    const cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.className = 'btn btn-sm btn-secondary';
+    cancelButton.textContent = 'Cancel';
+    const insertButton = document.createElement('button');
+    insertButton.type = 'button';
+    insertButton.className = 'btn btn-sm btn-primary';
+    insertButton.textContent = 'Insert plate';
+    footer.append(spacer, cancelButton, insertButton);
+    dialog.appendChild(footer);
+    overlay.appendChild(dialog);
+
+    let sheet = sheets[0];
+    const distinct = (column: number): number => new Set(sheet.rows.slice(1).map(row => row[column] ?? '').filter(Boolean)).size;
+    const chooseDefaultColour = (wellColumn: number): string => {
+      const header = sheet.rows[0];
+      const candidates = header.map((name, index) => index).filter(index => index !== wellColumn && distinct(index) >= 2 && distinct(index) <= 12);
+      const named = candidates.find(index => /^(group|condition|treatment)$/i.test(header[index]));
+      const pick = named ?? candidates[0];
+      return pick === undefined ? '' : (header[pick] || `Column ${pick + 1}`);
+    };
+
+    const load = (): void => {
+      const header = sheet.rows[0];
+      const wellColumn = detectWellColumn(sheet.rows);
+      fileLine.textContent = `${file.name} (${sheet.rows.length - 1} rows, ${header.length} columns)`;
+      fillSelect(wellSelect, [['-1', '(none found)'], ...header.map((name, index): [string, string] => [String(index), name || `Column ${index + 1}`])], String(wellColumn));
+      const names = header.map((name, index) => name || `Column ${index + 1}`);
+      fillSelect(colourSelect, [['', 'Manual (colours set by hand)'], ...names.map((name): [string, string] => [name, name])], chooseDefaultColour(wellColumn));
+      fillSelect(labelSelect, [['', 'Typed by hand'], ...names.map((name): [string, string] => [name, name])], '');
+      refresh(true);
+    };
+
+    const refresh = (resizeChoices: boolean): void => {
+      const wellColumn = Number(wellSelect.value);
+      const fits = wellColumn >= 0 ? fittingPresets(sheet.rows, wellColumn) : [];
+      if (resizeChoices || sizeSelect.options.length === 0) {
+        fillSelect(sizeSelect, fits.map((preset): [string, string] => [String(preset.wells), `${preset.wells}-well plate (${preset.rows} × ${preset.cols})`]), String(fits[0]?.wells ?? ''));
+      }
+      const ready = wellColumn >= 0 && fits.length > 0 && sizeSelect.value !== '';
+      insertButton.disabled = !ready;
+      previewGrid.replaceChildren();
+      previewLegend.replaceChildren();
+      if (wellColumn < 0) {
+        info.textContent = 'No column with well IDs such as A1 or B12 was found. Choose the Well ID column above.';
+        return;
+      }
+      if (fits.length === 0) {
+        info.textContent = 'The well IDs in this column do not fit a standard plate (up to 16 × 24). Check the Well ID column.';
+        return;
+      }
+      const data = buildPlateFromRows(sheet.rows, wellColumn, Number(sizeSelect.value), titleInput.value.trim(), colourSelect.value, labelSelect.value);
+      const found = Object.keys(data.plateTable?.rows ?? {}).length;
+      info.textContent = `${found} of ${sheet.rows.length - 1} rows placed on a ${data.plateSize}-well plate${fits.length > 1 ? ` (${fits[0].wells}-well is the smallest that fits; you can pick a bigger one)` : ''}. The other columns become the plate's table.`;
+      renderPlate(previewGrid, data, { popup: false, size: data.rows * data.cols > 96 ? 12 : 20 });
+      renderLegend(previewLegend, data);
+    };
+
+    sheetSelect.addEventListener('change', () => {
+      sheet = sheets[Number(sheetSelect.value)];
+      load();
+    });
+    if (sheets.length > 1) fillSelect(sheetSelect, sheets.map((candidate, index): [string, string] => [String(index), candidate.name]), '0');
+    wellSelect.addEventListener('change', () => {
+      fillSelect(colourSelect, [['', 'Manual (colours set by hand)'], ...Array.from(colourSelect.options).slice(1).map((option): [string, string] => [option.value, option.textContent ?? ''])], colourSelect.value);
+      refresh(true);
+    });
+    [sizeSelect, colourSelect, labelSelect].forEach(select => select.addEventListener('change', () => refresh(false)));
+    titleInput.addEventListener('input', () => undefined);
+
+    const close = (): void => {
+      document.removeEventListener('keydown', onKey, true);
+      hideTooltip();
+      overlay.remove();
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        close();
+        resolve(null);
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    cancelButton.addEventListener('click', () => {
+      close();
+      resolve(null);
+    });
+    insertButton.addEventListener('click', () => {
+      const wellColumn = Number(wellSelect.value);
+      const data = buildPlateFromRows(sheet.rows, wellColumn, Number(sizeSelect.value), titleInput.value.trim(), colourSelect.value, labelSelect.value);
+      close();
+      resolve(data);
+    });
+    document.body.appendChild(overlay);
+    load();
     dialog.focus({ preventScroll: true });
   });
 }

@@ -189,8 +189,14 @@ export interface SpreadsheetData {
   plateGroups?: Array<{ name: string; color: string }>;
   /** How a well plate is shown in the text and on view pages; the compact plate unless set to 'sheet'. */
   plateView?: 'plate' | 'sheet';
-  /** Extra columns per plate group (keyed by the group's colour); rows are the group's wells, keyed by well name. */
-  plateSheets?: Record<string, { columns: string[]; rows: Record<string, string[]> }>;
+  /** The table that belongs to a plate: one row per well (keyed by well name such as A1), one column per condition. */
+  plateTable?: { columns: string[]; rows: Record<string, string[]> };
+  /** The table column the wells are coloured by (a dynamic group); unset when the groups are coloured by hand. */
+  plateGroupBy?: string;
+  /** The plate table as last edited in the spreadsheet popup (formulas included); plateTable holds its results. */
+  plateTableSource?: string[][];
+  /** The table column whose value is written into each well's cell (the text the spreadsheet view shows). */
+  plateLabelBy?: string;
   /** Inline styles keyed by spreadsheet coordinates such as A1 or C4. */
   cellStyles?: CellStyles;
   /** Explicit data-row heights in pixels, keyed by zero-based row index. */
@@ -619,6 +625,8 @@ export function createWellPlateSpreadsheetData(wells: number): SpreadsheetData {
   return {
     ...emptySpreadsheetData(preset.cols, preset.rows, 'well-plate', `${preset.wells}-well plate`),
     plateSize: preset.wells,
+    // Every plate comes with its table (one row per well, listed in the Table tab) to fill in.
+    plateTable: { columns: ['Sample', 'Condition'], rows: {} },
   };
 }
 
@@ -655,7 +663,16 @@ export function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): S
         .map(group => ({ name: group.name.slice(0, 60), color: group.color.slice(0, 32) }))
       : undefined,
     plateView: kind === 'well-plate' && candidate.plateView === 'sheet' ? 'sheet' : undefined,
-    plateSheets: kind === 'well-plate' ? normalizePlateSheets(candidate.plateSheets) : undefined,
+    plateTable: kind === 'well-plate' ? normalizePlateTable(candidate.plateTable) : undefined,
+    plateGroupBy: kind === 'well-plate' && typeof candidate.plateGroupBy === 'string' && candidate.plateGroupBy !== ''
+      ? candidate.plateGroupBy.slice(0, 60)
+      : undefined,
+    plateTableSource: kind === 'well-plate' && Array.isArray(candidate.plateTableSource)
+      ? candidate.plateTableSource.slice(0, 2001).map(row => (Array.isArray(row) ? row.slice(0, 41).map(cell => String(cell ?? '').slice(0, 500)) : []))
+      : undefined,
+    plateLabelBy: kind === 'well-plate' && typeof candidate.plateLabelBy === 'string' && candidate.plateLabelBy !== ''
+      ? candidate.plateLabelBy.slice(0, 60)
+      : undefined,
     cellStyles: normalizeCellStyles(candidate.cellStyles, rows, cols),
     rowHeights: normalizeRowHeights(candidate.rowHeights, rows),
     colWidths: normalizeColWidths(candidate.colWidths, cols),
@@ -670,20 +687,16 @@ export function normalizeSpreadsheetData(candidate: Partial<SpreadsheetData>): S
   };
 }
 
-function normalizePlateSheets(candidate: unknown): SpreadsheetData['plateSheets'] {
-  if (!candidate || typeof candidate !== 'object') return undefined;
-  const result: NonNullable<SpreadsheetData['plateSheets']> = {};
-  Object.entries(candidate as Record<string, unknown>).slice(0, 40).forEach(([color, value]) => {
-    const sheet = value as { columns?: unknown; rows?: unknown } | null;
-    if (!sheet || !Array.isArray(sheet.columns)) return;
-    const columns = sheet.columns.filter((name): name is string => typeof name === 'string').slice(0, 20).map(name => name.slice(0, 60));
-    const rows: Record<string, string[]> = {};
-    Object.entries((sheet.rows && typeof sheet.rows === 'object' ? sheet.rows : {}) as Record<string, unknown>).slice(0, 2000).forEach(([well, cells]) => {
-      if (Array.isArray(cells)) rows[well.slice(0, 8)] = columns.map((_, index) => String(cells[index] ?? '').slice(0, 500));
-    });
-    if (columns.length > 0) result[color.slice(0, 32)] = { columns, rows };
+function normalizePlateTable(candidate: unknown): SpreadsheetData['plateTable'] {
+  const table = candidate as { columns?: unknown; rows?: unknown } | null | undefined;
+  if (!table || typeof table !== 'object' || !Array.isArray(table.columns)) return undefined;
+  const columns = table.columns.filter((name): name is string => typeof name === 'string').slice(0, 40).map(name => name.slice(0, 60));
+  if (columns.length === 0) return undefined;
+  const rows: Record<string, string[]> = {};
+  Object.entries((table.rows && typeof table.rows === 'object' ? table.rows : {}) as Record<string, unknown>).slice(0, 2000).forEach(([well, cells]) => {
+    if (Array.isArray(cells)) rows[well.slice(0, 8)] = columns.map((_, index) => String(cells[index] ?? '').slice(0, 500));
   });
-  return Object.keys(result).length > 0 ? result : undefined;
+  return { columns, rows };
 }
 
 function normalizeRowHeights(
@@ -3000,7 +3013,7 @@ function createStepperControl(
   return group;
 }
 
-function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
+function createOverlay(initial: SpreadsheetData, isEditing: boolean, offerPlateButton = initial.kind === 'well-plate'): {
   overlay: HTMLDivElement;
   sheetHost: HTMLDivElement;
   insertBtn: HTMLButtonElement;
@@ -3809,7 +3822,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean): {
   insertBtn.textContent = isEditing ? 'Update' : 'Insert';
   insertBtn.className = 'btn btn-sm btn-primary';
   let plateBtn: HTMLButtonElement | null = null;
-  if (initial.kind === 'well-plate') {
+  if (offerPlateButton) {
     plateBtn = document.createElement('button');
     plateBtn.type = 'button';
     plateBtn.textContent = 'Back to plate view';
@@ -4093,13 +4106,15 @@ export function openSpreadsheetModal(
   initialData: SpreadsheetData,
   isEditing = false,
   initialHistory?: SpreadsheetCellHistory,
+  /** Show a "Back to plate view" button (the popup was reached from a plate). */
+  options: { backToPlate?: boolean } = {},
 ): Promise<{ raw: SpreadsheetData; computed: AOA; history: SpreadsheetCellHistory; backToPlate?: boolean }> {
   return new Promise((resolve, reject) => {
     let working = normalizeSpreadsheetData({
       ...initialData,
       appearance: initialData.appearance ?? getEffectiveAppearanceDefaults(),
     });
-    const ui = createOverlay(working, isEditing);
+    const ui = createOverlay(working, isEditing, options.backToPlate ?? working.kind === 'well-plate');
     let sheetContainer: HTMLDivElement | null = null;
     let worksheet: JssInstance = null;
     let hasChanges = false;
@@ -6671,7 +6686,10 @@ export function openSpreadsheetModal(
         caption: ui.captionInput.value.trim(),
         plateSize: working.kind === 'well-plate' ? working.plateSize : undefined,
         plateGroups: working.plateGroups,
-        plateSheets: working.plateSheets,
+        plateTable: working.plateTable,
+        plateGroupBy: working.plateGroupBy,
+        plateLabelBy: working.plateLabelBy,
+        plateTableSource: working.plateTableSource,
         plateView: working.plateView,
         cellStyles: readCellStyles(rows, cols),
         rowHeights: withoutDefaultRowHeights(normalizeRowHeights(working.rowHeights, rows)),
