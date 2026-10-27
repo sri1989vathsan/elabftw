@@ -382,25 +382,36 @@ const MAX_DIMENSION = 400;
 // never scroll.
 const nativeTextAreaFocus = HTMLTextAreaElement.prototype.focus;
 HTMLTextAreaElement.prototype.focus = function focusWithoutScrollingGridInput(this: HTMLTextAreaElement, options?: FocusOptions): void {
-  nativeTextAreaFocus.call(this, this.classList.contains('jss_textarea') ? { ...options, preventScroll: true } : options);
+  const keepsPage = this.classList.contains('jss_textarea') || this.classList.contains('elabftw-spreadsheet-rescue-input');
+  nativeTextAreaFocus.call(this, keepsPage ? { ...options, preventScroll: true } : options);
 };
 // Typing into a focused textarea makes the browser scroll the page to its caret, and the grid's hidden input can be
 // hundreds of pixels away from the visible cell: the first typed character threw the page to it. Text keys pressed
 // in the grid keep the page where it was.
 const GRID_FOCUS_SELECTOR = '.jss_textarea, .jss_container, .elabftw-spreadsheet-readonly-view, .elabftw-spreadsheet-rescue-input';
 let gridTextKey: { x: number; y: number; at: number } | null = null;
+// While keys keep coming the position from the first one is kept: a later key can arrive after the browser has
+// already scrolled, and remembering that position would pin the page to the wrong place.
+const rememberGridTextPosition = (): void => {
+  const now = performance.now();
+  if (gridTextKey && now - gridTextKey.at <= 600) {
+    gridTextKey.at = now;
+    return;
+  }
+  gridTextKey = { x: window.scrollX, y: window.scrollY, at: now };
+};
 document.addEventListener('keydown', event => {
   const target = event.target;
   const isText = event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete';
   if (target instanceof Element && target.closest(GRID_FOCUS_SELECTOR) && isText && !event.ctrlKey && !event.metaKey) {
-    gridTextKey = { x: window.scrollX, y: window.scrollY, at: performance.now() };
+    rememberGridTextPosition();
   }
 }, true);
 // text that arrives without a key press (input methods, dictation, pasted keystrokes) scrolls the same way
 document.addEventListener('beforeinput', event => {
   const target = event.target;
   if (target instanceof Element && target.closest(GRID_FOCUS_SELECTOR)) {
-    gridTextKey = { x: window.scrollX, y: window.scrollY, at: performance.now() };
+    rememberGridTextPosition();
   }
 }, true);
 window.addEventListener('scroll', () => {
