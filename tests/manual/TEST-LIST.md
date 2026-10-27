@@ -136,3 +136,15 @@ Run on the dev instance with the accounts in `TEST-ACCOUNTS.md`.
 | N28 | A "my reference" order is invisible to others: Bob gets 404 and it is not in his list; an admin also gets 404 (by design, author only) | pass |
 | N29 | Non-admin cannot add a step to, or change the permissions of, another member's entry (403) | pass |
 | N30 | Non-admin (Alice) grants Bob edit on her entry: Bob also gets view; Alice then assigns him a step and he gets the task and notification with Alice as assigner | pass |
+| N31 | Stress, build 40-42 (Chromium, Alice): paste 160 x 12 with formulas, 5 undo + 5 redo, save, reload: stored data identical, formulas kept | pass |
+| N32 | Grid operations (insert/delete/move row and column, sort both ways, width, height, merge, comment) then undo all: values restored (only formula text vs shown value differ) | pass |
+| N33 | Double-click then Escape / Enter keeps a formula cell; fill handle keeps `$B$12`, shifts relative refs; popup bold, italic, undo, redo; Update keeps styles and 160 rows | pass |
+| N34 | Eight tables in one entry (plates 6-384 + data table + plate from table): no overlay overlaps, tops/lefts aligned, also in a 600 px wide window | pass |
+| N35 | Hold Enter 40-60 times under a table: the editor frame must be as tall as its text (no scrolling inside the editor) | fixed (frame was ~300 px short); pass |
+| N36 | Long notebook-style data table (160 rows, 12 columns): preview overlay as tall as its rows, no blank gap under it | fixed (was ~3,900 px of blank); pass |
+| N37 | Right-click Paste and Paste transposed write into the grid (selected cell first, small box when the clipboard cannot be read) | pass (also in Firefox, by the owner) |
+| N38 | 11 real shop scans (10 procurement numbers): every number read; article numbers read at 300 dpi in two OCR modes (A9539-500G, RDS-5329-..., 5609927 now found) | pass |
+| N39 | Orders with those numbers: sheets attached, only ordered orders become collected, items found per sheet (4/4, 1/2, ...); numbers with no order stay in unmatched/ | pass |
+| N40 | The same scan under two names (Scan_10-23.pdf and Scan_10-23[1].pdf): attached once, one sheet row, one notification | fixed (compared name and size only); pass |
+| N41 | Well plate (48): typed values, background colours, Plate/Spreadsheet choice survive reload, rebuild and a new login | pass |
+| N42 | Typing in a grid keeps the page where it is, and keystrokes after Enter are kept (real clicks and typing, build 47) | see below |

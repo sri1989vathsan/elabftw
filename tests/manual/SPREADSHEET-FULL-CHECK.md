@@ -66,6 +66,18 @@ are new in this round and have not been looked at in a browser yet unless it say
 | C11 | A wide spreadsheet (384-well plate, 24 columns): the editor frame itself must not scroll sideways or show empty space to the right; only the grid's own scroll bar moves. Check at several window widths, in Firefox especially (reported there) | inline | | |
 | C10 | Delete a step, comment or file with the new in-page confirmation; the spreadsheet trash icon still asks | inline | | |
 
+## C2. New in the stress round of 2026-10-27 (check in Firefox)
+
+| # | What to check | Where | Firefox | Chrome |
+|---|---------------|-------|---------|--------|
+| E1 | Click a cell, type a value, press Enter, type another: the page does not scroll away from the table and no keystroke is lost or lands in the text | inline, plates too | | |
+| E2 | Hold Enter under a table 40 times: the text is never scrolled inside the editor frame | inline | | |
+| E3 | A 160-row data table: the preview has no big blank gap below it | inline | | |
+| E4 | Right-click Paste / Paste transposed, and Ctrl/Cmd+Shift+V | inline, popup | | |
+| E5 | Well plate: type labels and fill colours in the Spreadsheet view, switch to Plate and back, reload: all kept | plates | | |
+| E6 | A plate up to 96 wells is as wide as the 96-well plate; the 384-well plate stays smaller | plates | | |
+| E7 | Insert > Well plate > Insert from file: always asks the plate size; Colour by / Label by follow the table | plates | | |
+
 ## D. Cross-cutting (do these in every run)
 
 | # | What to check | Firefox | Chrome |
