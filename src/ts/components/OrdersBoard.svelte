@@ -1884,21 +1884,7 @@
         title={t('Requested on or before')}
       />
     </div>
-    <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
-      <select class="form-control form-control-sm" style="width:auto" bind:value={pageSize} on:change={onPageSizeChange} title={t('Items per page')}>
-        {#each PAGE_SIZES as size (size)}
-          <option value={size}>{size} {t('/ page')}</option>
-        {/each}
-      </select>
-      <div class="btn-group btn-group-sm" role="group" aria-label={t('Pagination')}>
-        <button type="button" class="btn btn-sm btn-ghost" disabled={pageOffset === 0} on:click={goToPrevPage}>
-          <i class="fas fa-chevron-left fa-fw" aria-hidden="true"></i>{t('Previous')}
-        </button>
-        <button type="button" class="btn btn-sm btn-ghost" disabled={!hasNextPage} on:click={goToNextPage}>
-          {t('Next')}<i class="fas fa-chevron-right fa-fw" aria-hidden="true"></i>
-        </button>
-      </div>
-    </div>
+    {@render pagination()}
   </div>
 
   {#if selectedIds.size > 0}
@@ -1952,10 +1938,32 @@
         {@render orderCard(item)}
       {/each}
     </ul>
+    <!-- the same page controls again below the list, so there is no need to scroll back up -->
+    <div class="d-flex justify-content-end mt-2">
+      {@render pagination()}
+    </div>
   {/if}
   </div>
 </div>
 </div>
+
+{#snippet pagination()}
+  <div class="d-flex align-items-center flex-wrap" style="gap:0.5rem">
+    <select class="form-control form-control-sm" style="width:auto" bind:value={pageSize} on:change={onPageSizeChange} title={t('Items per page')}>
+      {#each PAGE_SIZES as size (size)}
+        <option value={size}>{size} {t('/ page')}</option>
+      {/each}
+    </select>
+    <div class="btn-group btn-group-sm" role="group" aria-label={t('Pagination')}>
+      <button type="button" class="btn btn-sm btn-ghost" disabled={pageOffset === 0} on:click={goToPrevPage}>
+        <i class="fas fa-chevron-left fa-fw" aria-hidden="true"></i>{t('Previous')}
+      </button>
+      <button type="button" class="btn btn-sm btn-ghost" disabled={!hasNextPage} on:click={goToNextPage}>
+        {t('Next')}<i class="fas fa-chevron-right fa-fw" aria-hidden="true"></i>
+      </button>
+    </div>
+  </div>
+{/snippet}
 
 {#snippet orderCard(item)}
         <li id={`order-item-${item.id}`} class="orders-card orders-item" class:orders-item-pinned={item.pinned}>
