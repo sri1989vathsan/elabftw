@@ -53,6 +53,21 @@ interface CellValueChange {
   style?: true;
   oldStyle?: string;
   newStyle?: string;
+  /** Rows or columns inserted or deleted: the whole grid before and after, so undo can put everything back. */
+  structure?: StructureChange;
+}
+interface StructureChange {
+  axis: 'row' | 'col';
+  kind: 'insert' | 'delete';
+  /** First row or column index the change touched (its final position for an insert) and how many there were. */
+  at: number;
+  count: number;
+  before: string[][];
+  after: string[][];
+  beforeStyles?: Record<string, string>;
+  afterStyles?: Record<string, string>;
+  beforeWidths?: ColWidths;
+  afterWidths?: ColWidths;
 }
 type CellHistoryEntry = CellValueChange[];
 export interface SpreadsheetCellHistory {
@@ -62,17 +77,49 @@ export interface SpreadsheetCellHistory {
 const MAX_CELL_HISTORY = 200;
 
 /**
- * The undo history remembers cells by position, so a row or column inserted or deleted afterwards would send an
- * undo to the wrong cell (and blank a formula that had moved). An insert shifts the remembered positions along;
- * a delete does not report which rows went, so the history is dropped.
+ * Row and column inserts and deletes are history entries of their own (the whole grid before and after), so Undo and
+ * Redo step through them in order with the cell edits around them. Entries made before a change keep the positions
+ * they had then, and are only undone after the change itself has been.
  */
-function shiftCellHistory(stacks: CellHistoryEntry[][], axis: 'row' | 'col', insertedAt: number[]): void {
-  const sorted = [...insertedAt].sort((a, b) => a - b);
-  stacks.forEach(stack => stack.forEach(entry => entry.forEach(change => {
-    sorted.forEach(index => {
-      if (change[axis] >= index) change[axis] += 1;
-    });
-  })));
+function hookIndexes(arg: unknown, key: 'row' | 'column'): number[] {
+  if (!Array.isArray(arg)) return [];
+  return arg
+    .map(entry => (typeof entry === 'number' ? entry : (entry as Record<string, unknown> | null)?.[key]))
+    .filter(Number.isInteger) as number[];
+}
+
+function snapshotData(worksheet: JssInstance): string[][] {
+  const data = worksheet?.getData?.();
+  return Array.isArray(data) ? data.map(row => (Array.isArray(row) ? row : []).map(value => String(value ?? ''))) : [];
+}
+
+/** Called just before jspreadsheet inserts or deletes rows or columns (after the typed values were flushed into it). */
+function beginStructure(
+  worksheet: JssInstance,
+  axis: 'row' | 'col',
+  kind: 'insert' | 'delete',
+  arg: unknown,
+  readWidths?: () => ColWidths | undefined,
+): StructureChange | null {
+  const indexes = hookIndexes(arg, axis === 'row' ? 'row' : 'column');
+  if (indexes.length === 0) return null;
+  return {
+    axis,
+    kind,
+    at: Math.min(...indexes),
+    count: indexes.length,
+    before: snapshotData(worksheet),
+    after: [],
+    beforeStyles: structuredClone(worksheet?.getStyle?.() ?? {}),
+    beforeWidths: readWidths?.(),
+  };
+}
+
+function finishStructure(worksheet: JssInstance, change: StructureChange, readWidths?: () => ColWidths | undefined): CellHistoryEntry {
+  change.after = snapshotData(worksheet);
+  change.afterStyles = structuredClone(worksheet?.getStyle?.() ?? {});
+  change.afterWidths = readWidths?.();
+  return [{ col: -1, row: -1, oldValue: '', newValue: '', structure: change }];
 }
 
 interface ClipboardTable {
@@ -4371,6 +4418,19 @@ export function openSpreadsheetModal(
         }
       }));
     };
+    // Row and column inserts and deletes join the undo history as entries of their own (see beginStructure).
+    let pendingStructure: StructureChange | null = null;
+    const readPopupColWidths = (): ColWidths | undefined => (sheetContainer ? readRenderedColWidths(sheetContainer) : undefined);
+    const beginPopupStructure = (target: JssInstance, axis: 'row' | 'col', kind: 'insert' | 'delete', arg: unknown): void => {
+      flushMirrorIntoWorksheet(target);
+      pendingStructure = acceptsGridChanges ? beginStructure(target, axis, kind, arg, readPopupColWidths) : null;
+    };
+    const finishPopupStructure = (target: JssInstance): void => {
+      if (!pendingStructure) return;
+      const entry = finishStructure(target, pendingStructure, readPopupColWidths);
+      pendingStructure = null;
+      pushCellHistoryEntry(entry);
+    };
     let selectedRange: CellRange | null = null;
     // The single formula cell a fill-handle (.jss_corner) drag started
     // from, armed on its mousedown -- see the onbeforechange override below
@@ -5010,7 +5070,29 @@ export function openSpreadsheetModal(
     // entry's worth of cell values back through the same mirror-first path
     // every other edit in this file already uses (see commitRescueInput's
     // own comment on why this never calls worksheet.setValue() directly).
+    // Undo and Redo of a row or column insert or delete: the grid is built again from the data (and styles and
+    // widths) it had before or after the change.
+    const applyStructureEntry = (change: StructureChange, undo: boolean): void => {
+      const snapshot = undo ? change.before : change.after;
+      const styles = undo ? change.beforeStyles : change.afterStyles;
+      const widths = undo ? change.beforeWidths : change.afterWidths;
+      const cols = clampDimension(snapshot.reduce((max, row) => Math.max(max, row.length), 0), working.cols);
+      const rows = clampDimension(snapshot.length, working.rows);
+      mountSpreadsheet({
+        ...working,
+        data: resizeData(snapshot, rows, cols),
+        rows,
+        cols,
+        cellStyles: styles && Object.keys(styles).length > 0 ? styles : undefined,
+        colWidths: widths ?? working.colWidths,
+      });
+      hasChanges = true;
+    };
     const applyCellHistoryEntry = (changes: CellHistoryEntry, useOldValue: boolean): void => {
+      if (changes[0]?.structure) {
+        applyStructureEntry(changes[0].structure, useOldValue);
+        return;
+      }
       if (changes[0]?.style) {
         // formatting: put the cells' styles back and draw the grid again, like applying a format does
         const rawData = readRawData();
@@ -5816,19 +5898,19 @@ export function openSpreadsheetModal(
           updateRawDataMirrorCell(changedCol, changedRow, value);
           scheduleFormulaResultRender();
         },
-        onbeforeinsertrow: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
-        onbeforeinsertcolumn: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
-        onbeforedeleterow: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
-        onbeforedeletecolumn: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
+        onbeforeinsertrow: (changedWorksheet: JssInstance, rows?: unknown): void => beginPopupStructure(changedWorksheet, 'row', 'insert', rows),
+        onbeforeinsertcolumn: (changedWorksheet: JssInstance, columns?: unknown): void => beginPopupStructure(changedWorksheet, 'col', 'insert', columns),
+        onbeforedeleterow: (changedWorksheet: JssInstance, rows?: unknown): void => beginPopupStructure(changedWorksheet, 'row', 'delete', rows),
+        onbeforedeletecolumn: (changedWorksheet: JssInstance, columns?: unknown): void => beginPopupStructure(changedWorksheet, 'col', 'delete', columns),
         oninsertrow: (changedWorksheet: JssInstance, inserted?: unknown): void => {
           if (acceptsGridChanges) hasChanges = true;
-          shiftCellHistory([cellUndoStack, cellRedoStack], 'row', insertedIndexes(inserted, 'row', Number.MAX_SAFE_INTEGER));
+          finishPopupStructure(changedWorksheet);
           syncMountedDimensions(changedWorksheet);
           styleNewlyInsertedRow(changedWorksheet, inserted);
         },
         oninsertcolumn: (changedWorksheet: JssInstance, inserted?: unknown): void => {
           if (acceptsGridChanges) hasChanges = true;
-          shiftCellHistory([cellUndoStack, cellRedoStack], 'col', insertedIndexes(inserted, 'column', Number.MAX_SAFE_INTEGER));
+          finishPopupStructure(changedWorksheet);
           syncMountedDimensions(changedWorksheet);
           styleNewlyInsertedColumn(changedWorksheet, inserted);
         },
@@ -5836,14 +5918,12 @@ export function openSpreadsheetModal(
           deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked),
         ondeleterow: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
-          cellUndoStack.length = 0;
-          cellRedoStack.length = 0;
+          finishPopupStructure(changedWorksheet);
           syncMountedDimensions(changedWorksheet);
         },
         ondeletecolumn: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
-          cellUndoStack.length = 0;
-          cellRedoStack.length = 0;
+          finishPopupStructure(changedWorksheet);
           syncMountedDimensions(changedWorksheet);
         },
         onpaste: (changedWorksheet: JssInstance): void => {
@@ -6180,7 +6260,36 @@ export function openSpreadsheetModal(
           : working.plateSize,
       };
       if (changedPlateSize) ui.presetSelect.value = 'custom';
+      // Add row, Add column and the size boxes rebuild the grid without jspreadsheet's insert and delete events, so
+      // the change is recorded here, for Undo and Redo.
+      const sizeChanged = rows !== working.rows || cols !== working.cols;
+      const before = readRawData().map(row => row.map(value => String(value ?? '')));
+      const beforeStyles = structuredClone(readCellStyles(working.rows, working.cols) ?? {});
+      const beforeWidths = sheetContainer ? readRenderedColWidths(sheetContainer) : undefined;
+      const rowsChanged = rows !== working.rows;
+      const grew = rows > working.rows || cols > working.cols;
+      const count = rowsChanged ? Math.abs(rows - working.rows) : Math.abs(cols - working.cols);
       mountSpreadsheet(resized);
+      if (sizeChanged) {
+        pushCellHistoryEntry([{
+          col: -1,
+          row: -1,
+          oldValue: '',
+          newValue: '',
+          structure: {
+            axis: rowsChanged ? 'row' : 'col',
+            kind: grew ? 'insert' : 'delete',
+            at: 0,
+            count,
+            before,
+            after: resized.data.map(row => row.map(value => String(value ?? ''))),
+            beforeStyles,
+            afterStyles: structuredClone(resized.cellStyles ?? {}),
+            beforeWidths,
+            afterWidths: beforeWidths,
+          },
+        }]);
+      }
     };
 
     const applyDimensions = (): void => {
@@ -7250,6 +7359,8 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
 export interface SpreadsheetHostOptions {
   /** Owned by the table, not its disposable visual overlay. */
   cellHistory?: SpreadsheetCellHistory;
+  /** Rebuilds the table from this data (used by Undo and Redo of row and column changes). */
+  onReplaceData?: (data: SpreadsheetData) => void;
   /** Data cell (0-based, excluding coordinate headers) to select once the grid has mounted. */
   initialSelection?: { col: number; row: number };
   /** When true, the grid accepts edits (typing, insert/delete row/column, row/column resize) instead of being read-only. */
@@ -7358,6 +7469,20 @@ export function buildReadOnlySpreadsheetHost(
         liveWorksheet.setValueFromCoords?.(colIndex, rowIndex, value, true);
       }
     }));
+  };
+  // Row and column inserts and deletes join the undo history as entries of their own (see beginStructure).
+  let pendingStructure: StructureChange | null = null;
+  const beginInlineStructure = (target: JssInstance, axis: 'row' | 'col', kind: 'insert' | 'delete', arg: unknown): void => {
+    flushMirrorIntoWorksheet(target);
+    pendingStructure = hydrationConfirmed
+      ? beginStructure(target, axis, kind, arg, () => readRenderedColWidths(sheetContainer))
+      : null;
+  };
+  const finishInlineStructure = (target: JssInstance): void => {
+    if (!pendingStructure) return;
+    const entry = finishStructure(target, pendingStructure, () => readRenderedColWidths(sheetContainer));
+    pendingStructure = null;
+    pushCellHistoryEntry(entry);
   };
   // Whether this table's data contains any formula cell at all -- checked
   // once here, then kept (cheaply) up to date below instead of rescanned.
@@ -8686,7 +8811,29 @@ export function buildReadOnlySpreadsheetHost(
     if (cellUndoStack.length > MAX_CELL_HISTORY) cellUndoStack.shift();
     cellRedoStack.length = 0;
   };
+  // Undo and Redo of a row or column insert or delete: the table is built again from the data (and styles and
+  // widths) it had before or after the change, the way the plate/spreadsheet switch does it.
+  const applyStructureEntry = (change: StructureChange, undo: boolean): void => {
+    if (!options.onReplaceData) return;
+    const snapshot = undo ? change.before : change.after;
+    const styles = undo ? change.beforeStyles : change.afterStyles;
+    const widths = undo ? change.beforeWidths : change.afterWidths;
+    const cols = snapshot.reduce((max, row) => Math.max(max, row.length), 0);
+    options.onReplaceData(normalizeSpreadsheetData({
+      ...extracted,
+      data: snapshot,
+      displayData: applyFormulaResults(snapshot, snapshot),
+      rows: snapshot.length,
+      cols,
+      colWidths: widths ?? extracted.colWidths,
+      cellStyles: styles ?? extracted.cellStyles,
+    }));
+  };
   const applyCellHistoryEntry = (changes: CellHistoryEntry, useOldValue: boolean): void => {
+    if (changes[0]?.structure) {
+      applyStructureEntry(changes[0].structure, useOldValue);
+      return;
+    }
     changes.forEach(({ col, row, oldValue, newValue, style: isStyle, oldStyle, newStyle }) => {
       if (isStyle) {
         // formatting: the style lives on the cell itself
@@ -9871,18 +10018,18 @@ export function buildReadOnlySpreadsheetHost(
           nativeCellEdit = null;
         }
       },
-      onbeforeinsertrow: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
-      onbeforeinsertcolumn: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
-      onbeforedeleterow: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
-      onbeforedeletecolumn: (changedWorksheet: JssInstance): void => flushMirrorIntoWorksheet(changedWorksheet),
+      onbeforeinsertrow: (changedWorksheet: JssInstance, rows?: unknown): void => beginInlineStructure(changedWorksheet, 'row', 'insert', rows),
+      onbeforeinsertcolumn: (changedWorksheet: JssInstance, columns?: unknown): void => beginInlineStructure(changedWorksheet, 'col', 'insert', columns),
+      onbeforedeleterow: (changedWorksheet: JssInstance, rows?: unknown): void => beginInlineStructure(changedWorksheet, 'row', 'delete', rows),
+      onbeforedeletecolumn: (changedWorksheet: JssInstance, columns?: unknown): void => beginInlineStructure(changedWorksheet, 'col', 'delete', columns),
       oninsertrow: (changedWorksheet: JssInstance, inserted?: unknown): void => {
-        shiftCellHistory([cellUndoStack, cellRedoStack], 'row', insertedIndexes(inserted, 'row', Number.MAX_SAFE_INTEGER));
+        finishInlineStructure(changedWorksheet);
         notifyStructuralChange(changedWorksheet);
         styleNewlyInsertedRow(changedWorksheet, inserted);
         requestOverlayRelayout();
       },
       oninsertcolumn: (changedWorksheet: JssInstance, inserted?: unknown): void => {
-        shiftCellHistory([cellUndoStack, cellRedoStack], 'col', insertedIndexes(inserted, 'column', Number.MAX_SAFE_INTEGER));
+        finishInlineStructure(changedWorksheet);
         notifyStructuralChange(changedWorksheet);
         requestOverlayRelayout();
         styleNewlyInsertedColumn(changedWorksheet, inserted);
@@ -9890,14 +10037,12 @@ export function buildReadOnlySpreadsheetHost(
       contextMenu: (...menuArgs: Parameters<typeof deleteWholeSelectionMenu>) =>
         deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked),
       ondeleterow: (changedWorksheet: JssInstance) => {
-        cellUndoStack.length = 0;
-        cellRedoStack.length = 0;
+        finishInlineStructure(changedWorksheet);
         notifyStructuralChange(changedWorksheet);
         requestOverlayRelayout();
       },
       ondeletecolumn: (changedWorksheet: JssInstance) => {
-        cellUndoStack.length = 0;
-        cellRedoStack.length = 0;
+        finishInlineStructure(changedWorksheet);
         notifyStructuralChange(changedWorksheet);
         requestOverlayRelayout();
       },

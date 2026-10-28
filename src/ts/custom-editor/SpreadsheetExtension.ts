@@ -2217,6 +2217,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       initialSelection,
       cellHistory: tableCellHistories.get(tableUid),
       onChange: data => writeOverlayChange(table, tableUid, data),
+      // Undo/Redo of a row or column insert or delete: write the earlier data to the table and build the grid again.
+      onReplaceData: data => {
+        writeOverlayChange(table, tableUid, data);
+        refreshTableOverlay(table);
+      },
       onOpenFullEditor: () => {
         // A cell committed less than 500ms ago can still be waiting out
         // notifyChange's debounce -- extractFromTable(table) below reads
