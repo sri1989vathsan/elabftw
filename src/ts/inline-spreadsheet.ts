@@ -68,6 +68,8 @@ interface StructureChange {
   afterStyles?: Record<string, string>;
   beforeWidths?: ColWidths;
   afterWidths?: ColWidths;
+  beforeHeights?: RowHeights;
+  afterHeights?: RowHeights;
 }
 type CellHistoryEntry = CellValueChange[];
 export interface SpreadsheetCellHistory {
@@ -4420,6 +4422,37 @@ export function openSpreadsheetModal(
     };
     // Row and column inserts and deletes join the undo history as entries of their own (see beginStructure).
     let pendingStructure: StructureChange | null = null;
+    // Dragging a row or column border and the auto-fit buttons are history entries too: the sizes before and after.
+    const popupSizes = (): { rowHeights: RowHeights; colWidths: ColWidths } => ({
+      rowHeights: structuredClone(working.rowHeights ?? {}),
+      colWidths: structuredClone(working.colWidths ?? {}),
+    });
+    const recordPopupSizeChange = (before: { rowHeights: RowHeights; colWidths: ColWidths }): void => {
+      const after = popupSizes();
+      if (!acceptsGridChanges || JSON.stringify(before) === JSON.stringify(after)) return;
+      const data = readRawData().map(row => row.map(value => String(value ?? '')));
+      const styles = structuredClone(readCellStyles(working.rows, working.cols) ?? {});
+      pushCellHistoryEntry([{
+        col: -1,
+        row: -1,
+        oldValue: '',
+        newValue: '',
+        structure: {
+          axis: 'row',
+          kind: 'insert',
+          at: 0,
+          count: 0,
+          before: data,
+          after: data,
+          beforeStyles: styles,
+          afterStyles: styles,
+          beforeHeights: before.rowHeights,
+          afterHeights: after.rowHeights,
+          beforeWidths: before.colWidths,
+          afterWidths: after.colWidths,
+        },
+      }]);
+    };
     const readPopupColWidths = (): ColWidths | undefined => (sheetContainer ? readRenderedColWidths(sheetContainer) : undefined);
     const beginPopupStructure = (target: JssInstance, axis: 'row' | 'col', kind: 'insert' | 'delete', arg: unknown): void => {
       flushMirrorIntoWorksheet(target);
@@ -5076,6 +5109,7 @@ export function openSpreadsheetModal(
       const snapshot = undo ? change.before : change.after;
       const styles = undo ? change.beforeStyles : change.afterStyles;
       const widths = undo ? change.beforeWidths : change.afterWidths;
+      const heights = undo ? change.beforeHeights : change.afterHeights;
       const cols = clampDimension(snapshot.reduce((max, row) => Math.max(max, row.length), 0), working.cols);
       const rows = clampDimension(snapshot.length, working.rows);
       mountSpreadsheet({
@@ -5085,6 +5119,7 @@ export function openSpreadsheetModal(
         cols,
         cellStyles: styles && Object.keys(styles).length > 0 ? styles : undefined,
         colWidths: widths ?? working.colWidths,
+        rowHeights: heights ?? working.rowHeights,
       });
       hasChanges = true;
     };
@@ -5434,6 +5469,7 @@ export function openSpreadsheetModal(
     // blob is read back from the live DOM on close regardless.
     const autofitAllColumns = (): void => {
       if (!sheetContainer) return;
+      const sizesBefore = popupSizes();
       const colWidths: ColWidths = { ...(working.colWidths ?? {}) };
       for (let col = 0; col < working.cols; col++) {
         const cells = Array.from(sheetContainer.querySelectorAll<HTMLElement>(
@@ -5452,6 +5488,7 @@ export function openSpreadsheetModal(
       });
       applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
       hasChanges = true;
+      recordPopupSizeChange(sizesBefore);
     };
     // Measured after any column-width change already above it in the call
     // order (autofitAllColumnsAndRows below runs this second) so a row
@@ -5459,6 +5496,7 @@ export function openSpreadsheetModal(
     // narrower is measured at that new, narrower width, not the old one.
     const autofitAllRows = (): void => {
       if (!sheetContainer) return;
+      const sizesBefore = popupSizes();
       const rowHeights: RowHeights = { ...(working.rowHeights ?? {}) };
       for (let row = 0; row < working.rows; row++) {
         const cells = Array.from(sheetContainer.querySelectorAll<HTMLElement>(
@@ -5485,6 +5523,7 @@ export function openSpreadsheetModal(
       // inside stays clipped exactly as it was before the autofit.
       applyCellClipHeights(sheetContainer, toRowHeightsMap(rowHeights));
       hasChanges = true;
+      recordPopupSizeChange(sizesBefore);
     };
     const autofitAllColumnsAndRows = (): void => {
       autofitAllColumns();
@@ -5934,6 +5973,7 @@ export function openSpreadsheetModal(
           row: number | number[],
           height: number | number[],
         ): void => {
+          const sizesBefore = popupSizes();
           const changedRows = Array.isArray(row) ? row : [row];
           const changedHeights = Array.isArray(height) ? height : [height];
           const rowHeights: RowHeights = { ...(working.rowHeights ?? {}) };
@@ -5961,6 +6001,7 @@ export function openSpreadsheetModal(
             data: readRawData(),
             rowHeights,
           });
+          recordPopupSizeChange(sizesBefore);
           scheduleCoordinateDimensionEnforcement();
         },
         // Column-width counterpart of onresizerow just above -- captures a
@@ -5974,6 +6015,7 @@ export function openSpreadsheetModal(
           column: number | number[],
           width: number | number[],
         ): void => {
+          const sizesBefore = popupSizes();
           const changedCols = Array.isArray(column) ? column : [column];
           const changedWidths = Array.isArray(width) ? width : [width];
           const colWidths: ColWidths = { ...(working.colWidths ?? {}) };
@@ -6020,6 +6062,7 @@ export function openSpreadsheetModal(
             colWidths,
             rowHeights,
           });
+          recordPopupSizeChange(sizesBefore);
         },
         onselection: (
           selectedWorksheet: JssInstance,
@@ -7483,6 +7526,39 @@ export function buildReadOnlySpreadsheetHost(
   };
   // Row and column inserts and deletes join the undo history as entries of their own (see beginStructure).
   let pendingStructure: StructureChange | null = null;
+  // Dragging a row or column border and the two auto-fit buttons are history entries too: the sizes before and after.
+  const sizesNow = (): { rowHeights: RowHeights; colWidths: ColWidths } => ({
+    rowHeights: Object.fromEntries(manuallyResizedRows) as RowHeights,
+    colWidths: readRenderedColWidths(sheetContainer) ?? {},
+  });
+  const pushInlineSizeHistory = (
+    before: { rowHeights: RowHeights; colWidths: ColWidths },
+    after: { rowHeights: RowHeights; colWidths: ColWidths },
+  ): void => {
+    if (!hydrationConfirmed || JSON.stringify(before) === JSON.stringify(after)) return;
+    const data = rawDataMirror.map(row => row.map(value => String(value ?? '')));
+    const styles = structuredClone(getMountedWorksheet(sheetContainer)?.getStyle?.() ?? {});
+    pushCellHistoryEntry([{
+      col: -1,
+      row: -1,
+      oldValue: '',
+      newValue: '',
+      structure: {
+        axis: 'row',
+        kind: 'insert',
+        at: 0,
+        count: 0,
+        before: data,
+        after: data,
+        beforeStyles: styles,
+        afterStyles: styles,
+        beforeHeights: before.rowHeights,
+        afterHeights: after.rowHeights,
+        beforeWidths: before.colWidths,
+        afterWidths: after.colWidths,
+      },
+    }]);
+  };
   const beginInlineStructure = (target: JssInstance, axis: 'row' | 'col', kind: 'insert' | 'delete', arg: unknown): void => {
     flushMirrorIntoWorksheet(target);
     pendingStructure = hydrationConfirmed
@@ -7684,6 +7760,7 @@ export function buildReadOnlySpreadsheetHost(
   // rest of the function has finished running).
   autofitRowsButton.addEventListener('click', event => {
     event.stopPropagation();
+    const sizesBefore = sizesNow();
     const targetWorksheet = getMountedWorksheet(sheetContainer);
     const rowEls = Array.from(sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr'));
     rowEls.forEach((rowEl, row) => {
@@ -7703,9 +7780,11 @@ export function buildReadOnlySpreadsheetHost(
     });
     applyCellClipHeights(sheetContainer, manuallyResizedRows);
     notifyStructuralChange(targetWorksheet);
+    pushInlineSizeHistory(sizesBefore, sizesNow());
   });
   autofitColumnsButton.addEventListener('click', event => {
     event.stopPropagation();
+    const sizesBefore = sizesNow();
     const targetWorksheet = getMountedWorksheet(sheetContainer);
     const headerCells = Array.from(sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > thead [data-x]'));
     const colCount = headerCells.reduce(
@@ -7725,6 +7804,7 @@ export function buildReadOnlySpreadsheetHost(
     }
     applySpreadsheetColWidths(sheetContainer, targetWorksheet, colWidthsUpdate);
     notifyStructuralChange(targetWorksheet);
+    pushInlineSizeHistory(sizesBefore, sizesNow());
   });
   const copyTableButton = document.createElement('button');
   copyTableButton.type = 'button';
@@ -8829,6 +8909,7 @@ export function buildReadOnlySpreadsheetHost(
     const snapshot = undo ? change.before : change.after;
     const styles = undo ? change.beforeStyles : change.afterStyles;
     const widths = undo ? change.beforeWidths : change.afterWidths;
+    const heights = undo ? change.beforeHeights : change.afterHeights;
     const cols = snapshot.reduce((max, row) => Math.max(max, row.length), 0);
     options.onReplaceData(normalizeSpreadsheetData({
       ...extracted,
@@ -8837,6 +8918,7 @@ export function buildReadOnlySpreadsheetHost(
       rows: snapshot.length,
       cols,
       colWidths: widths ?? extracted.colWidths,
+      rowHeights: heights ?? extracted.rowHeights,
       cellStyles: styles ?? extracted.cellStyles,
     }));
   };
@@ -10060,10 +10142,23 @@ export function buildReadOnlySpreadsheetHost(
       // jspreadsheet calls onresizerow(instance, row, newHeight, oldHeight) --
       // resizedRow here is genuinely a row index, unlike onresizecolumn's own
       // second argument (a column index), so only this one may pass it through.
-      onresizerow: (worksheet: JssInstance, row: number): void => notifyStructuralChange(worksheet, row),
-      onresizecolumn: (worksheet: JssInstance, column: number): void => {
+      onresizerow: (worksheet: JssInstance, row: number, _newHeight?: unknown, oldHeight?: unknown): void => {
+        notifyStructuralChange(worksheet, row);
+        const after = sizesNow();
+        const before = { rowHeights: { ...after.rowHeights }, colWidths: after.colWidths };
+        const previous = Math.round(Number(oldHeight));
+        if (Number.isFinite(previous) && previous !== JSS_DEFAULT_ROW_HEIGHT) before.rowHeights[String(row)] = previous;
+        else delete before.rowHeights[String(row)];
+        pushInlineSizeHistory(before, after);
+      },
+      onresizecolumn: (worksheet: JssInstance, column: number, _newWidth?: unknown, oldWidth?: unknown): void => {
         growRowsForNarrowedColumn(sheetContainer, column, manuallyResizedRows);
         notifyStructuralChange(worksheet);
+        const after = sizesNow();
+        const before = { rowHeights: after.rowHeights, colWidths: { ...after.colWidths } };
+        const previous = Math.round(Number(oldWidth));
+        if (Number.isFinite(previous)) before.colWidths[String(column)] = previous;
+        pushInlineSizeHistory(before, after);
       },
       onselection: (
         selectedWorksheet: JssInstance,
