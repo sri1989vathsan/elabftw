@@ -269,6 +269,7 @@ const createNewFolderInput = document.getElementById('createNewFolderInput') as 
 const createNewFolderSaveBtn = document.getElementById('createNewFolderSaveBtn');
 const createNewFolderCancelBtn = document.getElementById('createNewFolderCancelBtn');
 const createNewFolderSelect = document.getElementById('createNewFolderSelect') as HTMLSelectElement;
+const createNewFolderParent = document.getElementById('createNewFolderParent') as HTMLSelectElement | null;
 const createNewFolderScopeButtons = document.querySelectorAll<HTMLButtonElement>('[data-create-folder-scope]');
 
 type CreateNewFolderScope = 'mine' | 'bookmarked' | 'all';
@@ -361,6 +362,17 @@ if (createNewFolderBtn && createNewFolderInputDiv) {
   createNewFolderBtn.addEventListener('click', () => {
     createNewFolderInputDiv.removeAttribute('hidden');
     createNewFolderInput.value = '';
+    // The parent can be any of your own folders; the one chosen above is suggested, so a subfolder is one click away.
+    if (createNewFolderParent) {
+      const currentUserId = createNewFolderSelect.dataset.currentUserId ?? '';
+      createNewFolderParent.replaceChildren(createNewFolderParent.options[0] ?? new Option('No parent folder (top level)', ''));
+      Array.from(createNewFolderSelect.options).slice(1).forEach(option => {
+        if (option.dataset.folderOwnerId !== currentUserId) return;
+        createNewFolderParent.appendChild(new Option(option.textContent ?? '', option.value));
+      });
+      const suggested = createNewFolderSelect.value;
+      createNewFolderParent.value = Array.from(createNewFolderParent.options).some(option => option.value === suggested) ? suggested : '';
+    }
     createNewFolderInput.focus();
   });
 
@@ -371,7 +383,9 @@ if (createNewFolderBtn && createNewFolderInputDiv) {
   createNewFolderSaveBtn?.addEventListener('click', () => {
     const name = createNewFolderInput.value.trim();
     if (!name) return;
-    ApiC.post('experiments_folders', { name: name, parent_id: null }).then(resp => {
+    const parentId = createNewFolderParent?.value ? Number.parseInt(createNewFolderParent.value, 10) : null;
+    const parentPath = createNewFolderParent?.value ? createNewFolderParent.selectedOptions[0]?.textContent ?? '' : '';
+    ApiC.post('experiments_folders', { name: name, parent_id: parentId }).then(resp => {
       // Extract new folder id from Location header
       const location = resp.headers.get('Location') || '';
       const match = location.match(/\/(\d+)$/);
@@ -380,7 +394,7 @@ if (createNewFolderBtn && createNewFolderInputDiv) {
         // Add and select the new folder in the dropdown
         const option = document.createElement('option');
         option.value = newId;
-        option.textContent = name;
+        option.textContent = parentPath ? `${parentPath} > ${name}` : name;
         option.dataset.folderOwnerId = createNewFolderSelect.dataset.currentUserId ?? '';
         option.dataset.folderBookmarked = 'false';
         option.selected = true;

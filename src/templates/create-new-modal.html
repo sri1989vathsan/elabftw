@@ -76,6 +76,10 @@
                   <button type='button' class='btn btn-outline-secondary' id='createNewFolderCancelBtn'><i class='fas fa-times'></i></button>
                 </div>
               </div>
+              <label class='small mb-0 mt-1' for='createNewFolderParent'>{{ 'Parent folder'|trans }}</label>
+              <select id='createNewFolderParent' class='form-control form-control-sm' aria-label='{{ 'Parent folder'|trans }}'>
+                <option value=''>{{ 'No parent folder (top level)'|trans }}</option>
+              </select>
             </div>
           </div>
           {% endif %}
