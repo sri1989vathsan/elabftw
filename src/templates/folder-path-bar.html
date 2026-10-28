@@ -1,14 +1,15 @@
-{# The folder an experiment or resource is filed in, as a path (Desktop > Users > ...): each part opens that folder. #}
-{% set folderId = Entity.entityData.folder_id|default(0) %}
-{% if Entity.entityType.value in ['experiments', 'items'] and folderId and experimentsFoldersArr is defined %}
-  {% set listingPage = Entity.entityType.value == 'items' ? 'database.php' : 'experiments.php' %}
+{# A folder as a path (Desktop > Users > ...): each part opens that folder.
+   Needs: pathFolderId, pathFolders (the hierarchy rows) and pathPage (the listing page). #}
+{% set folderId = pathFolderId|default(0) %}
+{% if folderId and pathFolders is iterable %}
+  {% set listingPage = pathPage %}
   {% set crumbs = [] %}
   {% set currentId = folderId %}
   {# walk from the folder up to its root; the depth limit only guards against a broken parent chain #}
   {% for step in 1..12 %}
     {% if currentId %}
       {% set nextId = 0 %}
-      {% for folder in experimentsFoldersArr %}
+      {% for folder in pathFolders %}
         {% if folder.id == currentId %}
           {% set crumbs = [folder]|merge(crumbs) %}
           {% set nextId = folder.parent_id|default(0) %}

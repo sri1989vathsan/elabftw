@@ -702,6 +702,11 @@
       {# this is where components will be mounted #}
       <div id='entityList'></div>
 
+  {# the path of the folder being shown, to move up to any of its parent folders #}
+  {% if Entity.entityType.value in ['experiments', 'items'] and App.Request.query.get('folder') matches '/^[1-9][0-9]*$/' %}
+    {% include 'folder-path-bar.html' with {'pathFolderId': App.Request.query.get('folder')|number_format(0, '', ''), 'pathFolders': experimentsFoldersCreateArr, 'pathPage': Entity.entityType.value == 'items' ? 'database.php' : 'experiments.php'} only %}
+  {% endif %}
+
   <div id='info'
       data-page='show'
       data-limit='{{ DisplayParams.limit }}'
