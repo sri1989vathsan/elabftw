@@ -10653,7 +10653,7 @@ export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clon
     // A well plate shown as the compact plate prints as the compact plate (without its buttons); one shown as a
     // spreadsheet is regenerated as a table below.
     if (extracted.kind === 'well-plate' && extracted.plateView !== 'sheet') {
-      clone.querySelectorAll('.elabftw-spreadsheet-readonly-toggle button, .wp-view-switch').forEach(node => node.remove());
+      clone.querySelectorAll('.elabftw-spreadsheet-readonly-toggle button, .wp-view-switch, .wp-choice').forEach(node => node.remove());
       clone.querySelectorAll('.wp-legend-item').forEach(node => node.removeAttribute('title'));
       return;
     }
