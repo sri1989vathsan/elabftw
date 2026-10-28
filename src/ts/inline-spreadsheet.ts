@@ -10588,6 +10588,34 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
   // Reported as a section filter/print selection hiding regular text
   // correctly but still showing spreadsheet tables from other sections.
   const FILTER_HIDDEN_CLASS = 'toc-section-filter-hidden';
+  // A well plate on a view page can be shown as the compact plate or as a spreadsheet; the switch rebuilds the host
+  // in the other form. Nothing is saved, and printing follows what is shown (the registered data says which).
+  const buildViewHost = (extracted: SpreadsheetData, mode: 'plate' | 'sheet'): { host: HTMLElement; destroy: () => void } => {
+    const isPlate = extracted.kind === 'well-plate';
+    const shownData: SpreadsheetData = isPlate ? { ...extracted, plateView: mode } : extracted;
+    let current: HTMLElement | null = null;
+    const switchTo = (nextMode: 'plate' | 'sheet'): void => {
+      const old = current;
+      if (!old) return;
+      const next = buildViewHost(extracted, nextMode);
+      next.host.classList.toggle(FILTER_HIDDEN_CLASS, old.classList.contains(FILTER_HIDDEN_CLASS));
+      if (old.id) next.host.id = old.id;
+      const html = savedHtml.get(old);
+      destroyers.get(old)?.();
+      savedHtml.delete(old);
+      destroyers.delete(old);
+      old.replaceWith(next.host);
+      if (html !== undefined) savedHtml.set(next.host, html);
+      destroyers.set(next.host, next.destroy);
+      observer.unobserve(old);
+      observer.observe(next.host);
+    };
+    const handle = mode === 'plate'
+      ? buildWellPlateHost(shownData, { onShowSheet: () => switchTo('sheet') })
+      : buildReadOnlySpreadsheetHost(shownData, isPlate ? { onShowPlate: () => switchTo('plate') } : {});
+    current = handle.host;
+    return { host: handle.host, destroy: handle.destroy };
+  };
   const observer = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       const el = entry.target as HTMLElement;
@@ -10595,9 +10623,7 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
         if (!(el instanceof HTMLTableElement)) return; // already mounted
         const html = el.outerHTML;
         const extractedForView = extractFromTable(el);
-        const { host, destroy } = extractedForView.kind === 'well-plate' && extractedForView.plateView !== 'sheet'
-          ? buildWellPlateHost(extractedForView)
-          : buildReadOnlySpreadsheetHost(extractedForView);
+        const { host, destroy } = buildViewHost(extractedForView, extractedForView.kind === 'well-plate' && extractedForView.plateView !== 'sheet' ? 'plate' : 'sheet');
         host.classList.toggle(FILTER_HIDDEN_CLASS, el.classList.contains(FILTER_HIDDEN_CLASS));
         // The table of contents links to a spreadsheet by id; keep it across the swap.
         if (el.id) host.id = el.id;
