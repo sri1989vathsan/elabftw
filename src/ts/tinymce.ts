@@ -714,6 +714,14 @@ export function getTinymceBaseConfig(page: string): object {
       // actually ready so the correct height shows up without needing focus.
       editor.getDoc()?.fonts?.ready.then(() => editor.execCommand('mceAutoResize'));
       editor.getDoc()?.fonts?.ready.then(() => window.dispatchEvent(new CustomEvent('elabftw-spreadsheet-resync')));
+      // The autoresize plugin only re-measures on keyup/NodeChange, so the
+      // bottom edge visibly lags Enter until the key is released. Re-measure
+      // as soon as the new line exists (the input event) and once more on the
+      // next frame, when the layout has settled.
+      editor.on('input', () => {
+        editor.execCommand('mceAutoResize');
+        window.requestAnimationFrame(() => editor.execCommand('mceAutoResize'));
+      });
       editor.on('ExecCommand', (e) => {
         if (e.command == 'mcePreview') {
           // declaration as iFrame element required to avoid errors with getting srcdoc property
