@@ -71,6 +71,7 @@ declare const MathJax: MathJaxObject;
 import { entity } from './getEntity';
 import { isDarkTheme } from './theme';
 import { registerCustomEditorExtensions } from './custom-editor';
+import { printEverything, printMainText } from './print-main-text';
 
 // AUTOSAVE
 const doneTypingInterval = 7000;  // time in ms between end of typing and save
@@ -230,7 +231,7 @@ export function getTinymceBaseConfig(page: string): object {
     toolbar1 = toolbar1.replace('experiment-title ', '');
   }
   let removedMenuItems = 'newdocument, image, anchor';
-  let fileMenuItems = 'preview | print';
+  let fileMenuItems = 'preview | printEverything printMainText';
   if (page === 'edit') {
     fileMenuItems = 'restoredraft | saveAndGoBack ' + fileMenuItems;
     plugins += ' autosave';
@@ -624,6 +625,19 @@ export function getTinymceBaseConfig(page: string): object {
         },
       });
       // save and go back button for toolbar, inside "File" menu.
+      // File > Print is now Print everything (the whole entry: main text with its spreadsheets and plates, steps,
+      // links, files and comments) and Print main text, which prints only the main text as the table of contents does.
+      editor.ui.registry.addMenuItem('printEverything', {
+        text: 'Print everything',
+        icon: 'print',
+        shortcut: 'Meta+P',
+        onAction: () => printEverything(editor.getBody()),
+      });
+      editor.ui.registry.addMenuItem('printMainText', {
+        text: 'Print main text',
+        icon: 'print',
+        onAction: () => printMainText(editor.getBody()),
+      });
       editor.ui.registry.addMenuItem('saveAndGoBack', {
         text: i18next.t('save-and-go-back'),
         icon: 'customSave',
