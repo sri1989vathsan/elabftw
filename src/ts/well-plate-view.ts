@@ -458,6 +458,52 @@ export function buildWellPlateHost(extracted: SpreadsheetData, options: Spreadsh
   }
   let repaintPlate: () => void = () => undefined;
   const tableColumns = data.plateTable?.columns ?? [];
+  // On a view page (no onChange) colours and labels can still be switched, on a working copy that is never saved.
+  let shown: SpreadsheetData = data;
+  if (!options.onChange && tableColumns.length > 0) {
+    const chosen: { colour: string; label: string } = { colour: '', label: '' };
+    const refresh = (): void => {
+      shown = data;
+      if (chosen.colour || chosen.label) {
+        shown = structuredClone(data);
+        if (chosen.colour) regroupByColumn(shown, chosen.colour);
+        if (chosen.label) labelWellsByColumn(shown, chosen.label);
+      }
+      // another colouring has other colours, so a dimmed colour from the previous one means nothing
+      dimmed.clear();
+      repaintPlate();
+    };
+    const addViewChoice = (label: string, title: string, savedText: string, current: string | undefined, key: 'colour' | 'label'): void => {
+      const wrap = document.createElement('label');
+      wrap.className = 'wp-choice';
+      wrap.title = title;
+      wrap.append(document.createTextNode(`${label} `));
+      const select = document.createElement('select');
+      select.setAttribute('aria-label', label);
+      const saved = document.createElement('option');
+      saved.value = '';
+      saved.textContent = savedText;
+      select.appendChild(saved);
+      tableColumns.forEach(column => {
+        const option = document.createElement('option');
+        option.value = column;
+        option.textContent = column || '(unnamed column)';
+        select.appendChild(option);
+      });
+      select.value = current && tableColumns.includes(current) ? current : '';
+      chosen[key] = select.value;
+      select.addEventListener('mousedown', event => event.stopPropagation());
+      select.addEventListener('change', () => {
+        chosen[key] = select.value;
+        refresh();
+      });
+      wrap.addEventListener('click', event => event.stopPropagation());
+      wrap.appendChild(select);
+      toggleBar.appendChild(wrap);
+    };
+    addViewChoice('Colour by', 'Colour the wells by the values of a column of the plate table (only for viewing, nothing is saved)', 'Saved colours', data.plateGroupBy, 'colour');
+    addViewChoice('Label by', 'Show the values of a column of the plate table as the text of each well when hovering (only for viewing, nothing is saved)', 'Saved labels', data.plateLabelBy, 'label');
+  }
   if (options.onChange && tableColumns.length > 0) {
     // Colour and label the wells by any column of the plate's table; saved like any other edit.
     const addChoice = (label: string, title: string, manualText: string, current: string | undefined, apply: (column: string) => void, clear: () => void): void => {
@@ -497,7 +543,7 @@ export function buildWellPlateHost(extracted: SpreadsheetData, options: Spreadsh
       data.plateLabelBy = undefined;
     });
   }
-  addButton('elabftw-spreadsheet-readonly-copy-table', 'Copy the whole plate', 'fa-copy', () => copyPlateToClipboard(data));
+  addButton('elabftw-spreadsheet-readonly-copy-table', 'Copy the whole plate', 'fa-copy', () => copyPlateToClipboard(shown));
   if (options.onShowSheet) toggleBar.appendChild(createPlateViewSwitch('plate', () => undefined, options.onShowSheet));
   if (options.onOpenFullEditor) {
     addButton('elabftw-spreadsheet-readonly-open-editor', 'Edit plate: select wells, set groups and colours', 'fa-up-right-and-down-left-from-center', options.onOpenFullEditor);
@@ -518,8 +564,8 @@ export function buildWellPlateHost(extracted: SpreadsheetData, options: Spreadsh
   legend.className = 'wp-legend';
   const dimmed = new Set<string>();
   const paint = (): void => {
-    renderPlate(plate, data, { popup: false, dimmed, onClick: options.onOpenFullEditor });
-    renderLegend(legend, data, dimmed, color => {
+    renderPlate(plate, shown, { popup: false, dimmed, onClick: options.onOpenFullEditor });
+    renderLegend(legend, shown, dimmed, color => {
       if (dimmed.has(color)) dimmed.delete(color);
       else dimmed.add(color);
       paint();
