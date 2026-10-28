@@ -28,6 +28,7 @@ use function file_exists;
 use function filemtime;
 use function getenv;
 use function glob;
+use function hrtime;
 use function is_dir;
 use function mkdir;
 use function preg_match;
@@ -97,13 +98,14 @@ final class OrdersImportSheetsCommand extends Command
             if (str_contains($path, '/unmatched/') && preg_match('/^(\d{6,10})__(.+)$/', $name, $matches) === 1) {
                 [$known, $original] = array($matches[1], $matches[2]);
             }
+            $started = hrtime(true);
             try {
                 $result = $sheets->process(new UploadedFile($path, $original, 'application/pdf', null, true), $known);
             } catch (Throwable $e) {
                 $output->writeln(sprintf('%s: %s', $name, $e->getMessage()));
                 continue;
             }
-            $output->writeln(sprintf('%s: %s%s', $name, $result['status'], $result['procurement_id'] !== null ? ' (' . $result['procurement_id'] . ')' : ''));
+            $output->writeln(sprintf('%s: %s%s in %.1f s', $name, $result['status'], $result['procurement_id'] !== null ? ' (' . $result['procurement_id'] . ')' : '', (hrtime(true) - $started) / 1e9));
             if ($result['status'] === 'no_order' && $known !== null) {
                 continue; // stays in unmatched/, tried again on the next run
             }
