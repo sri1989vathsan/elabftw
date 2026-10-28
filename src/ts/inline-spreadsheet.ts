@@ -10640,6 +10640,10 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
  * cloneNode() produces new node objects the WeakMap was never keyed on.
  */
 export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clonedRoot: ParentNode): void {
+  // The editor keeps a spacer after each table to reserve room for its overlay, with a negative margin when the
+  // overlay is shorter than the table. On paper the real table is printed, so a leftover spacer would pull the
+  // following tables and text up over it.
+  clonedRoot.querySelectorAll('[data-elabftw-spreadsheet-spacer]').forEach(spacer => spacer.remove());
   const originals = Array.from(originalRoot.querySelectorAll<HTMLElement>('.elabftw-spreadsheet-readonly-view'));
   const clones = Array.from(clonedRoot.querySelectorAll<HTMLElement>('.elabftw-spreadsheet-readonly-view'));
   originals.forEach((originalHost, index) => {
