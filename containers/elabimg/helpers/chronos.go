@@ -41,7 +41,7 @@ func main() {
 	go scheduleDaily(ctx, 3, 37, []string{"idps:refresh"})
 	go scheduleDaily(ctx, 4, 15, []string{"orders:autoarchive"})
 	go scheduleEveryMinute(ctx, []string{"notifications:send"})
-	go scheduleEveryMinute(ctx, []string{"orders:import-sheets"})
+	go scheduleEvery(ctx, 5*time.Minute, []string{"orders:import-sheets"})
 	log.Println("scheduled tasks started")
 
 	// wait until context is canceled
@@ -73,9 +73,14 @@ func scheduleDaily(ctx context.Context, hour, min int, cmdArgs []string) {
 
 // scheduleEveryMinute runs cmdArgs every 1 minute on the minute.
 func scheduleEveryMinute(ctx context.Context, cmdArgs []string) {
+	scheduleEvery(ctx, time.Minute, cmdArgs)
+}
+
+// scheduleEvery runs cmdArgs once per interval.
+func scheduleEvery(ctx context.Context, interval time.Duration, cmdArgs []string) {
 	waitOrExit(ctx, jitter)
 
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
