@@ -39,7 +39,7 @@ use function time;
 /**
  * Watches a folder for the signed shop sheets (PDF scans): every new file gets the same treatment as one dropped on the
  * orders page (the number after "Rüstschein" is read, the PDF is attached to the orders with that procurement ID, they
- * become "collected" and the people who placed them are notified). Runs every minute (see chronos.go).
+ * become "collected" and the people who placed them are notified). Runs every minute (see chronos.go), reading at most 10 files per run.
  *
  * The folder is ORDER_SHEETS_DIR (default /var/lib/elabftw/order-sheets); ORDER_SHEETS_USERID is the account the
  * attachments are attributed to (default: the first sysadmin), and its team is the one whose orders are matched.
@@ -50,6 +50,8 @@ use function time;
 final class OrdersImportSheetsCommand extends Command
 {
     private const int SETTLE_SECONDS = 15;
+    // at most this many files are read per run; the rest wait for the next minute (new files come first, then unmatched ones)
+    private const int MAX_FILES_PER_RUN = 10;
 
     #[Override]
     protected function configure(): void
@@ -79,11 +81,16 @@ final class OrdersImportSheetsCommand extends Command
         if ($files === array()) {
             return Command::SUCCESS;
         }
+        $handled = 0;
         foreach ($files as $path) {
+            if ($handled >= self::MAX_FILES_PER_RUN) {
+                break;
+            }
             // a scanner may still be writing the file
             if (time() - (int) filemtime($path) < self::SETTLE_SECONDS) {
                 continue;
             }
+            $handled++;
             $name = basename($path);
             $known = null;
             $original = $name;

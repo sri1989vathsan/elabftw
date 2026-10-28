@@ -623,7 +623,7 @@ grid and the plate submenu create it). Its size is fixed: no inserting or deleti
 
 ### Watched folder for shop sheets
 
-`orders:import-sheets` (every minute, see `chronos.go`) takes new PDFs from `ORDER_SHEETS_DIR`
+`orders:import-sheets` (every minute, see `chronos.go`; reads at most 10 files per run) takes new PDFs from `ORDER_SHEETS_DIR`
 (default `/var/lib/elabftw/order-sheets`, the `elabftw-order-sheets` volume, or the host folder in `ORDER_SHEETS_HOST_DIR`)
 and treats them like a drop on the orders page. Handled files move to `done/`, `unmatched/` (no order has that number
 yet: tried again each run) or `unreadable/`. `ORDER_SHEETS_USERID` is the account the attachments are attributed to
