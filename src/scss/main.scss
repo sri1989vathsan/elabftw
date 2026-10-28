@@ -7467,3 +7467,12 @@ button.wp-legend-item {
 .inline-spreadsheet-dialog.wp-import {
   width: min(94vw, 900px);
 }
+
+/* On a view page a well plate is first sent as a plain table and swapped for the compact plate once the page's
+   script runs. Until then keep the table out of sight, so the page does not show a spreadsheet that then turns
+   into a plate. (Printing is unaffected, and a plate saved as a spreadsheet stays visible.) */
+@media screen {
+  #body_view table.elabftw-spreadsheet[data-spreadsheet-style='well-plate']:not([data-spreadsheet*='"plateView":"sheet"']) {
+    visibility: hidden;
+  }
+}
