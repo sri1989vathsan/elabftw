@@ -7122,6 +7122,17 @@ export function openSpreadsheetModal(
           || (target instanceof Element && target.closest('.inline-spreadsheet-cell-format') !== null));
       if (!withinEditingSurface) selectedRange = null;
     }, true);
+    // The page editor behind the popup can take focus back (its own focus restoring, with no focus event reaching
+    // the page) after the first click: the keys typed next then went to the page text instead of the cell. While
+    // the popup is open the editor frame never keeps the focus; it goes back into the popup's grid.
+    const popupFocusGuard = window.setInterval(() => {
+      const active = document.activeElement;
+      if (!(active instanceof HTMLIFrameElement) || ui.overlay.contains(active)) return;
+      releaseEditorFrameFocus();
+      const sink = sheetContainer?.querySelector<HTMLElement>('.jss_textarea') ?? ui.overlay.querySelector<HTMLElement>('.inline-spreadsheet-dialog');
+      sink?.focus({ preventScroll: true });
+    }, 100);
+    popupPageListenerRemovers.push(() => window.clearInterval(popupFocusGuard));
     document.addEventListener('keydown', onKey, true);
   });
 }
