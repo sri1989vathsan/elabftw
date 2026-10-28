@@ -4,6 +4,9 @@
 #}
 {% set type = type|default('icon') %}
 {% set lastquery = App.Session.get('lastquery') %}
-<a title='{{ 'Back to listing'|trans }}' aria-label='{{ 'Back to listing'|trans }}' href='?{{ lastquery }}' class='btn {{ type == 'btn' ? 'btn-secondary' : 'btn-ghost' }}'>
+{# an experiment or resource filed in a folder goes back to that folder #}
+{% set backFolderId = Entity is defined ? Entity.entityData.folder_id|default(0) : 0 %}
+{% set backHref = backFolderId and Entity.entityType.value in ['experiments', 'items'] ? '?folder=' ~ backFolderId : '?' ~ lastquery %}
+<a title='{{ 'Back to listing'|trans }}' aria-label='{{ 'Back to listing'|trans }}' href='{{ backHref }}' class='btn {{ type == 'btn' ? 'btn-secondary' : 'btn-ghost' }}'>
   <i class='fas fa-arrow-left fa-fw'></i>{{ type == 'btn' ? 'Back to listing'|trans }}
 </a>

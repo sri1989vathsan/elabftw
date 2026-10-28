@@ -1916,15 +1916,15 @@ export function showModalAndFocusFirstInput(modalSelector: string) {
 
 on('update-entity-body', async (el: HTMLElement) => {
   const redirectTarget = el.dataset.redirect;
-  const shouldRedirect = redirectTarget === 'view' || redirectTarget === 'list';
+  const shouldRedirect = redirectTarget === 'view' || redirectTarget === 'list' || redirectTarget === 'folder';
   const wasSaved = await updateEntityBody(shouldRedirect);
   if (shouldRedirect && wasSaved) {
     sessionStorage.setItem('flash_saved', i18next.t('saved'));
-    window.location.replace(
-      redirectTarget === 'list'
-        ? window.location.pathname
-        : '?mode=view&id=' + entity.id,
-    );
+    let destination = '?mode=view&id=' + entity.id;
+    if (redirectTarget === 'list') destination = window.location.pathname;
+    // an entry filed in a folder goes back to that folder
+    if (redirectTarget === 'folder') destination = el.dataset.folderUrl ?? window.location.pathname;
+    window.location.replace(destination);
   }
 });
 
