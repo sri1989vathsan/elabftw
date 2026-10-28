@@ -7476,3 +7476,43 @@ button.wp-legend-item {
     visibility: hidden;
   }
 }
+
+/* The folder an entry is filed in, as a path under the entry; every part opens that folder. */
+.folder-path-bar {
+  align-items: center;
+  border-top: 1px solid var(--border-color, rgba(128, 128, 128, 0.3));
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  gap: 0.25rem;
+  margin-top: 1.5rem;
+  padding-top: 0.6rem;
+}
+
+.folder-path-bar .folder-path-crumb {
+  border-radius: 4px;
+  color: inherit;
+  padding: 0.15rem 0.4rem;
+  text-decoration: none;
+}
+
+.folder-path-bar .folder-path-crumb:hover,
+.folder-path-bar .folder-path-crumb:focus-visible {
+  background: rgba(128, 128, 128, 0.18);
+}
+
+.folder-path-bar .folder-path-crumb .fa-folder {
+  color: #3d9be9;
+  margin-right: 0.3rem;
+}
+
+.folder-path-bar .folder-path-sep {
+  font-size: 0.6rem;
+  opacity: 0.55;
+}
+
+@media print {
+  .folder-path-bar {
+    display: none;
+  }
+}

@@ -1,0 +1,30 @@
+{# The folder an experiment or resource is filed in, as a path (Desktop > Users > ...): each part opens that folder. #}
+{% set folderId = Entity.entityData.folder_id|default(0) %}
+{% if Entity.entityType.value in ['experiments', 'items'] and folderId and experimentsFoldersArr is defined %}
+  {% set listingPage = Entity.entityType.value == 'items' ? 'database.php' : 'experiments.php' %}
+  {% set crumbs = [] %}
+  {% set currentId = folderId %}
+  {# walk from the folder up to its root; the depth limit only guards against a broken parent chain #}
+  {% for step in 1..12 %}
+    {% if currentId %}
+      {% set nextId = 0 %}
+      {% for folder in experimentsFoldersArr %}
+        {% if folder.id == currentId %}
+          {% set crumbs = [folder]|merge(crumbs) %}
+          {% set nextId = folder.parent_id|default(0) %}
+        {% endif %}
+      {% endfor %}
+      {% set currentId = nextId %}
+    {% endif %}
+  {% endfor %}
+  {% if crumbs|length > 0 %}
+    <nav class='folder-path-bar' aria-label='{{ 'Folder path'|trans }}'>
+      {% for folder in crumbs %}
+        {% if not loop.first %}<i class='fas fa-chevron-right folder-path-sep' aria-hidden='true'></i>{% endif %}
+        <a class='folder-path-crumb' href='{{ listingPage }}?folder={{ folder.id }}' title='{{ folder.full_path|e('html_attr') }}'>
+          <i class='fas fa-folder fa-fw' aria-hidden='true'></i>{{ folder.name }}
+        </a>
+      {% endfor %}
+    </nav>
+  {% endif %}
+{% endif %}
