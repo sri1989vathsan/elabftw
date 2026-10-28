@@ -5120,7 +5120,7 @@ export function openSpreadsheetModal(
         cellStyles: styles && Object.keys(styles).length > 0 ? styles : undefined,
         colWidths: widths ?? working.colWidths,
         rowHeights: heights ?? working.rowHeights,
-      });
+      }, widths !== undefined && heights !== undefined);
       hasChanges = true;
     };
     const applyCellHistoryEntry = (changes: CellHistoryEntry, useOldValue: boolean): void => {
@@ -5576,7 +5576,7 @@ export function openSpreadsheetModal(
       if (customOption) customOption.textContent = `Custom spreadsheet (${rows} × ${cols})`;
     };
 
-    const mountSpreadsheet = (spreadsheet: SpreadsheetData): void => {
+    const mountSpreadsheet = (spreadsheet: SpreadsheetData, keepGivenSizes = false): void => {
       // Every caller here destroys and recreates sheetContainer's entire
       // contents -- an edit still sitting in the rescue input would
       // otherwise be silently orphaned (tracking a cell element that's
@@ -5600,7 +5600,8 @@ export function openSpreadsheetModal(
         // instead of each one needing its own resync.
         const liveRowHeights = readRenderedRowHeights(sheetContainer);
         const liveColWidths = readRenderedColWidths(sheetContainer);
-        if (liveRowHeights || liveColWidths) {
+        // Undo and Redo hand in the exact sizes to restore; the sizes on screen now must not override them.
+        if (!keepGivenSizes && (liveRowHeights || liveColWidths)) {
           spreadsheet = {
             ...spreadsheet,
             rowHeights: sheetContainer ? mergeRenderedRowHeights(spreadsheet.rowHeights, sheetContainer) : spreadsheet.rowHeights,
