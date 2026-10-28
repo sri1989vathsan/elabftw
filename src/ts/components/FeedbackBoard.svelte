@@ -155,11 +155,13 @@
   let editingItemId: number | null = null;
   let editItemTitle = '';
   let editItemBody = '';
+  let editItemType: FeedbackType = 'feature';
 
   function startEditItem(item: FeedbackItem): void {
     editingItemId = item.id;
     editItemTitle = item.title;
     editItemBody = item.body ?? '';
+    editItemType = item.type;
   }
 
   function cancelEditItem(): void {
@@ -171,9 +173,10 @@
     if (!title) return;
     try {
       const body = editItemBody.trim() === '' ? null : editItemBody.trim();
-      await ApiC.patch(`${Model.Feedback}/${item.id}`, { title, body });
+      await ApiC.patch(`${Model.Feedback}/${item.id}`, { title, body, type: editItemType });
       item.title = title;
       item.body = body;
+      item.type = editItemType;
       items = items;
       editingItemId = null;
     } catch (error) {
@@ -477,6 +480,24 @@
             </div>
             {#if editingItemId === item.id}
               <form class='feedback-edit-item-form mt-1' on:submit|preventDefault={() => saveEditItem(item)}>
+                <div class='btn-group btn-group-sm mb-1' role='group' aria-label={t('Type')}>
+                  <button
+                    type='button'
+                    class={editItemType === 'feature' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'}
+                    aria-pressed={editItemType === 'feature'}
+                    on:click={() => editItemType = 'feature'}
+                  >
+                    <i class='fas fa-star fa-fw mr-1' aria-hidden='true'></i>{t('Feature')}
+                  </button>
+                  <button
+                    type='button'
+                    class={editItemType === 'bug' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'}
+                    aria-pressed={editItemType === 'bug'}
+                    on:click={() => editItemType = 'bug'}
+                  >
+                    <i class='fas fa-bug fa-fw mr-1' aria-hidden='true'></i>{t('Bug')}
+                  </button>
+                </div>
                 <label class='sr-only' for={`feedbackEditTitle-${item.id}`}>{t('Title')}</label>
                 <input
                   id={`feedbackEditTitle-${item.id}`}

@@ -144,6 +144,12 @@ final class Feedback extends AbstractRest
             }
             $this->updateStatus((string) $params['status']);
         }
+        if (array_key_exists('type', $params)) {
+            if (!$isOwner && !$this->Users->isAdmin) {
+                throw new ImproperActionException('Only the author or a team admin can edit this item.');
+            }
+            $this->updateType((string) $params['type']);
+        }
         if (array_key_exists('title', $params) || array_key_exists('body', $params)) {
             if (!$isOwner && !$this->Users->isAdmin) {
                 throw new ImproperActionException('Only the author or a team admin can edit this item.');
@@ -192,6 +198,19 @@ final class Feedback extends AbstractRest
         $sql = 'UPDATE custom_feedback_items SET status = :status WHERE id = :id AND team = :team';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':status', $status);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    private function updateType(string $type): void
+    {
+        if (!in_array($type, self::TYPES, true)) {
+            throw new ImproperActionException('Invalid feedback type.');
+        }
+        $sql = 'UPDATE custom_feedback_items SET type = :type WHERE id = :id AND team = :team';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':type', $type);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $this->Db->execute($req);
