@@ -15,8 +15,10 @@ import {
   colLabel,
   normalizeSpreadsheetData,
   registerSpreadsheetHostData,
+  spreadsheetToHTML,
   WELL_PLATE_PRESETS,
 } from './inline-spreadsheet';
+import { RICH_SELECTION_ATTRIBUTE } from './ClipboardContent';
 
 export interface PlateGroup {
   name: string;
@@ -349,29 +351,25 @@ export function createPlateViewSwitch(active: 'plate' | 'sheet', onPlate: () => 
 
 /**
  * Puts the whole plate on the clipboard the way the spreadsheet's copy button does: tab-separated text (a header row
- * of column numbers, then one row per plate row with its letter and the content of each well) and an HTML table
- * that also carries each well's group colour.
+ * of column numbers, then one row per plate row with its letter and the content of each well) and the plate as an editor table
+ * (all its data and group colours), so pasting into the main text recreates the well plate.
  */
 function copyPlateToClipboard(data: SpreadsheetData): void {
-  const escape = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const textCell = (text: string): string => (/[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text);
   const numbers = Array.from({ length: data.cols }, (_, col) => String(col + 1));
   const textRows = [['', ...numbers].join('\t')];
-  const htmlRows = [`<tr><td></td>${numbers.map(number => `<td><b>${number}</b></td>`).join('')}</tr>`];
   for (let row = 0; row < data.rows; row++) {
     const values: string[] = [];
-    const cells: string[] = [];
     for (let col = 0; col < data.cols; col++) {
       const value = wellValue(data, row, col).trim();
-      const color = wellColor(data, row, col);
       values.push(textCell(value));
-      cells.push(`<td${color ? ` style="background-color:${escape(color)}"` : ''}>${escape(value)}</td>`);
     }
     textRows.push([colLabel(row), ...values].join('\t'));
-    htmlRows.push(`<tr><td><b>${colLabel(row)}</b></td>${cells.join('')}</tr>`);
   }
   const plain = textRows.join('\n');
-  const html = `<table><tbody>${htmlRows.join('')}</tbody></table>`;
+  // The plate itself, with all its data, marked as an editor copy: pasting it into the main text makes a new well
+  // plate, while other programs see an ordinary coloured table.
+  const html = `<div ${RICH_SELECTION_ATTRIBUTE}="true">${spreadsheetToHTML(data, data.displayData ?? data.data)}</div>`;
   const writePlain = (): void => { navigator.clipboard?.writeText(plain)?.catch(() => undefined); };
   if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
     writePlain();

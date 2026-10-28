@@ -14,6 +14,7 @@ import {
   spreadsheetFromClipboard,
   spreadsheetFromFlattenedClipboard,
   spreadsheetToHTML,
+  wellPlateFromClipboard,
   syncGridFiller,
   SpreadsheetData,
   SpreadsheetCellHistory,
@@ -3190,6 +3191,18 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       const selectedCell = editor.selection.getNode()
         .closest('td, th') as HTMLTableCellElement | null;
       const isRichSelection = richClipboardHtml.includes(RICH_SELECTION_ATTRIBUTE);
+      if (isRichSelection && !selectedCell && isStandaloneClipboardTable(richClipboardHtml)) {
+        // A copied well plate becomes a new well plate: the editor's own paste filter drops the cell colours.
+        const copiedPlate = wellPlateFromClipboard(richClipboardHtml);
+        if (copiedPlate) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          editor.undoManager.transact(() => {
+            insertPastedSpreadsheet(spreadsheetToHTML(copiedPlate, copiedPlate.displayData ?? copiedPlate.data));
+          });
+          return;
+        }
+      }
       if (isRichSelection && (!selectedCell || !isStandaloneClipboardTable(richClipboardHtml))) {
         return;
       }

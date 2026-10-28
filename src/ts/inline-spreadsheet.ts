@@ -1737,6 +1737,16 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
   };
 }
 
+/**
+ * A well plate copied with its own copy button (or selected in the editor): the plate as it was, read from the
+ * table markup on the clipboard, so pasting it into the main text makes a new well plate.
+ */
+export function wellPlateFromClipboard(html: string): SpreadsheetData | null {
+  const table = new DOMParser().parseFromString(html, 'text/html')
+    .body.querySelector<HTMLTableElement>('table.elabftw-spreadsheet[data-spreadsheet-style="well-plate"][data-spreadsheet]');
+  return table ? extractFromTable(table) : null;
+}
+
 /** Paste a rectangular source grid into an existing formula spreadsheet. */
 export function pasteSpreadsheetRange(
   targetData: SpreadsheetData,
