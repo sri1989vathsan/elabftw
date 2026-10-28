@@ -7155,16 +7155,8 @@ button.wp-legend-item {
   gap: 14px;
   min-height: 0;
   min-width: 0;
-  // the panel scrolls on its own; the selection box at the bottom (contents, Set contents, Remove group) stays in view
+  // the panel scrolls on its own when its sections do not all fit
   overflow-y: auto;
-
-  > .wp-box:last-child {
-    background: var(--mainbackground);
-    bottom: 0;
-    padding-bottom: 4px;
-    position: sticky;
-    z-index: 1;
-  }
 
   h6 {
     font-size: 12px;

@@ -620,6 +620,12 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
     const side = document.createElement('div');
     side.className = 'wp-dialog-side';
     side.innerHTML = `
+      <section class="wp-box wp-box-selection" hidden><h6 class="wp-selection-title">Selection</h6>
+        <p class="wp-hint wp-selection-info"></p>
+        <textarea class="form-control form-control-sm wp-contents" rows="3" aria-label="Contents of the selected wells" placeholder="Contents of the selected wells"></textarea>
+        <div class="wp-row"><button type="button" class="btn btn-sm btn-secondary wp-apply">Set contents</button>
+        <button type="button" class="btn btn-sm btn-secondary wp-clear-group">Remove group</button></div>
+      </section>
       <section class="wp-box"><h6>Colour wells by</h6>
         <select class="form-control form-control-sm wp-groupby" aria-label="Colour wells by"></select>
         <p class="wp-hint wp-groupby-hint"></p>
@@ -636,12 +642,6 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
         <div class="wp-palette" role="group" aria-label="Group colour"></div>
         <div class="wp-row"><button type="button" class="btn btn-sm btn-primary wp-add-group">Create group</button></div>
         <p class="wp-hint">Only creates the group. Assign wells from the list above.</p>
-      </section>
-      <section class="wp-box"><h6 class="wp-selection-title">Selection</h6>
-        <p class="wp-hint wp-selection-info"></p>
-        <textarea class="form-control form-control-sm wp-contents" rows="3" aria-label="Contents of the selected wells" placeholder="Contents of the selected wells"></textarea>
-        <div class="wp-row"><button type="button" class="btn btn-sm btn-secondary wp-apply">Set contents</button>
-        <button type="button" class="btn btn-sm btn-secondary wp-clear-group">Remove group</button></div>
       </section>`;
     body.append(left, side);
     dialog.appendChild(body);
@@ -671,13 +671,14 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
     const newName = side.querySelector<HTMLInputElement>('.wp-new-name');
     const palette = side.querySelector<HTMLElement>('.wp-palette');
     const selectionTitle = side.querySelector<HTMLElement>('.wp-selection-title');
+    const selectionBox = side.querySelector<HTMLElement>('.wp-box-selection');
     const selectionInfo = side.querySelector<HTMLElement>('.wp-selection-info');
     const groupBySelect = side.querySelector<HTMLSelectElement>('.wp-groupby');
     const groupByHint = side.querySelector<HTMLElement>('.wp-groupby-hint');
     const labelBySelect = side.querySelector<HTMLSelectElement>('.wp-labelby');
     const labelByHint = side.querySelector<HTMLElement>('.wp-labelby-hint');
     const contents = side.querySelector<HTMLTextAreaElement>('.wp-contents');
-    if (!groupList || !newName || !palette || !selectionTitle || !selectionInfo || !contents || !groupBySelect || !groupByHint || !labelBySelect || !labelByHint) {
+    if (!groupList || !newName || !palette || !selectionTitle || !selectionBox || !selectionInfo || !contents || !groupBySelect || !groupByHint || !labelBySelect || !labelByHint) {
       reject(new Error('well plate dialog could not be built'));
       return;
     }
@@ -786,6 +787,8 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
     };
 
     const paintSelection = (): void => {
+      // the selection box is only there while wells are selected
+      selectionBox.hidden = selected.size === 0;
       selectionTitle.textContent = selected.size > 0 ? `Selection (${selected.size})` : 'Selection';
       const names = Array.from(selected).slice(0, 8).map(key => {
         const [row, col] = key.split(',').map(Number);
@@ -935,6 +938,14 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
       plateRoot.querySelectorAll<HTMLElement>('.wp-well').forEach(el => {
         el.classList.toggle('is-selected', selected.has(wellKey(Number(el.dataset.row), Number(el.dataset.col))));
       });
+    });
+    // a click anywhere else in the dialog's body, outside the plate's wells and the side panel, drops the selection
+    body.addEventListener('mousedown', event => {
+      const target = event.target as Element;
+      if (selected.size === 0 || target.closest('.wp-well, .wp-label, .wp-dialog-side')) return;
+      selected = new Set();
+      anchor = null;
+      paint();
     });
     const endDrag = (): void => {
       if (!dragging) return;
