@@ -117,7 +117,7 @@ export function mountActivityLog(rootElement: HTMLElement | null, onLoaded: () =
   const render = (): void => {
     const rows = visible();
     count.textContent = `${rows.length} ${rows.length === 1 ? 'entry' : 'entries'}`;
-    const table = el('table', 'table table-sm table-hover');
+    const table = el('table', 'table table-sm table-hover activity-table');
     const head = el('tr');
     columns.forEach(c => {
       const th = el('th', 'activity-sortable');

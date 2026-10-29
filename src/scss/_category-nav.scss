@@ -218,7 +218,12 @@
   white-space: nowrap;
 }
 
+.activity-table {
+  min-width: 46rem;
+  font-size: 0.85rem;
+}
+
 .activity-details {
-  max-width: 28rem;
-  overflow-wrap: anywhere;
+  min-width: 16rem;
+  overflow-wrap: break-word;
 }
