@@ -641,6 +641,15 @@ grid and the plate submenu create it). Its size is fixed: no inserting or deleti
 - **Create popup**: "New folder" has a Parent folder list, so nested folders can be created there (`create-new-modal.html`, `create-new.ts`).
 - **Feedback board**: the author or a team admin can change an item's type (bug or feature) when editing it (`Feedback.php`, `FeedbackBoard.svelte`).
 
+## HTML tools: sending results to the main text
+
+The HTML tools feature (sysadmin-installed `.html` or `.zip` tools in a sandboxed frame, opened from the toolbox icon in the side panel,
+`HtmlToolsPanel.class.ts`, `HtmlTools.php`) is switched on with `FeatureFlags::HTML_TOOLS` (it was off; the flag's comment says to flip it once the
+implementation is ready). `src/ts/html-tool-bridge.ts` lets a tool hand a result to the entry being edited: the tool calls
+`window.parent.postMessage({ elabftw: 1, type: 'insert-plate' | 'insert-table' | 'insert-text', ... }, '*')`; the page takes a message only from the tool
+frame's window, rebuilds it from plain strings (colours checked, sizes capped) and inserts it at the cursor as one undo step through the editor
+command `elabftwInsertSpreadsheetData` (`SpreadsheetExtension.ts`). Message format, and the qPCR tool with its three "→ eLabFTW" buttons: `docs/html-tool-bridge/`.
+
 ## General Merge Notes
 
 - eLabFTW uses Yarn PnP (no `node_modules` directory) — packages are in zip archives
