@@ -26,3 +26,15 @@ need the same small block (look for `eLabFTW BRIDGE` in the file) and one button
 
 Install a tool: Administration, HTML tools (sysadmin), upload the file. Open it from the toolbox icon on any page; on an edit page the
 buttons insert into the main text.
+
+## The other tools: the pick bridge
+
+`pick-bridge.html` is a small block that `add-bridge.py` adds to any tool (`python3 add-bridge.py in.html out.html [extra.html]`). Inside eLabFTW it shows
+a bar at the bottom right: **Pick → eLabFTW** (click a table and it is sent as a table; click a result block and it is sent as text; hovering outlines what
+will be sent, Esc cancels) and **Selection → eLabFTW** (the text you have selected). Outside eLabFTW it does nothing. Tool-specific buttons go in an extra
+file and use `elabftwSend(message)` / `elabftwNote(text)`: `extras/transfection-plate.html` (the painted plate, one colour group per condition) and
+`extras/lenti-plates.html` (every filled plate: production, transduction, organoids). Installed this way: AAV Production, Lentivirus, Transfection Batch
+Calculator, Golden Gate, Lab Calculator (qPCR has its own buttons, above). Mouse Registry and Freezer Inventory were left as they are.
+
+Tools run with `connect-src 'none'` (see `HtmlToolController.php`), so anything that talks to the network, such as the Google Sheets sync of Mouse
+Registry and Freezer Inventory, cannot work inside eLabFTW.

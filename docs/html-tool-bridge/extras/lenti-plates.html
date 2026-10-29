@@ -1,0 +1,29 @@
+<script>
+// Lentivirus tool: every plate with assigned wells (production, transduction, organoids) as a well plate
+(function(){
+  if(window.parent===window) return;
+  var b=document.createElement('button'); b.type='button'; b.textContent='Plates → eLabFTW';
+  b.title='Insert the plates you have filled into the main text, one well plate each';
+  function plate(caption,wellIds,state,conds){
+    var wells={}, groups={}, rows={};
+    wellIds.forEach(function(w){
+      var c=conds.filter(function(x){return x.id===state[w];})[0]; if(!c) return;
+      wells[w]={label:String(conds.indexOf(c)+1),group:c.name,color:c.color}; groups[c.name]=c.color; rows[w]=[c.name];
+    });
+    if(!Object.keys(wells).length) return null;
+    return {type:'insert-plate',plateSize:wellIds.length,caption:caption,wells:wells,
+      groups:Object.keys(groups).map(function(n){return {name:n,color:groups[n]};}),table:{columns:['Condition'],rows:rows}};
+  }
+  b.addEventListener('click',function(){
+    var out=[];
+    out.push(plate('Virus production plate',getProdWellIds(),prodLayout.wellState,prodLayout.constructs));
+    out.push(plate('Transduction plate',getWellIds('cells'),planners.cells.wellState,planners.cells.conditions));
+    out.push(plate('Organoid transduction plate',getWellIds('orgs'),planners.orgs.wellState,planners.orgs.conditions));
+    out=out.filter(Boolean);
+    if(!out.length){ elabftwNote('Assign wells on a plate first'); return; }
+    out.forEach(function(m){ elabftwSend(m); });
+    elabftwNote(out.length+' plate'+(out.length===1?'':'s')+' sent');
+  });
+  document.getElementById('elabPick').prepend(b);
+})();
+</script>

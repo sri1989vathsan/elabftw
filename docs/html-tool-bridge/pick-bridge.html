@@ -1,0 +1,76 @@
+<!-- eLabFTW BRIDGE (pick): inserted by add-bridge.py; only active when the page runs inside eLabFTW -->
+<style>
+#elabPick{position:fixed;right:14px;bottom:14px;z-index:2147483647;display:none;gap:6px;align-items:center;font:600 12px/1 system-ui,sans-serif}
+#elabPick button{font:inherit;padding:8px 12px;border:0;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#elabPick button.on{background:#dc2626}
+#elabPick .elab-note{padding:8px 12px;border-radius:8px;background:#111827;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3);font-weight:500}
+.elab-pick-target{outline:3px solid #2563eb!important;outline-offset:2px;cursor:copy!important}
+@media print{#elabPick{display:none!important}}
+</style>
+<script>
+(function(){
+  if(window.parent===window) return;
+  var TARGETS='table,[class*="result"],[class*="summary"],[class*="recipe"],[class*="output"],.card,pre,li,p';
+  var bar=document.createElement('div'); bar.id='elabPick'; bar.style.display='flex';
+  var pick=document.createElement('button'); pick.type='button'; pick.textContent='Pick → eLabFTW';
+  pick.title='Click a table or result on this page to insert it into the main text';
+  var sel=document.createElement('button'); sel.type='button'; sel.textContent='Selection → eLabFTW';
+  sel.title='Insert the text you have selected'; sel.style.display='none';
+  var note=document.createElement('span'); note.className='elab-note'; note.style.display='none';
+  bar.append(note,sel,pick); document.body.appendChild(bar);
+  var picking=false, hot=null, timer=0;
+  function say(t){ note.textContent=t; note.style.display=''; clearTimeout(timer); timer=setTimeout(function(){ if(!picking) note.style.display='none'; },3500); }
+  function send(m){ window.parent.postMessage(Object.assign({elabftw:1},m),'*'); }
+  function clean(s){ return String(s||'').replace(/[ \t\r\f\v]+/g,' ').replace(/ ?\n ?/g,'\n').trim(); }
+  function cellText(c){
+    var t=clean(c.innerText).replace(/\n+/g,' '); if(t) return t;
+    var f=c.querySelector('input,select,textarea'); return f? clean(f.tagName==='SELECT'? f.options[f.selectedIndex]&&f.options[f.selectedIndex].text : f.value):'';
+  }
+  function fromTable(t){
+    var columns=null, rows=[];
+    t.querySelectorAll('tr').forEach(function(tr){
+      var cells=[].map.call(tr.children,cellText);
+      if(!cells.some(Boolean)) return;
+      if(!columns && [].every.call(tr.children,function(c){return c.tagName==='TH';})) columns=cells; else rows.push(cells);
+    });
+    if(!columns && rows.length) columns=rows.shift();
+    var cap=t.querySelector('caption'), h=t.closest('section,.card');
+    var title=(cap&&cap.innerText)||(h&&h.querySelector('h1,h2,h3,h4')&&h.querySelector('h1,h2,h3,h4').innerText)||document.title;
+    return {type:'insert-table',caption:clean(title).slice(0,120),columns:columns||[],rows:rows};
+  }
+  function fromElement(el){
+    var t=el.closest('table'); if(t) return fromTable(t);
+    var text=clean(el.innerText); if(!text) return null;
+    return {type:'insert-text',text:text};
+  }
+  var BLOCKS='[class*="result"],[class*="summary"],[class*="output"]';
+  function targetOf(node){
+    if(!node||!node.closest||node.closest('#elabPick')) return null;
+    var el=node.closest(TARGETS); if(!el||el.tagName==='TABLE') return el;
+    // a value inside a result block: take the whole block (not when that is most of the page)
+    for(var up=el.parentElement&&el.parentElement.closest(BLOCKS); up&&up!==document.body&&clean(up.innerText).length<1500; up=up.parentElement&&up.parentElement.closest(BLOCKS)) el=up;
+    return el;
+  }
+  function setHot(el){ if(hot) hot.classList.remove('elab-pick-target'); hot=el; if(hot) hot.classList.add('elab-pick-target'); }
+  function stop(){ picking=false; setHot(null); pick.classList.remove('on'); pick.textContent='Pick → eLabFTW'; note.style.display='none'; }
+  pick.addEventListener('click',function(e){
+    e.stopPropagation();
+    if(picking){ stop(); return; }
+    picking=true; pick.classList.add('on'); pick.textContent='Cancel';
+    note.textContent='Click a table or result to insert it (Esc cancels)'; note.style.display='';
+  });
+  document.addEventListener('mouseover',function(e){ if(picking) setHot(targetOf(e.target)); },true);
+  document.addEventListener('click',function(e){
+    if(!picking||e.target.closest('#elabPick')) return;
+    e.preventDefault(); e.stopPropagation();
+    var el=targetOf(e.target); var m=el&&fromElement(el); stop();
+    if(m){ send(m); say(m.type==='insert-table'?'Table sent':'Text sent'); } else say('Nothing to insert there');
+  },true);
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&picking) stop(); });
+  document.addEventListener('selectionchange',function(){ sel.style.display=clean(String(window.getSelection()))?'':'none'; });
+  sel.addEventListener('mousedown',function(e){ e.preventDefault(); });
+  sel.addEventListener('click',function(){ var s=window.getSelection(), text=clean(String(s)); if(text){ send({type:'insert-text',text:text}); say('Text sent'); } });
+  window.elabftwSend=send;   // tool-specific buttons use this
+  window.elabftwNote=say;
+})();
+</script>

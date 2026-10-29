@@ -653,7 +653,9 @@ command `elabftwInsertSpreadsheetData` (`SpreadsheetExtension.ts`). Message form
 The flag is on. The main text toolbar has an **HTML tools** button (after the spreadsheet tools button, `custom-editor/HtmlToolsExtension.ts`, only when the
 feature is on): its dropdown lists the installed tools; a pick dispatches the `open-html-tool` window event and `HtmlToolsPanel` opens that tool in the
 workspace beside the page, so the text stays visible. The eight tools of https://moors-code.github.io/Lab_Protocols/ were installed in the local
-dev database (qPCR from `docs/html-tool-bridge/qpcr.html`, the other seven unchanged); Mouse Registry and Freezer Inventory talk to Google Sheets.
+dev database (qPCR from `docs/html-tool-bridge/qpcr.html`, the other seven unchanged); Mouse Registry and Freezer Inventory talk to Google Sheets (which the tool frame's `connect-src 'none'` blocks).
+Five of the tools (all but qPCR, which has its own buttons, and the two registries) have a pick bridge added with `docs/html-tool-bridge/add-bridge.py`: a bar with
+**Pick → eLabFTW** (click a table or result block) and **Selection → eLabFTW**; the transfection and lentivirus tools also have plate buttons.
 
 ## General Merge Notes
 

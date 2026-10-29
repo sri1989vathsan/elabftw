@@ -1,0 +1,22 @@
+<script>
+// Transfection Batch Calculator: the painted plate as a well plate (one colour group per condition)
+(function(){
+  if(window.parent===window) return;
+  var b=document.createElement('button'); b.type='button'; b.textContent='Plate → eLabFTW';
+  b.title='Insert the painted plate into the main text';
+  b.addEventListener('click',function(){
+    var wells={}, groups={}, rows={};
+    Object.keys(state.wells).forEach(function(key){
+      var c=getCond(state.wells[key]); if(!c) return;
+      var n=state.conditions.indexOf(c)+1;
+      wells[key]={label:String(n),group:c.name,color:c.color}; groups[c.name]=c.color; rows[key]=[c.name,c.vessel||''];
+    });
+    if(!Object.keys(wells).length){ elabftwNote('Paint wells on the plate first'); return; }
+    elabftwSend({type:'insert-plate',plateSize:state.plateFormat,caption:'Transfection plate',wells:wells,
+      groups:Object.keys(groups).map(function(n){return {name:n,color:groups[n]};}),
+      table:{columns:['Condition','Vessel'],rows:rows}});
+    elabftwNote('Plate sent');
+  });
+  document.getElementById('elabPick').prepend(b);
+})();
+</script>
