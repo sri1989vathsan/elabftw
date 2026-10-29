@@ -147,11 +147,17 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
   copies.setAttribute('aria-label', 'Number of containers');
 
   const renderResults = (): void => {
-    const needle = search.value.trim().toLowerCase();
-    const matches = units
-      .filter(u => needle === '' || u.full_path.toLowerCase().includes(needle))
-      .slice(0, MAX_RESULTS);
+    // every word typed must be in the path, in any order: "freezer rack 3" finds Freezer > Rack 3_1
+    const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
     results.replaceChildren();
+    // nothing is listed until something is typed
+    if (words.length === 0) {
+      results.append(el('div', 'list-group-item text-muted', 'Type to search a location: a room, a freezer, a rack or a box.'));
+      return;
+    }
+    const matches = units
+      .filter(u => words.every(w => u.full_path.toLowerCase().includes(w)))
+      .slice(0, MAX_RESULTS);
     if (matches.length === 0) {
       results.append(el('div', 'list-group-item text-muted', 'No location matches.'));
       return;
@@ -249,6 +255,13 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
   };
 
   search.addEventListener('input', renderResults);
+  // Enter picks the first result
+  search.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      results.querySelector<HTMLButtonElement>('button')?.click();
+    }
+  });
 
   add.addEventListener('click', async () => {
     if (selected === null) {

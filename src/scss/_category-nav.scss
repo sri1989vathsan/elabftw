@@ -440,3 +440,9 @@
   font-size: 0.75rem;
   color: var(--medium);
 }
+
+// the results of the storage picker scroll instead of growing the popup
+.storage-picker-results {
+  max-height: 14rem;
+  overflow-y: auto;
+}
