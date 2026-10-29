@@ -457,7 +457,7 @@ abstract class AbstractEntity extends AbstractRest
 
         $entities = $req->fetchAll();
 
-        return $this->hydrateTags($entities);
+        return $this->hydrateStorage($this->hydrateTags($entities));
     }
 
     /**
@@ -1587,6 +1587,54 @@ abstract class AbstractEntity extends AbstractRest
         }
 
         return $tagsByItemId;
+    }
+
+    /**
+     * Add the storage locations (full path and quantity) of resources, so the table view can show them
+     */
+    protected function hydrateStorage(array $entities): array
+    {
+        if ($this->entityType !== EntityType::Items || $entities === array()) {
+            return $entities;
+        }
+        $ids = array_map(static fn(array $entity): int => (int) $entity['id'], $entities);
+        $sql = sprintf(
+            'SELECT item_id, storage_id, qty_stored, qty_unit FROM containers2items WHERE item_id IN (%s) ORDER BY id',
+            implode(',', $ids),
+        );
+        $req = $this->Db->prepare($sql);
+        $this->Db->execute($req);
+        $links = $req->fetchAll();
+        $byItem = array();
+        if ($links !== array()) {
+            $units = array();
+            $req = $this->Db->prepare('SELECT id, name, parent_id FROM storage_units');
+            $this->Db->execute($req);
+            foreach ($req->fetchAll() as $unit) {
+                $units[(int) $unit['id']] = $unit;
+            }
+            foreach ($links as $link) {
+                $parts = array();
+                $current = (int) $link['storage_id'];
+                // the depth cap protects against a corrupted parent loop
+                for ($i = 0; $i < 20 && isset($units[$current]); $i++) {
+                    array_unshift($parts, $units[$current]['name']);
+                    $current = (int) ($units[$current]['parent_id'] ?? 0);
+                }
+                $byItem[(int) $link['item_id']][] = array(
+                    'storage_id' => (int) $link['storage_id'],
+                    'path' => implode(' > ', $parts),
+                    'qty_stored' => (float) $link['qty_stored'],
+                    'qty_unit' => $link['qty_unit'],
+                );
+            }
+        }
+        foreach ($entities as &$entity) {
+            $entity['storage_locations'] = $byItem[(int) $entity['id']] ?? array();
+        }
+        unset($entity);
+
+        return $entities;
     }
 
     protected function hydrateTags(array $entities): array

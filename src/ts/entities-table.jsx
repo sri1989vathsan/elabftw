@@ -215,11 +215,28 @@ const EntitiesTable = ({
     );
   };
 
+  // resources only: where the item is stored and how much of it, as in an inventory sheet
+  const isResourcesPage = window.location.pathname.split('/').pop() === 'database.php';
+  const storageLocations = p => p.data.storage_locations ?? [];
+  const storageColumns = [
+    {
+      field: 'storage_path',
+      headerName: i18next.t('location', { defaultValue: 'Location' }),
+      valueGetter: p => storageLocations(p).map(l => l.path).join(' | '),
+    },
+    {
+      field: 'storage_qty',
+      headerName: i18next.t('quantity', { defaultValue: 'Quantity' }),
+      valueGetter: p => storageLocations(p).map(l => `${l.qty_stored} ${l.qty_unit}`.trim()).join(' | '),
+    },
+  ];
+
   const [columnDefs] = useState([
     { field: 'title', headerName: i18next.t('title') },
     { field: 'team_name', headerName: i18next.t('team') },
     { field: 'date', headerName: i18next.t('started-on'), valueGetter: p => lastLoginText(p.data.date), filterValueGetter: p => lastLoginText(p.data.date), cellRenderer: PastDateRenderer},
     { field: 'category', headerName: i18next.t('category'), valueGetter: p => p.data.category_title },
+    ...(isResourcesPage ? storageColumns : []),
     { field: 'status', headerName: i18next.t('status'), valueGetter: p => p.data.status_title },
     { field: 'tags_decoded', headerName: i18next.t('tags'), valueGetter: p => p.data.tags_decoded, filterValueGetter: p => p.data.tags_decoded?.map(tagData => tagData.tag).join(' ') ?? '', cellRenderer: TagsRenderer },
     { field: 'id', headerName: i18next.t('id') },
