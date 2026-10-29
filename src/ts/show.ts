@@ -244,7 +244,9 @@ async function displayEntities(
   relatedOrigin: string = getCurrentUrlParam('related_origin'),
 ) {
   const rootEl = document.getElementById('entityList');
-  const view = ['tb', 'gr', 'st', 'ac'].includes(mode) ? mode : 'it';
+  // the views made for the resources are not offered on the other pages, even when the saved mode is one of them
+  const resourceViews = entity.type === 'items' ? ['gr', 'st', 'ac'] : [];
+  const view = ['tb', ...resourceViews].includes(mode) ? mode : 'it';
   unmountOtherViews(view);
   if (view === 'ac') {
     activityModule ??= await import(
