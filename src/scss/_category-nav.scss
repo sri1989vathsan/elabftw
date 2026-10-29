@@ -118,6 +118,27 @@
 
     .btn {
       padding: 0.1rem 0.4rem !important;
+      font-size: 0.8rem;
+    }
+
+    .title,
+    .title a {
+      font-size: 1rem;
+      line-height: 1.3;
+    }
+
+    .catstat-btn {
+      font-size: 0.65rem;
+    }
+
+    .item-date,
+    .owner {
+      font-size: 0.72rem;
+    }
+
+    .entity-storage > summary,
+    .entity-storage-list {
+      font-size: 0.8rem;
     }
 
     // keep only the start date, the modification date is one click away
