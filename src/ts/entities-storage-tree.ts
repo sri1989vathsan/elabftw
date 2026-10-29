@@ -360,7 +360,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     tile.title = `${box.unit.name}: ${box.own.length} of ${rows * cols}`;
     tile.addEventListener('click', () => select(box.unit.id));
     const dots = el('div', 'rack-box-dots');
-    dots.style.gridTemplateColumns = `repeat(${cols}, 0.4rem)`;
+    dots.style.gridTemplateColumns = `repeat(${cols}, var(--rack-dot, 0.65rem))`;
     const filled = new Map<string, Row>();
     box.own.forEach(row => (row.storage_locations ?? [])
       .filter(l => l.storage_id === box.unit.id && l.position)
