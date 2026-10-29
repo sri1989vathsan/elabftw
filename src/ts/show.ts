@@ -32,6 +32,7 @@ import { on } from './handlers';
 // Loaded on demand: the "table" view pulls in ag-grid, which most page loads never need.
 let entitiesTableModule: typeof import('./entities-table') | null = null;
 let groupedModule: typeof import('./entities-grouped') | null = null;
+let storageTreeModule: typeof import('./entities-storage-tree') | null = null;
 
 type TeamScopedTomSelect = TomSelectWithAllOptions & {
   _showAll?: boolean;
@@ -223,6 +224,18 @@ async function displayEntities(
   relatedOrigin: string = getCurrentUrlParam('related_origin'),
 ) {
   const rootEl = document.getElementById('entityList');
+  if (mode === 'st') {
+    unmountEntityListSv();
+    entitiesTableModule?.unmountEntitiesTable();
+    groupedModule?.unmountGroupedEntities();
+    storageTreeModule ??= await import(
+      /* webpackChunkName: 'entities-storage-tree' */
+      './entities-storage-tree'
+    );
+    storageTreeModule.mountStorageTree(rootEl, order, sort, handleInitialLoadDone);
+    return;
+  }
+  storageTreeModule?.unmountStorageTree();
   if (mode === 'gr') {
     unmountEntityListSv();
     entitiesTableModule?.unmountEntitiesTable();
@@ -830,6 +843,16 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
       displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
       document.querySelector('[data-action="toggle-grouped-layout"]')?.classList.toggle('active', target === 'gr');
+    });
+  });
+
+  // the storage browser of the resources: tree of the storage units and the contents of the selected one
+  on('toggle-storage-layout', async () => {
+    const me = await getMe();
+    const target = me['display_mode'] === 'st' ? 'it' : 'st';
+    ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
+      displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
     });
   });
 

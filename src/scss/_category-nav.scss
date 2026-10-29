@@ -58,3 +58,41 @@
   font-size: 0.8rem;
   background: rgba(128, 128, 128, 0.2);
 }
+
+// storage browser: tree on the left, contents of the selected location on the right
+.storage-tree-layout {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.storage-tree-side {
+  flex: 0 0 18rem;
+  max-width: 40%;
+}
+
+.storage-tree-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.storage-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.storage-tree-row {
+  display: flex;
+  align-items: center;
+
+  &.selected {
+    background: rgba(128, 128, 128, 0.2);
+    font-weight: 600;
+  }
+}
+
+.storage-tree-label {
+  flex: 1 1 auto;
+  text-align: left;
+}
