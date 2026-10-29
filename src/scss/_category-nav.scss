@@ -103,12 +103,56 @@
   padding-bottom: 0.15rem !important;
   margin: 2px auto;
 
+  // fixed columns so every row lines up: badge, title, storage, buttons; anything else goes on a second line
   > .align-self-center {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 8rem minmax(0, 1fr) 6.5rem auto;
+    column-gap: 0.6rem;
     align-items: center;
-    column-gap: 0.75rem;
     width: 100%;
+
+    > * {
+      grid-row: 2;
+      grid-column: 2 / -1;
+      min-width: 0;
+    }
+
+    > div:first-child {
+      grid-row: 1;
+      grid-column: 1;
+      overflow: hidden;
+
+      .catstat-btn {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
+    > .title {
+      grid-row: 1;
+      grid-column: 2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    > .entity-storage {
+      grid-row: 1;
+      grid-column: 3;
+    }
+
+    > .d-flex.flex-row {
+      grid-row: 1;
+      grid-column: 4;
+    }
+
+    // the dates and the content toggle are in the table views
+    .d-flex.flex-column.small,
+    [data-action='toggle-body'] {
+      display: none !important;
+    }
 
     > *,
     .title {
@@ -140,11 +184,6 @@
     .entity-storage-list {
       font-size: 0.8rem;
     }
-
-    // keep only the start date, the modification date is one click away
-    .item-date + .item-date {
-      display: none;
-    }
   }
 }
 
@@ -168,6 +207,7 @@
   }
 }
 
-#entityList.entity-list-compact .entity > .align-self-center .entity-storage[open] {
-  flex-basis: 100%;
+#entityList.entity-list-compact .entity > .align-self-center > .entity-storage[open] {
+  grid-row: 2;
+  grid-column: 2 / -1;
 }
