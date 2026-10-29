@@ -588,6 +588,19 @@ grid and the plate submenu create it). Its size is fixed: no inserting or deleti
   partly filled plates are common (`plateTableSource` records the file name).
 - Data: `data-spreadsheet` holds `kind`, `plateSize`, `plateGroups`, `plateView`, `plateTable`, `plateGroupBy`, `plateLabelBy`,
   `plateTableSource`; normalised by `normalizePlateTable` in `src/ts/inline-spreadsheet.ts`.
+- **Plate editor (popup)**: the side panel scrolls on its own; the Selection box (contents, Set contents, Remove group) is at the
+  top and only shows while wells are selected; a click outside the wells and the side panel clears the selection.
+- **Copy and paste a plate**: the copy button in the plate's header (`copyPlateToClipboard` in `well-plate-view.ts`) puts the whole plate on the
+  clipboard: tab-separated text (header row of column numbers, then a letter and the wells) and the plate's own table markup in a
+  `data-elabftw-rich-selection` wrapper. Pasting into the main text outside a table (`spreadsheetPasteHandler` in
+  `SpreadsheetExtension.ts`, `wellPlateFromClipboard`) rebuilds a new, separate plate from the data in the markup (the editor's paste filter strips
+  the cells' colours, so the plate is rebuilt, not taken from the pasted HTML). Excel and Sheets get the grid as text.
+- **View pages**: `activateLazySpreadsheetViews` (`inline-spreadsheet.ts`) swaps the plain table for the plate with `buildViewHost`. There the
+  plate has the Plate | Spreadsheet buttons (`onShowSheet` / `onShowPlate`) and the "Colour by" / "Label by" lists on a working copy
+  (`structuredClone`) that is never saved: choices are lost on reload and when the plate is scrolled far out of view and mounted again.
+  Plates and spreadsheets in or near the window are built when the script starts (`mountTable`), not after the observer's first
+  report, and `main.scss` hides the plain well-plate table on screen until it is replaced. Printing follows the form shown;
+  `restoreStaticSpreadsheetsForPrint` leaves the buttons and the `.wp-choice` lists out.
 
 ### Spreadsheet changes (October 2026)
 
@@ -595,13 +608,38 @@ grid and the plate submenu create it). Its size is fixed: no inserting or deleti
 - **Paste transposed**: Ctrl/Cmd+Shift+V and "Paste transposed" in the right-click menu, in the inline grid and the popup. When the browser
   does not let the page read the clipboard, a small box asks to press Ctrl/Cmd+V. Right-click **Paste** works the same way
   (a menu click clears the grid's selection, so the clicked cell is selected before pasting).
-- Undo and redo also cover formatting changes (inline grid and popup).
+- Undo and redo also cover formatting changes (inline grid and popup), inserting and deleting rows and columns, dragging a row or column
+  border and the two autofit buttons (`StructureChange` entries carry `beforeWidths` / `afterWidths` / `beforeHeights` / `afterHeights`; the
+  popup keeps restored sizes with `mountSpreadsheet(spreadsheet, keepGivenSizes)`), and a paste inside a grid (one entry per paste,
+  `createPasteUndoRecorder`: `onbeforepaste` notes the target cells, `onpaste` hands over the cells that changed).
+- **Formulas move on paste, like Excel**: the grid's own copy never runs (the app writes the clipboard itself), so every copy in the inline
+  grid and the popup is remembered (`rememberGridCopy`: the text put on the clipboard, the raw cell contents behind it and where the
+  range came from). `createFormulaPasteShift` (`onbeforepaste`) swaps in the raw formulas of the last copy, shifted by how far they travelled
+  (`shiftFormulaReferences`, `$` anchors stay), when the pasted text is exactly what that copy put on the clipboard; text from elsewhere pastes as it is.
+  A repeated paste (into a larger selection) shifts each repeat by its own offset. Cut is not handled specially.
 - Enter while editing commits and moves down; in the last row it stays and a further Enter adds a row. Autosave starts after an insert, a paste and every grid edit.
 - The editor frame grows to fit its text when the built-in autoresize stops short (no scrolling inside the editor after quick typing).
+  It also re-measures on every `input` event (`tinymce.ts`), because the plugin only measures on key release, so the bottom edge no longer lags Enter.
+- **Printing**: File > Print everything / Print main text (`src/ts/print-main-text.ts`) prints an isolated copy. The editor keeps a spacer
+  `<div data-elabftw-spreadsheet-spacer>` after each table with a negative margin when the overlay is shorter than the table; the print copy
+  drops them (`restoreStaticSpreadsheetsForPrint`), otherwise tables and plates print on top of each other when printing from the edit page.
 - A notebook-style table's preview is sized from its own rows (no blank gap under long tables).
 - Typing into a grid keeps the page where it is: the grid's hidden input (`.jss_textarea`) can sit far from the visible cell and the browser
   scrolled to its caret. `inline-spreadsheet.ts` focuses it with `preventScroll` and puts the page back after typed text (keydown and `beforeinput`).
 - Test checklists: `tests/manual/SPREADSHEET-FULL-CHECK.md`, `tests/manual/TEST-LIST.md`.
+
+## Folders: back to the folder, folder path bar
+
+- **Back goes to the folder**: for an experiment or resource filed in a folder, the back arrow on the view page (`back-to-previous.html`), the
+  back arrow on the edit page (`view-edit-toolbar.html`) and "Save and go back" (`data-redirect='folder'` with `data-folder-url`, handled in
+  `update-entity-body` in `src/ts/common.ts`) open `?folder=<id>`. Entries without a folder behave as before (listing / view page).
+- **Folder path bar** (`src/templates/folder-path-bar.html`, `.folder-path-bar` in `main.scss`): the path of the folder, for example
+  `Vatsi > EV Project > Trogocytosis`, under view and edit pages (`view.html`, `edit.html`) and under a folder's list (`show.html`, when `?folder=<id>`).
+  Each part opens that folder (`experiments.php?folder=` or `database.php?folder=` for resources). The path is built from the hierarchy rows
+  (`readHierarchyRows`, `parent_id`). The last button lists the folder's subfolders in an upward menu. The bar is `position: sticky; bottom: 0`
+  so it stays at the bottom of the window, and it is hidden in print.
+- **Create popup**: "New folder" has a Parent folder list, so nested folders can be created there (`create-new-modal.html`, `create-new.ts`).
+- **Feedback board**: the author or a team admin can change an item's type (bug or feature) when editing it (`Feedback.php`, `FeedbackBoard.svelte`).
 
 ## General Merge Notes
 
