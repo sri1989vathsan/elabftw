@@ -216,7 +216,8 @@
   {# TOP TOOLBAR #}
   <div class='d-flex align-items-center flex-wrap' id='topToolbar'>
     {% if mode == 'edit' and Entity.entityType.value in ['experiments', 'items'] %}
-      <a title='{{ 'Go back'|trans }}' aria-label='{{ 'Go back'|trans }}' href='?mode=view&amp;id={{ Entity.id }}' class='btn btn-secondary'>
+      {# an entry filed in a folder goes back to that folder, the others to their view page #}
+      <a title='{{ 'Go back'|trans }}' aria-label='{{ 'Go back'|trans }}' href='{{ Entity.entityData.folder_id|default(0) ? '?folder=' ~ Entity.entityData.folder_id : '?mode=view&id=' ~ Entity.id }}' class='btn btn-secondary'>
         <i class='fas fa-arrow-left fa-fw'></i>
       </a>
     {% else %}
