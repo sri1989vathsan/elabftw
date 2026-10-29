@@ -7,6 +7,7 @@
 import { Editor } from 'tinymce/tinymce';
 import { registerDateTitleExtension } from './DateTitleExtension';
 import { registerFormatPainterExtension } from './FormatPainterExtension';
+import { registerHtmlToolsExtension } from './HtmlToolsExtension';
 import { registerLinkExtension } from './LinkExtension';
 import { registerListExtension } from './ListExtension';
 import { registerMouseLinkExtension } from './MouseLinkExtension';
@@ -36,6 +37,7 @@ export function registerCustomEditorExtensions(editor: Editor): void {
   );
   registerDateTitleExtension(editor);
   registerFormatPainterExtension(editor);
+  registerHtmlToolsExtension(editor);
   registerLinkExtension(editor);
   registerListExtension(editor);
   registerMouseLinkExtension(editor);

@@ -230,6 +230,10 @@ export function getTinymceBaseConfig(page: string): object {
   if (!document.getElementById('documentTitle')) {
     toolbar1 = toolbar1.replace('experiment-title ', '');
   }
+  // the HTML tools button only exists when the feature is on (the panel is rendered)
+  if (document.getElementById('htmlToolsPanel')) {
+    toolbar1 = toolbar1.replace('spreadsheet-tools ', 'spreadsheet-tools html-tools ');
+  }
   let removedMenuItems = 'newdocument, image, anchor';
   let fileMenuItems = 'preview | printEverything printMainText';
   if (page === 'edit') {

@@ -5,6 +5,7 @@
 import { ApiC } from './api';
 import SidePanel from './SidePanel.class';
 import { listenForHtmlToolMessages } from './html-tool-bridge';
+import { OPEN_HTML_TOOL_EVENT } from './custom-editor/HtmlToolsExtension';
 
 interface HtmlTool {
   id: number;
@@ -30,6 +31,10 @@ export default class HtmlToolsPanel extends SidePanel {
     document.getElementById('htmlToolClose')?.addEventListener('click', () => this.closeWorkspace());
     window.addEventListener('html-tools-changed', () => {
       if (this.loaded) void this.refresh();
+    });
+    // the editor's HTML tools toolbar button asks for a tool by id
+    window.addEventListener(OPEN_HTML_TOOL_EVENT, event => {
+      void this.openToolById((event as CustomEvent<{ id: number }>).detail.id);
     });
     this.initializeWorkspaceResizer();
     // a tool can send a plate, a table or text to the main text being edited
@@ -126,6 +131,12 @@ export default class HtmlToolsPanel extends SidePanel {
     body.append(actions);
     card.append(icon, body);
     return card;
+  }
+
+  private async openToolById(id: number): Promise<void> {
+    if (!this.loaded) await this.loadTools();
+    const tool = this.tools.find(candidate => candidate.id === id);
+    if (tool) this.openTool(tool);
   }
 
   private openTool(tool: HtmlTool): void {

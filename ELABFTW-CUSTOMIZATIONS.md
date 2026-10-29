@@ -650,6 +650,11 @@ implementation is ready). `src/ts/html-tool-bridge.ts` lets a tool hand a result
 frame's window, rebuilds it from plain strings (colours checked, sizes capped) and inserts it at the cursor as one undo step through the editor
 command `elabftwInsertSpreadsheetData` (`SpreadsheetExtension.ts`). Message format, and the qPCR tool with its three "→ eLabFTW" buttons: `docs/html-tool-bridge/`.
 
+The flag is on. The main text toolbar has an **HTML tools** button (after the spreadsheet tools button, `custom-editor/HtmlToolsExtension.ts`, only when the
+feature is on): its dropdown lists the installed tools; a pick dispatches the `open-html-tool` window event and `HtmlToolsPanel` opens that tool in the
+workspace beside the page, so the text stays visible. The eight tools of https://moors-code.github.io/Lab_Protocols/ were installed in the local
+dev database (qPCR from `docs/html-tool-bridge/qpcr.html`, the other seven unchanged); Mouse Registry and Freezer Inventory talk to Google Sheets.
+
 ## General Merge Notes
 
 - eLabFTW uses Yarn PnP (no `node_modules` directory) — packages are in zip archives
