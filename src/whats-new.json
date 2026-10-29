@@ -1,5 +1,36 @@
 [
   {
+    "id": "folder-path-bar",
+    "date": "2026-10-29",
+    "area": "Organise",
+    "featured": false,
+    "title": "Back to the folder, and a folder path with subfolders",
+    "summary": "Back and Save and go back return to the folder an entry is in, and a path bar at the bottom lets you move up or down the folders.",
+    "details": [
+      "In a folder's list, and under an experiment or resource that is in a folder, a bar shows the path, for example Vatsi > EV Project > Trogocytosis. Click any part to open that folder.",
+      "When the folder has subfolders, the last button opens a menu of them to go one level down. The bar stays at the bottom of the window as you scroll.",
+      "The back arrow (also on the edit page) and Save and go back now return to that folder."
+    ],
+    "image": "",
+    "imageAlt": ""
+  },
+  {
+    "id": "plate-view-and-copy",
+    "date": "2026-10-29",
+    "area": "Spreadsheets",
+    "featured": false,
+    "title": "Well plates: switch views, copy, and Excel-style formulas",
+    "summary": "Switch a plate between plate and spreadsheet, recolour it by any column, copy it as a new plate, and paste formulas with moving references.",
+    "details": [
+      "On a page you are reading, a well plate has Plate and Spreadsheet buttons and Colour by and Label by lists. They only change what you see; nothing is saved.",
+      "The copy button in a plate's header copies the whole plate; paste it into the text to get a new plate.",
+      "Pasting a copied formula in a spreadsheet moves its references like Excel, and pasting and resizing rows or columns are part of Undo.",
+      "Printing from the edit page no longer puts plates and tables on top of each other."
+    ],
+    "image": "",
+    "imageAlt": ""
+  },
+  {
     "id": "link-to-data",
     "date": "2026-10-11",
     "area": "Experiments",
@@ -334,7 +365,9 @@
       "fa-folder-tree::Open the Folders tab in the left sidebar. The tree shows every folder; the number next to a folder counts the items inside it.",
       "fa-folder-plus::Press Create folder at the bottom, give it a name (and an optional short description) and choose a parent folder to nest it.",
       "A good way to use them: one folder for each project, and a subfolder inside it for each idea within that project that you want to test and verify. Each approach then has its own place, and you can compare them side by side.",
-      "Click a folder to list only what is inside it. Choose the folder when you create an experiment or resource, or change it on its edit page.",
+      "Click a folder to list only what is inside it. Choose the folder when you create an experiment or resource, or change it on its edit page. In the Create experiment (or resource) window, New folder has a Parent folder list, so you can create a nested folder right there.",
+      "fa-arrow-left::Back to the folder: when an experiment or resource is in a folder, the back arrow on its page (also on the edit page) and Save and go back take you to that folder's list instead of the whole list of experiments.",
+      "fa-angles-right::Folder path: under an entry, and under the list of a folder, a bar shows where you are, for example Vatsi > EV Project > Trogocytosis. It stays at the bottom of the window as you scroll. Click any part to open that folder. When the folder has subfolders, the last button (for example 2 subfolders) opens a menu of them, so you can also go deeper.",
       "fa-ellipsis-vertical::Press the three dots on a folder for Export, Edit (rename, move to another parent, change the description) and Delete. Deleting a folder moves its items to Unfiled.",
       "fa-file-lines::Press the page icon on a folder to open its README: a page of notes for everyone working in that folder. The folder's owner and admins edit it; everyone who can see the folder can read it.",
       "fa-star::Star a folder to bookmark it, and collapse the branches you do not need. The tree remembers what you opened.",
@@ -523,6 +556,7 @@
       "Ordered, Collected and In storage orders show a Missing Procurement ID warning when no procurement ID was found in an attached file.",
       "The person who placed an order is notified when someone else changes its status.",
       "fa-file-pdf::Signed collection sheets: drop the signed sheets from the shop (PDF, one or several) on the dashed area at the top of the Orders page, or let them arrive in the synced folder. The number after Rüstschein is read from each sheet and the PDF is attached to every order with that procurement ID. An order that was Ordered becomes Collected, and the result of each file is shown as a notification in the corner of the page. Scans are read at high resolution so article numbers inside the table are found. Dropping the same sheet again, even under another file name, does not attach it twice.",
+      "fa-clock::The synced folder is checked every 5 minutes, and at most 10 files are read each time, so a large batch is simply worked through over the next checks. A read sheet moves to a done folder; one whose procurement number matches no order yet waits in unmatched and is tried again at every check; one that cannot be read at all goes to unreadable. Files that were only just copied in are left for the next check.",
       "fa-bell::The people who placed those orders are notified, whoever drops the sheet: “Orders from Procurement # (order name) has been collected. Please check if your item has been delivered.” When the confirmation of the procurement is attached to an order, the notification also says how many of its items were collected so far, for example 3/4; a later sheet with the remaining items brings it to 4/4.",
       "fa-sliders::Notification controls: open your profile, then Notifications. “My order was collected” turns this notification on or off in the app and by email, apart from “My order was updated” and “Status of my order changed”.",
       "fa-clipboard-check::Order Status: the tab next to Templates lists every procurement with its order numbers, order date, who requested it, how many of its items were collected (for example 1/4) and its signed sheets. Search by procurement ID, order number, order or person, filter by order date, and use My orders, Everyone or the people list. Press a row to see its orders, its items with the sheet that collected each, and the signed sheets with the items found on each. The page refreshes itself.",
@@ -691,7 +725,7 @@
       "fa-caret-up::Upvote the items that matter most to you. You automatically upvote your own post.",
       "fa-arrow-up::Sort the list by Most votes or by date.",
       "fa-comment::Open an item to read and write comments. Type @ followed by a name to mention a colleague, who is then notified.",
-      "fa-pen::The author of an item, or a team admin, can edit it, change its status (open, planned, done or declined) and delete it.",
+      "fa-pen::The author of an item, or a team admin, can edit it, change its type (Feature or Bug), change its status (open, planned, done or declined) and delete it.",
       "fa-bell::You are notified when someone mentions you in feedback."
     ],
     "imageAlt": "The Feedback board with the form to post a feature or bug, the filter tabs and one post with its vote button and comments",
@@ -837,7 +871,7 @@
     "title": "The editor toolbar",
     "summary": "New buttons above the text of an experiment: one Insert menu, dates, titles, notes, checklists, spreadsheets and more.",
     "details": [
-      "fa-floppy-disk::Save: the first button saves the experiment, and the bar shows whether your changes are saved. Save and go back is in the File menu.",
+      "fa-floppy-disk::Save: the first button saves the experiment, and the bar shows whether your changes are saved. Save and go back is in the File menu and returns to the folder the experiment is in. The File menu also has Print everything (the whole entry: text with its spreadsheets and plates, steps, links, files and comments) and Print main text (only the text).",
       "fa-plus::Insert: one menu for everything you can add. It lists Insert note, Divider, Tables, Spreadsheet, Well plate, Image, Links and Insert template. Title and date have their own buttons next to it. Insert template is only here, not as a separate button.",
       "fa-list-check::Checklist: turns lines into tick boxes. Type [ ] and a space to start one, then click a box to tick it.",
       "fa-image::Image: in the Insert menu. Opens the picture window to add an image from your computer or a web address, with a description and size. Image options: this button is only on the toolbar while an image is selected. It opens the same window for that image, to change its description, size or caption.",
@@ -918,12 +952,15 @@
       "fa-plus::Add rows: under a spreadsheet, type how many rows you want and press Add rows to add them at the bottom, up to 400 rows (and 400 columns) in all. Right-click a row number or column letter to insert a row or column, or delete the selected ones; select several first to delete them together.",
       "fa-grip::A well plate keeps its size. It has no Add rows bar, Enter in its last row adds nothing, and the right-click menu has no insert or delete. In the Spreadsheet Editor the row and column boxes and the Add rows and add-column buttons are greyed out. To change the size, pick another plate size in the size list, or choose Custom to turn the plate into an ordinary spreadsheet.",
       "fa-circle-dot::Plate view: a well plate in the text is drawn as round wells. Hover a well to see what it holds. Wells with the same colour form a group, listed under the plate by colour and name. The Plate and Spreadsheet buttons in the table's header switch between the plate and the grid; your choice is saved and is what gets printed. Plates up to 96 wells are as wide as the 96-well plate; the 384-well plate is smaller.",
+      "fa-eye::On a page you are only reading, a well plate has the same Plate and Spreadsheet buttons, and the Colour by and Label by lists: pick a column of the plate table to recolour the wells (the legend follows) or to show that column when you hover a well. Choose Saved colours or Saved labels to go back. This is only for looking: nothing is saved, the page shows the saved version again when you reload, and a plate that has been scrolled far out of sight returns to it. Printing prints the plate as it is on screen.",
+      "fa-copy::Copy plate: the copy button in a plate's header copies the whole plate. Paste it into the text (with the cursor outside a table) and you get a new, separate well plate with the same wells, colours and groups, which is a quick way to duplicate a plate. Pasted into Excel or Google Sheets it gives the grid as tab-separated text.",
       "fa-table-list::Plate table: give each well a row of information (sample, dose, …). Colour by and Label by then colour or name the wells by any column, so groups follow the table. Insert > Well plate > Insert from file… reads a CSV or XLSX file into a plate table; you are always asked for the plate size, because partly filled plates are common. A table opens as a full spreadsheet, and Back to plate view returns.",
       "fa-up-right-and-down-left-from-center::Spreadsheet Editor: the larger window has the formula bar, fill, fonts, colours, alignment (including top, middle and bottom), and the table and cell appearance. Update saves your changes and Cancel drops them.",
-      "fa-calculator::Formulas: start a cell with = to calculate, for example =A1+B1. Dragging the fill handle copies a formula down or across, and a reference written with a dollar sign stays fixed.",
+      "fa-calculator::Formulas: start a cell with = to calculate, for example =A1+B1. Dragging the fill handle copies a formula down or across, and a reference written with a dollar sign stays fixed. Copy a cell with a formula and paste it somewhere else in a spreadsheet and the references move the way they do in Excel: =B2*2 copied from C2 and pasted into C3 becomes =B3*2, and a reference with a dollar sign stays fixed.",
       "fa-paste::Paste: Ctrl/Cmd+V pastes at the selected cell. Ctrl/Cmd+Shift+V, or Paste transposed in the right-click menu, swaps rows and columns first. If the browser does not allow reading the clipboard from a menu, a small box asks you to press Ctrl/Cmd+V.",
       "fa-copy::Copy table: in the Edit menu of the menu bar. Copy complete table copies a whole table with its formatting, ready to paste into another program.",
-      "fa-rotate-left::Undo: Ctrl+Z in a spreadsheet only undoes spreadsheet edits (including formatting such as bold or a fill colour), and in the text it leaves the tables alone."
+      "fa-rotate-left::Undo: Ctrl+Z in a spreadsheet only undoes spreadsheet edits (including formatting such as bold or a fill colour), and in the text it leaves the tables alone. Pasting, inserting and deleting rows and columns, dragging a row or column border and the two autofit buttons are undo steps too, in the text and in the Spreadsheet Editor.",
+      "fa-print::Printing: File > Print main text (or Print everything) prints every spreadsheet and plate in full, one after another and never on top of each other, also when you print from the edit page."
     ],
     "imageAlt": "The Insert menu open on Spreadsheet, with the squares for picking a size",
     "featured": false,
