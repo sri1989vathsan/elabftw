@@ -56,7 +56,8 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
   units.sort((a, b) => a.full_path.localeCompare(b.full_path));
 
   let selected: Unit | null = null;
-  let startSlot: string | null = null;
+  // the free slots the user clicked in the box; when none, the first free slots are used
+  let pickedSlots: string[] = [];
 
   // the modal
   const modal = el('div', 'modal fade');
@@ -171,9 +172,12 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
       }
       item.addEventListener('click', () => {
         selected = u;
-        startSlot = null;
+        pickedSlots = [];
+        copies.disabled = false;
         renderResults();
         renderChosen();
+        // a box shows its slots below the results: make sure they are seen
+        chosen.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       });
       results.append(item);
     });
@@ -199,9 +203,19 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     if (unit.box_rows && unit.box_cols) {
       const taken = new Set((unit.taken_positions ?? '').split(',').filter(Boolean));
       const hint = el('p', 'small color-medium mt-2 mb-1');
+      // what will be used: the slots clicked, or the first free ones
+      const planned = (): string[] => pickedSlots.length > 0
+        ? pickedSlots
+        : freeSlotsFrom(unit, null, Math.max(1, Number(copies.value) || 1));
       const showHint = (): void => {
-        const slots = freeSlotsFrom(unit, startSlot, Math.max(1, Number(copies.value) || 1));
-        hint.textContent = slots.length === 0 ? 'This box is full.' : `Placed in ${slots.join(', ')}. Click a free slot to start from it.`;
+        if (pickedSlots.length > 0) {
+          hint.textContent = `Selected: ${pickedSlots.join(', ')}. Click a selected slot again to unselect it.`;
+        } else {
+          const slots = planned();
+          hint.textContent = slots.length === 0
+            ? 'This box is full.'
+            : `No slot selected: the first free slots (${slots.join(', ')}) will be used. Click free slots to choose your own.`;
+        }
       };
       const wrap = el('div', 'box-grid-wrap');
       const table = el('table', 'box-grid');
@@ -228,7 +242,12 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
             cell.style.backgroundColor = '#9a9a9a';
           } else {
             cell.addEventListener('click', () => {
-              startSlot = slot;
+              pickedSlots = pickedSlots.includes(slot) ? pickedSlots.filter(x => x !== slot) : [...pickedSlots, slot];
+              // the selection decides how many containers there are
+              copies.disabled = pickedSlots.length > 0;
+              if (pickedSlots.length > 0) {
+                copies.value = String(pickedSlots.length);
+              }
               paint();
             });
           }
@@ -242,12 +261,16 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
       wrap.append(table);
       // the slots that will be used are shown picked
       const paint = (): void => {
-        const used = new Set(freeSlotsFrom(unit, startSlot, Math.max(1, Number(copies.value) || 1)));
-        cells.forEach((cell, slot) => cell.classList.toggle('picked', used.has(slot)));
+        const chosenSlots = new Set(pickedSlots);
+        const suggested = new Set(pickedSlots.length > 0 ? [] : planned());
+        cells.forEach((cell, slot) => {
+          cell.classList.toggle('picked', chosenSlots.has(slot));
+          cell.classList.toggle('suggested', suggested.has(slot));
+        });
         showHint();
       };
       copies.oninput = paint;
-      chosen.append(el('label', 'mt-2 mb-1', 'Slots in the box'), wrap, hint);
+      chosen.append(el('label', 'mt-2 mb-1 font-weight-bold', 'Choose free slots in the box'), wrap, hint);
       paint();
     } else {
       copies.oninput = null;
@@ -268,8 +291,8 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
       return;
     }
     const unit = selected;
-    const count = Math.max(1, Math.floor(Number(copies.value) || 1));
-    const slots = unit.box_rows ? freeSlotsFrom(unit, startSlot, count) : [];
+    const count = pickedSlots.length > 0 ? pickedSlots.length : Math.max(1, Math.floor(Number(copies.value) || 1));
+    const slots = unit.box_rows ? (pickedSlots.length > 0 ? pickedSlots : freeSlotsFrom(unit, null, count)) : [];
     if (unit.box_rows && slots.length < count) {
       // the box cannot take that many: say so instead of leaving some containers loose
       copies.setCustomValidity(`Only ${slots.length} free slot(s) in this box`);

@@ -446,3 +446,10 @@
   max-height: 14rem;
   overflow-y: auto;
 }
+
+// slots the picker would use when none is clicked
+.box-slot.suggested {
+  border-style: solid;
+  border-color: var(--primary, #295ca9);
+  opacity: 0.7;
+}
