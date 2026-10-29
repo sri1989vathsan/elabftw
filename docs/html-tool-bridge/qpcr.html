@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>qPCR Protocol Builder</title>
+<link rel="icon" type="image/svg+xml" href="favicon-qpcr.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+:root {
+  --bg:#f0f2f5; --surface:#fff; --s2:#f7f8fb; --bd:#e0e4ed;
+  --fg:#1a1d26; --fg2:#5c6275; --acc:#2563b8; --accl:#dbeafe;
+  --grn:#16a34a; --grnl:#dcfce7; --red:#dc2626;
+  --r:8px; --sh:0 1px 3px rgba(0,0,0,.07),0 4px 14px rgba(0,0,0,.05);
+  --font:'IBM Plex Sans',system-ui,sans-serif;
+  --mono:'IBM Plex Mono','Courier New',monospace;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --bg:#0d1019; --surface:#161a24; --s2:#1c2030; --bd:#272d40;
+  --fg:#dde2f0; --fg2:#6b7390; --acc:#5b9cf0; --accl:#172040;
+  --grn:#3ecf6e; --grnl:#0c2218; --red:#f06868;
+  color-scheme:dark;
+}}
+:root[data-theme=dark]{
+  --bg:#0d1019; --surface:#161a24; --s2:#1c2030; --bd:#272d40;
+  --fg:#dde2f0; --fg2:#6b7390; --acc:#5b9cf0; --accl:#172040;
+  --grn:#3ecf6e; --grnl:#0c2218; --red:#f06868; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:var(--font);font-size:14px;line-height:1.5;
+  color:var(--fg);background:var(--bg);
+  padding:0 20px 48px;
+}
+
+/* HEADER */
+.hdr{
+  position:sticky;top:0;z-index:100;
+  background:var(--bg);border-bottom:1px solid var(--bd);
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  justify-content:space-between;padding:10px 0;margin-bottom:16px;
+}
+.hdr-l{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.badge{font-size:10px;font-weight:700;letter-spacing:.07em;color:var(--acc);
+  background:var(--accl);padding:3px 9px;border-radius:20px;white-space:nowrap;}
+.exp-name{font-size:16px;font-weight:600;letter-spacing:-.02em;background:none;border:none;
+  color:var(--fg);font-family:var(--font);padding:2px 4px;border-radius:4px;min-width:180px;}
+.exp-name:focus{outline:2px solid var(--acc);background:var(--accl);}
+.exp-name::placeholder{color:var(--fg2);}
+.hdr-r{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.date-inp{padding:5px 8px;background:var(--s2);border:1px solid var(--bd);
+  border-radius:6px;font-family:var(--mono);font-size:12px;color:var(--fg);outline:none;}
+.date-inp:focus{border-color:var(--acc);}
+.theme-btn{background:none;border:1px solid var(--bd);border-radius:6px;
+  padding:5px 9px;cursor:pointer;font-size:14px;line-height:1;color:var(--fg2);}
+.theme-btn:hover{border-color:var(--acc);color:var(--acc);}
+
+/* LAYOUT */
+.app{display:grid;grid-template-columns:210px 1fr;gap:14px;align-items:start;}
+@media(max-width:680px){.app{grid-template-columns:1fr;}}
+
+/* CARD */
+.card{background:var(--surface);border:1px solid var(--bd);border-radius:var(--r);
+  box-shadow:var(--sh);overflow:hidden;margin-bottom:12px;}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:9px 13px;border-bottom:1px solid var(--bd);background:var(--s2);}
+.card-hdr h2{font-size:10px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--fg2);}
+.card-body{padding:11px 13px;}
+
+/* FORM */
+.field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;}
+.field:last-child{margin-bottom:0;}
+.field label{font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--fg2);text-transform:uppercase;}
+.inp{padding:5px 8px;background:var(--s2);border:1px solid var(--bd);border-radius:6px;
+  font-family:var(--mono);font-size:12px;color:var(--fg);outline:none;width:100%;transition:border-color .12s;}
+.inp:focus{border-color:var(--acc);}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:6px;border:none;
+  font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;transition:opacity .12s;}
+.btn:hover{opacity:.82;}
+.btn-p{background:var(--acc);color:#fff;}
+.btn-g{background:var(--grn);color:#fff;}
+.btn-ghost{background:none;border:1px solid var(--bd);color:var(--fg2);}
+.btn-ghost:hover{border-color:var(--acc);color:var(--acc);background:var(--accl);}
+.btn-sm{padding:4px 9px;font-size:11px;}
+.btn-xs{padding:2px 7px;font-size:10px;}
+
+/* SAMPLE LIST */
+.smp-list{list-style:none;display:flex;flex-direction:column;gap:2px;}
+.smp-item{display:flex;align-items:center;gap:6px;padding:4px 5px;border-radius:5px;transition:background .1s;}
+.smp-item:hover{background:var(--s2);}
+.smp-inp{background:none;border:none;font-family:var(--font);font-size:12px;
+  font-weight:500;color:var(--fg);flex:1;min-width:0;outline:none;padding:0;}
+.smp-cnt{font-family:var(--mono);font-size:9px;color:var(--fg2);
+  background:var(--s2);padding:1px 5px;border-radius:8px;border:1px solid var(--bd);flex-shrink:0;}
+.rm{background:none;border:none;cursor:pointer;color:var(--fg2);font-size:15px;
+  line-height:1;padding:0 2px;opacity:.35;flex-shrink:0;}
+.rm:hover{opacity:1;color:var(--red);}
+.add-row{display:flex;align-items:center;gap:5px;width:100%;background:none;
+  border:1px dashed var(--bd);border-radius:5px;padding:5px 8px;cursor:pointer;
+  font-size:11px;font-weight:500;color:var(--fg2);font-family:var(--font);
+  margin-top:5px;transition:all .12s;}
+.add-row:hover{border-color:var(--acc);color:var(--acc);background:var(--accl);}
+
+/* GENE LIST */
+.gene-list{list-style:none;display:flex;flex-direction:column;gap:2px;}
+.gene-item{display:flex;align-items:center;gap:5px;padding:4px 5px;border-radius:5px;transition:background .1s;}
+.gene-item:hover{background:var(--s2);}
+.g-key{font-family:var(--mono);font-size:9px;font-weight:700;background:var(--s2);
+  border:1px solid var(--bd);border-radius:3px;padding:1px 5px;color:var(--fg2);flex-shrink:0;}
+.gene-inp{background:none;border:none;font-family:var(--font);font-size:12px;
+  font-weight:500;color:var(--fg);flex:1;min-width:0;outline:none;padding:0;}
+
+/* SETTINGS */
+.water-row{background:var(--grnl);border-radius:6px;padding:7px 9px;font-size:11px;
+  color:var(--grn);display:flex;justify-content:space-between;align-items:center;}
+.water-row strong{font-family:var(--mono);font-size:13px;}
+
+/* COLOR PICKER */
+input[type=color]{width:17px;height:17px;border:none;padding:0;cursor:pointer;
+  border-radius:50%;background:none;flex-shrink:0;}
+input[type=color]::-webkit-color-swatch-wrapper{padding:0;}
+input[type=color]::-webkit-color-swatch{border-radius:50%;border:none;}
+
+/* TABS */
+.tabs{display:flex;gap:2px;padding:8px 10px;border-bottom:1px solid var(--bd);background:var(--s2);}
+.tab{padding:4px 11px;border-radius:5px;border:none;background:none;
+  font-family:var(--font);font-size:11px;font-weight:500;color:var(--fg2);cursor:pointer;transition:all .12s;}
+.tab.on{background:var(--acc);color:#fff;}
+.tab:not(.on):hover{background:var(--surface);color:var(--fg);}
+
+/* QUICK BAR */
+.quick-bar{display:flex;gap:5px;flex-wrap:wrap;padding:7px 11px;
+  border-bottom:1px solid var(--bd);background:var(--s2);}
+
+/* INLINE PICKER */
+.picker{display:none;flex-wrap:wrap;gap:4px;padding:6px 11px 8px;
+  border-bottom:1px solid var(--bd);background:var(--accl);}
+.picker.show{display:flex;}
+.picker label{font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--acc);
+  text-transform:uppercase;align-self:center;margin-right:3px;}
+.pk-btn{padding:3px 7px;border-radius:4px;border:1px solid var(--acc);
+  background:var(--surface);color:var(--acc);font-family:var(--mono);
+  font-size:11px;font-weight:700;cursor:pointer;transition:all .1s;}
+.pk-btn:hover,.pk-btn.on{background:var(--acc);color:#fff;}
+.pk-close{margin-left:auto;background:none;border:none;cursor:pointer;
+  color:var(--fg2);font-size:16px;line-height:1;padding:0 4px;}
+.pk-close:hover{color:var(--red);}
+
+/* PLATE */
+.plate-wrap{overflow-x:auto;padding:10px 12px;}
+.plate-grid{display:grid;grid-template-columns:16px repeat(12,minmax(26px,1fr));
+  gap:3px;user-select:none;min-width:360px;}
+.col-lbl{text-align:center;font-size:9px;font-family:var(--mono);
+  font-weight:700;color:var(--fg2);padding:2px 0;}
+.row-lbl{font-size:9px;font-family:var(--mono);font-weight:700;
+  color:var(--fg2);display:flex;align-items:center;justify-content:center;}
+.well{aspect-ratio:1;border-radius:50%;background:var(--bd);
+  border:2px solid transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .07s;min-width:22px;min-height:22px;}
+.well:hover{transform:scale(1.1);}
+.well.sel{border-color:#fff;box-shadow:0 0 0 2px var(--acc),0 0 0 4px rgba(37,99,184,.3);z-index:2;position:relative;}
+.wlbl{font-family:var(--mono);font-size:7px;font-weight:700;
+  color:rgba(255,255,255,.92);text-shadow:0 1px 2px rgba(0,0,0,.4);
+  pointer-events:none;line-height:1;text-align:center;}
+
+/* ASSIGN PANEL */
+.assign-panel{background:var(--accl);border:1px solid var(--acc);
+  border-radius:6px;margin:0 11px 9px;padding:9px 11px;display:none;}
+.assign-panel.show{display:block;}
+.assign-panel h3{font-size:11px;font-weight:700;color:var(--acc);margin-bottom:8px;}
+.assign-row{display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;}
+.asel{flex:1 1 120px;padding:5px 8px;background:var(--surface);
+  border:1px solid var(--bd);border-radius:6px;font-family:var(--font);
+  font-size:12px;color:var(--fg);outline:none;appearance:none;}
+.asel:focus{border-color:var(--acc);}
+
+/* LEGEND */
+#plateLegend{padding:5px 11px 10px;display:flex;flex-wrap:wrap;gap:6px;}
+
+/* WELL LIST */
+.wl-wrap{overflow:auto;max-height:350px;}
+.wl-table{width:100%;border-collapse:collapse;font-size:11px;}
+.wl-table th{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--fg2);padding:4px 9px;border-bottom:1px solid var(--bd);
+  text-align:left;position:sticky;top:0;background:var(--s2);}
+.wl-table td{padding:4px 9px;border-bottom:1px solid var(--bd);}
+.wl-table tr:hover td{background:var(--s2);}
+.wl-table tr:last-child td{border-bottom:none;}
+.wdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+.wid{font-family:var(--mono);font-weight:700;font-size:10px;}
+
+/* MASTER MIX */
+.mm-stats{display:flex;gap:16px;flex-wrap:wrap;padding:10px 13px;
+  border-bottom:1px solid var(--bd);background:var(--s2);}
+.stat{display:flex;flex-direction:column;}
+.stat-v{font-family:var(--mono);font-size:18px;font-weight:500;color:var(--acc);line-height:1.1;}
+.stat-l{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--fg2);}
+.formula-box{background:var(--s2);border:1px solid var(--bd);border-radius:5px;
+  padding:8px 10px;font-family:var(--mono);font-size:11px;line-height:1.7;
+  color:var(--fg2);margin-bottom:10px;}
+.formula-box .v{color:var(--acc);font-weight:700;}
+.mm-gene{margin-bottom:14px;}
+.mm-gene-hdr{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;margin-bottom:6px;}
+.mm-gbadge{font-family:var(--mono);font-size:9px;font-weight:700;background:var(--s2);
+  border:1px solid var(--bd);border-radius:3px;padding:2px 5px;color:var(--fg2);}
+.mm-tbl{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;}
+.mm-tbl th{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--fg2);padding:4px 8px;border-bottom:1px solid var(--bd);text-align:left;}
+.mm-tbl td{padding:5px 8px;border-bottom:1px solid var(--bd);}
+.mm-tbl tr:last-child td{border-bottom:none;}
+.mm-tbl .n{font-family:var(--mono);color:var(--acc);}
+.mm-tbl .tot td{font-weight:600;background:var(--s2);border-top:2px solid var(--bd);}
+.mm-tbl .dim{color:var(--fg2);font-style:italic;}
+.divider{border:none;border-top:1px solid var(--bd);margin:12px 0;}
+
+/* BOTTOM */
+.bottom{grid-column:1/-1;}
+.proto-pre{font-family:var(--mono);font-size:10px;line-height:1.85;
+  background:var(--s2);border:1px solid var(--bd);border-radius:5px;
+  padding:12px;white-space:pre-wrap;color:var(--fg);max-height:340px;overflow-y:auto;}
+.copied{color:var(--grn);font-size:11px;font-weight:600;opacity:0;margin-left:4px;transition:opacity .3s;}
+.copied.show{opacity:1;}
+
+/* NOTES */
+.notes-ta{
+  width:100%;min-height:90px;resize:vertical;
+  background:var(--s2);border:1px solid var(--bd);border-radius:5px;
+  font-family:var(--mono);font-size:11px;line-height:1.75;
+  color:var(--fg);padding:10px 12px;outline:none;transition:border-color .12s;
+}
+.notes-ta:focus{border-color:var(--acc);}
+.notes-ta::placeholder{color:var(--fg2);}
+
+/* TOAST */
+#toast{position:fixed;bottom:20px;right:20px;background:var(--fg);color:var(--bg);
+  font-family:var(--mono);font-size:11px;padding:8px 14px;border-radius:6px;
+  z-index:999;opacity:0;transition:opacity .25s;pointer-events:none;}
+#toast.show{opacity:1;}
+
+/* ═══════════════ PRINT / PDF STYLES ═══════════════ */
+@media print {
+  /* Force light theme, reset layout */
+  :root {
+    --bg: #fff; --surface: #fff; --s2: #f4f5f7; --bd: #d0d4de;
+    --fg: #0d1019; --fg2: #4a5068; --acc: #1a4fa0; --accl: #e8effe;
+    --grn: #0d7a38; --grnl: #e6f8ee; --red: #b91c1c;
+  }
+
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  body {
+    background: #fff;
+    color: #0d1019;
+    padding: 0;
+    font-size: 11pt;
+  }
+
+  /* Hide all interactive elements */
+  .no-print,
+  .tabs,
+  .quick-bar,
+  .picker,
+  .assign-panel,
+  #listPanel,
+  .rm,
+  .add-row { display: none !important; }
+
+  /* Unstick header, make it a print title block */
+  .hdr {
+    position: static;
+    border-bottom: 2px solid #1a4fa0;
+    padding-bottom: 8pt;
+    margin-bottom: 12pt;
+  }
+  .badge { border: 1px solid #1a4fa0; }
+  .exp-name { font-size: 14pt; }
+
+  /* Full-width layout in print */
+  .app { display: block; }
+  .app > div:first-child { display: none; } /* hide sidebar settings — covered by protocol text */
+
+  /* Cards */
+  .card {
+    box-shadow: none;
+    border: 1px solid #d0d4de;
+    border-radius: 4pt;
+    margin-bottom: 10pt;
+    page-break-inside: avoid;
+  }
+  .card-hdr { background: #f4f5f7; }
+
+  /* Plate — show plate view, remove scroll */
+  #platePanel { display: block !important; }
+  .plate-wrap { overflow: visible; padding: 6pt 8pt; }
+  .plate-grid {
+    grid-template-columns: 14pt repeat(12, 1fr);
+    gap: 2pt;
+    min-width: unset;
+    width: 100%;
+  }
+  .well { min-width: unset; min-height: unset; }
+  .col-lbl { font-size: 6pt; }
+  .row-lbl  { font-size: 7pt; }
+  .wlbl     { font-size: 5.5pt; }
+  #plateLegend { padding: 4pt 8pt 6pt; }
+
+  /* Master mix tables */
+  .mm-stats { background: #f4f5f7; }
+  .formula-box { font-size: 9pt; }
+  .mm-tbl { font-size: 9.5pt; }
+  .divider { margin: 6pt 0; }
+
+  /* Protocol summary — full height, no scroll */
+  .proto-pre {
+    max-height: none;
+    overflow: visible;
+    font-size: 8pt;
+    line-height: 1.7;
+    border: 1px solid #d0d4de;
+    page-break-before: always;
+  }
+  .bottom { grid-column: unset; }
+
+  /* Notes textarea in print */
+  .notes-ta {
+    min-height: unset;
+    resize: none;
+    max-height: none;
+    overflow: visible;
+    border: 1px solid #d0d4de;
+    font-size: 9pt;
+  }
+
+  /* Page setup */
+  @page {
+    size: A4 portrait;
+    margin: 16mm 14mm 16mm 14mm;
+  }
+}
+
+.elabftw-only[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-l">
+    <span class="badge">qPCR</span>
+    <input class="exp-name" id="expName" placeholder="Experiment name…" value="qPCR Experiment" autocomplete="off">
+  </div>
+  <div class="hdr-r">
+    <input type="date" class="date-inp" id="expDate">
+    <button class="btn btn-p btn-sm no-print elabftw-only" hidden onclick="sendPlateToElabftw()" title="Insert the plate into the main text of the experiment you are editing">Plate → eLabFTW</button>
+    <button class="btn btn-ghost btn-sm no-print" onclick="clearPlate()">Clear plate</button>
+    <button class="btn btn-p btn-sm no-print" onclick="window.print()" title="Export as PDF via browser print dialog">⬇ Export PDF</button>
+    <button class="theme-btn no-print" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">☀</button>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- LEFT: SETUP -->
+  <div>
+
+    <div class="card">
+      <div class="card-hdr">
+        <h2>Samples</h2>
+        <button class="btn btn-ghost btn-xs" onclick="addSample()">+ Add</button>
+      </div>
+      <div class="card-body" style="padding-bottom:8px;">
+        <ul class="smp-list" id="smpList"></ul>
+        <button class="add-row" onclick="addSample()">+ Add sample / condition</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">
+        <h2>Genes / Primer Pairs</h2>
+        <button class="btn btn-ghost btn-xs" onclick="addGene()">+ Add</button>
+      </div>
+      <div class="card-body" style="padding-bottom:8px;">
+        <ul class="gene-list" id="geneList"></ul>
+        <button class="add-row" onclick="addGene()">+ Add gene / primer pair</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr"><h2>Reaction Settings</h2></div>
+      <div class="card-body">
+        <div class="field">
+          <label>Total Volume (µL)</label>
+          <input class="inp" type="number" id="rxnVol" value="10" min="5" max="50" step="0.5" oninput="update()">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>SYBR 2× (µL)</label>
+            <input class="inp" type="number" id="sybrVol" value="5" min="0" max="20" step="0.5" oninput="update()">
+          </div>
+          <div class="field">
+            <label>Primers (µL)</label>
+            <input class="inp" type="number" id="primerVol" value="1" min="0" max="10" step="0.1" oninput="update()">
+          </div>
+        </div>
+        <div class="field">
+          <label>Template / cDNA (µL)</label>
+          <input class="inp" type="number" id="tmplVol" value="1" min="0" max="10" step="0.5" oninput="update()">
+        </div>
+        <div class="water-row" style="margin-bottom:8px;">
+          <span>H₂O per reaction</span>
+          <strong id="waterCalc">3 µL</strong>
+        </div>
+        <div class="field">
+          <label>Overage %</label>
+          <input class="inp" type="number" id="overage" value="10" min="0" max="50" step="1" oninput="update()">
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: PLATE + MM + SUMMARY -->
+  <div>
+
+    <!-- PLATE CARD -->
+    <div class="card">
+      <div class="card-hdr">
+        <h2>96-Well Plate</h2>
+        <div style="display:flex;gap:5px;">
+          <button class="btn btn-ghost btn-xs no-print" onclick="clearPlate()">Clear</button>
+          <button class="btn btn-p btn-xs no-print" onclick="autoFill()">Auto-fill ↓</button>
+        </div>
+      </div>
+
+      <!-- PLATE / LIST TABS -->
+      <div class="tabs no-print">
+        <button class="tab on" id="tab-plate" onclick="switchTab('plate')">Plate view</button>
+        <button class="tab" id="tab-list" onclick="switchTab('list')">Well list</button>
+      </div>
+
+      <!-- QUICK ACTIONS -->
+      <div class="quick-bar no-print">
+        <button class="btn btn-ghost btn-xs" onclick="selAll()">Select all</button>
+        <button class="btn btn-ghost btn-xs" onclick="selNone()">Deselect</button>
+        <button class="btn btn-ghost btn-xs" onclick="clearSel()">Clear selected</button>
+        <button class="btn btn-ghost btn-xs" onclick="togglePicker('rowPicker')">Select row</button>
+        <button class="btn btn-ghost btn-xs" onclick="togglePicker('colPicker')">Select column</button>
+      </div>
+      <!-- ROW PICKER -->
+      <div class="picker no-print" id="rowPicker">
+        <label>Row:</label>
+        <button class="pk-btn" onclick="pickRow('A')">A</button>
+        <button class="pk-btn" onclick="pickRow('B')">B</button>
+        <button class="pk-btn" onclick="pickRow('C')">C</button>
+        <button class="pk-btn" onclick="pickRow('D')">D</button>
+        <button class="pk-btn" onclick="pickRow('E')">E</button>
+        <button class="pk-btn" onclick="pickRow('F')">F</button>
+        <button class="pk-btn" onclick="pickRow('G')">G</button>
+        <button class="pk-btn" onclick="pickRow('H')">H</button>
+        <button class="pk-close" onclick="togglePicker('rowPicker')" title="Close">✕</button>
+      </div>
+      <!-- COL PICKER -->
+      <div class="picker no-print" id="colPicker">
+        <label>Col:</label>
+        <button class="pk-btn" onclick="pickCol(1)">1</button>
+        <button class="pk-btn" onclick="pickCol(2)">2</button>
+        <button class="pk-btn" onclick="pickCol(3)">3</button>
+        <button class="pk-btn" onclick="pickCol(4)">4</button>
+        <button class="pk-btn" onclick="pickCol(5)">5</button>
+        <button class="pk-btn" onclick="pickCol(6)">6</button>
+        <button class="pk-btn" onclick="pickCol(7)">7</button>
+        <button class="pk-btn" onclick="pickCol(8)">8</button>
+        <button class="pk-btn" onclick="pickCol(9)">9</button>
+        <button class="pk-btn" onclick="pickCol(10)">10</button>
+        <button class="pk-btn" onclick="pickCol(11)">11</button>
+        <button class="pk-btn" onclick="pickCol(12)">12</button>
+        <button class="pk-close" onclick="togglePicker('colPicker')" title="Close">✕</button>
+      </div>
+
+      <!-- ASSIGN PANEL -->
+      <div class="assign-panel no-print" id="assignPanel">
+        <h3>Assign <span id="selCount">0</span> selected well(s)</h3>
+        <div class="assign-row">
+          <select class="asel" id="asmSample"><option value="">— Sample —</option></select>
+          <select class="asel" id="asmGene"><option value="">— Gene / Primer —</option></select>
+          <button class="btn btn-p btn-sm" onclick="assignWells()">Assign</button>
+        </div>
+      </div>
+
+      <!-- PLATE VIEW -->
+      <div id="platePanel">
+        <div class="plate-wrap">
+          <div class="plate-grid" id="plateGrid"></div>
+        </div>
+        <div id="plateLegend"></div>
+      </div>
+
+      <!-- LIST VIEW -->
+      <div id="listPanel" style="display:none;">
+        <div class="wl-wrap">
+          <table class="wl-table">
+            <thead><tr>
+              <th>Well</th><th>Sample</th><th>Gene</th><th>Type</th>
+              <th class="no-print">Action</th>
+            </tr></thead>
+            <tbody id="wellListBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- MASTER MIX CARD -->
+    <div class="card">
+      <div class="card-hdr"><h2>Master Mix Calculator</h2></div>
+      <div class="mm-stats" id="mmStats"></div>
+      <div class="card-body">
+        <div class="formula-box" id="formulaBox"></div>
+        <div id="mmTables"></div>
+      </div>
+    </div>
+
+    <!-- NOTES CARD -->
+    <div class="card">
+      <div class="card-hdr"><h2>Experiment Notes</h2></div>
+      <div class="card-body">
+        <textarea class="notes-ta" id="expNotes"
+          placeholder="Reagent lots, observations, instrument settings, deviations from protocol…"
+          oninput="update()"></textarea>
+      </div>
+    </div>
+
+    <!-- PROTOCOL SUMMARY CARD -->
+    <div class="card bottom">
+      <div class="card-hdr">
+        <h2>Protocol Summary</h2>
+        <div style="display:flex;align-items:center;gap:6px;" class="no-print">
+          <button class="btn btn-ghost btn-xs" onclick="copyProtocol()">Copy text</button>
+          <button class="btn btn-p btn-xs elabftw-only" hidden onclick="sendMasterMixToElabftw()" title="Insert the master-mix volumes as a table">Master mix → eLabFTW</button>
+          <button class="btn btn-p btn-xs elabftw-only" hidden onclick="sendProtocolToElabftw()" title="Insert the protocol text">Protocol → eLabFTW</button>
+          <button class="btn btn-p btn-xs" onclick="window.print()">⬇ Export PDF</button>
+          <span class="copied" id="copiedBadge">✓ Copied!</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <pre class="proto-pre" id="protocolText"></pre>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const ROWS = 'ABCDEFGH'.split('');
+const COLS = Array.from({length:12},(_,i)=>i+1);
+const GLTR = 'ABCDEFGHIJ'.split('');
+const COLORS = ['#2563eb','#dc2626','#16a34a','#d97706','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#0f766e'];
+
+let UID = 0;
+const uid = () => 'x'+(++UID);
+
+const S = {
+  samples: [
+    { id:'s1', name:'Condition A', color:COLORS[0] },
+    { id:'s2', name:'Condition B', color:COLORS[2] },
+  ],
+  genes: [
+    { id:'g1', name:'Housekeeping (GAPDH)' },
+    { id:'g2', name:'Gene of Interest' },
+  ],
+  wells: {},
+  sel: new Set(),
+  tab: 'plate',
+};
+
+function settings() {
+  const rxn = parseFloat(document.getElementById('rxnVol').value)||10;
+  const sybr = parseFloat(document.getElementById('sybrVol').value)||5;
+  const primer = parseFloat(document.getElementById('primerVol').value)||1;
+  const tmpl = parseFloat(document.getElementById('tmplVol').value)||1;
+  const ov = parseFloat(document.getElementById('overage').value)||10;
+  const water = Math.max(0, rxn - sybr - primer - tmpl);
+  return { rxn, sybr, primer, tmpl, water, ov };
+}
+
+// ─── INIT ───
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('expDate').value = new Date().toISOString().slice(0,10);
+  if (window.matchMedia('(prefers-color-scheme:dark)').matches)
+    document.getElementById('themeBtn').textContent = '☾';
+  document.getElementById('expName').addEventListener('input', update);
+  document.getElementById('expDate').addEventListener('input', update);
+  renderSamples(); renderGenes(); renderPlate(); update();
+});
+
+// ─── THEME ───
+function toggleTheme() {
+  const r = document.documentElement;
+  const c = r.getAttribute('data-theme');
+  const btn = document.getElementById('themeBtn');
+  if (!c) { r.setAttribute('data-theme','dark'); btn.textContent='☀'; }
+  else if (c==='dark') { r.setAttribute('data-theme','light'); btn.textContent='☾'; }
+  else { r.removeAttribute('data-theme'); btn.textContent = window.matchMedia('(prefers-color-scheme:dark)').matches ? '☀' : '☾'; }
+}
+
+// ─── SAMPLES ───
+function renderSamples() {
+  const ul = document.getElementById('smpList');
+  ul.innerHTML = '';
+  S.samples.forEach(s => {
+    const li = document.createElement('li');
+    li.className = 'smp-item';
+    li.innerHTML = `
+      <input type="color" id="cp_${s.id}" value="${s.color}">
+      <input class="smp-inp" value="${esc(s.name)}" placeholder="Sample name" oninput="updateSmpName('${s.id}',this.value)">
+      <span class="smp-cnt" id="cnt_${s.id}">0</span>
+      <button class="rm" onclick="removeSmp('${s.id}')" title="Remove">×</button>`;
+    li.querySelector('#cp_'+s.id).addEventListener('input', e => { s.color=e.target.value; renderPlate(); update(); });
+    ul.appendChild(li);
+  });
+}
+function updateSmpName(id,v){ const s=S.samples.find(x=>x.id===id); if(s){s.name=v;update();} }
+function addSample(){
+  S.samples.push({id:uid(),name:'Sample '+(S.samples.length+1),color:COLORS[S.samples.length%COLORS.length]});
+  renderSamples(); update();
+}
+function removeSmp(id){
+  S.samples=S.samples.filter(s=>s.id!==id);
+  Object.keys(S.wells).forEach(k=>{if(S.wells[k]?.sid===id)delete S.wells[k];});
+  renderSamples(); renderPlate(); update();
+}
+
+// ─── GENES ───
+function renderGenes() {
+  const ul = document.getElementById('geneList');
+  ul.innerHTML = '';
+  S.genes.forEach((g,i) => {
+    const li = document.createElement('li');
+    li.className = 'gene-item';
+    li.innerHTML = `
+      <span class="g-key">${GLTR[i]||'?'}</span>
+      <input class="gene-inp" value="${esc(g.name)}" placeholder="Gene / primer pair" oninput="updateGeneName('${g.id}',this.value)">
+      <button class="rm" onclick="removeGene('${g.id}')" title="Remove">×</button>`;
+    ul.appendChild(li);
+  });
+}
+function updateGeneName(id,v){ const g=S.genes.find(x=>x.id===id); if(g){g.name=v;update();} }
+function addGene(){
+  S.genes.push({id:uid(),name:'Gene '+(S.genes.length+1)});
+  renderGenes(); update();
+}
+function removeGene(id){
+  S.genes=S.genes.filter(g=>g.id!==id);
+  Object.keys(S.wells).forEach(k=>{if(S.wells[k]?.gid===id)delete S.wells[k];});
+  renderGenes(); renderPlate(); update();
+}
+
+// ─── PLATE RENDERING ───
+let isDrag=false, dragAdd=true;
+
+function renderPlate() {
+  const grid = document.getElementById('plateGrid');
+  grid.innerHTML = '';
+  grid.appendChild(document.createElement('div'));
+  COLS.forEach(c => {
+    const d=document.createElement('div'); d.className='col-lbl'; d.textContent=c; grid.appendChild(d);
+  });
+  ROWS.forEach(row => {
+    const rl=document.createElement('div'); rl.className='row-lbl'; rl.textContent=row; grid.appendChild(rl);
+    COLS.forEach(col => {
+      const key=row+col;
+      const w=document.createElement('div');
+      w.className='well'; w.dataset.k=key;
+      const a=S.wells[key];
+      if(a) {
+        const isNTC=a.sid==='NTC';
+        const smp=S.samples.find(s=>s.id===a.sid);
+        const gIdx=S.genes.findIndex(g=>g.id===a.gid);
+        const color=isNTC?'#8b96b0':(smp?.color||'#8b96b0');
+        w.style.background=color;
+        if(isNTC) w.style.opacity='.75';
+        const lbl=document.createElement('div');
+        lbl.className='wlbl';
+        lbl.textContent=GLTR[gIdx]??'?';
+        w.appendChild(lbl);
+        const geneName=S.genes.find(g=>g.id===a.gid)?.name||'?';
+        const smpName=isNTC?'NTC':(smp?.name||'?');
+        w.title=`${key}: ${smpName} / ${geneName}`;
+      } else {
+        w.title=key;
+      }
+      if(S.sel.has(key)) w.classList.add('sel');
+      w.addEventListener('mousedown', e => {
+        e.preventDefault();
+        isDrag=true;
+        dragAdd=!S.sel.has(key);
+        if(dragAdd) S.sel.add(key); else S.sel.delete(key);
+        renderPlate(); updateAssign();
+      });
+      w.addEventListener('mouseenter', () => {
+        if(!isDrag) return;
+        if(dragAdd) S.sel.add(key); else S.sel.delete(key);
+        renderPlate(); updateAssign();
+      });
+      grid.appendChild(w);
+    });
+  });
+  document.onmouseup = () => { isDrag=false; };
+  renderLegend(); updateCounts();
+}
+
+function updateCounts() {
+  S.samples.forEach(s => {
+    const el=document.getElementById('cnt_'+s.id);
+    if(el) el.textContent=Object.values(S.wells).filter(a=>a?.sid===s.id).length+'w';
+  });
+}
+
+function renderLegend() {
+  const leg=document.getElementById('plateLegend');
+  leg.innerHTML='';
+  const shown=new Set();
+  Object.values(S.wells).forEach(a=>{
+    if(!a) return;
+    const key=a.sid==='NTC'?'NTC':a.sid;
+    if(shown.has(key)) return; shown.add(key);
+    const smp=S.samples.find(s=>s.id===a.sid);
+    const color=a.sid==='NTC'?'#8b96b0':(smp?.color||'#8b96b0');
+    const name=a.sid==='NTC'?'NTC':(smp?.name||'?');
+    leg.insertAdjacentHTML('beforeend',
+      `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--fg2);">
+        <span style="width:9px;height:9px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block;"></span>${esc(name)}</span>`);
+  });
+  const gUsed=new Set(Object.values(S.wells).filter(Boolean).map(a=>a.gid));
+  S.genes.forEach((g,i)=>{
+    if(!gUsed.has(g.id)) return;
+    leg.insertAdjacentHTML('beforeend',
+      `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--fg2);border-left:1px solid var(--bd);padding-left:6px;margin-left:2px;">
+        <span style="font-family:var(--mono);font-size:9px;font-weight:700;background:var(--s2);border:1px solid var(--bd);border-radius:3px;padding:0 4px;">${GLTR[i]}</span>${esc(g.name)}</span>`);
+  });
+}
+
+// ─── ASSIGN PANEL ───
+function updateAssign() {
+  const n=S.sel.size;
+  document.getElementById('selCount').textContent=n;
+  document.getElementById('assignPanel').classList.toggle('show', n>0);
+  if(!n) return;
+  const ss=document.getElementById('asmSample');
+  const sg=document.getElementById('asmGene');
+  ss.innerHTML='<option value="">— Sample —</option><option value="NTC">NTC (no template)</option>';
+  S.samples.forEach(s=>{ ss.innerHTML+=`<option value="${s.id}">${esc(s.name)}</option>`; });
+  sg.innerHTML='<option value="">— Gene / Primer —</option>';
+  S.genes.forEach((g,i)=>{ sg.innerHTML+=`<option value="${g.id}">${GLTR[i]}: ${esc(g.name)}</option>`; });
+}
+
+function assignWells() {
+  const sid=document.getElementById('asmSample').value;
+  const gid=document.getElementById('asmGene').value;
+  if(!sid||!gid){ toast('Select a sample and gene first'); return; }
+  S.sel.forEach(k=>{ S.wells[k]={sid,gid}; });
+  S.sel.clear(); renderPlate(); updateAssign(); update();
+}
+
+// ─── TAB SWITCH ───
+function switchTab(t) {
+  S.tab=t;
+  document.getElementById('tab-plate').classList.toggle('on',t==='plate');
+  document.getElementById('tab-list').classList.toggle('on',t==='list');
+  document.getElementById('platePanel').style.display=t==='plate'?'':'none';
+  document.getElementById('listPanel').style.display=t==='list'?'':'none';
+  if(t==='list') renderWellList();
+}
+
+function renderWellList() {
+  const tbody=document.getElementById('wellListBody');
+  tbody.innerHTML='';
+  let count=0;
+  ROWS.forEach(r=>COLS.forEach(c=>{
+    const key=r+c; const a=S.wells[key]; if(!a) return;
+    count++;
+    const smp=S.samples.find(s=>s.id===a.sid);
+    const gene=S.genes.find(g=>g.id===a.gid);
+    const gIdx=S.genes.findIndex(g=>g.id===a.gid);
+    const isNTC=a.sid==='NTC';
+    const color=isNTC?'#8b96b0':(smp?.color||'#8b96b0');
+    const smpName=isNTC?'NTC':(smp?.name||'—');
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td class="wid">${key}</td>
+      <td><span class="wdot" style="background:${color}"></span>${esc(smpName)}</td>
+      <td>${GLTR[gIdx]??'?'}: ${esc(gene?.name||'—')}</td>
+      <td style="color:var(--fg2)">${isNTC?'NTC':'Sample'}</td>
+      <td class="no-print">
+        <button class="btn btn-ghost btn-xs" onclick="goToWell('${key}')">View</button>
+        <button class="btn btn-ghost btn-xs" style="color:var(--red)" onclick="clearWell('${key}')">Clear</button>
+      </td>`;
+    tbody.appendChild(tr);
+  }));
+  if(!count){
+    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--fg2);padding:20px;">No wells assigned yet — use the plate view or Auto-fill</td></tr>';
+  }
+}
+
+function goToWell(key) {
+  switchTab('plate');
+  S.sel.clear(); S.sel.add(key);
+  renderPlate(); updateAssign();
+  document.getElementById('platePanel').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function clearWell(key) {
+  delete S.wells[key];
+  renderWellList(); renderPlate(); update();
+}
+
+// ─── QUICK ACTIONS ───
+function selAll(){ ROWS.forEach(r=>COLS.forEach(c=>S.sel.add(r+c))); renderPlate(); updateAssign(); }
+function selNone(){ S.sel.clear(); renderPlate(); updateAssign(); }
+function clearSel(){ S.sel.forEach(k=>delete S.wells[k]); S.sel.clear(); renderPlate(); updateAssign(); update(); }
+function clearPlate(){ S.wells={}; S.sel.clear(); renderPlate(); updateAssign(); update(); }
+
+function togglePicker(id) {
+  const el=document.getElementById(id);
+  const other=id==='rowPicker'?'colPicker':'rowPicker';
+  document.getElementById(other).classList.remove('show');
+  el.classList.toggle('show');
+}
+function pickRow(r) {
+  COLS.forEach(c=>S.sel.add(r+c));
+  document.getElementById('rowPicker').classList.remove('show');
+  renderPlate(); updateAssign();
+}
+function pickCol(c) {
+  ROWS.forEach(r=>S.sel.add(r+c));
+  document.getElementById('colPicker').classList.remove('show');
+  renderPlate(); updateAssign();
+}
+
+// ─── AUTO-FILL ───
+function autoFill() {
+  if(!S.samples.length||!S.genes.length){ toast('Add samples and genes first'); return; }
+  const n=S.samples.length;
+  const rowsPerGene=Math.ceil(n/4)+1;
+  const needed=rowsPerGene*S.genes.length;
+  if(needed>8){ toast(`⚠ Need ${needed} rows but plate only has 8. Reduce samples or genes.`); return; }
+  S.wells={};
+  S.genes.forEach((gene,gi) => {
+    const startRow=gi*rowsPerGene;
+    S.samples.forEach((smp,si) => {
+      const rOff=Math.floor(si/4);
+      const cStart=(si%4)*3;
+      for(let rep=0;rep<3;rep++){
+        S.wells[ROWS[startRow+rOff]+(cStart+rep+1)]={sid:smp.id,gid:gene.id};
+      }
+    });
+    const ntcRow=startRow+Math.ceil(n/4);
+    for(let i=0;i<3;i++) S.wells[ROWS[ntcRow]+(i+1)]={sid:'NTC',gid:gene.id};
+  });
+  renderPlate(); update(); toast('Plate auto-filled — adjust as needed');
+}
+
+// ─── MAIN UPDATE ───
+function update() {
+  const cfg=settings();
+  document.getElementById('waterCalc').textContent=cfg.water.toFixed(2)+' µL';
+
+  const geneData=S.genes.map((gene,gi) => {
+    const gWells=Object.entries(S.wells).filter(([_,a])=>a?.gid===gene.id);
+    const nAll=gWells.length;
+    const nNTC=gWells.filter(([_,a])=>a?.sid==='NTC').length;
+    const nSmp=nAll-nNTC;
+    const N=+(nAll*(1+cfg.ov/100)).toFixed(2);
+    return {
+      gene,gi,nAll,nNTC,nSmp,N,
+      sybr:+(cfg.sybr*N).toFixed(2),
+      water:+(cfg.water*N).toFixed(2),
+      primer:+(cfg.primer*N).toFixed(2),
+      mmTotal:+((cfg.sybr+cfg.water+cfg.primer)*N).toFixed(2),
+    };
+  });
+
+  const totWells=Object.keys(S.wells).length;
+  const totNTC=Object.values(S.wells).filter(a=>a?.sid==='NTC').length;
+  const totAdj=+(totWells*(1+cfg.ov/100)).toFixed(1);
+
+  document.getElementById('mmStats').innerHTML=`
+    <div class="stat"><div class="stat-v">${totWells}</div><div class="stat-l">Total wells</div></div>
+    <div class="stat"><div class="stat-v">${S.genes.length}</div><div class="stat-l">Genes</div></div>
+    <div class="stat"><div class="stat-v">${totNTC}</div><div class="stat-l">NTC wells</div></div>
+    <div class="stat"><div class="stat-v">${totAdj}</div><div class="stat-l">Adj. rxns (+${cfg.ov}%)</div></div>`;
+
+  const n=S.samples.length, x=S.genes.length, ov=1+cfg.ov/100;
+  const refMult=+(((n*x*3)+(3*x))*ov).toFixed(1);
+  document.getElementById('formulaBox').innerHTML=
+    `<b style="color:var(--fg)">Protocol formula (reference):</b><br>
+MMix mult = ((n_smp × n_genes × 3) + (3_NTC × n_genes)) × 1.${cfg.ov}<br>
+= ((<span class="v">${n}</span> × <span class="v">${x}</span> × 3) + (3 × <span class="v">${x}</span>)) × <span class="v">${ov.toFixed(2)}</span> = <span class="v">${refMult}</span><br>
+<span style="color:var(--fg2);">↳ Actual volumes below are calculated from wells you placed on the plate.</span>`;
+
+  const mmEl=document.getElementById('mmTables');
+  mmEl.innerHTML='';
+  const active=geneData.filter(g=>g.nAll>0);
+  if(!active.length){
+    mmEl.innerHTML='<div style="text-align:center;color:var(--fg2);font-size:12px;padding:20px 0;">Assign wells on the plate to calculate volumes</div>';
+  } else {
+    active.forEach((g,i) => {
+      const basePerGene=+((cfg.sybr+cfg.water)*g.N).toFixed(2);
+      const sec=document.createElement('div');
+      sec.className='mm-gene';
+      sec.innerHTML=`
+        <div class="mm-gene-hdr">
+          <span class="mm-gbadge">${GLTR[g.gi]}</span>${esc(g.gene.name)}
+          <span style="font-size:11px;color:var(--fg2);font-weight:400;">(${g.nAll} wells · ${g.nSmp} samples + ${g.nNTC} NTC)</span>
+        </div>
+        <table class="mm-tbl">
+          <thead><tr>
+            <th>Component</th><th>Per rxn</th><th>× ${g.N} adj</th><th>Total (µL)</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td>SYBR Green 2× MM</td>
+              <td class="n">${cfg.sybr} µL</td><td class="n">×${g.N}</td><td class="n">${g.sybr}</td>
+            </tr>
+            <tr>
+              <td>RNase/DNase-free H₂O</td>
+              <td class="n">${cfg.water.toFixed(2)} µL</td><td class="n">×${g.N}</td><td class="n">${g.water}</td>
+            </tr>
+            <tr>
+              <td class="dim" colspan="3">↳ mix SYBR+H₂O first, then add primers to this gene's aliquot</td>
+              <td class="n dim">${basePerGene} µL</td>
+            </tr>
+            <tr>
+              <td>Primers 10 µM (F+R mix)</td>
+              <td class="n">${cfg.primer} µL</td><td class="n">×${g.N}</td><td class="n">${g.primer}</td>
+            </tr>
+            <tr class="tot">
+              <td>Total MMix (${(cfg.sybr+cfg.water+cfg.primer).toFixed(1)} µL/well)</td>
+              <td class="n">${(cfg.sybr+cfg.water+cfg.primer).toFixed(1)} µL</td>
+              <td class="n">×${g.N}</td><td class="n">${g.mmTotal}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="font-size:10px;color:var(--fg2);margin-top:4px;">+ Pipette <strong>${cfg.tmpl} µL</strong> cDNA per sample well (or H₂O for NTC)</p>`;
+      mmEl.appendChild(sec);
+      if(i<active.length-1){ const hr=document.createElement('hr'); hr.className='divider'; mmEl.appendChild(hr); }
+    });
+  }
+
+  LAST_CALC={geneData,cfg};
+  renderProtocol(geneData, cfg);
+  if(S.tab==='list') renderWellList();
+}
+
+// ─── PROTOCOL TEXT ───
+function renderProtocol(geneData, cfg) {
+  const expName=(document.getElementById('expName').value||'qPCR Experiment').toUpperCase();
+  const expDate=document.getElementById('expDate').value||'—';
+  const mmPerWell=(cfg.sybr+cfg.water+cfg.primer).toFixed(1);
+  const active=geneData.filter(g=>g.nAll>0);
+  const totWells=Object.keys(S.wells).length;
+  const totNTC=Object.values(S.wells).filter(a=>a?.sid==='NTC').length;
+
+  const L=[];
+  L.push('═══════════════════════════════════════════════════════');
+  L.push(`  qPCR PROTOCOL  ·  ${expName}`);
+  L.push(`  Date: ${expDate}   Lab: Syphy-lab, ETH Zürich`);
+  L.push('═══════════════════════════════════════════════════════');
+  L.push('');
+  L.push('REACTION SETUP');
+  L.push('──────────────');
+  L.push(`  Instrument       QuantStudio 3 (QS3)`);
+  L.push(`  Chemistry        SYBR Green, Fast mode`);
+  L.push(`  Reaction volume  ${cfg.rxn} µL  (${mmPerWell} µL MMix + ${cfg.tmpl} µL template)`);
+  L.push(`  Overage factor   ${cfg.ov}%`);
+  L.push(`  Total wells      ${totWells}  (${totNTC} NTC)`);
+  L.push(`  Genes assayed    ${S.genes.length}`);
+  L.push('');
+  L.push('MASTER MIX PREPARATION');
+  L.push('───────────────────────');
+
+  if(!active.length) {
+    L.push('  [Assign wells on the plate to generate volumes]');
+  } else {
+    const totN=+(totWells*(1+cfg.ov/100)).toFixed(1);
+    const sybrTot=+(cfg.sybr*totN).toFixed(1);
+    const waterTot=+(cfg.water*totN).toFixed(1);
+    L.push(`Step 1 — Prepare combined SYBR + H₂O base mix (for all ${active.length} gene(s))`);
+    L.push('');
+    L.push(`  Component              Per rxn     × ${totN} adj      Total`);
+    L.push(`  ─────────────────────  ──────────  ────────────  ──────────`);
+    L.push(`  SYBR Green 2× MM       ${String(cfg.sybr+' µL').padEnd(10)}  ×${totN}          ${sybrTot} µL`);
+    L.push(`  RNase-free H₂O         ${String(cfg.water.toFixed(2)+' µL').padEnd(10)}  ×${totN}          ${waterTot} µL`);
+    L.push('');
+    L.push(`Step 2 — Split base mix into ${active.length} eppendorf(s), one per gene`);
+    const baseTot=+((cfg.sybr+cfg.water)*totN).toFixed(1);
+    L.push(`  ${baseTot} µL ÷ ${active.length} = ${+(baseTot/active.length).toFixed(1)} µL per eppendorf`);
+    L.push('');
+    L.push(`Step 3 — Add primers to each gene eppendorf`);
+    L.push('');
+    active.forEach(g => {
+      const baseVol=+((cfg.sybr+cfg.water)*g.N).toFixed(1);
+      L.push(`  Eppendorf ${GLTR[g.gi]}: ${g.gene.name}`);
+      L.push(`    SYBR + H₂O (base)  ${baseVol} µL`);
+      L.push(`    + Primers 10 µM    ${g.primer} µL`);
+      L.push(`    = Total MMix       ${g.mmTotal} µL  (for ${g.nAll} wells × ${g.N} adj factor)`);
+      L.push('');
+    });
+    L.push(`Step 4 — Pipette ${mmPerWell} µL of gene MMix into each well`);
+    L.push(`Step 5 — Add ${cfg.tmpl} µL cDNA to sample wells; ${cfg.tmpl} µL H₂O to NTC wells`);
+  }
+
+  L.push('');
+  L.push('PLATE MAP  (letter = gene, N = NTC, · = empty)');
+  L.push('───────────────────────────────────────────────');
+  L.push('      ' + COLS.map(c=>String(c).padStart(3)).join(''));
+  ROWS.forEach(row => {
+    let line=`  ${row}   `;
+    COLS.forEach(col=>{
+      const a=S.wells[row+col];
+      if(!a){ line+=' · '; return; }
+      if(a.sid==='NTC'){ line+=' N '; return; }
+      const gi=S.genes.findIndex(g=>g.id===a.gid);
+      line+=` ${GLTR[gi]??'?'} `;
+    });
+    L.push(line);
+  });
+  L.push('');
+  L.push('Key: '+S.genes.map((g,i)=>`${GLTR[i]}=${g.name}`).join(', ')+', N=NTC, ·=empty');
+
+  const notes=(document.getElementById('expNotes').value||'').trim();
+  if(notes){
+    L.push('');
+    L.push('EXPERIMENT NOTES');
+    L.push('────────────────');
+    notes.split('\n').forEach(line=>L.push('  '+line));
+  }
+  L.push('');
+  L.push('═══════════════════════════════════════════════════════');
+  document.getElementById('protocolText').textContent=L.join('\n');
+}
+
+// ─── COPY ───
+function copyProtocol(){
+  const txt=document.getElementById('protocolText').textContent;
+  navigator.clipboard.writeText(txt).then(()=>{
+    const b=document.getElementById('copiedBadge');
+    b.classList.add('show');
+    setTimeout(()=>b.classList.remove('show'),2200);
+  }).catch(()=>toast('Select text manually and copy'));
+}
+
+// ─── eLabFTW BRIDGE ───
+// Inside eLabFTW this page runs in a sandboxed frame and can only send messages to the page around it.
+// The buttons marked .elabftw-only are shown only then; see docs/html-tool-bridge/README.md in the eLabFTW fork.
+let LAST_CALC=null;
+const IN_ELABFTW = window.parent !== window;
+document.addEventListener('DOMContentLoaded',()=>{
+  if(IN_ELABFTW) document.querySelectorAll('.elabftw-only').forEach(el=>el.hidden=false);
+});
+function sendToElabftw(message){
+  if(!IN_ELABFTW){ toast('Open this tool inside eLabFTW to insert into an experiment'); return; }
+  window.parent.postMessage({elabftw:1,...message},'*');
+}
+function sendPlateToElabftw(){
+  const wells={}, groups=new Map(), table={columns:['Sample','Gene'],rows:{}};
+  Object.entries(S.wells).forEach(([key,a])=>{
+    if(!a) return;
+    const isNTC=a.sid==='NTC';
+    const smp=S.samples.find(x=>x.id===a.sid);
+    const gene=S.genes.find(x=>x.id===a.gid);
+    const gIdx=S.genes.findIndex(x=>x.id===a.gid);
+    const group=isNTC?'NTC':(smp?.name||'?');
+    const color=isNTC?'#8b96b0':(smp?.color||'#8b96b0');
+    groups.set(group,color);
+    wells[key]={label:(GLTR[gIdx]??'?'),group,color};
+    table.rows[key]=[group,gene?.name||''];
+  });
+  if(!Object.keys(wells).length){ toast('Assign wells on the plate first'); return; }
+  const name=document.getElementById('expName').value||'qPCR plate';
+  sendToElabftw({type:'insert-plate',plateSize:96,caption:name,wells,
+    groups:[...groups].map(([name,color])=>({name,color})),table});
+}
+function sendMasterMixToElabftw(){
+  const active=(LAST_CALC?.geneData||[]).filter(g=>g.nAll>0);
+  if(!active.length){ toast('Assign wells on the plate first'); return; }
+  const cfg=LAST_CALC.cfg;
+  sendToElabftw({type:'insert-table',
+    caption:(document.getElementById('expName').value||'qPCR')+' – master mix',
+    columns:['Gene','Wells','Reactions (+'+cfg.ov+'%)','SYBR Green 2× (µL)','H₂O (µL)','Primers 10 µM (µL)','Total MMix (µL)'],
+    rows:active.map(g=>[g.gene.name,g.nAll,g.N,g.sybr,g.water,g.primer,g.mmTotal])});
+}
+function sendProtocolToElabftw(){
+  const txt=document.getElementById('protocolText').textContent.trim();
+  if(!txt){ toast('Nothing to insert yet'); return; }
+  sendToElabftw({type:'insert-text',text:txt});
+}
+
+// ─── TOAST ───
+function toast(msg,ms=2600){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),ms);
+}
+
+// ─── ESCAPE ───
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
