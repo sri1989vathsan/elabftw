@@ -55,3 +55,36 @@ export function filterParams(event?: Event, order = 'date', sort = 'desc'): URLS
   }
   return params;
 }
+
+const URL_RE = /^https?:\/\/\S+$/i;
+
+// a value that is a web address becomes a link to it, anything else stays text
+export function linkify(value: string): Node {
+  if (!URL_RE.test(value)) {
+    return document.createTextNode(value);
+  }
+  const a = document.createElement('a');
+  a.href = value;
+  a.textContent = value;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  return a;
+}
+
+// the storage browser, opened on a location
+export function storageUrl(storageId: number): string {
+  return `?storage_unit=${encodeURIComponent(String(storageId))}`;
+}
+
+// the locations of a resource as links to the storage browser, separated by a bar
+export function appendLocationLinks(cell: HTMLElement, locations: { storage_id: number; path: string }[]): void {
+  locations.forEach((l, i) => {
+    if (i > 0) {
+      cell.append(document.createTextNode(' | '));
+    }
+    const a = document.createElement('a');
+    a.href = storageUrl(l.storage_id);
+    a.textContent = l.path;
+    cell.append(a);
+  });
+}

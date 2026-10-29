@@ -4,9 +4,10 @@
  */
 import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
+import { appendLocationLinks, linkify } from './entities-view-utils';
 
 type ExtraField = { name: string; value: string };
-type StorageLocation = { path: string; qty_stored: number; qty_unit: string };
+type StorageLocation = { storage_id: number; path: string; qty_stored: number; qty_unit: string };
 type Row = {
   id: number;
   title: string;
@@ -94,7 +95,7 @@ function buildGroups(rows: Row[], groupBy: GroupBy): Group[] {
 
 function buildTable(group: Group, groupBy: GroupBy): HTMLTableElement {
   const table = el('table', 'table table-sm table-hover mb-0');
-  const columns: { head: string; cell: (row: Row) => string }[] = [];
+  const columns: { head: string; cell: (row: Row) => string | Node }[] = [];
   if (groupBy === 'category') {
     // the fields of this category, in the order they were defined
     const names: string[] = [];
@@ -105,9 +106,16 @@ function buildTable(group: Group, groupBy: GroupBy): HTMLTableElement {
     }));
     names.forEach(name => columns.push({
       head: name,
-      cell: row => (row.extra_fields ?? []).find(f => f.name === name)?.value ?? '',
+      cell: row => linkify((row.extra_fields ?? []).find(f => f.name === name)?.value ?? ''),
     }));
-    columns.push({ head: 'Location', cell: row => locationsOf(row).map(l => l.path).join(' | ') });
+    columns.push({
+      head: 'Location',
+      cell: row => {
+        const span = el('span');
+        appendLocationLinks(span, locationsOf(row));
+        return span;
+      },
+    });
   } else {
     columns.push({ head: 'Category', cell: row => row.category_title ?? '' });
   }
@@ -129,7 +137,11 @@ function buildTable(group: Group, groupBy: GroupBy): HTMLTableElement {
     const titleCell = el('td');
     titleCell.append(link);
     tr.append(titleCell);
-    columns.forEach(c => tr.append(el('td', '', c.cell(row))));
+    columns.forEach(c => {
+      const td = el('td');
+      td.append(c.cell(row));
+      tr.append(td);
+    });
     body.append(tr);
   });
   table.append(body);

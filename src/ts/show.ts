@@ -380,7 +380,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // can't have await at top level, so wrap it
   void (async (): Promise<void> => {
     const me = await getMe();
-    displayEntities(String(me['display_mode'] ?? 'it'), getPreferredOrder(me), getPreferredSort(me));
+    // a link to a storage location opens the storage browser, without changing the saved display mode
+    const toLocation = entity.type === 'items' && getCurrentUrlNumberParam('storage_unit') !== null;
+    displayEntities(toLocation ? 'st' : String(me['display_mode'] ?? 'it'), getPreferredOrder(me), getPreferredSort(me));
   })();
 
   preventReactiveSearchFormSubmit();

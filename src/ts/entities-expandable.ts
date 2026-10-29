@@ -4,10 +4,12 @@
  */
 import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
-import { el, fieldLabel, filterParams, plainText } from './entities-view-utils';
+import { appendLocationLinks, el, fieldLabel, filterParams, linkify, plainText, storageUrl } from './entities-view-utils';
 
 type ExtraField = { name: string; value: string };
-type StorageLocation = { path: string; qty_stored: number; qty_unit: string };
+type StorageLocation = { storage_id: number; path: string; qty_stored: number; qty_unit: string };
+type WebLink = { id: string; label: string; url: string };
+type InternalLink = { page: string; entityid: number; title: string; category_title: string | null; category_color: string | null };
 type Row = {
   id: number;
   title: string;
@@ -16,6 +18,7 @@ type Row = {
   fullname: string;
   storage_locations?: StorageLocation[];
   extra_fields?: ExtraField[];
+  web_links?: WebLink[];
 };
 type Change = { created_at: string; target: string; content: string | null; fullname: string | null };
 
@@ -47,7 +50,9 @@ function buildDetail(row: Row): HTMLElement {
     const grid = el('div', 'expandable-fields');
     fields.forEach(f => {
       const cell = el('div', 'expandable-field');
-      cell.append(el('div', 'expandable-field-label', f.name), el('div', '', f.value));
+      const value = el('div');
+      value.append(linkify(f.value));
+      cell.append(el('div', 'expandable-field-label', f.name), value);
       grid.append(cell);
     });
     box.append(grid);
@@ -63,18 +68,45 @@ function buildDetail(row: Row): HTMLElement {
     const list = el('ul', 'entity-storage-list');
     locations.forEach(l => {
       const li = el('li');
-      li.append(el('span', '', l.path), el('span', 'color-medium', `${l.qty_stored} ${l.qty_unit}`.trim()));
+      const where = el('a', '', l.path);
+      where.href = storageUrl(l.storage_id);
+      li.append(where, el('span', 'color-medium', `${l.qty_stored} ${l.qty_unit}`.trim()));
       list.append(li);
     });
     storage.append(list);
   }
   detail.append(storage);
 
+  // external links of the resource are in the list, the internal ones are fetched with the activity
+  const links = section('Links');
+  const webLinks = row.web_links ?? [];
+  webLinks.forEach(w => {
+    const a = el('a', 'd-block', w.label || w.url);
+    a.href = w.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.title = w.url;
+    links.append(a);
+  });
+  const internal = el('div');
+  links.append(internal);
+  detail.append(links);
+
   const activity = section('Recent activity');
   activity.append(el('p', 'text-muted mb-0', 'Loading...'));
   detail.append(activity);
   // the changelog is not part of the list: fetch it when the row is opened
-  void ApiC.getJson<{ changelog?: Change[] }>(`items/${row.id}`, { notifOnError: 0 }).then(item => {
+  void ApiC.getJson<{ changelog?: Change[]; items_links?: InternalLink[]; experiments_links?: InternalLink[] }>(`items/${row.id}`, { notifOnError: 0 }).then(item => {
+    const internalLinks = [...(item.items_links ?? []), ...(item.experiments_links ?? [])];
+    internalLinks.forEach(l => {
+      const a = el('a', 'd-block');
+      a.href = `${l.page}?mode=view&id=${encodeURIComponent(String(l.entityid))}`;
+      a.append(el('i', 'fas fa-arrow-right fa-fw mr-1'), document.createTextNode(l.title));
+      internal.append(a);
+    });
+    if (internalLinks.length === 0 && webLinks.length === 0) {
+      links.append(el('p', 'text-muted mb-0', 'No links.'));
+    }
     const changes = (item.changelog ?? []).slice(0, RECENT_CHANGES);
     activity.lastElementChild?.remove();
     if (changes.length === 0) {
@@ -91,6 +123,7 @@ function buildDetail(row: Row): HTMLElement {
     table.append(tbody);
     activity.append(table);
   }).catch(() => {
+    links.append(el('p', 'text-muted mb-0', 'The links could not be loaded.'));
     activity.lastElementChild?.remove();
     activity.append(el('p', 'text-muted mb-0', 'The activity could not be loaded.'));
   });
@@ -116,7 +149,6 @@ function render(container: HTMLElement, rows: Row[]): void {
   const body = el('tbody');
   rows.forEach(row => {
     const locations = row.storage_locations ?? [];
-    const first = locations[0];
     const tr = el('tr', 'expandable-row');
     const caretCell = el('td', 'expandable-caret-cell');
     const caret = el('button', 'btn btn-transparent btn-sm');
@@ -140,7 +172,9 @@ function render(container: HTMLElement, rows: Row[]): void {
     }
     categoryCell.append(document.createTextNode(row.category_title ?? ''));
     tr.append(categoryCell);
-    tr.append(el('td', '', first ? `${first.path}${locations.length > 1 ? ` (+${locations.length - 1})` : ''}` : ''));
+    const locationCell = el('td');
+    appendLocationLinks(locationCell, locations);
+    tr.append(locationCell);
     tr.append(el('td', 'text-nowrap', locations.length > 0 ? totalStock(locations) : ''));
     tr.append(el('td', '', row.fullname ?? ''));
     body.append(tr);

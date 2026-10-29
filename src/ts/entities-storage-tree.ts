@@ -120,6 +120,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   let includeChildren = true;
   let query = '';
   let tree: { roots: Node[]; byId: Map<number, Node> } = { roots: [], byId: new Map() };
+  // the location asked for in the address is selected once, then the user's own choices win
+  let openedFromUrl = false;
 
   const layout = el('div', 'storage-tree-layout');
   const side = el('div', 'storage-tree-side');
@@ -234,8 +236,17 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
       titleCell.append(link);
       tr.append(titleCell);
-      [row.category_title ?? '', `${location.qty_stored} ${location.qty_unit}`.trim(), location.path, row.fullname ?? '']
-        .forEach(text => tr.append(el('td', '', text)));
+      [row.category_title ?? '', `${location.qty_stored} ${location.qty_unit}`.trim()].forEach(text => tr.append(el('td', '', text)));
+      // the location of an entry is a link that selects it in the tree
+      const whereCell = el('td');
+      const where = el('a', '', location.path);
+      where.href = `?storage_unit=${location.storage_id}`;
+      where.addEventListener('click', event => {
+        event.preventDefault();
+        select(location.storage_id);
+      });
+      whereCell.append(where);
+      tr.append(whereCell, el('td', '', row.fullname ?? ''));
       body.append(tr);
     });
     table.append(thead, body);
@@ -261,6 +272,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   const load = async (event?: Event): Promise<void> => {
     const current = ++requestId;
     const params = filterParams(event, order, sort);
+    // the location in the address is for the tree, not a filter of the resources
+    params.delete('storage_unit');
     try {
       const endpoint = getEntityTypeFromPage(window.location);
       const [units, rows] = await Promise.all([
@@ -272,6 +285,18 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         return;
       }
       tree = buildTree(units, rows);
+      const requested = Number(new URLSearchParams(document.location.search).get('storage_unit'));
+      if (requested > 0 && tree.byId.has(requested) && !openedFromUrl) {
+        state.selected = requested;
+        // open the parents so the selected location is visible
+        let parent = tree.byId.get(requested)?.unit.parent_id ?? null;
+        while (parent !== null && tree.byId.has(parent)) {
+          state.collapsed[String(parent)] = false;
+          parent = tree.byId.get(parent)?.unit.parent_id ?? null;
+        }
+        writeState(state);
+      }
+      openedFromUrl = true;
       renderTree();
       renderMain();
     } catch (error) {

@@ -36,6 +36,23 @@ const yesNo = v => v === 1 ? i18next.t('yes') : i18next.t('no');
 const lastLoginText = v => v === null ? i18next.t('never') : v;
 let entitiesTableRoot = null;
 
+const URL_RE = /^https?:\/\/\S+$/i;
+
+// the locations of a resource, each a link to the storage browser opened on it
+const LocationsRenderer = ({ data }) => (data.storage_locations ?? []).map((l, i) => (
+  <span key={l.storage_id}>
+    {i > 0 && ' | '}
+    <a href={`?storage_unit=${l.storage_id}`} onClick={event => event.stopPropagation()}>{l.path}</a>
+  </span>
+));
+
+// a web address in a custom field becomes a link to it
+const WebAddressRenderer = ({ value }) => (
+  URL_RE.test(value ?? '')
+    ? <a href={value} target='_blank' rel='noopener noreferrer' onClick={event => event.stopPropagation()}>{value}</a>
+    : value
+);
+
 const normalizeStringParam = value => {
   if (value === null || value === undefined) {
     return '';
@@ -223,6 +240,7 @@ const EntitiesTable = ({
       field: 'storage_path',
       headerName: i18next.t('location', { defaultValue: 'Location' }),
       valueGetter: p => storageLocations(p).map(l => l.path).join(' | '),
+      cellRenderer: LocationsRenderer,
     },
     {
       field: 'storage_qty',
@@ -265,6 +283,7 @@ const EntitiesTable = ({
       colId: `extra_${name}`,
       headerName: name,
       valueGetter: p => (p.data.extra_fields ?? []).find(f => f.name === name)?.value ?? '',
+      cellRenderer: WebAddressRenderer,
     }));
     // placed right after the title so the data of the category comes first, like in an inventory sheet
     return [baseColumns[0], ...extraColumns, ...baseColumns.slice(1)];

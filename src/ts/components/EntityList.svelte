@@ -823,7 +823,7 @@
               <ul class='entity-storage-list'>
                 {#each entity.storage_locations ?? [] as location (location.storage_id)}
                   <li>
-                    <span>{location.path}</span>
+                    <a href={`?storage_unit=${location.storage_id}`}>{location.path}</a>
                     <span class='color-medium'>{location.qty_stored} {location.qty_unit}</span>
                   </li>
                 {/each}
