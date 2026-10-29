@@ -322,10 +322,20 @@ type AnyTS = TomSelectWithAllOptions & {
 };
 const bound = new WeakSet<Element>();
 
+const COMPACT_LIST_KEY = 'persistent_compact_list_v1';
+
 // DOM
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('info')) {
     return;
+  }
+  try {
+    if (localStorage.getItem(COMPACT_LIST_KEY) === '1') {
+      document.getElementById('entityList')?.classList.add('entity-list-compact');
+      document.querySelector('[data-action="toggle-compact-list"]')?.classList.add('active');
+    }
+  } catch {
+    // localStorage might be unavailable
   }
   const about = document.getElementById('info').dataset;
   // only run in show mode
@@ -854,6 +864,17 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
       displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
     });
+  });
+
+  // narrower cards in the item list, so there is less to scroll
+  on('toggle-compact-list', (el: HTMLElement) => {
+    const compact = document.getElementById('entityList')?.classList.toggle('entity-list-compact') ?? false;
+    el.classList.toggle('active', compact);
+    try {
+      localStorage.setItem(COMPACT_LIST_KEY, compact ? '1' : '0');
+    } catch {
+      // localStorage might be unavailable
+    }
   });
 
   on('add-tag-filter', (el: HTMLElement) => {

@@ -96,3 +96,33 @@
   flex: 1 1 auto;
   text-align: left;
 }
+
+// compact cards in the item list: badge, title, tags, buttons and date on one line
+#entityList.entity-list-compact .entity {
+  padding-top: 0.15rem !important;
+  padding-bottom: 0.15rem !important;
+  margin: 2px auto;
+
+  > .align-self-center {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 0.75rem;
+    width: 100%;
+
+    > *,
+    .title {
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+    }
+
+    .btn {
+      padding: 0.1rem 0.4rem !important;
+    }
+
+    // keep only the start date, the modification date is one click away
+    .item-date + .item-date {
+      display: none;
+    }
+  }
+}
