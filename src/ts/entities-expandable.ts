@@ -7,7 +7,7 @@ import { getEntityTypeFromPage } from './misc';
 import { appendLocationLinks, el, fieldLabel, filterParams, linkify, plainText, storageUrl } from './entities-view-utils';
 
 type ExtraField = { name: string; value: string };
-type StorageLocation = { storage_id: number; path: string; qty_stored: number; qty_unit: string };
+type StorageLocation = { storage_id: number; is_primary?: boolean; path: string; qty_stored: number; qty_unit: string };
 type WebLink = { id: string; label: string; url: string };
 type InternalLink = { page: string; entityid: number; title: string; category_title: string | null; category_color: string | null };
 type Row = {
@@ -70,7 +70,7 @@ function buildDetail(row: Row): HTMLElement {
       const li = el('li');
       const where = el('a', '', l.path);
       where.href = storageUrl(l.storage_id);
-      li.append(where, el('span', 'color-medium', `${l.qty_stored} ${l.qty_unit}`.trim()));
+      li.append(where, el('span', `badge badge-${l.is_primary ? 'primary' : 'secondary'}`, l.is_primary ? 'Primary' : 'Secondary'), el('span', 'color-medium', `${l.qty_stored} ${l.qty_unit}`.trim()));
       list.append(li);
     });
     storage.append(list);

@@ -20,9 +20,16 @@
             <li class='list-group-item countable'>
               <div class='d-flex flex align-items-center'>
                 <div>
+                  {% if Entity.entityType.value == 'items' %}
+                    <span class='badge badge-{{ container.is_primary ? 'primary' : 'secondary' }} mr-2'>{{ container.is_primary ? 'Primary'|trans : 'Secondary'|trans }}</span>
+                  {% endif %}
                   <span class='mr-2'><span class='malleableColumn hl-hover p-1 rounded' data-ma-type='float' data-endpoint='{{ Entity.entityType.value }}/{{ Entity.id }}/containers' data-id='{{ container.id }}' data-target='qty_stored'>{{ container.qty_stored }}</span></span> <span class='mr-2'><span class='malleableQtyUnit hl-hover p-1 rounded' data-endpoint='{{ Entity.entityType.value }}/{{ Entity.id }}/containers' data-id='{{ container.id }}'>{{ container.qty_unit }}</span> {{ 'in'|trans }} {% if Entity.isReadOnly %}{{ container.full_path }}{% else %}<button type='button' class='btn btn-transparent m-2' data-action='move-container' data-id='{{ container.id }}' data-current-storage-id='{{ container.storage_id }}' title='{{ 'Move to another storage location'|trans }}'>{{ container.full_path }}</button>{% endif %}</span>
                 </div>
                 <div class='ml-auto'>
+                  {% if Entity.entityType.value == 'items' and container.position %}<span class='color-medium mr-2' title='{{ 'Slot in the box'|trans }}'>{{ container.position }}</span>{% endif %}
+                  {% if Entity.entityType.value == 'items' and not container.is_primary and not Entity.isReadOnly %}
+                    <button type='button' data-action='make-primary-container' data-id='{{ container.id }}' class='btn btn-ghost btn-sm' title='{{ 'Make this the primary storage'|trans }}'>{{ 'Make primary'|trans }}</button>
+                  {% endif %}
                   <a href='inventory.php?storage_unit={{ container.storage_id }}' class='btn btn-ghost' aria-label='{{ 'Go to inventory'|trans }}' title='{{ 'Go to inventory'|trans }}'><i class='fas fa-magnifying-glass'></i></a>
                   <button type='button' data-action='destroy-container' data-id='{{ container.id }}' class='btn btn-danger-ghost' aria-label='{{ 'Delete'|trans }}' title='{{ 'Delete'|trans }}'><i class='fas fa-trash-alt'></i></button>
                 </div>
@@ -35,9 +42,16 @@
     {% endif %}
     {% if not Entity.isReadOnly %}
       <div>
+        {% if Entity.entityType.value == 'items' %}
+          {# resources: a popup to search the location, pick primary or secondary and the slot of a box #}
+          <button type='button' title='{{ 'Add storage'|trans }}' aria-label='{{ 'Add storage'|trans }}' class='btn btn-ghost my-2' data-action='open-storage-picker' data-containers-count='{{ Entity.entityData.containers|length }}' data-units='{{ enum('Elabftw\\Enums\\Units').cases|map(c => {'value': c.value, 'label': c.toHuman()})|json_encode|e('html_attr') }}'>
+            <i class='fas fa-fw fa-square-plus mr-2'></i>{{ 'Add storage'|trans }}
+          </button>
+        {% else %}
         <button type='button' title='{{ 'Add container'|trans }}' aria-label='{{ 'Add container'|trans }}' class='btn btn-ghost my-2' data-action='toggle-modal' data-target='storageModal'>
           <i class='fas fa-fw fa-square-plus mr-2'></i>{{ 'Add container'|trans }}
         </button>
+        {% endif %}
       </div>
     {% endif %}
   </div>

@@ -27,6 +27,7 @@
 
   interface EntityStorageLocation {
     storage_id: number;
+    is_primary?: boolean;
     path: string;
     qty_stored: number;
     qty_unit: string;
@@ -824,6 +825,7 @@
                 {#each entity.storage_locations ?? [] as location (location.storage_id)}
                   <li>
                     <a href={`?storage_unit=${location.storage_id}`}>{location.path}</a>
+                    <span class={`badge badge-${location.is_primary ? 'primary' : 'secondary'}`}>{location.is_primary ? 'Primary' : 'Secondary'}</span>
                     <span class='color-medium'>{location.qty_stored} {location.qty_unit}</span>
                   </li>
                 {/each}
