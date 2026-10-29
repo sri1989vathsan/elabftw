@@ -468,6 +468,11 @@
         <i class='fas fa-fw fa-list'></i>
         <i class='fas fa-fw fa-table'></i>
       </button>
+      {% if scriptName == 'database.php' %}
+        <button title='{{ 'Grouped view'|trans }}' aria-label='{{ 'Grouped view'|trans }}' type='button' class='btn btn-transparent mr-1{{ App.Users.userData.display_mode == 'gr' ? ' active' }}' data-action='toggle-grouped-layout'>
+          <i class='fas fa-fw fa-layer-group'></i>
+        </button>
+      {% endif %}
     <div class='vertical-separator'></div>
 
     <div class='d-flex'>

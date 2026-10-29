@@ -31,3 +31,30 @@
   border-radius: 50%;
   margin-right: 0.45rem;
 }
+
+// grouped view: collapsible sections, each with its own table
+.grouped-section {
+  border: 1px solid var(--border-color, rgba(128, 128, 128, 0.3));
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+
+  > summary {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+  }
+
+  &[open] > summary {
+    border-bottom: 1px solid var(--border-color, rgba(128, 128, 128, 0.3));
+  }
+}
+
+.grouped-section-count {
+  margin-left: 0.5rem;
+  padding: 0 0.5rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  background: rgba(128, 128, 128, 0.2);
+}

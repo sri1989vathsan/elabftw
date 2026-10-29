@@ -31,6 +31,7 @@ import { on } from './handlers';
 
 // Loaded on demand: the "table" view pulls in ag-grid, which most page loads never need.
 let entitiesTableModule: typeof import('./entities-table') | null = null;
+let groupedModule: typeof import('./entities-grouped') | null = null;
 
 type TeamScopedTomSelect = TomSelectWithAllOptions & {
   _showAll?: boolean;
@@ -222,6 +223,17 @@ async function displayEntities(
   relatedOrigin: string = getCurrentUrlParam('related_origin'),
 ) {
   const rootEl = document.getElementById('entityList');
+  if (mode === 'gr') {
+    unmountEntityListSv();
+    entitiesTableModule?.unmountEntitiesTable();
+    groupedModule ??= await import(
+      /* webpackChunkName: 'entities-grouped' */
+      './entities-grouped'
+    );
+    groupedModule.mountGroupedEntities(rootEl, order, sort, handleInitialLoadDone);
+    return;
+  }
+  groupedModule?.unmountGroupedEntities();
   if (mode === 'tb') {
     unmountEntityListSv();
     entitiesTableModule ??= await import(
@@ -807,6 +819,17 @@ document.addEventListener('DOMContentLoaded', () => {
     ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
       document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
       displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
+    });
+  });
+
+  // the grouped view of the resources: collapsible sections, each with its own table
+  on('toggle-grouped-layout', async () => {
+    const me = await getMe();
+    const target = me['display_mode'] === 'gr' ? 'it' : 'gr';
+    ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
+      displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
+      document.querySelector('[data-action="toggle-grouped-layout"]')?.classList.toggle('active', target === 'gr');
     });
   });
 
