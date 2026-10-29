@@ -259,3 +259,53 @@
 .item-total-stock {
   font-size: 1.05rem;
 }
+
+// expandable table of the resources
+.expandable-table {
+  td,
+  th {
+    vertical-align: middle;
+  }
+
+  .expandable-caret-cell {
+    width: 2.5rem;
+  }
+}
+
+.expandable-detail-row > td {
+  background: rgba(128, 128, 128, 0.07);
+}
+
+.expandable-detail {
+  padding: 0.25rem 0.5rem 0.5rem 2rem;
+
+  .expandable-section {
+    margin-bottom: 0.75rem;
+
+    h5 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--medium);
+      margin-bottom: 0.25rem;
+    }
+  }
+}
+
+.expandable-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0.4rem;
+}
+
+.expandable-field {
+  border: 1px solid var(--border-color, rgba(128, 128, 128, 0.3));
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  overflow-wrap: anywhere;
+}
+
+.expandable-field-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--medium);
+}

@@ -34,6 +34,7 @@ let entitiesTableModule: typeof import('./entities-table') | null = null;
 let groupedModule: typeof import('./entities-grouped') | null = null;
 let storageTreeModule: typeof import('./entities-storage-tree') | null = null;
 let activityModule: typeof import('./entities-activity') | null = null;
+let expandableModule: typeof import('./entities-expandable') | null = null;
 
 type TeamScopedTomSelect = TomSelectWithAllOptions & {
   _showAll?: boolean;
@@ -231,6 +232,9 @@ function unmountOtherViews(keep: string): void {
   if (keep !== 'ac') {
     activityModule?.unmountActivityLog();
   }
+  if (keep !== 'ex') {
+    expandableModule?.unmountExpandableTable();
+  }
   if (keep !== 'it') {
     unmountEntityListSv();
   }
@@ -245,9 +249,17 @@ async function displayEntities(
 ) {
   const rootEl = document.getElementById('entityList');
   // the views made for the resources are not offered on the other pages, even when the saved mode is one of them
-  const resourceViews = entity.type === 'items' ? ['gr', 'st', 'ac'] : [];
+  const resourceViews = entity.type === 'items' ? ['gr', 'st', 'ac', 'ex'] : [];
   const view = ['tb', ...resourceViews].includes(mode) ? mode : 'it';
   unmountOtherViews(view);
+  if (view === 'ex') {
+    expandableModule ??= await import(
+      /* webpackChunkName: 'entities-expandable' */
+      './entities-expandable'
+    );
+    expandableModule.mountExpandableTable(rootEl, order, sort, handleInitialLoadDone);
+    return;
+  }
   if (view === 'ac') {
     activityModule ??= await import(
       /* webpackChunkName: 'entities-activity' */
@@ -898,6 +910,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch {
       // localStorage might be unavailable
     }
+  });
+
+  // the expandable table of the resources: a row per resource, opened to show its fields, storage and activity
+  on('toggle-expandable-layout', async () => {
+    const me = await getMe();
+    const target = me['display_mode'] === 'ex' ? 'it' : 'ex';
+    ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
+      displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
+    });
   });
 
   // the activity log of the resources: who changed what and when
