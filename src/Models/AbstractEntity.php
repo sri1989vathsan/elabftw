@@ -457,7 +457,7 @@ abstract class AbstractEntity extends AbstractRest
 
         $entities = $req->fetchAll();
 
-        return $this->hydrateStorage($this->hydrateTags($entities));
+        return $this->hydrateExtraFields($this->hydrateStorage($this->hydrateTags($entities)));
     }
 
     /**
@@ -1631,6 +1631,44 @@ abstract class AbstractEntity extends AbstractRest
         }
         foreach ($entities as &$entity) {
             $entity['storage_locations'] = $byItem[(int) $entity['id']] ?? array();
+        }
+        unset($entity);
+
+        return $entities;
+    }
+
+    /**
+     * Add the extra fields of resources as an ordered name/value list, so the table view can show them as columns
+     */
+    protected function hydrateExtraFields(array $entities): array
+    {
+        if ($this->entityType !== EntityType::Items || $entities === array()) {
+            return $entities;
+        }
+        $ids = array_map(static fn(array $entity): int => (int) $entity['id'], $entities);
+        $req = $this->Db->prepare(sprintf('SELECT id, metadata FROM items WHERE id IN (%s)', implode(',', $ids)));
+        $this->Db->execute($req);
+        $byId = array();
+        foreach ($req->fetchAll() as $row) {
+            $decoded = json_decode((string) $row['metadata'], true);
+            $fields = is_array($decoded) && is_array($decoded['extra_fields'] ?? null) ? $decoded['extra_fields'] : array();
+            $list = array();
+            foreach ($fields as $name => $field) {
+                if (!is_array($field)) {
+                    continue;
+                }
+                $value = $field['value'] ?? '';
+                $list[] = array(
+                    'name' => (string) $name,
+                    'value' => is_array($value) ? implode(', ', array_map('strval', $value)) : (string) $value,
+                    'position' => (int) ($field['position'] ?? 0),
+                );
+            }
+            usort($list, static fn(array $a, array $b): int => $a['position'] <=> $b['position']);
+            $byId[(int) $row['id']] = $list;
+        }
+        foreach ($entities as &$entity) {
+            $entity['extra_fields'] = $byId[(int) $entity['id']] ?? array();
         }
         unset($entity);
 

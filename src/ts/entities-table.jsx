@@ -231,7 +231,7 @@ const EntitiesTable = ({
     },
   ];
 
-  const [columnDefs] = useState([
+  const baseColumns = [
     { field: 'title', headerName: i18next.t('title') },
     { field: 'team_name', headerName: i18next.t('team') },
     { field: 'date', headerName: i18next.t('started-on'), valueGetter: p => lastLoginText(p.data.date), filterValueGetter: p => lastLoginText(p.data.date), cellRenderer: PastDateRenderer},
@@ -247,7 +247,28 @@ const EntitiesTable = ({
     { field: 'locked', headerName: i18next.t('is-locked'), valueGetter: p => yesNo(p.data.locked), filterValueGetter: p => yesNo(p.data.locked), cellRenderer: BinaryRenderer },
     { field: 'rating', headerName: i18next.t('rating'), cellRenderer: RatingsRenderer },
     { field: 'next_step', headerName: i18next.t('next-step'),  cellRenderer: ({ value }) => value ? value.split('|')[0] : null }
-  ]);
+  ];
+
+  // when the list holds a single category (the category tab bar), add one column per extra field of that category
+  const columnDefs = useMemo(() => {
+    const categories = new Set(rowData.map(row => row.category));
+    if (!isResourcesPage || categories.size !== 1) {
+      return baseColumns;
+    }
+    const names = [];
+    rowData.forEach(row => (row.extra_fields ?? []).forEach(f => {
+      if (!names.includes(f.name)) {
+        names.push(f.name);
+      }
+    }));
+    const extraColumns = names.map(name => ({
+      colId: `extra_${name}`,
+      headerName: name,
+      valueGetter: p => (p.data.extra_fields ?? []).find(f => f.name === name)?.value ?? '',
+    }));
+    // placed right after the title so the data of the category comes first, like in an inventory sheet
+    return [baseColumns[0], ...extraColumns, ...baseColumns.slice(1)];
+  }, [rowData]);
 
   const getResolvedEntityFilterParams = useCallback(event => {
     const params = getEntityFilterParams(event);
