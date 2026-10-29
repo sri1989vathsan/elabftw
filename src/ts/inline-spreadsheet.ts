@@ -10616,22 +10616,26 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
     current = handle.host;
     return { host: handle.host, destroy: handle.destroy };
   };
+  const mountTable = (el: HTMLElement): void => {
+    // already mounted, or removed from the page in the meantime
+    if (!(el instanceof HTMLTableElement) || !el.isConnected) return;
+    const html = el.outerHTML;
+    const extractedForView = extractFromTable(el);
+    const { host, destroy } = buildViewHost(extractedForView, extractedForView.kind === 'well-plate' && extractedForView.plateView !== 'sheet' ? 'plate' : 'sheet');
+    host.classList.toggle(FILTER_HIDDEN_CLASS, el.classList.contains(FILTER_HIDDEN_CLASS));
+    // The table of contents links to a spreadsheet by id; keep it across the swap.
+    if (el.id) host.id = el.id;
+    el.replaceWith(host);
+    savedHtml.set(host, html);
+    destroyers.set(host, destroy);
+    observer.unobserve(el);
+    observer.observe(host);
+  };
   const observer = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       const el = entry.target as HTMLElement;
       if (entry.isIntersecting) {
-        if (!(el instanceof HTMLTableElement)) return; // already mounted
-        const html = el.outerHTML;
-        const extractedForView = extractFromTable(el);
-        const { host, destroy } = buildViewHost(extractedForView, extractedForView.kind === 'well-plate' && extractedForView.plateView !== 'sheet' ? 'plate' : 'sheet');
-        host.classList.toggle(FILTER_HIDDEN_CLASS, el.classList.contains(FILTER_HIDDEN_CLASS));
-        // The table of contents links to a spreadsheet by id; keep it across the swap.
-        if (el.id) host.id = el.id;
-        el.replaceWith(host);
-        savedHtml.set(host, html);
-        destroyers.set(host, destroy);
-        observer.unobserve(el);
-        observer.observe(host);
+        mountTable(el);
       } else {
         const html = savedHtml.get(el);
         if (html === undefined) return; // still the static table -- nothing mounted to tear down
@@ -10651,6 +10655,13 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
     });
   }, { rootMargin: '400px 0px' });
   tables.forEach(table => observer.observe(table));
+  // The observer only reports after the first frame; a spreadsheet or plate already in (or near) the window is
+  // built right now, so it does not first show as a plain table.
+  const nearViewport = window.innerHeight + 400;
+  tables.forEach(table => {
+    const { top, bottom } = table.getBoundingClientRect();
+    if (bottom >= -400 && top <= nearViewport) mountTable(table);
+  });
 }
 
 /**
