@@ -2187,6 +2187,41 @@ function createFormulaPasteShift(): {
   };
 }
 
+/**
+ * A paste inside a grid as one undo step. onbeforepaste notes what the target cells hold, onpaste then compares it
+ * with what they hold now (the grid has written the pasted values into its raw data by then) and hands over the cells
+ * that changed. Works together with createFormulaPasteShift, whose formulas go in first.
+ */
+function createPasteUndoRecorder(
+  makeReader: () => (col: number, row: number) => string,
+  record: (changes: CellValueChange[]) => void,
+): {
+  before: (data: Array<Array<{ value?: unknown }>>, x: number, y: number) => void;
+  after: () => void;
+} {
+  let pending: { col: number; row: number; oldValue: string }[] = [];
+  return {
+    before: (data, x, y) => {
+      pending = [];
+      if (!Array.isArray(data)) return;
+      const readCell = makeReader();
+      data.forEach((line, row) => line.forEach((_cell, col) => {
+        pending.push({ col: x + col, row: y + row, oldValue: readCell(x + col, y + row) });
+      }));
+    },
+    after: () => {
+      const changes: CellValueChange[] = [];
+      const readCell = makeReader();
+      pending.forEach(({ col, row, oldValue }) => {
+        const newValue = readCell(col, row);
+        if (newValue !== oldValue) changes.push({ col, row, oldValue, newValue });
+      });
+      pending = [];
+      if (changes.length > 0) record(changes);
+    },
+  };
+}
+
 function evaluateArithmeticExpression(
   expression: string,
   resolveCell: (cellName: string) => number | undefined,
@@ -5901,6 +5936,14 @@ export function openSpreadsheetModal(
       ui.addRowBtn.title = plateLocked
         ? 'A well plate has a fixed size. Choose Custom in the size list to change it.'
         : 'Add this many rows at the bottom';
+      const formulaPasteShift = createFormulaPasteShift();
+      const popupPasteUndo = createPasteUndoRecorder(
+        () => {
+          const rawNow = readRawData();
+          return (col, row) => String(rawNow[row]?.[col] ?? '');
+        },
+        changes => pushCellHistoryEntry(changes),
+      );
       const stopTrackingJssListeners = startTrackingGlobalListeners();
       const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
         worksheets: [{
@@ -6024,9 +6067,13 @@ export function openSpreadsheetModal(
           finishPopupStructure(changedWorksheet);
           syncMountedDimensions(changedWorksheet);
         },
-        ...createFormulaPasteShift(),
+        onbeforepaste: (changedWorksheet: JssInstance, data: Array<Array<{ value?: unknown }>>, x: number, y: number): unknown => {
+          popupPasteUndo.before(data, x, y);
+          return formulaPasteShift.onbeforepaste(changedWorksheet, data, x, y);
+        },
         onpaste: (changedWorksheet: JssInstance): void => {
           syncMountedDimensions(changedWorksheet);
+          popupPasteUndo.after();
         },
         onresizerow: (
           changedWorksheet: JssInstance,
@@ -9982,6 +10029,11 @@ export function buildReadOnlySpreadsheetHost(
   }>();
 
   installWellPlateHeaders(sheetContainer, () => extracted.kind);
+  const formulaPasteShift = createFormulaPasteShift();
+  const pasteUndo = createPasteUndoRecorder(
+    () => (col, row) => String(rawDataMirror[row]?.[col] ?? ''),
+    changes => pushCellHistoryEntry(changes),
+  );
   const stopTrackingJssListeners = startTrackingGlobalListeners();
   (jspreadsheet as unknown as JssFactory)(sheetContainer, {
     worksheets: [{
@@ -10018,7 +10070,13 @@ export function buildReadOnlySpreadsheetHost(
       hydrateUntilReady(getMountedWorksheet(sheetContainer, instance));
     },
     ...(editable ? {
-      ...createFormulaPasteShift(),
+      onbeforepaste: (changedWorksheet: JssInstance, data: Array<Array<{ value?: unknown }>>, x: number, y: number): unknown => {
+        pasteUndo.before(data, x, y);
+        return formulaPasteShift.onbeforepaste(changedWorksheet, data, x, y);
+      },
+      onpaste: (): void => {
+        pasteUndo.after();
+      },
       onbeforechange: (
         changedWorksheet: JssInstance,
         cell: HTMLElement,
