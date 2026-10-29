@@ -4,6 +4,7 @@
  */
 import { ApiC } from './api';
 import SidePanel from './SidePanel.class';
+import { listenForHtmlToolMessages } from './html-tool-bridge';
 
 interface HtmlTool {
   id: number;
@@ -31,6 +32,8 @@ export default class HtmlToolsPanel extends SidePanel {
       if (this.loaded) void this.refresh();
     });
     this.initializeWorkspaceResizer();
+    // a tool can send a plate, a table or text to the main text being edited
+    listenForHtmlToolMessages(() => (document.getElementById('htmlToolIframe') as HTMLIFrameElement | null)?.contentWindow);
   }
 
   show(): void {

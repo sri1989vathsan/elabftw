@@ -929,6 +929,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // wording-dependent) tooltip/aria-label and merely opening its dropdown --
   // see CommandPalette.class.ts.
   editor.addCommand('elabftwInsertTable', openStandardTableDialog);
+  // Used by the HTML tool bridge (html-tool-bridge.ts): inserts a ready-made spreadsheet or well plate at the cursor.
+  editor.addCommand('elabftwInsertSpreadsheetData', (_ui: boolean, data: SpreadsheetData) => {
+    insertNewSpreadsheet(data);
+  });
 
   // What is selected right now: the node under the caret, the table around it (also after "Indent table",
   // when the caret sits on the margin wrapper) and, failing that, the spreadsheet last clicked.
