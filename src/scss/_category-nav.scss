@@ -227,3 +227,35 @@
   min-width: 16rem;
   overflow-wrap: break-word;
 }
+
+// item page: the custom fields of a resource as a grid of label and value
+.item-details {
+  .list-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.5rem;
+  }
+
+  .list-group-item {
+    border: 1px solid var(--border-color, rgba(128, 128, 128, 0.3));
+    border-radius: 4px;
+    padding: 0.4rem 0.75rem;
+
+    h5 {
+      font-size: 0.75rem;
+      font-weight: 400;
+      color: var(--medium);
+      text-transform: uppercase;
+    }
+
+    h6 {
+      font-size: 1rem;
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+  }
+}
+
+.item-total-stock {
+  font-size: 1.05rem;
+}
