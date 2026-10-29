@@ -33,9 +33,12 @@ use PDO;
 
 use function array_key_exists;
 use function intval;
+use function is_string;
 use function json_encode;
 use function number_format;
 use function sprintf;
+use function strtoupper;
+use function trim;
 
 /**
  * All about containers links with entities
@@ -62,7 +65,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
             main.storage_id,
             main.item_id,
             main.created_at,
-            main.modified_at,
+            main.modified_at,' . $this->positionSelect() . '
             storage_units.id AS storage_id,
             storage_units.name AS storage_name
             FROM ' . $this->getTable() . ' AS main
@@ -152,7 +155,12 @@ abstract class AbstractContainersLinks extends AbstractLinks
         $this->Entity->canOrExplode(AccessType::Write);
         $before = $this->readOne();
         if (isset($params['storage_id'])) {
+            // the slot belongs to the box the tube leaves
+            $this->clearPosition();
             $this->moveToStorage((int) $params['storage_id']);
+        }
+        if (array_key_exists('position', $params)) {
+            $this->setPosition($params['position']);
         }
         $qtyGiven = array_key_exists('qty_stored', $params) && $params['qty_stored'] !== null && $params['qty_stored'] !== '';
         $unitGiven = array_key_exists('qty_unit', $params) && $params['qty_unit'] !== null && $params['qty_unit'] !== '';
@@ -210,7 +218,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
             main.qty_stored,
             main.qty_unit,
             main.storage_id,
-            main.item_id,
+            main.item_id,' . $this->positionSelect() . '
             main.created_at,
             main.modified_at
             FROM ' . $this->getTable() . ' AS main
@@ -226,7 +234,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         string $column,
         int|float|string $value,
     ): bool {
-        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id') {
+        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id' && $column !== 'position') {
             throw new ImproperActionException('Invalid update target');
         }
         $sql = sprintf(
@@ -389,6 +397,65 @@ abstract class AbstractContainersLinks extends AbstractLinks
             return 'containers2experiments';
         }
         return 'containers2items';
+    }
+
+    /**
+     * Put the container in a slot (A1 style) of its box, or take it out of the slot when empty
+     */
+    private function setPosition(mixed $position): void
+    {
+        if ($this->getTable() !== 'containers2items') {
+            throw new ImproperActionException('Only the containers of resources have a position.');
+        }
+        $current = $this->readOne();
+        $position = is_string($position) ? strtoupper(trim($position)) : '';
+        if ($position === '') {
+            $this->clearPosition();
+        } else {
+            $slot = StorageUnits::parseSlot($position);
+            $req = $this->Db->prepare('SELECT box_rows, box_cols FROM storage_units WHERE id = :id');
+            $req->bindValue(':id', (int) $current['storage_id'], PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $box = $req->fetch();
+            if ($slot === null || empty($box['box_rows']) || $slot[0] > (int) $box['box_rows'] || $slot[1] > (int) $box['box_cols']) {
+                throw new ImproperActionException('This slot is not in the box.');
+            }
+            $req = $this->Db->prepare('SELECT COUNT(*) FROM containers2items WHERE storage_id = :storage_id AND position = :position AND id <> :id');
+            $req->bindValue(':storage_id', (int) $current['storage_id'], PDO::PARAM_INT);
+            $req->bindValue(':position', $position);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            if ((int) $req->fetchColumn() > 0) {
+                throw new ImproperActionException(sprintf('The slot %s is already taken.', $position));
+            }
+            $this->update('position', $position);
+        }
+        $this->Entity->touch();
+        new Changelog($this->Entity)->create(new ContentParams(
+            'container_position_changed',
+            sprintf(
+                $position === '' ? 'Container #%2$d taken out of its slot at "%3$s"' : 'Container #%2$d placed in slot %1$s at "%3$s"',
+                $position,
+                (int) $current['id'],
+                $this->getStoragePath((int) $current['storage_id']),
+            ),
+        ));
+    }
+
+    private function clearPosition(): void
+    {
+        if ($this->getTable() === 'containers2items') {
+            $req = $this->Db->prepare('UPDATE containers2items SET position = NULL WHERE id = :id AND item_id = :item_id');
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+        }
+    }
+
+    // the position column exists for the containers of resources only
+    private function positionSelect(): string
+    {
+        return $this->getTable() === 'containers2items' ? ' main.position,' : '';
     }
 
     private function moveToStorage(int $newStorageId): void
