@@ -254,7 +254,7 @@ const EntitiesTable = ({
 
   const baseColumns = [
     // the ID is what is looked for first: it comes first and stays in view when the table is scrolled
-    { field: 'id', headerName: i18next.t('id'), pinned: 'left', width: 90, filter: 'agNumberColumnFilter' },
+    { field: 'id', headerName: i18next.t('id'), pinned: 'left', width: 90 },
     { field: 'title', headerName: i18next.t('title') },
     { field: 'team_name', headerName: i18next.t('team') },
     { field: 'date', headerName: i18next.t('started-on'), valueGetter: p => lastLoginText(p.data.date), filterValueGetter: p => lastLoginText(p.data.date), cellRenderer: PastDateRenderer},
