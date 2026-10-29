@@ -27,7 +27,9 @@
 
   interface EntityStorageLocation {
     storage_id: number;
+    container_id: number;
     is_primary?: boolean;
+    position?: string | null;
     path: string;
     qty_stored: number;
     qty_unit: string;
@@ -822,10 +824,11 @@
                 <i class='fas fa-location-dot fa-fw mr-1 color-medium' aria-hidden='true'></i>{t('Storage')} ({entity.storage_locations?.length})
               </summary>
               <ul class='entity-storage-list'>
-                {#each entity.storage_locations ?? [] as location (location.storage_id)}
+                {#each entity.storage_locations ?? [] as location (location.container_id)}
                   <li>
+                    <span class={`storage-kind storage-kind-${location.is_primary ? 'primary' : 'secondary'}`}>{location.is_primary ? 'Primary' : 'Secondary'}</span>
                     <a href={`?storage_unit=${location.storage_id}`}>{location.path}</a>
-                    <span class={`badge badge-${location.is_primary ? 'primary' : 'secondary'}`}>{location.is_primary ? 'Primary' : 'Secondary'}</span>
+                    <span class='color-medium'>{location.position ?? ''}</span>
                     <span class='color-medium'>{location.qty_stored} {location.qty_unit}</span>
                   </li>
                 {/each}
