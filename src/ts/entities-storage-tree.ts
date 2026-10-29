@@ -337,6 +337,153 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     return wrap;
   };
 
+
+  // RACKS: what a fridge or freezer holds, as a card per rack with its boxes drawn small, and a capacity gauge
+  const subtree = (node: Node): Node[] => [node, ...node.children.flatMap(subtree)];
+  const boxesIn = (node: Node): Node[] => subtree(node).filter(n => n.unit.box_rows && n.unit.box_cols);
+  const slotsOf = (node: Node): number => boxesIn(node).reduce((sum, b) => sum + (b.unit.box_rows ?? 0) * (b.unit.box_cols ?? 0), 0);
+  const takenIn = (node: Node): number => boxesIn(node).reduce((sum, b) => sum + b.own.length, 0);
+
+  const gauge = (taken: number, slots: number): HTMLElement => {
+    const bar = el('div', 'rack-gauge');
+    const fill = el('div', 'rack-gauge-fill');
+    fill.style.width = `${slots > 0 ? Math.min(100, Math.round((taken / slots) * 100)) : 0}%`;
+    bar.append(fill);
+    return bar;
+  };
+
+  const miniBox = (box: Node): HTMLElement => {
+    const rows = box.unit.box_rows ?? 0;
+    const cols = box.unit.box_cols ?? 0;
+    const tile = el('button', 'rack-box');
+    tile.type = 'button';
+    tile.title = `${box.unit.name}: ${box.own.length} of ${rows * cols}`;
+    tile.addEventListener('click', () => select(box.unit.id));
+    const dots = el('div', 'rack-box-dots');
+    dots.style.gridTemplateColumns = `repeat(${cols}, 0.4rem)`;
+    const filled = new Map<string, Row>();
+    box.own.forEach(row => (row.storage_locations ?? [])
+      .filter(l => l.storage_id === box.unit.id && l.position)
+      .forEach(l => filled.set(String(l.position), row)));
+    // a very large box is shown as its gauge only
+    if (rows * cols <= 200) {
+      for (let r = 1; r <= rows; r++) {
+        for (let c = 1; c <= cols; c++) {
+          const dot = el('span', 'rack-dot');
+          const row = filled.get(`${String.fromCharCode(64 + r)}${c}`);
+          if (row) {
+            dot.classList.add('filled');
+            dot.style.backgroundColor = row.category_color ? `#${row.category_color}` : '#7a7a7a';
+          }
+          dots.append(dot);
+        }
+      }
+      tile.append(dots);
+    }
+    tile.append(el('span', 'rack-box-name', box.unit.name), el('span', 'rack-box-count', `${box.own.length}/${rows * cols}`));
+    return tile;
+  };
+
+  const renderRacks = (node: Node): HTMLElement => {
+    const wrap = el('div', 'mb-3');
+    const slots = slotsOf(node);
+    if (slots > 0) {
+      const taken = takenIn(node);
+      wrap.append(el('div', 'small', `Capacity ${slots} slots, taken ${taken} (${Math.round((taken / slots) * 100)}%)`), gauge(taken, slots));
+    }
+    const cards = el('div', 'rack-cards');
+    node.children.forEach(child => {
+      const card = el('div', 'rack-card');
+      const title = el('button', 'btn btn-transparent btn-sm rack-card-title');
+      title.type = 'button';
+      title.textContent = child.unit.name;
+      title.addEventListener('click', () => select(child.unit.id));
+      card.append(title);
+      const boxes = boxesIn(child);
+      const childSlots = slotsOf(child);
+      if (childSlots > 0) {
+        const taken = takenIn(child);
+        card.append(el('div', 'small color-medium', `${boxes.length} ${boxes.length === 1 ? 'box' : 'boxes'}, ${taken}/${childSlots} slots`), gauge(taken, childSlots));
+      } else {
+        card.append(el('div', 'small color-medium', `${child.total} ${child.total === 1 ? 'resource' : 'resources'}`));
+      }
+      const tiles = el('div', 'rack-boxes');
+      boxes.forEach(b => tiles.append(miniBox(b)));
+      card.append(tiles);
+      cards.append(card);
+    });
+    wrap.append(cards);
+    return wrap;
+  };
+
+  const renderAddForm = (node: Node): HTMLElement => {
+    const form = el('div', 'd-flex flex-wrap align-items-center mb-3');
+    const kind = el('select', 'form-control form-control-sm w-auto mr-1');
+    kind.setAttribute('aria-label', 'What to add');
+    [['rack', 'Rack / drawer / shelf'], ['box', 'Box']].forEach(([value, label]) => {
+      const option = el('option', '', label);
+      option.value = value;
+      kind.append(option);
+    });
+    const name = el('input', 'form-control form-control-sm w-auto mr-1');
+    name.placeholder = 'Name';
+    name.setAttribute('aria-label', 'Name');
+    const rows = el('input', 'form-control form-control-sm mr-1');
+    const cols = el('input', 'form-control form-control-sm mr-1');
+    [rows, cols].forEach(i => {
+      i.type = 'number';
+      i.min = '1';
+      i.style.width = '4.5rem';
+    });
+    rows.max = '26';
+    cols.max = '99';
+    rows.placeholder = 'rows';
+    cols.placeholder = 'cols';
+    rows.value = '9';
+    cols.value = '9';
+    rows.hidden = cols.hidden = true;
+    kind.addEventListener('change', () => {
+      rows.hidden = cols.hidden = kind.value !== 'box';
+    });
+    const add = el('button', 'btn btn-secondary btn-sm', 'Add');
+    add.type = 'button';
+    add.addEventListener('click', () => {
+      const unitName = name.value.trim();
+      if (unitName === '') {
+        name.focus();
+        return;
+      }
+      void ApiC.post2location('storage_units', { name: unitName, parent_id: node.unit.id }).then(async id => {
+        if (kind.value === 'box') {
+          await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rows.value), box_cols: Number(cols.value) });
+        }
+        // show the new unit in the tree
+        state.collapsed[String(node.unit.id)] = false;
+        writeState(state);
+        return load();
+      });
+    });
+    form.append(el('span', 'mr-2', 'Add inside'), kind, name, rows, cols, add);
+    return form;
+  };
+
+  const renderRename = (node: Node): HTMLElement => {
+    const form = el('div', 'd-flex flex-wrap align-items-center mb-2');
+    const name = el('input', 'form-control form-control-sm w-auto mr-1');
+    name.value = node.unit.name;
+    name.setAttribute('aria-label', 'Rename');
+    const save = el('button', 'btn btn-transparent btn-sm', 'Rename');
+    save.type = 'button';
+    save.addEventListener('click', () => {
+      const unitName = name.value.trim();
+      if (unitName !== '' && unitName !== node.unit.name) {
+        patchAndReload(`storage_units/${node.unit.id}`, { name: unitName });
+      }
+    });
+    form.append(name, save);
+    return form;
+  };
+
   const renderMain = (): void => {
     main.replaceChildren();
     const node = state.selected === null ? undefined : tree.byId.get(state.selected);
@@ -345,6 +492,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       return;
     }
     main.append(el('h4', '', node.unit.full_path));
+    main.append(renderRename(node));
     const opt = el('label', 'd-block mb-2');
     const box = el('input', 'mr-1');
     box.type = 'checkbox';
@@ -355,20 +503,19 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     opt.append(box, document.createTextNode('Include sub-locations'));
     main.append(opt);
-    main.append(renderBoxSize(node));
-    if (node.unit.box_rows && node.unit.box_cols) {
+    const isBox = Boolean(node.unit.box_rows && node.unit.box_cols);
+    // a unit with units inside is a rack or a freezer: it is a box only when it holds none
+    if (isBox || node.children.length === 0) {
+      main.append(renderBoxSize(node));
+    }
+    if (isBox) {
       main.append(renderBox(node));
+    } else {
+      main.append(renderAddForm(node));
     }
 
     if (node.children.length > 0) {
-      const subs = el('div', 'mb-3');
-      node.children.forEach(c => {
-        const chip = el('button', 'btn btn-sm btn-secondary mr-1 mb-1', `${c.unit.name} (${c.total})`);
-        chip.type = 'button';
-        chip.addEventListener('click', () => select(c.unit.id));
-        subs.append(chip);
-      });
-      main.append(subs);
+      main.append(renderRacks(node));
     }
 
     const entries = collect(node, includeChildren);
