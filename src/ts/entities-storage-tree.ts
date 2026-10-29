@@ -5,8 +5,8 @@
 import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
 
-type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number };
-type StorageLocation = { storage_id: number; path: string; qty_stored: number; qty_unit: string };
+type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null };
+type StorageLocation = { storage_id: number; container_id: number; position: string | null; path: string; qty_stored: number; qty_unit: string };
 type Row = {
   id: number;
   title: string;
@@ -122,6 +122,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   let tree: { roots: Node[]; byId: Map<number, Node> } = { roots: [], byId: new Map() };
   // the location asked for in the address is selected once, then the user's own choices win
   let openedFromUrl = false;
+  // the tube picked to be placed in a slot of the box
+  let pickedTube: { row: Row; location: StorageLocation } | null = null;
 
   const layout = el('div', 'storage-tree-layout');
   const side = el('div', 'storage-tree-side');
@@ -188,6 +190,153 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     treeBox.replaceChildren(ul);
   };
 
+
+  // BOX: the unit as a grid of slots, the tubes in their slots, and the ones not placed yet
+  const patchAndReload = (endpoint: string, body: Record<string, unknown>): void => {
+    void ApiC.patch(endpoint, body).then(() => {
+      pickedTube = null;
+      return load();
+    }).catch(() => load());
+  };
+
+  const sameTube = (a: { location: StorageLocation } | null, b: { location: StorageLocation }): boolean =>
+    a !== null && a.location.container_id === b.location.container_id;
+
+  const renderBoxSize = (node: Node): HTMLElement => {
+    const form = el('div', 'd-flex flex-wrap align-items-center mb-2');
+    form.append(el('span', 'mr-2', 'Box size'));
+    const rows = el('input', 'form-control form-control-sm mr-1');
+    const cols = el('input', 'form-control form-control-sm mx-1');
+    [rows, cols].forEach(i => {
+      i.type = 'number';
+      i.min = '1';
+      i.style.width = '4.5rem';
+    });
+    rows.max = '26';
+    cols.max = '99';
+    rows.placeholder = 'rows';
+    cols.placeholder = 'columns';
+    rows.setAttribute('aria-label', 'Rows (letters)');
+    cols.setAttribute('aria-label', 'Columns');
+    rows.value = node.unit.box_rows ? String(node.unit.box_rows) : '';
+    cols.value = node.unit.box_cols ? String(node.unit.box_cols) : '';
+    const save = el('button', 'btn btn-secondary btn-sm ml-2', node.unit.box_rows ? 'Resize' : 'Make a box');
+    save.type = 'button';
+    save.addEventListener('click', () => patchAndReload(`storage_units/${node.unit.id}`, { box_rows: Number(rows.value), box_cols: Number(cols.value) }));
+    form.append(rows, el('span', '', '×'), cols, save);
+    if (node.unit.box_rows) {
+      const clear = el('button', 'btn btn-transparent btn-sm', 'Not a box');
+      clear.type = 'button';
+      clear.addEventListener('click', () => patchAndReload(`storage_units/${node.unit.id}`, { box_rows: null, box_cols: null }));
+      form.append(clear);
+    }
+    return form;
+  };
+
+  const renderBox = (node: Node): HTMLElement => {
+    const wrap = el('div', 'mb-3');
+    const rowsCount = node.unit.box_rows ?? 0;
+    const colsCount = node.unit.box_cols ?? 0;
+    const inBox = collect(node, false);
+    const bySlot = new Map<string, { row: Row; location: StorageLocation }>();
+    inBox.filter(e => e.location.position).forEach(e => bySlot.set(String(e.location.position), e));
+
+    const scroller = el('div', 'box-grid-wrap');
+    const table = el('table', 'box-grid');
+    const head = el('tr');
+    head.append(el('th'));
+    for (let c = 1; c <= colsCount; c++) {
+      head.append(el('th', '', String(c)));
+    }
+    const thead = el('thead');
+    thead.append(head);
+    const body = el('tbody');
+    for (let r = 1; r <= rowsCount; r++) {
+      const letter = String.fromCharCode(64 + r);
+      const tr = el('tr');
+      tr.append(el('th', '', letter));
+      for (let c = 1; c <= colsCount; c++) {
+        const slot = `${letter}${c}`;
+        const entry = bySlot.get(slot);
+        const td = el('td');
+        const cell = el('button', entry ? 'box-slot filled' : 'box-slot');
+        cell.type = 'button';
+        if (entry) {
+          cell.textContent = entry.row.title.slice(0, 2);
+          cell.title = `${slot}: ${entry.row.title} (${entry.location.qty_stored} ${entry.location.qty_unit})`.trim();
+          cell.setAttribute('aria-label', cell.title);
+          if (entry.row.category_color) {
+            cell.style.backgroundColor = `#${entry.row.category_color}`;
+          }
+          if (sameTube(pickedTube, entry)) {
+            cell.classList.add('picked');
+          }
+          cell.addEventListener('click', () => {
+            pickedTube = sameTube(pickedTube, entry) ? null : entry;
+            renderMain();
+          });
+        } else {
+          cell.title = pickedTube ? `Place ${pickedTube.row.title} in ${slot}` : `${slot}: free`;
+          cell.setAttribute('aria-label', cell.title);
+          cell.addEventListener('click', () => {
+            if (pickedTube) {
+              patchAndReload(`items/${pickedTube.row.id}/containers/${pickedTube.location.container_id}`, { position: slot });
+            }
+          });
+        }
+        td.append(cell);
+        tr.append(td);
+      }
+      body.append(tr);
+    }
+    table.append(thead, body);
+    scroller.append(table);
+    wrap.append(scroller);
+
+    const placed = inBox.filter(e => e.location.position).length;
+    wrap.append(el('p', 'color-medium small mb-2', `${placed} of ${rowsCount * colsCount} slots used`));
+
+    if (pickedTube) {
+      const bar = el('div', 'box-picked mb-2');
+      const link = el('a', '', pickedTube.row.title);
+      link.href = `?mode=view&id=${encodeURIComponent(String(pickedTube.row.id))}`;
+      bar.append(document.createTextNode('Selected: '), link);
+      bar.append(document.createTextNode(pickedTube.location.position ? ` in ${pickedTube.location.position}. Click a free slot to move it. ` : '. Click a free slot to place it. '));
+      if (pickedTube.location.position) {
+        const out = el('button', 'btn btn-transparent btn-sm', 'Take out of its slot');
+        out.type = 'button';
+        const tube = pickedTube;
+        out.addEventListener('click', () => patchAndReload(`items/${tube.row.id}/containers/${tube.location.container_id}`, { position: '' }));
+        bar.append(out);
+      }
+      const cancel = el('button', 'btn btn-transparent btn-sm', 'Cancel');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => {
+        pickedTube = null;
+        renderMain();
+      });
+      bar.append(cancel);
+      wrap.append(bar);
+    }
+
+    const loose = inBox.filter(e => !e.location.position);
+    if (loose.length > 0) {
+      const box = el('div', 'mb-2');
+      box.append(el('div', 'small color-medium', 'Not placed in a slot'));
+      loose.forEach(e => {
+        const chip = el('button', `btn btn-sm mr-1 mb-1 ${sameTube(pickedTube, e) ? 'btn-primary' : 'btn-secondary'}`, e.row.title);
+        chip.type = 'button';
+        chip.addEventListener('click', () => {
+          pickedTube = sameTube(pickedTube, e) ? null : e;
+          renderMain();
+        });
+        box.append(chip);
+      });
+      wrap.append(box);
+    }
+    return wrap;
+  };
+
   const renderMain = (): void => {
     main.replaceChildren();
     const node = state.selected === null ? undefined : tree.byId.get(state.selected);
@@ -206,6 +355,10 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     opt.append(box, document.createTextNode('Include sub-locations'));
     main.append(opt);
+    main.append(renderBoxSize(node));
+    if (node.unit.box_rows && node.unit.box_cols) {
+      main.append(renderBox(node));
+    }
 
     if (node.children.length > 0) {
       const subs = el('div', 'mb-3');

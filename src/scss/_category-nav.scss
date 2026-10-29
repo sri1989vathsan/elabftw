@@ -321,3 +321,44 @@
     column-gap: 1rem;
   }
 }
+
+// storage box: the slots of a box as a grid, the tubes in their slots
+.box-grid-wrap {
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.box-grid {
+  border-collapse: separate;
+  border-spacing: 3px;
+
+  th {
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: var(--medium);
+    text-align: center;
+  }
+}
+
+.box-slot {
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 1px dashed var(--border-color, rgba(128, 128, 128, 0.5));
+  border-radius: 50%;
+  background: transparent;
+  font-size: 0.65rem;
+  line-height: 1;
+  cursor: pointer;
+
+  &.filled {
+    border-style: solid;
+    color: #fff;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+  }
+
+  &.picked {
+    outline: 3px solid var(--primary, #295ca9);
+    outline-offset: 1px;
+  }
+}
