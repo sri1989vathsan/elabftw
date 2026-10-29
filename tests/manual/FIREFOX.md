@@ -32,3 +32,10 @@ tables, but the editor autosaves.
   stays on one line with "…", the buttons wrap to a second row and none is cut off.
 - **A7 / A8:** right-click > insert row before/after and column before/after; the new row/column take
   the look of their neighbour, and the original cells keep theirs.
+- **N52 / N53:** open an experiment with a plate, a spreadsheet and a photo in edit mode and choose File > Print main text: they print one after
+  another with no overlap. Press Enter at the end of the text: the bottom edge follows at once.
+- **N54 / N55:** open the same experiment in view mode: no plain spreadsheet look before the plate; switch Plate / Spreadsheet, change Colour by and
+  Label by (hover a well), reload (back to the saved colours), print after a switch (what is shown, no lists).
+- **N56 / N57:** put an experiment in a nested folder. The back arrows (view and edit) and Save and go back open that folder. The path bar at the bottom
+  opens each parent folder, and its subfolder button opens a menu of the folders inside.
+- **N58 / N59:** type =B2*2 in C2, copy C2, paste in C3: =B3*2. Ctrl+Z undoes the whole paste in one step, Ctrl+Shift+Z puts it back. Same in the popup.
