@@ -2140,59 +2140,49 @@ function shiftFormulaReferences(formula: string, deltaCol: number, deltaRow: num
 }
 
 /**
+ * What the last copy inside a grid put on the clipboard as text (`shown`) and the cell contents behind it (`raw`,
+ * the formulas), with where the range came from. A paste of that same text brings the formulas along, moved by how far
+ * they travelled, the way Excel does.
+ */
+let lastGridCopy: { col: number; row: number; shown: string[][]; raw: string[][] } | null = null;
+
+function rememberGridCopy(col: number, row: number, shown: string[][], raw: string[][]): void {
+  lastGridCopy = { col, row, shown, raw };
+}
+
+/**
  * Pasting a copied formula moves its references the way Excel does: =A1+B1 copied from C1 and pasted into C2 becomes
- * =A2+B2, and $ anchors stay put. The grid's own paste puts the text in as it is, so oncopy remembers where the range
- * came from and onbeforepaste shifts the formulas by how far they moved. A range that was cut, or whose cells have
- * changed since the copy, is pasted as it is (a move keeps its references).
+ * =A2+B2, and $ anchors stay put. The grid's own paste puts the clipboard text in as it is, so onbeforepaste swaps in
+ * the formulas of the last copy when the pasted text is exactly what that copy put on the clipboard (text copied from
+ * anywhere else is pasted as it is).
  * Spread the result into the grid's options.
  */
 function createFormulaPasteShift(): {
-  oncopy: (worksheet: JssInstance, range: number[]) => void;
   onbeforepaste: (worksheet: JssInstance, data: Array<Array<{ value?: unknown }>>, x: number, y: number) => unknown;
 } {
-  let source: { col: number; row: number; width: number; height: number; values: string[][] } | null = null;
-  const read = (worksheet: JssInstance, col: number, row: number): string => {
-    try {
-      return String(worksheet?.getValueFromCoords?.(col, row) ?? '');
-    } catch {
-      return '';
-    }
-  };
   return {
-    oncopy: (worksheet, range) => {
-      source = null;
-      if (!Array.isArray(range) || range.length < 4) return;
-      const [col1, row1, col2, row2] = range;
-      const values: string[][] = [];
-      for (let row = row1; row <= row2; row++) {
-        const line: string[] = [];
-        for (let col = col1; col <= col2; col++) line.push(read(worksheet, col, row));
-        values.push(line);
-      }
-      source = { col: col1, row: row1, width: col2 - col1 + 1, height: row2 - row1 + 1, values };
-    },
-    onbeforepaste: (worksheet, data, x, y) => {
-      const copied = source;
-      if (!copied || !Array.isArray(data)) return undefined;
-      for (let row = 0; row < copied.height; row++) {
-        for (let col = 0; col < copied.width; col++) {
-          if (read(worksheet, copied.col + col, copied.row + row) !== copied.values[row][col]) return undefined;
-        }
-      }
+    onbeforepaste: (_worksheet, data, x, y) => {
+      const copied = lastGridCopy;
+      const height = copied?.shown.length ?? 0;
+      const width = copied?.shown[0]?.length ?? 0;
+      if (!copied || height === 0 || width === 0 || !Array.isArray(data)) return undefined;
+      // a range pasted into a larger selection repeats, so each cell is compared with its own source cell
+      const sameText = data.every((line, row) => line.every((cell, col) => String(cell?.value ?? '') === copied.shown[row % height]?.[col % width]));
+      if (!sameText) return undefined;
       let changed = false;
-      const shifted = data.map((line, row) => line.map((cell, col) => {
-        const value = cell?.value;
-        if (typeof value !== 'string' || !value.trimStart().startsWith('=')) return cell;
-        // a range pasted into a larger selection repeats, so each cell is measured from its own source cell
-        const sourceRow = row % copied.height;
-        const sourceCol = col % copied.width;
-        if (value !== copied.values[sourceRow][sourceCol]) return cell;
-        const moved = shiftFormulaReferences(value, x + col - (copied.col + sourceCol), y + row - (copied.row + sourceRow));
-        if (moved === value) return cell;
+      const withFormulas = data.map((line, row) => line.map((cell, col) => {
+        const sourceRow = row % height;
+        const sourceCol = col % width;
+        const raw = copied.raw[sourceRow]?.[sourceCol] ?? '';
+        let value = raw;
+        if (raw.trimStart().startsWith('=')) {
+          value = shiftFormulaReferences(raw, x + col - (copied.col + sourceCol), y + row - (copied.row + sourceRow));
+        }
+        if (value === String(cell?.value ?? '')) return cell;
         changed = true;
-        return { ...cell, value: moved };
+        return { ...cell, value };
       }));
-      return changed ? shifted : undefined;
+      return changed ? withFormulas : undefined;
     },
   };
 }
@@ -6232,6 +6222,12 @@ export function openSpreadsheetModal(
           `<tr${Number.isFinite(copiedHeight) ? ` style="height:${copiedHeight}px"` : ''}>${htmlCells.join('')}</tr>`,
         );
       }
+      rememberGridCopy(
+        startCol,
+        startRow,
+        Array.from({ length: endRow - startRow + 1 }, (_, row) => Array.from({ length: endCol - startCol + 1 }, (_, col) => String(rawData[startRow + row]?.[startCol + col] ?? ''))),
+        Array.from({ length: endRow - startRow + 1 }, (_, row) => Array.from({ length: endCol - startCol + 1 }, (_, col) => String(rawData[startRow + row]?.[startCol + col] ?? ''))),
+      );
       event.preventDefault();
       event.stopImmediatePropagation();
       event.clipboardData.setData('text/plain', textRows.join('\n'));
@@ -8496,14 +8492,21 @@ export function buildReadOnlySpreadsheetHost(
     const endRow = Math.max(selStartRow, selEndRow);
     const textRows: string[] = [];
     const htmlRows: string[] = [];
+    const shownCells: string[][] = [];
+    const rawCells: string[][] = [];
+    const copiedWorksheet = getMountedWorksheet(sheetContainer);
     for (let row = startRow; row <= endRow; row++) {
       const textCells: string[] = [];
       const htmlCells: string[] = [];
+      shownCells.push([]);
+      rawCells.push([]);
       for (let col = startCol; col <= endCol; col++) {
         const cell = sheetContainer.querySelector<HTMLElement>(
           `.jss_worksheet > tbody td[data-x="${col}"][data-y="${row}"]`,
         );
         const text = (cell?.textContent ?? '').trim();
+        shownCells[shownCells.length - 1].push(text);
+        rawCells[rawCells.length - 1].push(String(copiedWorksheet?.getValueFromCoords?.(col, row) ?? text));
         textCells.push(/[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text);
         const style = sanitizeStyle(cell?.getAttribute('style') ?? undefined, PRESERVED_STYLE_PROPERTIES);
         htmlCells.push(`<td${style ? ` style="${escapeHTMLAttribute(style)}"` : ''}>${escapeHTML(text)}</td>`);
@@ -8511,6 +8514,7 @@ export function buildReadOnlySpreadsheetHost(
       textRows.push(textCells.join('\t'));
       htmlRows.push(`<tr>${htmlCells.join('')}</tr>`);
     }
+    rememberGridCopy(startCol, startRow, shownCells, rawCells);
     event.preventDefault();
     event.stopImmediatePropagation();
     event.clipboardData.setData('text/plain', textRows.join('\n'));
