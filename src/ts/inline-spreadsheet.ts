@@ -8494,7 +8494,6 @@ export function buildReadOnlySpreadsheetHost(
     const htmlRows: string[] = [];
     const shownCells: string[][] = [];
     const rawCells: string[][] = [];
-    const copiedWorksheet = getMountedWorksheet(sheetContainer);
     for (let row = startRow; row <= endRow; row++) {
       const textCells: string[] = [];
       const htmlCells: string[] = [];
@@ -8506,7 +8505,7 @@ export function buildReadOnlySpreadsheetHost(
         );
         const text = (cell?.textContent ?? '').trim();
         shownCells[shownCells.length - 1].push(text);
-        rawCells[rawCells.length - 1].push(String(copiedWorksheet?.getValueFromCoords?.(col, row) ?? text));
+        rawCells[rawCells.length - 1].push(String(rawDataMirror[row]?.[col] ?? text));
         textCells.push(/[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text);
         const style = sanitizeStyle(cell?.getAttribute('style') ?? undefined, PRESERVED_STYLE_PROPERTIES);
         htmlCells.push(`<td${style ? ` style="${escapeHTMLAttribute(style)}"` : ''}>${escapeHTML(text)}</td>`);
