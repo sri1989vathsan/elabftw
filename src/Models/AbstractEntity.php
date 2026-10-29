@@ -1649,6 +1649,7 @@ abstract class AbstractEntity extends AbstractRest
         $req = $this->Db->prepare(sprintf('SELECT id, metadata FROM items WHERE id IN (%s)', implode(',', $ids)));
         $this->Db->execute($req);
         $byId = array();
+        $linksById = array();
         foreach ($req->fetchAll() as $row) {
             $decoded = json_decode((string) $row['metadata'], true);
             $fields = is_array($decoded) && is_array($decoded['extra_fields'] ?? null) ? $decoded['extra_fields'] : array();
@@ -1666,9 +1667,18 @@ abstract class AbstractEntity extends AbstractRest
             }
             usort($list, static fn(array $a, array $b): int => $a['position'] <=> $b['position']);
             $byId[(int) $row['id']] = $list;
+            // the web links of the resource (a benchling page, a paper...): only http(s) addresses are kept
+            $links = array();
+            foreach (($decoded['elabftw']['web_links'] ?? array()) as $link) {
+                if (is_array($link) && is_string($link['url'] ?? null) && preg_match('#^https?://#i', $link['url']) === 1) {
+                    $links[] = array('id' => (string) ($link['id'] ?? ''), 'label' => (string) ($link['label'] ?? ''), 'url' => $link['url']);
+                }
+            }
+            $linksById[(int) $row['id']] = $links;
         }
         foreach ($entities as &$entity) {
             $entity['extra_fields'] = $byId[(int) $entity['id']] ?? array();
+            $entity['web_links'] = $linksById[(int) $entity['id']] ?? array();
         }
         unset($entity);
 
