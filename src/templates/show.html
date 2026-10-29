@@ -16,6 +16,18 @@
   {% include 'search-help-modal.html' %}
   {% include 'show-view-edit.html' %}
   {% include 'request-actions-show.html' %}
+  {% if scriptName == 'database.php' %}
+    {# module navigation: one tab per resource category, like the module bar of an inventory system #}
+    {% set currentCategories = App.Request.query.get('category')|split(',') %}
+    <nav class='category-nav d-flex flex-wrap mt-2' aria-label='{{ 'Category'|trans }}'>
+      <a class='category-nav-item{{ App.Request.query.get('category') == '' ? ' active' }}' href='database.php'>{{ 'All'|trans }}</a>
+      {% for category in categoryArr if category.is_current_team %}
+        <a class='category-nav-item{{ category.id|string in currentCategories ? ' active' }}' href='database.php?category={{ category.id }}'>
+          <span class='category-nav-dot' style='background-color:#{{ category.color|default('bdbdbd') }}'></span>{{ category.title }}
+        </a>
+      {% endfor %}
+    </nav>
+  {% endif %}
   <hr>
 
   {# SEARCH BAR #}
