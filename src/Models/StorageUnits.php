@@ -591,7 +591,8 @@ final class StorageUnits extends AbstractRest
             level_depth,
             children_count,
             box_rows,
-            box_cols
+            box_cols,
+            (SELECT GROUP_CONCAT(c.position) FROM containers2items AS c WHERE c.storage_id = storage_hierarchy.id AND c.position IS NOT NULL) AS taken_positions
         FROM
             storage_hierarchy
         ORDER BY

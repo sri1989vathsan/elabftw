@@ -143,7 +143,12 @@ abstract class AbstractContainersLinks extends AbstractLinks
     public function postAction(Action $action, array $reqBody): int
     {
         return match ($action) {
-            Action::Create => $this->createWithQuantity((float) $reqBody['qty_stored'], $reqBody['qty_unit'] ?? Units::Unit->value),
+            Action::Create => $this->createWithQuantity(
+                (float) $reqBody['qty_stored'],
+                $reqBody['qty_unit'] ?? Units::Unit->value,
+                isset($reqBody['position']) ? (string) $reqBody['position'] : null,
+                (int) ($reqBody['is_primary'] ?? 0) === 1,
+            ),
             Action::Duplicate => $this->import(),
             default => throw new ImproperActionException('Invalid action for links create.'),
         };
@@ -161,6 +166,9 @@ abstract class AbstractContainersLinks extends AbstractLinks
         }
         if (array_key_exists('position', $params)) {
             $this->setPosition($params['position']);
+        }
+        if (array_key_exists('is_primary', $params) && (int) $params['is_primary'] === 1) {
+            $this->makePrimary();
         }
         $qtyGiven = array_key_exists('qty_stored', $params) && $params['qty_stored'] !== null && $params['qty_stored'] !== '';
         $unitGiven = array_key_exists('qty_unit', $params) && $params['qty_unit'] !== null && $params['qty_unit'] !== '';
@@ -273,6 +281,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         $result = $this->Db->execute($req);
 
         if ($current !== null && $req->rowCount() > 0) {
+            $this->ensurePrimary();
             new Changelog($this->Entity)->create(new ContentParams(
                 'container_deleted',
                 sprintf(
@@ -320,7 +329,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
             && $this->Entity->id === intval($targetId);
     }
 
-    public function createWithQuantity(float $qty, string $unit): int
+    public function createWithQuantity(float $qty, string $unit, ?string $position = null, bool $primary = false): int
     {
         $this->Entity->canOrExplode(AccessType::Write);
         $this->Entity->touch();
@@ -339,6 +348,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         // INSERT IGNORE inserts nothing on a FK violation; only log a real insert
         if ($req->rowCount() > 0) {
             $containerId = $this->Db->lastInsertId();
+            $this->ensurePrimary();
             new Changelog($this->Entity)->create(new ContentParams(
                 'container_created',
                 sprintf(
@@ -349,6 +359,21 @@ abstract class AbstractContainersLinks extends AbstractLinks
                     $containerId,
                 ),
             ));
+            // the slot and the primary flag act on the new container: point the id to it for these, then back to the storage
+            if (($position !== null && $position !== '') || $primary) {
+                $storageId = $this->id;
+                $this->id = $containerId;
+                try {
+                    if ($position !== null && $position !== '') {
+                        $this->setPosition($position);
+                    }
+                    if ($primary) {
+                        $this->makePrimary();
+                    }
+                } finally {
+                    $this->id = $storageId;
+                }
+            }
         }
 
         return $this->id;
@@ -442,6 +467,48 @@ abstract class AbstractContainersLinks extends AbstractLinks
         ));
     }
 
+    /**
+     * This container becomes the primary storage of the resource, the others are secondary
+     */
+    private function makePrimary(): void
+    {
+        if ($this->getTable() !== 'containers2items') {
+            throw new ImproperActionException('Only the containers of resources can be primary.');
+        }
+        $current = $this->readOne();
+        if ((int) $current['is_primary'] === 1) {
+            return;
+        }
+        $req = $this->Db->prepare('UPDATE containers2items SET is_primary = IF(id = :id, 1, 0) WHERE item_id = :item_id');
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $this->Entity->touch();
+        new Changelog($this->Entity)->create(new ContentParams(
+            'container_primary_changed',
+            sprintf('Container #%d at "%s" is now the primary storage', (int) $current['id'], $this->getStoragePath((int) $current['storage_id'])),
+        ));
+    }
+
+    /**
+     * A resource with containers always has a primary: the oldest one when none is
+     */
+    private function ensurePrimary(): void
+    {
+        if ($this->getTable() !== 'containers2items') {
+            return;
+        }
+        $req = $this->Db->prepare('SELECT COUNT(*) FROM containers2items WHERE item_id = :item_id AND is_primary = 1');
+        $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        if ((int) $req->fetchColumn() > 0) {
+            return;
+        }
+        $req = $this->Db->prepare('UPDATE containers2items SET is_primary = 1 WHERE item_id = :item_id ORDER BY id ASC LIMIT 1');
+        $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
     private function clearPosition(): void
     {
         if ($this->getTable() === 'containers2items') {
@@ -455,7 +522,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
     // the position column exists for the containers of resources only
     private function positionSelect(): string
     {
-        return $this->getTable() === 'containers2items' ? ' main.position,' : '';
+        return $this->getTable() === 'containers2items' ? ' main.position, main.is_primary,' : '';
     }
 
     private function moveToStorage(int $newStorageId): void
