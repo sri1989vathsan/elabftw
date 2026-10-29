@@ -25,7 +25,15 @@
     is_favorite: boolean;
   }
 
+  interface EntityStorageLocation {
+    storage_id: number;
+    path: string;
+    qty_stored: number;
+    qty_unit: string;
+  }
+
   interface EntityListItem {
+    storage_locations?: EntityStorageLocation[];
     id: number;
     title: string | null;
     experiment_goal?: string | null;
@@ -806,6 +814,22 @@
               </span>
             {/if}
           </p>
+
+          {#if entityType === 'items' && (entity.storage_locations?.length ?? 0) > 0}
+            <details class='entity-storage'>
+              <summary>
+                <i class='fas fa-location-dot fa-fw mr-1 color-medium' aria-hidden='true'></i>{t('Storage')} ({entity.storage_locations?.length})
+              </summary>
+              <ul class='entity-storage-list'>
+                {#each entity.storage_locations ?? [] as location (location.storage_id)}
+                  <li>
+                    <span>{location.path}</span>
+                    <span class='color-medium'>{location.qty_stored} {location.qty_unit}</span>
+                  </li>
+                {/each}
+              </ul>
+            </details>
+          {/if}
 
           <div class='d-flex flex-row'>
             {#if template}
