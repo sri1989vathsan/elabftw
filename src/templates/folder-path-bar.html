@@ -26,6 +26,29 @@
           <i class='fas fa-folder fa-fw' aria-hidden='true'></i>{{ folder.name }}
         </a>
       {% endfor %}
+      {# the folders inside the last one, to move forwards #}
+      {% set currentFolder = crumbs|last %}
+      {% set subfolders = [] %}
+      {% for folder in pathFolders %}
+        {% if folder.parent_id and folder.parent_id == currentFolder.id %}
+          {% set subfolders = subfolders|merge([folder]) %}
+        {% endif %}
+      {% endfor %}
+      {% if subfolders|length > 0 %}
+        <i class='fas fa-chevron-right folder-path-sep' aria-hidden='true'></i>
+        <div class='dropup folder-path-subfolders'>
+          <button type='button' class='folder-path-crumb folder-path-more dropdown-toggle' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false' title='{{ 'Folders inside this folder'|trans }}'>
+            <i class='fas fa-folder-tree fa-fw' aria-hidden='true'></i>{{ subfolders|length }} {{ subfolders|length == 1 ? 'subfolder'|trans : 'subfolders'|trans }}
+          </button>
+          <div class='dropdown-menu folder-path-menu'>
+            {% for folder in subfolders %}
+              <a class='dropdown-item' href='{{ listingPage }}?folder={{ folder.id }}'>
+                <i class='fas fa-folder fa-fw mr-1' aria-hidden='true'></i>{{ folder.name }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
     </nav>
   {% endif %}
 {% endif %}

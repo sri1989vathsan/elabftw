@@ -7521,3 +7521,18 @@ button.wp-legend-item {
     display: none;
   }
 }
+
+.folder-path-bar .folder-path-more {
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.folder-path-bar .folder-path-menu {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.folder-path-bar .folder-path-menu .fa-folder {
+  color: #3d9be9;
+}
