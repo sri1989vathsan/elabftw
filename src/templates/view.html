@@ -186,6 +186,41 @@
     {% include 'storage-view-edit.html' %}
   {% endif %}
 
+  {# recent activity of a resource: the last changes, the rest is in the changelog #}
+  {% if Entity.entityType.value == 'items' and Entity.entityData.changelog %}
+    <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='activityDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Activity'|trans }} ({{ Entity.entityData.changelog|length }})</h3>
+    <div class='mt-2 ml-3' id='activityDiv' data-save-hidden='activityDiv'>
+      <div class='table-responsive'>
+        {% set activityLabels = {'title': 'Title', 'body': 'Main text', 'bodyappend': 'Main text', 'metadata': 'Custom fields', 'category': 'Category', 'status': 'Status', 'container_created': 'Storage added', 'container_deleted': 'Storage removed', 'container_moved': 'Storage moved', 'container_qty_changed': 'Quantity', 'container_unit_changed': 'Unit'} %}
+        <table class='table table-sm'>
+          <thead>
+            <tr>
+              <th>{{ 'Date'|trans }}</th>
+              <th>{{ 'User'|trans }}</th>
+              <th>{{ 'Property changed'|trans }}</th>
+              <th>{{ 'New value'|trans }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for change in Entity.entityData.changelog|slice(0, 10) %}
+              <tr>
+                <td class='text-nowrap'>{{ change.created_at }}</td>
+                <td>{{ change.fullname }}</td>
+                <td class='text-nowrap'>{{ activityLabels[change.target]|default(change.target|replace({'_': ' '})|capitalize)|trans }}</td>
+                {# body entries hold a link to the revisions: render it, like the changelog page does #}
+                <td>{{ change.target in ['body', 'bodyappend'] ? change.content|raw : change.content }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if Entity.entityData.changelog|length > 10 %}
+        <a href='?mode=changelog&amp;id={{ Entity.id }}'>{{ 'Full changelog'|trans }}</a>
+      {% endif %}
+    </div>
+    <hr>
+  {% endif %}
+
   {# PERMISSIONS #}
   <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' aria-controls='permissionsDiv'><i class='fas fa-caret-right fa-fw mr-2'></i>{{ 'Permissions'|trans }}</h3>
   <div class='mt-2 ml-3' id='permissionsDiv' hidden data-save-hidden='permissionsDiv'>
