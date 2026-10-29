@@ -9,6 +9,7 @@ interface InstalledTool {
   id: number;
   name: string;
   description: string;
+  enabled: number | boolean;
 }
 
 export const OPEN_HTML_TOOL_EVENT = 'open-html-tool';
@@ -22,7 +23,8 @@ export function registerHtmlToolsExtension(editor: Editor): void {
     icon: 'elabftw-html-tools',
     tooltip: 'HTML tools: open a tool beside the text and insert its results',
     fetch: callback => {
-      ApiC.getJson<InstalledTool[]>('html_tools').then(tools => {
+      ApiC.getJson<InstalledTool[]>('html_tools').then(all => {
+        const tools = all.filter(tool => Number(tool.enabled) === 1);
         callback(tools.length === 0
           ? [{ type: 'menuitem', text: 'No HTML tools installed yet', enabled: false }]
           : tools.map(tool => ({

@@ -11,6 +11,7 @@ interface HtmlTool {
   id: number;
   name: string;
   description: string;
+  enabled: number | boolean;
   version: string;
   launch_url: string;
 }
@@ -22,12 +23,15 @@ export default class HtmlToolsPanel extends SidePanel {
   private tools: HtmlTool[] = [];
   private loaded = false;
   private loading = false;
+  private openToolId: number | null = null;
 
   constructor() {
     super('html-tools');
     this.panelId = 'htmlToolsPanel';
     document.getElementById('htmlToolsSearch')?.addEventListener('input', () => this.render());
     document.getElementById('htmlToolMaximize')?.addEventListener('click', () => this.toggleMaximized());
+    document.getElementById('htmlToolsRefresh')?.addEventListener('click', () => void this.refresh());
+    document.getElementById('htmlToolReload')?.addEventListener('click', () => this.reloadOpenTool());
     document.getElementById('htmlToolClose')?.addEventListener('click', () => this.closeWorkspace());
     window.addEventListener('html-tools-changed', () => {
       if (this.loaded) void this.refresh();
@@ -56,8 +60,10 @@ export default class HtmlToolsPanel extends SidePanel {
     this.loading = true;
     this.setStatus('Loading tools…');
     try {
-      this.tools = await ApiC.getJson<HtmlTool[]>('html_tools');
+      // a sysadmin also gets the disabled tools from the API (the admin screen lists them); they are not offered here
+      this.tools = (await ApiC.getJson<HtmlTool[]>('html_tools')).filter(tool => Number(tool.enabled) === 1);
       this.loaded = true;
+      if (this.openToolId !== null && !this.tools.some(tool => tool.id === this.openToolId)) this.closeWorkspace();
       this.render();
     } catch (error) {
       this.setStatus(error instanceof Error ? error.message : 'Could not load HTML tools.');
@@ -145,6 +151,7 @@ export default class HtmlToolsPanel extends SidePanel {
     const newWindow = document.getElementById('htmlToolNewWindow') as HTMLAnchorElement | null;
     const workspace = document.getElementById('htmlToolWorkspace');
     if (!iframe || !title || !newWindow || !workspace) return;
+    this.openToolId = tool.id;
     title.textContent = tool.name;
     iframe.title = tool.name;
     iframe.src = tool.launch_url;
@@ -152,6 +159,12 @@ export default class HtmlToolsPanel extends SidePanel {
     workspace.removeAttribute('hidden');
     document.body.classList.add('html-tool-workspace-open');
     iframe.focus();
+  }
+
+  private reloadOpenTool(): void {
+    const iframe = document.getElementById('htmlToolIframe') as HTMLIFrameElement | null;
+    const src = iframe?.getAttribute('src');
+    if (iframe && src) iframe.src = src;
   }
 
   private toggleMaximized(): void {
@@ -170,6 +183,7 @@ export default class HtmlToolsPanel extends SidePanel {
   private closeWorkspace(): void {
     const iframe = document.getElementById('htmlToolIframe') as HTMLIFrameElement | null;
     const workspace = document.getElementById('htmlToolWorkspace');
+    this.openToolId = null;
     if (iframe) iframe.removeAttribute('src');
     workspace?.classList.remove('html-tool-workspace-maximized');
     workspace?.toggleAttribute('hidden', true);

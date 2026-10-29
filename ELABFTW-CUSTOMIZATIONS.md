@@ -650,6 +650,8 @@ implementation is ready). `src/ts/html-tool-bridge.ts` lets a tool hand a result
 frame's window, rebuilds it from plain strings (colours checked, sizes capped) and inserts it at the cursor as one undo step through the editor
 command `elabftwInsertSpreadsheetData` (`SpreadsheetExtension.ts`). Message format, and the qPCR tool with its three "→ eLabFTW" buttons: `docs/html-tool-bridge/`.
 
+A disabled tool (unchecked in Administration, HTML tools) is hidden from the side panel and the toolbar button and its `/html-tools/<id>/` route answers 404 for everyone, sysadmins included; only the admin list shows it. The side panel has a refresh button (list of tools; it closes a tool that was disabled meanwhile) and the open tool a reload button.
+
 The flag is on. The main text toolbar has an **HTML tools** button (after the spreadsheet tools button, `custom-editor/HtmlToolsExtension.ts`, only when the
 feature is on): its dropdown lists the installed tools; a pick dispatches the `open-html-tool` window event and `HtmlToolsPanel` opens that tool in the
 workspace beside the page, so the text stays visible. The eight tools of https://moors-code.github.io/Lab_Protocols/ were installed in the local

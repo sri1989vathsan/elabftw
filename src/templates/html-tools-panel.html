@@ -3,7 +3,12 @@
     <i class='fas fa-xmark fa-2x'></i>
   </button>
   <div class='p-3'>
-    <h3 class='mb-2'><i class='fas fa-toolbox mr-2' aria-hidden='true'></i>{{ 'HTML tools'|trans }}</h3>
+    <h3 class='mb-2'>
+      <i class='fas fa-toolbox mr-2' aria-hidden='true'></i>{{ 'HTML tools'|trans }}
+      <button type='button' id='htmlToolsRefresh' class='btn btn-sm btn-outline-secondary float-right' title='{{ 'Refresh the list of tools'|trans }}' aria-label='{{ 'Refresh the list of tools'|trans }}'>
+        <i class='fas fa-rotate fa-fw'></i>
+      </button>
+    </h3>
     <p class='small color-medium mb-3'>{{ 'Interactive tools installed for this eLabFTW instance.'|trans }}</p>
     <div class='input-group input-group-sm mb-2'>
       <div class='input-group-prepend'>
@@ -34,6 +39,9 @@
       <a id='htmlToolNewWindow' class='btn btn-outline-secondary btn-sm mr-2' target='_blank' rel='noopener noreferrer' title='{{ 'Open in a new window'|trans }}' aria-label='{{ 'Open in a new window'|trans }}'>
         <i class='fas fa-up-right-from-square fa-fw'></i>
       </a>
+      <button type='button' id='htmlToolReload' class='btn btn-outline-secondary btn-sm mr-2' title='{{ 'Reload this tool'|trans }}' aria-label='{{ 'Reload this tool'|trans }}'>
+        <i class='fas fa-rotate-right fa-fw'></i>
+      </button>
       <button type='button' id='htmlToolMaximize' class='btn btn-outline-secondary btn-sm mr-2' title='{{ 'Maximize'|trans }}' aria-label='{{ 'Maximize'|trans }}'>
         <i class='fas fa-expand fa-fw'></i>
       </button>

@@ -67,7 +67,7 @@ final class HtmlToolController extends AbstractController
         $assetPath = $this->Request->query->getString('tool_path');
         $Tools = new HtmlTools($this->requester, $toolId);
         $tool = $Tools->readOne();
-        if ((int) $tool['enabled'] !== 1 && !$this->requester->isSysadmin()) {
+        if ((int) $tool['enabled'] !== 1) {
             throw new ResourceNotFoundException();
         }
         $storagePath = $Tools->getAssetStoragePath($assetPath);
