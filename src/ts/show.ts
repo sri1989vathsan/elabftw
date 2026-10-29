@@ -33,6 +33,7 @@ import { on } from './handlers';
 let entitiesTableModule: typeof import('./entities-table') | null = null;
 let groupedModule: typeof import('./entities-grouped') | null = null;
 let storageTreeModule: typeof import('./entities-storage-tree') | null = null;
+let activityModule: typeof import('./entities-activity') | null = null;
 
 type TeamScopedTomSelect = TomSelectWithAllOptions & {
   _showAll?: boolean;
@@ -216,6 +217,25 @@ const unmountEntityListSv = async (): Promise<void> => {
   entityListSvComponent = null;
 };
 
+// unmount the views that are not the one about to be shown
+function unmountOtherViews(keep: string): void {
+  if (keep !== 'tb') {
+    entitiesTableModule?.unmountEntitiesTable();
+  }
+  if (keep !== 'gr') {
+    groupedModule?.unmountGroupedEntities();
+  }
+  if (keep !== 'st') {
+    storageTreeModule?.unmountStorageTree();
+  }
+  if (keep !== 'ac') {
+    activityModule?.unmountActivityLog();
+  }
+  if (keep !== 'it') {
+    unmountEntityListSv();
+  }
+}
+
 async function displayEntities(
   mode: string,
   order: string,
@@ -224,10 +244,17 @@ async function displayEntities(
   relatedOrigin: string = getCurrentUrlParam('related_origin'),
 ) {
   const rootEl = document.getElementById('entityList');
-  if (mode === 'st') {
-    unmountEntityListSv();
-    entitiesTableModule?.unmountEntitiesTable();
-    groupedModule?.unmountGroupedEntities();
+  const view = ['tb', 'gr', 'st', 'ac'].includes(mode) ? mode : 'it';
+  unmountOtherViews(view);
+  if (view === 'ac') {
+    activityModule ??= await import(
+      /* webpackChunkName: 'entities-activity' */
+      './entities-activity'
+    );
+    activityModule.mountActivityLog(rootEl, handleInitialLoadDone);
+    return;
+  }
+  if (view === 'st') {
     storageTreeModule ??= await import(
       /* webpackChunkName: 'entities-storage-tree' */
       './entities-storage-tree'
@@ -235,10 +262,7 @@ async function displayEntities(
     storageTreeModule.mountStorageTree(rootEl, order, sort, handleInitialLoadDone);
     return;
   }
-  storageTreeModule?.unmountStorageTree();
-  if (mode === 'gr') {
-    unmountEntityListSv();
-    entitiesTableModule?.unmountEntitiesTable();
+  if (view === 'gr') {
     groupedModule ??= await import(
       /* webpackChunkName: 'entities-grouped' */
       './entities-grouped'
@@ -246,9 +270,7 @@ async function displayEntities(
     groupedModule.mountGroupedEntities(rootEl, order, sort, handleInitialLoadDone);
     return;
   }
-  groupedModule?.unmountGroupedEntities();
-  if (mode === 'tb') {
-    unmountEntityListSv();
+  if (view === 'tb') {
     entitiesTableModule ??= await import(
       /* webpackChunkName: 'entities-table' */
       './entities-table'
@@ -257,7 +279,6 @@ async function displayEntities(
     handleInitialLoadDone();
     return;
   }
-  entitiesTableModule?.unmountEntitiesTable();
   mountEntityListSv(rootEl, order, sort);
 }
 
@@ -875,6 +896,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch {
       // localStorage might be unavailable
     }
+  });
+
+  // the activity log of the resources: who changed what and when
+  on('toggle-activity-layout', async () => {
+    const me = await getMe();
+    const target = me['display_mode'] === 'ac' ? 'it' : 'ac';
+    ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
+      displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
+    });
   });
 
   on('add-tag-filter', (el: HTMLElement) => {

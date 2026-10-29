@@ -28,6 +28,7 @@ enum ApiEndpoint: string
     case ExperimentsFolders = 'experiments_folders';
     case ExperimentsTemplates = 'experiments_templates';
     case Export = 'exports';
+    case Activity = 'activity';
     case ExtraFieldsKeys = 'extra_fields_keys';
     case Event = 'event';
     case Events = 'events';

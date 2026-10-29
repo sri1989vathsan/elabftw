@@ -211,3 +211,14 @@
   grid-row: 2;
   grid-column: 2 / -1;
 }
+
+// activity log
+.activity-sortable {
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.activity-details {
+  max-width: 28rem;
+  overflow-wrap: anywhere;
+}

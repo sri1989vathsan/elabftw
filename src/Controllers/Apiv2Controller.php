@@ -46,6 +46,7 @@ use Elabftw\Models\Config;
 use Elabftw\Models\Dspace;
 use Elabftw\Models\ExperimentsCategories;
 use Elabftw\Models\ExperimentsStatus;
+use Elabftw\Models\ActivityLog;
 use Elabftw\Models\ExtraFieldsKeys;
 use Elabftw\Models\FavFilters;
 use Elabftw\Models\FavTags;
@@ -396,6 +397,13 @@ final class Apiv2Controller extends AbstractApiController
                 null,
                 $this->Request->query->getString('start', Scheduler::EVENT_START),
                 $this->Request->query->getString('end', Scheduler::EVENT_END),
+            ),
+            ApiEndpoint::Activity => new ActivityLog(
+                $this->requester,
+                trim($this->Request->query->getString('q')),
+                $this->Request->query->getInt('userid'),
+                $this->Request->query->getInt('category'),
+                $this->Request->query->getInt('limit'),
             ),
             ApiEndpoint::ExtraFieldsKeys => new ExtraFieldsKeys(
                 $this->requester,
