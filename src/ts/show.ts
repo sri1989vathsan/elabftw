@@ -357,7 +357,8 @@ type AnyTS = TomSelectWithAllOptions & {
 };
 const bound = new WeakSet<Element>();
 
-const COMPACT_LIST_KEY = 'persistent_compact_list_v1';
+// one setting per kind of list, so compacting the resources leaves the experiments as they were
+const compactListKey = (): string => `persistent_compact_list_v2_${entity.type}`;
 
 // DOM
 document.addEventListener('DOMContentLoaded', () => {
@@ -365,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
   try {
-    if (localStorage.getItem(COMPACT_LIST_KEY) === '1') {
+    if (localStorage.getItem(compactListKey()) === '1') {
       document.getElementById('entityList')?.classList.add('entity-list-compact');
       document.querySelector('[data-action="toggle-compact-list"]')?.classList.add('active');
     }
@@ -908,7 +909,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const compact = document.getElementById('entityList')?.classList.toggle('entity-list-compact') ?? false;
     el.classList.toggle('active', compact);
     try {
-      localStorage.setItem(COMPACT_LIST_KEY, compact ? '1' : '0');
+      localStorage.setItem(compactListKey(), compact ? '1' : '0');
     } catch {
       // localStorage might be unavailable
     }

@@ -174,6 +174,9 @@ const EntitiesTable = ({
         applyOrder: true,
       });
     }
+    // a column state saved before the ID was pinned must not take it out of sight
+    event.api.applyColumnState({ state: [{ colId: 'id', pinned: 'left' }] });
+    event.api.moveColumns(['id'], 0);
     fetchData();
   };
 
@@ -250,6 +253,8 @@ const EntitiesTable = ({
   ];
 
   const baseColumns = [
+    // the ID is what is looked for first: it comes first and stays in view when the table is scrolled
+    { field: 'id', headerName: i18next.t('id'), pinned: 'left', width: 90, filter: 'agNumberColumnFilter' },
     { field: 'title', headerName: i18next.t('title') },
     { field: 'team_name', headerName: i18next.t('team') },
     { field: 'date', headerName: i18next.t('started-on'), valueGetter: p => lastLoginText(p.data.date), filterValueGetter: p => lastLoginText(p.data.date), cellRenderer: PastDateRenderer},
@@ -257,7 +262,6 @@ const EntitiesTable = ({
     ...(isResourcesPage ? storageColumns : []),
     { field: 'status', headerName: i18next.t('status'), valueGetter: p => p.data.status_title },
     { field: 'tags_decoded', headerName: i18next.t('tags'), valueGetter: p => p.data.tags_decoded, filterValueGetter: p => p.data.tags_decoded?.map(tagData => tagData.tag).join(' ') ?? '', cellRenderer: TagsRenderer },
-    { field: 'id', headerName: i18next.t('id') },
     { field: 'custom_id', headerName: i18next.t('custom-id') },
     { field: 'fullname', headerName: i18next.t('owner') },
     { field: 'timestamped', headerName: i18next.t('is-timestamped'), valueGetter: p => yesNo(p.data.timestamped), filterValueGetter: p => yesNo(p.data.timestamped), cellRenderer: BinaryRenderer },
@@ -286,7 +290,7 @@ const EntitiesTable = ({
       cellRenderer: WebAddressRenderer,
     }));
     // placed right after the title so the data of the category comes first, like in an inventory sheet
-    return [baseColumns[0], ...extraColumns, ...baseColumns.slice(1)];
+    return [baseColumns[0], baseColumns[1], ...extraColumns, ...baseColumns.slice(2)];
   }, [rowData]);
 
   const getResolvedEntityFilterParams = useCallback(event => {

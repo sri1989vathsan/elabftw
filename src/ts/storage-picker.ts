@@ -264,8 +264,13 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
         const chosenSlots = new Set(pickedSlots);
         const suggested = new Set(pickedSlots.length > 0 ? [] : planned());
         cells.forEach((cell, slot) => {
-          cell.classList.toggle('picked', chosenSlots.has(slot));
+          const isChosen = chosenSlots.has(slot);
+          cell.classList.toggle('chosen', isChosen);
           cell.classList.toggle('suggested', suggested.has(slot));
+          cell.setAttribute('aria-pressed', String(isChosen));
+          if (!cell.disabled) {
+            cell.textContent = isChosen ? '✓' : '';
+          }
         });
         showHint();
       };

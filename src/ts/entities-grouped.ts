@@ -123,7 +123,7 @@ function buildTable(group: Group, groupBy: GroupBy): HTMLTableElement {
   columns.push({ head: 'Owner', cell: row => row.fullname ?? '' });
 
   const headRow = el('tr');
-  headRow.append(el('th', '', 'Title'));
+  headRow.append(el('th', 'id-cell', 'ID'), el('th', '', 'Title'));
   columns.forEach(c => headRow.append(el('th', '', c.head)));
   const thead = el('thead');
   thead.append(headRow);
@@ -134,6 +134,7 @@ function buildTable(group: Group, groupBy: GroupBy): HTMLTableElement {
     const tr = el('tr');
     const link = el('a', '', row.title);
     link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
+    tr.append(el('td', 'id-cell', String(row.id)));
     const titleCell = el('td');
     titleCell.append(link);
     tr.append(titleCell);

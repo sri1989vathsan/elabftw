@@ -7,7 +7,7 @@ import { getEntityTypeFromPage } from './misc';
 import { appendLocationLinks, el, fieldLabel, filterParams, linkify, plainText, storageUrl } from './entities-view-utils';
 
 type ExtraField = { name: string; value: string };
-type StorageLocation = { storage_id: number; is_primary?: boolean; path: string; qty_stored: number; qty_unit: string };
+type StorageLocation = { storage_id: number; is_primary?: boolean; position?: string | null; path: string; qty_stored: number; qty_unit: string };
 type WebLink = { id: string; label: string; url: string };
 type InternalLink = { page: string; entityid: number; title: string; category_title: string | null; category_color: string | null };
 type Row = {
@@ -23,7 +23,7 @@ type Row = {
 type Change = { created_at: string; target: string; content: string | null; fullname: string | null };
 
 const RECENT_CHANGES = 5;
-const COLUMNS = ['Title', 'Category', 'Location', 'Quantity', 'Owner'];
+const COLUMNS = ['ID', 'Title', 'Category', 'Location', 'Quantity', 'Owner'];
 
 let rootEl: HTMLElement | null = null;
 let onFiltersChanged: ((event: Event) => void) | null = null;
@@ -70,7 +70,12 @@ function buildDetail(row: Row): HTMLElement {
       const li = el('li');
       const where = el('a', '', l.path);
       where.href = storageUrl(l.storage_id);
-      li.append(where, el('span', `badge badge-${l.is_primary ? 'primary' : 'secondary'}`, l.is_primary ? 'Primary' : 'Secondary'), el('span', 'color-medium', `${l.qty_stored} ${l.qty_unit}`.trim()));
+      li.append(
+        el('span', `storage-kind storage-kind-${l.is_primary ? 'primary' : 'secondary'}`, l.is_primary ? 'Primary' : 'Secondary'),
+        where,
+        el('span', 'color-medium', l.position ?? ''),
+        el('span', 'color-medium', `${l.qty_stored} ${l.qty_unit}`.trim()),
+      );
       list.append(li);
     });
     storage.append(list);
@@ -142,8 +147,8 @@ function render(container: HTMLElement, rows: Row[]): void {
   }
   const table = el('table', 'table table-sm expandable-table');
   const head = el('tr');
-  head.append(el('th'));
-  COLUMNS.forEach(c => head.append(el('th', '', c)));
+  head.append(el('th', 'expandable-caret-cell'));
+  COLUMNS.forEach(c => head.append(el('th', c === 'ID' ? 'id-cell' : '', c)));
   const thead = el('thead');
   thead.append(head);
   const body = el('tbody');
@@ -159,6 +164,8 @@ function render(container: HTMLElement, rows: Row[]): void {
     caret.append(icon);
     caretCell.append(caret);
     tr.append(caretCell);
+    // the ID stays in view when the table is scrolled sideways
+    tr.append(el('td', 'id-cell', String(row.id)));
     const titleCell = el('td');
     const link = el('a', '', row.title);
     link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;

@@ -453,3 +453,126 @@
   border-color: var(--primary, #295ca9);
   opacity: 0.7;
 }
+
+// primary and secondary storage labels: own colours, readable in every theme
+.storage-kind {
+  display: inline-block;
+  min-width: 5.2rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  color: #fff !important;
+  background: #6c757d;
+
+  &.storage-kind-primary {
+    background: #1f5fae;
+  }
+}
+
+// a storage row: label, location, slot, quantity, in columns
+.entity-storage-list li,
+.expandable-detail .entity-storage-list li {
+  display: grid;
+  grid-template-columns: 5.6rem minmax(0, 1fr) 2.2rem auto;
+  column-gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.1rem 0;
+}
+
+// the ID of a resource stays in view when a table scrolls sideways
+.id-cell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 3.2rem;
+  font-variant-numeric: tabular-nums;
+  background-color: var(--white, #fff);
+}
+
+.expandable-table .expandable-caret-cell {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background-color: var(--white, #fff);
+}
+
+.expandable-table .expandable-caret-cell + .id-cell {
+  left: 2.5rem;
+}
+
+// a slot chosen in the add storage popup: filled with a check mark
+.box-slot.chosen {
+  background: var(--primary, #1f5fae);
+  border-style: solid;
+  border-color: var(--primary, #1f5fae);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+// the storage rows of a resource page: one aligned line
+.storage-row {
+  display: grid;
+  grid-template-columns: 5.8rem minmax(0, 1fr) 2.6rem 7rem auto;
+  column-gap: 0.75rem;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+
+  .storage-row-path {
+    padding: 0;
+    text-align: left;
+    white-space: normal;
+    font-weight: 600;
+  }
+
+  .storage-row-slot {
+    font-weight: 600;
+    color: var(--medium);
+  }
+
+  .storage-row-qty {
+    white-space: nowrap;
+
+    .malleableQtyUnit {
+      margin-left: 0.15rem;
+    }
+  }
+
+  .storage-row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    white-space: nowrap;
+  }
+}
+
+// narrow screens: label and actions on the first line, the rest under the location
+@media (max-width: 576px) {
+  .storage-row {
+    grid-template-columns: 5.8rem minmax(0, 1fr) auto;
+    row-gap: 0.25rem;
+
+    .storage-row-where {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+
+    .storage-row-slot {
+      grid-row: 1;
+      grid-column: 2;
+    }
+
+    .storage-row-qty {
+      grid-row: 3;
+      grid-column: 1 / 3;
+    }
+
+    .storage-row-actions {
+      grid-row: 1;
+      grid-column: 3;
+    }
+  }
+}

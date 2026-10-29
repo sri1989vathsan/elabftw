@@ -525,12 +525,13 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     }
     const table = el('table', 'table table-sm table-hover');
     const head = el('tr');
-    ['Title', 'Category', 'Quantity', 'Location', 'Owner'].forEach(h => head.append(el('th', '', h)));
+    ['ID', 'Title', 'Category', 'Quantity', 'Location', 'Owner'].forEach(h => head.append(el('th', h === 'ID' ? 'id-cell' : '', h)));
     const thead = el('thead');
     thead.append(head);
     const body = el('tbody');
     entries.forEach(({ row, location }) => {
       const tr = el('tr');
+      tr.append(el('td', 'id-cell', String(row.id)));
       const titleCell = el('td');
       const link = el('a', '', row.title);
       link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
