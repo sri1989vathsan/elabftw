@@ -43,10 +43,10 @@ $v = static fn(string $file): int => (int) filemtime(__DIR__ . '/' . $file);
     <span id="save-state" role="status"></span>
         <label class="map-style" title="Look of the circular map">Map style
       <select id="map-style" aria-label="Map style">
-        <option value="clean">Clean</option>
-        <option value="vivid">Vivid</option>
-        <option value="dark">Dark</option>
-        <option value="classic">Classic</option>
+        <option value="classic">Classic (editor)</option>
+        <option value="clean">New: clean</option>
+        <option value="vivid">New: vivid</option>
+        <option value="dark">New: dark</option>
       </select>
     </label>
     <span id="status" role="status">Loading the editor...</span>

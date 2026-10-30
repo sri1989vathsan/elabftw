@@ -138,17 +138,18 @@
     let signature = '';
     let hover = null;
     let drag = null;
+    let pan = null;
     let menu = null;
     let layout = null;
     // the map can be made bigger: the drawing is made for a larger area and the panel scrolls
     let zoom = 1;
     try {
-      zoom = Math.min(2.5, Math.max(0.8, Number(window.localStorage.getItem('sequence-editor-map-zoom')) || 1));
+      zoom = Math.min(4, Math.max(0.6, Number(window.localStorage.getItem('sequence-editor-map-zoom')) || 1));
     } catch (error) {
       zoom = 1;
     }
     const setZoom = function (value) {
-      zoom = Math.min(2.5, Math.max(0.8, Math.round(value * 100) / 100));
+      zoom = Math.min(4, Math.max(0.6, Math.round(value * 100) / 100));
       try {
         window.localStorage.setItem('sequence-editor-map-zoom', String(zoom));
       } catch (error) {
@@ -566,13 +567,24 @@
           return;
         }
         const where = positionAt(event);
-        if (where.radius < ringIn - 30 || where.radius > outer + 24) {
+        if (event.altKey || where.radius < ringIn - 30 || where.radius > outer + 24) {
+          // outside the ring (or with Alt held): a drag moves the map when it is bigger than the panel
+          if (host.scrollWidth > host.clientWidth || host.scrollHeight > host.clientHeight) {
+            pan = { x: event.clientX, y: event.clientY, left: host.scrollLeft, top: host.scrollTop };
+            host.classList.add('panning');
+            event.preventDefault();
+          }
           return;
         }
         drag = { from: where.position, moved: false };
         event.preventDefault();
       });
       svg.addEventListener('mousemove', function (event) {
+        if (pan) {
+          host.scrollLeft = pan.left - (event.clientX - pan.x);
+          host.scrollTop = pan.top - (event.clientY - pan.y);
+          return;
+        }
         if (!drag) {
           return;
         }
@@ -589,6 +601,8 @@
         }
       });
       const finish = function () {
+        pan = null;
+        host.classList.remove('panning');
         if (drag && !drag.moved) {
           editor.updateEditor({ selectionLayer: { start: -1, end: -1 }, caretPosition: drag.from });
         }
@@ -596,6 +610,14 @@
       };
       svg.addEventListener('mouseup', finish);
       svg.addEventListener('mouseleave', finish);
+      svg.addEventListener('dblclick', function (event) {
+        const where = positionAt(event);
+        if (where.radius > outer + 24 || where.radius < ringIn - 30) {
+          setZoom(1);
+          host.scrollLeft = 0;
+          host.scrollTop = 0;
+        }
+      });
       svg.addEventListener('contextmenu', function (event) {
         event.preventDefault();
         const target = menuTarget;
@@ -688,6 +710,7 @@
       wrap.append(host);
       const controls = document.createElement('div');
       controls.className = 'own-map-zoom';
+      controls.title = 'Scroll the wheel on the map to zoom';
       const button = function (text, label, handler) {
         const b = document.createElement('button');
         b.type = 'button';
@@ -699,20 +722,27 @@
       };
       zoomLabel = document.createElement('span');
       zoomLabel.textContent = Math.round(zoom * 100) + '%';
-      controls.append(button('\u2212', 'Zoom out', function () {
-        setZoom(zoom - 0.15);
-      }), zoomLabel, button('+', 'Zoom in', function () {
-        setZoom(zoom + 0.15);
-      }), button('Fit', 'Fit the map to the panel', function () {
+      controls.append(zoomLabel, button('Fit', 'Fit the map to the panel', function () {
         setZoom(1);
       }), button('SVG', 'Save the map as an SVG image', exportSvg));
       wrap.append(controls);
-      // Ctrl (or Cmd) and the wheel zoom too
+      // the wheel zooms the map (a trackpad pinch too), around the pointer; the map is moved by dragging it
       host.addEventListener('wheel', function (event) {
-        if (event.ctrlKey || event.metaKey) {
-          event.preventDefault();
-          setZoom(zoom + (event.deltaY < 0 ? 0.1 : -0.1));
+        event.preventDefault();
+        const box = host.getBoundingClientRect();
+        const px = event.clientX - box.left;
+        const py = event.clientY - box.top;
+        const before = zoom;
+        setZoom(zoom * Math.exp(-event.deltaY * (event.deltaMode === 1 ? 0.05 : 0.0018)));
+        if (zoom === before) {
+          return;
         }
+        const ratio = zoom / before;
+        const left = host.scrollLeft;
+        const top = host.scrollTop;
+        draw();
+        host.scrollLeft = (left + px) * ratio - px;
+        host.scrollTop = (top + py) * ratio - py;
       }, { passive: false });
       container.append(wrap);
       container.classList.add('has-own-map');

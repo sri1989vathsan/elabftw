@@ -1606,3 +1606,7 @@ body:not([data-map-style="classic"]) .veZoomCircularSlider {
 .own-map-label.hot {
   font-weight: 700;
 }
+
+.own-map-host.panning {
+  cursor: grabbing;
+}

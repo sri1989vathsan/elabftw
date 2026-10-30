@@ -77,10 +77,10 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
     <span id="title"></span>
     <label class="map-style" title="Look of the circular map">Map style
       <select id="map-style" aria-label="Map style">
-        <option value="clean">Clean</option>
-        <option value="vivid">Vivid</option>
-        <option value="dark">Dark</option>
-        <option value="classic">Classic</option>
+        <option value="classic">Classic (editor)</option>
+        <option value="clean">New: clean</option>
+        <option value="vivid">New: vivid</option>
+        <option value="dark">New: dark</option>
       </select>
     </label>
     <span id="save-state" role="status"></span>
