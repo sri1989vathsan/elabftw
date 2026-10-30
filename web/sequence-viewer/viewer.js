@@ -12,7 +12,9 @@
   const saveState = document.getElementById('save-state');
   const fileName = params.get('name') || 'sequence';
   const entryId = Number(body.entry) || 0;
-  const canWrite = body.canWrite === '1';
+  // a Sanger trace (ab1) is an instrument file: it is only looked at, never written back
+  const isTrace = /\.ab1$/i.test(fileName);
+  const canWrite = body.canWrite === '1' && !isTrace;
   // after a save the file to replace is the new version, and a SnapGene file is saved as a GenBank file next to it
   let uploadId = Number(body.upload) || 0;
   let saveName = fileName;
@@ -79,9 +81,9 @@
     if (!response.ok) {
       throw new Error('The file could not be downloaded (' + response.status + ').');
     }
-    // SnapGene files are binary, the other formats are text
+    // SnapGene and ab1 files are binary, the other formats are text
     const isSnapgene = /\.dna$/i.test(fileName);
-    const input = isSnapgene ? new File([await response.blob()], fileName) : await response.text();
+    const input = isSnapgene || isTrace ? new File([await response.blob()], fileName) : await response.text();
     const results = await window.bioParsers.anyToJson(input, { fileName: fileName });
     const result = Array.isArray(results) ? results[0] : results;
     if (!result || !result.success || !result.parsedSequence) {
@@ -140,7 +142,7 @@
     }
 
     if (!canWrite) {
-      setSaveState('Read only: you cannot edit this entry', '');
+      setSaveState(isTrace ? 'Sanger trace: read only' : 'Read only: you cannot edit this entry', '');
       return;
     }
     setSaveState('No changes yet', '');

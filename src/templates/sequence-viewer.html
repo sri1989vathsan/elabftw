@@ -1,7 +1,7 @@
 {# SEQUENCE: the sequence files attached to an entry of the database, opened in the Open Vector Editor (read only), each in a page of its own #}
 {% set sequenceFiles = [] %}
 {% for upload in Entity.entityData.uploads %}
-  {% if upload.real_name matches '/\\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i' %}
+  {% if upload.real_name matches '/\\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna|ab1)$/i' %}
     {% set sequenceFiles = sequenceFiles|merge([upload]) %}
   {% endif %}
 {% endfor %}
