@@ -155,6 +155,12 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     unitSelect.append(option);
   });
   if (editing && button.dataset.unit) {
+    // a unit that is not in the list is kept as it is
+    if (!unitOptions.some(u => u.value === button.dataset.unit)) {
+      const option = el('option', '', button.dataset.unit);
+      option.value = button.dataset.unit;
+      unitSelect.append(option);
+    }
     unitSelect.value = button.dataset.unit;
   }
   const copies = el('input', 'form-control');
