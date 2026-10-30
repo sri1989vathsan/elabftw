@@ -66,6 +66,7 @@ use Elabftw\Models\Notifications\EventDeleted;
 use Elabftw\Models\Notifications\UserNotifications;
 use Elabftw\Models\ProcurementRequests;
 use Elabftw\Models\RequestActions;
+use Elabftw\Models\InventoryCategories;
 use Elabftw\Models\ResourcesCategories;
 use Elabftw\Models\Revisions;
 use Elabftw\Models\ExperimentsFolders;
@@ -479,6 +480,7 @@ final class Apiv2Controller extends AbstractApiController
                 ApiSubModels::Status, ApiSubModels::ExperimentsStatus => new ExperimentsStatus($this->Model, $this->subId),
                 ApiSubModels::ExperimentsCategories => new ExperimentsCategories($this->Model, $this->subId),
                 ApiSubModels::ResourcesCategories => new ResourcesCategories($this->Model, $this->subId),
+                ApiSubModels::RegistryCategories => new InventoryCategories($this->Model, $this->subId),
                 ApiSubModels::ItemsStatus => new ItemsStatus($this->Model, $this->subId),
                 ApiSubModels::ProcurementRequests => new ProcurementRequests($this->Model, $this->subId),
                 ApiSubModels::Rors => new Teams2Rors($this->Model->id ?? 0, $this->Model->canWrite(), $this->subIdString),

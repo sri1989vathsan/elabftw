@@ -19,6 +19,7 @@ enum Orderable: string
 {
     case ExperimentsCategories = 'experiments_categories';
     case ResourcesCategories = 'items_categories';
+    case RegistryCategories = 'inventory_categories';
     case ExperimentsStatus = 'experiments_status';
     case ItemsStatus = 'items_status';
     case ExperimentsSteps = 'experiments_steps';

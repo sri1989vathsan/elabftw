@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block body %}
+
+{% import 'categories-status-index.macro.html' as idx %}
+{{ idx.catstatidx(
+  'registry_categories',
+  'inventory_categories',
+  'Create and modify the categories available to the registry.'|trans,
+  'Registry categories group the entries of the registry (plasmids, antibodies, cells, strains, probes, primers...). They belong to a team and have two main properties: name and color.'|trans,
+  App.registryCategoryArr|filter(c => c.is_current_team == 1),
+  'No registry categories have been created in this team yet.'|trans|msg('warning', false),
+  'Create new registry category'|trans,
+  'Category name'|trans,
+  App.Teams.teamArr.name,
+  App.Users.isAdmin,
+  true,
+  ) }}
+
+{% endblock body %}

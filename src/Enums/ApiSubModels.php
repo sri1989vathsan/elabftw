@@ -29,6 +29,7 @@ enum ApiSubModels: string
     case ExperimentsStatus = 'experiments_status';
     case Events = 'events';
     case ResourcesCategories = 'resources_categories';
+    case RegistryCategories = 'registry_categories';
     case IdpsCerts = 'certs';
     case IdpsEndpoints = 'endpoints';
     case ItemsLinks = 'items_links';
@@ -91,6 +92,7 @@ enum ApiSubModels: string
                 self::ExperimentsCategories,
                 self::ExperimentsStatus,
                 self::ResourcesCategories,
+                self::RegistryCategories,
                 self::ItemsStatus,
                 self::ProcurementRequests,
                 self::Rors,

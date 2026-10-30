@@ -151,7 +151,7 @@
                 </div>
             </div>
             <div class='nav-item dropdown'>
-              <a id='navRegistryDropdown' href='#' class='nav-link dropdown-toggle {{ scriptName == 'registry.php' ? 'active' }}' role='button' data-toggle='dropdown' data-overflow-href='registry.php' aria-haspopup='true' aria-expanded='false'>{{ 'Registry'|trans }}</a>
+              <a id='navRegistryDropdown' href='#' class='nav-link dropdown-toggle {{ scriptName in ['registry.php', 'registry-categories.php'] ? 'active' }}' role='button' data-toggle='dropdown' data-overflow-href='registry.php' aria-haspopup='true' aria-expanded='false'>{{ 'Registry'|trans }}</a>
               <div class='dropdown-menu'>
                 <form class='dropdown-item form-inline' action='registry.php' aria-label='{{ 'Quick search registry'|trans }}'>
                   <label for='nav-search-registry' class='sr-only'>{{ 'Search registry'|trans }}</label>
@@ -166,6 +166,9 @@
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='registry.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-vials fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'All entries'|trans }}</a>
                 {% set isActive = scriptName == 'registry.php' and App.Request.query.get('scope') == 1 %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='registry.php?scope=1' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-user fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'My entries'|trans }}</a>
+                <div class='dropdown-divider'></div>
+                {% set isActive = scriptName == 'registry-categories.php' %}
+                <a class='dropdown-item {{ isActive ? 'active' }}' href='registry-categories.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-rectangle-list fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Registry categories'|trans }}</a>
                 <div class='dropdown-divider'></div>
                 {% for entity in App.registryCategoryArr|filter(c => c.is_current_team == 1) %}
                   {% set isActive = scriptName == 'registry.php' and App.Request.query.get('category') == entity.id %}
