@@ -325,6 +325,18 @@
       vendor.value = 'idt';
       fillOptions();
     }
+    // the default name of a new order tells the supplier; a name the user typed is left alone
+    const defaultTitle = function () {
+      return vendor.value ? 'Oligos; ' + SHEETS[vendor.value].label.split(' ')[0] : 'Oligos';
+    };
+    let suggested = defaultTitle();
+    title.value = suggested;
+    vendor.addEventListener('change', function () {
+      if (title.value === suggested) {
+        suggested = defaultTitle();
+        title.value = suggested;
+      }
+    });
     sheetBox.append(vendor, scale, purification);
     choices.append(sheetBox);
     const actions = element('div', 'sa-actions');
