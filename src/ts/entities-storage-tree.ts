@@ -137,11 +137,9 @@ function buildTree(units: Unit[], rows: Row[]): { roots: Node[]; byId: Map<numbe
 function collect(node: Node, withChildren: boolean): { row: Row; location: StorageLocation }[] {
   const out: { row: Row; location: StorageLocation }[] = [];
   const visit = (n: Node): void => {
-    n.own.forEach(row => {
-      const location = (row.storage_locations ?? []).find(l => l.storage_id === n.unit.id);
-      if (location) {
-        out.push({ row, location });
-      }
+    // an entry with several tubes in the unit is listed once per tube in own: take every tube of it once
+    new Set(n.own).forEach(row => {
+      (row.storage_locations ?? []).filter(l => l.storage_id === n.unit.id).forEach(location => out.push({ row, location }));
     });
     if (withChildren) {
       n.children.forEach(visit);
