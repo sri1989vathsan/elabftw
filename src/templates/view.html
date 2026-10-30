@@ -144,7 +144,7 @@
   {% set body = Entity.entityData.body_html %}
   {% if body != '' %}
       <div {% if Entity.entityData.hide_main_text %}hidden='hidden'{% endif %}>
-        <h3 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='body_view'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Main text'|trans }}</h3>
+        <h3 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='body_view'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ (Entity.entityType.value == 'inventory' ? 'Description' : 'Main text')|trans }}</h3>
         <div id='body_view' class='pt-2 ml-3 overflow-auto' data-save-hidden='body_view'>{{ body|raw }}</div>
         <hr>
       </div>
@@ -191,7 +191,7 @@
     <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='activityDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Activity'|trans }} ({{ Entity.entityData.changelog|length }})</h3>
     <div class='mt-2 ml-3' id='activityDiv' data-save-hidden='activityDiv'>
       <div class='table-responsive'>
-        {% set activityLabels = {'title': 'Title', 'body': 'Main text', 'bodyappend': 'Main text', 'metadata': 'Custom fields', 'category': 'Category', 'status': 'Status', 'container_created': 'Storage added', 'container_deleted': 'Storage removed', 'container_moved': 'Storage moved', 'container_qty_changed': 'Quantity', 'container_unit_changed': 'Unit'} %}
+        {% set activityLabels = {'title': 'Title', 'body': 'Description', 'bodyappend': 'Description', 'metadata': 'Custom fields', 'category': 'Category', 'status': 'Status', 'container_created': 'Storage added', 'container_deleted': 'Storage removed', 'container_moved': 'Storage moved', 'container_qty_changed': 'Quantity', 'container_unit_changed': 'Unit'} %}
         <table class='table table-sm'>
           <thead>
             <tr>
