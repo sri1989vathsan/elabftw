@@ -37,6 +37,8 @@
     let tab = 'primers';
     // where the primers searched bind, relative to the selection
     let whereFilter = 'anywhere';
+    // the part of the Primers tab that is open: attached, search or file
+    let subTab = null;
     // what is drawn on the map: the attached primers and the pair being looked at, none of it is saved in the file
     let attachedDrawn = {};
     let designDrawn = {};
@@ -197,14 +199,17 @@
       const attachedIds = new Set(attachedPrimers.map(function (p) {
         return p.id;
       }));
+      const sectionAttached = element('div', 'primers-section');
+      const sectionSearch = element('div', 'primers-section');
+      const sectionFile = element('div', 'primers-section');
 
-      panel.append(element('h4', '', 'On this sequence'));
+      sectionAttached.append(element('h4', '', 'On this sequence'));
       if (attachedPrimers.length === 0) {
-        panel.append(element('p', 'primers-muted', entryId ? 'No primer is attached yet. Search the database below.' : 'Open a plasmid of the database to attach primers to it.'));
+        sectionAttached.append(element('p', 'primers-muted', entryId ? 'No primer is attached yet. Use the Find and add tab.' : 'Open a plasmid of the database to attach primers to it.'));
       }
       attachedPrimers.forEach(function (primer) {
         const sites = findSitesCached(now.sequence, primer.sequence, now.circular);
-        panel.append(card(primer, sites, [
+        sectionAttached.append(card(primer, sites, [
           action('Order', function () {
             tools.sendToOrder([primer.id]);
           }),
@@ -221,7 +226,7 @@
       });
 
       // search the database: by name or sequence, and by where the primers bind relative to the selection
-      panel.append(element('h4', '', 'Add a primer of the database'));
+      sectionSearch.append(element('h4', '', 'Add a primer of the database'));
       const search = element('input', 'primers-name');
       search.type = 'search';
       search.placeholder = 'Name or sequence...';
@@ -397,17 +402,17 @@
         results.prepend(count);
       }, 'primary');
       finder.append(scope, tolerance, candidates);
-      panel.append(finder);
+      sectionSearch.append(finder);
 
       const searchRow = element('div', 'primers-row');
       searchRow.append(search, where);
-      panel.append(searchRow, results);
+      sectionSearch.append(searchRow, results);
       showResults();
 
       // the primers annotated in the file, not in the database yet
       const own = Object.values(now.data.primers || {});
       if (own.length > 0) {
-        panel.append(element('h4', '', 'Primers designed in this file'));
+        sectionFile.append(element('h4', '', 'Primers designed in this file'));
       }
       // the ones that are not in the database yet can be ticked and added together, or all at once
       const items = own.map(function (primer) {
@@ -447,7 +452,7 @@
           addMany(missing, [addChosen, addAll]);
         });
         bar.append(everything, element('span', 'primers-muted', 'Select all'), addChosen, addAll);
-        panel.append(bar);
+        sectionFile.append(bar);
         refreshBar();
         items.boxes = boxes;
       }
@@ -485,13 +490,13 @@
           });
           row.append(add);
         }
-        panel.append(row);
+        sectionFile.append(row);
       });
 
       // a primer from the bases selected on the sequence
-      panel.append(element('h4', '', 'New primer from the selection'));
+      sectionFile.append(element('h4', '', 'New primer from the selection'));
       if (!hasSelection) {
-        panel.append(element('p', 'primers-muted', 'Select the bases of the primer on the sequence first.'));
+        sectionFile.append(element('p', 'primers-muted', 'Select the bases of the primer on the sequence first.'));
       } else {
         const reverse = element('input');
         reverse.type = 'checkbox';
@@ -520,7 +525,31 @@
         });
         const row = element('div', 'primers-row');
         row.append(name, info, reverseLabel, add);
-        panel.append(row);
+        sectionFile.append(row);
+      }
+
+      // the three parts are tabs, so the panel stays short: what is attached, what can be searched, what the file holds
+      const fileCount = missing.length;
+      if (subTab === null) {
+        subTab = attachedPrimers.length > 0 ? 'attached' : 'search';
+      }
+      const subTabs = element('div', 'primers-subtabs');
+      [['attached', 'Attached', attachedPrimers.length, sectionAttached], ['search', 'Find and add', null, sectionSearch], ['file', 'In this file', fileCount, sectionFile]].forEach(function (tabDef) {
+        const button = element('button', 'primers-subtab' + (subTab === tabDef[0] ? ' active' : ''), tabDef[1] + (tabDef[2] === null ? '' : ' (' + tabDef[2] + ')'));
+        button.type = 'button';
+        button.setAttribute('aria-pressed', subTab === tabDef[0] ? 'true' : 'false');
+        button.addEventListener('click', function () {
+          subTab = tabDef[0];
+          render();
+        });
+        subTabs.append(button);
+        tabDef[3].hidden = subTab !== tabDef[0];
+      });
+      panel.append(subTabs, sectionAttached, sectionSearch, sectionFile);
+      // the preview of the search belongs to the search tab
+      if (subTab !== 'search' && Object.keys(previewDrawn).length > 0) {
+        previewDrawn = {};
+        redraw();
       }
     }
 
