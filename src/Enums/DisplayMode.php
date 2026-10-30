@@ -16,4 +16,9 @@ enum DisplayMode: string
 {
     case Normal = 'it';
     case Table = 'tb';
+    // views of the resources, see src/ts/show.ts
+    case Grouped = 'gr';
+    case Storage = 'st';
+    case Activity = 'ac';
+    case Expandable = 'ex';
 }

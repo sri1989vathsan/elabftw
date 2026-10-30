@@ -250,7 +250,7 @@
   <div class='d-flex flex-wrap'>
     {# LEFT #}
     <div class='d-flex'>
-      {% if App.Users.userData.display_mode == 'it' %}
+      {% if App.Users.userData.display_mode != 'tb' %}
         <a title='{{ 'Select all'|trans }}' aria-label='{{ 'Select all'|trans }}' data-action='toggle-select-all-entities' data-target='select' href='#' class='btn btn-transparent'>
           <i class='far fa-square'></i>
         </a>
@@ -653,7 +653,7 @@
 
       {# SKELETONS #}
       <div id='itemListSkeleton' class='d-flex flex-column' aria-hidden='true'>
-        {% if App.Users.userData.display_mode == 'it' %}
+        {% if App.Users.userData.display_mode != 'tb' %}
           {% for i in 1..DisplayParams.limit %}
             <section data-twiglinterstfu='{{ i }}' class='entity entity-skeleton pl-3 py-3 d-flex'>
               <div class='mt-1 mr-3'>
