@@ -433,12 +433,35 @@
       where.value = whereFilter;
       // the selection is read when it is needed: the panel stays open while the user selects on the sequence
       const selectionNow = function () {
-        const current = editor.getState().selectionLayer || { start: -1, end: -1 };
-        return { start: current.start, end: current.end, has: current.start >= 0 && current.end >= current.start };
+        const chosen = editor.getState().selectionLayer || { start: -1, end: -1 };
+        const has = chosen.start >= 0 && chosen.end >= 0;
+        // a selection over the origin of a circular sequence runs from a high position to a low one
+        return { start: chosen.start, end: chosen.end, has: has, wraps: has && chosen.start > chosen.end };
       };
+      const inSelection = function (position, chosen) {
+        return chosen.wraps ? (position >= chosen.start || position <= chosen.end) : (position >= chosen.start && position <= chosen.end);
+      };
+      // the whole binding site is in the selection
       const insideSelection = function (site) {
         const chosen = selectionNow();
-        return chosen.has && site.start >= chosen.start && site.end - 1 <= chosen.end;
+        const length = now.sequence.length;
+        if (!chosen.has || (site.end > length && !chosen.wraps)) {
+          return false;
+        }
+        return inSelection(site.start, chosen) && inSelection((site.end - 1) % length, chosen);
+      };
+      // a part of the binding site is in the selection
+      const touchesSelection = function (site) {
+        const chosen = selectionNow();
+        if (!chosen.has) {
+          return false;
+        }
+        for (let position = site.start; position < site.end; position++) {
+          if (inSelection(position % now.sequence.length, chosen)) {
+            return true;
+          }
+        }
+        return false;
       };
       const results = element('div', 'primers-results');
       // a list of primers as cards the user can tick, to attach several together
@@ -467,7 +490,9 @@
           attachPicked.disabled = picked.size === 0;
         };
         const boxes = [];
-        if (entryId && list.length > 0) {
+        if (entryId && list.some(function (primer) {
+          return !attachedIds.has(primer.id);
+        })) {
           const all = element('input');
           all.type = 'checkbox';
           all.setAttribute('aria-label', 'Select all of the results');
@@ -485,7 +510,11 @@
         list.forEach(function (primer) {
           const sites = findSitesCached(now.sequence, primer.sequence, now.circular);
           const holder = element('div', 'primers-pick');
-          if (entryId) {
+          const isAttached = attachedIds.has(primer.id);
+          if (entryId && isAttached) {
+            holder.append(element('span', 'primers-pick-space'));
+          }
+          if (entryId && !isAttached) {
             const box = element('input');
             box.type = 'checkbox';
             box.setAttribute('aria-label', 'Select ' + primer.title);
@@ -500,9 +529,11 @@
             boxes.push(box);
             holder.append(box);
           }
-          holder.append(card(primer, sites, entryId ? [action('Attach', function () {
+          const attachButton = isAttached ? action('Attached', function () {}, 'quiet') : action('Attach', function () {
             attach(primer);
-          }, 'primary')] : []));
+          }, 'primary');
+          attachButton.disabled = isAttached;
+          holder.append(card(primer, sites, entryId ? [attachButton] : []));
           results.append(holder);
         });
         if (list.length === 0) {
@@ -549,7 +580,7 @@
       // candidates: the primers of the database that match the selected region, or the entire sequence
       const finder = element('div', 'primers-finder');
       const scope = element('select', 'primers-name');
-      [['selection', 'inside the selection'], ['entire', 'anywhere on the entire sequence']].forEach(function (choice) {
+      [['selection', 'inside the selection'], ['overlap', 'overlapping the selection'], ['entire', 'anywhere on the entire sequence']].forEach(function (choice) {
         const option = element('option', '', 'Bind ' + choice[1]);
         option.value = choice[0];
         scope.append(option);
@@ -566,18 +597,16 @@
         candidatePrefs = { scope: scope.value, mismatches: tolerance.value };
         search.value = '';
         results.textContent = '';
-        if (scope.value === 'selection' && !selectionNow().has) {
+        if (scope.value !== 'entire' && !selectionNow().has) {
           results.append(element('p', 'primers-muted', 'Select a region of the sequence first, or search the entire sequence.'));
           return;
         }
         const limit = Number(tolerance.value);
         const found = [];
+        // the primers already attached are listed too (without a tick): they are on the sequence, so they match
         (databasePrimers || []).forEach(function (primer) {
-          if (attachedIds.has(primer.id)) {
-            return;
-          }
           const sites = findSitesCached(now.sequence, primer.sequence, now.circular).filter(function (site) {
-            return site.mismatches <= limit && (scope.value === 'entire' || insideSelection(site));
+            return site.mismatches <= limit && (scope.value === 'entire' || (scope.value === 'overlap' ? touchesSelection(site) : insideSelection(site)));
           });
           if (sites.length > 0) {
             found.push({ primer: primer, best: Math.min.apply(null, sites.map(function (site) {
@@ -589,7 +618,11 @@
         found.sort(function (x, y) {
           return x.best - y.best || x.first - y.first;
         });
-        const count = element('p', 'primers-muted', found.length + ' candidate' + (found.length === 1 ? '' : 's') + (scope.value === 'selection' ? ' in the selection (' + (selectionNow().start + 1) + '..' + (selectionNow().end + 1) + ')' : ' on the sequence') + '.');
+        const attachedCount = found.filter(function (item) {
+          return attachedIds.has(item.primer.id);
+        }).length;
+        const chosenNow = selectionNow();
+        const count = element('p', 'primers-muted', found.length + ' matching primer' + (found.length === 1 ? '' : 's') + (scope.value !== 'entire' ? ' ' + (scope.value === 'overlap' ? 'overlapping' : 'in') + ' the selection (' + (chosenNow.start + 1) + '..' + (chosenNow.end + 1) + ')' : ' on the sequence') + (attachedCount > 0 ? ', ' + attachedCount + ' already attached' : '') + '.');
         if (found.length > 0) {
           renderList(found.slice(0, 200).map(function (item) {
             return item.primer;

@@ -1315,3 +1315,11 @@ body[data-map-style="dark"] .veCircularViewMiddleOfVectorText * {
 #tool-sidebar .primers-compact-detail .primers-compact-actions {
   margin-left: 0;
 }
+
+#tool-sidebar .primers-pick-space {
+  flex: 0 0 1rem;
+}
+
+#tool-sidebar [hidden] {
+  display: none !important;
+}
