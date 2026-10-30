@@ -163,6 +163,9 @@
     if (window.OriginTab) {
       window.OriginTab.setup(editor);
     }
+    if (window.OwnMap) {
+      window.OwnMap.setup(editor);
+    }
     if (window.AnnotateTab) {
       window.AnnotateTab.setup(editor);
     }
