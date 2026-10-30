@@ -58,7 +58,7 @@ function buildDetail(row: Row): HTMLElement {
 
   const fields = row.extra_fields ?? [];
   if (fields.length > 0) {
-    const box = section('Custom fields');
+    const box = section('Details');
     const grid = el('div', 'expandable-fields');
     fields.forEach(f => {
       const cell = el('div', 'expandable-field');
