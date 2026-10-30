@@ -652,6 +652,10 @@ command `elabftwInsertSpreadsheetData` (`SpreadsheetExtension.ts`). Message form
 
 A disabled tool (unchecked in Administration, HTML tools) is hidden from the side panel and the toolbar button and its `/html-tools/<id>/` route answers 404 for everyone, sysadmins included; only the admin list shows it. The side panel has a refresh button (list of tools; it closes a tool that was disabled meanwhile) and the open tool a reload button.
 
+Inventory: a tool can ask the page to search the resources (`search-items`, answered to the tool frame only, read-only, with the user's own permissions) and text it inserts
+can link entries with `[[item:ID|label]]` (the entry also becomes a linked resource of the experiment). See `docs/html-tool-bridge/README.md`; the transfection tool's plasmid button
+uses it.
+
 The flag is on. The main text toolbar has an **HTML tools** button (after the spreadsheet tools button, `custom-editor/HtmlToolsExtension.ts`, only when the
 feature is on): its dropdown lists the installed tools; a pick dispatches the `open-html-tool` window event and `HtmlToolsPanel` opens that tool in the
 workspace beside the page, so the text stays visible. The eight tools of https://moors-code.github.io/Lab_Protocols/ were installed in the local

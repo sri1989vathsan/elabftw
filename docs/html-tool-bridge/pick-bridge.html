@@ -20,7 +20,15 @@
   bar.append(note,sel,pick); document.body.appendChild(bar);
   var picking=false, hot=null, timer=0;
   function say(t){ note.textContent=t; note.style.display=''; clearTimeout(timer); timer=setTimeout(function(){ if(!picking) note.style.display='none'; },3500); }
-  function send(m){ window.parent.postMessage(Object.assign({elabftw:1},m),'*'); }
+  function post(m){ window.parent.postMessage(Object.assign({elabftw:1},m),'*'); }
+  function send(m){
+    post(m);
+    // a tool that works with inventory entries (window.elabftwItemLinks() -> [{id,title}]) gets them linked in the text too
+    if(m.type!=='insert-text' && typeof window.elabftwItemLinks==='function'){
+      var l=window.elabftwItemLinks()||[];
+      if(l.length) post({type:'insert-text',text:'Inventory: '+l.map(function(i){return '[[item:'+i.id+'|'+String(i.title).replace(/[\]|]/g,' ')+']]';}).join(', ')});
+    }
+  }
   function clean(s){ return String(s||'').replace(/[ \t\r\f\v]+/g,' ').replace(/ ?\n ?/g,'\n').trim(); }
   function cellText(c){
     var t=clean(c.innerText).replace(/\n+/g,' '); if(t) return t;
@@ -70,6 +78,62 @@
   document.addEventListener('selectionchange',function(){ sel.style.display=clean(String(window.getSelection()))?'':'none'; });
   sel.addEventListener('mousedown',function(e){ e.preventDefault(); });
   sel.addEventListener('click',function(){ var s=window.getSelection(), text=clean(String(s)); if(text){ send({type:'insert-text',text:text}); say('Text sent'); } });
+  // ── inventory search: the page searches with the user's own session and sends the entries back ──
+  var pending={}, counter=0;
+  window.addEventListener('message',function(e){
+    var d=e.data; if(e.source!==window.parent||!d||d.elabftw!==1||(d.type!=='items'&&d.type!=='items-error')||!pending[d.requestId]) return;
+    var p=pending[d.requestId]; delete pending[d.requestId];
+    if(d.type==='items') p.ok(d.items||[]); else p.fail(new Error(d.message||'Search failed'));
+  });
+  window.elabftwSearchItems=function(query,opts){
+    opts=opts||{};
+    return new Promise(function(ok,fail){
+      var id='r'+(++counter); pending[id]={ok:ok,fail:fail};
+      post({type:'search-items',requestId:id,query:query,category:opts.category||'',limit:opts.limit||20});
+      setTimeout(function(){ if(pending[id]){ delete pending[id]; fail(new Error('No answer from eLabFTW')); } },15000);
+    });
+  };
+  // a search box with the matching entries; resolves with the chosen entry ({id,title,category,url,fields}) or null
+  window.elabftwPickItem=function(opts){
+    opts=opts||{};
+    return new Promise(function(done){
+      var back=document.createElement('div');
+      back.style.cssText='position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;padding-top:8vh;font:14px/1.4 system-ui,sans-serif';
+      var card=document.createElement('div');
+      card.style.cssText='background:#fff;color:#111827;border-radius:10px;width:min(560px,92vw);max-height:76vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.4)';
+      var head=document.createElement('div'); head.style.cssText='padding:12px 14px;font-weight:600;border-bottom:1px solid #e5e7eb';
+      head.textContent=opts.title||'Search the inventory'+(opts.category?' ('+opts.category+')':'');
+      var box=document.createElement('input'); box.type='search'; box.placeholder='Type to search…';
+      box.style.cssText='margin:10px 14px;padding:8px 10px;border:1px solid #9ca3af;border-radius:6px;font:inherit;color:#111827;background:#fff';
+      var list=document.createElement('div'); list.style.cssText='overflow:auto;padding:0 8px 10px';
+      card.append(head,box,list); back.appendChild(card); document.body.appendChild(back); box.focus();
+      var timer=0, token=0;
+      function close(v){ document.removeEventListener('keydown',key,true); back.remove(); done(v); }
+      function key(e){ if(e.key==='Escape'){ e.stopPropagation(); close(null); } }
+      document.addEventListener('keydown',key,true);
+      back.addEventListener('mousedown',function(e){ if(e.target===back) close(null); });
+      function show(items){
+        list.textContent='';
+        if(!items.length){ var none=document.createElement('div'); none.style.cssText='padding:10px 8px;color:#6b7280'; none.textContent='Nothing found'; list.appendChild(none); return; }
+        items.forEach(function(it){
+          var row=document.createElement('button'); row.type='button';
+          row.style.cssText='display:block;width:100%;text-align:left;padding:8px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;cursor:pointer';
+          row.onmouseenter=function(){ row.style.background='#eff6ff'; }; row.onmouseleave=function(){ row.style.background='none'; };
+          var t=document.createElement('div'); t.style.fontWeight='600'; t.textContent=it.title;
+          var sub=document.createElement('div'); sub.style.cssText='font-size:12px;color:#6b7280';
+          sub.textContent=[it.category].concat(Object.keys(it.fields||{}).slice(0,4).map(function(k){ return it.fields[k]?k+': '+it.fields[k]:''; })).filter(Boolean).join(' · ');
+          row.append(t,sub); row.onclick=function(){ close(it); }; list.appendChild(row);
+        });
+      }
+      function run(){
+        var mine=++token;
+        window.elabftwSearchItems(box.value,{category:opts.category}).then(function(items){ if(mine===token) show(items); })
+          .catch(function(err){ if(mine===token){ list.textContent=err.message; } });
+      }
+      box.addEventListener('input',function(){ clearTimeout(timer); timer=setTimeout(run,250); });
+      run();
+    });
+  };
   window.elabftwSend=send;   // tool-specific buttons use this
   window.elabftwNote=say;
 })();

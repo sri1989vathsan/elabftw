@@ -38,3 +38,23 @@ Calculator, Golden Gate, Lab Calculator (qPCR has its own buttons, above). Mouse
 
 Tools run with `connect-src 'none'` (see `HtmlToolController.php`), so anything that talks to the network, such as the Google Sheets sync of Mouse
 Registry and Freezer Inventory, cannot work inside eLabFTW.
+
+## Inventory search and links
+
+A tool can search the eLabFTW inventory (resources) through the page around it. The tool has no login and no network; the page searches with the
+signed-in user's own session, so a tool sees only what that user may read, and a search never writes anything.
+
+```js
+elabftwSearchItems('pLKO', { category: 'Plasmid', limit: 20 }).then(items => { /* [{ id, title, category, url, fields: { 'Concentration (ng/µL)': '380', ... } }] */ });
+elabftwPickItem({ title: 'Pick a plasmid' }).then(item => { /* a search box with the matches; the chosen entry, or null */ });
+```
+
+Both are in `pick-bridge.html` (a tool without it can post `{ elabftw: 1, type: 'search-items', requestId, query, category?, limit? }` and listen for `items` / `items-error`).
+`fields` are the entry's extra fields as plain name: value text.
+
+Links: in `insert-text`, `[[item:ID|label]]` becomes a link to that entry and the entry is added to the experiment's linked resources, the same as the `#` mention in
+the editor. A tool that defines `window.elabftwItemLinks = () => [{ id, title }]` gets an "Inventory: ..." line with those links inserted after every table or plate it sends.
+`extras/transfection-inventory.html` does this for the Transfection Batch Calculator: its plasmid button (📦) searches the eLabFTW inventory instead of opening the Google Sheets
+popup, fills the name, concentration (the first extra field with "conc" or "ng" in its name) and stock volume (first field with "vol"), and the plasmids of the conditions that have wells
+are linked when the plate or table is inserted.
+

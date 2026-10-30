@@ -1,0 +1,31 @@
+<script>
+// Transfection Batch Calculator: the plasmid picker (📦) searches the eLabFTW inventory instead of opening the
+// Google Sheets popup (which cannot open inside the tool frame). The plasmids used are linked in what is inserted.
+(function(){
+  if(window.parent===window) return;
+  function field(item,pattern){
+    var k=Object.keys(item.fields||{}).filter(function(n){ return pattern.test(n); })[0];
+    return k? parseFloat(String(item.fields[k]).replace(',','.')) : NaN;
+  }
+  window.openInventoryPicker=function(condId,plasmidIndex){
+    elabftwPickItem({title:'Pick a plasmid from the inventory'}).then(function(item){
+      if(!item) return;
+      var c=getCond(condId), p=c&&c.plasmids[plasmidIndex]; if(!p) return;
+      var conc=field(item,/conc|ng/i), vol=field(item,/vol/i);
+      p.name=item.title; if(conc>0) p.conc=String(conc);
+      p._stockVol=vol>0?vol:0; p._itemId=item.id;
+      renderConditions(); renderResults();
+      showToast('📦 '+item.title+' picked from the inventory'+(conc>0?'':' (no concentration on the entry: enter it)'));
+    });
+  };
+  // the plasmids of the conditions that have wells, for the "Inventory:" links added after an insert
+  window.elabftwItemLinks=function(){
+    var seen={}, out=[];
+    state.conditions.forEach(function(c){
+      if(!getWellCount(c)) return;
+      c.plasmids.forEach(function(p){ if(p._itemId&&!seen[p._itemId]){ seen[p._itemId]=1; out.push({id:p._itemId,title:p.name}); } });
+    });
+    return out;
+  };
+})();
+</script>
