@@ -722,7 +722,22 @@ export function getTinymceBaseConfig(page: string): object {
       // bottom edge visibly lags Enter until the key is released. Re-measure
       // as soon as the new line exists (the input event) and once more on the
       // next frame, when the layout has settled.
-      editor.on('input', () => {
+      // Each measure lays out the whole text, which on a long entry costs more than the
+      // keystroke itself. Plain typed characters only need one measure per frame, off the
+      // key's path; anything that can change the height at once (a new line, a paste, a
+      // delete, undo) is still measured immediately, as before.
+      let resizeFramePending = false;
+      editor.on('input', (event: Event) => {
+        const inputType = (event as InputEvent).inputType ?? '';
+        if (inputType === 'insertText' || inputType === 'insertCompositionText') {
+          if (resizeFramePending) return;
+          resizeFramePending = true;
+          window.requestAnimationFrame(() => {
+            resizeFramePending = false;
+            if (!editor.removed) editor.execCommand('mceAutoResize');
+          });
+          return;
+        }
         editor.execCommand('mceAutoResize');
         window.requestAnimationFrame(() => editor.execCommand('mceAutoResize'));
       });
