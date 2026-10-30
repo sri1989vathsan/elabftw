@@ -4,7 +4,7 @@
  */
 import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
-import { appendLocationLinks, el, fieldLabel, filterParams, linkify, plainText, sortableHeader, sortRows, storageUrl } from './entities-view-utils';
+import { el, fieldLabel, filterParams, linkify, plainText, sortableHeader, sortRows, storageUrl } from './entities-view-utils';
 import type { SortState } from './entities-view-utils';
 
 type ExtraField = { name: string; value: string };
@@ -24,15 +24,14 @@ type Row = {
 type Change = { created_at: string; target: string; content: string | null; fullname: string | null };
 
 const RECENT_CHANGES = 5;
-const COLUMNS = ['ID', 'Title', 'Category', 'Location', 'Quantity', 'Owner'];
+// the category is in the tabs and the location in the opened row: no columns for them
+const COLUMNS = ['ID', 'Title', 'Quantity', 'Owner'];
 
 function sortValue(row: Row, key: string): string | number {
   const locations = row.storage_locations ?? [];
   switch (key) {
   case 'ID': return row.id;
   case 'Title': return row.title ?? '';
-  case 'Category': return row.category_title ?? '';
-  case 'Location': return locations.map(l => `${l.path} ${l.position ?? ''}`.trim()).join(' | ');
   case 'Quantity': return locations.length > 0 ? locations.reduce((sum, l) => sum + Number(l.qty_stored), 0) : '';
   default: return row.fullname ?? '';
   }
@@ -189,17 +188,6 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
     titleCell.append(link);
     tr.append(titleCell);
-    const categoryCell = el('td', 'text-nowrap');
-    if (row.category_color) {
-      const dot = el('span', 'category-nav-dot');
-      dot.style.backgroundColor = `#${row.category_color}`;
-      categoryCell.append(dot);
-    }
-    categoryCell.append(document.createTextNode(row.category_title ?? ''));
-    tr.append(categoryCell);
-    const locationCell = el('td');
-    appendLocationLinks(locationCell, locations);
-    tr.append(locationCell);
     tr.append(el('td', 'text-nowrap', locations.length > 0 ? totalStock(locations) : ''));
     tr.append(el('td', '', row.fullname ?? ''));
     body.append(tr);

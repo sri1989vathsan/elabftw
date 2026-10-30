@@ -37,7 +37,7 @@ final class RegistryController extends AbstractEntityController
     #[Override]
     protected function getPageTitle(): string
     {
-        return _('Registry');
+        return _('Database');
     }
 
     #[Override]

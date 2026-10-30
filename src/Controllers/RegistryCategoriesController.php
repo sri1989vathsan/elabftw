@@ -30,6 +30,6 @@ final class RegistryCategoriesController extends AbstractHtmlController
     #[Override]
     protected function getPageTitle(): string
     {
-        return _('Registry categories');
+        return _('Database categories');
     }
 }
