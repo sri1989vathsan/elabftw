@@ -37,7 +37,7 @@ final class SamplesController extends AbstractEntityController
     #[Override]
     protected function getPageTitle(): string
     {
-        return _('Inventory');
+        return _('Registry');
     }
 
     #[Override]

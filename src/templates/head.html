@@ -151,7 +151,7 @@
                 </div>
             </div>
             {% set isActive = scriptName == 'samples.php' %}
-            <a class='nav-item nav-link {{ isActive ? 'active' }}' href='samples.php' {{ isActive ? 'aria-current="page"' }}>{{ 'Samples'|trans }}</a>
+            <a class='nav-item nav-link {{ isActive ? 'active' }}' href='samples.php' {{ isActive ? 'aria-current="page"' }}>{{ 'Registry'|trans }}</a>
             {% if not App.isAnonymous() %}
             {% set isActive = scriptName == 'projectmanagement.php' %}
             <a class='nav-item nav-link {{ isActive ? 'active' }}'
