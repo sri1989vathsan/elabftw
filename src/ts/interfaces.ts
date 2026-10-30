@@ -184,6 +184,7 @@ enum EntityType {
   Experiment = 'experiments',
   Item = 'items',
   ItemType = 'items_types',
+  Inventory = 'inventory',
   Template = 'experiments_templates',
   Other = 'other',
 }
@@ -192,6 +193,7 @@ enum SingularEntityType {
   Experiment = 'experiment',
   Item = 'item',
   ItemType = 'item_type',
+  Inventory = 'inventory',
   Template = 'experiment_template',
   Other = 'other',
 }

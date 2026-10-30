@@ -307,6 +307,8 @@ export function getEntityTypeFromPage(loc: Location): EntityType {
     return EntityType.Experiment;
   case 'database.php':
     return EntityType.Item;
+  case 'samples.php':
+    return EntityType.Inventory;
   case 'templates.php':
     return EntityType.Template;
   case 'resources-templates.php':

@@ -111,6 +111,8 @@ const getSingularEntryTypeFromEntityType = (entity: EntityType): SingularEntityT
   case EntityType.Item:
     return SingularEntityType.Item;
     break;
+  case EntityType.Inventory:
+    return SingularEntityType.Inventory;
   case EntityType.ItemType:
     return SingularEntityType.ItemType;
     break;

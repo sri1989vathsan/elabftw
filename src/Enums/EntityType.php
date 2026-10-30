@@ -144,7 +144,7 @@ enum EntityType: string
         return match ($this) {
             self::Experiments => 'experiments.php',
             self::Items => 'database.php',
-            self::Inventory => 'inventory.php',
+            self::Inventory => 'samples.php',
             self::Templates => 'templates.php',
             self::ItemsTypes => 'resources-templates.php',
         };

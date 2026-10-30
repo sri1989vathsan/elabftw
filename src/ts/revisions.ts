@@ -266,6 +266,7 @@ function entityEditUrl(entityType: string, id: string): string {
   const pages: Record<string, string> = {
     [EntityType.Experiment]: 'experiments.php',
     [EntityType.Item]: 'database.php',
+    [EntityType.Inventory]: 'samples.php',
     [EntityType.Template]: 'templates.php',
     [EntityType.ItemType]: 'resources-templates.php',
   };
