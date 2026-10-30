@@ -183,6 +183,11 @@
 
 {% if not App.isAnonymous() %}
 
+  {# the sequence files of an entry of the database #}
+  {% if Entity.entityType.value == 'inventory' %}
+    {% include 'sequence-viewer.html' %}
+  {% endif %}
+
   {# same for storage #}
   {% if Entity.entityData.containers or Entity.entityType.value == 'inventory' %}
     {% include 'storage-view-edit.html' %}

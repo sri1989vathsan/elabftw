@@ -47,3 +47,6 @@ whats-new-screenshots/inbox/
 # Python bytecode from the manual test scripts
 __pycache__/
 *.pyc
+
+# the Open Vector Editor files of the sequence viewer, fetched with bin/fetch-ove.sh
+web/sequence-viewer/vendor/

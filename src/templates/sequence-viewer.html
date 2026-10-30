@@ -1,0 +1,25 @@
+{# SEQUENCE: the sequence files attached to an entry of the database, opened in the Open Vector Editor (read only, in a frame of their own so its styles stay apart) #}
+{% set sequenceFiles = [] %}
+{% for upload in Entity.entityData.uploads %}
+  {% if upload.real_name matches '/\\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i' %}
+    {% set sequenceFiles = sequenceFiles|merge([upload]) %}
+  {% endif %}
+{% endfor %}
+{% if sequenceFiles|length > 0 or Entity.entityData.category_title == 'Plasmids' %}
+  <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-dna' data-scroll-btn-label='{{ 'Sequence'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='sequenceDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Sequence'|trans }} ({{ sequenceFiles|length }})</h3>
+  <div class='mt-2 ml-3' id='sequenceDiv' data-save-hidden='sequenceDiv'>
+    {% if sequenceFiles|length == 0 %}
+      <p class='text-muted'>{{ 'Attach a GenBank, FASTA or SnapGene file in the local files to view the sequence here.'|trans }}</p>
+    {% else %}
+      <ul class='list-inline mb-2'>
+        {% for upload in sequenceFiles %}
+          <li class='list-inline-item'>
+            <a class='btn btn-secondary btn-sm' target='sequenceFrame' href='sequence-viewer/index.php?f={{ upload.long_name|e('url') }}&amp;name={{ upload.real_name|e('url') }}&amp;storage={{ upload.storage }}{% if accessKey %}&amp;access_key={{ accessKey|e('url') }}{% endif %}'><i class='fas fa-dna fa-fw mr-1'></i>{{ upload.real_name }}</a>
+          </li>
+        {% endfor %}
+      </ul>
+      <iframe name='sequenceFrame' id='sequenceFrame' class='sequence-frame' style='width: 100%; height: 40rem; border: 1px solid #c9ccd1;' title='{{ 'Sequence editor'|trans }}' srcdoc='&lt;p style=&quot;font:14px sans-serif;color:#666;padding:1rem&quot;&gt;Choose a file above to open it in the sequence editor.&lt;/p&gt;'></iframe>
+    {% endif %}
+  </div>
+  <hr>
+{% endif %}
