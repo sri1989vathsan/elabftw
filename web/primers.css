@@ -1,0 +1,42 @@
+/* the primers section of an entry of the database */
+#primersRoot .primers-table {
+  margin-bottom: 0.6rem;
+}
+
+#primersRoot .primers-table th {
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-weight: 600;
+}
+
+#primersRoot .primers-sequence {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+#primersRoot .primers-warning {
+  color: #a61e1e;
+}
+
+#primersRoot .primers-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.5rem;
+}
+
+#primersRoot .primers-suggestions {
+  margin-top: 0.6rem;
+}
+
+#primersRoot .primers-suggestions h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+#primersRoot .primers-suggestion {
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+}

@@ -79,6 +79,7 @@ final class EntityOrderLinks extends AbstractRest
                     WHEN "items" THEN (SELECT title FROM items WHERE id = link.entity_id)
                     WHEN "experiments_templates" THEN (SELECT title FROM experiments_templates WHERE id = link.entity_id)
                     WHEN "items_types" THEN (SELECT title FROM items_types WHERE id = link.entity_id)
+                    WHEN "inventory" THEN (SELECT title FROM inventory WHERE id = link.entity_id)
                 END AS title
             FROM entity_order_links AS link
             WHERE link.order_id = :order_id

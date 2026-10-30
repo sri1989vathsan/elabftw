@@ -1,0 +1,21 @@
+{# PRIMERS: on a plasmid, its primers with where they bind; on a primer, the plasmids it is attached to and its orders. See primers.js #}
+{% set primerMode = Entity.entityData.category_title matches '/^primers?$/i' %}
+{% set plasmidMode = Entity.entityData.category_title matches '/^plasmids?$/i' %}
+{% if primerMode or plasmidMode %}
+  {% set plasmidFiles = [] %}
+  {% for upload in Entity.entityData.uploads %}
+    {% if upload.real_name matches '/\\.(gb|gbk|gbff|genbank|fasta|fa|fna)$/i' %}
+      {% set plasmidFiles = plasmidFiles|merge([{'real_name': upload.real_name, 'long_name': upload.long_name, 'storage': upload.storage}]) %}
+    {% endif %}
+  {% endfor %}
+  <link rel='stylesheet' href='lineage.css?v={{ 'now'|date('YmdHi') }}'>
+  <link rel='stylesheet' href='primers.css?v={{ 'now'|date('YmdHi') }}'>
+  <link rel='stylesheet' href='sequence-add.css?v={{ 'now'|date('YmdHi') }}'>
+  <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-dna' data-scroll-btn-label='{{ 'Primers'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='primersDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ primerMode ? 'Plasmids and orders'|trans : 'Primers'|trans }}</h3>
+  <div class='mt-2 ml-3' id='primersDiv' data-save-hidden='primersDiv' data-entry='{{ Entity.id }}' data-mode='{{ primerMode ? 'primer' : 'plasmid' }}' data-files='{{ plasmidFiles|json_encode|e('html_attr') }}'>
+    <div id='primersRoot'><span class='text-muted'>{{ 'Loading...'|trans }}</span></div>
+  </div>
+  <script src='primer-tools.js?v={{ 'now'|date('YmdHi') }}'></script>
+  <script src='primers.js?v={{ 'now'|date('YmdHi') }}'></script>
+  <hr>
+{% endif %}
