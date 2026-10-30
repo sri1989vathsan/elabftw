@@ -467,7 +467,14 @@
       showResults();
 
       // the primers annotated in the file, not in the database yet
-      const own = Object.values(now.data.primers || {});
+      // the primers annotated in the file: the primers of the editor and the features of the type primer_bind (a GenBank file
+      // has its primers as these)
+      const featureList = Array.isArray(now.data.features) ? now.data.features : Object.values(now.data.features || {});
+      const own = Object.values(now.data.primers || {}).concat(featureList.filter(function (feature) {
+        return String(feature.type || '').toLowerCase() === 'primer_bind' && feature.start <= feature.end;
+      }).map(function (feature) {
+        return { name: feature.name, start: feature.start, end: feature.end, forward: feature.strand !== -1, strand: feature.strand };
+      }));
       if (own.length > 0) {
         sectionFile.append(element('h4', '', 'Primers designed in this file'));
       }
