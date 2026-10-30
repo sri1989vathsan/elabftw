@@ -429,7 +429,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
      */
     private function setPosition(mixed $position): void
     {
-        if ($this->getTable() !== 'containers2items') {
+        if (!$this->hasSlots()) {
             throw new ImproperActionException('Only the containers of resources have a position.');
         }
         $current = $this->readOne();
@@ -445,9 +445,18 @@ abstract class AbstractContainersLinks extends AbstractLinks
             if ($slot === null || empty($box['box_rows']) || $slot[0] > (int) $box['box_rows'] || $slot[1] > (int) $box['box_cols']) {
                 throw new ImproperActionException('This slot is not in the box.');
             }
-            $req = $this->Db->prepare('SELECT COUNT(*) FROM containers2items WHERE storage_id = :storage_id AND position = :position AND id <> :id');
+            // a slot is taken by a container of resources or of the registry alike
+            $other = $this->getTable() === 'containers2items' ? 'containers2inventory' : 'containers2items';
+            $req = $this->Db->prepare(sprintf(
+                'SELECT (SELECT COUNT(*) FROM %s WHERE storage_id = :storage_id AND position = :position AND id <> :id)
+                    + (SELECT COUNT(*) FROM %s WHERE storage_id = :storage_id2 AND position = :position2)',
+                $this->getTable(),
+                $other,
+            ));
             $req->bindValue(':storage_id', (int) $current['storage_id'], PDO::PARAM_INT);
+            $req->bindValue(':storage_id2', (int) $current['storage_id'], PDO::PARAM_INT);
             $req->bindValue(':position', $position);
+            $req->bindValue(':position2', $position);
             $req->bindParam(':id', $this->id, PDO::PARAM_INT);
             $this->Db->execute($req);
             if ((int) $req->fetchColumn() > 0) {
@@ -472,14 +481,14 @@ abstract class AbstractContainersLinks extends AbstractLinks
      */
     private function makePrimary(): void
     {
-        if ($this->getTable() !== 'containers2items') {
+        if (!$this->hasSlots()) {
             throw new ImproperActionException('Only the containers of resources can be primary.');
         }
         $current = $this->readOne();
         if ((int) $current['is_primary'] === 1) {
             return;
         }
-        $req = $this->Db->prepare('UPDATE containers2items SET is_primary = IF(id = :id, 1, 0) WHERE item_id = :item_id');
+        $req = $this->Db->prepare('UPDATE ' . $this->getTable() . ' SET is_primary = IF(id = :id, 1, 0) WHERE item_id = :item_id');
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
         $this->Db->execute($req);
@@ -495,34 +504,39 @@ abstract class AbstractContainersLinks extends AbstractLinks
      */
     private function ensurePrimary(): void
     {
-        if ($this->getTable() !== 'containers2items') {
+        if (!$this->hasSlots()) {
             return;
         }
-        $req = $this->Db->prepare('SELECT COUNT(*) FROM containers2items WHERE item_id = :item_id AND is_primary = 1');
+        $req = $this->Db->prepare('SELECT COUNT(*) FROM ' . $this->getTable() . ' WHERE item_id = :item_id AND is_primary = 1');
         $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
         $this->Db->execute($req);
         if ((int) $req->fetchColumn() > 0) {
             return;
         }
-        $req = $this->Db->prepare('UPDATE containers2items SET is_primary = 1 WHERE item_id = :item_id ORDER BY id ASC LIMIT 1');
+        $req = $this->Db->prepare('UPDATE ' . $this->getTable() . ' SET is_primary = 1 WHERE item_id = :item_id ORDER BY id ASC LIMIT 1');
         $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
         $this->Db->execute($req);
     }
 
     private function clearPosition(): void
     {
-        if ($this->getTable() === 'containers2items') {
-            $req = $this->Db->prepare('UPDATE containers2items SET position = NULL WHERE id = :id AND item_id = :item_id');
+        if ($this->hasSlots()) {
+            $req = $this->Db->prepare('UPDATE ' . $this->getTable() . ' SET position = NULL WHERE id = :id AND item_id = :item_id');
             $req->bindParam(':id', $this->id, PDO::PARAM_INT);
             $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
             $this->Db->execute($req);
         }
     }
 
-    // the position column exists for the containers of resources only
+    // slots and the primary flag exist for the containers of resources and of the registry, not of experiments
+    private function hasSlots(): bool
+    {
+        return $this->getTable() === 'containers2items' || $this->getTable() === 'containers2inventory';
+    }
+
     private function positionSelect(): string
     {
-        return $this->getTable() === 'containers2items' ? ' main.position, main.is_primary,' : '';
+        return $this->hasSlots() ? ' main.position, main.is_primary,' : '';
     }
 
     private function moveToStorage(int $newStorageId): void

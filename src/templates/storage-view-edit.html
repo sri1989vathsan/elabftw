@@ -1,5 +1,5 @@
 {# STORAGE : only show for concrete entries #}
-{% if Entity.entityType.value == 'experiments' or Entity.entityType.value == 'items' %}
+{% if Entity.entityType.value in ['experiments', 'items', 'inventory'] %}
 {% set storageOpen = mode == 'edit' or Entity.entityType.value == 'inventory' %}
 {% include 'add-container-modal.html' %}
 {% include 'move-container-modal.html' %}

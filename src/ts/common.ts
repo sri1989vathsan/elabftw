@@ -1739,6 +1739,16 @@ on('container-qty-minus', (el: HTMLElement) => {
   if (input) setStepperValue(input, intFromInput(input) - 1);
 });
 
+// primary and secondary storage of a registry entry: the picker is loaded when needed
+on('open-storage-picker', async (el: HTMLElement) => {
+  (await import(/* webpackChunkName: 'storage-picker' */ './storage-picker')).openStoragePicker(el);
+});
+
+on('make-primary-container', (el: HTMLElement) => {
+  ApiC.patch(`${entity.type}/${entity.id}/containers/${el.dataset.id}`, { is_primary: 1 })
+    .then(() => reloadElements(['storageDivContent']));
+});
+
 on('store-containers-distributed', () => {
   const submitBtn = document.getElementById('storeContainersBtn') as HTMLButtonElement | null;
   // guard against double submit: a disabled button means a batch is already in flight

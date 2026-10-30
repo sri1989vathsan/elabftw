@@ -142,6 +142,7 @@ final class CustomMigrationRunner
         '101_notif_order_collected.sql',
         '110_inventory.sql',
         '111_inventory_steps.sql',
+        '112_registry_storage.sql',
     );
 
     private Db $Db;
