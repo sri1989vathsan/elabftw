@@ -479,7 +479,7 @@
 .expandable-detail .entity-storage-list li {
   display: grid;
   // the last two columns have a fixed width, so the slots and the quantities line up from row to row
-  grid-template-columns: 5.6rem minmax(0, 1fr) 3rem 7rem;
+  grid-template-columns: 5.6rem minmax(0, 1fr) 9rem 11rem;
   column-gap: 0.75rem;
   align-items: baseline;
   padding: 0.1rem 0;
@@ -760,4 +760,11 @@
   font-style: italic;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+// the slots of the tubes of one location, side by side in the row of the storage
+.storage-tube-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
 }

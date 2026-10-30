@@ -772,13 +772,22 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       main.append(el('p', 'text-muted', 'This location does not contain any resource.'));
       return;
     }
+    // the tubes of one entry in one location are one line: its slots, the total quantity
+    const groups = new Map<string, { row: Row; locations: StorageLocation[] }>();
+    entries.forEach(({ row, location }) => {
+      const key = `${row.id}:${location.storage_id}`;
+      const group = groups.get(key) ?? { row, locations: [] };
+      group.locations.push(location);
+      groups.set(key, group);
+    });
     const table = el('table', 'table table-sm table-hover');
     const head = el('tr');
-    ['ID', 'Title', 'Category', 'Quantity', 'Location', 'Owner'].forEach(h => head.append(el('th', h === 'ID' ? 'id-cell' : '', h)));
+    ['ID', 'Title', 'Slots', 'Quantity', 'Location', 'Owner'].forEach(h => head.append(el('th', h === 'ID' ? 'id-cell' : '', h)));
     const thead = el('thead');
     thead.append(head);
     const body = el('tbody');
-    entries.forEach(({ row, location }) => {
+    groups.forEach(({ row, locations }) => {
+      const first = locations[0];
       const tr = el('tr');
       tr.append(el('td', 'id-cell', String(row.id)));
       const titleCell = el('td');
@@ -786,14 +795,27 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
       titleCell.append(link);
       tr.append(titleCell);
-      [row.category_title ?? '', `${location.qty_stored} ${location.qty_unit}`.trim()].forEach(text => tr.append(el('td', '', text)));
+      const slotsCell = el('td');
+      locations.forEach(l => {
+        if (l.position) {
+          const chip = el('span', `storage-slot-chip ${l.is_primary ? 'is-primary' : 'is-secondary'} mr-1`, l.position);
+          chip.title = l.comment ? `${l.is_primary ? 'Primary' : 'Secondary'}: ${l.comment}` : (l.is_primary ? 'Primary' : 'Secondary');
+          slotsCell.append(chip);
+        }
+      });
+      tr.append(slotsCell);
+      // the quantities of the tubes added up per unit
+      const sums = new Map<string, number>();
+      locations.forEach(l => sums.set(l.qty_unit, (sums.get(l.qty_unit) ?? 0) + Number(l.qty_stored)));
+      const total = [...sums.entries()].map(([unit, qty]) => `${Math.round(qty * 100) / 100} ${unit}`.trim()).join(', ');
+      tr.append(el('td', 'text-nowrap', locations.length > 1 ? `${total} (${locations.length} tubes)` : total));
       // the location of an entry is a link that selects it in the tree
       const whereCell = el('td');
-      const where = el('a', '', location.path);
-      where.href = `?storage_unit=${location.storage_id}`;
+      const where = el('a', '', first.path);
+      where.href = `?storage_unit=${first.storage_id}`;
       where.addEventListener('click', event => {
         event.preventDefault();
-        select(location.storage_id);
+        select(first.storage_id);
       });
       whereCell.append(where);
       tr.append(whereCell, el('td', '', row.fullname ?? ''));

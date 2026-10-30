@@ -8,7 +8,7 @@ import { el, fieldLabel, filterParams, linkify, plainText, sortableHeader, sortR
 import type { SortState } from './entities-view-utils';
 
 type ExtraField = { name: string; value: string };
-type StorageLocation = { storage_id: number; is_primary?: boolean; position?: string | null; path: string; qty_stored: number; qty_unit: string };
+type StorageLocation = { storage_id: number; is_primary?: boolean; comment?: string | null; position?: string | null; path: string; qty_stored: number; qty_unit: string };
 type WebLink = { id: string; label: string; url: string };
 type InternalLink = { page: string; entityid: number; title: string; category_title: string | null; category_color: string | null };
 type Row = {
@@ -77,16 +77,28 @@ function buildDetail(row: Row): HTMLElement {
     storage.append(el('p', 'text-muted mb-0', 'Not stored anywhere.'));
   } else {
     storage.append(el('p', 'mb-1', `Total stock: ${totalStock(locations)}`));
+    // the tubes in one location are one line: the slots as chips, the quantity added up
+    const byStorage = new Map<number, StorageLocation[]>();
+    locations.forEach(l => byStorage.set(l.storage_id, [...(byStorage.get(l.storage_id) ?? []), l]));
     const list = el('ul', 'entity-storage-list');
-    locations.forEach(l => {
+    byStorage.forEach(tubes => {
       const li = el('li');
-      const where = el('a', '', l.path);
-      where.href = storageUrl(l.storage_id);
+      const where = el('a', '', tubes[0].path);
+      where.href = storageUrl(tubes[0].storage_id);
+      const slots = el('span', 'storage-tube-slots');
+      tubes.forEach(l => {
+        if (l.position) {
+          const chip = el('span', `storage-slot-chip ${l.is_primary ? 'is-primary' : 'is-secondary'}`, l.position);
+          chip.title = l.comment ? `${l.is_primary ? 'Primary' : 'Secondary'}: ${l.comment}` : (l.is_primary ? 'Primary' : 'Secondary');
+          slots.append(chip);
+        }
+      });
+      const hasPrimary = tubes.some(l => l.is_primary);
       li.append(
-        el('span', `storage-kind storage-kind-${l.is_primary ? 'primary' : 'secondary'}`, l.is_primary ? 'Primary' : 'Secondary'),
+        el('span', `storage-kind storage-kind-${hasPrimary ? 'primary' : 'secondary'}`, hasPrimary ? 'Primary' : 'Secondary'),
         where,
-        el('span', 'color-medium', l.position ?? ''),
-        el('span', 'color-medium', `${l.qty_stored} ${l.qty_unit}`.trim()),
+        slots,
+        el('span', 'color-medium', tubes.length > 1 ? `${totalStock(tubes)} (${tubes.length} tubes)` : totalStock(tubes)),
       );
       list.append(li);
     });
