@@ -156,26 +156,29 @@
     return field ? clean(field.value) : clean(entry.sequence || '');
   }
 
-  let primersCategory = null;
-  async function primersCategoryId() {
-    if (primersCategory === null) {
-      const categories = await json('api/v2/teams/current/registry_categories');
-      const found = categories.find(function (c) {
-        return /^primers?$/i.test(c.title);
-      });
-      primersCategory = found ? found.id : 0;
+  // the modules whose entries are sequences that bind: the primers and the probes
+  const BINDING_MODULE = /^(primers?|probes?)$/i;
+  let bindingCategories = null;
+  async function categoriesOf(pattern) {
+    if (bindingCategories === null) {
+      bindingCategories = await json('api/v2/teams/current/registry_categories');
     }
-    return primersCategory;
+    return bindingCategories.filter(function (c) {
+      return pattern.test(c.title);
+    });
+  }
+  async function primersCategoryId() {
+    const found = (await categoriesOf(/^primers?$/i))[0];
+    return found ? found.id : 0;
   }
 
-  // every primer of the database that has a sequence
+  // every primer and probe of the database that has a sequence
   async function allPrimers() {
-    const category = await primersCategoryId();
-    if (!category) {
-      return [];
-    }
-    const entries = await json('api/v2/inventory?limit=1000&category=' + category);
-    return entries.map(function (entry) {
+    const categories = await categoriesOf(BINDING_MODULE);
+    const lists = await Promise.all(categories.map(function (category) {
+      return json('api/v2/inventory?limit=1000&category=' + category.id);
+    }));
+    return lists.flat().map(function (entry) {
       return { id: entry.id, title: entry.title, sequence: primerSequenceOf(entry), category: entry.category_title, color: entry.category_color };
     }).filter(function (primer) {
       return primer.sequence.length >= MIN_LENGTH;

@@ -34,7 +34,7 @@ const quantityOf = (row: Row): number | '' => {
   return locations.length > 0 ? locations.reduce((sum, l) => sum + Number(l.qty_stored), 0) : '';
 };
 const fieldOf = (row: Row, pattern: RegExp): string => (row.extra_fields ?? []).find(f => pattern.test(f.name))?.value ?? '';
-const isPrimerList = (rows: Row[]): boolean => rows.length > 0 && rows.every(r => /^primers?$/i.test(r.category_title ?? ''));
+const isPrimerList = (rows: Row[]): boolean => rows.length > 0 && rows.every(r => /^(primers?|probes?)$/i.test(r.category_title ?? ''));
 const basesOf = (row: Row): string => fieldOf(row, /^sequence/i).toUpperCase().replace(/[^A-Z]/g, '');
 const gcOf = (bases: string): number | '' => bases === '' ? '' : Math.round(((bases.match(/[GC]/g) ?? []).length / bases.length) * 1000) / 10;
 const numberOrEmpty = (value: string): number | '' => value !== '' && Number.isFinite(Number(value)) ? Number(value) : '';

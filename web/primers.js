@@ -138,7 +138,7 @@
 
     const table = element('table', 'table table-sm primers-table');
     const head = element('tr');
-    ['Primer', 'Sequence 5\'-3\'', 'Tm', 'Binds on this plasmid', ''].forEach(function (label) {
+    ['Name', 'Sequence 5\'-3\'', 'Tm', 'Binds on this plasmid', ''].forEach(function (label) {
       head.append(element('th', '', label));
     });
     const thead = element('thead');
@@ -196,7 +196,7 @@
     });
     if (state.primers.length === 0) {
       const tr = element('tr');
-      const cell = element('td', 'text-muted', 'No primer is attached to this plasmid yet.');
+      const cell = element('td', 'text-muted', 'No primer or probe is attached to this plasmid yet.');
       cell.colSpan = 5;
       tr.append(cell);
       body.append(tr);
@@ -205,7 +205,7 @@
     root.append(table);
 
     const controls = element('div', 'primers-controls');
-    controls.append(search('Attach a primer...', async function (term) {
+    controls.append(search('Attach a primer or probe...', async function (term) {
       const lower = term.toLowerCase();
       return primers.filter(function (p) {
         return !attachedIds.has(p.id) && (p.title.toLowerCase().indexOf(lower) !== -1 || p.sequence.toLowerCase().indexOf(lower) !== -1);
@@ -229,7 +229,7 @@
       controls.append(all);
     }
     if (sequenceInfo) {
-      const find = element('button', 'btn btn-secondary btn-sm ml-2', 'Find the primers of the database that bind');
+      const find = element('button', 'btn btn-secondary btn-sm ml-2', 'Find the primers and probes of the database that bind');
       find.type = 'button';
       find.addEventListener('click', function () {
         const found = primers.filter(function (p) {
@@ -241,10 +241,10 @@
         });
         suggestions.textContent = '';
         if (found.length === 0) {
-          suggestions.append(element('p', 'text-muted mb-1', 'No other primer of the database binds this sequence.'));
+          suggestions.append(element('p', 'text-muted mb-1', 'No other primer or probe of the database binds this sequence.'));
           return;
         }
-        suggestions.append(element('h4', '', 'Primers of the database that bind this sequence'));
+        suggestions.append(element('h4', '', 'Primers and probes of the database that bind this sequence'));
         found.forEach(function (match) {
           const line = element('div', 'primers-suggestion');
           const link = element('a', '', match.primer.title);

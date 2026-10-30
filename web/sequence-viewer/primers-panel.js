@@ -114,7 +114,7 @@
       const top = element('div', 'primers-card-top');
       top.append(element('strong', 'primers-card-name', primer.title));
       const chips = element('span', 'primers-chips');
-      [primer.sequence.length + ' bases', 'Tm ' + tools.tm(primer.sequence) + '\u00b0C', 'GC ' + tools.gc(primer.sequence) + '%'].forEach(function (text) {
+      [primer.category && !/^primers?$/i.test(primer.category) ? primer.category.replace(/s$/i, '') : '', primer.sequence.length + ' bases', 'Tm ' + tools.tm(primer.sequence) + '\u00b0C', 'GC ' + tools.gc(primer.sequence) + '%'].forEach(function (text) {
         chips.append(element('span', 'primers-chip', text));
       });
       top.append(chips);
