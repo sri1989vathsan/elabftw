@@ -15,6 +15,8 @@
   // a Sanger trace (ab1) is an instrument file: it is only looked at, never written back
   const isTrace = /\.ab1$/i.test(fileName);
   const canWrite = body.canWrite === '1' && !isTrace;
+  // the tool of the Tools menu: an editor with no file of the database behind it, nothing is saved
+  const toolMode = body.tool === '1';
   // after a save the file to replace is the new version, and a SnapGene file is saved as a GenBank file next to it
   let uploadId = Number(body.upload) || 0;
   let saveName = fileName;
@@ -74,7 +76,10 @@
   }
 
   document.title = fileName + ' - Sequence editor';
-  document.getElementById('title').textContent = fileName;
+  const titleElement = document.getElementById('title');
+  if (titleElement) {
+    titleElement.textContent = fileName;
+  }
 
   function fail(message) {
     status.textContent = message;
@@ -171,7 +176,27 @@
     });
   }
 
+  // a new, empty sequence to start from: File > Import Sequence opens a file of the computer
+  function loadTool() {
+    status.className = 'hidden';
+    document.title = 'Sequence editor';
+    const sequenceData = { name: 'New sequence', circular: true, sequence: '', features: [] };
+    applyPalette(sequenceData);
+    const editor = window.createVectorEditor(document.getElementById('root'), {
+      editorName: 'sequence-tool',
+      showMenuBar: true,
+      readOnly: false,
+    });
+    window.sequenceEditor = editor;
+    buildCutterButtons(editor);
+    editor.updateEditor({ sequenceData: sequenceData, annotationVisibility: { features: true, cutsites: true, orfs: false } });
+    setSaveState('Nothing is stored here: use File > Export Sequence to keep your work', '');
+  }
+
   async function load() {
+    if (toolMode) {
+      return loadTool();
+    }
     const download = new URLSearchParams({ f: params.get('f') || '', name: fileName, storage: params.get('storage') || '1' });
     if (params.get('access_key')) {
       download.set('access_key', params.get('access_key'));
