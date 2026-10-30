@@ -171,6 +171,73 @@
       return box;
     }
 
+    // the rows that are opened, kept while the panel is drawn again
+    const openRows = new Set();
+
+    // a primer as a row of one line (name and where it binds); a click opens the sequence, the Tm and the buttons
+    function compactRow(primer, sites, buttons, key) {
+      const row = element('div', 'primers-compact');
+      const bases = primer.sequence;
+      const top = element('div', 'primers-compact-top');
+      const toggle = element('button', 'primers-compact-toggle');
+      toggle.type = 'button';
+      const name = element('strong', 'primers-compact-name', primer.title);
+      name.title = primer.title;
+      toggle.append(element('span', 'primers-compact-chevron', '\u25b8'), name);
+      top.append(toggle);
+      const first = sites[0];
+      if (first) {
+        top.append(element('span', 'primers-compact-meta', (first.start + 1) + '..' + first.end + (first.forward ? ' \u2192' : ' \u2190') + (sites.length > 1 ? ' +' + (sites.length - 1) : '')));
+      } else {
+        top.append(element('span', 'primers-compact-meta primers-compact-bad', 'no binding site'));
+      }
+      top.append(element('span', 'primers-compact-meta', bases.length + ' b'));
+      const category = primer.category && !/^primers?$/i.test(primer.category) ? primer.category.replace(/s$/i, '') : '';
+      if (category) {
+        top.append(element('span', 'primers-compact-badge', category));
+      }
+
+      const detail = element('div', 'primers-compact-detail');
+      detail.append(element('div', 'primers-compact-meta', 'Tm ' + tools.tm(bases) + '\u00b0C \u00b7 GC ' + tools.gc(bases) + '%'), element('code', 'primers-compact-seq', bases));
+      const places = element('div', 'primers-compact-places');
+      if (sites.length === 0) {
+        places.append(element('span', 'primers-tag primers-tag-bad', 'does not bind this sequence'));
+      }
+      sites.forEach(function (site) {
+        const tag = element('button', 'primers-tag primers-tag-site', (site.start + 1) + '..' + site.end + (site.forward ? ' \u2192' : ' \u2190') + (site.mismatches > 0 ? ' \u00b7 ' + site.mismatches + ' mismatch' + (site.mismatches > 1 ? 'es' : '') : ''));
+        tag.type = 'button';
+        tag.title = 'Select this binding site';
+        tag.addEventListener('click', function () {
+          select(site);
+        });
+        places.append(tag);
+      });
+      const actions = element('div', 'primers-compact-actions');
+      buttons.forEach(function (b) {
+        actions.append(b);
+      });
+      detail.append(places, actions);
+
+      const apply = function () {
+        const open = openRows.has(key);
+        detail.hidden = !open;
+        row.classList.toggle('open', open);
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.firstChild.textContent = open ? '\u25be' : '\u25b8';
+      };
+      toggle.addEventListener('click', function () {
+        if (openRows.has(key)) {
+          openRows.delete(key);
+        } else {
+          openRows.add(key);
+        }
+        apply();
+      });
+      apply();
+      row.append(top, detail);
+      return row;
+    }
+
     const action = function (label, handler, kind) {
       const b = element('button', 'primers-btn' + (kind ? ' primers-btn-' + kind : ''), label);
       b.type = 'button';
@@ -267,8 +334,8 @@
         }, 'quiet');
         const refreshTicked = function () {
           const total = tickedDb.size + tickedFile.size;
-          orderTicked.textContent = 'Order the ' + total + ' selected';
-          addTicked.textContent = 'Add ' + tickedFile.size + ' to the database';
+          orderTicked.textContent = 'Order ' + total;
+          addTicked.textContent = 'Add ' + tickedFile.size + ' to database';
           detachTicked.textContent = 'Detach ' + tickedDb.size;
           orderTicked.disabled = total === 0;
           addTicked.disabled = tickedFile.size === 0;
@@ -277,7 +344,30 @@
           detachTicked.hidden = attachedPrimers.length === 0;
           everything.checked = total === attachedPrimers.length + fileOnly.length && total > 0;
         };
-        bar.append(everything, element('span', 'primers-muted', 'Select all'), orderTicked, addTicked, detachTicked);
+        // open or close all the rows
+        const rowKeys = attachedPrimers.map(function (primer) {
+          return 'db' + primer.id;
+        }).concat(fileOnly.map(function (item) {
+          return 'file' + item.name + item.bases;
+        }));
+        const fold = action(rowKeys.some(function (key) {
+          return openRows.has(key);
+        }) ? 'Collapse' : 'Expand', function () {
+          const anyOpen = rowKeys.some(function (key) {
+            return openRows.has(key);
+          });
+          rowKeys.forEach(function (key) {
+            if (anyOpen) {
+              openRows.delete(key);
+            } else {
+              openRows.add(key);
+            }
+          });
+          render();
+        }, 'quiet');
+        fold.title = 'Show or hide the sequence and the details of every primer';
+        bar.append(everything, element('span', 'primers-muted', 'All'), orderTicked, addTicked, detachTicked, fold);
+        bar.classList.add('primers-pickbar-compact');
         sectionAttached.append(bar);
         const pick = function (box, set, value) {
           box.addEventListener('change', function () {
@@ -297,7 +387,7 @@
           box.type = 'checkbox';
           box.setAttribute('aria-label', 'Select ' + primer.title);
           pick(box, tickedDb, primer.id);
-          holder.append(box, card(primer, sites, [
+          holder.append(box, compactRow(primer, sites, [
             action('Order', function () {
               tools.sendToOrder([primer.id]);
             }),
@@ -310,7 +400,7 @@
                 say(error.message || String(error), true);
               }
             }, 'quiet'),
-          ]));
+          ], 'db' + primer.id));
           sectionAttached.append(holder);
         });
         // the primers that are only in the file: they have a button to be added to the database
@@ -320,10 +410,10 @@
           box.type = 'checkbox';
           box.setAttribute('aria-label', 'Select ' + item.name);
           pick(box, tickedFile, item);
-          const add = action('Add to the database', function () {
+          const add = action('Add to database', function () {
             addToDatabase(add, item.name, item.bases, item.forward);
           }, 'primary');
-          holder.append(box, card({ title: item.name, category: 'Not in the database', sequence: item.bases }, findSitesCached(now.sequence, item.bases, now.circular), [add]));
+          holder.append(box, compactRow({ title: item.name, category: 'Not in the database', sequence: item.bases }, findSitesCached(now.sequence, item.bases, now.circular), [add], 'file' + item.name + item.bases));
           sectionAttached.append(holder);
         });
         refreshTicked();
