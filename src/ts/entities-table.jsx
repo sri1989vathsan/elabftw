@@ -40,9 +40,10 @@ const URL_RE = /^https?:\/\/\S+$/i;
 
 // the locations of a resource, each a link to the storage browser opened on it
 const LocationsRenderer = ({ data }) => (data.storage_locations ?? []).map((l, i) => (
-  <span key={l.storage_id}>
+  <span key={l.container_id ?? i}>
     {i > 0 && ' | '}
     <a href={`?storage_unit=${l.storage_id}`} onClick={event => event.stopPropagation()}>{l.path}</a>
+    {l.position && <span className='color-medium'>{` · ${l.position}`}</span>}
   </span>
 ));
 
@@ -242,7 +243,7 @@ const EntitiesTable = ({
     {
       field: 'storage_path',
       headerName: i18next.t('location', { defaultValue: 'Location' }),
-      valueGetter: p => storageLocations(p).map(l => l.path).join(' | '),
+      valueGetter: p => storageLocations(p).map(l => `${l.path} ${l.position ?? ''}`.trim()).join(' | '),
       cellRenderer: LocationsRenderer,
     },
     {

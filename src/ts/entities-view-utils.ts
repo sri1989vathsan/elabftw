@@ -76,8 +76,8 @@ export function storageUrl(storageId: number): string {
   return `?storage_unit=${encodeURIComponent(String(storageId))}`;
 }
 
-// the locations of a resource as links to the storage browser, separated by a bar
-export function appendLocationLinks(cell: HTMLElement, locations: { storage_id: number; path: string }[]): void {
+// the locations of a resource as links to the storage browser, each with its slot in the box, separated by a bar
+export function appendLocationLinks(cell: HTMLElement, locations: { storage_id: number; path: string; position?: string | null }[]): void {
   locations.forEach((l, i) => {
     if (i > 0) {
       cell.append(document.createTextNode(' | '));
@@ -86,6 +86,12 @@ export function appendLocationLinks(cell: HTMLElement, locations: { storage_id: 
     a.href = storageUrl(l.storage_id);
     a.textContent = l.path;
     cell.append(a);
+    if (l.position) {
+      const slot = document.createElement('span');
+      slot.className = 'color-medium';
+      slot.textContent = ` · ${l.position}`;
+      cell.append(slot);
+    }
   });
 }
 

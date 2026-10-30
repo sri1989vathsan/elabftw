@@ -8,7 +8,7 @@ import { appendLocationLinks, linkify, sortableHeader, sortRows } from './entiti
 import type { SortState } from './entities-view-utils';
 
 type ExtraField = { name: string; value: string };
-type StorageLocation = { storage_id: number; path: string; qty_stored: number; qty_unit: string };
+type StorageLocation = { storage_id: number; path: string; position?: string | null; qty_stored: number; qty_unit: string };
 type Row = {
   id: number;
   title: string;
@@ -99,7 +99,7 @@ function buildTable(group: Group, groupBy: GroupBy, sort: SortState | null, onSo
   // what the cell shows, and what the column sorts on
   type Column = { head: string; cell: (row: Row) => string | Node; value: (row: Row) => string | number };
   const columns: Column[] = [];
-  const locationText = (row: Row): string => locationsOf(row).map(l => l.path).join(' | ');
+  const locationText = (row: Row): string => locationsOf(row).map(l => `${l.path} ${l.position ?? ''}`.trim()).join(' | ');
   const totalQuantity = (row: Row): string | number => locationsOf(row).length > 0
     ? locationsOf(row).reduce((sum, l) => sum + Number(l.qty_stored), 0)
     : '';
