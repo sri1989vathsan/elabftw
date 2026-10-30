@@ -29,6 +29,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Override;
 
 use function _;
+use function is_string;
 
 /**
  * All about the inventory: a type of its own, a twin of the resources (see migration 110)
@@ -68,6 +69,14 @@ final class Inventory extends AbstractConcreteEntity
         BinaryValue $isBookable = BinaryValue::False,
     ): int {
         $title = Filter::title($title ?? _('Untitled'));
+        // an entry of a category starts with the fields of that category
+        if ($metadata === null && $category !== null) {
+            $req = $this->Db->prepare('SELECT fields FROM inventory_categories WHERE id = :id');
+            $req->bindParam(':id', $category, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $fields = $req->fetchColumn();
+            $metadata = is_string($fields) && $fields !== '' ? $fields : null;
+        }
         $date ??= new DateTimeImmutable();
         $body = Filter::body($body);
         if (empty($body)) {
