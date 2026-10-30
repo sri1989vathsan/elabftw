@@ -260,12 +260,22 @@
       }
     }
 
-    function openMenu(event, position) {
+    function openMenu(event, position, target) {
       closeMenu();
       const data = dataNow();
       menu = document.createElement('div');
       menu.className = 'own-map-menu';
       const items = [];
+      if (target) {
+        items.push(['Select ' + target.name, function () {
+          select(target.start, target.end);
+        }]);
+        if (data.circular && !editor.getState().readOnly && window.OriginTab && target.start > 0) {
+          items.push(['Set origin at the start of ' + target.name, function () {
+            window.OriginTab.rotateAt(target.start + 1);
+          }]);
+        }
+      }
       if (data.circular && !editor.getState().readOnly && window.OriginTab && position > 0) {
         items.push(['Set origin here (base ' + (position + 1) + ' becomes 1)', function () {
           window.OriginTab.rotateAt(position + 1);
@@ -341,7 +351,15 @@
       } catch (error) {
         sites = [];
       }
-      const labelWidth = width < 460 ? 86 : 120;
+      // the columns of the labels are as wide as the longest label needs (a name is shortened beyond 18 characters)
+      const longest = features.concat(primers).map(function (item) {
+        return String(item.name).length;
+      }).concat(sites.map(function (site) {
+        return site.name.length + 3;
+      })).reduce(function (most, size) {
+        return Math.max(most, size);
+      }, 6);
+      const labelWidth = Math.max(66, Math.min(150, Math.min(18, longest) * 7.4 + 14));
       const cx = width / 2;
       const cy = height / 2;
       const hasPrimers = primers.length > 0;
@@ -394,17 +412,37 @@
       const detail = function (item) {
         return { title: item.name, line: (item.start + 1) + '..' + (item.end + 1) + ' · ' + ((item.end >= item.start ? item.end - item.start : item.end + length - item.start) + 1) + ' bp' + (item.strand === 0 ? '' : (item.strand === 1 ? ' · forward' : ' · reverse')) };
       };
+      // the arc, the tick and the label of an item are lit together when the pointer is on one of them
+      const parts = {};
+      const light = function (key, on) {
+        (parts[key] || []).forEach(function (node) {
+          node.classList.toggle('hot', on);
+        });
+        svg.classList.toggle('has-hot', on);
+      };
+      const join = function (key, node) {
+        (parts[key] = parts[key] || []).push(node);
+      };
+      let counter = 0;
+      let menuTarget = null;
       const draw1 = function (item, rIn, rOut, head, rank) {
+        const key = 'item' + (counter++);
         const range = arcOf(item, length);
         const path = svgElement('path', { d: arrowPath(cx, cy, rIn, rOut, range[0], range[1], item.strand, head / radius), fill: item.color, class: 'own-map-feature' + (item.candidate ? ' candidate' : '') });
         path.append(svgElement('title', {}, item.name + ' (' + item.type + ') ' + detail(item).line));
+        join(key, path);
         path.addEventListener('mouseenter', function () {
           hover = detail(item);
           showCenter();
+          light(key, true);
         });
         path.addEventListener('mouseleave', function () {
           hover = null;
           showCenter();
+          light(key, false);
+        });
+        path.addEventListener('contextmenu', function () {
+          menuTarget = item;
         });
         path.addEventListener('mousedown', function (event) {
           event.stopPropagation();
@@ -415,7 +453,7 @@
         });
         svg.append(path);
         const middle = (range[0] + range[1]) / 2;
-        labels.push({ text: item.name, color: item.color, middle: middle, rOut: rOut, rank: rank, size: range[1] - range[0], kind: item.kind, onEnter: function () {
+        labels.push({ key: key, text: item.name, color: item.color, middle: middle, rOut: rOut, rank: rank, size: range[1] - range[0], kind: item.kind, onEnter: function () {
           hover = detail(item);
           showCenter();
         } });
@@ -444,12 +482,14 @@
         }
       });
       clusters.forEach(function (cluster) {
+        const cutKey = 'cut' + (counter++);
         cluster.sites.forEach(function (site) {
           const a = angleOf(site.position, length);
           const p1 = at(outer + 1, a);
           const p2 = at(outer + 6, a);
           const tick = svgElement('line', { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1], class: 'own-map-cut' });
           tick.append(svgElement('title', {}, site.name + ' cuts at ' + site.position + (site.count > 1 ? ' (' + site.count + ' sites)' : ' (single cutter)')));
+          join(cutKey, tick);
           svg.append(tick);
         });
         const first = cluster.sites[0];
@@ -457,7 +497,7 @@
         const names = cluster.sites.map(function (site) {
           return site.name;
         });
-        labels.push({ text: first.name + (names.length > 1 ? ' +' + (names.length - 1) : ''), color: null, middle: middle, rOut: outer + 6, rank: 3, size: 0, kind: 'cut ' + (first.count === 1 ? 'single' : 'multi'), onEnter: function () {
+        labels.push({ key: cutKey, text: first.name + (names.length > 1 ? ' +' + (names.length - 1) : ''), color: null, middle: middle, rOut: outer + 6, rank: 3, size: 0, kind: 'cut ' + (first.count === 1 ? 'single' : 'multi'), onEnter: function () {
           hover = { title: names.join(', '), line: 'cut at ' + cluster.sites.map(function (site) {
             return site.position;
           }).join(', ') };
@@ -492,10 +532,15 @@
           if (label.color) {
             svg.append(svgElement('circle', { cx: x + (side === 'right' ? -1 : 1), cy: label.y, r: 2.5, fill: label.color, class: 'own-map-dot' }));
           }
-          text.addEventListener('mouseenter', label.onEnter);
+          join(label.key, text);
+          text.addEventListener('mouseenter', function () {
+            label.onEnter();
+            light(label.key, true);
+          });
           text.addEventListener('mouseleave', function () {
             hover = null;
             showCenter();
+            light(label.key, false);
           });
           svg.append(text);
         });
@@ -553,7 +598,9 @@
       svg.addEventListener('mouseleave', finish);
       svg.addEventListener('contextmenu', function (event) {
         event.preventDefault();
-        openMenu(event, positionAt(event).position);
+        const target = menuTarget;
+        menuTarget = null;
+        openMenu(event, positionAt(event).position, target);
       });
     }
 
@@ -585,6 +632,39 @@
       const primers = Object.keys((state.temporaryAnnotations && state.temporaryAnnotations.primers) || {}).join(',') + listOf(data.primers).length;
       const selection = state.selectionLayer || {};
       return [sequence.length, sequence.slice(0, 30), features, primers, selection.start, selection.end, state.caretPosition, JSON.stringify(state.restrictionEnzymes), JSON.stringify(state.annotationVisibility && state.annotationVisibility.featureTypesToHide), !!data.circular, host ? host.clientWidth + 'x' + host.clientHeight : '', document.body.dataset.mapStyle, zoom].join('|');
+    }
+
+    // the map as an SVG file: the styles the map has now are written into the file, so it looks the same elsewhere
+    function exportSvg() {
+      if (!svg) {
+        return;
+      }
+      const copy = svg.cloneNode(true);
+      const live = svg.querySelectorAll('*');
+      const cloned = copy.querySelectorAll('*');
+      const properties = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linejoin', 'font-family', 'font-size', 'font-weight', 'opacity', 'fill-opacity'];
+      live.forEach(function (node, index) {
+        const computed = window.getComputedStyle(node);
+        cloned[index].setAttribute('style', properties.map(function (property) {
+          return property + ':' + computed.getPropertyValue(property);
+        }).join(';'));
+      });
+      const background = document.createElementNS(NS, 'rect');
+      background.setAttribute('width', svg.getAttribute('width'));
+      background.setAttribute('height', svg.getAttribute('height'));
+      background.setAttribute('fill', document.body.dataset.mapStyle === 'dark' ? '#0f172a' : '#ffffff');
+      copy.insertBefore(background, copy.firstChild);
+      copy.setAttribute('xmlns', NS);
+      const blob = new Blob([new XMLSerializer().serializeToString(copy)], { type: 'image/svg+xml' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = String(dataNow().name || 'plasmid').replace(/[^\w.-]+/g, '_') + '-map.svg';
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(function () {
+        URL.revokeObjectURL(link.href);
+      }, 2000);
     }
 
     // the container of the circular map of the editor is taken over: its own drawing is hidden, ours is put in its place
@@ -625,7 +705,7 @@
         setZoom(zoom + 0.15);
       }), button('Fit', 'Fit the map to the panel', function () {
         setZoom(1);
-      }));
+      }), button('SVG', 'Save the map as an SVG image', exportSvg));
       wrap.append(controls);
       // Ctrl (or Cmd) and the wheel zoom too
       host.addEventListener('wheel', function (event) {

@@ -1584,3 +1584,25 @@ body:not([data-map-style="classic"]) .veRotateCircularSlider,
 body:not([data-map-style="classic"]) .veZoomCircularSlider {
   display: none !important;
 }
+
+.own-map-svg.has-hot .own-map-feature:not(.hot) {
+  opacity: 0.4;
+}
+
+.own-map-svg.has-hot .own-map-cut:not(.hot) {
+  opacity: 0.35;
+}
+
+.own-map-feature.hot {
+  stroke-width: 2.2;
+  filter: drop-shadow(0 1px 3px rgba(15, 23, 42, 0.45));
+}
+
+.own-map-cut.hot {
+  stroke: #c2410c;
+  stroke-width: 2.4;
+}
+
+.own-map-label.hot {
+  font-weight: 700;
+}
