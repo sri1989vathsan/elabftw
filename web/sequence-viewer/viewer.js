@@ -21,6 +21,58 @@
   const AUTOSAVE_AFTER_MS = 3000;
   const WATCH_EVERY_MS = 1000;
 
+  // colours of the annotations, for the display only: they are not written to the file unless the user sets them
+  const FEATURE_COLORS = {
+    cds: '#2f6fed',
+    gene: '#1b4fc4',
+    promoter: '#1fa35a',
+    terminator: '#d6455d',
+    rep_origin: '#7a8699',
+    origin: '#7a8699',
+    misc_feature: '#9b5de5',
+    primer_bind: '#f0a202',
+    regulatory: '#0fa3a3',
+    protein_bind: '#d6409f',
+    misc_binding: '#d6409f',
+    rbs: '#e07a1f',
+    sig_peptide: '#43a047',
+    misc_recomb: '#8d6e63',
+    mobile_element: '#8d6e63',
+    // the feature that covers the whole plasmid is a background
+    source: '#dfe3e8',
+  };
+  // the labels of the cut sites: red for the enzymes that cut once, orange twice, purple three times or more
+  const CUTSITE_COLORS = { single: '#d32f2f', double: '#ef6c00', multi: '#7b1fa2' };
+  const paletteKeys = new Set();
+  const featureKey = function (feature) {
+    return [feature.type, feature.start, feature.end, feature.name].join('|');
+  };
+  const featuresOf = function (sequenceData) {
+    const features = sequenceData.features || [];
+    return Array.isArray(features) ? features : Object.values(features);
+  };
+  function applyPalette(sequenceData) {
+    featuresOf(sequenceData).forEach(function (feature) {
+      const color = FEATURE_COLORS[String(feature.type || '').toLowerCase()];
+      if (!feature.color && color) {
+        feature.color = color;
+        paletteKeys.add(featureKey(feature));
+      }
+    });
+    sequenceData.cutsiteLabelColors = CUTSITE_COLORS;
+  }
+  // what is written to the file has none of the colours of the display
+  function withoutPalette(sequenceData) {
+    const clone = JSON.parse(JSON.stringify(sequenceData));
+    featuresOf(clone).forEach(function (feature) {
+      if (paletteKeys.has(featureKey(feature)) && feature.color === FEATURE_COLORS[String(feature.type || '').toLowerCase()]) {
+        delete feature.color;
+      }
+    });
+    delete clone.cutsiteLabelColors;
+    return clone;
+  }
+
   document.title = fileName + ' - Sequence editor';
   document.getElementById('title').textContent = fileName;
 
@@ -35,7 +87,8 @@
   }
 
   // the format of the file decides how it is written back
-  function serialize(sequenceData) {
+  function serialize(rawSequenceData) {
+    const sequenceData = withoutPalette(rawSequenceData);
     if (/\.(fasta|fa|fna)$/i.test(saveName)) {
       return window.bioParsers.jsonToFasta(sequenceData);
     }
@@ -72,6 +125,52 @@
     }
   }
 
+  // the restriction enzymes shown on the sequence, by the number of times they cut: one button per combination
+  const CUTTERS = {
+    single: { value: 'single', label: 'Single cutters', cutsThisManyTimes: 1 },
+    double: { value: 'double', label: 'Double cutters', cutsThisManyTimes: 2 },
+    triple: { value: 'triple', label: 'Triple cutters', cutsThisManyTimes: 3 },
+  };
+  const CUTTER_PRESETS = [
+    { label: 'Single', keys: ['single'] },
+    { label: 'Double', keys: ['double'] },
+    { label: 'Triple', keys: ['triple'] },
+    { label: 'Single + double', keys: ['single', 'double'] },
+    { label: 'Double + triple', keys: ['double', 'triple'] },
+    { label: 'Single + double + triple', keys: ['single', 'double', 'triple'] },
+  ];
+  function buildCutterButtons(editor) {
+    const holder = document.getElementById('cutters');
+    if (!holder) {
+      return;
+    }
+    holder.textContent = '';
+    const title = document.createElement('span');
+    title.className = 'cutters-label';
+    title.textContent = 'Enzymes that cut:';
+    holder.append(title);
+    const buttons = [];
+    CUTTER_PRESETS.forEach(function (preset, index) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'cutter-button';
+      button.textContent = preset.label;
+      button.setAttribute('aria-pressed', index === 0 ? 'true' : 'false');
+      button.addEventListener('click', function () {
+        editor.updateEditor({
+          restrictionEnzymes: { isEnzymeFilterAnd: false, filteredRestrictionEnzymes: preset.keys.map(function (key) {
+            return CUTTERS[key];
+          }) },
+        });
+        buttons.forEach(function (other) {
+          other.setAttribute('aria-pressed', other === button ? 'true' : 'false');
+        });
+      });
+      buttons.push(button);
+      holder.append(button);
+    });
+  }
+
   async function load() {
     const download = new URLSearchParams({ f: params.get('f') || '', name: fileName, storage: params.get('storage') || '1' });
     if (params.get('access_key')) {
@@ -96,6 +195,7 @@
       uploadId = 0;
     }
     status.className = 'hidden';
+    applyPalette(result.parsedSequence);
 
     // what the editor holds once it has loaded the file is the starting point: only later changes are saved
     let lastSaved = '';
@@ -114,6 +214,7 @@
     });
     // kept reachable for tests and for the browser console
     window.sequenceEditor = editor;
+    buildCutterButtons(editor);
     editor.updateEditor({
       sequenceData: result.parsedSequence,
       readOnly: !canWrite,

@@ -5,13 +5,20 @@ html, body {
   font-family: sans-serif;
 }
 
+body {
+  display: flex;
+  flex-direction: column;
+}
+
 #bar {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
   box-sizing: border-box;
-  height: 2.75rem;
-  padding: 0 1rem;
+  min-height: 2.75rem;
+  padding: 0.3rem 1rem;
   border-bottom: 1px solid #d0d4d9;
   background: #f1f3f5;
 }
@@ -40,7 +47,8 @@ html, body {
 }
 
 #root {
-  height: calc(100% - 2.75rem);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 #entry-title {
@@ -99,6 +107,40 @@ html, body {
   color: #1a7f37;
 }
 
-body.has-summary #root {
-  height: calc(100% - 2.75rem - var(--summary-height, 0px));
+#summary {
+  flex: 0 0 auto;
+}
+
+#cutters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-left: 1rem;
+}
+
+#cutters .cutters-label {
+  color: #495057;
+  font-size: 0.85rem;
+}
+
+.cutter-button {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid #c3c8cf;
+  border-radius: 999px;
+  background: #fff;
+  color: #343a40;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.cutter-button:hover {
+  border-color: #7b8794;
+}
+
+.cutter-button[aria-pressed="true"] {
+  border-color: #1f5fae;
+  background: #1f5fae;
+  color: #fff;
 }
