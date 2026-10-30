@@ -207,23 +207,80 @@
       if (attachedPrimers.length === 0) {
         sectionAttached.append(element('p', 'primers-muted', entryId ? 'No primer is attached yet. Use the Find and add tab.' : 'Open a plasmid of the database to attach primers to it.'));
       }
-      attachedPrimers.forEach(function (primer) {
-        const sites = findSitesCached(now.sequence, primer.sequence, now.circular);
-        sectionAttached.append(card(primer, sites, [
-          action('Order', function () {
-            tools.sendToOrder([primer.id]);
-          }),
-          action('Detach', async function () {
-            try {
-              await tools.detach(entryId, primer.id);
-              await loadAttached();
-              await render();
-            } catch (error) {
-              say(error.message || String(error), true);
+      // the attached primers can be ticked, to send them to an order or to detach them together
+      const ticked = new Set();
+      const attachedBoxes = [];
+      if (attachedPrimers.length > 1 || (attachedPrimers.length === 1 && entryId)) {
+        const bar = element('div', 'primers-pickbar');
+        const everything = element('input');
+        everything.type = 'checkbox';
+        everything.setAttribute('aria-label', 'Select all the attached primers');
+        everything.addEventListener('change', function () {
+          attachedBoxes.forEach(function (box) {
+            box.checked = everything.checked;
+            box.dispatchEvent(new Event('change'));
+          });
+        });
+        const orderTicked = action('', function () {
+          tools.sendToOrder(Array.from(ticked), function () {
+            render();
+          });
+        }, 'primary');
+        const detachTicked = action('', async function () {
+          orderTicked.disabled = true;
+          detachTicked.disabled = true;
+          try {
+            for (const id of Array.from(ticked)) {
+              await tools.detach(entryId, id);
             }
-          }, 'quiet'),
-        ]));
-      });
+          } catch (error) {
+            say(error.message || String(error), true);
+          }
+          await loadAttached();
+          await render();
+        }, 'quiet');
+        const refreshTicked = function () {
+          orderTicked.textContent = 'Order the ' + ticked.size + ' selected';
+          detachTicked.textContent = 'Detach the ' + ticked.size + ' selected';
+          orderTicked.disabled = ticked.size === 0;
+          detachTicked.disabled = ticked.size === 0 || !entryId;
+          everything.checked = ticked.size === attachedPrimers.length && ticked.size > 0;
+        };
+        bar.append(everything, element('span', 'primers-muted', 'Select all'), orderTicked, detachTicked);
+        sectionAttached.append(bar);
+        refreshTicked();
+        attachedPrimers.forEach(function (primer) {
+          const sites = findSitesCached(now.sequence, primer.sequence, now.circular);
+          const holder = element('div', 'primers-pick');
+          const box = element('input');
+          box.type = 'checkbox';
+          box.setAttribute('aria-label', 'Select ' + primer.title);
+          box.addEventListener('change', function () {
+            if (box.checked) {
+              ticked.add(primer.id);
+            } else {
+              ticked.delete(primer.id);
+            }
+            refreshTicked();
+          });
+          attachedBoxes.push(box);
+          holder.append(box, card(primer, sites, [
+            action('Order', function () {
+              tools.sendToOrder([primer.id]);
+            }),
+            action('Detach', async function () {
+              try {
+                await tools.detach(entryId, primer.id);
+                await loadAttached();
+                await render();
+              } catch (error) {
+                say(error.message || String(error), true);
+              }
+            }, 'quiet'),
+          ]));
+          sectionAttached.append(holder);
+        });
+      }
 
       // search the database: by name or sequence, and by where the primers bind relative to the selection
       sectionSearch.append(element('h4', '', 'Add a primer of the database'));
