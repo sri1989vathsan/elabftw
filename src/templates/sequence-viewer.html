@@ -33,6 +33,15 @@
       </ul>
     {% endif %}
 
+    {# on the edit page the sequence can be attached here, as a file or pasted (see sequence-add.js) #}
+    {% if mode == 'edit' %}
+      <div id='sequenceAttach' class='mb-3' data-entry='{{ Entity.id }}' data-title='{{ Entity.entityData.title|e('html_attr') }}'>
+        <div class='small text-muted mb-1'>{{ 'Add a sequence to this plasmid:'|trans }}</div>
+      </div>
+      <link rel='stylesheet' href='sequence-add.css?v={{ 'now'|date('YmdHi') }}'>
+      <script src='sequence-add.js?v={{ 'now'|date('YmdHi') }}'></script>
+    {% endif %}
+
     {# the sequencing reads (ab1), aligned to a plasmid sequence of the entry on the server #}
     <h4 class='h6 text-muted mb-1'>{{ 'Sequencing reads'|trans }} ({{ readFiles|length }})</h4>
     {% if readFiles|length == 0 %}

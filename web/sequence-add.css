@@ -1,0 +1,154 @@
+/* the dialog of a new plasmid and the control to attach a sequence on the edit page */
+.sa-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8vh;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.sa-dialog {
+  box-sizing: border-box;
+  width: min(34rem, 94vw);
+  max-height: 84vh;
+  overflow: auto;
+  padding: 1.2rem 1.4rem;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #212529;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.sa-dialog h4 {
+  margin: 0 0 0.8rem;
+  font-size: 1.15rem;
+}
+
+.sa-dialog label {
+  display: block;
+  margin-bottom: 0.7rem;
+  font-weight: 600;
+}
+
+.sa-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #c3c8cf;
+  border-radius: 0.3rem;
+  font: inherit;
+  font-weight: 400;
+}
+
+.sa-section {
+  margin: 0.4rem 0 0.3rem;
+  font-weight: 600;
+}
+
+.sa-radio {
+  display: block;
+  margin: 0 0 0.3rem;
+  font-weight: 400;
+}
+
+.sa-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
+.sa-message {
+  display: inline-block;
+  margin: 0.4rem 0 0 0.5rem;
+  font-size: 0.85rem;
+}
+
+.sa-message.error {
+  color: #a61e1e;
+}
+
+.sa-parents {
+  position: relative;
+}
+
+.sa-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0.3rem 0.3rem 0;
+  padding: 0.1rem 0.3rem 0.1rem 0.6rem;
+  border: 1px solid #c3c8cf;
+  border-radius: 999px;
+  background: #f5f7fa;
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.sa-chip button {
+  border: 0;
+  background: transparent;
+  color: #6c757d;
+  cursor: pointer;
+}
+
+.sa-results {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  max-height: 12rem;
+  overflow: auto;
+  border: 1px solid #c3c8cf;
+  border-radius: 0.3rem;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+.sa-results[hidden] {
+  display: none;
+}
+
+.sa-results button {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 0.7rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.sa-results button:hover {
+  background: #eef3fb;
+}
+
+.sa-none {
+  padding: 0.4rem 0.7rem;
+  color: #6c757d;
+  font-size: 0.85rem;
+}
+
+/* the control to attach a sequence on the edit page: the file field and the paste button on one line */
+#sequenceAttach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+}
+
+#sequenceAttach > .small,
+#sequenceAttach > textarea {
+  flex: 1 1 100%;
+}
+
+#sequenceAttach .btn {
+  margin: 0;
+}

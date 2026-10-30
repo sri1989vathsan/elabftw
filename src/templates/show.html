@@ -20,6 +20,8 @@
   {% include 'show-view-edit.html' %}
   {% include 'request-actions-show.html' %}
   {% if scriptName == 'registry.php' %}
+    <link rel='stylesheet' href='sequence-add.css?v={{ 'now'|date('YmdHi') }}'>
+    <script src='sequence-add.js?v={{ 'now'|date('YmdHi') }}'></script>
     {# module navigation: one tab per resource category, like the module bar of an inventory system #}
     {% set currentCategories = App.Request.query.get('category')|split(',') %}
     <nav class='category-nav d-flex flex-wrap mt-2' aria-label='{{ 'Category'|trans }}'>
@@ -35,7 +37,8 @@
       {% if currentCategories|length == 1 and currentCategories[0] matches '/^\\d+$/' %}
         {% for category in categoryArr %}
           {% if category.id == currentCategories[0] %}
-            <button type='button' class='btn btn-primary btn-sm ml-auto' data-action='create-in-category' data-category='{{ category.id }}'>
+            {# the plasmids start with a dialog that can take their sequence and parents, see sequence-add.js #}
+            <button type='button' class='btn btn-primary btn-sm ml-auto' data-action='create-in-category' data-category='{{ category.id }}' data-category-title='{{ category.title|e('html_attr') }}'{{ category.title == 'Plasmids' ? " data-with-sequence='1'" }}>
               <i class='fas fa-fw fa-plus mr-1'></i>{{ 'New entry'|trans }}: {{ category.title }}
             </button>
           {% endif %}
