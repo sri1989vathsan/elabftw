@@ -32,7 +32,7 @@ import { RICH_SELECTION_ATTRIBUTE } from '../ClipboardContent';
 import TableIndentation from '../TableIndentation.class';
 import { isSortable } from '../TableSorting.class';
 import { captureSpreadsheetPositions, restoreSpreadsheetPositions } from './SpreadsheetUndo';
-import { createSpreadsheetLayoutGate, createSpreadsheetProfiler, createSpreadsheetSnapshotCache } from './SpreadsheetPerformance';
+import { createSpreadsheetLayoutGate, createSpreadsheetProfiler, createSpreadsheetSnapshotCache, stripSpreadsheetTables } from './SpreadsheetPerformance';
 import { cellsEqual, createSyncDiagnostics, hashCells, normalizeCells } from './SpreadsheetSyncDiagnostics';
 
 interface PdfTableDialogData {
@@ -2817,7 +2817,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // transient layout spacers when comparing two adjacent snapshots.
   const mainTextSnapshot = (html: string): string => {
     const fragment = editor.getDoc().createElement('div');
-    fragment.innerHTML = html;
+    // The tables are cut out of the string first so only the prose is parsed; with large spreadsheets in
+    // the text, parsing all of it for every undo level cost more than the key press itself.
+    fragment.innerHTML = stripSpreadsheetTables(html);
     fragment.querySelectorAll('table.elabftw-spreadsheet, [data-elabftw-spreadsheet-spacer]').forEach(node => node.remove());
     return fragment.innerHTML;
   };

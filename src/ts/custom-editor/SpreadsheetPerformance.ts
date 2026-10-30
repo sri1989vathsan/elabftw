@@ -12,6 +12,59 @@ export function createSpreadsheetLayoutGate() {
   };
 }
 
+/**
+ * Cuts every <table class="... elabftw-spreadsheet ..."> element (with anything nested in it) out of
+ * serialized HTML without parsing it. Parsing a long entry into a DOM for each undo level was the main
+ * cost of pressing Enter in a text with big spreadsheets. Anything that cannot be matched exactly is left
+ * in place, which can only make two snapshots look different (one extra undo step), never equal. The
+ * editor serializes tag and attribute names in lower case, so they are matched as they are.
+ */
+export function stripSpreadsheetTables(html: string): string {
+  if (!html.includes('elabftw-spreadsheet')) return html;
+  let out = '';
+  let from = 0;
+  let open = html.indexOf('<table');
+  while (open !== -1) {
+    const next = html.charCodeAt(open + 6);
+    const tagEnd = html.indexOf('>', open);
+    // "<table" must be a whole tag name, not <tablefoo
+    const isTable = tagEnd !== -1 && (next === 32 || next === 62 || next === 10 || next === 9 || next === 13);
+    const tag = isTable ? html.slice(open, tagEnd) : '';
+    const isSpreadsheet = /\sclass\s*=\s*(?:"[^"]*[\s"]elabftw-spreadsheet[\s"]|'[^']*[\s']elabftw-spreadsheet[\s'])/.test(tag + ' ')
+      || /\sclass\s*=\s*(?:"|')elabftw-spreadsheet[\s"']/.test(tag + ' ');
+    if (!isSpreadsheet) {
+      open = html.indexOf('<table', open + 6);
+      continue;
+    }
+    // find the matching </table>, counting nested tables
+    let depth = 1;
+    let scan = tagEnd + 1;
+    let close = -1;
+    while (depth > 0) {
+      const nextOpen = html.indexOf('<table', scan);
+      const nextClose = html.indexOf('</table', scan);
+      if (nextClose === -1) break;
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        depth++;
+        scan = nextOpen + 6;
+      } else {
+        depth--;
+        scan = nextClose + 7;
+        if (depth === 0) close = html.indexOf('>', nextClose);
+      }
+    }
+    if (close === -1) {
+      // unmatched: keep the rest as it is
+      open = html.indexOf('<table', open + 6);
+      continue;
+    }
+    out += html.slice(from, open);
+    from = close + 1;
+    open = html.indexOf('<table', from);
+  }
+  return out + html.slice(from);
+}
+
 /** Snapshot objects belong to TinyMCE; weak keys do not retain old history. */
 export function createSpreadsheetSnapshotCache(normalize: (html: string) => string) {
   const cache = new WeakMap<object, { html: string; normalized: string }>();
