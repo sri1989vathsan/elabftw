@@ -324,4 +324,30 @@
     holder.append(input, pasteButton, area, save, message);
   }
   bindAttach();
+
+  // the x next to a sequence or a sequencing read removes the file from the entry (it stays in the history of the entry)
+  document.addEventListener('click', async function (event) {
+    const button = event.target.closest ? event.target.closest('[data-remove-upload]') : null;
+    if (!button) {
+      return;
+    }
+    if (!window.confirm('Remove ' + button.dataset.removeName + ' from this entry?')) {
+      return;
+    }
+    button.disabled = true;
+    try {
+      const response = await fetch('api/v2/inventory/' + button.dataset.removeEntry + '/uploads/' + button.dataset.removeUpload, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
+      });
+      if (!response.ok) {
+        throw new Error('The file could not be removed (' + response.status + ').');
+      }
+      window.location.reload();
+    } catch (error) {
+      button.disabled = false;
+      window.alert(error.message || String(error));
+    }
+  });
 })();
