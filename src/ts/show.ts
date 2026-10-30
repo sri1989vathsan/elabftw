@@ -959,6 +959,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // a new entry in the category that is open; a template of that category brings its fields (a plasmid has a Benchling link)
+  on('create-in-category', async (el: HTMLElement) => {
+    const category = parseInt(el.dataset.category ?? '', 10);
+    const params: Record<string, number> = { category };
+    try {
+      const templates = await ApiC.getJson<{ id: number; category: number | null }[]>('items_types', { notifOnError: 0 });
+      const template = templates.find(t => t.category === category);
+      if (template) {
+        params['template'] = template.id;
+      }
+    } catch {
+      // without a template the entry is created empty, in the category
+    }
+    const id = await ApiC.post2location('items', params);
+    window.location.href = `database.php?mode=edit&id=${id}`;
+  });
+
   // the activity log of the resources: who changed what and when
   on('toggle-activity-layout', async () => {
     const me = await getMe();

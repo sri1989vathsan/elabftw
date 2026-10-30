@@ -28,6 +28,16 @@
           </a>
         {% endif %}
       {% endfor %}
+      {# a category is open: offer a new entry of that category #}
+      {% if currentCategories|length == 1 and currentCategories[0] matches '/^\\d+$/' %}
+        {% for category in categoryArr %}
+          {% if category.id == currentCategories[0] %}
+            <button type='button' class='btn btn-primary btn-sm ml-auto' data-action='create-in-category' data-category='{{ category.id }}'>
+              <i class='fas fa-fw fa-plus mr-1'></i>{{ 'New entry'|trans }}: {{ category.title }}
+            </button>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
     </nav>
   {% endif %}
   <hr>
