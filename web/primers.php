@@ -19,6 +19,9 @@ use PDO;
 use Throwable;
 
 use function array_map;
+use function readfile;
+use function unlink;
+use function gmdate;
 use function array_unique;
 use function array_values;
 use function count;
@@ -49,6 +52,7 @@ use function strtoupper;
  * order, adds their sequences to its notes: whoever can read the primers can send them.
  */
 require_once __DIR__ . '/app/init.inc.php';
+require_once __DIR__ . '/order-sheets/sheets.inc.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -199,6 +203,38 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     new Changelog($Plasmid)->create(new ContentParams('primers', sprintf('Primer #%d %s this plasmid', $primer, $verb)));
     new Changelog($Primer)->create(new ContentParams('primers', sprintf('Primer %s plasmid #%d', $verb, $plasmid)));
     respond(200, array('ok' => true));
+}
+
+if (isset($_GET['sheet'])) {
+    // the order sheet of a supplier with the names and sequences of primers: GET ?sheet=idt|microsynth&ids=1,2&scale=&purification=
+    $vendor = ORDER_SHEET_VENDORS[(string) $_GET['sheet']] ?? null;
+    $ids = array_values(array_unique(array_map('intval', explode(',', (string) ($_GET['ids'] ?? '')))));
+    if ($vendor === null || $ids === array() || count($ids) > 200) {
+        respond(400, array('error' => 'Invalid request.'));
+    }
+    $scale = in_array((string) ($_GET['scale'] ?? ''), $vendor['scales'], true) ? (string) $_GET['scale'] : $vendor['scale'];
+    $purification = in_array((string) ($_GET['purification'] ?? ''), $vendor['purifications'], true) ? (string) $_GET['purification'] : $vendor['purification'];
+    $oligos = array();
+    foreach ($ids as $id) {
+        $described = $id > 0 ? describe($App, $id) : null;
+        $bases = $described === null ? '' : cleanOligoSequence($described['sequence']);
+        if ($described !== null && $bases !== '') {
+            $oligos[] = array('name' => $_GET['sheet'] === 'microsynth' ? microsynthName($described['title']) : $described['title'], 'sequence' => $bases);
+        }
+    }
+    if ($oligos === array()) {
+        respond(404, array('error' => 'None of these primers has a sequence.'));
+    }
+    try {
+        $file = $_GET['sheet'] === 'microsynth' ? microsynthSheet($oligos, $scale, $purification) : idtSheet($oligos, $scale, $purification);
+    } catch (Throwable $e) {
+        respond(500, array('error' => $e->getMessage()));
+    }
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header(sprintf('Content-Disposition: attachment; filename="oligo-order-%s-%s.xlsx"', (string) $_GET['sheet'], gmdate('Y-m-d')));
+    readfile($file);
+    unlink($file);
+    exit;
 }
 
 if (($_GET['orders'] ?? '') === '1') {

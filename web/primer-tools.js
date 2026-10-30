@@ -285,6 +285,45 @@
     const select = element('select', 'sa-input');
     select.disabled = true;
     choices.append(newLabel, title, existingLabel, select);
+    // the order sheet of a supplier, filled with the names and sequences, is attached to the order
+    const SHEETS = {
+      idt: { label: 'IDT (to paste in the bulk input)', scales: ['25nm', '100nm', '250nm', '1um', '2um', '5um', '10um'], purifications: ['STD', 'PAGE', 'HPLC', 'IEHPLC', 'PAGEHPLC'] },
+      microsynth: { label: 'Microsynth (their upload form)', scales: ['0.04', '0.2', '1.0', '15'], purifications: ['DES', 'HPL', 'HPD', 'IEX', 'PAG'] },
+    };
+    const sheetBox = element('div', 'sa-sheet');
+    sheetBox.append(element('div', 'sa-sheet-title', 'Order sheet (Excel), attached to the order'));
+    const vendor = element('select', 'sa-input');
+    [['', 'No sheet'], ['idt', SHEETS.idt.label], ['microsynth', SHEETS.microsynth.label]].forEach(function (choice) {
+      const option = element('option', '', choice[1]);
+      option.value = choice[0];
+      vendor.append(option);
+    });
+    const scale = element('select', 'sa-input sa-small');
+    scale.setAttribute('aria-label', 'Scale');
+    const purification = element('select', 'sa-input sa-small');
+    purification.setAttribute('aria-label', 'Purification');
+    const fillOptions = function () {
+      const choice = SHEETS[vendor.value];
+      [[scale, choice ? choice.scales : []], [purification, choice ? choice.purifications : []]].forEach(function (pair) {
+        pair[0].textContent = '';
+        pair[1].forEach(function (value) {
+          const option = element('option', '', value);
+          option.value = value;
+          pair[0].append(option);
+        });
+        pair[0].hidden = !choice;
+      });
+    };
+    vendor.addEventListener('change', fillOptions);
+    fillOptions();
+    try {
+      vendor.value = window.localStorage.getItem('order-sheet-vendor') || '';
+      fillOptions();
+    } catch (error) {
+      // the choice is not remembered
+    }
+    sheetBox.append(vendor, scale, purification);
+    choices.append(sheetBox);
     const actions = element('div', 'sa-actions');
     const cancel = element('button', 'btn btn-secondary', 'Cancel');
     cancel.type = 'button';
@@ -348,6 +387,30 @@
         message.textContent = 'Sent to the order "' + result.order.title + '"' + (result.notesAdded ? ', with the sequences in its notes.' : '.');
         message.className = 'sa-message';
         cancel.textContent = 'Close';
+        if (vendor.value) {
+          try {
+            window.localStorage.setItem('order-sheet-vendor', vendor.value);
+          } catch (error) {
+            // not remembered
+          }
+          // the sheet is made on the server and attached to the order, like a quote: nothing is downloaded
+          const sheetResponse = await fetch(base + 'primers.php?' + new URLSearchParams({ sheet: vendor.value, ids: primerIds.join(','), scale: scale.value, purification: purification.value }).toString(), { credentials: 'same-origin' });
+          if (!sheetResponse.ok) {
+            throw new Error('The order sheet could not be made (' + sheetResponse.status + ').');
+          }
+          const form = new FormData();
+          form.append('file', new File([await sheetResponse.blob()], 'oligo-order-' + vendor.value + '-' + new Date().toISOString().slice(0, 10) + '.xlsx'));
+          const attached = await fetch(base + 'api/v2/orders/' + result.order.id + '/uploads', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-CSRF-Token': token() },
+            body: form,
+          });
+          if (!attached.ok) {
+            throw new Error('The order sheet could not be attached to the order (' + attached.status + ').');
+          }
+          message.textContent += ' The ' + SHEETS[vendor.value].label.split(' ')[0] + ' order sheet is attached to it.';
+        }
         if (onDone) {
           onDone(result);
         }
