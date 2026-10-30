@@ -411,13 +411,18 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
       }
     });
 
-    // the copy button: makes a copy of the entry (with its files) and opens it to be edited
+    // the actions of the row, at its right end: edit, copy (a copy of the entry with its files, opened to be edited) and print
     const actionCell = el('td', 'expandable-actions-cell text-nowrap text-right');
-    const copy = el('button', 'btn btn-secondary btn-sm');
+    const edit = el('a', 'btn btn-secondary btn-sm mr-1');
+    edit.href = `?mode=edit&id=${encodeURIComponent(String(row.id))}`;
+    edit.title = `Edit ${row.title}`;
+    edit.setAttribute('aria-label', `Edit ${row.title}`);
+    edit.append(el('i', 'fas fa-pencil-alt fa-fw'));
+    const copy = el('button', 'btn btn-secondary btn-sm mr-1');
     copy.type = 'button';
     copy.title = `Make a copy of ${row.title}`;
     copy.setAttribute('aria-label', `Copy ${row.title}`);
-    copy.append(el('i', 'fas fa-copy fa-fw mr-1'), document.createTextNode('Copy'));
+    copy.append(el('i', 'fas fa-copy fa-fw'));
     copy.addEventListener('click', () => {
       copy.disabled = true;
       void ApiC.post2location(`inventory/${row.id}`, { action: Action.Duplicate, copyFiles: true, linkToOriginal: false })
@@ -428,7 +433,16 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
           copy.disabled = false;
         });
     });
-    actionCell.append(copy);
+    // the label printing is not made yet: the button tells the page which entry was meant, and a handler can be added later
+    const print = el('button', 'btn btn-secondary btn-sm');
+    print.type = 'button';
+    print.title = `Print a label for ${row.title}`;
+    print.setAttribute('aria-label', `Print a label for ${row.title}`);
+    print.append(el('i', 'fas fa-print fa-fw'));
+    print.addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('registry:print-label', { detail: { id: row.id, title: row.title } }));
+    });
+    actionCell.append(edit, copy, print);
     tr.append(actionCell);
 
     let detailRow: HTMLTableRowElement | null = null;
