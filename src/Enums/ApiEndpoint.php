@@ -19,6 +19,7 @@ enum ApiEndpoint: string
     case Announcements = 'announcements';
     case ApiKeys = 'apikeys';
     case Batch = 'batch';
+    case Activity = 'activity';
     case CalendarActivity = 'calendar_activity';
     case CalendarFeed = 'calendar_feed';
     case Compounds = 'compounds';

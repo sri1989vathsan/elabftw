@@ -37,6 +37,7 @@ use Elabftw\Models\AnnouncementUploads;
 use Elabftw\Models\ApiKeys;
 use Elabftw\Models\Batch;
 use Elabftw\Models\Branding;
+use Elabftw\Models\ActivityLog;
 use Elabftw\Models\CalendarActivity;
 use Elabftw\Models\CalendarFeed;
 use Elabftw\Models\Comments;
@@ -351,6 +352,14 @@ final class Apiv2Controller extends AbstractApiController
             ApiEndpoint::ApiKeys => new ApiKeys($this->requester, $this->id),
             ApiEndpoint::Batch => new Batch($this->requester),
             ApiEndpoint::CalendarActivity => new CalendarActivity($this->requester),
+            ApiEndpoint::Activity => new ActivityLog(
+                $this->requester,
+                trim($this->Request->query->getString('q')),
+                $this->Request->query->getInt('userid'),
+                $this->Request->query->getInt('category'),
+                $this->Request->query->getInt('limit'),
+                $this->Request->query->getString('type') === EntityType::Inventory->value ? EntityType::Inventory : EntityType::Items,
+            ),
             ApiEndpoint::CalendarFeed => new CalendarFeed($this->requester),
             ApiEndpoint::Compounds => (
                 function () {
