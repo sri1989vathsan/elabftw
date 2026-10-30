@@ -130,6 +130,23 @@
     const text = serialize(sequenceData);
     const form = new FormData();
     form.append('file', new File([text], saveName, { type: 'text/plain' }));
+    // the file to replace is the newest one of this name in the entry, not the one of the link the page was opened with: a link
+    // that is out of date (another tab saved since) would otherwise add a new copy at every save
+    try {
+      const listing = await fetch('../api/v2/inventory/' + entryId + '/uploads', { credentials: 'same-origin' });
+      if (listing.ok) {
+        const same = (await listing.json()).filter(function (upload) {
+          return upload.real_name === saveName;
+        });
+        if (same.length > 0) {
+          uploadId = same.reduce(function (newest, upload) {
+            return Number(upload.id) > newest ? Number(upload.id) : newest;
+          }, 0);
+        }
+      }
+    } catch (error) {
+      // the id of the link is used
+    }
     let url = '../api/v2/inventory/' + entryId + '/uploads';
     if (uploadId > 0) {
       // the previous version of the file stays in the history of the entry as an archived file
