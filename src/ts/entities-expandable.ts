@@ -86,7 +86,7 @@ function buildDetail(row: Row): HTMLElement {
       li.append(
         el('span', `storage-kind storage-kind-${l.is_primary ? 'primary' : 'secondary'}`, l.is_primary ? 'Primary' : 'Secondary'),
         where,
-        el('span', 'color-medium', l.position ? `Position ${l.position}` : ''),
+        el('span', 'color-medium', l.position ?? ''),
         el('span', 'color-medium', `${l.qty_stored} ${l.qty_unit}`.trim()),
       );
       list.append(li);
