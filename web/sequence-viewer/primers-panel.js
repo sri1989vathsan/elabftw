@@ -31,6 +31,8 @@
     let panel = element('div');
 
     let databasePrimers = null;
+    // the choices of the search for candidates
+    let candidatePrefs = { scope: 'selection', mismatches: '1' };
     let attachedPrimers = [];
     let tab = 'primers';
     // where the primers searched bind, relative to the selection
@@ -38,8 +40,25 @@
     // what is drawn on the map: the attached primers and the pair being looked at, none of it is saved in the file
     let attachedDrawn = {};
     let designDrawn = {};
+    // the primers of the search results, drawn where they bind so they can be looked at before they are attached
+    let previewDrawn = {};
     let designResult = null;
     let designOptions = Object.assign({}, designer ? designer.defaults : {});
+
+    // where a primer binds is worked out once for a sequence: the search, the preview and the candidates ask for it again and
+    // again while the user types, with thousands of primers and a long sequence
+    let sitesFor = { sequence: null, circular: null, byPrimer: new Map() };
+    const findSitesCached = function (sequence, primerSequence, circular) {
+      if (sitesFor.sequence !== sequence || sitesFor.circular !== circular) {
+        sitesFor = { sequence: sequence, circular: circular, byPrimer: new Map() };
+      }
+      let sites = sitesFor.byPrimer.get(primerSequence);
+      if (sites === undefined) {
+        sites = tools.findSites(sequence, primerSequence, circular);
+        sitesFor.byPrimer.set(primerSequence, sites);
+      }
+      return sites;
+    };
 
     const current = function () {
       const data = editor.getState().sequenceData;
@@ -51,7 +70,20 @@
     };
 
     const redraw = function () {
-      editor.updateEditor({ temporaryAnnotations: { primers: Object.assign({}, attachedDrawn, designDrawn) }, annotationVisibility: { primers: true } });
+      editor.updateEditor({ temporaryAnnotations: { primers: Object.assign({}, previewDrawn, attachedDrawn, designDrawn) }, annotationVisibility: { primers: true } });
+    };
+
+    // draws the binding sites of some primers of the database as a preview (not saved, not attached)
+    const preview = function (primers) {
+      const now = current();
+      previewDrawn = {};
+      primers.slice(0, 40).forEach(function (primer) {
+        findSitesCached(now.sequence, primer.sequence, now.circular).forEach(function (site, index) {
+          const id = 'preview-' + primer.id + '-' + index;
+          previewDrawn[id] = Object.assign(annotation(id, primer.title + ' (candidate)', site.start, site.end - 1, site.forward, now.sequence.length), { color: '#e8890c' });
+        });
+      });
+      redraw();
     };
 
     async function loadAttached() {
@@ -66,7 +98,7 @@
       const now = current();
       attachedDrawn = {};
       attachedPrimers.forEach(function (primer) {
-        tools.findSites(now.sequence, primer.sequence, now.circular).forEach(function (site, index) {
+        findSitesCached(now.sequence, primer.sequence, now.circular).forEach(function (site, index) {
           const id = 'dbprimer-' + primer.id + '-' + index;
           attachedDrawn[id] = annotation(id, primer.title, site.start, site.end - 1, site.forward, now.sequence.length);
         });
@@ -157,6 +189,11 @@
     // ---- the Primers tab
     async function renderPrimersTab() {
       const now = current();
+      // the preview belongs to the results of the last search: a new view starts without it
+      if (Object.keys(previewDrawn).length > 0) {
+        previewDrawn = {};
+        redraw();
+      }
       const attachedIds = new Set(attachedPrimers.map(function (p) {
         return p.id;
       }));
@@ -166,7 +203,7 @@
         panel.append(element('p', 'primers-muted', entryId ? 'No primer is attached yet. Search the database below.' : 'Open a plasmid of the database to attach primers to it.'));
       }
       attachedPrimers.forEach(function (primer) {
-        const sites = tools.findSites(now.sequence, primer.sequence, now.circular);
+        const sites = findSitesCached(now.sequence, primer.sequence, now.circular);
         panel.append(card(primer, sites, [
           action('Order', function () {
             tools.sendToOrder([primer.id]);
@@ -201,31 +238,9 @@
         return hasSelection && site.start >= selection.start && site.end - 1 <= selection.end;
       };
       const results = element('div', 'primers-results');
-      const showResults = function () {
-        const term = search.value.trim().toLowerCase();
-        results.textContent = '';
-        if (term === '' && whereFilter === 'anywhere') {
-          return;
-        }
-        if ((whereFilter === 'inside' || whereFilter === 'outside') && !hasSelection) {
-          results.append(element('p', 'primers-muted', 'Select a region of the sequence first.'));
-          return;
-        }
-        const list = (databasePrimers || []).filter(function (primer) {
-          if (attachedIds.has(primer.id)) {
-            return false;
-          }
-          if (term !== '' && primer.title.toLowerCase().indexOf(term) === -1 && primer.sequence.toLowerCase().indexOf(term) === -1) {
-            return false;
-          }
-          const sites = tools.findSites(now.sequence, primer.sequence, now.circular);
-          switch (whereFilter) {
-          case 'inside': return sites.some(insideSelection);
-          case 'outside': return sites.length > 0 && !sites.some(insideSelection);
-          case 'nowhere': return sites.length === 0;
-          default: return true;
-          }
-        }).slice(0, 25);
+      // a list of primers as cards the user can tick, to attach several together
+      const renderList = function (list) {
+        preview(list);
         // the ones that are ticked can be attached together
         const picked = new Set();
         const attachPicked = action('', async function () {
@@ -241,6 +256,10 @@
           await render();
         }, 'primary');
         const refreshPicked = function () {
+          // what is ticked is drawn on the map; without a tick, all the results are
+          preview(picked.size > 0 ? list.filter(function (p) {
+            return picked.has(p.id);
+          }) : list);
           attachPicked.textContent = 'Attach the ' + picked.size + ' selected';
           attachPicked.disabled = picked.size === 0;
         };
@@ -261,7 +280,7 @@
           refreshPicked();
         }
         list.forEach(function (primer) {
-          const sites = tools.findSites(now.sequence, primer.sequence, now.circular);
+          const sites = findSitesCached(now.sequence, primer.sequence, now.circular);
           const holder = element('div', 'primers-pick');
           if (entryId) {
             const box = element('input');
@@ -287,11 +306,99 @@
           results.append(element('p', 'primers-muted', 'Nothing found.'));
         }
       };
-      search.addEventListener('input', showResults);
+      const showResults = function () {
+        const term = search.value.trim().toLowerCase();
+        results.textContent = '';
+        if (term === '' && whereFilter === 'anywhere') {
+          preview([]);
+          return;
+        }
+        if ((whereFilter === 'inside' || whereFilter === 'outside') && !hasSelection) {
+          results.append(element('p', 'primers-muted', 'Select a region of the sequence first.'));
+          return;
+        }
+        const list = (databasePrimers || []).filter(function (primer) {
+          if (attachedIds.has(primer.id)) {
+            return false;
+          }
+          if (term !== '' && primer.title.toLowerCase().indexOf(term) === -1 && primer.sequence.toLowerCase().indexOf(term) === -1) {
+            return false;
+          }
+          const sites = findSitesCached(now.sequence, primer.sequence, now.circular);
+          switch (whereFilter) {
+          case 'inside': return sites.some(insideSelection);
+          case 'outside': return sites.length > 0 && !sites.some(insideSelection);
+          case 'nowhere': return sites.length === 0;
+          default: return true;
+          }
+        }).slice(0, 25);
+        renderList(list);
+      };
+      let typing = 0;
+      search.addEventListener('input', function () {
+        window.clearTimeout(typing);
+        typing = window.setTimeout(showResults, 150);
+      });
       where.addEventListener('change', function () {
         whereFilter = where.value;
         showResults();
       });
+      // candidates: the primers of the database that match the selected region, or the entire sequence
+      const finder = element('div', 'primers-finder');
+      const scope = element('select', 'primers-name');
+      [['selection', 'inside the selection'], ['entire', 'anywhere on the entire sequence']].forEach(function (choice) {
+        const option = element('option', '', 'Bind ' + choice[1]);
+        option.value = choice[0];
+        scope.append(option);
+      });
+      scope.value = candidatePrefs.scope;
+      const tolerance = element('select', 'primers-name');
+      [['0', 'exact match'], ['1', 'up to 1 mismatch'], ['3', 'up to 3 mismatches']].forEach(function (choice) {
+        const option = element('option', '', choice[1]);
+        option.value = choice[0];
+        tolerance.append(option);
+      });
+      tolerance.value = candidatePrefs.mismatches;
+      const candidates = action('Find matching primers', function () {
+        candidatePrefs = { scope: scope.value, mismatches: tolerance.value };
+        search.value = '';
+        results.textContent = '';
+        if (scope.value === 'selection' && !hasSelection) {
+          results.append(element('p', 'primers-muted', 'Select a region of the sequence first, or search the entire sequence.'));
+          return;
+        }
+        const limit = Number(tolerance.value);
+        const found = [];
+        (databasePrimers || []).forEach(function (primer) {
+          if (attachedIds.has(primer.id)) {
+            return;
+          }
+          const sites = findSitesCached(now.sequence, primer.sequence, now.circular).filter(function (site) {
+            return site.mismatches <= limit && (scope.value === 'entire' || insideSelection(site));
+          });
+          if (sites.length > 0) {
+            found.push({ primer: primer, best: Math.min.apply(null, sites.map(function (site) {
+              return site.mismatches;
+            })), first: sites[0].start });
+          }
+        });
+        // the closest matches first, then along the sequence
+        found.sort(function (x, y) {
+          return x.best - y.best || x.first - y.first;
+        });
+        const count = element('p', 'primers-muted', found.length + ' candidate' + (found.length === 1 ? '' : 's') + (hasSelection && scope.value === 'selection' ? ' in the selection (' + (selection.start + 1) + '..' + (selection.end + 1) + ')' : ' on the sequence') + '.');
+        if (found.length > 0) {
+          renderList(found.slice(0, 200).map(function (item) {
+            return item.primer;
+          }));
+        } else {
+          preview([]);
+        }
+        results.prepend(count);
+      }, 'primary');
+      finder.append(scope, tolerance, candidates);
+      panel.append(finder);
+
       const searchRow = element('div', 'primers-row');
       searchRow.append(search, where);
       panel.append(searchRow, results);

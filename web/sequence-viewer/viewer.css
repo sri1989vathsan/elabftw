@@ -895,3 +895,21 @@ body {
   background: #eaf1fc;
   color: #1d4c96;
 }
+
+#tool-sidebar .primers-finder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.7rem;
+  padding: 0.6rem;
+  border: 1px solid #dde2e8;
+  border-radius: 0.55rem;
+  background: #f6f8fb;
+}
+
+#tool-sidebar .tool-content .primers-finder select.primers-name {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  width: 100%;
+}
