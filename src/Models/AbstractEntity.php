@@ -1683,10 +1683,29 @@ abstract class AbstractEntity extends AbstractRest
             }
             $linksById[(int) $row['id']] = $links;
         }
+        // the sequence files of the entries (GenBank, FASTA, SnapGene), to open them in the sequence editor from the list
+        $req = $this->Db->prepare(sprintf(
+            'SELECT item_id, id, long_name, real_name, storage FROM uploads WHERE type = :type AND state = :state AND item_id IN (%s) AND real_name REGEXP :pattern ORDER BY id',
+            implode(',', $ids),
+        ));
+        $req->bindValue(':type', $this->entityType->value);
+        $req->bindValue(':state', State::Normal->value, PDO::PARAM_INT);
+        $req->bindValue(':pattern', '\\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$');
+        $this->Db->execute($req);
+        $sequenceFilesById = array();
+        foreach ($req->fetchAll() as $file) {
+            $sequenceFilesById[(int) $file['item_id']][] = array(
+                'id' => (int) $file['id'],
+                'long_name' => (string) $file['long_name'],
+                'real_name' => (string) $file['real_name'],
+                'storage' => (int) $file['storage'],
+            );
+        }
         foreach ($entities as &$entity) {
             $entity['extra_fields'] = $byId[(int) $entity['id']] ?? array();
             $entity['web_links'] = $linksById[(int) $entity['id']] ?? array();
             $entity['description'] = $descriptionById[(int) $entity['id']] ?? '';
+            $entity['sequence_files'] = $sequenceFilesById[(int) $entity['id']] ?? array();
         }
         unset($entity);
 

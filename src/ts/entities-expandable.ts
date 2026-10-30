@@ -10,6 +10,7 @@ import type { SortState } from './entities-view-utils';
 type ExtraField = { name: string; value: string };
 type StorageLocation = { storage_id: number; is_primary?: boolean; comment?: string | null; position?: string | null; path: string; qty_stored: number; qty_unit: string };
 type WebLink = { id: string; label: string; url: string };
+type SequenceFile = { id: number; long_name: string; real_name: string; storage: number };
 type InternalLink = { page: string; entityid: number; title: string; category_title: string | null; category_color: string | null };
 type Row = {
   id: number;
@@ -20,18 +21,23 @@ type Row = {
   storage_locations?: StorageLocation[];
   extra_fields?: ExtraField[];
   web_links?: WebLink[];
+  sequence_files?: SequenceFile[];
 };
 type Change = { created_at: string; target: string; content: string | null; fullname: string | null };
 
 const RECENT_CHANGES = 5;
 // the category is in the tabs and the location in the opened row: no columns for them
-const COLUMNS = ['ID', 'Title', 'Quantity', 'Owner'];
+const COLUMNS = ['ID', 'Title', 'Sequence', 'Quantity', 'Owner'];
+
+// the sequence column is there when some entry of the list has a sequence file (the plasmids)
+const columnsFor = (rows: Row[]): string[] => COLUMNS.filter(c => c !== 'Sequence' || rows.some(r => (r.sequence_files ?? []).length > 0));
 
 function sortValue(row: Row, key: string): string | number {
   const locations = row.storage_locations ?? [];
   switch (key) {
   case 'ID': return row.id;
   case 'Title': return row.title ?? '';
+  case 'Sequence': return (row.sequence_files ?? []).map(f => f.real_name).join(' ');
   case 'Quantity': return locations.length > 0 ? locations.reduce((sum, l) => sum + Number(l.qty_stored), 0) : '';
   default: return row.fullname ?? '';
   }
@@ -173,7 +179,8 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
   const table = el('table', 'table table-sm expandable-table');
   const head = el('tr');
   head.append(el('th', 'expandable-caret-cell'));
-  COLUMNS.forEach(c => {
+  const columns = columnsFor(allRows);
+  columns.forEach(c => {
     const th = el('th', c === 'ID' ? 'id-cell' : '');
     sortableHeader(th, c, c, sort, onSort);
     head.append(th);
@@ -200,6 +207,20 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
     titleCell.append(link);
     tr.append(titleCell);
+    if (columns.includes('Sequence')) {
+      // the sequence files of the entry open in the sequence editor, in a page of their own
+      const sequenceCell = el('td', 'text-nowrap');
+      (row.sequence_files ?? []).forEach(f => {
+        const a = el('a', 'btn btn-secondary btn-sm mr-1');
+        a.href = `sequence-viewer/index.php?entry=${row.id}&upload=${f.id}&f=${encodeURIComponent(f.long_name)}&name=${encodeURIComponent(f.real_name)}&storage=${f.storage}`;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.title = `Open ${f.real_name} in the sequence editor`;
+        a.append(el('i', 'fas fa-dna fa-fw'));
+        sequenceCell.append(a);
+      });
+      tr.append(sequenceCell);
+    }
     tr.append(el('td', 'text-nowrap', locations.length > 0 ? totalStock(locations) : ''));
     tr.append(el('td', '', row.fullname ?? ''));
     body.append(tr);
@@ -215,7 +236,7 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
       }
       detailRow = el('tr', 'expandable-detail-row');
       const cell = el('td');
-      cell.colSpan = COLUMNS.length + 1;
+      cell.colSpan = columns.length + 1;
       cell.append(buildDetail(row));
       detailRow.append(cell);
       tr.after(detailRow);
