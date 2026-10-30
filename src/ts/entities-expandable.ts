@@ -4,7 +4,8 @@
  */
 import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
-import { appendLocationLinks, el, fieldLabel, filterParams, linkify, plainText, storageUrl } from './entities-view-utils';
+import { appendLocationLinks, el, fieldLabel, filterParams, linkify, plainText, sortableHeader, sortRows, storageUrl } from './entities-view-utils';
+import type { SortState } from './entities-view-utils';
 
 type ExtraField = { name: string; value: string };
 type StorageLocation = { storage_id: number; is_primary?: boolean; position?: string | null; path: string; qty_stored: number; qty_unit: string };
@@ -24,6 +25,18 @@ type Change = { created_at: string; target: string; content: string | null; full
 
 const RECENT_CHANGES = 5;
 const COLUMNS = ['ID', 'Title', 'Category', 'Location', 'Quantity', 'Owner'];
+
+function sortValue(row: Row, key: string): string | number {
+  const locations = row.storage_locations ?? [];
+  switch (key) {
+  case 'ID': return row.id;
+  case 'Title': return row.title ?? '';
+  case 'Category': return row.category_title ?? '';
+  case 'Location': return locations.map(l => l.path).join(' | ');
+  case 'Quantity': return locations.length > 0 ? locations.reduce((sum, l) => sum + Number(l.qty_stored), 0) : '';
+  default: return row.fullname ?? '';
+  }
+}
 
 let rootEl: HTMLElement | null = null;
 let onFiltersChanged: ((event: Event) => void) | null = null;
@@ -139,16 +152,21 @@ function buildDetail(row: Row): HTMLElement {
   return detail;
 }
 
-function render(container: HTMLElement, rows: Row[]): void {
+function render(container: HTMLElement, allRows: Row[], sort: SortState | null, onSort: (sort: SortState) => void): void {
   container.replaceChildren();
-  if (rows.length === 0) {
+  if (allRows.length === 0) {
     container.append(el('p', 'text-muted', 'Nothing to show.'));
     return;
   }
+  const rows = sortRows(allRows, sort, sortValue);
   const table = el('table', 'table table-sm expandable-table');
   const head = el('tr');
   head.append(el('th', 'expandable-caret-cell'));
-  COLUMNS.forEach(c => head.append(el('th', c === 'ID' ? 'id-cell' : '', c)));
+  COLUMNS.forEach(c => {
+    const th = el('th', c === 'ID' ? 'id-cell' : '');
+    sortableHeader(th, c, c, sort, onSort);
+    head.append(th);
+  });
   const thead = el('thead');
   thead.append(head);
   const body = el('tbody');
@@ -225,6 +243,12 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   toolbar.append(expandAll, collapseAll);
   const container = el('div');
   rootEl.replaceChildren(toolbar, container);
+  let rows: Row[] = [];
+  let tableSort: SortState | null = null;
+  const onSort = (next: SortState): void => {
+    tableSort = next;
+    render(container, rows, tableSort, onSort);
+  };
 
   // the carets own the open or closed state of their row: drive them instead of duplicating it
   const setAll = (open: boolean): void => {
@@ -242,12 +266,13 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     const params = filterParams(event, order, sort);
     try {
       const endpoint = getEntityTypeFromPage(window.location);
-      const rows = await ApiC.getJson<Row[]>(`${endpoint}?${params.toString()}`, { notifOnError: 0 });
+      const loaded = await ApiC.getJson<Row[]>(`${endpoint}?${params.toString()}`, { notifOnError: 0 });
       // a later filter change may have started another request in the meantime
       if (current !== requestId) {
         return;
       }
-      render(container, rows);
+      rows = loaded;
+      render(container, rows, tableSort, onSort);
     } catch (error) {
       console.error(`Could not load the resources: ${error}`);
     }

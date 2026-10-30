@@ -4,7 +4,8 @@
  */
 import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
-import { appendLocationLinks, linkify } from './entities-view-utils';
+import { appendLocationLinks, linkify, sortableHeader, sortRows } from './entities-view-utils';
+import type { SortState } from './entities-view-utils';
 
 type ExtraField = { name: string; value: string };
 type StorageLocation = { storage_id: number; path: string; qty_stored: number; qty_unit: string };
@@ -93,9 +94,15 @@ function buildGroups(rows: Row[], groupBy: GroupBy): Group[] {
   return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function buildTable(group: Group, groupBy: GroupBy): HTMLTableElement {
+function buildTable(group: Group, groupBy: GroupBy, sort: SortState | null, onSort: (sort: SortState) => void): HTMLTableElement {
   const table = el('table', 'table table-sm table-hover mb-0');
-  const columns: { head: string; cell: (row: Row) => string | Node }[] = [];
+  // what the cell shows, and what the column sorts on
+  type Column = { head: string; cell: (row: Row) => string | Node; value: (row: Row) => string | number };
+  const columns: Column[] = [];
+  const locationText = (row: Row): string => locationsOf(row).map(l => l.path).join(' | ');
+  const totalQuantity = (row: Row): string | number => locationsOf(row).length > 0
+    ? locationsOf(row).reduce((sum, l) => sum + Number(l.qty_stored), 0)
+    : '';
   if (groupBy === 'category') {
     // the fields of this category, in the order they were defined
     const names: string[] = [];
@@ -107,6 +114,7 @@ function buildTable(group: Group, groupBy: GroupBy): HTMLTableElement {
     names.forEach(name => columns.push({
       head: name,
       cell: row => linkify((row.extra_fields ?? []).find(f => f.name === name)?.value ?? ''),
+      value: row => (row.extra_fields ?? []).find(f => f.name === name)?.value ?? '',
     }));
     columns.push({
       head: 'Location',
@@ -115,22 +123,31 @@ function buildTable(group: Group, groupBy: GroupBy): HTMLTableElement {
         appendLocationLinks(span, locationsOf(row));
         return span;
       },
+      value: locationText,
     });
   } else {
-    columns.push({ head: 'Category', cell: row => row.category_title ?? '' });
+    columns.push({ head: 'Category', cell: row => row.category_title ?? '', value: row => row.category_title ?? '' });
   }
-  columns.push({ head: 'Quantity', cell: quantityOf });
-  columns.push({ head: 'Owner', cell: row => row.fullname ?? '' });
+  columns.push({ head: 'Quantity', cell: quantityOf, value: totalQuantity });
+  columns.push({ head: 'Owner', cell: row => row.fullname ?? '', value: row => row.fullname ?? '' });
 
+  const sortColumns: { head: string; value: (row: Row) => string | number }[] = [
+    { head: 'ID', value: row => row.id },
+    { head: 'Title', value: row => row.title ?? '' },
+    ...columns,
+  ];
   const headRow = el('tr');
-  headRow.append(el('th', 'id-cell', 'ID'), el('th', '', 'Title'));
-  columns.forEach(c => headRow.append(el('th', '', c.head)));
+  sortColumns.forEach(c => {
+    const th = el('th', c.head === 'ID' ? 'id-cell' : '');
+    sortableHeader(th, c.head, c.head, sort, onSort);
+    headRow.append(th);
+  });
   const thead = el('thead');
   thead.append(headRow);
   table.append(thead);
 
   const body = el('tbody');
-  group.rows.forEach(row => {
+  sortRows(group.rows, sort, (row, key) => sortColumns.find(c => c.head === key)?.value(row) ?? '').forEach(row => {
     const tr = el('tr');
     const link = el('a', '', row.title);
     link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
@@ -149,7 +166,7 @@ function buildTable(group: Group, groupBy: GroupBy): HTMLTableElement {
   return table;
 }
 
-function render(container: HTMLElement, rows: Row[], state: StoredState): void {
+function render(container: HTMLElement, rows: Row[], state: StoredState, sort: SortState | null, onSort: (sort: SortState) => void): void {
   container.replaceChildren();
   if (rows.length === 0) {
     container.append(el('p', 'text-muted', 'Nothing to show.'));
@@ -172,7 +189,7 @@ function render(container: HTMLElement, rows: Row[], state: StoredState): void {
     summary.append(el('span', '', group.label), el('span', 'grouped-section-count', String(group.rows.length)));
     details.append(summary);
     const wrap = el('div', 'table-responsive');
-    wrap.append(buildTable(group, state.groupBy));
+    wrap.append(buildTable(group, state.groupBy, sort, onSort));
     details.append(wrap);
     container.append(details);
   });
@@ -218,6 +235,11 @@ export function mountGroupedEntities(rootElement: HTMLElement | null, order: str
   rootEl.replaceChildren(toolbar, container);
 
   let rows: Row[] = [];
+  let tableSort: SortState | null = null;
+  const onSort = (next: SortState): void => {
+    tableSort = next;
+    render(container, rows, state, tableSort, onSort);
+  };
   const setAll = (open: boolean): void => {
     container.querySelectorAll('details').forEach(d => {
       d.open = open;
@@ -228,7 +250,7 @@ export function mountGroupedEntities(rootElement: HTMLElement | null, order: str
   groupSelect.addEventListener('change', () => {
     state.groupBy = groupSelect.value as GroupBy;
     writeState(state);
-    render(container, rows, state);
+    render(container, rows, state, tableSort, onSort);
   });
 
   const load = async (event?: Event): Promise<void> => {
@@ -242,7 +264,7 @@ export function mountGroupedEntities(rootElement: HTMLElement | null, order: str
         return;
       }
       rows = loaded as Row[];
-      render(container, rows, state);
+      render(container, rows, state, tableSort, onSort);
     } catch (error) {
       console.error(`Could not load entities: ${error}`);
     }

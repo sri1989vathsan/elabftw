@@ -240,6 +240,28 @@ function unmountOtherViews(keep: string): void {
   }
 }
 
+// the resources open in the expandable table unless the cards were chosen: the saved mode 'it' alone does not say, as it is also the default
+const CARDS_KEY = 'persistent_resource_cards_v1';
+
+function effectiveMode(mode: string): string {
+  if (entity.type !== 'items' || mode !== 'it') {
+    return mode;
+  }
+  try {
+    return localStorage.getItem(CARDS_KEY) === '1' ? 'it' : 'ex';
+  } catch {
+    return 'ex';
+  }
+}
+
+function rememberCards(chosen: boolean): void {
+  try {
+    localStorage.setItem(CARDS_KEY, chosen ? '1' : '0');
+  } catch {
+    // localStorage might be unavailable
+  }
+}
+
 async function displayEntities(
   mode: string,
   order: string,
@@ -248,10 +270,15 @@ async function displayEntities(
   relatedOrigin: string = getCurrentUrlParam('related_origin'),
 ) {
   const rootEl = document.getElementById('entityList');
+  mode = effectiveMode(mode);
   // the views made for the resources are not offered on the other pages, even when the saved mode is one of them
   const resourceViews = entity.type === 'items' ? ['gr', 'st', 'ac', 'ex'] : [];
   const view = ['tb', ...resourceViews].includes(mode) ? mode : 'it';
   unmountOtherViews(view);
+  // the button of the view shown is the one lit
+  [['gr', 'toggle-grouped-layout'], ['ex', 'toggle-expandable-layout'], ['st', 'toggle-storage-layout'], ['ac', 'toggle-activity-layout']].forEach(([key, action]) => {
+    document.querySelector(`[data-action="${action}"]`)?.classList.toggle('active', view === key);
+  });
   if (view === 'ex') {
     expandableModule ??= await import(
       /* webpackChunkName: 'entities-expandable' */
@@ -383,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const me = await getMe();
     // a link to a storage location opens the storage browser, without changing the saved display mode
     const toLocation = entity.type === 'items' && getCurrentUrlNumberParam('storage_unit') !== null;
-    displayEntities(toLocation ? 'st' : String(me['display_mode'] ?? 'it'), getPreferredOrder(me), getPreferredSort(me));
+    displayEntities(toLocation ? 'st' : effectiveMode(String(me['display_mode'] ?? 'it')), getPreferredOrder(me), getPreferredSort(me));
   })();
 
   preventReactiveSearchFormSubmit();
@@ -874,11 +901,12 @@ document.addEventListener('DOMContentLoaded', () => {
   on('toggle-items-layout', async () => {
     let target = 'it';
     const me = await getMe();
-    if (me['display_mode'] === 'it') {
+    if (effectiveMode(me['display_mode']) !== 'tb') {
       target = 'tb';
     }
+    rememberCards(target === 'it');
     ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
-      document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', effectiveMode(target) === 'it');
       displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
     });
   });
@@ -886,9 +914,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // the grouped view of the resources: collapsible sections, each with its own table
   on('toggle-grouped-layout', async () => {
     const me = await getMe();
-    const target = me['display_mode'] === 'gr' ? 'it' : 'gr';
+    const target = effectiveMode(me['display_mode']) === 'gr' ? 'it' : 'gr';
+    // closing the view goes back to the expandable table
+    rememberCards(false);
     ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
-      document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', effectiveMode(target) === 'it');
       displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
       document.querySelector('[data-action="toggle-grouped-layout"]')?.classList.toggle('active', target === 'gr');
     });
@@ -897,9 +927,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // the storage browser of the resources: tree of the storage units and the contents of the selected one
   on('toggle-storage-layout', async () => {
     const me = await getMe();
-    const target = me['display_mode'] === 'st' ? 'it' : 'st';
+    const target = effectiveMode(me['display_mode']) === 'st' ? 'it' : 'st';
+    // closing the view goes back to the expandable table
+    rememberCards(false);
     ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
-      document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', effectiveMode(target) === 'it');
       displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
     });
   });
@@ -918,9 +950,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // the expandable table of the resources: a row per resource, opened to show its fields, storage and activity
   on('toggle-expandable-layout', async () => {
     const me = await getMe();
-    const target = me['display_mode'] === 'ex' ? 'it' : 'ex';
+    const target = effectiveMode(me['display_mode']) === 'ex' ? 'it' : 'ex';
+    // the expandable table is the default: closing it shows the cards
+    rememberCards(target === 'it');
     ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
-      document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', effectiveMode(target) === 'it');
       displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
     });
   });
@@ -928,9 +962,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // the activity log of the resources: who changed what and when
   on('toggle-activity-layout', async () => {
     const me = await getMe();
-    const target = me['display_mode'] === 'ac' ? 'it' : 'ac';
+    const target = effectiveMode(me['display_mode']) === 'ac' ? 'it' : 'ac';
+    // closing the view goes back to the expandable table
+    rememberCards(false);
     ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
-      document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', effectiveMode(target) === 'it');
       displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
     });
   });

@@ -88,3 +88,42 @@ export function appendLocationLinks(cell: HTMLElement, locations: { storage_id: 
     cell.append(a);
   });
 }
+
+export type SortState = { key: string; asc: boolean };
+
+// numbers compare as numbers, text in natural order ("Box 2" before "Box 10"), empty values stay last in both directions
+export function sortRows<T>(rows: T[], sort: SortState | null, valueOf: (row: T, key: string) => string | number): T[] {
+  if (sort === null) {
+    return rows;
+  }
+  const direction = sort.asc ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const av = valueOf(a, sort.key);
+    const bv = valueOf(b, sort.key);
+    if (av === '' || bv === '') {
+      return av === bv ? 0 : (av === '' ? 1 : -1);
+    }
+    if (typeof av === 'number' && typeof bv === 'number') {
+      return (av - bv) * direction;
+    }
+    return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' }) * direction;
+  });
+}
+
+// a column header that sorts its table when clicked, with an arrow on the sorted column
+export function sortableHeader(th: HTMLElement, label: string, key: string, sort: SortState | null, onSort: (sort: SortState) => void): void {
+  const active = sort?.key === key;
+  th.classList.add('sortable-th');
+  th.tabIndex = 0;
+  th.setAttribute('role', 'button');
+  th.setAttribute('aria-sort', active ? (sort.asc ? 'ascending' : 'descending') : 'none');
+  th.textContent = `${label}${active ? (sort.asc ? ' ▲' : ' ▼') : ''}`;
+  const activate = (): void => onSort({ key, asc: active ? !sort.asc : true });
+  th.addEventListener('click', activate);
+  th.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      activate();
+    }
+  });
+}

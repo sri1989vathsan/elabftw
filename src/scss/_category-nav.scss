@@ -213,8 +213,10 @@
 }
 
 // activity log
-.activity-sortable {
+.activity-sortable,
+.sortable-th {
   cursor: pointer;
+  user-select: none;
   white-space: nowrap;
 }
 
