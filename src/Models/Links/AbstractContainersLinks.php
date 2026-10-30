@@ -157,7 +157,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
     #[Override]
     public function patch(Action $action, array $params): array
     {
-        $this->Entity->canOrExplode(AccessType::Write);
+        $this->canStoreOrExplode();
         $before = $this->readOne();
         if (isset($params['storage_id'])) {
             // the slot belongs to the box the tube leaves
@@ -261,7 +261,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
     #[Override]
     public function destroy(): bool
     {
-        $this->Entity->canOrExplode(AccessType::Write);
+        $this->canStoreOrExplode();
         $this->Entity->touch();
 
         // read details for the changelog before the row is deleted
@@ -331,7 +331,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
 
     public function createWithQuantity(float $qty, string $unit, ?string $position = null, bool $primary = false): int
     {
-        $this->Entity->canOrExplode(AccessType::Write);
+        $this->canStoreOrExplode();
         $this->Entity->touch();
 
         // use IGNORE to avoid failure due to a key constraint violations
@@ -519,6 +519,14 @@ abstract class AbstractContainersLinks extends AbstractLinks
         }
     }
 
+    /**
+     * Anyone who can read an entry of the database can put tubes in storage and take them out. The other entries need write access.
+     */
+    private function canStoreOrExplode(): void
+    {
+        $this->Entity->canOrExplode($this->hasSlots() ? AccessType::Read : AccessType::Write);
+    }
+
     // slots and the primary flag exist for the containers of the registry only
     private function hasSlots(): bool
     {
@@ -585,7 +593,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
      */
     private function import(): int
     {
-        $this->Entity->canOrExplode(AccessType::Write);
+        $this->canStoreOrExplode();
 
         // the :item_id of the SELECT will be the same for all rows: our current entity id
         // use IGNORE to avoid failure due to a key constraint violations

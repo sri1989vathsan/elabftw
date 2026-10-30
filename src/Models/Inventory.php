@@ -69,6 +69,14 @@ final class Inventory extends AbstractConcreteEntity
         BinaryValue $isBookable = BinaryValue::False,
     ): int {
         $title = Filter::title($title ?? _('Untitled'));
+        // the entries of the database are visible to everyone with an account and editable by their owner and the admins,
+        // whatever the defaults of the user: only an admin can change that
+        $canreadBase = BasePermissions::Organization;
+        $canwriteBase = BasePermissions::User;
+        $canread = self::EMPTY_CAN_JSON;
+        $canwrite = self::EMPTY_CAN_JSON;
+        $canreadIsImmutable = true;
+        $canwriteIsImmutable = true;
         // an entry of a category starts with the fields of that category
         if ($metadata === null && $category !== null) {
             $req = $this->Db->prepare('SELECT fields FROM inventory_categories WHERE id = :id');

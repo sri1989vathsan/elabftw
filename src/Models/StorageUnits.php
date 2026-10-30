@@ -423,6 +423,10 @@ final class StorageUnits extends AbstractRest
     #[Override]
     public function destroy(): bool
     {
+        // everyone can put tubes in a storage unit and take them out, but only admins delete the unit itself
+        if (!$this->requester->isAdmin) {
+            throw new IllegalActionException();
+        }
         $this->canWriteOrExplode();
         if ($this->hasChildren()) {
             throw new ImproperActionException(_('Cannot delete a storage unit with children!'));

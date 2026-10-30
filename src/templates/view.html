@@ -184,7 +184,7 @@
 {% if not App.isAnonymous() %}
 
   {# same for storage #}
-  {% if Entity.entityData.containers %}
+  {% if Entity.entityData.containers or Entity.entityType.value == 'inventory' %}
     {% include 'storage-view-edit.html' %}
   {% endif %}
 
