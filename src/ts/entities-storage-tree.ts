@@ -367,7 +367,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
             renderMain();
           });
         } else {
-          cell.title = pickedTube ? `Place ${pickedTube.row.title} in ${slot}` : `${slot}: free`;
+          cell.title = pickedTube ? `Place ${pickedTube.row.title} in ${slot}` : `${slot}: free, click to add storage`;
           cell.setAttribute('aria-label', cell.title);
           // a dragged tube is dropped in a free slot
           cell.addEventListener('dragover', event => {
@@ -386,10 +386,15 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
               patchAndReload(`inventory/${tube.row.id}/containers/${tube.location.container_id}`, { position: slot });
             }
           });
-          cell.addEventListener('click', () => {
+          cell.addEventListener('click', async () => {
             if (pickedTube) {
               patchAndReload(`inventory/${pickedTube.row.id}/containers/${pickedTube.location.container_id}`, { position: slot });
+              return;
             }
+            // nothing picked: a free slot offers to store an entry in it
+            (await import(/* webpackChunkName: 'storage-slot-add' */ './storage-slot-add')).openSlotAdd(node.unit, slot, () => {
+              void load();
+            });
           });
         }
         td.append(cell);
