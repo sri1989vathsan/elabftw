@@ -26,15 +26,16 @@ function hideTubeCard(): void {
   tubeCard = null;
 }
 
-function showTubeCard(tube: Tube, event: MouseEvent): void {
-  if (!tubeCard) {
-    tubeCard = el('div', 'tube-card');
-    tubeCard.setAttribute('role', 'tooltip');
-    document.body.append(tubeCard);
-  }
-  const card = tubeCard;
+function fillTubeCard(card: HTMLElement, tube: Tube, linked: boolean): void {
   card.replaceChildren();
-  card.append(el('div', 'tube-card-title', tube.row.title));
+  if (linked) {
+    // the pinned card: the title leads to the entry
+    const link = el('a', 'tube-card-title', tube.row.title);
+    link.href = `?mode=view&id=${encodeURIComponent(String(tube.row.id))}`;
+    card.append(link);
+  } else {
+    card.append(el('div', 'tube-card-title', tube.row.title));
+  }
   const meta = el('div', 'tube-card-meta');
   if (tube.row.category_color) {
     const dot = el('span', 'category-nav-dot');
@@ -56,8 +57,73 @@ function showTubeCard(tube: Tube, event: MouseEvent): void {
   line('Quantity', `${tube.location.qty_stored} ${tube.location.qty_unit}`.trim());
   line('Location', tube.location.path);
   line('Owner', tube.row.fullname ?? '');
+}
+
+function showTubeCard(tube: Tube, event: MouseEvent): void {
+  if (pinnedCard) {
+    return;
+  }
+  if (!tubeCard) {
+    tubeCard = el('div', 'tube-card');
+    tubeCard.setAttribute('role', 'tooltip');
+    document.body.append(tubeCard);
+  }
+  fillTubeCard(tubeCard, tube, false);
   moveTubeCard(event);
 }
+
+// the card kept open by a click on a tube: a link to the entry and what can be done with the tube
+let pinnedCard: HTMLElement | null = null;
+
+function closePinnedCard(): void {
+  pinnedCard?.remove();
+  pinnedCard = null;
+}
+
+function pinTubeCard(tube: Tube, anchor: HTMLElement, actions: { label: string; run: () => void }[]): void {
+  closePinnedCard();
+  hideTubeCard();
+  const card = el('div', 'tube-card pinned');
+  card.setAttribute('role', 'dialog');
+  fillTubeCard(card, tube, true);
+  const bar = el('div', 'tube-card-actions');
+  const open = el('a', 'btn btn-primary btn-sm', 'Open entry');
+  open.href = `?mode=view&id=${encodeURIComponent(String(tube.row.id))}`;
+  bar.append(open);
+  actions.forEach(a => {
+    const button = el('button', 'btn btn-secondary btn-sm', a.label);
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      closePinnedCard();
+      a.run();
+    });
+    bar.append(button);
+  });
+  const close = el('button', 'btn btn-transparent btn-sm', 'Close');
+  close.type = 'button';
+  close.addEventListener('click', closePinnedCard);
+  bar.append(close);
+  card.append(bar);
+  document.body.append(card);
+  pinnedCard = card;
+  // under the tube, kept inside the window
+  const box = anchor.getBoundingClientRect();
+  const x = Math.min(box.left, window.innerWidth - card.offsetWidth - 8);
+  const y = box.bottom + 6 + card.offsetHeight > window.innerHeight ? box.top - card.offsetHeight - 6 : box.bottom + 6;
+  card.style.left = `${Math.max(8, x)}px`;
+  card.style.top = `${Math.max(8, y)}px`;
+}
+
+document.addEventListener('mousedown', event => {
+  if (pinnedCard && !pinnedCard.contains(event.target as Node)) {
+    closePinnedCard();
+  }
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    closePinnedCard();
+  }
+});
 
 function moveTubeCard(event: MouseEvent): void {
   if (!tubeCard) {
@@ -361,8 +427,16 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
             cell.classList.add('picked');
           }
           cell.addEventListener('click', () => {
-            pickedTube = sameTube(pickedTube, entry) ? null : entry;
-            renderMain();
+            // a tube already picked to be moved: a click on another tube drops the pick
+            if (pickedTube) {
+              pickedTube = sameTube(pickedTube, entry) ? null : entry;
+              renderMain();
+              return;
+            }
+            pinTubeCard(entry, cell, [
+              { label: 'Move to a slot', run: () => { pickedTube = entry; renderMain(); } },
+              ...(entry.location.position ? [{ label: 'Take out of its slot', run: () => patchAndReload(`inventory/${entry.row.id}/containers/${entry.location.container_id}`, { position: '' }) }] : []),
+            ]);
           });
         } else {
           cell.title = pickedTube ? `Place ${pickedTube.row.title} in ${slot}` : `${slot}: free, click to add storage`;
@@ -449,8 +523,12 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         chip.addEventListener('mousemove', moveTubeCard);
         chip.addEventListener('mouseleave', hideTubeCard);
         chip.addEventListener('click', () => {
-          pickedTube = sameTube(pickedTube, e) ? null : e;
-          renderMain();
+          if (pickedTube) {
+            pickedTube = sameTube(pickedTube, e) ? null : e;
+            renderMain();
+            return;
+          }
+          pinTubeCard(e, chip, [{ label: 'Move to a slot', run: () => { pickedTube = e; renderMain(); } }]);
         });
         box.append(chip);
       });
@@ -734,6 +812,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
 }
 
 export function unmountStorageTree(): void {
+  closePinnedCard();
+  hideTubeCard();
   if (onFiltersChanged) {
     window.removeEventListener('entity-filters-changed', onFiltersChanged);
     onFiltersChanged = null;

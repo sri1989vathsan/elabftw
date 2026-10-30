@@ -709,3 +709,20 @@
   outline: 2px solid var(--primary, #1f5fae);
   background-color: rgba(31, 95, 174, 0.12);
 }
+
+// the card kept open by a click on a tube
+.tube-card.pinned {
+  pointer-events: auto;
+
+  .tube-card-title {
+    display: block;
+    margin-bottom: 0.1rem;
+  }
+
+  .tube-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.6rem;
+  }
+}
