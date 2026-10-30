@@ -111,19 +111,6 @@ body {
   flex: 0 0 auto;
 }
 
-#cutters {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-left: 1rem;
-}
-
-#cutters .cutters-label {
-  color: #495057;
-  font-size: 0.85rem;
-}
-
 .cutter-button {
   padding: 0.15rem 0.6rem;
   border: 1px solid #c3c8cf;
@@ -193,102 +180,273 @@ body {
   color: #6c757d;
 }
 
-/* the primers of the sequence editor: a panel under the bar */
+/* the primers panel of the sequence editor */
 #primers-panel {
   position: fixed;
   z-index: 60;
-  top: 4.5rem;
+  top: 4.2rem;
   right: 1rem;
   box-sizing: border-box;
-  width: min(34rem, 94vw);
-  max-height: 70vh;
+  width: min(36rem, 94vw);
+  max-height: calc(100vh - 5.5rem);
   overflow: auto;
-  padding: 0.7rem 0.9rem;
-  border: 1px solid #c3c8cf;
-  border-radius: 0.4rem;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid #d3d8df;
+  border-radius: 0.7rem;
   background: #fff;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-  font-size: 0.85rem;
+  box-shadow: 0 12px 34px rgba(20, 30, 50, 0.22);
+  color: #1f2933;
+  font-size: 0.86rem;
+  line-height: 1.35;
 }
 
 #primers-panel[hidden] {
   display: none;
 }
 
-#primers-panel h4 {
-  margin: 0.6rem 0 0.3rem;
-  font-size: 0.85rem;
-  color: #6c757d;
+#primers-panel .primers-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
 }
 
-#primers-panel h4:first-child {
-  margin-top: 0;
+#primers-panel .primers-title {
+  font-size: 1.05rem;
+}
+
+#primers-panel .primers-close {
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #6b7785;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#primers-panel .primers-close:hover {
+  background: #eef1f5;
+}
+
+#primers-panel .primers-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.8rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: #eef1f5;
+}
+
+#primers-panel .primers-tab {
+  flex: 1 1 0;
+  padding: 0.3rem 0.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #4a5663;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#primers-panel .primers-tab[aria-pressed="true"] {
+  background: #fff;
+  color: #1f5fae;
+  box-shadow: 0 1px 3px rgba(20, 30, 50, 0.18);
+}
+
+#primers-panel h4 {
+  margin: 1rem 0 0.4rem;
+  color: #6b7785;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#primers-panel .primers-tabs + h4 {
+  margin-top: 0.2rem;
+}
+
+#primers-panel .primers-muted {
+  margin: 0 0 0.4rem;
+  color: #6b7785;
+}
+
+#primers-panel .primers-warning {
+  margin: 0 0 0.25rem;
+  color: #b42318;
 }
 
 #primers-panel .primers-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.3rem 0.6rem;
-  margin-bottom: 0.35rem;
+  gap: 0.4rem 0.6rem;
+  margin-bottom: 0.4rem;
 }
 
-#primers-panel .primers-muted {
-  margin: 0;
-  color: #6c757d;
-}
-
-#primers-panel .primers-name {
-  padding: 0.2rem 0.5rem;
-  border: 1px solid #c3c8cf;
-  border-radius: 0.3rem;
+#primers-panel .primers-name,
+#primers-panel select.primers-name {
+  box-sizing: border-box;
+  flex: 1 1 10rem;
+  min-width: 0;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #c8ced6;
+  border-radius: 0.45rem;
+  background: #fff;
+  color: inherit;
   font: inherit;
 }
 
-#primers-panel .primers-message {
-  margin: 0.3rem 0 0;
+#primers-panel .primers-name:focus {
+  border-color: #1f5fae;
+  outline: 2px solid rgba(31, 95, 174, 0.2);
 }
 
-#primers-panel .primers-message.error {
-  color: #a61e1e;
+/* a primer as a card */
+#primers-panel .primers-card {
+  margin-bottom: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #dde2e8;
+  border-radius: 0.55rem;
+  background: #fafbfd;
+}
+
+#primers-panel .primers-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.2rem 0.6rem;
+}
+
+#primers-panel .primers-card-name {
+  font-size: 0.92rem;
+}
+
+#primers-panel .primers-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+#primers-panel .primers-chip {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: #e9eef5;
+  color: #43505e;
+  font-size: 0.74rem;
+}
+
+#primers-panel .primers-card-seq {
+  display: block;
+  margin: 0.35rem 0;
+  color: #2d3a48;
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+#primers-panel .primers-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+#primers-panel .primers-places {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+#primers-panel .primers-tag {
+  padding: 0.1rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+#primers-panel .primers-tag-site {
+  border-color: #b7cdea;
+  background: #eaf1fb;
+  color: #1f5fae;
+  cursor: pointer;
+}
+
+#primers-panel .primers-tag-site:hover {
+  background: #d9e7f8;
+}
+
+#primers-panel .primers-tag-bad {
+  background: #fdecea;
+  color: #b42318;
+}
+
+#primers-panel .primers-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+#primers-panel .primers-btn,
+.cutter-button {
+  padding: 0.25rem 0.8rem;
+  border: 1px solid #c3c8cf;
+  border-radius: 999px;
+  background: #fff;
+  color: #343a40;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+#primers-panel .primers-btn:hover,
+.cutter-button:hover {
+  border-color: #7b8794;
+}
+
+#primers-panel .primers-btn-primary,
+#primers-panel .primers-primary {
+  border-color: #1f5fae;
+  background: #1f5fae;
+  color: #fff;
+}
+
+#primers-panel .primers-btn-primary:hover,
+#primers-panel .primers-primary:hover {
+  background: #184f94;
+}
+
+#primers-panel .primers-btn-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: #6b7785;
+}
+
+#primers-panel .primers-btn-quiet:hover {
+  color: #b42318;
+}
+
+#primers-panel button:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .primers-button {
   font-weight: 600;
 }
 
-/* the tabs and the forms of the primers panel */
-#primers-panel .primers-tabs {
-  display: flex;
-  gap: 0.3rem;
-  margin-bottom: 0.5rem;
-}
-
-#primers-panel .primers-tab {
-  padding: 0.2rem 0.9rem;
-  border: 1px solid #c3c8cf;
-  border-radius: 999px;
-  background: #fff;
-  font: inherit;
-  cursor: pointer;
-}
-
-#primers-panel .primers-tab[aria-pressed="true"] {
-  border-color: #1f5fae;
-  background: #1f5fae;
-  color: #fff;
-}
-
-#primers-panel .primers-warning {
-  margin: 0 0 0.25rem;
-  color: #a61e1e;
-}
-
+/* the design form and its pairs */
 #primers-panel .primers-form {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.4rem 0.8rem;
-  margin-bottom: 0.6rem;
+  gap: 0.5rem 0.8rem;
+  margin-bottom: 0.7rem;
 }
 
 #primers-panel .primers-field {
@@ -296,47 +454,54 @@ body {
   flex-direction: column;
   gap: 0.15rem;
   margin: 0;
-  color: #495057;
+  color: #4a5663;
+  font-size: 0.78rem;
 }
 
 #primers-panel .primers-field .primers-name {
+  flex: 0 0 auto;
   width: 100%;
-  box-sizing: border-box;
 }
 
 #primers-panel .primers-pair {
   margin: 0.5rem 0;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid #d7dce2;
-  border-radius: 0.4rem;
-  background: #fafbfc;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #dde2e8;
+  border-radius: 0.55rem;
+  background: #fafbfd;
+}
+
+#primers-panel .primers-pair .primers-row {
+  justify-content: space-between;
 }
 
 #primers-panel .primers-line {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.2rem 0.6rem;
-  margin-bottom: 0.2rem;
+  gap: 0.15rem 0.6rem;
+  margin-bottom: 0.3rem;
 }
 
 #primers-panel .primers-dir {
-  width: 1.2rem;
-  font-weight: 700;
+  width: 1.3rem;
   color: #1f5fae;
+  font-weight: 700;
 }
 
 #primers-panel .primers-sequence {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   word-break: break-all;
 }
 
-#primers-panel .primers-primary {
-  border-color: #1f5fae;
-  background: #1f5fae;
-  color: #fff;
+#primers-panel .primers-message {
+  margin: 0.5rem 0 0;
+}
+
+#primers-panel .primers-message.error {
+  color: #b42318;
 }
 
 #primers-panel .primers-results {
-  margin-top: 0.3rem;
+  margin-top: 0.4rem;
 }

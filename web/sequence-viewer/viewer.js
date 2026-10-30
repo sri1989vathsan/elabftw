@@ -130,70 +130,6 @@
     }
   }
 
-  // the restriction enzymes shown on the sequence, by the number of times they cut: one button per combination
-  const CUTTERS = {
-    single: { value: 'single', label: 'Single cutters', cutsThisManyTimes: 1 },
-    double: { value: 'double', label: 'Double cutters', cutsThisManyTimes: 2 },
-    triple: { value: 'triple', label: 'Triple cutters', cutsThisManyTimes: 3 },
-  };
-  const CUTTER_PRESETS = [
-    { label: 'Single', keys: ['single'] },
-    { label: 'Double', keys: ['double'] },
-    { label: 'Triple', keys: ['triple'] },
-    { label: 'Single + double', keys: ['single', 'double'] },
-    { label: 'Double + triple', keys: ['double', 'triple'] },
-    { label: 'Single + double + triple', keys: ['single', 'double', 'triple'] },
-  ];
-  function buildCutterButtons(editor) {
-    const holder = document.getElementById('cutters');
-    if (!holder) {
-      return;
-    }
-    holder.textContent = '';
-    const title = document.createElement('span');
-    title.className = 'cutters-label';
-    title.textContent = 'Enzymes that cut:';
-    holder.append(title);
-    const buttons = [];
-    CUTTER_PRESETS.forEach(function (preset, index) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'cutter-button';
-      button.textContent = preset.label;
-      button.setAttribute('aria-pressed', index === 0 ? 'true' : 'false');
-      button.addEventListener('click', function () {
-        editor.updateEditor({
-          restrictionEnzymes: { isEnzymeFilterAnd: false, filteredRestrictionEnzymes: preset.keys.map(function (key) {
-            return CUTTERS[key];
-          }) },
-        });
-        buttons.forEach(function (other) {
-          other.setAttribute('aria-pressed', other === button ? 'true' : 'false');
-        });
-      });
-      buttons.push(button);
-      holder.append(button);
-    });
-  }
-
-  // a new, empty sequence to start from: File > Import Sequence opens a file of the computer
-  function loadTool() {
-    status.className = 'hidden';
-    document.title = 'Sequence editor';
-    const sequenceData = { name: 'New sequence', circular: true, sequence: '', features: [] };
-    applyPalette(sequenceData);
-    const editor = window.createVectorEditor(document.getElementById('root'), {
-      editorName: 'sequence-tool',
-      showMenuBar: true,
-      readOnly: false,
-    });
-    window.sequenceEditor = editor;
-    buildCutterButtons(editor);
-    setupPrimers(editor);
-    editor.updateEditor({ sequenceData: sequenceData, annotationVisibility: { features: true, cutsites: true, orfs: false } });
-    setSaveState('Nothing is stored here: use File > Export Sequence to keep your work', '');
-  }
-
   // the primers panel (primers-panel.js): the primers of the database attached to the sequence, and the design of new ones
   function setupPrimers(editor) {
     if (window.PrimerPanel) {
@@ -247,7 +183,6 @@
     });
     // kept reachable for tests and for the browser console
     window.sequenceEditor = editor;
-    buildCutterButtons(editor);
     editor.updateEditor({
       sequenceData: result.parsedSequence,
       readOnly: !canWrite,

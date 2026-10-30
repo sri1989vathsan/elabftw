@@ -39,6 +39,8 @@
     let databasePrimers = null;
     let attachedPrimers = [];
     let tab = 'primers';
+    // where the primers searched bind, relative to the selection
+    let whereFilter = 'anywhere';
     // what is drawn on the map: the attached primers and the pair being looked at, none of it is saved in the file
     let attachedDrawn = {};
     let designDrawn = {};
@@ -106,6 +108,48 @@
       message.className = 'primers-message' + (error ? ' error' : '');
     };
 
+    // a primer as a card: name, sequence, size, Tm and GC, the places where it binds as tags, and the buttons
+    function card(primer, sites, buttons) {
+      const box = element('div', 'primers-card');
+      const top = element('div', 'primers-card-top');
+      top.append(element('strong', 'primers-card-name', primer.title));
+      const chips = element('span', 'primers-chips');
+      [primer.sequence.length + ' bases', 'Tm ' + tools.tm(primer.sequence) + '\u00b0C', 'GC ' + tools.gc(primer.sequence) + '%'].forEach(function (text) {
+        chips.append(element('span', 'primers-chip', text));
+      });
+      top.append(chips);
+      box.append(top, element('code', 'primers-card-seq', primer.sequence));
+      const foot = element('div', 'primers-card-foot');
+      const places = element('span', 'primers-places');
+      if (sites.length === 0) {
+        places.append(element('span', 'primers-tag primers-tag-bad', 'does not bind this sequence'));
+      }
+      sites.forEach(function (site) {
+        const tag = element('button', 'primers-tag primers-tag-site', (site.start + 1) + '..' + site.end + (site.forward ? ' \u2192' : ' \u2190') + (site.mismatches > 0 ? ' \u00b7 ' + site.mismatches + ' mismatch' + (site.mismatches > 1 ? 'es' : '') : ''));
+        tag.type = 'button';
+        tag.title = 'Select this binding site';
+        tag.addEventListener('click', function () {
+          select(site);
+        });
+        places.append(tag);
+      });
+      foot.append(places);
+      const actions = element('span', 'primers-actions');
+      buttons.forEach(function (b) {
+        actions.append(b);
+      });
+      foot.append(actions);
+      box.append(foot);
+      return box;
+    }
+
+    const action = function (label, handler, kind) {
+      const b = element('button', 'primers-btn' + (kind ? ' primers-btn-' + kind : ''), label);
+      b.type = 'button';
+      b.addEventListener('click', handler);
+      return b;
+    };
+
     async function attach(primer) {
       try {
         await tools.attach(entryId, primer.id);
@@ -128,88 +172,85 @@
         panel.append(element('p', 'primers-muted', entryId ? 'No primer is attached yet. Search the database below.' : 'Open a plasmid of the database to attach primers to it.'));
       }
       attachedPrimers.forEach(function (primer) {
-        const row = element('div', 'primers-row');
-        row.append(element('strong', '', primer.title));
         const sites = tools.findSites(now.sequence, primer.sequence, now.circular);
-        const where = element('span', sites.length === 0 ? 'primers-warning' : 'primers-muted', sites.length === 0 ? 'no binding site' : sites.map(siteText).join('; '));
-        row.append(where);
-        if (sites.length > 0) {
-          const show = element('button', 'cutter-button', 'Show');
-          show.type = 'button';
-          show.addEventListener('click', function () {
-            select(sites[0]);
-          });
-          row.append(show);
-        }
-        const order = element('button', 'cutter-button', 'Order');
-        order.type = 'button';
-        order.addEventListener('click', function () {
-          tools.sendToOrder([primer.id]);
-        });
-        row.append(order);
-        const detach = element('button', 'cutter-button', '×');
-        detach.type = 'button';
-        detach.title = 'Detach this primer';
-        detach.addEventListener('click', async function () {
-          try {
-            await tools.detach(entryId, primer.id);
-            await loadAttached();
-            await render();
-          } catch (error) {
-            say(error.message || String(error), true);
-          }
-        });
-        row.append(detach);
-        panel.append(row);
+        panel.append(card(primer, sites, [
+          action('Order', function () {
+            tools.sendToOrder([primer.id]);
+          }),
+          action('Detach', async function () {
+            try {
+              await tools.detach(entryId, primer.id);
+              await loadAttached();
+              await render();
+            } catch (error) {
+              say(error.message || String(error), true);
+            }
+          }, 'quiet'),
+        ]));
       });
 
-      // search the database
+      // search the database: by name or sequence, and by where the primers bind relative to the selection
       panel.append(element('h4', '', 'Add a primer of the database'));
       const search = element('input', 'primers-name');
       search.type = 'search';
       search.placeholder = 'Name or sequence...';
+      const where = element('select', 'primers-name primers-where');
+      [['anywhere', 'Binding anywhere'], ['inside', 'Binding inside the selection'], ['outside', 'Binding, but not inside the selection'], ['nowhere', 'Not binding this sequence']].forEach(function (choice) {
+        const option = element('option', '', choice[1]);
+        option.value = choice[0];
+        where.append(option);
+      });
+      where.value = whereFilter;
+      const selection = editor.getState().selectionLayer || { start: -1, end: -1 };
+      const hasSelection = selection.start >= 0 && selection.end >= selection.start;
+      const insideSelection = function (site) {
+        return hasSelection && site.start >= selection.start && site.end - 1 <= selection.end;
+      };
       const results = element('div', 'primers-results');
-      const showResults = function (list) {
+      const showResults = function () {
+        const term = search.value.trim().toLowerCase();
         results.textContent = '';
+        if (term === '' && whereFilter === 'anywhere') {
+          return;
+        }
+        if ((whereFilter === 'inside' || whereFilter === 'outside') && !hasSelection) {
+          results.append(element('p', 'primers-muted', 'Select a region of the sequence first.'));
+          return;
+        }
+        const list = (databasePrimers || []).filter(function (primer) {
+          if (attachedIds.has(primer.id)) {
+            return false;
+          }
+          if (term !== '' && primer.title.toLowerCase().indexOf(term) === -1 && primer.sequence.toLowerCase().indexOf(term) === -1) {
+            return false;
+          }
+          const sites = tools.findSites(now.sequence, primer.sequence, now.circular);
+          switch (whereFilter) {
+          case 'inside': return sites.some(insideSelection);
+          case 'outside': return sites.length > 0 && !sites.some(insideSelection);
+          case 'nowhere': return sites.length === 0;
+          default: return true;
+          }
+        }).slice(0, 25);
         list.forEach(function (primer) {
           const sites = tools.findSites(now.sequence, primer.sequence, now.circular);
-          const row = element('div', 'primers-row');
-          row.append(element('strong', '', primer.title), element('span', 'primers-muted', primer.sequence.length + ' bases, Tm ' + tools.tm(primer.sequence) + '°C'));
-          row.append(element('span', sites.length === 0 ? 'primers-warning' : 'primers-muted', sites.length === 0 ? 'does not bind here' : sites.map(siteText).join('; ')));
-          if (entryId && !attachedIds.has(primer.id)) {
-            const add = element('button', 'cutter-button', 'Attach');
-            add.type = 'button';
-            add.addEventListener('click', function () {
-              attach(primer);
-            });
-            row.append(add);
-          }
-          results.append(row);
+          results.append(card(primer, sites, entryId ? [action('Attach', function () {
+            attach(primer);
+          }, 'primary')] : []));
         });
         if (list.length === 0) {
           results.append(element('p', 'primers-muted', 'Nothing found.'));
         }
       };
-      search.addEventListener('input', function () {
-        const term = search.value.trim().toLowerCase();
-        if (term === '') {
-          results.textContent = '';
-          return;
-        }
-        showResults((databasePrimers || []).filter(function (p) {
-          return !attachedIds.has(p.id) && (p.title.toLowerCase().indexOf(term) !== -1 || p.sequence.toLowerCase().indexOf(term) !== -1);
-        }).slice(0, 10));
-      });
-      const find = element('button', 'cutter-button', 'Find the primers that bind');
-      find.type = 'button';
-      find.addEventListener('click', function () {
-        showResults((databasePrimers || []).filter(function (p) {
-          return !attachedIds.has(p.id) && tools.findSites(now.sequence, p.sequence, now.circular).length > 0;
-        }));
+      search.addEventListener('input', showResults);
+      where.addEventListener('change', function () {
+        whereFilter = where.value;
+        showResults();
       });
       const searchRow = element('div', 'primers-row');
-      searchRow.append(search, find);
+      searchRow.append(search, where);
       panel.append(searchRow, results);
+      showResults();
 
       // the primers annotated in the file, not in the database yet
       const own = Object.values(now.data.primers || {});
@@ -240,8 +281,7 @@
 
       // a primer from the bases selected on the sequence
       panel.append(element('h4', '', 'New primer from the selection'));
-      const selection = editor.getState().selectionLayer || { start: -1, end: -1 };
-      if (selection.start < 0 || selection.end < 0) {
+      if (!hasSelection) {
         panel.append(element('p', 'primers-muted', 'Select the bases of the primer on the sequence first.'));
       } else {
         const reverse = element('input');
@@ -433,6 +473,16 @@
           return [];
         });
       }
+      const header = element('div', 'primers-header');
+      header.append(element('strong', 'primers-title', 'Primers'));
+      const close = element('button', 'primers-close', '\u00d7');
+      close.type = 'button';
+      close.setAttribute('aria-label', 'Close');
+      close.addEventListener('click', function () {
+        panel.hidden = true;
+      });
+      header.append(close);
+      panel.append(header);
       const tabs = element('div', 'primers-tabs');
       [['primers', 'Primers'], ['design', 'Design']].forEach(function (item) {
         const tabButton = element('button', 'primers-tab', item[1]);

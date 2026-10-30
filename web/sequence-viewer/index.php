@@ -69,7 +69,6 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
     <a id="back" href="../registry.php?mode=view&amp;id=<?= $entryId ?>">&larr; Back to the entry</a>
     <strong id="entry-title"><?= $h($title) ?></strong>
     <span id="title"></span>
-    <span id="cutters"></span>
     <span id="primers-menu"></span>
     <span id="save-state" role="status"></span>
     <span id="status" role="status">Loading the sequence...</span>

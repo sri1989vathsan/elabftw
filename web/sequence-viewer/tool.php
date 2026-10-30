@@ -39,7 +39,6 @@ $v = static fn(string $file): int => (int) filemtime(__DIR__ . '/' . $file);
       <input id="plasmid-search" type="search" autocomplete="off" placeholder="Open a plasmid of the database..." aria-label="Search a plasmid of the database">
       <div id="plasmid-results" hidden></div>
     </span>
-    <span id="cutters"></span>
     <span id="primers-menu"></span>
     <span id="save-state" role="status"></span>
     <span id="status" role="status">Loading the editor...</span>
