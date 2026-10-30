@@ -656,6 +656,8 @@ Inventory: a tool can ask the page to search the resources (`search-items`, answ
 can link entries with `[[item:ID|label]]` (the entry also becomes a linked resource of the experiment). See `docs/html-tool-bridge/README.md`; the transfection tool's plasmid button
 uses it.
 
+The spreadsheet popup (`.inline-spreadsheet-overlay`) no longer covers an open sidebar: it fits the room beside the left side panels (`--side-panel-width`) and the HTML tool workspace on the right, so a sidebar can be closed with the popup open and the popup then widens to the page.
+
 The flag is on. The main text toolbar has an **HTML tools** button (after the spreadsheet tools button, `custom-editor/HtmlToolsExtension.ts`, only when the
 feature is on): its dropdown lists the installed tools; a pick dispatches the `open-html-tool` window event and `HtmlToolsPanel` opens that tool in the
 workspace beside the page, so the text stays visible. The eight tools of https://moors-code.github.io/Lab_Protocols/ were installed in the local
