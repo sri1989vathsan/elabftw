@@ -431,10 +431,14 @@
         where.append(option);
       });
       where.value = whereFilter;
-      const selection = editor.getState().selectionLayer || { start: -1, end: -1 };
-      const hasSelection = selection.start >= 0 && selection.end >= selection.start;
+      // the selection is read when it is needed: the panel stays open while the user selects on the sequence
+      const selectionNow = function () {
+        const current = editor.getState().selectionLayer || { start: -1, end: -1 };
+        return { start: current.start, end: current.end, has: current.start >= 0 && current.end >= current.start };
+      };
       const insideSelection = function (site) {
-        return hasSelection && site.start >= selection.start && site.end - 1 <= selection.end;
+        const chosen = selectionNow();
+        return chosen.has && site.start >= chosen.start && site.end - 1 <= chosen.end;
       };
       const results = element('div', 'primers-results');
       // a list of primers as cards the user can tick, to attach several together
@@ -512,7 +516,7 @@
           preview([]);
           return;
         }
-        if ((whereFilter === 'inside' || whereFilter === 'outside') && !hasSelection) {
+        if ((whereFilter === 'inside' || whereFilter === 'outside') && !selectionNow().has) {
           results.append(element('p', 'primers-muted', 'Select a region of the sequence first.'));
           return;
         }
@@ -562,7 +566,7 @@
         candidatePrefs = { scope: scope.value, mismatches: tolerance.value };
         search.value = '';
         results.textContent = '';
-        if (scope.value === 'selection' && !hasSelection) {
+        if (scope.value === 'selection' && !selectionNow().has) {
           results.append(element('p', 'primers-muted', 'Select a region of the sequence first, or search the entire sequence.'));
           return;
         }
@@ -585,7 +589,7 @@
         found.sort(function (x, y) {
           return x.best - y.best || x.first - y.first;
         });
-        const count = element('p', 'primers-muted', found.length + ' candidate' + (found.length === 1 ? '' : 's') + (hasSelection && scope.value === 'selection' ? ' in the selection (' + (selection.start + 1) + '..' + (selection.end + 1) + ')' : ' on the sequence') + '.');
+        const count = element('p', 'primers-muted', found.length + ' candidate' + (found.length === 1 ? '' : 's') + (scope.value === 'selection' ? ' in the selection (' + (selectionNow().start + 1) + '..' + (selectionNow().end + 1) + ')' : ' on the sequence') + '.');
         if (found.length > 0) {
           renderList(found.slice(0, 200).map(function (item) {
             return item.primer;
@@ -603,40 +607,55 @@
       sectionSearch.append(searchRow, results);
       showResults();
 
-      // a primer from the bases selected on the sequence
+      // a primer from the bases selected on the sequence: the form follows the selection while the panel is open
       sectionSearch.append(element('h4', '', 'New primer from the selection'));
-      if (!hasSelection) {
-        sectionSearch.append(element('p', 'primers-muted', 'Select the bases of the primer on the sequence first.'));
-      } else {
-        const reverse = element('input');
-        reverse.type = 'checkbox';
-        const reverseLabel = element('label', 'primers-muted');
-        reverseLabel.append(reverse, document.createTextNode(' reverse primer'));
-        const name = element('input', 'primers-name');
-        name.type = 'text';
-        name.placeholder = 'Name of the primer';
-        const info = element('span', 'primers-muted');
-        const refresh = function () {
-          const bases = basesOf(now.sequence, selection.start, selection.end, !reverse.checked);
-          info.textContent = bases.length + ' bases, Tm ' + tools.tm(bases) + '°C, GC ' + tools.gc(bases) + '%' + (bases.length < tools.minLength ? ' (too short)' : '');
-        };
-        reverse.addEventListener('change', refresh);
-        refresh();
-        const add = element('button', 'cutter-button', 'Add to the database');
-        add.type = 'button';
-        add.addEventListener('click', function () {
-          const bases = basesOf(now.sequence, selection.start, selection.end, !reverse.checked);
-          if (bases.length < tools.minLength) {
-            say('A primer has at least ' + tools.minLength + ' bases.', true);
-            return;
-          }
-          const title = name.value.trim() || (now.name + (reverse.checked ? '-R-' : '-F-') + (selection.start + 1));
-          addToDatabase(add, title, bases, !reverse.checked);
-        });
-        const row = element('div', 'primers-row');
-        row.append(name, info, reverseLabel, add);
-        sectionSearch.append(row);
-      }
+      const reverse = element('input');
+      reverse.type = 'checkbox';
+      const reverseLabel = element('label', 'primers-muted');
+      reverseLabel.append(reverse, document.createTextNode(' reverse primer'));
+      const name = element('input', 'primers-name');
+      name.type = 'text';
+      name.placeholder = 'Name of the primer';
+      const info = element('span', 'primers-muted');
+      const addNew = element('button', 'cutter-button', 'Add to the database');
+      addNew.type = 'button';
+      const formRow = element('div', 'primers-row');
+      formRow.append(name, info, reverseLabel, addNew);
+      const basesNow = function () {
+        const chosen = selectionNow();
+        return chosen.has ? basesOf(current().sequence, chosen.start, chosen.end, !reverse.checked) : '';
+      };
+      const refreshNew = function () {
+        const chosen = selectionNow();
+        formRow.hidden = !chosen.has;
+        hint.hidden = chosen.has;
+        if (chosen.has) {
+          const bases = basesOf(current().sequence, chosen.start, chosen.end, !reverse.checked);
+          info.textContent = bases.length + ' bases, Tm ' + tools.tm(bases) + '\u00b0C, GC ' + tools.gc(bases) + '%' + (bases.length < tools.minLength ? ' (too short)' : '');
+        }
+      };
+      const hint = element('p', 'primers-muted', 'Select the bases of the primer on the sequence first.');
+      reverse.addEventListener('change', refreshNew);
+      addNew.addEventListener('click', function () {
+        const chosen = selectionNow();
+        const bases = basesNow();
+        if (!chosen.has || bases.length < tools.minLength) {
+          say('A primer has at least ' + tools.minLength + ' bases.', true);
+          return;
+        }
+        const title = name.value.trim() || (current().name + (reverse.checked ? '-R-' : '-F-') + (chosen.start + 1));
+        addToDatabase(addNew, title, bases, !reverse.checked);
+      });
+      sectionSearch.append(hint, formRow);
+      refreshNew();
+      // while this panel is on the page, the form follows the selection (the timer stops when the panel is drawn again)
+      const follow = window.setInterval(function () {
+        if (!formRow.isConnected) {
+          window.clearInterval(follow);
+          return;
+        }
+        refreshNew();
+      }, 400);
 
       // two tabs, so the panel stays short: what is on the sequence, and what can be searched and added
       if (subTab === null) {
@@ -740,14 +759,29 @@
     // ---- the Design tab
     function renderDesignTab() {
       const now = current();
-      const selection = editor.getState().selectionLayer || { start: -1, end: -1 };
-      const hasSelection = selection.start >= 0 && selection.end >= 0 && selection.end >= selection.start;
-      const start = hasSelection ? selection.start : 0;
-      const end = hasSelection ? selection.end : now.sequence.length - 1;
+      // the region is read when it is needed: the panel stays open while the user selects on the sequence
+      const regionNow = function () {
+        const chosen = editor.getState().selectionLayer || { start: -1, end: -1 };
+        const has = chosen.start >= 0 && chosen.end >= 0 && chosen.end >= chosen.start;
+        return { has: has, start: has ? chosen.start : 0, end: has ? chosen.end : current().sequence.length - 1 };
+      };
       panel.append(element('h4', '', 'Region to amplify'));
-      panel.append(element('p', 'primers-muted', hasSelection
-        ? 'The selection: ' + (start + 1) + '..' + (end + 1) + ' (' + (end - start + 1) + ' bases).'
-        : 'No selection: the whole sequence (' + now.sequence.length + ' bases). Select a region to design primers for it.'));
+      const regionText = element('p', 'primers-muted');
+      const showRegion = function () {
+        const region = regionNow();
+        regionText.textContent = region.has
+          ? 'The selection: ' + (region.start + 1) + '..' + (region.end + 1) + ' (' + (region.end - region.start + 1) + ' bases).'
+          : 'No selection: the whole sequence (' + now.sequence.length + ' bases). Select a region to design primers for it.';
+      };
+      showRegion();
+      panel.append(regionText);
+      const followRegion = window.setInterval(function () {
+        if (!regionText.isConnected) {
+          window.clearInterval(followRegion);
+          return;
+        }
+        showRegion();
+      }, 400);
 
       const form = element('div', 'primers-form');
       const field = function (label, input) {
@@ -802,8 +836,9 @@
         run.textContent = 'Designing...';
         // the work is a moment of calculation: let the button change first
         window.setTimeout(function () {
-          designResult = designer.design(now.sequence, start, end, now.circular, designOptions);
-          designResult.region = { start: start, end: end };
+          const region = regionNow();
+          designResult = designer.design(now.sequence, region.start, region.end, now.circular, designOptions);
+          designResult.region = { start: region.start, end: region.end };
           designDrawn = {};
           render();
         }, 30);
