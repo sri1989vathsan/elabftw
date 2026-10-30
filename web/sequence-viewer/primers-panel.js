@@ -226,11 +226,62 @@
           default: return true;
           }
         }).slice(0, 25);
+        // the ones that are ticked can be attached together
+        const picked = new Set();
+        const attachPicked = action('', async function () {
+          attachPicked.disabled = true;
+          try {
+            for (const id of Array.from(picked)) {
+              await tools.attach(entryId, id);
+            }
+          } catch (error) {
+            say(error.message || String(error), true);
+          }
+          await loadAttached();
+          await render();
+        }, 'primary');
+        const refreshPicked = function () {
+          attachPicked.textContent = 'Attach the ' + picked.size + ' selected';
+          attachPicked.disabled = picked.size === 0;
+        };
+        const boxes = [];
+        if (entryId && list.length > 0) {
+          const all = element('input');
+          all.type = 'checkbox';
+          all.setAttribute('aria-label', 'Select all of the results');
+          all.addEventListener('change', function () {
+            boxes.forEach(function (b) {
+              b.checked = all.checked;
+              b.dispatchEvent(new Event('change'));
+            });
+          });
+          const bar = element('div', 'primers-pickbar');
+          bar.append(all, element('span', 'primers-muted', 'Select all'), attachPicked);
+          results.append(bar);
+          refreshPicked();
+        }
         list.forEach(function (primer) {
           const sites = tools.findSites(now.sequence, primer.sequence, now.circular);
-          results.append(card(primer, sites, entryId ? [action('Attach', function () {
+          const holder = element('div', 'primers-pick');
+          if (entryId) {
+            const box = element('input');
+            box.type = 'checkbox';
+            box.setAttribute('aria-label', 'Select ' + primer.title);
+            box.addEventListener('change', function () {
+              if (box.checked) {
+                picked.add(primer.id);
+              } else {
+                picked.delete(primer.id);
+              }
+              refreshPicked();
+            });
+            boxes.push(box);
+            holder.append(box);
+          }
+          holder.append(card(primer, sites, entryId ? [action('Attach', function () {
             attach(primer);
           }, 'primary')] : []));
+          results.append(holder);
         });
         if (list.length === 0) {
           results.append(element('p', 'primers-muted', 'Nothing found.'));

@@ -245,24 +245,62 @@
           return;
         }
         suggestions.append(element('h4', '', 'Primers and probes of the database that bind this sequence'));
+        const chosen = new Set(found.map(function (match) {
+          return match.primer.id;
+        }));
+        const bar = element('div', 'primers-suggestion');
+        const attachChosen = element('button', 'btn btn-primary btn-sm', '');
+        attachChosen.type = 'button';
+        const refreshBar = function () {
+          attachChosen.textContent = 'Attach the ' + chosen.size + ' selected';
+          attachChosen.disabled = chosen.size === 0;
+        };
+        const everything = element('input');
+        everything.type = 'checkbox';
+        everything.checked = true;
+        everything.setAttribute('aria-label', 'Select all');
+        const boxes = [];
+        everything.addEventListener('change', function () {
+          boxes.forEach(function (box) {
+            box.checked = everything.checked;
+            box.dispatchEvent(new Event('change'));
+          });
+        });
+        attachChosen.addEventListener('click', async function () {
+          attachChosen.disabled = true;
+          try {
+            for (const id of Array.from(chosen)) {
+              await tools.attach(entryId, id);
+            }
+            await renderPlasmid();
+          } catch (error) {
+            fail(error);
+            await renderPlasmid();
+          }
+        });
+        bar.append(everything, element('span', 'ml-2 mr-2', 'Select all'), attachChosen);
+        suggestions.append(bar);
         found.forEach(function (match) {
-          const line = element('div', 'primers-suggestion');
+          const line = element('label', 'primers-suggestion d-block');
+          const box = element('input');
+          box.type = 'checkbox';
+          box.checked = true;
+          box.addEventListener('change', function () {
+            if (box.checked) {
+              chosen.add(match.primer.id);
+            } else {
+              chosen.delete(match.primer.id);
+            }
+            everything.checked = chosen.size === found.length;
+            refreshBar();
+          });
+          boxes.push(box);
           const link = element('a', '', match.primer.title);
           link.href = viewUrl(match.primer.id);
-          line.append(link, element('span', 'text-muted', ' ' + match.sites.map(siteText).join('; ')));
-          const add = element('button', 'btn btn-secondary btn-sm ml-2', 'Attach');
-          add.type = 'button';
-          add.addEventListener('click', async function () {
-            try {
-              await tools.attach(entryId, match.primer.id);
-              await renderPlasmid();
-            } catch (error) {
-              fail(error);
-            }
-          });
-          line.append(add);
+          line.append(box, document.createTextNode(' '), link, element('span', 'text-muted', ' ' + match.sites.map(siteText).join('; ')));
           suggestions.append(line);
         });
+        refreshBar();
       });
       controls.append(find);
     }
