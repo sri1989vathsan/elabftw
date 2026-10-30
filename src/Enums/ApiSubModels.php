@@ -51,6 +51,7 @@ enum ApiSubModels: string
         return match ($apiEndpoint) {
             ApiEndpoint::Experiments,
             ApiEndpoint::Items,
+            ApiEndpoint::Inventory,
             ApiEndpoint::ItemsTypes,
             ApiEndpoint::ExperimentsTemplates => self::getAbstractEntityCases(),
             ApiEndpoint::Teams => self::getTeamsCases(),

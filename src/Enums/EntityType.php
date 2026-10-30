@@ -15,6 +15,7 @@ namespace Elabftw\Enums;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Models\AbstractEntity;
 use Elabftw\Models\Experiments;
+use Elabftw\Models\Inventory;
 use Elabftw\Models\Items;
 use Elabftw\Models\ItemsTypes;
 use Elabftw\Models\Templates;
@@ -28,6 +29,7 @@ enum EntityType: string
     case Templates = 'experiments_templates';
     case Items = 'items';
     case ItemsTypes = 'items_types';
+    case Inventory = 'inventory';
 
     public function toInstance(Users $users, ?int $entityId = null, ?bool $bypassReadPermission = null, ?bool $bypassWritePermission = null): AbstractEntity
     {
@@ -36,6 +38,7 @@ enum EntityType: string
             self::Items => new Items($users, $entityId, $bypassReadPermission, $bypassWritePermission),
             self::Templates => new Templates($users, $entityId, $bypassReadPermission, $bypassWritePermission),
             self::ItemsTypes => new ItemsTypes($users, $entityId, $bypassReadPermission, $bypassWritePermission),
+            self::Inventory => new Inventory($users, $entityId, $bypassReadPermission, $bypassWritePermission),
         };
     }
 
@@ -45,6 +48,7 @@ enum EntityType: string
             self::Experiments,
             self::Templates  => new Templates($users, $entityId, $bypassReadPermission, $bypassWritePermission),
             self::Items,
+            self::Inventory,
             self::ItemsTypes => new ItemsTypes($users, $entityId, $bypassReadPermission, $bypassWritePermission),
         };
     }
@@ -56,6 +60,7 @@ enum EntityType: string
             self::Templates => new Experiments($users, $entityId, $bypassReadPermission, $bypassWritePermission),
             self::Items,
             self::ItemsTypes => new Items($users, $entityId, $bypassReadPermission, $bypassWritePermission),
+            self::Inventory => new Inventory($users, $entityId, $bypassReadPermission, $bypassWritePermission),
         };
     }
 
@@ -63,7 +68,7 @@ enum EntityType: string
     {
         return match ($this) {
             self::Experiments => self::Templates,
-            self::Templates, self::ItemsTypes => null,
+            self::Templates, self::ItemsTypes, self::Inventory => null,
             self::Items => self::ItemsTypes,
         };
     }
@@ -71,7 +76,7 @@ enum EntityType: string
     public function asEntityTypeOrNull(): ?EntityType
     {
         return match ($this) {
-            self::Experiments, self::Items => null,
+            self::Experiments, self::Items, self::Inventory => null,
             self::Templates => self::Experiments,
             self::ItemsTypes => self::Items,
         };
@@ -80,7 +85,7 @@ enum EntityType: string
     public function toTemplatePage(): string
     {
         return match ($this) {
-            self::Items, self::ItemsTypes => 'resources-templates.php',
+            self::Items, self::ItemsTypes, self::Inventory => 'resources-templates.php',
             default => 'templates.php',
         };
     }
@@ -89,6 +94,7 @@ enum EntityType: string
     {
         $prefix = match ($this) {
             self::Items, self::ItemsTypes => 'resources',
+            self::Inventory => 'inventory',
             default => 'experiments',
         };
         return $prefix . '-categories.php';
@@ -108,6 +114,7 @@ enum EntityType: string
         return match ($this) {
             self::Experiments, self::Templates => 'experiments_status',
             self::Items, self::ItemsTypes => 'items_status',
+            self::Inventory => 'inventory_status',
         };
     }
 
@@ -116,6 +123,7 @@ enum EntityType: string
         return match ($this) {
             self::Experiments, self::Templates => 'experiments_categories',
             self::Items, self::ItemsTypes => 'items_categories',
+            self::Inventory => 'inventory_categories',
         };
     }
 
@@ -125,6 +133,7 @@ enum EntityType: string
         return match ($this) {
             self::Experiments => 'experiment',
             self::Items => 'resource',
+            self::Inventory => 'inventory item',
             self::Templates => 'experiment template',
             self::ItemsTypes => 'resource template',
         };
@@ -135,6 +144,7 @@ enum EntityType: string
         return match ($this) {
             self::Experiments => 'experiments.php',
             self::Items => 'database.php',
+            self::Inventory => 'inventory.php',
             self::Templates => 'templates.php',
             self::ItemsTypes => 'resources-templates.php',
         };
@@ -147,6 +157,7 @@ enum EntityType: string
             self::Items => 2,
             self::Templates => 3,
             self::ItemsTypes => 4,
+            self::Inventory => 5,
         };
     }
 
@@ -157,6 +168,7 @@ enum EntityType: string
             2 => self::Items,
             3 => self::Templates,
             4 => self::ItemsTypes,
+            5 => self::Inventory,
             null => null,
             default => throw new ImproperActionException('Invalid integer value for entityType'),
         };
@@ -169,6 +181,7 @@ enum EntityType: string
             self::Items => _('Resources'),
             self::Templates => _('Experiment templates'),
             self::ItemsTypes => _('Resource templates'),
+            self::Inventory => _('Inventory'),
         };
     }
 }

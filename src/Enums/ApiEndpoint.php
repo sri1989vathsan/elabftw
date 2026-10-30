@@ -50,6 +50,7 @@ enum ApiEndpoint: string
     case Instance = 'instance';
     case Items = 'items';
     case ItemsTypes = 'items_types';
+    case Inventory = 'inventory';
     case Reports = 'reports';
     case StorageUnits = 'storage_units';
 

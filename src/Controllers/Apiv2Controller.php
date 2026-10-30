@@ -386,6 +386,7 @@ final class Apiv2Controller extends AbstractApiController
             ApiEndpoint::Export => new Exports(App::getDefaultLogger(), $this->requester, Storage::EXPORTS->getStorage(), $this->id),
             ApiEndpoint::Experiments,
             ApiEndpoint::Items,
+            ApiEndpoint::Inventory,
             ApiEndpoint::ExperimentsTemplates,
             ApiEndpoint::ItemsTypes => EntityType::from($this->endpoint->value)->toInstance($this->requester, $this->id),
             // for a single event, the id is the id of the event

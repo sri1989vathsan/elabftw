@@ -1,0 +1,49 @@
+<?php
+
+/**
+ * @author Nicolas CARPi <nico-git@deltablot.email>
+ * @copyright 2025 Nicolas CARPi
+ * @see https://www.elabftw.net Official website
+ * @license AGPL-3.0
+ * @package elabftw
+ */
+
+declare(strict_types=1);
+
+namespace Elabftw\Models;
+
+use Elabftw\Exceptions\IllegalActionException;
+use Elabftw\Traits\CategoryDescriptionTrait;
+use Override;
+
+/**
+ * Categories of the inventory
+ */
+final class InventoryCategories extends AbstractStatus
+{
+    use CategoryDescriptionTrait;
+
+    protected string $table = 'inventory_categories';
+
+    protected function getDescriptionScope(): string
+    {
+        return CustomUiDescriptions::RESOURCE_CATEGORY;
+    }
+
+    #[Override]
+    protected function getUsersCanwriteName(): string
+    {
+        return 'resources_categories';
+    }
+
+    // categories are admin-only to write: everyone can view them (see
+    // web/resources-categories.php), but unlike statuses, there is no
+    // per-team "let regular users manage this" toggle for categories
+    #[Override]
+    protected function canWriteOrExplode(): void
+    {
+        if (!$this->Teams->Users->isAdmin) {
+            throw new IllegalActionException();
+        }
+    }
+}
