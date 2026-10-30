@@ -6,7 +6,7 @@ import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
 
 type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null };
-type StorageLocation = { storage_id: number; container_id: number; position: string | null; path: string; qty_stored: number; qty_unit: string };
+type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; position: string | null; path: string; qty_stored: number; qty_unit: string };
 type Row = {
   id: number;
   title: string;
@@ -16,6 +16,61 @@ type Row = {
   storage_locations?: StorageLocation[];
 };
 type Node = { unit: Unit; children: Node[]; own: Row[]; total: number };
+type Tube = { row: Row; location: StorageLocation };
+
+// the details of a tube, shown while the pointer is over it
+let tubeCard: HTMLElement | null = null;
+
+function hideTubeCard(): void {
+  tubeCard?.remove();
+  tubeCard = null;
+}
+
+function showTubeCard(tube: Tube, event: MouseEvent): void {
+  if (!tubeCard) {
+    tubeCard = el('div', 'tube-card');
+    tubeCard.setAttribute('role', 'tooltip');
+    document.body.append(tubeCard);
+  }
+  const card = tubeCard;
+  card.replaceChildren();
+  card.append(el('div', 'tube-card-title', tube.row.title));
+  const meta = el('div', 'tube-card-meta');
+  if (tube.row.category_color) {
+    const dot = el('span', 'category-nav-dot');
+    dot.style.backgroundColor = `#${tube.row.category_color}`;
+    meta.append(dot);
+  }
+  meta.append(document.createTextNode(`#${tube.row.id}${tube.row.category_title ? ` · ${tube.row.category_title}` : ''}`));
+  card.append(meta);
+  const line = (label: string, value: string): void => {
+    if (value === '') {
+      return;
+    }
+    const row = el('div', 'tube-card-row');
+    row.append(el('span', 'tube-card-label', label), el('span', '', value));
+    card.append(row);
+  };
+  line('Slot', tube.location.position ?? '');
+  line('Storage', tube.location.is_primary ? 'Primary' : 'Secondary');
+  line('Quantity', `${tube.location.qty_stored} ${tube.location.qty_unit}`.trim());
+  line('Location', tube.location.path);
+  line('Owner', tube.row.fullname ?? '');
+  moveTubeCard(event);
+}
+
+function moveTubeCard(event: MouseEvent): void {
+  if (!tubeCard) {
+    return;
+  }
+  const width = tubeCard.offsetWidth;
+  const height = tubeCard.offsetHeight;
+  // beside the pointer, kept inside the window
+  const x = Math.min(event.clientX + 14, window.innerWidth - width - 8);
+  const y = event.clientY + 16 + height > window.innerHeight ? event.clientY - height - 12 : event.clientY + 16;
+  tubeCard.style.left = `${Math.max(8, x)}px`;
+  tubeCard.style.top = `${Math.max(8, y)}px`;
+}
 
 const STATE_KEY = 'persistent_storage_tree_v1';
 
@@ -123,7 +178,9 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   // the location asked for in the address is selected once, then the user's own choices win
   let openedFromUrl = false;
   // the tube picked to be placed in a slot of the box
-  let pickedTube: { row: Row; location: StorageLocation } | null = null;
+  let pickedTube: Tube | null = null;
+  // the tube being dragged to a slot of the box, or to another location of the tree
+  let dragged: Tube | null = null;
 
   const layout = el('div', 'storage-tree-layout');
   const side = el('div', 'storage-tree-side');
@@ -174,6 +231,23 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     label.type = 'button';
     label.append(el('i', 'fas fa-fw fa-location-dot mr-1'), el('span', '', node.unit.name), el('span', 'grouped-section-count', String(node.total)));
     label.addEventListener('click', () => select(node.unit.id));
+    // a tube dropped on a location moves there
+    row.addEventListener('dragover', event => {
+      if (dragged && dragged.location.storage_id !== node.unit.id) {
+        event.preventDefault();
+        row.classList.add('drop-target');
+      }
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+    row.addEventListener('drop', event => {
+      row.classList.remove('drop-target');
+      if (dragged && dragged.location.storage_id !== node.unit.id) {
+        event.preventDefault();
+        const tube = dragged;
+        dragged = null;
+        patchAndReload(`inventory/${tube.row.id}/containers/${tube.location.container_id}`, { storage_id: node.unit.id });
+      }
+    });
     row.append(caret, label);
     li.append(row);
     if (hasChildren && !collapsed) {
@@ -193,6 +267,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
 
   // BOX: the unit as a grid of slots, the tubes in their slots, and the ones not placed yet
   const patchAndReload = (endpoint: string, body: Record<string, unknown>): void => {
+    hideTubeCard();
     void ApiC.patch(endpoint, body).then(() => {
       pickedTube = null;
       return load();
@@ -263,8 +338,24 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         cell.type = 'button';
         if (entry) {
           cell.textContent = entry.row.title.slice(0, 2);
-          cell.title = `${slot}: ${entry.row.title} (${entry.location.qty_stored} ${entry.location.qty_unit})`.trim();
-          cell.setAttribute('aria-label', cell.title);
+          cell.setAttribute('aria-label', `${slot}: ${entry.row.title} (${entry.location.qty_stored} ${entry.location.qty_unit})`.trim());
+          cell.addEventListener('mouseenter', event => showTubeCard(entry, event));
+          cell.addEventListener('mousemove', moveTubeCard);
+          cell.addEventListener('mouseleave', hideTubeCard);
+          cell.draggable = true;
+          cell.addEventListener('dragstart', event => {
+            hideTubeCard();
+            dragged = entry;
+            event.dataTransfer?.setData('text/plain', entry.row.title);
+            if (event.dataTransfer) {
+              event.dataTransfer.effectAllowed = 'move';
+            }
+            cell.classList.add('dragging');
+          });
+          cell.addEventListener('dragend', () => {
+            dragged = null;
+            cell.classList.remove('dragging');
+          });
           if (entry.row.category_color) {
             cell.style.backgroundColor = `#${entry.row.category_color}`;
           }
@@ -278,6 +369,23 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         } else {
           cell.title = pickedTube ? `Place ${pickedTube.row.title} in ${slot}` : `${slot}: free`;
           cell.setAttribute('aria-label', cell.title);
+          // a dragged tube is dropped in a free slot
+          cell.addEventListener('dragover', event => {
+            if (dragged) {
+              event.preventDefault();
+              cell.classList.add('drop-target');
+            }
+          });
+          cell.addEventListener('dragleave', () => cell.classList.remove('drop-target'));
+          cell.addEventListener('drop', event => {
+            cell.classList.remove('drop-target');
+            if (dragged) {
+              event.preventDefault();
+              const tube = dragged;
+              dragged = null;
+              patchAndReload(`inventory/${tube.row.id}/containers/${tube.location.container_id}`, { position: slot });
+            }
+          });
           cell.addEventListener('click', () => {
             if (pickedTube) {
               patchAndReload(`inventory/${pickedTube.row.id}/containers/${pickedTube.location.container_id}`, { position: slot });
@@ -326,6 +434,17 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       loose.forEach(e => {
         const chip = el('button', `btn btn-sm mr-1 mb-1 ${sameTube(pickedTube, e) ? 'btn-primary' : 'btn-secondary'}`, e.row.title);
         chip.type = 'button';
+        chip.draggable = true;
+        chip.addEventListener('dragstart', event => {
+          dragged = e;
+          event.dataTransfer?.setData('text/plain', e.row.title);
+        });
+        chip.addEventListener('dragend', () => {
+          dragged = null;
+        });
+        chip.addEventListener('mouseenter', event => showTubeCard(e, event));
+        chip.addEventListener('mousemove', moveTubeCard);
+        chip.addEventListener('mouseleave', hideTubeCard);
         chip.addEventListener('click', () => {
           pickedTube = sameTube(pickedTube, e) ? null : e;
           renderMain();

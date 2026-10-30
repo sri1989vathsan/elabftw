@@ -655,3 +655,57 @@
     }
   }
 }
+
+// the details of a tube while the pointer is over it in the storage browser
+.tube-card {
+  position: fixed;
+  z-index: 2000;
+  min-width: 14rem;
+  max-width: 22rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #c9ccd1;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #212529;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  font-size: 0.85rem;
+  pointer-events: none;
+
+  .tube-card-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+
+  .tube-card-meta {
+    margin-bottom: 0.35rem;
+    color: #6c757d;
+  }
+
+  .tube-card-row {
+    display: flex;
+    gap: 0.6rem;
+  }
+
+  .tube-card-label {
+    flex: 0 0 4.2rem;
+    color: #6c757d;
+  }
+}
+
+// drag and drop in the storage browser
+.box-slot {
+  &.dragging {
+    opacity: 0.45;
+  }
+
+  &.drop-target {
+    outline: 2px solid var(--primary, #1f5fae);
+    outline-offset: -2px;
+    background-color: rgba(31, 95, 174, 0.15);
+  }
+}
+
+.storage-tree-row.drop-target {
+  outline: 2px solid var(--primary, #1f5fae);
+  background-color: rgba(31, 95, 174, 0.12);
+}
