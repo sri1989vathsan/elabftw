@@ -34,6 +34,10 @@ use Elabftw\Models\Links\Items2ExperimentsLinks;
 use Elabftw\Models\Links\Items2ItemsLinks;
 use Elabftw\Models\Links\ItemsTypes2ExperimentsLinks;
 use Elabftw\Models\Links\ItemsTypes2ItemsLinks;
+use Elabftw\Models\Links\Compounds2InventoryLinks;
+use Elabftw\Models\Links\Containers2InventoryLinks;
+use Elabftw\Models\Links\Inventory2ExperimentsLinks;
+use Elabftw\Models\Links\Inventory2InventoryLinks;
 
 final class LinksFactory
 {
@@ -44,6 +48,7 @@ final class LinksFactory
             EntityType::Items => new Items2ExperimentsLinks($entity, $id),
             EntityType::Templates => new ExperimentsTemplates2ExperimentsLinks($entity, $id),
             EntityType::ItemsTypes => new ItemsTypes2ExperimentsLinks($entity, $id),
+            EntityType::Inventory => new Inventory2ExperimentsLinks($entity, $id),
         };
     }
 
@@ -54,6 +59,7 @@ final class LinksFactory
             EntityType::Items => new Containers2ItemsLinks($entity, $id),
             EntityType::Templates => new Containers2TemplatesLinks($entity, $id),
             EntityType::ItemsTypes => new Containers2ItemsTypesLinks($entity, $id),
+            EntityType::Inventory => new Containers2InventoryLinks($entity, $id),
         };
     }
 
@@ -64,6 +70,7 @@ final class LinksFactory
             EntityType::Items => new Items2ItemsLinks($entity, $id),
             EntityType::Templates => new ExperimentsTemplates2ItemsLinks($entity, $id),
             EntityType::ItemsTypes => new ItemsTypes2ItemsLinks($entity, $id),
+            EntityType::Inventory => new Inventory2InventoryLinks($entity, $id),
         };
     }
 
@@ -74,6 +81,7 @@ final class LinksFactory
             EntityType::Items => new Compounds2ItemsLinks($entity, $id),
             EntityType::Templates => new Compounds2ExperimentsTemplatesLinks($entity, $id),
             EntityType::ItemsTypes => new Compounds2ItemsTypesLinks($entity, $id),
+            EntityType::Inventory => new Compounds2InventoryLinks($entity, $id),
         };
     }
 }
