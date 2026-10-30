@@ -1813,6 +1813,43 @@ on('destroy-container', (el: HTMLElement) => {
   }
 });
 
+// the tubes of a box can be selected and removed together
+const selectedTubes = (group: Element): HTMLInputElement[] => [...group.querySelectorAll<HTMLInputElement>('.storage-tube-select:checked')];
+
+function refreshTubeSelection(group: Element | null): void {
+  if (!group) return;
+  const count = selectedTubes(group).length;
+  const button = group.querySelector<HTMLElement>('.storage-remove-selected');
+  if (button) {
+    button.hidden = count === 0;
+    const label = button.querySelector('.storage-remove-label');
+    if (label) label.textContent = `Remove selected (${count})`;
+  }
+}
+
+on('toggle-tube-select', (el: HTMLElement) => {
+  refreshTubeSelection(el.closest('.storage-group'));
+});
+
+on('select-all-tubes', (el: HTMLElement) => {
+  const group = el.closest('.storage-group');
+  group?.querySelectorAll<HTMLInputElement>('.storage-tube-select').forEach(box => {
+    box.checked = (el as HTMLInputElement).checked;
+  });
+  refreshTubeSelection(group ?? null);
+});
+
+on('destroy-selected-containers', async (el: HTMLElement) => {
+  const group = el.closest('.storage-group');
+  if (!group) return;
+  const ids = selectedTubes(group).map(box => box.dataset.id);
+  if (ids.length === 0 || !confirm(i18next.t('generic-delete-warning'))) return;
+  for (const id of ids) {
+    await ApiC.delete(`${entity.type}/${entity.id}/containers/${id}`);
+  }
+  await reloadElements(['storageDivContent']);
+});
+
 on('move-container', (el: HTMLElement) => {
   const modal = document.getElementById('moveStorageModal');
   if (!modal) return;

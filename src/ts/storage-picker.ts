@@ -1,6 +1,6 @@
 /**
- * Popup to add a storage to a resource: search the location, say if it is the primary or a secondary storage,
- * pick the slot when the location is a box, and give the quantity
+ * Popup to add a storage to an entry, or to edit one (the button carries the container then): search the location,
+ * say if it is the primary or a secondary storage, pick the slot when the location is a box, and give the quantity
  */
 import { ApiC } from './api';
 import { entity } from './getEntity';
@@ -45,7 +45,13 @@ function freeSlotsFrom(unit: Unit, start: string | null, count: number): string[
 }
 
 export async function openStoragePicker(button: HTMLElement): Promise<void> {
-  const hasStorage = Number(button.dataset.containersCount ?? '0') > 0;
+  // editing: the container to change, with what it holds now
+  const editId = button.dataset.editId ? Number(button.dataset.editId) : null;
+  const editing = editId !== null;
+  const currentStorageId = Number(button.dataset.storageId ?? '0');
+  const currentPosition = button.dataset.position ?? '';
+  const wasPrimary = button.dataset.primary === '1';
+  const hasStorage = !editing && Number(button.dataset.containersCount ?? '0') > 0;
   let unitOptions: UnitOption[] = [];
   try {
     unitOptions = JSON.parse(button.dataset.units ?? '[]') as UnitOption[];
@@ -55,9 +61,17 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
   const units = await ApiC.getJson<Unit[]>('storage_units?hierarchy=1', { notifOnError: 0 });
   units.sort((a, b) => a.full_path.localeCompare(b.full_path));
 
-  let selected: Unit | null = null;
+  if (editing) {
+    // the slot of the tube itself is not taken for the tube itself
+    units.forEach(u => {
+      if (u.id === currentStorageId && currentPosition !== '') {
+        u.taken_positions = (u.taken_positions ?? '').split(',').filter(x => x && x !== currentPosition).join(',');
+      }
+    });
+  }
+  let selected: Unit | null = editing ? (units.find(u => u.id === currentStorageId) ?? null) : null;
   // the free slots the user clicked in the box; when none, the first free slots are used
-  let pickedSlots: string[] = [];
+  let pickedSlots: string[] = editing && currentPosition !== '' ? [currentPosition] : [];
 
   // the modal
   const modal = el('div', 'modal fade');
@@ -67,7 +81,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
   const content = el('div', 'modal-content');
   const header = el('div', 'modal-header');
   const title = el('h4', 'modal-title');
-  title.append(el('i', 'fas fa-fw fa-warehouse mr-1'), document.createTextNode('Add storage'));
+  title.append(el('i', 'fas fa-fw fa-warehouse mr-1'), document.createTextNode(editing ? 'Edit storage' : 'Add storage'));
   const close = el('button', 'close');
   close.type = 'button';
   close.setAttribute('data-dismiss', 'modal');
@@ -86,7 +100,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     { value: 'primary', label: 'Primary storage' },
     { value: 'secondary', label: 'Secondary storage' },
   ];
-  let kind: 'primary' | 'secondary' = hasStorage ? 'secondary' : 'primary';
+  let kind: 'primary' | 'secondary' = editing ? (wasPrimary ? 'primary' : 'secondary') : (hasStorage ? 'secondary' : 'primary');
   kinds.forEach(k => {
     const label = el('label', 'mr-4 mb-0');
     const radio = el('input', 'mr-1');
@@ -118,7 +132,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
 
   body.append(kindRow, searchLabel, search, results, chosen);
 
-  const add = el('button', 'btn btn-primary', 'Add storage');
+  const add = el('button', 'btn btn-primary', editing ? 'Save' : 'Add storage');
   add.type = 'button';
   add.disabled = true;
   const cancel = el('button', 'btn btn-secondary', 'Close');
@@ -131,7 +145,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
   qty.type = 'number';
   qty.min = '0';
   qty.step = 'any';
-  qty.value = '1';
+  qty.value = editing ? (button.dataset.qty ?? '1') : '1';
   qty.setAttribute('aria-label', 'Quantity');
   const unitSelect = el('select', 'custom-select');
   unitSelect.setAttribute('aria-label', 'Quantity unit');
@@ -140,6 +154,9 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     option.value = u.value;
     unitSelect.append(option);
   });
+  if (editing && button.dataset.unit) {
+    unitSelect.value = button.dataset.unit;
+  }
   const copies = el('input', 'form-control');
   copies.type = 'number';
   copies.min = '1';
@@ -198,7 +215,9 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     amount.append(qty, append);
     chosen.append(el('label', 'mb-1', 'Quantity per container'), amount);
 
-    chosen.append(el('label', 'mb-1', 'Number of containers (aliquots)'), copies);
+    if (!editing) {
+      chosen.append(el('label', 'mb-1', 'Number of containers (aliquots)'), copies);
+    }
 
     if (unit.box_rows && unit.box_cols) {
       const taken = new Set((unit.taken_positions ?? '').split(',').filter(Boolean));
@@ -242,7 +261,10 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
             cell.style.backgroundColor = '#9a9a9a';
           } else {
             cell.addEventListener('click', () => {
-              pickedSlots = pickedSlots.includes(slot) ? pickedSlots.filter(x => x !== slot) : [...pickedSlots, slot];
+              // a tube being edited takes one slot
+              pickedSlots = editing
+                ? (pickedSlots.includes(slot) ? [] : [slot])
+                : (pickedSlots.includes(slot) ? pickedSlots.filter(x => x !== slot) : [...pickedSlots, slot]);
               // the selection decides how many containers there are
               copies.disabled = pickedSlots.length > 0;
               if (pickedSlots.length > 0) {
@@ -296,6 +318,26 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
       return;
     }
     const unit = selected;
+    if (editing) {
+      add.disabled = true;
+      const slot = unit.box_rows && pickedSlots.length > 0 ? pickedSlots[0] : '';
+      const moved = unit.id !== currentStorageId;
+      try {
+        await ApiC.patch(`${entity.type}/${entity.id}/containers/${editId}`, {
+          qty_stored: qty.value,
+          qty_unit: unitSelect.value,
+          ...(moved ? { storage_id: unit.id } : {}),
+          // a move leaves the old slot: the new one is set after it
+          ...((moved || slot !== currentPosition) && (slot !== '' || !moved) ? { position: slot } : {}),
+          ...(kind === 'primary' && !wasPrimary ? { is_primary: 1 } : {}),
+        });
+        $(modal).modal('hide');
+        await reloadElements(['storageDivContent']);
+      } catch {
+        add.disabled = false;
+      }
+      return;
+    }
     const count = pickedSlots.length > 0 ? pickedSlots.length : Math.max(1, Math.floor(Number(copies.value) || 1));
     const slots = unit.box_rows ? (pickedSlots.length > 0 ? pickedSlots : freeSlotsFrom(unit, null, count)) : [];
     if (unit.box_rows && slots.length < count) {
