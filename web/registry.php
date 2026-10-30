@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace Elabftw\Elabftw;
 
-use Elabftw\Controllers\SamplesController;
+use Elabftw\Controllers\RegistryController;
 use Elabftw\Enums\EntityType;
 use Elabftw\Exceptions\AppException;
 use Elabftw\Models\Inventory;
@@ -40,7 +40,7 @@ try {
             $bypassReadPermission = true;
         }
     }
-    $Response = new SamplesController($App, new Inventory($App->Users, $id, bypassReadPermission: $bypassReadPermission))->getResponse();
+    $Response = new RegistryController($App, new Inventory($App->Users, $id, bypassReadPermission: $bypassReadPermission))->getResponse();
 } catch (AppException $e) {
     $Response = $e->getResponseFromException($App);
 } catch (Exception $e) {

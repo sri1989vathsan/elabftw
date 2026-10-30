@@ -21,9 +21,9 @@ use Override;
 use function _;
 
 /**
- * For samples.php
+ * For registry.php
  */
-final class SamplesController extends AbstractEntityController
+final class RegistryController extends AbstractEntityController
 {
     public function __construct(App $app, Inventory $entity)
     {
