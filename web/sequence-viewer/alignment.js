@@ -32,6 +32,16 @@
     return result.parsedSequence;
   }
 
+  // a file dropped on the page: read from the computer, not from the entry
+  async function readLocal(file) {
+    const results = await window.bioParsers.anyToJson(file, { fileName: file.name });
+    const result = Array.isArray(results) ? results[0] : results;
+    if (!result || !result.success || !result.parsedSequence) {
+      throw new Error(file.name + ' could not be read as a sequence.');
+    }
+    return result.parsedSequence;
+  }
+
   // a read found on the other strand: its traces are turned around too, so they stay under their bases
   const COMPLEMENT = { A: 'T', T: 'A', G: 'C', C: 'G', N: 'N' };
   function reverseTraces(chromatogram) {
@@ -121,20 +131,32 @@
     return line;
   }
 
+  const dropped = [];
+  // each alignment is shown in the same node with a view of its own
+  let viewCount = 0;
+
   async function run() {
     if (!files.reference) {
       throw new Error('This entry has no reference sequence: attach a GenBank or FASTA file.');
     }
-    if (!files.reads || files.reads.length === 0) {
-      throw new Error('This entry has no sequencing reads: attach the ab1 files.');
+    const total = (files.reads || []).length + dropped.length;
+    if (total === 0) {
+      throw new Error('Drop the sequencing reads (ab1 files) on this page to align them to the sequence.');
     }
+    summary.textContent = '';
+    summary.hidden = true;
+    status.className = '';
     const reference = await readFile(files.reference);
     const referenceSequence = String(reference.sequence).toUpperCase();
-    status.textContent = 'Reading ' + files.reads.length + ' read(s)...';
+    status.textContent = 'Reading ' + total + ' read(s)...';
     const reads = [];
-    for (const file of files.reads) {
+    for (const file of files.reads || []) {
       const parsed = await readFile(file);
       reads.push({ name: file.real_name, sequence: String(parsed.sequence).toUpperCase(), parsed: parsed });
+    }
+    for (const file of dropped) {
+      const parsed = await readLocal(file);
+      reads.push({ name: file.name + ' (dropped)', sequence: String(parsed.sequence).toUpperCase(), parsed: parsed });
     }
     status.textContent = 'Aligning...';
     const results = await align(referenceSequence, reads);
@@ -171,7 +193,8 @@
       };
     };
     // the traces of the reads are shown under their bases from the start
-    const options = { id: 'sequencing-alignment', alignmentAnnotationVisibility: { chromatogram: true } };
+    viewCount++;
+    const options = { id: 'sequencing-alignment-' + viewCount, alignmentAnnotationVisibility: { chromatogram: true } };
     // without insertions in any read the reference is the same for all of them: one alignment of everything
     const plain = found.every(function (item) {
       return item.alignment.alignedReference === referenceSequence;
@@ -198,7 +221,57 @@
     fail('The sequence editor is not installed. Run bin/fetch-ove.sh once.');
     return;
   }
-  run().catch(function (error) {
-    fail(error.message || String(error));
+  const start = function () {
+    run().catch(function (error) {
+      fail(error.message || String(error));
+    });
+  };
+  start();
+
+  // the reads are dropped on the page: they are added to those of the entry and everything is aligned again
+  const hint = document.createElement('div');
+  hint.id = 'drop-hint';
+  hint.textContent = 'Drop the ab1 files to align them';
+  hint.hidden = true;
+  document.body.append(hint);
+  let depth = 0;
+  const hasFiles = function (event) {
+    return Array.from((event.dataTransfer && event.dataTransfer.types) || []).indexOf('Files') !== -1;
+  };
+  document.addEventListener('dragenter', function (event) {
+    if (hasFiles(event)) {
+      depth++;
+      hint.hidden = false;
+    }
+  });
+  document.addEventListener('dragleave', function (event) {
+    if (hasFiles(event) && --depth <= 0) {
+      depth = 0;
+      hint.hidden = true;
+    }
+  });
+  document.addEventListener('dragover', function (event) {
+    if (hasFiles(event)) {
+      event.preventDefault();
+    }
+  });
+  document.addEventListener('drop', function (event) {
+    if (!hasFiles(event)) {
+      return;
+    }
+    event.preventDefault();
+    depth = 0;
+    hint.hidden = true;
+    const accepted = Array.from(event.dataTransfer.files).filter(function (file) {
+      return /\.(ab1|abi|scf|fasta|fa|gb|gbk)$/i.test(file.name);
+    });
+    if (accepted.length === 0) {
+      fail('Only sequencing files (ab1) can be dropped.');
+      return;
+    }
+    accepted.forEach(function (file) {
+      dropped.push(file);
+    });
+    start();
   });
 })();

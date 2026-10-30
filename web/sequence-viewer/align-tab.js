@@ -89,17 +89,50 @@
       return box;
     }
 
-    async function run(host, list, results, message) {
+    // a file dropped on the tool is read from the computer: it is not in the entry unless it is saved there
+    async function readLocal(file) {
+      const results = await window.bioParsers.anyToJson(file, { fileName: file.name });
+      const parsed = Array.isArray(results) ? results[0] : results;
+      if (!parsed || !parsed.success) {
+        throw new Error(file.name + ' could not be read.');
+      }
+      return String(parsed.parsedSequence.sequence).toUpperCase();
+    }
+
+    async function saveToEntry(file, button) {
+      button.disabled = true;
+      button.textContent = 'Saving...';
+      const form = new FormData();
+      form.append('file', file);
+      try {
+        const response = await fetch('../api/v2/inventory/' + entryId + '/uploads', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'X-CSRF-Token': body.csrf },
+          body: form,
+        });
+        if (!response.ok) {
+          throw new Error('not saved (' + response.status + ')');
+        }
+        button.textContent = 'Saved in the entry';
+      } catch (error) {
+        button.textContent = 'Could not save';
+        button.disabled = false;
+      }
+    }
+
+    // items: {name, load(): the sequence, file?: a dropped file}
+    async function run(items, results, message) {
       message.textContent = 'Reading and aligning...';
       message.className = 'tool-message';
       results.textContent = '';
       try {
         const reads = [];
-        for (const upload of list) {
-          reads.push({ name: upload.real_name, sequence: await readSequence(upload) });
+        for (const item of items) {
+          reads.push({ name: item.name, sequence: await item.load() });
         }
         const reference = String(editor.getState().sequenceData.sequence || '').toUpperCase();
-        const response = await fetch('../align.php', {
+        const response = await fetch('align.php', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': body.csrf },
@@ -110,7 +143,16 @@
         }
         const answer = (await response.json()).results;
         answer.forEach(function (result, index) {
-          results.append(card(reads[index].name, result.alignment));
+          const box = card(reads[index].name, result.alignment);
+          if (items[index].file && body.canWrite === '1') {
+            const save = element('button', 'tool-btn', 'Save in the entry');
+            save.type = 'button';
+            save.addEventListener('click', function () {
+              saveToEntry(items[index].file, save);
+            });
+            box.append(save);
+          }
+          results.append(box);
         });
         message.textContent = '';
       } catch (error) {
@@ -120,9 +162,10 @@
     }
 
     async function show(host) {
-      host.append(element('p', 'tool-muted', 'Aligns the sequencing reads (ab1 files) of this entry to the sequence in the editor.'));
+      host.append(element('p', 'tool-muted', 'Aligns sequencing reads (ab1 files) to the sequence in the editor.'));
       const message = element('p', 'tool-message');
       const results = element('div', 'tool-results');
+      const dropped = [];
       let list = [];
       try {
         const response = await fetch('../api/v2/inventory/' + entryId + '/uploads', { credentials: 'same-origin' });
@@ -133,25 +176,101 @@
         message.textContent = 'The files of the entry could not be listed.';
         message.className = 'tool-message error';
       }
-      if (list.length === 0) {
-        host.append(element('p', 'tool-muted', 'No sequencing read in this entry. Attach the ab1 files in its local files.'), message);
-        return;
-      }
-      const names = element('div', 'tool-tags');
-      list.forEach(function (upload) {
-        names.append(element('span', 'tool-chip', upload.real_name));
+      const everything = function () {
+        return list.map(function (upload) {
+          return { name: upload.real_name, load: function () {
+            return readSequence(upload);
+          } };
+        }).concat(dropped.map(function (file) {
+          return { name: file.name + ' (dropped)', file: file, load: function () {
+            return readLocal(file);
+          } };
+        }));
+      };
+
+      // drop the files here, or click to choose them
+      const zone = element('div', 'tool-drop', 'Drop ab1 files here, or click to choose them');
+      zone.tabIndex = 0;
+      const chooser = element('input');
+      chooser.type = 'file';
+      chooser.multiple = true;
+      chooser.accept = '.ab1,.abi,.scf,.fasta,.fa';
+      chooser.hidden = true;
+      const take = function (files) {
+        const accepted = Array.from(files).filter(function (file) {
+          return /\.(ab1|abi|scf|fasta|fa)$/i.test(file.name);
+        });
+        if (accepted.length === 0) {
+          message.textContent = 'Only sequencing files (ab1) can be used.';
+          message.className = 'tool-message error';
+          return;
+        }
+        accepted.forEach(function (file) {
+          dropped.push(file);
+        });
+        names();
+        run(everything(), results, message);
+      };
+      zone.addEventListener('click', function () {
+        chooser.click();
       });
-      host.append(names);
+      zone.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          chooser.click();
+        }
+      });
+      chooser.addEventListener('change', function () {
+        take(chooser.files);
+        chooser.value = '';
+      });
+      ['dragenter', 'dragover'].forEach(function (name) {
+        zone.addEventListener(name, function (event) {
+          event.preventDefault();
+          zone.classList.add('over');
+        });
+      });
+      zone.addEventListener('dragleave', function () {
+        zone.classList.remove('over');
+      });
+      zone.addEventListener('drop', function (event) {
+        event.preventDefault();
+        zone.classList.remove('over');
+        take(event.dataTransfer.files);
+      });
+      // a drop anywhere on the sidebar works too
+      host.addEventListener('dragover', function (event) {
+        event.preventDefault();
+      });
+      host.addEventListener('drop', function (event) {
+        if (event.target !== zone && !zone.contains(event.target)) {
+          event.preventDefault();
+          take(event.dataTransfer.files);
+        }
+      });
+
+      const nameBox = element('div', 'tool-tags');
+      const names = function () {
+        nameBox.textContent = '';
+        list.forEach(function (upload) {
+          nameBox.append(element('span', 'tool-chip', upload.real_name));
+        });
+        dropped.forEach(function (file) {
+          nameBox.append(element('span', 'tool-chip', file.name + ' (dropped)'));
+        });
+      };
+      names();
+      host.append(zone, chooser, nameBox);
       const actions = element('div', 'tool-actions');
-      const align = element('button', 'tool-btn tool-btn-primary', 'Align ' + list.length + (list.length === 1 ? ' read' : ' reads'));
+      const align = element('button', 'tool-btn tool-btn-primary', 'Align the reads of the entry');
       align.type = 'button';
+      align.disabled = list.length === 0;
       align.addEventListener('click', function () {
-        run(host, list, results, message);
+        run(everything(), results, message);
       });
       const view = element('a', 'tool-btn', 'Open the alignment view');
       view.href = 'alignment.php?entry=' + entryId;
-      view.target = '_blank';
-      view.rel = 'noopener';
+      view.title = 'Switch to the alignment view, with the traces';
       actions.append(align, view);
       host.append(actions, message, results);
     }

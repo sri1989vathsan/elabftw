@@ -808,3 +808,90 @@ body {
   margin-bottom: 0.5rem;
   font-size: 0.85rem;
 }
+
+#tool-sidebar .primers-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+#tool-sidebar .primers-pick > input {
+  margin-top: 0.9rem;
+}
+
+#tool-sidebar .primers-pick > .primers-card {
+  flex: 1;
+  min-width: 0;
+}
+
+#tool-sidebar .primers-pickbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.3rem 0;
+}
+
+.view-switch {
+  display: inline-flex;
+  border: 1px solid #c4cad1;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #fff;
+}
+
+.view-switch a {
+  padding: 0.2rem 0.8rem;
+  color: #3b4652;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.view-switch a + a {
+  border-left: 1px solid #c4cad1;
+}
+
+.view-switch a.current {
+  background: #2f6fd1;
+  color: #fff;
+  cursor: default;
+}
+
+.view-switch a:not(.current):hover {
+  background: #e8eef7;
+}
+
+#drop-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(47, 111, 209, 0.15);
+  border: 3px dashed #2f6fd1;
+  color: #1d4c96;
+  font-size: 1.4rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+#drop-hint[hidden] {
+  display: none;
+}
+
+#tool-sidebar .tool-drop {
+  margin: 0.5rem 0;
+  padding: 1rem 0.7rem;
+  border: 2px dashed #b7c1cd;
+  border-radius: 0.6rem;
+  color: #5a6672;
+  text-align: center;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+#tool-sidebar .tool-drop.over {
+  border-color: #2f6fd1;
+  background: #eaf1fc;
+  color: #1d4c96;
+}

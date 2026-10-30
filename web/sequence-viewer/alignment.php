@@ -57,6 +57,7 @@ try {
 
 header('Content-Type: text/html; charset=utf-8');
 $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$sequenceUrl = $reference === null ? '' : 'index.php?' . http_build_query(array('entry' => $entryId, 'upload' => $reference['id'], 'f' => $reference['long_name'], 'name' => $reference['real_name'], 'storage' => $reference['storage']));
 $files = json_encode(array('reference' => $reference, 'reads' => array_values($reads)), JSON_THROW_ON_ERROR);
 ?>
 <!doctype html>
@@ -77,6 +78,10 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
   <div id="bar">
     <a id="back" href="../registry.php?mode=view&amp;id=<?= $entryId ?>">&larr; Back to the entry</a>
     <strong id="entry-title"><?= $h($title) ?></strong>
+    <span class="view-switch" role="tablist" aria-label="View">
+      <?php if ($sequenceUrl !== '') { ?><a href="<?= $h($sequenceUrl) ?>" role="tab">Sequence</a><?php } ?>
+      <a href="#" role="tab" aria-selected="true" class="current">Alignment</a>
+    </span>
     <span id="title">Sequencing alignment</span>
     <span id="status" role="status">Loading the sequences...</span>
   </div>

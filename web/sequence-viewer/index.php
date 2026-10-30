@@ -70,6 +70,10 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   <div id="bar">
     <a id="back" href="../registry.php?mode=view&amp;id=<?= $entryId ?>">&larr; Back to the entry</a>
     <strong id="entry-title"><?= $h($title) ?></strong>
+    <span class="view-switch" role="tablist" aria-label="View">
+      <a href="#" role="tab" aria-selected="true" class="current">Sequence</a>
+      <a href="alignment.php?entry=<?= $entryId ?>" role="tab" title="Align the sequencing reads of this entry to the sequence">Alignment</a>
+    </span>
     <span id="title"></span>
     <span id="save-state" role="status"></span>
     <span id="status" role="status">Loading the sequence...</span>
