@@ -19,6 +19,7 @@ use Elabftw\Interfaces\SqlBuilderInterface;
 use Elabftw\Models\AbstractEntity;
 use Elabftw\Models\AbstractTemplateEntity;
 use Elabftw\Models\Experiments;
+use Elabftw\Models\Inventory;
 use Elabftw\Models\Items;
 use Elabftw\Models\TeamGroups;
 use Elabftw\Models\Users\AnonymousUser;
@@ -370,7 +371,8 @@ final class EntitySqlBuilder implements SqlBuilderInterface
         } elseif ($this->entity instanceof Items) {
             $this->selectSql[] = 'entity.is_bookable';
             $eventsColumn = 'item_link = entity.id OR team_events.item';
-        } elseif ($this->entity instanceof AbstractTemplateEntity) {
+        } elseif ($this->entity instanceof AbstractTemplateEntity || $this->entity instanceof Inventory) {
+            // no bookings or calendar events for these
             return;
         } else {
             throw new IllegalActionException('Nope.');
