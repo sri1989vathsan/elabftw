@@ -325,13 +325,26 @@
   }
   bindAttach();
 
-  // the x next to a sequence or a sequencing read removes the file from the entry (it stays in the history of the entry)
+  // the x next to a sequence or a sequencing read removes the file from the entry (it stays in the history of the entry).
+  // No native confirm box (it can be blocked): the first click asks "Remove?" on the button, the second one removes.
   document.addEventListener('click', async function (event) {
     const button = event.target.closest ? event.target.closest('[data-remove-upload]') : null;
     if (!button) {
       return;
     }
-    if (!window.confirm('Remove ' + button.dataset.removeName + ' from this entry?')) {
+    if (button.dataset.armed !== '1') {
+      const original = button.innerHTML;
+      button.dataset.armed = '1';
+      button.classList.add('btn-danger');
+      button.innerHTML = 'Remove ' + (button.dataset.removeName || 'the file') + '?';
+      button.title = 'Click again to remove the file from this entry';
+      window.setTimeout(function () {
+        if (button.dataset.armed === '1') {
+          button.dataset.armed = '';
+          button.classList.remove('btn-danger');
+          button.innerHTML = original;
+        }
+      }, 4000);
       return;
     }
     button.disabled = true;
@@ -347,7 +360,8 @@
       window.location.reload();
     } catch (error) {
       button.disabled = false;
-      window.alert(error.message || String(error));
+      button.dataset.armed = '';
+      button.textContent = error.message || String(error);
     }
   });
 })();
