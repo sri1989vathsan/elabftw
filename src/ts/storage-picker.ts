@@ -163,6 +163,13 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     }
     unitSelect.value = button.dataset.unit;
   }
+  // a short note on the storage: what is in the tube, a batch...
+  const comment = el('input', 'form-control');
+  comment.type = 'text';
+  comment.maxLength = 255;
+  comment.placeholder = 'Comment (optional)';
+  comment.setAttribute('aria-label', 'Comment');
+  comment.value = editing ? (button.dataset.comment ?? '') : '';
   const copies = el('input', 'form-control');
   copies.type = 'number';
   copies.min = '1';
@@ -220,6 +227,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     append.append(unitSelect);
     amount.append(qty, append);
     chosen.append(el('label', 'mb-1', 'Quantity per container'), amount);
+    chosen.append(el('label', 'mb-1', 'Comment'), comment);
 
     if (!editing) {
       chosen.append(el('label', 'mb-1', 'Number of containers (aliquots)'), copies);
@@ -334,6 +342,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
         await ApiC.patch(`${entity.type}/${entity.id}/containers/${editId}`, {
           qty_stored: qty.value,
           qty_unit: unitSelect.value,
+          comment: comment.value,
           ...(moved ? { storage_id: unit.id } : {}),
           // a move leaves the old slot: the new one is set after it
           ...((moved || slot !== currentPosition) && (slot !== '' || !moved) ? { position: slot } : {}),
@@ -344,6 +353,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
           await ApiC.post(`${entity.type}/${entity.id}/containers/${unit.id}`, {
             qty_stored: qty.value,
             qty_unit: unitSelect.value,
+            comment: comment.value,
             position: extra,
           });
         }
@@ -370,6 +380,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
         await ApiC.post(`${entity.type}/${entity.id}/containers/${unit.id}`, {
           qty_stored: qty.value,
           qty_unit: unitSelect.value,
+          ...(comment.value.trim() !== '' ? { comment: comment.value } : {}),
           ...(slots[i] ? { position: slots[i] } : {}),
           ...(kind === 'primary' && i === 0 ? { is_primary: 1 } : {}),
         });

@@ -35,6 +35,7 @@ use function array_key_exists;
 use function intval;
 use function is_string;
 use function json_encode;
+use function mb_strlen;
 use function number_format;
 use function sprintf;
 use function strtoupper;
@@ -148,6 +149,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
                 $reqBody['qty_unit'] ?? Units::Unit->value,
                 isset($reqBody['position']) ? (string) $reqBody['position'] : null,
                 (int) ($reqBody['is_primary'] ?? 0) === 1,
+                isset($reqBody['comment']) ? (string) $reqBody['comment'] : null,
             ),
             Action::Duplicate => $this->import(),
             default => throw new ImproperActionException('Invalid action for links create.'),
@@ -169,6 +171,9 @@ abstract class AbstractContainersLinks extends AbstractLinks
         }
         if (array_key_exists('is_primary', $params) && (int) $params['is_primary'] === 1) {
             $this->makePrimary();
+        }
+        if (array_key_exists('comment', $params)) {
+            $this->setComment($params['comment']);
         }
         $qtyGiven = array_key_exists('qty_stored', $params) && $params['qty_stored'] !== null && $params['qty_stored'] !== '';
         $unitGiven = array_key_exists('qty_unit', $params) && $params['qty_unit'] !== null && $params['qty_unit'] !== '';
@@ -242,7 +247,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         string $column,
         int|float|string $value,
     ): bool {
-        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id' && $column !== 'position') {
+        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id' && $column !== 'position' && $column !== 'comment') {
             throw new ImproperActionException('Invalid update target');
         }
         $sql = sprintf(
@@ -329,7 +334,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
             && $this->Entity->id === intval($targetId);
     }
 
-    public function createWithQuantity(float $qty, string $unit, ?string $position = null, bool $primary = false): int
+    public function createWithQuantity(float $qty, string $unit, ?string $position = null, bool $primary = false, ?string $comment = null): int
     {
         $this->canStoreOrExplode();
         $this->Entity->touch();
@@ -360,7 +365,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
                 ),
             ));
             // the slot and the primary flag act on the new container: point the id to it for these, then back to the storage
-            if (($position !== null && $position !== '') || $primary) {
+            if (($position !== null && $position !== '') || $primary || ($comment !== null && trim($comment) !== '')) {
                 $storageId = $this->id;
                 $this->id = $containerId;
                 try {
@@ -369,6 +374,9 @@ abstract class AbstractContainersLinks extends AbstractLinks
                     }
                     if ($primary) {
                         $this->makePrimary();
+                    }
+                    if ($comment !== null && trim($comment) !== '') {
+                        $this->setComment($comment);
                     }
                 } finally {
                     $this->id = $storageId;
@@ -468,6 +476,34 @@ abstract class AbstractContainersLinks extends AbstractLinks
     }
 
     /**
+     * A short comment on the container, empty to remove it
+     */
+    private function setComment(mixed $comment): void
+    {
+        if (!$this->hasSlots()) {
+            throw new ImproperActionException('Only the containers of the database have a comment.');
+        }
+        $comment = is_string($comment) ? trim($comment) : '';
+        if (mb_strlen($comment) > 255) {
+            throw new ImproperActionException('A comment has at most 255 characters.');
+        }
+        $current = $this->readOne();
+        if ((string) ($current['comment'] ?? '') === $comment) {
+            return;
+        }
+        $req = $this->Db->prepare('UPDATE ' . $this->getTable() . ' SET comment = :comment WHERE id = :id AND item_id = :item_id');
+        $req->bindValue(':comment', $comment === '' ? null : $comment, $comment === '' ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $this->Entity->touch();
+        new Changelog($this->Entity)->create(new ContentParams(
+            'container_comment_changed',
+            sprintf('Comment on container #%d at "%s": %s', (int) $current['id'], $this->getStoragePath((int) $current['storage_id']), $comment === '' ? '(removed)' : $comment),
+        ));
+    }
+
+    /**
      * This container becomes the primary storage of the resource, the others are secondary
      */
     private function makePrimary(): void
@@ -541,7 +577,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
 
     private function positionSelect(): string
     {
-        return $this->hasSlots() ? ' main.position, main.is_primary,' : '';
+        return $this->hasSlots() ? ' main.position, main.is_primary, main.comment,' : '';
     }
 
     private function moveToStorage(int $newStorageId): void

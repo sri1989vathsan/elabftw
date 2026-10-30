@@ -64,6 +64,12 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slot: strin
   append.append(unitSelect);
   amount.append(qty, append);
 
+  const comment = el('input', 'form-control mb-2');
+  comment.type = 'text';
+  comment.maxLength = 255;
+  comment.placeholder = 'Comment (optional)';
+  comment.setAttribute('aria-label', 'Comment');
+
   let kind: 'primary' | 'secondary' = 'primary';
   const kindRow = el('div', 'mb-2');
   (['primary', 'secondary'] as const).forEach(k => {
@@ -95,7 +101,7 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slot: strin
       return;
     }
     chosen.append(el('h5', '', selected.title));
-    chosen.append(el('label', 'mb-1', 'Quantity'), amount, kindRow);
+    chosen.append(el('label', 'mb-1', 'Quantity'), amount, el('label', 'mb-1', 'Comment'), comment, kindRow);
     kindRow.querySelectorAll<HTMLInputElement>('input').forEach(radio => {
       radio.checked = radio.dataset.kind === kind;
     });
@@ -155,6 +161,7 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slot: strin
         qty_stored: qty.value,
         qty_unit: unitSelect.value,
         position: slot,
+        ...(comment.value.trim() !== '' ? { comment: comment.value } : {}),
         ...(kind === 'primary' ? { is_primary: 1 } : {}),
       });
       $(modal).modal('hide');

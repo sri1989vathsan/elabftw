@@ -750,3 +750,14 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+// the comment of a tube on the entry page
+.storage-tube-comment {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--medium);
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

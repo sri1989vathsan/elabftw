@@ -6,7 +6,7 @@ import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
 
 type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null };
-type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; position: string | null; path: string; qty_stored: number; qty_unit: string };
+type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string };
 type Row = {
   id: number;
   title: string;
@@ -69,6 +69,7 @@ function fillTubeCard(card: HTMLElement, tube: Tube, linked: boolean): void {
   line('Slot', tube.location.position ?? '');
   line('Storage', tube.location.is_primary ? 'Primary' : 'Secondary');
   line('Quantity', `${tube.location.qty_stored} ${tube.location.qty_unit}`.trim());
+  line('Comment', tube.location.comment ?? '');
   // the fields that identify an entry of its category, when they are filled
   const shown = CARD_FIELDS[(tube.row.category_title ?? '').toLowerCase()] ?? [];
   shown.forEach(name => {

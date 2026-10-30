@@ -144,6 +144,7 @@ final class CustomMigrationRunner
         '111_inventory_steps.sql',
         '112_registry_storage.sql',
         '113_registry_category_fields.sql',
+        '114_registry_storage_comment.sql',
     );
 
     private Db $Db;

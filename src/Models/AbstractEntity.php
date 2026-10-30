@@ -1599,7 +1599,7 @@ abstract class AbstractEntity extends AbstractRest
         }
         $ids = array_map(static fn(array $entity): int => (int) $entity['id'], $entities);
         $sql = sprintf(
-            'SELECT id, item_id, storage_id, qty_stored, qty_unit, position, is_primary FROM containers2inventory WHERE item_id IN (%s) ORDER BY is_primary DESC, id',
+            'SELECT id, item_id, storage_id, qty_stored, qty_unit, position, is_primary, comment FROM containers2inventory WHERE item_id IN (%s) ORDER BY is_primary DESC, id',
             implode(',', $ids),
         );
         $req = $this->Db->prepare($sql);
@@ -1624,6 +1624,7 @@ abstract class AbstractEntity extends AbstractRest
                 $byItem[(int) $link['item_id']][] = array(
                     'container_id' => (int) $link['id'],
                     'position' => $link['position'],
+                    'comment' => $link['comment'],
                     'is_primary' => (int) $link['is_primary'] === 1,
                     'storage_id' => (int) $link['storage_id'],
                     'path' => implode(' > ', $parts),
