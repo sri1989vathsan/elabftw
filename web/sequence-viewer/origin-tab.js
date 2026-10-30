@@ -1,115 +1,105 @@
 /**
- * The origin tool of the sidebar: makes another position of a circular sequence the first base (position 1). The features,
- * parts and primers move with the bases; the sequence of the entry is saved with the change like any other edit.
- * Needs the sequence utilities of the editor (vendor/sequence-utils.umd.js). Exposed as window.OriginTab.
+ * Set the origin of a circular sequence: makes the base where the user right-clicked (or the start of a feature or of the
+ * selection) the first base. Features, parts and primers move with the bases; the entry is saved with the change like any
+ * other edit, and an Undo button stays on the page for a few seconds. The menu items are given to the editor as right-click
+ * overrides (see viewer.js). Needs the sequence utilities of the editor. Exposed as window.OriginTab.
  */
 (function () {
   'use strict';
+  let editor = null;
+  let toast = null;
+  let toastTimer = 0;
 
-  function element(tag, className, text) {
-    const node = document.createElement(tag);
-    if (className) {
-      node.className = className;
+  function say(text, undo) {
+    if (toast) {
+      toast.remove();
     }
-    if (text) {
-      node.textContent = text;
+    window.clearTimeout(toastTimer);
+    toast = document.createElement('div');
+    toast.className = 'origin-toast';
+    toast.setAttribute('role', 'status');
+    toast.append(document.createTextNode(text));
+    if (undo) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Undo';
+      button.addEventListener('click', function () {
+        toast.remove();
+        undo();
+      });
+      toast.append(button);
     }
-    return node;
+    document.body.append(toast);
+    toastTimer = window.setTimeout(function () {
+      toast.remove();
+    }, 9000);
   }
 
-  function setup(editor) {
+  // position: 1-based, the base that becomes the first one
+  function rotateAt(position, restoring) {
     const utils = window.sequenceUtils;
-    if (!window.ToolSidebar || !utils || typeof utils.rotateSequenceDataToPosition !== 'function') {
+    if (!editor || !utils || typeof utils.rotateSequenceDataToPosition !== 'function') {
       return;
     }
-    let message = '';
-    // the last change, to be able to go back: the position that was the first base
-    let last = null;
-
-    // the position of the caret or of the start of the selection (1-based), 0 when there is none
-    const picked = function () {
-      const state = editor.getState();
-      const selection = state.selectionLayer || { start: -1 };
-      if (selection.start >= 0) {
-        return selection.start + 1;
-      }
-      return typeof state.caretPosition === 'number' && state.caretPosition >= 0 ? state.caretPosition + 1 : 0;
-    };
-
-    function rotate(position) {
-      const data = editor.getState().sequenceData;
-      const length = String(data.sequence || '').length;
-      if (!data.circular) {
-        message = 'Only a circular sequence has an origin.';
-        return false;
-      }
-      if (!Number.isInteger(position) || position < 1 || position > length) {
-        message = 'The position has to be between 1 and ' + length + '.';
-        return false;
-      }
-      if (position === 1) {
-        message = 'This position is already the first base.';
-        return false;
-      }
-      // the base at "position" becomes the base 1
-      editor.updateEditor({ sequenceData: utils.rotateSequenceDataToPosition(data, position - 1), selectionLayer: { start: -1, end: -1 } });
-      last = { length: length, position: position };
-      message = 'Position ' + position + ' is now position 1.';
-      return true;
+    const data = editor.getState().sequenceData;
+    const length = String(data.sequence || '').length;
+    if (!data.circular || position <= 1 || position > length) {
+      return;
     }
-
-    function show(host) {
-      const data = editor.getState().sequenceData;
-      const length = String(data.sequence || '').length;
-      host.append(element('p', 'tool-muted', length + ' bases, ' + (data.circular ? 'circular' : 'linear') + '. Select a base on the sequence or the map (a click or a selection), then make it the first base.'));
-      if (!data.circular) {
-        host.append(element('p', 'tool-message', 'Only a circular sequence has an origin.'));
-        return;
-      }
-      const row = element('div', 'tool-actions');
-      const input = element('input', 'tool-input');
-      input.type = 'number';
-      input.min = '1';
-      input.max = String(length);
-      input.placeholder = 'Position';
-      input.value = picked() > 0 ? String(picked()) : '';
-      input.setAttribute('aria-label', 'Position to make the first base');
-      const use = element('button', 'tool-btn', 'Use the selection');
-      use.type = 'button';
-      use.addEventListener('click', function () {
-        input.value = picked() > 0 ? String(picked()) : '';
-      });
-      row.append(input, use);
-      const go = element('button', 'tool-btn tool-btn-primary', 'Make it position 1');
-      go.type = 'button';
-      go.addEventListener('click', function () {
-        if (rotate(Number(input.value))) {
-          host.textContent = '';
-          show(host);
-        } else {
-          note.textContent = message;
-          note.className = 'tool-message error';
-        }
-      });
-      const note = element('p', 'tool-message', message);
-      host.append(row, go);
-      if (last) {
-        const undo = element('button', 'tool-btn', 'Undo: back to the earlier first base');
-        undo.type = 'button';
-        undo.addEventListener('click', function () {
-          // going back is a turn by the rest of the length
-          const back = last.length - last.position + 2;
-          last = null;
-          rotate(back);
-          host.textContent = '';
-          show(host);
-        });
-        host.append(undo);
-      }
-      host.append(note, element('p', 'tool-muted', 'The sequence of the entry is saved with the change. Primers keep their place on the bases; the numbers of the features change.'));
+    editor.updateEditor({ sequenceData: utils.rotateSequenceDataToPosition(data, position - 1), selectionLayer: { start: -1, end: -1 }, caretPosition: -1 });
+    // going back is the turn by the rest of the length
+    if (restoring) {
+      say('Origin restored.');
+      return;
     }
-    window.ToolSidebar.register({ id: 'origin', icon: 'origin', label: 'Set the origin (position 1)', show: show });
+    say('Base ' + position + ' is now position 1.', function () {
+      rotateAt(length - position + 2, true);
+    });
   }
 
-  window.OriginTab = { setup: setup };
+  /**
+   * An item of the right-click menu: "Set origin here", for the 0-based position of the click. Nothing for a linear sequence
+   * or a sequence that is read only.
+   */
+  function menuItem(zeroBased, label) {
+    return {
+      text: label || 'Set origin here (this base becomes position 1)',
+      onClick: function () {
+        rotateAt(zeroBased + 1);
+      },
+    };
+  }
+
+  function usable(props) {
+    return !!props && !props.readOnly && !!props.sequenceData && !!props.sequenceData.circular;
+  }
+
+  // the right-click overrides for the editor: the origin in the menu of the sequence, of a feature and of a selection
+  function overrides() {
+    return {
+      // the menu of the editor has "Rotate To Caret Position": this is the same thing, worded as what it does
+      backgroundRightClicked: function (items, opts, props) {
+        if (!usable(props) || typeof opts.nearestCaretPos !== 'number') {
+          return items;
+        }
+        const out = items.map(function (item) {
+          return item === 'rotateToCaretPosition' ? menuItem(opts.nearestCaretPos) : item;
+        });
+        out._event = items._event;
+        return out;
+      },
+      featureRightClicked: function (items, opts, props) {
+        return usable(props) && opts.annotation ? items.concat([menuItem(opts.annotation.start, 'Set origin at the start of this feature')]) : items;
+      },
+      selectionLayerRightClicked: function (items, opts, props) {
+        return usable(props) && opts.annotation && opts.annotation.start >= 0 ? items.concat([menuItem(opts.annotation.start, 'Set origin at the start of the selection')]) : items;
+      },
+    };
+  }
+
+  function setup(editorInstance) {
+    editor = editorInstance;
+  }
+
+  window.OriginTab = { setup: setup, rotateAt: rotateAt, overrides: overrides };
 })();

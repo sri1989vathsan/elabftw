@@ -41,6 +41,14 @@ $v = static fn(string $file): int => (int) filemtime(__DIR__ . '/' . $file);
       <div id="plasmid-results" hidden></div>
     </span>
     <span id="save-state" role="status"></span>
+        <label class="map-style" title="Look of the circular map">Map style
+      <select id="map-style" aria-label="Map style">
+        <option value="clean">Clean</option>
+        <option value="vivid">Vivid</option>
+        <option value="dark">Dark</option>
+        <option value="classic">Classic</option>
+      </select>
+    </label>
     <span id="status" role="status">Loading the editor...</span>
   </div>
   <div id="workspace">

@@ -75,6 +75,14 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
       <a href="alignment.php?entry=<?= $entryId ?>" role="tab" title="Align the sequencing reads of this entry to the sequence">Alignment</a>
     </span>
     <span id="title"></span>
+    <label class="map-style" title="Look of the circular map">Map style
+      <select id="map-style" aria-label="Map style">
+        <option value="clean">Clean</option>
+        <option value="vivid">Vivid</option>
+        <option value="dark">Dark</option>
+        <option value="classic">Classic</option>
+      </select>
+    </label>
     <span id="save-state" role="status"></span>
     <span id="status" role="status">Loading the sequence...</span>
   </div>

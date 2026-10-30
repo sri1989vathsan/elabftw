@@ -23,6 +23,28 @@
   const AUTOSAVE_AFTER_MS = 3000;
   const WATCH_EVERY_MS = 1000;
 
+  // the look of the circular map: set on the page (CSS in viewer.css), remembered in the browser
+  const mapStyle = document.getElementById('map-style');
+  const MAP_STYLES = ['clean', 'vivid', 'dark', 'classic'];
+  let chosenStyle = 'clean';
+  try {
+    chosenStyle = window.localStorage.getItem('sequence-editor-map-style') || chosenStyle;
+  } catch (error) {
+    // the default stays
+  }
+  document.body.dataset.mapStyle = MAP_STYLES.indexOf(chosenStyle) === -1 ? 'clean' : chosenStyle;
+  if (mapStyle) {
+    mapStyle.value = document.body.dataset.mapStyle;
+    mapStyle.addEventListener('change', function () {
+      document.body.dataset.mapStyle = mapStyle.value;
+      try {
+        window.localStorage.setItem('sequence-editor-map-style', mapStyle.value);
+      } catch (error) {
+        // not remembered
+      }
+    });
+  }
+
   // colours of the annotations, for the display only: they are not written to the file unless the user sets them
   const FEATURE_COLORS = {
     cds: '#2f6fed',
@@ -193,6 +215,8 @@
       additionalEnzymes: window.EnzymeLibrary ? window.EnzymeLibrary.enzymes : {},
       // the list of the filter shows the groups of the user, not the vendors (they have their own tool)
       enzymeGroupsOverride: window.EnzymeVendors ? window.EnzymeVendors.userGroups : undefined,
+      // the right-click menu: Set origin here
+      rightClickOverrides: window.OriginTab ? window.OriginTab.overrides() : undefined,
       onSave: function (opts, sequenceData) {
         saveNow(sequenceData);
       },
