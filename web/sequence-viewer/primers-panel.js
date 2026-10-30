@@ -409,22 +409,79 @@
       if (own.length > 0) {
         panel.append(element('h4', '', 'Primers designed in this file'));
       }
-      own.forEach(function (primer) {
+      // the ones that are not in the database yet can be ticked and added together, or all at once
+      const items = own.map(function (primer) {
         const forward = primer.forward !== false && primer.strand !== -1;
         const bases = basesOf(now.sequence, primer.start, primer.end, forward);
-        const inDatabase = known(bases);
+        return { name: primer.name || 'primer', forward: forward, bases: bases, inDatabase: known(bases) };
+      });
+      const missing = items.filter(function (item) {
+        return !item.inDatabase && tools.clean(item.bases).length >= tools.minLength;
+      });
+      const chosen = new Set(missing);
+      let addChosen = null;
+      let addAll = null;
+      const refreshBar = function () {
+        if (addChosen) {
+          addChosen.textContent = 'Add the ' + chosen.size + ' selected to the database';
+          addChosen.disabled = chosen.size === 0;
+        }
+      };
+      if (missing.length > 0) {
+        const bar = element('div', 'primers-pickbar');
+        const everything = element('input');
+        everything.type = 'checkbox';
+        everything.checked = true;
+        everything.setAttribute('aria-label', 'Select all the primers of the file');
+        const boxes = [];
+        everything.addEventListener('change', function () {
+          boxes.forEach(function (box) {
+            box.checked = everything.checked;
+            box.dispatchEvent(new Event('change'));
+          });
+        });
+        addChosen = action('', function () {
+          addMany(Array.from(chosen), [addChosen, addAll]);
+        }, 'primary');
+        addAll = action('Add all (' + missing.length + ')', function () {
+          addMany(missing, [addChosen, addAll]);
+        });
+        bar.append(everything, element('span', 'primers-muted', 'Select all'), addChosen, addAll);
+        panel.append(bar);
+        refreshBar();
+        items.boxes = boxes;
+      }
+      items.forEach(function (item) {
         const row = element('div', 'primers-row');
-        row.append(element('strong', '', primer.name || 'primer'), element('span', 'primers-muted', bases.length + ' bases'));
-        if (inDatabase) {
-          const link = element('a', 'primers-muted', 'in the database: ' + inDatabase.title);
-          link.href = '../registry.php?mode=view&id=' + inDatabase.id;
+        if (missing.indexOf(item) !== -1) {
+          const box = element('input');
+          box.type = 'checkbox';
+          box.checked = true;
+          box.setAttribute('aria-label', 'Select ' + item.name);
+          box.addEventListener('change', function () {
+            if (box.checked) {
+              chosen.add(item);
+            } else {
+              chosen.delete(item);
+            }
+            refreshBar();
+          });
+          items.boxes.push(box);
+          row.append(box);
+        }
+        row.append(element('strong', '', item.name), element('span', 'primers-muted', item.bases.length + ' bases'));
+        if (item.inDatabase) {
+          const link = element('a', 'primers-muted', 'in the database: ' + item.inDatabase.title);
+          link.href = '../registry.php?mode=view&id=' + item.inDatabase.id;
           link.target = '_blank';
           row.append(link);
+        } else if (missing.indexOf(item) === -1) {
+          row.append(element('span', 'primers-muted', 'too short for the database'));
         } else {
           const add = element('button', 'cutter-button', 'Add to the database');
           add.type = 'button';
           add.addEventListener('click', function () {
-            addToDatabase(add, primer.name || 'primer', bases, forward);
+            addToDatabase(add, item.name, item.bases, item.forward);
           });
           row.append(add);
         }
@@ -465,6 +522,39 @@
         row.append(name, info, reverseLabel, add);
         panel.append(row);
       }
+    }
+
+    // several primers of the file in the database, each attached to this sequence; one that is already there is left out
+    async function addMany(list, buttons) {
+      buttons.forEach(function (b) {
+        if (b) {
+          b.disabled = true;
+        }
+      });
+      let added = 0;
+      let skipped = 0;
+      const seen = new Set();
+      try {
+        for (const item of list) {
+          const key = tools.clean(item.bases);
+          if (seen.has(key) || known(item.bases)) {
+            skipped++;
+            continue;
+          }
+          seen.add(key);
+          const id = await tools.createPrimer(item.name, item.bases, item.forward, current().name);
+          if (entryId) {
+            await tools.attach(entryId, id);
+          }
+          added++;
+        }
+        say(added + ' primer' + (added === 1 ? '' : 's') + ' added to the database' + (skipped > 0 ? ' (' + skipped + ' already there)' : '') + '.');
+      } catch (error) {
+        say((added > 0 ? added + ' added, then: ' : '') + (error.message || String(error)), true);
+      }
+      databasePrimers = null;
+      await loadAttached();
+      await render();
     }
 
     // a new primer in the database, attached to this sequence
