@@ -25,6 +25,7 @@ use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\FavCategories;
 use Elabftw\Models\FavFilters;
 use Elabftw\Models\FavTags;
+use Elabftw\Models\InventoryCategories;
 use Elabftw\Models\ItemsStatus;
 use Elabftw\Models\ResourcesCategories;
 use Elabftw\Models\Notifications\UserNotifications;
@@ -77,6 +78,8 @@ final class App
     public array $favoriteTagsArr = array();
 
     public array $itemsCategoryArr = array();
+
+    public array $registryCategoryArr = array();
 
     public array $itemsStatusArr = array();
 
@@ -158,6 +161,8 @@ final class App
             $this->experimentsCategoryArr = $ExperimentsCategory->readAll($ExperimentsCategory->getQueryParams(new InputBag(array('limit' => 9999))));
             $ResourcesCategory = new ResourcesCategories($this->Teams);
             $this->itemsCategoryArr = $ResourcesCategory->readAll($ResourcesCategory->getQueryParams(new InputBag(array('limit' => 9999))));
+            $RegistryCategory = new InventoryCategories($this->Teams);
+            $this->registryCategoryArr = $RegistryCategory->readAll($RegistryCategory->getQueryParams(new InputBag(array('limit' => 9999))));
             $ExperimentsStatus = new ExperimentsStatus($this->Teams);
             $this->experimentsStatusArr = $ExperimentsStatus->readAll($ExperimentsStatus->getQueryParams(new InputBag(array('limit' => 9999))));
             $ItemsStatus = new ItemsStatus($this->Teams);
