@@ -7,7 +7,10 @@
   {% set pageGuide = {'templates.php': 'guide-templates', 'resources-templates.php': 'guide-templates'}[scriptName] ?? null %}
   <h1 id='pageTitle' {% if hideTitle %}hidden{% endif %}>{{ pageTitle }}{% if scriptName == 'experiments.php' %}{{ guide.area('Experiments', pageTitle) }}{% elseif scriptName == 'database.php' %}{{ guide.area('Resources', pageTitle) }}{% elseif pageGuide %}{{ guide.info(pageGuide, pageTitle) }}{% endif %}</h1>
   <div class='ml-auto d-flex'>
-    {% include 'create-new.html' %}
+    {# the registry creates its entries from a category tab #}
+    {% if scriptName != 'registry.php' %}
+      {% include 'create-new.html' %}
+    {% endif %}
   </div>
 </div>
 {% endblock %}
