@@ -233,7 +233,9 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
         ? pickedSlots
         : freeSlotsFrom(unit, null, Math.max(1, Number(copies.value) || 1));
       const showHint = (): void => {
-        if (pickedSlots.length > 0) {
+        if (editing && pickedSlots.length > 0) {
+          hint.textContent = `Selected: ${pickedSlots.join(', ')}. The tube takes the first of them (${currentPosition !== '' && pickedSlots.includes(currentPosition) ? currentPosition : pickedSlots[0]}); each other slot gets one more tube with the same quantity.`;
+        } else if (pickedSlots.length > 0) {
           hint.textContent = `Selected: ${pickedSlots.join(', ')}. Click a selected slot again to unselect it.`;
         } else {
           const slots = planned();
@@ -267,10 +269,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
             cell.style.backgroundColor = '#9a9a9a';
           } else {
             cell.addEventListener('click', () => {
-              // a tube being edited takes one slot
-              pickedSlots = editing
-                ? (pickedSlots.includes(slot) ? [] : [slot])
-                : (pickedSlots.includes(slot) ? pickedSlots.filter(x => x !== slot) : [...pickedSlots, slot]);
+              pickedSlots = pickedSlots.includes(slot) ? pickedSlots.filter(x => x !== slot) : [...pickedSlots, slot];
               // the selection decides how many containers there are
               copies.disabled = pickedSlots.length > 0;
               if (pickedSlots.length > 0) {
@@ -326,7 +325,10 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     const unit = selected;
     if (editing) {
       add.disabled = true;
-      const slot = unit.box_rows && pickedSlots.length > 0 ? pickedSlots[0] : '';
+      const chosenSlots = unit.box_rows ? pickedSlots : [];
+      // the tube keeps its own slot when it is still selected, else it takes the first one
+      const slot = chosenSlots.length > 0 ? (chosenSlots.includes(currentPosition) && unit.id === currentStorageId ? currentPosition : chosenSlots[0]) : '';
+      const extraSlots = chosenSlots.filter(x => x !== slot);
       const moved = unit.id !== currentStorageId;
       try {
         await ApiC.patch(`${entity.type}/${entity.id}/containers/${editId}`, {
@@ -337,6 +339,14 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
           ...((moved || slot !== currentPosition) && (slot !== '' || !moved) ? { position: slot } : {}),
           ...(kind === 'primary' && !wasPrimary ? { is_primary: 1 } : {}),
         });
+        // more slots chosen: one more tube in each, with the same quantity
+        for (const extra of extraSlots) {
+          await ApiC.post(`${entity.type}/${entity.id}/containers/${unit.id}`, {
+            qty_stored: qty.value,
+            qty_unit: unitSelect.value,
+            position: extra,
+          });
+        }
         $(modal).modal('hide');
         await reloadElements(['storageDivContent']);
       } catch {
