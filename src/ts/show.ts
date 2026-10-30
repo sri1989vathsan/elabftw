@@ -1274,7 +1274,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderActiveFilters() {
     activeFilters.replaceChildren();
 
-    for (const { control, title } of filterControls) {
+    for (const { control, title, param } of filterControls) {
+      // the tab of the database already is the module filter: no chip for it
+      if (param === 'category' && entity.type === 'inventory') {
+        continue;
+      }
       for (const value of control.items) {
         const option = control.options[value];
         const labelField = control.settings.labelField || 'text';
