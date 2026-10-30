@@ -29,16 +29,12 @@ use function file_get_contents;
 use function hash_equals;
 use function header;
 use function http_response_code;
-use function implode;
 use function in_array;
 use function is_array;
 use function json_decode;
 use function json_encode;
 use function preg_match;
-use function round;
 use function sprintf;
-use function strlen;
-use function strtoupper;
 
 /**
  * The primers attached to the plasmids of the database. A primer is an entry of the database (a module of primers) and can be
@@ -48,8 +44,8 @@ use function strtoupper;
  * GET ?orders=1 gives the open orders of the team, to pick the one a primer is sent to.
  * POST {action: attach|detach, plasmid: <id>, primer: <id>} attaches or detaches; whoever can read both entries can do it,
  * like the storage of an entry.
- * POST {action: order, primers: [<id>], order: <id>} links primers to an order of the team and, when the requester owns the
- * order, adds their sequences to its notes: whoever can read the primers can send them.
+ * POST {action: order, primers: [<id>], order: <id>} links primers to an order of the team: whoever can read the primers can
+ * send them. The sequences go to the supplier in the order sheet (GET ?sheet=), not in the notes of the order.
  */
 require_once __DIR__ . '/app/init.inc.php';
 require_once __DIR__ . '/order-sheets/sheets.inc.php';
@@ -102,23 +98,6 @@ function describe(App $App, int $id): ?array
     );
 }
 
-/**
- * A quick estimate of the melting temperature, like the one of the editor
- */
-function estimateTm(string $sequence): ?float
-{
-    $bases = preg_replace('/[^A-Z]/', '', strtoupper($sequence)) ?? '';
-    $length = strlen($bases);
-    if ($length === 0) {
-        return null;
-    }
-    $gc = preg_match_all('/[GC]/', $bases);
-    if ($length < 14) {
-        return (float) (2 * ($length - $gc) + 4 * $gc);
-    }
-    return round(64.9 + (41 * ($gc - 16.4)) / $length, 1);
-}
-
 $pdo = Db::getConnection();
 $teamId = (int) $App->Users->userData['team'];
 $userId = (int) $App->Users->userData['userid'];
@@ -148,10 +127,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         if (!is_array($order)) {
             respond(404, array('error' => 'Order not found in this team.'));
         }
-        $lines = array();
         foreach ($primerIds as $primerId) {
-            $primerEntry = describe($App, $primerId);
-            if ($primerEntry === null) {
+            if (describe($App, $primerId) === null) {
                 continue;
             }
             $link = $pdo->prepare('INSERT IGNORE INTO entity_order_links (entity_type, entity_id, order_id) VALUES (:type, :id, :order)');
@@ -159,23 +136,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $link->bindValue(':id', $primerId, PDO::PARAM_INT);
             $link->bindValue(':order', $orderId, PDO::PARAM_INT);
             $pdo->execute($link);
-            // a primer is written in the notes once
-            if ($link->rowCount() > 0 && $primerEntry['sequence'] !== '') {
-                // the melting temperature written on the primer, else a quick estimate
-                $tm = $primerEntry['tm'] ?? estimateTm($primerEntry['sequence']);
-                $lines[] = sprintf("%s: 5'-%s-3'%s", $primerEntry['title'], $primerEntry['sequence'], $tm === null ? '' : sprintf(' (Tm %s C)', $tm));
-            }
         }
-        $notesAdded = false;
-        // the notes of an order are those of its owner (or of an admin)
-        if ($lines !== array() && ((int) $order['userid'] === $userId || $App->Users->isAdmin)) {
-            $update = $pdo->prepare("UPDATE custom_orders SET notes = CONCAT(IFNULL(notes, ''), IF(IFNULL(notes, '') = '', '', '\n'), :lines) WHERE id = :id");
-            $update->bindValue(':lines', implode("\n", $lines));
-            $update->bindValue(':id', $orderId, PDO::PARAM_INT);
-            $pdo->execute($update);
-            $notesAdded = true;
-        }
-        respond(200, array('ok' => true, 'linked' => count($primerIds), 'notesAdded' => $notesAdded, 'order' => array('id' => $orderId, 'title' => (string) $order['title'])));
+        respond(200, array('ok' => true, 'linked' => count($primerIds), 'order' => array('id' => $orderId, 'title' => (string) $order['title'])));
     }
     $plasmid = (int) ($payload['plasmid'] ?? 0);
     $primer = (int) ($payload['primer'] ?? 0);

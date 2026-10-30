@@ -176,3 +176,17 @@
 .sa-sheet .sa-small {
   flex: 0 0 6.5rem;
 }
+
+.sa-toast {
+  position: fixed;
+  right: 1.2rem;
+  bottom: 1.2rem;
+  z-index: 2000;
+  max-width: 24rem;
+  padding: 0.7rem 1rem;
+  border-radius: 0.5rem;
+  background: #1f2d3d;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  font-size: 0.9rem;
+}

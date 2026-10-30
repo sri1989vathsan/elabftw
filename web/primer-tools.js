@@ -258,7 +258,7 @@
 
   /**
    * A dialog to send primers to an order of the team: a new order or one that is open. The sequences of the primers are
-   * written in the notes of the order, to be sent to the maker.
+   * sent to the maker in the order sheet that can be attached to the order.
    */
   async function sendToOrder(primerIds, onDone) {
     ensureStyles();
@@ -276,7 +276,7 @@
     newLabel.append(newRadio, document.createTextNode(' A new order'));
     const title = element('input', 'sa-input');
     title.type = 'text';
-    title.value = 'Primers ' + new Date().toISOString().slice(0, 10);
+    title.value = 'Oligos';
     const existingRadio = element('input');
     existingRadio.type = 'radio';
     existingRadio.name = 'po-order';
@@ -317,10 +317,13 @@
     vendor.addEventListener('change', fillOptions);
     fillOptions();
     try {
-      vendor.value = window.localStorage.getItem('order-sheet-vendor') || '';
+      // IDT unless another choice was made before ('none' is remembered too)
+      const remembered = window.localStorage.getItem('order-sheet-vendor');
+      vendor.value = remembered === null ? 'idt' : (remembered === 'none' ? '' : remembered);
       fillOptions();
     } catch (error) {
-      // the choice is not remembered
+      vendor.value = 'idt';
+      fillOptions();
     }
     sheetBox.append(vendor, scale, purification);
     choices.append(sheetBox);
@@ -374,7 +377,7 @@
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
-            body: JSON.stringify({ title: title.value.trim() || 'Primers' }),
+            body: JSON.stringify({ title: title.value.trim() || 'Oligos' }),
           });
           if (!response.ok) {
             throw new Error('The order could not be created (' + response.status + ').');
@@ -384,15 +387,13 @@
           orderId = Number(select.value);
         }
         const result = await json('primers.php', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ action: 'order', primers: primerIds, order: orderId }) });
-        message.textContent = 'Sent to the order "' + result.order.title + '"' + (result.notesAdded ? ', with the sequences in its notes.' : '.');
-        message.className = 'sa-message';
-        cancel.textContent = 'Close';
+        let done = 'Sent to the order "' + result.order.title + '".';
+        try {
+          window.localStorage.setItem('order-sheet-vendor', vendor.value || 'none');
+        } catch (error) {
+          // not remembered
+        }
         if (vendor.value) {
-          try {
-            window.localStorage.setItem('order-sheet-vendor', vendor.value);
-          } catch (error) {
-            // not remembered
-          }
           // the sheet is made on the server and attached to the order, like a quote: nothing is downloaded
           const sheetResponse = await fetch(base + 'primers.php?' + new URLSearchParams({ sheet: vendor.value, ids: primerIds.join(','), scale: scale.value, purification: purification.value }).toString(), { credentials: 'same-origin' });
           if (!sheetResponse.ok) {
@@ -409,8 +410,16 @@
           if (!attached.ok) {
             throw new Error('The order sheet could not be attached to the order (' + attached.status + ').');
           }
-          message.textContent += ' The ' + SHEETS[vendor.value].label.split(' ')[0] + ' order sheet is attached to it.';
+          done += ' The ' + SHEETS[vendor.value].label.split(' ')[0] + ' order sheet is attached to it.';
         }
+        // the dialog closes; a short note tells what was done
+        close();
+        const toast = element('div', 'sa-toast', done);
+        toast.setAttribute('role', 'status');
+        document.body.append(toast);
+        window.setTimeout(function () {
+          toast.remove();
+        }, 5000);
         if (onDone) {
           onDone(result);
         }
