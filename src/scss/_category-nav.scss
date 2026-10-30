@@ -776,6 +776,12 @@
     text-align: center;
   }
 
+  // the copy button at the right end of each row stays in view
+  .expandable-actions-cell {
+    width: 1%;
+    white-space: nowrap;
+  }
+
   .expandable-filter-row th {
     padding: 0.15rem 0.3rem;
     border-top: 0;

@@ -3,6 +3,7 @@
  * its storage with the total stock and its recent activity
  */
 import { ApiC } from './api';
+import { Action } from './interfaces';
 import { getEntityTypeFromPage } from './misc';
 import { el, fieldLabel, filterParams, linkify, plainText, sortableHeader, sortRows, storageUrl } from './entities-view-utils';
 import type { SortState } from './entities-view-utils';
@@ -35,6 +36,8 @@ const quantityOf = (row: Row): number | '' => {
 };
 const fieldOf = (row: Row, pattern: RegExp): string => (row.extra_fields ?? []).find(f => pattern.test(f.name))?.value ?? '';
 const isPrimerList = (rows: Row[]): boolean => rows.length > 0 && rows.every(r => /^(primers?|probes?)$/i.test(r.category_title ?? ''));
+// the list is of one module: the fields of the module are columns
+const isModule = (rows: Row[], pattern: RegExp): boolean => rows.length > 0 && rows.every(r => pattern.test(r.category_title ?? ''));
 const basesOf = (row: Row): string => fieldOf(row, /^sequence/i).toUpperCase().replace(/[^A-Z]/g, '');
 const gcOf = (bases: string): number | '' => bases === '' ? '' : Math.round(((bases.match(/[GC]/g) ?? []).length / bases.length) * 1000) / 10;
 const numberOrEmpty = (value: string): number | '' => value !== '' && Number.isFinite(Number(value)) ? Number(value) : '';
@@ -54,8 +57,53 @@ function columnsFor(rows: Row[]): Column[] {
       text('Orientation', 'Orientation', r => fieldOf(r, /^orientation/i)),
       text('Target', 'Target', r => fieldOf(r, /^target/i)),
     );
+    if (rows.some(r => /^probes?$/i.test(r.category_title ?? ''))) {
+      // a probe also has a label (its dye) and a type
+      columns.push(text('Label', 'Label', r => fieldOf(r, /^label/i)), text('Type', 'Type', r => fieldOf(r, /^type/i)));
+    }
+  } else if (isModule(rows, /^antibod/i)) {
+    // the antibodies are looked at by what they recognise, where they come from, their kind, their dye and their dilution
+    columns.push(
+      text('Target', 'Target', r => fieldOf(r, /^target/i)),
+      text('Host', 'Host', r => fieldOf(r, /^host/i)),
+      text('Kind', 'Primary / secondary', r => fieldOf(r, /^antibody type/i)),
+      text('Dye', 'Dye', r => fieldOf(r, /^conjugate$/i)),
+      text('Dilution', 'Dilution', r => fieldOf(r, /^dilution/i)),
+    );
+  } else if (isModule(rows, /^samples?$/i)) {
+    columns.push(
+      text('SampleType', 'Sample type', r => fieldOf(r, /^sample type/i)),
+      text('Collected', 'Date collected', r => fieldOf(r, /^date collected/i)),
+    );
+  } else if (isModule(rows, /^cells?/i)) {
+    // cells and strains: what they are, their genotype, the selection and the mycoplasma status
+    columns.push(
+      text('Kind', 'Kind', r => fieldOf(r, /^kind/i)),
+      text('Species', 'Species / organism', r => fieldOf(r, /^species/i)),
+      text('Genotype', 'Genotype / tissue', r => fieldOf(r, /^genotype/i)),
+      text('Selection', 'Selection', r => fieldOf(r, /^(resistance|selection)/i)),
+      text('Mycoplasma', 'Mycoplasma', r => fieldOf(r, /^mycoplasma/i)),
+    );
+  } else if (isModule(rows, /^reagents?$/i)) {
+    // reagents: what is checked at the bench, the supplier, the lot and the expiry
+    columns.push(
+      text('ReagentType', 'Type', r => fieldOf(r, /^reagent type/i)),
+      text('Supplier', 'Supplier', r => fieldOf(r, /^supplier/i)),
+      text('Catalog', 'Catalog no.', r => fieldOf(r, /^catalog/i)),
+      text('Lot', 'Lot', r => fieldOf(r, /^lot/i)),
+      text('Expiry', 'Expiry', r => fieldOf(r, /^expiry/i)),
+    );
+  } else if (isModule(rows, /^plasmids?$/i)) {
+    // a plasmid: its backbone and the selection (the resistance), and the sequence files opened in the sequence editor
+    columns.push(
+      text('Backbone', 'Backbone', r => fieldOf(r, /^backbone/i)),
+      text('Selection', 'Selection', r => fieldOf(r, /^(resistance|selection)/i)),
+    );
+    if (rows.some(r => (r.sequence_files ?? []).length > 0)) {
+      columns.push(text('Files', 'Sequence', r => (r.sequence_files ?? []).map(f => f.real_name).join(' ')));
+    }
   } else if (rows.some(r => (r.sequence_files ?? []).length > 0)) {
-    // the sequence files of the plasmids, opened in the sequence editor
+    // the sequence files of the other lists that have them, opened in the sequence editor
     columns.push(text('Files', 'Sequence', r => (r.sequence_files ?? []).map(f => f.real_name).join(' ')));
   }
   columns.push(num('Quantity', 'Quantity', quantityOf), text('Owner', 'Owner', r => r.fullname ?? ''));
@@ -240,6 +288,8 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     sortableHeader(th, c.label, c.key, sort, onSort);
     head.append(th);
   });
+  // the last column holds the copy button of each row
+  head.append(el('th', 'expandable-actions-cell'));
   // a filter on each column, the rows shown are the ones that pass all of them
   const filterRow = el('tr', 'expandable-filter-row');
   filterRow.append(el('th'), el('th'));
@@ -258,6 +308,7 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     th.append(input);
     filterRow.append(th);
   });
+  filterRow.append(el('th', 'expandable-actions-cell'));
   const thead = el('thead');
   thead.append(head, filterRow);
   const body = el('tbody');
@@ -360,6 +411,26 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
       }
     });
 
+    // the copy button: makes a copy of the entry (with its files) and opens it to be edited
+    const actionCell = el('td', 'expandable-actions-cell text-nowrap text-right');
+    const copy = el('button', 'btn btn-secondary btn-sm');
+    copy.type = 'button';
+    copy.title = `Make a copy of ${row.title}`;
+    copy.setAttribute('aria-label', `Copy ${row.title}`);
+    copy.append(el('i', 'fas fa-copy fa-fw mr-1'), document.createTextNode('Copy'));
+    copy.addEventListener('click', () => {
+      copy.disabled = true;
+      void ApiC.post2location(`inventory/${row.id}`, { action: Action.Duplicate, copyFiles: true, linkToOriginal: false })
+        .then(id => {
+          window.location.href = `?mode=edit&id=${id}`;
+        })
+        .catch(() => {
+          copy.disabled = false;
+        });
+    });
+    actionCell.append(copy);
+    tr.append(actionCell);
+
     let detailRow: HTMLTableRowElement | null = null;
     caret.addEventListener('click', () => {
       if (detailRow) {
@@ -371,7 +442,7 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
       }
       detailRow = el('tr', 'expandable-detail-row');
       const cell = el('td');
-      cell.colSpan = cols.length + 2;
+      cell.colSpan = cols.length + 3;
       cell.append(buildDetail(row));
       detailRow.append(cell);
       tr.after(detailRow);
