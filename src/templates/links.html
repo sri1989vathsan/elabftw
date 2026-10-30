@@ -19,7 +19,7 @@
 {# DATA: smb:// and \\server\share network paths. Kept as its own top-level
    section (not nested inside Links) since it's usually the fastest link
    people reach for, so it gets a direct sidebar button of its own. #}
-<h3 data-action='toggle-next' data-scroll-btn='fa-server' data-scroll-btn-label='{{ 'Data'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ mode == 'edit' ? 'true' : 'false' }}' aria-controls='dataSectionDiv'><i class='fas {{ mode == 'edit' ? 'fa-caret-down' : 'fa-caret-right' }} mr-2 fa-fw'></i>{{ 'Data'|trans }} (<span id='dataLinksCount'>{{ dataReferences|length }}</span>)</h3>
+<h3 data-action='toggle-next' data-scroll-btn='fa-server' data-scroll-btn-label='{{ 'Data'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ mode == 'edit' ? 'true' : 'false' }}' aria-controls='dataSectionDiv' data-toggle-target='dataSectionDiv'><i class='fas {{ mode == 'edit' ? 'fa-caret-down' : 'fa-caret-right' }} mr-2 fa-fw'></i>{{ 'Data'|trans }} (<span id='dataLinksCount'>{{ dataReferences|length }}</span>)</h3>
 <div class='mt-2' {{ mode == 'edit' ? '' : 'hidden' }} data-save-hidden='dataSectionDiv' id='dataSectionDiv'>
   <section id='dataLinksSection'>
     <div id='dataLinksDiv'>
@@ -79,8 +79,10 @@
 <hr>
 
 {# LINKS #}
-<h3 data-action='toggle-next' data-scroll-btn='fa-link' data-scroll-btn-label='{{ 'Links'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ mode == 'edit' ? 'true' : 'false' }}' aria-controls='linksDiv'><i class='fas {{ mode == 'edit' ? 'fa-caret-down' : 'fa-caret-right' }} mr-2 fa-fw'></i>{{ 'Links'|trans }}</h3>{{ guide.info('guide-experiment-sections', 'Links') }}
-<div class='mt-2' {{ mode == 'edit' ? '' : 'hidden' }} data-save-hidden='linksDiv' id='linksDiv'>
+{# the links of a resource start collapsed, also when editing #}
+{% set linksOpen = mode == 'edit' and Entity.entityType.value != 'items' %}
+<h3 data-action='toggle-next' data-scroll-btn='fa-link' data-scroll-btn-label='{{ 'Links'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ linksOpen ? 'true' : 'false' }}' aria-controls='linksDiv' data-toggle-target='linksDiv'><i class='fas {{ linksOpen ? 'fa-caret-down' : 'fa-caret-right' }} mr-2 fa-fw'></i>{{ 'Links'|trans }}</h3>{{ guide.info('guide-experiment-sections', 'Links') }}
+<div class='mt-2' {{ linksOpen ? '' : 'hidden' }} data-save-hidden='linksDiv' id='linksDiv'>
   {# EXPERIMENTS LINKS #}
   <h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='ml-3 d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='experimentsLinksDiv'><i class='fas fa-caret-down mr-2 fa-fw'></i>{{ 'Experiment links'|trans }} (<span id='experimentsLinksCount'>{{ Entity.entityData.experiments_links|length }}</span>)</h4>
   <div id='experimentsLinksDiv' class='ml-4'>
