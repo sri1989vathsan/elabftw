@@ -1,0 +1,83 @@
+/* softer colours for the translations of the sequence editor: the amino acids are grouped by chemistry
+   (aliphatic blue, aromatic teal, polar amber, positive violet, negative rose). They replace the saturated
+   rainbow of the editor; generated from the colours it uses. */
+path[fill="hsl(327.3, 100%, 69%)"] {
+  fill: #b6d4f2;
+}
+
+path[fill="hsl(258.1, 100%, 69%)"] {
+  fill: #8f9cee;
+}
+
+path[fill="hsl(268.9, 100%, 69%)"] {
+  fill: #f9e9b8;
+}
+
+path[fill="hsl(268.9, 100%, 69%)"] {
+  fill: #f4a3ad;
+}
+
+path[fill="hsl(335.1, 100%, 69%)"] {
+  fill: #f7b977;
+}
+
+path[fill="hsl(268.9, 100%, 69%)"] {
+  fill: #f7bcc3;
+}
+
+path[fill="hsl(268.9, 100%, 69%)"] {
+  fill: #f6dc9a;
+}
+
+path[fill="hsl(303.1, 100%, 69%)"] {
+  fill: #d9dde3;
+}
+
+path[fill="hsl(272.2, 100%, 69%)"] {
+  fill: #c2c9f6;
+}
+
+path[fill="hsl(356.9, 100%, 69%)"] {
+  fill: #6ea5e0;
+}
+
+path[fill="hsl(349.4, 100%, 69%)"] {
+  fill: #82b4e6;
+}
+
+path[fill="hsl(264.7, 100%, 69%)"] {
+  fill: #a9b4f2;
+}
+
+path[fill="hsl(328.5, 100%, 69%)"] {
+  fill: #a7b9ec;
+}
+
+path[fill="hsl(338.4, 100%, 69%)"] {
+  fill: #7fd3c4;
+}
+
+path[fill="hsl(289.9, 100%, 69%)"] {
+  fill: #cdb9ea;
+}
+
+path[fill="hsl(298.6, 100%, 69%)"] {
+  fill: #fde6a6;
+}
+
+path[fill="hsl(299.8, 100%, 69%)"] {
+  fill: #fbd88a;
+}
+
+path[fill="hsl(297.6, 100%, 69%)"] {
+  fill: #5cc2b0;
+}
+
+path[fill="hsl(293.2, 100%, 69%)"] {
+  fill: #a1e0d2;
+}
+
+path[fill="hsl(353.6, 100%, 69%)"] {
+  fill: #9cc4ec;
+}
+

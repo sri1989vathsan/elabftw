@@ -57,6 +57,7 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sequence editor</title>
   <link rel="stylesheet" href="vendor/ove.css">
+  <link rel="stylesheet" href="aa-colors.css?v=<?= (int) filemtime(__DIR__ . '/aa-colors.css') ?>">
   <link rel="stylesheet" href="viewer.css?v=<?= (int) filemtime(__DIR__ . '/viewer.css') ?>">
 </head>
 <body

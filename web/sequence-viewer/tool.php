@@ -29,6 +29,7 @@ $v = static fn(string $file): int => (int) filemtime(__DIR__ . '/' . $file);
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sequence editor</title>
   <link rel="stylesheet" href="vendor/ove.css">
+  <link rel="stylesheet" href="aa-colors.css?v=<?= (int) filemtime(__DIR__ . '/aa-colors.css') ?>">
   <link rel="stylesheet" href="viewer.css?v=<?= $v('viewer.css') ?>">
 </head>
 <body data-tool="1" data-entry="0" data-upload="0" data-can-write="0" data-csrf="<?= $h((string) $App->Session->get('csrf')) ?>">
