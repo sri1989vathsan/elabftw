@@ -14,9 +14,23 @@ type Row = {
   category_color: string | null;
   fullname: string;
   storage_locations?: StorageLocation[];
+  extra_fields?: { name: string; value: string }[];
+  web_links?: { url: string; label: string }[];
+  description?: string;
 };
 type Node = { unit: Unit; children: Node[]; own: Row[]; total: number };
 type Tube = { row: Row; location: StorageLocation };
+
+// the fields shown on the card of a tube, per category (lower case names)
+const CARD_FIELDS: Record<string, string[]> = {
+  plasmids: ['backbone', 'resistance'],
+  antibodies: ['target', 'antibody type', 'host species', 'conjugate'],
+  'cells & strains': ['kind', 'species / organism'],
+  probes: ['target', 'label'],
+  primers: ['target gene', 'orientation'],
+  reagents: ['supplier', 'catalog number'],
+  samples: ['sample type', 'concentration'],
+};
 
 // the details of a tube, shown while the pointer is over it
 let tubeCard: HTMLElement | null = null;
@@ -55,7 +69,42 @@ function fillTubeCard(card: HTMLElement, tube: Tube, linked: boolean): void {
   line('Slot', tube.location.position ?? '');
   line('Storage', tube.location.is_primary ? 'Primary' : 'Secondary');
   line('Quantity', `${tube.location.qty_stored} ${tube.location.qty_unit}`.trim());
+  // the fields that identify an entry of its category, when they are filled
+  const shown = CARD_FIELDS[(tube.row.category_title ?? '').toLowerCase()] ?? [];
+  shown.forEach(name => {
+    const field = (tube.row.extra_fields ?? []).find(f => f.name.toLowerCase() === name);
+    line(field?.name ?? name, field?.value ?? '');
+  });
   line('Owner', tube.row.fullname ?? '');
+  const benchling = benchlingUrl(tube.row);
+  if (benchling !== '') {
+    const row = el('div', 'tube-card-row');
+    row.append(el('span', 'tube-card-label', 'Benchling'));
+    if (linked) {
+      const link = el('a', 'tube-card-text', 'Open the Benchling entry');
+      link.href = benchling;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      row.append(link);
+    } else {
+      row.append(el('span', 'tube-card-text', benchling.replace(/^https?:\/\//i, '')));
+    }
+    card.append(row);
+  }
+  if (tube.row.description) {
+    const row = el('div', 'tube-card-row');
+    row.append(el('span', 'tube-card-label', 'About'), el('span', 'tube-card-text tube-card-description', tube.row.description));
+    card.append(row);
+  }
+}
+
+// the address of the Benchling entry: the field of that name, else a web link to Benchling
+function benchlingUrl(row: Row): string {
+  const field = (row.extra_fields ?? []).find(f => /benchling/i.test(f.name) && /^https?:\/\//i.test(f.value));
+  if (field) {
+    return field.value;
+  }
+  return (row.web_links ?? []).find(l => /benchling/i.test(l.url))?.url ?? '';
 }
 
 function showTubeCard(tube: Tube, event: MouseEvent): void {

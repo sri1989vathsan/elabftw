@@ -726,3 +726,16 @@
     margin-top: 0.6rem;
   }
 }
+
+.tube-card-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+// the description: a few lines at most
+.tube-card-description {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

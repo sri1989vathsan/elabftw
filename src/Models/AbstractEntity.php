@@ -1649,10 +1649,11 @@ abstract class AbstractEntity extends AbstractRest
             return $entities;
         }
         $ids = array_map(static fn(array $entity): int => (int) $entity['id'], $entities);
-        $req = $this->Db->prepare(sprintf('SELECT id, metadata FROM inventory WHERE id IN (%s)', implode(',', $ids)));
+        $req = $this->Db->prepare(sprintf('SELECT id, metadata, body FROM inventory WHERE id IN (%s)', implode(',', $ids)));
         $this->Db->execute($req);
         $byId = array();
         $linksById = array();
+        $descriptionById = array();
         foreach ($req->fetchAll() as $row) {
             $decoded = json_decode((string) $row['metadata'], true);
             $fields = is_array($decoded) && is_array($decoded['extra_fields'] ?? null) ? $decoded['extra_fields'] : array();
@@ -1670,6 +1671,8 @@ abstract class AbstractEntity extends AbstractRest
             }
             usort($list, static fn(array $a, array $b): int => $a['position'] <=> $b['position']);
             $byId[(int) $row['id']] = $list;
+            // a short plain text of the description, for the cards of the storage browser
+            $descriptionById[(int) $row['id']] = mb_strimwidth(trim(preg_replace('/\s+/', ' ', html_entity_decode(strip_tags((string) $row['body']))) ?? ''), 0, 300, '...');
             // the web links of the resource (a benchling page, a paper...): only http(s) addresses are kept
             $links = array();
             foreach (($decoded['elabftw']['web_links'] ?? array()) as $link) {
@@ -1682,6 +1685,7 @@ abstract class AbstractEntity extends AbstractRest
         foreach ($entities as &$entity) {
             $entity['extra_fields'] = $byId[(int) $entity['id']] ?? array();
             $entity['web_links'] = $linksById[(int) $entity['id']] ?? array();
+            $entity['description'] = $descriptionById[(int) $entity['id']] ?? '';
         }
         unset($entity);
 
