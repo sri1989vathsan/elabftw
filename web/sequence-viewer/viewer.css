@@ -68,3 +68,37 @@ html, body {
 #save-state.failed {
   color: #a61e1e;
 }
+
+#summary {
+  box-sizing: border-box;
+  max-height: 9rem;
+  overflow: auto;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid #d0d4d9;
+  background: #fff;
+  font-size: 0.85rem;
+}
+
+#summary[hidden] {
+  display: none;
+}
+
+#summary p {
+  margin: 0.15rem 0;
+}
+
+#summary .read-name {
+  font-weight: 700;
+}
+
+#summary .bad {
+  color: #a61e1e;
+}
+
+#summary .good {
+  color: #1a7f37;
+}
+
+body.has-summary #root {
+  height: calc(100% - 2.75rem - var(--summary-height, 0px));
+}

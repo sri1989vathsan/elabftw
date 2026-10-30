@@ -23,6 +23,12 @@ use Throwable;
  */
 require_once dirname(__DIR__) . '/app/init.inc.php';
 
+// the application does not ask for a login on pages named index.php: this one needs it
+if (!$App->Session->has('is_auth')) {
+    header('Location: ../login.php');
+    exit;
+}
+
 $entryId = (int) ($_GET['entry'] ?? 0);
 $title = '';
 $canWrite = false;

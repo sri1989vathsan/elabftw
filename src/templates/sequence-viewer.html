@@ -5,6 +5,15 @@
     {% set sequenceFiles = sequenceFiles|merge([upload]) %}
   {% endif %}
 {% endfor %}
+{% set readFiles = [] %}
+{% set referenceFiles = [] %}
+{% for upload in sequenceFiles %}
+  {% if upload.real_name matches '/\\.ab1$/i' %}
+    {% set readFiles = readFiles|merge([upload]) %}
+  {% elseif upload.real_name matches '/\\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i' %}
+    {% set referenceFiles = referenceFiles|merge([upload]) %}
+  {% endif %}
+{% endfor %}
 {% if sequenceFiles|length > 0 or Entity.entityData.category_title == 'Plasmids' %}
   <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-dna' data-scroll-btn-label='{{ 'Sequence'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='sequenceDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Sequence'|trans }} ({{ sequenceFiles|length }})</h3>
   <div class='mt-2 ml-3' id='sequenceDiv' data-save-hidden='sequenceDiv'>
@@ -18,6 +27,16 @@
           </li>
         {% endfor %}
       </ul>
+      {# the sequencing reads (ab1) are aligned to a reference sequence of the entry, on the server #}
+      {% if readFiles|length > 0 and referenceFiles|length > 0 %}
+        <p class='mb-2'>
+          {% for reference in referenceFiles %}
+            <a class='btn btn-primary btn-sm mr-1' target='_blank' rel='noopener' href='sequence-viewer/alignment.php?entry={{ Entity.id }}&amp;ref={{ reference.id }}'><i class='fas fa-grip-lines fa-fw mr-1'></i>{{ 'Align the reads to'|trans }} {{ reference.real_name }}</a>
+          {% endfor %}
+        </p>
+      {% elseif readFiles|length > 0 %}
+        <p class='small text-muted mb-2'>{{ 'Attach the reference sequence (a GenBank or FASTA file) to align the reads.'|trans }}</p>
+      {% endif %}
       <p class='small text-muted mb-2'>{{ 'Changes made in the editor are saved as a new version of the file. The earlier versions are kept:'|trans }} <a href='?mode=view&amp;id={{ Entity.id }}&amp;state=1,2#filesDiv'>{{ 'show the versions'|trans }}</a>.</p>
     {% endif %}
   </div>
