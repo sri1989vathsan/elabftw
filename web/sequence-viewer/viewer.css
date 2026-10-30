@@ -913,3 +913,43 @@ body {
   min-height: 0;
   width: 100%;
 }
+
+.close-alignment {
+  margin-left: auto;
+  padding: 0.2rem 0.8rem;
+  border: 1px solid #c4cad1;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #3b4652;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.close-alignment:hover {
+  background: #fdecec;
+  border-color: #d6455d;
+  color: #a12a3d;
+}
+
+#tool-sidebar .enzyme-vendors {
+  margin: 0.6rem 0;
+}
+
+#tool-sidebar .enzyme-vendor {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  cursor: pointer;
+}
+
+#tool-sidebar .enzyme-vendor-name {
+  flex: 1;
+}
+
+#tool-sidebar .tool-input {
+  width: 6rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid #c4cad1;
+  border-radius: 0.4rem;
+}

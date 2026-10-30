@@ -138,6 +138,9 @@
     if (window.DigestCompare) {
       window.DigestCompare.setup(editor, { entryId: entryId });
     }
+    if (window.OriginTab) {
+      window.OriginTab.setup(editor);
+    }
     if (window.AnnotateTab) {
       window.AnnotateTab.setup(editor);
     }
@@ -188,6 +191,8 @@
       readOnly: !canWrite,
       // the commercial enzymes of REBASE, on top of those of the editor (enzymes-library.js)
       additionalEnzymes: window.EnzymeLibrary ? window.EnzymeLibrary.enzymes : {},
+      // the list of the filter shows the groups of the user, not the vendors (they have their own tool)
+      enzymeGroupsOverride: window.EnzymeVendors ? window.EnzymeVendors.userGroups : undefined,
       onSave: function (opts, sequenceData) {
         saveNow(sequenceData);
       },
@@ -199,6 +204,9 @@
       readOnly: !canWrite,
       annotationVisibility: { features: true, cutsites: true, orfs: false },
     });
+    if (window.EnzymeTab) {
+      window.EnzymeTab.setup(editor, { initial: true });
+    }
     setupPrimers(editor);
 
     async function saveNow(sequenceData) {

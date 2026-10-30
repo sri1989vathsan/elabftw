@@ -83,6 +83,7 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
       <a href="#" role="tab" aria-selected="true" class="current">Alignment</a>
     </span>
     <span id="title">Sequencing alignment</span>
+    <?php if ($sequenceUrl !== '') { ?><a id="close-alignment" class="close-alignment" href="<?= $h($sequenceUrl) ?>" title="Back to the plasmid (Esc)">&#10005; Close alignment</a><?php } ?>
     <span id="status" role="status">Loading the sequences...</span>
   </div>
   <div id="summary" hidden></div>

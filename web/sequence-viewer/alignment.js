@@ -221,6 +221,14 @@
     fail('The sequence editor is not installed. Run bin/fetch-ove.sh once.');
     return;
   }
+  // Esc leaves the alignment for the plasmid
+  document.addEventListener('keydown', function (event) {
+    const close = document.getElementById('close-alignment');
+    if (event.key === 'Escape' && close && !event.defaultPrevented) {
+      window.location.href = close.href;
+    }
+  });
+
   const start = function () {
     run().catch(function (error) {
       fail(error.message || String(error));

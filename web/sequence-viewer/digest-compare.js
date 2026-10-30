@@ -482,7 +482,10 @@
           }).sort(function (a, b) {
             const pa = a.toLowerCase().indexOf(term) === 0 ? 0 : 1;
             const pb = b.toLowerCase().indexOf(term) === 0 ? 0 : 1;
-            return pa - pb || a.localeCompare(b);
+            // the enzymes of NEB and Thermo come first
+            const wa = /Thermo|NEB/.test(vendorsOf(a)) ? 0 : 1;
+            const wb = /Thermo|NEB/.test(vendorsOf(b)) ? 0 : 1;
+            return wa - wb || pa - pb || a.localeCompare(b);
           }).slice(0, 12);
           names.forEach(function (n) {
             const count = (state.cuts[n] || []).length;

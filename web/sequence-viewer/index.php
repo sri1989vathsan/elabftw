@@ -88,6 +88,8 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   <script src="vendor/sequence-utils.umd.js"></script>
   <script src="digest-compare.js?v=<?= (int) filemtime(__DIR__ . '/digest-compare.js') ?>"></script>
   <script src="align-tab.js?v=<?= (int) filemtime(__DIR__ . '/align-tab.js') ?>"></script>
+  <script src="enzymes-tab.js?v=<?= (int) filemtime(__DIR__ . '/enzymes-tab.js') ?>"></script>
+  <script src="origin-tab.js?v=<?= (int) filemtime(__DIR__ . '/origin-tab.js') ?>"></script>
   <script src="annotate.js?v=<?= (int) filemtime(__DIR__ . '/annotate.js') ?>"></script>
   <script src="annotate-tab.js?v=<?= (int) filemtime(__DIR__ . '/annotate-tab.js') ?>"></script>
   <script src="primers-panel.js?v=<?= (int) filemtime(__DIR__ . '/primers-panel.js') ?>"></script>
