@@ -578,3 +578,80 @@
     }
   }
 }
+
+// the tubes of one box on a registry entry: the box path once, a small drawing of the box and a line per tube
+.storage-group {
+  padding: 0.6rem 0.75rem;
+
+  .storage-group-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 600;
+  }
+
+  .storage-group-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+    margin-top: 0.4rem;
+  }
+
+  .storage-tubes {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .storage-tube {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.15rem 0;
+  }
+}
+
+.storage-slot-chip {
+  display: inline-block;
+  min-width: 2.4rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #fff;
+
+  &.is-primary {
+    background: var(--primary, #1f5fae);
+  }
+
+  &.is-secondary {
+    background: #8a8f98;
+  }
+}
+
+// the box drawn small: a filled dot per tube, blue for the primary, grey for the others
+.mini-box {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 2px;
+  width: 10.5rem;
+
+  .mini-box-slot {
+    aspect-ratio: 1;
+    border: 1px solid #c9ccd1;
+    border-radius: 50%;
+
+    &.is-primary {
+      background: var(--primary, #1f5fae);
+      border-color: var(--primary, #1f5fae);
+    }
+
+    &.is-secondary {
+      background: #8a8f98;
+      border-color: #8a8f98;
+    }
+  }
+}

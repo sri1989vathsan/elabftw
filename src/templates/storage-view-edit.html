@@ -15,26 +15,60 @@
         <p class='item-total-stock mb-2'><strong>{{ 'Total stock'|trans }}:</strong>
           {% for unit, qty in stock %}{{ qty|round(2) }} {{ unit }}{{ not loop.last ? ', ' }}{% endfor %}
         </p>
+        {% if Entity.entityType.value == 'inventory' %}
+          {# registry: the tubes of one box are shown together, under the path of the box, with a small drawing of the box #}
+          {% set groups = {} %}
+          {% for container in Entity.entityData.containers %}
+            {% set key = 'box' ~ container.storage_id %}
+            {% set groups = groups|merge({(key): (groups[key]|default([]))|merge([container])}) %}
+          {% endfor %}
+          <ul class='list-group' id='containersDiv'>
+            {% for key, tubes in groups %}
+              {% set first = tubes|first %}
+              {% set slots = {} %}
+              {% for tube in tubes %}{% if tube.position %}{% set slots = slots|merge({(tube.position): tube}) %}{% endif %}{% endfor %}
+              <li class='list-group-item storage-group'>
+                <div class='storage-group-head'>
+                  <span class='storage-group-path'>
+                    {% if Entity.isReadOnly %}{{ first.full_path }}{% else %}<button type='button' class='btn btn-transparent btn-sm storage-row-path' data-action='move-container' data-id='{{ first.id }}' data-current-storage-id='{{ first.storage_id }}' title='{{ 'Move to another storage location'|trans }}'>{{ first.full_path }}</button>{% endif %}
+                  </span>
+                  <span class='color-medium'>{{ tubes|length }} {{ tubes|length == 1 ? 'tube'|trans : 'tubes'|trans }}</span>
+                  <a href='registry.php?storage_unit={{ first.storage_id }}' class='btn btn-ghost btn-sm ml-auto' aria-label='{{ 'Show in the storage browser'|trans }}' title='{{ 'Show in the storage browser'|trans }}'><i class='fas fa-location-dot'></i></a>
+                </div>
+                <div class='storage-group-body'>
+                  {% if first.box_rows and first.box_cols %}
+                    <div class='mini-box' style='grid-template-columns: repeat({{ first.box_cols }}, 1fr);' title='{{ first.box_rows }} x {{ first.box_cols }}'>
+                      {% for r in 1..first.box_rows %}
+                        {% for c in 1..first.box_cols %}
+                          {% set slot = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[r - 1:1] ~ c %}
+                          {% set tube = slots[slot]|default(null) %}
+                          <span class='mini-box-slot{{ tube ? (tube.is_primary ? ' is-primary' : ' is-secondary') }}' title='{{ slot }}'></span>
+                        {% endfor %}
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                  <ul class='storage-tubes'>
+                    {% for tube in tubes %}
+                      <li class='countable storage-tube'>
+                        <span class='storage-slot-chip {{ tube.is_primary ? 'is-primary' : 'is-secondary' }}' title='{{ tube.is_primary ? 'Primary'|trans : 'Secondary'|trans }}'>{{ tube.position|default('–') }}</span>
+                        <span class='storage-kind storage-kind-{{ tube.is_primary ? 'primary' : 'secondary' }}'>{{ tube.is_primary ? 'Primary'|trans : 'Secondary'|trans }}</span>
+                        <span class='storage-row-qty'><span class='malleableColumn hl-hover p-1 rounded' data-ma-type='float' data-endpoint='{{ Entity.entityType.value }}/{{ Entity.id }}/containers' data-id='{{ tube.id }}' data-target='qty_stored'>{{ tube.qty_stored|round(2) }}</span><span class='malleableQtyUnit hl-hover p-1 rounded' data-endpoint='{{ Entity.entityType.value }}/{{ Entity.id }}/containers' data-id='{{ tube.id }}'>{{ tube.qty_unit }}</span></span>
+                        <span class='storage-row-actions ml-auto'>
+                          {% if not tube.is_primary and not Entity.isReadOnly %}
+                            <button type='button' data-action='make-primary-container' data-id='{{ tube.id }}' class='btn btn-link btn-sm' title='{{ 'Make this the primary storage'|trans }}'>{{ 'Make primary'|trans }}</button>
+                          {% endif %}
+                          <button type='button' data-action='destroy-container' data-id='{{ tube.id }}' class='btn btn-danger-ghost btn-sm' aria-label='{{ 'Delete'|trans }}' title='{{ 'Delete'|trans }}'><i class='fas fa-trash-alt'></i></button>
+                        </span>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
         <ul class='list-group' id='containersDiv'>
           {% for container in Entity.entityData.containers %}
-            {% if Entity.entityType.value == 'inventory' %}
-              {# resources: one aligned line, label, location, slot, quantity, actions #}
-              <li class='list-group-item countable storage-row'>
-                <span class='storage-kind storage-kind-{{ container.is_primary ? 'primary' : 'secondary' }}'>{{ container.is_primary ? 'Primary'|trans : 'Secondary'|trans }}</span>
-                <span class='storage-row-where'>
-                  {% if Entity.isReadOnly %}{{ container.full_path }}{% else %}<button type='button' class='btn btn-transparent btn-sm storage-row-path' data-action='move-container' data-id='{{ container.id }}' data-current-storage-id='{{ container.storage_id }}' title='{{ 'Move to another storage location'|trans }}'>{{ container.full_path }}</button>{% endif %}
-                </span>
-                <span class='storage-row-slot' title='{{ 'Slot in the box'|trans }}'>{{ container.position }}</span>
-                <span class='storage-row-qty'><span class='malleableColumn hl-hover p-1 rounded' data-ma-type='float' data-endpoint='{{ Entity.entityType.value }}/{{ Entity.id }}/containers' data-id='{{ container.id }}' data-target='qty_stored'>{{ container.qty_stored|round(2) }}</span><span class='malleableQtyUnit hl-hover p-1 rounded' data-endpoint='{{ Entity.entityType.value }}/{{ Entity.id }}/containers' data-id='{{ container.id }}'>{{ container.qty_unit }}</span></span>
-                <span class='storage-row-actions'>
-                  {% if not container.is_primary and not Entity.isReadOnly %}
-                    <button type='button' data-action='make-primary-container' data-id='{{ container.id }}' class='btn btn-link btn-sm' title='{{ 'Make this the primary storage'|trans }}'>{{ 'Make primary'|trans }}</button>
-                  {% endif %}
-                  <a href='registry.php?storage_unit={{ container.storage_id }}' class='btn btn-ghost btn-sm' aria-label='{{ 'Show in the storage browser'|trans }}' title='{{ 'Show in the storage browser'|trans }}'><i class='fas fa-location-dot'></i></a>
-                  <button type='button' data-action='destroy-container' data-id='{{ container.id }}' class='btn btn-danger-ghost btn-sm' aria-label='{{ 'Delete'|trans }}' title='{{ 'Delete'|trans }}'><i class='fas fa-trash-alt'></i></button>
-                </span>
-              </li>
-            {% else %}
             <li class='list-group-item countable'>
               <div class='d-flex flex align-items-center'>
                 <div>
@@ -53,9 +87,9 @@
                 </div>
               </div>
             </li>
-            {% endif %}
           {% endfor %}
         </ul>
+        {% endif %}
     {% else %}
     {{ 'No containers stored'|trans }}
     {% endif %}

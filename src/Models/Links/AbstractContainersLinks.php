@@ -67,7 +67,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
             main.created_at,
             main.modified_at,' . $this->positionSelect() . '
             storage_units.id AS storage_id,
-            storage_units.name AS storage_name
+            storage_units.name AS storage_name' . $this->boxSelect() . '
             FROM ' . $this->getTable() . ' AS main
             LEFT JOIN ' . $this->getTargetType()->value . ' AS entity ON (main.item_id = entity.id)
             LEFT JOIN storage_units ON (main.storage_id = storage_units.id)
@@ -523,6 +523,12 @@ abstract class AbstractContainersLinks extends AbstractLinks
     private function hasSlots(): bool
     {
         return $this->getTable() === 'containers2inventory';
+    }
+
+    // the size of the box, to draw it
+    private function boxSelect(): string
+    {
+        return $this->hasSlots() ? ', storage_units.box_rows, storage_units.box_cols' : '';
     }
 
     private function positionSelect(): string
