@@ -768,3 +768,31 @@
   flex-wrap: wrap;
   gap: 0.25rem;
 }
+
+// the filters, the selection and the sequence of the primers in the expandable table
+.expandable-table {
+  .expandable-select-cell {
+    width: 1.8rem;
+    text-align: center;
+  }
+
+  .expandable-filter-row th {
+    padding: 0.15rem 0.3rem;
+    border-top: 0;
+    font-weight: 400;
+  }
+
+  .expandable-filter {
+    min-width: 4.5rem;
+    height: auto;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.8rem;
+  }
+
+  .expandable-sequence {
+    max-width: 22rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8rem;
+    word-break: break-all;
+  }
+}

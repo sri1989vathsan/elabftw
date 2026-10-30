@@ -26,22 +26,72 @@ type Row = {
 type Change = { created_at: string; target: string; content: string | null; fullname: string | null };
 
 const RECENT_CHANGES = 5;
-// the category is in the tabs and the location in the opened row: no columns for them
-const COLUMNS = ['ID', 'Title', 'Sequence', 'Quantity', 'Owner'];
 
-// the sequence column is there when some entry of the list has a sequence file (the plasmids)
-const columnsFor = (rows: Row[]): string[] => COLUMNS.filter(c => c !== 'Sequence' || rows.some(r => (r.sequence_files ?? []).length > 0));
+type Column = { key: string; label: string; numeric: boolean; get: (row: Row) => string | number };
 
-function sortValue(row: Row, key: string): string | number {
+const quantityOf = (row: Row): number | '' => {
   const locations = row.storage_locations ?? [];
-  switch (key) {
-  case 'ID': return row.id;
-  case 'Title': return row.title ?? '';
-  case 'Sequence': return (row.sequence_files ?? []).map(f => f.real_name).join(' ');
-  case 'Quantity': return locations.length > 0 ? locations.reduce((sum, l) => sum + Number(l.qty_stored), 0) : '';
-  default: return row.fullname ?? '';
+  return locations.length > 0 ? locations.reduce((sum, l) => sum + Number(l.qty_stored), 0) : '';
+};
+const fieldOf = (row: Row, pattern: RegExp): string => (row.extra_fields ?? []).find(f => pattern.test(f.name))?.value ?? '';
+const isPrimerList = (rows: Row[]): boolean => rows.length > 0 && rows.every(r => /^primers?$/i.test(r.category_title ?? ''));
+const basesOf = (row: Row): string => fieldOf(row, /^sequence/i).toUpperCase().replace(/[^A-Z]/g, '');
+const gcOf = (bases: string): number | '' => bases === '' ? '' : Math.round(((bases.match(/[GC]/g) ?? []).length / bases.length) * 1000) / 10;
+const numberOrEmpty = (value: string): number | '' => value !== '' && Number.isFinite(Number(value)) ? Number(value) : '';
+
+// the category is in the tabs and the location in the opened row: no columns for them
+function columnsFor(rows: Row[]): Column[] {
+  const text = (key: string, label: string, get: (row: Row) => string | number): Column => ({ key, label, numeric: false, get });
+  const num = (key: string, label: string, get: (row: Row) => string | number): Column => ({ key, label, numeric: true, get });
+  const columns: Column[] = [num('ID', 'ID', r => r.id), text('Title', 'Title', r => r.title ?? '')];
+  if (isPrimerList(rows)) {
+    // the primers are looked at by their sequence, length, melting temperature and GC share
+    columns.push(
+      text('Sequence', "Sequence 5'-3'", basesOf),
+      num('Length', 'Length', r => basesOf(r).length || ''),
+      num('Tm', 'Tm (°C)', r => numberOrEmpty(fieldOf(r, /^tm/i))),
+      num('GC', 'GC %', r => gcOf(basesOf(r))),
+      text('Orientation', 'Orientation', r => fieldOf(r, /^orientation/i)),
+      text('Target', 'Target', r => fieldOf(r, /^target/i)),
+    );
+  } else if (rows.some(r => (r.sequence_files ?? []).length > 0)) {
+    // the sequence files of the plasmids, opened in the sequence editor
+    columns.push(text('Files', 'Sequence', r => (r.sequence_files ?? []).map(f => f.real_name).join(' ')));
   }
+  columns.push(num('Quantity', 'Quantity', quantityOf), text('Owner', 'Owner', r => r.fullname ?? ''));
+  return columns;
 }
+
+// a filter on a column: text is searched in the value, a number can be compared (">50", "<=60", "55-62")
+function matchesFilter(value: string | number, filter: string, numeric: boolean): boolean {
+  const f = filter.trim();
+  if (f === '') {
+    return true;
+  }
+  if (numeric) {
+    const range = /^(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)$/.exec(f);
+    const compare = /^(>=|<=|>|<|=)?\s*(-?\d+(?:\.\d+)?)$/.exec(f);
+    if (range || compare) {
+      if (typeof value !== 'number') {
+        return false;
+      }
+      if (range) {
+        return value >= Number(range[1]) && value <= Number(range[2]);
+      }
+      const n = Number(compare?.[2]);
+      switch (compare?.[1]) {
+      case '>': return value > n;
+      case '<': return value < n;
+      case '>=': return value >= n;
+      case '<=': return value <= n;
+      default: return value === n || String(value).startsWith(String(n));
+      }
+    }
+  }
+  return String(value).toLowerCase().includes(f.toLowerCase());
+}
+
+type TableState = { filters: Map<string, string>; selected: Set<number>; onSelectionChange: () => void };
 
 let rootEl: HTMLElement | null = null;
 let onFiltersChanged: ((event: Event) => void) | null = null;
@@ -169,26 +219,80 @@ function buildDetail(row: Row): HTMLElement {
   return detail;
 }
 
-function render(container: HTMLElement, allRows: Row[], sort: SortState | null, onSort: (sort: SortState) => void): void {
+function render(container: HTMLElement, allRows: Row[], sort: SortState | null, onSort: (sort: SortState) => void, ui: TableState): void {
   container.replaceChildren();
   if (allRows.length === 0) {
     container.append(el('p', 'text-muted', 'Nothing to show.'));
     return;
   }
-  const rows = sortRows(allRows, sort, sortValue);
+  const columns = columnsFor(allRows);
   const table = el('table', 'table table-sm expandable-table');
   const head = el('tr');
   head.append(el('th', 'expandable-caret-cell'));
-  const columns = columnsFor(allRows);
+  const selectAll = el('input');
+  selectAll.type = 'checkbox';
+  selectAll.setAttribute('aria-label', 'Select all the rows shown');
+  const selectHead = el('th', 'expandable-select-cell');
+  selectHead.append(selectAll);
+  head.append(selectHead);
   columns.forEach(c => {
-    const th = el('th', c === 'ID' ? 'id-cell' : '');
-    sortableHeader(th, c, c, sort, onSort);
+    const th = el('th', c.key === 'ID' ? 'id-cell' : '');
+    sortableHeader(th, c.label, c.key, sort, onSort);
     head.append(th);
   });
+  // a filter on each column, the rows shown are the ones that pass all of them
+  const filterRow = el('tr', 'expandable-filter-row');
+  filterRow.append(el('th'), el('th'));
+  const count = el('span', 'text-muted small ml-2');
+  columns.forEach(c => {
+    const th = el('th', c.key === 'ID' ? 'id-cell' : '');
+    const input = el('input', 'form-control form-control-sm expandable-filter');
+    input.type = 'search';
+    input.placeholder = c.numeric ? 'e.g. >50' : 'filter';
+    input.value = ui.filters.get(c.key) ?? '';
+    input.setAttribute('aria-label', `Filter ${c.label}`);
+    input.addEventListener('input', () => {
+      ui.filters.set(c.key, input.value);
+      fillBody();
+    });
+    th.append(input);
+    filterRow.append(th);
+  });
   const thead = el('thead');
-  thead.append(head);
+  thead.append(head, filterRow);
   const body = el('tbody');
-  rows.forEach(row => {
+  const valueOf = (row: Row, key: string): string | number => columns.find(c => c.key === key)?.get(row) ?? '';
+  let shown: Row[] = [];
+
+  const syncSelectAll = (): void => {
+    const selectedShown = shown.filter(r => ui.selected.has(r.id)).length;
+    selectAll.checked = shown.length > 0 && selectedShown === shown.length;
+    selectAll.indeterminate = selectedShown > 0 && selectedShown < shown.length;
+    count.textContent = shown.length === allRows.length ? `${allRows.length} shown` : `${shown.length} of ${allRows.length} shown`;
+  };
+  selectAll.addEventListener('change', () => {
+    shown.forEach(r => {
+      if (selectAll.checked) {
+        ui.selected.add(r.id);
+      } else {
+        ui.selected.delete(r.id);
+      }
+    });
+    body.querySelectorAll<HTMLInputElement>('.expandable-select-cell input').forEach(box => {
+      box.checked = selectAll.checked;
+    });
+    ui.onSelectionChange();
+    syncSelectAll();
+  });
+
+  function fillBody(): void {
+    body.replaceChildren();
+    shown = sortRows(allRows, sort, valueOf).filter(row => columns.every(c => matchesFilter(c.get(row), ui.filters.get(c.key) ?? '', c.numeric)));
+    shown.forEach(row => body.append(...buildRow(row, columns)));
+    syncSelectAll();
+  }
+
+  function buildRow(row: Row, cols: Column[]): HTMLElement[] {
     const locations = row.storage_locations ?? [];
     const tr = el('tr', 'expandable-row');
     const caretCell = el('td', 'expandable-caret-cell');
@@ -200,30 +304,61 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     caret.append(icon);
     caretCell.append(caret);
     tr.append(caretCell);
-    // the ID stays in view when the table is scrolled sideways
-    tr.append(el('td', 'id-cell', String(row.id)));
-    const titleCell = el('td');
-    const link = el('a', '', row.title);
-    link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
-    titleCell.append(link);
-    tr.append(titleCell);
-    if (columns.includes('Sequence')) {
-      // the sequence files of the entry open in the sequence editor, in a page of their own
-      const sequenceCell = el('td', 'text-nowrap');
-      (row.sequence_files ?? []).forEach(f => {
-        const a = el('a', 'btn btn-secondary btn-sm mr-1');
-        a.href = `sequence-viewer/index.php?entry=${row.id}&upload=${f.id}&f=${encodeURIComponent(f.long_name)}&name=${encodeURIComponent(f.real_name)}&storage=${f.storage}`;
-        a.target = '_blank';
-        a.rel = 'noopener';
-        a.title = `Open ${f.real_name} in the sequence editor`;
-        a.append(el('i', 'fas fa-dna fa-fw'));
-        sequenceCell.append(a);
-      });
-      tr.append(sequenceCell);
-    }
-    tr.append(el('td', 'text-nowrap', locations.length > 0 ? totalStock(locations) : ''));
-    tr.append(el('td', '', row.fullname ?? ''));
-    body.append(tr);
+    const selectCell = el('td', 'expandable-select-cell');
+    const box = el('input');
+    box.type = 'checkbox';
+    box.checked = ui.selected.has(row.id);
+    box.setAttribute('aria-label', `Select ${row.title}`);
+    box.addEventListener('change', () => {
+      if (box.checked) {
+        ui.selected.add(row.id);
+      } else {
+        ui.selected.delete(row.id);
+      }
+      ui.onSelectionChange();
+      syncSelectAll();
+    });
+    selectCell.append(box);
+    tr.append(selectCell);
+    cols.forEach(c => {
+      switch (c.key) {
+      case 'ID':
+        // the ID stays in view when the table is scrolled sideways
+        tr.append(el('td', 'id-cell', String(row.id)));
+        break;
+      case 'Title': {
+        const titleCell = el('td');
+        const link = el('a', '', row.title);
+        link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
+        titleCell.append(link);
+        tr.append(titleCell);
+        break;
+      }
+      case 'Files': {
+        // the sequence files of the entry open in the sequence editor, in a page of their own
+        const sequenceCell = el('td', 'text-nowrap');
+        (row.sequence_files ?? []).forEach(f => {
+          const a = el('a', 'btn btn-secondary btn-sm mr-1');
+          a.href = `sequence-viewer/index.php?entry=${row.id}&upload=${f.id}&f=${encodeURIComponent(f.long_name)}&name=${encodeURIComponent(f.real_name)}&storage=${f.storage}`;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.title = `Open ${f.real_name} in the sequence editor`;
+          a.append(el('i', 'fas fa-dna fa-fw'));
+          sequenceCell.append(a);
+        });
+        tr.append(sequenceCell);
+        break;
+      }
+      case 'Quantity':
+        tr.append(el('td', 'text-nowrap', locations.length > 0 ? totalStock(locations) : ''));
+        break;
+      case 'Sequence':
+        tr.append(el('td', 'expandable-sequence', String(c.get(row))));
+        break;
+      default:
+        tr.append(el('td', '', String(c.get(row))));
+      }
+    });
 
     let detailRow: HTMLTableRowElement | null = null;
     caret.addEventListener('click', () => {
@@ -236,18 +371,21 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
       }
       detailRow = el('tr', 'expandable-detail-row');
       const cell = el('td');
-      cell.colSpan = columns.length + 1;
+      cell.colSpan = cols.length + 2;
       cell.append(buildDetail(row));
       detailRow.append(cell);
       tr.after(detailRow);
       icon.className = 'fas fa-fw fa-caret-down';
       caret.setAttribute('aria-expanded', 'true');
     });
-  });
+    return [tr];
+  }
+
   table.append(thead, body);
+  fillBody();
   const wrap = el('div', 'table-responsive');
   wrap.append(table);
-  container.append(wrap);
+  container.append(count, wrap);
 }
 
 export function mountExpandableTable(rootElement: HTMLElement | null, order: string, sort: string, onLoaded: () => void): void {
@@ -262,13 +400,35 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   const collapseAll = el('button', 'btn btn-transparent btn-sm', 'Collapse all');
   expandAll.type = collapseAll.type = 'button';
   toolbar.append(expandAll, collapseAll);
+  // the rows ticked can be sent to an order (the sequences of primers are written in its notes)
+  const orderButton = el('button', 'btn btn-secondary btn-sm ml-3', 'Send selected to an order');
+  orderButton.type = 'button';
+  orderButton.hidden = true;
+  toolbar.append(orderButton);
   const container = el('div');
   rootEl.replaceChildren(toolbar, container);
   let rows: Row[] = [];
   let tableSort: SortState | null = null;
+  const ui: TableState = {
+    filters: new Map<string, string>(),
+    selected: new Set<number>(),
+    onSelectionChange: () => {
+      const tools = (window as unknown as { PrimerTools?: { sendToOrder: (ids: number[], done?: () => void) => void } }).PrimerTools;
+      orderButton.hidden = ui.selected.size === 0 || !tools;
+      orderButton.textContent = `Send selected to an order (${ui.selected.size})`;
+    },
+  };
+  orderButton.addEventListener('click', () => {
+    const tools = (window as unknown as { PrimerTools?: { sendToOrder: (ids: number[], done?: () => void) => void } }).PrimerTools;
+    tools?.sendToOrder([...ui.selected], () => {
+      ui.selected.clear();
+      ui.onSelectionChange();
+      render(container, rows, tableSort, onSort, ui);
+    });
+  });
   const onSort = (next: SortState): void => {
     tableSort = next;
-    render(container, rows, tableSort, onSort);
+    render(container, rows, tableSort, onSort, ui);
   };
 
   // the carets own the open or closed state of their row: drive them instead of duplicating it
@@ -293,7 +453,11 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
         return;
       }
       rows = loaded;
-      render(container, rows, tableSort, onSort);
+      // what was selected stays selected when the list is loaded again, if it is still there
+      const ids = new Set(rows.map(r => r.id));
+      ui.selected.forEach(id => ids.has(id) || ui.selected.delete(id));
+      ui.onSelectionChange();
+      render(container, rows, tableSort, onSort, ui);
     } catch (error) {
       console.error(`Could not load the resources: ${error}`);
     }

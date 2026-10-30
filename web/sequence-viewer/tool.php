@@ -46,6 +46,8 @@ $v = static fn(string $file): int => (int) filemtime(__DIR__ . '/' . $file);
   </div>
   <div id="root"></div>
   <script src="../primer-tools.js?v=<?= (int) filemtime(dirname(__DIR__) . '/primer-tools.js') ?>"></script>
+  <script src="../primer-design.js?v=<?= (int) filemtime(dirname(__DIR__) . '/primer-design.js') ?>"></script>
+  <script src="primers-panel.js?v=<?= (int) filemtime(__DIR__ . '/primers-panel.js') ?>"></script>
   <script src="vendor/bio-parsers.umd.js"></script>
   <script src="vendor/ove.umd.js"></script>
   <script src="viewer.js?v=<?= $v('viewer.js') ?>"></script>

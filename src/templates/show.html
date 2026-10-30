@@ -22,6 +22,8 @@
   {% if scriptName == 'registry.php' %}
     <link rel='stylesheet' href='sequence-add.css?v={{ 'now'|date('YmdHi') }}'>
     <script src='sequence-add.js?v={{ 'now'|date('YmdHi') }}'></script>
+    {# the rows ticked in the table can be sent to an order, see primer-tools.js #}
+    <script src='primer-tools.js?v={{ 'now'|date('YmdHi') }}'></script>
     {# module navigation: one tab per resource category, like the module bar of an inventory system #}
     {% set currentCategories = App.Request.query.get('category')|split(',') %}
     <nav class='category-nav d-flex flex-wrap mt-2' aria-label='{{ 'Category'|trans }}'>

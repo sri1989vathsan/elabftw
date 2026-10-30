@@ -62,7 +62,7 @@ function respond(int $status, array $body): never
 /**
  * The entry as shown with its primers, null when it cannot be read by the requester
  *
- * @return array{id: int, title: string, category: string, color: string, sequence: string, orientation: string}|null
+ * @return array{id: int, title: string, category: string, color: string, sequence: string, orientation: string, tm: float|null}|null
  */
 function describe(App $App, int $id): ?array
 {
@@ -73,6 +73,7 @@ function describe(App $App, int $id): ?array
     }
     $sequence = '';
     $orientation = '';
+    $tm = null;
     $metadata = json_decode((string) ($data['metadata'] ?? ''), true);
     foreach (is_array($metadata) ? ($metadata['extra_fields'] ?? array()) : array() as $name => $field) {
         if (!is_array($field)) {
@@ -82,6 +83,8 @@ function describe(App $App, int $id): ?array
             $sequence = (string) ($field['value'] ?? '');
         } elseif (preg_match('/^orientation/i', (string) $name) === 1) {
             $orientation = (string) ($field['value'] ?? '');
+        } elseif (preg_match('/^tm/i', (string) $name) === 1 && is_numeric($field['value'] ?? null)) {
+            $tm = (float) $field['value'];
         }
     }
     return array(
@@ -91,6 +94,7 @@ function describe(App $App, int $id): ?array
         'color' => (string) ($data['category_color'] ?? ''),
         'sequence' => $sequence,
         'orientation' => $orientation,
+        'tm' => $tm,
     );
 }
 
@@ -153,7 +157,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $pdo->execute($link);
             // a primer is written in the notes once
             if ($link->rowCount() > 0 && $primerEntry['sequence'] !== '') {
-                $tm = estimateTm($primerEntry['sequence']);
+                // the melting temperature written on the primer, else a quick estimate
+                $tm = $primerEntry['tm'] ?? estimateTm($primerEntry['sequence']);
                 $lines[] = sprintf("%s: 5'-%s-3'%s", $primerEntry['title'], $primerEntry['sequence'], $tm === null ? '' : sprintf(' (Tm %s C)', $tm));
             }
         }

@@ -256,3 +256,87 @@ body {
 .primers-button {
   font-weight: 600;
 }
+
+/* the tabs and the forms of the primers panel */
+#primers-panel .primers-tabs {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+}
+
+#primers-panel .primers-tab {
+  padding: 0.2rem 0.9rem;
+  border: 1px solid #c3c8cf;
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+#primers-panel .primers-tab[aria-pressed="true"] {
+  border-color: #1f5fae;
+  background: #1f5fae;
+  color: #fff;
+}
+
+#primers-panel .primers-warning {
+  margin: 0 0 0.25rem;
+  color: #a61e1e;
+}
+
+#primers-panel .primers-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 0.8rem;
+  margin-bottom: 0.6rem;
+}
+
+#primers-panel .primers-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+  color: #495057;
+}
+
+#primers-panel .primers-field .primers-name {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#primers-panel .primers-pair {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #d7dce2;
+  border-radius: 0.4rem;
+  background: #fafbfc;
+}
+
+#primers-panel .primers-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.6rem;
+  margin-bottom: 0.2rem;
+}
+
+#primers-panel .primers-dir {
+  width: 1.2rem;
+  font-weight: 700;
+  color: #1f5fae;
+}
+
+#primers-panel .primers-sequence {
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+#primers-panel .primers-primary {
+  border-color: #1f5fae;
+  background: #1f5fae;
+  color: #fff;
+}
+
+#primers-panel .primers-results {
+  margin-top: 0.3rem;
+}

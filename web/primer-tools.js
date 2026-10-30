@@ -28,17 +28,49 @@
     }).join('');
   }
 
-  // melting temperature, a quick estimate: Wallace rule under 14 bases, else from the GC content
+  // nearest-neighbour parameters (SantaLucia 1998): enthalpy in kcal/mol, entropy in cal/(K mol)
+  const NN = {
+    AA: [-7.9, -22.2], TT: [-7.9, -22.2], AT: [-7.2, -20.4], TA: [-7.2, -21.3], CA: [-8.5, -22.7], TG: [-8.5, -22.7],
+    GT: [-8.4, -22.4], AC: [-8.4, -22.4], CT: [-7.8, -21.0], AG: [-7.8, -21.0], GA: [-8.2, -22.2], TC: [-8.2, -22.2],
+    CG: [-10.6, -27.2], GC: [-9.8, -24.4], GG: [-8.0, -19.9], CC: [-8.0, -19.9],
+  };
+
+  // melting temperature in degrees C: nearest neighbour for 14 bases or more (50 mM Na+, 0.25 uM primer), Wallace rule below
   function tm(sequence) {
     const s = clean(sequence);
-    const gc = (s.match(/[GC]/g) || []).length;
     if (s.length === 0) {
       return null;
     }
-    if (s.length < 14) {
-      return 2 * (s.length - gc) + 4 * gc;
+    const gc = (s.match(/[GC]/g) || []).length;
+    if (s.length < 14 || /[^ACGT]/.test(s)) {
+      return s.length < 14 ? 2 * (s.length - gc) + 4 * gc : Math.round((64.9 + (41 * (gc - 16.4)) / s.length) * 10) / 10;
     }
-    return Math.round((64.9 + (41 * (gc - 16.4)) / s.length) * 10) / 10;
+    let dh = 0;
+    let ds = 0;
+    for (let i = 0; i < s.length - 1; i++) {
+      const pair = NN[s.slice(i, i + 2)];
+      dh += pair[0];
+      ds += pair[1];
+    }
+    // the two ends: a G or C at the end and an A or T at the end are not the same
+    [s[0], s[s.length - 1]].forEach(function (end) {
+      if (end === 'G' || end === 'C') {
+        dh += 0.1;
+        ds += -2.8;
+      } else {
+        dh += 2.3;
+        ds += 4.1;
+      }
+    });
+    ds += 0.368 * (s.length - 1) * Math.log(0.05);
+    const gas = 1.987;
+    return Math.round((((dh * 1000) / (ds + gas * Math.log(0.25e-6 / 4))) - 273.15) * 10) / 10;
+  }
+
+  // the share of G and C, in percent
+  function gcPercent(sequence) {
+    const s = clean(sequence);
+    return s.length === 0 ? 0 : Math.round(((s.match(/[GC]/g) || []).length / s.length) * 1000) / 10;
   }
 
   function mismatches(a, b) {
@@ -329,6 +361,7 @@
     clean: clean,
     reverseComplement: reverseComplement,
     tm: tm,
+    gc: gcPercent,
     findSites: findSites,
     allPrimers: allPrimers,
     createPrimer: createPrimer,
