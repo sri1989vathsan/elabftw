@@ -135,6 +135,15 @@
     if (window.PrimerPanel) {
       window.PrimerPanel.setup(editor, { entryId: entryId, fileName: fileName });
     }
+    if (window.DigestCompare) {
+      window.DigestCompare.setup(editor, { entryId: entryId });
+    }
+    if (window.AnnotateTab) {
+      window.AnnotateTab.setup(editor);
+    }
+    if (window.AlignTab) {
+      window.AlignTab.setup(editor, { entryId: entryId });
+    }
   }
 
   async function load() {

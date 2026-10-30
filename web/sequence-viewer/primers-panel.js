@@ -23,18 +23,12 @@
   }
 
   function setup(editor, context) {
-    const menu = document.getElementById('primers-menu');
-    if (!tools || !menu) {
+    if (!tools || !window.ToolSidebar) {
       return;
     }
     const entryId = context.entryId || 0;
-    const button = element('button', 'cutter-button primers-button', 'Primers');
-    button.type = 'button';
-    const panel = element('div');
-    panel.id = 'primers-panel';
-    panel.hidden = true;
-    menu.append(button);
-    document.body.append(panel);
+    // the area of the sidebar that is shown: the primers and the design are two of its tabs
+    let panel = element('div');
 
     let databasePrimers = null;
     let attachedPrimers = [];
@@ -467,34 +461,17 @@
     }
 
     async function render() {
+      const shown = window.ToolSidebar.active();
+      if (shown !== 'primers' && shown !== 'design') {
+        return;
+      }
+      tab = shown;
       panel.textContent = '';
       if (databasePrimers === null) {
         databasePrimers = await tools.allPrimers().catch(function () {
           return [];
         });
       }
-      const header = element('div', 'primers-header');
-      header.append(element('strong', 'primers-title', 'Primers'));
-      const close = element('button', 'primers-close', '\u00d7');
-      close.type = 'button';
-      close.setAttribute('aria-label', 'Close');
-      close.addEventListener('click', function () {
-        panel.hidden = true;
-      });
-      header.append(close);
-      panel.append(header);
-      const tabs = element('div', 'primers-tabs');
-      [['primers', 'Primers'], ['design', 'Design']].forEach(function (item) {
-        const tabButton = element('button', 'primers-tab', item[1]);
-        tabButton.type = 'button';
-        tabButton.setAttribute('aria-pressed', tab === item[0] ? 'true' : 'false');
-        tabButton.addEventListener('click', function () {
-          tab = item[0];
-          render();
-        });
-        tabs.append(tabButton);
-      });
-      panel.append(tabs);
       if (tab === 'design' && designer) {
         renderDesignTab();
       } else {
@@ -503,13 +480,16 @@
       panel.append(message);
     }
 
-    button.addEventListener('click', function () {
-      panel.hidden = !panel.hidden;
-      if (!panel.hidden) {
-        say('');
-        render();
-      }
-    });
+    window.ToolSidebar.register({ id: 'primers', icon: 'primers', label: 'Primers and probes', show: function (host) {
+      panel = host;
+      say('');
+      render();
+    } });
+    window.ToolSidebar.register({ id: 'design', icon: 'design', label: 'Design primers', show: function (host) {
+      panel = host;
+      say('');
+      render();
+    } });
     // the primers of the plasmid are drawn from the start
     loadAttached().catch(function () {
       // the map just has no database primers
