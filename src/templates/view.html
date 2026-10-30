@@ -183,8 +183,9 @@
 
 {% if not App.isAnonymous() %}
 
-  {# the sequence files of an entry of the database #}
+  {# the lineage and the sequence files of an entry of the database #}
   {% if Entity.entityType.value == 'inventory' %}
+    {% include 'lineage.html' %}
     {% include 'sequence-viewer.html' %}
   {% endif %}
 

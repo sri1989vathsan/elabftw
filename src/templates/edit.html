@@ -131,6 +131,12 @@
 
   {% endif %}
 
+  {# the parents and the daughters of an entry of the database #}
+  {% if registryEntry %}
+    {% include 'lineage.html' %}
+    {% include 'sequence-viewer.html' %}
+  {% endif %}
+
   {# BODY #}
   <hr>
   {% if Entity.entityData.hide_main_text %}

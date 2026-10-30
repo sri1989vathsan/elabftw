@@ -1,0 +1,8 @@
+{# LINEAGE: the parents of an entry of the database (what it was made from), its daughters (what was made from it) and the family tree #}
+<link rel='stylesheet' href='lineage.css?v={{ 'now'|date('YmdHi') }}'>
+<h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-diagram-project' data-scroll-btn-label='{{ 'Lineage'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='lineageDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Lineage'|trans }}</h3>
+<div class='mt-2 ml-3' id='lineageDiv' data-save-hidden='lineageDiv' data-entry='{{ Entity.id }}' data-csrf='{{ App.Session.get('csrf') }}'>
+  <div id='lineageRoot'><span class='text-muted'>{{ 'Loading...'|trans }}</span></div>
+</div>
+<script src='lineage.js?v={{ 'now'|date('YmdHi') }}'></script>
+<hr>

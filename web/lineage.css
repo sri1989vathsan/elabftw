@@ -1,0 +1,154 @@
+/* the lineage of an entry of the database: parents, daughters and the family tree */
+#lineageRoot .lineage-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+#lineageRoot .lineage-column {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+#lineageRoot h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+#lineageRoot .lineage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0.35rem 0.35rem 0;
+  padding: 0.15rem 0.35rem 0.15rem 0.6rem;
+  border: 1px solid #c9ccd1;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 0.85rem;
+}
+
+#lineageRoot .lineage-chip .lineage-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+#lineageRoot .lineage-chip button {
+  padding: 0 0.3rem;
+  border: 0;
+  background: transparent;
+  color: #6c757d;
+  cursor: pointer;
+}
+
+#lineageRoot .lineage-chip button:hover {
+  color: #a61e1e;
+}
+
+#lineageRoot .lineage-add {
+  position: relative;
+  display: inline-block;
+}
+
+#lineageRoot .lineage-add input {
+  width: 15rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid #c9ccd1;
+  border-radius: 0.3rem;
+  font-size: 0.85rem;
+}
+
+#lineageRoot .lineage-results {
+  position: absolute;
+  z-index: 30;
+  top: 100%;
+  left: 0;
+  min-width: 18rem;
+  max-height: 14rem;
+  overflow: auto;
+  border: 1px solid #c9ccd1;
+  border-radius: 0.3rem;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+#lineageRoot .lineage-results button {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 0.7rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+#lineageRoot .lineage-results button:hover {
+  background: #eef3fb;
+}
+
+#lineageRoot .lineage-message {
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+}
+
+#lineageRoot .lineage-message.error {
+  color: #a61e1e;
+}
+
+/* the family tree: a row per generation, the oldest on top */
+#lineageRoot .lineage-tree {
+  position: relative;
+  margin-top: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+#lineageRoot .lineage-tree-rows {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2.2rem;
+  min-width: min-content;
+}
+
+#lineageRoot .lineage-generation {
+  display: flex;
+  justify-content: center;
+  gap: 1.2rem;
+}
+
+#lineageRoot .lineage-node {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border: 2px solid #c9ccd1;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #212529;
+  font-size: 0.85rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+#lineageRoot .lineage-node.current {
+  border-color: #1f5fae;
+  background: #eaf1fb;
+  font-weight: 700;
+}
+
+#lineageRoot .lineage-node:hover {
+  border-color: #7b8794;
+}
+
+#lineageRoot .lineage-lines {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
