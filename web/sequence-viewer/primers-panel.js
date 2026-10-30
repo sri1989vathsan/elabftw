@@ -201,36 +201,62 @@
       }));
       const sectionAttached = element('div', 'primers-section');
       const sectionSearch = element('div', 'primers-section');
-      const sectionFile = element('div', 'primers-section');
+
+      // the primers annotated in the file: the primers of the editor and the features of the type primer_bind (a GenBank file has
+      // its primers as these). Those that are not in the database yet are listed with the attached ones.
+      const featureList = Array.isArray(now.data.features) ? now.data.features : Object.values(now.data.features || {});
+      const own = Object.values(now.data.primers || {}).concat(featureList.filter(function (feature) {
+        return String(feature.type || '').toLowerCase() === 'primer_bind' && feature.start <= feature.end;
+      }).map(function (feature) {
+        return { name: feature.name, start: feature.start, end: feature.end, forward: feature.strand !== -1, strand: feature.strand };
+      }));
+      const fileOnly = own.map(function (primer) {
+        const forward = primer.forward !== false && primer.strand !== -1;
+        const bases = basesOf(now.sequence, primer.start, primer.end, forward);
+        return { name: primer.name || 'primer', forward: forward, bases: bases, inDatabase: known(bases) };
+      }).filter(function (item) {
+        return !item.inDatabase && tools.clean(item.bases).length >= tools.minLength;
+      });
 
       sectionAttached.append(element('h4', '', 'On this sequence'));
-      if (attachedPrimers.length === 0) {
+      if (attachedPrimers.length === 0 && fileOnly.length === 0) {
         sectionAttached.append(element('p', 'primers-muted', entryId ? 'No primer is attached yet. Use the Find and add tab.' : 'Open a plasmid of the database to attach primers to it.'));
       }
-      // the attached primers can be ticked, to send them to an order or to detach them together
-      const ticked = new Set();
-      const attachedBoxes = [];
-      if (attachedPrimers.length > 1 || (attachedPrimers.length === 1 && entryId)) {
+      // what is ticked, to be sent to an order, added to the database or detached together
+      const tickedDb = new Set();
+      const tickedFile = new Set();
+      const allBoxes = [];
+      if (attachedPrimers.length + fileOnly.length > 0) {
         const bar = element('div', 'primers-pickbar');
         const everything = element('input');
         everything.type = 'checkbox';
-        everything.setAttribute('aria-label', 'Select all the attached primers');
+        everything.setAttribute('aria-label', 'Select all the primers of the sequence');
         everything.addEventListener('change', function () {
-          attachedBoxes.forEach(function (box) {
+          allBoxes.forEach(function (box) {
             box.checked = everything.checked;
             box.dispatchEvent(new Event('change'));
           });
         });
-        const orderTicked = action('', function () {
-          tools.sendToOrder(Array.from(ticked), function () {
-            render();
-          });
-        }, 'primary');
-        const detachTicked = action('', async function () {
+        // a primer that is only in the file is added to the database first: an order is made of entries of the database
+        const orderTicked = action('', async function () {
           orderTicked.disabled = true;
-          detachTicked.disabled = true;
           try {
-            for (const id of Array.from(ticked)) {
+            const created = await addMany(Array.from(tickedFile), [], true);
+            tools.sendToOrder(Array.from(tickedDb).concat(created), function () {
+              render();
+            });
+          } catch (error) {
+            say(error.message || String(error), true);
+          }
+        }, 'primary');
+        const addTicked = action('', function () {
+          addMany(Array.from(tickedFile), [addTicked, orderTicked]);
+        });
+        const detachTicked = action('', async function () {
+          detachTicked.disabled = true;
+          orderTicked.disabled = true;
+          try {
+            for (const id of Array.from(tickedDb)) {
               await tools.detach(entryId, id);
             }
           } catch (error) {
@@ -240,30 +266,37 @@
           await render();
         }, 'quiet');
         const refreshTicked = function () {
-          orderTicked.textContent = 'Order the ' + ticked.size + ' selected';
-          detachTicked.textContent = 'Detach the ' + ticked.size + ' selected';
-          orderTicked.disabled = ticked.size === 0;
-          detachTicked.disabled = ticked.size === 0 || !entryId;
-          everything.checked = ticked.size === attachedPrimers.length && ticked.size > 0;
+          const total = tickedDb.size + tickedFile.size;
+          orderTicked.textContent = 'Order the ' + total + ' selected';
+          addTicked.textContent = 'Add ' + tickedFile.size + ' to the database';
+          detachTicked.textContent = 'Detach ' + tickedDb.size;
+          orderTicked.disabled = total === 0;
+          addTicked.disabled = tickedFile.size === 0;
+          addTicked.hidden = fileOnly.length === 0;
+          detachTicked.disabled = tickedDb.size === 0 || !entryId;
+          detachTicked.hidden = attachedPrimers.length === 0;
+          everything.checked = total === attachedPrimers.length + fileOnly.length && total > 0;
         };
-        bar.append(everything, element('span', 'primers-muted', 'Select all'), orderTicked, detachTicked);
+        bar.append(everything, element('span', 'primers-muted', 'Select all'), orderTicked, addTicked, detachTicked);
         sectionAttached.append(bar);
-        refreshTicked();
+        const pick = function (box, set, value) {
+          box.addEventListener('change', function () {
+            if (box.checked) {
+              set.add(value);
+            } else {
+              set.delete(value);
+            }
+            refreshTicked();
+          });
+          allBoxes.push(box);
+        };
         attachedPrimers.forEach(function (primer) {
           const sites = findSitesCached(now.sequence, primer.sequence, now.circular);
           const holder = element('div', 'primers-pick');
           const box = element('input');
           box.type = 'checkbox';
           box.setAttribute('aria-label', 'Select ' + primer.title);
-          box.addEventListener('change', function () {
-            if (box.checked) {
-              ticked.add(primer.id);
-            } else {
-              ticked.delete(primer.id);
-            }
-            refreshTicked();
-          });
-          attachedBoxes.push(box);
+          pick(box, tickedDb, primer.id);
           holder.append(box, card(primer, sites, [
             action('Order', function () {
               tools.sendToOrder([primer.id]);
@@ -280,6 +313,20 @@
           ]));
           sectionAttached.append(holder);
         });
+        // the primers that are only in the file: they have a button to be added to the database
+        fileOnly.forEach(function (item) {
+          const holder = element('div', 'primers-pick');
+          const box = element('input');
+          box.type = 'checkbox';
+          box.setAttribute('aria-label', 'Select ' + item.name);
+          pick(box, tickedFile, item);
+          const add = action('Add to the database', function () {
+            addToDatabase(add, item.name, item.bases, item.forward);
+          }, 'primary');
+          holder.append(box, card({ title: item.name, category: 'Not in the database', sequence: item.bases }, findSitesCached(now.sequence, item.bases, now.circular), [add]));
+          sectionAttached.append(holder);
+        });
+        refreshTicked();
       }
 
       // search the database: by name or sequence, and by where the primers bind relative to the selection
@@ -466,101 +513,10 @@
       sectionSearch.append(searchRow, results);
       showResults();
 
-      // the primers annotated in the file, not in the database yet
-      // the primers annotated in the file: the primers of the editor and the features of the type primer_bind (a GenBank file
-      // has its primers as these)
-      const featureList = Array.isArray(now.data.features) ? now.data.features : Object.values(now.data.features || {});
-      const own = Object.values(now.data.primers || {}).concat(featureList.filter(function (feature) {
-        return String(feature.type || '').toLowerCase() === 'primer_bind' && feature.start <= feature.end;
-      }).map(function (feature) {
-        return { name: feature.name, start: feature.start, end: feature.end, forward: feature.strand !== -1, strand: feature.strand };
-      }));
-      if (own.length > 0) {
-        sectionFile.append(element('h4', '', 'Primers designed in this file'));
-      }
-      // the ones that are not in the database yet can be ticked and added together, or all at once
-      const items = own.map(function (primer) {
-        const forward = primer.forward !== false && primer.strand !== -1;
-        const bases = basesOf(now.sequence, primer.start, primer.end, forward);
-        return { name: primer.name || 'primer', forward: forward, bases: bases, inDatabase: known(bases) };
-      });
-      const missing = items.filter(function (item) {
-        return !item.inDatabase && tools.clean(item.bases).length >= tools.minLength;
-      });
-      const chosen = new Set(missing);
-      let addChosen = null;
-      let addAll = null;
-      const refreshBar = function () {
-        if (addChosen) {
-          addChosen.textContent = 'Add the ' + chosen.size + ' selected to the database';
-          addChosen.disabled = chosen.size === 0;
-        }
-      };
-      if (missing.length > 0) {
-        const bar = element('div', 'primers-pickbar');
-        const everything = element('input');
-        everything.type = 'checkbox';
-        everything.checked = true;
-        everything.setAttribute('aria-label', 'Select all the primers of the file');
-        const boxes = [];
-        everything.addEventListener('change', function () {
-          boxes.forEach(function (box) {
-            box.checked = everything.checked;
-            box.dispatchEvent(new Event('change'));
-          });
-        });
-        addChosen = action('', function () {
-          addMany(Array.from(chosen), [addChosen, addAll]);
-        }, 'primary');
-        addAll = action('Add all (' + missing.length + ')', function () {
-          addMany(missing, [addChosen, addAll]);
-        });
-        bar.append(everything, element('span', 'primers-muted', 'Select all'), addChosen, addAll);
-        sectionFile.append(bar);
-        refreshBar();
-        items.boxes = boxes;
-      }
-      items.forEach(function (item) {
-        const row = element('div', 'primers-row');
-        if (missing.indexOf(item) !== -1) {
-          const box = element('input');
-          box.type = 'checkbox';
-          box.checked = true;
-          box.setAttribute('aria-label', 'Select ' + item.name);
-          box.addEventListener('change', function () {
-            if (box.checked) {
-              chosen.add(item);
-            } else {
-              chosen.delete(item);
-            }
-            refreshBar();
-          });
-          items.boxes.push(box);
-          row.append(box);
-        }
-        row.append(element('strong', '', item.name), element('span', 'primers-muted', item.bases.length + ' bases'));
-        if (item.inDatabase) {
-          const link = element('a', 'primers-muted', 'in the database: ' + item.inDatabase.title);
-          link.href = '../registry.php?mode=view&id=' + item.inDatabase.id;
-          link.target = '_blank';
-          row.append(link);
-        } else if (missing.indexOf(item) === -1) {
-          row.append(element('span', 'primers-muted', 'too short for the database'));
-        } else {
-          const add = element('button', 'cutter-button', 'Add to the database');
-          add.type = 'button';
-          add.addEventListener('click', function () {
-            addToDatabase(add, item.name, item.bases, item.forward);
-          });
-          row.append(add);
-        }
-        sectionFile.append(row);
-      });
-
       // a primer from the bases selected on the sequence
-      sectionFile.append(element('h4', '', 'New primer from the selection'));
+      sectionSearch.append(element('h4', '', 'New primer from the selection'));
       if (!hasSelection) {
-        sectionFile.append(element('p', 'primers-muted', 'Select the bases of the primer on the sequence first.'));
+        sectionSearch.append(element('p', 'primers-muted', 'Select the bases of the primer on the sequence first.'));
       } else {
         const reverse = element('input');
         reverse.type = 'checkbox';
@@ -589,16 +545,15 @@
         });
         const row = element('div', 'primers-row');
         row.append(name, info, reverseLabel, add);
-        sectionFile.append(row);
+        sectionSearch.append(row);
       }
 
-      // the three parts are tabs, so the panel stays short: what is attached, what can be searched, what the file holds
-      const fileCount = missing.length;
+      // two tabs, so the panel stays short: what is on the sequence, and what can be searched and added
       if (subTab === null) {
         subTab = attachedPrimers.length > 0 ? 'attached' : 'search';
       }
       const subTabs = element('div', 'primers-subtabs');
-      [['attached', 'Attached', attachedPrimers.length, sectionAttached], ['search', 'Find and add', null, sectionSearch], ['file', 'In this file', fileCount, sectionFile]].forEach(function (tabDef) {
+      [['attached', 'Attached', attachedPrimers.length + fileOnly.length, sectionAttached], ['search', 'Find and add', null, sectionSearch]].forEach(function (tabDef) {
         const button = element('button', 'primers-subtab' + (subTab === tabDef[0] ? ' active' : ''), tabDef[1] + (tabDef[2] === null ? '' : ' (' + tabDef[2] + ')'));
         button.type = 'button';
         button.setAttribute('aria-pressed', subTab === tabDef[0] ? 'true' : 'false');
@@ -609,7 +564,7 @@
         subTabs.append(button);
         tabDef[3].hidden = subTab !== tabDef[0];
       });
-      panel.append(subTabs, sectionAttached, sectionSearch, sectionFile);
+      panel.append(subTabs, sectionAttached, sectionSearch);
       // the preview of the search belongs to the search tab
       if (subTab !== 'search' && Object.keys(previewDrawn).length > 0) {
         previewDrawn = {};
@@ -617,8 +572,9 @@
       }
     }
 
-    // several primers of the file in the database, each attached to this sequence; one that is already there is left out
-    async function addMany(list, buttons) {
+    // several primers of the file in the database, each attached to this sequence; one that is already there is left out.
+    // With "quiet" nothing is shown and the ids of the entries are given back (to order them).
+    async function addMany(list, buttons, quiet) {
       buttons.forEach(function (b) {
         if (b) {
           b.disabled = true;
@@ -626,28 +582,45 @@
       });
       let added = 0;
       let skipped = 0;
-      const seen = new Set();
+      const ids = [];
+      const seen = new Map();
       try {
         for (const item of list) {
           const key = tools.clean(item.bases);
-          if (seen.has(key) || known(item.bases)) {
+          if (seen.has(key)) {
+            ids.push(seen.get(key));
             skipped++;
             continue;
           }
-          seen.add(key);
+          const existing = known(item.bases);
+          if (existing) {
+            ids.push(existing.id);
+            skipped++;
+            continue;
+          }
           const id = await tools.createPrimer(item.name, item.bases, item.forward, current().name);
           if (entryId) {
             await tools.attach(entryId, id);
           }
+          seen.set(key, id);
+          ids.push(id);
           added++;
         }
-        say(added + ' primer' + (added === 1 ? '' : 's') + ' added to the database' + (skipped > 0 ? ' (' + skipped + ' already there)' : '') + '.');
+        if (!quiet) {
+          say(added + ' primer' + (added === 1 ? '' : 's') + ' added to the database' + (skipped > 0 ? ' (' + skipped + ' already there)' : '') + '.');
+        }
       } catch (error) {
         say((added > 0 ? added + ' added, then: ' : '') + (error.message || String(error)), true);
+        if (quiet) {
+          throw error;
+        }
       }
       databasePrimers = null;
       await loadAttached();
-      await render();
+      if (!quiet) {
+        await render();
+      }
+      return ids;
     }
 
     // a new primer in the database, attached to this sequence
