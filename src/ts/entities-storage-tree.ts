@@ -55,7 +55,6 @@ function fillTubeCard(card: HTMLElement, tube: Tube, linked: boolean): void {
   line('Slot', tube.location.position ?? '');
   line('Storage', tube.location.is_primary ? 'Primary' : 'Secondary');
   line('Quantity', `${tube.location.qty_stored} ${tube.location.qty_unit}`.trim());
-  line('Location', tube.location.path);
   line('Owner', tube.row.fullname ?? '');
 }
 
