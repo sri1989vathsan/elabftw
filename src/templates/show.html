@@ -16,6 +16,30 @@
   {% include 'search-help-modal.html' %}
   {% include 'show-view-edit.html' %}
   {% include 'request-actions-show.html' %}
+  {% if scriptName == 'registry.php' %}
+    {# module navigation: one tab per resource category, like the module bar of an inventory system #}
+    {% set currentCategories = App.Request.query.get('category')|split(',') %}
+    <nav class='category-nav d-flex flex-wrap mt-2' aria-label='{{ 'Category'|trans }}'>
+      <a class='category-nav-item{{ App.Request.query.get('category') == '' ? ' active' }}' href='registry.php'>{{ 'All'|trans }}</a>
+      {% for category in categoryArr %}
+        {% if category.is_current_team %}
+          <a class='category-nav-item{{ category.id in currentCategories ? ' active' }}' href='registry.php?category={{ category.id }}'>
+            <span class='category-nav-dot' style='background-color:#{{ category.color|default('bdbdbd') }}'></span>{{ category.title }}
+          </a>
+        {% endif %}
+      {% endfor %}
+      {# a category is open: offer a new entry of that category #}
+      {% if currentCategories|length == 1 and currentCategories[0] matches '/^\\d+$/' %}
+        {% for category in categoryArr %}
+          {% if category.id == currentCategories[0] %}
+            <button type='button' class='btn btn-primary btn-sm ml-auto' data-action='create-in-category' data-category='{{ category.id }}'>
+              <i class='fas fa-fw fa-plus mr-1'></i>{{ 'New entry'|trans }}: {{ category.title }}
+            </button>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    </nav>
+  {% endif %}
   <hr>
 
   {# SEARCH BAR #}
@@ -236,7 +260,7 @@
   <div class='d-flex flex-wrap'>
     {# LEFT #}
     <div class='d-flex'>
-      {% if App.Users.userData.display_mode == 'it' %}
+      {% if App.Users.userData.display_mode != 'tb' %}
         <a title='{{ 'Select all'|trans }}' aria-label='{{ 'Select all'|trans }}' data-action='toggle-select-all-entities' data-target='select' href='#' class='btn btn-transparent'>
           <i class='far fa-square'></i>
         </a>
@@ -244,6 +268,9 @@
           <i class='fas fa-arrows-turn-to-dots'></i>
         </a>
         <div class='vertical-separator'></div>
+        <a title='{{ 'Compact list'|trans }}' aria-label='{{ 'Compact list'|trans }}' data-action='toggle-compact-list' href='#' class='btn btn-transparent'>
+          <i class='fas fa-grip-lines'></i>
+        </a>
         <a title='{{ 'Toggle main text'|trans }}' aria-label='{{ 'Toggle main text'|trans }}' data-action='expand-all-entities' data-status='closed' href='#' class='btn btn-transparent'>
           <i class='fas fa-maximize'></i>
         </a>
@@ -454,6 +481,20 @@
         <i class='fas fa-fw fa-list'></i>
         <i class='fas fa-fw fa-table'></i>
       </button>
+      {% if scriptName == 'registry.php' %}
+        <button title='{{ 'Grouped view'|trans }}' aria-label='{{ 'Grouped view'|trans }}' type='button' class='btn btn-transparent mr-1{{ App.Users.userData.display_mode == 'gr' ? ' active' }}' data-action='toggle-grouped-layout'>
+          <i class='fas fa-fw fa-layer-group'></i>
+        </button>
+        <button title='{{ 'Expandable table'|trans }}' aria-label='{{ 'Expandable table'|trans }}' type='button' class='btn btn-transparent mr-1{{ App.Users.userData.display_mode == 'ex' ? ' active' }}' data-action='toggle-expandable-layout'>
+          <i class='fas fa-fw fa-table-list'></i>
+        </button>
+        <button title='{{ 'Storage browser'|trans }}' aria-label='{{ 'Storage browser'|trans }}' type='button' class='btn btn-transparent mr-1{{ App.Users.userData.display_mode == 'st' ? ' active' }}' data-action='toggle-storage-layout'>
+          <i class='fas fa-fw fa-sitemap'></i>
+        </button>
+        <button title='{{ 'Activity log'|trans }}' aria-label='{{ 'Activity log'|trans }}' type='button' class='btn btn-transparent mr-1{{ App.Users.userData.display_mode == 'ac' ? ' active' }}' data-action='toggle-activity-layout'>
+          <i class='fas fa-fw fa-clock-rotate-left'></i>
+        </button>
+      {% endif %}
     <div class='vertical-separator'></div>
 
     <div class='d-flex'>
@@ -622,7 +663,7 @@
 
       {# SKELETONS #}
       <div id='itemListSkeleton' class='d-flex flex-column' aria-hidden='true'>
-        {% if App.Users.userData.display_mode == 'it' %}
+        {% if App.Users.userData.display_mode != 'tb' %}
           {% for i in 1..DisplayParams.limit %}
             <section data-twiglinterstfu='{{ i }}' class='entity entity-skeleton pl-3 py-3 d-flex'>
               <div class='mt-1 mr-3'>

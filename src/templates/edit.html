@@ -171,7 +171,10 @@
 <hr>
 {% include('field-builder-modal.html') %}
 
-{% include 'steps-edit.html' %}
+{# resources are not worked through: steps are not offered unless the resource already has some #}
+{% if Entity.entityType.value != 'inventory' or Entity.entityData.steps %}
+  {% include 'steps-edit.html' %}
+{% endif %}
 
 {% include 'links.html' %}
 

@@ -33,9 +33,12 @@ use PDO;
 
 use function array_key_exists;
 use function intval;
+use function is_string;
 use function json_encode;
 use function number_format;
 use function sprintf;
+use function strtoupper;
+use function trim;
 
 /**
  * All about containers links with entities
@@ -62,7 +65,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
             main.storage_id,
             main.item_id,
             main.created_at,
-            main.modified_at,
+            main.modified_at,' . $this->positionSelect() . '
             storage_units.id AS storage_id,
             storage_units.name AS storage_name
             FROM ' . $this->getTable() . ' AS main
@@ -140,7 +143,12 @@ abstract class AbstractContainersLinks extends AbstractLinks
     public function postAction(Action $action, array $reqBody): int
     {
         return match ($action) {
-            Action::Create => $this->createWithQuantity((float) $reqBody['qty_stored'], $reqBody['qty_unit'] ?? Units::Unit->value),
+            Action::Create => $this->createWithQuantity(
+                (float) $reqBody['qty_stored'],
+                $reqBody['qty_unit'] ?? Units::Unit->value,
+                isset($reqBody['position']) ? (string) $reqBody['position'] : null,
+                (int) ($reqBody['is_primary'] ?? 0) === 1,
+            ),
             Action::Duplicate => $this->import(),
             default => throw new ImproperActionException('Invalid action for links create.'),
         };
@@ -152,7 +160,15 @@ abstract class AbstractContainersLinks extends AbstractLinks
         $this->Entity->canOrExplode(AccessType::Write);
         $before = $this->readOne();
         if (isset($params['storage_id'])) {
+            // the slot belongs to the box the tube leaves
+            $this->clearPosition();
             $this->moveToStorage((int) $params['storage_id']);
+        }
+        if (array_key_exists('position', $params)) {
+            $this->setPosition($params['position']);
+        }
+        if (array_key_exists('is_primary', $params) && (int) $params['is_primary'] === 1) {
+            $this->makePrimary();
         }
         $qtyGiven = array_key_exists('qty_stored', $params) && $params['qty_stored'] !== null && $params['qty_stored'] !== '';
         $unitGiven = array_key_exists('qty_unit', $params) && $params['qty_unit'] !== null && $params['qty_unit'] !== '';
@@ -210,7 +226,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
             main.qty_stored,
             main.qty_unit,
             main.storage_id,
-            main.item_id,
+            main.item_id,' . $this->positionSelect() . '
             main.created_at,
             main.modified_at
             FROM ' . $this->getTable() . ' AS main
@@ -226,7 +242,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         string $column,
         int|float|string $value,
     ): bool {
-        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id') {
+        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id' && $column !== 'position') {
             throw new ImproperActionException('Invalid update target');
         }
         $sql = sprintf(
@@ -265,6 +281,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         $result = $this->Db->execute($req);
 
         if ($current !== null && $req->rowCount() > 0) {
+            $this->ensurePrimary();
             new Changelog($this->Entity)->create(new ContentParams(
                 'container_deleted',
                 sprintf(
@@ -312,7 +329,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
             && $this->Entity->id === intval($targetId);
     }
 
-    public function createWithQuantity(float $qty, string $unit): int
+    public function createWithQuantity(float $qty, string $unit, ?string $position = null, bool $primary = false): int
     {
         $this->Entity->canOrExplode(AccessType::Write);
         $this->Entity->touch();
@@ -331,6 +348,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         // INSERT IGNORE inserts nothing on a FK violation; only log a real insert
         if ($req->rowCount() > 0) {
             $containerId = $this->Db->lastInsertId();
+            $this->ensurePrimary();
             new Changelog($this->Entity)->create(new ContentParams(
                 'container_created',
                 sprintf(
@@ -341,6 +359,21 @@ abstract class AbstractContainersLinks extends AbstractLinks
                     $containerId,
                 ),
             ));
+            // the slot and the primary flag act on the new container: point the id to it for these, then back to the storage
+            if (($position !== null && $position !== '') || $primary) {
+                $storageId = $this->id;
+                $this->id = $containerId;
+                try {
+                    if ($position !== null && $position !== '') {
+                        $this->setPosition($position);
+                    }
+                    if ($primary) {
+                        $this->makePrimary();
+                    }
+                } finally {
+                    $this->id = $storageId;
+                }
+            }
         }
 
         return $this->id;
@@ -389,6 +422,107 @@ abstract class AbstractContainersLinks extends AbstractLinks
             return 'containers2experiments';
         }
         return 'containers2items';
+    }
+
+    /**
+     * Put the container in a slot (A1 style) of its box, or take it out of the slot when empty
+     */
+    private function setPosition(mixed $position): void
+    {
+        if ($this->getTable() !== 'containers2items') {
+            throw new ImproperActionException('Only the containers of resources have a position.');
+        }
+        $current = $this->readOne();
+        $position = is_string($position) ? strtoupper(trim($position)) : '';
+        if ($position === '') {
+            $this->clearPosition();
+        } else {
+            $slot = StorageUnits::parseSlot($position);
+            $req = $this->Db->prepare('SELECT box_rows, box_cols FROM storage_units WHERE id = :id');
+            $req->bindValue(':id', (int) $current['storage_id'], PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $box = $req->fetch();
+            if ($slot === null || empty($box['box_rows']) || $slot[0] > (int) $box['box_rows'] || $slot[1] > (int) $box['box_cols']) {
+                throw new ImproperActionException('This slot is not in the box.');
+            }
+            $req = $this->Db->prepare('SELECT COUNT(*) FROM containers2items WHERE storage_id = :storage_id AND position = :position AND id <> :id');
+            $req->bindValue(':storage_id', (int) $current['storage_id'], PDO::PARAM_INT);
+            $req->bindValue(':position', $position);
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            if ((int) $req->fetchColumn() > 0) {
+                throw new ImproperActionException(sprintf('The slot %s is already taken.', $position));
+            }
+            $this->update('position', $position);
+        }
+        $this->Entity->touch();
+        new Changelog($this->Entity)->create(new ContentParams(
+            'container_position_changed',
+            sprintf(
+                $position === '' ? 'Container #%2$d taken out of its slot at "%3$s"' : 'Container #%2$d placed in slot %1$s at "%3$s"',
+                $position,
+                (int) $current['id'],
+                $this->getStoragePath((int) $current['storage_id']),
+            ),
+        ));
+    }
+
+    /**
+     * This container becomes the primary storage of the resource, the others are secondary
+     */
+    private function makePrimary(): void
+    {
+        if ($this->getTable() !== 'containers2items') {
+            throw new ImproperActionException('Only the containers of resources can be primary.');
+        }
+        $current = $this->readOne();
+        if ((int) $current['is_primary'] === 1) {
+            return;
+        }
+        $req = $this->Db->prepare('UPDATE containers2items SET is_primary = IF(id = :id, 1, 0) WHERE item_id = :item_id');
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $this->Entity->touch();
+        new Changelog($this->Entity)->create(new ContentParams(
+            'container_primary_changed',
+            sprintf('Container #%d at "%s" is now the primary storage', (int) $current['id'], $this->getStoragePath((int) $current['storage_id'])),
+        ));
+    }
+
+    /**
+     * A resource with containers always has a primary: the oldest one when none is
+     */
+    private function ensurePrimary(): void
+    {
+        if ($this->getTable() !== 'containers2items') {
+            return;
+        }
+        $req = $this->Db->prepare('SELECT COUNT(*) FROM containers2items WHERE item_id = :item_id AND is_primary = 1');
+        $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        if ((int) $req->fetchColumn() > 0) {
+            return;
+        }
+        $req = $this->Db->prepare('UPDATE containers2items SET is_primary = 1 WHERE item_id = :item_id ORDER BY id ASC LIMIT 1');
+        $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    private function clearPosition(): void
+    {
+        if ($this->getTable() === 'containers2items') {
+            $req = $this->Db->prepare('UPDATE containers2items SET position = NULL WHERE id = :id AND item_id = :item_id');
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+        }
+    }
+
+    // the position column exists for the containers of resources only
+    private function positionSelect(): string
+    {
+        return $this->getTable() === 'containers2items' ? ' main.position, main.is_primary,' : '';
     }
 
     private function moveToStorage(int $newStorageId): void

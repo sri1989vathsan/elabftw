@@ -34,6 +34,8 @@ use function filter_var;
 use function in_array;
 use function is_int;
 use function is_string;
+use function ord;
+use function preg_match;
 use function sprintf;
 use function trim;
 
@@ -42,6 +44,11 @@ use function trim;
  */
 final class StorageUnits extends AbstractRest
 {
+    // a box has its rows named by letters and its columns by one or two digits
+    public const int MAX_BOX_ROWS = 26;
+
+    public const int MAX_BOX_COLS = 99;
+
     use SetIdTrait;
 
     public function __construct(public Users $requester, private bool $requireEditRights, ?int $id = null)
@@ -279,8 +286,12 @@ final class StorageUnits extends AbstractRest
         $this->canWriteOrExplode();
         $hasName = !empty($params['name']);
         $hasParent = array_key_exists('parent_id', $params);
-        if (!$hasName && !$hasParent) {
+        $hasBox = array_key_exists('box_rows', $params) || array_key_exists('box_cols', $params);
+        if (!$hasName && !$hasParent && !$hasBox) {
             throw new ImproperActionException('No valid update target provided.');
+        }
+        if ($hasBox) {
+            $this->setBox($params['box_rows'] ?? null, $params['box_cols'] ?? null);
         }
         $newParentId = null;
         if ($hasParent) {
@@ -294,6 +305,47 @@ final class StorageUnits extends AbstractRest
             $this->applyMove($newParentId);
         }
         return $this->readOne();
+    }
+
+    /**
+     * Make the unit a box of rows x columns slots, or a plain unit again when both are empty
+     */
+    public function setBox(mixed $rows, mixed $cols): void
+    {
+        $rows = $rows === null || $rows === '' || (int) $rows === 0 ? null : (int) $rows;
+        $cols = $cols === null || $cols === '' || (int) $cols === 0 ? null : (int) $cols;
+        if (($rows === null) !== ($cols === null)) {
+            throw new ImproperActionException('A box needs both a number of rows and of columns.');
+        }
+        if ($rows !== null && ($rows < 1 || $rows > self::MAX_BOX_ROWS || $cols < 1 || $cols > self::MAX_BOX_COLS)) {
+            throw new ImproperActionException(sprintf('A box has between 1 and %d rows (letters) and between 1 and %d columns.', self::MAX_BOX_ROWS, self::MAX_BOX_COLS));
+        }
+        // never shrink a box under tubes that are already placed in it
+        $req = $this->Db->prepare('SELECT position FROM containers2items WHERE storage_id = :id AND position IS NOT NULL');
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        foreach ($req->fetchAll(PDO::FETCH_COLUMN) as $position) {
+            $slot = self::parseSlot((string) $position);
+            if ($rows === null || $slot === null || $slot[0] > $rows || $slot[1] > $cols) {
+                throw new ImproperActionException(sprintf('Tube %s is placed in this box, the new size would not contain it.', $position));
+            }
+        }
+        $req = $this->Db->prepare('UPDATE storage_units SET box_rows = :rows, box_cols = :cols WHERE id = :id');
+        $req->bindValue(':rows', $rows, $rows === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindValue(':cols', $cols, $cols === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    /**
+     * A slot like C4 as [row, column] (both starting at 1), or null if it is not a slot
+     */
+    public static function parseSlot(string $position): ?array
+    {
+        if (preg_match('/^([A-Z])(\d{1,2})$/', $position, $matches) !== 1) {
+            return null;
+        }
+        return array(ord($matches[1]) - 64, (int) $matches[2]);
     }
 
     public function move(?int $newParentId): bool
@@ -502,7 +554,9 @@ final class StorageUnits extends AbstractRest
                 parent_id,
                 name AS full_path,
                 0 AS level_depth,
-                (SELECT COUNT(*) FROM storage_units AS su WHERE su.parent_id = storage_units.id) AS children_count
+                (SELECT COUNT(*) FROM storage_units AS su WHERE su.parent_id = storage_units.id) AS children_count,
+                box_rows,
+                box_cols
             FROM
                 storage_units
             WHERE
@@ -517,7 +571,9 @@ final class StorageUnits extends AbstractRest
                 child.parent_id,
                 CONCAT(parent.full_path, ' > ', child.name) AS full_path,
                 parent.level_depth + 1,
-                (SELECT COUNT(*) FROM storage_units AS su WHERE su.parent_id = child.id) AS children_count
+                (SELECT COUNT(*) FROM storage_units AS su WHERE su.parent_id = child.id) AS children_count,
+                child.box_rows,
+                child.box_cols
             FROM
                 storage_units AS child
             INNER JOIN
@@ -533,7 +589,10 @@ final class StorageUnits extends AbstractRest
             full_path,
             parent_id,
             level_depth,
-            children_count
+            children_count,
+            box_rows,
+            box_cols,
+            (SELECT GROUP_CONCAT(c.position) FROM containers2items AS c WHERE c.storage_id = storage_hierarchy.id AND c.position IS NOT NULL) AS taken_positions
         FROM
             storage_hierarchy
         ORDER BY

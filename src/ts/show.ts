@@ -31,6 +31,10 @@ import { on } from './handlers';
 
 // Loaded on demand: the "table" view pulls in ag-grid, which most page loads never need.
 let entitiesTableModule: typeof import('./entities-table') | null = null;
+let groupedModule: typeof import('./entities-grouped') | null = null;
+let storageTreeModule: typeof import('./entities-storage-tree') | null = null;
+let activityModule: typeof import('./entities-activity') | null = null;
+let expandableModule: typeof import('./entities-expandable') | null = null;
 
 type TeamScopedTomSelect = TomSelectWithAllOptions & {
   _showAll?: boolean;
@@ -214,6 +218,50 @@ const unmountEntityListSv = async (): Promise<void> => {
   entityListSvComponent = null;
 };
 
+// unmount the views that are not the one about to be shown
+function unmountOtherViews(keep: string): void {
+  if (keep !== 'tb') {
+    entitiesTableModule?.unmountEntitiesTable();
+  }
+  if (keep !== 'gr') {
+    groupedModule?.unmountGroupedEntities();
+  }
+  if (keep !== 'st') {
+    storageTreeModule?.unmountStorageTree();
+  }
+  if (keep !== 'ac') {
+    activityModule?.unmountActivityLog();
+  }
+  if (keep !== 'ex') {
+    expandableModule?.unmountExpandableTable();
+  }
+  if (keep !== 'it') {
+    unmountEntityListSv();
+  }
+}
+
+// the resources open in the expandable table unless the cards were chosen: the saved mode 'it' alone does not say, as it is also the default
+const CARDS_KEY = 'persistent_resource_cards_v1';
+
+function effectiveMode(mode: string): string {
+  if (entity.type !== 'inventory' || mode !== 'it') {
+    return mode;
+  }
+  try {
+    return localStorage.getItem(CARDS_KEY) === '1' ? 'it' : 'ex';
+  } catch {
+    return 'ex';
+  }
+}
+
+function rememberCards(chosen: boolean): void {
+  try {
+    localStorage.setItem(CARDS_KEY, chosen ? '1' : '0');
+  } catch {
+    // localStorage might be unavailable
+  }
+}
+
 async function displayEntities(
   mode: string,
   order: string,
@@ -222,8 +270,48 @@ async function displayEntities(
   relatedOrigin: string = getCurrentUrlParam('related_origin'),
 ) {
   const rootEl = document.getElementById('entityList');
-  if (mode === 'tb') {
-    unmountEntityListSv();
+  mode = effectiveMode(mode);
+  // the views made for the resources are not offered on the other pages, even when the saved mode is one of them
+  const resourceViews = entity.type === 'inventory' ? ['gr', 'st', 'ac', 'ex'] : [];
+  const view = ['tb', ...resourceViews].includes(mode) ? mode : 'it';
+  unmountOtherViews(view);
+  // the button of the view shown is the one lit
+  [['gr', 'toggle-grouped-layout'], ['ex', 'toggle-expandable-layout'], ['st', 'toggle-storage-layout'], ['ac', 'toggle-activity-layout']].forEach(([key, action]) => {
+    document.querySelector(`[data-action="${action}"]`)?.classList.toggle('active', view === key);
+  });
+  if (view === 'ex') {
+    expandableModule ??= await import(
+      /* webpackChunkName: 'entities-expandable' */
+      './entities-expandable'
+    );
+    expandableModule.mountExpandableTable(rootEl, order, sort, handleInitialLoadDone);
+    return;
+  }
+  if (view === 'ac') {
+    activityModule ??= await import(
+      /* webpackChunkName: 'entities-activity' */
+      './entities-activity'
+    );
+    activityModule.mountActivityLog(rootEl, handleInitialLoadDone);
+    return;
+  }
+  if (view === 'st') {
+    storageTreeModule ??= await import(
+      /* webpackChunkName: 'entities-storage-tree' */
+      './entities-storage-tree'
+    );
+    storageTreeModule.mountStorageTree(rootEl, order, sort, handleInitialLoadDone);
+    return;
+  }
+  if (view === 'gr') {
+    groupedModule ??= await import(
+      /* webpackChunkName: 'entities-grouped' */
+      './entities-grouped'
+    );
+    groupedModule.mountGroupedEntities(rootEl, order, sort, handleInitialLoadDone);
+    return;
+  }
+  if (view === 'tb') {
     entitiesTableModule ??= await import(
       /* webpackChunkName: 'entities-table' */
       './entities-table'
@@ -232,7 +320,6 @@ async function displayEntities(
     handleInitialLoadDone();
     return;
   }
-  entitiesTableModule?.unmountEntitiesTable();
   mountEntityListSv(rootEl, order, sort);
 }
 
@@ -297,10 +384,21 @@ type AnyTS = TomSelectWithAllOptions & {
 };
 const bound = new WeakSet<Element>();
 
+// one setting per kind of list, so compacting the resources leaves the experiments as they were
+const compactListKey = (): string => `persistent_compact_list_v2_${entity.type}`;
+
 // DOM
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('info')) {
     return;
+  }
+  try {
+    if (localStorage.getItem(compactListKey()) === '1') {
+      document.getElementById('entityList')?.classList.add('entity-list-compact');
+      document.querySelector('[data-action="toggle-compact-list"]')?.classList.add('active');
+    }
+  } catch {
+    // localStorage might be unavailable
   }
   const about = document.getElementById('info').dataset;
   // only run in show mode
@@ -310,7 +408,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // can't have await at top level, so wrap it
   void (async (): Promise<void> => {
     const me = await getMe();
-    displayEntities(String(me['display_mode'] ?? 'it'), getPreferredOrder(me), getPreferredSort(me));
+    // a link to a storage location opens the storage browser, without changing the saved display mode
+    const toLocation = entity.type === 'inventory' && getCurrentUrlNumberParam('storage_unit') !== null;
+    displayEntities(toLocation ? 'st' : effectiveMode(String(me['display_mode'] ?? 'it')), getPreferredOrder(me), getPreferredSort(me));
   })();
 
   preventReactiveSearchFormSubmit();
@@ -801,11 +901,80 @@ document.addEventListener('DOMContentLoaded', () => {
   on('toggle-items-layout', async () => {
     let target = 'it';
     const me = await getMe();
-    if (me['display_mode'] === 'it') {
+    if (effectiveMode(me['display_mode']) !== 'tb') {
       target = 'tb';
     }
+    rememberCards(target === 'it');
     ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
-      document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', effectiveMode(target) === 'it');
+      displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
+    });
+  });
+
+  // the grouped view of the resources: collapsible sections, each with its own table
+  on('toggle-grouped-layout', async () => {
+    const me = await getMe();
+    const target = effectiveMode(me['display_mode']) === 'gr' ? 'it' : 'gr';
+    // closing the view goes back to the expandable table
+    rememberCards(false);
+    ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', effectiveMode(target) === 'it');
+      displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
+      document.querySelector('[data-action="toggle-grouped-layout"]')?.classList.toggle('active', target === 'gr');
+    });
+  });
+
+  // the storage browser of the resources: tree of the storage units and the contents of the selected one
+  on('toggle-storage-layout', async () => {
+    const me = await getMe();
+    const target = effectiveMode(me['display_mode']) === 'st' ? 'it' : 'st';
+    // closing the view goes back to the expandable table
+    rememberCards(false);
+    ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', effectiveMode(target) === 'it');
+      displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
+    });
+  });
+
+  // narrower cards in the item list, so there is less to scroll
+  on('toggle-compact-list', (el: HTMLElement) => {
+    const compact = document.getElementById('entityList')?.classList.toggle('entity-list-compact') ?? false;
+    el.classList.toggle('active', compact);
+    try {
+      localStorage.setItem(compactListKey(), compact ? '1' : '0');
+    } catch {
+      // localStorage might be unavailable
+    }
+  });
+
+  // the expandable table of the resources: a row per resource, opened to show its fields, storage and activity
+  on('toggle-expandable-layout', async () => {
+    const me = await getMe();
+    const target = effectiveMode(me['display_mode']) === 'ex' ? 'it' : 'ex';
+    // the expandable table is the default: closing it shows the cards
+    rememberCards(target === 'it');
+    ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', effectiveMode(target) === 'it');
+      displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
+    });
+  });
+
+  // a new entry in the category that is open
+  on('create-in-category', async (el: HTMLElement) => {
+    const category = parseInt(el.dataset.category ?? '', 10);
+    const params: Record<string, number> = { category };
+    const id = await ApiC.post2location('inventory', params);
+    window.location.href = `registry.php?mode=edit&id=${id}`;
+  });
+
+  // the activity log of the resources: who changed what and when
+  on('toggle-activity-layout', async () => {
+    const me = await getMe();
+    const target = effectiveMode(me['display_mode']) === 'ac' ? 'it' : 'ac';
+    // closing the view goes back to the expandable table
+    rememberCards(false);
+    ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
+      document.getElementById('realContainer')?.classList.toggle('max-width-70', effectiveMode(target) === 'it');
       displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
     });
   });

@@ -55,6 +55,7 @@
 @include meta.load-css('custom-editor');
 @include meta.load-css('prism');
 @include meta.load-css('skeletons');
+@include meta.load-css('category-nav');
 
 /* Font is Lato */
 @font-face {

@@ -457,7 +457,7 @@ abstract class AbstractEntity extends AbstractRest
 
         $entities = $req->fetchAll();
 
-        return $this->hydrateTags($entities);
+        return $this->hydrateExtraFields($this->hydrateStorage($this->hydrateTags($entities)));
     }
 
     /**
@@ -1587,6 +1587,105 @@ abstract class AbstractEntity extends AbstractRest
         }
 
         return $tagsByItemId;
+    }
+
+    /**
+     * Add the storage locations (full path and quantity) of registry entries, so the table view can show them
+     */
+    protected function hydrateStorage(array $entities): array
+    {
+        if ($this->entityType !== EntityType::Inventory || $entities === array()) {
+            return $entities;
+        }
+        $ids = array_map(static fn(array $entity): int => (int) $entity['id'], $entities);
+        $sql = sprintf(
+            'SELECT id, item_id, storage_id, qty_stored, qty_unit, position, is_primary FROM containers2inventory WHERE item_id IN (%s) ORDER BY is_primary DESC, id',
+            implode(',', $ids),
+        );
+        $req = $this->Db->prepare($sql);
+        $this->Db->execute($req);
+        $links = $req->fetchAll();
+        $byItem = array();
+        if ($links !== array()) {
+            $units = array();
+            $req = $this->Db->prepare('SELECT id, name, parent_id FROM storage_units');
+            $this->Db->execute($req);
+            foreach ($req->fetchAll() as $unit) {
+                $units[(int) $unit['id']] = $unit;
+            }
+            foreach ($links as $link) {
+                $parts = array();
+                $current = (int) $link['storage_id'];
+                // the depth cap protects against a corrupted parent loop
+                for ($i = 0; $i < 20 && isset($units[$current]); $i++) {
+                    array_unshift($parts, $units[$current]['name']);
+                    $current = (int) ($units[$current]['parent_id'] ?? 0);
+                }
+                $byItem[(int) $link['item_id']][] = array(
+                    'container_id' => (int) $link['id'],
+                    'position' => $link['position'],
+                    'is_primary' => (int) $link['is_primary'] === 1,
+                    'storage_id' => (int) $link['storage_id'],
+                    'path' => implode(' > ', $parts),
+                    'qty_stored' => (float) $link['qty_stored'],
+                    'qty_unit' => $link['qty_unit'],
+                );
+            }
+        }
+        foreach ($entities as &$entity) {
+            $entity['storage_locations'] = $byItem[(int) $entity['id']] ?? array();
+        }
+        unset($entity);
+
+        return $entities;
+    }
+
+    /**
+     * Add the extra fields of registry entries as an ordered name/value list, so the table view can show them as columns
+     */
+    protected function hydrateExtraFields(array $entities): array
+    {
+        if ($this->entityType !== EntityType::Inventory || $entities === array()) {
+            return $entities;
+        }
+        $ids = array_map(static fn(array $entity): int => (int) $entity['id'], $entities);
+        $req = $this->Db->prepare(sprintf('SELECT id, metadata FROM inventory WHERE id IN (%s)', implode(',', $ids)));
+        $this->Db->execute($req);
+        $byId = array();
+        $linksById = array();
+        foreach ($req->fetchAll() as $row) {
+            $decoded = json_decode((string) $row['metadata'], true);
+            $fields = is_array($decoded) && is_array($decoded['extra_fields'] ?? null) ? $decoded['extra_fields'] : array();
+            $list = array();
+            foreach ($fields as $name => $field) {
+                if (!is_array($field)) {
+                    continue;
+                }
+                $value = $field['value'] ?? '';
+                $list[] = array(
+                    'name' => (string) $name,
+                    'value' => is_array($value) ? implode(', ', array_map('strval', $value)) : (string) $value,
+                    'position' => (int) ($field['position'] ?? 0),
+                );
+            }
+            usort($list, static fn(array $a, array $b): int => $a['position'] <=> $b['position']);
+            $byId[(int) $row['id']] = $list;
+            // the web links of the resource (a benchling page, a paper...): only http(s) addresses are kept
+            $links = array();
+            foreach (($decoded['elabftw']['web_links'] ?? array()) as $link) {
+                if (is_array($link) && is_string($link['url'] ?? null) && preg_match('#^https?://#i', $link['url']) === 1) {
+                    $links[] = array('id' => (string) ($link['id'] ?? ''), 'label' => (string) ($link['label'] ?? ''), 'url' => $link['url']);
+                }
+            }
+            $linksById[(int) $row['id']] = $links;
+        }
+        foreach ($entities as &$entity) {
+            $entity['extra_fields'] = $byId[(int) $entity['id']] ?? array();
+            $entity['web_links'] = $linksById[(int) $entity['id']] ?? array();
+        }
+        unset($entity);
+
+        return $entities;
     }
 
     protected function hydrateTags(array $entities): array
