@@ -321,9 +321,8 @@ final class StorageUnits extends AbstractRest
             throw new ImproperActionException(sprintf('A box has between 1 and %d rows (letters) and between 1 and %d columns.', self::MAX_BOX_ROWS, self::MAX_BOX_COLS));
         }
         // never shrink a box under tubes that are already placed in it
-        $req = $this->Db->prepare('SELECT position FROM containers2items WHERE storage_id = :id AND position IS NOT NULL UNION ALL SELECT position FROM containers2inventory WHERE storage_id = :id2 AND position IS NOT NULL');
+        $req = $this->Db->prepare('SELECT position FROM containers2inventory WHERE storage_id = :id AND position IS NOT NULL');
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
-        $req->bindParam(':id2', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
         foreach ($req->fetchAll(PDO::FETCH_COLUMN) as $position) {
             $slot = self::parseSlot((string) $position);
@@ -593,7 +592,7 @@ final class StorageUnits extends AbstractRest
             children_count,
             box_rows,
             box_cols,
-            (SELECT GROUP_CONCAT(c.position) FROM (SELECT storage_id, position FROM containers2items UNION ALL SELECT storage_id, position FROM containers2inventory) AS c WHERE c.storage_id = storage_hierarchy.id AND c.position IS NOT NULL) AS taken_positions
+            (SELECT GROUP_CONCAT(c.position) FROM containers2inventory AS c WHERE c.storage_id = storage_hierarchy.id AND c.position IS NOT NULL) AS taken_positions
         FROM
             storage_hierarchy
         ORDER BY

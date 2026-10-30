@@ -445,18 +445,9 @@ abstract class AbstractContainersLinks extends AbstractLinks
             if ($slot === null || empty($box['box_rows']) || $slot[0] > (int) $box['box_rows'] || $slot[1] > (int) $box['box_cols']) {
                 throw new ImproperActionException('This slot is not in the box.');
             }
-            // a slot is taken by a container of resources or of the registry alike
-            $other = $this->getTable() === 'containers2items' ? 'containers2inventory' : 'containers2items';
-            $req = $this->Db->prepare(sprintf(
-                'SELECT (SELECT COUNT(*) FROM %s WHERE storage_id = :storage_id AND position = :position AND id <> :id)
-                    + (SELECT COUNT(*) FROM %s WHERE storage_id = :storage_id2 AND position = :position2)',
-                $this->getTable(),
-                $other,
-            ));
+            $req = $this->Db->prepare('SELECT COUNT(*) FROM containers2inventory WHERE storage_id = :storage_id AND position = :position AND id <> :id');
             $req->bindValue(':storage_id', (int) $current['storage_id'], PDO::PARAM_INT);
-            $req->bindValue(':storage_id2', (int) $current['storage_id'], PDO::PARAM_INT);
             $req->bindValue(':position', $position);
-            $req->bindValue(':position2', $position);
             $req->bindParam(':id', $this->id, PDO::PARAM_INT);
             $this->Db->execute($req);
             if ((int) $req->fetchColumn() > 0) {
@@ -528,10 +519,10 @@ abstract class AbstractContainersLinks extends AbstractLinks
         }
     }
 
-    // slots and the primary flag exist for the containers of resources and of the registry, not of experiments
+    // slots and the primary flag exist for the containers of the registry only
     private function hasSlots(): bool
     {
-        return $this->getTable() === 'containers2items' || $this->getTable() === 'containers2inventory';
+        return $this->getTable() === 'containers2inventory';
     }
 
     private function positionSelect(): string
