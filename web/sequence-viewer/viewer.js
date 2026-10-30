@@ -186,6 +186,8 @@
       editorName: 'sequence-editor',
       showMenuBar: true,
       readOnly: !canWrite,
+      // the commercial enzymes of REBASE, on top of those of the editor (enzymes-library.js)
+      additionalEnzymes: window.EnzymeLibrary ? window.EnzymeLibrary.enzymes : {},
       onSave: function (opts, sequenceData) {
         saveNow(sequenceData);
       },

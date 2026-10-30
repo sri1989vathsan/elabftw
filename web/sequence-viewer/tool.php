@@ -57,6 +57,7 @@ $v = static fn(string $file): int => (int) filemtime(__DIR__ . '/' . $file);
   <script src="annotate-tab.js?v=<?= (int) filemtime(__DIR__ . '/annotate-tab.js') ?>"></script>
   <script src="primers-panel.js?v=<?= (int) filemtime(__DIR__ . '/primers-panel.js') ?>"></script>
   <script src="vendor/bio-parsers.umd.js"></script>
+  <script src="enzymes-library.js?v=<?= (int) filemtime(__DIR__ . '/enzymes-library.js') ?>"></script>
   <script src="vendor/ove.umd.js"></script>
   <script src="viewer.js?v=<?= $v('viewer.js') ?>"></script>
   <script src="tool.js?v=<?= $v('tool.js') ?>"></script>
