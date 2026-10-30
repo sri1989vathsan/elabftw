@@ -5,8 +5,28 @@ html, body {
   font-family: sans-serif;
 }
 
+#bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-sizing: border-box;
+  height: 2.75rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid #d0d4d9;
+  background: #f1f3f5;
+}
+
+#back {
+  color: #1f5fae;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+#back:hover {
+  text-decoration: underline;
+}
+
 #status {
-  padding: 0.75rem 1rem;
   color: #495057;
 }
 
@@ -20,5 +40,31 @@ html, body {
 }
 
 #root {
-  height: 100%;
+  height: calc(100% - 2.75rem);
+}
+
+#entry-title {
+  color: #212529;
+}
+
+#title {
+  color: #6c757d;
+}
+
+#save-state {
+  margin-left: auto;
+  white-space: nowrap;
+  color: #495057;
+}
+
+#save-state.dirty {
+  color: #9a6700;
+}
+
+#save-state.saved {
+  color: #1a7f37;
+}
+
+#save-state.failed {
+  color: #a61e1e;
 }

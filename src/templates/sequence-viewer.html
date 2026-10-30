@@ -1,4 +1,4 @@
-{# SEQUENCE: the sequence files attached to an entry of the database, opened in the Open Vector Editor (read only, in a frame of their own so its styles stay apart) #}
+{# SEQUENCE: the sequence files attached to an entry of the database, opened in the Open Vector Editor (read only), each in a page of its own #}
 {% set sequenceFiles = [] %}
 {% for upload in Entity.entityData.uploads %}
   {% if upload.real_name matches '/\\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i' %}
@@ -14,11 +14,11 @@
       <ul class='list-inline mb-2'>
         {% for upload in sequenceFiles %}
           <li class='list-inline-item'>
-            <a class='btn btn-secondary btn-sm' target='sequenceFrame' href='sequence-viewer/index.php?f={{ upload.long_name|e('url') }}&amp;name={{ upload.real_name|e('url') }}&amp;storage={{ upload.storage }}{% if accessKey %}&amp;access_key={{ accessKey|e('url') }}{% endif %}'><i class='fas fa-dna fa-fw mr-1'></i>{{ upload.real_name }}</a>
+            <a class='btn btn-secondary btn-sm' target='_blank' rel='noopener' title='{{ 'Open in the sequence editor'|trans }}' href='sequence-viewer/index.php?entry={{ Entity.id }}&amp;upload={{ upload.id }}&amp;f={{ upload.long_name|e('url') }}&amp;name={{ upload.real_name|e('url') }}&amp;storage={{ upload.storage }}{% if accessKey %}&amp;access_key={{ accessKey|e('url') }}{% endif %}'><i class='fas fa-dna fa-fw mr-1'></i>{{ upload.real_name }} <i class='fas fa-arrow-up-right-from-square fa-fw ml-1 fa-xs' aria-hidden='true'></i></a>
           </li>
         {% endfor %}
       </ul>
-      <iframe name='sequenceFrame' id='sequenceFrame' class='sequence-frame' style='width: 100%; height: 40rem; border: 1px solid #c9ccd1;' title='{{ 'Sequence editor'|trans }}' srcdoc='&lt;p style=&quot;font:14px sans-serif;color:#666;padding:1rem&quot;&gt;Choose a file above to open it in the sequence editor.&lt;/p&gt;'></iframe>
+      <p class='small text-muted mb-2'>{{ 'Changes made in the editor are saved as a new version of the file. The earlier versions are kept:'|trans }} <a href='?mode=view&amp;id={{ Entity.id }}&amp;state=1,2#filesDiv'>{{ 'show the versions'|trans }}</a>.</p>
     {% endif %}
   </div>
   <hr>
