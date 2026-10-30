@@ -32,6 +32,7 @@ use function sprintf;
 use function nl2br;
 use function _;
 use function array_key_exists;
+use function count;
 use function in_array;
 
 /**
@@ -89,7 +90,7 @@ final class TwigFilters
      * Process the metadata json string into html, for extra fields view mode
      * @psalm-suppress PossiblyUnusedMethod this method is used in twig templates
      */
-    public static function formatMetadata(string $json): string
+    public static function formatMetadata(string $json, bool $hideSingleGroupName = false): string
     {
         try {
             $Metadata = new Metadata($json);
@@ -112,7 +113,12 @@ final class TwigFilters
                 continue;
             }
             // group list item contains another list with fields
-            $final .= sprintf("<div><h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='mt-4 d-inline togglable-section-title'><i class='fas fa-caret-down fa-fw mr-2'></i>%s</h4>", Tools::eLabHtmlspecialchars($group['name']));
+            // a single group needs no title when asked (the registry shows its fields under "Details")
+            if ($hideSingleGroupName && count($grouped) === 1) {
+                $final .= '<div>';
+            } else {
+                $final .= sprintf("<div><h4 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='mt-4 d-inline togglable-section-title'><i class='fas fa-caret-down fa-fw mr-2'></i>%s</h4>", Tools::eLabHtmlspecialchars($group['name']));
+            }
             $final .= '<ul class="list-group">';
             foreach ($group['extra_fields'] as $field) {
                 $final .= '<li class="list-group-item">';

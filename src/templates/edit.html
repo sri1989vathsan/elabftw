@@ -118,7 +118,7 @@
   {% set registryEntry = Entity.entityType.value == 'inventory' %}
   {% if registryEntry %}
   <hr>
-<h3 data-action='toggle-next' data-scroll-btn='fa-rectangle-list' data-scroll-btn-label='{{ 'Custom fields'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Custom fields'|trans }}</h3>
+<h3 data-action='toggle-next' data-scroll-btn='fa-rectangle-list' data-scroll-btn-label='{{ 'Details'|trans }}' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Details'|trans }}</h3>
 <div data-save-hidden='metadataDiv' class='col-md-8 mt-4'>
   {# this div is filled in JS by Metadata.class.ts edit() #}
   <div id='metadataDiv'></div>
@@ -211,7 +211,9 @@
 
 {% endif %}
 
-{% include 'uploads.html' %}
+{% if not registryEntry %}
+  {% include 'uploads.html' %}
+{% endif %}
 
 {% include 'pyrat-experiment-links.html' %}
 
@@ -278,6 +280,12 @@
 <hr>
 {% include 'json-editor.html' %}
 <hr>
+
+{# registry: the local files come last #}
+{% if registryEntry %}
+  {% include 'uploads.html' %}
+  <hr>
+{% endif %}
 
 {% if Entity.entityType.value in ['experiments', 'items'] and experimentsFoldersArr is defined %}
   {% include 'folder-path-bar.html' with {'pathFolderId': Entity.entityData.folder_id|default(0), 'pathFolders': experimentsFoldersArr, 'pathPage': Entity.entityType.value == 'items' ? 'database.php' : 'experiments.php'} only %}

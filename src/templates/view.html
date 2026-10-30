@@ -163,11 +163,11 @@
 
 <section id='extraFieldsSection'>
 {# METADATA view #}
-{% set formattedMetadata = Entity.entityData.metadata ? Entity.entityData.metadata|formatMetadata : '' %}
+{% set formattedMetadata = Entity.entityData.metadata ? Entity.entityData.metadata|formatMetadata(Entity.entityType.value == 'inventory') : '' %}
 {% if formattedMetadata is not empty %}
   {# the data of a resource is what is looked for first: open by default and laid out as a grid of label and value #}
   {% set detailsOpen = Entity.entityType.value == 'inventory' %}
-  <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ detailsOpen ? 'true' : 'false' }}' aria-controls='extraFieldsDiv'><i class='fas {{ detailsOpen ? 'fa-caret-down' : 'fa-caret-right' }} fa-fw mr-2'></i>{{ 'Custom fields'|trans }}</h3>
+  <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='{{ detailsOpen ? 'true' : 'false' }}' aria-controls='extraFieldsDiv'><i class='fas {{ detailsOpen ? 'fa-caret-down' : 'fa-caret-right' }} fa-fw mr-2'></i>{{ (Entity.entityType.value == 'inventory' ? 'Details' : 'Custom fields')|trans }}</h3>
   <div class='mt-2 {{ detailsOpen ? 'item-details' : 'col-md-8' }}' id='extraFieldsDiv' {{ detailsOpen ? '' : 'hidden' }} data-save-hidden='extraFieldsDiv'>
     {{ formattedMetadata|raw }}
   </div>
@@ -175,7 +175,9 @@
 {% endif %}
 </section>
 
-{% include 'uploads.html' %}
+{% if Entity.entityType.value != 'inventory' %}
+  {% include 'uploads.html' %}
+{% endif %}
 
 {% include 'pyrat-experiment-links.html' %}
 
@@ -191,7 +193,7 @@
     <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='activityDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Activity'|trans }} ({{ Entity.entityData.changelog|length }})</h3>
     <div class='mt-2 ml-3' id='activityDiv' data-save-hidden='activityDiv'>
       <div class='table-responsive'>
-        {% set activityLabels = {'title': 'Title', 'body': 'Description', 'bodyappend': 'Description', 'metadata': 'Custom fields', 'category': 'Category', 'status': 'Status', 'container_created': 'Storage added', 'container_deleted': 'Storage removed', 'container_moved': 'Storage moved', 'container_qty_changed': 'Quantity', 'container_unit_changed': 'Unit'} %}
+        {% set activityLabels = {'title': 'Title', 'body': 'Description', 'bodyappend': 'Description', 'metadata': 'Details', 'category': 'Category', 'status': 'Status', 'container_created': 'Storage added', 'container_deleted': 'Storage removed', 'container_moved': 'Storage moved', 'container_qty_changed': 'Quantity', 'container_unit_changed': 'Unit'} %}
         <table class='table table-sm'>
           <thead>
             <tr>
@@ -231,6 +233,11 @@
 
 
   {% include 'comments-section.html' %}
+{% endif %}
+
+{# registry: the local files come last #}
+{% if Entity.entityType.value == 'inventory' %}
+  {% include 'uploads.html' %}
 {% endif %}
 {# STATIC INFO #}
 <hr>
