@@ -189,8 +189,241 @@
     });
     window.sequenceEditor = editor;
     buildCutterButtons(editor);
+    setupPrimers(editor);
     editor.updateEditor({ sequenceData: sequenceData, annotationVisibility: { features: true, cutsites: true, orfs: false } });
     setSaveState('Nothing is stored here: use File > Export Sequence to keep your work', '');
+  }
+
+  // the primers: those attached to the plasmid are drawn on the map, and the primers designed in the editor can be added to the database
+  function setupPrimers(editor) {
+    const tools = window.PrimerTools;
+    const menu = document.getElementById('primers-menu');
+    if (!tools || !menu) {
+      return;
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'cutter-button primers-button';
+    button.textContent = 'Primers';
+    const panel = document.createElement('div');
+    panel.id = 'primers-panel';
+    panel.hidden = true;
+    menu.append(button);
+    document.body.append(panel);
+    let databasePrimers = null;
+
+    const sequenceState = function () {
+      const data = editor.getState().sequenceData;
+      return { sequence: String(data.sequence || ''), circular: !!data.circular, data: data, name: data.name || fileName };
+    };
+
+    // the primers attached to the entry are drawn on the map, as temporary annotations that are not saved in the file
+    async function drawAttached() {
+      if (!entryId) {
+        return [];
+      }
+      const state = await tools.attached(entryId);
+      const current = sequenceState();
+      const length = current.sequence.length;
+      const drawn = {};
+      state.primers.forEach(function (primer) {
+        tools.findSites(current.sequence, primer.sequence, current.circular).forEach(function (site, index) {
+          const id = 'dbprimer-' + primer.id + '-' + index;
+          drawn[id] = {
+            id: id,
+            name: primer.title,
+            type: 'primer',
+            start: site.start % length,
+            end: (site.end - 1) % length,
+            forward: site.forward,
+            strand: site.forward ? 1 : -1,
+          };
+        });
+      });
+      editor.updateEditor({ temporaryAnnotations: { primers: drawn }, annotationVisibility: { primers: true } });
+      return state.primers;
+    }
+
+    const element = function (tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) {
+        node.className = className;
+      }
+      if (text) {
+        node.textContent = text;
+      }
+      return node;
+    };
+
+    // the bases of a primer drawn in the file or selected: the reverse strand gives the reverse complement
+    const basesOf = function (sequence, start, end, forward) {
+      const length = sequence.length;
+      const span = start <= end ? sequence.slice(start, end + 1) : sequence.slice(start) + sequence.slice(0, end + 1);
+      return forward ? span : tools.reverseComplement(span);
+    };
+
+    async function render() {
+      panel.textContent = '';
+      const message = element('p', 'primers-message');
+      const current = sequenceState();
+      if (databasePrimers === null) {
+        databasePrimers = await tools.allPrimers().catch(function () {
+          return [];
+        });
+      }
+      const inDatabase = function (bases) {
+        const clean = tools.clean(bases);
+        const reverse = tools.reverseComplement(clean);
+        return databasePrimers.find(function (p) {
+          return p.sequence === clean || p.sequence === reverse;
+        });
+      };
+
+      // attached to the plasmid
+      if (entryId) {
+        panel.append(element('h4', '', 'Attached to this plasmid'));
+        let attached = [];
+        try {
+          attached = await drawAttached();
+        } catch (error) {
+          panel.append(element('p', 'primers-message error', error.message));
+        }
+        if (attached.length === 0) {
+          panel.append(element('p', 'primers-muted', 'No primer is attached. Attach some from the primers section of the entry.'));
+        }
+        attached.forEach(function (primer) {
+          const row = element('div', 'primers-row');
+          row.append(element('strong', '', primer.title));
+          const sites = tools.findSites(current.sequence, primer.sequence, current.circular);
+          row.append(element('span', 'primers-muted', sites.length === 0 ? 'no binding site' : sites.map(function (site) {
+            return (site.start + 1) + '..' + site.end + (site.forward ? ' (+)' : ' (\u2212)');
+          }).join('; ')));
+          if (sites.length > 0) {
+            const show = element('button', 'cutter-button', 'Show');
+            show.type = 'button';
+            show.addEventListener('click', function () {
+              editor.updateEditor({ selectionLayer: { start: sites[0].start, end: sites[0].end - 1 } });
+            });
+            row.append(show);
+          }
+          const order = element('button', 'cutter-button', 'Order');
+          order.type = 'button';
+          order.addEventListener('click', function () {
+            tools.sendToOrder([primer.id]);
+          });
+          row.append(order);
+          panel.append(row);
+        });
+      }
+
+      // the primers of the file (annotated in the editor) that are not in the database yet
+      const fileData = current.data;
+      const own = Object.values(fileData.primers || {});
+      panel.append(element('h4', '', 'Primers designed in this file'));
+      if (own.length === 0) {
+        panel.append(element('p', 'primers-muted', 'None yet. Select the bases of a primer on the sequence, then use "New primer from the selection" below, or add a primer with the editor (Edit menu).'));
+      }
+      own.forEach(function (primer) {
+        const forward = primer.forward !== false && primer.strand !== -1;
+        const bases = basesOf(current.sequence, primer.start, primer.end, forward);
+        const known = inDatabase(bases);
+        const row = element('div', 'primers-row');
+        row.append(element('strong', '', primer.name || 'primer'), element('span', 'primers-muted', bases.length + ' bases'));
+        if (known) {
+          const link = element('a', 'primers-muted', 'in the database: ' + known.title);
+          link.href = '../registry.php?mode=view&id=' + known.id;
+          link.target = '_blank';
+          row.append(link);
+        } else {
+          const add = element('button', 'cutter-button', 'Add to the database');
+          add.type = 'button';
+          add.addEventListener('click', async function () {
+            add.disabled = true;
+            try {
+              const id = await tools.createPrimer(primer.name || 'primer', bases, forward, current.name);
+              if (entryId) {
+                await tools.attach(entryId, id);
+              }
+              databasePrimers = null;
+              await render();
+            } catch (error) {
+              message.textContent = error.message || String(error);
+              message.className = 'primers-message error';
+              add.disabled = false;
+            }
+          });
+          row.append(add);
+        }
+        panel.append(row);
+      });
+
+      // a primer from the bases selected on the sequence
+      panel.append(element('h4', '', 'New primer from the selection'));
+      const selection = editor.getState().selectionLayer || { start: -1, end: -1 };
+      if (selection.start < 0 || selection.end < 0) {
+        panel.append(element('p', 'primers-muted', 'Select the bases of the primer on the sequence first.'));
+      } else {
+        const reverse = element('input');
+        reverse.type = 'checkbox';
+        const reverseLabel = element('label', 'primers-muted');
+        reverseLabel.append(reverse, document.createTextNode(' reverse primer (reverse complement of the selection)'));
+        const name = element('input', 'primers-name');
+        name.type = 'text';
+        name.placeholder = 'Name of the primer';
+        const info = element('span', 'primers-muted');
+        const refresh = function () {
+          const bases = basesOf(current.sequence, selection.start, selection.end, !reverse.checked);
+          info.textContent = bases.length + ' bases, Tm ' + tools.tm(bases) + '\u00b0C' + (bases.length < tools.minLength ? ' (too short)' : '');
+        };
+        reverse.addEventListener('change', refresh);
+        refresh();
+        const add = element('button', 'cutter-button', 'Add to the database');
+        add.type = 'button';
+        add.addEventListener('click', async function () {
+          const bases = basesOf(current.sequence, selection.start, selection.end, !reverse.checked);
+          if (bases.length < tools.minLength) {
+            message.textContent = 'A primer has at least ' + tools.minLength + ' bases.';
+            message.className = 'primers-message error';
+            return;
+          }
+          const known = inDatabase(bases);
+          if (known) {
+            message.textContent = 'This primer is already in the database: ' + known.title + '.';
+            message.className = 'primers-message error';
+            return;
+          }
+          add.disabled = true;
+          try {
+            const title = name.value.trim() || (current.name + (reverse.checked ? ' reverse ' : ' forward ') + (selection.start + 1));
+            const id = await tools.createPrimer(title, bases, !reverse.checked, current.name);
+            if (entryId) {
+              await tools.attach(entryId, id);
+            }
+            databasePrimers = null;
+            await render();
+          } catch (error) {
+            message.textContent = error.message || String(error);
+            message.className = 'primers-message error';
+            add.disabled = false;
+          }
+        });
+        const row = element('div', 'primers-row');
+        row.append(name, info, reverseLabel, add);
+        panel.append(row);
+      }
+      panel.append(message);
+    }
+
+    button.addEventListener('click', function () {
+      panel.hidden = !panel.hidden;
+      if (!panel.hidden) {
+        render();
+      }
+    });
+    // the primers of the plasmid are drawn from the start
+    drawAttached().catch(function () {
+      // the map just has no database primers
+    });
   }
 
   async function load() {
@@ -245,6 +478,7 @@
       readOnly: !canWrite,
       annotationVisibility: { features: true, cutsites: true, orfs: false },
     });
+    setupPrimers(editor);
 
     async function saveNow(sequenceData) {
       if (saving) {

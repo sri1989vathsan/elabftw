@@ -192,3 +192,67 @@ body {
 #plasmid-results .plasmid-none {
   color: #6c757d;
 }
+
+/* the primers of the sequence editor: a panel under the bar */
+#primers-panel {
+  position: fixed;
+  z-index: 60;
+  top: 4.5rem;
+  right: 1rem;
+  box-sizing: border-box;
+  width: min(34rem, 94vw);
+  max-height: 70vh;
+  overflow: auto;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid #c3c8cf;
+  border-radius: 0.4rem;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  font-size: 0.85rem;
+}
+
+#primers-panel[hidden] {
+  display: none;
+}
+
+#primers-panel h4 {
+  margin: 0.6rem 0 0.3rem;
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+#primers-panel h4:first-child {
+  margin-top: 0;
+}
+
+#primers-panel .primers-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+#primers-panel .primers-muted {
+  margin: 0;
+  color: #6c757d;
+}
+
+#primers-panel .primers-name {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #c3c8cf;
+  border-radius: 0.3rem;
+  font: inherit;
+}
+
+#primers-panel .primers-message {
+  margin: 0.3rem 0 0;
+}
+
+#primers-panel .primers-message.error {
+  color: #a61e1e;
+}
+
+.primers-button {
+  font-weight: 600;
+}

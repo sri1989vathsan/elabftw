@@ -40,10 +40,12 @@ $v = static fn(string $file): int => (int) filemtime(__DIR__ . '/' . $file);
       <div id="plasmid-results" hidden></div>
     </span>
     <span id="cutters"></span>
+    <span id="primers-menu"></span>
     <span id="save-state" role="status"></span>
     <span id="status" role="status">Loading the editor...</span>
   </div>
   <div id="root"></div>
+  <script src="../primer-tools.js?v=<?= (int) filemtime(dirname(__DIR__) . '/primer-tools.js') ?>"></script>
   <script src="vendor/bio-parsers.umd.js"></script>
   <script src="vendor/ove.umd.js"></script>
   <script src="viewer.js?v=<?= $v('viewer.js') ?>"></script>
