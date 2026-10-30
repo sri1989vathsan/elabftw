@@ -11,7 +11,8 @@
   'use strict';
   const NS = 'http://www.w3.org/2000/svg';
   const TAU = Math.PI * 2;
-  const ROW = 14.5;
+  // the most names of enzymes written on the map (the others are ticks with a tooltip)
+  const MAX_SITE_LABELS = 12;
 
   function svgElement(tag, attributes, text) {
     const node = document.createElementNS(NS, tag);
@@ -161,6 +162,13 @@
       }
     };
     let zoomLabel = null;
+    // the cut sites can be hidden
+    let showSites = true;
+    try {
+      showSites = window.localStorage.getItem('sequence-editor-map-sites') !== '0';
+    } catch (error) {
+      showSites = true;
+    }
 
     const dataNow = function () {
       return editor.getState().sequenceData;
@@ -304,14 +312,26 @@
       wrap.append(menu);
     }
 
-    // label rows for one side: each as near to the height of its arc as possible, with a row of space between them
-    function placeColumn(items, top, bottom) {
+    // a colour mixed with white or black: labels in the colour of their feature, readable on the page
+    function mix(hex, other, amount) {
+      const value = /^#([0-9a-f]{6})$/i.test(hex) ? hex.slice(1) : '7a8699';
+      const channel = function (start) {
+        const from = parseInt(value.slice(start, start + 2), 16);
+        const to = other === 'white' ? 255 : 0;
+        return Math.round(from + (to - from) * amount).toString(16).padStart(2, '0');
+      };
+      return '#' + channel(0) + channel(2) + channel(4);
+    }
+
+    // the labels of one side, in rows at about the height of their arcs: each row keeps its space, and the rows follow the
+    // curve of the ring so the names stay close to it
+    function placeRows(items, top, bottom, rowHeight) {
       const sorted = items.slice().sort(function (a, b) {
         return a.wanted - b.wanted;
       });
       let fit = sorted.slice();
-      while (fit.length * ROW > bottom - top && fit.length > 0) {
-        // too many for the height: the least important go
+      while (fit.length * rowHeight > bottom - top && fit.length > 0) {
+        // too many for the height: the least important go (the enzymes first, then the small features)
         let weakest = 0;
         fit.forEach(function (item, index) {
           if (item.rank > fit[weakest].rank || (item.rank === fit[weakest].rank && item.size < fit[weakest].size)) {
@@ -322,13 +342,40 @@
         fit.splice(weakest, 1);
       }
       fit.forEach(function (item, index) {
-        item.y = Math.max(item.wanted, index === 0 ? top : fit[index - 1].y + ROW);
+        item.y = Math.max(item.wanted, index === 0 ? top : fit[index - 1].y + rowHeight);
       });
       for (let index = fit.length - 1; index >= 0; index--) {
-        const limit = index === fit.length - 1 ? bottom : fit[index + 1].y - ROW;
+        const limit = index === fit.length - 1 ? bottom : fit[index + 1].y - rowHeight;
         fit[index].y = Math.min(fit[index].y, limit);
       }
       return fit;
+    }
+
+    // the features in lanes: those that overlap are on different rings, so each of them can be seen
+    function laneOf(features, length) {
+      const ends = [];
+      const overlaps = function (a, b) {
+        return [-length, 0, length].some(function (shift) {
+          return a.s < b.e + shift && b.s + shift < a.e;
+        });
+      };
+      features.slice().sort(function (a, b) {
+        return a.start - b.start;
+      }).forEach(function (feature) {
+        const span = { s: feature.start, e: feature.end >= feature.start ? feature.end + 1 : feature.end + 1 + length };
+        let lane = ends.findIndex(function (taken) {
+          return !taken.some(function (other) {
+            return overlaps(span, other);
+          });
+        });
+        if (lane === -1) {
+          lane = ends.length;
+          ends.push([]);
+        }
+        ends[lane].push(span);
+        feature.lane = lane;
+      });
+      return ends.length;
     }
 
     function draw() {
@@ -343,33 +390,40 @@
       if (length === 0 || width < 120 || height < 120) {
         return;
       }
+      const dark = document.body.dataset.mapStyle === 'dark';
       const filter = editor.getState().restrictionEnzymes;
       const features = featureItems(data);
       const primers = primerItems(data);
       let sites = [];
-      try {
-        sites = cutSites(data, filter);
-      } catch (error) {
-        sites = [];
+      if (showSites) {
+        try {
+          sites = cutSites(data, filter);
+        } catch (error) {
+          sites = [];
+        }
       }
-      // the columns of the labels are as wide as the longest label needs (a name is shortened beyond 18 characters)
+      const laneCount = Math.max(1, laneOf(features, length));
+      const THICK = 20;
+      const LANE = 25;
+      const hasPrimers = primers.length > 0;
+      // the ring is as big as the panel allows, with room for the names beside it
       const longest = features.concat(primers).map(function (item) {
         return String(item.name).length;
-      }).concat(sites.map(function (site) {
-        return site.name.length + 3;
-      })).reduce(function (most, size) {
+      }).reduce(function (most, size) {
         return Math.max(most, size);
       }, 6);
-      const labelWidth = Math.max(66, Math.min(150, Math.min(18, longest) * 7.4 + 14));
+      const room = Math.max(70, Math.min(104, Math.min(14, longest) * 6.9 + 22));
       const cx = width / 2;
       const cy = height / 2;
-      const hasPrimers = primers.length > 0;
-      const radius = Math.max(56, Math.min(height / 2 - 30, width / 2 - labelWidth - 34 - (hasPrimers ? 10 : 0)));
-      const ringIn = radius - 8;
-      const ringOut = radius + 8;
+      // the names at the sides can be shortened and the ones at the top and the bottom have the corners: the ring takes more of
+      // the panel than the longest name would leave it
+      const sideRoom = Math.min(room, 88);
+      const radius = Math.max(60, Math.min(height / 2 - 40, width / 2 - sideRoom - 8 - (hasPrimers ? 12 : 0)));
+      const ringOut = radius + THICK / 2;
       const primerIn = ringOut + 4;
       const primerOut = primerIn + 6;
-      const outer = hasPrimers ? primerOut : ringOut;
+      const edge = hasPrimers ? primerOut : ringOut;
+      const innerEdge = radius - THICK / 2 - LANE * (laneCount - 1);
       layout = { cx: cx, cy: cy, radius: radius, length: length };
 
       svg = svgElement('svg', { width: width, height: height, viewBox: '0 0 ' + width + ' ' + height, class: 'own-map-svg', role: 'img', 'aria-label': 'Circular map of ' + (data.name || 'the sequence') });
@@ -378,34 +432,34 @@
       };
 
       // the backbone and the scale
-      svg.append(svgElement('circle', { cx: cx, cy: cy, r: radius, class: 'own-map-backbone', fill: 'none', 'stroke-width': 16 }));
+      svg.append(svgElement('circle', { cx: cx, cy: cy, r: radius, class: 'own-map-backbone', fill: 'none', 'stroke-width': 2 }));
       const steps = [1, 2, 5, 10, 20, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000, 20000, 50000];
       const step = steps.find(function (candidate) {
-        return length / candidate <= 10;
+        return length / candidate <= 12;
       }) || 50000;
       for (let position = step; position < length; position += step) {
         const a = angleOf(position, length);
-        const tick1 = at(ringIn - 2, a);
-        const tick2 = at(ringIn - 6, a);
+        const tick1 = at(innerEdge - 3, a);
+        const tick2 = at(innerEdge - 8, a);
         svg.append(svgElement('line', { x1: tick1[0], y1: tick1[1], x2: tick2[0], y2: tick2[1], class: 'own-map-tick' }));
-        const label = at(ringIn - 16, a);
+        const label = at(innerEdge - 19, a);
         svg.append(svgElement('text', { x: label[0], y: label[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'own-map-scale' }, String(position)));
       }
-      const origin = at(ringIn - 6, angleOf(0, length));
-      const originEnd = at(ringOut + 3, angleOf(0, length));
+      const origin = at(innerEdge - 8, angleOf(0, length));
+      const originEnd = at(ringOut + 4, angleOf(0, length));
       svg.append(svgElement('line', { x1: origin[0], y1: origin[1], x2: originEnd[0], y2: originEnd[1], class: 'own-map-origin' }));
 
       // the selection behind the arrows
       const selection = editor.getState().selectionLayer || { start: -1, end: -1 };
       if (selection.start >= 0 && selection.end >= 0) {
         const range = arcOf({ start: selection.start, end: selection.end }, length);
-        svg.append(svgElement('path', { d: arrowPath(cx, cy, ringIn - 4, ringOut + 4, range[0], range[1], 0, 0), class: 'own-map-selection' }));
+        svg.append(svgElement('path', { d: arrowPath(cx, cy, innerEdge - 5, edge + 5, range[0], range[1], 0, 0), class: 'own-map-selection' }));
       }
       const caret = editor.getState().caretPosition;
       if (typeof caret === 'number' && caret >= 0) {
         const a = angleOf(caret, length);
-        const c1 = at(ringIn - 6, a);
-        const c2 = at(ringOut + 8, a);
+        const c1 = at(innerEdge - 8, a);
+        const c2 = at(edge + 10, a);
         svg.append(svgElement('line', { x1: c1[0], y1: c1[1], x2: c2[0], y2: c2[1], class: 'own-map-caret' }));
       }
 
@@ -429,7 +483,7 @@
       const draw1 = function (item, rIn, rOut, head, rank) {
         const key = 'item' + (counter++);
         const range = arcOf(item, length);
-        const path = svgElement('path', { d: arrowPath(cx, cy, rIn, rOut, range[0], range[1], item.strand, head / radius), fill: item.color, class: 'own-map-feature' + (item.candidate ? ' candidate' : '') });
+        const path = svgElement('path', { d: arrowPath(cx, cy, rIn, rOut, range[0], range[1], item.strand, head / ((rIn + rOut) / 2)), fill: item.color, class: 'own-map-feature' + (item.candidate ? ' candidate' : '') });
         path.append(svgElement('title', {}, item.name + ' (' + item.type + ') ' + detail(item).line));
         join(key, path);
         path.addEventListener('mouseenter', function () {
@@ -454,7 +508,7 @@
         });
         svg.append(path);
         const middle = (range[0] + range[1]) / 2;
-        labels.push({ key: key, text: item.name, color: item.color, middle: middle, rOut: rOut, rank: rank, size: range[1] - range[0], kind: item.kind, onEnter: function () {
+        labels.push({ key: key, text: item.name, color: item.color, middle: middle, rank: rank, size: range[1] - range[0], kind: item.kind, rEdge: rank === 1 ? ringOut : edge, onEnter: function () {
           hover = detail(item);
           showCenter();
         } });
@@ -462,43 +516,51 @@
       features.sort(function (a, b) {
         return (b.end - b.start) - (a.end - a.start);
       }).forEach(function (item) {
-        draw1(item, ringIn, ringOut, 10, 1);
+        const centre = radius - LANE * (item.lane || 0);
+        draw1(item, centre - THICK / 2, centre + THICK / 2, 13, 1);
       });
       primers.forEach(function (item) {
-        draw1(item, primerIn, primerOut, 6, 2);
+        draw1(item, primerIn, primerOut, 7, 2);
       });
 
-      // the cut sites: a tick each, one label for sites that are close
+      // the cut sites: a short tick each; a name for a few of them, the others are in the tooltip (the sites that are close
+      // share one name)
       const ordered = sites.slice().sort(function (a, b) {
         return a.position - b.position;
       });
       const clusters = [];
       ordered.forEach(function (site) {
         const last = clusters[clusters.length - 1];
-        if (last && (site.position - last.end) / length * TAU < 0.04 + 0.0001) {
+        if (last && (site.position - last.end) / length * TAU < 0.05) {
           last.sites.push(site);
           last.end = site.position;
         } else {
           clusters.push({ start: site.position, end: site.position, sites: [site] });
         }
       });
+      const named = new Set(clusters.slice().sort(function (a, b) {
+        return b.sites.length - a.sites.length;
+      }).slice(0, MAX_SITE_LABELS));
       clusters.forEach(function (cluster) {
         const cutKey = 'cut' + (counter++);
         cluster.sites.forEach(function (site) {
           const a = angleOf(site.position, length);
-          const p1 = at(outer + 1, a);
-          const p2 = at(outer + 6, a);
+          const p1 = at(edge + 1, a);
+          const p2 = at(edge + 6, a);
           const tick = svgElement('line', { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1], class: 'own-map-cut' });
           tick.append(svgElement('title', {}, site.name + ' cuts at ' + site.position + (site.count > 1 ? ' (' + site.count + ' sites)' : ' (single cutter)')));
           join(cutKey, tick);
           svg.append(tick);
         });
+        if (!named.has(cluster)) {
+          return;
+        }
         const first = cluster.sites[0];
         const middle = angleOf((cluster.start + cluster.end) / 2, length);
         const names = cluster.sites.map(function (site) {
           return site.name;
         });
-        labels.push({ key: cutKey, text: first.name + (names.length > 1 ? ' +' + (names.length - 1) : ''), color: null, middle: middle, rOut: outer + 6, rank: 3, size: 0, kind: 'cut ' + (first.count === 1 ? 'single' : 'multi'), onEnter: function () {
+        labels.push({ key: cutKey, text: first.name + (names.length > 1 ? ' +' + (names.length - 1) : ''), color: null, middle: middle, rank: 3, size: 0, kind: 'cut ' + (first.count === 1 ? 'single' : 'multi'), rEdge: edge + 6, onEnter: function () {
           hover = { title: names.join(', '), line: 'cut at ' + cluster.sites.map(function (site) {
             return site.position;
           }).join(', ') };
@@ -506,33 +568,39 @@
         } });
       });
 
-      // the labels in a column on each side, joined to their arcs by a line
+      // the names beside the ring: each row at the height of its arc, the rows following the curve of the ring
+      const labelRadius = edge + 20;
       const sides = { left: [], right: [] };
       labels.forEach(function (label) {
-        const sin = Math.sin(label.middle);
-        const cos = Math.cos(label.middle);
-        label.side = cos >= 0 ? 'right' : 'left';
-        label.wanted = cy + (outer + 14) * sin;
-        label.anchor = at(label.rOut + 1, label.middle);
-        label.elbow = at(label.rOut + 12, label.middle);
+        label.side = Math.cos(label.middle) >= 0 ? 'right' : 'left';
+        label.wanted = cy + labelRadius * Math.sin(label.middle);
+        label.anchor = at(label.rEdge + 2, label.middle);
         sides[label.side].push(label);
       });
-      const columnX = { left: cx - (outer + 34), right: cx + (outer + 34) };
       let hidden = 0;
       ['left', 'right'].forEach(function (side) {
-        const placed = placeColumn(sides[side], 12, height - 12);
+        const placed = placeRows(sides[side], 14, height - 14, 15);
         hidden += sides[side].length - placed.length;
         placed.forEach(function (label) {
-          const x = columnX[side];
-          svg.append(svgElement('polyline', { points: label.anchor.join(',') + ' ' + label.elbow.join(',') + ' ' + x + ',' + label.y, class: 'own-map-leader', fill: 'none' }));
-          // a long name is cut to the room of the column; the whole name is in the tooltip
-          const room = Math.max(6, Math.floor((labelWidth - 10) / 7.4));
-          const shown = label.text.length > room ? label.text.slice(0, room - 1) + '\u2026' : label.text;
-          const text = svgElement('text', { x: x + (side === 'right' ? 4 : -4), y: label.y, 'text-anchor': side === 'right' ? 'start' : 'end', 'dominant-baseline': 'central', class: 'own-map-label ' + label.kind }, shown);
-          text.append(svgElement('title', {}, label.text));
-          if (label.color) {
-            svg.append(svgElement('circle', { cx: x + (side === 'right' ? -1 : 1), cy: label.y, r: 2.5, fill: label.color, class: 'own-map-dot' }));
+          const dy = Math.min(Math.abs(label.y - cy), labelRadius - 1);
+          const reach = Math.max(Math.sqrt(labelRadius * labelRadius - dy * dy), labelRadius * 0.3);
+          const x = cx + (side === 'right' ? reach : -reach);
+          const textX = x + (side === 'right' ? 5 : -5);
+          const feature = label.kind === 'feature' || label.kind === 'primer';
+          svg.append(svgElement('polyline', { points: label.anchor.map(function (n) {
+            return n.toFixed(1);
+          }).join(',') + ' ' + (x + (side === 'right' ? -1 : 1)).toFixed(1) + ',' + label.y.toFixed(1), class: 'own-map-leader', fill: 'none' }));
+          // a long name is cut to the room beside the ring; the whole name is in the tooltip
+          const space = side === 'right' ? width - textX - 4 : textX - 4;
+          const perChar = feature ? 6.7 : 5.8;
+          const fits = Math.max(4, Math.floor(space / perChar));
+          const shown = label.text.length > fits ? label.text.slice(0, fits - 1) + '…' : label.text;
+          const attributes = { x: textX, y: label.y, 'text-anchor': side === 'right' ? 'start' : 'end', 'dominant-baseline': 'central', class: 'own-map-label ' + label.kind };
+          if (feature && label.color) {
+            attributes.fill = dark ? mix(label.color, 'white', 0.35) : mix(label.color, 'black', 0.3);
           }
+          const text = svgElement('text', attributes, shown);
+          text.append(svgElement('title', {}, label.text));
           join(label.key, text);
           text.addEventListener('mouseenter', function () {
             label.onEnter();
@@ -558,8 +626,9 @@
       host.scrollLeft = scrollLeft;
       host.scrollTop = scrollTop;
       if (wrap) {
-        wrap.classList.toggle('dark-map', document.body.dataset.mapStyle === 'dark');
+        wrap.classList.toggle('dark-map', dark);
       }
+      layout.inner = innerEdge;
       showCenter();
 
       svg.addEventListener('mousedown', function (event) {
@@ -567,7 +636,7 @@
           return;
         }
         const where = positionAt(event);
-        if (event.altKey || where.radius < ringIn - 30 || where.radius > outer + 24) {
+        if (event.altKey || where.radius < innerEdge - 30 || where.radius > edge + 26) {
           // outside the ring (or with Alt held): a drag moves the map when it is bigger than the panel
           if (host.scrollWidth > host.clientWidth || host.scrollHeight > host.clientHeight) {
             pan = { x: event.clientX, y: event.clientY, left: host.scrollLeft, top: host.scrollTop };
@@ -612,7 +681,7 @@
       svg.addEventListener('mouseleave', finish);
       svg.addEventListener('dblclick', function (event) {
         const where = positionAt(event);
-        if (where.radius > outer + 24 || where.radius < ringIn - 30) {
+        if (where.radius > edge + 26 || where.radius < innerEdge - 30) {
           setZoom(1);
           host.scrollLeft = 0;
           host.scrollTop = 0;
@@ -653,7 +722,7 @@
       }).join(',');
       const primers = Object.keys((state.temporaryAnnotations && state.temporaryAnnotations.primers) || {}).join(',') + listOf(data.primers).length;
       const selection = state.selectionLayer || {};
-      return [sequence.length, sequence.slice(0, 30), features, primers, selection.start, selection.end, state.caretPosition, JSON.stringify(state.restrictionEnzymes), JSON.stringify(state.annotationVisibility && state.annotationVisibility.featureTypesToHide), !!data.circular, host ? host.clientWidth + 'x' + host.clientHeight : '', document.body.dataset.mapStyle, zoom].join('|');
+      return [sequence.length, sequence.slice(0, 30), features, primers, selection.start, selection.end, state.caretPosition, JSON.stringify(state.restrictionEnzymes), JSON.stringify(state.annotationVisibility && state.annotationVisibility.featureTypesToHide), !!data.circular, host ? host.clientWidth + 'x' + host.clientHeight : '', document.body.dataset.mapStyle, zoom, showSites].join('|');
     }
 
     // the map as an SVG file: the styles the map has now are written into the file, so it looks the same elsewhere
@@ -722,7 +791,18 @@
       };
       zoomLabel = document.createElement('span');
       zoomLabel.textContent = Math.round(zoom * 100) + '%';
-      controls.append(zoomLabel, button('Fit', 'Fit the map to the panel', function () {
+      const sitesButton = button('Sites', 'Show or hide the cut sites of the enzymes', function () {
+        showSites = !showSites;
+        sitesButton.classList.toggle('off', !showSites);
+        try {
+          window.localStorage.setItem('sequence-editor-map-sites', showSites ? '1' : '0');
+        } catch (error) {
+          // not remembered
+        }
+        signature = '';
+      });
+      sitesButton.classList.toggle('off', !showSites);
+      controls.append(zoomLabel, sitesButton, button('Fit', 'Fit the map to the panel', function () {
         setZoom(1);
       }), button('SVG', 'Save the map as an SVG image', exportSvg));
       wrap.append(controls);

@@ -1610,3 +1610,67 @@ body:not([data-map-style="classic"]) .veZoomCircularSlider {
 .own-map-host.panning {
   cursor: grabbing;
 }
+
+/* the second version of the map: thicker arrows, names in the colour of their feature, quiet enzymes */
+.own-map-feature {
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.own-map-label.feature,
+.own-map-label.primer {
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.own-map-label.cut {
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.own-map-label.cut.single {
+  fill: #64748b;
+}
+
+.own-map-label.cut.multi {
+  fill: #94a3b8;
+}
+
+.own-map-backbone {
+  stroke: #94a3b8;
+}
+
+.own-map-leader {
+  stroke: #b8c2cf;
+  stroke-width: 0.8;
+}
+
+.own-map-title {
+  font-size: 17px;
+}
+
+.own-map-zoom button.off {
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+
+body[data-map-style="dark"] .own-map-label.cut.single {
+  fill: #94a3b8;
+}
+
+body[data-map-style="dark"] .own-map-label.cut.multi {
+  fill: #64748b;
+}
+
+body[data-map-style="dark"] .own-map-backbone {
+  stroke: #64748b;
+}
+
+body[data-map-style="dark"] .own-map-feature {
+  stroke: #0f172a;
+}
+
+.own-map-label.feature,
+.own-map-label.primer {
+  font-size: 12px;
+}

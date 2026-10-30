@@ -76,7 +76,7 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
   data-files="<?= $h($files) ?>"
 >
   <div id="bar">
-    <a id="back" href="../registry.php?mode=view&amp;id=<?= $entryId ?>">&larr; Back to the entry</a>
+    <a id="back" href="../registry.php?mode=view&amp;id=<?= $entryId ?>">&larr; Back to eLabFTW</a>
     <strong id="entry-title"><?= $h($title) ?></strong>
     <span class="view-switch" role="tablist" aria-label="View">
       <?php if ($sequenceUrl !== '') { ?><a href="<?= $h($sequenceUrl) ?>" role="tab">Sequence</a><?php } ?>
