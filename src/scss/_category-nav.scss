@@ -478,10 +478,21 @@
 .entity-storage-list li,
 .expandable-detail .entity-storage-list li {
   display: grid;
-  grid-template-columns: 5.6rem minmax(0, 1fr) 3rem auto;
+  // the last two columns have a fixed width, so the slots and the quantities line up from row to row
+  grid-template-columns: 5.6rem minmax(0, 1fr) 3rem 7rem;
   column-gap: 0.75rem;
   align-items: baseline;
   padding: 0.1rem 0;
+
+  > :nth-child(3) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  > :nth-child(4) {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 // the ID of a resource stays in view when a table scrolls sideways
