@@ -535,30 +535,32 @@ export function getTinymceBaseConfig(page: string): object {
       editor.on('init', () => {
         // doing this will give focus to the editor, which is OK for entities but on admin page it's not wanted, so avoid it
         if (page !== 'admin' && page !== 'sysconfig') {
-          // the command gives the focus to the editor, which scrolls the page down to the description: the page stays where it was
-          const scrolled = window.scrollY;
-          editor.execCommand('lineheight', false, '1');
-          if (document.activeElement instanceof HTMLElement) {
-            document.activeElement.blur();
-          }
-          window.scrollTo(0, scrolled);
-          window.requestAnimationFrame(() => window.scrollTo(0, scrolled));
-          // the editor can still take the focus a moment later: unless the user has clicked or typed, it is given back
-          let touched = false;
+          // the editor takes the focus on its own (the command below, and later its layout), which scrolls the page down to the
+          // description: the page opens at the top, and stays there unless the user does something on it
+          // (only an editor that starts while the page loads: one the user opens later is left alone)
+          let touched = performance.now() > 8000;
           const touch = (): void => {
             touched = true;
           };
-          document.addEventListener('pointerdown', touch, { once: true, capture: true });
-          document.addEventListener('keydown', touch, { once: true, capture: true });
-          [200, 600, 1200].forEach(delay => window.setTimeout(() => {
-            if (!touched && editor.hasFocus()) {
-              editor.getWin().blur();
-              if (document.activeElement instanceof HTMLElement) {
-                document.activeElement.blur();
-              }
-              window.scrollTo(0, scrolled);
+          ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(name => document.addEventListener(name, touch, { once: true, capture: true, passive: true }));
+          const toTop = (): void => {
+            if (touched) {
+              return;
             }
-          }, delay));
+            if (editor.hasFocus()) {
+              editor.getWin().blur();
+            }
+            if (document.activeElement instanceof HTMLElement && document.activeElement.tagName === 'IFRAME') {
+              document.activeElement.blur();
+            }
+            if (window.scrollY !== 0) {
+              window.scrollTo(0, 0);
+            }
+          };
+          editor.execCommand('lineheight', false, '1');
+          toTop();
+          window.requestAnimationFrame(toTop);
+          [150, 400, 800, 1500, 2500].forEach(delay => window.setTimeout(toTop, delay));
         }
         // The link plugin's own default shortcut is the same Meta/Ctrl+K used
         // app-wide for the command palette. Free it up so Cmd+K always opens
