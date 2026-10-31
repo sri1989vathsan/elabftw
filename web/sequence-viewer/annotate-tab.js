@@ -53,10 +53,40 @@
       editor.updateEditor({ selectionLayer: { start: start, end: end } });
     };
 
-    // is the feature already one of the features of the plasmid
+    // how many bases two ranges share (a range over the origin is two ranges)
+    const parts = function (start, end, length) {
+      return end >= start ? [[start, end]] : [[start, length - 1], [0, end]];
+    };
+    const shared = function (a, b, length) {
+      let total = 0;
+      parts(a.start, a.end, length).forEach(function (one) {
+        parts(b.start, b.end, length).forEach(function (other) {
+          total += Math.max(0, Math.min(one[1], other[1]) - Math.max(one[0], other[0]) + 1);
+        });
+      });
+      return total;
+    };
+    const plain = function (name) {
+      return String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    };
+    // is the feature already one of the features of the plasmid: the same name on the same place, or the same place whatever
+    // the name (a feature of the file, or one added before, is not added again)
     const present = function (hit, data) {
+      const length = data.sequence.length;
+      const range = { start: hit.start, end: (hit.end - 1) % length };
+      const size = hit.length;
       return listOf(data.features).some(function (feature) {
-        return feature.start === hit.start && feature.end === (hit.end - 1) % data.sequence.length && (feature.strand || 1) === hit.strand;
+        if (String(feature.type || '').toLowerCase() === 'source') {
+          return false;
+        }
+        const overlap = shared(range, feature, length);
+        if (overlap === 0) {
+          return false;
+        }
+        const sameName = plain(feature.name) === plain(hit.name);
+        const covers = overlap / size;
+        // the same name: a good part of it is there; another name: almost exactly the same place and strand
+        return (sameName && covers >= 0.5) || (covers >= 0.9 && shared(feature, feature, length) <= size * 1.15 && (feature.strand || 1) === hit.strand);
       });
     };
 
@@ -107,7 +137,7 @@
 
     function results() {
       const box = element('div', 'annotate-results');
-      found.forEach(function (row) {
+      const rowOf = function (row) {
         const hit = row.hit;
         const line = element('label', 'tool-card annotate-row');
         const check = element('input');
@@ -121,17 +151,38 @@
         const text = element('span', 'annotate-text');
         const name = element('strong', '', hit.name);
         name.title = hit.description || '';
-        const where = element('button', 'tool-tag', (hit.start + 1) + '..' + hit.end + (hit.strand > 0 ? ' (+)' : ' (−)'));
+        const where = element('button', 'tool-tag', (hit.start + 1) + '..' + hit.end + (hit.strand > 0 ? ' (+)' : ' (\u2212)'));
         where.type = 'button';
         where.title = 'Select it on the sequence';
         where.addEventListener('click', function (event) {
           event.preventDefault();
           select(hit.start, (hit.end - 1) % editor.getState().sequenceData.sequence.length);
         });
-        text.append(name, element('small', 'text-muted', ' ' + hit.type + (row.existing ? ', already a feature' : '')), document.createElement('br'), where);
+        text.append(name, element('small', 'text-muted', ' ' + hit.type), document.createElement('br'), where);
         line.append(check, text);
-        box.append(line);
+        return line;
+      };
+      // the new ones are listed; the ones that are already features are folded away, they are not offered again
+      const fresh = found.filter(function (row) {
+        return !row.existing;
       });
+      const old = found.filter(function (row) {
+        return row.existing;
+      });
+      fresh.forEach(function (row) {
+        box.append(rowOf(row));
+      });
+      if (fresh.length === 0) {
+        box.append(element('p', 'tool-muted', 'Nothing new: every feature found is already on the plasmid.'));
+      }
+      if (old.length > 0) {
+        const folded = element('details', 'annotate-old');
+        folded.append(element('summary', 'tool-muted', 'Already on the plasmid (' + old.length + ')'));
+        old.forEach(function (row) {
+          folded.append(rowOf(row));
+        });
+        box.append(folded);
+      }
       return box;
     }
 

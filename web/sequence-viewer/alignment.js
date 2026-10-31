@@ -160,6 +160,15 @@
     }
     status.textContent = 'Aligning...';
     const results = await align(referenceSequence, reads);
+    // the result stays with the entry; the Align tool of the editor shows it
+    if (window.AlignmentStore && entryId) {
+      window.AlignmentStore.save(entryId, body.csrf, {
+        referenceLength: referenceSequence.length,
+        results: results.map(function (result, index) {
+          return { name: reads[index].name, source: /\(dropped\)$/.test(reads[index].name) ? 'dropped' : 'entry', alignment: result.alignment };
+        }),
+      });
+    }
 
     const tracks = [];
     const found = [];

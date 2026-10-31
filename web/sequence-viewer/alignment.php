@@ -88,6 +88,7 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
   </div>
   <div id="summary" hidden></div>
   <div id="root"></div>
+  <script src="alignment-store.js?v=<?= (int) filemtime(__DIR__ . '/alignment-store.js') ?>"></script>
   <script src="vendor/bio-parsers.umd.js"></script>
   <script src="vendor/ove.umd.js"></script>
   <script src="alignment.js?v=<?= (int) filemtime(__DIR__ . '/alignment.js') ?>"></script>

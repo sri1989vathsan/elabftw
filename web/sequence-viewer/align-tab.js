@@ -155,6 +155,19 @@
           results.append(box);
         });
         message.textContent = '';
+        // the result stays with the entry and is there the next time the tool is opened
+        if (window.AlignmentStore && entryId) {
+          window.AlignmentStore.save(entryId, body.csrf, {
+            referenceLength: reference.length,
+            results: answer.map(function (result, index) {
+              return { name: reads[index].name, source: items[index].file ? 'dropped' : 'entry', alignment: result.alignment };
+            }),
+          }).then(function (saved) {
+            if (saved) {
+              message.textContent = 'Saved with the entry.';
+            }
+          });
+        }
       } catch (error) {
         message.textContent = error.message || String(error);
         message.className = 'tool-message error';
@@ -273,6 +286,22 @@
       view.title = 'Switch to the alignment view, with the traces';
       actions.append(align, view);
       host.append(actions, message, results);
+      // the last alignment of the entry, saved when the reads were aligned
+      if (window.AlignmentStore && entryId) {
+        window.AlignmentStore.load(entryId).then(function (saved) {
+          if (!saved || results.children.length > 0) {
+            return;
+          }
+          saved.results.forEach(function (item) {
+            const box = card(item.name + (item.source === 'dropped' ? ' (dropped)' : ''), item.alignment);
+            results.append(box);
+          });
+          const length = String(editor.getState().sequenceData.sequence || '').length;
+          const when = new Date(saved.savedAt);
+          message.textContent = 'Saved alignment of ' + saved.results.length + (saved.results.length === 1 ? ' read' : ' reads') + ', ' + (Number.isNaN(when.getTime()) ? '' : when.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })) + '.' + (saved.referenceLength && saved.referenceLength !== length ? ' The sequence has changed since (' + saved.referenceLength + ' bases then, ' + length + ' now): align again.' : '');
+          message.className = 'tool-message' + (saved.referenceLength && saved.referenceLength !== length ? ' error' : '');
+        });
+      }
     }
 
     window.ToolSidebar.register({ id: 'align', icon: 'align', label: 'Align sequencing reads', show: show });
