@@ -6,4 +6,6 @@
 {% include 'orders-tabs.html' with {'active': 'orders'} %}
 <p class='text-muted'>{{ 'Track things to order for the team, and follow each one through to delivery.'|trans }}</p>
 <div id='ordersRoot'></div>
+{# a button on each Excel sheet of an order: its primers go to the database #}
+<script src='order-primers.js?v={{ 'now'|date('YmdHi') }}'></script>
 {% endblock %}

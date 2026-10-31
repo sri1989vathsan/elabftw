@@ -190,3 +190,40 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   font-size: 0.9rem;
 }
+
+.op-dialog {
+  width: min(760px, 94vw);
+}
+
+.op-wrap {
+  max-height: 46vh;
+  overflow: auto;
+  margin: 0.5rem 0;
+}
+
+.op-table td,
+.op-table th {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.op-name {
+  width: 11rem;
+  padding: 0.1rem 0.3rem;
+  border: 1px solid #c4cad1;
+  border-radius: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.op-name:disabled {
+  border-color: transparent;
+  background: transparent;
+}
+
+.op-sequence {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.78rem;
+}

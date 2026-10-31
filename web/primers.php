@@ -12,10 +12,12 @@ declare(strict_types=1);
 
 namespace Elabftw\Elabftw;
 
+use Elabftw\Enums\Storage;
 use Elabftw\Models\Changelog;
 use Elabftw\Models\Inventory;
 use Elabftw\Params\ContentParams;
 use PDO;
+use RuntimeException;
 use Throwable;
 
 use function array_map;
@@ -165,6 +167,35 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     new Changelog($Plasmid)->create(new ContentParams('primers', sprintf('Primer #%d %s this plasmid', $primer, $verb)));
     new Changelog($Primer)->create(new ContentParams('primers', sprintf('Primer %s plasmid #%d', $verb, $plasmid)));
     respond(200, array('ok' => true));
+}
+
+if (isset($_GET['order_sheet'])) {
+    // the oligos of a sheet attached to an order of the team: GET ?order_sheet=1&order=<id>&f=<long name of the file>
+    $orderId = (int) ($_GET['order'] ?? 0);
+    $req = $pdo->prepare("SELECT u.real_name, u.long_name, u.storage FROM custom_order_uploads AS u INNER JOIN custom_orders AS o ON o.id = u.order_id AND o.team = :team WHERE u.order_id = :order AND u.long_name = :f AND (o.status <> 'my_reference' OR o.userid = :userid)");
+    $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+    $req->bindValue(':order', $orderId, PDO::PARAM_INT);
+    $req->bindValue(':f', (string) ($_GET['f'] ?? ''));
+    $req->bindValue(':userid', $userId, PDO::PARAM_INT);
+    $pdo->execute($req);
+    $file = $req->fetch();
+    if (!is_array($file) || preg_match('/\.xlsx$/i', (string) $file['real_name']) !== 1) {
+        respond(404, array('error' => 'This file is not a sheet of this order.'));
+    }
+    $temporary = tempnam(sys_get_temp_dir(), 'ordersheet');
+    try {
+        if ($temporary === false) {
+            throw new RuntimeException('The sheet could not be read.');
+        }
+        file_put_contents($temporary, Storage::from((int) $file['storage'])->getStorage()->getFs()->read((string) $file['long_name']));
+        respond(200, array('name' => (string) $file['real_name'], 'oligos' => readOrderSheet($temporary)));
+    } catch (Throwable $e) {
+        respond(422, array('error' => $e->getMessage()));
+    } finally {
+        if (is_string($temporary)) {
+            @unlink($temporary);
+        }
+    }
 }
 
 if (isset($_GET['sheet'])) {

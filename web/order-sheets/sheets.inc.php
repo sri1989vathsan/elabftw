@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Elabftw\Elabftw;
 
 use RuntimeException;
+use SimpleXMLElement;
 use ZipArchive;
 
 use function file_put_contents;
@@ -133,4 +134,139 @@ function microsynthName(string $name): string
 function cleanOligoSequence(string $sequence): string
 {
     return strtoupper(preg_replace('/[^A-Za-z]/', '', $sequence) ?? '');
+}
+
+/**
+ * The oligos of an order sheet (an .xlsx file: the sheet of IDT, the form of Microsynth, or any sheet with a column of names and one
+ * of sequences). The sheet "DNA Order" is read when there is one, else the first sheet. The row of the headers is the first one with a
+ * column "name" and a column "sequence".
+ *
+ * @return list<array{name: string, sequence: string, purification: string, scale: string}>
+ */
+function readOrderSheet(string $path): array
+{
+    $zip = new ZipArchive();
+    if ($zip->open($path) !== true) {
+        throw new RuntimeException('This file is not an Excel sheet.');
+    }
+    $read = static function (string $name) use ($zip): ?SimpleXMLElement {
+        $content = $zip->getFromName($name);
+        if ($content === false) {
+            return null;
+        }
+        $xml = simplexml_load_string($content, SimpleXMLElement::class, LIBXML_NONET | LIBXML_COMPACT | LIBXML_PARSEHUGE);
+        return $xml === false ? null : $xml;
+    };
+    $workbook = $read('xl/workbook.xml');
+    $relations = $read('xl/_rels/workbook.xml.rels');
+    if ($workbook === null || $relations === null) {
+        throw new RuntimeException('This file is not an Excel sheet.');
+    }
+    $targets = array();
+    foreach ($relations->Relationship as $relation) {
+        $targets[(string) $relation['Id']] = (string) $relation['Target'];
+    }
+    $chosen = null;
+    $workbook->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+    foreach ($workbook->sheets->sheet as $sheet) {
+        $relationId = (string) $sheet->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships')['id'];
+        $target = $targets[$relationId] ?? null;
+        if ($target === null) {
+            continue;
+        }
+        if ($chosen === null || strtolower((string) $sheet['name']) === 'dna order') {
+            $chosen = 'xl/' . ltrim(preg_replace('#^/?(xl/)?#', '', $target) ?? $target, '/');
+        }
+    }
+    $sheetXml = $chosen === null ? null : $read($chosen);
+    if ($sheetXml === null) {
+        throw new RuntimeException('The sheet could not be read.');
+    }
+    $strings = array();
+    $shared = $read('xl/sharedStrings.xml');
+    if ($shared !== null) {
+        foreach ($shared->si as $item) {
+            $text = '';
+            if (isset($item->t)) {
+                $text = (string) $item->t;
+            } else {
+                foreach ($item->r as $run) {
+                    $text .= (string) $run->t;
+                }
+            }
+            $strings[] = $text;
+        }
+    }
+    // the cells of each row, by the letters of their column
+    $rows = array();
+    foreach ($sheetXml->sheetData->row as $row) {
+        $cells = array();
+        foreach ($row->c as $cell) {
+            $letters = preg_replace('/\d+/', '', (string) $cell['r']) ?? '';
+            $type = (string) $cell['t'];
+            if ($type === 's') {
+                $value = $strings[(int) $cell->v] ?? '';
+            } elseif ($type === 'inlineStr') {
+                $value = (string) $cell->is->t;
+            } else {
+                $value = (string) $cell->v;
+            }
+            if (trim($value) !== '') {
+                $cells[$letters] = trim($value);
+            }
+        }
+        if ($cells !== array()) {
+            $rows[] = $cells;
+        }
+        if (count($rows) > 2000) {
+            break;
+        }
+    }
+    $nameColumn = 'A';
+    $sequenceColumn = 'B';
+    $purificationColumn = null;
+    $scaleColumn = null;
+    $start = 0;
+    foreach ($rows as $index => $cells) {
+        $name = null;
+        $sequence = null;
+        foreach ($cells as $letters => $value) {
+            if ($name === null && preg_match('/name/i', $value) === 1) {
+                $name = $letters;
+            }
+            if ($sequence === null && preg_match('/sequence/i', $value) === 1) {
+                $sequence = $letters;
+            }
+        }
+        if ($name !== null && $sequence !== null) {
+            $nameColumn = $name;
+            $sequenceColumn = $sequence;
+            foreach ($cells as $letters => $value) {
+                // the exact headers (the form of Microsynth has hidden check columns with these words in their headers)
+                if (preg_match('/^(dna\s+)?purification$/i', $value) === 1) {
+                    $purificationColumn = $letters;
+                } elseif (preg_match('/^(dna\s+)?scale$/i', $value) === 1) {
+                    $scaleColumn = $letters;
+                }
+            }
+            $start = $index + 1;
+            break;
+        }
+    }
+    $oligos = array();
+    foreach (array_slice($rows, $start) as $cells) {
+        $bases = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) ($cells[$sequenceColumn] ?? '')) ?? '');
+        // a sequence: bases only (the letters of the nucleotides and of the ambiguity codes)
+        if ($bases === '' || preg_match('/^[ACGTURYKMSWBDHVN]+$/', $bases) !== 1 || strlen($bases) < 8) {
+            continue;
+        }
+        $oligos[] = array(
+            'name' => (string) ($cells[$nameColumn] ?? ''),
+            'sequence' => $bases,
+            'purification' => $purificationColumn === null ? '' : (string) ($cells[$purificationColumn] ?? ''),
+            'scale' => $scaleColumn === null ? '' : (string) ($cells[$scaleColumn] ?? ''),
+        );
+    }
+    $zip->close();
+    return $oligos;
 }

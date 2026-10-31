@@ -217,7 +217,9 @@
     };
     set(/^sequence/i, clean(sequence));
     set(/^tm/i, tm(sequence));
-    set(/^orientation/i, forward ? 'Forward' : 'Reverse');
+    if (forward !== null) {
+      set(/^orientation/i, forward ? 'Forward' : 'Reverse');
+    }
     if (target) {
       set(/^target/i, target);
     }
