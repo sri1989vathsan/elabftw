@@ -131,11 +131,12 @@
 
   {% endif %}
 
-  {# the parents and the daughters of an entry of the database #}
+  {# an entry of the database: the sequence, the storage, the primers and the lineage come after its details, then the description #}
   {% if registryEntry %}
-    {% include 'lineage.html' %}
     {% include 'sequence-viewer.html' %}
+    {% include 'storage-view-edit.html' %}
     {% include 'primers.html' %}
+    {% include 'lineage.html' %}
   {% endif %}
 
   {# BODY #}
@@ -226,7 +227,9 @@
 
 {% include 'spreadsheet-editor.html' %}
 
-{% include 'storage-view-edit.html' %}
+{% if not registryEntry %}
+  {% include 'storage-view-edit.html' %}
+{% endif %}
 
 {# PERMISSIONS #}
 <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-user-lock' data-scroll-btn-label='{{ 'Permissions'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='permissionsDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Permissions'|trans }}</h3>

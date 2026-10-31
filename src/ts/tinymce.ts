@@ -535,7 +535,14 @@ export function getTinymceBaseConfig(page: string): object {
       editor.on('init', () => {
         // doing this will give focus to the editor, which is OK for entities but on admin page it's not wanted, so avoid it
         if (page !== 'admin' && page !== 'sysconfig') {
+          // the command gives the focus to the editor, which scrolls the page down to the description: the page stays where it was
+          const scrolled = window.scrollY;
           editor.execCommand('lineheight', false, '1');
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+          window.scrollTo(0, scrolled);
+          window.requestAnimationFrame(() => window.scrollTo(0, scrolled));
         }
         // The link plugin's own default shortcut is the same Meta/Ctrl+K used
         // app-wide for the command palette. Free it up so Cmd+K always opens

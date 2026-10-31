@@ -142,7 +142,7 @@
 
   {# BODY (show only if not empty) #}
   {% set body = Entity.entityData.body_html %}
-  {% if body != '' %}
+  {% if body != '' and Entity.entityType.value != 'inventory' %}
       <div {% if Entity.entityData.hide_main_text %}hidden='hidden'{% endif %}>
         <h3 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='body_view'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ (Entity.entityType.value == 'inventory' ? 'Description' : 'Main text')|trans }}</h3>
         <div id='body_view' class='pt-2 ml-3 overflow-auto' data-save-hidden='body_view'>{{ body|raw }}</div>
@@ -157,7 +157,8 @@
 {# we only show this section in view mode if there are at least one link #}
 {% set fileFolderReferences = Entity.entityData.metadata_decoded.elabftw.file_folder_references|default([]) %}
 {% set webLinks = Entity.entityData.metadata_decoded.elabftw.web_links|default([]) %}
-{% if Entity.entityData.experiments_links or Entity.entityData.items_links or Entity.entityData.compounds_links or Entity.entityData.related_experiments_links or Entity.entityData.related_items_links or Entity.entityData.uploads or fileFolderReferences or webLinks or linkedTasksArr or orderLinksArr or (associatedTemplatesArr and Entity.entityData.type == 'experiments') %}
+{% set hasLinks = Entity.entityData.experiments_links or Entity.entityData.items_links or Entity.entityData.compounds_links or Entity.entityData.related_experiments_links or Entity.entityData.related_items_links or Entity.entityData.uploads or fileFolderReferences or webLinks or linkedTasksArr or orderLinksArr or (associatedTemplatesArr and Entity.entityData.type == 'experiments') %}
+{% if hasLinks and Entity.entityType.value != 'inventory' %}
   {% include 'links.html' %}
 {% endif %}
 
@@ -183,15 +184,13 @@
 
 {% if not App.isAnonymous() %}
 
-  {# the lineage and the sequence files of an entry of the database #}
+  {# an entry of the database: the sequence, the storage, the primers and the lineage come after its details #}
   {% if Entity.entityType.value == 'inventory' %}
-    {% include 'lineage.html' %}
     {% include 'sequence-viewer.html' %}
+    {% include 'storage-view-edit.html' %}
     {% include 'primers.html' %}
-  {% endif %}
-
-  {# same for storage #}
-  {% if Entity.entityData.containers or Entity.entityType.value == 'inventory' %}
+    {% include 'lineage.html' %}
+  {% elseif Entity.entityData.containers %}
     {% include 'storage-view-edit.html' %}
   {% endif %}
 
@@ -230,6 +229,24 @@
     <hr>
   {% endif %}
 
+{% endif %}
+
+{# an entry of the database: the description, then the data and the links, come after the activity #}
+{% if Entity.entityType.value == 'inventory' %}
+  {% set registryBody = Entity.entityData.body_html %}
+  {% if registryBody != '' %}
+    <div {% if Entity.entityData.hide_main_text %}hidden='hidden'{% endif %}>
+      <h3 data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='body_view'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Description'|trans }}</h3>
+      <div id='body_view' class='pt-2 ml-3 overflow-auto' data-save-hidden='body_view'>{{ registryBody|raw }}</div>
+      <hr>
+    </div>
+  {% endif %}
+  {% if hasLinks %}
+    {% include 'links.html' %}
+  {% endif %}
+{% endif %}
+
+{% if not App.isAnonymous() %}
   {# PERMISSIONS #}
   <h3 title='{{ 'Toggle visibility'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='false' aria-controls='permissionsDiv'><i class='fas fa-caret-right fa-fw mr-2'></i>{{ 'Permissions'|trans }}</h3>
   <div class='mt-2 ml-3' id='permissionsDiv' hidden data-save-hidden='permissionsDiv'>
