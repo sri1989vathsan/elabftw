@@ -172,6 +172,12 @@ final class Inventory extends AbstractConcreteEntity
             ),
         );
 
+        // the copy is a daughter of the original: the original is its parent
+        $req = $this->Db->prepare('INSERT IGNORE INTO inventory2inventory (item_id, link_id) VALUES (:child, :parent)');
+        $req->bindValue(':child', $newId, PDO::PARAM_INT);
+        $req->bindValue(':parent', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+
         return $newId;
     }
 
