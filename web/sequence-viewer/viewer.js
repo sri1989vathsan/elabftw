@@ -26,14 +26,14 @@
   // the look of the circular map: set on the page (CSS in viewer.css), remembered in the browser
   const mapStyle = document.getElementById('map-style');
   const MAP_STYLES = ['clean', 'vivid', 'dark', 'classic'];
-  // the map of the editor is the default; the map drawn here (circular-map.js) is chosen with Clean, Vivid or Dark
-  let chosenStyle = 'classic';
+  // the map drawn here (circular-map.js) is the default; the map of the editor is chosen with Classic
+  let chosenStyle = 'clean';
   try {
     chosenStyle = window.localStorage.getItem('sequence-editor-map-style') || chosenStyle;
   } catch (error) {
     // the default stays
   }
-  document.body.dataset.mapStyle = MAP_STYLES.indexOf(chosenStyle) === -1 ? 'classic' : chosenStyle;
+  document.body.dataset.mapStyle = MAP_STYLES.indexOf(chosenStyle) === -1 ? 'clean' : chosenStyle;
   if (mapStyle) {
     mapStyle.value = document.body.dataset.mapStyle;
     mapStyle.addEventListener('change', function () {
