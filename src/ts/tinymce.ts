@@ -543,6 +543,22 @@ export function getTinymceBaseConfig(page: string): object {
           }
           window.scrollTo(0, scrolled);
           window.requestAnimationFrame(() => window.scrollTo(0, scrolled));
+          // the editor can still take the focus a moment later: unless the user has clicked or typed, it is given back
+          let touched = false;
+          const touch = (): void => {
+            touched = true;
+          };
+          document.addEventListener('pointerdown', touch, { once: true, capture: true });
+          document.addEventListener('keydown', touch, { once: true, capture: true });
+          [200, 600, 1200].forEach(delay => window.setTimeout(() => {
+            if (!touched && editor.hasFocus()) {
+              editor.getWin().blur();
+              if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
+              }
+              window.scrollTo(0, scrolled);
+            }
+          }, delay));
         }
         // The link plugin's own default shortcut is the same Meta/Ctrl+K used
         // app-wide for the command palette. Free it up so Cmd+K always opens
