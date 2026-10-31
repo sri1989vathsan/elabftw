@@ -561,6 +561,14 @@ export function getTinymceBaseConfig(page: string): object {
           toTop();
           window.requestAnimationFrame(toTop);
           [150, 400, 800, 1500, 2500].forEach(delay => window.setTimeout(toTop, delay));
+          // the editor also takes the focus back when the window gets it (the tab is shown again): same until the user acts
+          const again = (): void => {
+            window.setTimeout(toTop, 0);
+            window.setTimeout(toTop, 120);
+          };
+          editor.on('focus', again);
+          window.addEventListener('focus', again);
+          document.addEventListener('visibilitychange', again);
         }
         // The link plugin's own default shortcut is the same Meta/Ctrl+K used
         // app-wide for the command palette. Free it up so Cmd+K always opens
