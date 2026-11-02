@@ -36,21 +36,15 @@
     return { bases: sequence, label: 'the whole sequence (' + sequence.length + ' bases)' };
   }
 
-  // a form posted to NCBI in a new tab: the sequence is not put in an address, so a long one goes too
+  // a form posted to NCBI in a new tab; CMD=Put makes NCBI run the search at once, as its own page does
   function send(program, bases, name) {
     const query = '>' + (name || 'query') + '\n' + bases;
-    // NCBI fills its query box from the address; a long sequence does not fit in one and goes by form
-    if (bases.length <= 6000) {
-      const params = new URLSearchParams({ PAGE_TYPE: 'BlastSearch', PROGRAM: program, QUERY: query, DATABASE: program === 'blastn' ? 'nt' : 'nr', LINK_LOC: 'blasthome' });
-      window.open('https://blast.ncbi.nlm.nih.gov/Blast.cgi?' + params.toString(), '_blank', 'noopener');
-      return;
-    }
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = 'https://blast.ncbi.nlm.nih.gov/Blast.cgi';
     form.target = '_blank';
     form.rel = 'noopener';
-    const fields = { PAGE_TYPE: 'BlastSearch', PROGRAM: program, QUERY: query, DATABASE: program === 'blastn' ? 'nt' : 'nr', CMD: 'Web' };
+    const fields = { PAGE_TYPE: 'BlastSearch', PROGRAM: program, QUERY: query, DATABASE: program === 'blastx' ? 'nr' : 'nt', CMD: 'Put' };
     Object.keys(fields).forEach(function (key) {
       const input = document.createElement('input');
       input.type = 'hidden';
