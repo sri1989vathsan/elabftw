@@ -6,6 +6,7 @@
 (function () {
   'use strict';
   const HEIGHT = 16;
+  const PAD = 3;
   const COMPLEMENT = { A: 'T', T: 'A', G: 'C', C: 'G' };
 
   function element(tag, text) {
@@ -71,26 +72,46 @@
         return;
       }
       const numbers = (path.getAttribute('d') || '').match(/L\s*([\d.]+)\s*,\s*0/);
-      const width = numbers ? parseFloat(numbers[1]) + 4 : 0;
+      // an oligo that has its bases (one that was designed here) is drawn by the editor with its own letters, next to the box:
+      // the box is then drawn around them, the width is theirs
+      const own = g.parentNode.querySelector(':scope > text.tg-primer-bases');
+      const insert = g.parentNode.querySelector(':scope > text.tg-primer-bases-insert');
+      const width = own ? parseFloat(own.getAttribute('textLength')) : (numbers ? parseFloat(numbers[1]) + 4 : 0);
       if (!(width > 0) && !g.dataset.oligoWidth) {
         return;
       }
-      let w = g.dataset.oligoWidth ? parseFloat(g.dataset.oligoWidth) : width;
+      let w = own ? width : (g.dataset.oligoWidth ? parseFloat(g.dataset.oligoWidth) : width);
       const forward = primer.forward !== false && primer.strand !== -1;
       // whole: the oligo is on one row (the rows are drawn when they scroll into view, so the other pieces of an oligo that
       // goes over the end of a row may not be there yet: its width, against the width of its bases, tells)
       const bound = primer.end - primer.start + 1;
       const whole = primer.end >= primer.start && charWidth > 0 && Math.abs(w - bound * charWidth) < charWidth * 1.5;
+      const overhang = insert ? (insert.getAttribute('data-insert-bases') || '').length : 0;
       if (whole) {
         // the editor draws the box a little short: the bases must stand exactly under the bases of the sequence
         w = bound * charWidth;
       }
-      const tail = whole && primer.tail ? primer.tail : 0;
+      const tail = whole ? (insert ? overhang : primer.tail || 0) : 0;
       const char = w / bound;
       // the part that binds, and its overhang: on the left for a forward oligo (its 5' end), on the right for a reverse one
-      const x0 = 0;
-      const x1 = w;
-      const d = shape(x0, x1, forward, whole) + (tail ? ' ' + (forward ? overhangShape(-tail * char, 0) : overhangShape(w, w + tail * char)) : '');
+      // the box is a little wider than its bases (PAD) so the letters do not touch its edge; the bases stay under the sequence
+      const x0 = whole ? -PAD : 0;
+      const x1 = whole ? w + PAD : w;
+      const gap = whole ? PAD : 0;
+      const d = shape(x0, x1, forward, whole) + (tail ? ' ' + (forward ? overhangShape(x0 - tail * char, x0) : overhangShape(x1, x1 + tail * char)) : '');
+      if (own && whole) {
+        // the letters of the editor on the line of the sequence, the bases exactly under the bases of the sequence, and the
+        // overhang in line with them on the side of the 5' end
+        own.setAttribute('x', '0');
+        own.setAttribute('y', forward ? '12' : '10');
+        own.setAttribute('textLength', String(w));
+        if (insert) {
+          insert.setAttribute('x', String(forward ? x0 - tail * char : x1));
+          insert.setAttribute('y', forward ? '12' : '10');
+          insert.setAttribute('textLength', String(tail * char));
+          insert.removeAttribute('transform');
+        }
+      }
       if (path.getAttribute('d') === d) {
         return;
       }
@@ -122,7 +143,7 @@
             return COMPLEMENT[b];
           }));
           overhang.setAttribute('class', 'veLabelText ve-monospace-font oligo-tail');
-          overhang.setAttribute('transform', 'translate(' + (forward ? -tail * char : w) + ',' + (forward ? 14 : 12) + ')');
+          overhang.setAttribute('transform', 'translate(' + (forward ? -tail * char - gap : w + gap) + ',' + (forward ? 14 : 12) + ')');
           overhang.setAttribute('textLength', String(tail * char));
           overhang.setAttribute('lengthAdjust', 'spacing');
           g.append(overhang);
