@@ -74,8 +74,17 @@
     const annotation = function (id, name, start, end, forward, length, site, bases) {
       const drawn = { id: id, name: name, type: 'primer', start: start % length, end: end % length, forward: forward, strand: forward ? 1 : -1 };
       if (site && site.tail) {
+        // the whole oligo is laid on the plasmid, its overhang on the places next to the binding site (before it for a forward
+        // oligo, after it for a reverse one); oligo-style.js boxes the places that match and writes the overhang as plain letters
         drawn.tail = site.tail;
-        drawn.bases = String(bases || '').toUpperCase();
+        drawn.oligo = String(bases || '').toUpperCase();
+        drawn.boundStart = drawn.start;
+        drawn.boundEnd = drawn.end;
+        if (forward) {
+          drawn.start = (drawn.start - site.tail + length) % length;
+        } else {
+          drawn.end = (drawn.end + site.tail) % length;
+        }
       }
       return drawn;
     };

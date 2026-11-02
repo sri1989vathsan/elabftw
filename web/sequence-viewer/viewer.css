@@ -1927,3 +1927,10 @@ body[data-map-style="dark"] .own-map-feature {
 .own-map-translation {
   cursor: pointer;
 }
+
+/* the letters of an oligo, the overhang (the bases that do not match) in red and underlined */
+.veRowViewPrimer .oligo-overhang,
+.oligo-overhang {
+  fill: #d73a1f;
+  text-decoration: underline;
+}

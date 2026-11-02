@@ -9,12 +9,6 @@
   const PAD = 2;
   const COMPLEMENT = { A: 'T', T: 'A', G: 'C', C: 'G' };
 
-  function element(tag, text) {
-    const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
-    node.textContent = text;
-    return node;
-  }
-
   function primersOf(state) {
     const found = {};
     const add = function (list) {
@@ -40,6 +34,34 @@
       : 'M' + x0 + ',0 L' + x1 + ',0 L' + x1 + ',' + (HEIGHT - top) + ' L' + (x0 + 9) + ',' + (HEIGHT - top) + ' L' + (x0 + 9) + ',' + HEIGHT + ' L' + x0 + ',' + (HEIGHT - top) + ' Z';
   }
 
+  const SVG = 'http://www.w3.org/2000/svg';
+
+  // the oligo as it is laid on the plasmid: its bases from 5' to 3', where it starts and ends (the overhang included), and
+  // which of those places match the sequence. An oligo without an overhang is just the bases it binds.
+  function layout(primer, sequence) {
+    const forward = primer.forward !== false && primer.strand !== -1;
+    const bound = sequence.slice(primer.start, primer.end + 1);
+    const oligo = String(primer.oligo || (forward ? bound : bound.split('').reverse().join('').replace(/[ACGT]/g, function (b) {
+      return COMPLEMENT[b];
+    })) || '').toUpperCase();
+    const tail = primer.oligo ? Math.max(0, Number(primer.tail) || 0) : 0;
+    const span = primer.end - primer.start + 1;
+    return {
+      forward: forward,
+      oligo: oligo,
+      tail: tail,
+      // the places that match: all of them when there is no overhang, else without the overhang
+      boundStart: primer.oligo ? (primer.boundStart !== undefined ? primer.boundStart : (forward ? primer.start + tail : primer.start)) : primer.start,
+      boundEnd: primer.oligo ? (primer.boundEnd !== undefined ? primer.boundEnd : (forward ? primer.end : primer.end - tail)) : primer.end,
+      // the base of the oligo that stands at a place of the plasmid: the oligo is read from the 5' end, the left end of a
+      // forward oligo and the right end of a reverse one; the letters are drawn as they stand under the sequence
+      at: function (position) {
+        const index = forward ? position - primer.start : primer.end - position;
+        return index >= 0 && index < oligo.length && span === oligo.length ? oligo[index] : '';
+      },
+    };
+  }
+
   function restyle() {
     const editor = window.sequenceEditor;
     if (!editor) {
@@ -59,168 +81,100 @@
       }
       return false;
     });
+    if (!(charWidth > 0)) {
+      return;
+    }
     shapes.forEach(function (g) {
       const path = g.querySelector(':scope > path');
-      const text = g.querySelector(':scope > text');
       const primer = primers[g.dataset.id];
-      if (!path || !primer) {
-        return;
-      }
-      const numbers = (path.getAttribute('d') || '').match(/L\s*([\d.]+)\s*,\s*0/);
-      // an oligo that has its bases (one that was designed here) is drawn by the editor with its own letters, next to the box:
-      // the box is then drawn around them, the width is theirs
-      const own = g.parentNode.querySelector(':scope > text.tg-primer-bases');
-      const insert = g.parentNode.querySelector(':scope > text.tg-primer-bases-insert');
-      const width = own ? parseFloat(own.getAttribute('textLength')) : (numbers ? parseFloat(numbers[1]) + 4 : 0);
-      if (!(width > 0) && !(g.dataset.oligoD !== undefined && g.dataset.oligoWidth)) {
-        return;
-      }
-      // the width of the box the editor drew: read from its path, or remembered when the path is the one written here (the
-      // editor draws a piece again with a new path when the oligo or the row changes, then it is read again)
-      const written = g.dataset.oligoD !== undefined && path.getAttribute('d') === g.dataset.oligoD;
-      let w = own ? width : (written && g.dataset.oligoWidth ? parseFloat(g.dataset.oligoWidth) : width);
-      const forward = primer.forward !== false && primer.strand !== -1;
-      // whole: the oligo is on one row (the rows are drawn when they scroll into view, so the other pieces of an oligo that
-      // goes over the end of a row may not be there yet: its width, against the width of its bases, tells)
-      const bound = primer.end - primer.start + 1;
-      // the columns of the row this piece covers: the row starts where its sequence is found in the sequence, the piece where its
-      // svg is. The letters of the piece are the bases of those columns only.
-      let piece = null;
       const rowEl = g.closest('.veRowItem');
-      if (!own && rowEl && charWidth > 0 && primer.end >= primer.start) {
-        const rowText = Array.from(rowEl.querySelectorAll('text.ve-monospace-font[textLength]')).find(function (node) {
-          return node.textContent.length > 5 && !node.classList.contains('ve-sequence-reverse') && !node.classList.contains('veLabelText');
-        });
-        const rowStart = rowText ? sequence.indexOf(rowText.textContent.toUpperCase()) : -1;
-        if (rowStart >= 0) {
-          const first = rowStart + Math.round((g.parentNode.getBoundingClientRect().left - rowEl.getBoundingClientRect().left) / charWidth);
-          const last = Math.min(primer.end, rowStart + rowText.textContent.length - 1);
-          if (first >= primer.start && first <= last) {
-            piece = { start: first, end: last };
-          }
-        }
-      }
-      const whole = piece ? piece.start === primer.start && piece.end === primer.end : (primer.end >= primer.start && charWidth > 0 && Math.abs(w - bound * charWidth) < charWidth * 1.5);
-      // the arrow of the 3' end is on the piece that has that end
-      const barb = piece ? (forward ? piece.end === primer.end : piece.start === primer.start) : whole;
-      const overhang = insert ? (insert.getAttribute('data-insert-bases') || insert.textContent || '').length || primer.tail || 0 : 0;
-      if (piece) {
-        // the editor draws the box a little short: the bases must stand exactly under the bases of the sequence
-        w = (piece.end - piece.start + 1) * charWidth;
-      } else if (whole) {
-        w = bound * charWidth;
-      }
-      const tail = whole ? (insert ? overhang : primer.tail || 0) : 0;
-      const char = charWidth > 0 ? charWidth : w / bound;
-      // the part that binds, and its overhang: on the left for a forward oligo (its 5' end), on the right for a reverse one
-      // the box is a little wider than its bases (PAD) so the letters do not touch its edge; the bases stay under the sequence
-      const x0 = whole ? -PAD : 0;
-      const x1 = whole ? w + PAD : w;
-      const gap = whole ? PAD : 0;
-      // only the part that matches the sequence is boxed: the overhang is plain letters beside it
-      const d = shape(x0, x1, forward, barb);
-      if (own && whole) {
-        // the letters of the editor on the line of the sequence, the bases exactly under the bases of the sequence, and the
-        // overhang in line with them on the side of the 5' end
-        own.setAttribute('x', '0');
-        own.setAttribute('y', forward ? '14' : '11');
-        own.setAttribute('textLength', String(w));
-        if (insert) {
-          // beside the box when there is room for it on this row, above it when the row ends first
-          const row = g.closest('.veRowItem');
-          const svgBox = g.parentNode.getBoundingClientRect();
-          const rowBox = row ? row.getBoundingClientRect() : null;
-          const room = rowBox ? (forward ? svgBox.left + x0 - rowBox.left : rowBox.right - (svgBox.left + x1)) : Infinity;
-          const above = tail > 0 && room < tail * char;
-          insert.setAttribute('x', String(above ? (forward ? x0 : x1 - tail * char) : (forward ? x0 - tail * char : x1)));
-          insert.setAttribute('y', above ? '-3' : (forward ? '14' : '11'));
-          insert.setAttribute('textLength', String(tail * char));
-          insert.removeAttribute('transform');
-        }
-      }
-      if (text && (piece || whole)) {
-        // the bases as they stand under the top strand: the complement for an oligo on the other strand
-        let bases = piece ? sequence.slice(piece.start, piece.end + 1) : sequence.slice(primer.start, primer.end + 1);
-        if (!forward) {
-          bases = bases.replace(/[ACGT]/g, function (b) {
-            return COMPLEMENT[b];
-          });
-        }
-        if (text.textContent !== bases) {
-          text.textContent = bases;
-        }
-        text.setAttribute('transform', 'translate(0,' + (forward ? 14 : 11) + ')');
-        text.setAttribute('textLength', String(w));
-        text.setAttribute('lengthAdjust', 'spacing');
-        text.setAttribute('class', 'veLabelText ve-monospace-font oligo-bases');
-      }
-      if (path.getAttribute('d') === d) {
+      if (!path || !primer || !rowEl || !(primer.end >= primer.start)) {
         return;
       }
-      g.dataset.oligoWidth = String(w);
-      g.dataset.oligoD = d;
-      path.setAttribute('d', d);
-      path.setAttribute('fill', '#fde8e2');
-      path.setAttribute('stroke', '#e0806a');
+      // the columns of the row this piece covers: the row starts where its sequence is found in the sequence, the piece where its
+      // svg is
+      const rowText = Array.from(rowEl.querySelectorAll('text.ve-monospace-font[textLength]')).find(function (node) {
+        return node.textContent.length > 5 && !node.classList.contains('ve-sequence-reverse') && !node.classList.contains('veLabelText');
+      });
+      const rowStart = rowText ? sequence.indexOf(rowText.textContent.toUpperCase()) : -1;
+      if (rowStart < 0) {
+        return;
+      }
+      const first = rowStart + Math.round((g.parentNode.getBoundingClientRect().left - rowEl.getBoundingClientRect().left) / charWidth);
+      const last = Math.min(primer.end, rowStart + rowText.textContent.length - 1);
+      if (first < primer.start || first > last) {
+        return;
+      }
+      const info = layout(primer, sequence);
+      const forward = info.forward;
+      // the editor draws its own letters for an oligo that has bases: they are not wanted
+      g.parentNode.querySelectorAll(':scope > text.tg-primer-bases, :scope > text.tg-primer-bases-insert').forEach(function (node) {
+        node.remove();
+      });
+      // the box: only the places that match the sequence, a little wider than its letters; the arrow of the 3' end is on the piece
+      // that has that end
+      const from = Math.max(first, info.boundStart);
+      const to = Math.min(last, info.boundEnd);
+      let d = 'M0,0';
+      if (to >= from) {
+        const barb = forward ? to === primer.end : from === primer.start;
+        d = shape((from - first) * charWidth - PAD, (to - first + 1) * charWidth + PAD, forward, barb);
+      }
+      // the editor mirrors the box of a reverse oligo with a transform: the box is drawn here on its own columns
+      if (path.hasAttribute('transform')) {
+        path.removeAttribute('transform');
+      }
+      if (path.getAttribute('d') !== d) {
+        path.setAttribute('d', d);
+      }
+      path.setAttribute('fill', to >= from ? '#fde8e2' : 'none');
+      path.setAttribute('stroke', to >= from ? '#e0806a' : 'none');
       path.setAttribute('stroke-width', '1');
       path.removeAttribute('stroke-dasharray');
-    });
-    placeOverhangs(shapes, primers, sequence, charWidth);
-  }
-
-  // an oligo with an overhang that goes over the end of a row: the editor puts the overhang on one of its pieces, which may
-  // not be the one with the 5' end; it is moved there (the left end of a forward oligo, the right end of a reverse one)
-  function placeOverhangs(shapes, primers, sequence, charWidth) {
-    const byId = {};
-    shapes.forEach(function (g) {
-      (byId[g.dataset.id] = byId[g.dataset.id] || []).push(g);
-    });
-    const complement = function (bases) {
-      return bases.replace(/[ACGT]/g, function (b) {
-        return COMPLEMENT[b];
-      });
-    };
-    Object.keys(byId).forEach(function (id) {
-      const primer = primers[id];
-      const pieces = byId[id].filter(function (g) {
-        return g.parentNode.querySelector(':scope > text.tg-primer-bases');
-      });
-      if (!primer || !primer.tail || pieces.length < 2 || primer.end < primer.start) {
-        return;
+      // the letters of the whole piece, the overhang ones in red
+      let text = g.querySelector(':scope > text.oligo-bases');
+      if (!text) {
+        g.querySelectorAll(':scope > text').forEach(function (node) {
+          node.remove();
+        });
+        text = document.createElementNS(SVG, 'text');
+        text.setAttribute('class', 'veLabelText ve-monospace-font oligo-bases');
+        g.append(text);
       }
-      const forward = primer.forward !== false && primer.strand !== -1;
-      const top = sequence.slice(primer.start, primer.end + 1);
-      const shown = forward ? top : complement(top);
-      const owns = pieces.map(function (g) {
-        return g.parentNode.querySelector(':scope > text.tg-primer-bases');
-      });
-      const index = owns.findIndex(function (own) {
-        const letters = own.textContent.toUpperCase();
-        return forward ? shown.startsWith(letters) : shown.endsWith(letters);
-      });
-      let insert = null;
-      pieces.forEach(function (g) {
-        insert = insert || g.parentNode.querySelector(':scope > text.tg-primer-bases-insert');
-      });
-      if (index === -1 || !insert) {
-        return;
+      let letters = '';
+      for (let p = first; p <= last; p++) {
+        letters += info.at(p) || ' ';
       }
-      const holder = pieces[index].parentNode;
-      if (insert.parentNode !== holder) {
-        holder.append(insert);
+      const key = letters + '|' + info.boundStart + '|' + info.boundEnd + '|' + first;
+      if (text.dataset.key !== key) {
+        text.dataset.key = key;
+        text.textContent = '';
+        let run = '';
+        let over = false;
+        const flush = function () {
+          if (run) {
+            const t = document.createElementNS(SVG, 'tspan');
+            if (over) {
+              t.setAttribute('class', 'oligo-overhang');
+            }
+            t.textContent = run;
+            text.append(t);
+          }
+          run = '';
+        };
+        for (let p = first; p <= last; p++) {
+          const outside = p < info.boundStart || p > info.boundEnd;
+          if (outside !== over) {
+            flush();
+            over = outside;
+          }
+          run += info.at(p) || ' ';
+        }
+        flush();
       }
-      const letters = (insert.getAttribute('data-insert-bases') || insert.textContent || '').length;
-      const width = parseFloat(owns[index].getAttribute('textLength')) || 0;
-      const wide = letters * charWidth;
-      const row = pieces[index].closest('.veRowItem');
-      const box = holder.getBoundingClientRect();
-      const rowBox = row ? row.getBoundingClientRect() : null;
-      const room = rowBox ? (forward ? box.left - rowBox.left : rowBox.right - (box.left + width)) : Infinity;
-      const above = room < wide;
-      insert.setAttribute('x', String(above ? (forward ? 0 : width - wide) : (forward ? -wide : width)));
-      insert.setAttribute('y', above ? '-3' : (forward ? '14' : '11'));
-      insert.setAttribute('textLength', String(wide));
-      insert.removeAttribute('transform');
+      text.setAttribute('transform', 'translate(0,' + (forward ? 14 : 11) + ')');
+      text.setAttribute('textLength', String((last - first + 1) * charWidth));
+      text.setAttribute('lengthAdjust', 'spacing');
     });
   }
 
