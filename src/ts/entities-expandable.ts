@@ -276,6 +276,7 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     return;
   }
   const columns = columnsFor(allRows);
+  const mixedModules = new Set(allRows.map(r => r.category_title ?? '')).size > 1;
   const table = el('table', 'table table-sm expandable-table');
   const head = el('tr');
   head.append(el('th', 'expandable-caret-cell'));
@@ -377,7 +378,16 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
       switch (c.key) {
       case 'ID':
         // the ID stays in view when the table is scrolled sideways
-        tr.append(el('td', 'id-cell', String(row.custom_id ?? row.id)));
+        {
+          const cell = el('td', 'id-cell', String(row.custom_id ?? row.id));
+          // modules count on their own: when the list mixes modules, the module is written under the number
+          if (mixedModules && row.category_title) {
+            const moduleName = el('span', 'id-module', row.category_title);
+            moduleName.style.color = row.category_color ? `#${row.category_color}` : '';
+            cell.append(moduleName);
+          }
+          tr.append(cell);
+        }
         break;
       case 'Title': {
         const titleCell = el('td');
