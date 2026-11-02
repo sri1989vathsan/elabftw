@@ -668,10 +668,10 @@
   const style = element('style');
   style.textContent = `
 .rf-panel { display: flex; flex-direction: column; }
-.rf-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1rem 0.5rem; }
+.rf-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1rem 0.5rem 3.25rem; }
 .rf-header h3 { margin: 0; font-size: 1.25rem; }
 .rf-close { border: 0; background: transparent; color: inherit; font-size: 1.1rem; cursor: pointer; }
-.rf-body { padding: 0.5rem 0.75rem 1rem; overflow-y: auto; }
+.rf-body { padding: 0.5rem 0.75rem 1rem 3.25rem; overflow-y: auto; }
 .rf-title { margin: 0.9rem 0 0.3rem 0.5rem; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.65; }
 .rf-row { position: relative; display: flex; align-items: center; border-radius: 6px; }
 .rf-row:hover { background: rgba(255, 255, 255, 0.08); }
