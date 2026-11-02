@@ -266,6 +266,10 @@ abstract class AbstractEntity extends AbstractRest
                     $contentType = isset($reqBody['content_type'])
                         ? BodyContentType::from($reqBody['content_type'])
                         : ($useMarkdown ? BodyContentType::Markdown : BodyContentType::Html);
+                    // an entry of the database made as an intermediate has no number until it is registered
+                    if ($this instanceof Inventory && !empty($reqBody['unregistered'])) {
+                        $this->asUnregistered = true;
+                    }
                     $newId = $this->create(
                         title: $reqBody['title'] ?? null,
                         body: $reqBody['body'] ?? null,

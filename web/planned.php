@@ -32,7 +32,8 @@ use function trim;
  *
  * GET gives the planned entries of the requester.
  * POST {action: plan, title, category} makes a planned entry; {action: status, id, status} sets its status (Planned, Ordered,
- * Being made); {action: ready, id} moves it into the Database (it keeps the number it had before, else gets the next one of its
+ * Being made); {action: register, id} gives a number to an entry of the Database that has none (an intermediate), when it has
+ * what its module requires; {action: ready, id} moves it into the Database (it keeps the number it had before, else gets the next one of its
  * module); {action: revert, id} takes an entry of the Database back to the planned ones, keeping its number.
  */
 require_once __DIR__ . '/app/init.inc.php';
@@ -75,6 +76,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $id = (int) ($payload['id'] ?? 0);
             new Inventory($App->Users, $id)->setPlannedStatus((string) ($payload['status'] ?? ''));
             respond(200, array('id' => $id));
+        }
+        if ($action === 'register') {
+            $id = (int) ($payload['id'] ?? 0);
+            $number = new Inventory($App->Users, $id)->register();
+            respond(200, array('id' => $id, 'number' => $number));
         }
         if ($action === 'revert') {
             $id = (int) ($payload['id'] ?? 0);

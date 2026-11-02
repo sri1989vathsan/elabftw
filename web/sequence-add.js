@@ -45,12 +45,12 @@
     return new File(['>' + (header || title || name) + '\n' + wrapped + '\n'], name + '.fasta', { type: 'text/plain' });
   }
 
-  async function createEntry(category, title) {
+  async function createEntry(category, title, unregistered) {
     const response = await fetch('api/v2/inventory', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
-      body: JSON.stringify(title ? { category: category, title: title } : { category: category }),
+      body: JSON.stringify(Object.assign(title ? { category: category, title: title } : { category: category }, unregistered ? { unregistered: true } : {})),
     });
     if (!response.ok) {
       throw new Error('The entry could not be created (' + response.status + ').');
@@ -189,6 +189,12 @@
     });
     showChoice();
 
+    // an intermediate is kept without a number: it is registered later, when it deserves one
+    const intermediateLabel = element('label', 'sa-radio');
+    const intermediate = element('input');
+    intermediate.type = 'checkbox';
+    intermediateLabel.append(intermediate, document.createTextNode(' Intermediate: no number yet (register it later)'));
+
     const message = element('p', 'sa-message');
     const actions = element('div', 'sa-actions');
     const cancel = element('button', 'btn btn-secondary', 'Cancel');
@@ -196,7 +202,7 @@
     const create = element('button', 'btn btn-primary', 'Create');
     create.type = 'button';
     actions.append(cancel, create);
-    dialog.append(nameLabel, parentsLabel, sequenceTitle, choices, file, paste, message, actions);
+    dialog.append(nameLabel, parentsLabel, sequenceTitle, choices, file, paste, intermediateLabel, message, actions);
     backdrop.append(dialog);
     document.body.append(backdrop);
     name.focus();
@@ -243,7 +249,7 @@
       }
       create.disabled = true;
       try {
-        const id = await createEntry(categoryId, title);
+        const id = await createEntry(categoryId, title, intermediate.checked);
         if (sequenceFile) {
           await uploadFile(id, sequenceFile);
         }

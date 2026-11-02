@@ -48,7 +48,7 @@ const numberOrEmpty = (value: string): number | '' => value !== '' && Number.isF
 function columnsFor(rows: Row[]): Column[] {
   const text = (key: string, label: string, get: (row: Row) => string | number): Column => ({ key, label, numeric: false, get });
   const num = (key: string, label: string, get: (row: Row) => string | number): Column => ({ key, label, numeric: true, get });
-  const columns: Column[] = [num('ID', 'ID', r => r.custom_id ?? r.id), text('Title', 'Title', r => r.title ?? '')];
+  const columns: Column[] = [num('ID', 'ID', r => r.custom_id ?? 0), text('Title', 'Title', r => r.title ?? '')];
   if (isPrimerList(rows)) {
     // the primers are looked at by their sequence, length, melting temperature and GC share
     columns.push(
@@ -379,7 +379,9 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
       case 'ID':
         // the ID stays in view when the table is scrolled sideways
         {
-          const cell = el('td', 'id-cell', String(row.custom_id ?? row.id));
+          // an entry without a number is not registered yet (an intermediate)
+          const cell = el('td', 'id-cell', row.custom_id == null ? '–' : String(row.custom_id));
+          if (row.custom_id == null) cell.title = 'Not registered: no number yet';
           // modules count on their own: when the list mixes modules, the module is written under the number
           if (mixedModules && row.category_title) {
             const moduleName = el('span', 'id-module', row.category_title);

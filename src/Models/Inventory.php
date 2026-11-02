@@ -31,7 +31,13 @@ use Symfony\Component\HttpFoundation\Request;
 use Override;
 
 use function _;
+use function array_map;
 use function is_string;
+use function is_array;
+use function trim;
+use function implode;
+use function preg_match;
+use function json_decode;
 
 /**
  * All about the inventory: a type of its own, a twin of the resources (see migration 110)
@@ -46,6 +52,9 @@ final class Inventory extends AbstractConcreteEntity
 
     /** the entry that is made is a planned one: private, kept out of the lists, without a number */
     public bool $asPlanned = false;
+
+    /** the entry that is made is not registered (an intermediate): in the Database like the others, but without a number until it is registered */
+    public bool $asUnregistered = false;
 
     #[Override]
     public function create(
@@ -97,7 +106,7 @@ final class Inventory extends AbstractConcreteEntity
             $body = null;
         }
         // each type of entry (plasmids, primers, ...) counts on its own: the next number of the module; a planned entry has none
-        $customId ??= $this->asPlanned ? null : $this->nextNumber($category);
+        $customId ??= ($this->asPlanned || $this->asUnregistered) ? null : $this->nextNumber($category);
 
         $sql = 'INSERT INTO inventory(team, title, date, status, body, userid, category, elabid, canread_base, canwrite_base, canbook_base, canread, canwrite, canread_is_immutable, canwrite_is_immutable, canbook, metadata, custom_id, content_type, rating, hide_main_text, created_from_type, created_from_id, is_bookable, is_planned)
             VALUES(:team, :title, :date, :status, :body, :userid, :category, :elabid, :canread_base, :canwrite_base, :canbook_base, :canread, :canwrite, :canread_is_immutable, :canwrite_is_immutable, :canbook, :metadata, :custom_id, :content_type, :rating, :hide_main_text, :created_from_type, :created_from_id, :is_bookable, :is_planned)';
@@ -174,6 +183,55 @@ final class Inventory extends AbstractConcreteEntity
         $req->bindValue(':ordering', array_search($title, array_keys(self::PLANNED_STATUSES), true) + 1, PDO::PARAM_INT);
         $this->Db->execute($req);
         return (int) $this->Db->lastInsertId();
+    }
+
+    /**
+     * An entry without a number is registered: it must have what its module requires (the required fields, and for the plasmids
+     * a sequence), then it gets the next number of its module. A number is never taken back or given to another entry.
+     *
+     * @return int the number it got
+     */
+    public function register(): int
+    {
+        $this->canOrExplode(AccessType::Write);
+        if ((int) ($this->entityData['is_planned'] ?? 0) === 1) {
+            throw new ImproperActionException(_('This entry is only planned: move it to the Database first.'));
+        }
+        if ($this->entityData['custom_id'] !== null) {
+            throw new ImproperActionException(_('This entry is registered already.'));
+        }
+        $category = $this->entityData['category'] ?? null;
+        if ($category === null) {
+            throw new ImproperActionException(_('A module is needed to give it a number: choose one first.'));
+        }
+        $missing = array();
+        $metadata = json_decode((string) ($this->entityData['metadata'] ?? ''), true);
+        foreach (is_array($metadata) ? ($metadata['extra_fields'] ?? array()) : array() as $name => $field) {
+            if (is_array($field) && !empty($field['required']) && trim((string) ($field['value'] ?? '')) === '') {
+                $missing[] = (string) $name;
+            }
+        }
+        $titleReq = $this->Db->prepare('SELECT title FROM inventory_categories WHERE id = :id');
+        $titleReq->bindValue(':id', (int) $category, PDO::PARAM_INT);
+        $this->Db->execute($titleReq);
+        if (preg_match('/^plasmids?$/i', (string) $titleReq->fetchColumn()) === 1) {
+            $likes = implode(' OR ', array_map(static fn(string $ext): string => "LOWER(real_name) LIKE '%." . $ext . "'", array('gb', 'gbk', 'gbff', 'genbank', 'fasta', 'fa', 'fna', 'dna')));
+            $files = $this->Db->prepare("SELECT COUNT(*) FROM uploads WHERE item_id = :id AND type = 'inventory' AND state = 1 AND (" . $likes . ')');
+            $files->bindValue(':id', $this->id, PDO::PARAM_INT);
+            $this->Db->execute($files);
+            if ((int) $files->fetchColumn() === 0) {
+                $missing[] = _('a sequence file');
+            }
+        }
+        if ($missing !== array()) {
+            throw new ImproperActionException(_('It cannot be registered yet, it needs: ') . implode(', ', $missing) . '.');
+        }
+        $number = $this->nextNumber((int) $category);
+        $req = $this->Db->prepare('UPDATE inventory SET custom_id = :number WHERE id = :id AND custom_id IS NULL AND is_planned = 0');
+        $req->bindValue(':number', $number, PDO::PARAM_INT);
+        $req->bindValue(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return (int) $number;
     }
 
     /**

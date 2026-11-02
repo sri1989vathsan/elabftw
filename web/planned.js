@@ -217,6 +217,27 @@
         }
       });
       bar.append(status, move, message);
+    } else if (mine && !entry.custom_id) {
+      // in the Database without a number: an intermediate. Register gives it the next number of its module, when it has what the
+      // module requires (the required fields, and for the plasmids a sequence).
+      bar.classList.add('alert-warning');
+      bar.append(element('span', 'mr-2', 'Not registered: no number yet (an intermediate).'));
+      const register = element('button', 'btn btn-success btn-sm ml-auto', 'Register to number');
+      register.type = 'button';
+      register.addEventListener('click', async function () {
+        register.disabled = true;
+        try {
+          const done = await post({ action: 'register', id: id });
+          message.textContent = 'Registered: number ' + done.number + '.';
+          window.setTimeout(function () {
+            location.reload();
+          }, 900);
+        } catch (error) {
+          message.textContent = error.message;
+          register.disabled = false;
+        }
+      });
+      bar.append(register, message);
     } else if (mine) {
       bar.append(element('span', 'text-muted mr-2', 'In the Database' + (entry.custom_id ? ' as number ' + entry.custom_id : '') + '.'));
       const back = element('button', 'btn btn-outline-secondary btn-sm ml-auto', 'Move back to planned');
