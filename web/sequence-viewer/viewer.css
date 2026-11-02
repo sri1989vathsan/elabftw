@@ -1963,3 +1963,52 @@ body[data-map-style="dark"] .own-map-feature {
   letter-spacing: 0.04em;
   resize: vertical;
 }
+
+/* what is shown on the maps (left) and on the sequence map (right): set apart, see view-toggles.js */
+body.hide-map-features .veLinearView .veRowViewFeaturesContainer,
+body.hide-map-features .veLinearView .veFeatureLabel,
+body.hide-seq-features .veRowView .veRowViewFeaturesContainer,
+body.hide-seq-features .veRowView .veFeatureLabel,
+body.hide-map-primers .veLinearView .veRowViewPrimersContainer,
+body.hide-seq-primers .veRowView .veRowViewPrimersContainer,
+body.hide-map-sites .veLinearView .veRowViewCutsite,
+body.hide-map-sites .veLinearView .veCutsiteLabel,
+body.hide-seq-sites .veRowView .veRowViewCutsite,
+body.hide-seq-sites .veRowView .veCutsiteLabel,
+body.hide-map-translations .veLinearView .veRowViewTranslationsContainer,
+body.hide-seq-translations .veRowView .veRowViewTranslationsContainer {
+  display: none !important;
+}
+
+.view-toggles {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #d5dbe3;
+  border-radius: 6px;
+  z-index: 20;
+}
+
+.view-toggles button {
+  border: 0;
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  background: #e8f0fc;
+  color: #1f4e9c;
+  font: 600 0.72rem system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.view-toggles button.off {
+  background: transparent;
+  color: #8a94a3;
+  text-decoration: line-through;
+}
+
+.view-toggles-linear,
+.view-toggles-seq {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+}

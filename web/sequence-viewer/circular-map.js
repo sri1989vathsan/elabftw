@@ -173,21 +173,10 @@
       }
     };
     let zoomLabel = null;
-    // the cut sites can be hidden
-    let showSites = true;
-    try {
-      showSites = window.localStorage.getItem('sequence-editor-map-sites') !== '0';
-    } catch (error) {
-      showSites = true;
-    }
-
-    // the translations (the amino acids of the genes) can be hidden
-    let showTranslations = true;
-    try {
-      showTranslations = window.localStorage.getItem('sequence-editor-map-translations') !== '0';
-    } catch (error) {
-      showTranslations = true;
-    }
+    // what is shown on the maps (view-toggles.js): the features, the primers, the cut sites and the translations
+    const shown = function (key) {
+      return !window.ViewToggles || window.ViewToggles.get('map', key);
+    };
 
     const dataNow = function () {
       return editor.getState().sequenceData;
@@ -201,7 +190,7 @@
       const state = editor.getState();
       const visibility = state.annotationVisibility || {};
       const hiddenTypes = visibility.featureTypesToHide || {};
-      if (visibility.features === false) {
+      if (visibility.features === false || !shown('features')) {
         return [];
       }
       return listOf(data.features).filter(function (feature) {
@@ -212,6 +201,9 @@
     }
 
     function primerItems(data) {
+      if (!shown('primers')) {
+        return [];
+      }
       const state = editor.getState();
       const drawn = Object.assign({}, state.temporaryAnnotations && state.temporaryAnnotations.primers);
       listOf(data.primers).forEach(function (primer) {
@@ -467,7 +459,7 @@
       const features = featureItems(data);
       const primers = primerItems(data);
       let sites = [];
-      if (showSites) {
+      if (shown('sites')) {
         try {
           sites = cutSites(data, filter);
         } catch (error) {
@@ -596,7 +588,7 @@
       });
 
       // the translations: a ring inside the scale, a segment for each amino acid (its letter when there is room for it)
-      if (showTranslations) {
+      if (shown('translations')) {
         const ringMid = innerEdge - 36;
         if (ringMid > 34) {
           translationItems(data).forEach(function (item) {
@@ -855,7 +847,7 @@
       }).join(',');
       const primers = Object.keys((state.temporaryAnnotations && state.temporaryAnnotations.primers) || {}).join(',') + listOf(data.primers).length;
       const selection = state.selectionLayer || {};
-      return [sequence.length, sequence.slice(0, 30), features, primers, selection.start, selection.end, state.caretPosition, JSON.stringify(state.restrictionEnzymes), JSON.stringify(state.annotationVisibility && state.annotationVisibility.featureTypesToHide), !!data.circular, host ? host.clientWidth + 'x' + host.clientHeight : '', document.body.dataset.mapStyle, zoom, showSites, showTranslations, JSON.stringify(data.translations || null)].join('|');
+      return [sequence.length, sequence.slice(0, 30), features, primers, selection.start, selection.end, state.caretPosition, JSON.stringify(state.restrictionEnzymes), JSON.stringify(state.annotationVisibility && state.annotationVisibility.featureTypesToHide), !!data.circular, host ? host.clientWidth + 'x' + host.clientHeight : '', document.body.dataset.mapStyle, zoom, shown('features'), shown('primers'), shown('sites'), shown('translations'), JSON.stringify(data.translations || null)].join('|');
     }
 
     // the map as an SVG file: the styles the map has now are written into the file, so it looks the same elsewhere
@@ -924,29 +916,7 @@
       };
       zoomLabel = document.createElement('span');
       zoomLabel.textContent = Math.round(zoom * 100) + '%';
-      const sitesButton = button('Sites', 'Show or hide the cut sites of the enzymes', function () {
-        showSites = !showSites;
-        sitesButton.classList.toggle('off', !showSites);
-        try {
-          window.localStorage.setItem('sequence-editor-map-sites', showSites ? '1' : '0');
-        } catch (error) {
-          // not remembered
-        }
-        signature = '';
-      });
-      sitesButton.classList.toggle('off', !showSites);
-      const translationsButton = button('Aa', 'Show or hide the translations (the amino acids of the genes)', function () {
-        showTranslations = !showTranslations;
-        translationsButton.classList.toggle('off', !showTranslations);
-        try {
-          window.localStorage.setItem('sequence-editor-map-translations', showTranslations ? '1' : '0');
-        } catch (error) {
-          // not remembered
-        }
-        signature = '';
-      });
-      translationsButton.classList.toggle('off', !showTranslations);
-      controls.append(zoomLabel, sitesButton, translationsButton, button('Fit', 'Fit the map to the panel', function () {
+      controls.append(zoomLabel, window.ViewToggles ? window.ViewToggles.bar('map') : document.createElement('span'), button('Fit', 'Fit the map to the panel', function () {
         setZoom(1);
       }), button('SVG', 'Save the map as an SVG image', exportSvg));
       wrap.append(controls);

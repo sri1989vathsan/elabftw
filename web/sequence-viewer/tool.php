@@ -66,6 +66,7 @@ $v = static fn(string $file): int => (int) filemtime(__DIR__ . '/' . $file);
   <script src="annotate.js?v=<?= (int) filemtime(__DIR__ . '/annotate.js') ?>"></script>
   <script src="annotate-tab.js?v=<?= (int) filemtime(__DIR__ . '/annotate-tab.js') ?>"></script>
   <script src="oligo-style.js?v=<?= (int) filemtime(__DIR__ . '/oligo-style.js') ?>"></script>
+  <script src="view-toggles.js?v=<?= (int) filemtime(__DIR__ . '/view-toggles.js') ?>"></script>
   <script src="oligo-editor.js?v=<?= (int) filemtime(__DIR__ . '/oligo-editor.js') ?>"></script>
   <script src="primer-menu.js?v=<?= (int) filemtime(__DIR__ . '/primer-menu.js') ?>"></script>
   <script src="tools-tab.js?v=<?= (int) filemtime(__DIR__ . '/tools-tab.js') ?>"></script>
