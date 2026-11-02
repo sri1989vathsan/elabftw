@@ -75,12 +75,16 @@
       if (!(width > 0) && !g.dataset.oligoWidth) {
         return;
       }
-      const w = g.dataset.oligoWidth ? parseFloat(g.dataset.oligoWidth) : width;
+      let w = g.dataset.oligoWidth ? parseFloat(g.dataset.oligoWidth) : width;
       const forward = primer.forward !== false && primer.strand !== -1;
       // whole: the oligo is on one row (the rows are drawn when they scroll into view, so the other pieces of an oligo that
       // goes over the end of a row may not be there yet: its width, against the width of its bases, tells)
       const bound = primer.end - primer.start + 1;
       const whole = primer.end >= primer.start && charWidth > 0 && Math.abs(w - bound * charWidth) < charWidth * 1.5;
+      if (whole) {
+        // the editor draws the box a little short: the bases must stand exactly under the bases of the sequence
+        w = bound * charWidth;
+      }
       const tail = whole && primer.tail ? primer.tail : 0;
       const char = w / bound;
       // the part that binds, and its overhang: on the left for a forward oligo (its 5' end), on the right for a reverse one
@@ -105,8 +109,8 @@
           });
         }
         text.textContent = bases;
-        text.setAttribute('transform', 'translate(2,' + (forward ? 14 : 12) + ')');
-        text.setAttribute('textLength', String(Math.max(0, w - 4)));
+        text.setAttribute('transform', 'translate(0,' + (forward ? 14 : 12) + ')');
+        text.setAttribute('textLength', String(w));
         text.setAttribute('lengthAdjust', 'spacing');
         text.setAttribute('class', 'veLabelText ve-monospace-font oligo-bases');
         // the overhang bases, beside them (the bases of the oligo from 5' to 3': the overhang is its first ones)
@@ -118,8 +122,8 @@
             return COMPLEMENT[b];
           }));
           overhang.setAttribute('class', 'veLabelText ve-monospace-font oligo-tail');
-          overhang.setAttribute('transform', 'translate(' + (forward ? -tail * char + 2 : w + 2) + ',' + (forward ? 14 : 12) + ')');
-          overhang.setAttribute('textLength', String(Math.max(0, tail * char - 4)));
+          overhang.setAttribute('transform', 'translate(' + (forward ? -tail * char : w) + ',' + (forward ? 14 : 12) + ')');
+          overhang.setAttribute('textLength', String(tail * char));
           overhang.setAttribute('lengthAdjust', 'spacing');
           g.append(overhang);
         }
