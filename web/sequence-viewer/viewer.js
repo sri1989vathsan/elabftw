@@ -87,6 +87,8 @@
     sequenceData.cutsiteLabelColors = CUTSITE_COLORS;
   }
   // what is written to the file has none of the colours of the display
+  // a version put back in the editor (history-tab.js) gets the colours of the display too
+  window.ViewerPalette = applyPalette;
   function withoutPalette(sequenceData) {
     const clone = JSON.parse(JSON.stringify(sequenceData));
     featuresOf(clone).forEach(function (feature) {
@@ -183,6 +185,11 @@
     }
     if (window.OwnMap) {
       window.OwnMap.setup(editor);
+    }
+    if (window.HistoryTab) {
+      window.HistoryTab.setup(editor, { entryId: entryId, fileName: function () {
+        return saveName;
+      }, canWrite: canWrite });
     }
     if (window.AnnotateTab) {
       window.AnnotateTab.setup(editor);
