@@ -42,6 +42,8 @@
     // what is drawn on the map: the attached primers and the pair being looked at, none of it is saved in the file
     let attachedDrawn = {};
     let designDrawn = {};
+    // the oligo that is being edited (oligo-editor.js), drawn where it would bind
+    let editDrawn = {};
     // the primers of the search results, drawn where they bind so they can be looked at before they are attached
     let previewDrawn = {};
     let designResult = null;
@@ -90,7 +92,7 @@
     };
 
     const redraw = function () {
-      editor.updateEditor({ temporaryAnnotations: { primers: Object.assign({}, previewDrawn, attachedDrawn, designDrawn) }, annotationVisibility: { primers: true } });
+      editor.updateEditor({ temporaryAnnotations: { primers: Object.assign({}, previewDrawn, attachedDrawn, designDrawn, editDrawn) }, annotationVisibility: { primers: true } });
     };
 
     // draws the binding sites of some primers of the database as a preview (not saved, not attached)
@@ -1030,6 +1032,15 @@
       render();
     } });
     // the right-click menu of the map (primer-menu.js) detaches a primer through this
+    window.PrimerPanel.setEdit = function (spec) {
+      editDrawn = {};
+      if (spec) {
+        const now = current();
+        const drawn = annotation('edit-preview', spec.name, spec.start, spec.end, spec.forward, now.sequence.length, spec.tail ? { tail: spec.tail } : null, spec.bases);
+        editDrawn['edit-preview'] = Object.assign(drawn, { color: '#7a5af8' });
+      }
+      redraw();
+    };
     window.PrimerPanel.reload = async function () {
       sitesFor = { sequence: null, circular: null, byPrimer: new Map() };
       await loadAttached();

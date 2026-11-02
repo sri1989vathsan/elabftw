@@ -2040,3 +2040,47 @@ body.hide-seq-orfs .veRowView .veRowViewOrfsContainer {
   padding: 0;
   background: transparent;
 }
+
+/* the Edit oligo panel: the oligo split in overhang and binding part */
+#tool-sidebar .oligo-shown {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 0.35rem 0.4rem;
+  background: #f6f8fb;
+  border: 1px solid #e1e6ee;
+  border-radius: 4px;
+  font-family: ui-monospace, Menlo, monospace;
+  letter-spacing: 0.06em;
+  word-break: break-all;
+}
+
+#tool-sidebar .oligo-shown-label {
+  color: #8a94a3;
+  font-size: 0.7rem;
+}
+
+#tool-sidebar .oligo-overhang-text {
+  color: #d73a1f;
+  text-decoration: underline;
+}
+
+#tool-sidebar .oligo-binding-text {
+  padding: 0 0.2rem;
+  background: #fde8e2;
+  border: 1px solid #e0806a;
+  border-radius: 3px;
+}
+
+#tool-sidebar .oligo-strand {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+#tool-sidebar .oligo-window {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}

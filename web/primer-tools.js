@@ -279,9 +279,14 @@
       });
       return key ? fields[key].value : '';
     };
-    return { id: id, title: entry.title, sequence: primerSequenceOf(Object.assign({}, entry, { extra_fields: Object.keys(fields).map(function (n) {
+    return { id: id, title: entry.title, userid: entry.userid, owner: entry.fullname || '', locked: Number(entry.locked) === 1, sequence: primerSequenceOf(Object.assign({}, entry, { extra_fields: Object.keys(fields).map(function (n) {
       return { name: n, value: fields[n].value };
     }) })), orientation: named(/^orientation/i), tm: named(/^tm/i) };
+  }
+
+  // the user who is logged in
+  async function currentUserId() {
+    return (await json('api/v2/users/me')).userid;
   }
 
   // the name and the bases (with the melting temperature and the orientation) of a primer of the database are changed
@@ -533,6 +538,7 @@
     allPrimers: allPrimers,
     createPrimer: createPrimer,
     getPrimer: getPrimer,
+    currentUserId: currentUserId,
     updatePrimer: updatePrimer,
     attach: attach,
     detach: detach,
