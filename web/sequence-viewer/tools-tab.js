@@ -34,7 +34,9 @@
         box.addEventListener('toggle', function () {
           if (box.open && !built) {
             built = true;
-            box.append(part.build(editor, context || {}));
+            Promise.resolve(part.build(editor, context || {})).then(function (node) {
+              box.append(node);
+            });
           }
         });
         host.append(box);

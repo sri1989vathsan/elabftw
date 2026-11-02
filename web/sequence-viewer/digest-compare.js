@@ -578,6 +578,10 @@
       panel.append(controls);
       panel.append(ladderEditor());
 
+      // the products of the PCR tool (tools-pcr.js) are lanes of the gel as well
+      ((window.DigestCompare && window.DigestCompare.pcrLanes) || []).forEach(function (lane) {
+        results.push({ label: lane.label, color: '#c2410c', fragments: [{ size: lane.size, start: lane.start, end: lane.end }] });
+      });
       if (showUncut) {
         results.unshift({ label: 'uncut', color: '#8a93a0', fragments: [{ size: state.length, start: 0, end: state.length - 1 }] });
       }
@@ -596,5 +600,5 @@
     } });
   }
 
-  window.DigestCompare = { setup: setup, fragments: fragments, parseLadders: parseLadders, parseSizes: parseSizes };
+  window.DigestCompare = Object.assign(window.DigestCompare || {}, { setup: setup, fragments: fragments, parseLadders: parseLadders, parseSizes: parseSizes });
 })();
