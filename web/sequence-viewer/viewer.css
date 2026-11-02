@@ -1674,3 +1674,29 @@ body[data-map-style="dark"] .own-map-feature {
 .own-map-label.primer {
   font-size: 12px;
 }
+
+/* the properties of a feature of the plasmid */
+#tool-sidebar .annotate-props-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.1rem 0.7rem;
+  margin: 0.3rem 0 0.2rem;
+  font-size: 0.78rem;
+}
+
+#tool-sidebar .annotate-props-list dt {
+  color: #6b7480;
+  font-weight: 500;
+}
+
+#tool-sidebar .annotate-props-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+#tool-sidebar .annotate-props-seq {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.72rem;
+  color: #4a5562;
+  overflow-wrap: anywhere;
+}

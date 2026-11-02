@@ -232,6 +232,41 @@
       return wrap;
     }
 
+    // the properties of a feature, folded under it: the place, the length, the strand, the make-up of its bases and its notes
+    function properties(feature, data) {
+      const length = data.sequence.length;
+      const size = ((feature.end - feature.start + length) % length) + 1;
+      const bases = feature.end >= feature.start ? data.sequence.slice(feature.start, feature.end + 1) : data.sequence.slice(feature.start) + data.sequence.slice(0, feature.end + 1);
+      const gc = bases.length === 0 ? 0 : (bases.replace(/[^gcGC]/g, '').length / bases.length) * 100;
+      const rows = [
+        ['Type', String(feature.type || 'misc_feature')],
+        ['Start', String(feature.start + 1)],
+        ['End', String(feature.end + 1)],
+        ['Length', size + ' bp' + (size % 3 === 0 ? ' (' + size / 3 + ' codons)' : '')],
+        ['Strand', (feature.strand || 1) > 0 ? 'forward (+)' : 'reverse (\u2212)'],
+        ['GC content', gc.toFixed(1) + ' %'],
+      ];
+      if (feature.end < feature.start) {
+        rows.push(['Position', 'runs over the origin']);
+      }
+      Object.keys(feature.notes || {}).forEach(function (key) {
+        const value = [].concat(feature.notes[key]).join('; ');
+        if (value !== '') {
+          rows.push([key, value]);
+        }
+      });
+      const details = element('details', 'annotate-props');
+      details.append(element('summary', 'tool-muted', 'Properties'));
+      const table = element('dl', 'annotate-props-list');
+      rows.forEach(function (pair) {
+        table.append(element('dt', '', pair[0]), element('dd', '', pair[1]));
+      });
+      const sequence = element('div', 'annotate-props-seq', bases.length > 60 ? bases.slice(0, 60) + '... (' + bases.length + ' bp)' : bases);
+      sequence.title = 'The first bases of the feature (on the forward strand)';
+      details.append(table, sequence);
+      return details;
+    }
+
     // the features of the plasmid, grouped by their type (a group can be folded), in the order of the sequence
     function currentFeatures() {
       const box = element('div', 'annotate-current');
@@ -274,6 +309,7 @@
             select(feature.start, feature.end);
           });
           text.append(name, document.createElement('br'), where);
+          text.append(properties(feature, data));
           row.append(text);
           group.append(row);
         });
