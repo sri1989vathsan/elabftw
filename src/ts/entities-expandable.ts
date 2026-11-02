@@ -15,6 +15,8 @@ type SequenceFile = { id: number; long_name: string; real_name: string; storage:
 type InternalLink = { page: string; entityid: number; title: string; category_title: string | null; category_color: string | null };
 type Row = {
   id: number;
+  // the number of the entry in its module (plasmids, primers... each count on their own); the row number is only internal
+  custom_id?: number | null;
   title: string;
   category_title: string | null;
   category_color: string | null;
@@ -46,7 +48,7 @@ const numberOrEmpty = (value: string): number | '' => value !== '' && Number.isF
 function columnsFor(rows: Row[]): Column[] {
   const text = (key: string, label: string, get: (row: Row) => string | number): Column => ({ key, label, numeric: false, get });
   const num = (key: string, label: string, get: (row: Row) => string | number): Column => ({ key, label, numeric: true, get });
-  const columns: Column[] = [num('ID', 'ID', r => r.id), text('Title', 'Title', r => r.title ?? '')];
+  const columns: Column[] = [num('ID', 'ID', r => r.custom_id ?? r.id), text('Title', 'Title', r => r.title ?? '')];
   if (isPrimerList(rows)) {
     // the primers are looked at by their sequence, length, melting temperature and GC share
     columns.push(
@@ -375,7 +377,7 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
       switch (c.key) {
       case 'ID':
         // the ID stays in view when the table is scrolled sideways
-        tr.append(el('td', 'id-cell', String(row.id)));
+        tr.append(el('td', 'id-cell', String(row.custom_id ?? row.id)));
         break;
       case 'Title': {
         const titleCell = el('td');
