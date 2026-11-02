@@ -9,6 +9,8 @@
   // the 3' end of a primer decides where it binds: this many bases have to match exactly
   const ANCHOR = 12;
   const MAX_MISMATCHES = 3;
+  // a primer with a tail (an overhang that does not bind): its 3' end binds exactly over at least this many bases
+  const TAIL_ANCHOR = 15;
   const MIN_LENGTH = 12;
 
   const token = function () {
@@ -87,7 +89,7 @@
    * Where a primer binds on a sequence: both strands, the 3' end exact, a few mismatches allowed in the rest.
    * Positions start at 0, the end is excluded. On a circular sequence a site can run over the origin.
    *
-   * @returns {Array<{start: number, end: number, forward: boolean, mismatches: number, length: number}>}
+   * @returns {Array<{start: number, end: number, forward: boolean, mismatches: number, length: number, tail?: number}>}
    */
   function findSites(sequence, primerSequence, circular) {
     const seq = clean(sequence);
@@ -125,6 +127,45 @@
     };
     scan(primer, true);
     scan(reverseComplement(primer), false);
+    // a tail: the 3' end binds exactly, the 5' end hangs over (the sites have "tail": the bases that do not bind)
+    const scanTailed = function (target, forward) {
+      const anchorText = forward ? target.slice(length - TAIL_ANCHOR) : target.slice(0, TAIL_ANCHOR);
+      let from = 0;
+      for (;;) {
+        const found = text.indexOf(anchorText, from);
+        if (found === -1) {
+          break;
+        }
+        from = found + 1;
+        if (found >= seq.length) {
+          continue;
+        }
+        let bound = TAIL_ANCHOR;
+        let start = found;
+        let end = found + TAIL_ANCHOR;
+        if (forward) {
+          while (bound < length && start > 0 && target[length - bound - 1] === text[start - 1]) {
+            bound++;
+            start--;
+          }
+        } else {
+          while (bound < length && end < text.length && target[bound] === text[end]) {
+            bound++;
+            end++;
+          }
+        }
+        const known = sites.some(function (site) {
+          return site.forward === forward && (forward ? site.end === end : site.start === start);
+        });
+        if (bound < length && !known) {
+          sites.push({ start: start, end: end, forward: forward, mismatches: 0, length: bound, tail: length - bound });
+        }
+      }
+    };
+    if (length >= TAIL_ANCHOR + 3) {
+      scanTailed(primer, true);
+      scanTailed(reverseComplement(primer), false);
+    }
     return sites.sort(function (a, b) {
       return a.start - b.start;
     });

@@ -296,23 +296,47 @@
         const group = element('details', 'annotate-group');
         group.open = true;
         group.append(element('summary', 'tool-muted', type + ' (' + list.length + ')'));
+        // a table per type: a click on a row selects the feature on the sequence, the arrow opens its properties
+        const table = element('table', 'annotate-table');
+        const head = element('tr');
+        ['', 'Name', 'Start', 'End', 'bp', 'Strand'].forEach(function (title) {
+          head.append(element('th', '', title));
+        });
+        const thead = element('thead');
+        thead.append(head);
+        table.append(thead);
+        const rows = element('tbody');
         list.forEach(function (feature) {
-          const row = element('div', 'tool-card annotate-row');
-          const text = element('span', 'annotate-text');
-          const name = element('strong', '', feature.name || type);
-          const note = feature.notes && Object.values(feature.notes)[0];
-          name.title = Array.isArray(note) ? note[0] : '';
-          const where = element('button', 'tool-tag', (feature.start + 1) + '..' + (feature.end + 1) + ((feature.strand || 1) > 0 ? ' (+)' : ' (\u2212)') + ', ' + (((feature.end - feature.start + length) % length) + 1) + ' bp');
-          where.type = 'button';
-          where.title = 'Select it on the sequence';
-          where.addEventListener('click', function () {
+          const size = ((feature.end - feature.start + length) % length) + 1;
+          const row = element('tr', 'annotate-trow');
+          row.title = 'Select it on the sequence';
+          const toggle = element('button', 'annotate-toggle', '\u25b8');
+          toggle.type = 'button';
+          toggle.setAttribute('aria-label', 'Properties');
+          const first = element('td');
+          first.append(toggle);
+          row.append(first, element('td', 'annotate-name', feature.name || type), element('td', '', String(feature.start + 1)), element('td', '', String(feature.end + 1)), element('td', '', String(size)), element('td', '', (feature.strand || 1) > 0 ? '+' : '\u2212'));
+          const more = element('tr', 'annotate-more');
+          more.hidden = true;
+          const cell = element('td');
+          cell.colSpan = 6;
+          cell.append(properties(feature, data));
+          more.append(cell);
+          const details = cell.firstChild;
+          details.open = true;
+          details.firstChild.hidden = true;
+          row.addEventListener('click', function (event) {
+            if (event.target === toggle) {
+              more.hidden = !more.hidden;
+              toggle.textContent = more.hidden ? '\u25b8' : '\u25be';
+              return;
+            }
             select(feature.start, feature.end);
           });
-          text.append(name, document.createElement('br'), where);
-          text.append(properties(feature, data));
-          row.append(text);
-          group.append(row);
+          rows.append(row, more);
         });
+        table.append(rows);
+        group.append(table);
         box.append(group);
       });
       return box;

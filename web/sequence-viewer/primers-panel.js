@@ -67,8 +67,14 @@
       return { sequence: String(data.sequence || ''), circular: !!data.circular, data: data, name: data.name || context.fileName || 'sequence' };
     };
 
-    const annotation = function (id, name, start, end, forward, length) {
-      return { id: id, name: name, type: 'primer', start: start % length, end: end % length, forward: forward, strand: forward ? 1 : -1 };
+    // "site" is where the primer binds; its tail (the bases that hang over) and the bases of the primer are drawn by oligo-style.js
+    const annotation = function (id, name, start, end, forward, length, site, bases) {
+      const drawn = { id: id, name: name, type: 'primer', start: start % length, end: end % length, forward: forward, strand: forward ? 1 : -1 };
+      if (site && site.tail) {
+        drawn.tail = site.tail;
+        drawn.bases = String(bases || '').toUpperCase();
+      }
+      return drawn;
     };
 
     const redraw = function () {
@@ -82,7 +88,7 @@
       primers.slice(0, 40).forEach(function (primer) {
         findSitesCached(now.sequence, primer.sequence, now.circular).forEach(function (site, index) {
           const id = 'preview-' + primer.id + '-' + index;
-          previewDrawn[id] = Object.assign(annotation(id, primer.title + ' (candidate)', site.start, site.end - 1, site.forward, now.sequence.length), { color: '#e8890c' });
+          previewDrawn[id] = Object.assign(annotation(id, primer.title + ' (candidate)', site.start, site.end - 1, site.forward, now.sequence.length, site, primer.sequence), { color: '#e8890c' });
         });
       });
       redraw();
@@ -102,7 +108,7 @@
       attachedPrimers.forEach(function (primer) {
         findSitesCached(now.sequence, primer.sequence, now.circular).forEach(function (site, index) {
           const id = 'dbprimer-' + primer.id + '-' + index;
-          attachedDrawn[id] = annotation(id, primer.title, site.start, site.end - 1, site.forward, now.sequence.length);
+          attachedDrawn[id] = annotation(id, primer.title, site.start, site.end - 1, site.forward, now.sequence.length, site, primer.sequence);
         });
       });
       redraw();

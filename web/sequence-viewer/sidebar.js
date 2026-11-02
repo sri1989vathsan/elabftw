@@ -135,6 +135,13 @@
     }
   }
 
+  // Escape closes the overlay
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && panel && !panel.hidden && !event.defaultPrevented) {
+      toggle(false);
+    }
+  });
+
   window.ToolSidebar = {
     register: function (tab) {
       tabs.push(tab);

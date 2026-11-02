@@ -431,6 +431,7 @@ body {
 
 /* the sidebar: a panel and a rail of icons on the right of the sequence */
 #workspace {
+  position: relative;
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
@@ -450,13 +451,22 @@ body {
   background: #f6f8fa;
 }
 
+/* a tool opens as an overlay on top of the editor, next to the rail of icons, and does not take room from the editor */
 #tool-sidebar .tool-panel {
+  position: absolute;
+  z-index: 30;
+  top: 0.5rem;
+  right: 3.6rem;
+  bottom: 0.5rem;
   display: flex;
   flex-direction: column;
-  width: min(25rem, 70vw);
+  width: min(26rem, calc(100vw - 5rem));
   min-height: 0;
-  border-right: 1px solid #d0d4d9;
+  border: 1px solid #d0d4d9;
+  border-radius: 0.8rem;
   background: #fff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
 }
 
 #tool-sidebar .tool-panel[hidden] {
@@ -1701,21 +1711,76 @@ body[data-map-style="dark"] .own-map-feature {
   overflow-wrap: anywhere;
 }
 
-/* oligos (primers, probes) look different from features: a light orange outlined strip with orange italic text, where a
-   feature is a solid purple or blue arrow */
+/* oligos (primers, probes) look different from features: a pale box with the bases as text (oligo-style.js) */
 .vePrimer path {
-  fill: #fff1d6 !important;
-  stroke: #e8890c !important;
-  stroke-width: 1.5px !important;
-  stroke-dasharray: 5 2;
+  fill: #fde8e2 !important;
+  stroke: #e0806a !important;
+  stroke-width: 1px !important;
 }
 
 .vePrimer text,
 .vePrimer .veLabelText {
-  fill: #9a5200 !important;
-  font-style: italic;
+  fill: #8a3b2a !important;
 }
 
 .vePrimer:hover path {
-  fill: #ffe2a8 !important;
+  fill: #fbd5ca !important;
+}
+
+/* the features of the plasmid as a table, one per type */
+#tool-sidebar .annotate-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  margin: 0.2rem 0 0.5rem;
+}
+
+#tool-sidebar .annotate-table th {
+  text-align: left;
+  font-weight: 500;
+  color: #6b7480;
+  padding: 0.15rem 0.3rem;
+  border-bottom: 1px solid #dde2e8;
+}
+
+#tool-sidebar .annotate-table td {
+  padding: 0.2rem 0.3rem;
+  border-bottom: 1px solid #eef1f5;
+}
+
+#tool-sidebar .annotate-trow {
+  cursor: pointer;
+}
+
+#tool-sidebar .annotate-trow:hover {
+  background: #f3f6fa;
+}
+
+#tool-sidebar .annotate-name {
+  font-weight: 600;
+}
+
+#tool-sidebar .annotate-toggle {
+  border: 0;
+  background: transparent;
+  padding: 0 0.2rem;
+  color: #6b7480;
+  cursor: pointer;
+}
+
+/* the overhang of an oligo: the bases that do not bind, drawn lighter and in bold */
+.vePrimer .oligo-tail {
+  fill: #b5482f !important;
+  font-weight: 700;
+}
+
+#tool-sidebar .annotate-table th:nth-child(1),
+#tool-sidebar .annotate-table td:nth-child(1) {
+  width: 1.6rem;
+}
+
+#tool-sidebar .annotate-table th:nth-child(n + 3),
+#tool-sidebar .annotate-table td:nth-child(n + 3) {
+  width: 3.2rem;
 }
