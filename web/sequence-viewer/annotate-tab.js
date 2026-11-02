@@ -48,6 +48,8 @@
     let panel = null;
     let found = null;
     let message = '';
+    // the tab that is shown: the features that are on the plasmid, or the search for new ones
+    let subTab = 'current';
 
     const select = function (start, end) {
       editor.updateEditor({ selectionLayer: { start: start, end: end } });
@@ -230,11 +232,80 @@
       return wrap;
     }
 
+    // the features of the plasmid, grouped by their type (a group can be folded), in the order of the sequence
+    function currentFeatures() {
+      const box = element('div', 'annotate-current');
+      const data = editor.getState().sequenceData;
+      const length = data.sequence.length;
+      const all = listOf(data.features).filter(function (feature) {
+        return String(feature.type || '').toLowerCase() !== 'source';
+      });
+      if (all.length === 0) {
+        box.append(element('p', 'tool-muted', 'The plasmid has no features yet. Find them in the other tab.'));
+        return box;
+      }
+      const groups = new Map();
+      all.forEach(function (feature) {
+        const type = String(feature.type || 'misc_feature');
+        if (!groups.has(type)) {
+          groups.set(type, []);
+        }
+        groups.get(type).push(feature);
+      });
+      Array.from(groups.keys()).sort(function (a, b) {
+        return a.localeCompare(b);
+      }).forEach(function (type) {
+        const list = groups.get(type).slice().sort(function (a, b) {
+          return a.start - b.start;
+        });
+        const group = element('details', 'annotate-group');
+        group.open = true;
+        group.append(element('summary', 'tool-muted', type + ' (' + list.length + ')'));
+        list.forEach(function (feature) {
+          const row = element('div', 'tool-card annotate-row');
+          const text = element('span', 'annotate-text');
+          const name = element('strong', '', feature.name || type);
+          const note = feature.notes && Object.values(feature.notes)[0];
+          name.title = Array.isArray(note) ? note[0] : '';
+          const where = element('button', 'tool-tag', (feature.start + 1) + '..' + (feature.end + 1) + ((feature.strand || 1) > 0 ? ' (+)' : ' (\u2212)') + ', ' + (((feature.end - feature.start + length) % length) + 1) + ' bp');
+          where.type = 'button';
+          where.title = 'Select it on the sequence';
+          where.addEventListener('click', function () {
+            select(feature.start, feature.end);
+          });
+          text.append(name, document.createElement('br'), where);
+          row.append(text);
+          group.append(row);
+        });
+        box.append(group);
+      });
+      return box;
+    }
+
     function render() {
       if (!panel || window.ToolSidebar.active() !== 'annotate') {
         return;
       }
       panel.textContent = '';
+      const count = listOf(editor.getState().sequenceData.features).filter(function (feature) {
+        return String(feature.type || '').toLowerCase() !== 'source';
+      }).length;
+      const subTabs = element('div', 'primers-subtabs');
+      [['current', 'On the plasmid (' + count + ')'], ['find', 'Find and add']].forEach(function (tabDef) {
+        const button = element('button', 'primers-subtab' + (subTab === tabDef[0] ? ' active' : ''), tabDef[1]);
+        button.type = 'button';
+        button.setAttribute('aria-pressed', subTab === tabDef[0] ? 'true' : 'false');
+        button.addEventListener('click', function () {
+          subTab = tabDef[0];
+          render();
+        });
+        subTabs.append(button);
+      });
+      panel.append(subTabs);
+      if (subTab === 'current') {
+        panel.append(currentFeatures());
+        return;
+      }
       panel.append(element('p', 'digest-help', 'Finds the common features of this sequence (resistance genes, origins, promoters, tags, reporters ...) and adds the ones you choose to its features.'));
       const run1 = element('button', 'tool-btn tool-btn-primary', found ? 'Find again' : 'Find the features');
       run1.type = 'button';
@@ -257,6 +328,7 @@
       panel = host;
       found = null;
       message = '';
+      subTab = 'current';
       render();
     } });
   }
