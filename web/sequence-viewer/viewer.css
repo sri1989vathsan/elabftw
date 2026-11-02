@@ -2084,3 +2084,10 @@ body.hide-seq-orfs .veRowView .veRowViewOrfsContainer {
   grid-template-columns: 1fr 1fr;
   gap: 0.6rem;
 }
+
+#tool-sidebar .oligo-replace {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #55606f;
+}

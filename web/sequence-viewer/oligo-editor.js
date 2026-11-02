@@ -228,6 +228,53 @@
       save.disabled = !owner || entry.locked;
     });
 
+    // a copy in the Database: a new primer with these bases, attached to this plasmid; the old one can leave the plasmid
+    const copy = element('button', 'tool-btn', 'Save as new primer');
+    copy.type = 'button';
+    copy.title = 'Make a new primer in the Database with this name and these bases';
+    const replace = element('input');
+    replace.type = 'checkbox';
+    replace.checked = !owner;
+    const replaceLabel = element('label', 'oligo-replace', ' Take the old primer off this plasmid');
+    replaceLabel.prepend(replace);
+    copy.addEventListener('click', async function () {
+      const now = state();
+      const entryId = Number(document.body.dataset.entry);
+      if (!name.value.trim() || now.sequence.length === 0) {
+        message.textContent = 'A name and some bases are needed.';
+        message.className = 'tool-message error';
+        return;
+      }
+      if (name.value.trim() === entry.title) {
+        message.textContent = 'Give the new primer a name of its own.';
+        message.className = 'tool-message error';
+        return;
+      }
+      copy.disabled = true;
+      message.textContent = 'Saving...';
+      message.className = 'tool-message';
+      try {
+        const id = await tools.createPrimer(name.value.trim(), now.sequence, now.forward, null);
+        if (entryId) {
+          await tools.attach(entryId, id);
+          if (replace.checked) {
+            await tools.detach(entryId, target.id);
+          }
+        }
+        if (window.PrimerPanel && window.PrimerPanel.reload) {
+          await window.PrimerPanel.reload();
+        }
+        target = { id: id };
+        message.textContent = 'A new primer was made in the Database and attached to this plasmid' + (replace.checked ? ', the old one is off it.' : '.');
+        await render();
+        return;
+      } catch (error) {
+        message.textContent = error.message || String(error);
+        message.className = 'tool-message error';
+      }
+      copy.disabled = false;
+    });
+
     const strand = element('div', 'oligo-strand');
     const forwardLabel = element('label', '', ' Forward');
     forwardLabel.prepend(strandForward);
@@ -252,7 +299,8 @@
       element('div', 'tool-actions'),
       message
     );
-    host.querySelector('.tool-actions').append(save, fit, open);
+    host.querySelector('.tool-actions').append(save, copy, fit, open);
+    host.append(replaceLabel);
   }
 
   function setup() {
