@@ -40,10 +40,61 @@
   };
 
   // ---- the list page: a tab "My planned" with the planned entries and a form to plan one
+  // the switch between All entries (the registered Database) and My entries (everything of the user, the ones without a number
+  // included): it sets or removes planned=1 in the address and keeps the module and the folder
+  function viewSwitch(nav) {
+    const params = new URLSearchParams(location.search);
+    const mine = params.get('planned') === '1';
+    const box = element('div', 'btn-group btn-group-sm view-switch mt-2');
+    box.setAttribute('role', 'group');
+    box.setAttribute('aria-label', 'Which entries');
+    const go = function (wantMine) {
+      const next = new URLSearchParams(location.search);
+      if (wantMine) {
+        next.set('planned', '1');
+      } else {
+        next.delete('planned');
+      }
+      location.search = next.toString();
+    };
+    [['All entries', false, 'The Database: the registered entries of everyone'], ['My entries', true, 'Everything of yours, with the entries that have no number yet (planned and intermediates)']].forEach(function (item) {
+      const b = element('button', 'btn btn-outline-primary' + (mine === item[1] ? ' active' : ''), item[0]);
+      b.type = 'button';
+      b.title = item[2];
+      b.setAttribute('aria-pressed', mine === item[1] ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        if (mine !== item[1]) {
+          go(item[1]);
+        }
+      });
+      box.append(b);
+    });
+    nav.insertAdjacentElement('beforebegin', box);
+    // the links of the modules and of the folders keep the choice
+    if (mine) {
+      const keep = function (link) {
+        const url = new URL(link.getAttribute('href'), location.href);
+        if (/registry\.php$/.test(url.pathname) && !url.searchParams.has('planned') && !url.searchParams.has('id')) {
+          url.searchParams.set('planned', '1');
+          link.setAttribute('href', url.pathname.replace(/^\//, '') + url.search);
+        }
+      };
+      nav.querySelectorAll('a[href]').forEach(keep);
+      const rewrite = function () {
+        document.querySelectorAll('#foldersPanel a[href]').forEach(keep);
+      };
+      rewrite();
+      document.addEventListener('elabftw:folders-panel-loaded', rewrite);
+      new MutationObserver(rewrite).observe(document.body, { childList: true, subtree: true });
+    }
+    return mine;
+  }
+
   async function listPage(nav) {
-    const tab = element('button', 'category-nav-item planned-tab', 'My entries');
+    viewSwitch(nav);
+    const tab = element('button', 'category-nav-item planned-tab', 'Plan / register');
     tab.type = 'button';
-    tab.title = 'All your entries, with the ones that have no number yet (planned, ordered, being made, intermediates) first. Only you see those.';
+    tab.title = 'Plan something, add an intermediate, or register or move your entries that have no number yet';
     nav.append(tab);
     const panel = element('div', 'planned-panel card card-body my-2');
     panel.hidden = true;
