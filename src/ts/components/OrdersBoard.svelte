@@ -1853,7 +1853,7 @@
       ></div>
 
       <div class="orders-resource-picker mb-2">
-        {#if selectedResources.length > 0 || selectedEntries.length > 0}
+        {#if selectedResources.length > 0}
           <div class="mb-1">
             {#each selectedResources as resource (resource.id)}
               <span class="badge badge-info orders-resource-badge mr-1">
@@ -1861,6 +1861,64 @@
                 <button type="button" class="btn-unstyled ml-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeSelectedResource(resource.id)}>&times;</button>
               </span>
             {/each}
+          </div>
+        {/if}
+        <div class="orders-resource-search" use:clickOutside={() => { resourceResults = []; }}>
+          <input
+            class="form-control form-control-sm"
+            type="text"
+            placeholder={t('Link an existing resource… (optional)')}
+            bind:value={resourceQuery}
+            on:input={searchResource}
+          />
+          {#if searchingResource}
+            <div class="orders-resource-results orders-muted small p-2">{t('Searching')}…</div>
+          {:else if resourceResults.length > 0}
+            <ul class="orders-resource-results">
+              {#each resourceResults as resource (resource.id)}
+                <li>
+                  <button type="button" class="btn-unstyled orders-resource-result" on:click={() => pickResource(resource)}>
+                    {resource.title}
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+        {#each pendingNewResources as pending, index (index)}
+          <div class="d-flex align-items-center mt-1 flex-wrap orders-pending-resource">
+            <input
+              class="form-control form-control-sm mr-2 mb-1"
+              type="text"
+              maxlength="255"
+              placeholder={t('New resource title…')}
+              bind:value={pending.title}
+            />
+            <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.template} title={t('Start from a template (optional)')}>
+              <option value={null}>{t('No template')}</option>
+              {#each templates as template (template.id)}
+                <option value={template.id}>{template.title}</option>
+              {/each}
+            </select>
+            <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.category} disabled={pending.template !== null} title={t('Category (ignored if a template is picked)')}>
+              <option value={null}>{t('No category')}</option>
+              {#each categories as category (category.id)}
+                <option value={category.id}>{category.title}</option>
+              {/each}
+            </select>
+            <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button mb-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removePendingNewResource(index)}>
+              <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+            </button>
+          </div>
+        {/each}
+        <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={addPendingNewResource}>
+          <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add a new resource instead')}
+        </button>
+      </div>
+
+      <div class="orders-resource-picker mb-2">
+        {#if selectedEntries.length > 0}
+          <div class="mb-1">
             {#each selectedEntries as entry (entry.id)}
               <span class="badge badge-info orders-resource-badge mr-1">
                 <i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i><a href={`registry.php?mode=view&id=${entry.id}`} target="_blank" rel="noopener noreferrer" title={t('Open in the database')}>{entry.title}</a>
@@ -2279,7 +2337,7 @@
                 >{@html editNotesInitial}</div>
 
                 <div class="orders-resource-picker mb-2">
-                  {#if editSelectedResources.length > 0 || editSelectedEntries.length > 0}
+                  {#if editSelectedResources.length > 0}
                     <div class="mb-1">
                       {#each editSelectedResources as resource (resource.id)}
                         <span class="badge badge-info orders-resource-badge mr-1">
@@ -2287,6 +2345,64 @@
                           <button type="button" class="btn-unstyled ml-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEditSelectedResource(resource.id)}>&times;</button>
                         </span>
                       {/each}
+                    </div>
+                  {/if}
+                  <div class="orders-resource-search" use:clickOutside={() => { editResourceResults = []; }}>
+                    <input
+                      class="form-control form-control-sm"
+                      type="text"
+                      placeholder={t('Link an existing resource… (optional)')}
+                      bind:value={editResourceQuery}
+                      on:input={searchEditResource}
+                    />
+                    {#if editSearchingResource}
+                      <div class="orders-resource-results orders-muted small p-2">{t('Searching')}…</div>
+                    {:else if editResourceResults.length > 0}
+                      <ul class="orders-resource-results">
+                        {#each editResourceResults as resource (resource.id)}
+                          <li>
+                            <button type="button" class="btn-unstyled orders-resource-result" on:click={() => pickEditResource(resource)}>
+                              {resource.title}
+                            </button>
+                          </li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  </div>
+                  {#each editPendingNewResources as pending, index (index)}
+                    <div class="d-flex align-items-center mt-1 flex-wrap orders-pending-resource">
+                      <input
+                        class="form-control form-control-sm mr-2 mb-1"
+                        type="text"
+                        maxlength="255"
+                        placeholder={t('New resource title…')}
+                        bind:value={pending.title}
+                      />
+                      <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.template} title={t('Start from a template (optional)')}>
+                        <option value={null}>{t('No template')}</option>
+                        {#each templates as template (template.id)}
+                          <option value={template.id}>{template.title}</option>
+                        {/each}
+                      </select>
+                      <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.category} disabled={pending.template !== null} title={t('Category (ignored if a template is picked)')}>
+                        <option value={null}>{t('No category')}</option>
+                        {#each categories as category (category.id)}
+                          <option value={category.id}>{category.title}</option>
+                        {/each}
+                      </select>
+                      <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button mb-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEditPendingNewResource(index)}>
+                        <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
+                      </button>
+                    </div>
+                  {/each}
+                  <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={addEditPendingNewResource}>
+                    <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add a new resource instead')}
+                  </button>
+                </div>
+
+                <div class="orders-resource-picker mb-2">
+                  {#if editSelectedEntries.length > 0}
+                    <div class="mb-1">
                       {#each editSelectedEntries as entry (entry.id)}
                         <span class="badge badge-info orders-resource-badge mr-1">
                           <i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i><a href={`registry.php?mode=view&id=${entry.id}`} target="_blank" rel="noopener noreferrer" title={t('Open in the database')}>{entry.title}</a>
