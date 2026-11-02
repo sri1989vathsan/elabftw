@@ -102,6 +102,7 @@ final class Orders extends AbstractRest
         $title = $this->getTitle($reqBody['title'] ?? '');
         $notes = $this->getNotes($reqBody['notes'] ?? null);
         $itemIds = $this->getItemIds($reqBody['item_ids'] ?? null);
+        $inventoryIds = $this->getInventoryIds($reqBody['inventory_ids'] ?? null);
         // status is optional -- a plain order starts 'requested' (the column
         // default) same as always; the only other choice at creation time is
         // marking it 'pinned_all' up front, since that's known at the moment
@@ -146,10 +147,13 @@ final class Orders extends AbstractRest
         $labcollectorType = $this->getLabCollectorType($reqBody['labcollector_type'] ?? null);
         $labcollectorId = $this->getLabCollectorId($reqBody['labcollector_id'] ?? null);
 
-        if (!empty($itemIds) || $labcollectorType !== null) {
+        if (!empty($itemIds) || !empty($inventoryIds) || $labcollectorType !== null) {
             $this->setId($orderId);
             if (!empty($itemIds)) {
                 $this->replaceItems($itemIds);
+            }
+            if (!empty($inventoryIds)) {
+                $this->replaceInventory($inventoryIds);
             }
             if ($labcollectorType !== null) {
                 $this->updateLabCollectorLink($labcollectorType, $labcollectorId);
@@ -184,10 +188,14 @@ final class Orders extends AbstractRest
         $newId = (int) $this->Db->lastInsertId();
 
         $itemIds = array_map(static fn(array $item): int => (int) $item['id'], $source['items']);
-        if (!empty($itemIds) || $source['labcollector_type'] !== null) {
+        $inventoryIds = array_map(static fn(array $entry): int => (int) $entry['id'], $source['inventory'] ?? array());
+        if (!empty($itemIds) || !empty($inventoryIds) || $source['labcollector_type'] !== null) {
             $this->setId($newId);
             if (!empty($itemIds)) {
                 $this->replaceItems($itemIds);
+            }
+            if (!empty($inventoryIds)) {
+                $this->replaceInventory($inventoryIds);
             }
             if ($source['labcollector_type'] !== null) {
                 $this->updateLabCollectorLink($source['labcollector_type'], $source['labcollector_id']);
@@ -473,6 +481,12 @@ final class Orders extends AbstractRest
                     WHERE oi.order_id = o.id
                 ), JSON_ARRAY()) AS items,
                 COALESCE((
+                    SELECT JSON_ARRAYAGG(JSON_OBJECT("id", inv.id, "title", inv.title))
+                    FROM entity_order_links AS el
+                    INNER JOIN inventory AS inv ON inv.id = el.entity_id AND inv.state = 1
+                    WHERE el.order_id = o.id AND el.entity_type = "inventory"
+                ), JSON_ARRAY()) AS inventory,
+                COALESCE((
                     SELECT JSON_ARRAYAGG(JSON_OBJECT(
                         "id", upload.id,
                         "real_name", upload.real_name,
@@ -504,6 +518,7 @@ final class Orders extends AbstractRest
         $order['pinned'] = (bool) $order['pinned'];
         $order['common'] = (bool) $order['common'];
         $order['items'] = json_decode((string) $order['items'], true, 512, JSON_THROW_ON_ERROR);
+        $order['inventory'] = json_decode((string) $order['inventory'], true, 512, JSON_THROW_ON_ERROR);
         $uploads = json_decode((string) $order['uploads'], true, 512, JSON_THROW_ON_ERROR);
         foreach ($uploads as &$upload) {
             $upload['id'] = (int) $upload['id'];
@@ -595,6 +610,12 @@ final class Orders extends AbstractRest
                 throw new ImproperActionException('Only the author or a team admin can edit this order.');
             }
             $this->replaceItems($this->getItemIds($params['item_ids']));
+        }
+        if (array_key_exists('inventory_ids', $params)) {
+            if (!$isOwner && !$this->Users->isAdmin) {
+                throw new ImproperActionException('Only the author or a team admin can edit this order.');
+            }
+            $this->replaceInventory($this->getInventoryIds($params['inventory_ids']));
         }
         if (array_key_exists('labcollector_type', $params) || array_key_exists('labcollector_id', $params)) {
             // anyone on the team can register/link an order to LabCollector,
@@ -799,6 +820,50 @@ final class Orders extends AbstractRest
             $insReq->bindValue(':item_id', $itemId, PDO::PARAM_INT);
             $this->Db->execute($insReq);
         }
+    }
+
+    // the entries of the database linked to the order: the whole set is replaced, like the linked resources
+    private function replaceInventory(array $entryIds): void
+    {
+        $delReq = $this->Db->prepare('DELETE FROM entity_order_links WHERE order_id = :order_id AND entity_type = \'inventory\'');
+        $delReq->bindParam(':order_id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($delReq);
+
+        $insReq = $this->Db->prepare('INSERT IGNORE INTO entity_order_links (entity_type, entity_id, order_id) VALUES (\'inventory\', :entry_id, :order_id)');
+        foreach ($entryIds as $entryId) {
+            $insReq->bindParam(':order_id', $this->id, PDO::PARAM_INT);
+            $insReq->bindValue(':entry_id', $entryId, PDO::PARAM_INT);
+            $this->Db->execute($insReq);
+        }
+    }
+
+    /** @return list<int> */
+    private function getInventoryIds(mixed $value): array
+    {
+        if ($value === null) {
+            return array();
+        }
+        if (!is_array($value)) {
+            throw new ImproperActionException('Invalid list of entries.');
+        }
+        $entryIds = array_values(array_unique(array_map(static function (mixed $v): int {
+            $entryId = filter_var($v, FILTER_VALIDATE_INT);
+            if ($entryId === false) {
+                throw new ImproperActionException('Invalid entry.');
+            }
+            return $entryId;
+        }, $value)));
+        if (empty($entryIds)) {
+            return array();
+        }
+        $placeholders = implode(',', array_fill(0, count($entryIds), '?'));
+        $req = $this->Db->prepare("SELECT id FROM inventory WHERE team = ? AND state = 1 AND id IN ({$placeholders})");
+        $req->execute(array($this->Users->team, ...$entryIds));
+        $found = array_map(static fn(array $row): int => (int) $row['id'], $req->fetchAll());
+        if (count($found) !== count($entryIds)) {
+            throw new ImproperActionException('One or more entries of the database could not be found.');
+        }
+        return $entryIds;
     }
 
     private function getLabCollectorType(mixed $value): ?string

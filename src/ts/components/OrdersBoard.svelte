@@ -40,6 +40,18 @@
     title: string;
   };
 
+  // an entry of the database linked to an order
+  type LinkedEntry = {
+    id: number;
+    title: string;
+  };
+
+  // a new entry of the database made from the order form: a title and the module (category) it is in
+  type PendingEntry = {
+    title: string;
+    category: number | null;
+  };
+
   type OrderItem = {
     id: number;
     title: string;
@@ -55,6 +67,7 @@
     userid: number;
     author_fullname: string;
     items: LinkedItem[];
+    inventory: LinkedEntry[];
     uploads: OrderUpload[];
     labcollector_type: string | null;
     labcollector_id: string | null;
@@ -260,6 +273,15 @@
   let pendingNewResources: PendingResource[] = [];
   let resourceSearchTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // the entries of the database linked to the order (new-order form): searched and picked, or made on the fly in a module
+  let modules: Category[] = [];
+  let entryQuery = '';
+  let entryResults: LinkedEntry[] = [];
+  let searchingEntry = false;
+  let selectedEntries: LinkedEntry[] = [];
+  let pendingNewEntries: PendingEntry[] = [];
+  let entrySearchTimeout: ReturnType<typeof setTimeout> | null = null;
+
   // editing an existing order: same resource-link idea as the new-order
   // form, but kept in its own state so it never interferes with it
   let editingItemId: number | null = null;
@@ -280,6 +302,12 @@
   let editSelectedResources: ResourceResult[] = [];
   let editPendingNewResources: PendingResource[] = [];
   let editResourceSearchTimeout: ReturnType<typeof setTimeout> | null = null;
+  let editEntryQuery = '';
+  let editEntryResults: LinkedEntry[] = [];
+  let editSearchingEntry = false;
+  let editSelectedEntries: LinkedEntry[] = [];
+  let editPendingNewEntries: PendingEntry[] = [];
+  let editEntrySearchTimeout: ReturnType<typeof setTimeout> | null = null;
   let savingEdit = false;
 
   const COMMENT_PAGE_SIZE = 5;
@@ -648,6 +676,88 @@
     pendingNewResources = pendingNewResources.filter((_, i) => i !== index);
   }
 
+  // the entries of the database: searched by their name, picked, or made from the form in a chosen module
+  function searchEntries(query: string, done: (found: LinkedEntry[]) => void, searching: (on: boolean) => void): ReturnType<typeof setTimeout> | null {
+    const text = query.trim();
+    if (text === '') {
+      done([]);
+      return null;
+    }
+    return setTimeout(async () => {
+      searching(true);
+      try {
+        done(await ApiC.getJson(`inventory?q=${encodeURIComponent(text)}&limit=8`) as LinkedEntry[]);
+      } catch (error) {
+        notify.error(error instanceof Error ? error.message : 'Could not search the database.');
+      } finally {
+        searching(false);
+      }
+    }, 250);
+  }
+
+  function searchEntry(): void {
+    if (entrySearchTimeout) clearTimeout(entrySearchTimeout);
+    entrySearchTimeout = searchEntries(entryQuery, found => { entryResults = found; }, on => { searchingEntry = on; });
+  }
+
+  function pickEntry(entry: LinkedEntry): void {
+    if (!selectedEntries.some(e => e.id === entry.id)) {
+      selectedEntries = [...selectedEntries, { id: entry.id, title: entry.title }];
+    }
+    entryQuery = '';
+    entryResults = [];
+  }
+
+  function removeSelectedEntry(id: number): void {
+    selectedEntries = selectedEntries.filter(e => e.id !== id);
+  }
+
+  function addPendingNewEntry(): void {
+    pendingNewEntries = [...pendingNewEntries, { title: '', category: null }];
+  }
+
+  function removePendingNewEntry(index: number): void {
+    pendingNewEntries = pendingNewEntries.filter((_, i) => i !== index);
+  }
+
+  function searchEditEntry(): void {
+    if (editEntrySearchTimeout) clearTimeout(editEntrySearchTimeout);
+    editEntrySearchTimeout = searchEntries(editEntryQuery, found => { editEntryResults = found; }, on => { editSearchingEntry = on; });
+  }
+
+  function pickEditEntry(entry: LinkedEntry): void {
+    if (!editSelectedEntries.some(e => e.id === entry.id)) {
+      editSelectedEntries = [...editSelectedEntries, { id: entry.id, title: entry.title }];
+    }
+    editEntryQuery = '';
+    editEntryResults = [];
+  }
+
+  function removeEditSelectedEntry(id: number): void {
+    editSelectedEntries = editSelectedEntries.filter(e => e.id !== id);
+  }
+
+  function addEditPendingNewEntry(): void {
+    editPendingNewEntries = [...editPendingNewEntries, { title: '', category: null }];
+  }
+
+  function removeEditPendingNewEntry(index: number): void {
+    editPendingNewEntries = editPendingNewEntries.filter((_, i) => i !== index);
+  }
+
+  // one new entry of the database, in the chosen module
+  async function createPendingEntry(pending: PendingEntry): Promise<number> {
+    return ApiC.post2location('inventory', { title: pending.title.trim(), category: pending.category });
+  }
+
+  async function loadModules(): Promise<void> {
+    try {
+      modules = await ApiC.getJson(`${Model.Team}/current/registry_categories`) as Category[];
+    } catch {
+      // without the list of modules a new entry is made without one
+    }
+  }
+
   async function loadCategories(): Promise<void> {
     try {
       categories = await ApiC.getJson(`${Model.Team}/current/resources_categories`) as Category[];
@@ -678,9 +788,10 @@
     submitting = true;
     try {
       const itemIds = selectedResources.map(r => r.id);
-      for (const pending of pendingNewResources) {
+      const entryIds = selectedEntries.map(e => e.id);
+      for (const pending of pendingNewEntries) {
         if (pending.title.trim() === '') continue;
-        itemIds.push(await createPendingResource(pending));
+        entryIds.push(await createPendingEntry(pending));
       }
       let notesHtml = (newNotesEl?.innerHTML ?? '').trim();
       const orderId = await ApiC.post2location(Model.Order, {
@@ -689,6 +800,7 @@
         // fixed up right below once each one is actually uploaded
         notes: notesHtml === '' ? null : notesHtml,
         item_ids: itemIds,
+        inventory_ids: entryIds,
         status: newIsReference ? 'pinned_all' : (newIsMyReference ? 'my_reference' : undefined),
         userid: newForUserid ?? undefined,
         common: newIsCommon,
@@ -743,6 +855,8 @@
       newLabcollectorId = null;
       selectedResources = [];
       pendingNewResources = [];
+      selectedEntries = [];
+      pendingNewEntries = [];
       pendingNoteImages = [];
       await load();
     } catch (error) {
@@ -884,6 +998,10 @@
     editResourceResults = [];
     editPendingNewResources = [];
     editSelectedResources = item.items.map(i => ({ id: i.id, title: i.title }));
+    editEntryQuery = '';
+    editEntryResults = [];
+    editPendingNewEntries = [];
+    editSelectedEntries = (item.inventory ?? []).map(e => ({ id: e.id, title: e.title }));
   }
 
   function cancelEdit(): void {
@@ -934,15 +1052,17 @@
     savingEdit = true;
     try {
       const itemIds = editSelectedResources.map(r => r.id);
-      for (const pending of editPendingNewResources) {
+      const entryIds = editSelectedEntries.map(e => e.id);
+      for (const pending of editPendingNewEntries) {
         if (pending.title.trim() === '') continue;
-        itemIds.push(await createPendingResource(pending));
+        entryIds.push(await createPendingEntry(pending));
       }
       const notesHtml = (editNotesEl?.innerHTML ?? '').trim();
       await ApiC.patch(`${Model.Order}/${item.id}`, {
         title: editTitle.trim(),
         notes: notesHtml === '' ? null : notesHtml,
         item_ids: itemIds,
+        inventory_ids: entryIds,
         common: editIsCommon,
         // a personal Reference always stays with its author, so no owner change goes with it
         userid: editPinKind === 'my_reference' ? undefined : editForUserid,
@@ -1025,6 +1145,7 @@
     newTitle = item.title;
     if (newNotesEl) newNotesEl.innerHTML = item.notes ?? '';
     selectedResources = item.items.map(linkedItem => ({ id: linkedItem.id, title: linkedItem.title }));
+    selectedEntries = (item.inventory ?? []).map(e => ({ id: e.id, title: e.title }));
     newIsCommon = item.common;
     newIsReference = false;
     newIsMyReference = false;
@@ -1630,6 +1751,7 @@
     void loadTeamMembers();
     void loadCategories();
     void loadTemplates();
+    void loadModules();
     void loadTeamSettings();
 
     // A status change isn't always driven by someone looking at this page
@@ -1731,7 +1853,7 @@
       ></div>
 
       <div class="orders-resource-picker mb-2">
-        {#if selectedResources.length > 0}
+        {#if selectedResources.length > 0 || selectedEntries.length > 0}
           <div class="mb-1">
             {#each selectedResources as resource (resource.id)}
               <span class="badge badge-info orders-resource-badge mr-1">
@@ -1739,58 +1861,58 @@
                 <button type="button" class="btn-unstyled ml-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeSelectedResource(resource.id)}>&times;</button>
               </span>
             {/each}
+            {#each selectedEntries as entry (entry.id)}
+              <span class="badge badge-info orders-resource-badge mr-1">
+                <i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i><a href={`registry.php?mode=view&id=${entry.id}`} target="_blank" rel="noopener noreferrer" title={t('Open in the database')}>{entry.title}</a>
+                <button type="button" class="btn-unstyled ml-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeSelectedEntry(entry.id)}>&times;</button>
+              </span>
+            {/each}
           </div>
         {/if}
-        <div class="orders-resource-search" use:clickOutside={() => { resourceResults = []; }}>
+        <div class="orders-resource-search" use:clickOutside={() => { entryResults = []; }}>
           <input
             class="form-control form-control-sm"
             type="text"
-            placeholder={t('Link an existing resource… (optional)')}
-            bind:value={resourceQuery}
-            on:input={searchResource}
+            placeholder={t('Link an entry of the database… (optional)')}
+            bind:value={entryQuery}
+            on:input={searchEntry}
           />
-          {#if searchingResource}
+          {#if searchingEntry}
             <div class="orders-resource-results orders-muted small p-2">{t('Searching')}…</div>
-          {:else if resourceResults.length > 0}
+          {:else if entryResults.length > 0}
             <ul class="orders-resource-results">
-              {#each resourceResults as resource (resource.id)}
+              {#each entryResults as entry (entry.id)}
                 <li>
-                  <button type="button" class="btn-unstyled orders-resource-result" on:click={() => pickResource(resource)}>
-                    {resource.title}
+                  <button type="button" class="btn-unstyled orders-resource-result" on:click={() => pickEntry(entry)}>
+                    {entry.title}
                   </button>
                 </li>
               {/each}
             </ul>
           {/if}
         </div>
-        {#each pendingNewResources as pending, index (index)}
+        {#each pendingNewEntries as pending, index (index)}
           <div class="d-flex align-items-center mt-1 flex-wrap orders-pending-resource">
             <input
               class="form-control form-control-sm mr-2 mb-1"
               type="text"
               maxlength="255"
-              placeholder={t('New resource title…')}
+              placeholder={t('New entry title…')}
               bind:value={pending.title}
             />
-            <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.template} title={t('Start from a template (optional)')}>
-              <option value={null}>{t('No template')}</option>
-              {#each templates as template (template.id)}
-                <option value={template.id}>{template.title}</option>
+            <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.category} title={t('Module of the database')}>
+              <option value={null}>{t('No module')}</option>
+              {#each modules as module (module.id)}
+                <option value={module.id}>{module.title}</option>
               {/each}
             </select>
-            <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.category} disabled={pending.template !== null} title={t('Category (ignored if a template is picked)')}>
-              <option value={null}>{t('No category')}</option>
-              {#each categories as category (category.id)}
-                <option value={category.id}>{category.title}</option>
-              {/each}
-            </select>
-            <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button mb-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removePendingNewResource(index)}>
+            <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button mb-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removePendingNewEntry(index)}>
               <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
             </button>
           </div>
         {/each}
-        <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={addPendingNewResource}>
-          <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add a new resource instead')}
+        <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={addPendingNewEntry}>
+          <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add a new entry of the database instead')}
         </button>
       </div>
 
@@ -2157,7 +2279,7 @@
                 >{@html editNotesInitial}</div>
 
                 <div class="orders-resource-picker mb-2">
-                  {#if editSelectedResources.length > 0}
+                  {#if editSelectedResources.length > 0 || editSelectedEntries.length > 0}
                     <div class="mb-1">
                       {#each editSelectedResources as resource (resource.id)}
                         <span class="badge badge-info orders-resource-badge mr-1">
@@ -2165,58 +2287,58 @@
                           <button type="button" class="btn-unstyled ml-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEditSelectedResource(resource.id)}>&times;</button>
                         </span>
                       {/each}
+                      {#each editSelectedEntries as entry (entry.id)}
+                        <span class="badge badge-info orders-resource-badge mr-1">
+                          <i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i><a href={`registry.php?mode=view&id=${entry.id}`} target="_blank" rel="noopener noreferrer" title={t('Open in the database')}>{entry.title}</a>
+                          <button type="button" class="btn-unstyled ml-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEditSelectedEntry(entry.id)}>&times;</button>
+                        </span>
+                      {/each}
                     </div>
                   {/if}
-                  <div class="orders-resource-search" use:clickOutside={() => { editResourceResults = []; }}>
+                  <div class="orders-resource-search" use:clickOutside={() => { editEntryResults = []; }}>
                     <input
                       class="form-control form-control-sm"
                       type="text"
-                      placeholder={t('Link an existing resource… (optional)')}
-                      bind:value={editResourceQuery}
-                      on:input={searchEditResource}
+                      placeholder={t('Link an entry of the database… (optional)')}
+                      bind:value={editEntryQuery}
+                      on:input={searchEditEntry}
                     />
-                    {#if editSearchingResource}
+                    {#if editSearchingEntry}
                       <div class="orders-resource-results orders-muted small p-2">{t('Searching')}…</div>
-                    {:else if editResourceResults.length > 0}
+                    {:else if editEntryResults.length > 0}
                       <ul class="orders-resource-results">
-                        {#each editResourceResults as resource (resource.id)}
+                        {#each editEntryResults as entry (entry.id)}
                           <li>
-                            <button type="button" class="btn-unstyled orders-resource-result" on:click={() => pickEditResource(resource)}>
-                              {resource.title}
+                            <button type="button" class="btn-unstyled orders-resource-result" on:click={() => pickEditEntry(entry)}>
+                              {entry.title}
                             </button>
                           </li>
                         {/each}
                       </ul>
                     {/if}
                   </div>
-                  {#each editPendingNewResources as pending, index (index)}
+                  {#each editPendingNewEntries as pending, index (index)}
                     <div class="d-flex align-items-center mt-1 flex-wrap orders-pending-resource">
                       <input
                         class="form-control form-control-sm mr-2 mb-1"
                         type="text"
                         maxlength="255"
-                        placeholder={t('New resource title…')}
+                        placeholder={t('New entry title…')}
                         bind:value={pending.title}
                       />
-                      <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.template} title={t('Start from a template (optional)')}>
-                        <option value={null}>{t('No template')}</option>
-                        {#each templates as template (template.id)}
-                          <option value={template.id}>{template.title}</option>
+                      <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.category} title={t('Module of the database')}>
+                        <option value={null}>{t('No module')}</option>
+                        {#each modules as module (module.id)}
+                          <option value={module.id}>{module.title}</option>
                         {/each}
                       </select>
-                      <select class="form-control form-control-sm mr-2 mb-1 orders-category-select" bind:value={pending.category} disabled={pending.template !== null} title={t('Category (ignored if a template is picked)')}>
-                        <option value={null}>{t('No category')}</option>
-                        {#each categories as category (category.id)}
-                          <option value={category.id}>{category.title}</option>
-                        {/each}
-                      </select>
-                      <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button mb-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEditPendingNewResource(index)}>
+                      <button type="button" class="btn btn-danger-ghost btn-sm orders-icon-button mb-1" title={t('Remove')} aria-label={t('Remove')} on:click={() => removeEditPendingNewEntry(index)}>
                         <i class="fas fa-trash fa-fw" aria-hidden="true"></i>
                       </button>
                     </div>
                   {/each}
-                  <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={addEditPendingNewResource}>
-                    <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add a new resource instead')}
+                  <button type="button" class="btn btn-ghost btn-sm mt-1" on:click={addEditPendingNewEntry}>
+                    <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add a new entry of the database instead')}
                   </button>
                 </div>
 
@@ -2266,6 +2388,9 @@
                 {/if}
                 {#each item.items as linkedItem (linkedItem.id)}
                   <span class="badge badge-info"><i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{linkedItem.title}</span>
+                {/each}
+                {#each item.inventory ?? [] as entry (entry.id)}
+                  <a class="badge badge-info" href={`registry.php?mode=view&id=${entry.id}`} title={t('Open in the database')}><i class="fas fa-box fa-fw mr-1" aria-hidden="true"></i>{entry.title}</a>
                 {/each}
                 {#each orderProcurementGroups(item) as tags (tags.key)}
                   {#if tags.procurement_id || tags.order_number || tags.order_date}
