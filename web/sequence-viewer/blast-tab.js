@@ -44,7 +44,7 @@
     form.action = 'https://blast.ncbi.nlm.nih.gov/Blast.cgi';
     form.target = '_blank';
     form.rel = 'noopener';
-    const fields = { PAGE_TYPE: 'BlastSearch', PROGRAM: program, QUERY: query, DATABASE: program === 'blastx' ? 'nr' : 'nt', CMD: 'Put' };
+    const fields = { PAGE_TYPE: 'BlastSearch', PROGRAM: program, QUERY: query, DATABASE: program === 'blastx' ? 'nr' : 'nt', CMD: 'Put', AUTO_FORMAT: 'Semiauto', FORMAT_TYPE: 'HTML', FORMAT_OBJECT: 'Alignment', SHOW_OVERVIEW: 'on', SHOW_LINKOUT: 'on', ALIGNMENT_VIEW: 'Pairwise' };
     Object.keys(fields).forEach(function (key) {
       const input = document.createElement('input');
       input.type = 'hidden';
