@@ -5,8 +5,8 @@
  */
 (function () {
   'use strict';
-  const HEIGHT = 21;
-  const PAD = 5;
+  const HEIGHT = 17;
+  const PAD = 2;
   const COMPLEMENT = { A: 'T', T: 'A', G: 'C', C: 'G' };
 
   function element(tag, text) {
@@ -31,7 +31,7 @@
 
   // the box of an oligo, from x0 to x1, with a half arrow at its 3' end (the right end for a forward oligo)
   function shape(x0, x1, forward, barb) {
-    const top = barb ? 6 : 3;
+    const top = 3;
     if (!barb) {
       return 'M' + x0 + ',' + top + ' L' + x1 + ',' + top + ' L' + x1 + ',' + HEIGHT + ' L' + x0 + ',' + HEIGHT + ' Z';
     }
@@ -99,11 +99,17 @@
         // the letters of the editor on the line of the sequence, the bases exactly under the bases of the sequence, and the
         // overhang in line with them on the side of the 5' end
         own.setAttribute('x', '0');
-        own.setAttribute('y', forward ? '17' : '12');
+        own.setAttribute('y', forward ? '14' : '11');
         own.setAttribute('textLength', String(w));
         if (insert) {
-          insert.setAttribute('x', String(forward ? x0 - tail * char : x1));
-          insert.setAttribute('y', forward ? '17' : '12');
+          // beside the box when there is room for it on this row, above it when the row ends first
+          const row = g.closest('.veRowItem');
+          const svgBox = g.parentNode.getBoundingClientRect();
+          const rowBox = row ? row.getBoundingClientRect() : null;
+          const room = rowBox ? (forward ? svgBox.left + x0 - rowBox.left : rowBox.right - (svgBox.left + x1)) : Infinity;
+          const above = tail > 0 && room < tail * char;
+          insert.setAttribute('x', String(above ? (forward ? x0 : x1 - tail * char) : (forward ? x0 - tail * char : x1)));
+          insert.setAttribute('y', above ? '-3' : (forward ? '14' : '11'));
           insert.setAttribute('textLength', String(tail * char));
           insert.removeAttribute('transform');
         }
@@ -126,7 +132,7 @@
           });
         }
         text.textContent = bases;
-        text.setAttribute('transform', 'translate(0,' + (forward ? 17 : 12) + ')');
+        text.setAttribute('transform', 'translate(0,' + (forward ? 14 : 11) + ')');
         text.setAttribute('textLength', String(w));
         text.setAttribute('lengthAdjust', 'spacing');
         text.setAttribute('class', 'veLabelText ve-monospace-font oligo-bases');
@@ -139,7 +145,7 @@
             return COMPLEMENT[b];
           }));
           overhang.setAttribute('class', 'veLabelText ve-monospace-font oligo-tail');
-          overhang.setAttribute('transform', 'translate(' + (forward ? -tail * char - gap : w + gap) + ',' + (forward ? 17 : 12) + ')');
+          overhang.setAttribute('transform', 'translate(' + (forward ? -tail * char - gap : w + gap) + ',' + (forward ? 14 : 11) + ')');
           overhang.setAttribute('textLength', String(tail * char));
           overhang.setAttribute('lengthAdjust', 'spacing');
           g.append(overhang);
