@@ -67,7 +67,7 @@ function askCopyFolder(title: string): Promise<{ folder: number; toDatabase: boo
       return label;
     };
     where.append(
-      choice('local', 'Make a local copy: in My entries, only you see it, no number until you register it', true),
+      choice('local', 'Copy for myself: in My entries, only you see it, no number until you register it', true),
       choice('database', 'Copy to the Database: in All entries now, registered with the next number of its module', false),
     );
     box.append(where);

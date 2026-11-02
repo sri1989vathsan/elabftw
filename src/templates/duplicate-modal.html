@@ -21,7 +21,7 @@
       {% if Entity.entityType.value == 'inventory' %}
         {# a local copy stays with the user until it is registered; a copy to the Database is in All entries at once #}
         <div class='mt-2'>
-          <label class='d-block'><input type='radio' name='duplicateWhere' value='local' checked> {{ 'Make a local copy: in My entries, only you see it, no number until you register it'|trans }}</label>
+          <label class='d-block'><input type='radio' name='duplicateWhere' value='local' checked> {{ 'Copy for myself: in My entries, only you see it, no number until you register it'|trans }}</label>
           <label class='d-block'><input type='radio' name='duplicateWhere' value='database'> {{ 'Copy to the Database: in All entries now, registered with the next number of its module'|trans }}</label>
         </div>
         {% if experimentsFoldersArr is defined %}
