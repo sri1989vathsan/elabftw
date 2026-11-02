@@ -216,6 +216,26 @@
       });
     }
 
+    // the open reading frames of the editor's settings (minimum size, other start codons), worked out again only when these change
+    let orfCache = { key: '', orfs: [] };
+    function orfItems(data) {
+      const state = editor.getState();
+      const sequence = String(data.sequence || '');
+      const key = [sequence.length, sequence.slice(0, 40), sequence.slice(-40), !!data.circular, state.minimumOrfSize, state.useAdditionalOrfStartCodons].join('|');
+      if (orfCache.key !== key) {
+        let found = [];
+        try {
+          found = window.sequenceUtils.findOrfsInPlasmid(sequence, !!data.circular, state.minimumOrfSize || 300, !!state.useAdditionalOrfStartCodons, false) || [];
+        } catch (error) {
+          found = [];
+        }
+        orfCache = { key: key, orfs: found.map(function (orf) {
+          return { start: orf.start, end: orf.end, forward: orf.forward !== false, starts: orf.internalStartCodonIndices || [] };
+        }) };
+      }
+      return orfCache.orfs;
+    }
+
     // the translations: those of the editor and the genes (CDS features), with the amino acid of each codon
     const CODE = 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG';
     const BASE_COMPLEMENT = { A: 'T', T: 'A', G: 'C', C: 'G' };
@@ -632,6 +652,51 @@
         }
       }
 
+      // the open reading frames: thin lines inside the translations, in lanes where they overlap, a small tick at each of the other
+      // start codons and an arrowhead where the reading ends
+      if (shown('orfs')) {
+        const orfs = orfItems(data).map(function (orf) {
+          return Object.assign({}, orf);
+        });
+        const lanes = Math.min(8, laneOf(orfs, length));
+        const base = innerEdge - 36 - (shown('translations') ? 16 : 0);
+        orfs.forEach(function (orf) {
+          const r = base - (orf.lane || 0) * 5;
+          if (r < 30 || (orf.lane || 0) >= lanes) {
+            return;
+          }
+          const range = arcOf(orf, length);
+          const large = (range[1] - range[0]) > Math.PI ? 1 : 0;
+          const from = at(r, range[0]);
+          const to = at(r, range[1]);
+          const group = svgElement('g', { class: 'own-map-orf' });
+          const line = svgElement('path', { d: 'M' + from[0].toFixed(1) + ',' + from[1].toFixed(1) + 'A' + r + ',' + r + ' 0 ' + large + ' 1 ' + to[0].toFixed(1) + ',' + to[1].toFixed(1), class: 'own-map-orf-line' });
+          line.append(svgElement('title', {}, 'ORF ' + (orf.start + 1) + '..' + (orf.end + 1) + ' · ' + Math.round(((orf.end >= orf.start ? orf.end - orf.start : orf.end + length - orf.start) + 1) / 3) + ' codons' + (orf.forward ? '' : ' · reverse')));
+          group.append(line);
+          group.append(svgElement('path', { d: line.getAttribute('d'), fill: 'none', stroke: 'transparent', 'stroke-width': 6 }));
+          orf.starts.forEach(function (position) {
+            const a = angleOf(position + 1.5, length);
+            const t1 = at(r - 3, a);
+            const t2 = at(r + 3, a);
+            group.append(svgElement('line', { x1: t1[0], y1: t1[1], x2: t2[0], y2: t2[1], class: 'own-map-orf-tick' }));
+          });
+          const end = orf.forward ? range[1] : range[0];
+          const back = end + (orf.forward ? -1 : 1) * Math.min(0.04, (range[1] - range[0]) / 2);
+          const tip = at(r, end);
+          const upper = at(r + 3.5, back);
+          const lower = at(r - 3.5, back);
+          group.append(svgElement('path', { d: 'M' + tip[0].toFixed(1) + ',' + tip[1].toFixed(1) + 'L' + upper[0].toFixed(1) + ',' + upper[1].toFixed(1) + 'M' + tip[0].toFixed(1) + ',' + tip[1].toFixed(1) + 'L' + lower[0].toFixed(1) + ',' + lower[1].toFixed(1), class: 'own-map-orf-line' }));
+          group.addEventListener('mousedown', function (event) {
+            event.stopPropagation();
+          });
+          group.addEventListener('click', function (event) {
+            event.stopPropagation();
+            select(orf.start, orf.end);
+          });
+          svg.append(group);
+        });
+      }
+
       // the cut sites: a short tick each; a name for a few of them, the others are in the tooltip (the sites that are close
       // share one name)
       const ordered = sites.slice().sort(function (a, b) {
@@ -847,7 +912,7 @@
       }).join(',');
       const primers = Object.keys((state.temporaryAnnotations && state.temporaryAnnotations.primers) || {}).join(',') + listOf(data.primers).length;
       const selection = state.selectionLayer || {};
-      return [sequence.length, sequence.slice(0, 30), features, primers, selection.start, selection.end, state.caretPosition, JSON.stringify(state.restrictionEnzymes), JSON.stringify(state.annotationVisibility && state.annotationVisibility.featureTypesToHide), !!data.circular, host ? host.clientWidth + 'x' + host.clientHeight : '', document.body.dataset.mapStyle, zoom, shown('features'), shown('primers'), shown('sites'), shown('translations'), JSON.stringify(data.translations || null)].join('|');
+      return [sequence.length, sequence.slice(0, 30), features, primers, selection.start, selection.end, state.caretPosition, JSON.stringify(state.restrictionEnzymes), JSON.stringify(state.annotationVisibility && state.annotationVisibility.featureTypesToHide), !!data.circular, host ? host.clientWidth + 'x' + host.clientHeight : '', document.body.dataset.mapStyle, zoom, shown('features'), shown('primers'), shown('sites'), shown('translations'), shown('orfs'), JSON.stringify(data.translations || null)].join('|');
     }
 
     // the map as an SVG file: the styles the map has now are written into the file, so it looks the same elsewhere

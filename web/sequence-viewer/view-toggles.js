@@ -12,6 +12,7 @@
     ['primers', 'Primers', 'Show or hide the primers'],
     ['sites', 'Sites', 'Show or hide the cut sites of the enzymes'],
     ['translations', 'Aa', 'Show or hide the translations (the amino acids of the genes)'],
+    ['orfs', 'ORFs', 'Show or hide the open reading frames'],
   ];
   const STORE = 'sequence-editor-view-toggles';
   let state = { map: {}, seq: {} };
@@ -21,9 +22,25 @@
   } catch (error) {
     state = { map: {}, seq: {} };
   }
+  // the open reading frames start hidden: there are many of them
+  const OFF_AT_FIRST = { orfs: true };
   const get = function (group, key) {
-    return state[group][key] !== false;
+    return state[group][key] === undefined ? !OFF_AT_FIRST[key] : state[group][key];
   };
+
+  // the editor draws the open reading frames when either place asks for them; the other place hides them with a style
+  function syncEditor() {
+    const editor = window.sequenceEditor;
+    if (!editor) {
+      return false;
+    }
+    const wanted = get('map', 'orfs') || get('seq', 'orfs');
+    const now = editor.getState().annotationVisibility || {};
+    if (!!now.orfs !== wanted) {
+      editor.updateEditor({ annotationVisibility: { orfs: wanted } });
+    }
+    return true;
+  }
 
   function apply() {
     ['map', 'seq'].forEach(function (group) {
@@ -44,6 +61,7 @@
       // not remembered
     }
     apply();
+    syncEditor();
     window.dispatchEvent(new CustomEvent('view-toggles', { detail: { group: group, key: key } }));
   }
 
@@ -92,6 +110,12 @@
   }
 
   apply();
+  // the editor is made after this script: its open reading frames are set once it is there
+  const waitForEditor = window.setInterval(function () {
+    if (syncEditor()) {
+      window.clearInterval(waitForEditor);
+    }
+  }, 300);
   new MutationObserver(mount).observe(document.body, { childList: true, subtree: true });
   mount();
 
