@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Elabftw\Elabftw;
 
+use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Storage;
 use Elabftw\Models\Changelog;
 use Elabftw\Models\Inventory;
@@ -43,6 +44,7 @@ use function sprintf;
  * attached to any number of plasmids; where it binds is worked out from the sequence of the plasmid, in the browser.
  *
  * GET ?entry=<id> gives the primers attached to the entry and the entries it is attached to (as a primer).
+ * GET ?list=1 gives every primer and probe the requester can read (id, name, bases, module), for the search on a sequence.
  * GET ?orders=1 gives the open orders of the team, to pick the one a primer is sent to.
  * POST {action: attach|detach, plasmid: <id>, primer: <id>} attaches or detaches; whoever can read both entries can do it,
  * like the storage of an entry.
@@ -169,6 +171,35 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     respond(200, array('ok' => true));
 }
 
+if (isset($_GET['list'])) {
+    // every primer and probe the requester can read, with only what the search needs (name, bases, module), in one request: the
+    // search on the sequence is done in the browser and there can be many thousands of them
+    $canFilter = new CanSqlBuilder($App->Users, AccessType::Read)->getCanFilter();
+    $req = $pdo->prepare("SELECT entity.id, entity.title, entity.metadata, c.title AS category_title, c.color AS category_color
+        FROM inventory AS entity
+        INNER JOIN inventory_categories AS c ON c.id = entity.category
+        WHERE entity.state = 1 AND entity.is_planned = 0 AND entity.team = :team
+            AND c.title REGEXP '^(primers?|probes?)$'" . $canFilter . ' ORDER BY entity.id');
+    $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+    $req->bindValue(':userid', $userId, PDO::PARAM_INT);
+    $pdo->execute($req);
+    $primers = array();
+    foreach ($req->fetchAll() as $row) {
+        $metadata = json_decode((string) ($row['metadata'] ?? ''), true);
+        $sequence = '';
+        foreach (is_array($metadata) ? ($metadata['extra_fields'] ?? array()) : array() as $name => $field) {
+            if (is_array($field) && preg_match('/^sequence/i', (string) $name) === 1) {
+                $sequence = (string) ($field['value'] ?? '');
+                break;
+            }
+        }
+        if ($sequence === '') {
+            continue;
+        }
+        $primers[] = array('id' => (int) $row['id'], 'title' => (string) $row['title'], 'sequence' => $sequence, 'category' => (string) $row['category_title'], 'color' => (string) $row['category_color']);
+    }
+    respond(200, array('primers' => $primers));
+}
 if (isset($_GET['order_sheet'])) {
     // the oligos of a sheet attached to an order of the team: GET ?order_sheet=1&order=<id>&f=<long name of the file>
     $orderId = (int) ($_GET['order'] ?? 0);

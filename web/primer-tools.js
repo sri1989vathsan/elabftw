@@ -215,9 +215,29 @@
 
   // every primer and probe of the database that has a sequence
   async function allPrimers() {
+    // one slim request: there can be many thousands (the entries themselves are much bigger than their names and bases)
+    try {
+      const slim = (await json('primers.php?list=1')).primers || [];
+      return slim.map(function (entry) {
+        return { id: entry.id, title: entry.title, sequence: clean(entry.sequence), category: entry.category, color: entry.color };
+      }).filter(function (primer) {
+        return primer.sequence.length >= MIN_LENGTH;
+      });
+    } catch (error) {
+      // the entries one page at a time, when the list is not there
+    }
     const categories = await categoriesOf(BINDING_MODULE);
-    const lists = await Promise.all(categories.map(function (category) {
-      return json('api/v2/inventory?limit=1000&category=' + category.id);
+    const lists = await Promise.all(categories.map(async function (category) {
+      // all the pages: a module can hold more than one page of primers
+      const all = [];
+      for (let offset = 0; ; offset += 500) {
+        const page = await json('api/v2/inventory?limit=500&offset=' + offset + '&category=' + category.id);
+        all.push(...page);
+        if (page.length < 500) {
+          break;
+        }
+      }
+      return all;
     }));
     return lists.flat().map(function (entry) {
       return { id: entry.id, title: entry.title, sequence: primerSequenceOf(entry), category: entry.category_title, color: entry.category_color };

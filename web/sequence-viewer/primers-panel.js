@@ -642,7 +642,7 @@
           return attachedIds.has(item.primer.id);
         }).length;
         const chosenNow = selectionNow();
-        const count = element('p', 'primers-muted', found.length + ' matching primer' + (found.length === 1 ? '' : 's') + (scope.value !== 'entire' ? ' ' + (scope.value === 'overlap' ? 'overlapping' : 'in') + ' the selection (' + (chosenNow.start + 1) + '..' + (chosenNow.end + 1) + ')' : ' on the sequence') + (attachedCount > 0 ? ', ' + attachedCount + ' already attached' : '') + '.');
+        const count = element('p', 'primers-muted', found.length + ' matching primer' + (found.length === 1 ? '' : 's') + (scope.value !== 'entire' ? ' ' + (scope.value === 'overlap' ? 'overlapping' : 'in') + ' the selection (' + (chosenNow.start + 1) + '..' + (chosenNow.end + 1) + ')' : ' on the sequence') + (attachedCount > 0 ? ', ' + attachedCount + ' already attached' : '') + (found.length > 200 ? '. The first 200 are listed: narrow the search with a selection or fewer mismatches' : '') + '.');
         if (found.length > 0) {
           renderList(found.slice(0, 200).map(function (item) {
             return item.primer;
