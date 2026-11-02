@@ -1916,3 +1916,14 @@ body[data-map-style="dark"] .own-map-feature {
 .primer-menu-item:hover {
   background: #eef4ff;
 }
+
+/* the translations ring of the circular map */
+.own-map-aa {
+  font: 600 9px ui-monospace, Menlo, monospace;
+  fill: #25324a;
+  pointer-events: none;
+}
+
+.own-map-translation {
+  cursor: pointer;
+}

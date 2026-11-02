@@ -181,6 +181,14 @@
       showSites = true;
     }
 
+    // the translations (the amino acids of the genes) can be hidden
+    let showTranslations = true;
+    try {
+      showTranslations = window.localStorage.getItem('sequence-editor-map-translations') !== '0';
+    } catch (error) {
+      showTranslations = true;
+    }
+
     const dataNow = function () {
       return editor.getState().sequenceData;
     };
@@ -214,6 +222,59 @@
         const candidate = /candidate/.test(String(primer.name));
         return { kind: 'primer', name: String(primer.name || 'primer').replace(' (candidate)', ''), start: primer.start, end: primer.end, strand: primer.forward === false || primer.strand === -1 ? -1 : 1, color: candidate ? '#e8890c' : (primer.color || '#f0a202'), candidate: candidate, type: candidate ? 'candidate primer' : 'primer' };
       });
+    }
+
+    // the translations: those of the editor and the genes (CDS features), with the amino acid of each codon
+    const CODE = 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG';
+    const BASE_COMPLEMENT = { A: 'T', T: 'A', G: 'C', C: 'G' };
+    const aminoAcid = function (codon) {
+      const index = codon.split('').map(function (b) {
+        return 'TCAG'.indexOf(b);
+      });
+      return index.indexOf(-1) !== -1 ? 'X' : CODE[16 * index[0] + 4 * index[1] + index[2]];
+    };
+
+    function translationItems(data) {
+      const sequence = String(data.sequence || '').toUpperCase();
+      const length = sequence.length;
+      const found = [];
+      const seen = new Set();
+      const add = function (name, start, end, forward, color) {
+        const key = start + ':' + end + ':' + forward;
+        if (seen.has(key) || !(start >= 0 && end >= 0 && start < length && end < length)) {
+          return;
+        }
+        seen.add(key);
+        const span = (end >= start ? end - start : end + length - start) + 1;
+        if (span < 6) {
+          return;
+        }
+        const codons = [];
+        for (let k = 0; k + 3 <= span; k += 3) {
+          // a gene on the reverse strand is read from its end
+          const first = forward ? (start + k) % length : ((end - k - 2) % length + length) % length;
+          let triplet = '';
+          for (let i = 0; i < 3; i++) {
+            triplet += sequence[(first + i) % length];
+          }
+          if (!forward) {
+            triplet = triplet.split('').reverse().map(function (b) {
+              return BASE_COMPLEMENT[b] || 'N';
+            }).join('');
+          }
+          codons.push({ start: first, aa: aminoAcid(triplet) });
+        }
+        found.push({ name: name, start: start, end: end, forward: forward, codons: codons, color: color });
+      };
+      listOf(data.translations).forEach(function (t) {
+        add(t.name || 'translation', t.start, t.end, t.forward !== false && t.strand !== -1, t.color);
+      });
+      listOf(data.features).forEach(function (f) {
+        if (String(f.type || '').toUpperCase() === 'CDS') {
+          add(f.name || 'CDS', f.start, f.end, f.strand !== -1, f.color);
+        }
+      });
+      return found;
     }
 
     const angleOf = function (position, length) {
@@ -534,6 +595,51 @@
         draw1(item, primerIn, primerOut, 7, 2);
       });
 
+      // the translations: a ring inside the scale, a segment for each amino acid (its letter when there is room for it)
+      if (showTranslations) {
+        const ringMid = innerEdge - 36;
+        if (ringMid > 34) {
+          translationItems(data).forEach(function (item) {
+            const first = angleOf(item.start, length);
+            const codonArc = (TAU * 3 / length) * ringMid;
+            const group = svgElement('g', { class: 'own-map-translation' });
+            const title = item.name + ' (translation) ' + (item.start + 1) + '..' + (item.end + 1) + ' · ' + item.codons.length + ' amino acids' + (item.forward ? '' : ' · reverse');
+            if (codonArc < 2.5) {
+              // too small for the codons: one band with an arrow, the amino acids are there when the map is made bigger
+              const range = arcOf(item, length);
+              const band = svgElement('path', { d: arrowPath(cx, cy, ringMid - 6, ringMid + 6, range[0], range[1], item.forward ? 1 : -1, 10 / ringMid), fill: dark ? '#46618a' : '#c7d9f1', stroke: dark ? '#7f9cc8' : '#8aa6d3', 'stroke-width': 0.8 });
+              band.append(svgElement('title', {}, title));
+              group.append(band);
+            } else {
+              item.codons.forEach(function (codon, index) {
+                const a1 = angleOf(codon.start, length);
+                const a2 = a1 + (TAU * 3) / length;
+                const stop = codon.aa === '*';
+                const fill = stop ? '#e0806a' : (index % 2 === 0 ? (dark ? '#3d5578' : '#dbe7f7') : (dark ? '#46618a' : '#c7d9f1'));
+                const segment = svgElement('path', { d: arrowPath(cx, cy, ringMid - 6, ringMid + 6, a1, a2, 0, 0), fill: fill });
+                segment.append(svgElement('title', {}, codon.aa + ' ' + (index + 1) + ' · ' + item.name));
+                group.append(segment);
+                if (codonArc >= 9) {
+                  const p = at(ringMid, (a1 + a2) / 2);
+                  group.append(svgElement('text', { x: p[0], y: p[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'own-map-aa' }, stop ? '*' : codon.aa));
+                }
+              });
+              // the start of the gene is marked: the arrow of the reading direction at its end
+              const range = arcOf(item, length);
+              group.append(svgElement('path', { d: arrowPath(cx, cy, ringMid + 7, ringMid + 9, range[0], range[1], 0, 0), fill: item.forward ? '#6a8fd0' : '#d08f6a' }));
+            }
+            group.addEventListener('mousedown', function (event) {
+              event.stopPropagation();
+            });
+            group.addEventListener('click', function (event) {
+              event.stopPropagation();
+              select(item.start, item.end);
+            });
+            svg.append(group);
+          });
+        }
+      }
+
       // the cut sites: a short tick each; a name for a few of them, the others are in the tooltip (the sites that are close
       // share one name)
       const ordered = sites.slice().sort(function (a, b) {
@@ -749,7 +855,7 @@
       }).join(',');
       const primers = Object.keys((state.temporaryAnnotations && state.temporaryAnnotations.primers) || {}).join(',') + listOf(data.primers).length;
       const selection = state.selectionLayer || {};
-      return [sequence.length, sequence.slice(0, 30), features, primers, selection.start, selection.end, state.caretPosition, JSON.stringify(state.restrictionEnzymes), JSON.stringify(state.annotationVisibility && state.annotationVisibility.featureTypesToHide), !!data.circular, host ? host.clientWidth + 'x' + host.clientHeight : '', document.body.dataset.mapStyle, zoom, showSites].join('|');
+      return [sequence.length, sequence.slice(0, 30), features, primers, selection.start, selection.end, state.caretPosition, JSON.stringify(state.restrictionEnzymes), JSON.stringify(state.annotationVisibility && state.annotationVisibility.featureTypesToHide), !!data.circular, host ? host.clientWidth + 'x' + host.clientHeight : '', document.body.dataset.mapStyle, zoom, showSites, showTranslations, JSON.stringify(data.translations || null)].join('|');
     }
 
     // the map as an SVG file: the styles the map has now are written into the file, so it looks the same elsewhere
@@ -829,7 +935,18 @@
         signature = '';
       });
       sitesButton.classList.toggle('off', !showSites);
-      controls.append(zoomLabel, sitesButton, button('Fit', 'Fit the map to the panel', function () {
+      const translationsButton = button('Aa', 'Show or hide the translations (the amino acids of the genes)', function () {
+        showTranslations = !showTranslations;
+        translationsButton.classList.toggle('off', !showTranslations);
+        try {
+          window.localStorage.setItem('sequence-editor-map-translations', showTranslations ? '1' : '0');
+        } catch (error) {
+          // not remembered
+        }
+        signature = '';
+      });
+      translationsButton.classList.toggle('off', !showTranslations);
+      controls.append(zoomLabel, sitesButton, translationsButton, button('Fit', 'Fit the map to the panel', function () {
         setZoom(1);
       }), button('SVG', 'Save the map as an SVG image', exportSvg));
       wrap.append(controls);
