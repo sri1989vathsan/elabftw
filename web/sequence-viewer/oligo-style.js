@@ -5,8 +5,8 @@
  */
 (function () {
   'use strict';
-  const HEIGHT = 16;
-  const PAD = 3;
+  const HEIGHT = 20;
+  const PAD = 5;
   const COMPLEMENT = { A: 'T', T: 'A', G: 'C', C: 'G' };
 
   function element(tag, text) {
@@ -31,7 +31,7 @@
 
   // the box of an oligo, from x0 to x1, with a half arrow at its 3' end (the right end for a forward oligo)
   function shape(x0, x1, forward, barb) {
-    const top = barb ? 5 : 3;
+    const top = barb ? 6 : 3;
     if (!barb) {
       return 'M' + x0 + ',' + top + ' L' + x1 + ',' + top + ' L' + x1 + ',' + HEIGHT + ' L' + x0 + ',' + HEIGHT + ' Z';
     }
@@ -103,11 +103,11 @@
         // the letters of the editor on the line of the sequence, the bases exactly under the bases of the sequence, and the
         // overhang in line with them on the side of the 5' end
         own.setAttribute('x', '0');
-        own.setAttribute('y', forward ? '12' : '10');
+        own.setAttribute('y', forward ? '15' : '13');
         own.setAttribute('textLength', String(w));
         if (insert) {
           insert.setAttribute('x', String(forward ? x0 - tail * char : x1));
-          insert.setAttribute('y', forward ? '12' : '10');
+          insert.setAttribute('y', forward ? '15' : '13');
           insert.setAttribute('textLength', String(tail * char));
           insert.removeAttribute('transform');
         }
@@ -130,7 +130,7 @@
           });
         }
         text.textContent = bases;
-        text.setAttribute('transform', 'translate(0,' + (forward ? 14 : 12) + ')');
+        text.setAttribute('transform', 'translate(0,' + (forward ? 15 : 13) + ')');
         text.setAttribute('textLength', String(w));
         text.setAttribute('lengthAdjust', 'spacing');
         text.setAttribute('class', 'veLabelText ve-monospace-font oligo-bases');
@@ -143,7 +143,7 @@
             return COMPLEMENT[b];
           }));
           overhang.setAttribute('class', 'veLabelText ve-monospace-font oligo-tail');
-          overhang.setAttribute('transform', 'translate(' + (forward ? -tail * char - gap : w + gap) + ',' + (forward ? 14 : 12) + ')');
+          overhang.setAttribute('transform', 'translate(' + (forward ? -tail * char - gap : w + gap) + ',' + (forward ? 15 : 13) + ')');
           overhang.setAttribute('textLength', String(tail * char));
           overhang.setAttribute('lengthAdjust', 'spacing');
           g.append(overhang);
