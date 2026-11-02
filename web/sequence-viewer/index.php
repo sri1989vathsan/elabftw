@@ -99,6 +99,7 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   <script src="annotate.js?v=<?= (int) filemtime(__DIR__ . '/annotate.js') ?>"></script>
   <script src="annotate-tab.js?v=<?= (int) filemtime(__DIR__ . '/annotate-tab.js') ?>"></script>
   <script src="oligo-style.js?v=<?= (int) filemtime(__DIR__ . '/oligo-style.js') ?>"></script>
+  <script src="primer-menu.js?v=<?= (int) filemtime(__DIR__ . '/primer-menu.js') ?>"></script>
   <script src="tools-tab.js?v=<?= (int) filemtime(__DIR__ . '/tools-tab.js') ?>"></script>
   <script src="blast-tab.js?v=<?= (int) filemtime(__DIR__ . '/blast-tab.js') ?>"></script>
   <script src="tools-basic.js?v=<?= (int) filemtime(__DIR__ . '/tools-basic.js') ?>"></script>

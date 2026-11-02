@@ -1020,6 +1020,14 @@
       say('');
       render();
     } });
+    // the right-click menu of the map (primer-menu.js) detaches a primer through this
+    window.PrimerPanel.detachPrimer = async function (id) {
+      await tools.detach(entryId, id);
+      await loadAttached();
+      if (panel && window.ToolSidebar.active() === 'primers') {
+        await render();
+      }
+    };
     // the primers of the plasmid are drawn from the start
     loadAttached().catch(function () {
       // the map just has no database primers

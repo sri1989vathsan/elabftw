@@ -1879,3 +1879,40 @@ body[data-map-style="dark"] .own-map-feature {
   font-size: 0.72rem;
   margin-right: 0.2rem;
 }
+
+/* the right-click menu of a primer */
+.primer-menu {
+  position: fixed;
+  z-index: 100000;
+  min-width: 15rem;
+  padding: 0.25rem;
+  background: #fff;
+  border: 1px solid #cfd6df;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(20, 30, 50, 0.2);
+  font-size: 0.82rem;
+}
+
+.primer-menu-title {
+  padding: 0.3rem 0.6rem;
+  font-weight: 600;
+  color: #6b7686;
+  border-bottom: 1px solid #eef1f5;
+  margin-bottom: 0.15rem;
+}
+
+.primer-menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.primer-menu-item:hover {
+  background: #eef4ff;
+}
