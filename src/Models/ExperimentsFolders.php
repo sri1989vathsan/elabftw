@@ -51,10 +51,17 @@ final class ExperimentsFolders extends AbstractRest
 {
     use SetIdTrait;
 
-    public function __construct(private Users $requester, ?int $id = null)
+    /**
+     * @param string $scope the tree: 'experiments' (the folders of the experiments and of the resources) or 'inventory' (the
+     *                      folders of the database, a tree of their own with the same features)
+     */
+    public function __construct(private Users $requester, ?int $id = null, private string $scope = 'experiments')
     {
         parent::__construct();
         $this->setId($id);
+        if ($this->scope !== 'experiments' && $this->scope !== 'inventory') {
+            throw new ImproperActionException('Unknown folder tree.');
+        }
     }
 
     #[Override]
@@ -331,6 +338,10 @@ final class ExperimentsFolders extends AbstractRest
     public function postAction(Action $action, array $reqBody): int
     {
         $this->canWriteOrExplode();
+        // a folder of the database goes in the tree of the database
+        if (($reqBody['scope'] ?? 'experiments') === 'inventory') {
+            $this->scope = 'inventory';
+        }
         $id = $this->create(
             $reqBody['name'] ?? throw new ImproperActionException('Missing value for "name"'),
             Filter::intOrNull($reqBody['parent_id'] ?? 0),
@@ -362,8 +373,9 @@ final class ExperimentsFolders extends AbstractRest
 
     private function getIdempotentIdFromNameAndParent(string $name, ?int $parentId): int
     {
-        $sql = 'SELECT id FROM experiments_folders WHERE team = :team AND name = :name AND parent_id <=> :parent_id LIMIT 1';
+        $sql = 'SELECT id FROM experiments_folders WHERE team = :team AND scope = :scope AND name = :name AND parent_id <=> :parent_id LIMIT 1';
         $req = $this->Db->prepare($sql);
+        $req->bindValue(':scope', $this->scope);
         $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
         $req->bindValue(':name', $name);
         // bindValue, not bindParam -- bindParam binds by reference, and
@@ -394,9 +406,19 @@ final class ExperimentsFolders extends AbstractRest
 
     public function create(string $folderName, ?int $parentId = null): int
     {
-        $sql = 'INSERT INTO experiments_folders(team, name, parent_id, userid)
-            VALUES(:team, :name, :parent_id, :userid)';
+        $sql = 'INSERT INTO experiments_folders(team, name, parent_id, userid, scope)
+            VALUES(:team, :name, :parent_id, :userid, :scope)';
         $req = $this->Db->prepare($sql);
+        // a subfolder is in the tree of its parent
+        $scope = $this->scope;
+        if ($parentId !== null) {
+            $scopeReq = $this->Db->prepare('SELECT scope FROM experiments_folders WHERE id = :id AND team = :team');
+            $scopeReq->bindValue(':id', $parentId, PDO::PARAM_INT);
+            $scopeReq->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
+            $this->Db->execute($scopeReq);
+            $scope = (string) ($scopeReq->fetchColumn() ?: $scope);
+        }
+        $req->bindValue(':scope', $scope);
         $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
         $req->bindParam(':name', $folderName);
         $req->bindParam(':parent_id', $parentId);
@@ -460,6 +482,17 @@ final class ExperimentsFolders extends AbstractRest
     }
 
     /**
+     * Assign an entry of the database to a folder of the database
+     */
+    public function assignInventory(int $entryId, ?int $folderId): bool
+    {
+        $req = $this->Db->prepare('UPDATE inventory SET folder_id = :folder_id WHERE id = :id');
+        $req->bindParam(':folder_id', $folderId);
+        $req->bindParam(':id', $entryId, PDO::PARAM_INT);
+        return $this->Db->execute($req);
+    }
+
+    /**
      * Assign a resource to a folder.
      */
     public function assignResource(int $resourceId, ?int $folderId): bool
@@ -497,6 +530,7 @@ final class ExperimentsFolders extends AbstractRest
             WHERE
                 parent_id IS NULL
                 AND team = :team
+                AND scope = :scope
 
             UNION
 
@@ -527,6 +561,7 @@ final class ExperimentsFolders extends AbstractRest
             COALESCE(child_counts.children_count, 0) AS children_count,
             COALESCE(experiment_counts.experiments_count, 0) AS experiments_count,
             COALESCE(resource_counts.resources_count, 0) AS resources_count,
+            COALESCE(inventory_counts.inventory_count, 0) AS inventory_count,
             (readmes.folder_id IS NOT NULL) AS has_readme
         FROM
             folder_hierarchy
@@ -548,12 +583,19 @@ final class ExperimentsFolders extends AbstractRest
             WHERE state = 1 AND folder_id IS NOT NULL
             GROUP BY folder_id
         ) AS resource_counts ON resource_counts.folder_id = folder_hierarchy.id
+        LEFT JOIN (
+            SELECT folder_id, COUNT(*) AS inventory_count
+            FROM inventory
+            WHERE state = 1 AND is_planned = 0 AND folder_id IS NOT NULL
+            GROUP BY folder_id
+        ) AS inventory_counts ON inventory_counts.folder_id = folder_hierarchy.id
         LEFT JOIN custom_experiment_folder_readmes AS readmes
             ON readmes.folder_id = folder_hierarchy.id AND readmes.body <> ''
         ORDER BY
             folder_hierarchy.name, folder_hierarchy.parent_id";
         $req = $this->Db->prepare($sql);
         $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $req->bindValue(':scope', $this->scope);
         $this->Db->execute($req);
         $rows = (new CustomUiDescriptions())->enrichRows(
             CustomUiDescriptions::EXPERIMENT_FOLDER,
@@ -571,10 +613,12 @@ final class ExperimentsFolders extends AbstractRest
             INNER JOIN experiments_folders AS folders ON folders.id = bookmarks.folder_id
             WHERE bookmarks.users_id = :userid
                 AND folders.team = :team
+                AND folders.scope = :scope
             ORDER BY bookmarks.created_at, bookmarks.folder_id';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
         $req->bindValue(':team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $req->bindValue(':scope', $this->scope);
         $this->Db->execute($req);
 
         $folderIds = array();
@@ -593,6 +637,7 @@ final class ExperimentsFolders extends AbstractRest
             INNER JOIN custom_favorite_experiment_folders AS bookmarks ON bookmarks.folder_id = folders.id
             WHERE bookmarks.users_id = :userid
                 AND folders.team = :root_team
+                AND folders.scope = :scope
 
             UNION ALL
 
@@ -609,6 +654,7 @@ final class ExperimentsFolders extends AbstractRest
         $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
         $req->bindValue(':root_team', $this->requester->userData['team'], PDO::PARAM_INT);
         $req->bindValue(':ancestor_team', $this->requester->userData['team'], PDO::PARAM_INT);
+        $req->bindValue(':scope', $this->scope);
         $this->Db->execute($req);
 
         $rootIds = array();

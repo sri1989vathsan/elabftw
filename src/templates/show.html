@@ -25,7 +25,6 @@
     {# the rows ticked in the table can be sent to an order, see primer-tools.js #}
     <script src='primer-tools.js?v={{ 'now'|date('YmdHi') }}'></script>
     {# the folders of the database, a tree of their own #}
-    <script src='registry-folders.js?v={{ 'now'|date('YmdHi') }}'></script>
     {# the planned entries: not made or ordered yet, private, without a number, see planned.js #}
     <script src='planned.js?v={{ 'now'|date('YmdHi') }}' defer></script>
     {# module navigation: one tab per resource category, like the module bar of an inventory system #}
@@ -756,8 +755,8 @@
       <div id='entityList'></div>
 
   {# the path of the folder being shown, to move up to any of its parent folders #}
-  {% if Entity.entityType.value in ['experiments', 'items'] and App.Request.query.get('folder') matches '/^[1-9][0-9]*$/' %}
-    {% include 'folder-path-bar.html' with {'pathFolderId': App.Request.query.get('folder')|number_format(0, '', ''), 'pathFolders': experimentsFoldersCreateArr, 'pathPage': Entity.entityType.value == 'items' ? 'database.php' : 'experiments.php'} only %}
+  {% if Entity.entityType.value in ['experiments', 'items', 'inventory'] and App.Request.query.get('folder') matches '/^[1-9][0-9]*$/' %}
+    {% include 'folder-path-bar.html' with {'pathFolderId': App.Request.query.get('folder')|number_format(0, '', ''), 'pathFolders': experimentsFoldersCreateArr, 'pathPage': Entity.entityType.value == 'items' ? 'database.php' : (Entity.entityType.value == 'inventory' ? 'registry.php' : 'experiments.php')} only %}
   {% endif %}
 
   <div id='info'

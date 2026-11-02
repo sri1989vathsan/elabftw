@@ -15,7 +15,7 @@ import { getTinymceBaseConfig } from './tinymce';
 import { htmlToMarkdown, markdownToHtml } from './Editor.class';
 
 type FolderScope = 'mine' | 'all';
-type FolderEntityType = 'experiments' | 'items';
+type FolderEntityType = 'experiments' | 'items' | 'inventory';
 
 interface FolderReadme {
   id: number;
@@ -119,7 +119,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // depends on this -- persisted per-user so it survives navigating around
   const folderEntityTypeKey = `experiment-folder-entity-type-${currentUserId}`;
   const storedFolderEntityType = localStorage.getItem(folderEntityTypeKey);
-  let activeFolderEntityType: FolderEntityType = storedFolderEntityType === 'items' ? 'items' : 'experiments';
+  // the database has a tree of its own: on its page the panel is the one of the database
+  let activeFolderEntityType: FolderEntityType = window.location.pathname === '/registry.php' ? 'inventory' : (storedFolderEntityType === 'items' ? 'items' : 'experiments');
   let activeReadme: FolderReadme | null = null;
 
   function readFavoriteFolderIds(element: HTMLElement): string[] {
@@ -233,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   function applyFolderEntityType(type: FolderEntityType): void {
     activeFolderEntityType = type;
-    localStorage.setItem(folderEntityTypeKey, type);
+    if (type !== 'inventory') localStorage.setItem(folderEntityTypeKey, type);
 
     const typeSelect = document.getElementById('folderEntityTypeSelect') as HTMLSelectElement | null;
     if (typeSelect) {
@@ -245,14 +246,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const quickLinkSelect = document.getElementById('folderQuickLinkSelect') as HTMLSelectElement | null;
     if (quickLinkSelect) {
       const allOption = quickLinkSelect.querySelector('option[value="all"]') as HTMLOptionElement | null;
-      const targetLabel = type === 'items' ? allOption?.dataset.itemsLabel : allOption?.dataset.experimentsLabel;
+      const targetLabel = type === 'items' ? allOption?.dataset.itemsLabel : (type === 'inventory' ? allOption?.dataset.inventoryLabel : allOption?.dataset.experimentsLabel);
       if (allOption && targetLabel) allOption.textContent = targetLabel;
     }
 
     document.querySelectorAll<HTMLAnchorElement>('[data-folder-entity-link]').forEach(link => {
-      const targetHref = type === 'items' ? link.dataset.itemsHref : link.dataset.experimentsHref;
+      const targetHref = type === 'items' ? link.dataset.itemsHref : (type === 'inventory' ? link.dataset.inventoryHref : link.dataset.experimentsHref);
       if (targetHref) link.href = targetHref;
-      const count = (type === 'items' ? link.dataset.resourcesCount : link.dataset.experimentsCount) ?? '0';
+      const count = (type === 'items' ? link.dataset.resourcesCount : (type === 'inventory' ? link.dataset.inventoryCount : link.dataset.experimentsCount)) ?? '0';
       const badge = link.querySelector('.folder-entity-count') as HTMLElement | null;
       if (badge) {
         badge.textContent = count;
@@ -265,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function getQuickLinkHref(option: HTMLOptionElement, type: FolderEntityType): string | undefined {
-    return type === 'items' ? option.dataset.itemsHref : option.dataset.experimentsHref;
+    return type === 'items' ? option.dataset.itemsHref : (type === 'inventory' ? option.dataset.inventoryHref : option.dataset.experimentsHref);
   }
 
   function applyFolderScope(scope: FolderScope): void {
@@ -426,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const panelScrollTop = currentPanel.scrollTop;
     sessionStorage.removeItem('folders-panel-html-v1');
     sessionStorage.removeItem('folders-panel-html-v1-at');
-    const supportsFolderData = ['/experiments.php', '/database.php'].includes(window.location.pathname);
+    const supportsFolderData = ['/experiments.php', '/database.php', '/registry.php'].includes(window.location.pathname);
     const refreshUrl = supportsFolderData
       ? new URL(window.location.href)
       : new URL('/experiments.php?mode=show&scope=1', window.location.origin);
@@ -769,6 +770,8 @@ document.addEventListener('DOMContentLoaded', () => {
       name: name,
       parent_id: parentId,
       description: descriptionInput.value.trim(),
+      // a folder made from the page of the database is in the tree of the database
+      ...(activeFolderEntityType === 'inventory' ? { scope: 'inventory' } : {}),
     }).then(() => {
       nameInput.value = '';
       descriptionInput.value = '';

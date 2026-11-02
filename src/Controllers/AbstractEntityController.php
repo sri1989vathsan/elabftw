@@ -150,7 +150,7 @@ abstract class AbstractEntityController implements ControllerInterface
         $template = 'show.html';
         $UserRequestActions = new UserRequestActions($this->App->Users);
 
-        $ExperimentsFolders = new ExperimentsFolders($this->App->Users);
+        $ExperimentsFolders = new ExperimentsFolders($this->App->Users, null, $this->folderScope());
         $experimentsFoldersTreeArr = $ExperimentsFolders->readAllRecursive();
         $experimentsFoldersCreateArr = $ExperimentsFolders->readHierarchyRows();
         $favoriteFolderIds = $ExperimentsFolders->getFavoriteFolders();
@@ -197,7 +197,7 @@ abstract class AbstractEntityController implements ControllerInterface
     protected function view(): Response
     {
         $RequestActions = new RequestActions($this->App->Users, $this->Entity);
-        $ExperimentsFoldersView = new ExperimentsFolders($this->App->Users);
+        $ExperimentsFoldersView = new ExperimentsFolders($this->App->Users, null, $this->folderScope());
         $experimentsFoldersViewArr = $ExperimentsFoldersView->readHierarchyRows();
         $favoriteFolderIds = $ExperimentsFoldersView->getFavoriteFolders();
         // the mode parameter is for the uploads tpl
@@ -280,7 +280,7 @@ abstract class AbstractEntityController implements ControllerInterface
         $ItemsTypes = new ItemsTypes($this->App->Users);
         $DisplayParamsTemplates = new DisplayParams($this->App->Users, EntityType::Templates);
         $DisplayParamsItemsTypes = new DisplayParams($this->App->Users, EntityType::ItemsTypes);
-        $ExperimentsFoldersEdit = new ExperimentsFolders($this->App->Users);
+        $ExperimentsFoldersEdit = new ExperimentsFolders($this->App->Users, null, $this->folderScope());
         $experimentsFoldersEditArr = $ExperimentsFoldersEdit->readHierarchyRows();
         $favoriteFolderIds = $ExperimentsFoldersEdit->getFavoriteFolders();
 
@@ -351,5 +351,13 @@ abstract class AbstractEntityController implements ControllerInterface
         $Response->prepare($this->App->Request);
         $Response->setContent($this->App->render('changelog.html', $renderArr));
         return $Response;
+    }
+
+    /**
+     * The folders the page shows: the entries of the database have a tree of their own, the others share one
+     */
+    protected function folderScope(): string
+    {
+        return $this->Entity->entityType === EntityType::Inventory ? 'inventory' : 'experiments';
     }
 }

@@ -286,7 +286,7 @@
 {% endif %}
 
 {% if Entity.entityType.value in ['experiments', 'items'] and experimentsFoldersArr is defined %}
-  {% include 'folder-path-bar.html' with {'pathFolderId': Entity.entityData.folder_id|default(0), 'pathFolders': experimentsFoldersArr, 'pathPage': Entity.entityType.value == 'items' ? 'database.php' : 'experiments.php'} only %}
+  {% include 'folder-path-bar.html' with {'pathFolderId': Entity.entityData.folder_id|default(0), 'pathFolders': experimentsFoldersArr, 'pathPage': Entity.entityType.value == 'items' ? 'database.php' : (Entity.entityType.value == 'inventory' ? 'registry.php' : 'experiments.php')} only %}
 {% endif %}
 
 <div id='info'
@@ -299,7 +299,6 @@
 
 {% if Entity.entityType.value == 'inventory' %}
   {# the folders of the database #}
-  <script src='registry-folders.js?v={{ 'now'|date('YmdHi') }}'></script>
   <script src='planned.js?v={{ 'now'|date('YmdHi') }}' defer></script>
 {% endif %}
 

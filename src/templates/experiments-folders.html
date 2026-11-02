@@ -1,9 +1,9 @@
 {% import 'guide-info.html' as guide -%}
 {# Shared experiment/resource folder tree - dedicated tab in the left sidebar. #}
 {% if experimentsFoldersTreeArr is defined %}
-{% set folderEntityType = Entity is defined and Entity.entityType.value == 'items' ? 'items' : 'experiments' %}
+{% set folderEntityType = Entity is defined and Entity.entityType.value == 'items' ? 'items' : (Entity is defined and Entity.entityType.value == 'inventory' ? 'inventory' : 'experiments') %}
 {% set currentFolderId = App.Request.query.has('folder') ? App.Request.query.get('folder') : (Entity is defined ? Entity.entityData.folder_id|default('') : '') %}
-{% set folderPage = folderEntityType == 'items' ? 'database.php' : 'experiments.php' %}
+{% set folderPage = folderEntityType == 'items' ? 'database.php' : (folderEntityType == 'inventory' ? 'registry.php' : 'experiments.php') %}
 {% set folderBookmarkIds = favoriteFolderIds|default([]) %}
 {% set folderBookmarkRootIds = favoriteRootFolderIds|default([]) %}
 <div class='side-panel' id='foldersPanel' hidden>
@@ -24,7 +24,7 @@
       </div>
     </div>
 
-    <div class='mb-2' data-active-entity-type='{{ folderEntityType }}'>
+    <div class='mb-2' data-active-entity-type='{{ folderEntityType }}'{{ folderEntityType == 'inventory' ? ' hidden' }}>
       <select id='folderEntityTypeSelect' class='form-control form-control-sm' aria-label='{{ 'Folder content type'|trans }}'>
         <option value='experiments' {{ folderEntityType == 'experiments' ? 'selected' }}>{{ 'Experiments'|trans }}</option>
         <option value='items' {{ folderEntityType == 'items' ? 'selected' }}>{{ 'Resources'|trans }}</option>
@@ -37,14 +37,17 @@
           value='all'
           data-experiments-href='experiments.php'
           data-items-href='database.php'
+          data-inventory-href='registry.php'
           data-experiments-label='{{ 'All experiments'|trans|e('html_attr') }}'
           data-items-label='{{ 'All resources'|trans|e('html_attr') }}'
+          data-inventory-label='{{ 'All entries'|trans|e('html_attr') }}'
           {{ currentFolderId is empty ? 'selected' }}
-        >{{ (folderEntityType == 'items' ? 'All resources' : 'All experiments')|trans }}</option>
+        >{{ (folderEntityType == 'items' ? 'All resources' : (folderEntityType == 'inventory' ? 'All entries' : 'All experiments'))|trans }}</option>
         <option
           value='unfiled'
           data-experiments-href='experiments.php?folder=0'
           data-items-href='database.php?folder=0'
+          data-inventory-href='registry.php?folder=0'
           {{ App.Request.query.get('folder') == '0' ? 'selected' }}
         >{{ 'Unfiled'|trans }}</option>
       </select>
@@ -91,13 +94,15 @@
               data-folder-entity-link
               data-experiments-href='experiments.php?folder={{ folder.id }}'
               data-items-href='database.php?folder={{ folder.id }}'
+              data-inventory-href='registry.php?folder={{ folder.id }}'
               data-experiments-count='{{ folder.experiments_count }}'
               data-resources-count='{{ folder.resources_count }}'
+              data-inventory-count='{{ folder.inventory_count|default(0) }}'
               title='{{ folder.full_path|e('html_attr') }}'
               class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'
             >
               <i class='fas fa-folder fa-fw mr-1 folder-icon'></i><span class='folder-name'>{{ folder.name }}</span>
-              {% set entityCount = folderEntityType == 'items' ? folder.resources_count : folder.experiments_count %}
+              {% set entityCount = folderEntityType == 'items' ? folder.resources_count : (folderEntityType == 'inventory' ? folder.inventory_count|default(0) : folder.experiments_count) %}
               <span class='badge badge-secondary folder-entity-count' {{ entityCount > 0 ? '' : 'hidden' }}>{{ entityCount }}</span>
             </a>
             {% set isBookmarked = folder.id in folderBookmarkIds %}
