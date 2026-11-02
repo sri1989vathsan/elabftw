@@ -133,6 +133,17 @@
 
   // ---- the map
   function setup(editor) {
+    // puts the cursor on a base and shows that place in the sequence view, where it is cut or chosen on a map
+    const goTo = function (position, scrollOnly) {
+      if (!scrollOnly) {
+        editor.updateEditor({ selectionLayer: { start: -1, end: -1 }, caretPosition: position });
+      }
+      const rows = document.querySelector('.veRowView');
+      const length = String(editor.getState().sequenceData.sequence || '').length;
+      if (rows && length > 0 && rows.scrollHeight > rows.clientHeight) {
+        rows.scrollTop = Math.max(0, (position / length) * rows.scrollHeight - rows.clientHeight / 2);
+      }
+    };
     let host = null;
     let wrap = null;
     let svg = null;
@@ -550,6 +561,13 @@
           const tick = svgElement('line', { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1], class: 'own-map-cut' });
           tick.append(svgElement('title', {}, site.name + ' cuts at ' + site.position + (site.count > 1 ? ' (' + site.count + ' sites)' : ' (single cutter)')));
           join(cutKey, tick);
+          // a click on a cut site puts the cursor there (the mouse down must not start a selection)
+          tick.addEventListener('mousedown', function (event) {
+            event.stopPropagation();
+          });
+          tick.addEventListener('click', function () {
+            goTo(site.position);
+          });
           svg.append(tick);
         });
         if (!named.has(cluster)) {
@@ -560,7 +578,9 @@
         const names = cluster.sites.map(function (site) {
           return site.name;
         });
-        labels.push({ key: cutKey, text: first.name + (names.length > 1 ? ' +' + (names.length - 1) : ''), color: null, middle: middle, rank: 3, size: 0, kind: 'cut ' + (first.count === 1 ? 'single' : 'multi'), rEdge: edge + 6, onEnter: function () {
+        labels.push({ key: cutKey, text: first.name + (names.length > 1 ? ' +' + (names.length - 1) : ''), color: null, middle: middle, rank: 3, size: 0, kind: 'cut ' + (first.count === 1 ? 'single' : 'multi'), rEdge: edge + 6, onClick: function () {
+          goTo(first.position);
+        }, onEnter: function () {
           hover = { title: names.join(', '), line: 'cut at ' + cluster.sites.map(function (site) {
             return site.position;
           }).join(', ') };
@@ -602,6 +622,13 @@
           const text = svgElement('text', attributes, shown);
           text.append(svgElement('title', {}, label.text));
           join(label.key, text);
+          if (label.onClick) {
+            text.addEventListener('mousedown', function (event) {
+              event.stopPropagation();
+            });
+            text.addEventListener('click', label.onClick);
+            text.style.cursor = 'pointer';
+          }
           text.addEventListener('mouseenter', function () {
             label.onEnter();
             light(label.key, true);
@@ -844,6 +871,18 @@
         draw();
       }
     }, 250);
+    // the labels of the cut sites on the linear map move the cursor to the cut already: the sequence view follows it
+    document.addEventListener('click', function (event) {
+      const label = event.target.closest && event.target.closest('.veCutsiteLabel');
+      if (label && !label.closest('.veRowView')) {
+        window.setTimeout(function () {
+          const caret = editor.getState().caretPosition;
+          if (caret >= 0) {
+            goTo(caret, true);
+          }
+        }, 80);
+      }
+    }, true);
     document.addEventListener('mousedown', function (event) {
       if (menu && !menu.contains(event.target)) {
         closeMenu();
