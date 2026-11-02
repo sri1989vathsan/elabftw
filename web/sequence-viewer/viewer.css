@@ -1700,3 +1700,22 @@ body[data-map-style="dark"] .own-map-feature {
   color: #4a5562;
   overflow-wrap: anywhere;
 }
+
+/* oligos (primers, probes) look different from features: a light orange outlined strip with orange italic text, where a
+   feature is a solid purple or blue arrow */
+.vePrimer path {
+  fill: #fff1d6 !important;
+  stroke: #e8890c !important;
+  stroke-width: 1.5px !important;
+  stroke-dasharray: 5 2;
+}
+
+.vePrimer text,
+.vePrimer .veLabelText {
+  fill: #9a5200 !important;
+  font-style: italic;
+}
+
+.vePrimer:hover path {
+  fill: #ffe2a8 !important;
+}
