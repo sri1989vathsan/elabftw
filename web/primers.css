@@ -40,3 +40,44 @@
   margin-bottom: 0.25rem;
   font-size: 0.85rem;
 }
+
+/* a primer: the plasmids it is attached to and its orders, as two quiet columns */
+#primersRoot .lineage-columns {
+  gap: 2rem;
+}
+
+#primersRoot .lineage-column h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#primersRoot .lineage-chip a {
+  font-weight: 500;
+  text-decoration: none;
+}
+
+#primersRoot .lineage-chip small {
+  margin-left: 0.2rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: #eef1f5;
+  color: #4a5562;
+  font-size: 0.72rem;
+}
+
+#primersRoot .lineage-column > p {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+}
+
+#primersRoot .lineage-column > .btn {
+  margin-top: 0.2rem;
+}
+
+#primersRoot .lineage-add {
+  display: block;
+  margin-top: 0.15rem;
+}

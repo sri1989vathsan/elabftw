@@ -1,22 +1,26 @@
-/* the lineage of an entry of the database: parents, daughters and the family tree */
-#lineageRoot .lineage-columns {
+/* the lineage of an entry of the database: parents, daughters and the family tree; the chips and the search are shared with the plasmids and orders of a primer (#primersRoot) */
+#lineageRoot .lineage-columns,
+#primersRoot .lineage-columns {
   display: flex;
   flex-wrap: wrap;
   gap: 1.5rem;
 }
 
-#lineageRoot .lineage-column {
+#lineageRoot .lineage-column,
+#primersRoot .lineage-column {
   flex: 1 1 18rem;
   min-width: 0;
 }
 
-#lineageRoot h4 {
+#lineageRoot h4,
+#primersRoot .lineage-column h4 {
   margin: 0 0 0.35rem;
   font-size: 0.9rem;
   color: #6c757d;
 }
 
-#lineageRoot .lineage-chip {
+#lineageRoot .lineage-chip,
+#primersRoot .lineage-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -28,14 +32,16 @@
   font-size: 0.85rem;
 }
 
-#lineageRoot .lineage-chip .lineage-dot {
+#lineageRoot .lineage-chip .lineage-dot,
+#primersRoot .lineage-chip .lineage-dot {
   width: 0.65rem;
   height: 0.65rem;
   border-radius: 50%;
   flex: 0 0 auto;
 }
 
-#lineageRoot .lineage-chip button {
+#lineageRoot .lineage-chip button,
+#primersRoot .lineage-chip button {
   padding: 0 0.3rem;
   border: 0;
   background: transparent;
@@ -43,16 +49,19 @@
   cursor: pointer;
 }
 
-#lineageRoot .lineage-chip button:hover {
+#lineageRoot .lineage-chip button:hover,
+#primersRoot .lineage-chip button:hover {
   color: #a61e1e;
 }
 
-#lineageRoot .lineage-add {
+#lineageRoot .lineage-add,
+#primersRoot .lineage-add {
   position: relative;
   display: inline-block;
 }
 
-#lineageRoot .lineage-add input {
+#lineageRoot .lineage-add input,
+#primersRoot .lineage-add input {
   width: 15rem;
   padding: 0.2rem 0.6rem;
   border: 1px solid #c9ccd1;
@@ -60,7 +69,8 @@
   font-size: 0.85rem;
 }
 
-#lineageRoot .lineage-results {
+#lineageRoot .lineage-results,
+#primersRoot .lineage-results {
   position: absolute;
   z-index: 30;
   top: 100%;
@@ -74,7 +84,8 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
 }
 
-#lineageRoot .lineage-results button {
+#lineageRoot .lineage-results button,
+#primersRoot .lineage-results button {
   display: block;
   width: 100%;
   padding: 0.35rem 0.7rem;
@@ -85,16 +96,19 @@
   cursor: pointer;
 }
 
-#lineageRoot .lineage-results button:hover {
+#lineageRoot .lineage-results button:hover,
+#primersRoot .lineage-results button:hover {
   background: #eef3fb;
 }
 
-#lineageRoot .lineage-message {
+#lineageRoot .lineage-message,
+#primersRoot .lineage-message {
   margin: 0.3rem 0 0;
   font-size: 0.85rem;
 }
 
-#lineageRoot .lineage-message.error {
+#lineageRoot .lineage-message.error,
+#primersRoot .lineage-message.error {
   color: #a61e1e;
 }
 
