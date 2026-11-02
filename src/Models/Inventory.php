@@ -85,9 +85,9 @@ final class Inventory extends AbstractConcreteEntity
         $title = Filter::title($title ?? _('Untitled'));
         // the entries of the database are visible to everyone with an account and editable by their owner and the admins,
         // whatever the defaults of the user: only an admin can change that
-        // a planned entry is private to its owner until it is marked ready
-        $canreadBase = $this->asPlanned ? BasePermissions::UserOnly : BasePermissions::Organization;
-        $canwriteBase = $this->asPlanned ? BasePermissions::UserOnly : BasePermissions::User;
+        // a planned entry, and an entry that is not registered, are private to their owner until they are marked ready or registered
+        $canreadBase = ($this->asPlanned || $this->asUnregistered) ? BasePermissions::UserOnly : BasePermissions::Organization;
+        $canwriteBase = ($this->asPlanned || $this->asUnregistered) ? BasePermissions::UserOnly : BasePermissions::User;
         $canread = self::EMPTY_CAN_JSON;
         $canwrite = self::EMPTY_CAN_JSON;
         $canreadIsImmutable = true;
@@ -227,8 +227,10 @@ final class Inventory extends AbstractConcreteEntity
             throw new ImproperActionException(_('It cannot be registered yet, it needs: ') . implode(', ', $missing) . '.');
         }
         $number = $this->nextNumber((int) $category);
-        $req = $this->Db->prepare('UPDATE inventory SET custom_id = :number WHERE id = :id AND custom_id IS NULL AND is_planned = 0');
+        $req = $this->Db->prepare('UPDATE inventory SET custom_id = :number, canread_base = :canread, canwrite_base = :canwrite WHERE id = :id AND custom_id IS NULL AND is_planned = 0');
         $req->bindValue(':number', $number, PDO::PARAM_INT);
+        $req->bindValue(':canread', BasePermissions::Organization->value, PDO::PARAM_INT);
+        $req->bindValue(':canwrite', BasePermissions::User->value, PDO::PARAM_INT);
         $req->bindValue(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
         return (int) $number;
@@ -297,16 +299,18 @@ final class Inventory extends AbstractConcreteEntity
     }
 
     /**
-     * The lists of the database leave out the planned entries, except the ones of the owner asking for them (planned=1)
+     * The lists of the database leave out the planned entries and the ones that are not registered, except in the list of the owner (planned=1), which has all the entries of the owner
      */
     #[Override]
     public function readShow(QueryParamsInterface $displayParams, bool $extended = false, string $can = 'canread'): array
     {
         $before = $this->filterSql;
+        // an entry without a number (and with a module) is not registered: it is in the list of its owner only (planned=1), the
+        // lists of the Database show the registered entries
         if ($displayParams->getQuery()->getBoolean('planned')) {
-            $this->filterSql .= ' AND entity.is_planned = 1 AND entity.userid = ' . (int) $this->Users->userData['userid'] . ' ';
+            $this->filterSql .= ' AND entity.userid = ' . (int) $this->Users->userData['userid'] . ' ';
         } else {
-            $this->filterSql .= ' AND entity.is_planned = 0 ';
+            $this->filterSql .= ' AND entity.is_planned = 0 AND (entity.custom_id IS NOT NULL OR entity.category IS NULL) ';
         }
         try {
             return parent::readShow($displayParams, $extended, $can);

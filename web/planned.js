@@ -41,9 +41,9 @@
 
   // ---- the list page: a tab "My planned" with the planned entries and a form to plan one
   async function listPage(nav) {
-    const tab = element('button', 'category-nav-item planned-tab', 'My planned');
+    const tab = element('button', 'category-nav-item planned-tab', 'My entries');
     tab.type = 'button';
-    tab.title = 'Plasmids, primers and stocks that are not made or ordered yet: private, without a number';
+    tab.title = 'All your entries, with the ones that have no number yet (planned, ordered, being made, intermediates) first. Only you see those.';
     nav.append(tab);
     const panel = element('div', 'planned-panel card card-body my-2');
     panel.hidden = true;
@@ -51,7 +51,7 @@
 
     async function draw() {
       panel.textContent = '';
-      panel.append(element('p', 'text-muted mb-2', 'Planned entries (Planned, Ordered, Being made) are private to you, are not in the lists of the Database and show no number. Move one to the Database when it is made or arrives: it gets the next number of its module (or the number it had before).'));
+      panel.append(element('p', 'text-muted mb-2', 'The Database lists show the registered entries only. Here are all your entries; the ones without a number (planned: Planned, Ordered, Being made, and intermediates) come first and only you see them. Move a planned one to the Database when it is made, or register an intermediate: it gets the next number of its module.'));
       const form = element('form', 'form-inline mb-2');
       const title = element('input', 'form-control form-control-sm mr-2');
       title.type = 'text';
@@ -89,29 +89,34 @@
       try {
         const planned = (await call()).planned;
         if (planned.length === 0) {
-          holder.append(element('p', 'text-muted mb-0', 'Nothing is planned yet.'));
+          holder.append(element('p', 'text-muted mb-0', 'You have no entries yet.'));
         }
         planned.forEach(function (entry) {
           const row = element('div', 'd-flex align-items-center py-1 border-top');
           const link = element('a', '', entry.title);
           link.href = 'registry.php?mode=view&id=' + entry.id;
           const badge = element('span', 'badge badge-secondary ml-2', entry.category_title || 'no module');
-          const state = element('span', 'badge ml-2 text-white', entry.status_title || 'Planned');
-          state.style.backgroundColor = '#' + (entry.status_color || 'b0b7c3');
-          const ready = element('button', 'btn btn-outline-success btn-sm ml-auto', 'Move to the Database');
-          ready.title = entry.custom_id ? 'It comes back with its number ' + entry.custom_id : 'It gets the next number of its module';
+          const isPlanned = Number(entry.is_planned) === 1;
+          const registered = !isPlanned && entry.custom_id !== null;
+          const state = element('span', 'badge ml-2 text-white', registered ? 'No. ' + entry.custom_id : (isPlanned ? (entry.status_title || 'Planned') : 'Intermediate'));
+          state.style.backgroundColor = '#' + (registered ? '6b7785' : (isPlanned ? (entry.status_color || 'b0b7c3') : 'c9a227'));
+          const ready = element('button', 'btn btn-outline-success btn-sm ml-auto', isPlanned ? 'Move to the Database' : 'Register to number');
+          ready.title = isPlanned ? (entry.custom_id ? 'It comes back with its number ' + entry.custom_id : 'It gets the next number of its module') : 'It gets the next number of its module when it has what the module requires';
           ready.type = 'button';
           ready.addEventListener('click', async function () {
             ready.disabled = true;
             try {
-              const done = await post({ action: 'ready', id: entry.id });
+              const done = await post({ action: isPlanned ? 'ready' : 'register', id: entry.id });
               ready.textContent = 'Number ' + done.number;
               window.setTimeout(draw, 800);
             } catch (error) {
               ready.textContent = error.message;
             }
           });
-          row.append(link, badge, state, ready);
+          row.append(link, badge, state);
+          if (!registered) {
+            row.append(ready);
+          }
           holder.append(row);
         });
       } catch (error) {
@@ -221,7 +226,7 @@
       // in the Database without a number: an intermediate. Register gives it the next number of its module, when it has what the
       // module requires (the required fields, and for the plasmids a sequence).
       bar.classList.add('alert-warning');
-      bar.append(element('span', 'mr-2', 'Not registered: no number yet (an intermediate).'));
+      bar.append(element('span', 'mr-2', 'Not registered: no number yet (an intermediate). Only you see it, and it is not in the lists of the Database.'));
       const register = element('button', 'btn btn-success btn-sm ml-auto', 'Register to number');
       register.type = 'button';
       register.addEventListener('click', async function () {

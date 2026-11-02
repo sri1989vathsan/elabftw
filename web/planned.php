@@ -30,7 +30,7 @@ use function trim;
  * owner, kept out of the lists of the database and have no number until they are marked ready; then they get the next number of
  * their module (each module counts on its own).
  *
- * GET gives the planned entries of the requester.
+ * GET gives the entries of the requester: the ones without a number first (planned and intermediates), then the registered ones.
  * POST {action: plan, title, category} makes a planned entry; {action: status, id, status} sets its status (Planned, Ordered,
  * Being made); {action: register, id} gives a number to an entry of the Database that has none (an intermediate), when it has
  * what its module requires; {action: ready, id} moves it into the Database (it keeps the number it had before, else gets the next one of its
@@ -98,9 +98,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 }
 
-$req = $pdo->prepare('SELECT i.id, i.title, i.category, c.title AS category_title, c.color AS category_color, i.date, i.custom_id, s.title AS status_title, s.color AS status_color
+$req = $pdo->prepare('SELECT i.id, i.title, i.is_planned, i.category, c.title AS category_title, c.color AS category_color, i.date, i.custom_id, s.title AS status_title, s.color AS status_color
     FROM inventory AS i LEFT JOIN inventory_categories AS c ON c.id = i.category LEFT JOIN inventory_status AS s ON s.id = i.status
-    WHERE i.is_planned = 1 AND i.userid = :userid AND i.team = :team AND i.state = 1 ORDER BY i.id DESC');
+    WHERE i.userid = :userid AND i.team = :team AND i.state = 1
+    ORDER BY (i.is_planned = 0 AND i.custom_id IS NOT NULL), i.id DESC LIMIT 300');
 $req->bindValue(':userid', $userId, PDO::PARAM_INT);
 $req->bindValue(':team', $teamId, PDO::PARAM_INT);
 $pdo->execute($req);
