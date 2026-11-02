@@ -5,7 +5,7 @@
  */
 (function () {
   'use strict';
-  const HEIGHT = 20;
+  const HEIGHT = 21;
   const PAD = 5;
   const COMPLEMENT = { A: 'T', T: 'A', G: 'C', C: 'G' };
 
@@ -41,8 +41,10 @@
   }
 
   // the overhang (the tail that does not bind) as a second, hatched box next to the bound part
-  function overhangShape(x0, x1) {
-    return 'M' + x0 + ',3 L' + x1 + ',3 L' + x1 + ',' + HEIGHT + ' L' + x0 + ',' + HEIGHT + ' Z';
+  function overhangShape(x0, x1, forward) {
+    const top = forward ? 6 : 0;
+    const bottom = forward ? HEIGHT : HEIGHT - 6;
+    return 'M' + x0 + ',' + top + ' L' + x1 + ',' + top + ' L' + x1 + ',' + bottom + ' L' + x0 + ',' + bottom + ' Z';
   }
 
   function restyle() {
@@ -98,16 +100,16 @@
       const x0 = whole ? -PAD : 0;
       const x1 = whole ? w + PAD : w;
       const gap = whole ? PAD : 0;
-      const d = shape(x0, x1, forward, whole) + (tail ? ' ' + (forward ? overhangShape(x0 - tail * char, x0) : overhangShape(x1, x1 + tail * char)) : '');
+      const d = shape(x0, x1, forward, whole) + (tail ? ' ' + (forward ? overhangShape(x0 - tail * char, x0, true) : overhangShape(x1, x1 + tail * char, false)) : '');
       if (own && whole) {
         // the letters of the editor on the line of the sequence, the bases exactly under the bases of the sequence, and the
         // overhang in line with them on the side of the 5' end
         own.setAttribute('x', '0');
-        own.setAttribute('y', forward ? '15' : '13');
+        own.setAttribute('y', forward ? '17' : '12');
         own.setAttribute('textLength', String(w));
         if (insert) {
           insert.setAttribute('x', String(forward ? x0 - tail * char : x1));
-          insert.setAttribute('y', forward ? '15' : '13');
+          insert.setAttribute('y', forward ? '17' : '12');
           insert.setAttribute('textLength', String(tail * char));
           insert.removeAttribute('transform');
         }
@@ -130,7 +132,7 @@
           });
         }
         text.textContent = bases;
-        text.setAttribute('transform', 'translate(0,' + (forward ? 15 : 13) + ')');
+        text.setAttribute('transform', 'translate(0,' + (forward ? 17 : 12) + ')');
         text.setAttribute('textLength', String(w));
         text.setAttribute('lengthAdjust', 'spacing');
         text.setAttribute('class', 'veLabelText ve-monospace-font oligo-bases');
@@ -143,7 +145,7 @@
             return COMPLEMENT[b];
           }));
           overhang.setAttribute('class', 'veLabelText ve-monospace-font oligo-tail');
-          overhang.setAttribute('transform', 'translate(' + (forward ? -tail * char - gap : w + gap) + ',' + (forward ? 15 : 13) + ')');
+          overhang.setAttribute('transform', 'translate(' + (forward ? -tail * char - gap : w + gap) + ',' + (forward ? 17 : 12) + ')');
           overhang.setAttribute('textLength', String(tail * char));
           overhang.setAttribute('lengthAdjust', 'spacing');
           g.append(overhang);
