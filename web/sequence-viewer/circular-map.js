@@ -587,39 +587,39 @@
         draw1(item, primerIn, primerOut, 7, 2);
       });
 
-      // the translations: a ring inside the scale, a segment for each amino acid (its letter when there is room for it)
+      // the translations: a thin green line along the gene with an arrowhead where the reading ends and a small tick across it
+      // at each stop codon
       if (shown('translations')) {
-        const ringMid = innerEdge - 36;
+        const ringMid = innerEdge - 30;
         if (ringMid > 34) {
           translationItems(data).forEach(function (item) {
-            const first = angleOf(item.start, length);
-            const codonArc = (TAU * 3 / length) * ringMid;
+            const range = arcOf(item, length);
             const group = svgElement('g', { class: 'own-map-translation' });
             const title = item.name + ' (translation) ' + (item.start + 1) + '..' + (item.end + 1) + ' · ' + item.codons.length + ' amino acids' + (item.forward ? '' : ' · reverse');
-            if (codonArc < 2.5) {
-              // too small for the codons: one band with an arrow, the amino acids are there when the map is made bigger
-              const range = arcOf(item, length);
-              const band = svgElement('path', { d: arrowPath(cx, cy, ringMid - 6, ringMid + 6, range[0], range[1], item.forward ? 1 : -1, 10 / ringMid), fill: dark ? '#46618a' : '#c7d9f1', stroke: dark ? '#7f9cc8' : '#8aa6d3', 'stroke-width': 0.8 });
-              band.append(svgElement('title', {}, title));
-              group.append(band);
-            } else {
-              item.codons.forEach(function (codon, index) {
-                const a1 = angleOf(codon.start, length);
-                const a2 = a1 + (TAU * 3) / length;
-                const stop = codon.aa === '*';
-                const fill = stop ? '#e0806a' : (index % 2 === 0 ? (dark ? '#3d5578' : '#dbe7f7') : (dark ? '#46618a' : '#c7d9f1'));
-                const segment = svgElement('path', { d: arrowPath(cx, cy, ringMid - 6, ringMid + 6, a1, a2, 0, 0), fill: fill });
-                segment.append(svgElement('title', {}, codon.aa + ' ' + (index + 1) + ' · ' + item.name));
-                group.append(segment);
-                if (codonArc >= 9) {
-                  const p = at(ringMid, (a1 + a2) / 2);
-                  group.append(svgElement('text', { x: p[0], y: p[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'own-map-aa' }, stop ? '*' : codon.aa));
-                }
-              });
-              // the start of the gene is marked: the arrow of the reading direction at its end
-              const range = arcOf(item, length);
-              group.append(svgElement('path', { d: arrowPath(cx, cy, ringMid + 7, ringMid + 9, range[0], range[1], 0, 0), fill: item.forward ? '#6a8fd0' : '#d08f6a' }));
-            }
+            const large = (range[1] - range[0]) > Math.PI ? 1 : 0;
+            const from = at(ringMid, range[0]);
+            const to = at(ringMid, range[1]);
+            const line = svgElement('path', { d: 'M' + from[0].toFixed(1) + ',' + from[1].toFixed(1) + 'A' + ringMid + ',' + ringMid + ' 0 ' + large + ' 1 ' + to[0].toFixed(1) + ',' + to[1].toFixed(1), class: 'own-map-translation-line', fill: 'none' });
+            line.append(svgElement('title', {}, title));
+            group.append(line);
+            // a wide invisible stroke so the line is easy to point at
+            group.append(svgElement('path', { d: line.getAttribute('d'), fill: 'none', stroke: 'transparent', 'stroke-width': 9 }));
+            item.codons.forEach(function (codon) {
+              if (codon.aa !== '*') {
+                return;
+              }
+              const a = angleOf(codon.start + 1.5, length);
+              const t1 = at(ringMid - 3.5, a);
+              const t2 = at(ringMid + 3.5, a);
+              group.append(svgElement('line', { x1: t1[0], y1: t1[1], x2: t2[0], y2: t2[1], class: 'own-map-translation-tick' }));
+            });
+            // the arrowhead: a small barb at the end of the reading
+            const end = item.forward ? range[1] : range[0];
+            const back = end + (item.forward ? -1 : 1) * Math.min(0.05, (range[1] - range[0]) / 2);
+            const tip = at(ringMid, end);
+            const base = at(ringMid + 4, back);
+            const inner = at(ringMid - 4, back);
+            group.append(svgElement('path', { d: 'M' + tip[0].toFixed(1) + ',' + tip[1].toFixed(1) + 'L' + base[0].toFixed(1) + ',' + base[1].toFixed(1) + 'M' + tip[0].toFixed(1) + ',' + tip[1].toFixed(1) + 'L' + inner[0].toFixed(1) + ',' + inner[1].toFixed(1), class: 'own-map-translation-line', fill: 'none' }));
             group.addEventListener('mousedown', function (event) {
               event.stopPropagation();
             });

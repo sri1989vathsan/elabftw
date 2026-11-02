@@ -2012,3 +2012,15 @@ body.hide-seq-translations .veRowView .veRowViewTranslationsContainer {
   top: 4px;
   right: 8px;
 }
+
+/* the translations of the circular map: a thin line with ticks at the stop codons */
+.own-map-translation-line {
+  stroke: #2f8f46;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.own-map-translation-tick {
+  stroke: #2f8f46;
+  stroke-width: 1.4;
+}
