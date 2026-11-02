@@ -297,4 +297,9 @@
 >
 </div>
 
+{% if Entity.entityType.value == 'inventory' %}
+  {# the folders of the database #}
+  <script src='registry-folders.js?v={{ 'now'|date('YmdHi') }}'></script>
+{% endif %}
+
 {% endblock body %}

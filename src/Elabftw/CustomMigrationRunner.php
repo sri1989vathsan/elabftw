@@ -146,6 +146,7 @@ final class CustomMigrationRunner
         '113_registry_category_fields.sql',
         '114_registry_storage_comment.sql',
         '115_registry_primers.sql',
+        '116_registry_folders.sql',
     );
 
     private Db $Db;
