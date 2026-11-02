@@ -53,6 +53,9 @@ final class Inventory extends AbstractConcreteEntity
     /** the entry that is made is a planned one: private, kept out of the lists, without a number */
     public bool $asPlanned = false;
 
+    /** the copy made by duplicate() goes into the Database at once (registered, with a number), not into My entries */
+    public bool $duplicateRegistered = false;
+
     /** the folder (of the database) the copy made by duplicate() goes in */
     public ?int $duplicateFolderId = null;
 
@@ -354,8 +357,9 @@ final class Inventory extends AbstractConcreteEntity
     {
         $this->canOrExplode(AccessType::Read);
 
-        // a copy is not registered: it is in My entries, private to the user, without a number, until it is registered
-        $this->asUnregistered = true;
+        // a copy is a local copy by default: not registered, in My entries, private to the user, without a number, until it is registered;
+        // a copy to the Database is registered at once and gets the next number of its module
+        $this->asUnregistered = !$this->duplicateRegistered;
         $newId = $this->copyEntityFrom(
             sourceEntity: $this,
             title: $this->entityData['title'] . ' I',

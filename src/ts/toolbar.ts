@@ -18,10 +18,16 @@ on(Action.Duplicate, () => {
   const copyFiles = (document.getElementById('duplicateKeepFilesSelect') as HTMLInputElement);
   const linkToOriginalExperiment = (document.getElementById('duplicateLinkToOriginal') as HTMLInputElement);
   // Ensure the link to original exists because this feature is not available for Template entities
+  // the entries of the database: a local copy (in My entries) or a copy to the Database, and the folder
+  const where = (document.querySelector('input[name="duplicateWhere"]:checked') as HTMLInputElement | null)?.value;
+  const folder = parseInt((document.getElementById('duplicateFolder') as HTMLSelectElement | null)?.value ?? '', 10);
   ApiC.post2location(`${entity.type}/${entity.id}`, {
     action: Action.Duplicate,
     copyFiles: Boolean(copyFiles.checked),
-    linkToOriginal: Boolean(linkToOriginalExperiment?.checked ?? false)},
+    linkToOriginal: Boolean(linkToOriginalExperiment?.checked ?? false),
+    ...(where === 'database' ? { registered: true } : {}),
+    ...(folder > 0 ? { folder_id: folder } : {}),
+  },
   ).then(id => {
     window.location.href = `?mode=edit&id=${id}`;
   });

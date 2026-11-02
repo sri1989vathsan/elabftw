@@ -304,6 +304,7 @@ abstract class AbstractEntity extends AbstractRest
                 // a copy of an entry of the database goes in the folder the user chose, if they chose one
                 if ($this instanceof Inventory) {
                     $this->duplicateFolderId = !empty($reqBody['folder_id']) ? (int) $reqBody['folder_id'] : null;
+                    $this->duplicateRegistered = !empty($reqBody['registered']);
                 }
                 return $this->duplicate((bool) ($reqBody['copyFiles'] ?? false), (bool) ($reqBody['linkToOriginal'] ?? false));
             })(),

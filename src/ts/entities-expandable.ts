@@ -46,15 +46,31 @@ const numberOrEmpty = (value: string): number | '' => value !== '' && Number.isF
 
 
 // the dialog of a copy: in which folder of the database it goes (the folders are the ones of the folders panel); resolves to the
-// folder id, 0 for no folder, or null when the user cancels
-function askCopyFolder(title: string): Promise<number | null> {
+// the folder id (0 for no folder) and whether the copy goes to the Database, or null when the user cancels
+function askCopyFolder(title: string): Promise<{ folder: number; toDatabase: boolean } | null> {
   return new Promise(resolve => {
     const back = el('div', 'copy-backdrop');
     const box = el('div', 'copy-dialog');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
     box.append(el('h5', '', `Copy ${title}`));
-    box.append(el('p', 'text-muted small', 'The copy is not registered: it has no number and only you see it, in My entries, until you register it.'));
+    // a local copy stays with the user until it is registered; a copy to the Database is in All entries at once
+    const where = el('div', 'mb-2');
+    const choice = (value: string, text: string, checked: boolean): HTMLLabelElement => {
+      const label = el('label', 'd-block');
+      const radio = el('input');
+      radio.type = 'radio';
+      radio.name = 'copy-where';
+      radio.value = value;
+      radio.checked = checked;
+      label.append(radio, document.createTextNode(` ${text}`));
+      return label;
+    };
+    where.append(
+      choice('local', 'Make a local copy: in My entries, only you see it, no number until you register it', true),
+      choice('database', 'Copy to the Database: in All entries now, registered with the next number of its module', false),
+    );
+    box.append(where);
     const label = el('label', '', 'Folder');
     const select = el('select', 'form-control form-control-sm');
     const none = el('option', '', 'No folder');
@@ -73,12 +89,12 @@ function askCopyFolder(title: string): Promise<number | null> {
     cancel.type = 'button';
     const ok = el('button', 'btn btn-primary btn-sm', 'Copy');
     ok.type = 'button';
-    const done = (value: number | null): void => {
+    const done = (value: { folder: number; toDatabase: boolean } | null): void => {
       back.remove();
       resolve(value);
     };
     cancel.addEventListener('click', () => done(null));
-    ok.addEventListener('click', () => done(parseInt(select.value, 10) || 0));
+    ok.addEventListener('click', () => done({ folder: parseInt(select.value, 10) || 0, toDatabase: (box.querySelector('input[name="copy-where"]:checked') as HTMLInputElement | null)?.value === 'database' }));
     back.addEventListener('click', event => {
       if (event.target === back) done(null);
     });
@@ -489,7 +505,8 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
         if (choice === null) return;
         copy.disabled = true;
         const body: Record<string, unknown> = { action: Action.Duplicate, copyFiles: true, linkToOriginal: false };
-        if (choice > 0) body.folder_id = choice;
+        if (choice.folder > 0) body.folder_id = choice.folder;
+        if (choice.toDatabase) body.registered = true;
         return ApiC.post2location(`inventory/${row.id}`, body)
           .then(id => {
             window.location.href = `?mode=edit&id=${id}`;
