@@ -520,6 +520,15 @@
         container.style.marginLeft = 'auto';
       }
     }
+    try {
+      if (open) {
+        window.localStorage.setItem('registry-folders-panel', '1');
+      } else {
+        window.localStorage.removeItem('registry-folders-panel');
+      }
+    } catch (error) {
+      // not remembered
+    }
     if (opener) {
       opener.classList.toggle('sidepanel-opened', open);
       opener.classList.toggle('sidepanel-closed', !open);
@@ -693,8 +702,51 @@ tr.expandable-row[draggable="true"] { cursor: grab; }
 
   window.RegistryFolders = { reload: load };
 
+  // The pages of the database show the folders of the database, never those of the experiments and the resources: that panel is
+  // closed when the page opens (it can be restored from a visit to another page) and whenever something tries to open it. When it was
+  // the panel that was open, the panel of the database opens in its place.
+  function keepExperimentFoldersOut() {
+    const experiments = document.getElementById('foldersPanel');
+    if (!experiments) {
+      return;
+    }
+    const check = function () {
+      if (experiments.hasAttribute('hidden')) {
+        return;
+      }
+      experiments.setAttribute('hidden', '');
+      const opener = document.getElementById('foldersPanelOpener');
+      if (opener) {
+        opener.classList.add('sidepanel-closed');
+        opener.classList.remove('sidepanel-opened');
+        opener.setAttribute('aria-expanded', 'false');
+      }
+      try {
+        if (window.localStorage.getItem('opened-sidepanel') === 'folders') {
+          window.localStorage.removeItem('opened-sidepanel');
+        }
+      } catch (error) {
+        // nothing to forget
+      }
+      if (panel) {
+        showPanel(true);
+      }
+    };
+    check();
+    new MutationObserver(check).observe(experiments, { attributes: true, attributeFilter: ['hidden'] });
+  }
+
   function start() {
     build();
+    keepExperimentFoldersOut();
+    // the panel of the database was open on the last page of the database
+    try {
+      if (panel && window.localStorage.getItem('registry-folders-panel') === '1' && !document.querySelector('.side-panel:not([hidden]):not(#registryFoldersPanel)')) {
+        showPanel(true);
+      }
+    } catch (error) {
+      // closed
+    }
     load().then(function () {
       placeEntryFolder();
       filterList();
