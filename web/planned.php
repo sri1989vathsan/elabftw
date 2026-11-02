@@ -72,6 +72,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $id = $Inventory->create(title: $title, category: $category, status: $Inventory->plannedStatusId('Planned'));
             respond(200, array('id' => $id));
         }
+        if ($action === 'intermediate') {
+            $title = trim((string) ($payload['title'] ?? ''));
+            $category = (int) ($payload['category'] ?? 0);
+            if ($title === '' || $category <= 0) {
+                respond(400, array('error' => 'A title and a module are needed.'));
+            }
+            $Inventory = new Inventory($App->Users);
+            $Inventory->asUnregistered = true;
+            respond(200, array('id' => $Inventory->create(title: $title, category: $category)));
+        }
         if ($action === 'status') {
             $id = (int) ($payload['id'] ?? 0);
             new Inventory($App->Users, $id)->setPlannedStatus((string) ($payload['status'] ?? ''));

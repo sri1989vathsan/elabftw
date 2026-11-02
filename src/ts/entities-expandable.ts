@@ -44,6 +44,52 @@ const basesOf = (row: Row): string => fieldOf(row, /^sequence/i).toUpperCase().r
 const gcOf = (bases: string): number | '' => bases === '' ? '' : Math.round(((bases.match(/[GC]/g) ?? []).length / bases.length) * 1000) / 10;
 const numberOrEmpty = (value: string): number | '' => value !== '' && Number.isFinite(Number(value)) ? Number(value) : '';
 
+
+// the dialog of a copy: in which folder of the database it goes (the folders are the ones of the folders panel); resolves to the
+// folder id, 0 for no folder, or null when the user cancels
+function askCopyFolder(title: string): Promise<number | null> {
+  return new Promise(resolve => {
+    const back = el('div', 'copy-backdrop');
+    const box = el('div', 'copy-dialog');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.append(el('h5', '', `Copy ${title}`));
+    box.append(el('p', 'text-muted small', 'The copy is not registered: it has no number and only you see it, in My entries, until you register it.'));
+    const label = el('label', '', 'Folder');
+    const select = el('select', 'form-control form-control-sm');
+    const none = el('option', '', 'No folder');
+    none.value = '0';
+    select.append(none);
+    document.querySelectorAll<HTMLOptionElement>('#newFolderParent option').forEach(option => {
+      if (!option.value) return;
+      const own = el('option', '', option.textContent ?? '');
+      own.value = option.value;
+      select.append(own);
+    });
+    label.append(select);
+    box.append(label);
+    const buttons = el('div', 'copy-dialog-buttons');
+    const cancel = el('button', 'btn btn-secondary btn-sm', 'Cancel');
+    cancel.type = 'button';
+    const ok = el('button', 'btn btn-primary btn-sm', 'Copy');
+    ok.type = 'button';
+    const done = (value: number | null): void => {
+      back.remove();
+      resolve(value);
+    };
+    cancel.addEventListener('click', () => done(null));
+    ok.addEventListener('click', () => done(parseInt(select.value, 10) || 0));
+    back.addEventListener('click', event => {
+      if (event.target === back) done(null);
+    });
+    buttons.append(cancel, ok);
+    box.append(buttons);
+    back.append(box);
+    document.body.append(back);
+    select.focus();
+  });
+}
+
 // the category is in the tabs and the location in the opened row: no columns for them
 function columnsFor(rows: Row[]): Column[] {
   const text = (key: string, label: string, get: (row: Row) => string | number): Column => ({ key, label, numeric: false, get });
@@ -438,14 +484,20 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     copy.setAttribute('aria-label', `Copy ${row.title}`);
     copy.append(el('i', 'fas fa-copy fa-fw'));
     copy.addEventListener('click', () => {
-      copy.disabled = true;
-      void ApiC.post2location(`inventory/${row.id}`, { action: Action.Duplicate, copyFiles: true, linkToOriginal: false })
-        .then(id => {
-          window.location.href = `?mode=edit&id=${id}`;
-        })
-        .catch(() => {
-          copy.disabled = false;
-        });
+      // a copy goes to My entries (not registered, private, no number): the user says in which folder
+      void askCopyFolder(row.title).then(choice => {
+        if (choice === null) return;
+        copy.disabled = true;
+        const body: Record<string, unknown> = { action: Action.Duplicate, copyFiles: true, linkToOriginal: false };
+        if (choice > 0) body.folder_id = choice;
+        return ApiC.post2location(`inventory/${row.id}`, body)
+          .then(id => {
+            window.location.href = `?mode=edit&id=${id}`;
+          })
+          .catch(() => {
+            copy.disabled = false;
+          });
+      });
     });
     // the label printing is not made yet: the button tells the page which entry was meant, and a handler can be added later
     const print = el('button', 'btn btn-secondary btn-sm');

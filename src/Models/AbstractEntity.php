@@ -266,8 +266,9 @@ abstract class AbstractEntity extends AbstractRest
                     $contentType = isset($reqBody['content_type'])
                         ? BodyContentType::from($reqBody['content_type'])
                         : ($useMarkdown ? BodyContentType::Markdown : BodyContentType::Html);
-                    // an entry of the database made as an intermediate has no number until it is registered
-                    if ($this instanceof Inventory && !empty($reqBody['unregistered'])) {
+                    // an entry of the database made through the API has no number and is private to its owner (it is in My entries)
+                    // until it is registered; only the Add entry button asks for it to be registered at once
+                    if ($this instanceof Inventory && empty($reqBody['registered'])) {
                         $this->asUnregistered = true;
                     }
                     $newId = $this->create(
@@ -299,7 +300,13 @@ abstract class AbstractEntity extends AbstractRest
                     return $newId;
                 }
             )(),
-            Action::Duplicate => $this->duplicate((bool) ($reqBody['copyFiles'] ?? false), (bool) ($reqBody['linkToOriginal'] ?? false)),
+            Action::Duplicate => (function () use ($reqBody): int {
+                // a copy of an entry of the database goes in the folder the user chose, if they chose one
+                if ($this instanceof Inventory) {
+                    $this->duplicateFolderId = !empty($reqBody['folder_id']) ? (int) $reqBody['folder_id'] : null;
+                }
+                return $this->duplicate((bool) ($reqBody['copyFiles'] ?? false), (bool) ($reqBody['linkToOriginal'] ?? false));
+            })(),
             default => throw new ImproperActionException('Invalid action parameter.'),
         };
     }

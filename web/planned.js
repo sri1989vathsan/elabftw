@@ -57,11 +57,17 @@
       title.type = 'text';
       title.placeholder = 'Name of what you plan';
       title.required = true;
+      const kind = element('select', 'form-control form-control-sm mr-2');
+      [['plan', 'Planned (not made yet)'], ['intermediate', 'Intermediate (made, no number)']].forEach(function (option) {
+        const o = element('option', '', option[1]);
+        o.value = option[0];
+        kind.append(o);
+      });
       const category = element('select', 'form-control form-control-sm mr-2');
-      const add = element('button', 'btn btn-primary btn-sm', 'Plan it');
+      const add = element('button', 'btn btn-primary btn-sm', 'Add');
       add.type = 'submit';
       const message = element('span', 'ml-2 text-danger');
-      form.append(title, category, add, message);
+      form.append(title, kind, category, add, message);
       panel.append(form);
       try {
         const categories = await (await fetch('api/v2/teams/current/registry_categories', { credentials: 'same-origin' })).json();
@@ -77,7 +83,7 @@
         event.preventDefault();
         add.disabled = true;
         try {
-          const made = await post({ action: 'plan', title: title.value, category: Number(category.value) });
+          const made = await post({ action: kind.value, title: title.value, category: Number(category.value) });
           location.href = 'registry.php?mode=edit&id=' + made.id;
         } catch (error) {
           message.textContent = error.message;

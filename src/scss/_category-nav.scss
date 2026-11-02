@@ -811,3 +811,31 @@
   line-height: 1;
   opacity: 0.85;
 }
+
+// the dialog that asks where the copy of an entry of the database goes
+.copy-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 30, 50, 0.45);
+}
+
+.copy-dialog {
+  min-width: 20rem;
+  max-width: 28rem;
+  padding: 1.2rem 1.4rem;
+  background: var(--bg, #fff);
+  color: inherit;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.copy-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}

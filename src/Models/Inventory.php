@@ -53,6 +53,9 @@ final class Inventory extends AbstractConcreteEntity
     /** the entry that is made is a planned one: private, kept out of the lists, without a number */
     public bool $asPlanned = false;
 
+    /** the folder (of the database) the copy made by duplicate() goes in */
+    public ?int $duplicateFolderId = null;
+
     /** the entry that is made is not registered (an intermediate): in the Database like the others, but without a number until it is registered */
     public bool $asUnregistered = false;
 
@@ -351,6 +354,8 @@ final class Inventory extends AbstractConcreteEntity
     {
         $this->canOrExplode(AccessType::Read);
 
+        // a copy is not registered: it is in My entries, private to the user, without a number, until it is registered
+        $this->asUnregistered = true;
         $newId = $this->copyEntityFrom(
             sourceEntity: $this,
             title: $this->entityData['title'] . ' I',
@@ -362,6 +367,10 @@ final class Inventory extends AbstractConcreteEntity
             ),
         );
 
+        $this->asUnregistered = false;
+        if ($this->duplicateFolderId !== null) {
+            new ExperimentsFolders($this->Users, null, 'inventory')->assignInventory($newId, $this->duplicateFolderId);
+        }
         // the copy is a daughter of the original: the original is its parent
         $req = $this->Db->prepare('INSERT IGNORE INTO inventory2inventory (item_id, link_id) VALUES (:child, :parent)');
         $req->bindValue(':child', $newId, PDO::PARAM_INT);

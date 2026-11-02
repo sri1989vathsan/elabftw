@@ -962,7 +962,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // a new entry in the category that is open
   on('create-in-category', async (el: HTMLElement) => {
     const category = parseInt(el.dataset.category ?? '', 10);
-    const params: Record<string, number> = { category };
+    // the Add entry button puts the entry in the Database at once: registered, with its number
+    const params: Record<string, number | boolean> = { category, registered: true };
     const id = await ApiC.post2location('inventory', params);
     window.location.href = `registry.php?mode=edit&id=${id}`;
   });
