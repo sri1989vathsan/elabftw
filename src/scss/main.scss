@@ -1285,7 +1285,8 @@ tr:first-child td {
 
 /* Narrow windows: the rail of sidebar buttons would sit on top of the page, so it collapses into
  * one button in the top bar, left of the logo (#sidepanelRailToggle), that shows the others on
- * demand. A button whose panel is open stays visible so the panel can always be closed. */
+ * demand. While a panel is open the whole rail stays visible (the panel leaves a gutter for it), so
+ * the other panels are one click away without reopening the rail. */
 #sidepanelRailToggle {
   color: var(--primary-fg, #fff);
   display: none;
@@ -1297,7 +1298,7 @@ tr:first-child td {
     display: block;
   }
 
-  #sidepanel-buttons:not(.rail-open) > .sidepanel-btn:not(.sidepanel-opened) {
+  #sidepanel-buttons:not(.rail-open):not(:has(> .sidepanel-opened)) > .sidepanel-btn {
     display: none;
   }
 }
