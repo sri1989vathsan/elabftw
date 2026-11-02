@@ -53,9 +53,15 @@
     const sequence = String(state.sequenceData.sequence || '').toUpperCase();
     const primers = primersOf(state);
     const shapes = Array.from(document.querySelectorAll('g.veRowViewPrimer'));
-    const count = {};
-    shapes.forEach(function (g) {
-      count[g.dataset.id] = (count[g.dataset.id] || 0) + 1;
+    // the width of one base in the rows: the sequence letters are one text with a fixed length
+    let charWidth = 0;
+    Array.from(document.querySelectorAll('.veRowView text.ve-monospace-font[textLength]')).some(function (node) {
+      const length = node.textContent.length;
+      if (length > 5 && !node.classList.contains('veLabelText') && !node.classList.contains('oligo-bases')) {
+        charWidth = parseFloat(node.getAttribute('textLength')) / length;
+        return true;
+      }
+      return false;
     });
     shapes.forEach(function (g) {
       const path = g.querySelector(':scope > path');
@@ -71,9 +77,11 @@
       }
       const w = g.dataset.oligoWidth ? parseFloat(g.dataset.oligoWidth) : width;
       const forward = primer.forward !== false && primer.strand !== -1;
-      const whole = count[g.dataset.id] === 1 && primer.end >= primer.start;
-      const tail = whole && primer.tail ? primer.tail : 0;
+      // whole: the oligo is on one row (the rows are drawn when they scroll into view, so the other pieces of an oligo that
+      // goes over the end of a row may not be there yet: its width, against the width of its bases, tells)
       const bound = primer.end - primer.start + 1;
+      const whole = primer.end >= primer.start && charWidth > 0 && Math.abs(w - bound * charWidth) < charWidth * 1.5;
+      const tail = whole && primer.tail ? primer.tail : 0;
       const char = w / bound;
       // the part that binds, and its overhang: on the left for a forward oligo (its 5' end), on the right for a reverse one
       const x0 = 0;
