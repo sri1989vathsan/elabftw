@@ -88,6 +88,9 @@
   function drawRail() {
     rail.textContent = '';
     tabs.forEach(function (tab) {
+      if (tab.hidden) {
+        return;
+      }
       const b = element('button', 'tool-icon');
       b.type = 'button';
       b.title = tab.label;

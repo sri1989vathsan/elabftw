@@ -53,8 +53,8 @@
         editor.updateEditor({ selectionLayer: { start: drawn.start, end: drawn.end } });
       }));
     }
-    menu.append(item('Edit primer (properties, name, sequence)', function () {
-      window.open('../registry.php?mode=edit&id=' + id, '_blank', 'noopener');
+    menu.append(item('Edit primer (properties, name, bases)', function () {
+      window.OligoEditor.open(id);
     }));
     menu.append(item('Detach from this plasmid', function () {
       window.PrimerPanel.detachPrimer(id).catch(function (error) {

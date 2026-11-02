@@ -1934,3 +1934,32 @@ body[data-map-style="dark"] .own-map-feature {
   fill: #d73a1f;
   text-decoration: underline;
 }
+
+/* the Edit oligo panel */
+#tool-sidebar .oligo-field {
+  display: block;
+  margin: 0.5rem 0;
+}
+
+#tool-sidebar .oligo-field-label {
+  display: block;
+  margin: 0.4rem 0 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7686;
+}
+
+#tool-sidebar .oligo-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #cfd6df;
+  border-radius: 4px;
+  font: inherit;
+}
+
+#tool-sidebar .oligo-bases-input {
+  font-family: ui-monospace, Menlo, monospace;
+  letter-spacing: 0.04em;
+  resize: vertical;
+}

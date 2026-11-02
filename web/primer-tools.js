@@ -268,6 +268,43 @@
     return id;
   }
 
+  // a primer of the database as it is now: its name, bases and orientation
+  async function getPrimer(id) {
+    const entry = await json('api/v2/inventory/' + id);
+    const metadata = JSON.parse(entry.metadata || '{"extra_fields":{}}');
+    const fields = metadata.extra_fields || {};
+    const named = function (pattern) {
+      const key = Object.keys(fields).find(function (n) {
+        return pattern.test(n);
+      });
+      return key ? fields[key].value : '';
+    };
+    return { id: id, title: entry.title, sequence: primerSequenceOf(Object.assign({}, entry, { extra_fields: Object.keys(fields).map(function (n) {
+      return { name: n, value: fields[n].value };
+    }) })), orientation: named(/^orientation/i), tm: named(/^tm/i) };
+  }
+
+  // the name and the bases (with the melting temperature and the orientation) of a primer of the database are changed
+  async function updatePrimer(id, change) {
+    const entry = await json('api/v2/inventory/' + id);
+    const metadata = JSON.parse(entry.metadata || '{"extra_fields":{}}');
+    metadata.extra_fields = metadata.extra_fields || {};
+    const set = function (pattern, value) {
+      const name = Object.keys(metadata.extra_fields).find(function (n) {
+        return pattern.test(n);
+      });
+      if (name) {
+        metadata.extra_fields[name].value = value;
+      }
+    };
+    set(/^sequence/i, clean(change.sequence));
+    set(/^tm/i, tm(change.sequence));
+    if (change.forward !== null && change.forward !== undefined) {
+      set(/^orientation/i, change.forward ? 'Forward' : 'Reverse');
+    }
+    await json('api/v2/inventory/' + id, { method: 'PATCH', headers: jsonHeaders(), body: JSON.stringify({ title: change.title, metadata: JSON.stringify(metadata) }) });
+  }
+
   const attach = function (plasmid, primer) {
     return json('primers.php', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ action: 'attach', plasmid: plasmid, primer: primer }) });
   };
@@ -495,6 +532,8 @@
     findSites: findSites,
     allPrimers: allPrimers,
     createPrimer: createPrimer,
+    getPrimer: getPrimer,
+    updatePrimer: updatePrimer,
     attach: attach,
     detach: detach,
     attached: attached,

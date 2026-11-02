@@ -1030,6 +1030,10 @@
       render();
     } });
     // the right-click menu of the map (primer-menu.js) detaches a primer through this
+    window.PrimerPanel.reload = async function () {
+      sitesFor = { sequence: null, circular: null, byPrimer: new Map() };
+      await loadAttached();
+    };
     window.PrimerPanel.detachPrimer = async function (id) {
       await tools.detach(entryId, id);
       await loadAttached();
