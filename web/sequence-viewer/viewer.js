@@ -197,6 +197,9 @@
     if (window.AlignTab) {
       window.AlignTab.setup(editor, { entryId: entryId });
     }
+    if (window.ToolsTab) {
+      window.ToolsTab.setup(editor, { entryId: entryId, name: fileName });
+    }
   }
 
   async function load() {

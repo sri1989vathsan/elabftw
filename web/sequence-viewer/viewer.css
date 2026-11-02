@@ -1784,3 +1784,58 @@ body[data-map-style="dark"] .own-map-feature {
 #tool-sidebar .annotate-table td:nth-child(n + 3) {
   width: 3.2rem;
 }
+
+/* the Tools panel: folded actions */
+#tool-sidebar .tools-part {
+  margin: 0 0 0.4rem;
+  border: 1px solid #e6e9ed;
+  border-radius: 0.6rem;
+  background: #fff;
+}
+
+#tool-sidebar .tools-part > summary {
+  padding: 0.5rem 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#tool-sidebar .tools-part > .tools-block {
+  padding: 0 0.7rem 0.7rem;
+}
+
+#tool-sidebar .tools-select,
+#tool-sidebar .tools-block input[type='text'],
+#tool-sidebar .tools-block textarea {
+  width: 100%;
+  margin: 0 0 0.4rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid #ccd3da;
+  border-radius: 0.4rem;
+  font-size: 0.82rem;
+}
+
+#tool-sidebar .tools-out {
+  width: 100%;
+  min-height: 4rem;
+  margin: 0.3rem 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid #dde2e8;
+  border-radius: 0.4rem;
+  background: #f6f8fa;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+#tool-sidebar .tools-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+#tool-sidebar .tools-table td,
+#tool-sidebar .tools-table th {
+  padding: 0.15rem 0.3rem;
+  border-bottom: 1px solid #eef1f5;
+  text-align: left;
+}
