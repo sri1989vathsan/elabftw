@@ -148,11 +148,55 @@ final class Inventory extends AbstractConcreteEntity
         return $this->getCurrentHighestCustomId($category) + 1;
     }
 
+    /** the statuses of what is not in the Database yet, with their colours */
+    public const array PLANNED_STATUSES = array('Planned' => 'b0b7c3', 'Ordered' => 'f0a202', 'Being made' => '5b8def');
+
     /**
-     * A planned entry becomes a real one: it gets the next number of its module and is visible to everyone with an account
-     * like the other entries of the database. Only its owner (and the admins) can do it.
+     * The id of a status of the planned entries in the team, made when it is not there yet
+     */
+    public function plannedStatusId(string $title): int
+    {
+        if (!isset(self::PLANNED_STATUSES[$title])) {
+            throw new ImproperActionException(_('Unknown status.'));
+        }
+        $req = $this->Db->prepare('SELECT id FROM inventory_status WHERE team = :team AND title = :title AND state = 1 LIMIT 1');
+        $req->bindValue(':team', $this->Users->team, PDO::PARAM_INT);
+        $req->bindValue(':title', $title);
+        $this->Db->execute($req);
+        $found = $req->fetchColumn();
+        if ($found !== false) {
+            return (int) $found;
+        }
+        $req = $this->Db->prepare('INSERT INTO inventory_status (team, title, color, is_private, ordering, state) VALUES (:team, :title, :color, 0, :ordering, 1)');
+        $req->bindValue(':team', $this->Users->team, PDO::PARAM_INT);
+        $req->bindValue(':title', $title);
+        $req->bindValue(':color', self::PLANNED_STATUSES[$title]);
+        $req->bindValue(':ordering', array_search($title, array_keys(self::PLANNED_STATUSES), true) + 1, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return (int) $this->Db->lastInsertId();
+    }
+
+    /**
+     * The status of a planned entry changes (Planned, Ordered, Being made)
+     */
+    public function setPlannedStatus(string $title): void
+    {
+        $this->canOrExplode(AccessType::Write);
+        if ((int) ($this->entityData['is_planned'] ?? 0) !== 1) {
+            throw new ImproperActionException(_('This entry is not a planned one.'));
+        }
+        $req = $this->Db->prepare('UPDATE inventory SET status = :status WHERE id = :id AND is_planned = 1');
+        $req->bindValue(':status', $this->plannedStatusId($title), PDO::PARAM_INT);
+        $req->bindValue(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    /**
+     * A planned entry moves into the Database: it keeps the number it had before if it was in the Database already, else it gets
+     * the next number of its module, and it is visible to everyone with an account like the other entries. Only its owner (and
+     * the admins) can do it.
      *
-     * @return int the number it got
+     * @return int the number it has
      */
     public function markReady(): int
     {
@@ -164,14 +208,34 @@ final class Inventory extends AbstractConcreteEntity
         if ($category === null) {
             throw new ImproperActionException(_('A module is needed to give it a number: choose one first.'));
         }
-        $number = $this->nextNumber((int) $category);
-        $req = $this->Db->prepare('UPDATE inventory SET is_planned = 0, custom_id = :number, canread_base = :canread, canwrite_base = :canwrite WHERE id = :id AND is_planned = 1');
+        // an entry that was in the Database before keeps its number: nobody else could have taken it, the numbers of the planned
+        // entries count for the next number of the module
+        $number = $this->entityData['custom_id'] !== null ? (int) $this->entityData['custom_id'] : $this->nextNumber((int) $category);
+        $req = $this->Db->prepare('UPDATE inventory SET is_planned = 0, custom_id = :number, status = NULL, canread_base = :canread, canwrite_base = :canwrite WHERE id = :id AND is_planned = 1');
         $req->bindValue(':number', $number, PDO::PARAM_INT);
         $req->bindValue(':canread', BasePermissions::Organization->value, PDO::PARAM_INT);
         $req->bindValue(':canwrite', BasePermissions::User->value, PDO::PARAM_INT);
         $req->bindValue(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
         return (int) $number;
+    }
+
+    /**
+     * An entry of the Database goes back to the planned ones: private, out of the lists. It keeps its number, so it has the same
+     * one when it moves into the Database again.
+     */
+    public function markPlanned(): void
+    {
+        $this->canOrExplode(AccessType::Write);
+        if ((int) ($this->entityData['is_planned'] ?? 0) === 1) {
+            throw new ImproperActionException(_('This entry is planned already.'));
+        }
+        $req = $this->Db->prepare('UPDATE inventory SET is_planned = 1, status = :status, canread_base = :canread, canwrite_base = :canwrite WHERE id = :id AND is_planned = 0');
+        $req->bindValue(':status', $this->plannedStatusId('Planned'), PDO::PARAM_INT);
+        $req->bindValue(':canread', BasePermissions::UserOnly->value, PDO::PARAM_INT);
+        $req->bindValue(':canwrite', BasePermissions::UserOnly->value, PDO::PARAM_INT);
+        $req->bindValue(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
     }
 
     /**

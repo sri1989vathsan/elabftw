@@ -31,7 +31,9 @@ use function trim;
  * their module (each module counts on its own).
  *
  * GET gives the planned entries of the requester.
- * POST {action: plan, title, category} makes a planned entry; {action: ready, id} marks one ready and gives it its number.
+ * POST {action: plan, title, category} makes a planned entry; {action: status, id, status} sets its status (Planned, Ordered,
+ * Being made); {action: ready, id} moves it into the Database (it keeps the number it had before, else gets the next one of its
+ * module); {action: revert, id} takes an entry of the Database back to the planned ones, keeping its number.
  */
 require_once __DIR__ . '/app/init.inc.php';
 
@@ -66,7 +68,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             }
             $Inventory = new Inventory($App->Users);
             $Inventory->asPlanned = true;
-            $id = $Inventory->create(title: $title, category: $category);
+            $id = $Inventory->create(title: $title, category: $category, status: $Inventory->plannedStatusId('Planned'));
+            respond(200, array('id' => $id));
+        }
+        if ($action === 'status') {
+            $id = (int) ($payload['id'] ?? 0);
+            new Inventory($App->Users, $id)->setPlannedStatus((string) ($payload['status'] ?? ''));
+            respond(200, array('id' => $id));
+        }
+        if ($action === 'revert') {
+            $id = (int) ($payload['id'] ?? 0);
+            new Inventory($App->Users, $id)->markPlanned();
             respond(200, array('id' => $id));
         }
         if ($action === 'ready') {
@@ -80,8 +92,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 }
 
-$req = $pdo->prepare('SELECT i.id, i.title, i.category, c.title AS category_title, c.color AS category_color, i.date
-    FROM inventory AS i LEFT JOIN inventory_categories AS c ON c.id = i.category
+$req = $pdo->prepare('SELECT i.id, i.title, i.category, c.title AS category_title, c.color AS category_color, i.date, i.custom_id, s.title AS status_title, s.color AS status_color
+    FROM inventory AS i LEFT JOIN inventory_categories AS c ON c.id = i.category LEFT JOIN inventory_status AS s ON s.id = i.status
     WHERE i.is_planned = 1 AND i.userid = :userid AND i.team = :team AND i.state = 1 ORDER BY i.id DESC');
 $req->bindValue(':userid', $userId, PDO::PARAM_INT);
 $req->bindValue(':team', $teamId, PDO::PARAM_INT);

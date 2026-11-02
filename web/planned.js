@@ -5,6 +5,12 @@
  */
 (function () {
   'use strict';
+  if (!document.querySelector('link[href^="planned.css"]')) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'planned.css';
+    document.head.append(link);
+  }
   const token = function () {
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.content : (document.body.dataset.csrf || '');
@@ -45,7 +51,7 @@
 
     async function draw() {
       panel.textContent = '';
-      panel.append(element('p', 'text-muted mb-2', 'Planned entries are private to you, are not in the lists of the Database and have no number yet. Mark one ready when it is made or arrives: it gets the next number of its module.'));
+      panel.append(element('p', 'text-muted mb-2', 'Planned entries (Planned, Ordered, Being made) are private to you, are not in the lists of the Database and show no number. Move one to the Database when it is made or arrives: it gets the next number of its module (or the number it had before).'));
       const form = element('form', 'form-inline mb-2');
       const title = element('input', 'form-control form-control-sm mr-2');
       title.type = 'text';
@@ -90,7 +96,10 @@
           const link = element('a', '', entry.title);
           link.href = 'registry.php?mode=view&id=' + entry.id;
           const badge = element('span', 'badge badge-secondary ml-2', entry.category_title || 'no module');
-          const ready = element('button', 'btn btn-outline-success btn-sm ml-auto', 'Mark as ready');
+          const state = element('span', 'badge ml-2 text-white', entry.status_title || 'Planned');
+          state.style.backgroundColor = '#' + (entry.status_color || 'b0b7c3');
+          const ready = element('button', 'btn btn-outline-success btn-sm ml-auto', 'Move to the Database');
+          ready.title = entry.custom_id ? 'It comes back with its number ' + entry.custom_id : 'It gets the next number of its module';
           ready.type = 'button';
           ready.addEventListener('click', async function () {
             ready.disabled = true;
@@ -102,7 +111,7 @@
               ready.textContent = error.message;
             }
           });
-          row.append(link, badge, ready);
+          row.append(link, badge, state, ready);
           holder.append(row);
         });
       } catch (error) {
@@ -118,40 +127,117 @@
     });
   }
 
-  // ---- the page of an entry: a bar when it is planned
+  // a dialog of our own: the native box of the browser can be blocked
+  function confirmDialog(title, text, ok) {
+    return new Promise(function (resolve) {
+      const back = element('div', 'planned-backdrop');
+      const box = element('div', 'planned-dialog');
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-modal', 'true');
+      box.append(element('h5', '', title), element('p', '', text));
+      const buttons = element('div', 'planned-dialog-buttons');
+      const cancel = element('button', 'btn btn-secondary btn-sm', 'Cancel');
+      cancel.type = 'button';
+      const yes = element('button', 'btn btn-danger btn-sm', ok);
+      yes.type = 'button';
+      const done = function (value) {
+        back.remove();
+        resolve(value);
+      };
+      cancel.addEventListener('click', function () {
+        done(false);
+      });
+      yes.addEventListener('click', function () {
+        done(true);
+      });
+      back.addEventListener('click', function (event) {
+        if (event.target === back) {
+          done(false);
+        }
+      });
+      buttons.append(cancel, yes);
+      box.append(buttons);
+      back.append(box);
+      document.body.append(back);
+      cancel.focus();
+    });
+  }
+
+  // ---- the page of an entry: a bar says where it is, planned or in the Database, and moves it
   async function entryPage(id) {
     let entry;
+    let me = null;
     try {
       entry = await (await fetch('api/v2/inventory/' + id, { credentials: 'same-origin' })).json();
+      me = (await (await fetch('api/v2/users/me', { credentials: 'same-origin' })).json()).userid;
     } catch (error) {
       return;
     }
-    if (Number(entry.is_planned) !== 1) {
+    const container = document.getElementById('container');
+    if (!container) {
       return;
     }
-    const bar = element('div', 'alert alert-info d-flex align-items-center my-2');
-    bar.append(element('span', '', 'Planned: private to you, not in the lists of the Database, no number yet.'));
-    const ready = element('button', 'btn btn-success btn-sm ml-auto', 'Mark as ready');
-    ready.type = 'button';
+    const planned = Number(entry.is_planned) === 1;
+    const mine = Number(entry.userid) === Number(me);
+    const bar = element('div', 'alert d-flex align-items-center flex-wrap my-2 ' + (planned ? 'alert-info' : 'alert-light border'));
     const message = element('span', 'ml-2');
-    ready.addEventListener('click', async function () {
-      ready.disabled = true;
-      try {
-        const done = await post({ action: 'ready', id: id });
-        message.textContent = 'It is ready: number ' + done.number + '.';
-        window.setTimeout(function () {
+    if (planned) {
+      bar.append(element('span', 'mr-2', 'Not in the Database yet: private to you, no number shown.'));
+      const status = element('select', 'form-control form-control-sm w-auto mr-2');
+      ['Planned', 'Ordered', 'Being made'].forEach(function (title) {
+        const option = element('option', '', title);
+        option.value = title;
+        option.selected = title === entry.status_title;
+        status.append(option);
+      });
+      status.disabled = !mine;
+      status.addEventListener('change', async function () {
+        try {
+          await post({ action: 'status', id: id, status: status.value });
+          message.textContent = 'Status: ' + status.value + '.';
+        } catch (error) {
+          message.textContent = error.message;
+        }
+      });
+      const move = element('button', 'btn btn-success btn-sm ml-auto', 'Move to the Database');
+      move.type = 'button';
+      move.disabled = !mine;
+      move.title = entry.custom_id ? 'It comes back with its number ' + entry.custom_id : 'It gets the next number of its module';
+      move.addEventListener('click', async function () {
+        move.disabled = true;
+        try {
+          const done = await post({ action: 'ready', id: id });
+          message.textContent = 'It is in the Database now: number ' + done.number + '.';
+          window.setTimeout(function () {
+            location.reload();
+          }, 900);
+        } catch (error) {
+          message.textContent = error.message;
+          move.disabled = false;
+        }
+      });
+      bar.append(status, move, message);
+    } else if (mine) {
+      bar.append(element('span', 'text-muted mr-2', 'In the Database' + (entry.custom_id ? ' as number ' + entry.custom_id : '') + '.'));
+      const back = element('button', 'btn btn-outline-secondary btn-sm ml-auto', 'Move back to planned');
+      back.type = 'button';
+      back.addEventListener('click', async function () {
+        const yes = await confirmDialog('Move it out of the Database?', 'It becomes private to you and disappears from the lists, the searches and the pickers of everyone else, including the orders and plasmids that use it. It keeps its number ' + (entry.custom_id || '') + ': when you move it back into the Database it has the same one.', 'Move back to planned');
+        if (!yes) {
+          return;
+        }
+        try {
+          await post({ action: 'revert', id: id });
           location.reload();
-        }, 900);
-      } catch (error) {
-        message.textContent = error.message;
-        ready.disabled = false;
-      }
-    });
-    bar.append(ready, message);
-    const container = document.getElementById('container');
-    if (container) {
-      container.prepend(bar);
+        } catch (error) {
+          message.textContent = error.message;
+        }
+      });
+      bar.append(back, message);
+    } else {
+      return;
     }
+    container.prepend(bar);
   }
 
   const params = new URLSearchParams(location.search);
