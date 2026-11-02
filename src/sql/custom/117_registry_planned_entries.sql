@@ -1,5 +1,4 @@
--- schema 220
--- planned entries of the database: made on paper, not ordered or built yet. They are private to their owner, kept out of the
+-- Fork migration 117: planned entries of the database: made on paper, not ordered or built yet. They are private to their owner, kept out of the
 -- lists of the database and have no number of their own until they are marked ready
 ALTER TABLE `inventory`
     ADD COLUMN `is_planned` TINYINT(1) UNSIGNED NOT NULL DEFAULT 0,
