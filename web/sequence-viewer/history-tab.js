@@ -129,20 +129,29 @@
       message = 'The version of ' + when(upload.created_at) + ' is in the editor. It is saved as a new version in a moment; the one you had stays in the history.';
     }
 
-    function card(upload, index, current, list) {
-      const box = element('div', 'tool-card history-card');
-      const top = element('div', 'tool-card-top');
-      top.append(element('strong', '', when(upload.created_at)));
-      const chips = element('span', 'tool-chips');
-      chips.append(element('span', 'tool-chip', index === 0 ? 'current' : 'version ' + (list.length - index)));
-      top.append(chips);
-      box.append(top);
-      box.append(element('div', 'tool-muted', (upload.fullname || '') + (upload.fullname ? ' · ' : '') + size(Number(upload.filesize) || 0)));
+    // a version as a row of the table, with a second row for the result of Compare
+    function row(upload, index, list) {
+      const tr = element('tr');
+      const cell = function (text) {
+        const td = element('td', '', text);
+        tr.append(td);
+        return td;
+      };
+      cell(index === 0 ? 'current' : 'v' + (list.length - index)).className = index === 0 ? 'history-current' : '';
+      cell(when(upload.created_at));
+      cell(upload.fullname || '');
+      cell(size(Number(upload.filesize) || 0));
       if (index === 0) {
-        return box;
+        return [tr];
       }
+      const notesRow = element('tr', 'history-notes');
+      const holder = element('td');
+      holder.colSpan = 4;
+      const actions = element('div', 'history-actions');
       const notes = element('div', 'tool-tags');
-      const actions = element('div', 'tool-actions');
+      holder.append(actions, notes);
+      notesRow.append(holder);
+      tr.classList.add('history-main');
       const compareButton = element('button', 'tool-btn', 'Compare');
       compareButton.type = 'button';
       compareButton.addEventListener('click', async function () {
@@ -165,7 +174,7 @@
       restoreButton.addEventListener('click', async function () {
         if (restoreButton.dataset.armed !== '1') {
           restoreButton.dataset.armed = '1';
-          restoreButton.textContent = 'Restore this version?';
+          restoreButton.textContent = 'Sure?';
           window.setTimeout(function () {
             restoreButton.dataset.armed = '';
             restoreButton.textContent = 'Restore';
@@ -185,8 +194,23 @@
       download.href = '../app/download.php?' + new URLSearchParams({ f: upload.long_name, name: upload.real_name, storage: String(upload.storage) }).toString();
       download.download = upload.real_name;
       actions.append(compareButton, restoreButton, download);
-      box.append(actions, notes);
-      return box;
+      return [tr, notesRow];
+    }
+
+    function table(list) {
+      const t = element('table', 'history-table');
+      const head = element('thead');
+      const hr = element('tr');
+      ['Version', 'Saved', 'By', 'Size'].forEach(function (label) {
+        hr.append(element('th', '', label));
+      });
+      head.append(hr);
+      const body = element('tbody');
+      list.forEach(function (upload, index) {
+        body.append(...row(upload, index, list));
+      });
+      t.append(head, body);
+      return t;
     }
 
     async function render(later) {
@@ -206,9 +230,9 @@
         if (list.length === 0) {
           holder.append(element('p', 'tool-muted', 'No version of this file yet.'));
         }
-        list.forEach(function (upload, index) {
-          holder.append(card(upload, index, null, list));
-        });
+        if (list.length > 0) {
+          holder.append(table(list));
+        }
         if (list.length === 1) {
           holder.append(element('p', 'tool-muted', 'This is the only version: the next save will keep it here.'));
         }

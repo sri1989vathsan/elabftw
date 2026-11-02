@@ -1839,3 +1839,43 @@ body[data-map-style="dark"] .own-map-feature {
   border-bottom: 1px solid #eef1f5;
   text-align: left;
 }
+
+/* the versions of the file as a table */
+#tool-sidebar .history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+#tool-sidebar .history-table th,
+#tool-sidebar .history-table td {
+  padding: 0.3rem 0.35rem;
+  border-bottom: 1px solid #eef1f5;
+  text-align: left;
+  vertical-align: top;
+}
+
+#tool-sidebar .history-table th {
+  color: #6b7686;
+  font-weight: 600;
+}
+
+#tool-sidebar .history-table .history-current {
+  font-weight: 600;
+  color: #2f6f4f;
+}
+
+#tool-sidebar .history-table .history-main td {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+#tool-sidebar .history-table .history-actions {
+  white-space: nowrap;
+}
+
+#tool-sidebar .history-table .history-actions .tool-btn {
+  padding: 0.1rem 0.4rem;
+  font-size: 0.72rem;
+  margin-right: 0.2rem;
+}
