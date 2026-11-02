@@ -40,13 +40,6 @@
       : 'M' + x0 + ',0 L' + x1 + ',0 L' + x1 + ',' + (HEIGHT - top) + ' L' + (x0 + 9) + ',' + (HEIGHT - top) + ' L' + (x0 + 9) + ',' + HEIGHT + ' L' + x0 + ',' + (HEIGHT - top) + ' Z';
   }
 
-  // the overhang (the tail that does not bind) as a second, hatched box next to the bound part
-  function overhangShape(x0, x1, forward) {
-    const top = forward ? 6 : 0;
-    const bottom = forward ? HEIGHT : HEIGHT - 6;
-    return 'M' + x0 + ',' + top + ' L' + x1 + ',' + top + ' L' + x1 + ',' + bottom + ' L' + x0 + ',' + bottom + ' Z';
-  }
-
   function restyle() {
     const editor = window.sequenceEditor;
     if (!editor) {
@@ -100,7 +93,8 @@
       const x0 = whole ? -PAD : 0;
       const x1 = whole ? w + PAD : w;
       const gap = whole ? PAD : 0;
-      const d = shape(x0, x1, forward, whole) + (tail ? ' ' + (forward ? overhangShape(x0 - tail * char, x0, true) : overhangShape(x1, x1 + tail * char, false)) : '');
+      // only the part that matches the sequence is boxed: the overhang is plain letters beside it
+      const d = shape(x0, x1, forward, whole);
       if (own && whole) {
         // the letters of the editor on the line of the sequence, the bases exactly under the bases of the sequence, and the
         // overhang in line with them on the side of the 5' end
