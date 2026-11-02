@@ -46,6 +46,9 @@
     let previewDrawn = {};
     let designResult = null;
     let designOptions = Object.assign({}, designer ? designer.defaults : {});
+    // the designer used: Primer3 on the server when it is there
+    let designEngine = 'primer3';
+    let primer3Available = null;
 
     // where a primer binds is worked out once for a sequence: the search, the preview and the candidates ask for it again and
     // again while the user types, with thousands of primers and a long sequence
@@ -855,7 +858,39 @@
       const tailR = field("5' tail of the reverse primer", element('input', 'primers-name'));
       tailR.value = designOptions.tailReverse || '';
       tailR.placeholder = 'a restriction site, an overlap...';
+      // Primer3, run on the server, when it is installed there; otherwise (or by choice) the built-in designer of the browser
+      const engine = element('select', 'primers-name');
+      [['primer3', 'Primer3 (on the server)'], ['builtin', 'Built-in designer (in the browser)']].forEach(function (choice) {
+        const option = element('option', '', choice[1]);
+        option.value = choice[0];
+        engine.append(option);
+      });
+      engine.value = designEngine;
+      engine.addEventListener('change', function () {
+        designEngine = engine.value;
+      });
+      const engineField = element('label', 'primers-field');
+      engineField.append(element('span', '', 'Designer'), engine);
+      form.prepend(engineField);
       panel.append(form);
+      if (primer3Available === null) {
+        fetch('primer3.php', { credentials: 'same-origin' }).then(function (response) {
+          return response.ok ? response.json() : { available: false };
+        }).catch(function () {
+          return { available: false };
+        }).then(function (answer) {
+          primer3Available = !!answer.available;
+          if (!primer3Available) {
+            designEngine = 'builtin';
+            engine.value = 'builtin';
+            engine.querySelector('option[value="primer3"]').disabled = true;
+            engine.querySelector('option[value="primer3"]').textContent = 'Primer3 (not installed on this server)';
+          }
+        });
+      } else if (!primer3Available) {
+        engine.value = 'builtin';
+        engine.querySelector('option[value="primer3"]').disabled = true;
+      }
 
       const run = element('button', 'cutter-button primers-primary', 'Design primers');
       run.type = 'button';
@@ -874,9 +909,26 @@
         run.disabled = true;
         run.textContent = 'Designing...';
         // the work is a moment of calculation: let the button change first
-        window.setTimeout(function () {
+        window.setTimeout(async function () {
           const region = regionNow();
-          designResult = designer.design(now.sequence, region.start, region.end, now.circular, designOptions);
+          if (designEngine === 'primer3' && primer3Available !== false) {
+            try {
+              const response = await fetch('primer3.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': document.body.dataset.csrf },
+                body: JSON.stringify({ sequence: now.sequence, start: region.start, end: region.end, options: Object.assign({ pairs: 5 }, designOptions) }),
+              });
+              const answer = await response.json();
+              designResult = response.ok ? answer : { pairs: [], error: answer.error || 'Primer3 failed (' + response.status + ').' };
+              designResult.engine = 'Primer3';
+            } catch (error) {
+              designResult = { pairs: [], error: 'Primer3 could not be reached: ' + (error.message || error) };
+            }
+          } else {
+            designResult = designer.design(now.sequence, region.start, region.end, now.circular, designOptions);
+            designResult.engine = 'Built-in designer';
+          }
           designResult.region = { start: region.start, end: region.end };
           designDrawn = {};
           render();
@@ -885,11 +937,11 @@
       panel.append(run);
 
       if (designResult) {
-        panel.append(element('h4', '', 'Primer pairs'));
+        panel.append(element('h4', '', 'Primer pairs' + (designResult.engine ? ' (' + designResult.engine + ')' : '')));
         if (designResult.error) {
           panel.append(element('p', 'primers-warning', designResult.error));
         } else if (designResult.pairs.length === 0) {
-          panel.append(element('p', 'primers-muted', 'No pair found: widen the range of lengths or of Tm.'));
+          panel.append(element('p', 'primers-muted', 'No pair found' + (designResult.explain ? ' (Primer3: ' + designResult.explain + ')' : '') + ': widen the range of lengths or of Tm, or let the primers start around the region.'));
         }
         designResult.pairs.forEach(function (pair, index) {
           const card = element('div', 'primers-pair');

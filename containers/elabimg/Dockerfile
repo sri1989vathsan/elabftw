@@ -173,6 +173,30 @@ RUN cmake -S . -B build \
         --parallel "$(getconf _NPROCESSORS_ONLN)" \
     && strip -s build/bin/obabel
 
+#####################
+# PRIMER3 BUILDER   #
+#####################
+FROM alpine:3.23 AS primer3-builder
+
+# Version 2.6.1
+# https://github.com/primer3-org/primer3/releases/tag/v2.6.1
+ARG PRIMER3_REF=7f9f17d6012f404e83bbf0f931a4d06eb4af465b
+
+RUN apk add --no-cache \
+    build-base \
+    git
+
+WORKDIR /build/primer3
+
+RUN git init \
+    && git remote add origin https://github.com/primer3-org/primer3.git \
+    && git fetch --depth 1 origin "$PRIMER3_REF" \
+    && git checkout --detach FETCH_HEAD
+
+# the sources use old style declarations that the C23 default of the compiler refuses
+RUN make -C src CC="gcc -std=gnu17" -j"$(getconf _NPROCESSORS_ONLN)" primer3_core \
+    && strip -s src/primer3_core
+
 #############################
 # ELABFTW + NGINX + PHP-FPM #
 #############################
@@ -201,6 +225,10 @@ RUN mkdir /var/cache/nginx
 
 # OpenBabel
 COPY --from=openbabel-builder /build/openbabel/build/bin/obabel /usr/local/bin/obabel
+
+# Primer3 (primer design on the server, GPL-2.0)
+COPY --from=primer3-builder /build/primer3/src/primer3_core /usr/local/bin/primer3_core
+COPY --from=primer3-builder /build/primer3/src/primer3_config /usr/local/share/primer3_config
 
 # install required packages
 # php8-bcmath is required to send emails via Exchange (NTLM authenticator)
