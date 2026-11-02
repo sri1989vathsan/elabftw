@@ -213,9 +213,22 @@
 <div id='entityToolbar' class='sticky-toolbar'>
   <hr>
 
+  {# the entries of the database go back to their folder, else to their module (and stay in My entries when they have no number yet) #}
+  {% if Entity.entityType.value == 'inventory' %}
+    {% set databaseBack = 'registry.php' ~ (Entity.entityData.folder_id|default(0) ? '?folder=' ~ Entity.entityData.folder_id : (Entity.entityData.category ? '?category=' ~ Entity.entityData.category : '')) %}
+    {% if Entity.entityData.is_planned or Entity.entityData.custom_id is null %}
+      {% set databaseBack = databaseBack ~ ('?' in databaseBack ? '&planned=1' : '?planned=1') %}
+    {% endif %}
+  {% else %}
+    {% set databaseBack = '' %}
+  {% endif %}
   {# TOP TOOLBAR #}
   <div class='d-flex align-items-center flex-wrap' id='topToolbar'>
-    {% if mode == 'edit' and Entity.entityType.value in ['experiments', 'items'] %}
+    {% if databaseBack != '' %}
+      <a title='{{ 'Go back'|trans }}' aria-label='{{ 'Go back'|trans }}' href='{{ databaseBack }}' class='btn btn-secondary'>
+        <i class='fas fa-arrow-left fa-fw'></i>
+      </a>
+    {% elseif mode == 'edit' and Entity.entityType.value in ['experiments', 'items'] %}
       {# an entry filed in a folder goes back to that folder, the others to their view page #}
       <a title='{{ 'Go back'|trans }}' aria-label='{{ 'Go back'|trans }}' href='{{ Entity.entityData.folder_id|default(0) ? '?folder=' ~ Entity.entityData.folder_id : '?mode=view&id=' ~ Entity.id }}' class='btn btn-secondary'>
         <i class='fas fa-arrow-left fa-fw'></i>
@@ -241,7 +254,7 @@
       <button type='button' title='{{ 'Save'|trans }}' data-action='update-entity-body' aria-label='{{ 'Save'|trans }}' class='btn btn-primary mr-2'>
         <i class='fas fa-save'></i>
       </button>
-      <button type='button' title='{{ 'Save and go back'|trans }}' aria-label='{{ 'Save and go back'|trans }}' data-action='update-entity-body' data-redirect='{{ Entity.entityType.value in ['experiments', 'items'] and Entity.entityData.folder_id|default(0) ? 'folder' : (Entity.entityType.value in ['experiments', 'items', 'experiments_templates', 'items_types'] ? 'view' : 'list') }}' data-folder-url='?folder={{ Entity.entityData.folder_id|default(0) }}' class='btn btn-secondary mr-2'>
+      <button type='button' title='{{ 'Save and go back'|trans }}' aria-label='{{ 'Save and go back'|trans }}' data-action='update-entity-body' data-redirect='{{ databaseBack != '' ? 'folder' : (Entity.entityType.value in ['experiments', 'items'] and Entity.entityData.folder_id|default(0) ? 'folder' : (Entity.entityType.value in ['experiments', 'items', 'experiments_templates', 'items_types'] ? 'view' : 'list')) }}' data-folder-url='{{ databaseBack != '' ? databaseBack : '?folder=' ~ Entity.entityData.folder_id|default(0) }}' class='btn btn-secondary mr-2'>
         <i class='fas fa-arrow-left fa-fw' aria-hidden='true'></i>
         <i class='fas fa-save fa-fw' aria-hidden='true'></i>
       </button>

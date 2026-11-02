@@ -81,7 +81,7 @@
       };
       nav.querySelectorAll('a[href]').forEach(keep);
       const rewrite = function () {
-        document.querySelectorAll('#foldersPanel a[href]').forEach(keep);
+        document.querySelectorAll('#foldersPanel a[href], .folder-path-bar a[href]').forEach(keep);
       };
       rewrite();
       document.addEventListener('elabftw:folders-panel-loaded', rewrite);
@@ -241,6 +241,21 @@
     }
     const planned = Number(entry.is_planned) === 1;
     const mine = Number(entry.userid) === Number(me);
+    // an entry without a number is in My entries: the folders of the path bar and of the panel lead to My entries
+    if (planned || entry.custom_id === null) {
+      const keepMine = function () {
+        document.querySelectorAll('#foldersPanel a[href], .folder-path-bar a[href]').forEach(function (link) {
+          const url = new URL(link.getAttribute('href'), location.href);
+          if (/registry\.php$/.test(url.pathname) && !url.searchParams.has('planned') && !url.searchParams.has('id')) {
+            url.searchParams.set('planned', '1');
+            link.setAttribute('href', url.pathname.replace(/^\//, '') + url.search);
+          }
+        });
+      };
+      keepMine();
+      document.addEventListener('elabftw:folders-panel-loaded', keepMine);
+      new MutationObserver(keepMine).observe(document.body, { childList: true, subtree: true });
+    }
     const bar = element('div', 'alert d-flex align-items-center flex-wrap my-2 ' + (planned ? 'alert-info' : 'alert-light border'));
     const message = element('span', 'ml-2');
     if (planned) {

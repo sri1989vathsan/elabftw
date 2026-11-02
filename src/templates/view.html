@@ -285,7 +285,7 @@
   </div>
 {% endif %}
 
-{% if Entity.entityType.value in ['experiments', 'items'] and experimentsFoldersArr is defined %}
+{% if Entity.entityType.value in ['experiments', 'items', 'inventory'] and experimentsFoldersArr is defined %}
   {% include 'folder-path-bar.html' with {'pathFolderId': Entity.entityData.folder_id|default(0), 'pathFolders': experimentsFoldersArr, 'pathPage': Entity.entityType.value == 'items' ? 'database.php' : (Entity.entityType.value == 'inventory' ? 'registry.php' : 'experiments.php')} only %}
 {% endif %}
 
