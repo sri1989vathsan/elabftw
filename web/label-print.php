@@ -75,7 +75,7 @@ $isAdmin = (bool) $App->Users->isAdmin;
 
 // the formats of the team; until an admin has made one, the default of label-config.json is the only format
 $loadFormats = static function () use ($pdo, $teamId, $config): array {
-    $req = $pdo->prepare('SELECT id, name, width_mm, height_mm, margin_mm, margin_bottom_mm, font_mm, qr, `lines`, is_default FROM registry_label_formats WHERE team = :team ORDER BY is_default DESC, name');
+    $req = $pdo->prepare('SELECT id, name, width_mm, height_mm, margin_mm, margin_left_mm, margin_top_mm, margin_right_mm, margin_bottom_mm, font_mm, qr, `lines`, is_default FROM registry_label_formats WHERE team = :team ORDER BY is_default DESC, name');
     $req->bindValue(':team', $teamId, PDO::PARAM_INT);
     $pdo->execute($req);
     $formats = array();
@@ -85,7 +85,7 @@ $loadFormats = static function () use ($pdo, $teamId, $config): array {
     }
     if ($formats === array()) {
         $default = $config['default'];
-        $formats[] = array('id' => 0, 'name' => $default['width_mm'] . ' x ' . $default['height_mm'] . ' mm', 'width_mm' => $default['width_mm'], 'height_mm' => $default['height_mm'], 'margin_mm' => $default['margin_mm'], 'margin_bottom_mm' => $default['margin_bottom_mm'] ?? null, 'font_mm' => $default['font_mm'], 'qr' => $default['qr'] ? 1 : 0, 'lines' => $default['lines'], 'is_default' => 1);
+        $formats[] = array('id' => 0, 'name' => $default['width_mm'] . ' x ' . $default['height_mm'] . ' mm', 'width_mm' => $default['width_mm'], 'height_mm' => $default['height_mm'], 'margin_mm' => 1.0, 'margin_left_mm' => $default['margin_left_mm'], 'margin_top_mm' => $default['margin_top_mm'], 'margin_right_mm' => $default['margin_right_mm'], 'margin_bottom_mm' => $default['margin_bottom_mm'], 'font_mm' => $default['font_mm'], 'qr' => $default['qr'] ? 1 : 0, 'lines' => $default['lines'], 'is_default' => 1);
     }
     return $formats;
 };
@@ -126,6 +126,8 @@ if ($action !== '') {
     }
     try {
         if ($action === 'save_format') {
+            // a margin of a side: empty means the margin of the format
+            $sideValue = static fn(array $p, string $key): ?float => isset($p[$key]) && $p[$key] !== '' ? max(0.0, min(10.0, (float) $p[$key])) : null;
             $name = trim((string) ($payload['name'] ?? ''));
             $width = (float) ($payload['width_mm'] ?? 0);
             $height = (float) ($payload['height_mm'] ?? 0);
@@ -135,15 +137,15 @@ if ($action !== '') {
             $lines = array_values(array_filter(array_map('trim', explode("\n", (string) ($payload['lines'] ?? ''))), static fn(string $l): bool => $l !== ''));
             $values = array(
                 ':team' => $teamId, ':name' => mb_substr($name, 0, 100), ':width' => $width, ':height' => $height,
-                ':margin' => max(0, min(10, (float) ($payload['margin_mm'] ?? 1.5))), ':bottom' => isset($payload['margin_bottom_mm']) && $payload['margin_bottom_mm'] !== '' ? max(0, min(10, (float) $payload['margin_bottom_mm'])) : null, ':font' => max(1, min(20, (float) ($payload['font_mm'] ?? 3.2))),
+                ':margin' => max(0, min(10, (float) ($payload['margin_mm'] ?? 1.5))), ':left' => $sideValue($payload, 'margin_left_mm'), ':top' => $sideValue($payload, 'margin_top_mm'), ':right' => $sideValue($payload, 'margin_right_mm'), ':bottom' => $sideValue($payload, 'margin_bottom_mm'), ':font' => max(1, min(20, (float) ($payload['font_mm'] ?? 3.2))),
                 ':qr' => !empty($payload['qr']) ? 1 : 0, ':lines' => json_encode($lines === array() ? array('{id_line}', '{title}') : array_slice($lines, 0, 8)),
             );
             $formatId = (int) ($payload['id'] ?? 0);
             if ($formatId > 0) {
-                $req = $pdo->prepare('UPDATE registry_label_formats SET name = :name, width_mm = :width, height_mm = :height, margin_mm = :margin, margin_bottom_mm = :bottom, font_mm = :font, qr = :qr, `lines` = :lines WHERE id = :id AND team = :team');
+                $req = $pdo->prepare('UPDATE registry_label_formats SET name = :name, width_mm = :width, height_mm = :height, margin_mm = :margin, margin_left_mm = :left, margin_top_mm = :top, margin_right_mm = :right, margin_bottom_mm = :bottom, font_mm = :font, qr = :qr, `lines` = :lines WHERE id = :id AND team = :team');
                 $req->bindValue(':id', $formatId, PDO::PARAM_INT);
             } else {
-                $req = $pdo->prepare('INSERT INTO registry_label_formats (team, name, width_mm, height_mm, margin_mm, margin_bottom_mm, font_mm, qr, `lines`) VALUES (:team, :name, :width, :height, :margin, :bottom, :font, :qr, :lines)');
+                $req = $pdo->prepare('INSERT INTO registry_label_formats (team, name, width_mm, height_mm, margin_mm, margin_left_mm, margin_top_mm, margin_right_mm, margin_bottom_mm, font_mm, qr, `lines`) VALUES (:team, :name, :width, :height, :margin, :left, :top, :right, :bottom, :font, :qr, :lines)');
             }
             foreach ($values as $key => $value) {
                 $req->bindValue($key, $value);
@@ -219,7 +221,7 @@ try {
             break;
         }
     }
-    $design = array('width_mm' => $chosen['width_mm'], 'height_mm' => $chosen['height_mm'], 'margin_mm' => $chosen['margin_mm'], 'margin_bottom_mm' => $chosen['margin_bottom_mm'], 'font_mm' => $chosen['font_mm'], 'qr' => (bool) $chosen['qr'], 'lines' => $chosen['lines']);
+    $design = array('width_mm' => $chosen['width_mm'], 'height_mm' => $chosen['height_mm'], 'margin_mm' => $chosen['margin_mm'], 'margin_left_mm' => $chosen['margin_left_mm'], 'margin_top_mm' => $chosen['margin_top_mm'], 'margin_right_mm' => $chosen['margin_right_mm'], 'margin_bottom_mm' => $chosen['margin_bottom_mm'], 'font_mm' => $chosen['font_mm'], 'qr' => (bool) $chosen['qr'], 'lines' => $chosen['lines']);
     $lines = array();
     foreach ($design['lines'] ?? array() as $template) {
         // a line is left out when one of its fields is empty
@@ -246,22 +248,26 @@ try {
     $dots = static fn(float $mm): int => (int) round($mm * $dpi / 25.4);
     $width = $dots((float) $design['width_mm']);
     $height = $dots((float) $design['height_mm']);
-    $margin = $dots((float) $design['margin_mm']);
-    $bottom = $design['margin_bottom_mm'] !== null ? $dots((float) $design['margin_bottom_mm']) : $margin;
-    $usable = $height - $margin - $bottom;
+    // each side has its margin; an empty one is the margin of the format
+    $side = static fn(string $key): int => $dots((float) ($design[$key] ?? $design['margin_mm']));
+    $left = $side('margin_left_mm');
+    $top = $side('margin_top_mm');
+    $right = $side('margin_right_mm');
+    $bottom = $side('margin_bottom_mm');
+    $usable = $height - $top - $bottom;
     $qrSize = !empty($design['qr']) ? $usable : 0;
-    $textWidth = $width - 2 * $margin - ($qrSize > 0 ? $qrSize + $margin : 0);
+    $textWidth = $width - $left - $right - ($qrSize > 0 ? $qrSize + $dots(1.0) : 0);
     $count = max(1, count($lines));
     $font = (int) min($dots((float) $design['font_mm']), floor($usable / $count * 0.9));
     $clean = static fn(string $text): string => str_replace(array('^', '~', '\\'), ' ', $text);
 
     $zpl = array('^XA', '^CI28', '^PW' . $width, '^LL' . $height, '^LH0,0');
-    $y = $margin;
+    $y = $top;
     foreach ($lines as $index => $line) {
         // the first line (the numbers) is bold: written twice, one dot apart
-        $zpl[] = sprintf('^FO%d,%d^A0N,%d,%d^FB%d,1,0,L,0^FD%s^FS', $margin, $y, $font, $font, $textWidth, $clean($line));
+        $zpl[] = sprintf('^FO%d,%d^A0N,%d,%d^FB%d,1,0,L,0^FD%s^FS', $left, $y, $font, $font, $textWidth, $clean($line));
         if ($index === 0) {
-            $zpl[] = sprintf('^FO%d,%d^A0N,%d,%d^FB%d,1,0,L,0^FD%s^FS', $margin + 1, $y, $font, $font, $textWidth, $clean($line));
+            $zpl[] = sprintf('^FO%d,%d^A0N,%d,%d^FB%d,1,0,L,0^FD%s^FS', $left + 1, $y, $font, $font, $textWidth, $clean($line));
         }
         $y += (int) ceil($font * 1.1);
     }
@@ -272,7 +278,7 @@ try {
         }
         $url = $base . '/registry.php?mode=view&id=' . $id;
         $magnification = max(2, (int) floor($qrSize / 37));
-        $zpl[] = sprintf('^FO%d,%d^BQN,2,%d^FDQA,%s^FS', $width - $margin - $qrSize, $margin, $magnification, $url);
+        $zpl[] = sprintf('^FO%d,%d^BQN,2,%d^FDQA,%s^FS', $width - $right - $qrSize, $top, $magnification, $url);
     }
     $zpl[] = '^PQ' . $copies;
     $zpl[] = '^XZ';

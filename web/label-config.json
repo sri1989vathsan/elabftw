@@ -8,13 +8,15 @@
   "default": {
     "width_mm": 29,
     "height_mm": 11,
-    "margin_mm": 1.0,
     "font_mm": 2.6,
     "qr": true,
     "lines": [
       "{id_line}",
       "{title}"
     ],
+    "margin_left_mm": 1.0,
+    "margin_top_mm": 1.0,
+    "margin_right_mm": 1.0,
     "margin_bottom_mm": 3.0
   },
   "modules": {}
