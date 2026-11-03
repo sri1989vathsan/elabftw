@@ -200,48 +200,65 @@ function defaultColumnsFor(rows: Row[]): Column[] {
   return columns;
 }
 
-// the columns a user hides, kept in this browser for each module (and one list for the lists that mix modules)
+// the columns a user hides or adds, kept on the server for each user and module (a module key is the id of the module, or "mixed" for the
+// lists that have several modules); what the browser kept before is sent to the server once
+type ColumnChoice = { hidden: string[]; extra: string[] };
 const HIDDEN_COLUMNS_KEY = 'registry_hidden_columns_v1';
+const EXTRA_COLUMNS_KEY = 'registry_extra_columns_v1';
+let columnChoices = new Map<string, ColumnChoice>();
 const moduleKeyOf = (rows: Row[]): string => {
   const first = rows[0]?.category ?? null;
   return first !== null && rows.every(r => r.category === first) ? String(first) : 'mixed';
 };
-function loadHiddenColumns(moduleKey: string): Set<string> {
-  try {
-    const all = JSON.parse(localStorage.getItem(HIDDEN_COLUMNS_KEY) ?? '{}') as Record<string, string[]>;
-    return new Set(all[moduleKey] ?? []);
-  } catch {
-    return new Set();
-  }
+const csrfToken = (): string => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+
+function saveColumnChoice(moduleKey: string): void {
+  const choice = columnChoices.get(moduleKey) ?? { hidden: [], extra: [] };
+  void fetch('registry-columns.php', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrfToken() },
+    body: JSON.stringify({ module_key: moduleKey, hidden: choice.hidden, extra: choice.extra }),
+  }).catch(() => {
+    // the choice stays for this visit, it is saved with the next change
+  });
 }
-function saveHiddenColumns(moduleKey: string, hidden: Set<string>): void {
+
+async function loadColumnChoices(): Promise<void> {
   try {
-    const all = JSON.parse(localStorage.getItem(HIDDEN_COLUMNS_KEY) ?? '{}') as Record<string, string[]>;
-    all[moduleKey] = [...hidden];
-    localStorage.setItem(HIDDEN_COLUMNS_KEY, JSON.stringify(all));
+    const response = await fetch('registry-columns.php', { credentials: 'same-origin' });
+    const body = await response.json() as { prefs: Record<string, ColumnChoice> };
+    columnChoices = new Map(Object.entries(body.prefs));
   } catch {
-    // localStorage might be unavailable: the columns come back at the next visit
+    columnChoices = new Map();
+    return;
+  }
+  // what this browser kept before the choices were on the server goes to the server, for the modules that have no choice there yet
+  try {
+    const oldHidden = JSON.parse(localStorage.getItem(HIDDEN_COLUMNS_KEY) ?? '{}') as Record<string, string[]>;
+    const oldExtra = JSON.parse(localStorage.getItem(EXTRA_COLUMNS_KEY) ?? '{}') as Record<string, string[]>;
+    new Set([...Object.keys(oldHidden), ...Object.keys(oldExtra)]).forEach(key => {
+      if (!columnChoices.has(key)) {
+        columnChoices.set(key, { hidden: oldHidden[key] ?? [], extra: oldExtra[key] ?? [] });
+        saveColumnChoice(key);
+      }
+    });
+    localStorage.removeItem(HIDDEN_COLUMNS_KEY);
+    localStorage.removeItem(EXTRA_COLUMNS_KEY);
+  } catch {
+    // no browser storage: nothing to send
   }
 }
 
-// the other fields of a module (the ones the admin did not make a column) that a user chooses to show, kept in this browser too
-const EXTRA_COLUMNS_KEY = 'registry_extra_columns_v1';
-function loadExtraColumns(moduleKey: string): Set<string> {
-  try {
-    const all = JSON.parse(localStorage.getItem(EXTRA_COLUMNS_KEY) ?? '{}') as Record<string, string[]>;
-    return new Set(all[moduleKey] ?? []);
-  } catch {
-    return new Set();
-  }
+const loadHiddenColumns = (moduleKey: string): Set<string> => new Set(columnChoices.get(moduleKey)?.hidden ?? []);
+const loadExtraColumns = (moduleKey: string): Set<string> => new Set(columnChoices.get(moduleKey)?.extra ?? []);
+function saveHiddenColumns(moduleKey: string, hidden: Set<string>): void {
+  columnChoices.set(moduleKey, { hidden: [...hidden], extra: columnChoices.get(moduleKey)?.extra ?? [] });
+  saveColumnChoice(moduleKey);
 }
 function saveExtraColumns(moduleKey: string, extra: Set<string>): void {
-  try {
-    const all = JSON.parse(localStorage.getItem(EXTRA_COLUMNS_KEY) ?? '{}') as Record<string, string[]>;
-    all[moduleKey] = [...extra];
-    localStorage.setItem(EXTRA_COLUMNS_KEY, JSON.stringify(all));
-  } catch {
-    // localStorage might be unavailable
-  }
+  columnChoices.set(moduleKey, { hidden: columnChoices.get(moduleKey)?.hidden ?? [], extra: [...extra] });
+  saveColumnChoice(moduleKey);
 }
 
 // a filter on a column: text is searched in the value, a number can be compared (">50", "<=60", "55-62")
@@ -811,7 +828,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     void load(event);
   };
   window.addEventListener('entity-filters-changed', onFiltersChanged);
-  void loadModuleSettings().then(() => load()).then(onLoaded);
+  void Promise.all([loadModuleSettings(), loadColumnChoices()]).then(() => load()).then(onLoaded);
 }
 
 export function unmountExpandableTable(): void {
