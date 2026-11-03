@@ -29,6 +29,7 @@ $entryId = (int) ($_GET['entry'] ?? 0);
 $title = '';
 $reference = null;
 $reads = array();
+$clustal = null;
 try {
     $Entity = new Inventory($App->Users, $entryId > 0 ? $entryId : null);
     $Entity->readOne();
@@ -41,7 +42,12 @@ try {
             'real_name' => (string) $upload['real_name'],
             'storage' => (int) $upload['storage'],
         );
-        if (preg_match('/\.ab1$/i', $file['real_name']) === 1) {
+        if (preg_match('/\.(aln|clustal|clw)$/i', $file['real_name']) === 1) {
+            // an alignment of the entry that is opened as it is (?clustal=<upload id>)
+            if ((int) ($_GET['clustal'] ?? 0) === $file['id']) {
+                $clustal = $file;
+            }
+        } elseif (preg_match('/\.ab1$/i', $file['real_name']) === 1) {
             $reads[] = $file;
         } elseif (preg_match('/\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i', $file['real_name']) === 1) {
             // the reference is the one asked for, else the first sequence file of the entry
@@ -58,7 +64,7 @@ try {
 header('Content-Type: text/html; charset=utf-8');
 $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $sequenceUrl = $reference === null ? '' : 'index.php?' . http_build_query(array('entry' => $entryId, 'upload' => $reference['id'], 'f' => $reference['long_name'], 'name' => $reference['real_name'], 'storage' => $reference['storage']));
-$files = json_encode(array('reference' => $reference, 'reads' => array_values($reads)), JSON_THROW_ON_ERROR);
+$files = json_encode(array('reference' => $reference, 'reads' => array_values($reads), 'clustal' => $clustal), JSON_THROW_ON_ERROR);
 ?>
 <!doctype html>
 <html lang="en">

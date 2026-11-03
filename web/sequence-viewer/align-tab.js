@@ -180,10 +180,16 @@
       const results = element('div', 'tool-results');
       const dropped = [];
       let list = [];
+      let clustals = [];
       try {
         const response = await fetch('../api/v2/inventory/' + entryId + '/uploads', { credentials: 'same-origin' });
-        list = (response.ok ? await response.json() : []).filter(function (u) {
+        const uploads = response.ok ? await response.json() : [];
+        list = uploads.filter(function (u) {
           return /\.ab1$/i.test(u.real_name);
+        });
+        // the alignments attached to the entry (Clustal files, for example from Benchling)
+        clustals = uploads.filter(function (u) {
+          return /\.(aln|clustal|clw)$/i.test(u.real_name);
         });
       } catch (error) {
         message.textContent = 'The files of the entry could not be listed.';
@@ -286,6 +292,18 @@
       view.title = 'Switch to the alignment view, with the traces';
       actions.append(align, view);
       host.append(actions, message, results);
+      // the alignments attached to the entry: each opens in the alignment view
+      if (clustals.length > 0) {
+        host.append(element('p', 'tool-muted', 'Alignments attached to this entry (Clustal files):'));
+        const attached = element('div', 'tool-actions');
+        clustals.forEach(function (upload) {
+          const open = element('a', 'tool-btn', upload.real_name);
+          open.href = 'alignment.php?entry=' + entryId + '&clustal=' + upload.id;
+          open.title = 'Open this alignment';
+          attached.append(open);
+        });
+        host.append(attached);
+      }
       // the last alignment of the entry, saved when the reads were aligned
       if (window.AlignmentStore && entryId) {
         window.AlignmentStore.load(entryId).then(function (saved) {

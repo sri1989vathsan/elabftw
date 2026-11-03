@@ -421,7 +421,26 @@
     }
   });
 
+  // an alignment attached to the entry as a Clustal file is shown as it is
+  async function openAttachedClustal() {
+    const file = files.clustal;
+    const params = new URLSearchParams({ f: file.long_name, name: file.real_name, storage: String(file.storage) });
+    const response = await fetch('../app/download.php?' + params.toString(), { credentials: 'same-origin' });
+    if (!response.ok) {
+      throw new Error(file.real_name + ' could not be downloaded (' + response.status + ').');
+    }
+    status.textContent = 'Reading ' + file.real_name + '...';
+    showClustal(parseClustal(await response.text()));
+    document.getElementById('title').textContent = file.real_name;
+  }
+
   const start = function () {
+    if (files.clustal && dropped.length === 0) {
+      openAttachedClustal().catch(function (error) {
+        fail(error.message || String(error));
+      });
+      return;
+    }
     run().catch(function (error) {
       fail(error.message || String(error));
     });
