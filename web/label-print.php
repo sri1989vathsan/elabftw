@@ -263,12 +263,8 @@ try {
     $font = (int) min($dots((float) $design['font_mm']), floor($usable / $count * 0.9));
     $clean = static fn(string $text): string => str_replace(array('^', '~', '\\'), ' ', $text);
 
-    // the printer setup the label software of the printer sends first (media tracking, thermal transfer, speed, darkness); a label that is
-    // read turned by 180 degrees is printed with ^POI
+    // the printer setup the label software of the printer sends first (media tracking, thermal transfer, speed, darkness)
     $header = (string) ($config['zpl_header'] ?? '^XA~TA000~JSN^LT0^MNW^MTT^PON^PMN^LH0,0^JMA^PR4,4~SD15^JUS^LRN^CI0^XZ');
-    if (!empty($design['rotate_180'])) {
-        $header = str_replace('^PON', '^POI', $header);
-    }
     $zpl = array($header, '^XA', '^MMT', '^CI28', '^PW' . $width, '^LL' . $height, '^LS0', '^LH' . max(0, $dots((float) $design['offset_x_mm'])) . ',' . max(0, $dots((float) $design['offset_y_mm'])));
     $y = $top;
     // each text is placed by its baseline, as the label software of the printer does; a label that is read turned by 180 degrees has
