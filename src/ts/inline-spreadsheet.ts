@@ -4454,8 +4454,15 @@ export function openSpreadsheetModal(
   initialData: SpreadsheetData,
   isEditing = false,
   initialHistory?: SpreadsheetCellHistory,
-  /** Show a "Back to plate view" button (the popup was reached from a plate). */
-  options: { backToPlate?: boolean } = {},
+  /**
+   * backToPlate: show a "Back to plate view" button (the popup was reached from a plate).
+   * onAutosave: called a moment after the content changed, while the popup stays open, so the table behind it
+   * is kept up to date (the popup used to hold edits only until Update).
+   */
+  options: {
+    backToPlate?: boolean;
+    onAutosave?: (result: { raw: SpreadsheetData; computed: AOA; history: SpreadsheetCellHistory }) => void;
+  } = {},
 ): Promise<{ raw: SpreadsheetData; computed: AOA; history: SpreadsheetCellHistory; backToPlate?: boolean }> {
   return new Promise((resolve, reject) => {
     let working = normalizeSpreadsheetData({
@@ -5645,6 +5652,11 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('mousedown', event => {
       fillDragSource = null;
       if (!(event.target instanceof Element) || !event.target.closest('.jss_corner')) return;
+      // The library fills from its own copy of the cells, which does not hold text typed in the cell editor box
+      // (see commitRescueInput): commit what is being typed and bring the grid up to date first, or the drag
+      // copies the old (empty) value.
+      commitRescueInput();
+      flushMirrorIntoWorksheet(worksheet);
       const selection = getSelectedRange();
       if (!selection || selection[0] !== selection[2] || selection[1] !== selection[3]) return;
       const value = rawDataMirror[selection[1]]?.[selection[0]];
@@ -6212,7 +6224,7 @@ export function openSpreadsheetModal(
       }
     };
 
-    const onSpreadsheetCopy = (event: ClipboardEvent): void => {
+    const onSpreadsheetCopy = (event: ClipboardEvent, fromEditorBox = false): void => {
       // Exclude our own UI's real inputs (formula bar, caption field, etc)
       // so copying out of those still behaves like a normal text field --
       // but NOT jspreadsheet's own hidden "jss_textarea": jspreadsheet
@@ -6228,7 +6240,7 @@ export function openSpreadsheetModal(
       // copy listener for the same bug, already fixed there the same way).
       const target = event.target;
       const isOwnFormField = (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
-        && target.id !== 'jss_textarea';
+        && target.id !== 'jss_textarea' && !fromEditorBox;
       if (!event.clipboardData || isOwnFormField) {
         return;
       }
@@ -6459,6 +6471,14 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('mousedown', onRowResizePointerDown, true);
     document.addEventListener('mouseup', onRowResizePointerUp, true);
     ui.sheetHost.addEventListener('copy', onSpreadsheetCopy, true);
+    // Ctrl/Cmd+C right after typing in a cell: the text box has nothing selected, so the browser would copy nothing.
+    // Finish the edit and copy the cell, as a spreadsheet does. With some text selected in the box, that text is copied.
+    listenWhilePopupOpen(document, 'copy', event => {
+      const box = rescueInputEl;
+      if (!box || box.hidden || event.target !== box || box.selectionStart !== box.selectionEnd) return;
+      commitRescueInput();
+      onSpreadsheetCopy(event as ClipboardEvent, true);
+    }, true);
     ui.sheetHost.addEventListener('paste', onSpreadsheetPaste, true);
     // Ctrl/Cmd+Shift+V pastes the clipboard transposed, with its top-left cell at the selected cell
     popupPageListenerRemovers.push(installTransposedPaste(ui.sheetHost, () => {
@@ -7180,14 +7200,8 @@ export function openSpreadsheetModal(
       }
     };
 
-    const finish = (backToPlate: boolean): void => {
-      // readRawData() below only prefers rawDataMirror's own value over
-      // worksheet.getData()'s for a formula still being composed -- a plain
-      // value sitting in an open rescue input, never having reached
-      // worksheet.setValue() yet, would otherwise be silently dropped. Not
-      // deferred: readRawData() is read synchronously right below.
-      commitRescueInput();
-      commitFormulaInput();
+    // What the popup holds right now, as it would be applied by Update (nothing is closed or committed here)
+    const buildResult = (): { result: SpreadsheetData; computed: () => AOA } => {
       const rawData = readRawData();
       const rows = clampDimension(rawData.length, working.rows);
       const cols = clampDimension(
@@ -7215,12 +7229,44 @@ export function openSpreadsheetModal(
         tableBorder: working.tableBorder,
         appearance: normalizeAppearance(working.appearance),
       };
-      const computed = sheetContainer
+      // read from the page, so only when it is needed
+      const computed = (): AOA => (sheetContainer
         ? resizeData(getComputedDataFromDOM(sheetContainer), rows, cols)
-        : result.data;
-      cleanup();
-      resolve({ raw: result, computed, history: { undo: cellUndoStack, redo: cellRedoStack }, backToPlate });
+        : result.data);
+      return { result, computed };
     };
+    const finish = (backToPlate: boolean): void => {
+      // readRawData() only prefers rawDataMirror's own value over
+      // worksheet.getData()'s for a formula still being composed -- a plain
+      // value sitting in an open rescue input, never having reached
+      // worksheet.setValue() yet, would otherwise be silently dropped. Not
+      // deferred: readRawData() is read synchronously right below.
+      commitRescueInput();
+      commitFormulaInput();
+      const { result, computed } = buildResult();
+      const computedData = computed();
+      cleanup();
+      resolve({ raw: result, computed: computedData, history: { undo: cellUndoStack, redo: cellRedoStack }, backToPlate });
+    };
+    // Autosave: when the content differs from the last time it was handed over, hand it over again. What is typed in
+    // an open cell box is already in the mirror, so nothing is committed or closed here.
+    if (options.onAutosave) {
+      const onAutosave = options.onAutosave;
+      let lastSaved: string | null = null;
+      const autosaveTimer = window.setInterval(() => {
+        if (!acceptsGridChanges) return;
+        const { result, computed } = buildResult();
+        const signature = JSON.stringify(result);
+        if (lastSaved === null) {
+          lastSaved = signature;
+          return;
+        }
+        if (signature === lastSaved) return;
+        lastSaved = signature;
+        onAutosave({ raw: result, computed: computed(), history: { undo: cellUndoStack, redo: cellRedoStack } });
+      }, 2000);
+      popupPageListenerRemovers.push(() => window.clearInterval(autosaveTimer));
+    }
     ui.insertBtn.addEventListener('click', () => finish(false));
     ui.plateBtn?.addEventListener('click', () => finish(true));
 

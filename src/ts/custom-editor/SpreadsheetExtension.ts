@@ -725,8 +725,33 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const modalHistory = uid ? tableCellHistories.get(uid) : undefined;
     type PopupResult = { raw: SpreadsheetData; computed: SpreadsheetData["data"]; history: SpreadsheetCellHistory };
     // A well plate has two popups that can hand over to each other, keeping the edits.
-    const spreadsheetPopup = (data: SpreadsheetData): Promise<PopupResult> => openSpreadsheetModal(data, existingTable !== null, modalHistory)
-      .then(result => (result.backToPlate ? platePopup(result.raw) : result));
+    // Autosave: while the popup is open the table behind it is kept up to date, so nothing typed is lost if the page
+    // is closed or reloaded. Cancel still discards: the table as it was when the popup opened is put back.
+    let htmlBeforePopup: string | null = null;
+    let autosavedHash: string | null = null;
+    const saveWhilePopupOpen = ({ raw, computed }: PopupResult): void => {
+      if (!existingTable || !existingTable.isConnected) return;
+      htmlBeforePopup ??= existingTable.outerHTML;
+      if (!applySpreadsheetHtmlToTable(existingTable, spreadsheetToHTML(raw, computed))) return;
+      if (uid) latestTableContent.set(uid, existingTable.outerHTML);
+      markOwnWrite(existingTable);
+      autosavedHash = hashCells(raw.data);
+      diagnose('popup autosave', () => {
+        if (!uid) return;
+        diag.bump(uid, 'popup');
+        markSynced(existingTable);
+        lastSyncedHash.set(existingTable, autosavedHash ?? '');
+      });
+      editor.setDirty(true);
+      // the popup is outside the editor body, so the editor's own autosave timer has to be restarted from here
+      editor.dispatch('keyup');
+    };
+    const spreadsheetPopup = (data: SpreadsheetData): Promise<PopupResult> => openSpreadsheetModal(
+      data,
+      existingTable !== null,
+      modalHistory,
+      existingTable ? { onAutosave: saveWhilePopupOpen } : {},
+    ).then(result => (result.backToPlate ? platePopup(result.raw) : result));
     // The plate's table opens as a data table in the general spreadsheet popup (formulas, selection, insert and
     // delete rows and columns); on the way back its results become the plate's table.
     const tablePopup = (plate: SpreadsheetData): Promise<PopupResult> => openSpreadsheetModal(
@@ -756,7 +781,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           diag.log('popup-apply', uid, {
             openedRev: openedRevision, rev: diag.revision(uid), openedHash, tableHash: nowHash, popupHash: hashCells(raw.data),
           });
-          if (nowHash !== openedHash) {
+          if (nowHash !== (autosavedHash ?? openedHash)) {
             diag.saveRecovery(uid, 'the spreadsheet popup was replacing a newer version of the table', existingTable.outerHTML);
             warnSync('The spreadsheet changed while the popup was open. Your popup changes were applied; a recovery copy of the other version was saved.', uid);
           }
@@ -814,6 +839,13 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       // idempotent no-op on the common case where the overlay was never
       // actually removed.
       if (!existingTable) return;
+      // Cancel discards: put back what the table held when the popup opened if autosave has changed it since
+      if (htmlBeforePopup !== null && existingTable.isConnected && applySpreadsheetHtmlToTable(existingTable, htmlBeforePopup)) {
+        if (uid) latestTableContent.set(uid, existingTable.outerHTML);
+        markOwnWrite(existingTable);
+        editor.setDirty(true);
+        editor.dispatch('keyup');
+      }
       // Firefox runs the "Discard unsaved changes?" confirm() with its own
       // blur/focus handling around it, and the overlay has been seen missing
       // after confirming. Rebuild now, then check again once focus and layout
