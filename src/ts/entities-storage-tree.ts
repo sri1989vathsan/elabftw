@@ -6,7 +6,7 @@ import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
 import { askConfirm } from './confirm-dialog';
 
-type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null };
+type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null };
 type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string };
 type Row = {
   id: number;
@@ -239,6 +239,20 @@ function buildTree(units: Unit[], rows: Row[]): { roots: Node[]; byId: Map<numbe
   const sortNodes = (nodes: Node[]): void => {
     // in order: by the number at the end of the name when both have one (box 5, 6, 7, 8, 9, 10 whatever the words before it), else in natural order
     nodes.sort((a, b) => {
+      // the position given to a place decides first; the places without one follow
+      const ap = a.unit.position ?? null;
+      const bp = b.unit.position ?? null;
+      if (ap !== null || bp !== null) {
+        if (ap === null) {
+          return 1;
+        }
+        if (bp === null) {
+          return -1;
+        }
+        if (ap !== bp) {
+          return ap - bp;
+        }
+      }
       const an = /(\d+)\s*$/.exec(a.unit.name);
       const bn = /(\d+)\s*$/.exec(b.unit.name);
       if (an && bn && Number(an[1]) !== Number(bn[1])) {
@@ -700,6 +714,13 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     const name = el('input', 'form-control form-control-sm w-auto mr-1');
     name.placeholder = 'Name';
     name.setAttribute('aria-label', 'Name');
+    const position = el('input', 'form-control form-control-sm mr-1');
+    position.type = 'number';
+    position.min = '1';
+    position.style.width = '5.5rem';
+    position.placeholder = 'position';
+    position.title = 'Its position among the places of its parent (1, 2, 3...): it gives the order';
+    position.setAttribute('aria-label', 'Position');
     const rows = el('input', 'form-control form-control-sm mr-1');
     const cols = el('input', 'form-control form-control-sm mr-1');
     [rows, cols].forEach(i => {
@@ -725,7 +746,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         name.focus();
         return;
       }
-      void ApiC.post2location('storage_units', node === null ? { name: unitName } : { name: unitName, parent_id: node.unit.id }).then(async id => {
+      void ApiC.post2location('storage_units', { name: unitName, ...(node === null ? {} : { parent_id: node.unit.id }), ...(Number(position.value) > 0 ? { position: Number(position.value) } : {}) }).then(async id => {
         if (kind.value === 'box') {
           await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rows.value), box_cols: Number(cols.value) });
         }
@@ -738,7 +759,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         return load();
       });
     });
-    form.append(el('span', 'mr-2', node === null ? 'Add at the top' : 'Add inside'), kind, name, rows, cols, add);
+    form.append(el('span', 'mr-2', node === null ? 'Add at the top' : 'Add inside'), kind, name, position, rows, cols, add);
     return form;
   };
 
@@ -747,15 +768,31 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     const name = el('input', 'form-control form-control-sm w-auto mr-1');
     name.value = node.unit.name;
     name.setAttribute('aria-label', 'Rename');
-    const save = el('button', 'btn btn-transparent btn-sm', 'Rename');
+    // the position of the place among the places of its parent: it gives the order
+    const position = el('input', 'form-control form-control-sm mr-1');
+    position.type = 'number';
+    position.min = '1';
+    position.style.width = '5.5rem';
+    position.placeholder = 'position';
+    position.title = 'Its position among the places of its parent (1, 2, 3...): it gives the order';
+    position.setAttribute('aria-label', 'Position');
+    position.value = node.unit.position ? String(node.unit.position) : '';
+    const save = el('button', 'btn btn-transparent btn-sm', 'Save');
     save.type = 'button';
     save.addEventListener('click', () => {
       const unitName = name.value.trim();
+      const body: Record<string, unknown> = {};
       if (unitName !== '' && unitName !== node.unit.name) {
-        patchAndReload(`storage_units/${node.unit.id}`, { name: unitName });
+        body.name = unitName;
+      }
+      if (position.value !== (node.unit.position ? String(node.unit.position) : '')) {
+        body.position = position.value === '' ? null : Number(position.value);
+      }
+      if (Object.keys(body).length > 0) {
+        patchAndReload(`storage_units/${node.unit.id}`, body);
       }
     });
-    form.append(name, save);
+    form.append(name, position, save);
     return form;
   };
 

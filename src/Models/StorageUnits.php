@@ -287,11 +287,15 @@ final class StorageUnits extends AbstractRest
         $hasName = !empty($params['name']);
         $hasParent = array_key_exists('parent_id', $params);
         $hasBox = array_key_exists('box_rows', $params) || array_key_exists('box_cols', $params);
-        if (!$hasName && !$hasParent && !$hasBox) {
+        $hasPosition = array_key_exists('position', $params);
+        if (!$hasName && !$hasParent && !$hasBox && !$hasPosition) {
             throw new ImproperActionException('No valid update target provided.');
         }
         if ($hasBox) {
             $this->setBox($params['box_rows'] ?? null, $params['box_cols'] ?? null);
+        }
+        if ($hasPosition) {
+            $this->setPosition($params['position']);
         }
         $newParentId = null;
         if ($hasParent) {
@@ -396,15 +400,27 @@ final class StorageUnits extends AbstractRest
         return $this->create(
             $reqBody['name'] ?? throw new ImproperActionException('Missing value for "name"'),
             Filter::intOrNull($reqBody['parent_id'] ?? 0),
+            Filter::intOrNull($reqBody['position'] ?? 0),
         );
     }
 
-    public function create(string $unitName, ?int $parentId = null): int
+    /** the position of the place among the places of its parent: a number, or nothing */
+    public function setPosition(mixed $position): void
     {
-        $sql = 'INSERT INTO storage_units(parent_id, name) VALUES(:parent_id, :name)';
+        $value = filter_var($position, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1, 'max_range' => 65535)));
+        $req = $this->Db->prepare('UPDATE storage_units SET position = :position WHERE id = :id');
+        $req->bindValue(':position', $value === false ? null : $value, $value === false ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    public function create(string $unitName, ?int $parentId = null, ?int $position = null): int
+    {
+        $sql = 'INSERT INTO storage_units(parent_id, name, position) VALUES(:parent_id, :name, :position)';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':parent_id', $parentId);
         $req->bindParam(':name', $unitName);
+        $req->bindParam(':position', $position);
         $this->Db->execute($req);
         return $this->Db->lastInsertId();
     }
@@ -560,7 +576,8 @@ final class StorageUnits extends AbstractRest
                 0 AS level_depth,
                 (SELECT COUNT(*) FROM storage_units AS su WHERE su.parent_id = storage_units.id) AS children_count,
                 box_rows,
-                box_cols
+                box_cols,
+                position
             FROM
                 storage_units
             WHERE
@@ -577,7 +594,8 @@ final class StorageUnits extends AbstractRest
                 parent.level_depth + 1,
                 (SELECT COUNT(*) FROM storage_units AS su WHERE su.parent_id = child.id) AS children_count,
                 child.box_rows,
-                child.box_cols
+                child.box_cols,
+                child.position
             FROM
                 storage_units AS child
             INNER JOIN
@@ -596,6 +614,7 @@ final class StorageUnits extends AbstractRest
             children_count,
             box_rows,
             box_cols,
+            position,
             (SELECT GROUP_CONCAT(c.position) FROM containers2inventory AS c WHERE c.storage_id = storage_hierarchy.id AND c.position IS NOT NULL) AS taken_positions
         FROM
             storage_hierarchy

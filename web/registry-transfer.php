@@ -379,6 +379,20 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
             }
             return $segments;
         };
+        // "rack_3 (4) > Moor 3-4": the 4 after the name of the rack is the position of the box in the rack
+        $orderOf = static function (string $path): array {
+            $order = array();
+            $previous = null;
+            foreach (explode(' > ', $path) as $segment) {
+                $segment = trim($segment);
+                if ($segment === '' || preg_match('/^\(?(?:delete)\)?$/i', $segment) === 1) {
+                    continue;
+                }
+                $order[] = $previous;
+                $previous = preg_match('/\((\d+)\)\s*$/', $segment, $found) === 1 ? (int) $found[1] : null;
+            }
+            return $order;
+        };
         $positionsOf = static function (string $raw): array {
             $found = array();
             foreach (explode(',', $raw) as $one) {
@@ -422,7 +436,7 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
                     if (count($segments) >= 1) {
                         $positions = $positionsOf((string) $raw);
                         $comment = preg_match('/Comments:\s*([^|]*)/', $tail, $c) === 1 ? trim($c[1]) : (preg_match('/Features:\s*([^|]*)/', $tail, $c) === 1 ? trim($c[1]) : '');
-                        $places[$id][] = array('segments' => $segments, 'positions' => $positions, 'comment' => $comment);
+                        $places[$id][] = array('segments' => $segments, 'order' => $orderOf($pathText), 'positions' => $positions, 'comment' => $comment);
                         $key = implode(' > ', $segments);
                         foreach ($positions as $position) {
                             $boxes[$key]['rows'] = max($boxes[$key]['rows'] ?? 0, ord($position[0]) - 64);
@@ -447,10 +461,11 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
         };
         $unitIds = array();
         $created = 0;
-        $findUnit = $pdo->prepare('SELECT id, box_rows FROM storage_units WHERE name = :name AND ((:parent IS NULL AND parent_id IS NULL) OR parent_id = :parent2) LIMIT 1');
-        $makeUnit = $pdo->prepare('INSERT INTO storage_units (name, parent_id, box_rows, box_cols) VALUES (:name, :parent, :rows, :cols)');
+        $findUnit = $pdo->prepare('SELECT id, box_rows, position FROM storage_units WHERE name = :name AND ((:parent IS NULL AND parent_id IS NULL) OR parent_id = :parent2) LIMIT 1');
+        $makeUnit = $pdo->prepare('INSERT INTO storage_units (name, parent_id, box_rows, box_cols, position) VALUES (:name, :parent, :rows, :cols, :position)');
         $setSize = $pdo->prepare('UPDATE storage_units SET box_rows = :rows, box_cols = :cols WHERE id = :id');
-        $unitFor = static function (array $segments) use (&$unitIds, &$created, $findUnit, $makeUnit, $setSize, $boxes, $sizeOf, $pdo): int {
+        $setOrder = $pdo->prepare('UPDATE storage_units SET position = :position WHERE id = :id AND position IS NULL');
+        $unitFor = static function (array $segments, array $order = array()) use (&$unitIds, &$created, $findUnit, $makeUnit, $setSize, $setOrder, $boxes, $sizeOf, $pdo): int {
             $parent = null;
             $path = array();
             foreach ($segments as $depth => $name) {
@@ -466,6 +481,11 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
                     $found = $findUnit->fetch();
                     if (is_array($found)) {
                         $unitIds[$key] = (int) $found['id'];
+                        if (($order[$depth] ?? null) !== null && $found['position'] === null) {
+                            $setOrder->bindValue(':position', $order[$depth], PDO::PARAM_INT);
+                            $setOrder->bindValue(':id', $unitIds[$key], PDO::PARAM_INT);
+                            $pdo->execute($setOrder);
+                        }
                         if ($size !== null && $found['box_rows'] === null) {
                             $setSize->bindValue(':rows', $size[0], PDO::PARAM_INT);
                             $setSize->bindValue(':cols', $size[1], PDO::PARAM_INT);
@@ -477,6 +497,7 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
                         $makeUnit->bindValue(':parent', $parent, $parent === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
                         $makeUnit->bindValue(':rows', $size[0] ?? null, $size === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
                         $makeUnit->bindValue(':cols', $size[1] ?? null, $size === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+                        $makeUnit->bindValue(':position', $order[$depth] ?? null, ($order[$depth] ?? null) === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
                         $pdo->execute($makeUnit);
                         $unitIds[$key] = (int) $pdo->lastInsertId();
                         $created++;
@@ -495,7 +516,7 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
             $first = true;
             $single = count($list) === 1;
             foreach ($list as $place) {
-                $storage = $unitFor($place['segments']);
+                $storage = $unitFor($place['segments'], $place['order'] ?? array());
                 $targets = $place['positions'] === array() ? array(null) : $place['positions'];
                 foreach ($targets as $position) {
                     $link->bindValue(':storage', $storage, PDO::PARAM_INT);
