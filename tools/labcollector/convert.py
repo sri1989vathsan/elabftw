@@ -642,6 +642,75 @@ def enrich_plasmid(row, key, files, notes, cache):
         notes.append('Sequence file from the Benchling link')
 
 
+# ---- backbone and selection of a plasmid -----------------------------------------------------------------------------------------------
+
+
+MARKERS = (
+    ('Ampicillin', r'\bamp\s*[-(]?\s*r\b|\bampr\b|\bbla\b|ampicillin|carbenicillin|amp resist'),
+    ('Kanamycin', r'\bkan\s*[-(]?\s*r\b|\bkanr\b|kanamycin|neor/kanr|\baph\(3'),
+    ('Chloramphenicol', r'\bcm\s*[-(]?\s*r\b|\bcmr\b|\bcamr\b|chloramphenicol|\bcat\b'),
+    ('Spectinomycin', r'\bspec\s*[-(]?\s*r\b|\bspecr\b|spectinomycin|\baada\b'),
+)
+
+
+def vector_families(records):
+    """The first part of the names that many plasmids share (pLVX, pT4, pTL ...) is the vector family they were made from."""
+    found = {}
+    for title in records:
+        match = re.match(r'^[pP][A-Za-z]*\d*[A-Za-z]*(?=[-_ ]|$)', title.strip())
+        if match:
+            token = match.group(0)
+            found[token[0].lower() + token[1:]] = found.get(token[0].lower() + token[1:], 0) + 1
+    return {name for name, count in found.items() if count >= 3}
+
+
+def backbone_of(title, comment, families):
+    """The backbone: said in the comments ("Backbone: X"), or "in <vector>" in the name, or the family the name starts with."""
+    said = re.search(r'backbone\s*[:=]\s*([A-Za-z0-9][\w.+-]*)', comment, re.I)
+    if said:
+        return said.group(1).rstrip('.,;'), 'the comments'
+    inside = re.search(r'\b(?:in|into)\s+(p[A-Za-z][\w.+-]*)\s*$', title.strip(), re.I)
+    if inside:
+        return inside.group(1), 'the name'
+    match = re.match(r'^[pP][A-Za-z]*\d*[A-Za-z]*(?=[-_ ]|$)', title.strip())
+    if match:
+        token = match.group(0)
+        token = token[0].lower() + token[1:]
+        trimmed = re.sub(r'\d+$', '', token)
+        for candidate in (token, trimmed):
+            if candidate in families:
+                return candidate, 'the name'
+    return '', ''
+
+
+def selection_of(comment, genbank):
+    """The antibiotic of the bacteria: from the comments, else from the resistance genes of the sequence."""
+    for source, text_ in (('the comments', comment), ('the sequence features', genbank)):
+        found = [name for name, pattern in MARKERS if re.search(pattern, text_, re.I)]
+        if found:
+            return found[0], source, found
+    return '', '', []
+
+
+def plasmid_details(row, files, families, notes):
+    comment = row.get('Comments (LabCollector)', '')
+    if not row.get('Backbone'):
+        backbone, source = backbone_of(row.get('Title', ''), comment, families)
+        if backbone:
+            row['Backbone'] = backbone
+            notes.append('Backbone from ' + source + ' (check it)')
+    if not row.get('Resistance'):
+        genbank = ''
+        for name, content in files:
+            if name.endswith('.gb'):
+                # only the labels of the features: the long sequence and the references are left out
+                genbank = ' '.join(re.findall(r'/(?:label|gene|note|product)="([^"]+)"', content.decode('utf-8', 'replace')))
+        value, source, found = selection_of(comment, genbank)
+        if value:
+            row['Resistance'] = value
+            notes.append('Selection (' + value + ') from ' + source + (' (also ' + ', '.join(f for f in found[1:]) + ')' if len(found) > 1 else ''))
+
+
 # ---- the zip ---------------------------------------------------------------------------------------------------------------------------
 
 
@@ -659,6 +728,7 @@ def main():
         wanted = sys.argv[sys.argv.index('--as') + 1] if '--as' in sys.argv else {'primers': 'Primers', 'probes': 'Probes', 'reagents': 'Reagents', 'consumables': 'Consumables', 'samples': 'Samples'}.get(module, '')
         target_fields = default_modules().get(wanted, [])
     rows, reviews, all_files = [], [], []
+    families = vector_families([text(r, 'Name') for r in read_page(folder)]) if module == 'plasmids' else set()
     for index, record in enumerate(read_page(folder), start=1):
         row, notes, files = {}, [], []
         if module == 'antibodies':
@@ -677,6 +747,8 @@ def main():
                 enrich_antibody(row, str(index), notes, cache, stable, had_link)
             elif module == 'plasmids':
                 enrich_plasmid(row, str(index), files, notes, cache)
+        if module == 'plasmids':
+            plasmid_details(row, files, families, notes)
         row['ID'] = row.get('LabCollector ID', '')
         row['Key'] = str(index)
         seen = {}
