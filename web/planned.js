@@ -457,7 +457,11 @@
     box.setAttribute('aria-modal', 'true');
     box.append(element('h5', '', 'Order ' + entry.title));
     const inputs = {};
-    [['vendor', 'Vendor', field(/^(supplier|vendor)/i)], ['clone', 'Clone', field(/^clone/i)], ['link', 'Link', field(/^(link|url|product link|website)/i)], ['amount', 'Amount', field(/^(order )?amount/i)]].forEach(function (item) {
+    // only an antibody has a clone
+    const isAntibody = /^antibod/i.test(entry.category || '');
+    [['vendor', 'Vendor', field(/^(supplier|vendor)/i)], ['clone', 'Clone', field(/^clone/i)], ['link', 'Link', field(/^(link|url|product link|website)/i)], ['amount', 'Amount', field(/^(order )?amount/i)]].filter(function (item) {
+      return item[0] !== 'clone' || isAntibody;
+    }).forEach(function (item) {
       const label = element('label', 'd-block');
       label.append(element('span', 'd-block small text-muted', item[1]));
       const input = element('input', 'form-control form-control-sm');
@@ -493,7 +497,7 @@
         if (inputs.link.value.trim()) {
           lines.push('Link: ' + inputs.link.value.trim());
         }
-        if (inputs.clone.value.trim()) {
+        if (inputs.clone && inputs.clone.value.trim()) {
           lines.push('Clone: ' + inputs.clone.value.trim());
         }
         if (inputs.amount.value.trim()) {

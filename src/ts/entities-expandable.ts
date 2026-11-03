@@ -547,7 +547,7 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
       order.setAttribute('aria-label', `Order ${row.title}`);
       order.append(el('i', 'fas fa-cart-shopping fa-fw'));
       order.addEventListener('click', () => {
-        window.dispatchEvent(new CustomEvent('registry:order-entry', { detail: { id: row.id, title: row.title, fields: row.extra_fields ?? [] } }));
+        window.dispatchEvent(new CustomEvent('registry:order-entry', { detail: { id: row.id, title: row.title, category: row.category_title ?? '', fields: row.extra_fields ?? [] } }));
       });
       actionCell.append(order);
     }
