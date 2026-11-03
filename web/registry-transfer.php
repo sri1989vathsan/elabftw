@@ -14,6 +14,8 @@ namespace Elabftw\Elabftw;
 
 use Elabftw\Elabftw\CreateUploadFromFs;
 use Elabftw\Enums\AccessType;
+use Elabftw\Enums\Action;
+use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Enums\Storage;
 use Elabftw\Hash\FileHash;
 use Elabftw\Models\Inventory;
@@ -155,6 +157,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         exit;
     }
     // the users that can own what is imported (admins only)
+    // the folders of the Database, for the choice of the folder of entries
+    if (isset($_GET['folders'])) {
+        $folders = array();
+        foreach (new ExperimentsFolders($App->Users, null, 'inventory')->readAll() as $folder) {
+            $folders[] = array('id' => (int) $folder['id'], 'path' => (string) $folder['full_path']);
+        }
+        respond(200, array('folders' => $folders));
+    }
     if (isset($_GET['users'])) {
         respond(200, array('users' => $isAdmin ? $teamUsers() : array(), 'is_admin' => $isAdmin, 'me' => $userId, 'default_owner' => $defaultOwner > 0 ? $defaultOwner : null));
     }
@@ -571,6 +581,35 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'empty_storage') {
         respond(200, array('places' => count($ids), 'entries' => $entries, 'links' => $links, 'deleted' => $delete));
     } catch (Throwable $e) {
         respond(500, array('error' => 'Could not do it: ' . $e->getMessage()));
+    }
+}
+
+// the entries that were ticked move to another folder (or to none): each one needs the right to edit it
+if (is_array($payload) && ($payload['action'] ?? '') === 'move_to_folder') {
+    try {
+        $ids = array_slice(array_values(array_unique(array_filter(array_map('intval', is_array($payload['ids'] ?? null) ? $payload['ids'] : array()), static fn(int $n): bool => $n > 0))), 0, 500);
+        $folderId = (int) ($payload['folder_id'] ?? 0);
+        if ($ids === array()) {
+            respond(400, array('error' => 'Choose entries.'));
+        }
+        $known = array_column((new ExperimentsFolders($App->Users, null, 'inventory'))->readAll(), 'id');
+        if ($folderId > 0 && !in_array((string) $folderId, array_map('strval', $known), true)) {
+            respond(400, array('error' => 'This folder does not exist.'));
+        }
+        $moved = 0;
+        $refused = array();
+        foreach ($ids as $id) {
+            try {
+                $Entry = new Inventory($App->Users, $id);
+                $Entry->patch(Action::Update, array('folder_id' => $folderId > 0 ? (string) $folderId : ''));
+                $moved++;
+            } catch (Throwable) {
+                $refused[] = $id;
+            }
+        }
+        respond(200, array('moved' => $moved, 'refused' => $refused));
+    } catch (Throwable $e) {
+        respond(500, array('error' => 'Could not move the entries: ' . $e->getMessage()));
     }
 }
 

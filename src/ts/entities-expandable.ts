@@ -814,6 +814,62 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   ownerButton.type = 'button';
   ownerButton.hidden = true;
   toolbar.append(ownerButton);
+  // the rows ticked move to another folder (or to none); the entries need the right to edit them
+  const folderButton = el('button', 'btn btn-secondary btn-sm ml-2', 'Move to folder');
+  folderButton.type = 'button';
+  folderButton.hidden = true;
+  const folderPanel = el('div', 'columns-panel');
+  folderPanel.hidden = true;
+  folderPanel.style.minWidth = '18rem';
+  toolbar.append(folderButton, folderPanel);
+  const csrfToken = (): string => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+  folderButton.addEventListener('click', () => {
+    if (!folderPanel.hidden) {
+      folderPanel.hidden = true;
+      return;
+    }
+    folderPanel.replaceChildren(el('div', 'small text-muted', 'Loading the folders...'));
+    folderPanel.hidden = false;
+    void fetch('registry-transfer.php?folders=1', { credentials: 'same-origin' }).then(r => r.json()).then((body: { folders: { id: number; path: string }[] }) => {
+      const choice = el('select', 'form-control form-control-sm mb-2');
+      choice.setAttribute('aria-label', 'Folder');
+      const none = el('option', '', 'No folder (Unfiled)');
+      none.value = '0';
+      choice.append(none);
+      body.folders.forEach(f => {
+        const option = el('option', '', f.path);
+        option.value = String(f.id);
+        choice.append(option);
+      });
+      const go = el('button', 'btn btn-primary btn-sm', `Move ${ui.selected.size} entries`);
+      go.type = 'button';
+      const note = el('div', 'small mt-1');
+      go.addEventListener('click', () => {
+        go.disabled = true;
+        void fetch('registry-transfer.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrfToken() },
+          body: JSON.stringify({ action: 'move_to_folder', ids: [...ui.selected], folder_id: Number(choice.value) }),
+        }).then(r => r.json()).then((result: { moved?: number; refused?: number[]; error?: string }) => {
+          if (result.error) {
+            throw new Error(result.error);
+          }
+          const refused = result.refused?.length ?? 0;
+          note.className = refused > 0 ? 'small mt-1 text-danger' : 'small mt-1 text-success';
+          note.textContent = `${result.moved ?? 0} moved` + (refused > 0 ? `, ${refused} not moved (you cannot edit them)` : '');
+          window.setTimeout(() => window.location.reload(), refused > 0 ? 2500 : 700);
+        }).catch(error => {
+          go.disabled = false;
+          note.className = 'small mt-1 text-danger';
+          note.textContent = error instanceof Error ? error.message : String(error);
+        });
+      });
+      folderPanel.replaceChildren(choice, go, note);
+    }).catch(() => {
+      folderPanel.replaceChildren(el('div', 'small text-danger', 'The folders could not be loaded.'));
+    });
+  });
   const inMyEntries = new URLSearchParams(window.location.search).get('planned') === '1';
   const container = el('div');
   rootEl.replaceChildren(toolbar, container);
@@ -831,6 +887,11 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
       databaseButton.textContent = `Add selected to the Database (${ui.selected.size})`;
       ownerButton.hidden = ui.selected.size === 0;
       ownerButton.textContent = `Assign owner (${ui.selected.size})`;
+      folderButton.hidden = ui.selected.size === 0;
+      folderButton.textContent = `Move to folder (${ui.selected.size})`;
+      if (ui.selected.size === 0) {
+        folderPanel.hidden = true;
+      }
       refreshExportButton();
     },
   };
