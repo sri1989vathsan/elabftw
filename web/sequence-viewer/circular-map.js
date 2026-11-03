@@ -409,12 +409,13 @@
 
     // the labels of one side, in rows at about the height of their arcs: each row keeps its space, and the rows follow the
     // curve of the ring so the names stay close to it
-    function placeRows(items, top, bottom, rowHeight) {
+    function placeRows(items, top, bottom, rowHeight, budget) {
       const sorted = items.slice().sort(function (a, b) {
         return a.wanted - b.wanted;
       });
       let fit = sorted.slice();
-      while (fit.length * rowHeight > bottom - top && fit.length > 0) {
+      // zoomed out the names are few: only the biggest features and the enzymes that matter, the others come back as the map is zoomed in
+      while ((fit.length * rowHeight > bottom - top || fit.length > budget) && fit.length > 0) {
         // too many for the height: the least important go (the enzymes first, then the small features)
         let weakest = 0;
         fit.forEach(function (item, index) {
@@ -761,8 +762,25 @@
         sides[label.side].push(label);
       });
       let hidden = 0;
+      // a name that is repeated (four "linker") is written once, on the biggest of them, until the map is zoomed in
+      if (zoom < 1.6) {
+        const biggest = {};
+        labels.forEach(function (label) {
+          const name = label.kind + '|' + label.text;
+          if (!biggest[name] || label.size > biggest[name].size) {
+            biggest[name] = label;
+          }
+        });
+        ['left', 'right'].forEach(function (side) {
+          sides[side] = sides[side].filter(function (label) {
+            return biggest[label.kind + '|' + label.text] === label;
+          });
+        });
+      }
+      // how many names a side can carry: few when the map is small, more as it is zoomed in
+      const budget = Math.max(3, Math.round(4 + 8 * zoom * zoom));
       ['left', 'right'].forEach(function (side) {
-        const placed = placeRows(sides[side], 14, height - 14, 15);
+        const placed = placeRows(sides[side], 14, height - 14, 15, budget);
         hidden += sides[side].length - placed.length;
         placed.forEach(function (label) {
           const dy = Math.min(Math.abs(label.y - cy), labelRadius - 1);
@@ -895,6 +913,7 @@
         return;
       }
       group.textContent = '';
+      svg.classList.toggle('own-map-detail', !!hover);
       const data = dataNow();
       const title = hover ? hover.title : (data.name || 'Sequence');
       const line = hover ? hover.line : String(data.sequence || '').length.toLocaleString('en') + ' bp' + (data.circular ? '' : ' (linear)');

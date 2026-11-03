@@ -2091,3 +2091,8 @@ body.hide-seq-orfs .veRowView .veRowViewOrfsContainer {
   font-size: 0.8rem;
   color: #55606f;
 }
+
+/* the details of what the pointer is on are written in the centre of the map: the numbers of the scale give way to them */
+.own-map-detail .own-map-scale {
+  opacity: 0;
+}
