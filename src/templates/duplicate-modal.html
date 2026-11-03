@@ -25,7 +25,7 @@
           <label class='d-block'><input type='radio' name='duplicateWhere' value='database'> {{ 'Copy to the Database: in All entries now, registered with the next number of its module'|trans }}</label>
         </div>
         {% if experimentsFoldersArr is defined %}
-          <div class='form-group mt-2'>
+          <div class='form-group mt-2' id='duplicateFolderGroup'>
             <label for='duplicateFolder' class='mb-1'>{{ 'Folder'|trans }}</label>
             <select id='duplicateFolder' class='form-control form-control-sm'>
               <option value=''>{{ 'No folder (Unfiled)'|trans }}</option>

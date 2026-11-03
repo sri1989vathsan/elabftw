@@ -26,12 +26,24 @@ on(Action.Duplicate, () => {
     copyFiles: Boolean(copyFiles.checked),
     linkToOriginal: Boolean(linkToOriginalExperiment?.checked ?? false),
     ...(where === 'database' ? { registered: true } : {}),
-    ...(folder > 0 ? { folder_id: folder } : {}),
+    // a copy to the Database is filed in the folder of its module: no folder is chosen for it
+    ...(folder > 0 && where !== 'database' ? { folder_id: folder } : {}),
   },
   ).then(id => {
     window.location.href = `?mode=edit&id=${id}`;
   });
 });
+
+// the folder of a copy is chosen only for a copy for oneself: a copy to the Database goes in the folder of its module
+function syncDuplicateFolder(): void {
+  const where = (document.querySelector('input[name="duplicateWhere"]:checked') as HTMLInputElement | null)?.value;
+  const group = document.getElementById('duplicateFolderGroup');
+  if (group) {
+    group.hidden = where === 'database';
+  }
+}
+document.querySelectorAll('input[name="duplicateWhere"]').forEach(radio => radio.addEventListener('change', syncDuplicateFolder));
+syncDuplicateFolder();
 
 on(Action.Timestamp, () => {
   ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.Timestamp}).then(() => {
