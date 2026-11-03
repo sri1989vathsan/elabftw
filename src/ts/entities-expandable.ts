@@ -290,7 +290,28 @@ function matchesFilter(value: string | number, filter: string, numeric: boolean)
   return String(value).toLowerCase().includes(f.toLowerCase());
 }
 
-type TableState = { filters: Map<string, string>; selected: Set<number>; onSelectionChange: () => void };
+type TableState = { filters: Map<string, string>; selected: Set<number>; onSelectionChange: () => void; page: number };
+
+// how many entries one page of the table shows (0 is all of them): the same for every module, remembered in this browser
+const PAGE_SIZES = [25, 50, 100, 250, 0];
+const PAGE_SIZE_KEY = 'registry_page_size';
+
+function loadPageSize(): number {
+  try {
+    const saved = Number(localStorage.getItem(PAGE_SIZE_KEY));
+    return localStorage.getItem(PAGE_SIZE_KEY) !== null && PAGE_SIZES.includes(saved) ? saved : 50;
+  } catch {
+    return 50;
+  }
+}
+
+function savePageSize(size: number): void {
+  try {
+    localStorage.setItem(PAGE_SIZE_KEY, String(size));
+  } catch {
+    // localStorage might be unavailable
+  }
+}
 
 let rootEl: HTMLElement | null = null;
 let onFiltersChanged: ((event: Event) => void) | null = null;
@@ -448,7 +469,8 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
   // a filter on each column, the rows shown are the ones that pass all of them
   const filterRow = el('tr', 'expandable-filter-row');
   filterRow.append(el('th'), el('th'));
-  const count = el('span', 'text-muted small ml-2');
+  // the pager: the entries on each page, and the buttons to go to the previous and the next page (above and below the table)
+  const pagers = [el('div', 'd-flex flex-wrap align-items-center mb-1'), el('div', 'd-flex flex-wrap align-items-center mt-1')];
   columns.forEach(c => {
     const th = el('th', c.key === 'ID' ? 'id-cell' : '');
     const input = el('input', 'form-control form-control-sm expandable-filter');
@@ -458,6 +480,7 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     input.setAttribute('aria-label', `Filter ${c.label}`);
     input.addEventListener('input', () => {
       ui.filters.set(c.key, input.value);
+      ui.page = 0;
       fillBody();
     });
     th.append(input);
@@ -474,7 +497,6 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     const selectedShown = shown.filter(r => ui.selected.has(r.id)).length;
     selectAll.checked = shown.length > 0 && selectedShown === shown.length;
     selectAll.indeterminate = selectedShown > 0 && selectedShown < shown.length;
-    count.textContent = shown.length === allRows.length ? `${allRows.length} shown` : `${shown.length} of ${allRows.length} shown`;
   };
   selectAll.addEventListener('change', () => {
     shown.forEach(r => {
@@ -491,10 +513,53 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     syncSelectAll();
   });
 
+  function drawPagers(total: number, from: number, to: number, pageSize: number): void {
+    pagers.forEach(pager => {
+      pager.replaceChildren();
+      const text = el('span', 'text-muted small mr-3', total === allRows.length ? `${total === 0 ? 0 : from + 1}-${to} of ${total}` : `${total === 0 ? 0 : from + 1}-${to} of ${total} (${allRows.length} in all)`);
+      pager.append(text);
+      const previous = el('button', 'btn btn-transparent btn-sm', 'Previous');
+      const next = el('button', 'btn btn-transparent btn-sm mr-3', 'Next');
+      previous.type = next.type = 'button';
+      previous.disabled = from === 0;
+      next.disabled = pageSize === 0 || to >= total;
+      previous.addEventListener('click', () => {
+        ui.page = Math.max(0, ui.page - 1);
+        fillBody();
+      });
+      next.addEventListener('click', () => {
+        ui.page += 1;
+        fillBody();
+      });
+      const choice = el('select', 'custom-select custom-select-sm w-auto');
+      choice.setAttribute('aria-label', 'Entries per page');
+      PAGE_SIZES.forEach(size => {
+        const option = el('option', '', size === 0 ? 'All per page' : `${size} per page`);
+        option.value = String(size);
+        option.selected = size === pageSize;
+        choice.append(option);
+      });
+      choice.addEventListener('change', () => {
+        savePageSize(Number(choice.value));
+        ui.page = 0;
+        fillBody();
+      });
+      pager.append(previous, next, choice);
+    });
+  }
+
   function fillBody(): void {
     body.replaceChildren();
-    shown = sortRows(allRows, sort, valueOf).filter(row => columns.every(c => matchesFilter(c.get(row), ui.filters.get(c.key) ?? '', c.numeric)));
+    const filtered = sortRows(allRows, sort, valueOf).filter(row => columns.every(c => matchesFilter(c.get(row), ui.filters.get(c.key) ?? '', c.numeric)));
+    const pageSize = loadPageSize();
+    const pages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
+    ui.page = Math.min(ui.page, pages - 1);
+    const from = pageSize === 0 ? 0 : ui.page * pageSize;
+    const to = pageSize === 0 ? filtered.length : Math.min(filtered.length, from + pageSize);
+    // the rows of this page: the ones that "select all" and the count are about
+    shown = filtered.slice(from, to);
     shown.forEach(row => body.append(...buildRow(row, columns)));
+    drawPagers(filtered.length, from, to, pageSize);
     syncSelectAll();
   }
 
@@ -670,7 +735,7 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
   fillBody();
   const wrap = el('div', 'table-responsive');
   wrap.append(table);
-  container.append(count, wrap);
+  container.append(pagers[0], wrap, pagers[1]);
 }
 
 export function mountExpandableTable(rootElement: HTMLElement | null, order: string, sort: string, onLoaded: () => void): void {
@@ -733,6 +798,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   const ui: TableState = {
     filters: new Map<string, string>(),
     selected: new Set<number>(),
+    page: 0,
     onSelectionChange: () => {
       const tools = (window as unknown as { PrimerTools?: { sendToOrder: (ids: number[], done?: () => void) => void } }).PrimerTools;
       orderButton.hidden = ui.selected.size === 0 || !tools;
@@ -879,6 +945,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   });
   const onSort = (next: SortState): void => {
     tableSort = next;
+    ui.page = 0;
     render(container, rows, tableSort, onSort, ui);
   };
 
