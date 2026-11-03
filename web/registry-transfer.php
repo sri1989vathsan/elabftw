@@ -361,7 +361,8 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
         $cleanPath = static function (string $path): array {
             $segments = array();
             foreach (explode(' > ', $path) as $segment) {
-                $segment = trim((string) preg_replace('/\s*\((?:delete|)\)\s*$/i', '', trim($segment)));
+                // "(delete)" and "()" are noise; "(2)" after a name is the place of the thing inside its parent (the 2nd position of the rack), not another one
+                $segment = trim((string) preg_replace('/\s*\((?:delete|\d*)\)\s*$/i', '', trim($segment)));
                 if ($segment !== '') {
                     $segments[] = mb_substr($segment, 0, 255);
                 }
