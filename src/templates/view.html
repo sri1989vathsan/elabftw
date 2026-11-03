@@ -301,5 +301,9 @@
   {# the folders of the database #}
   <script src='planned.js?v={{ 'now'|date('YmdHi') }}' defer></script>
 {% endif %}
+{% if Entity.entityType.value in ['experiments', 'items', 'inventory'] %}
+  {# the entries of the database linked to experiments and resources #}
+  <script src='registry-links.js?v={{ 'now'|date('YmdHi') }}' defer></script>
+{% endif %}
 
 {% endblock body %}
