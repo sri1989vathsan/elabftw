@@ -441,6 +441,92 @@
     },
   };
 
+  // an antibody or a reagent is ordered: a dialog asks for the amount (and the link or the vendor when they are not in the entry), then an
+  // order is made, "Name; Vendor", with the link, the clone and the amount in its description, and linked to the entry
+  window.addEventListener('registry:order-entry', function (event) {
+    const entry = event.detail;
+    const field = function (pattern) {
+      const found = (entry.fields || []).find(function (f) {
+        return pattern.test(f.name);
+      });
+      return found && found.value ? String(found.value) : '';
+    };
+    const back = element('div', 'planned-backdrop');
+    const box = element('div', 'planned-dialog');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.append(element('h5', '', 'Order ' + entry.title));
+    const inputs = {};
+    [['vendor', 'Vendor', field(/^(supplier|vendor)/i)], ['clone', 'Clone', field(/^clone/i)], ['link', 'Link', field(/^(link|url|product link|website)/i)], ['amount', 'Amount', field(/^(order )?amount/i)]].forEach(function (item) {
+      const label = element('label', 'd-block');
+      label.append(element('span', 'd-block small text-muted', item[1]));
+      const input = element('input', 'form-control form-control-sm');
+      input.type = 'text';
+      input.value = item[2];
+      if (item[0] === 'amount') {
+        input.placeholder = 'for example 100 µl, or 1 vial';
+      }
+      inputs[item[0]] = input;
+      label.append(input);
+      box.append(label);
+    });
+    const message = element('p', 'small text-danger mb-0');
+    const buttons = element('div', 'planned-dialog-buttons');
+    const cancel = element('button', 'btn btn-secondary btn-sm', 'Cancel');
+    cancel.type = 'button';
+    const make = element('button', 'btn btn-primary btn-sm', 'Make the order');
+    make.type = 'button';
+    cancel.addEventListener('click', function () {
+      back.remove();
+    });
+    back.addEventListener('click', function (e) {
+      if (e.target === back) {
+        back.remove();
+      }
+    });
+    make.addEventListener('click', async function () {
+      make.disabled = true;
+      message.textContent = '';
+      try {
+        const vendor = inputs.vendor.value.trim();
+        const lines = [];
+        if (inputs.link.value.trim()) {
+          lines.push('Link: ' + inputs.link.value.trim());
+        }
+        if (inputs.clone.value.trim()) {
+          lines.push('Clone: ' + inputs.clone.value.trim());
+        }
+        if (inputs.amount.value.trim()) {
+          lines.push('Amount: ' + inputs.amount.value.trim());
+        }
+        const response = await fetch('api/v2/orders', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
+          body: JSON.stringify({ title: entry.title + (vendor ? '; ' + vendor : ''), notes: lines.join('\n') }),
+        });
+        if (!response.ok) {
+          throw new Error('The order could not be made (' + response.status + ').');
+        }
+        const orderId = Number((response.headers.get('Location') || '').split('/').pop());
+        const linked = await fetch('primers.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'order', primers: [entry.id], order: orderId }) });
+        if (!linked.ok) {
+          throw new Error('The order was made, but it could not be linked to the entry (' + linked.status + ').');
+        }
+        back.remove();
+        window.location.href = 'orders.php?order=' + orderId;
+      } catch (error) {
+        message.textContent = error.message;
+        make.disabled = false;
+      }
+    });
+    buttons.append(cancel, make);
+    box.append(message, buttons);
+    back.append(box);
+    document.body.append(back);
+    inputs.amount.focus();
+  });
+
   const params = new URLSearchParams(location.search);
   const id = Number(params.get('id'));
   const nav = document.querySelector('nav.category-nav');

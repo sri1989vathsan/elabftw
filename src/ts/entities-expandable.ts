@@ -538,6 +538,18 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
       window.dispatchEvent(new CustomEvent('registry:print-label', { detail: { id: row.id, title: row.title } }));
     });
     actionCell.append(edit, copy, print);
+    // antibodies and reagents are bought: the button makes an order of the entry, next to the label button
+    if (/^(antibod|reagent)/i.test(row.category_title ?? '')) {
+      const order = el('button', 'btn btn-secondary btn-sm ml-1');
+      order.type = 'button';
+      order.title = `Order ${row.title}`;
+      order.setAttribute('aria-label', `Order ${row.title}`);
+      order.append(el('i', 'fas fa-cart-shopping fa-fw'));
+      order.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('registry:order-entry', { detail: { id: row.id, title: row.title, fields: row.extra_fields ?? [] } }));
+      });
+      actionCell.append(order);
+    }
     tr.append(actionCell);
 
     let detailRow: HTMLTableRowElement | null = null;
