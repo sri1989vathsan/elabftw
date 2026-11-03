@@ -482,6 +482,9 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
           });
           if (entry.row.category_color) {
             cell.style.backgroundColor = `#${entry.row.category_color}`;
+            // dark text on a light colour, white on a dark one: the text stays readable whatever the colour of the module
+            const [red, green, blue] = [0, 2, 4].map(i => parseInt(entry.row.category_color?.slice(i, i + 2) ?? '0', 16));
+            cell.style.color = (0.299 * red + 0.587 * green + 0.114 * blue) > 150 ? '#1b1b1b' : '#ffffff';
           }
           if (sameTube(pickedTube, entry)) {
             cell.classList.add('picked');

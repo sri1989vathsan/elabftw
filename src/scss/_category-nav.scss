@@ -367,8 +367,7 @@
 
   &.filled {
     border-style: solid;
-    color: #fff;
-    text-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+    font-weight: 600;
   }
 
   &.picked {
@@ -478,11 +477,13 @@
   font-weight: 600;
   line-height: 1.4;
   text-align: center;
-  color: #fff !important;
-  background: #6c757d;
+  // primary: a bright blue with white text; secondary: a light blue with dark text
+  color: #0d2b57 !important;
+  background: #bcd8ff;
 
   &.storage-kind-primary {
-    background: #1f5fae;
+    color: #fff !important;
+    background: #1677ff;
   }
 }
 
@@ -644,18 +645,19 @@
   text-align: center;
   font-weight: 700;
   font-size: 0.85rem;
-  color: #fff;
 
   &.is-primary {
-    background: var(--primary, #1f5fae);
+    color: #fff !important;
+    background: #1677ff;
   }
 
   &.is-secondary {
-    background: #8a8f98;
+    color: #0d2b57 !important;
+    background: #bcd8ff;
   }
 }
 
-// the box drawn small: a filled dot per tube, blue for the primary, grey for the others
+// the box drawn small: a filled dot per tube, bright blue for the primary, light blue for the others
 .mini-box {
   display: grid;
   flex: 0 0 auto;
@@ -668,13 +670,13 @@
     border-radius: 50%;
 
     &.is-primary {
-      background: var(--primary, #1f5fae);
-      border-color: var(--primary, #1f5fae);
+      background: #1677ff;
+      border-color: #1677ff;
     }
 
     &.is-secondary {
-      background: #8a8f98;
-      border-color: #8a8f98;
+      background: #bcd8ff;
+      border-color: #8fbaf5;
     }
   }
 }
