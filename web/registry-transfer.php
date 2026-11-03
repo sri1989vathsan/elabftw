@@ -515,6 +515,65 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
     }
 }
 
+// empty a storage place (the entries stored in it are unlinked, they are kept), or delete it with everything inside it (admins only);
+// with count_only the numbers are given first, so the user can confirm them
+if (is_array($payload) && ($payload['action'] ?? '') === 'empty_storage') {
+    if (!$isAdmin) {
+        respond(403, array('error' => 'Only an admin can empty or delete storage places.'));
+    }
+    try {
+        $rootId = (int) ($payload['id'] ?? 0);
+        $delete = !empty($payload['delete']);
+        $withChildren = $delete || !empty($payload['include_children']);
+        $run = static function (string $sql) use ($pdo): \PDOStatement {
+            $statement = $pdo->prepare($sql);
+            $pdo->execute($statement);
+            return $statement;
+        };
+        $all = $run('SELECT id, parent_id FROM storage_units')->fetchAll();
+        $byParent = array();
+        $known = array();
+        foreach ($all as $unit) {
+            $known[(int) $unit['id']] = true;
+            $byParent[(int) ($unit['parent_id'] ?? 0)][] = (int) $unit['id'];
+        }
+        if (!isset($known[$rootId])) {
+            respond(404, array('error' => 'This storage place does not exist.'));
+        }
+        // the place, and the places inside it when they are included (the deepest last in the list, so they are deleted first)
+        $ids = array($rootId);
+        if ($withChildren) {
+            for ($i = 0; $i < count($ids); $i++) {
+                foreach ($byParent[$ids[$i]] ?? array() as $child) {
+                    $ids[] = $child;
+                }
+            }
+        }
+        $in = implode(',', array_map('intval', $ids));
+        $links = (int) $run('SELECT COUNT(*) FROM containers2inventory WHERE storage_id IN (' . $in . ')')->fetchColumn();
+        $entries = (int) $run('SELECT COUNT(DISTINCT item_id) FROM containers2inventory WHERE storage_id IN (' . $in . ')')->fetchColumn();
+        $others = 0;
+        foreach (array('containers2experiments', 'containers2experiments_templates', 'containers2items', 'containers2items_types') as $table) {
+            $others += (int) $run('SELECT COUNT(*) FROM ' . $table . ' WHERE storage_id IN (' . $in . ')')->fetchColumn();
+        }
+        if (!empty($payload['count_only'])) {
+            respond(200, array('places' => count($ids), 'entries' => $entries, 'links' => $links, 'other_links' => $others));
+        }
+        if ($delete && $others > 0) {
+            respond(409, array('error' => 'Something other than Database entries (an experiment or a resource) is stored here: remove that first.'));
+        }
+        $run('DELETE FROM containers2inventory WHERE storage_id IN (' . $in . ')');
+        if ($delete) {
+            foreach (array_reverse($ids) as $unitId) {
+                $run('DELETE FROM storage_units WHERE id = ' . (int) $unitId);
+            }
+        }
+        respond(200, array('places' => count($ids), 'entries' => $entries, 'links' => $links, 'deleted' => $delete));
+    } catch (Throwable $e) {
+        respond(500, array('error' => 'Could not do it: ' . $e->getMessage()));
+    }
+}
+
 // the entries that were ticked get another owner (admins only): each is renumbered in the list of the new owner, so My ID stays their own count
 if (is_array($payload) && ($payload['action'] ?? '') === 'assign_owner') {
     if (!$isAdmin) {

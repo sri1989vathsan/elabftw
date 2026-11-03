@@ -815,6 +815,13 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   };
 
   // a location is deleted when nothing is in it and it has no sub-locations (the server refuses otherwise, and only for admins)
+  // is the user an admin: the buttons that empty or delete a whole place are shown to admins (the server checks it again)
+  let adminAnswer: Promise<boolean> | null = null;
+  const adminCheck = (): Promise<boolean> => {
+    adminAnswer ??= fetch('registry-transfer.php?users=1', { credentials: 'same-origin' }).then(r => r.json()).then(body => Boolean((body as { is_admin?: boolean }).is_admin)).catch(() => false);
+    return adminAnswer;
+  };
+
   const renderDelete = (node: Node): HTMLElement => {
     const wrap = el('div', 'mb-2');
     const blocked = node.children.length > 0 || collect(node, true).length > 0;
@@ -836,6 +843,49 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     if (blocked) {
       wrap.append(el('span', 'small text-muted ml-2', 'Empty it first to delete it.'));
     }
+    // admins: empty the place in one go, or delete it with everything inside; the numbers are shown to confirm first
+    const bulk = el('div', 'mt-1');
+    bulk.hidden = true;
+    const bulkCall = async (body: Record<string, unknown>): Promise<Record<string, number | boolean | string>> => {
+      const meta = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]');
+      const response = await fetch('registry-transfer.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': meta?.content ?? '' },
+        body: JSON.stringify(Object.assign({ action: 'empty_storage', id: node.unit.id }, body)),
+      });
+      const result = await response.json() as Record<string, number | boolean | string>;
+      if (!response.ok) {
+        throw new Error(String(result.error ?? 'It did not work.'));
+      }
+      return result;
+    };
+    const bulkAction = (label: string, danger: boolean, options: Record<string, unknown>, describe: (n: Record<string, number | boolean | string>) => string): void => {
+      const button = el('button', `btn btn-sm mr-2 ${danger ? 'btn-danger' : 'btn-outline-danger'}`, label);
+      button.type = 'button';
+      button.addEventListener('click', () => {
+        void bulkCall({ ...options, count_only: true }).then(async counts => {
+          if (!await askConfirm(`${describe(counts)} Continue?`, label)) {
+            return;
+          }
+          await bulkCall(options);
+          if (options.delete) {
+            state.selected = node.unit.parent_id;
+            writeState(state);
+          }
+          return load();
+        }).catch(error => {
+          button.after(el('span', 'small text-danger ml-1', error instanceof Error ? error.message : String(error)));
+        });
+      });
+      bulk.append(button);
+    };
+    bulkAction('Empty this place', false, { include_children: includeChildren }, n => `This takes ${n.entries} entries out of ${n.places} place(s) (the entries are kept).`);
+    bulkAction('Delete with everything inside', true, { delete: true }, n => `This deletes "${node.unit.full_path}" and the ${Number(n.places) - 1} place(s) inside it, and takes ${n.entries} entries out of them (the entries are kept).`);
+    wrap.append(bulk);
+    void adminCheck().then(isAdmin => {
+      bulk.hidden = !isAdmin;
+    });
     return wrap;
   };
 
