@@ -438,6 +438,67 @@
     inputs.amount.focus();
   });
 
+  // the print button of a row: the label of the entry is printed on the label printer of the lab (see label-print.php)
+  window.addEventListener('registry:print-label', function (event) {
+    const entry = event.detail;
+    const back = element('div', 'planned-backdrop');
+    const box = element('div', 'planned-dialog');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.append(element('h5', '', 'Print a label for ' + entry.title));
+    const label = element('label', 'd-block');
+    label.append(element('span', 'd-block small text-muted', 'Copies'));
+    const copies = element('input', 'form-control form-control-sm');
+    copies.type = 'number';
+    copies.min = '1';
+    copies.max = '100';
+    copies.value = '1';
+    label.append(copies);
+    box.append(label);
+    const message = element('p', 'small mb-0');
+    const buttons = element('div', 'planned-dialog-buttons');
+    const cancel = element('button', 'btn btn-secondary btn-sm', 'Close');
+    cancel.type = 'button';
+    const print = element('button', 'btn btn-primary btn-sm', 'Print');
+    print.type = 'button';
+    cancel.addEventListener('click', function () {
+      back.remove();
+    });
+    back.addEventListener('click', function (e) {
+      if (e.target === back) {
+        back.remove();
+      }
+    });
+    print.addEventListener('click', async function () {
+      print.disabled = true;
+      message.className = 'small mb-0';
+      message.textContent = 'Sending to the printer...';
+      try {
+        const response = await fetch('label-print.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
+          body: JSON.stringify({ id: entry.id, copies: Number(copies.value) || 1 }),
+        });
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body.error || 'The label could not be printed.');
+        }
+        message.className = 'small mb-0 text-success';
+        message.textContent = 'Sent: ' + body.printed + (body.printed === 1 ? ' label' : ' labels') + ' (' + body.lines.join(' / ') + ').';
+      } catch (error) {
+        message.className = 'small mb-0 text-danger';
+        message.textContent = error.message;
+      }
+      print.disabled = false;
+    });
+    buttons.append(cancel, print);
+    box.append(message, buttons);
+    back.append(box);
+    document.body.append(back);
+    print.focus();
+  });
+
   const params = new URLSearchParams(location.search);
   const id = Number(params.get('id'));
   const nav = document.querySelector('nav.category-nav');
