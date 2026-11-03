@@ -170,6 +170,12 @@ def convert_antibody(record, row, notes):
         url = next((link for link in record['Description']['links'] if link.startswith('http')), '')
         if not url:
             url = next((link for link in record['Manufacturer website']['links'] if link.startswith('http')), '')
+        # a link written as plain text in the description
+        if not url:
+            found = re.search(r'https?://[^\s<>"]+', text(record, 'Description') + ' ' + text(record, 'Specificity') + ' ' + text(record, 'Storage Comments'))
+            if found:
+                url = found.group(0).rstrip('.,;)')
+                notes.append('Link found in the description')
     row['Title'] = name
     if url:
         row['Link'] = url
