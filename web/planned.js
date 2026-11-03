@@ -203,7 +203,10 @@
     help.append(document.createTextNode('A CSV file with a heading row (Excel can save one), or a ZIP from an export with files. Every row makes an entry. '));
     const template = element('a', '', 'Download a template');
     template.href = 'registry-transfer.php?template=1&category=' + category;
-    help.append(template, document.createTextNode(' with the fields of this module.'));
+    help.append(template, document.createTextNode(' with the fields of this module, or '));
+    const all = element('a', '', 'the templates of all the modules');
+    all.href = 'registry-transfer.php?templates=1';
+    help.append(all, document.createTextNode('.'));
     box.append(help);
     const file = element('input', 'form-control-file mb-2');
     file.type = 'file';
@@ -327,7 +330,10 @@
         run.disabled = false;
         return;
       }
-      table = parseCsv(await file.files[0].text());
+      // the row of hints of a template starts with #
+      table = parseCsv(await file.files[0].text()).filter(function (r, i) {
+        return i === 0 || !/^\s*#/.test(r[0] || '');
+      });
       if (table.length < 2) {
         message.className = 'small mb-2 text-danger';
         message.textContent = 'The file needs a heading row and at least one row of data.';

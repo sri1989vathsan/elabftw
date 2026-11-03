@@ -9,6 +9,7 @@ The pages are data, not code: they are only read.
 """
 import csv
 import glob
+import hashlib
 import io
 import json
 import os
@@ -480,22 +481,47 @@ def from_web(found, row, notes):
         notes.append(text)
 
 
-def enrich_antibody(row, key, notes, cache):
+def norm(text):
+    return re.sub(r'[^a-z0-9]+', ' ', (text or '').lower()).strip()
+
+
+def build_stable_cache(cache):
+    """The results of the web searches are written for the groups of one export (by position); here they are filed by what they are about
+    (the target and the species, or the name of the antibody), so a later export can use them."""
+    path = os.path.join(cache, 'websearch-cache.json')
+    stable = load_json(path) or {}
+    for name, bucket in (('websearch-biolegend.json', 'biolegend'), ('websearch-nolink.json', 'nolink')):
+        groups = load_json(os.path.join(cache, name)) or []
+        by_key = {str(g.get('key')): g for g in groups}
+        for result_file in sorted(glob.glob(os.path.join(cache, 'websearch-result-' + bucket + '-*.json'))):
+            for found in load_json(result_file) or []:
+                group = by_key.get(str(found.get('key')))
+                if not group:
+                    continue
+                label = ('bio|' + norm(group.get('target')) + '|' + norm(group.get('species'))) if bucket == 'biolegend' else ('nolink|' + norm(group.get('title')))
+                stable[label] = found
+    json.dump(stable, open(path, 'w'), ensure_ascii=False, indent=1)
+    return stable
+
+
+def enrich_antibody(row, key, notes, cache, stable, had_link):
     pages = load_json(os.path.join(cache, 'antibody-pages.json')) or {}
     if row.get('Link') and row['Link'] in pages:
         from_page_title(row['Link'], pages[row['Link']], row, notes)
-    for name, bucket in (('websearch-biolegend.json', 'biolegend'), ('websearch-nolink.json', 'nolink')):
-        for group in load_json(os.path.join(cache, name)) or []:
-            if key in [str(k) for k in group.get('rows', [])]:
-                for result_file in sorted(glob.glob(os.path.join(cache, 'websearch-result-' + bucket + '-*.json'))):
-                    for found in load_json(result_file) or []:
-                        if str(found.get('key')) == str(group.get('key')):
-                            from_web(found, row, notes)
+    if 'biolegend.com' in row.get('Link', ''):
+        found = stable.get('bio|' + norm(row.get('Target')) + '|' + norm(row.get('Reactivity species')))
+    elif not had_link:
+        found = stable.get('nolink|' + norm(row.get('Title')))
+    else:
+        found = None
+    if found:
+        from_web(found, row, notes)
 
 
 def enrich_plasmid(row, key, files, notes, cache):
-    path = os.path.join(cache, 'sequences', key + '.gb')
-    if os.path.isfile(path) and not any(name.endswith('.gb') for name, _ in files):
+    link = re.sub(r'/(edit|view)?/?$', '', (row.get('Benchling entry') or '').strip())
+    path = os.path.join(cache, 'sequences', hashlib.sha1(link.encode()).hexdigest()[:16] + '.gb') if link else ''
+    if path and os.path.isfile(path) and not any(name.endswith('.gb') for name, _ in files):
         files.append((re.sub(r'[^A-Za-z0-9_.-]+', '_', row.get('Title', 'plasmid')) + '.gb', open(path, 'rb').read()))
         notes.append('Sequence file from the Benchling link')
 
@@ -507,6 +533,7 @@ def main():
     folder, module, out = sys.argv[1], sys.argv[2], sys.argv[3]
     cache = sys.argv[sys.argv.index('--cache') + 1] if '--cache' in sys.argv else ''
     os.makedirs(out, exist_ok=True)
+    stable = build_stable_cache(cache) if cache else {}
     rows, reviews, all_files = [], [], []
     for index, record in enumerate(read_page(folder), start=1):
         row, notes, files = {}, [], []
@@ -518,9 +545,10 @@ def main():
             convert_cell(record, row, notes, files)
         common(record, row, notes)
         pictures(record, folder, files)
+        had_link = bool(row.get('Link'))
         if cache:
             if module == 'antibodies':
-                enrich_antibody(row, str(index), notes, cache)
+                enrich_antibody(row, str(index), notes, cache, stable, had_link)
             elif module == 'plasmids':
                 enrich_plasmid(row, str(index), files, notes, cache)
         row['ID'] = row.get('LabCollector ID', '')

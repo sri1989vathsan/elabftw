@@ -23,6 +23,9 @@ use Throwable;
 use ZipArchive;
 
 use function array_column;
+use function str_starts_with;
+use function rewind;
+use function stream_get_contents;
 use function array_slice;
 use function count;
 use function fopen;
@@ -90,7 +93,52 @@ $teamUsers = static function () use ($pdo, $teamId): array {
     return $req->fetchAll();
 };
 
+// the template of a module for the import: a heading row, and a row (its first cell is #) that says what each column takes; the import skips it
+$templateOf = static function (array $module) use ($fieldsOf): string {
+    $definitions = $fieldsOf($module);
+    $headings = array('ID', 'Title', 'Owner e-mail');
+    $hints = array('# Number in the lab (optional)', 'The name of the entry (required)', 'E-mail of the owner (optional)');
+    foreach ($definitions as $name => $definition) {
+        $headings[] = (string) $name;
+        $hint = match ((string) ($definition['type'] ?? 'text')) {
+            'select', 'radio' => 'One of: ' . implode(' / ', is_array($definition['options'] ?? null) ? $definition['options'] : array()),
+            'number' => 'A number' . (!empty($definition['unit']) ? ' (' . $definition['unit'] . ')' : ''),
+            'date' => 'A date, like 2026-12-31',
+            'checkbox' => 'on or off',
+            'url' => 'A web address',
+            'email' => 'An e-mail address',
+            default => 'Text',
+        };
+        $hints[] = $hint . (!empty($definition['required']) ? ' (required)' : '');
+    }
+    $out = fopen('php://temp', 'w+b');
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, $headings, ',', '"', '');
+    fputcsv($out, $hints, ',', '"', '');
+    rewind($out);
+    return (string) stream_get_contents($out);
+};
+
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
+    // the templates of all the modules, in one zip
+    if (isset($_GET['templates'])) {
+        $req = $pdo->prepare('SELECT id, title, fields, settings FROM inventory_categories WHERE team = :team AND state = 1 ORDER BY ordering, title');
+        $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($req);
+        $zipPath = (string) tempnam(sys_get_temp_dir(), 'regtpl');
+        $zip = new ZipArchive();
+        $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        foreach ($req->fetchAll() as $module) {
+            $zip->addFromString(strtolower((string) preg_replace('/[^A-Za-z0-9]+/', '-', (string) $module['title'])) . '-template.csv', $templateOf($module));
+        }
+        $zip->close();
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="import-templates.zip"');
+        header('Content-Length: ' . filesize($zipPath));
+        readfile($zipPath);
+        unlink($zipPath);
+        exit;
+    }
     // the users that can own what is imported (admins only)
     if (isset($_GET['users'])) {
         respond(200, array('users' => $isAdmin ? $teamUsers() : array(), 'is_admin' => $isAdmin, 'me' => $userId, 'default_owner' => $defaultOwner > 0 ? $defaultOwner : null));
@@ -122,9 +170,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     if (isset($_GET['template'])) {
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . $slug . '-template.csv"');
-        $out = fopen('php://output', 'wb');
-        fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, $headings, ',', '"', '');
+        echo $templateOf($module);
         exit;
     }
     if (!isset($_GET['export'])) {
@@ -410,6 +456,7 @@ try {
     };
 
     if ($isZip) {
+        @set_time_limit(0);
         // a zip of the export: entries.csv, and the files of the entries in files/<key>/
         $zip = new ZipArchive();
         if ($zip->open((string) $_FILES['file']['tmp_name']) !== true) {
@@ -431,7 +478,11 @@ try {
         $fs = Storage::EXPORTS->getStorage()->getFs();
         $tmpDir = 'registry-import-' . bin2hex(random_bytes(6));
         $count = 0;
-        while (($cells = fgetcsv($handle, 0, ',', '"', '')) !== false && $count < 500) {
+        while (($cells = fgetcsv($handle, 0, ',', '"', '')) !== false && $count < 5000) {
+            // the row of hints of a template starts with #
+            if (isset($cells[0]) && str_starts_with(trim((string) $cells[0]), '#')) {
+                continue;
+            }
             $count++;
             $row = array('title' => '', 'fields' => array(), 'extra' => array());
             $key = '';
