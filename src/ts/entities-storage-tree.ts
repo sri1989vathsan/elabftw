@@ -459,7 +459,9 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         const cell = el('button', entry ? 'box-slot filled' : 'box-slot');
         cell.type = 'button';
         if (entry) {
-          cell.textContent = entry.row.title.slice(0, 2);
+          // what the slot says: the target of the entry when it has one (an antibody), else its title; the whole text, in a few lines
+          const target = entry.row.extra_fields?.find(f => f.name === 'Target')?.value?.trim();
+          cell.textContent = target || entry.row.title;
           cell.setAttribute('aria-label', `${slot}: ${entry.row.title} (${entry.location.qty_stored} ${entry.location.qty_unit})`.trim());
           cell.addEventListener('mouseenter', event => showTubeCard(entry, event));
           cell.addEventListener('mousemove', moveTubeCard);
