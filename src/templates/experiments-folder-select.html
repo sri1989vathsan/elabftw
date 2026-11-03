@@ -30,14 +30,17 @@
     >
       <option value=''>{{ 'No folder (Unfiled)'|trans }}</option>
       {% for folder in experimentsFoldersArr %}
+        {# the folders of the Database are not offered: an entry gets into them only by being added to the Database (its own folder stays in the list) #}
+        {% set isDatabaseFolder = Entity.entityType.value == 'inventory' and (folder.full_path == 'Database items' or folder.full_path starts with 'Database items > ') %}
+        {% if not isDatabaseFolder or Entity.entityData.folder_id == folder.id %}
         <option
           value='{{ folder.id }}'
           data-folder-owner-id='{{ folder.userid }}'
           data-folder-path='{{ folder.full_path|e('html_attr') }}'
-          {% if Entity.entityType.value == 'inventory' and (folder.full_path == 'Database items' or folder.full_path starts with 'Database items > ') and Entity.entityData.folder_id != folder.id %}data-folder-locked='true' disabled{% endif %}
           data-folder-bookmarked='{{ folder.id in favoriteFolderIds|default([]) ? 'true' : 'false' }}'
           {{ Entity.entityData.folder_id == folder.id ? 'selected' : '' }}
         >{{ folder.full_path }}</option>
+        {% endif %}
       {% endfor %}
     </select>
     {% if folderFixed %}
