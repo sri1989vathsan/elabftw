@@ -25,7 +25,7 @@ for index, row in enumerate(todo, start=1):
     link = re.sub(r'/(edit|view)?/?$', '', row['Benchling entry'].strip())
     target = os.path.join(cache, name_of(row) + '.gb')
     try:
-        response = requests.get(link + '.gb', headers=HEADERS, timeout=40)
+        response = requests.get(link.split('?')[0].rstrip('/') + '.gb', headers=HEADERS, timeout=40)
         if response.status_code == 200 and response.text.lstrip().startswith('LOCUS'):
             open(target, 'w', encoding='utf-8').write(response.text)
             done += 1

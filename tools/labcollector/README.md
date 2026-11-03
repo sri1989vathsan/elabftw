@@ -13,6 +13,9 @@ python3 -I tools/labcollector/make_import.py <output folder> "LabCollector - Ant
 For each page it writes `<module>-import.zip` (the entries and their files) and `<module>-review.csv` (for each entry, what was filled in and
 from where, and what still needs a look).
 
+To also look up the missing details (product pages, Benchling sequences) add `--fetch`; it reads them from the internet on your computer, converts
+again, and leaves one finished ZIP per module. Only that ZIP is imported on the server.
+
 ## What the converter fills
 
 * the fields of the module are filled from the columns of LabCollector;

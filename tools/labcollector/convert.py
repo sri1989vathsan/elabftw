@@ -590,8 +590,31 @@ def build_stable_cache(cache):
                     continue
                 label = ('bio|' + norm(group.get('target')) + '|' + norm(group.get('species'))) if bucket == 'biolegend' else ('nolink|' + norm(group.get('title')))
                 stable[label] = found
+    # the species the antibody was tested in: filed by the link, or by the name and catalog number
+    groups = {str(g.get('key')): g for g in (load_json(os.path.join(cache, 'websearch-reactivity.json')) or [])}
+    for result_file in sorted(glob.glob(os.path.join(cache, 'websearch-result-reactivity-*.json'))):
+        for found in load_json(result_file) or []:
+            group = groups.get(str(found.get('key')))
+            if group and (found.get('reactivity') or found.get('applications')):
+                stable[react_label(group.get('link'), group.get('title'), group.get('catalog'))] = found
     json.dump(stable, open(path, 'w'), ensure_ascii=False, indent=1)
     return stable
+
+
+def react_label(link, title, catalog):
+    return 'react|' + ((link or '').strip() or (norm(title) + '|' + norm(catalog)))
+
+
+def from_web_species(found, row, notes):
+    """The species and applications the maker lists for the antibody (a web search): fills what is empty and says so."""
+    filled = []
+    for key, field in (('reactivity', 'Reactivity species'), ('applications', 'Applications')):
+        value = (found.get(key) or '').strip()
+        if value and not row.get(field):
+            row[field] = value
+            filled.append(field)
+    if filled:
+        notes.append(', '.join(filled) + ' from a web search (' + (found.get('confidence') or '?') + ', tested species as listed by the maker); ' + (found.get('source') or ''))
 
 
 def enrich_antibody(row, key, notes, cache, stable, had_link):
@@ -606,6 +629,9 @@ def enrich_antibody(row, key, notes, cache, stable, had_link):
         found = None
     if found:
         from_web(found, row, notes)
+    species = stable.get(react_label(row.get('Link'), row.get('Title'), row.get('Catalog number')))
+    if species:
+        from_web_species(species, row, notes)
 
 
 def enrich_plasmid(row, key, files, notes, cache):

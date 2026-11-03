@@ -7,7 +7,11 @@ strains and cells), converts it and writes <module>-import.zip and <module>-revi
 module (Import, then choose the lab database and tick "Keep the numbers of the file"). If a cache folder with what was found elsewhere is given
 (pages of the makers, web searches, Benchling sequences) it is merged in.
 
-Usage: python3 -I make_import.py <output folder> [--cache <folder>] <page.7z | page folder> [more pages...]
+With --fetch (needs internet; the pages of the makers and the Benchling sequences are read on this computer) the missing details are looked up
+too and the entries are converted again, so one command gives the finished file. Nothing is sent to the server: only the ZIP that comes out is
+imported there.
+
+Usage: python3 -I make_import.py <output folder> [--cache <folder>] [--fetch] <page.7z | page folder> [more pages...]
 """
 import glob
 import os
@@ -49,6 +53,11 @@ def main():
         i = args.index('--cache')
         cache = ['--cache', args[i + 1]]
         del args[i:i + 2]
+    fetch = '--fetch' in args
+    if fetch:
+        args.remove('--fetch')
+        if not cache:
+            cache = ['--cache', os.path.join(out, 'cache')]
     os.makedirs(out, exist_ok=True)
     work = tempfile.mkdtemp()
     try:
@@ -56,7 +65,17 @@ def main():
             folder = find_page_folder(path, work)
             module, page_folder = module_of(folder)
             print('==', path, '->', module)
-            subprocess.run([sys.executable, '-I', os.path.join(HERE, 'convert.py'), page_folder, module, out] + cache, check=True)
+            convert = [sys.executable, '-I', os.path.join(HERE, 'convert.py'), page_folder, module, out] + cache
+            if fetch and cache:
+                os.makedirs(cache[1], exist_ok=True)
+            subprocess.run(convert, check=True)
+            if fetch and module in ('antibodies', 'plasmids'):
+                made = os.path.join(out, module + '-import.zip')
+                if module == 'antibodies':
+                    subprocess.run([sys.executable, '-I', os.path.join(HERE, 'fetch_titles.py'), made, os.path.join(cache[1], 'antibody-pages.json')], check=True)
+                else:
+                    subprocess.run([sys.executable, '-I', os.path.join(HERE, 'fetch_sequences.py'), made, os.path.join(cache[1], 'sequences')], check=True)
+                subprocess.run(convert, check=True)
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
