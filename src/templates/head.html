@@ -163,6 +163,9 @@
                   </div>
                 </form>
                 <div class='dropdown-divider'></div>
+                {# the storage browser of the database: the tree of the storage locations and what is in each #}
+                {% set isActive = scriptName == 'registry.php' and App.Request.query.has('storage_unit') %}
+                <a class='dropdown-item {{ isActive ? 'active' }}' href='registry.php?storage_unit=0' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-warehouse fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Storage browser'|trans }}</a>
                 {% set isActive = scriptName == 'registry-categories.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='registry-categories.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-rectangle-list fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Modules'|trans }}</a>
                 <div class='dropdown-divider'></div>
