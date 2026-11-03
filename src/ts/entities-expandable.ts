@@ -798,27 +798,47 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   transferGroup.append(exportButton, importButton);
   toolbar.append(transferGroup, exportMenu);
   // the rows ticked can be sent to an order (the sequences of primers are written in its notes)
-  // what can be done with the ticked rows: one row of its own, the buttons evenly spaced
-  const selectionBar = el('div', 'd-flex flex-wrap align-items-center w-100 mt-2');
-  selectionBar.style.gap = '0.5rem';
+  // what can be done with the ticked rows: one menu, "Actions on selected", that appears when rows are ticked
+  const selectionBar = el('div');
+  selectionBar.style.position = 'relative';
+  selectionBar.className = 'ml-3';
   selectionBar.hidden = true;
+  const actionsButton = el('button', 'btn btn-primary btn-sm');
+  actionsButton.type = 'button';
+  const actionsMenu = el('div', 'columns-panel');
+  actionsMenu.hidden = true;
+  actionsMenu.style.minWidth = '17rem';
+  actionsMenu.style.padding = '0.35rem';
+  actionsButton.addEventListener('click', () => {
+    actionsMenu.hidden = !actionsMenu.hidden;
+  });
+  document.addEventListener('click', event => {
+    if (!actionsMenu.hidden && !selectionBar.contains(event.target as Node)) {
+      actionsMenu.hidden = true;
+    }
+  });
+  selectionBar.append(actionsButton, actionsMenu);
   toolbar.append(selectionBar);
+  const menuItem = (button: HTMLButtonElement): void => {
+    button.className = 'btn btn-transparent btn-sm d-block w-100 text-left';
+    actionsMenu.append(button);
+  };
   const orderButton = el('button', 'btn btn-secondary btn-sm', 'Send selected to an order');
   orderButton.type = 'button';
   orderButton.hidden = true;
-  selectionBar.append(orderButton);
+  menuItem(orderButton);
   // in My entries the rows ticked can be added to the lab Database
   const databaseButton = el('button', 'btn btn-primary btn-sm', 'Add selected to the Database');
   databaseButton.type = 'button';
   databaseButton.hidden = true;
-  selectionBar.append(databaseButton);
+  menuItem(databaseButton);
   type RegistryTools = { addToDatabase: (ids: number[], done: () => void) => Promise<void>; assignOwner: (ids: number[], done: () => void) => Promise<void> };
   const registryTools = (): RegistryTools | undefined => (window as unknown as { RegistryTools?: RegistryTools }).RegistryTools;
   // the rows ticked can get another owner (an admin chooses it in the dialog)
   const ownerButton = el('button', 'btn btn-secondary btn-sm', 'Assign owner');
   ownerButton.type = 'button';
   ownerButton.hidden = true;
-  selectionBar.append(ownerButton);
+  menuItem(ownerButton);
   // the rows ticked move to another folder (or to none); the entries need the right to edit them
   const folderButton = el('button', 'btn btn-secondary btn-sm', 'Move to folder');
   folderButton.type = 'button';
@@ -827,11 +847,13 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   folderPanel.hidden = true;
   folderPanel.style.minWidth = '18rem';
   // the panel opens right under its button
-  const folderWrap = el('div');
-  folderWrap.style.position = 'relative';
-  folderPanel.style.top = 'calc(100% + 4px)';
-  folderWrap.append(folderButton, folderPanel);
-  selectionBar.append(folderWrap);
+  folderPanel.style.position = 'static';
+  folderPanel.style.boxShadow = 'none';
+  folderPanel.style.border = '0';
+  folderPanel.style.padding = '0.4rem 0.6rem';
+  folderPanel.style.minWidth = '0';
+  menuItem(folderButton);
+  actionsMenu.append(folderPanel);
   const csrfToken = (): string => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
   folderButton.addEventListener('click', () => {
     if (!folderPanel.hidden) {
@@ -915,16 +937,18 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     onSelectionChange: () => {
       const tools = (window as unknown as { PrimerTools?: { sendToOrder: (ids: number[], done?: () => void) => void } }).PrimerTools;
       orderButton.hidden = ui.selected.size === 0 || !tools;
-      orderButton.textContent = `Send selected to an order (${ui.selected.size})`;
       databaseButton.hidden = ui.selected.size === 0 || !inMyEntries;
-      databaseButton.textContent = `Add selected to the Database (${ui.selected.size})`;
       ownerButton.hidden = ui.selected.size === 0;
-      ownerButton.textContent = `Assign owner (${ui.selected.size})`;
       folderButton.hidden = ui.selected.size === 0;
       selectionBar.hidden = ui.selected.size === 0;
-      folderButton.textContent = `Move to folder (${ui.selected.size})`;
+      actionsButton.textContent = `Actions on selected (${ui.selected.size}) ▾`;
+      folderButton.textContent = 'Move to folder';
+      orderButton.textContent = 'Send to an order';
+      databaseButton.textContent = 'Add to the Database';
+      ownerButton.textContent = 'Assign owner';
       if (ui.selected.size === 0) {
         folderPanel.hidden = true;
+        actionsMenu.hidden = true;
       }
       refreshExportButton();
     },
