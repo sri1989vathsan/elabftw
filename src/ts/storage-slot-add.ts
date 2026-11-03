@@ -10,7 +10,10 @@ type Entry = { id: number; title: string; category_title: string | null; storage
 const UNITS = ['•', 'μL', 'mL', 'L', 'μg', 'mg', 'g', 'kg', 'e6 cells'];
 const MAX_RESULTS = 8;
 
-export function openSlotAdd(unit: { id: number; full_path: string }, slot: string, onDone: () => void): void {
+export function openSlotAdd(unit: { id: number; full_path: string }, slotOrSlots: string | string[], onDone: () => void): void {
+  // one slot, or several free slots chosen together: the entry is stored in each of them
+  const slots = Array.isArray(slotOrSlots) ? slotOrSlots : [slotOrSlots];
+  const slot = slots.length === 1 ? slots[0] : `${slots.length} slots`;
   let selected: Entry | null = null;
   let timer = 0;
 
@@ -21,7 +24,7 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slot: strin
   const content = el('div', 'modal-content');
   const header = el('div', 'modal-header');
   const title = el('h4', 'modal-title');
-  title.append(el('i', 'fas fa-fw fa-warehouse mr-1'), document.createTextNode(`Add storage in ${slot}`));
+  title.append(el('i', 'fas fa-fw fa-warehouse mr-1'), document.createTextNode(`Add storage in ${slots.length > 4 ? slot : slots.join(', ')}`));
   const close = el('button', 'close');
   close.type = 'button';
   close.setAttribute('data-dismiss', 'modal');
@@ -34,7 +37,7 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slot: strin
   dialog.append(content);
   modal.append(dialog);
 
-  body.append(el('p', 'color-medium', `${unit.full_path} · slot ${slot}`));
+  body.append(el('p', 'color-medium', slots.length === 1 ? `${unit.full_path} · slot ${slot}` : `${unit.full_path} · slots ${slots.join(', ')}`));
 
   const searchLabel = el('label', 'font-weight-bold', 'Which entry is stored here?');
   const search = el('input', 'form-control mb-2');
@@ -157,13 +160,16 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slot: strin
     }
     add.disabled = true;
     try {
-      await ApiC.post(`inventory/${selected.id}/containers/${unit.id}`, {
-        qty_stored: qty.value,
-        qty_unit: unitSelect.value,
-        position: slot,
-        ...(comment.value.trim() !== '' ? { comment: comment.value } : {}),
-        ...(kind === 'primary' ? { is_primary: 1 } : {}),
-      });
+      // one tube in each slot: the first is the primary storage of the entry when it is chosen so, the others are secondary
+      for (const [index, place] of slots.entries()) {
+        await ApiC.post(`inventory/${selected.id}/containers/${unit.id}`, {
+          qty_stored: qty.value,
+          qty_unit: unitSelect.value,
+          position: place,
+          ...(comment.value.trim() !== '' ? { comment: comment.value } : {}),
+          ...(kind === 'primary' && index === 0 ? { is_primary: 1 } : {}),
+        });
+      }
       $(modal).modal('hide');
       onDone();
     } catch {

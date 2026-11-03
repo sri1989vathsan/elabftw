@@ -315,6 +315,10 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   let openedFromUrl = false;
   // the tube picked to be placed in a slot of the box
   let pickedTube: Tube | null = null;
+  // free slots chosen together (Cmd/Ctrl-click, Shift-click for a block) to store an entry in all of them
+  let pickedSlots = new Set<string>();
+  let pickedSlotsUnit = 0;
+  let lastPickedSlot: string | null = null;
   // the tube being dragged to a slot of the box, or to another location of the tree
   let dragged: Tube | null = null;
 
@@ -460,6 +464,11 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     const bySlot = new Map<string, { row: Row; location: StorageLocation }>();
     inBox.filter(e => e.location.position).forEach(e => bySlot.set(String(e.location.position), e));
 
+    if (pickedSlotsUnit !== node.unit.id) {
+      pickedSlots = new Set<string>();
+      pickedSlotsUnit = node.unit.id;
+      lastPickedSlot = null;
+    }
     const scroller = el('div', 'box-grid-wrap');
     const table = el('table', 'box-grid');
     const head = el('tr');
@@ -543,9 +552,39 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
               patchAndReload(`inventory/${tube.row.id}/containers/${tube.location.container_id}`, { position: slot });
             }
           });
-          cell.addEventListener('click', async () => {
+          if (pickedSlots.has(slot)) {
+            cell.classList.add('chosen');
+            cell.textContent = '✓';
+          }
+          cell.addEventListener('click', async event => {
             if (pickedTube) {
               patchAndReload(`inventory/${pickedTube.row.id}/containers/${pickedTube.location.container_id}`, { position: slot });
+              return;
+            }
+            // several free slots: Cmd/Ctrl-click one, Shift-click to the other corner of a block; once some are chosen a click adds or removes
+            if (event.metaKey || event.ctrlKey || event.shiftKey || pickedSlots.size > 0) {
+              if (event.shiftKey && lastPickedSlot !== null) {
+                const from = /^([A-Z])(\d+)$/.exec(lastPickedSlot);
+                const to = /^([A-Z])(\d+)$/.exec(slot);
+                if (from && to) {
+                  const [r1, r2] = [from[1].charCodeAt(0), to[1].charCodeAt(0)].sort((a, b) => a - b);
+                  const [c1, c2] = [Number(from[2]), Number(to[2])].sort((a, b) => a - b);
+                  for (let r = r1; r <= r2; r++) {
+                    for (let c = c1; c <= c2; c++) {
+                      const name = `${String.fromCharCode(r)}${c}`;
+                      if (!bySlot.has(name)) {
+                        pickedSlots.add(name);
+                      }
+                    }
+                  }
+                }
+              } else if (pickedSlots.has(slot)) {
+                pickedSlots.delete(slot);
+              } else {
+                pickedSlots.add(slot);
+              }
+              lastPickedSlot = slot;
+              renderMain();
               return;
             }
             // nothing picked: a free slot offers to store an entry in it
@@ -565,6 +604,30 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
 
     const placed = inBox.filter(e => e.location.position).length;
     wrap.append(el('p', 'color-medium small mb-2', `${placed} of ${rowsCount * colsCount} slots used`));
+    if (pickedSlots.size > 0) {
+      const chosenBar = el('div', 'box-picked mb-2');
+      chosenBar.append(document.createTextNode(`${pickedSlots.size} free ${pickedSlots.size === 1 ? 'slot' : 'slots'} chosen. `));
+      const addMany = el('button', 'btn btn-primary btn-sm mr-1', 'Add an entry to these slots');
+      addMany.type = 'button';
+      addMany.addEventListener('click', async () => {
+        // in the order of the box: A1, A2 ... B1
+        const ordered = [...pickedSlots].sort((a, b) => a.charCodeAt(0) - b.charCodeAt(0) || Number(a.slice(1)) - Number(b.slice(1)));
+        (await import(/* webpackChunkName: 'storage-slot-add' */ './storage-slot-add')).openSlotAdd(node.unit, ordered, () => {
+          pickedSlots = new Set<string>();
+          void load();
+        });
+      });
+      const clear = el('button', 'btn btn-transparent btn-sm', 'Clear');
+      clear.type = 'button';
+      clear.addEventListener('click', () => {
+        pickedSlots = new Set<string>();
+        renderMain();
+      });
+      chosenBar.append(addMany, clear);
+      wrap.append(chosenBar);
+    } else {
+      wrap.append(el('p', 'color-medium small mb-2', 'To fill several free slots: Cmd/Ctrl-click them, or Shift-click the other corner of a block.'));
+    }
 
     if (pickedTube) {
       const bar = el('div', 'box-picked mb-2');
