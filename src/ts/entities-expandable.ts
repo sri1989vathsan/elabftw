@@ -127,7 +127,36 @@ const fieldNamed = (row: Row, name: string): string => {
 
 // the category is in the tabs and the location in the opened row: no columns for them. The columns of a list of one module are the ones
 // its admin chose; a list that mixes modules has the ones that every module has
-function columnsFor(rows: Row[]): Column[] {
+function columnsFor(rows: Row[], withExtra = true): Column[] {
+  const columns = defaultColumnsFor(rows);
+  if (!withExtra) {
+    return columns;
+  }
+  // the fields the user chose to show besides the columns of the module, after them
+  loadExtraColumns(moduleKeyOf(rows)).forEach(name => {
+    if (!rows.some(r => (r.extra_fields ?? []).some(f => f.name === name))) {
+      return;
+    }
+    const values = rows.map(r => fieldNamed(r, name)).filter(v => v !== '');
+    const numeric = values.length > 0 && values.every(v => Number.isFinite(Number(v)));
+    const key = `field:${name}`;
+    columns.push(numeric ? { key, label: name, numeric: true, get: r => numberOrEmpty(fieldNamed(r, name)) } : { key, label: name, numeric: false, get: r => fieldNamed(r, name) });
+  });
+  return columns;
+}
+
+// the fields that entries have and the columns of the module do not show: the ones a user can add
+function otherFieldsOf(rows: Row[]): string[] {
+  const shown = columnsFor(rows, false).map(c => c.key).filter(k => k.startsWith('field:') || k === 'Sequence');
+  const names = new Set<string>();
+  rows.forEach(r => (r.extra_fields ?? []).forEach(f => names.add(f.name)));
+  // the field that holds the sequence is the Sequence column
+  const first = rows[0]?.category ?? null;
+  const sequenceField = (first !== null && rows.every(r => r.category === first) ? moduleSettings.get(first)?.sequence_field : null) ?? null;
+  return [...names].filter(name => !(sequenceField !== null && name.toLowerCase() === sequenceField.toLowerCase()) && !shown.some(k => k.startsWith('field:') && (name === k.slice(6) || name.toLowerCase().startsWith(k.slice(6).toLowerCase()))));
+}
+
+function defaultColumnsFor(rows: Row[]): Column[] {
   const text = (key: string, label: string, get: (row: Row) => string | number): Column => ({ key, label, numeric: false, get });
   const num = (key: string, label: string, get: (row: Row) => string | number): Column => ({ key, label, numeric: true, get });
   const columns: Column[] = [num('ID', 'ID', r => r.custom_id ?? 0), text('Title', 'Title', r => r.title ?? '')];
@@ -192,6 +221,26 @@ function saveHiddenColumns(moduleKey: string, hidden: Set<string>): void {
     localStorage.setItem(HIDDEN_COLUMNS_KEY, JSON.stringify(all));
   } catch {
     // localStorage might be unavailable: the columns come back at the next visit
+  }
+}
+
+// the other fields of a module (the ones the admin did not make a column) that a user chooses to show, kept in this browser too
+const EXTRA_COLUMNS_KEY = 'registry_extra_columns_v1';
+function loadExtraColumns(moduleKey: string): Set<string> {
+  try {
+    const all = JSON.parse(localStorage.getItem(EXTRA_COLUMNS_KEY) ?? '{}') as Record<string, string[]>;
+    return new Set(all[moduleKey] ?? []);
+  } catch {
+    return new Set();
+  }
+}
+function saveExtraColumns(moduleKey: string, extra: Set<string>): void {
+  try {
+    const all = JSON.parse(localStorage.getItem(EXTRA_COLUMNS_KEY) ?? '{}') as Record<string, string[]>;
+    all[moduleKey] = [...extra];
+    localStorage.setItem(EXTRA_COLUMNS_KEY, JSON.stringify(all));
+  } catch {
+    // localStorage might be unavailable
   }
 }
 
@@ -668,7 +717,11 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     columnsPanel.replaceChildren();
     const moduleKey = moduleKeyOf(rows);
     const hidden = loadHiddenColumns(moduleKey);
-    columnsFor(rows).filter(c => c.key !== 'ID' && c.key !== 'Title').forEach(c => {
+    const extra = loadExtraColumns(moduleKey);
+    const redraw = (): void => {
+      render(container, rows, tableSort, onSort, ui);
+    };
+    columnsFor(rows, false).filter(c => c.key !== 'ID' && c.key !== 'Title').forEach(c => {
       const label = el('label', 'd-block mb-1');
       const box = el('input');
       box.type = 'checkbox';
@@ -676,16 +729,35 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
       box.addEventListener('change', () => {
         if (box.checked) hidden.delete(c.key); else hidden.add(c.key);
         saveHiddenColumns(moduleKey, hidden);
-        render(container, rows, tableSort, onSort, ui);
+        redraw();
       });
       label.append(box, document.createTextNode(` ${c.label}`));
       columnsPanel.append(label);
     });
-    const showAll = el('button', 'btn btn-link btn-sm p-0 mt-1', 'Show all');
+    // the other fields the entries have: shown when the user wants them
+    const others = otherFieldsOf(rows);
+    if (others.length > 0) {
+      columnsPanel.append(el('div', 'small text-muted mt-2 mb-1', 'More fields of these entries'));
+      others.forEach(name => {
+        const label = el('label', 'd-block mb-1');
+        const box = el('input');
+        box.type = 'checkbox';
+        box.checked = extra.has(name);
+        box.addEventListener('change', () => {
+          if (box.checked) extra.add(name); else extra.delete(name);
+          saveExtraColumns(moduleKey, extra);
+          redraw();
+        });
+        label.append(box, document.createTextNode(` ${name}`));
+        columnsPanel.append(label);
+      });
+    }
+    const showAll = el('button', 'btn btn-link btn-sm p-0 mt-1', 'Show the module columns again');
     showAll.type = 'button';
     showAll.addEventListener('click', () => {
       saveHiddenColumns(moduleKey, new Set());
-      render(container, rows, tableSort, onSort, ui);
+      saveExtraColumns(moduleKey, new Set());
+      redraw();
       fillColumnsPanel();
     });
     columnsPanel.append(showAll);
