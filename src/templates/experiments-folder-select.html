@@ -11,16 +11,9 @@
       <button type='button' class='btn btn-outline-secondary active flex-fill' data-edit-folder-scope='mine' role='tab' aria-selected='true'>
         <i class='fas fa-user fa-fw mr-1'></i>{{ 'My folders'|trans }}
       </button>
-      {% if Entity.entityType.value == 'inventory' %}
-        {# the Database: the folders of the lab Database are a choice of their own #}
-        <button type='button' class='btn btn-outline-secondary flex-fill' data-edit-folder-scope='database' role='tab' aria-selected='false'>
-          <i class='fas fa-database fa-fw mr-1'></i>{{ 'Database folders'|trans }}
-        </button>
-      {% else %}
-        <button type='button' class='btn btn-outline-secondary flex-fill' data-edit-folder-scope='bookmarked' role='tab' aria-selected='false'>
-          <i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked'|trans }}
-        </button>
-      {% endif %}
+      <button type='button' class='btn btn-outline-secondary flex-fill' data-edit-folder-scope='bookmarked' role='tab' aria-selected='false'>
+        <i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked'|trans }}
+      </button>
       <button type='button' class='btn btn-outline-secondary flex-fill' data-edit-folder-scope='all' role='tab' aria-selected='false'>
         <i class='fas fa-users fa-fw mr-1'></i>{{ 'All folders'|trans }}
       </button>
