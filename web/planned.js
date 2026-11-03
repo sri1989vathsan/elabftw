@@ -220,6 +220,42 @@
       }
       destination.append(option);
     });
+    // who owns the new entries: the user who imports, the owner written in the file, or a user chosen (the last two for admins)
+    const ownerBox = element('div', 'mb-2');
+    ownerBox.append(element('p', 'small text-muted mb-1 mt-2', 'Who owns the new entries'));
+    const ownerMode = element('select', 'form-control form-control-sm w-auto mb-1');
+    [['me', 'Me'], ['column', 'The owner written in the file (matched by e-mail or name; the others are mine)'], ['user', 'A user of the team']].forEach(function (item) {
+      const option = element('option', '', item[1]);
+      option.value = item[0];
+      ownerMode.append(option);
+    });
+    const ownerUser = element('select', 'form-control form-control-sm w-auto');
+    ownerUser.hidden = true;
+    ownerBox.append(ownerMode, ownerUser);
+    ownerMode.addEventListener('change', function () {
+      ownerUser.hidden = ownerMode.value !== 'user';
+    });
+    fetch('registry-transfer.php?users=1', { credentials: 'same-origin' }).then(function (response) {
+      return response.json();
+    }).then(function (body) {
+      if (!body.is_admin) {
+        ownerBox.textContent = '';
+        ownerBox.append(element('p', 'small text-muted mb-1 mt-2', 'The new entries will be yours. An admin can give them to other owners.'));
+        ownerMode.value = 'me';
+        return;
+      }
+      body.users.forEach(function (u) {
+        const option = element('option', '', u.name);
+        option.value = String(u.id);
+        option.selected = Number(u.id) === Number(body.me);
+        ownerUser.append(option);
+      });
+    }).catch(function () {
+      ownerMode.value = 'me';
+    });
+    const ownerFields = function () {
+      return { owner_mode: ownerMode.value, owner_user: Number(ownerUser.value) || 0 };
+    };
     const message = element('p', 'small mb-2');
     const buttons = element('div', 'planned-dialog-buttons');
     const cancel = element('button', 'btn btn-secondary btn-sm', 'Close');
@@ -235,7 +271,7 @@
       }
     });
     buttons.append(cancel, run);
-    box.append(mapping, element('p', 'small text-muted mb-1', 'Where the entries go'), destination, message, buttons);
+    box.append(mapping, element('p', 'small text-muted mb-1', 'Where the entries go'), destination, ownerBox, message, buttons);
     back.append(box);
     document.body.append(back);
 
@@ -273,7 +309,7 @@
         name.style.width = '14em';
         name.textContent = heading || '(no heading)';
         const select = element('select', 'form-control form-control-sm w-auto');
-        const options = [['title', 'The title'], ['ignore', 'Leave out']].concat(module.fields.map(function (f) {
+        const options = [['title', 'The title'], ['ignore', 'Leave out'], ['owner', 'The owner (e-mail or name)']].concat(module.fields.map(function (f) {
           return ['field:' + f.name, 'Field: ' + f.name];
         }), [['extra', 'Keep as a new field']]);
         options.forEach(function (o) {
@@ -285,7 +321,9 @@
         let guess = 'ignore';
         if (key === 'title' || key === 'name') {
           guess = 'title';
-        } else if (['id', 'myid', 'owner', 'date'].indexOf(key) === -1) {
+        } else if (key === 'owner' || key === 'owneremail') {
+          guess = 'owner';
+        } else if (['id', 'myid', 'date'].indexOf(key) === -1) {
           const found = module.fields.find(function (f) {
             return normal(f.name) === key;
           });
@@ -311,6 +349,8 @@
           const form = new FormData();
           form.append('category', String(category));
           form.append('register', destination.value);
+          form.append('owner_mode', ownerFields().owner_mode);
+          form.append('owner_user', String(ownerFields().owner_user));
           form.append('file', file.files[0]);
           const response = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: form });
           const body = await response.json();
@@ -318,7 +358,7 @@
             throw new Error(body.error || 'The import failed.');
           }
           message.className = 'small mb-2 text-success';
-          message.textContent = body.created + ' entries made, ' + body.files + ' files attached.' + (body.skipped.length ? ' Not made (' + body.skipped.length + '): ' + body.skipped.slice(0, 6).map(function (i) {
+          message.textContent = body.created + ' entries made, ' + body.files + ' files attached.' + ((body.owners_not_found || []).length ? ' No user was found for: ' + body.owners_not_found.slice(0, 6).join(', ') + '; those entries are yours.' : '') + (body.skipped.length ? ' Not made (' + body.skipped.length + '): ' + body.skipped.slice(0, 6).map(function (i) {
             return i.row + ': ' + i.reason;
           }).join(' ') : '');
           cancel.textContent = 'Close and reload';
@@ -346,6 +386,13 @@
           const value = (cells[index] || '').trim();
           if (kind === 'title') {
             row.title = value;
+          } else if (kind === 'owner') {
+            // an e-mail address, else a name
+            if (/@/.test(value)) {
+              row.owner_email = value;
+            } else if (!row.owner_email) {
+              row.owner = value;
+            }
           } else if (kind.indexOf('field:') === 0) {
             row.fields[kind.slice(6)] = value;
           } else if (kind === 'extra') {
@@ -356,6 +403,7 @@
       });
       run.disabled = true;
       let created = 0;
+      const notFound = [];
       const skipped = [];
       try {
         for (let start = 0; start < rows.length; start += 100) {
@@ -365,19 +413,24 @@
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
-            body: JSON.stringify({ category: category, register: destination.value, offset: start, rows: rows.slice(start, start + 100) }),
+            body: JSON.stringify(Object.assign({ category: category, register: destination.value, offset: start, rows: rows.slice(start, start + 100) }, ownerFields())),
           });
           const body = await response.json();
           if (!response.ok) {
             throw new Error(body.error || 'The import failed.');
           }
           created += body.created;
+          (body.owners_not_found || []).forEach(function (o) {
+            if (notFound.indexOf(o) === -1) {
+              notFound.push(o);
+            }
+          });
           body.skipped.forEach(function (item) {
             skipped.push(item.row + ': ' + item.reason);
           });
         }
         message.className = 'small mb-2 text-success';
-        message.textContent = created + ' entries made.' + (skipped.length ? ' Not made (' + skipped.length + '): ' + skipped.slice(0, 8).join(' ') + (skipped.length > 8 ? ' ...' : '') : '');
+        message.textContent = created + ' entries made.' + (notFound.length ? ' No user was found for: ' + notFound.slice(0, 6).join(', ') + '; those entries are yours.' : '') + (skipped.length ? ' Not made (' + skipped.length + '): ' + skipped.slice(0, 8).join(' ') + (skipped.length > 8 ? ' ...' : '') : '');
         cancel.textContent = 'Close and reload';
         cancel.addEventListener('click', function () {
           window.location.reload();
@@ -575,7 +628,72 @@
 
   // the rows ticked in the list go into the lab Database: each is registered (or moved from planned) and gets its number
   // and its folder; the ones that cannot (a plasmid needs a sequence, a module its required fields) are listed
+  // the entries that were ticked get another owner (admins)
+  async function assignOwnerDialog(ids, done) {
+    let body;
+    try {
+      body = await (await fetch('registry-transfer.php?users=1', { credentials: 'same-origin' })).json();
+    } catch (error) {
+      return;
+    }
+    const back = element('div', 'planned-backdrop');
+    const box = element('div', 'planned-dialog');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.append(element('h5', '', 'Assign an owner to ' + ids.length + (ids.length === 1 ? ' entry' : ' entries')));
+    const message = element('p', 'small mb-2');
+    const buttons = element('div', 'planned-dialog-buttons');
+    const cancel = element('button', 'btn btn-secondary btn-sm', 'Close');
+    cancel.type = 'button';
+    cancel.addEventListener('click', function () {
+      back.remove();
+    });
+    buttons.append(cancel);
+    if (!body.is_admin) {
+      box.append(element('p', 'mb-2', 'Only an admin can assign the owner of entries.'), buttons);
+    } else {
+      box.append(element('p', 'small text-muted mb-1', 'The new owner gets them with a My ID in their own count; the lab number stays.'));
+      const select = element('select', 'form-control form-control-sm mb-2');
+      body.users.forEach(function (u) {
+        const option = element('option', '', u.name);
+        option.value = String(u.id);
+        select.append(option);
+      });
+      const go = element('button', 'btn btn-primary btn-sm', 'Assign');
+      go.type = 'button';
+      go.addEventListener('click', async function () {
+        go.disabled = true;
+        try {
+          const response = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'assign_owner', ids: ids, owner: Number(select.value) }) });
+          const answer = await response.json();
+          if (!response.ok) {
+            throw new Error(answer.error || 'It could not be done.');
+          }
+          message.className = 'small mb-2 text-success';
+          message.textContent = answer.changed + ' entries changed owner.';
+          cancel.textContent = 'Close and reload';
+          cancel.addEventListener('click', function () {
+            if (done) {
+              done();
+            }
+          });
+        } catch (error) {
+          message.className = 'small mb-2 text-danger';
+          message.textContent = error.message;
+          go.disabled = false;
+        }
+      });
+      buttons.prepend(go);
+      box.append(select, message, buttons);
+    }
+    back.append(box);
+    document.body.append(back);
+  }
+
   window.RegistryTools = {
+    assignOwner: function (ids, done) {
+      return assignOwnerDialog(ids, done);
+    },
     importDialog: function (category) {
       return importDialog(category);
     },

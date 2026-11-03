@@ -17,10 +17,12 @@ use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Storage;
 use Elabftw\Hash\FileHash;
 use Elabftw\Models\Inventory;
+use Elabftw\Models\Users\Users;
 use PDO;
 use Throwable;
 use ZipArchive;
 
+use function array_column;
 use function array_slice;
 use function count;
 use function fopen;
@@ -75,7 +77,19 @@ $fieldsOf = static function (array $module): array {
     return is_array($decoded) && is_array($decoded['extra_fields'] ?? null) ? $decoded['extra_fields'] : array();
 };
 
+$isAdmin = (bool) $App->Users->isAdmin;
+$teamUsers = static function () use ($pdo, $teamId): array {
+    $req = $pdo->prepare('SELECT u.userid AS id, u.email, CONCAT(u.firstname, " ", u.lastname) AS name FROM users AS u INNER JOIN users2teams AS t ON t.users_id = u.userid WHERE t.teams_id = :team AND t.is_archived = 0 AND u.archived = 0 ORDER BY u.firstname, u.lastname');
+    $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+    $pdo->execute($req);
+    return $req->fetchAll();
+};
+
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
+    // the users that can own what is imported (admins only)
+    if (isset($_GET['users'])) {
+        respond(200, array('users' => $isAdmin ? $teamUsers() : array(), 'is_admin' => $isAdmin, 'me' => $userId));
+    }
     // selected entries: they have to be of one module
     $selected = array();
     if (isset($_GET['ids']) && (string) $_GET['ids'] !== '') {
@@ -118,7 +132,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         // the entries that were selected, the ones that can be read
         $where = 'entity.id IN (' . implode(',', $selected) . ')';
     }
-    $req = $pdo->prepare('SELECT entity.id, entity.title, entity.custom_id, entity.personal_id, entity.date, entity.metadata, CONCAT(u.firstname, " ", u.lastname) AS owner
+    $req = $pdo->prepare('SELECT entity.id, entity.title, entity.custom_id, entity.personal_id, entity.date, entity.metadata, CONCAT(u.firstname, " ", u.lastname) AS owner, u.email AS owner_email
         FROM inventory AS entity LEFT JOIN users AS u ON u.userid = entity.userid
         WHERE entity.state = 1 AND entity.team = :team AND entity.category = :category AND ' . $where . $canFilter . ' ORDER BY entity.custom_id, entity.id');
     $req->bindValue(':team', $teamId, PDO::PARAM_INT);
@@ -143,11 +157,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $asZip = ($_GET['format'] ?? 'csv') === 'zip';
     $label = $selected !== array() ? 'selected' : ($scope === 'mine' ? 'mine' : 'lab');
     $fileName = $slug . '-' . $label . '-' . gmdate('Y-m-d');
-    $heading = array_merge(array('ID', 'My ID', 'Title', 'Date', 'Owner'), array_keys($names), $asZip ? array('Key', 'Files') : array());
+    $heading = array_merge(array('ID', 'My ID', 'Title', 'Date', 'Owner', 'Owner e-mail'), array_keys($names), $asZip ? array('Key', 'Files') : array());
     $rows = array();
     $zipFiles = array();
     foreach ($entries as $index => $entry) {
-        $row = array((string) ($entry['custom_id'] ?? ''), (string) ($entry['personal_id'] ?? ''), (string) $entry['title'], (string) $entry['date'], (string) $entry['owner']);
+        $row = array((string) ($entry['custom_id'] ?? ''), (string) ($entry['personal_id'] ?? ''), (string) $entry['title'], (string) $entry['date'], (string) $entry['owner'], (string) ($entry['owner_email'] ?? ''));
         foreach (array_keys($names) as $name) {
             $value = $decodedEntries[$index][$name]['value'] ?? '';
             $row[] = is_array($value) ? implode(', ', array_map('strval', $value)) : (string) $value;
@@ -218,8 +232,51 @@ $payload = isset($_FILES['file']) ? array() : json_decode((string) file_get_cont
 if (!is_array($payload)) {
     respond(400, array('error' => 'Invalid request.'));
 }
+// the entries that were ticked get another owner (admins only): each is renumbered in the list of the new owner, so My ID stays their own count
+if (is_array($payload) && ($payload['action'] ?? '') === 'assign_owner') {
+    if (!$isAdmin) {
+        respond(403, array('error' => 'Only an admin can assign the owner of entries.'));
+    }
+    try {
+        $ids = array_slice(array_values(array_unique(array_filter(array_map('intval', is_array($payload['ids'] ?? null) ? $payload['ids'] : array()), static fn(int $n): bool => $n > 0))), 0, 500);
+        $ownerId = (int) ($payload['owner'] ?? 0);
+        $members = array_column($teamUsers(), 'id');
+        if ($ids === array() || !in_array((string) $ownerId, array_map('strval', $members), true)) {
+            respond(400, array('error' => 'Choose entries and an owner of the team.'));
+        }
+        $changed = 0;
+        $read = $pdo->prepare('SELECT id, category, userid, personal_id FROM inventory WHERE id = :id AND team = :team AND state = 1');
+        $next = $pdo->prepare('SELECT COALESCE(MAX(personal_id), 0) + 1 FROM inventory WHERE userid = :user AND category = :category');
+        $write = $pdo->prepare('UPDATE inventory SET userid = :user, personal_id = :personal WHERE id = :id');
+        foreach ($ids as $id) {
+            $read->bindValue(':id', $id, PDO::PARAM_INT);
+            $read->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $pdo->execute($read);
+            $entry = $read->fetch();
+            if (!is_array($entry) || (int) $entry['userid'] === $ownerId) {
+                continue;
+            }
+            $personal = null;
+            if ($entry['personal_id'] !== null && $entry['category'] !== null) {
+                $next->bindValue(':user', $ownerId, PDO::PARAM_INT);
+                $next->bindValue(':category', (int) $entry['category'], PDO::PARAM_INT);
+                $pdo->execute($next);
+                $personal = (int) $next->fetchColumn();
+            }
+            $write->bindValue(':user', $ownerId, PDO::PARAM_INT);
+            $write->bindValue(':personal', $personal, $personal === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+            $write->bindValue(':id', $id, PDO::PARAM_INT);
+            $pdo->execute($write);
+            $changed++;
+        }
+        respond(200, array('changed' => $changed));
+    } catch (Throwable $e) {
+        respond(400, array('error' => $e->getMessage()));
+    }
+}
+
 // one row of a file becomes an entry of the module; returns the id, or the reason it was not made
-$makeEntry = static function (array $row, int $categoryId, array $definitions, string $register) use ($App): array {
+$makeEntry = static function (array $row, int $categoryId, array $definitions, string $register, ?Users $Owner = null) use ($App): array {
     $title = trim((string) ($row['title'] ?? ''));
     if ($title === '') {
         return array('id' => null, 'reason' => 'It has no title.');
@@ -249,7 +306,7 @@ $makeEntry = static function (array $row, int $categoryId, array $definitions, s
             return array('id' => null, 'reason' => 'It needs: ' . implode(', ', $missing) . '.');
         }
     }
-    $Entry = new Inventory($App->Users);
+    $Entry = new Inventory($Owner ?? $App->Users);
     $Entry->asUnregistered = $register !== 'both';
     $Entry->withPersonal = $register === 'both' || $register === 'personal';
     return array('id' => $Entry->create(title: mb_substr($title, 0, 255), category: $categoryId, metadata: json_encode(array('extra_fields' => (object) $fields), JSON_UNESCAPED_UNICODE)), 'reason' => null);
@@ -274,6 +331,40 @@ try {
     $created = array();
     $skipped = array();
     $filesAttached = 0;
+
+    // the owner of the new entries: the user who imports, one user chosen, or the owner written in each row (matched by e-mail, then by name);
+    // only admins can give entries to someone else
+    $ownerMode = (string) ($source['owner_mode'] ?? 'me');
+    $ownerChoice = (int) ($source['owner_user'] ?? 0);
+    if ($ownerMode !== 'me' && !$isAdmin) {
+        respond(403, array('error' => 'Only an admin can import entries for another owner.'));
+    }
+    $users = $ownerMode === 'me' ? array() : $teamUsers();
+    $byEmail = array();
+    $byName = array();
+    foreach ($users as $user) {
+        $byEmail[strtolower(trim((string) $user['email']))] = (int) $user['id'];
+        $byName[strtolower(trim((string) $user['name']))] = (int) $user['id'];
+    }
+    $ownerUsers = array();
+    $notFound = array();
+    $ownerFor = static function (array $row) use ($ownerMode, $ownerChoice, $byEmail, $byName, $teamId, &$ownerUsers, &$notFound, $userId): ?Users {
+        $id = 0;
+        if ($ownerMode === 'user') {
+            $id = $ownerChoice;
+        } elseif ($ownerMode === 'column') {
+            $mail = strtolower(trim((string) ($row['owner_email'] ?? '')));
+            $name = strtolower(trim((string) ($row['owner'] ?? '')));
+            $id = $byEmail[$mail] ?? ($byName[$name] ?? 0);
+            if ($id === 0 && ($mail !== '' || $name !== '')) {
+                $notFound[($mail !== '' ? $mail : $name)] = true;
+            }
+        }
+        if ($id <= 0 || $id === $userId) {
+            return null;
+        }
+        return $ownerUsers[$id] ??= new Users($id, $teamId);
+    };
 
     if ($isZip) {
         // a zip of the export: entries.csv, and the files of the entries in files/<key>/
@@ -311,7 +402,11 @@ try {
                     $key = $value;
                 } elseif ($n === 'files') {
                     $fileList = $value;
-                } elseif (in_array($n, array('id', 'myid', 'date', 'owner', ''), true)) {
+                } elseif ($n === 'owner') {
+                    $row['owner'] = $value;
+                } elseif ($n === 'owneremail') {
+                    $row['owner_email'] = $value;
+                } elseif (in_array($n, array('id', 'myid', 'date', ''), true)) {
                     continue;
                 } elseif (isset($byNormal[$n])) {
                     $row['fields'][$byNormal[$n]] = $value;
@@ -319,7 +414,7 @@ try {
                     $row['extra'][(string) $name] = $value;
                 }
             }
-            $made = $makeEntry($row, (int) $module['id'], $definitions, $register);
+            $made = $makeEntry($row, (int) $module['id'], $definitions, $register, $ownerFor($row));
             if ($made['id'] === null) {
                 $skipped[] = array('row' => 'Row ' . $count . ' (' . $row['title'] . ')', 'reason' => $made['reason']);
                 continue;
@@ -349,18 +444,18 @@ try {
             // the temporary files are cleaned by the exports clean-up
         }
         $zip->close();
-        respond(200, array('created' => count($created), 'files' => $filesAttached, 'skipped' => $skipped));
+        respond(200, array('created' => count($created), 'files' => $filesAttached, 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound)));
     }
 
     foreach (array_slice(is_array($payload['rows'] ?? null) ? $payload['rows'] : array(), 0, 200) as $index => $row) {
-        $made = $makeEntry($row, (int) $module['id'], $definitions, $register);
+        $made = $makeEntry($row, (int) $module['id'], $definitions, $register, $ownerFor($row));
         if ($made['id'] === null) {
             $skipped[] = array('row' => 'Row ' . ((int) ($payload['offset'] ?? 0) + $index + 1) . ' (' . trim((string) ($row['title'] ?? '')) . ')', 'reason' => $made['reason']);
             continue;
         }
         $created[] = $made['id'];
     }
-    respond(200, array('created' => count($created), 'skipped' => $skipped));
+    respond(200, array('created' => count($created), 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound)));
 } catch (Throwable $e) {
     respond(400, array('error' => $e->getMessage()));
 }

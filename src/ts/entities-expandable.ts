@@ -711,8 +711,13 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   databaseButton.type = 'button';
   databaseButton.hidden = true;
   toolbar.append(databaseButton);
-  type RegistryTools = { addToDatabase: (ids: number[], done: () => void) => Promise<void> };
+  type RegistryTools = { addToDatabase: (ids: number[], done: () => void) => Promise<void>; assignOwner: (ids: number[], done: () => void) => Promise<void> };
   const registryTools = (): RegistryTools | undefined => (window as unknown as { RegistryTools?: RegistryTools }).RegistryTools;
+  // the rows ticked can get another owner (an admin chooses it in the dialog)
+  const ownerButton = el('button', 'btn btn-secondary btn-sm ml-2', 'Assign owner');
+  ownerButton.type = 'button';
+  ownerButton.hidden = true;
+  toolbar.append(ownerButton);
   const inMyEntries = new URLSearchParams(window.location.search).get('planned') === '1';
   const container = el('div');
   rootEl.replaceChildren(toolbar, container);
@@ -727,6 +732,8 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
       orderButton.textContent = `Send selected to an order (${ui.selected.size})`;
       databaseButton.hidden = ui.selected.size === 0 || !inMyEntries;
       databaseButton.textContent = `Add selected to the Database (${ui.selected.size})`;
+      ownerButton.hidden = ui.selected.size === 0;
+      ownerButton.textContent = `Assign owner (${ui.selected.size})`;
       refreshExportButton();
     },
   };
@@ -856,6 +863,13 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     if (!exportMenu.hidden && !exportMenu.contains(event.target as Node)) exportMenu.hidden = true;
   });
   refreshExportButton();
+  ownerButton.addEventListener('click', () => {
+    void registryTools()?.assignOwner([...ui.selected], () => {
+      ui.selected.clear();
+      ui.onSelectionChange();
+      window.location.reload();
+    });
+  });
   const onSort = (next: SortState): void => {
     tableSort = next;
     render(container, rows, tableSort, onSort, ui);
