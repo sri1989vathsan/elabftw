@@ -162,10 +162,6 @@
                     </div>
                   </div>
                 </form>
-                {% set isActive = scriptName == 'registry.php' and not App.Request.query.get('category') %}
-                <a class='dropdown-item {{ isActive ? 'active' }}' href='registry.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-vials fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'All entries'|trans }}</a>
-                {% set isActive = scriptName == 'registry.php' and App.Request.query.get('scope') == 1 %}
-                <a class='dropdown-item {{ isActive ? 'active' }}' href='registry.php?scope=1' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-user fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'My entries'|trans }}</a>
                 <div class='dropdown-divider'></div>
                 {% set isActive = scriptName == 'registry-categories.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='registry-categories.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-rectangle-list fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Modules'|trans }}</a>
