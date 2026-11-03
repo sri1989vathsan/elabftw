@@ -25,6 +25,18 @@
     return node;
   }
 
+  // a name that was read as Latin-1 instead of UTF-8 ("Î±" for "α") is put right
+  function repairText(text) {
+    if (!/[ÂÃÎÏ][\u0080-\u00bf]/.test(text)) {
+      return text;
+    }
+    try {
+      return decodeURIComponent(escape(text));
+    } catch (error) {
+      return text;
+    }
+  }
+
   const listOf = function (value) {
     return Array.isArray(value) ? value : Object.values(value || {});
   };
@@ -519,16 +531,21 @@
       // the backbone and the scale
       svg.append(svgElement('circle', { cx: cx, cy: cy, r: radius, class: 'own-map-backbone', fill: 'none', 'stroke-width': 2 }));
       const steps = [1, 2, 5, 10, 20, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000, 20000, 50000];
+      // fewer numbers on a small map, so they do not touch each other or the title
+      const crowded = Math.min(host.clientWidth, host.clientHeight) * zoom < 520;
       const step = steps.find(function (candidate) {
-        return length / candidate <= 12;
+        return length / candidate <= (crowded ? 6 : 12);
       }) || 50000;
       for (let position = step; position < length; position += step) {
         const a = angleOf(position, length);
         const tick1 = at(innerEdge - 3, a);
         const tick2 = at(innerEdge - 8, a);
         svg.append(svgElement('line', { x1: tick1[0], y1: tick1[1], x2: tick2[0], y2: tick2[1], class: 'own-map-tick' }));
-        const label = at(innerEdge - 19, a);
-        svg.append(svgElement('text', { x: label[0], y: label[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'own-map-scale' }, String(position)));
+        // on a small ring the numbers would lie over the title: only the ticks are drawn
+        if (innerEdge >= 150) {
+          const label = at(innerEdge - 19, a);
+          svg.append(svgElement('text', { x: label[0], y: label[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'own-map-scale' }, String(position)));
+        }
       }
       const origin = at(innerEdge - 8, angleOf(0, length));
       const originEnd = at(ringOut + 4, angleOf(0, length));
@@ -917,9 +934,40 @@
       const data = dataNow();
       const title = hover ? hover.title : (data.name || 'Sequence');
       const line = hover ? hover.line : String(data.sequence || '').length.toLocaleString('en') + ' bp' + (data.circular ? '' : ' (linear)');
-      const words = title.length > 22 ? [title.slice(0, 21) + '…'] : [title];
-      group.append(svgElement('text', { x: layout.cx, y: layout.cy - 6, 'text-anchor': 'middle', class: 'own-map-title' }, words[0]));
-      group.append(svgElement('text', { x: layout.cx, y: layout.cy + 12, 'text-anchor': 'middle', class: 'own-map-sub' }, line.length > 34 ? line.slice(0, 33) + '…' : line));
+      // the text has to fit inside the ring, clear of the numbers of the scale: the title takes up to two lines, smaller when it is long
+      const room = Math.max(50, ((layout.inner || layout.radius * 0.8) - 28) * 2 * 0.86);
+      let size = 15;
+      const charsFor = function (px) {
+        return Math.max(6, Math.floor(room / (px * 0.56)));
+      };
+      const wrapped = [];
+      let rest = repairText(title);
+      while (size >= 11 && Math.ceil(rest.length / charsFor(size)) > 2) {
+        size -= 1;
+      }
+      for (let n = 0; n < 2 && rest.length > 0; n++) {
+        const max = charsFor(size);
+        if (rest.length <= max) {
+          wrapped.push(rest);
+          rest = '';
+          break;
+        }
+        // a line breaks after a space or a dash when it can
+        const cut = Math.max(rest.lastIndexOf(' ', max), rest.lastIndexOf('-', max - 1) + 1, rest.lastIndexOf('_', max - 1) + 1);
+        const at = cut > max * 0.5 ? cut : max;
+        wrapped.push(rest.slice(0, at).trim());
+        rest = rest.slice(at).trim();
+      }
+      if (rest.length > 0) {
+        wrapped[wrapped.length - 1] = wrapped[wrapped.length - 1].slice(0, Math.max(1, wrapped[wrapped.length - 1].length - 1)) + '…';
+      }
+      const lineHeight = size + 2;
+      const top = layout.cy - (wrapped.length * lineHeight) / 2 - 4;
+      wrapped.forEach(function (text, index) {
+        group.append(svgElement('text', { x: layout.cx, y: top + (index + 0.8) * lineHeight, 'text-anchor': 'middle', style: 'font-size:' + size + 'px', class: 'own-map-title' }, text));
+      });
+      const subMax = Math.max(10, charsFor(11));
+      group.append(svgElement('text', { x: layout.cx, y: top + wrapped.length * lineHeight + 14, 'text-anchor': 'middle', class: 'own-map-sub' }, line.length > subMax ? line.slice(0, subMax - 1) + '…' : line));
     }
 
     function stateSignature() {
