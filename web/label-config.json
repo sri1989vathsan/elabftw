@@ -6,20 +6,23 @@
   "dpi": 300,
   "qr_base_url": "",
   "default": {
-    "width_mm": 29,
-    "height_mm": 11,
-    "font_mm": 2.6,
-    "qr": true,
+    "width_mm": 31,
+    "height_mm": 15,
+    "margin_mm": 1.0,
+    "margin_left_mm": 2.2,
+    "margin_top_mm": 1.8,
+    "margin_right_mm": 1.0,
+    "margin_bottom_mm": 1.0,
+    "offset_x_mm": 0.0,
+    "offset_y_mm": 0.0,
+    "font_mm": 2.9,
+    "qr": false,
+    "rotate_180": true,
     "lines": [
       "{id_line}",
       "{title}"
-    ],
-    "margin_left_mm": 1.0,
-    "margin_top_mm": 1.0,
-    "margin_right_mm": 1.0,
-    "margin_bottom_mm": 3.0,
-    "offset_x_mm": 0.0,
-    "offset_y_mm": 0.0
+    ]
   },
-  "modules": {}
+  "modules": {},
+  "zpl_header": "^XA~TA000~JSN^LT0^MNW^MTT^PON^PMN^LH0,0^JMA^PR4,4~SD15^JUS^LRN^CI0^XZ"
 }
