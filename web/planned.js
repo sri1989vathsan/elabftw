@@ -70,6 +70,12 @@
       box.append(b);
     });
     nav.insertAdjacentElement('beforebegin', box);
+    // the entry pages remember which of the two the list was in
+    try {
+      sessionStorage.setItem('registryMine', mine ? '1' : '0');
+    } catch (error) {
+      // no storage: the entry goes back to its module
+    }
     // the links of the modules and of the folders keep the choice
     if (mine) {
       const keep = function (link) {
@@ -255,6 +261,23 @@
       keepMine();
       document.addEventListener('elabftw:folders-panel-loaded', keepMine);
       new MutationObserver(keepMine).observe(document.body, { childList: true, subtree: true });
+    }
+    // an entry opened from My entries goes back to its folder, in My entries
+    let fromMine = false;
+    try {
+      fromMine = sessionStorage.getItem('registryMine') === '1';
+    } catch (error) {
+      fromMine = false;
+    }
+    if (fromMine && Number(entry.folder_id) > 0) {
+      const target = 'registry.php?folder=' + Number(entry.folder_id) + '&planned=1';
+      document.querySelectorAll('a[title="Go back"], a[title="Back to listing"]').forEach(function (link) {
+        link.setAttribute('href', target);
+      });
+      document.querySelectorAll('[data-action="update-entity-body"][data-folder-url]').forEach(function (button) {
+        button.dataset.redirect = 'folder';
+        button.dataset.folderUrl = target;
+      });
     }
     const bar = element('div', 'alert d-flex align-items-center flex-wrap my-2 ' + (planned ? 'alert-info' : 'alert-light border'));
     const message = element('span', 'ml-2');
