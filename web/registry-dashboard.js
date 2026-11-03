@@ -1,5 +1,5 @@
 /**
- * The dashboard of the Database: totals, the entries by module, and what needs attention. Talks to registry-dashboard.php?data=1.
+ * The dashboard of the Database: totals, the entries by module, and what to check. Talks to registry-dashboard.php?data=1.
  */
 (function () {
   'use strict';
@@ -24,69 +24,19 @@
   let openRisk = null;
   let timer = 0;
 
-  function donut(modules) {
-    const total = modules.reduce(function (sum, m) {
-      return sum + m.count;
-    }, 0);
-    const size = 220;
-    const radius = 95;
-    const svg = document.createElementNS(SVGNS, 'svg');
-    svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
-    svg.setAttribute('width', String(size));
-    svg.setAttribute('height', String(size));
-    svg.setAttribute('role', 'img');
-    svg.setAttribute('aria-label', 'Entries by module');
-    if (total === 0) {
-      const ring = document.createElementNS(SVGNS, 'circle');
-      ring.setAttribute('cx', size / 2);
-      ring.setAttribute('cy', size / 2);
-      ring.setAttribute('r', radius - 18);
-      ring.setAttribute('fill', 'none');
-      ring.setAttribute('stroke', '#ccc');
-      ring.setAttribute('stroke-width', '36');
-      svg.append(ring);
-      return svg;
-    }
-    let angle = -Math.PI / 2;
-    modules.filter(function (m) {
-      return m.count > 0;
-    }).forEach(function (m) {
-      const sweep = (m.count / total) * Math.PI * 2;
-      const point = function (a, r) {
-        return [size / 2 + Math.cos(a) * r, size / 2 + Math.sin(a) * r];
-      };
-      const inner = radius - 36;
-      const a0 = point(angle, radius);
-      const a1 = point(angle + sweep - 0.0001, radius);
-      const b0 = point(angle + sweep - 0.0001, inner);
-      const b1 = point(angle, inner);
-      const large = sweep > Math.PI ? 1 : 0;
-      const path = document.createElementNS(SVGNS, 'path');
-      path.setAttribute('d', 'M' + a0.join(',') + ' A' + radius + ',' + radius + ' 0 ' + large + ' 1 ' + a1.join(',') + ' L' + b0.join(',') + ' A' + inner + ',' + inner + ' 0 ' + large + ' 0 ' + b1.join(',') + ' Z');
-      path.setAttribute('fill', '#' + (m.color || 'bdbdbd'));
-      const tip = document.createElementNS(SVGNS, 'title');
-      tip.textContent = m.title + ': ' + m.count;
-      path.append(tip);
-      svg.append(path);
-      angle += sweep;
-    });
-    return svg;
-  }
-
   function draw(data) {
     root.textContent = '';
     // the head
     const head = element('div', 'rd-head');
-    const titles = element('div');
-    titles.append(element('h1', '', 'Dashboard'), element('div', 'rd-sub', 'What is in the Database, and what needs attention'));
+    head.append(element('h1', '', 'The Database at a glance'));
     const tools = element('div', 'rd-tools');
     const autoLabel = element('label', 'mb-0');
     const auto = element('input');
     auto.type = 'checkbox';
     auto.checked = window.localStorage.getItem('registryDashboardAuto') !== '0';
-    autoLabel.append(auto, document.createTextNode(' Auto-refresh'));
-    const stamp = element('span', 'rd-sub', 'Last updated: ' + data.updated);
-    const refresh = element('button', 'btn btn-primary btn-sm', 'Refresh');
+    autoLabel.append(auto, document.createTextNode(' Refresh every minute'));
+    const stamp = element('span', 'rd-sub', 'Updated ' + data.updated);
+    const refresh = element('button', 'btn btn-secondary btn-sm', 'Refresh now');
     refresh.type = 'button';
     refresh.addEventListener('click', load);
     auto.addEventListener('change', function () {
@@ -98,56 +48,72 @@
       schedule(auto.checked);
     });
     tools.append(autoLabel, stamp, refresh);
-    head.append(titles, tools);
+    head.append(tools);
     root.append(head);
     schedule(auto.checked);
 
-    // the overview
-    const overview = element('section', 'rd-panel');
-    overview.append(element('h2', '', 'Database overview'));
-    const kpis = element('div', 'rd-kpis');
-    [['main', data.total, 'Total entries'], ['', data.modules, 'Modules'], ['', data.recent, 'New entries (7 days)'], ['', data.active, 'Active users (30 days)']].forEach(function (k) {
-      const box = element('div', 'rd-kpi ' + k[0]);
-      box.append(element('div', 'n', number(k[1])), element('div', 'l', k[2]));
-      kpis.append(box);
+    // the numbers, as facts in a line
+    const facts = element('div', 'rd-facts');
+    [[data.total, 'entries in the lab Database'], [data.modules, 'modules'], [data.recent, 'new this week'], [data.active, 'people active this month']].forEach(function (f) {
+      const fact = element('div', 'rd-fact');
+      fact.append(element('span', 'n', number(f[0])), element('span', 'l', f[1]));
+      facts.append(fact);
     });
-    overview.append(kpis);
-    const split = element('div', 'rd-split');
-    const chart = element('div', 'rd-donut');
-    chart.append(donut(data.byModule));
-    const legend = element('div', 'rd-legend');
-    data.byModule.forEach(function (m) {
-      const row = element('div');
-      const dot = element('span', 'rd-dot');
-      dot.style.backgroundColor = '#' + (m.color || 'bdbdbd');
-      row.append(dot, element('span', '', m.title));
-      legend.append(row);
+    root.append(facts);
+
+    // the modules: one bar cut in parts, then a line with a small bar for each module
+    const modulesSection = element('section', 'rd-section');
+    modulesSection.append(element('h2', '', 'Entries by module'));
+    const total = data.byModule.reduce(function (sum, m) {
+      return sum + m.count;
+    }, 0);
+    const stack = element('div', 'rd-stack');
+    data.byModule.filter(function (m) {
+      return m.count > 0;
+    }).forEach(function (m) {
+      const part = element('span');
+      part.style.width = (m.count / total * 100) + '%';
+      part.style.backgroundColor = '#' + (m.color || 'bdbdbd');
+      part.title = m.title + ': ' + m.count;
+      stack.append(part);
     });
-    const list = element('div', 'rd-list');
+    modulesSection.append(stack);
+    const highest = Math.max.apply(null, data.byModule.map(function (m) {
+      return m.count;
+    }).concat([1]));
+    const grid = element('div', 'rd-modules');
     data.byModule.slice().sort(function (a, b) {
       return b.count - a.count;
     }).forEach(function (m) {
-      const link = element('a');
+      const link = element('a', 'rd-module');
       link.href = 'registry.php?category=' + m.id;
-      link.append(element('span', '', m.title), element('span', 'c', number(m.count)));
-      list.append(link);
+      const name = element('span', 'name');
+      const dot = element('span', 'rd-dot');
+      dot.style.backgroundColor = '#' + (m.color || 'bdbdbd');
+      name.append(dot, document.createTextNode(m.title));
+      const bar = element('span', 'bar');
+      const fill = element('i');
+      fill.style.width = (m.count / highest * 100) + '%';
+      fill.style.backgroundColor = '#' + (m.color || 'bdbdbd');
+      bar.append(fill);
+      link.append(name, element('span', 'count', number(m.count)), bar);
+      grid.append(link);
     });
-    split.append(chart, legend, list);
-    overview.append(split);
-    root.append(overview);
+    modulesSection.append(grid);
+    root.append(modulesSection);
 
-    // what needs attention
-    const risks = element('section', 'rd-panel');
-    risks.append(element('h2', '', 'Needs attention'));
-    const grid = element('div', 'rd-risks');
-    const detail = element('div', 'rd-detail');
-    detail.hidden = true;
-    const showDetail = function (risk) {
-      detail.textContent = '';
-      detail.append(element('strong', '', risk.label + ' (' + risk.count + ')'));
-      if (risk.items.length === 0) {
-        detail.append(element('p', 'text-muted mb-0', 'Nothing here.'));
-      }
+    // the checks
+    const checksSection = element('section', 'rd-section');
+    checksSection.append(element('h2', '', 'Checks'));
+    const list = element('div', 'rd-checks');
+    data.risks.forEach(function (risk) {
+      const level = risk.count === 0 ? '' : (risk.key === 'expired' ? ' bad' : ' warn');
+      const check = element('div', 'rd-check' + level);
+      const toggle = element('button');
+      toggle.type = 'button';
+      toggle.append(element('span', 'rd-status'), element('span', 'label', risk.label), element('span', 'count', number(risk.count)), element('span', 'more', risk.count > 0 ? (openRisk === risk.key ? 'hide' : 'show') : ''));
+      const detail = element('div', 'rd-detail');
+      detail.hidden = openRisk !== risk.key || risk.count === 0;
       risk.items.forEach(function (item) {
         const row = element('div', 'row-item');
         const link = element('a', '', item.title || 'Untitled');
@@ -158,32 +124,19 @@
       if (risk.count > risk.items.length) {
         detail.append(element('p', 'text-muted small mb-0 mt-1', 'and ' + (risk.count - risk.items.length) + ' more'));
       }
-    };
-    data.risks.forEach(function (risk) {
-      const tile = element('button', 'rd-risk' + (risk.count === 0 ? ' zero' : (risk.key === 'expired' ? ' bad' : ' warn')) + (openRisk === risk.key ? ' open' : ''));
-      tile.type = 'button';
-      const text = element('div');
-      text.append(element('div', 'l', risk.label));
-      tile.append(element('div', 'n', number(risk.count)), text);
-      tile.addEventListener('click', function () {
-        openRisk = openRisk === risk.key ? null : risk.key;
-        grid.querySelectorAll('.rd-risk').forEach(function (t) {
-          t.classList.remove('open');
-        });
-        if (openRisk) {
-          tile.classList.add('open');
-          showDetail(risk);
+      toggle.addEventListener('click', function () {
+        if (risk.count === 0) {
+          return;
         }
-        detail.hidden = !openRisk;
+        openRisk = openRisk === risk.key ? null : risk.key;
+        detail.hidden = openRisk !== risk.key;
+        toggle.lastChild.textContent = openRisk === risk.key ? 'hide' : 'show';
       });
-      grid.append(tile);
-      if (openRisk === risk.key) {
-        showDetail(risk);
-        detail.hidden = false;
-      }
+      check.append(toggle, detail);
+      list.append(check);
     });
-    risks.append(grid, detail);
-    root.append(risks);
+    checksSection.append(list);
+    root.append(checksSection);
   }
 
   function schedule(on) {
