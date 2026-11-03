@@ -70,26 +70,29 @@
       box.append(b);
     });
     nav.insertAdjacentElement('beforebegin', box);
-    // in My entries: which of them to show, by the number they have
+    // in My entries: the toggle In database filters the entries by whether they are in the lab Database
     if (mine) {
-      const filter = element('select', 'form-control form-control-sm d-inline-block w-auto ml-2 mt-2 id-filter');
-      filter.setAttribute('aria-label', 'Show the entries by their numbers');
-      [['', 'All of mine'], ['lab', 'In the lab Database (lab number)'], ['personal', 'Registered for myself (my number only)'], ['none', 'Not registered (no number)']].forEach(function (item) {
-        const option = element('option', '', item[1]);
-        option.value = item[0];
-        filter.append(option);
+      const toggle = element('div', 'btn-group btn-group-sm ml-2 mt-2 id-filter');
+      toggle.setAttribute('role', 'group');
+      toggle.setAttribute('aria-label', 'In database');
+      const current = params.get('idstate') || '';
+      [['', 'All', 'All of my entries'], ['lab', 'In database', 'Only the entries that are in the lab Database'], ['notlab', 'Not in database', 'Only the entries that are not in the lab Database: planned, intermediates and the ones in my database only']].forEach(function (item) {
+        const b2 = element('button', 'btn btn-outline-secondary' + (current === item[0] ? ' active' : ''), item[1]);
+        b2.type = 'button';
+        b2.title = item[2];
+        b2.setAttribute('aria-pressed', current === item[0] ? 'true' : 'false');
+        b2.addEventListener('click', function () {
+          const next = new URLSearchParams(location.search);
+          if (item[0]) {
+            next.set('idstate', item[0]);
+          } else {
+            next.delete('idstate');
+          }
+          location.search = next.toString();
+        });
+        toggle.append(b2);
       });
-      filter.value = params.get('idstate') || '';
-      filter.addEventListener('change', function () {
-        const next = new URLSearchParams(location.search);
-        if (filter.value) {
-          next.set('idstate', filter.value);
-        } else {
-          next.delete('idstate');
-        }
-        location.search = next.toString();
-      });
-      box.insertAdjacentElement('afterend', filter);
+      box.insertAdjacentElement('afterend', toggle);
     }
     // the entry pages remember which of the two the list was in
     try {
@@ -117,123 +120,9 @@
     return mine;
   }
 
-  async function listPage(nav) {
+  // the list page: the switch between All entries and My entries, and in My entries the toggle In database
+  function listPage(nav) {
     viewSwitch(nav);
-    const tab = element('button', 'category-nav-item planned-tab', 'Plan / register');
-    tab.type = 'button';
-    tab.title = 'Plan something, add an intermediate, or register or move your entries that have no number yet';
-    nav.append(tab);
-    const panel = element('div', 'planned-panel card card-body my-2');
-    panel.hidden = true;
-    nav.insertAdjacentElement('afterend', panel);
-
-    async function draw() {
-      panel.textContent = '';
-      panel.append(element('p', 'text-muted mb-2', 'The Database lists show the registered entries only. Here are all your entries; the ones without a number (planned: Planned, Ordered, Being made, and intermediates) come first and only you see them. Move a planned one to the Database when it is made, or register an intermediate: it gets the next number of its module.'));
-      const form = element('form', 'form-inline mb-2');
-      const title = element('input', 'form-control form-control-sm mr-2');
-      title.type = 'text';
-      title.placeholder = 'Name of what you plan';
-      title.required = true;
-      const kind = element('select', 'form-control form-control-sm mr-2');
-      [['plan', 'Planned (not made yet)'], ['intermediate', 'Intermediate (made, no number)']].forEach(function (option) {
-        const o = element('option', '', option[1]);
-        o.value = option[0];
-        kind.append(o);
-      });
-      const category = element('select', 'form-control form-control-sm mr-2');
-      const add = element('button', 'btn btn-primary btn-sm', 'Add');
-      add.type = 'submit';
-      const message = element('span', 'ml-2 text-danger');
-      form.append(title, kind, category, add, message);
-      panel.append(form);
-      try {
-        const categories = await (await fetch('api/v2/teams/current/registry_categories', { credentials: 'same-origin' })).json();
-        categories.forEach(function (c) {
-          const option = element('option', '', c.title);
-          option.value = c.id;
-          category.append(option);
-        });
-      } catch (error) {
-        message.textContent = 'The modules could not be loaded.';
-      }
-      form.addEventListener('submit', async function (event) {
-        event.preventDefault();
-        add.disabled = true;
-        try {
-          const made = await post({ action: kind.value, title: title.value, category: Number(category.value) });
-          location.href = 'registry.php?mode=edit&id=' + made.id;
-        } catch (error) {
-          message.textContent = error.message;
-          add.disabled = false;
-        }
-      });
-      const holder = element('div');
-      panel.append(holder);
-      try {
-        const planned = (await call()).planned;
-        if (planned.length === 0) {
-          holder.append(element('p', 'text-muted mb-0', 'You have no entries yet.'));
-        }
-        planned.forEach(function (entry) {
-          const row = element('div', 'd-flex align-items-center py-1 border-top');
-          const link = element('a', '', entry.title);
-          link.href = 'registry.php?mode=view&id=' + entry.id;
-          const badge = element('span', 'badge badge-secondary ml-2', entry.category_title || 'no module');
-          const isPlanned = Number(entry.is_planned) === 1;
-          const registered = !isPlanned && entry.custom_id !== null;
-          const state = element('span', 'badge ml-2 text-white', registered ? 'No. ' + entry.custom_id : (isPlanned ? (entry.status_title || 'Planned') : 'Intermediate'));
-          state.style.backgroundColor = '#' + (registered ? '6b7785' : (isPlanned ? (entry.status_color || 'b0b7c3') : 'c9a227'));
-          const ready = element('button', 'btn btn-outline-success btn-sm ml-auto', isPlanned ? 'Move to the Database' : 'Register to number');
-          ready.title = isPlanned ? (entry.custom_id ? 'It comes back with its number ' + entry.custom_id : 'It gets the next number of its module') : 'It gets the next number of its module when it has what the module requires';
-          ready.type = 'button';
-          ready.addEventListener('click', async function () {
-            ready.disabled = true;
-            try {
-              const done = await post({ action: isPlanned ? 'ready' : 'register', id: entry.id });
-              ready.textContent = 'Number ' + done.number;
-              window.setTimeout(draw, 800);
-            } catch (error) {
-              ready.textContent = error.message;
-            }
-          });
-          row.append(link, badge, state);
-          if (entry.personal_id !== null && entry.personal_id !== undefined) {
-            row.append((function () { const b = element('span', 'badge badge-light border ml-2', String(entry.personal_id)); b.title = 'My ID'; return b; })());
-          } else if (!isPlanned) {
-            const own = element('button', 'btn btn-outline-secondary btn-sm ml-auto', 'Register for myself');
-            own.type = 'button';
-            own.title = 'It gets your next number of the module and stays private to you';
-            own.addEventListener('click', async function () {
-              own.disabled = true;
-              try {
-                const done = await post({ action: 'personal', id: entry.id });
-                own.textContent = String(done.number);
-                window.setTimeout(draw, 800);
-              } catch (error) {
-                own.textContent = error.message;
-              }
-            });
-            row.append(own);
-            ready.classList.remove('ml-auto');
-            ready.classList.add('ml-2');
-          }
-          if (!registered) {
-            row.append(ready);
-          }
-          holder.append(row);
-        });
-      } catch (error) {
-        holder.append(element('p', 'text-danger', error.message));
-      }
-    }
-    tab.addEventListener('click', function () {
-      panel.hidden = !panel.hidden;
-      tab.classList.toggle('active', !panel.hidden);
-      if (!panel.hidden) {
-        draw();
-      }
-    });
   }
 
   // a dialog of our own: the native box of the browser can be blocked

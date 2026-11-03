@@ -392,6 +392,8 @@ final class Inventory extends AbstractConcreteEntity
             $filter = $displayParams->getQuery()->getString('idstate');
             if ($filter === 'lab') {
                 $this->filterSql .= ' AND entity.is_planned = 0 AND entity.custom_id IS NOT NULL ';
+            } elseif ($filter === 'notlab') {
+                $this->filterSql .= ' AND (entity.is_planned = 1 OR entity.custom_id IS NULL) ';
             } elseif ($filter === 'personal') {
                 $this->filterSql .= ' AND entity.custom_id IS NULL AND entity.personal_id IS NOT NULL ';
             } elseif ($filter === 'none') {
