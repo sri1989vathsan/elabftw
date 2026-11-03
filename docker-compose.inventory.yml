@@ -19,6 +19,7 @@ services:
       - ./web/planned.css:/elabftw/web/planned.css:ro
       - ./web/order-sheets:/elabftw/web/order-sheets:ro
       - ./src/Models/Inventory.php:/elabftw/src/Models/Inventory.php:ro
+      - ./src/Elabftw/EntitySqlBuilder.php:/elabftw/src/Elabftw/EntitySqlBuilder.php:ro
       - ./web/order-primers.js:/elabftw/web/order-primers.js:ro
       - ./web/registry-folders.php:/elabftw/web/registry-folders.php:ro
       - ./web/registry-folders.js:/elabftw/web/registry-folders.js:ro

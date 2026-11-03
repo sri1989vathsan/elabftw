@@ -153,6 +153,10 @@ final class EntitySqlBuilder implements SqlBuilderInterface
                 entity.last_signed_by,
                 entity.timestamped,
                 entity.timestampedby';
+            // the number of the owner of an entry of the Database (my id) is in its lists
+            if ($this->entity->entityType === EntityType::Inventory) {
+                $this->selectSql[] = 'entity.personal_id';
+            }
             // only include columns (created_at, locked_at, timestamped_at, entity.metadata) if actually searching for it
             if (!empty(array_column($this->entity->extendedValues, 'additional_columns'))) {
                 $this->selectSql[] = implode(', ', array_unique(array_column($this->entity->extendedValues, 'additional_columns')));
