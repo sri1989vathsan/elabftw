@@ -798,30 +798,40 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   transferGroup.append(exportButton, importButton);
   toolbar.append(transferGroup, exportMenu);
   // the rows ticked can be sent to an order (the sequences of primers are written in its notes)
-  const orderButton = el('button', 'btn btn-secondary btn-sm ml-3', 'Send selected to an order');
+  // what can be done with the ticked rows: one row of its own, the buttons evenly spaced
+  const selectionBar = el('div', 'd-flex flex-wrap align-items-center w-100 mt-2');
+  selectionBar.style.gap = '0.5rem';
+  selectionBar.hidden = true;
+  toolbar.append(selectionBar);
+  const orderButton = el('button', 'btn btn-secondary btn-sm', 'Send selected to an order');
   orderButton.type = 'button';
   orderButton.hidden = true;
-  toolbar.append(orderButton);
+  selectionBar.append(orderButton);
   // in My entries the rows ticked can be added to the lab Database
-  const databaseButton = el('button', 'btn btn-primary btn-sm ml-2', 'Add selected to the Database');
+  const databaseButton = el('button', 'btn btn-primary btn-sm', 'Add selected to the Database');
   databaseButton.type = 'button';
   databaseButton.hidden = true;
-  toolbar.append(databaseButton);
+  selectionBar.append(databaseButton);
   type RegistryTools = { addToDatabase: (ids: number[], done: () => void) => Promise<void>; assignOwner: (ids: number[], done: () => void) => Promise<void> };
   const registryTools = (): RegistryTools | undefined => (window as unknown as { RegistryTools?: RegistryTools }).RegistryTools;
   // the rows ticked can get another owner (an admin chooses it in the dialog)
-  const ownerButton = el('button', 'btn btn-secondary btn-sm ml-2', 'Assign owner');
+  const ownerButton = el('button', 'btn btn-secondary btn-sm', 'Assign owner');
   ownerButton.type = 'button';
   ownerButton.hidden = true;
-  toolbar.append(ownerButton);
+  selectionBar.append(ownerButton);
   // the rows ticked move to another folder (or to none); the entries need the right to edit them
-  const folderButton = el('button', 'btn btn-secondary btn-sm ml-2', 'Move to folder');
+  const folderButton = el('button', 'btn btn-secondary btn-sm', 'Move to folder');
   folderButton.type = 'button';
   folderButton.hidden = true;
   const folderPanel = el('div', 'columns-panel');
   folderPanel.hidden = true;
   folderPanel.style.minWidth = '18rem';
-  toolbar.append(folderButton, folderPanel);
+  // the panel opens right under its button
+  const folderWrap = el('div');
+  folderWrap.style.position = 'relative';
+  folderPanel.style.top = 'calc(100% + 4px)';
+  folderWrap.append(folderButton, folderPanel);
+  selectionBar.append(folderWrap);
   const csrfToken = (): string => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
   folderButton.addEventListener('click', () => {
     if (!folderPanel.hidden) {
@@ -911,6 +921,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
       ownerButton.hidden = ui.selected.size === 0;
       ownerButton.textContent = `Assign owner (${ui.selected.size})`;
       folderButton.hidden = ui.selected.size === 0;
+      selectionBar.hidden = ui.selected.size === 0;
       folderButton.textContent = `Move to folder (${ui.selected.size})`;
       if (ui.selected.size === 0) {
         folderPanel.hidden = true;
