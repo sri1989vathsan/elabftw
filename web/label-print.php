@@ -201,12 +201,82 @@ try {
             $fields[(string) $name] = trim((string) ($field['value'] ?? ''));
         }
     }
+    // the numbers are written plain: {id} is the number of the lab, {my_id} the number of the owner, {id_line} the number of the lab, or the
+    // number of the owner when the entry is not in the lab Database
+    $labelId = $data['custom_id'] !== null ? (string) $data['custom_id'] : '';
+    $mine = $data['personal_id'] !== null ? (string) $data['personal_id'] : '';
+    $values = array(
+                ':team' => $teamId, ':name' => mb_substr($name, 0, 100), ':width' => $width, ':height' => $height,
+                ':margin' => max(0, min(10, (float) ($payload['margin_mm'] ?? 1.5))), ':offx' => max(0.0, min(40.0, (float) ($payload['offset_x_mm'] ?? 0))), ':offy' => max(0.0, min(40.0, (float) ($payload['offset_y_mm'] ?? 0))), ':left' => $sideValue($payload, 'margin_left_mm'), ':top' => $sideValue($payload, 'margin_top_mm'), ':right' => $sideValue($payload, 'margin_right_mm'), ':bottom' => $sideValue($payload, 'margin_bottom_mm'), ':font' => max(1, min(20, (float) ($payload['font_mm'] ?? 3.2))),
+                ':qr' => !empty($payload['qr']) ? 1 : 0, ':rotate' => !empty($payload['rotate_180']) ? 1 : 0, ':lines' => json_encode($lines === array() ? array('{id_line}', '{title}') : array_slice($lines, 0, 8)),
+            );
+            $formatId = (int) ($payload['id'] ?? 0);
+            if ($formatId > 0) {
+                $req = $pdo->prepare('UPDATE registry_label_formats SET name = :name, width_mm = :width, height_mm = :height, margin_mm = :margin, margin_left_mm = :left, margin_top_mm = :top, margin_right_mm = :right, margin_bottom_mm = :bottom, offset_x_mm = :offx, offset_y_mm = :offy, rotate_180 = :rotate, font_mm = :font, qr = :qr, `lines` = :lines WHERE id = :id AND team = :team');
+                $req->bindValue(':id', $formatId, PDO::PARAM_INT);
+            } else {
+                $req = $pdo->prepare('INSERT INTO registry_label_formats (team, name, width_mm, height_mm, margin_mm, margin_left_mm, margin_top_mm, margin_right_mm, margin_bottom_mm, offset_x_mm, offset_y_mm, rotate_180, font_mm, qr, `lines`) VALUES (:team, :name, :width, :height, :margin, :left, :top, :right, :bottom, :offx, :offy, :rotate, :font, :qr, :lines)');
+            }
+            foreach ($values as $key => $value) {
+                $req->bindValue($key, $value);
+            }
+            $pdo->execute($req);
+            $formatId = $formatId > 0 ? $formatId : (int) $pdo->lastInsertId();
+            // one format is the default
+            $count = $pdo->prepare('SELECT COUNT(*) FROM registry_label_formats WHERE team = :team AND is_default = 1');
+            $count->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $pdo->execute($count);
+            if (!empty($payload['is_default']) || (int) $count->fetchColumn() === 0) {
+                $pdo->prepare('UPDATE registry_label_formats SET is_default = IF(id = ' . $formatId . ', 1, 0) WHERE team = ' . $teamId)->execute();
+            }
+            respond(200, array('ok' => true, 'id' => $formatId));
+        }
+        if ($action === 'delete_format') {
+            $req = $pdo->prepare('DELETE FROM registry_label_formats WHERE id = :id AND team = :team');
+            $req->bindValue(':id', (int) ($payload['id'] ?? 0), PDO::PARAM_INT);
+            $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $pdo->execute($req);
+            respond(200, array('ok' => true));
+        }
+        if ($action === 'save_settings') {
+            $req = $pdo->prepare('INSERT INTO registry_label_settings (team, printer_host, printer_port, dpi, qr_base_url) VALUES (:team, :host, :port, :dpi, :base) ON DUPLICATE KEY UPDATE printer_host = VALUES(printer_host), printer_port = VALUES(printer_port), dpi = VALUES(dpi), qr_base_url = VALUES(qr_base_url)');
+            $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $req->bindValue(':host', mb_substr(trim((string) ($payload['printer_host'] ?? '')), 0, 255));
+            $req->bindValue(':port', max(1, min(65535, (int) ($payload['printer_port'] ?? 9100))), PDO::PARAM_INT);
+            $req->bindValue(':dpi', in_array((int) ($payload['dpi'] ?? 300), array(203, 300, 600), true) ? (int) $payload['dpi'] : 300, PDO::PARAM_INT);
+            $req->bindValue(':base', mb_substr(trim((string) ($payload['qr_base_url'] ?? '')), 0, 255));
+            $pdo->execute($req);
+            respond(200, array('ok' => true));
+        }
+        respond(400, array('error' => 'Unknown action.'));
+    } catch (Throwable $e) {
+        respond(400, array('error' => $e->getMessage()));
+    }
+}
+
+try {
+    $id = (int) ($payload['id'] ?? 0);
+    $copies = max(1, min(100, (int) ($payload['copies'] ?? 1)));
+    // whoever can read the entry can print its label
+    $data = new Inventory($App->Users, $id)->readOne();
+    $req = $pdo->prepare('SELECT title FROM inventory_categories WHERE id = :id');
+    $req->bindValue(':id', (int) ($data['category'] ?? 0), PDO::PARAM_INT);
+    $pdo->execute($req);
+    $module = (string) $req->fetchColumn();
+
+    $fields = array();
+    $metadata = json_decode((string) ($data['metadata'] ?? ''), true);
+    foreach (is_array($metadata) ? ($metadata['extra_fields'] ?? array()) : array() as $name => $field) {
+        if (is_array($field)) {
+            $fields[(string) $name] = trim((string) ($field['value'] ?? ''));
+        }
+    }
     $labelId = $data['custom_id'] !== null ? '#' . $data['custom_id'] : '';
     $mine = $data['personal_id'] !== null ? 'my ' . $data['personal_id'] : '';
     $values = array(
         'id' => $labelId,
         'my_id' => $mine,
-        'id_line' => trim($labelId . ' ' . $mine),
+        'id_line' => $labelId !== '' ? $labelId : $mine,
         'title' => (string) ($data['title'] ?? ''),
         'module' => $module,
         'date' => (string) ($data['date'] ?? ''),
@@ -271,11 +341,13 @@ try {
     $y = $top;
     foreach ($lines as $index => $line) {
         // the first line (the numbers) is bold: written twice, one dot apart
-        $zpl[] = sprintf('^FO%d,%d^A0N,%d,%d^FB%d,1,0,L,0^FD%s^FS', $left, $y, $font, $font, $textWidth, $clean($line));
+        // the title (the second line) can take two rows when the label has the room
+        $rows = ($index === 1 && $usable - ($y - $top) >= (int) ceil($font * 1.1) * 2) ? 2 : 1;
+        $zpl[] = sprintf('^FO%d,%d^A0N,%d,%d^FB%d,%d,0,L,0^FD%s^FS', $left, $y, $font, $font, $textWidth, $rows, $clean($line));
         if ($index === 0) {
             $zpl[] = sprintf('^FO%d,%d^A0N,%d,%d^FB%d,1,0,L,0^FD%s^FS', $left + 1, $y, $font, $font, $textWidth, $clean($line));
         }
-        $y += (int) ceil($font * 1.1);
+        $y += (int) ceil($font * 1.1) * $rows;
     }
     if ($qrSize > 0) {
         $base = (string) $settings['qr_base_url'];
