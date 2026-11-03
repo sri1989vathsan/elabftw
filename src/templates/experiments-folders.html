@@ -59,6 +59,14 @@
           <i class='fas fa-user fa-fw mr-1'></i>{{ 'My folders'|trans }}
         </button>
       </li>
+      {% if folderEntityType == 'inventory' %}
+        {# the Database: the folders of the lab Database are a tab of their own #}
+        <li class='nav-item'>
+          <button type='button' class='nav-link w-100' data-action='select-folder-scope' data-scope='database' role='tab' aria-selected='false'>
+            <i class='fas fa-database fa-fw mr-1'></i>{{ 'Database folders'|trans }}
+          </button>
+        </li>
+      {% endif %}
       <li class='nav-item'>
         <button type='button' class='nav-link w-100' data-action='select-folder-scope' data-scope='all' role='tab' aria-selected='false'>
           <i class='fas fa-users fa-fw mr-1'></i>{{ 'All folders'|trans }}

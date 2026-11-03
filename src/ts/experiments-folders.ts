@@ -14,7 +14,7 @@ import { notify } from './notify';
 import { getTinymceBaseConfig } from './tinymce';
 import { htmlToMarkdown, markdownToHtml } from './Editor.class';
 
-type FolderScope = 'mine' | 'all';
+type FolderScope = 'mine' | 'database' | 'all';
 type FolderEntityType = 'experiments' | 'items' | 'inventory';
 
 interface FolderReadme {
@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const OTHER_FOLDERS_KEY = `other-folders-collapsed-v2-${currentUserId}`;
   const folderScopeKey = `experiment-folder-scope-${currentUserId}`;
   const storedFolderScope = localStorage.getItem(folderScopeKey);
-  let activeFolderScope: FolderScope = storedFolderScope === 'all' ? 'all' : 'mine';
+  let activeFolderScope: FolderScope = storedFolderScope === 'all' || storedFolderScope === 'database' ? storedFolderScope : 'mine';
   // the folder tree itself is shared between experiments and resources, only
   // which page a folder link opens (and which entity count badge shows)
   // depends on this -- persisted per-user so it survives navigating around
@@ -291,9 +291,24 @@ document.addEventListener('DOMContentLoaded', () => {
           applyFolderState(node.dataset.folderId, getCollapsedSet().has(node.dataset.folderId));
         }
       });
+    } else if (scope === 'database') {
+      // only the folders of the lab Database: "Database items" and what is inside it
+      rootNodes.forEach(root => {
+        const isDatabase = root.dataset.folderFullPath === 'Database items';
+        root.hidden = !isDatabase;
+        root.classList.remove('folder-scope-context');
+        root.querySelectorAll('.folder-node').forEach((child: HTMLElement) => {
+          child.hidden = !isDatabase;
+          child.classList.remove('folder-scope-context');
+        });
+        if (isDatabase && root.dataset.folderId) {
+          applyFolderState(root.dataset.folderId, false);
+        }
+      });
     } else {
       rootNodes.forEach(root => {
-        const isMyTree = root.dataset.folderOwnerId === currentUserId;
+        // the Database folders have a tab of their own: My folders are the folders of the user
+        const isMyTree = root.dataset.folderOwnerId === currentUserId && root.dataset.folderFullPath !== 'Database items';
         root.hidden = !isMyTree;
         root.classList.remove('folder-scope-context');
         root.querySelectorAll('.folder-node').forEach((child: HTMLElement) => {
@@ -596,7 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   on('select-folder-scope', (el: HTMLElement, event: Event) => {
     event.preventDefault();
-    if (el.dataset.scope === 'mine' || el.dataset.scope === 'all') {
+    if (el.dataset.scope === 'mine' || el.dataset.scope === 'database' || el.dataset.scope === 'all') {
       applyFolderScope(el.dataset.scope);
     }
   });
