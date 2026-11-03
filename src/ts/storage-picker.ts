@@ -59,7 +59,26 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     unitOptions = [{ value: '•', label: '•' }];
   }
   const units = await ApiC.getJson<Unit[]>('storage_units?hierarchy=1', { notifOnError: 0 });
-  units.sort((a, b) => a.full_path.localeCompare(b.full_path));
+  // in order, place by place along the path: by the number at the end of a name when both have one (box 5, 6, ... 10), else in natural order
+  const byName = (a: string, b: string): number => {
+    const an = /(\d+)\s*$/.exec(a);
+    const bn = /(\d+)\s*$/.exec(b);
+    if (an && bn && Number(an[1]) !== Number(bn[1])) {
+      return Number(an[1]) - Number(bn[1]);
+    }
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  };
+  units.sort((a, b) => {
+    const as = a.full_path.split(' > ');
+    const bs = b.full_path.split(' > ');
+    for (let i = 0; i < Math.min(as.length, bs.length); i++) {
+      const order = byName(as[i], bs[i]);
+      if (order !== 0) {
+        return order;
+      }
+    }
+    return as.length - bs.length;
+  });
 
   if (editing) {
     // the slot of the tube itself is not taken for the tube itself
