@@ -263,10 +263,12 @@ final class Inventory extends AbstractConcreteEntity
                 $missing[] = (string) $name;
             }
         }
-        $titleReq = $this->Db->prepare('SELECT title FROM inventory_categories WHERE id = :id');
-        $titleReq->bindValue(':id', (int) $category, PDO::PARAM_INT);
-        $this->Db->execute($titleReq);
-        if (preg_match('/^plasmids?$/i', (string) $titleReq->fetchColumn()) === 1) {
+        // the module says whether a sequence file is needed to register (a plasmid has one, a sample does not)
+        $settingsReq = $this->Db->prepare('SELECT settings FROM inventory_categories WHERE id = :id');
+        $settingsReq->bindValue(':id', (int) $category, PDO::PARAM_INT);
+        $this->Db->execute($settingsReq);
+        $settings = json_decode((string) $settingsReq->fetchColumn(), true);
+        if (is_array($settings) && !empty($settings['requires_sequence_file'])) {
             $likes = implode(' OR ', array_map(static fn(string $ext): string => "LOWER(real_name) LIKE '%." . $ext . "'", array('gb', 'gbk', 'gbff', 'genbank', 'fasta', 'fa', 'fna', 'dna')));
             $files = $this->Db->prepare("SELECT COUNT(*) FROM uploads WHERE item_id = :id AND type = 'inventory' AND state = 1 AND (" . $likes . ')');
             $files->bindValue(':id', $this->id, PDO::PARAM_INT);

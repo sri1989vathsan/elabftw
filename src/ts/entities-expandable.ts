@@ -19,6 +19,7 @@ type Row = {
   custom_id?: number | null;
   personal_id?: number | null;
   title: string;
+  category?: number | null;
   category_title: string | null;
   category_color: string | null;
   fullname: string;
@@ -37,11 +38,6 @@ const quantityOf = (row: Row): number | '' => {
   const locations = row.storage_locations ?? [];
   return locations.length > 0 ? locations.reduce((sum, l) => sum + Number(l.qty_stored), 0) : '';
 };
-const fieldOf = (row: Row, pattern: RegExp): string => (row.extra_fields ?? []).find(f => pattern.test(f.name))?.value ?? '';
-const isPrimerList = (rows: Row[]): boolean => rows.length > 0 && rows.every(r => /^(primers?|probes?)$/i.test(r.category_title ?? ''));
-// the list is of one module: the fields of the module are columns
-const isModule = (rows: Row[], pattern: RegExp): boolean => rows.length > 0 && rows.every(r => pattern.test(r.category_title ?? ''));
-const basesOf = (row: Row): string => fieldOf(row, /^sequence/i).toUpperCase().replace(/[^A-Z]/g, '');
 const gcOf = (bases: string): number | '' => bases === '' ? '' : Math.round(((bases.match(/[GC]/g) ?? []).length / bases.length) * 1000) / 10;
 const numberOrEmpty = (value: string): number | '' => value !== '' && Number.isFinite(Number(value)) ? Number(value) : '';
 
@@ -107,7 +103,30 @@ function askCopyFolder(title: string): Promise<{ folder: number; toDatabase: boo
   });
 }
 
-// the category is in the tabs and the location in the opened row: no columns for them
+// the rules of the modules, set by the admins (the Modules page): the columns of the list of a module and the field that holds its sequence
+type ModuleSettings = { columns: { key: string; label: string }[]; sequence_field: string | null };
+let moduleSettings = new Map<number, ModuleSettings>();
+
+async function loadModuleSettings(): Promise<void> {
+  try {
+    const response = await fetch('registry-modules.php', { credentials: 'same-origin' });
+    const body = await response.json() as { modules: { id: number; settings: ModuleSettings }[] };
+    moduleSettings = new Map(body.modules.map((m): [number, ModuleSettings] => [m.id, m.settings]));
+  } catch {
+    // without the settings the lists have the default columns
+    moduleSettings = new Map();
+  }
+}
+
+// a field of an entry: by its name, or by the start of its name (a name can be written a little differently from one entry to another)
+const fieldNamed = (row: Row, name: string): string => {
+  const fields = row.extra_fields ?? [];
+  const wanted = name.toLowerCase();
+  return (fields.find(f => f.name === name) ?? fields.find(f => f.name.toLowerCase().startsWith(wanted)))?.value ?? '';
+};
+
+// the category is in the tabs and the location in the opened row: no columns for them. The columns of a list of one module are the ones
+// its admin chose; a list that mixes modules has the ones that every module has
 function columnsFor(rows: Row[]): Column[] {
   const text = (key: string, label: string, get: (row: Row) => string | number): Column => ({ key, label, numeric: false, get });
   const num = (key: string, label: string, get: (row: Row) => string | number): Column => ({ key, label, numeric: true, get });
@@ -116,66 +135,39 @@ function columnsFor(rows: Row[]): Column[] {
   if (new URLSearchParams(window.location.search).get('planned') === '1') {
     columns.splice(1, 0, num('MyID', 'My ID', r => r.personal_id ?? 0));
   }
-  if (isPrimerList(rows)) {
-    // the primers are looked at by their sequence, length, melting temperature and GC share
-    columns.push(
-      text('Sequence', "Sequence 5'-3'", basesOf),
-      num('Length', 'Length', r => basesOf(r).length || ''),
-      num('Tm', 'Tm (°C)', r => numberOrEmpty(fieldOf(r, /^tm/i))),
-      num('GC', 'GC %', r => gcOf(basesOf(r))),
-      text('Orientation', 'Orientation', r => fieldOf(r, /^orientation/i)),
-      text('Target', 'Target', r => fieldOf(r, /^target/i)),
-    );
-    if (rows.some(r => /^probes?$/i.test(r.category_title ?? ''))) {
-      // a probe also has a label (its dye) and a type
-      columns.push(text('Label', 'Label', r => fieldOf(r, /^label/i)), text('Type', 'Type', r => fieldOf(r, /^type/i)));
+  const hasFiles = rows.some(r => (r.sequence_files ?? []).length > 0);
+  const filesOf = (r: Row): string => (r.sequence_files ?? []).map(f => f.real_name).join(' ');
+  const first = rows[0]?.category ?? null;
+  const settings = first !== null && rows.every(r => r.category === first) ? moduleSettings.get(first) : undefined;
+  if (!settings || settings.columns.length === 0) {
+    if (hasFiles) {
+      columns.push(text('Files', 'Sequence', filesOf));
     }
-  } else if (isModule(rows, /^antibod/i)) {
-    // the antibodies are looked at by what they recognise, where they come from, their kind, their dye and their dilution
-    columns.push(
-      text('Target', 'Target', r => fieldOf(r, /^target/i)),
-      text('Host', 'Host', r => fieldOf(r, /^host/i)),
-      text('Kind', 'Primary / secondary', r => fieldOf(r, /^antibody type/i)),
-      text('Dye', 'Dye', r => fieldOf(r, /^conjugate$/i)),
-      text('Dilution', 'Dilution', r => fieldOf(r, /^dilution/i)),
-    );
-  } else if (isModule(rows, /^samples?$/i)) {
-    columns.push(
-      text('SampleType', 'Sample type', r => fieldOf(r, /^sample type/i)),
-      text('Collected', 'Date collected', r => fieldOf(r, /^date collected/i)),
-    );
-  } else if (isModule(rows, /^cells?/i)) {
-    // cells and strains: what they are, their genotype, the selection and the mycoplasma status
-    columns.push(
-      text('Kind', 'Kind', r => fieldOf(r, /^kind/i)),
-      text('Species', 'Species / organism', r => fieldOf(r, /^species/i)),
-      text('Genotype', 'Genotype / tissue', r => fieldOf(r, /^genotype/i)),
-      text('Selection', 'Selection', r => fieldOf(r, /^(resistance|selection)/i)),
-      text('Mycoplasma', 'Mycoplasma', r => fieldOf(r, /^mycoplasma/i)),
-    );
-  } else if (isModule(rows, /^reagents?$/i)) {
-    // reagents: what is checked at the bench, the supplier, the lot and the expiry
-    columns.push(
-      text('ReagentType', 'Type', r => fieldOf(r, /^reagent type/i)),
-      text('Supplier', 'Supplier', r => fieldOf(r, /^supplier/i)),
-      text('Catalog', 'Catalog no.', r => fieldOf(r, /^catalog/i)),
-      text('Lot', 'Lot', r => fieldOf(r, /^lot/i)),
-      text('Expiry', 'Expiry', r => fieldOf(r, /^expiry/i)),
-    );
-  } else if (isModule(rows, /^plasmids?$/i)) {
-    // a plasmid: its backbone and the selection (the resistance), and the sequence files opened in the sequence editor
-    columns.push(
-      text('Backbone', 'Backbone', r => fieldOf(r, /^backbone/i)),
-      text('Selection', 'Selection', r => fieldOf(r, /^(resistance|selection)/i)),
-    );
-    if (rows.some(r => (r.sequence_files ?? []).length > 0)) {
-      columns.push(text('Files', 'Sequence', r => (r.sequence_files ?? []).map(f => f.real_name).join(' ')));
-    }
-  } else if (rows.some(r => (r.sequence_files ?? []).length > 0)) {
-    // the sequence files of the other lists that have them, opened in the sequence editor
-    columns.push(text('Files', 'Sequence', r => (r.sequence_files ?? []).map(f => f.real_name).join(' ')));
+    columns.push(num('Quantity', 'Quantity', quantityOf), text('Owner', 'Owner', r => r.fullname ?? ''));
+    return columns;
   }
-  columns.push(num('Quantity', 'Quantity', quantityOf), text('Owner', 'Owner', r => r.fullname ?? ''));
+  const sequenceOf = (r: Row): string => settings.sequence_field ? fieldNamed(r, settings.sequence_field).toUpperCase().replace(/[^A-Z]/g, '') : '';
+  settings.columns.forEach(c => {
+    if (c.key === 'files') {
+      if (hasFiles) columns.push(text('Files', c.label, filesOf));
+    } else if (c.key === 'quantity') {
+      columns.push(num('Quantity', c.label, quantityOf));
+    } else if (c.key === 'owner') {
+      columns.push(text('Owner', c.label, r => r.fullname ?? ''));
+    } else if (c.key === 'calc:length') {
+      columns.push(num('Length', c.label, r => sequenceOf(r).length || ''));
+    } else if (c.key === 'calc:gc') {
+      columns.push(num('GC', c.label, r => gcOf(sequenceOf(r))));
+    } else if (c.key.startsWith('field:')) {
+      const name = c.key.slice(6);
+      const values = rows.map(r => fieldNamed(r, name)).filter(v => v !== '');
+      const numeric = values.length > 0 && values.every(v => Number.isFinite(Number(v)));
+      // the field that holds the sequence is shown in the sequence style
+      const isSequence = settings.sequence_field !== null && name.toLowerCase() === settings.sequence_field.toLowerCase();
+      const key = isSequence ? 'Sequence' : c.key;
+      columns.push(numeric ? num(key, c.label, r => numberOrEmpty(fieldNamed(r, name))) : text(key, c.label, r => fieldNamed(r, name)));
+    }
+  });
   return columns;
 }
 
@@ -677,7 +669,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     void load(event);
   };
   window.addEventListener('entity-filters-changed', onFiltersChanged);
-  void load().then(onLoaded);
+  void loadModuleSettings().then(() => load()).then(onLoaded);
 }
 
 export function unmountExpandableTable(): void {
