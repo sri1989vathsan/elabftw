@@ -177,6 +177,15 @@
             "type": "text",
             "value": "",
             "position": 4
+          },
+          "Conjugated": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Yes",
+              "No"
+            ],
+            "position": 8
           }
         }
       },
@@ -197,6 +206,10 @@
           {
             "key": "field:Conjugate",
             "label": "Dye"
+          },
+          {
+            "key": "field:Conjugated",
+            "label": "Conjugated"
           },
           {
             "key": "field:Dilution",

@@ -249,6 +249,7 @@ def convert_antibody(record, row, notes):
                 break
     if dye:
         row['Conjugate'] = dye
+    row['Conjugated'] = 'Yes' if dye else 'No'
 
     # the clone: a word "clone", a table of the page of the maker, or a code in brackets in the name
     clone = ''
