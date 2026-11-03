@@ -667,7 +667,14 @@ $makeEntry = static function (array $row, int $categoryId, array $definitions, s
     $Entry = new Inventory($Owner ?? $App->Users);
     $Entry->asUnregistered = $register !== 'both';
     $Entry->withPersonal = $register === 'both' || $register === 'personal';
-    return array('id' => $Entry->create(title: mb_substr($title, 0, 255), category: $categoryId, customId: $number, metadata: json_encode(array('extra_fields' => (object) $fields), JSON_UNESCAPED_UNICODE)), 'reason' => null);
+    $newId = $Entry->create(title: mb_substr($title, 0, 255), category: $categoryId, customId: $number, metadata: json_encode(array('extra_fields' => (object) $fields), JSON_UNESCAPED_UNICODE));
+    // the entries of a shared account of LabCollector ("Wild Card") belong to the whole team: everyone can edit them
+    if (in_array(strtolower(trim((string) ($row['owner'] ?? ''))), array('wild card'), true)) {
+        $open = $pdo->prepare('UPDATE inventory SET canwrite_base = 30 WHERE id = :id');
+        $open->bindValue(':id', $newId, PDO::PARAM_INT);
+        $pdo->execute($open);
+    }
+    return array('id' => $newId, 'reason' => null);
 };
 
 try {
