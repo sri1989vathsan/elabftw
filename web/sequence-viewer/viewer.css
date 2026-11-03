@@ -2096,3 +2096,15 @@ body.hide-seq-orfs .veRowView .veRowViewOrfsContainer {
 .own-map-detail .own-map-scale {
   opacity: 0;
 }
+
+/* the numbers outside a small ring have a halo, so they stay readable where they cross an arrow or a line */
+.own-map-scale-out {
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+body[data-map-style="dark"] .own-map-scale-out {
+  stroke: #0f172a;
+}

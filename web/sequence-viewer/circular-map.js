@@ -545,6 +545,12 @@
         if (innerEdge >= 150) {
           const label = at(innerEdge - 19, a);
           svg.append(svgElement('text', { x: label[0], y: label[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'own-map-scale' }, String(position)));
+        } else {
+          // outside the ring a few numbers fit where the inside has no room (every other one, so they stay apart)
+          if (Math.round(position / step) % 2 === 0) {
+            const outside = at(ringOut + 14, a);
+            svg.append(svgElement('text', { x: outside[0], y: outside[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'own-map-scale own-map-scale-out' }, String(position)));
+          }
         }
       }
       const origin = at(innerEdge - 8, angleOf(0, length));
