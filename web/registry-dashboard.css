@@ -11,9 +11,9 @@
 /* the numbers: cards with the number on the left and its words beside it */
 .rd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.8rem; margin-bottom: 1.2rem; }
 .rd-kpi { display: flex; align-items: center; gap: 0.8rem; border: 1px solid var(--rd-line); border-radius: 3px; padding: 0.7rem 0.9rem; text-align: left; }
-.rd-kpi .n { font-size: 1.9rem; font-weight: 600; line-height: 1; min-width: 3.2rem; color: var(--rd-accent); }
+.rd-kpi .n { flex: 0 0 auto; white-space: nowrap; font-size: 1.9rem; font-weight: 600; line-height: 1; min-width: 3.2rem; color: var(--rd-accent); }
 .rd-kpi.main .n { color: inherit; }
-.rd-kpi .l { font-size: 0.82rem; line-height: 1.25; color: var(--secondary-text, #6b7785); }
+.rd-kpi .l { flex: 1 1 auto; min-width: 0; font-size: 0.82rem; line-height: 1.25; color: var(--secondary-text, #6b7785); }
 
 .rd-split { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; }
 .rd-donut { flex: 0 0 auto; }
