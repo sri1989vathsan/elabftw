@@ -230,11 +230,16 @@
       ownerMode.append(option);
     });
     const ownerUser = element('select', 'form-control form-control-sm w-auto');
-    ownerUser.hidden = true;
-    ownerBox.append(ownerMode, ownerUser);
-    ownerMode.addEventListener('change', function () {
-      ownerUser.hidden = ownerMode.value !== 'user';
-    });
+    const ownerUserLabel = element('span', 'small text-muted mr-2');
+    const ownerUserRow = element('div');
+    ownerUserRow.hidden = true;
+    ownerUserRow.append(ownerUserLabel, ownerUser);
+    ownerBox.append(ownerMode, ownerUserRow);
+    const showOwnerUser = function () {
+      ownerUserRow.hidden = ownerMode.value === 'me';
+      ownerUserLabel.textContent = ownerMode.value === 'column' ? 'Rows whose owner is not found go to' : 'The owner';
+    };
+    ownerMode.addEventListener('change', showOwnerUser);
     fetch('registry-transfer.php?users=1', { credentials: 'same-origin' }).then(function (response) {
       return response.json();
     }).then(function (body) {
@@ -250,6 +255,7 @@
         option.selected = Number(u.id) === Number(body.me);
         ownerUser.append(option);
       });
+      showOwnerUser();
     }).catch(function () {
       ownerMode.value = 'me';
     });

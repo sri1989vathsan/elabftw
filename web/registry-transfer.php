@@ -360,6 +360,10 @@ try {
                 $notFound[($mail !== '' ? $mail : $name)] = true;
             }
         }
+        // an owner that is not found: the user chosen for those rows, else the one who imports
+        if ($ownerMode === 'column' && $id === 0 && $ownerChoice > 0) {
+            $id = $ownerChoice;
+        }
         if ($id <= 0 || $id === $userId) {
             return null;
         }
