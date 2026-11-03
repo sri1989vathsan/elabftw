@@ -14,7 +14,7 @@ vm.runInNewContext(js, {
   module: mod, exports: mod.exports, URL, Date, Math, Array, JSON, window: {}, document: {},
   require: () => ({ default: { t: key => key } }),
 });
-const { withoutHash, isFollowableLink, placesForPage } = mod.exports;
+const { withoutHash, isFollowableLink, placesForPage, leadsToAnotherPlace } = mod.exports;
 
 const page = 'https://elab.test/experiments.php?mode=view&id=5#top';
 const plain = { button: 0, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false };
@@ -57,4 +57,13 @@ test('a chain of links keeps every place, newest last', () => {
 test('old places are dropped', () => {
   const stack = [place('https://elab.test/x', 1000)];
   assert.equal(placesForPage(stack, 'https://elab.test/x', 1000 + 7 * 60 * 60 * 1000).length, 0);
+});
+
+test('only links that go to another page, another entry or another place in the page count', () => {
+  const list = 'https://elab.test/experiments.php?mode=show&offset=0';
+  assert.equal(leadsToAnotherPlace('experiments.php?mode=show&offset=15', list), false, 'paging');
+  assert.equal(leadsToAnotherPlace('experiments.php?mode=view&id=7', list), true, 'an entry');
+  assert.equal(leadsToAnotherPlace('projectmanagement.php', list), true, 'another page');
+  assert.equal(leadsToAnotherPlace('experiments.php?mode=view&id=7', 'https://elab.test/experiments.php?mode=view&id=7'), false);
+  assert.equal(leadsToAnotherPlace('experiments.php?mode=view&id=7#methods', 'https://elab.test/experiments.php?mode=view&id=7'), true);
 });

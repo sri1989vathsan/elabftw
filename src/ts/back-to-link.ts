@@ -15,8 +15,9 @@ const STACK_KEY = 'elabftw-back-stack';
 const RESTORE_KEY = 'elabftw-back-restore';
 const MAX_PLACES = 10;
 const MAX_AGE_MS = 6 * 60 * 60 * 1000;
-// links in these parts of the page lead somewhere the user may want to come back from
-const LINK_AREAS = '#body_view, #tocPanel, #linksDiv, #stepsDiv';
+// links in the menus and the footer are ordinary navigation; every other link (entry text, linked entries, steps,
+// the table of contents, the project boards, lists, the to-do panel) leads somewhere the user may want to come back from
+const NAVIGATION_AREAS = 'nav, footer, #sidepanel-buttons, .dropdown-menu, .modal, .pagination, #elabftwBackButton';
 
 export interface Place {
   /** the page and position the link was clicked on (address without the hash) */
@@ -35,6 +36,19 @@ export function withoutHash(url: string, base: string): string {
     return `${parsed.origin}${parsed.pathname}${parsed.search}`;
   } catch {
     return '';
+  }
+}
+
+/** A link that only changes a list's filter, sort or page (same page, same entry) is not a trip somewhere else. */
+export function leadsToAnotherPlace(to: string, from: string): boolean {
+  try {
+    const a = new URL(to, from);
+    const b = new URL(from);
+    if (a.pathname !== b.pathname) return true;
+    if (a.hash !== '' && a.hash !== b.hash) return true;
+    return (a.searchParams.get('id') ?? '') !== (b.searchParams.get('id') ?? '');
+  } catch {
+    return false;
   }
 }
 
@@ -161,7 +175,7 @@ export function initBackToLink(): void {
   document.addEventListener('click', event => {
     const link = (event.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
     // the table of contents entries are handled below
-    if (!link || link.classList.contains('toc-link') || !link.closest(LINK_AREAS) || !isFollowableLink(link, window.location.href, event)) return;
+    if (!link || link.classList.contains('toc-link') || link.closest(NAVIGATION_AREAS) || !leadsToAnotherPlace(link.href, window.location.href) || !isFollowableLink(link, window.location.href, event)) return;
     const stack = readStack();
     const here = withoutHash(window.location.href, window.location.href);
     stack.push({ url: here, y: Math.round(window.scrollY), label: pageLabel(), target: withoutHash(link.href, window.location.href), at: Date.now() });
