@@ -34,6 +34,7 @@
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='7'>{{ 'Category manager'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='8'>{{ 'Export by user'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='9'>{{ 'Announcements'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='10'>{{ 'Labels'|trans }}</button></li>
 </ul>
 
 {% include 'loading-spinner.html' %}
@@ -812,5 +813,16 @@
   </div>
 </div>
 {# END ANNOUNCEMENTS #}
+
+{# TAB 10 LABELS: the label printer and the label formats of the database #}
+<div data-tabcontent='10' hidden>
+  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Labels'|trans }}</h2>
+  <div class='pl-3'>
+    <p class='text-muted'>{{ 'The labels of the database are printed on the label printer of the lab. Add a format for each size of label; people choose one when they print. The lines are text with the fields of the entry: {id_line} (the ID and My ID), {id}, {my_id}, {title}, {module}, {date} and {field:Name of a field}. A line whose field is empty is left out.'|trans }}</p>
+    <div id='labelFormatsApp'></div>
+  </div>
+  <script src='label-formats.js?v={{ 'now'|date('YmdHi') }}'></script>
+</div>
+{# END LABELS #}
 
 {% endblock body %}

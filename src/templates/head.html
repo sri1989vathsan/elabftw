@@ -151,7 +151,7 @@
                 </div>
             </div>
             <div class='nav-item dropdown'>
-              <a id='navRegistryDropdown' href='#' class='nav-link dropdown-toggle {{ scriptName in ['registry.php', 'registry-categories.php', 'label-formats.php'] ? 'active' }}' role='button' data-toggle='dropdown' data-overflow-href='registry.php' aria-haspopup='true' aria-expanded='false'>{{ 'Database'|trans }}</a>
+              <a id='navRegistryDropdown' href='#' class='nav-link dropdown-toggle {{ scriptName in ['registry.php', 'registry-categories.php'] ? 'active' }}' role='button' data-toggle='dropdown' data-overflow-href='registry.php' aria-haspopup='true' aria-expanded='false'>{{ 'Database'|trans }}</a>
               <div class='dropdown-menu'>
                 <form class='dropdown-item form-inline' action='registry.php' aria-label='{{ 'Quick search database'|trans }}'>
                   <label for='nav-search-registry' class='sr-only'>{{ 'Search database'|trans }}</label>
@@ -165,10 +165,6 @@
                 <div class='dropdown-divider'></div>
                 {% set isActive = scriptName == 'registry-categories.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='registry-categories.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-rectangle-list fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Modules'|trans }}</a>
-                {% if App.Users.isAdmin %}
-                  {% set isActive = scriptName == 'label-formats.php' %}
-                  <a class='dropdown-item {{ isActive ? 'active' }}' href='label-formats.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-tag fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Label formats'|trans }}</a>
-                {% endif %}
                 <div class='dropdown-divider'></div>
                 {% for entity in App.registryCategoryArr|filter(c => c.is_current_team == 1) %}
                   {% set isActive = scriptName == 'registry.php' and App.Request.query.get('category') == entity.id %}

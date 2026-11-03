@@ -34,6 +34,7 @@ services:
       - ./web/label-formats.php:/elabftw/web/label-formats.php:ro
       - ./web/label-formats.js:/elabftw/web/label-formats.js:ro
       - ./src/templates/label-formats.html:/elabftw/src/templates/label-formats.html:ro
+      - ./src/templates/admin.html:/elabftw/src/templates/admin.html:ro
       - ./web/label-config.json:/elabftw/web/label-config.json:ro
       - ./src/templates/view-edit-toolbar.html:/elabftw/src/templates/view-edit-toolbar.html:ro
       - ./src/templates/back-to-previous.html:/elabftw/src/templates/back-to-previous.html:ro
