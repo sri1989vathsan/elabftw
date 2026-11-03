@@ -213,11 +213,13 @@
 <div id='entityToolbar' class='sticky-toolbar'>
   <hr>
 
-  {# the entries of the database go back to their folder, else to their module (and stay in My entries when they have no number yet) #}
+  {# registered entries of the database go back to their module; those without a number go to their folder (else module) in My entries #}
   {% if Entity.entityType.value == 'inventory' %}
-    {% set databaseBack = 'registry.php' ~ (Entity.entityData.folder_id|default(0) ? '?folder=' ~ Entity.entityData.folder_id : (Entity.entityData.category ? '?category=' ~ Entity.entityData.category : '')) %}
     {% if Entity.entityData.is_planned or Entity.entityData.custom_id is null %}
+      {% set databaseBack = 'registry.php' ~ (Entity.entityData.folder_id|default(0) ? '?folder=' ~ Entity.entityData.folder_id : (Entity.entityData.category ? '?category=' ~ Entity.entityData.category : '')) %}
       {% set databaseBack = databaseBack ~ ('?' in databaseBack ? '&planned=1' : '?planned=1') %}
+    {% else %}
+      {% set databaseBack = 'registry.php' ~ (Entity.entityData.category ? '?category=' ~ Entity.entityData.category : '') %}
     {% endif %}
   {% else %}
     {% set databaseBack = '' %}
