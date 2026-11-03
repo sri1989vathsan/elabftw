@@ -13,8 +13,8 @@
         {% if Entity.entityData.custom_id %}
           <span title='{{ 'Custom ID'|trans }}'>{{ Entity.entityData.custom_id }}</span>
         {% endif %}
-        {% if Entity.entityType.value == 'inventory' and Entity.entityData.personal_id %}
-          <span class='text-muted' title='{{ 'The number of its owner in this module'|trans }}'>(mine {{ Entity.entityData.personal_id }})</span>
+        {% if Entity.entityType.value == 'inventory' and Entity.entityData.personal_id and Entity.entityData.userid == App.Users.userData['userid'] %}
+          <span class='text-muted' title='{{ 'The number of its owner in this module'|trans }}'>(my id {{ Entity.entityData.personal_id }})</span>
         {% endif %}
          <!-- [html-validate-disable-block prefer-native-element: suppress error from malle] -->
         <span id='documentTitle' class='breakable {{ not Entity.isReadOnly ? 'malleable-title malleable' }} rounded py-1' data-target='title' data-endpoint='{{ Entity.entityType.value }}' data-id='{{ Entity.id }}'>{{ Entity.entityData.title }}</span>

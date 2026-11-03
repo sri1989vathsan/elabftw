@@ -445,9 +445,9 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
           // an entry without a number is not registered yet (an intermediate)
           const cell = el('td', 'id-cell', row.custom_id == null ? '–' : String(row.custom_id));
           if (row.custom_id == null) cell.title = 'Not registered: no number of the lab yet';
-          // the second number is the owner's own: it counts their entries of the module from 1
-          if (row.personal_id != null) {
-            const own = el('span', 'id-own', `mine ${row.personal_id}`);
+          // the second number is the owner's own (my id): it counts their entries of the module from 1, and only My entries show it
+          if (row.personal_id != null && new URLSearchParams(window.location.search).get('planned') === '1') {
+            const own = el('span', 'id-own', `my id ${row.personal_id}`);
             own.title = 'The number of its owner in this module';
             cell.append(own);
           }
