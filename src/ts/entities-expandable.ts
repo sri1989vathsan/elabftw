@@ -293,6 +293,30 @@ function matchesFilter(value: string | number, filter: string, numeric: boolean)
 type TableState = { filters: Map<string, string>; selected: Set<number>; onSelectionChange: () => void; page: number };
 
 // how many entries one page of the table shows (0 is all of them): the same for every module, remembered in this browser
+// the order of the table: the highest ID first, until the user clicks another column (the choice is remembered in this browser)
+const SORT_KEY = 'registry_table_sort';
+const DEFAULT_SORT: SortState = { key: 'ID', asc: false };
+
+function loadSort(): SortState {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SORT_KEY) ?? 'null') as SortState | null;
+    if (saved && typeof saved.key === 'string' && typeof saved.asc === 'boolean') {
+      return saved;
+    }
+  } catch {
+    // localStorage might be unavailable
+  }
+  return { ...DEFAULT_SORT };
+}
+
+function saveSort(sort: SortState): void {
+  try {
+    localStorage.setItem(SORT_KEY, JSON.stringify(sort));
+  } catch {
+    // localStorage might be unavailable
+  }
+}
+
 const PAGE_SIZES = [25, 50, 100, 250, 0];
 const PAGE_SIZE_KEY = 'registry_page_size';
 
@@ -794,7 +818,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   const container = el('div');
   rootEl.replaceChildren(toolbar, container);
   let rows: Row[] = [];
-  let tableSort: SortState | null = null;
+  let tableSort: SortState | null = loadSort();
   const ui: TableState = {
     filters: new Map<string, string>(),
     selected: new Set<number>(),
@@ -945,6 +969,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   });
   const onSort = (next: SortState): void => {
     tableSort = next;
+    saveSort(next);
     ui.page = 0;
     render(container, rows, tableSort, onSort, ui);
   };
