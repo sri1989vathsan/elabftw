@@ -12,11 +12,15 @@ declare(strict_types=1);
 
 namespace Elabftw\Elabftw;
 
+use Elabftw\Elabftw\CreateUploadFromFs;
 use Elabftw\Enums\AccessType;
+use Elabftw\Enums\Storage;
+use Elabftw\Hash\FileHash;
 use Elabftw\Models\Inventory;
 use Elabftw\Services\CanSqlBuilder;
 use PDO;
 use Throwable;
+use ZipArchive;
 
 use function array_slice;
 use function count;
@@ -73,6 +77,17 @@ $fieldsOf = static function (array $module): array {
 };
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
+    // selected entries: they have to be of one module
+    $selected = array();
+    if (isset($_GET['ids']) && (string) $_GET['ids'] !== '') {
+        $selected = array_values(array_unique(array_filter(array_map('intval', explode(',', (string) $_GET['ids'])), static fn(int $n): bool => $n > 0)));
+        $selected = array_slice($selected, 0, 500);
+        $modules = $pdo->query('SELECT DISTINCT category FROM inventory WHERE team = ' . $teamId . ' AND id IN (' . implode(',', $selected ?: array(0)) . ')')->fetchAll(PDO::FETCH_COLUMN);
+        if (count($modules) !== 1) {
+            respond(400, array('error' => 'Select entries of one module to export them.'));
+        }
+        $_GET['category'] = (string) $modules[0];
+    }
     $module = $loadModule((int) ($_GET['category'] ?? 0));
     if ($module === null) {
         respond(404, array('error' => 'This module is not in your team.'));
@@ -97,6 +112,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $scope = ($_GET['scope'] ?? 'lab') === 'mine' ? 'mine' : 'lab';
     $canFilter = new CanSqlBuilder($App->Users, AccessType::Read)->getCanFilter();
     $where = $scope === 'mine' ? 'entity.userid = :userid' : 'entity.is_planned = 0 AND entity.custom_id IS NOT NULL';
+    if ($selected !== array()) {
+        // the entries that were selected, the ones that can be read
+        $where = 'entity.id IN (' . implode(',', $selected) . ')';
+    }
     $req = $pdo->prepare('SELECT entity.id, entity.title, entity.custom_id, entity.personal_id, entity.date, entity.metadata, CONCAT(u.firstname, " ", u.lastname) AS owner
         FROM inventory AS entity LEFT JOIN users AS u ON u.userid = entity.userid
         WHERE entity.state = 1 AND entity.team = :team AND entity.category = :category AND ' . $where . $canFilter . ' ORDER BY entity.custom_id, entity.id');
@@ -119,19 +138,71 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
             $names[(string) $name] = true;
         }
     }
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . $slug . '-' . ($scope === 'mine' ? 'mine' : 'lab') . '-' . gmdate('Y-m-d') . '.csv"');
-    $out = fopen('php://output', 'wb');
-    fwrite($out, "\xEF\xBB\xBF");
-    fputcsv($out, array_merge(array('ID', 'My ID', 'Title', 'Date', 'Owner'), array_keys($names)), ',', '"', '');
+    $asZip = ($_GET['format'] ?? 'csv') === 'zip';
+    $label = $selected !== array() ? 'selected' : ($scope === 'mine' ? 'mine' : 'lab');
+    $fileName = $slug . '-' . $label . '-' . gmdate('Y-m-d');
+    $heading = array_merge(array('ID', 'My ID', 'Title', 'Date', 'Owner'), array_keys($names), $asZip ? array('Key', 'Files') : array());
+    $rows = array();
+    $zipFiles = array();
     foreach ($entries as $index => $entry) {
         $row = array((string) ($entry['custom_id'] ?? ''), (string) ($entry['personal_id'] ?? ''), (string) $entry['title'], (string) $entry['date'], (string) $entry['owner']);
         foreach (array_keys($names) as $name) {
             $value = $decodedEntries[$index][$name]['value'] ?? '';
             $row[] = is_array($value) ? implode(', ', array_map('strval', $value)) : (string) $value;
         }
-        fputcsv($out, $row, ',', '"', '');
+        if ($asZip) {
+            // the attached files go in the folder files/<key>/ of the zip
+            $key = (string) ($index + 1);
+            $uploads = $pdo->prepare("SELECT real_name, long_name, storage FROM uploads WHERE item_id = :id AND type = 'inventory' AND state = 1 ORDER BY id");
+            $uploads->bindValue(':id', (int) $entry['id'], PDO::PARAM_INT);
+            $pdo->execute($uploads);
+            $fileNames = array();
+            foreach ($uploads->fetchAll() as $upload) {
+                $real = (string) preg_replace('/[\/\\\\]+/', '_', (string) $upload['real_name']);
+                $zipFiles[] = array('path' => 'files/' . $key . '/' . $real, 'long_name' => (string) $upload['long_name'], 'storage' => (int) $upload['storage']);
+                $fileNames[] = $real;
+            }
+            $row[] = $key;
+            $row[] = implode('|', $fileNames);
+        }
+        $rows[] = $row;
     }
+    if (!$asZip) {
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $fileName . '.csv"');
+        $out = fopen('php://output', 'wb');
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, $heading, ',', '"', '');
+        foreach ($rows as $row) {
+            fputcsv($out, $row, ',', '"', '');
+        }
+        exit;
+    }
+    // a zip: entries.csv and the files of the entries
+    $csv = fopen('php://temp', 'w+b');
+    fwrite($csv, "\xEF\xBB\xBF");
+    fputcsv($csv, $heading, ',', '"', '');
+    foreach ($rows as $row) {
+        fputcsv($csv, $row, ',', '"', '');
+    }
+    rewind($csv);
+    $zipPath = (string) tempnam(sys_get_temp_dir(), 'regzip');
+    $zip = new ZipArchive();
+    $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+    $zip->addFromString('entries.csv', (string) stream_get_contents($csv));
+    foreach ($zipFiles as $file) {
+        try {
+            $zip->addFromString($file['path'], Storage::from($file['storage'])->getStorage()->getFs()->read($file['long_name']));
+        } catch (Throwable) {
+            // a file that cannot be read is left out
+        }
+    }
+    $zip->close();
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="' . $fileName . '.zip"');
+    header('Content-Length: ' . filesize($zipPath));
+    readfile($zipPath);
+    unlink($zipPath);
     exit;
 }
 
@@ -141,65 +212,151 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 if (!hash_equals((string) $App->Session->get('csrf'), (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''))) {
     respond(403, array('error' => 'Invalid token.'));
 }
-$payload = json_decode((string) file_get_contents('php://input'), true);
+$payload = isset($_FILES['file']) ? array() : json_decode((string) file_get_contents('php://input'), true);
 if (!is_array($payload)) {
     respond(400, array('error' => 'Invalid request.'));
 }
+// one row of a file becomes an entry of the module; returns the id, or the reason it was not made
+$makeEntry = static function (array $row, int $categoryId, array $definitions, string $register) use ($App): array {
+    $title = trim((string) ($row['title'] ?? ''));
+    if ($title === '') {
+        return array('id' => null, 'reason' => 'It has no title.');
+    }
+    // the fields of the module, with the values of the row
+    $fields = $definitions;
+    foreach (is_array($row['fields'] ?? null) ? $row['fields'] : array() as $name => $value) {
+        if (isset($fields[$name]) && is_array($fields[$name])) {
+            $fields[$name]['value'] = mb_substr((string) $value, 0, 1000);
+        }
+    }
+    // the other columns of the file the user kept become text fields
+    foreach (is_array($row['extra'] ?? null) ? $row['extra'] : array() as $name => $value) {
+        $name = trim(mb_substr((string) $name, 0, 100));
+        if ($name !== '' && !isset($fields[$name]) && trim((string) $value) !== '') {
+            $fields[$name] = array('type' => 'text', 'value' => mb_substr((string) $value, 0, 1000), 'position' => count($fields) + 1);
+        }
+    }
+    if ($register === 'both') {
+        $missing = array();
+        foreach ($fields as $name => $field) {
+            if (is_array($field) && !empty($field['required']) && trim((string) ($field['value'] ?? '')) === '') {
+                $missing[] = (string) $name;
+            }
+        }
+        if ($missing !== array()) {
+            return array('id' => null, 'reason' => 'It needs: ' . implode(', ', $missing) . '.');
+        }
+    }
+    $Entry = new Inventory($App->Users);
+    $Entry->asUnregistered = $register !== 'both';
+    $Entry->withPersonal = $register === 'both' || $register === 'personal';
+    return array('id' => $Entry->create(title: mb_substr($title, 0, 255), category: $categoryId, metadata: json_encode(array('extra_fields' => (object) $fields), JSON_UNESCAPED_UNICODE)), 'reason' => null);
+};
+
 try {
-    $module = $loadModule((int) ($payload['category'] ?? 0));
+    $isZip = isset($_FILES['file']);
+    $source = $isZip ? $_POST : $payload;
+    $module = $loadModule((int) ($source['category'] ?? 0));
     if ($module === null) {
         respond(404, array('error' => 'This module is not in your team.'));
     }
-    $register = (string) ($payload['register'] ?? 'personal');
+    $register = (string) ($source['register'] ?? 'personal');
     if (!in_array($register, array('both', 'personal', 'none'), true)) {
         respond(400, array('error' => 'Invalid request.'));
     }
     $settings = json_decode((string) $module['settings'], true);
-    if ($register === 'both' && is_array($settings) && !empty($settings['requires_sequence_file'])) {
+    if ($register === 'both' && is_array($settings) && !empty($settings['requires_sequence_file']) && !$isZip) {
         respond(400, array('error' => 'The entries of this module need a sequence file to go in the lab Database: import them into your own database, attach the files, and register them.'));
     }
     $definitions = $fieldsOf($module);
     $created = array();
     $skipped = array();
-    foreach (array_slice(is_array($payload['rows'] ?? null) ? $payload['rows'] : array(), 0, 200) as $index => $row) {
-        $label = 'Row ' . ($index + 1);
-        $title = trim((string) ($row['title'] ?? ''));
-        if ($title === '') {
-            $skipped[] = array('row' => $label, 'reason' => 'It has no title.');
-            continue;
+    $filesAttached = 0;
+
+    if ($isZip) {
+        // a zip of the export: entries.csv, and the files of the entries in files/<key>/
+        $zip = new ZipArchive();
+        if ($zip->open((string) $_FILES['file']['tmp_name']) !== true) {
+            respond(400, array('error' => 'This is not a zip file.'));
         }
-        // the fields of the module, with the values of the row
-        $fields = $definitions;
-        $values = is_array($row['fields'] ?? null) ? $row['fields'] : array();
-        foreach ($values as $name => $value) {
-            if (isset($fields[$name]) && is_array($fields[$name])) {
-                $fields[$name]['value'] = mb_substr((string) $value, 0, 1000);
-            }
+        $csv = $zip->getFromName('entries.csv');
+        if ($csv === false) {
+            respond(400, array('error' => 'The zip has no entries.csv: it has to come from an export of a module.'));
         }
-        // the other columns of the file the user kept become text fields
-        foreach (is_array($row['extra'] ?? null) ? $row['extra'] : array() as $name => $value) {
-            $name = trim(mb_substr((string) $name, 0, 100));
-            if ($name !== '' && !isset($fields[$name]) && trim((string) $value) !== '') {
-                $fields[$name] = array('type' => 'text', 'value' => mb_substr((string) $value, 0, 1000), 'position' => count($fields) + 1);
-            }
+        $handle = fopen('php://temp', 'w+b');
+        fwrite($handle, (string) preg_replace('/^\xEF\xBB\xBF/', '', $csv));
+        rewind($handle);
+        $heading = fgetcsv($handle, 0, ',', '"', '') ?: array();
+        $normal = static fn(string $text): string => (string) preg_replace('/[^a-z0-9]+/', '', strtolower($text));
+        $byNormal = array();
+        foreach ($definitions as $name => $definition) {
+            $byNormal[$normal((string) $name)] = (string) $name;
         }
-        if ($register === 'both') {
-            $missing = array();
-            foreach ($fields as $name => $field) {
-                if (is_array($field) && !empty($field['required']) && trim((string) ($field['value'] ?? '')) === '') {
-                    $missing[] = (string) $name;
+        $fs = Storage::EXPORTS->getStorage()->getFs();
+        $tmpDir = 'registry-import-' . bin2hex(random_bytes(6));
+        $count = 0;
+        while (($cells = fgetcsv($handle, 0, ',', '"', '')) !== false && $count < 500) {
+            $count++;
+            $row = array('title' => '', 'fields' => array(), 'extra' => array());
+            $key = '';
+            $fileList = '';
+            foreach ($heading as $index => $name) {
+                $value = trim((string) ($cells[$index] ?? ''));
+                $n = $normal((string) $name);
+                if ($n === 'title') {
+                    $row['title'] = $value;
+                } elseif ($n === 'key') {
+                    $key = $value;
+                } elseif ($n === 'files') {
+                    $fileList = $value;
+                } elseif (in_array($n, array('id', 'myid', 'date', 'owner', ''), true)) {
+                    continue;
+                } elseif (isset($byNormal[$n])) {
+                    $row['fields'][$byNormal[$n]] = $value;
+                } else {
+                    $row['extra'][(string) $name] = $value;
                 }
             }
-            if ($missing !== array()) {
-                $skipped[] = array('row' => $label . ' (' . $title . ')', 'reason' => 'It needs: ' . implode(', ', $missing) . '.');
+            $made = $makeEntry($row, (int) $module['id'], $definitions, $register);
+            if ($made['id'] === null) {
+                $skipped[] = array('row' => 'Row ' . $count . ' (' . $row['title'] . ')', 'reason' => $made['reason']);
                 continue;
             }
+            $created[] = $made['id'];
+            if ($key !== '' && $fileList !== '') {
+                $Entry = new Inventory($App->Users, (int) $made['id']);
+                foreach (explode('|', $fileList) as $fileName) {
+                    $content = $zip->getFromName('files/' . $key . '/' . $fileName);
+                    if ($content === false || $fileName === '') {
+                        continue;
+                    }
+                    $path = $tmpDir . '/' . bin2hex(random_bytes(4)) . '-' . $fileName;
+                    try {
+                        $fs->write($path, $content);
+                        $Entry->Uploads->create(new CreateUploadFromFs($fs, $fileName, $path, new FileHash($fs, $path)));
+                        $filesAttached++;
+                    } catch (Throwable $e) {
+                        $skipped[] = array('row' => 'File ' . $fileName . ' of row ' . $count, 'reason' => $e->getMessage());
+                    }
+                }
+            }
         }
-        $Entry = new Inventory($App->Users);
-        $Entry->asUnregistered = $register !== 'both';
-        $Entry->withPersonal = $register === 'both' || $register === 'personal';
-        $id = $Entry->create(title: mb_substr($title, 0, 255), category: (int) $module['id'], metadata: json_encode(array('extra_fields' => (object) $fields), JSON_UNESCAPED_UNICODE));
-        $created[] = $id;
+        try {
+            $fs->deleteDirectory($tmpDir);
+        } catch (Throwable) {
+            // the temporary files are cleaned by the exports clean-up
+        }
+        $zip->close();
+        respond(200, array('created' => count($created), 'files' => $filesAttached, 'skipped' => $skipped));
+    }
+
+    foreach (array_slice(is_array($payload['rows'] ?? null) ? $payload['rows'] : array(), 0, 200) as $index => $row) {
+        $made = $makeEntry($row, (int) $module['id'], $definitions, $register);
+        if ($made['id'] === null) {
+            $skipped[] = array('row' => 'Row ' . ((int) ($payload['offset'] ?? 0) + $index + 1) . ' (' . trim((string) ($row['title'] ?? '')) . ')', 'reason' => $made['reason']);
+            continue;
+        }
+        $created[] = $made['id'];
     }
     respond(200, array('created' => count($created), 'skipped' => $skipped));
 } catch (Throwable $e) {

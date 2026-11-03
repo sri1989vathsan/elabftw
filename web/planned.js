@@ -123,7 +123,6 @@
   // the list page: the switch between All entries and My entries, and in My entries the toggle In database
   function listPage(nav) {
     viewSwitch(nav);
-    transferButtons(nav);
   }
 
   // ---- batch import and export of the entries of the module that is open
@@ -179,33 +178,6 @@
     });
   }
 
-  function transferButtons(nav) {
-    const params = new URLSearchParams(location.search);
-    const category = Number(params.get('category'));
-    if (!(category > 0) || String(params.get('category')).indexOf(',') !== -1) {
-      return;
-    }
-    const mine = params.get('planned') === '1';
-    const group = element('div', 'btn-group btn-group-sm ml-2 mt-2 transfer-buttons');
-    group.setAttribute('role', 'group');
-    const exportLink = element('a', 'btn btn-outline-secondary', 'Export');
-    exportLink.href = 'registry-transfer.php?export=1&category=' + category + '&scope=' + (mine ? 'mine' : 'lab');
-    exportLink.title = mine ? 'Download all your entries of this module as a CSV file' : 'Download the entries of the lab Database of this module as a CSV file';
-    const importButton = element('button', 'btn btn-outline-secondary', 'Import');
-    importButton.type = 'button';
-    importButton.title = 'Add many entries at once from a CSV file';
-    importButton.addEventListener('click', function () {
-      importDialog(category);
-    });
-    group.append(exportLink, importButton);
-    const anchor = nav.parentNode.querySelector('.id-filter') || nav.parentNode.querySelector('.view-switch');
-    if (anchor) {
-      anchor.insertAdjacentElement('afterend', group);
-    } else {
-      nav.insertAdjacentElement('beforebegin', group);
-    }
-  }
-
   async function importDialog(category) {
     let module;
     try {
@@ -228,14 +200,14 @@
     box.setAttribute('aria-modal', 'true');
     box.append(element('h5', '', 'Import into ' + module.title));
     const help = element('p', 'small text-muted');
-    help.append(document.createTextNode('A CSV file with a heading row (Excel can save one). Every row makes an entry. '));
+    help.append(document.createTextNode('A CSV file with a heading row (Excel can save one), or a ZIP from an export with files. Every row makes an entry. '));
     const template = element('a', '', 'Download a template');
     template.href = 'registry-transfer.php?template=1&category=' + category;
     help.append(template, document.createTextNode(' with the fields of this module.'));
     box.append(help);
     const file = element('input', 'form-control-file mb-2');
     file.type = 'file';
-    file.accept = '.csv,.tsv,.txt,text/csv';
+    file.accept = '.csv,.tsv,.txt,.zip,text/csv,application/zip';
     box.append(file);
     const mapping = element('div');
     const destination = element('select', 'form-control form-control-sm w-auto mb-2');
@@ -271,12 +243,20 @@
       return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '');
     };
     let table = [];
+    let zipMode = false;
     const choices = [];
     file.addEventListener('change', async function () {
       mapping.textContent = '';
       choices.length = 0;
       run.disabled = true;
       if (!file.files || !file.files[0]) {
+        return;
+      }
+      zipMode = /\.zip$/i.test(file.files[0].name);
+      if (zipMode) {
+        // a zip of an export: the columns are matched by their names and the files are attached
+        mapping.append(element('p', 'small text-muted mb-1', 'A ZIP from an export of this module: the columns are matched by their names, and the files of each entry are attached to it.'));
+        run.disabled = false;
         return;
       }
       table = parseCsv(await file.files[0].text());
@@ -323,6 +303,35 @@
     });
 
     run.addEventListener('click', async function () {
+      if (zipMode) {
+        run.disabled = true;
+        message.className = 'small mb-2';
+        message.textContent = 'Importing the zip...';
+        try {
+          const form = new FormData();
+          form.append('category', String(category));
+          form.append('register', destination.value);
+          form.append('file', file.files[0]);
+          const response = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: form });
+          const body = await response.json();
+          if (!response.ok) {
+            throw new Error(body.error || 'The import failed.');
+          }
+          message.className = 'small mb-2 text-success';
+          message.textContent = body.created + ' entries made, ' + body.files + ' files attached.' + (body.skipped.length ? ' Not made (' + body.skipped.length + '): ' + body.skipped.slice(0, 6).map(function (i) {
+            return i.row + ': ' + i.reason;
+          }).join(' ') : '');
+          cancel.textContent = 'Close and reload';
+          cancel.addEventListener('click', function () {
+            window.location.reload();
+          });
+        } catch (error) {
+          message.className = 'small mb-2 text-danger';
+          message.textContent = error.message;
+          run.disabled = false;
+        }
+        return;
+      }
       const kinds = choices.map(function (c) {
         return c.value;
       });
@@ -356,7 +365,7 @@
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
-            body: JSON.stringify({ category: category, register: destination.value, rows: rows.slice(start, start + 100) }),
+            body: JSON.stringify({ category: category, register: destination.value, offset: start, rows: rows.slice(start, start + 100) }),
           });
           const body = await response.json();
           if (!response.ok) {
@@ -364,7 +373,7 @@
           }
           created += body.created;
           body.skipped.forEach(function (item) {
-            skipped.push('Row ' + (start + Number(String(item.row).replace(/\D.*$/, '').replace('Row ', '') || 0)) + ': ' + item.reason);
+            skipped.push(item.row + ': ' + item.reason);
           });
         }
         message.className = 'small mb-2 text-success';
@@ -567,6 +576,9 @@
   // the rows ticked in the list go into the lab Database: each is registered (or moved from planned) and gets its number
   // and its folder; the ones that cannot (a plasmid needs a sequence, a module its required fields) are listed
   window.RegistryTools = {
+    importDialog: function (category) {
+      return importDialog(category);
+    },
     addToDatabase: async function (ids, done) {
       if (!(await confirmDialog('Add ' + ids.length + (ids.length === 1 ? ' entry' : ' entries') + ' to the Database?', 'Each gets the next number of its module and is filed in Database items, in the folder of its module, visible to everyone with an account.', 'Add to the Database'))) {
         return;

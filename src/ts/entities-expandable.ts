@@ -673,7 +673,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   unmountExpandableTable();
   rootEl = rootElement;
 
-  const toolbar = el('div', 'mb-2');
+  const toolbar = el('div', 'mb-2 d-flex flex-wrap align-items-center');
   const expandAll = el('button', 'btn btn-transparent btn-sm', 'Expand all');
   const collapseAll = el('button', 'btn btn-transparent btn-sm', 'Collapse all');
   expandAll.type = collapseAll.type = 'button';
@@ -687,6 +687,20 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   const columnsPanel = el('div', 'columns-panel');
   columnsPanel.hidden = true;
   toolbar.append(columnsButton, columnsPanel);
+  // on the right: export (all of the module, or only the rows ticked) and import of entries as files
+  const transferGroup = el('div', 'ml-auto d-flex');
+  const exportButton = el('button', 'btn btn-secondary btn-sm mr-2');
+  exportButton.type = 'button';
+  const exportMenu = el('div', 'columns-panel');
+  exportMenu.style.left = 'auto';
+  exportMenu.style.right = '0';
+  exportMenu.hidden = true;
+  const importButton = el('button', 'btn btn-secondary btn-sm');
+  importButton.type = 'button';
+  importButton.append(el('i', 'fas fa-file-import fa-fw mr-1'), document.createTextNode('Import'));
+  importButton.title = 'Add many entries at once from a CSV file or a ZIP with files';
+  transferGroup.append(exportButton, importButton);
+  toolbar.append(transferGroup, exportMenu);
   // the rows ticked can be sent to an order (the sequences of primers are written in its notes)
   const orderButton = el('button', 'btn btn-secondary btn-sm ml-3', 'Send selected to an order');
   orderButton.type = 'button';
@@ -713,6 +727,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
       orderButton.textContent = `Send selected to an order (${ui.selected.size})`;
       databaseButton.hidden = ui.selected.size === 0 || !inMyEntries;
       databaseButton.textContent = `Add selected to the Database (${ui.selected.size})`;
+      refreshExportButton();
     },
   };
   orderButton.addEventListener('click', () => {
@@ -788,6 +803,59 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   document.addEventListener('click', event => {
     if (!columnsPanel.hidden && !columnsPanel.contains(event.target as Node)) columnsPanel.hidden = true;
   });
+  // the module of the list, when the list is of one module (an entry can only be exported with others of its module)
+  const openModule = (): number | null => {
+    const key = moduleKeyOf(rows);
+    return key === 'mixed' ? null : Number(key);
+  };
+  const refreshExportButton = (): void => {
+    exportButton.replaceChildren(el('i', 'fas fa-file-export fa-fw mr-1'), document.createTextNode(ui.selected.size > 0 ? `Export selected (${ui.selected.size})` : 'Export'));
+    exportButton.title = ui.selected.size > 0 ? 'Download only the rows ticked' : 'Download the entries of this module';
+  };
+  const exportAs = (format: 'csv' | 'zip'): void => {
+    const mine = new URLSearchParams(window.location.search).get('planned') === '1';
+    const module = openModule();
+    let url = `registry-transfer.php?export=1&format=${format}`;
+    if (ui.selected.size > 0) {
+      url += `&ids=${[...ui.selected].join(',')}`;
+    } else if (module !== null) {
+      url += `&category=${module}&scope=${mine ? 'mine' : 'lab'}`;
+    } else {
+      return;
+    }
+    window.location.href = url;
+  };
+  exportButton.addEventListener('click', event => {
+    event.stopPropagation();
+    if (ui.selected.size === 0 && openModule() === null) {
+      exportMenu.replaceChildren(el('div', 'small text-muted', 'Open a module, or tick rows of one module, to export.'));
+    } else {
+      exportMenu.replaceChildren();
+      ([['csv', 'CSV: a spreadsheet, the fields only'], ['zip', 'ZIP with files: the CSV and the attached files']] as ['csv' | 'zip', string][]).forEach(([format, label]) => {
+        const item = el('button', 'btn btn-link btn-sm d-block text-left p-1', label);
+        item.type = 'button';
+        item.addEventListener('click', () => {
+          exportMenu.hidden = true;
+          exportAs(format);
+        });
+        exportMenu.append(item);
+      });
+    }
+    exportMenu.hidden = !exportMenu.hidden;
+  });
+  importButton.addEventListener('click', () => {
+    const module = openModule();
+    if (module === null) {
+      exportMenu.replaceChildren(el('div', 'small text-muted', 'Open a module to import entries into it.'));
+      exportMenu.hidden = false;
+      return;
+    }
+    (window as unknown as { RegistryTools?: { importDialog: (category: number) => void } }).RegistryTools?.importDialog(module);
+  });
+  document.addEventListener('click', event => {
+    if (!exportMenu.hidden && !exportMenu.contains(event.target as Node)) exportMenu.hidden = true;
+  });
+  refreshExportButton();
   const onSort = (next: SortState): void => {
     tableSort = next;
     render(container, rows, tableSort, onSort, ui);
