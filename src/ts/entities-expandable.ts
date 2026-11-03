@@ -830,17 +830,40 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     }
     folderPanel.replaceChildren(el('div', 'small text-muted', 'Loading the folders...'));
     folderPanel.hidden = false;
-    void fetch('registry-transfer.php?folders=1', { credentials: 'same-origin' }).then(r => r.json()).then((body: { folders: { id: number; path: string }[] }) => {
+    void fetch('registry-transfer.php?folders=1', { credentials: 'same-origin' }).then(r => r.json()).then((body: { folders: { id: number; path: string; owner: number }[]; me: number }) => {
       const choice = el('select', 'form-control form-control-sm mb-2');
       choice.setAttribute('aria-label', 'Folder');
-      const none = el('option', '', 'No folder (Unfiled)');
-      none.value = '0';
-      choice.append(none);
-      body.folders.forEach(f => {
-        const option = el('option', '', f.path);
-        option.value = String(f.id);
-        choice.append(option);
+      // my folders, the folders of the lab Database, or all of them
+      const scopes: [string, string, (f: { path: string; owner: number }) => boolean][] = [
+        ['My folders', 'mine', f => f.owner === body.me],
+        ['Database folders', 'database', f => /^Database items( >|$)/.test(f.path)],
+        ['All folders', 'all', () => true],
+      ];
+      let scope = 'database';
+      const fill = (): void => {
+        choice.replaceChildren();
+        const none = el('option', '', 'No folder (Unfiled)');
+        none.value = '0';
+        choice.append(none);
+        const keep = scopes.find(([, key]) => key === scope)![2];
+        body.folders.filter(keep).forEach(f => {
+          const option = el('option', '', f.path);
+          option.value = String(f.id);
+          choice.append(option);
+        });
+      };
+      const tabs = el('div', 'btn-group btn-group-sm d-flex mb-2');
+      scopes.forEach(([label, key]) => {
+        const tab = el('button', `btn btn-outline-secondary flex-fill${key === scope ? ' active' : ''}`, label);
+        tab.type = 'button';
+        tab.addEventListener('click', () => {
+          scope = key;
+          tabs.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === tab));
+          fill();
+        });
+        tabs.append(tab);
       });
+      fill();
       const go = el('button', 'btn btn-primary btn-sm', `Move ${ui.selected.size} entries`);
       go.type = 'button';
       const note = el('div', 'small mt-1');
@@ -865,7 +888,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
           note.textContent = error instanceof Error ? error.message : String(error);
         });
       });
-      folderPanel.replaceChildren(choice, go, note);
+      folderPanel.replaceChildren(tabs, choice, go, note);
     }).catch(() => {
       folderPanel.replaceChildren(el('div', 'small text-danger', 'The folders could not be loaded.'));
     });

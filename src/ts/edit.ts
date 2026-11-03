@@ -96,7 +96,7 @@ window.addEventListener('message', event => {
 // initialize the file uploader
 (new Uploader()).init();
 
-type EditFolderScope = 'mine' | 'bookmarked' | 'all';
+type EditFolderScope = 'mine' | 'bookmarked' | 'database' | 'all';
 
 const editFolderSelect = document.getElementById('folderSelect') as HTMLSelectElement | null;
 const editFolderScopeButtons = document.querySelectorAll<HTMLButtonElement>('[data-edit-folder-scope]');
@@ -129,7 +129,9 @@ function applyEditFolderScope(scope: EditFolderScope): void {
     const isVisible = option.selected
       || scope === 'all'
       || (scope === 'mine' && option.dataset.folderOwnerId === currentUserId)
-      || (scope === 'bookmarked' && option.dataset.folderBookmarked === 'true');
+      || (scope === 'bookmarked' && option.dataset.folderBookmarked === 'true')
+      // the folders of the lab Database: "Database items" and what is inside it
+      || (scope === 'database' && /^Database items( >|$)/.test(option.dataset.folderPath ?? ''));
     option.hidden = !isVisible;
     option.disabled = !isVisible;
   });
@@ -143,7 +145,7 @@ function applyEditFolderScope(scope: EditFolderScope): void {
 editFolderScopeButtons.forEach(button => {
   button.addEventListener('click', () => {
     const scope = button.dataset.editFolderScope;
-    if (scope === 'mine' || scope === 'bookmarked' || scope === 'all') {
+    if (scope === 'mine' || scope === 'bookmarked' || scope === 'database' || scope === 'all') {
       applyEditFolderScope(scope);
     }
   });
