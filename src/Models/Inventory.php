@@ -65,6 +65,9 @@ final class Inventory extends AbstractConcreteEntity
     /** the entry that is made is not registered (an intermediate): in the Database like the others, but without a number until it is registered */
     public bool $asUnregistered = false;
 
+    /** the entry that is made is in the database of its owner only: it has the number of its owner but none of the lab */
+    public bool $asPersonal = false;
+
     #[Override]
     public function create(
         ?string $title = null,
@@ -139,7 +142,7 @@ final class Inventory extends AbstractConcreteEntity
         $req->bindParam(':metadata', $metadata);
         $req->bindParam(':custom_id', $customId, PDO::PARAM_INT);
         // an entry registered in the lab at once has the number of its owner too; the others get it when they are registered
-        $personalId = $customId !== null ? $this->nextPersonalNumber((int) $this->Users->userData['userid'], $category) : null;
+        $personalId = ($customId !== null || $this->asPersonal) ? $this->nextPersonalNumber((int) $this->Users->userData['userid'], $category) : null;
         $req->bindParam(':personal_id', $personalId, PDO::PARAM_INT);
         $req->bindValue(':content_type', $contentType->value, PDO::PARAM_INT);
         $req->bindParam(':rating', $rating, PDO::PARAM_INT);

@@ -240,6 +240,56 @@ function unmountOtherViews(keep: string): void {
   }
 }
 
+// the dialog of a new entry of the Database: where it is added; resolves to 'lab', 'personal' or 'none', or null when cancelled
+function askRegister(): Promise<'lab' | 'personal' | 'none' | null> {
+  return new Promise(resolve => {
+    const make = (tag: string, className = '', text = ''): HTMLElement => {
+      const node = document.createElement(tag);
+      node.className = className;
+      node.textContent = text;
+      return node;
+    };
+    const back = make('div', 'copy-backdrop');
+    const box = make('div', 'copy-dialog');
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.append(make('h5', '', 'Add a new entry'));
+    const options: [string, string, boolean][] = [
+      ['lab', 'Add to the lab Database: everyone sees it, it gets the ID of the lab and your My_id', true],
+      ['personal', 'Add to my database only: only you see it, it gets your My_id', false],
+      ['none', 'Do not add to a database yet: only you see it, no number until you register it', false],
+    ];
+    options.forEach(([value, text, checked]) => {
+      const label = make('label', 'd-block');
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'register-where';
+      radio.value = value;
+      radio.checked = checked;
+      label.append(radio, document.createTextNode(` ${text}`));
+      box.append(label);
+    });
+    const buttons = make('div', 'copy-dialog-buttons');
+    const cancel = make('button', 'btn btn-secondary btn-sm', 'Cancel') as HTMLButtonElement;
+    const ok = make('button', 'btn btn-primary btn-sm', 'Create') as HTMLButtonElement;
+    cancel.type = ok.type = 'button';
+    const done = (value: 'lab' | 'personal' | 'none' | null): void => {
+      back.remove();
+      resolve(value);
+    };
+    cancel.addEventListener('click', () => done(null));
+    ok.addEventListener('click', () => done((box.querySelector('input[name="register-where"]:checked') as HTMLInputElement | null)?.value as 'lab' | 'personal' | 'none'));
+    back.addEventListener('click', event => {
+      if (event.target === back) done(null);
+    });
+    buttons.append(cancel, ok);
+    box.append(buttons);
+    back.append(box);
+    document.body.append(back);
+    ok.focus();
+  });
+}
+
 // the resources open in the expandable table unless the cards were chosen: the saved mode 'it' alone does not say, as it is also the default
 const CARDS_KEY = 'persistent_resource_cards_v1';
 
@@ -962,8 +1012,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // a new entry in the category that is open
   on('create-in-category', async (el: HTMLElement) => {
     const category = parseInt(el.dataset.category ?? '', 10);
-    // the Add entry button puts the entry in the Database at once: registered, with its number
-    const params: Record<string, number | boolean> = { category, registered: true };
+    // the entry is made where the user says: in the lab Database, in their own database only, or without a number yet
+    const register = await askRegister();
+    if (register === null) {
+      return;
+    }
+    const params: Record<string, number | string | boolean> = { category, register, registered: register === 'lab' };
     const id = await ApiC.post2location('inventory', params);
     window.location.href = `registry.php?mode=edit&id=${id}`;
   });
