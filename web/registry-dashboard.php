@@ -43,7 +43,7 @@ if (!isset($_GET['data'])) {
     $Response = new Response();
     try {
         $Response->prepare($App->Request);
-        $Response->setContent($App->render('registry-dashboard.html', array('pageTitle' => _('Dashboard'))));
+        $Response->setContent($App->render('registry-dashboard.html', array('pageTitle' => _('Dashboard'), 'hideTitle' => true)));
         $Response->headers->set('Cache-Control', 'no-store');
     } catch (AppException $e) {
         $Response = $e->getResponseFromException($App);
