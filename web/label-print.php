@@ -16,7 +16,11 @@ use Elabftw\Models\Inventory;
 use PDO;
 use Throwable;
 
+use function array_filter;
+use function array_map;
 use function array_slice;
+use function array_values;
+use function in_array;
 use function ceil;
 use function explode;
 use function mb_substr;
@@ -43,10 +47,12 @@ use function trim;
 
 /**
  * Prints the label of an entry of the database on the Zebra label printer of the lab: the label is made in ZPL (the language of the
- * printer) and sent to the printer on the network, port 9100. The size of the label, the lines of each module and the address of
- * the printer are in label-config.json.
+ * printer) and sent to the printer on the network, port 9100. The label formats (a size, a margin, a text size, a QR code, the lines)
+ * and the address of the printer are set by an admin (label-formats.php); label-config.json holds what is used until then.
  *
- * POST {id, copies, dry}: dry gives the ZPL without printing it.
+ * GET ?formats=1 gives the formats and whether the printer is set; GET ?admin=1 gives all the settings (admins).
+ * POST {id, copies, custom, format, dry} prints (dry gives the ZPL without printing it).
+ * POST {action: save_format|delete_format|save_settings} is for admins.
  */
 require_once __DIR__ . '/app/init.inc.php';
 
@@ -59,8 +65,50 @@ function respond(int $status, array $body): never
     exit;
 }
 
+$config = json_decode((string) file_get_contents(__DIR__ . '/label-config.json'), true);
+if (!is_array($config)) {
+    respond(500, array('error' => 'label-config.json is not valid.'));
+}
+$pdo = Db::getConnection();
+$teamId = (int) $App->Users->userData['team'];
+$isAdmin = (bool) $App->Users->isAdmin;
+
+// the formats of the team; until an admin has made one, the default of label-config.json is the only format
+$loadFormats = static function () use ($pdo, $teamId, $config): array {
+    $req = $pdo->prepare('SELECT id, name, width_mm, height_mm, margin_mm, font_mm, qr, `lines`, is_default FROM registry_label_formats WHERE team = :team ORDER BY is_default DESC, name');
+    $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+    $pdo->execute($req);
+    $formats = array();
+    foreach ($req->fetchAll() as $row) {
+        $row['lines'] = json_decode((string) $row['lines'], true) ?: array('{id_line}', '{title}');
+        $formats[] = $row;
+    }
+    if ($formats === array()) {
+        $default = $config['default'];
+        $formats[] = array('id' => 0, 'name' => $default['width_mm'] . ' x ' . $default['height_mm'] . ' mm', 'width_mm' => $default['width_mm'], 'height_mm' => $default['height_mm'], 'margin_mm' => $default['margin_mm'], 'font_mm' => $default['font_mm'], 'qr' => $default['qr'] ? 1 : 0, 'lines' => $default['lines'], 'is_default' => 1);
+    }
+    return $formats;
+};
+$loadSettings = static function () use ($pdo, $teamId, $config): array {
+    $req = $pdo->prepare('SELECT printer_host, printer_port, dpi, qr_base_url FROM registry_label_settings WHERE team = :team');
+    $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+    $pdo->execute($req);
+    $row = $req->fetch();
+    return is_array($row) ? $row : array('printer_host' => (string) ($config['printer']['host'] ?? ''), 'printer_port' => (int) ($config['printer']['port'] ?? 9100), 'dpi' => (int) ($config['dpi'] ?? 300), 'qr_base_url' => (string) ($config['qr_base_url'] ?? ''));
+};
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
+    $settings = $loadSettings();
+    if (isset($_GET['admin'])) {
+        if (!$isAdmin) {
+            respond(403, array('error' => 'Only an admin can see the label settings.'));
+        }
+        respond(200, array('formats' => $loadFormats(), 'settings' => $settings));
+    }
+    respond(200, array('formats' => array_map(static fn(array $f): array => array('id' => (int) $f['id'], 'name' => $f['name'], 'width_mm' => $f['width_mm'], 'height_mm' => $f['height_mm'], 'is_default' => (int) $f['is_default']), $loadFormats()), 'printer_set' => $settings['printer_host'] !== ''));
+}
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-    respond(405, array('error' => 'POST only.'));
+    respond(405, array('error' => 'GET or POST only.'));
 }
 if (!hash_equals((string) $App->Session->get('csrf'), (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''))) {
     respond(403, array('error' => 'Invalid token.'));
@@ -69,9 +117,69 @@ $payload = json_decode((string) file_get_contents('php://input'), true);
 if (!is_array($payload)) {
     respond(400, array('error' => 'Invalid request.'));
 }
-$config = json_decode((string) file_get_contents(__DIR__ . '/label-config.json'), true);
-if (!is_array($config)) {
-    respond(500, array('error' => 'label-config.json is not valid.'));
+
+// the settings are for admins
+$action = (string) ($payload['action'] ?? '');
+if ($action !== '') {
+    if (!$isAdmin) {
+        respond(403, array('error' => 'Only an admin can change the label settings.'));
+    }
+    try {
+        if ($action === 'save_format') {
+            $name = trim((string) ($payload['name'] ?? ''));
+            $width = (float) ($payload['width_mm'] ?? 0);
+            $height = (float) ($payload['height_mm'] ?? 0);
+            if ($name === '' || $width < 10 || $width > 120 || $height < 5 || $height > 200) {
+                respond(400, array('error' => 'A name, a width (10 to 120 mm) and a height (5 to 200 mm) are needed.'));
+            }
+            $lines = array_values(array_filter(array_map('trim', explode("\n", (string) ($payload['lines'] ?? ''))), static fn(string $l): bool => $l !== ''));
+            $values = array(
+                ':team' => $teamId, ':name' => mb_substr($name, 0, 100), ':width' => $width, ':height' => $height,
+                ':margin' => max(0, min(10, (float) ($payload['margin_mm'] ?? 1.5))), ':font' => max(1, min(20, (float) ($payload['font_mm'] ?? 3.2))),
+                ':qr' => !empty($payload['qr']) ? 1 : 0, ':lines' => json_encode($lines === array() ? array('{id_line}', '{title}') : array_slice($lines, 0, 8)),
+            );
+            $formatId = (int) ($payload['id'] ?? 0);
+            if ($formatId > 0) {
+                $req = $pdo->prepare('UPDATE registry_label_formats SET name = :name, width_mm = :width, height_mm = :height, margin_mm = :margin, font_mm = :font, qr = :qr, `lines` = :lines WHERE id = :id AND team = :team');
+                $req->bindValue(':id', $formatId, PDO::PARAM_INT);
+            } else {
+                $req = $pdo->prepare('INSERT INTO registry_label_formats (team, name, width_mm, height_mm, margin_mm, font_mm, qr, `lines`) VALUES (:team, :name, :width, :height, :margin, :font, :qr, :lines)');
+            }
+            foreach ($values as $key => $value) {
+                $req->bindValue($key, $value);
+            }
+            $pdo->execute($req);
+            $formatId = $formatId > 0 ? $formatId : (int) $pdo->lastInsertId();
+            // one format is the default
+            $count = $pdo->prepare('SELECT COUNT(*) FROM registry_label_formats WHERE team = :team AND is_default = 1');
+            $count->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $pdo->execute($count);
+            if (!empty($payload['is_default']) || (int) $count->fetchColumn() === 0) {
+                $pdo->prepare('UPDATE registry_label_formats SET is_default = IF(id = ' . $formatId . ', 1, 0) WHERE team = ' . $teamId)->execute();
+            }
+            respond(200, array('ok' => true, 'id' => $formatId));
+        }
+        if ($action === 'delete_format') {
+            $req = $pdo->prepare('DELETE FROM registry_label_formats WHERE id = :id AND team = :team');
+            $req->bindValue(':id', (int) ($payload['id'] ?? 0), PDO::PARAM_INT);
+            $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $pdo->execute($req);
+            respond(200, array('ok' => true));
+        }
+        if ($action === 'save_settings') {
+            $req = $pdo->prepare('INSERT INTO registry_label_settings (team, printer_host, printer_port, dpi, qr_base_url) VALUES (:team, :host, :port, :dpi, :base) ON DUPLICATE KEY UPDATE printer_host = VALUES(printer_host), printer_port = VALUES(printer_port), dpi = VALUES(dpi), qr_base_url = VALUES(qr_base_url)');
+            $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $req->bindValue(':host', mb_substr(trim((string) ($payload['printer_host'] ?? '')), 0, 255));
+            $req->bindValue(':port', max(1, min(65535, (int) ($payload['printer_port'] ?? 9100))), PDO::PARAM_INT);
+            $req->bindValue(':dpi', in_array((int) ($payload['dpi'] ?? 300), array(203, 300, 600), true) ? (int) $payload['dpi'] : 300, PDO::PARAM_INT);
+            $req->bindValue(':base', mb_substr(trim((string) ($payload['qr_base_url'] ?? '')), 0, 255));
+            $pdo->execute($req);
+            respond(200, array('ok' => true));
+        }
+        respond(400, array('error' => 'Unknown action.'));
+    } catch (Throwable $e) {
+        respond(400, array('error' => $e->getMessage()));
+    }
 }
 
 try {
@@ -79,7 +187,6 @@ try {
     $copies = max(1, min(100, (int) ($payload['copies'] ?? 1)));
     // whoever can read the entry can print its label
     $data = new Inventory($App->Users, $id)->readOne();
-    $pdo = Db::getConnection();
     $req = $pdo->prepare('SELECT title FROM inventory_categories WHERE id = :id');
     $req->bindValue(':id', (int) ($data['category'] ?? 0), PDO::PARAM_INT);
     $pdo->execute($req);
@@ -102,7 +209,17 @@ try {
         'module' => $module,
         'date' => (string) ($data['date'] ?? ''),
     );
-    $design = ($config['modules'][$module] ?? array()) + ($config['default'] ?? array());
+    $settings = $loadSettings();
+    $chosen = null;
+    foreach ($loadFormats() as $format) {
+        if ($chosen === null || (int) $format['id'] === (int) ($payload['format'] ?? -1) || ((int) ($payload['format'] ?? -1) < 0 && $format['is_default'])) {
+            $chosen = $format;
+        }
+        if ((int) $format['id'] === (int) ($payload['format'] ?? -1)) {
+            break;
+        }
+    }
+    $design = array('width_mm' => $chosen['width_mm'], 'height_mm' => $chosen['height_mm'], 'margin_mm' => $chosen['margin_mm'], 'font_mm' => $chosen['font_mm'], 'qr' => (bool) $chosen['qr'], 'lines' => $chosen['lines']);
     $lines = array();
     foreach ($design['lines'] ?? array() as $template) {
         // a line is left out when one of its fields is empty
@@ -125,7 +242,7 @@ try {
         }
     }
 
-    $dpi = (int) ($config['dpi'] ?? 300);
+    $dpi = (int) $settings['dpi'];
     $dots = static fn(float $mm): int => (int) round($mm * $dpi / 25.4);
     $width = $dots((float) $design['width_mm']);
     $height = $dots((float) $design['height_mm']);
@@ -147,7 +264,7 @@ try {
         $y += (int) ceil($font * 1.1);
     }
     if ($qrSize > 0) {
-        $base = (string) ($config['qr_base_url'] ?? '');
+        $base = (string) $settings['qr_base_url'];
         if ($base === '') {
             $base = (($_SERVER['HTTPS'] ?? '') !== '' ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost');
         }
@@ -162,11 +279,11 @@ try {
     if (!empty($payload['dry'])) {
         respond(200, array('zpl' => $label, 'lines' => $lines, 'width_mm' => $design['width_mm'], 'height_mm' => $design['height_mm']));
     }
-    $host = (string) ($config['printer']['host'] ?? '');
+    $host = (string) $settings['printer_host'];
     if ($host === '') {
-        respond(400, array('error' => 'The address of the printer is not set: put it in label-config.json (printer.host).'));
+        respond(400, array('error' => 'The address of the printer is not set: an admin sets it on the Label formats page.'));
     }
-    $socket = @stream_socket_client('tcp://' . $host . ':' . (int) ($config['printer']['port'] ?? 9100), $errno, $errstr, 5);
+    $socket = @stream_socket_client('tcp://' . $host . ':' . (int) $settings['printer_port'], $errno, $errstr, 5);
     if ($socket === false) {
         respond(502, array('error' => 'The printer at ' . $host . ' does not answer (' . $errstr . ').'));
     }

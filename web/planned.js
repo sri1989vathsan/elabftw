@@ -465,12 +465,34 @@
     custom.maxLength = 240;
     customLabel.append(custom);
     box.append(customLabel);
+    // the format of the label: the sizes the admins have made
+    const formatLabel = element('label', 'd-block');
+    formatLabel.append(element('span', 'd-block small text-muted', 'Label format'));
+    const format = element('select', 'form-control form-control-sm');
+    formatLabel.append(format);
+    box.insertBefore(formatLabel, label);
+    fetch('label-print.php', { credentials: 'same-origin' }).then(function (response) {
+      return response.json();
+    }).then(function (body) {
+      body.formats.forEach(function (f) {
+        const option = element('option', '', f.name + ' (' + f.width_mm + ' x ' + f.height_mm + ' mm)');
+        option.value = String(f.id);
+        option.selected = Number(f.is_default) === 1;
+        format.append(option);
+      });
+      showPreview();
+    }).catch(function () {
+      // the default format is used
+    });
+    format.addEventListener('change', function () {
+      showPreview();
+    });
     const request = function (extra) {
       return fetch('label-print.php', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
-        body: JSON.stringify(Object.assign({ id: entry.id, copies: Number(copies.value) || 1, custom: custom.value }, extra || {})),
+        body: JSON.stringify(Object.assign({ id: entry.id, copies: Number(copies.value) || 1, custom: custom.value, format: format.value === '' ? -1 : Number(format.value) }, extra || {})),
       }).then(async function (response) {
         const body = await response.json();
         if (!response.ok) {
@@ -486,7 +508,6 @@
         preview.textContent = '';
       });
     };
-    showPreview();
     custom.addEventListener('input', function () {
       window.clearTimeout(custom.timer);
       custom.timer = window.setTimeout(showPreview, 400);

@@ -152,6 +152,7 @@ final class CustomMigrationRunner
         '119_registry_personal_ids.sql',
         '120_registry_order_link_field.sql',
         '121_registry_link_field_all.sql',
+        '122_registry_label_formats.sql',
     );
 
     private Db $Db;
