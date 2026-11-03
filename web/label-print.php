@@ -16,7 +16,10 @@ use Elabftw\Models\Inventory;
 use PDO;
 use Throwable;
 
+use function array_slice;
 use function ceil;
+use function explode;
+use function mb_substr;
 use function count;
 use function file_get_contents;
 use function fclose;
@@ -111,6 +114,14 @@ try {
         }, (string) $template));
         if ($line !== '' && !$empty) {
             $lines[] = $line;
+        }
+    }
+
+    // the text typed in the print dialog goes below: one line each, a few at most
+    foreach (array_slice(explode("\n", (string) ($payload['custom'] ?? '')), 0, 4) as $custom) {
+        $custom = trim(mb_substr($custom, 0, 60));
+        if ($custom !== '') {
+            $lines[] = $custom;
         }
     }
 

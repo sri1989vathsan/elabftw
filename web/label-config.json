@@ -1,5 +1,8 @@
 {
-  "printer": { "host": "", "port": 9100 },
+  "printer": {
+    "host": "",
+    "port": 9100
+  },
   "dpi": 300,
   "qr_base_url": "",
   "default": {
@@ -8,15 +11,10 @@
     "margin_mm": 1.5,
     "font_mm": 3.2,
     "qr": true,
-    "lines": ["{id_line}", "{title}", "{date}"]
+    "lines": [
+      "{id_line}",
+      "{title}"
+    ]
   },
-  "modules": {
-    "Plasmids": { "lines": ["{id_line}", "{title}", "{field:Resistance}", "{date}"] },
-    "Primers": { "lines": ["{id_line}", "{title}", "{date}"] },
-    "Probes": { "lines": ["{id_line}", "{title}", "{date}"] },
-    "Antibodies": { "lines": ["{id_line}", "{title}", "Clone {field:Clone}", "Lot {field:Lot number}"] },
-    "Reagents": { "lines": ["{id_line}", "{title}", "Lot {field:Lot number}", "Exp {field:Expiry date}"] },
-    "Cells & strains": { "lines": ["{id_line}", "{title}", "{field:Species / organism}", "{date}"] },
-    "Samples": { "lines": ["{id_line}", "{title}", "{field:Sample type}", "{date}"] }
-  }
+  "modules": {}
 }

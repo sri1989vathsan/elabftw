@@ -455,6 +455,42 @@
     copies.value = '1';
     label.append(copies);
     box.append(label);
+    // the label has the ID and the title of the entry; text typed here is added below them, one line each
+    const preview = element('p', 'small text-muted mb-2');
+    box.append(preview);
+    const customLabel = element('label', 'd-block');
+    customLabel.append(element('span', 'd-block small text-muted', 'Extra text on the label (optional, one line each)'));
+    const custom = element('textarea', 'form-control form-control-sm');
+    custom.rows = 3;
+    custom.maxLength = 240;
+    customLabel.append(custom);
+    box.append(customLabel);
+    const request = function (extra) {
+      return fetch('label-print.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
+        body: JSON.stringify(Object.assign({ id: entry.id, copies: Number(copies.value) || 1, custom: custom.value }, extra || {})),
+      }).then(async function (response) {
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body.error || 'The label could not be printed.');
+        }
+        return body;
+      });
+    };
+    const showPreview = function () {
+      request({ dry: true }).then(function (body) {
+        preview.textContent = 'On the label (' + body.width_mm + ' x ' + body.height_mm + ' mm, with a QR code to the entry): ' + body.lines.join(' / ');
+      }).catch(function () {
+        preview.textContent = '';
+      });
+    };
+    showPreview();
+    custom.addEventListener('input', function () {
+      window.clearTimeout(custom.timer);
+      custom.timer = window.setTimeout(showPreview, 400);
+    });
     const message = element('p', 'small mb-0');
     const buttons = element('div', 'planned-dialog-buttons');
     const cancel = element('button', 'btn btn-secondary btn-sm', 'Close');
@@ -474,16 +510,7 @@
       message.className = 'small mb-0';
       message.textContent = 'Sending to the printer...';
       try {
-        const response = await fetch('label-print.php', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
-          body: JSON.stringify({ id: entry.id, copies: Number(copies.value) || 1 }),
-        });
-        const body = await response.json();
-        if (!response.ok) {
-          throw new Error(body.error || 'The label could not be printed.');
-        }
+        const body = await request();
         message.className = 'small mb-0 text-success';
         message.textContent = 'Sent: ' + body.printed + (body.printed === 1 ? ' label' : ' labels') + ' (' + body.lines.join(' / ') + ').';
       } catch (error) {
