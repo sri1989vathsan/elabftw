@@ -425,9 +425,9 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     container.append(el('p', 'text-muted', 'Nothing to show.'));
     return;
   }
-  // the ID and the title stay; the other columns can be hidden by the user (button Columns)
+  // the ID stays (it opens the entry when the title is hidden); the other columns can be hidden by the user (button Columns)
   const hidden = loadHiddenColumns(moduleKeyOf(allRows));
-  const columns = columnsFor(allRows).filter(c => c.key === 'ID' || c.key === 'Title' || !hidden.has(c.key));
+  const columns = columnsFor(allRows).filter(c => c.key === 'ID' || !hidden.has(c.key));
   const mixedModules = new Set(allRows.map(r => r.category_title ?? '')).size > 1;
   const table = el('table', 'table table-sm expandable-table');
   const head = el('tr');
@@ -534,6 +534,13 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
           // an entry without a number is not registered yet (an intermediate)
           const cell = el('td', 'id-cell', row.custom_id == null ? '–' : String(row.custom_id));
           if (row.custom_id == null) cell.title = 'Not registered: no number of the lab yet';
+          // without the title column, the number opens the entry
+          if (!cols.some(column => column.key === 'Title')) {
+            const open = el('a', '', cell.textContent ?? '');
+            open.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
+            open.title = row.title;
+            cell.replaceChildren(open);
+          }
           // modules count on their own: when the list mixes modules, the module is written under the number
           if (mixedModules && row.category_title) {
             const moduleName = el('span', 'id-module', row.category_title);
@@ -760,7 +767,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     const redraw = (): void => {
       render(container, rows, tableSort, onSort, ui);
     };
-    columnsFor(rows, false).filter(c => c.key !== 'ID' && c.key !== 'Title').forEach(c => {
+    columnsFor(rows, false).filter(c => c.key !== 'ID').forEach(c => {
       const label = el('label', 'd-block mb-1');
       const box = el('input');
       box.type = 'checkbox';
