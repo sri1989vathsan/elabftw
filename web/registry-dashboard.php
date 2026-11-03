@@ -61,7 +61,7 @@ $pdo = Db::getConnection();
 $teamId = (int) $App->Users->userData['team'];
 $userId = (int) $App->Users->userData['userid'];
 $canRead = new CanSqlBuilder($App->Users, AccessType::Read)->getCanFilter();
-$LIMIT = 15;
+$LIMIT = 1000;
 
 try {
     // the entries of the lab Database that this user can read

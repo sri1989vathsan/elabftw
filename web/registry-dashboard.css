@@ -38,7 +38,7 @@
 .rd-risk.warn { border-top-color: #e0a100; }
 .rd-risk.bad { border-top-color: #d64545; }
 .rd-risk.open { background: rgba(31, 122, 140, 0.08); }
-.rd-detail { margin-top: 0.9rem; border-top: 1px solid var(--rd-line); padding-top: 0.7rem; }
+.rd-detail { max-height: 26rem; overflow-y: auto; margin-top: 0.9rem; border-top: 1px solid var(--rd-line); padding-top: 0.7rem; }
 .rd-detail .row-item { display: flex; gap: 0.6rem; padding: 0.25rem 0; font-size: 0.88rem; }
 .rd-detail .mod { opacity: 0.65; min-width: 7rem; }
 .rd-detail .det { margin-left: auto; opacity: 0.75; }
