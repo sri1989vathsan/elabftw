@@ -119,6 +119,11 @@
           }
           field.name = name.value;
         });
+        // when the name is written, the lists of columns and of the sequence field offer the field
+        name.addEventListener('change', function () {
+          drawColumns();
+          drawRules();
+        });
         const type = element('select', 'form-control form-control-sm mr-2 mb-1 w-auto');
         TYPES.forEach(function (t) {
           const option = element('option', '', t[1]);
