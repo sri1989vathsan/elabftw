@@ -131,15 +131,6 @@
             "value": "",
             "position": 9
           },
-          "Conjugated": {
-            "type": "select",
-            "value": "",
-            "options": [
-              "Yes",
-              "No"
-            ],
-            "position": 8
-          },
           "Lot number": {
             "type": "text",
             "value": "",
