@@ -132,6 +132,184 @@
   }
 
   const dropped = [];
+  let lastAligned = null;
+  const exportButton = document.getElementById('export-clustal');
+  const importInput = document.getElementById('import-clustal');
+
+  // ---- Clustal: the reference and the reads in the columns of the reference (the bases a read has more than the reference make columns of their own)
+  function clustalNames(names) {
+    const used = {};
+    return names.map(function (name) {
+      let clean = String(name).replace(/\.(ab1|gb|gbk|fasta|fa|dna)\b/i, '').replace(/\s+/g, '_').replace(/[^A-Za-z0-9_.()#+-]/g, '').slice(0, 30) || 'sequence';
+      used[clean] = (used[clean] || 0) + 1;
+      return used[clean] > 1 ? clean.slice(0, 26) + '_' + used[clean] : clean;
+    });
+  }
+
+  function buildClustal(aligned) {
+    const reference = aligned.referenceSequence;
+    const length = reference.length;
+    // for each read: the base opposite each base of the reference, and what it has more before a base
+    const reads = aligned.found.map(function (item) {
+      const a = item.alignment;
+      const cells = {};
+      const extra = {};
+      let position = a.refStart;
+      for (let c = 0; c < a.alignedReference.length; c++) {
+        if (a.alignedReference[c] === '-') {
+          extra[position] = (extra[position] || '') + a.alignedRead[c];
+        } else {
+          cells[position] = a.alignedRead[c];
+          position++;
+        }
+      }
+      return { start: a.refStart, end: position, cells: cells, extra: extra };
+    });
+    const slots = {};
+    reads.forEach(function (read) {
+      Object.keys(read.extra).forEach(function (key) {
+        slots[key] = Math.max(slots[key] || 0, read.extra[key].length);
+      });
+    });
+    const rows = [[], ...reads.map(function () {
+      return [];
+    })];
+    for (let position = 0; position <= length; position++) {
+      const width = slots[position] || 0;
+      if (width > 0) {
+        rows[0].push('-'.repeat(width));
+        reads.forEach(function (read, index) {
+          const inside = position > read.start && position < read.end;
+          rows[index + 1].push(inside ? (read.extra[position] || '').padEnd(width, '-') : '-'.repeat(width));
+        });
+      }
+      if (position < length) {
+        rows[0].push(reference[position]);
+        reads.forEach(function (read, index) {
+          rows[index + 1].push(position >= read.start && position < read.end ? (read.cells[position] || '-') : '-');
+        });
+      }
+    }
+    const sequences = rows.map(function (parts) {
+      return parts.join('');
+    });
+    // only the columns where a read is
+    let first = Infinity;
+    let last = -1;
+    for (let column = 0; column < sequences[0].length; column++) {
+      for (let r = 1; r < sequences.length; r++) {
+        if (sequences[r][column] !== '-') {
+          first = Math.min(first, column);
+          last = Math.max(last, column);
+          break;
+        }
+      }
+    }
+    return writeClustal(clustalNames([aligned.referenceName].concat(aligned.names)), sequences.map(function (sequence) {
+      return sequence.slice(first, last + 1);
+    }));
+  }
+
+  function writeClustal(names, sequences) {
+    const width = Math.max.apply(null, names.map(function (name) {
+      return name.length;
+    })) + 2;
+    const total = sequences[0].length;
+    const counts = sequences.map(function () {
+      return 0;
+    });
+    let text = 'CLUSTAL W (1.83) multiple sequence alignment\n\n\n';
+    for (let start = 0; start < total; start += 60) {
+      const end = Math.min(total, start + 60);
+      sequences.forEach(function (sequence, index) {
+        const chunk = sequence.slice(start, end);
+        counts[index] += chunk.replace(/-/g, '').length;
+        text += names[index].padEnd(width) + chunk + '\n';
+      });
+      let conserved = '';
+      for (let column = start; column < end; column++) {
+        const letters = sequences.map(function (sequence) {
+          return sequence[column];
+        });
+        conserved += letters[0] !== '-' && letters.every(function (letter) {
+          return letter === letters[0];
+        }) ? '*' : ' ';
+      }
+      text += ' '.repeat(width) + conserved + '\n\n';
+    }
+    return text;
+  }
+
+  // a Clustal file: the names and the rows of letters, block after block
+  function parseClustal(text) {
+    const order = [];
+    const rows = {};
+    text.split(/\r?\n/).forEach(function (line, index) {
+      if (index === 0 && /^(CLUSTAL|MUSCLE|MAFFT)/i.test(line)) {
+        return;
+      }
+      if (line.trim() === '' || /^\s/.test(line)) {
+        return;
+      }
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 2 || !/^[A-Za-z*.\-]+$/.test(parts[1])) {
+        return;
+      }
+      if (!(parts[0] in rows)) {
+        rows[parts[0]] = '';
+        order.push(parts[0]);
+      }
+      rows[parts[0]] += parts[1].toUpperCase();
+    });
+    return order.map(function (name) {
+      return { name: name, aligned: rows[name] };
+    });
+  }
+
+  function showClustal(items) {
+    if (items.length < 2) {
+      throw new Error('The file needs at least two aligned sequences.');
+    }
+    const length = items[0].aligned.length;
+    if (items.some(function (item) {
+      return item.aligned.length !== length;
+    })) {
+      throw new Error('The sequences of the file are not all the same length.');
+    }
+    viewCount++;
+    window.alignmentView = window.createAlignmentView(document.getElementById('root'), {
+      id: 'clustal-alignment-' + viewCount,
+      alignmentTracks: items.map(function (item) {
+        return { sequenceData: { name: item.name, sequence: item.aligned.replace(/-/g, ''), circular: false }, alignmentData: { sequence: item.aligned } };
+      }),
+    });
+    summary.hidden = true;
+    document.body.classList.remove('has-summary');
+    status.className = 'hidden';
+  }
+
+  exportButton.addEventListener('click', function () {
+    if (!lastAligned) {
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([buildClustal(lastAligned)], { type: 'text/plain' }));
+    link.download = (document.getElementById('entry-title').textContent.trim().replace(/[^A-Za-z0-9_.-]+/g, '_') || 'alignment') + '.aln';
+    link.click();
+  });
+  importInput.addEventListener('change', async function () {
+    const file = importInput.files && importInput.files[0];
+    importInput.value = '';
+    if (!file) {
+      return;
+    }
+    try {
+      showClustal(parseClustal(await file.text()));
+    } catch (error) {
+      fail(error.message || String(error));
+    }
+  });
+
   // each alignment is shown in the same node with a view of its own
   let viewCount = 0;
 
@@ -217,6 +395,11 @@
         return [referenceTrack(item.alignment.alignedReference), item.track];
       });
     }
+    // what the export to Clustal writes: the reference and the reads that were placed
+    lastAligned = { referenceName: files.reference.real_name, referenceSequence: referenceSequence, found: found, names: found.map(function (item) {
+      return item.track.sequenceData.name;
+    }) };
+    exportButton.hidden = false;
     // the view opens where the reads are, not at the start of the reference
     const firstStart = Math.min.apply(null, found.map(function (item) {
       return item.alignment.refStart;

@@ -84,6 +84,8 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
     </span>
     <span id="title">Sequencing alignment</span>
     <?php if ($sequenceUrl !== '') { ?><a id="close-alignment" class="close-alignment" href="<?= $h($sequenceUrl) ?>" title="Back to the plasmid (Esc)">&#10005; Close alignment</a><?php } ?>
+    <button type="button" id="export-clustal" class="close-alignment" hidden title="Save this alignment as a Clustal file">Export Clustal</button>
+    <label class="close-alignment" title="Show an alignment from a Clustal file" style="cursor:pointer;margin:0">Open Clustal<input type="file" id="import-clustal" accept=".aln,.clustal,.clw,.txt" hidden></label>
     <span id="status" role="status">Loading the sequences...</span>
   </div>
   <div id="summary" hidden></div>
