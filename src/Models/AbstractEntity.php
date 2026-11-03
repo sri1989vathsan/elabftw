@@ -268,14 +268,14 @@ abstract class AbstractEntity extends AbstractRest
                         : ($useMarkdown ? BodyContentType::Markdown : BodyContentType::Html);
                     // an entry of the database made through the API has no number and is private to its owner (it is in My entries)
                     // until it is registered; only the Add entry button asks for it to be registered at once
-                    // register: 'lab' (the lab Database: the number of the lab and of the owner), 'personal' (the database of the owner
-                    // only: their number, private) or 'none' (no number yet)
+                    // register: 'both' (the lab Database and the database of the owner: the number of the lab and of the owner), 'lab'
+                    // (the lab Database only), 'personal' (the database of the owner only: their number, private) or 'none' (no number yet)
                     if ($this instanceof Inventory) {
-                        $register = (string) ($reqBody['register'] ?? (empty($reqBody['registered']) ? 'none' : 'lab'));
-                        if ($register !== 'lab') {
+                        $register = (string) ($reqBody['register'] ?? (empty($reqBody['registered']) ? 'none' : 'both'));
+                        if ($register === 'personal' || $register === 'none') {
                             $this->asUnregistered = true;
-                            $this->asPersonal = $register === 'personal';
                         }
+                        $this->withPersonal = $register === 'both' || $register === 'personal';
                     }
                     $newId = $this->create(
                         title: $reqBody['title'] ?? null,

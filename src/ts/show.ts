@@ -240,8 +240,8 @@ function unmountOtherViews(keep: string): void {
   }
 }
 
-// the dialog of a new entry of the Database: where it is added; resolves to 'lab', 'personal' or 'none', or null when cancelled
-function askRegister(): Promise<'lab' | 'personal' | 'none' | null> {
+// the dialog of a new entry of the Database: where it is added; resolves to 'both', 'lab', 'personal' or 'none' (the boxes ticked), or null when cancelled
+function askRegister(): Promise<'both' | 'lab' | 'personal' | 'none' | null> {
   return new Promise(resolve => {
     const make = (tag: string, className = '', text = ''): HTMLElement => {
       const node = document.createElement(tag);
@@ -254,31 +254,36 @@ function askRegister(): Promise<'lab' | 'personal' | 'none' | null> {
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
     box.append(make('h5', '', 'Add a new entry'));
-    const options: [string, string, boolean][] = [
-      ['lab', 'Add to the lab Database: everyone sees it, it gets the ID of the lab and your My_id', true],
-      ['personal', 'Add to my database only: only you see it, it gets your My_id', false],
-      ['none', 'Do not add to a database yet: only you see it, no number until you register it', false],
+    box.append(make('p', 'mb-2', 'Add it to:'));
+    const options: [string, string][] = [
+      ['lab', 'The lab Database: everyone sees it, it gets the ID of the lab and is filed in Database items'],
+      ['personal', 'My database: it gets your My_id'],
     ];
-    options.forEach(([value, text, checked]) => {
+    options.forEach(([value, text]) => {
       const label = make('label', 'd-block');
-      const radio = document.createElement('input');
-      radio.type = 'radio';
-      radio.name = 'register-where';
-      radio.value = value;
-      radio.checked = checked;
-      label.append(radio, document.createTextNode(` ${text}`));
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.name = 'register-where';
+      check.value = value;
+      check.checked = true;
+      label.append(check, document.createTextNode(` ${text}`));
       box.append(label);
     });
+    box.append(make('p', 'text-muted small', 'With neither ticked it stays private to you with no number until you register it. Without the lab Database it is private to you.'));
     const buttons = make('div', 'copy-dialog-buttons');
     const cancel = make('button', 'btn btn-secondary btn-sm', 'Cancel') as HTMLButtonElement;
     const ok = make('button', 'btn btn-primary btn-sm', 'Create') as HTMLButtonElement;
     cancel.type = ok.type = 'button';
-    const done = (value: 'lab' | 'personal' | 'none' | null): void => {
+    const done = (value: 'both' | 'lab' | 'personal' | 'none' | null): void => {
       back.remove();
       resolve(value);
     };
     cancel.addEventListener('click', () => done(null));
-    ok.addEventListener('click', () => done((box.querySelector('input[name="register-where"]:checked') as HTMLInputElement | null)?.value as 'lab' | 'personal' | 'none'));
+    ok.addEventListener('click', () => {
+      const lab = (box.querySelector('input[value="lab"]') as HTMLInputElement).checked;
+      const mine = (box.querySelector('input[value="personal"]') as HTMLInputElement).checked;
+      done(lab && mine ? 'both' : (lab ? 'lab' : (mine ? 'personal' : 'none')));
+    });
     back.addEventListener('click', event => {
       if (event.target === back) done(null);
     });
@@ -1017,7 +1022,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (register === null) {
       return;
     }
-    const params: Record<string, number | string | boolean> = { category, register, registered: register === 'lab' };
+    const params: Record<string, number | string | boolean> = { category, register, registered: register === 'lab' || register === 'both' };
     const id = await ApiC.post2location('inventory', params);
     window.location.href = `registry.php?mode=edit&id=${id}`;
   });
