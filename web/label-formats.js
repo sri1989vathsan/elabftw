@@ -22,7 +22,7 @@
     return node;
   };
   const call = async function (payload) {
-    const response = await fetch('label-print.php' + (payload ? '' : '?admin=1'), payload ? { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() }, body: JSON.stringify(payload) } : { credentials: 'same-origin' });
+    const response = await fetch('label-print.php' + (payload ? '' : '?admin=1'), payload ? { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify(payload) } : { credentials: 'same-origin' });
     const body = await response.json();
     if (!response.ok) {
       throw new Error(body.error || 'The request failed.');

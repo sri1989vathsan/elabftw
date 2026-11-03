@@ -413,14 +413,14 @@
         const response = await fetch('api/v2/orders', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
           body: JSON.stringify({ title: entry.title + (vendor ? '; ' + vendor : ''), notes: lines.join('') }),
         });
         if (!response.ok) {
           throw new Error('The order could not be made (' + response.status + ').');
         }
         const orderId = Number((response.headers.get('Location') || '').split('/').pop());
-        const linked = await fetch('primers.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'order', primers: [entry.id], order: orderId }) });
+        const linked = await fetch('primers.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'order', primers: [entry.id], order: orderId }) });
         if (!linked.ok) {
           throw new Error('The order was made, but it could not be linked to the entry (' + linked.status + ').');
         }
@@ -491,7 +491,7 @@
       return fetch('label-print.php', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
         body: JSON.stringify(Object.assign({ id: entry.id, copies: Number(copies.value) || 1, custom: custom.value, format: format.value === '' ? -1 : Number(format.value) }, extra || {})),
       }).then(async function (response) {
         const body = await response.json();
