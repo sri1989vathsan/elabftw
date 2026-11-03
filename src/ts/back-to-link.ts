@@ -80,7 +80,7 @@ function writeStack(stack: Place[]): void {
 }
 
 function pageLabel(): string {
-  const heading = document.querySelector('#entityTitle, h1') as HTMLElement | null;
+  const heading = document.querySelector('#documentTitle, h1') as HTMLElement | null;
   const raw = (heading?.innerText || document.title || '').replace(/\s+/g, ' ').trim();
   return (raw || window.location.pathname).slice(0, 60);
 }
@@ -128,7 +128,7 @@ function render(): void {
     writeStack(rest);
     if (place.url === withoutHash(here, here)) {
       // same page: only the position changes
-      window.scrollTo({ top: place.y, behavior: 'smooth' });
+      window.scrollTo({ top: place.y });
       render();
       return;
     }
