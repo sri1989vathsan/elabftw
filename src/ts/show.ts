@@ -299,6 +299,10 @@ function askRegister(): Promise<'both' | 'lab' | 'personal' | 'none' | null> {
 const CARDS_KEY = 'persistent_resource_cards_v1';
 
 function effectiveMode(mode: string): string {
+  // the storage browser is opened from the Database menu: a saved choice of it does not make it the way the lists open
+  if (entity.type === 'inventory' && mode === 'st' && getCurrentUrlNumberParam('storage_unit') === null) {
+    return 'ex';
+  }
   if (entity.type !== 'inventory' || mode !== 'it') {
     return mode;
   }
