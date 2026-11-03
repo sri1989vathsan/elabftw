@@ -327,7 +327,14 @@
 // storage box: the slots of a box as a grid, the tubes in their slots
 .box-grid-wrap {
   overflow-x: auto;
-  padding-bottom: 0.25rem;
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.5rem 0.75rem 0.75rem;
+  // the box itself: a frame and a tray that set it apart from the page
+  border: 2px solid var(--border-color, rgba(128, 128, 128, 0.6));
+  border-radius: 10px;
+  background: rgba(128, 128, 128, 0.12);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .box-grid {
@@ -343,9 +350,9 @@
 }
 
 .box-slot {
-  width: 5.6rem;
-  height: 3.4rem;
-  padding: 0.15rem 0.25rem;
+  width: 4.6rem;
+  height: 4.6rem;
+  padding: 0.2rem;
   border: 1px dashed var(--border-color, rgba(128, 128, 128, 0.5));
   border-radius: 8px;
   background: transparent;
@@ -356,7 +363,7 @@
   overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
 
   &.filled {
     border-style: solid;
