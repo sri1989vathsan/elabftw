@@ -127,7 +127,7 @@ if ($action !== '') {
     try {
         if ($action === 'save_format') {
             // a margin of a side: empty means the margin of the format
-            $sideValue = static fn(array $p, string $key): ?float => isset($p[$key]) && $p[$key] !== '' ? max(0.0, min(10.0, (float) $p[$key])) : null;
+            $sideValue = static fn(array $p, string $key): ?float => isset($p[$key]) && $p[$key] !== '' ? max(-10.0, min(10.0, (float) $p[$key])) : null;
             $name = trim((string) ($payload['name'] ?? ''));
             $width = (float) ($payload['width_mm'] ?? 0);
             $height = (float) ($payload['height_mm'] ?? 0);
@@ -137,7 +137,7 @@ if ($action !== '') {
             $lines = array_values(array_filter(array_map('trim', explode("\n", (string) ($payload['lines'] ?? ''))), static fn(string $l): bool => $l !== ''));
             $values = array(
                 ':team' => $teamId, ':name' => mb_substr($name, 0, 100), ':width' => $width, ':height' => $height,
-                ':margin' => max(0, min(10, (float) ($payload['margin_mm'] ?? 1.5))), ':offx' => max(0.0, min(40.0, (float) ($payload['offset_x_mm'] ?? 0))), ':offy' => max(0.0, min(40.0, (float) ($payload['offset_y_mm'] ?? 0))), ':left' => $sideValue($payload, 'margin_left_mm'), ':top' => $sideValue($payload, 'margin_top_mm'), ':right' => $sideValue($payload, 'margin_right_mm'), ':bottom' => $sideValue($payload, 'margin_bottom_mm'), ':font' => max(1, min(20, (float) ($payload['font_mm'] ?? 3.2))),
+                ':margin' => max(-10, min(10, (float) ($payload['margin_mm'] ?? 1.5))), ':offx' => max(-40.0, min(40.0, (float) ($payload['offset_x_mm'] ?? 0))), ':offy' => max(-40.0, min(40.0, (float) ($payload['offset_y_mm'] ?? 0))), ':left' => $sideValue($payload, 'margin_left_mm'), ':top' => $sideValue($payload, 'margin_top_mm'), ':right' => $sideValue($payload, 'margin_right_mm'), ':bottom' => $sideValue($payload, 'margin_bottom_mm'), ':font' => max(1, min(20, (float) ($payload['font_mm'] ?? 3.2))),
                 ':qr' => !empty($payload['qr']) ? 1 : 0, ':rotate' => !empty($payload['rotate_180']) ? 1 : 0, ':lines' => json_encode($lines === array() ? array('{id_line}', '{title}') : array_slice($lines, 0, 8)),
             );
             $formatId = (int) ($payload['id'] ?? 0);
@@ -257,6 +257,9 @@ try {
     $right = $side('margin_right_mm');
     $bottom = $side('margin_bottom_mm');
     $usable = $height - $top - $bottom;
+    // the offset moves everything right and down, as it is read; it can be negative
+    $offX = $dots((float) ($design['offset_x_mm'] ?? 0));
+    $offY = $dots((float) ($design['offset_y_mm'] ?? 0));
     $qrSize = !empty($design['qr']) ? $usable : 0;
     $textWidth = $width - $left - $right - ($qrSize > 0 ? $qrSize + $dots(1.0) : 0);
     $count = max(1, count($lines));
@@ -265,7 +268,7 @@ try {
 
     // the printer setup the label software of the printer sends first (media tracking, thermal transfer, speed, darkness)
     $header = (string) ($config['zpl_header'] ?? '^XA~TA000~JSN^LT0^MNW^MTT^PON^PMN^LH0,0^JMA^PR4,4~SD15^JUS^LRN^CI0^XZ');
-    $zpl = array($header, '^XA', '^MMT', '^CI28', '^PW' . $width, '^LL' . $height, '^LS0', '^LH' . max(0, $dots((float) $design['offset_x_mm'])) . ',' . max(0, $dots((float) $design['offset_y_mm'])));
+    $zpl = array($header, '^XA', '^MMT', '^CI28', '^PW' . $width, '^LL' . $height, '^LS0', '^LH0,0');
     $y = $top;
     // a test pattern instead of the label: a frame at the edge of the label, a frame at the margins and the size in dots, to see where
     // the printer puts things
@@ -273,8 +276,8 @@ try {
         $lines = array();
         $qrSize = 0;
         $zpl[] = sprintf('^FO0,0^GB%d,%d,3^FS', $width, $height);
-        $zpl[] = sprintf('^FO%d,%d^GB%d,%d,1^FS', $left, $top, max(1, $width - $left - $right), max(1, $height - $top - $bottom));
-        $zpl[] = sprintf('^FO%d,%d^A0N,28,28^FD%dx%d^FS', $left + 8, $top + 8, $width, $height);
+        $zpl[] = sprintf('^FO%d,%d^GB%d,%d,1^FS', max(0, $left), max(0, $top), max(1, $width - $left - $right), max(1, $height - $top - $bottom));
+        $zpl[] = sprintf('^FO%d,%d^A0N,28,28^FD%dx%d^FS', max(0, $left + 8), max(0, $top + 8), $width, $height);
     }
     // each text is placed by its baseline, as the label software of the printer does; a label that is read turned by 180 degrees has
     // its texts written inverted from the opposite corner (^A0I), so the print is the same as the software makes
@@ -307,8 +310,10 @@ try {
                 break;
             }
             $baseline = $top + $row * $pitch + (int) round($font * 0.8);
-            $x = $rotated ? $width - $left : $left;
-            $y = $rotated ? $height - $baseline : $baseline;
+            $readX = $left + $offX;
+            $readY = $baseline + $offY;
+            $x = max(0, $rotated ? $width - $readX : $readX);
+            $y = max(0, $rotated ? $height - $readY : $readY);
             $zpl[] = sprintf('^FT%d,%d^A0%s,%d,%d^FH\^FD%s^FS', $x, $y, $rotated ? 'I' : 'N', $font, $font, $clean($part));
             $elements[] = array('type' => 'text', 'x' => $x, 'y' => $y, 'h' => $font, 'text' => $part, 'inverted' => $rotated);
             $row++;
@@ -321,8 +326,10 @@ try {
         }
         $url = $base . '/registry.php?mode=view&id=' . $id;
         $magnification = max(2, (int) floor($qrSize / 37));
-        $qrX = $rotated ? $right : $width - $right - $qrSize;
-        $qrY = $rotated ? $height - $top - $qrSize : $top;
+        $readQrX = $width - $right - $qrSize + $offX;
+        $readQrY = $top + $offY;
+        $qrX = max(0, $rotated ? $width - $readQrX - $qrSize : $readQrX);
+        $qrY = max(0, $rotated ? $height - $readQrY - $qrSize : $readQrY);
         $zpl[] = sprintf('^FO%d,%d^BQN,2,%d^FDQA,%s^FS', $qrX, $qrY, $magnification, $url);
         $elements[] = array('type' => 'qr', 'x' => $qrX, 'y' => $qrY, 'size' => $qrSize);
     }

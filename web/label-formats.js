@@ -134,16 +134,16 @@
       const name = input('text', format ? format.name : '', { placeholder: 'for example Cryo tube 50 x 25' });
       const width = input('number', format ? format.width_mm : 50, { min: 10, max: 120, step: 0.5 });
       const height = input('number', format ? format.height_mm : 25, { min: 5, max: 200, step: 0.5 });
-      const margin = input('number', format ? format.margin_mm : 1.5, { min: 0, max: 10, step: 0.5 });
+      const margin = input('number', format ? format.margin_mm : 1.5, { min: -10, max: 10, step: 0.5 });
       const sideOf = function (key) {
-        return input('number', format && format[key] !== null && format[key] !== undefined ? format[key] : '', { min: 0, max: 10, step: 0.5, placeholder: 'as the margin' });
+        return input('number', format && format[key] !== null && format[key] !== undefined ? format[key] : '', { min: -10, max: 10, step: 0.5, placeholder: 'as the margin' });
       };
       const left = sideOf('margin_left_mm');
       const top = sideOf('margin_top_mm');
       const right = sideOf('margin_right_mm');
       const bottom = sideOf('margin_bottom_mm');
-      const offsetX = input('number', format ? format.offset_x_mm : 0, { min: 0, max: 40, step: 0.5 });
-      const offsetY = input('number', format ? format.offset_y_mm : 0, { min: 0, max: 40, step: 0.5 });
+      const offsetX = input('number', format ? format.offset_x_mm : 0, { min: -40, max: 40, step: 0.5 });
+      const offsetY = input('number', format ? format.offset_y_mm : 0, { min: -40, max: 40, step: 0.5 });
       const font = input('number', format ? format.font_mm : 3.2, { min: 1, max: 20, step: 0.1 });
       const qr = input('checkbox');
       qr.checked = format ? Number(format.qr) === 1 : true;
@@ -170,7 +170,7 @@
       rotateLabel.append(rotate, document.createTextNode(' Printed turned by 180 degrees (the label is read upside down)'));
       const defLabel = element('label', 'd-block mb-2');
       defLabel.append(isDefault, document.createTextNode(' The format that is chosen first'));
-      holder.append(field('Name', name), field('Width (mm)', width), field('Height (mm)', height), field('Margin of the label (mm), used for the sides left empty', margin), field('Left margin (mm)', left), field('Top margin (mm)', top), field('Right margin (mm)', right), field('Bottom margin (mm)', bottom), field('Move everything to the right (mm)', offsetX, 'Where the printer starts to print: raise it if the print is too far left'), field('Move everything down (mm)', offsetY, 'Raise it if the print starts above the label'), field('Height of the text (mm)', font), qrLabel, rotateLabel, defLabel, field('Lines of text, one per line', lines, 'For example {id_line}, {title}, Lot {field:Lot number}'), save);
+      holder.append(field('Name', name), field('Width (mm)', width), field('Height (mm)', height), field('Margin of the label (mm), used for the sides left empty', margin), field('Left margin (mm)', left), field('Top margin (mm)', top), field('Right margin (mm)', right), field('Bottom margin (mm)', bottom), field('Move everything to the right (mm)', offsetX, 'Raise it if the print is too far left; a negative number moves it left'), field('Move everything down (mm)', offsetY, 'Raise it if the print starts above the label; a negative number moves it up'), field('Height of the text (mm)', font), qrLabel, rotateLabel, defLabel, field('Lines of text, one per line', lines, 'For example {id_line}, {title}, Lot {field:Lot number}'), save);
     }
   }
   draw();
