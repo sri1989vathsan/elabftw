@@ -56,6 +56,10 @@ const BUILT_IN_COLUMNS = array('files', 'quantity', 'owner', 'calc:length', 'cal
 
 $pdo = Db::getConnection();
 $teamId = (int) $App->Users->userData['team'];
+require_once __DIR__ . '/registry-defaults.inc.php';
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && !$App->isAnonymous()) {
+    seedDefaultModules($teamId);
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $req = $pdo->prepare('SELECT id, title, color, fields, settings FROM inventory_categories WHERE team = :team AND state = 1 ORDER BY ordering, title');

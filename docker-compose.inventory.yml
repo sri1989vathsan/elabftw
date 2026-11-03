@@ -37,6 +37,9 @@ services:
       - ./src/templates/admin.html:/elabftw/src/templates/admin.html:ro
       - ./web/label-config.json:/elabftw/web/label-config.json:ro
       - ./web/registry-columns.php:/elabftw/web/registry-columns.php:ro
+      - ./web/registry-defaults.inc.php:/elabftw/web/registry-defaults.inc.php:ro
+      - ./web/default-modules.json:/elabftw/web/default-modules.json:ro
+      - ./web/registry-transfer.php:/elabftw/web/registry-transfer.php:ro
       - ./web/registry-modules.php:/elabftw/web/registry-modules.php:ro
       - ./web/registry-modules.js:/elabftw/web/registry-modules.js:ro
       - ./src/templates/registry-categories.html:/elabftw/src/templates/registry-categories.html:ro

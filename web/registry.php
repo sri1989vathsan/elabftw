@@ -25,6 +25,10 @@ use Symfony\Component\HttpFoundation\Response;
  * Entry point for the inventory
  */
 require_once 'app/init.inc.php';
+require_once __DIR__ . '/registry-defaults.inc.php';
+
+// a team that has no module yet gets the default ones
+seedDefaultModulesAndReload($App);
 
 $Response = new Response();
 

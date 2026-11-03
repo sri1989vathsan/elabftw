@@ -1,0 +1,670 @@
+{
+  "modules": [
+    {
+      "title": "Plasmids",
+      "color": "29aeb9",
+      "ordering": 1,
+      "fields": {
+        "extra_fields": {
+          "Link": {
+            "type": "url",
+            "value": "",
+            "position": 100
+          },
+          "Insert": {
+            "type": "text",
+            "value": "",
+            "position": 2
+          },
+          "Backbone": {
+            "type": "text",
+            "value": "",
+            "position": 1
+          },
+          "Resistance": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Ampicillin",
+              "Kanamycin",
+              "Chloramphenicol",
+              "Spectinomycin",
+              "Other"
+            ],
+            "position": 3
+          },
+          "Benchling entry": {
+            "type": "url",
+            "value": "",
+            "position": 4
+          },
+          "Sequence verified": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Yes",
+              "No"
+            ],
+            "position": 6
+          },
+          "Concentration (ng/µl)": {
+            "type": "number",
+            "value": "",
+            "position": 5
+          }
+        }
+      },
+      "settings": {
+        "columns": [
+          {
+            "key": "field:Backbone",
+            "label": "Backbone"
+          },
+          {
+            "key": "field:Resistance",
+            "label": "Selection"
+          },
+          {
+            "key": "files",
+            "label": "Sequence"
+          },
+          {
+            "key": "quantity",
+            "label": "Quantity"
+          },
+          {
+            "key": "owner",
+            "label": "Owner"
+          }
+        ],
+        "sequence_field": null,
+        "requires_sequence_file": true
+      }
+    },
+    {
+      "title": "Antibodies",
+      "color": "bd2f2f",
+      "ordering": 2,
+      "fields": {
+        "extra_fields": {
+          "Link": {
+            "type": "url",
+            "value": "",
+            "position": 20
+          },
+          "Clone": {
+            "type": "text",
+            "value": "",
+            "position": 6
+          },
+          "Target": {
+            "type": "text",
+            "value": "",
+            "position": 1
+          },
+          "Isotype": {
+            "type": "text",
+            "value": "",
+            "position": 7
+          },
+          "Dilution": {
+            "type": "text",
+            "value": "",
+            "position": 12
+          },
+          "Supplier": {
+            "type": "text",
+            "value": "",
+            "position": 13
+          },
+          "Clonality": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Monoclonal",
+              "Polyclonal"
+            ],
+            "position": 5
+          },
+          "Conjugate": {
+            "type": "text",
+            "value": "",
+            "position": 9
+          },
+          "Conjugated": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Yes",
+              "No"
+            ],
+            "position": 8
+          },
+          "Lot number": {
+            "type": "text",
+            "value": "",
+            "position": 15
+          },
+          "Applications": {
+            "type": "text",
+            "value": "",
+            "position": 10
+          },
+          "Host species": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Mouse",
+              "Rabbit",
+              "Goat",
+              "Rat",
+              "Donkey",
+              "Other"
+            ],
+            "position": 3
+          },
+          "Antibody type": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Primary",
+              "Secondary"
+            ],
+            "position": 2
+          },
+          "Concentration": {
+            "type": "text",
+            "value": "",
+            "position": 11
+          },
+          "Catalog number": {
+            "type": "text",
+            "value": "",
+            "position": 14
+          },
+          "Reactivity species": {
+            "type": "text",
+            "value": "",
+            "position": 4
+          }
+        }
+      },
+      "settings": {
+        "columns": [
+          {
+            "key": "field:Target",
+            "label": "Target"
+          },
+          {
+            "key": "field:Host species",
+            "label": "Host"
+          },
+          {
+            "key": "field:Antibody type",
+            "label": "Primary / secondary"
+          },
+          {
+            "key": "field:Conjugate",
+            "label": "Dye"
+          },
+          {
+            "key": "field:Dilution",
+            "label": "Dilution"
+          },
+          {
+            "key": "quantity",
+            "label": "Quantity"
+          },
+          {
+            "key": "owner",
+            "label": "Owner"
+          }
+        ],
+        "sequence_field": null,
+        "requires_sequence_file": false
+      }
+    },
+    {
+      "title": "Cells & strains",
+      "color": "c0c0c0",
+      "ordering": 3,
+      "fields": {
+        "extra_fields": {
+          "Kind": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Cell line",
+              "Primary cells",
+              "Bacterial strain",
+              "Yeast strain",
+              "Other"
+            ],
+            "position": 1
+          },
+          "Link": {
+            "type": "url",
+            "value": "",
+            "position": 100
+          },
+          "Medium": {
+            "type": "text",
+            "value": "",
+            "position": 4
+          },
+          "Source": {
+            "type": "text",
+            "value": "",
+            "position": 8
+          },
+          "Passage": {
+            "type": "number",
+            "value": "",
+            "position": 6
+          },
+          "Benchling entry": {
+            "type": "url",
+            "value": "",
+            "position": 9
+          },
+          "Genotype / tissue": {
+            "type": "text",
+            "value": "",
+            "position": 3
+          },
+          "Mycoplasma status": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Negative",
+              "Positive",
+              "Untested",
+              "Not applicable"
+            ],
+            "position": 7
+          },
+          "Species / organism": {
+            "type": "text",
+            "value": "",
+            "position": 2
+          },
+          "Resistance / selection": {
+            "type": "text",
+            "value": "",
+            "position": 5
+          }
+        }
+      },
+      "settings": {
+        "columns": [
+          {
+            "key": "field:Kind",
+            "label": "Kind"
+          },
+          {
+            "key": "field:Species",
+            "label": "Species / organism"
+          },
+          {
+            "key": "field:Genotype",
+            "label": "Genotype / tissue"
+          },
+          {
+            "key": "field:Resistance",
+            "label": "Selection"
+          },
+          {
+            "key": "field:Mycoplasma",
+            "label": "Mycoplasma"
+          },
+          {
+            "key": "quantity",
+            "label": "Quantity"
+          },
+          {
+            "key": "owner",
+            "label": "Owner"
+          }
+        ],
+        "sequence_field": null,
+        "requires_sequence_file": false
+      }
+    },
+    {
+      "title": "Probes",
+      "color": "7b4fd1",
+      "ordering": 4,
+      "fields": {
+        "extra_fields": {
+          "Link": {
+            "type": "url",
+            "value": "",
+            "position": 100
+          },
+          "Type": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "FISH",
+              "TaqMan",
+              "Biotin",
+              "Other"
+            ],
+            "position": 4
+          },
+          "Label": {
+            "type": "text",
+            "value": "",
+            "position": 2
+          },
+          "Target": {
+            "type": "text",
+            "value": "",
+            "position": 1
+          },
+          "Sequence": {
+            "type": "text",
+            "value": "",
+            "position": 3
+          }
+        }
+      },
+      "settings": {
+        "columns": [
+          {
+            "key": "field:Sequence",
+            "label": "Sequence 5'-3'"
+          },
+          {
+            "key": "calc:length",
+            "label": "Length"
+          },
+          {
+            "key": "calc:gc",
+            "label": "GC %"
+          },
+          {
+            "key": "field:Target",
+            "label": "Target"
+          },
+          {
+            "key": "field:Label",
+            "label": "Label"
+          },
+          {
+            "key": "field:Type",
+            "label": "Type"
+          },
+          {
+            "key": "quantity",
+            "label": "Quantity"
+          },
+          {
+            "key": "owner",
+            "label": "Owner"
+          }
+        ],
+        "sequence_field": "Sequence",
+        "requires_sequence_file": false
+      }
+    },
+    {
+      "title": "Primers",
+      "color": "e8a317",
+      "ordering": 5,
+      "fields": {
+        "extra_fields": {
+          "Link": {
+            "type": "url",
+            "value": "",
+            "position": 100
+          },
+          "Tm (°C)": {
+            "type": "number",
+            "value": "",
+            "position": 2
+          },
+          "Orientation": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Forward",
+              "Reverse"
+            ],
+            "position": 4
+          },
+          "Target gene": {
+            "type": "text",
+            "value": "",
+            "position": 3
+          },
+          "Purification": {
+            "type": "text",
+            "value": "",
+            "position": 5
+          },
+          "Sequence 5'-3'": {
+            "type": "text",
+            "value": "",
+            "position": 1
+          }
+        }
+      },
+      "settings": {
+        "columns": [
+          {
+            "key": "field:Sequence",
+            "label": "Sequence 5'-3'"
+          },
+          {
+            "key": "calc:length",
+            "label": "Length"
+          },
+          {
+            "key": "field:Tm",
+            "label": "Tm (°C)"
+          },
+          {
+            "key": "calc:gc",
+            "label": "GC %"
+          },
+          {
+            "key": "field:Orientation",
+            "label": "Orientation"
+          },
+          {
+            "key": "field:Target",
+            "label": "Target"
+          },
+          {
+            "key": "quantity",
+            "label": "Quantity"
+          },
+          {
+            "key": "owner",
+            "label": "Owner"
+          }
+        ],
+        "sequence_field": "Sequence",
+        "requires_sequence_file": false
+      }
+    },
+    {
+      "title": "Reagents",
+      "color": "2d8f6f",
+      "ordering": 6,
+      "fields": {
+        "extra_fields": {
+          "Link": {
+            "type": "url",
+            "value": "",
+            "position": 20
+          },
+          "Hazards": {
+            "type": "text",
+            "value": "",
+            "position": 8
+          },
+          "Supplier": {
+            "type": "text",
+            "value": "",
+            "position": 2
+          },
+          "CAS number": {
+            "type": "text",
+            "value": "",
+            "position": 5
+          },
+          "Lot number": {
+            "type": "text",
+            "value": "",
+            "position": 4
+          },
+          "Expiry date": {
+            "type": "date",
+            "value": "",
+            "position": 7
+          },
+          "Reagent type": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Chemical",
+              "Buffer",
+              "Enzyme",
+              "Kit",
+              "Dye",
+              "Medium",
+              "Other"
+            ],
+            "position": 1
+          },
+          "Concentration": {
+            "type": "text",
+            "value": "",
+            "position": 6
+          },
+          "Catalog number": {
+            "type": "text",
+            "value": "",
+            "position": 3
+          }
+        }
+      },
+      "settings": {
+        "columns": [
+          {
+            "key": "field:Reagent type",
+            "label": "Type"
+          },
+          {
+            "key": "field:Supplier",
+            "label": "Supplier"
+          },
+          {
+            "key": "field:Catalog",
+            "label": "Catalog no."
+          },
+          {
+            "key": "field:Lot",
+            "label": "Lot"
+          },
+          {
+            "key": "field:Expiry",
+            "label": "Expiry"
+          },
+          {
+            "key": "quantity",
+            "label": "Quantity"
+          },
+          {
+            "key": "owner",
+            "label": "Owner"
+          }
+        ],
+        "sequence_field": null,
+        "requires_sequence_file": false
+      }
+    },
+    {
+      "title": "Samples",
+      "color": "d1568a",
+      "ordering": 7,
+      "fields": {
+        "extra_fields": {
+          "Link": {
+            "type": "url",
+            "value": "",
+            "position": 100
+          },
+          "Buffer": {
+            "type": "text",
+            "value": "",
+            "position": 4
+          },
+          "Project": {
+            "type": "text",
+            "value": "",
+            "position": 7
+          },
+          "Sample type": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "DNA",
+              "RNA",
+              "Protein",
+              "Lysate",
+              "Tissue",
+              "Serum",
+              "Other"
+            ],
+            "position": 1
+          },
+          "Concentration": {
+            "type": "text",
+            "value": "",
+            "position": 3
+          },
+          "Date collected": {
+            "type": "date",
+            "value": "",
+            "position": 6
+          },
+          "Source / organism": {
+            "type": "text",
+            "value": "",
+            "position": 2
+          },
+          "Treatment / condition": {
+            "type": "text",
+            "value": "",
+            "position": 5
+          }
+        }
+      },
+      "settings": {
+        "columns": [
+          {
+            "key": "field:Sample type",
+            "label": "Sample type"
+          },
+          {
+            "key": "field:Date collected",
+            "label": "Date collected"
+          },
+          {
+            "key": "quantity",
+            "label": "Quantity"
+          },
+          {
+            "key": "owner",
+            "label": "Owner"
+          }
+        ],
+        "sequence_field": null,
+        "requires_sequence_file": false
+      }
+    }
+  ]
+}
