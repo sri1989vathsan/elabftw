@@ -133,7 +133,8 @@ function applyEditFolderScope(scope: EditFolderScope): void {
       // the folders of the lab Database: "Database items" and what is inside it
       || (scope === 'database' && /^Database items( >|$)/.test(option.dataset.folderPath ?? ''));
     option.hidden = !isVisible;
-    option.disabled = !isVisible;
+    // the folders of the Database cannot be chosen: an entry gets in only by being added to the Database
+    option.disabled = !isVisible || option.dataset.folderLocked === 'true';
   });
   editFolderScopeButtons.forEach(button => {
     const isActive = button.dataset.editFolderScope === scope;

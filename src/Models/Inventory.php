@@ -194,8 +194,24 @@ final class Inventory extends AbstractConcreteEntity
             if (is_array($row) && $row['custom_id'] !== null && (int) $row['is_planned'] === 0 && $wanted !== (int) ($row['folder_id'] ?? 0)) {
                 throw new ImproperActionException(_('An entry of the Database stays in the folder of its module.'));
             }
+            // and the only way into the folders of the Database is to add the entry to the Database
+            if ($wanted > 0 && $this->isDatabaseFolder($wanted)) {
+                throw new ImproperActionException(_('An entry gets into the folders of the Database only when it is added to the Database.'));
+            }
         }
         return parent::patch($action, $params);
+    }
+
+    /** whether a folder is "Database items" or one of its subfolders */
+    private function isDatabaseFolder(int $folderId): bool
+    {
+        $req = $this->Db->prepare("SELECT COUNT(*) FROM experiments_folders AS f LEFT JOIN experiments_folders AS p ON p.id = f.parent_id WHERE f.id = :id AND f.scope = 'inventory' AND ((f.parent_id IS NULL AND f.name = :root) OR (p.parent_id IS NULL AND p.name = :root2))");
+        $req->bindParam(':id', $folderId, PDO::PARAM_INT);
+        $root = self::LAB_FOLDER;
+        $req->bindParam(':root', $root);
+        $req->bindParam(':root2', $root);
+        $this->Db->execute($req);
+        return (int) $req->fetchColumn() > 0;
     }
 
     /**

@@ -161,7 +161,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     if (isset($_GET['folders'])) {
         $folders = array();
         foreach (new ExperimentsFolders($App->Users, null, 'inventory')->readAll() as $folder) {
-            $folders[] = array('id' => (int) $folder['id'], 'path' => (string) $folder['full_path'], 'owner' => (int) ($folder['userid'] ?? 0));
+            $folders[] = array('id' => (int) $folder['id'], 'path' => (string) $folder['full_path'], 'owner' => (int) ($folder['userid'] ?? 0), 'database' => (string) $folder['full_path'] === 'Database items' || str_starts_with((string) $folder['full_path'], 'Database items > '));
         }
         respond(200, array('folders' => $folders, 'me' => $userId));
     }

@@ -865,7 +865,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     }
     folderPanel.replaceChildren(el('div', 'small text-muted', 'Loading the folders...'));
     folderPanel.hidden = false;
-    void fetch('registry-transfer.php?folders=1', { credentials: 'same-origin' }).then(r => r.json()).then((body: { folders: { id: number; path: string; owner: number }[]; me: number }) => {
+    void fetch('registry-transfer.php?folders=1', { credentials: 'same-origin' }).then(r => r.json()).then((body: { folders: { id: number; path: string; owner: number; database: boolean }[]; me: number }) => {
       const choice = el('select', 'form-control form-control-sm mb-2');
       choice.setAttribute('aria-label', 'Folder');
       // my folders, the folders of the lab Database, or all of them
@@ -874,7 +874,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
         ['Database folders', 'database', f => /^Database items( >|$)/.test(f.path)],
         ['All folders', 'all', () => true],
       ];
-      let scope = 'database';
+      let scope = 'mine';
       const fill = (): void => {
         choice.replaceChildren();
         const none = el('option', '', 'No folder (Unfiled)');
@@ -882,8 +882,10 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
         choice.append(none);
         const keep = scopes.find(([, key]) => key === scope)![2];
         body.folders.filter(keep).forEach(f => {
-          const option = el('option', '', f.path);
+          // the folders of the Database cannot be chosen here: an entry gets in by being added to the Database
+          const option = el('option', '', f.database ? `${f.path} (only by adding to the Database)` : f.path);
           option.value = String(f.id);
+          option.disabled = f.database;
           choice.append(option);
         });
       };
