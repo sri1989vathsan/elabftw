@@ -45,12 +45,12 @@
     return new File(['>' + (header || title || name) + '\n' + wrapped + '\n'], name + '.fasta', { type: 'text/plain' });
   }
 
-  async function createEntry(category, title) {
+  async function createEntry(category, title, register) {
     const response = await fetch('api/v2/inventory', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
-      body: JSON.stringify(Object.assign(title ? { category: category, title: title } : { category: category }, { registered: true })),
+      body: JSON.stringify(Object.assign(title ? { category: category, title: title } : { category: category }, register ? { register: register, registered: register === 'both' || register === 'lab' } : { registered: true })),
     });
     if (!response.ok) {
       throw new Error('The entry could not be created (' + response.status + ').');
@@ -364,4 +364,95 @@
       button.textContent = error.message || String(error);
     }
   });
+  // ---- drag and drop of files on the list of a module: a file dropped on a row is attached to that entry (a sequence file opens in
+  // the sequence editor); files dropped elsewhere on the list make one entry each in the module that is open, in your own database
+  (function () {
+    if (!/registry\.php$/.test(location.pathname) || new URLSearchParams(location.search).get('mode')) {
+      return;
+    }
+    const hasFiles = function (event) {
+      return event.dataTransfer && Array.prototype.indexOf.call(event.dataTransfer.types || [], 'Files') !== -1;
+    };
+    const toast = function (text, failed) {
+      const note = element('div', 'sa-toast', text);
+      note.setAttribute('role', 'status');
+      if (failed) {
+        note.style.background = '#b3261e';
+      }
+      document.body.append(note);
+      window.setTimeout(function () {
+        note.remove();
+      }, 6000);
+    };
+    const rowOf = function (target) {
+      let row = target.closest ? target.closest('tr.expandable-row, tr.expandable-detail-row') : null;
+      if (row && row.classList.contains('expandable-detail-row')) {
+        row = row.previousElementSibling;
+      }
+      return row;
+    };
+    const entryOfRow = function (row) {
+      const link = row ? row.querySelector('a[href*="id="]') : null;
+      const match = link ? /[?&]id=(\d+)/.exec(link.getAttribute('href')) : null;
+      return match ? Number(match[1]) : 0;
+    };
+    let marked = null;
+    const mark = function (node) {
+      if (marked && marked !== node) {
+        marked.classList.remove('sa-drop-target');
+      }
+      marked = node;
+      if (node) {
+        node.classList.add('sa-drop-target');
+      }
+    };
+    document.addEventListener('dragover', function (event) {
+      if (!hasFiles(event)) {
+        return;
+      }
+      event.preventDefault();
+      mark(rowOf(event.target) || document.getElementById('container'));
+    });
+    document.addEventListener('dragleave', function (event) {
+      if (event.relatedTarget === null) {
+        mark(null);
+      }
+    });
+    document.addEventListener('drop', async function (event) {
+      if (!hasFiles(event)) {
+        return;
+      }
+      event.preventDefault();
+      mark(null);
+      const files = Array.from(event.dataTransfer.files).slice(0, 50);
+      if (files.length === 0) {
+        return;
+      }
+      const row = rowOf(event.target);
+      const entry = entryOfRow(row);
+      const category = Number(new URLSearchParams(location.search).get('category'));
+      if (entry === 0 && !(category > 0)) {
+        toast('Open a module first: files dropped on the list make new entries in the module that is open.', true);
+        return;
+      }
+      toast('Adding ' + files.length + (files.length === 1 ? ' file' : ' files') + '...');
+      let done = 0;
+      const failed = [];
+      for (const file of files) {
+        try {
+          const target = entry > 0 ? entry : await createEntry(category, file.name.replace(/\.[^.]+$/, ''), 'personal');
+          await uploadFile(target, file);
+          done += 1;
+        } catch (error) {
+          failed.push(file.name + ': ' + (error.message || error));
+        }
+      }
+      toast((entry > 0 ? done + ' attached to the entry.' : done + ' new in your database, one entry per file.') + (failed.length ? ' Not added: ' + failed.join('; ') : ''), failed.length > 0);
+      if (done > 0) {
+        window.setTimeout(function () {
+          window.location.reload();
+        }, 1500);
+      }
+    });
+  })();
 })();

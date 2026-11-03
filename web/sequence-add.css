@@ -227,3 +227,5 @@
   font-family: ui-monospace, Menlo, monospace;
   font-size: 0.78rem;
 }
+
+.sa-drop-target { outline: 2px dashed #5b8def; outline-offset: -2px; background: rgba(91, 141, 239, 0.08); }
