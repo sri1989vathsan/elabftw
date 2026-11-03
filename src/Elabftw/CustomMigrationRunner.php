@@ -151,6 +151,7 @@ final class CustomMigrationRunner
         '118_registry_folder_scope.sql',
         '119_registry_personal_ids.sql',
         '120_registry_order_link_field.sql',
+        '121_registry_link_field_all.sql',
     );
 
     private Db $Db;
