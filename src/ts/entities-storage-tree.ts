@@ -796,6 +796,41 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     return form;
   };
 
+  // move the place, with everything inside it (the entries stored there go with it), to another place: a room, a freezer, a rack, or the top level
+  const renderMoveTo = (node: Node): HTMLElement => {
+    const form = el('div', 'd-flex flex-wrap align-items-center mb-2');
+    form.append(el('span', 'mr-2', 'Move to'));
+    const target = el('select', 'form-control form-control-sm w-auto mr-1');
+    target.setAttribute('aria-label', 'Move to');
+    target.style.maxWidth = '24rem';
+    const top = el('option', '', 'Top level (no parent)');
+    top.value = '0';
+    target.append(top);
+    const inside = new Set(subtree(node).map(n => n.unit.id));
+    // the places in the order of the tree; the place itself, what is inside it and the boxes (they hold entries, not places) are left out
+    const walk = (nodes: Node[]): void => {
+      nodes.forEach(n => {
+        if (!inside.has(n.unit.id) && !(n.unit.box_rows && n.unit.box_cols)) {
+          const option = el('option', '', n.unit.full_path);
+          option.value = String(n.unit.id);
+          target.append(option);
+        }
+        walk(n.children);
+      });
+    };
+    walk(tree.roots);
+    target.value = String(node.unit.parent_id ?? 0);
+    const go = el('button', 'btn btn-transparent btn-sm', 'Move');
+    go.type = 'button';
+    go.addEventListener('click', () => {
+      if (Number(target.value) !== (node.unit.parent_id ?? 0)) {
+        patchAndReload(`storage_units/${node.unit.id}`, { parent_id: Number(target.value) });
+      }
+    });
+    form.append(target, go);
+    return form;
+  };
+
   // the information about a storage place: where it is, its conditions, who looks after it, notes (saved in storage-info.php)
   const renderInfo = (node: Node): HTMLElement => {
     const box = el('div', 'card card-body mb-3');
@@ -943,6 +978,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     }
     main.append(el('h4', '', node.unit.full_path));
     main.append(renderRename(node));
+    main.append(renderMoveTo(node));
     main.append(renderInfo(node));
     main.append(renderDelete(node));
     const opt = el('label', 'd-block mb-2');
