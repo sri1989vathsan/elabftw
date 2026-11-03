@@ -4,6 +4,7 @@
  */
 import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
+import { askConfirm } from './confirm-dialog';
 
 type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null };
 type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string };
@@ -309,7 +310,15 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   const expandAll = el('button', 'btn btn-transparent btn-sm', 'Expand all');
   const collapseAll = el('button', 'btn btn-transparent btn-sm', 'Collapse all');
   expandAll.type = collapseAll.type = 'button';
-  tools.append(search, expandAll, collapseAll);
+  const addTop = el('button', 'btn btn-secondary btn-sm ml-2', 'Add a location');
+  addTop.type = 'button';
+  const addTopForm = el('div');
+  addTopForm.hidden = true;
+  addTop.addEventListener('click', () => {
+    addTopForm.hidden = !addTopForm.hidden;
+    if (!addTopForm.hidden) addTopForm.replaceChildren(renderAddForm(null));
+  });
+  tools.append(search, expandAll, collapseAll, addTop, addTopForm);
   const treeBox = el('div', 'storage-tree');
   side.append(tools, treeBox);
 
@@ -665,7 +674,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     return wrap;
   };
 
-  const renderAddForm = (node: Node): HTMLElement => {
+  // node is null for a location at the top (a freezer, a cabinet...)
+  const renderAddForm = (node: Node | null): HTMLElement => {
     const form = el('div', 'd-flex flex-wrap align-items-center mb-3');
     const kind = el('select', 'form-control form-control-sm w-auto mr-1');
     kind.setAttribute('aria-label', 'What to add');
@@ -702,17 +712,20 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         name.focus();
         return;
       }
-      void ApiC.post2location('storage_units', { name: unitName, parent_id: node.unit.id }).then(async id => {
+      void ApiC.post2location('storage_units', node === null ? { name: unitName } : { name: unitName, parent_id: node.unit.id }).then(async id => {
         if (kind.value === 'box') {
           await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rows.value), box_cols: Number(cols.value) });
         }
-        // show the new unit in the tree
-        state.collapsed[String(node.unit.id)] = false;
+        // show the new unit in the tree, and select it
+        if (node !== null) {
+          state.collapsed[String(node.unit.id)] = false;
+        }
+        state.selected = id;
         writeState(state);
         return load();
       });
     });
-    form.append(el('span', 'mr-2', 'Add inside'), kind, name, rows, cols, add);
+    form.append(el('span', 'mr-2', node === null ? 'Add at the top' : 'Add inside'), kind, name, rows, cols, add);
     return form;
   };
 
@@ -733,6 +746,31 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     return form;
   };
 
+  // a location is deleted when nothing is in it and it has no sub-locations (the server refuses otherwise, and only for admins)
+  const renderDelete = (node: Node): HTMLElement => {
+    const wrap = el('div', 'mb-2');
+    const blocked = node.children.length > 0 || collect(node, true).length > 0;
+    const remove = el('button', 'btn btn-outline-danger btn-sm', 'Delete this location');
+    remove.type = 'button';
+    remove.disabled = blocked;
+    remove.title = blocked ? 'Empty it first: it has sub-locations or something stored in it' : 'Delete this location';
+    remove.addEventListener('click', () => {
+      void askConfirm(`Delete "${node.unit.full_path}"?`, 'Delete').then(confirmed => {
+        if (!confirmed) return;
+        return ApiC.delete(`storage_units/${node.unit.id}`).then(() => {
+          state.selected = node.unit.parent_id;
+          writeState(state);
+          return load();
+        });
+      });
+    });
+    wrap.append(remove);
+    if (blocked) {
+      wrap.append(el('span', 'small text-muted ml-2', 'Empty it first to delete it.'));
+    }
+    return wrap;
+  };
+
   const renderMain = (): void => {
     main.replaceChildren();
     const node = state.selected === null ? undefined : tree.byId.get(state.selected);
@@ -742,6 +780,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     }
     main.append(el('h4', '', node.unit.full_path));
     main.append(renderRename(node));
+    main.append(renderDelete(node));
     const opt = el('label', 'd-block mb-2');
     const box = el('input', 'mr-1');
     box.type = 'checkbox';
