@@ -543,8 +543,9 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     if (/^(antibod|reagent)/i.test(row.category_title ?? '')) {
       const order = el('button', 'btn btn-secondary btn-sm ml-1');
       order.type = 'button';
-      order.title = `Order ${row.title}`;
-      order.setAttribute('aria-label', `Order ${row.title}`);
+      const kind = /^antibod/i.test(row.category_title ?? '') ? 'antibody' : 'reagent';
+      order.title = `Order this ${kind}: ${row.title}`;
+      order.setAttribute('aria-label', `Order this ${kind}: ${row.title}`);
       order.append(el('i', 'fas fa-cart-shopping fa-fw'));
       order.addEventListener('click', () => {
         window.dispatchEvent(new CustomEvent('registry:order-entry', { detail: { id: row.id, title: row.title, category: row.category_title ?? '', fields: row.extra_fields ?? [] } }));

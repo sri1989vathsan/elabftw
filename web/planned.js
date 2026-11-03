@@ -455,22 +455,27 @@
     const box = element('div', 'planned-dialog');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
-    box.append(element('h5', '', 'Order ' + entry.title));
-    const inputs = {};
-    // only an antibody has a clone
+    // each module has its own order: what is asked, and what the description of the order says
     const isAntibody = /^antibod/i.test(entry.category || '');
-    [['vendor', 'Vendor', field(/^(supplier|vendor)/i)], ['clone', 'Clone', field(/^clone/i)], ['link', 'Link', field(/^(link|url|product link|website)/i)], ['amount', 'Amount', field(/^(order )?amount/i)]].filter(function (item) {
-      return item[0] !== 'clone' || isAntibody;
-    }).forEach(function (item) {
+    const kind = isAntibody ? 'antibody' : 'reagent';
+    box.append(element('h5', '', 'Order ' + kind + ' ' + entry.title));
+    const form = [['vendor', 'Vendor', field(/^(supplier|vendor)/i), true]].concat(
+      isAntibody ? [['clone', 'Clone', field(/^clone/i), true]] : [['catalog', 'Catalog number', field(/^catalog/i), true]],
+      [['link', 'Link', field(/^(link|url|product link|website)/i), true], ['amount', 'Amount', field(/^(order )?amount/i), true]]
+    );
+    const inputs = {};
+    const labels = {};
+    form.forEach(function (item) {
       const label = element('label', 'd-block');
       label.append(element('span', 'd-block small text-muted', item[1]));
       const input = element('input', 'form-control form-control-sm');
       input.type = 'text';
       input.value = item[2];
       if (item[0] === 'amount') {
-        input.placeholder = 'for example 100 µl, or 1 vial';
+        input.placeholder = isAntibody ? 'for example 100 µl' : 'for example 500 g, or 1 bottle';
       }
       inputs[item[0]] = input;
+      labels[item[0]] = item[1];
       label.append(input);
       box.append(label);
     });
@@ -494,15 +499,11 @@
       try {
         const vendor = inputs.vendor.value.trim();
         const lines = [];
-        if (inputs.link.value.trim()) {
-          lines.push('Link: ' + inputs.link.value.trim());
-        }
-        if (inputs.clone && inputs.clone.value.trim()) {
-          lines.push('Clone: ' + inputs.clone.value.trim());
-        }
-        if (inputs.amount.value.trim()) {
-          lines.push('Amount: ' + inputs.amount.value.trim());
-        }
+        ['link', 'clone', 'catalog', 'amount'].forEach(function (key) {
+          if (inputs[key] && inputs[key].value.trim()) {
+            lines.push(labels[key] + ': ' + inputs[key].value.trim());
+          }
+        });
         const response = await fetch('api/v2/orders', {
           method: 'POST',
           credentials: 'same-origin',
