@@ -135,6 +135,7 @@
       const width = input('number', format ? format.width_mm : 50, { min: 10, max: 120, step: 0.5 });
       const height = input('number', format ? format.height_mm : 25, { min: 5, max: 200, step: 0.5 });
       const margin = input('number', format ? format.margin_mm : 1.5, { min: 0, max: 10, step: 0.5 });
+      const bottom = input('number', format && format.margin_bottom_mm !== null ? format.margin_bottom_mm : '', { min: 0, max: 10, step: 0.5, placeholder: 'same as the margin' });
       const font = input('number', format ? format.font_mm : 3.2, { min: 1, max: 20, step: 0.1 });
       const qr = input('checkbox');
       qr.checked = format ? Number(format.qr) === 1 : true;
@@ -147,7 +148,7 @@
       save.type = 'button';
       save.addEventListener('click', async function () {
         try {
-          await call({ action: 'save_format', id: format ? Number(format.id) : 0, name: name.value, width_mm: Number(width.value), height_mm: Number(height.value), margin_mm: Number(margin.value), font_mm: Number(font.value), qr: qr.checked, is_default: isDefault.checked, lines: lines.value });
+          await call({ action: 'save_format', id: format ? Number(format.id) : 0, name: name.value, width_mm: Number(width.value), height_mm: Number(height.value), margin_mm: Number(margin.value), margin_bottom_mm: bottom.value, font_mm: Number(font.value), qr: qr.checked, is_default: isDefault.checked, lines: lines.value });
           draw();
         } catch (error) {
           say(error.message, true);
@@ -157,7 +158,7 @@
       qrLabel.append(qr, document.createTextNode(' A QR code to the entry on the label'));
       const defLabel = element('label', 'd-block mb-2');
       defLabel.append(isDefault, document.createTextNode(' The format that is chosen first'));
-      holder.append(field('Name', name), field('Width (mm)', width), field('Height (mm)', height), field('Margin (mm)', margin), field('Height of the text (mm)', font), qrLabel, defLabel, field('Lines of text, one per line', lines, 'For example {id_line}, {title}, Lot {field:Lot number}'), save);
+      holder.append(field('Name', name), field('Width (mm)', width), field('Height (mm)', height), field('Margin: left, top and right (mm)', margin), field('Bottom margin (mm)', bottom), field('Height of the text (mm)', font), qrLabel, defLabel, field('Lines of text, one per line', lines, 'For example {id_line}, {title}, Lot {field:Lot number}'), save);
     }
   }
   draw();
