@@ -80,7 +80,8 @@ function writeStack(stack: Place[]): void {
 }
 
 function pageLabel(): string {
-  const heading = document.querySelector('#documentTitle, h1') as HTMLElement | null;
+  // the entry's own title; the first h1 on the page is the name of the section ("Experiments")
+  const heading = (document.getElementById('documentTitle') ?? document.querySelector('h1')) as HTMLElement | null;
   const raw = (heading?.innerText || document.title || '').replace(/\s+/g, ' ').trim();
   return (raw || window.location.pathname).slice(0, 60);
 }
