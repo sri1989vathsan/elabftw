@@ -617,6 +617,30 @@ def from_web_species(found, row, notes):
         notes.append(', '.join(filled) + ' from a web search (' + (found.get('confidence') or '?') + ', tested species as listed by the maker); ' + (found.get('source') or ''))
 
 
+# products that are a dye or a labelled probe, not an antibody: the dye is said in the name ("MemBrite Fix 488/515", "AZDye 680", "DAPI")
+DYES_BY_NAME = (
+    (r'membrite fix cell surface staining (\d{3}/\d{3})', lambda m: 'MemBrite Fix ' + m.group(1), False),
+    (r'azdye\s*(\d{3})', lambda m: 'AZDye ' + m.group(1), False),
+    (r'atto\s*(\d{3}\w*)', lambda m: 'ATTO ' + m.group(1).upper(), True),
+    (r'\bCF(\d{3}\w?)\b', lambda m: 'CF' + m.group(1), True),
+    (r'propidium iodide', lambda m: 'Propidium iodide', False),
+    (r'\bDAPI\b', lambda m: 'DAPI', False),
+)
+
+
+def dye_from_name(row, notes):
+    if row.get('Conjugate'):
+        return
+    for pattern, make, joined in DYES_BY_NAME:
+        found = re.search(pattern, row.get('Title', ''), re.I)
+        if found:
+            row['Conjugate'] = make(found)
+            if joined and row.get('Conjugated') in ('', 'No', None):
+                row['Conjugated'] = 'Yes'
+            notes.append('Dye from the name')
+            return
+
+
 def enrich_antibody(row, key, notes, cache, stable, had_link):
     pages = load_json(os.path.join(cache, 'antibody-pages.json')) or {}
     if row.get('Link') and row['Link'] in pages:
@@ -745,6 +769,7 @@ def main():
         if cache:
             if module == 'antibodies':
                 enrich_antibody(row, str(index), notes, cache, stable, had_link)
+                dye_from_name(row, notes)
             elif module == 'plasmids':
                 enrich_plasmid(row, str(index), files, notes, cache)
         if module == 'plasmids':
