@@ -267,6 +267,15 @@ try {
     $header = (string) ($config['zpl_header'] ?? '^XA~TA000~JSN^LT0^MNW^MTT^PON^PMN^LH0,0^JMA^PR4,4~SD15^JUS^LRN^CI0^XZ');
     $zpl = array($header, '^XA', '^MMT', '^CI28', '^PW' . $width, '^LL' . $height, '^LS0', '^LH' . max(0, $dots((float) $design['offset_x_mm'])) . ',' . max(0, $dots((float) $design['offset_y_mm'])));
     $y = $top;
+    // a test pattern instead of the label: a frame at the edge of the label, a frame at the margins and the size in dots, to see where
+    // the printer puts things
+    if (!empty($payload['test'])) {
+        $lines = array();
+        $qrSize = 0;
+        $zpl[] = sprintf('^FO0,0^GB%d,%d,3^FS', $width, $height);
+        $zpl[] = sprintf('^FO%d,%d^GB%d,%d,1^FS', $left, $top, max(1, $width - $left - $right), max(1, $height - $top - $bottom));
+        $zpl[] = sprintf('^FO%d,%d^A0N,28,28^FD%dx%d^FS', $left + 8, $top + 8, $width, $height);
+    }
     // each text is placed by its baseline, as the label software of the printer does; a label that is read turned by 180 degrees has
     // its texts written inverted from the opposite corner (^A0I), so the print is the same as the software makes
     $rotated = !empty($design['rotate_180']);

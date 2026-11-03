@@ -575,7 +575,24 @@
       }
       print.disabled = false;
     });
-    buttons.append(cancel, print);
+    const test = element('button', 'btn btn-outline-secondary btn-sm mr-auto', 'Print a test pattern');
+    test.type = 'button';
+    test.title = 'A frame at the edge of the label and one at the margins: to see where the printer puts things';
+    test.addEventListener('click', async function () {
+      test.disabled = true;
+      message.className = 'small mb-0';
+      message.textContent = 'Sending the test pattern...';
+      try {
+        await request({ test: true, copies: 1 });
+        message.className = 'small mb-0 text-success';
+        message.textContent = 'The test pattern is sent: a frame at the edge of the label, and one at the margins.';
+      } catch (error) {
+        message.className = 'small mb-0 text-danger';
+        message.textContent = error.message;
+      }
+      test.disabled = false;
+    });
+    buttons.append(test, cancel, print);
     box.append(message, buttons);
     back.append(box);
     document.body.append(back);
