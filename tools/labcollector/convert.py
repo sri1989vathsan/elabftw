@@ -4,7 +4,7 @@ Turns the pages saved from LabCollector (a listing exported as an .htm file with
 one ZIP per module with entries.csv and the files of the entries. The columns of LabCollector are mapped to the fields of the module; what
 can be read from a name, a clone or a link is filled in, and each filled value is noted in a review file so it can be checked.
 
-Usage: python3 -I convert.py <folder of the saved page> <module: antibodies|plasmids|cells> <output folder> [--cache <folder of what was found elsewhere>]
+Usage: python3 -I convert.py <folder of the saved page> <module: antibodies|plasmids|cells|primers|probes|reagents|consumables|samples|other> <output folder> [--cache <folder>] [--as <module of the Database>]
 The pages are data, not code: they are only read.
 """
 import csv
@@ -17,6 +17,8 @@ import re
 import sys
 import zipfile
 from bs4 import BeautifulSoup
+
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ---- reading the saved page -------------------------------------------------------------------------------------------------------------
 
@@ -269,8 +271,10 @@ def convert_antibody(record, row, notes):
                     notes.append('Clone from the table of the description')
     if not clone:
         hit = re.search(r'\(([A-Za-z]{0,3}\d[A-Za-z0-9\-./]{1,10}|[A-Za-z]{1,3}-\d{1,3})\)', name)
-        if hit and hit.group(1).upper() not in ('H+L',):
-            clone = hit.group(1)
+        candidate = hit.group(1) if hit else ''
+        # a catalog code (ab12345, sc-1234, a number) or a known tag is not a clone
+        if candidate and candidate.upper() not in ('H+L',) and not re.match(r'^(ab\d{3,7}|sc-?\d{3,6}|\d{3,7}|[A-Z]{1,2}\d{4,7}|igg\w*|p\d+)$', candidate, re.I):
+            clone = candidate
             notes.append('Clone guessed from the brackets in the name: check it')
     if clone:
         row['Clone'] = clone
@@ -393,6 +397,92 @@ def convert_cell(record, row, notes, files):
         row['Optional code (LabCollector)'] = text(record, 'Optional Unique Code')
     if comments:
         row['Notes (LabCollector)'] = re.sub(r'[ \t]+', ' ', comments)[:2000]
+
+
+# ---- any other module: columns are matched to the fields of the module of the Database by name --------------------------------------------------
+
+# what a column of LabCollector may be called, for a field of the Database (both sides are written without capitals and punctuation)
+SYNONYMS = {
+    'manufacturer': 'supplier', 'vendor': 'supplier', 'company': 'supplier', 'supplier': 'supplier', 'source': 'supplier',
+    'catalog': 'catalog number', 'catalogue': 'catalog number', 'cat': 'catalog number', 'catno': 'catalog number', 'reference': 'catalog number',
+    'catalognumber': 'catalog number', 'lot': 'lot number', 'lotno': 'lot number', 'lotnumber': 'lot number',
+    'expiration': 'expiry date', 'expirationdate': 'expiry date', 'expiry': 'expiry date', 'expirydate': 'expiry date', 'expdate': 'expiry date',
+    'cas': 'cas number', 'casnumber': 'cas number', 'hazard': 'hazards', 'hazards': 'hazards', 'safety': 'hazards',
+    'direction': 'orientation', 'strand': 'orientation', 'orientation': 'orientation', 'gene': 'target gene', 'targetgene': 'target gene',
+    'seq': 'sequence', 'sequence': 'sequence', 'sequence5': 'sequence', 'oligosequence': 'sequence', 'tm': 'tm', 'meltingtemperature': 'tm',
+    'conc': 'concentration', 'concentration': 'concentration', 'buffer': 'buffer', 'project': 'project', 'dye': 'label', 'label': 'label', 'fluorophore': 'label',
+    'type': 'type', 'category': 'type', 'sampletype': 'sample type', 'organism': 'source organism', 'species': 'source organism',
+}
+# the columns that are the same in every LabCollector module: they are kept by the common part, not as fields
+COMMON_COLUMNS = {'barcode', 'id', 'owner', 'creationdate', 'lastupdate', 'recordstatus', 'storage', 'secondarystorage', 'storagecomments', 'numberofvials',
+                  'numberofstraws', 'totalvolume', 'thawcounts', 'projectcode', 'label', 'mapimage'}
+
+
+def squash(text):
+    return re.sub(r'[^a-z0-9]+', '', (text or '').lower())
+
+
+def default_modules():
+    path = os.path.join(HERE, '..', '..', 'web', 'default-modules.json')
+    try:
+        return {m['title']: list(m['fields']['extra_fields'].keys()) for m in json.load(open(path, encoding='utf-8'))['modules']}
+    except (OSError, ValueError, KeyError):
+        return {}
+
+
+def best_field(header, fields):
+    """The field of the module that this column is: the same name, a name that starts the same, or what it is called in LabCollector."""
+    key = squash(header)
+    wanted = squash(SYNONYMS.get(key, key))
+    squashed = {f: squash(f) for f in fields}
+    for field, flat in squashed.items():
+        if flat == wanted or flat == key:
+            return field
+    for field, flat in squashed.items():
+        if wanted and (flat.startswith(wanted) or (len(wanted) > 3 and wanted in flat)):
+            return field
+    return ''
+
+
+def convert_generic(record, row, notes, fields, title_column):
+    row['Title'] = text(record, title_column)
+    used = set()
+    for header, cell in record.items():
+        flat = squash(header)
+        if header == title_column or flat in COMMON_COLUMNS - {'label', 'projectcode'}:
+            continue
+        value = cell['text'].replace('\n', ' ').strip()
+        link = next((l for l in cell['links'] if l.startswith('http')), '')
+        if not value and not link:
+            continue
+        if flat in ('website', 'url', 'link', 'manufacturerwebsite', 'webpage'):
+            if 'Link' in fields or True:
+                row['Link'] = link or value
+                continue
+        field = best_field(header, fields)
+        if field and field not in used:
+            row[field] = value
+            used.add(field)
+            notes.append(header + ' -> ' + field)
+        else:
+            row[header + ' (LabCollector)'] = value
+
+
+MODULE_OF_TABLE = (
+    ('antibod', 'antibodies', 'Antibodies'), ('plasmid', 'plasmids', 'Plasmids'), ('strain', 'cells', 'Cells & strains'), ('cell', 'cells', 'Cells & strains'),
+    ('oligo', 'primers', 'Primers'), ('primer', 'primers', 'Primers'), ('rnascope', 'probes', 'Probes'), ('probe', 'probes', 'Probes'),
+    ('reagent', 'reagents', 'Reagents'), ('consumable', 'consumables', 'Consumables'), ('suppl', 'reagents', 'Reagents'), ('sample', 'samples', 'Samples'),
+)
+
+
+def module_from_header(page_text):
+    """The page says which table it lists: (table: strains). Returns the kind of conversion and the module of the Database it goes to."""
+    hit = re.search(r'\(table:\s*([^)]+)\)', page_text)
+    name = (hit.group(1) if hit else page_text[:400]).lower()
+    for needle, kind, title in MODULE_OF_TABLE:
+        if needle in name:
+            return kind, title
+    return 'generic', ''
 
 
 # ---- the files of the pictures of a row --------------------------------------------------------------------------------------------------
@@ -534,6 +624,14 @@ def main():
     cache = sys.argv[sys.argv.index('--cache') + 1] if '--cache' in sys.argv else ''
     os.makedirs(out, exist_ok=True)
     stable = build_stable_cache(cache) if cache else {}
+    # a module that is not one of the three: its columns are matched to the fields of the module of the Database it goes to
+    target_fields, title_column = [], 'Name'
+    if module not in ('antibodies', 'plasmids', 'cells'):
+        page = glob.glob(os.path.join(folder, '*.htm'))[0]
+        records_peek = read_page(folder)
+        title_column = 'Name' if records_peek and 'Name' in records_peek[0] else next(iter(records_peek[0]), 'Name')
+        wanted = sys.argv[sys.argv.index('--as') + 1] if '--as' in sys.argv else {'primers': 'Primers', 'probes': 'Probes', 'reagents': 'Reagents', 'consumables': 'Consumables', 'samples': 'Samples'}.get(module, '')
+        target_fields = default_modules().get(wanted, [])
     rows, reviews, all_files = [], [], []
     for index, record in enumerate(read_page(folder), start=1):
         row, notes, files = {}, [], []
@@ -541,8 +639,10 @@ def main():
             convert_antibody(record, row, notes)
         elif module == 'plasmids':
             convert_plasmid(record, row, notes, files)
-        else:
+        elif module == 'cells':
             convert_cell(record, row, notes, files)
+        else:
+            convert_generic(record, row, notes, target_fields, title_column)
         common(record, row, notes)
         pictures(record, folder, files)
         had_link = bool(row.get('Link'))

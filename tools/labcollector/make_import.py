@@ -30,15 +30,13 @@ def find_page_folder(path, workdir):
 
 
 def module_of(folder):
+    """Reads the first part of the page, where LabCollector says which table it lists, and finds the module of the Database it goes to."""
+    sys.path.insert(0, HERE)
+    import convert
     page = glob.glob(os.path.join(folder, '**', '*.htm'), recursive=True)[0]
-    head = open(page, encoding='utf-8', errors='replace').read(6000)
-    if 'table: antibodies' in head or 'Antibodies' in head[:2500]:
-        return 'antibodies', os.path.dirname(page)
-    if 'table: plasmids' in head or 'Plasmids' in head[:2500]:
-        return 'plasmids', os.path.dirname(page)
-    if 'table: strains' in head or 'Strains' in head[:2500]:
-        return 'cells', os.path.dirname(page)
-    raise SystemExit('Not a module this tool knows: ' + page)
+    head = re.sub(r'<[^>]+>', ' ', open(page, encoding='utf-8', errors='replace').read(8000))
+    kind, title = convert.module_from_header(head)
+    return kind, os.path.dirname(page)
 
 
 def main():
