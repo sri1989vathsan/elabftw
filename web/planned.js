@@ -501,10 +501,45 @@
         return body;
       });
     };
+    // the label drawn as it will be printed: the same positions that go to the printer; a label read turned by 180 degrees is shown turned
+    const SVGNS = 'http://www.w3.org/2000/svg';
+    const draw = function (body) {
+      preview.textContent = '';
+      const svg = document.createElementNS(SVGNS, 'svg');
+      svg.setAttribute('viewBox', '0 0 ' + body.width + ' ' + body.height);
+      svg.setAttribute('width', String(Math.min(360, body.width)));
+      svg.style.border = '1px solid #888';
+      svg.style.background = '#fff';
+      svg.style.display = 'block';
+      const group = document.createElementNS(SVGNS, 'g');
+      body.elements.forEach(function (item) {
+        if (item.type === 'qr') {
+          const box = document.createElementNS(SVGNS, 'rect');
+          box.setAttribute('x', item.x);
+          box.setAttribute('y', item.y);
+          box.setAttribute('width', item.size);
+          box.setAttribute('height', item.size);
+          box.setAttribute('fill', '#ddd');
+          box.setAttribute('stroke', '#333');
+          group.append(box);
+          return;
+        }
+        const text = document.createElementNS(SVGNS, 'text');
+        text.setAttribute('transform', 'translate(' + item.x + ',' + item.y + ')' + (item.inverted ? ' rotate(180)' : ''));
+        text.setAttribute('font-size', String(item.h));
+        text.setAttribute('font-family', 'Helvetica, Arial, sans-serif');
+        text.textContent = item.text;
+        group.append(text);
+      });
+      // read upside down: turn the drawing so it is seen as a person reads the label
+      if (body.rotated) {
+        group.setAttribute('transform', 'rotate(180 ' + (body.width / 2) + ' ' + (body.height / 2) + ')');
+      }
+      svg.append(group);
+      preview.append(svg, document.createTextNode(body.width_mm + ' x ' + body.height_mm + ' mm' + (body.rotated ? ', shown as it is read (it prints turned by 180 degrees)' : '')));
+    };
     const showPreview = function () {
-      request({ dry: true }).then(function (body) {
-        preview.textContent = 'On the label (' + body.width_mm + ' x ' + body.height_mm + ' mm, with a QR code to the entry): ' + body.lines.join(' / ');
-      }).catch(function () {
+      request({ dry: true }).then(draw).catch(function () {
         preview.textContent = '';
       });
     };

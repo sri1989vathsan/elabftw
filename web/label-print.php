@@ -271,15 +271,43 @@ try {
     }
     $zpl = array($header, '^XA', '^MMT', '^CI28', '^PW' . $width, '^LL' . $height, '^LS0', '^LH' . max(0, $dots((float) $design['offset_x_mm'])) . ',' . max(0, $dots((float) $design['offset_y_mm'])));
     $y = $top;
-    foreach ($lines as $index => $line) {
-        // the first line (the numbers) is bold: written twice, one dot apart
-        // the title (the second line) can take two rows when the label has the room
-        $rows = ($index === 1 && $usable - ($y - $top) >= (int) ceil($font * 1.1) * 2) ? 2 : 1;
-        $zpl[] = sprintf('^FO%d,%d^A0N,%d,%d^FB%d,%d,0,L,0^FD%s^FS', $left, $y, $font, $font, $textWidth, $rows, $clean($line));
-        if ($index === 0) {
-            $zpl[] = sprintf('^FO%d,%d^A0N,%d,%d^FB%d,1,0,L,0^FD%s^FS', $left + 1, $y, $font, $font, $textWidth, $clean($line));
+    // each text is placed by its baseline, as the label software of the printer does; a label that is read turned by 180 degrees has
+    // its texts written inverted from the opposite corner (^A0I), so the print is the same as the software makes
+    $rotated = !empty($design['rotate_180']);
+    $wrap = static function (string $text, int $chars, int $rows): array {
+        $out = array();
+        $current = '';
+        foreach (explode(' ', $text) as $word) {
+            if ($current !== '' && mb_strlen($current . ' ' . $word) > $chars) {
+                $out[] = $current;
+                $current = $word;
+            } else {
+                $current = $current === '' ? $word : $current . ' ' . $word;
+            }
         }
-        $y += (int) ceil($font * 1.1) * $rows;
+        $out[] = $current;
+        $out = array_slice($out, 0, $rows);
+        // a word longer than the room is cut
+        return array_map(static fn(string $row): string => mb_substr($row, 0, $chars), $out);
+    };
+    $charsPerRow = max(1, (int) floor($textWidth / ($font * 0.56)));
+    $pitch = (int) ceil($font * 1.15);
+    $elements = array();
+    $row = 0;
+    foreach ($lines as $index => $line) {
+        // the title (the second line) can take two rows when the label has the room
+        $maxRows = ($index === 1 && $usable - $row * $pitch >= $pitch * 2) ? 2 : 1;
+        foreach ($wrap($line, $charsPerRow, $maxRows) as $part) {
+            if ($top + ($row + 1) * $pitch > $height - $bottom + (int) ($font * 0.3)) {
+                break;
+            }
+            $baseline = $top + $row * $pitch + (int) round($font * 0.8);
+            $x = $rotated ? $width - $left : $left;
+            $y = $rotated ? $height - $baseline : $baseline;
+            $zpl[] = sprintf('^FT%d,%d^A0%s,%d,%d^FH\^FD%s^FS', $x, $y, $rotated ? 'I' : 'N', $font, $font, $clean($part));
+            $elements[] = array('type' => 'text', 'x' => $x, 'y' => $y, 'h' => $font, 'text' => $part, 'inverted' => $rotated);
+            $row++;
+        }
     }
     if ($qrSize > 0) {
         $base = (string) $settings['qr_base_url'];
@@ -288,14 +316,17 @@ try {
         }
         $url = $base . '/registry.php?mode=view&id=' . $id;
         $magnification = max(2, (int) floor($qrSize / 37));
-        $zpl[] = sprintf('^FO%d,%d^BQN,2,%d^FDQA,%s^FS', $width - $right - $qrSize, $top, $magnification, $url);
+        $qrX = $rotated ? $right : $width - $right - $qrSize;
+        $qrY = $rotated ? $height - $top - $qrSize : $top;
+        $zpl[] = sprintf('^FO%d,%d^BQN,2,%d^FDQA,%s^FS', $qrX, $qrY, $magnification, $url);
+        $elements[] = array('type' => 'qr', 'x' => $qrX, 'y' => $qrY, 'size' => $qrSize);
     }
     $zpl[] = '^PQ' . $copies;
     $zpl[] = '^XZ';
     $label = implode("\n", $zpl) . "\n";
 
     if (!empty($payload['dry'])) {
-        respond(200, array('zpl' => $label, 'lines' => $lines, 'width_mm' => $design['width_mm'], 'height_mm' => $design['height_mm']));
+        respond(200, array('zpl' => $label, 'elements' => $elements, 'width' => $width, 'height' => $height, 'rotated' => $rotated, 'lines' => $lines, 'width_mm' => $design['width_mm'], 'height_mm' => $design['height_mm']));
     }
     $host = (string) $settings['printer_host'];
     if ($host === '') {
