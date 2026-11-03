@@ -289,8 +289,6 @@ function askRegister(): Promise<'both' | 'lab' | 'personal' | 'none' | null> {
     back.addEventListener('click', event => {
       if (event.target === back) done(null);
     });
-    buttons.append(cancel, ok);
-    box.append(buttons);
     back.append(box);
     document.body.append(back);
     create.focus();
