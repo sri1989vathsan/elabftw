@@ -732,7 +732,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const saveWhilePopupOpen = ({ raw, computed }: PopupResult): void => {
       if (!existingTable || !existingTable.isConnected) return;
       htmlBeforePopup ??= existingTable.outerHTML;
-      if (!applySpreadsheetHtmlToTable(existingTable, spreadsheetToHTML(raw, computed))) return;
+      // Like an edit in the grid in the text (commitOverlayChange): the page's own undo history must not get a step
+      // for every autosave, or Ctrl+Z in the text would undo them one by one
+      let applied = false;
+      editor.undoManager.ignore(() => {
+        applied = applySpreadsheetHtmlToTable(existingTable, spreadsheetToHTML(raw, computed));
+        if (applied) reconcileSpreadsheetRowHeights(existingTable, raw.rowHeights);
+      });
+      if (!applied) return;
       if (uid) latestTableContent.set(uid, existingTable.outerHTML);
       markOwnWrite(existingTable);
       autosavedHash = hashCells(raw.data);
@@ -744,7 +751,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       });
       editor.setDirty(true);
       // the popup is outside the editor body, so the editor's own autosave timer has to be restarted from here
-      editor.dispatch('keyup');
+      dispatchKeyupForAutosave();
     };
     const spreadsheetPopup = (data: SpreadsheetData): Promise<PopupResult> => openSpreadsheetModal(
       data,
