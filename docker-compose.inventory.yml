@@ -1,0 +1,37 @@
+# local test stack: own image tag, own volumes (project name is set with -p)
+services:
+  migration-init:
+    image: elabftw/elabimg:inventory
+  web:
+    image: elabftw/elabimg:inventory
+    volumes:
+      - ./web/registry.php:/elabftw/web/registry.php:ro
+      - ./web/registry-categories.php:/elabftw/web/registry-categories.php:ro
+      - ./web/sequence-viewer:/elabftw/web/sequence-viewer:ro
+      - ./web/lineage.php:/elabftw/web/lineage.php:ro
+      - ./web/lineage.js:/elabftw/web/lineage.js:ro
+      - ./web/lineage.css:/elabftw/web/lineage.css:ro
+      - ./web/sequence-add.js:/elabftw/web/sequence-add.js:ro
+      - ./web/sequence-add.css:/elabftw/web/sequence-add.css:ro
+      - ./web/primers.php:/elabftw/web/primers.php:ro
+      - ./web/planned.php:/elabftw/web/planned.php:ro
+      - ./web/planned.js:/elabftw/web/planned.js:ro
+      - ./web/planned.css:/elabftw/web/planned.css:ro
+      - ./web/order-sheets:/elabftw/web/order-sheets:ro
+      - ./src/Models/Inventory.php:/elabftw/src/Models/Inventory.php:ro
+      - ./web/order-primers.js:/elabftw/web/order-primers.js:ro
+      - ./web/registry-folders.php:/elabftw/web/registry-folders.php:ro
+      - ./web/registry-folders.js:/elabftw/web/registry-folders.js:ro
+      - ./src/templates/orders.html:/elabftw/src/templates/orders.html:ro
+      - ./src/templates/show.html:/elabftw/src/templates/show.html:ro
+      - ./src/templates/sequence-viewer.html:/elabftw/src/templates/sequence-viewer.html:ro
+      - ./src/templates/view.html:/elabftw/src/templates/view.html:ro
+      - ./src/templates/edit.html:/elabftw/src/templates/edit.html:ro
+      - ./src/templates/view-edit-toolbar.html:/elabftw/src/templates/view-edit-toolbar.html:ro
+      - ./src/templates/back-to-previous.html:/elabftw/src/templates/back-to-previous.html:ro
+      - ./web/primer-tools.js:/elabftw/web/primer-tools.js:ro
+      - ./web/primer-design.js:/elabftw/web/primer-design.js:ro
+      - ./web/primers.js:/elabftw/web/primers.js:ro
+      - ./web/primers.css:/elabftw/web/primers.css:ro
+  maintenance:
+    image: elabftw/elabimg:inventory

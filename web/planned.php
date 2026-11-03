@@ -92,6 +92,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $number = new Inventory($App->Users, $id)->register();
             respond(200, array('id' => $id, 'number' => $number));
         }
+        if ($action === 'personal') {
+            $id = (int) ($payload['id'] ?? 0);
+            $number = new Inventory($App->Users, $id)->registerPersonal();
+            respond(200, array('id' => $id, 'number' => $number));
+        }
         if ($action === 'revert') {
             $id = (int) ($payload['id'] ?? 0);
             new Inventory($App->Users, $id)->markPlanned();
@@ -108,7 +113,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 }
 
-$req = $pdo->prepare('SELECT i.id, i.title, i.is_planned, i.category, c.title AS category_title, c.color AS category_color, i.date, i.custom_id, s.title AS status_title, s.color AS status_color
+$req = $pdo->prepare('SELECT i.id, i.title, i.is_planned, i.category, c.title AS category_title, c.color AS category_color, i.date, i.custom_id, i.personal_id, s.title AS status_title, s.color AS status_color
     FROM inventory AS i LEFT JOIN inventory_categories AS c ON c.id = i.category LEFT JOIN inventory_status AS s ON s.id = i.status
     WHERE i.userid = :userid AND i.team = :team AND i.state = 1
     ORDER BY (i.is_planned = 0 AND i.custom_id IS NOT NULL), i.id DESC LIMIT 300');

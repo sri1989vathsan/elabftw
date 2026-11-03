@@ -839,3 +839,9 @@
   gap: 0.5rem;
   margin-top: 1rem;
 }
+
+.id-cell .id-own {
+  display: block;
+  font-size: 0.7em;
+  color: var(--secondary-text, #6b7785);
+}

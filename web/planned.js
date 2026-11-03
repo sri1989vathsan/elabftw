@@ -70,6 +70,27 @@
       box.append(b);
     });
     nav.insertAdjacentElement('beforebegin', box);
+    // in My entries: which of them to show, by the number they have
+    if (mine) {
+      const filter = element('select', 'form-control form-control-sm d-inline-block w-auto ml-2 mt-2 id-filter');
+      filter.setAttribute('aria-label', 'Show the entries by their numbers');
+      [['', 'All of mine'], ['lab', 'In the lab Database (lab number)'], ['personal', 'Registered for myself (my number only)'], ['none', 'Not registered (no number)']].forEach(function (item) {
+        const option = element('option', '', item[1]);
+        option.value = item[0];
+        filter.append(option);
+      });
+      filter.value = params.get('idstate') || '';
+      filter.addEventListener('change', function () {
+        const next = new URLSearchParams(location.search);
+        if (filter.value) {
+          next.set('idstate', filter.value);
+        } else {
+          next.delete('idstate');
+        }
+        location.search = next.toString();
+      });
+      box.insertAdjacentElement('afterend', filter);
+    }
     // the entry pages remember which of the two the list was in
     try {
       sessionStorage.setItem('registryMine', mine ? '1' : '0');
@@ -177,6 +198,26 @@
             }
           });
           row.append(link, badge, state);
+          if (entry.personal_id !== null && entry.personal_id !== undefined) {
+            row.append(element('span', 'badge badge-light border ml-2', 'mine ' + entry.personal_id));
+          } else if (!isPlanned) {
+            const own = element('button', 'btn btn-outline-secondary btn-sm ml-auto', 'Register for myself');
+            own.type = 'button';
+            own.title = 'It gets your next number of the module and stays private to you';
+            own.addEventListener('click', async function () {
+              own.disabled = true;
+              try {
+                const done = await post({ action: 'personal', id: entry.id });
+                own.textContent = 'Mine ' + done.number;
+                window.setTimeout(draw, 800);
+              } catch (error) {
+                own.textContent = error.message;
+              }
+            });
+            row.append(own);
+            ready.classList.remove('ml-auto');
+            ready.classList.add('ml-2');
+          }
           if (!registered) {
             row.append(ready);
           }
@@ -321,8 +362,8 @@
       // in the Database without a number: an intermediate. Register gives it the next number of its module, when it has what the
       // module requires (the required fields, and for the plasmids a sequence).
       bar.classList.add('alert-warning');
-      bar.append(element('span', 'mr-2', 'Not registered: no number yet (an intermediate). Only you see it, and it is not in the lists of the Database.'));
-      const register = element('button', 'btn btn-success btn-sm ml-auto', 'Register to number');
+      bar.append(element('span', 'mr-2', 'Not registered in the lab (an intermediate). Only you see it, and it is not in the lists of the Database.'));
+      const register = element('button', 'btn btn-success btn-sm ml-auto', 'Register in the lab Database');
       register.type = 'button';
       register.addEventListener('click', async function () {
         register.disabled = true;
@@ -337,7 +378,24 @@
           register.disabled = false;
         }
       });
-      bar.append(register, message);
+      const own = element('button', 'btn btn-outline-secondary btn-sm ml-2', entry.personal_id ? 'Mine ' + entry.personal_id : 'Register for myself');
+      own.type = 'button';
+      own.disabled = Boolean(entry.personal_id);
+      own.title = 'It gets your next number of the module and stays private to you';
+      own.addEventListener('click', async function () {
+        own.disabled = true;
+        try {
+          const done = await post({ action: 'personal', id: id });
+          message.textContent = 'Registered for you: number ' + done.number + '.';
+          window.setTimeout(function () {
+            location.reload();
+          }, 900);
+        } catch (error) {
+          message.textContent = error.message;
+          own.disabled = false;
+        }
+      });
+      bar.append(register, own, message);
     } else if (mine) {
       bar.append(element('span', 'text-muted mr-2', 'In the Database' + (entry.custom_id ? ' as number ' + entry.custom_id : '') + '.'));
       const back = element('button', 'btn btn-outline-secondary btn-sm ml-auto', 'Move back to planned');

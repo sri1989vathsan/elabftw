@@ -17,6 +17,7 @@ type Row = {
   id: number;
   // the number of the entry in its module (plasmids, primers... each count on their own); the row number is only internal
   custom_id?: number | null;
+  personal_id?: number | null;
   title: string;
   category_title: string | null;
   category_color: string | null;
@@ -443,7 +444,13 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
         {
           // an entry without a number is not registered yet (an intermediate)
           const cell = el('td', 'id-cell', row.custom_id == null ? '–' : String(row.custom_id));
-          if (row.custom_id == null) cell.title = 'Not registered: no number yet';
+          if (row.custom_id == null) cell.title = 'Not registered: no number of the lab yet';
+          // the second number is the owner's own: it counts their entries of the module from 1
+          if (row.personal_id != null) {
+            const own = el('span', 'id-own', `mine ${row.personal_id}`);
+            own.title = 'The number of its owner in this module';
+            cell.append(own);
+          }
           // modules count on their own: when the list mixes modules, the module is written under the number
           if (mixedModules && row.category_title) {
             const moduleName = el('span', 'id-module', row.category_title);

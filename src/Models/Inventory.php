@@ -114,8 +114,8 @@ final class Inventory extends AbstractConcreteEntity
         // each type of entry (plasmids, primers, ...) counts on its own: the next number of the module; a planned entry has none
         $customId ??= ($this->asPlanned || $this->asUnregistered) ? null : $this->nextNumber($category);
 
-        $sql = 'INSERT INTO inventory(team, title, date, status, body, userid, category, elabid, canread_base, canwrite_base, canbook_base, canread, canwrite, canread_is_immutable, canwrite_is_immutable, canbook, metadata, custom_id, content_type, rating, hide_main_text, created_from_type, created_from_id, is_bookable, is_planned)
-            VALUES(:team, :title, :date, :status, :body, :userid, :category, :elabid, :canread_base, :canwrite_base, :canbook_base, :canread, :canwrite, :canread_is_immutable, :canwrite_is_immutable, :canbook, :metadata, :custom_id, :content_type, :rating, :hide_main_text, :created_from_type, :created_from_id, :is_bookable, :is_planned)';
+        $sql = 'INSERT INTO inventory(team, title, date, status, body, userid, category, elabid, canread_base, canwrite_base, canbook_base, canread, canwrite, canread_is_immutable, canwrite_is_immutable, canbook, metadata, custom_id, personal_id, content_type, rating, hide_main_text, created_from_type, created_from_id, is_bookable, is_planned)
+            VALUES(:team, :title, :date, :status, :body, :userid, :category, :elabid, :canread_base, :canwrite_base, :canbook_base, :canread, :canwrite, :canread_is_immutable, :canwrite_is_immutable, :canbook, :metadata, :custom_id, :personal_id, :content_type, :rating, :hide_main_text, :created_from_type, :created_from_id, :is_bookable, :is_planned)';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->Users->team, PDO::PARAM_INT);
         $req->bindParam(':title', $title);
@@ -135,6 +135,9 @@ final class Inventory extends AbstractConcreteEntity
         $req->bindParam(':canbook', $canbook);
         $req->bindParam(':metadata', $metadata);
         $req->bindParam(':custom_id', $customId, PDO::PARAM_INT);
+        // an entry registered in the lab at once has the number of its owner too; the others get it when they are registered
+        $personalId = $customId !== null ? $this->nextPersonalNumber((int) $this->Users->userData['userid'], $category) : null;
+        $req->bindParam(':personal_id', $personalId, PDO::PARAM_INT);
         $req->bindValue(':content_type', $contentType->value, PDO::PARAM_INT);
         $req->bindParam(':rating', $rating, PDO::PARAM_INT);
         $req->bindValue(':hide_main_text', $hideMainText->value, PDO::PARAM_INT);
@@ -161,6 +164,22 @@ final class Inventory extends AbstractConcreteEntity
             return null;
         }
         return $this->getCurrentHighestCustomId($category) + 1;
+    }
+
+    /**
+     * The next number of an owner in a module: one more than the highest of their entries there (the first is 1). It is theirs
+     * alone, whatever the number of the lab is.
+     */
+    private function nextPersonalNumber(int $userid, ?int $category): ?int
+    {
+        if ($category === null) {
+            return null;
+        }
+        $req = $this->Db->prepare('SELECT COALESCE(MAX(personal_id), 0) FROM inventory WHERE userid = :userid AND category = :category');
+        $req->bindValue(':userid', $userid, PDO::PARAM_INT);
+        $req->bindValue(':category', $category, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return (int) $req->fetchColumn() + 1;
     }
 
     /** the statuses of what is not in the Database yet, with their colours */
@@ -233,10 +252,34 @@ final class Inventory extends AbstractConcreteEntity
             throw new ImproperActionException(_('It cannot be registered yet, it needs: ') . implode(', ', $missing) . '.');
         }
         $number = $this->nextNumber((int) $category);
-        $req = $this->Db->prepare('UPDATE inventory SET custom_id = :number, canread_base = :canread, canwrite_base = :canwrite WHERE id = :id AND custom_id IS NULL AND is_planned = 0');
+        $req = $this->Db->prepare('UPDATE inventory SET custom_id = :number, personal_id = COALESCE(personal_id, :personal), canread_base = :canread, canwrite_base = :canwrite WHERE id = :id AND custom_id IS NULL AND is_planned = 0');
         $req->bindValue(':number', $number, PDO::PARAM_INT);
+        $req->bindValue(':personal', $this->nextPersonalNumber((int) $this->entityData['userid'], (int) $category), PDO::PARAM_INT);
         $req->bindValue(':canread', BasePermissions::Organization->value, PDO::PARAM_INT);
         $req->bindValue(':canwrite', BasePermissions::User->value, PDO::PARAM_INT);
+        $req->bindValue(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return (int) $number;
+    }
+
+    /**
+     * An entry registers for its owner only: it gets the next number of its owner in the module, and stays private to them
+     *
+     * @return int the number it got
+     */
+    public function registerPersonal(): int
+    {
+        $this->canOrExplode(AccessType::Write);
+        $category = $this->entityData['category'] ?? null;
+        if ($category === null) {
+            throw new ImproperActionException(_('A module is needed to give it a number: choose one first.'));
+        }
+        if ($this->entityData['personal_id'] !== null) {
+            throw new ImproperActionException(_('This entry has a number of its owner already.'));
+        }
+        $number = $this->nextPersonalNumber((int) $this->entityData['userid'], (int) $category);
+        $req = $this->Db->prepare('UPDATE inventory SET personal_id = :number WHERE id = :id AND personal_id IS NULL');
+        $req->bindValue(':number', $number, PDO::PARAM_INT);
         $req->bindValue(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
         return (int) $number;
@@ -277,8 +320,9 @@ final class Inventory extends AbstractConcreteEntity
         // an entry that was in the Database before keeps its number: nobody else could have taken it, the numbers of the planned
         // entries count for the next number of the module
         $number = $this->entityData['custom_id'] !== null ? (int) $this->entityData['custom_id'] : $this->nextNumber((int) $category);
-        $req = $this->Db->prepare('UPDATE inventory SET is_planned = 0, custom_id = :number, status = NULL, canread_base = :canread, canwrite_base = :canwrite WHERE id = :id AND is_planned = 1');
+        $req = $this->Db->prepare('UPDATE inventory SET is_planned = 0, custom_id = :number, personal_id = COALESCE(personal_id, :personal), status = NULL, canread_base = :canread, canwrite_base = :canwrite WHERE id = :id AND is_planned = 1');
         $req->bindValue(':number', $number, PDO::PARAM_INT);
+        $req->bindValue(':personal', $this->nextPersonalNumber((int) $this->entityData['userid'], (int) $category), PDO::PARAM_INT);
         $req->bindValue(':canread', BasePermissions::Organization->value, PDO::PARAM_INT);
         $req->bindValue(':canwrite', BasePermissions::User->value, PDO::PARAM_INT);
         $req->bindValue(':id', $this->id, PDO::PARAM_INT);
@@ -315,6 +359,15 @@ final class Inventory extends AbstractConcreteEntity
         // lists of the Database show the registered entries
         if ($displayParams->getQuery()->getBoolean('planned')) {
             $this->filterSql .= ' AND entity.userid = ' . (int) $this->Users->userData['userid'] . ' ';
+            // which of them: in the lab Database, registered for the owner only, or without any number
+            $filter = $displayParams->getQuery()->getString('idstate');
+            if ($filter === 'lab') {
+                $this->filterSql .= ' AND entity.is_planned = 0 AND entity.custom_id IS NOT NULL ';
+            } elseif ($filter === 'personal') {
+                $this->filterSql .= ' AND entity.custom_id IS NULL AND entity.personal_id IS NOT NULL ';
+            } elseif ($filter === 'none') {
+                $this->filterSql .= ' AND entity.custom_id IS NULL AND entity.personal_id IS NULL ';
+            }
         } else {
             $this->filterSql .= ' AND entity.is_planned = 0 AND (entity.custom_id IS NOT NULL OR entity.category IS NULL) ';
         }
