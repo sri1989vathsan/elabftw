@@ -19,6 +19,7 @@ use PDO;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
+use function array_filter;
 use function array_slice;
 use function count;
 use function date;
@@ -79,12 +80,13 @@ try {
     $total = (int) $run('SELECT COUNT(*) FROM inventory AS entity WHERE ' . $labWhere)->fetchColumn();
     $recent = (int) $run('SELECT COUNT(*) FROM inventory AS entity WHERE ' . $labWhere . ' AND entity.created_at > NOW() - INTERVAL 7 DAY')->fetchColumn();
     $active = (int) $run('SELECT COUNT(DISTINCT c.users_id) FROM inventory_changelog AS c INNER JOIN inventory AS entity ON entity.id = c.entity_id WHERE entity.team = :team AND c.created_at > NOW() - INTERVAL 30 DAY')->fetchColumn();
-    $modules = $run('SELECT c.id, c.title, c.color, c.settings, (SELECT COUNT(*) FROM inventory AS entity WHERE entity.category = c.id AND ' . $labWhere . ') AS n
+    $mineTotal = (int) $run('SELECT COUNT(*) FROM inventory AS entity WHERE ' . $labWhere . ' AND entity.userid = :userid')->fetchColumn();
+    $modules = $run('SELECT c.id, c.title, c.color, c.settings, (SELECT COUNT(*) FROM inventory AS entity WHERE entity.category = c.id AND ' . $labWhere . ') AS n, (SELECT COUNT(*) FROM inventory AS entity WHERE entity.category = c.id AND entity.userid = :userid AND ' . $labWhere . ') AS mine
         FROM inventory_categories AS c WHERE c.team = :team AND c.state = 1 ORDER BY c.ordering, c.title')->fetchAll();
     $byModule = array();
     $needsSequence = array();
     foreach ($modules as $module) {
-        $byModule[] = array('id' => (int) $module['id'], 'title' => (string) $module['title'], 'color' => (string) $module['color'], 'count' => (int) $module['n']);
+        $byModule[] = array('id' => (int) $module['id'], 'title' => (string) $module['title'], 'color' => (string) $module['color'], 'count' => (int) $module['n'], 'mine' => (int) $module['mine']);
         $settings = json_decode((string) $module['settings'], true);
         if (is_array($settings) && !empty($settings['requires_sequence_file'])) {
             $needsSequence[] = (int) $module['id'];
@@ -96,13 +98,20 @@ try {
     }
 
     $risks = array();
-    $entryItem = static fn(array $row, string $detail = ''): array => array('id' => (int) $row['id'], 'title' => (string) $row['title'], 'module' => $moduleTitles[(int) ($row['category'] ?? 0)] ?? '', 'detail' => $detail);
+    $entryItem = static fn(array $row, string $detail = ''): array => array('id' => (int) $row['id'], 'title' => (string) $row['title'], 'module' => $moduleTitles[(int) ($row['category'] ?? 0)] ?? '', 'detail' => $detail, 'mine' => (int) ($row['userid'] ?? 0) === $userId, 'owner' => trim((string) ($row['owner'] ?? '')));
+    // a check: how many in all, how many are the user's, and the entries (the user's first)
+    $risk = static function (string $key, string $label, array $items) use ($LIMIT): array {
+        $mine = count(array_filter($items, static fn(array $i): bool => $i['mine'] === true));
+        usort($items, static fn(array $a, array $b): int => (int) $b['mine'] <=> (int) $a['mine']);
+        return array('key' => $key, 'label' => $label, 'count' => count($items), 'mine' => $mine, 'items' => array_slice($items, 0, $LIMIT));
+    };
+    $OWNER = ', entity.userid, (SELECT CONCAT(o.firstname, " ", o.lastname) FROM users AS o WHERE o.userid = entity.userid) AS owner';
 
     // stock that expires: a date field with "expir" in its name, in the past or in the next 30 days
     $today = strtotime(date('Y-m-d'));
     $expired = array();
     $expiring = array();
-    foreach ($run('SELECT entity.id, entity.title, entity.category, entity.metadata FROM inventory AS entity WHERE ' . $labWhere . " AND entity.metadata LIKE '%xpir%'")->fetchAll() as $row) {
+    foreach ($run('SELECT entity.id, entity.title, entity.category, entity.metadata' . $OWNER . ' FROM inventory AS entity WHERE ' . $labWhere . " AND entity.metadata LIKE '%xpir%'")->fetchAll() as $row) {
         $metadata = json_decode((string) $row['metadata'], true);
         foreach (is_array($metadata) ? ($metadata['extra_fields'] ?? array()) : array() as $name => $field) {
             if (!is_array($field) || preg_match('/expir/i', (string) $name) !== 1 || trim((string) ($field['value'] ?? '')) === '') {
@@ -121,12 +130,12 @@ try {
         }
     }
     usort($expiring, static fn(array $a, array $b): int => strcmp($a['detail'], $b['detail']));
-    $risks[] = array('key' => 'expiring', 'label' => 'Expiring in 30 days', 'count' => count($expiring), 'items' => array_slice($expiring, 0, $LIMIT));
-    $risks[] = array('key' => 'expired', 'label' => 'Expired', 'count' => count($expired), 'items' => array_slice($expired, 0, $LIMIT));
+    $risks[] = $risk('expiring', 'Expiring in 30 days', $expiring);
+    $risks[] = $risk('expired', 'Expired', $expired);
 
     // entries stored nowhere
-    $unstored = $run('SELECT entity.id, entity.title, entity.category FROM inventory AS entity WHERE ' . $labWhere . ' AND NOT EXISTS (SELECT 1 FROM containers2inventory AS k WHERE k.item_id = entity.id) ORDER BY entity.id DESC')->fetchAll();
-    $risks[] = array('key' => 'unstored', 'label' => 'Not stored anywhere', 'count' => count($unstored), 'items' => array_map($entryItem, array_slice($unstored, 0, $LIMIT)));
+    $unstored = $run('SELECT entity.id, entity.title, entity.category' . $OWNER . ' FROM inventory AS entity WHERE ' . $labWhere . ' AND NOT EXISTS (SELECT 1 FROM containers2inventory AS k WHERE k.item_id = entity.id) ORDER BY entity.id DESC')->fetchAll();
+    $risks[] = $risk('unstored', 'Not stored anywhere', array_map($entryItem, $unstored));
 
     // boxes that are almost full
     $units = $run('SELECT id, name, parent_id, box_rows, box_cols FROM storage_units')->fetchAll();
@@ -154,15 +163,15 @@ try {
             $full[] = array('id' => (int) $unit['id'], 'title' => $pathOf((int) $unit['id']), 'module' => '', 'detail' => ($used[(int) $unit['id']] ?? 0) . ' of ' . $slots . ' slots used', 'storage' => true);
         }
     }
-    $risks[] = array('key' => 'full', 'label' => 'Boxes almost full', 'count' => count($full), 'items' => array_slice($full, 0, $LIMIT));
+    $risks[] = array('key' => 'full', 'label' => 'Boxes almost full', 'count' => count($full), 'mine' => null, 'items' => array_slice($full, 0, $LIMIT));
 
     // the entries of this user that are not in the lab Database yet
-    $waiting = $run('SELECT entity.id, entity.title, entity.category FROM inventory AS entity WHERE entity.state = 1 AND entity.team = :team AND entity.userid = :userid AND (entity.is_planned = 1 OR entity.custom_id IS NULL) ORDER BY entity.id DESC')->fetchAll();
-    $risks[] = array('key' => 'waiting', 'label' => 'Yours, not in the lab Database yet', 'count' => count($waiting), 'items' => array_map($entryItem, array_slice($waiting, 0, $LIMIT)));
+    $waiting = $run('SELECT entity.id, entity.title, entity.category' . $OWNER . ' FROM inventory AS entity WHERE entity.state = 1 AND entity.team = :team AND entity.userid = :userid AND (entity.is_planned = 1 OR entity.custom_id IS NULL) ORDER BY entity.id DESC')->fetchAll();
+    $risks[] = $risk('waiting', 'Yours, not in the lab Database yet', array_map($entryItem, $waiting));
 
     // entries that miss what their module asks: a required field, or a sequence file
     $incomplete = array();
-    foreach ($run('SELECT entity.id, entity.title, entity.category, entity.metadata FROM inventory AS entity WHERE ' . $labWhere . " AND entity.metadata LIKE '%required%'")->fetchAll() as $row) {
+    foreach ($run('SELECT entity.id, entity.title, entity.category, entity.metadata' . $OWNER . ' FROM inventory AS entity WHERE ' . $labWhere . " AND entity.metadata LIKE '%required%'")->fetchAll() as $row) {
         $metadata = json_decode((string) $row['metadata'], true);
         $missing = array();
         foreach (is_array($metadata) ? ($metadata['extra_fields'] ?? array()) : array() as $name => $field) {
@@ -176,13 +185,13 @@ try {
     }
     if ($needsSequence !== array()) {
         $likes = "(LOWER(u.real_name) LIKE '%.gb' OR LOWER(u.real_name) LIKE '%.gbk' OR LOWER(u.real_name) LIKE '%.gbff' OR LOWER(u.real_name) LIKE '%.genbank' OR LOWER(u.real_name) LIKE '%.fasta' OR LOWER(u.real_name) LIKE '%.fa' OR LOWER(u.real_name) LIKE '%.fna' OR LOWER(u.real_name) LIKE '%.dna')";
-        foreach ($run('SELECT entity.id, entity.title, entity.category FROM inventory AS entity WHERE ' . $labWhere . ' AND entity.category IN (' . implode(',', $needsSequence) . ") AND NOT EXISTS (SELECT 1 FROM uploads AS u WHERE u.item_id = entity.id AND u.type = 'inventory' AND u.state = 1 AND " . $likes . ')')->fetchAll() as $row) {
+        foreach ($run('SELECT entity.id, entity.title, entity.category' . $OWNER . ' FROM inventory AS entity WHERE ' . $labWhere . ' AND entity.category IN (' . implode(',', $needsSequence) . ") AND NOT EXISTS (SELECT 1 FROM uploads AS u WHERE u.item_id = entity.id AND u.type = 'inventory' AND u.state = 1 AND " . $likes . ')')->fetchAll() as $row) {
             $incomplete[(int) $row['id']] = $entryItem($row, 'no sequence file');
         }
     }
-    $risks[] = array('key' => 'incomplete', 'label' => 'Missing what the module needs', 'count' => count($incomplete), 'items' => array_slice(array_values($incomplete), 0, $LIMIT));
+    $risks[] = $risk('incomplete', 'Missing what the module needs', array_values($incomplete));
 
-    echo json_encode(array('total' => $total, 'modules' => count($modules), 'recent' => $recent, 'active' => $active, 'byModule' => $byModule, 'risks' => $risks, 'updated' => date('H:i:s')));
+    echo json_encode(array('total' => $total, 'mineTotal' => $mineTotal, 'modules' => count($modules), 'recent' => $recent, 'active' => $active, 'byModule' => $byModule, 'risks' => $risks, 'updated' => date('H:i:s')));
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode(array('error' => $e->getMessage()));

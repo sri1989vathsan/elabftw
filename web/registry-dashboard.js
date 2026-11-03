@@ -22,6 +22,12 @@
     return Number(n).toLocaleString('en-US');
   };
   let openRisk = null;
+  let onlyMine = false;
+  try {
+    onlyMine = window.localStorage.getItem('registryDashboardMine') === '1';
+  } catch (error) {
+    onlyMine = false;
+  }
   let timer = 0;
 
   function donut(modules) {
@@ -110,7 +116,23 @@
       }
       schedule(auto.checked);
     });
-    tools.append(autoLabel, stamp, refresh);
+    // what is the user's: the lists and the counts of the checks can be limited to the entries of the user
+    const scope = element('div', 'btn-group btn-group-sm');
+    [['All entries', false], ['Only mine', true]].forEach(function (item) {
+      const button = element('button', 'btn btn-outline-secondary' + (onlyMine === item[1] ? ' active' : ''), item[0]);
+      button.type = 'button';
+      button.addEventListener('click', function () {
+        onlyMine = item[1];
+        try {
+          window.localStorage.setItem('registryDashboardMine', onlyMine ? '1' : '0');
+        } catch (error) {
+          // not remembered
+        }
+        draw(data);
+      });
+      scope.append(button);
+    });
+    tools.append(scope, autoLabel, stamp, refresh);
     head.append(titles, tools);
     root.append(head);
     schedule(auto.checked);
@@ -119,7 +141,7 @@
     const overview = element('section', 'rd-panel');
     overview.append(element('h2', '', 'Overview'));
     const kpis = element('div', 'rd-kpis');
-    [['main', data.total, 'Entries in the lab Database'], ['', data.modules, 'Modules'], ['', data.recent, 'Added this week'], ['', data.active, 'People active this month']].forEach(function (k) {
+    [['main', data.total, 'Entries in the lab Database'], ['', data.mineTotal, 'Of them yours'], ['', data.modules, 'Modules'], ['', data.recent, 'Added this week'], ['', data.active, 'People active this month']].forEach(function (k) {
       const box = element('div', 'rd-kpi ' + k[0]);
       box.append(element('div', 'n', number(k[1])), element('div', 'l', k[2]));
       kpis.append(box);
@@ -137,6 +159,7 @@
         return sum + x.count;
       }, 0) * 100) : 0;
       row.append(dot, element('span', '', m.title), element('span', 'rd-share', share + '%'));
+      row.title = m.title + ': ' + m.count + ' in all, ' + m.mine + ' yours';
       legend.append(row);
     });
     const list = element('div', 'rd-list');
@@ -145,7 +168,7 @@
     }).forEach(function (m) {
       const link = element('a');
       link.href = 'registry.php?category=' + m.id;
-      link.append(element('span', '', m.title), element('span', 'c', number(m.count)));
+      link.append(element('span', '', m.title), element('span', 'c', number(onlyMine ? m.mine : m.count) + (onlyMine ? '' : (m.mine ? '  (' + number(m.mine) + ' yours)' : ''))));
       list.append(link);
     });
     split.append(chart, legend, list);
@@ -160,27 +183,42 @@
     detail.hidden = true;
     const showDetail = function (risk) {
       detail.textContent = '';
-      detail.append(element('strong', '', risk.label + ' (' + risk.count + ')'));
-      if (risk.items.length === 0) {
+      const shown = shownCount(risk);
+      detail.append(element('strong', '', risk.label + ' (' + shown + (risk.mine !== null && !onlyMine ? ', ' + risk.mine + ' yours' : '') + ')'));
+      const items = onlyMine && risk.mine !== null ? risk.items.filter(function (item) {
+        return item.mine;
+      }) : risk.items;
+      if (items.length === 0) {
         detail.append(element('p', 'text-muted mb-0', 'Nothing here.'));
       }
-      risk.items.forEach(function (item) {
+      items.forEach(function (item) {
         const row = element('div', 'row-item');
         const link = element('a', '', item.title || 'Untitled');
         link.href = item.storage ? 'registry.php?storage_unit=' + item.id : 'registry.php?mode=view&id=' + item.id;
-        row.append(element('span', 'mod', item.module || ''), link, element('span', 'det', item.detail || ''));
+        // whose it is: the entries of the user are marked
+        const who = element('span', 'rd-who' + (item.mine ? ' mine' : ''), item.storage ? '' : (item.mine ? 'yours' : (item.owner || '')));
+        row.append(element('span', 'mod', item.module || ''), link, who, element('span', 'det', item.detail || ''));
         detail.append(row);
       });
-      if (risk.count > risk.items.length) {
-        detail.append(element('p', 'text-muted small mb-0 mt-1', 'and ' + (risk.count - risk.items.length) + ' more'));
+      if (shown > items.length) {
+        detail.append(element('p', 'text-muted small mb-0 mt-1', 'and ' + (shown - items.length) + ' more'));
       }
     };
+    // the count of a check: all of them, or the ones that are the user's
+    const shownCount = function (risk) {
+      return onlyMine && risk.mine !== null ? risk.mine : risk.count;
+    };
     data.risks.forEach(function (risk) {
-      const tile = element('button', 'rd-risk' + (risk.count === 0 ? ' zero' : (risk.key === 'expired' ? ' bad' : ' warn')) + (openRisk === risk.key ? ' open' : ''));
+      const count = shownCount(risk);
+      const tile = element('button', 'rd-risk' + (count === 0 ? ' zero' : (risk.key === 'expired' ? ' bad' : ' warn')) + (openRisk === risk.key ? ' open' : ''));
       tile.type = 'button';
       const text = element('div');
       text.append(element('div', 'l', risk.label));
-      tile.append(element('div', 'n', number(risk.count)), text);
+      // next to the count: how many of them are the user's
+      if (!onlyMine && risk.mine !== null && risk.count > 0) {
+        text.append(element('div', 'rd-mine', risk.mine + ' yours' + (risk.mine === 0 ? ', the rest are others\'' : '')));
+      }
+      tile.append(element('div', 'n', number(count)), text);
       tile.addEventListener('click', function () {
         openRisk = openRisk === risk.key ? null : risk.key;
         grid.querySelectorAll('.rd-risk').forEach(function (t) {

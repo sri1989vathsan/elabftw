@@ -42,3 +42,8 @@
 .rd-detail .row-item { display: flex; gap: 0.6rem; padding: 0.25rem 0; font-size: 0.88rem; }
 .rd-detail .mod { opacity: 0.65; min-width: 7rem; }
 .rd-detail .det { margin-left: auto; opacity: 0.75; }
+
+.rd-who { font-size: 0.78rem; padding: 0 0.45rem; border-radius: 3px; background: rgba(128, 128, 128, 0.18); white-space: nowrap; align-self: center; }
+.rd-who.mine { background: var(--rd-accent); color: #fff; }
+.rd-mine { font-size: 0.75rem; color: var(--rd-accent); }
+.rd-head .btn-group .btn.active { background: var(--rd-accent); border-color: var(--rd-accent); color: #fff; }
