@@ -237,7 +237,15 @@ function buildTree(units: Unit[], rows: Row[]): { roots: Node[]; byId: Map<numbe
   });
   rows.forEach(row => (row.storage_locations ?? []).forEach(l => byId.get(l.storage_id)?.own.push(row)));
   const sortNodes = (nodes: Node[]): void => {
-    nodes.sort((a, b) => a.unit.name.localeCompare(b.unit.name));
+    // in order: by the number at the end of the name when both have one (box 5, 6, 7, 8, 9, 10 whatever the words before it), else in natural order
+    nodes.sort((a, b) => {
+      const an = /(\d+)\s*$/.exec(a.unit.name);
+      const bn = /(\d+)\s*$/.exec(b.unit.name);
+      if (an && bn && Number(an[1]) !== Number(bn[1])) {
+        return Number(an[1]) - Number(bn[1]);
+      }
+      return a.unit.name.localeCompare(b.unit.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
     nodes.forEach(n => sortNodes(n.children));
   };
   sortNodes(roots);
