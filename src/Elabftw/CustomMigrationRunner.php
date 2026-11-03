@@ -154,6 +154,7 @@ final class CustomMigrationRunner
         '121_registry_link_field_all.sql',
         '122_registry_label_formats.sql',
         '123_registry_label_bottom_margin.sql',
+        '124_registry_module_settings.sql',
     );
 
     private Db $Db;
