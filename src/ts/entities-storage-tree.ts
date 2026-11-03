@@ -674,6 +674,16 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
           blockBetween(startSlot, endSlot).forEach(name => pickedSlots.add(name));
           lastPickedSlot = endSlot;
           renderMain();
+          // the entry to store in the slots is asked for at once (closing the window keeps the slots chosen)
+          if (pickedSlots.size > 0) {
+            const ordered = [...pickedSlots].sort((a, b) => a.charCodeAt(0) - b.charCodeAt(0) || Number(a.slice(1)) - Number(b.slice(1)));
+            void import(/* webpackChunkName: 'storage-slot-add' */ './storage-slot-add').then(module => {
+              module.openSlotAdd(node.unit, ordered, () => {
+                pickedSlots = new Set<string>();
+                void load();
+              });
+            });
+          }
         }
       };
       table.addEventListener('mouseover', over);
