@@ -24,6 +24,21 @@ use ZipArchive;
 
 use function array_column;
 use function str_starts_with;
+use function str_contains;
+use function explode;
+use function end;
+use function array_pop;
+use function preg_match;
+use function preg_split;
+use function mb_strpos;
+use function mb_strlen;
+use function uksort;
+use function ord;
+use function substr;
+use function max;
+use function min;
+use function implode;
+use function array_keys;
 use function rewind;
 use function stream_get_contents;
 use function array_slice;
@@ -298,6 +313,205 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'set_default_owner') {
     $req->bindValue(':owner', $chosen > 0 ? $chosen : null, $chosen > 0 ? PDO::PARAM_INT : PDO::PARAM_NULL);
     $pdo->execute($req);
     respond(200, array('ok' => true));
+}
+
+// the storage places of LabCollector, kept as text in the field "Storage (LabCollector)", become places of the storage browser: the path of rooms,
+// freezers and racks, a box at the end of it, and the entry in the boxes with the positions of its vials (admins only)
+if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
+    if (!$isAdmin) {
+        respond(403, array('error' => 'Only an admin can build the storage places.'));
+    }
+    try {
+        $categoryId = (int) ($payload['category'] ?? 0);
+        if ($loadModule($categoryId) === null) {
+            respond(404, array('error' => 'This module is not in your team.'));
+        }
+        $read = $pdo->prepare('SELECT id, metadata FROM inventory WHERE category = :category AND team = :team AND state = 1 AND NOT EXISTS (SELECT 1 FROM containers2inventory AS c WHERE c.item_id = inventory.id)');
+        $read->bindValue(':category', $categoryId, PDO::PARAM_INT);
+        $read->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($read);
+        $entries = array();
+        $texts = array();
+        foreach ($read->fetchAll() as $entry) {
+            $meta = json_decode((string) $entry['metadata'], true);
+            $value = trim((string) ($meta['extra_fields']['Storage (LabCollector)']['value'] ?? ''));
+            if ($value !== '') {
+                $texts[(int) $entry['id']] = $value;
+            }
+        }
+        // the roots (first place of a path: "Instrument Room"): they tell where a second place starts inside one text
+        $roots = array();
+        $partsOf = static function (string $text): array {
+            $parts = explode(' || ', $text);
+            $extras = '';
+            if ($parts !== array() && preg_match('/^(vials|volume|comment):/', (string) end($parts)) === 1) {
+                $extras = (string) array_pop($parts);
+            }
+            return array($parts, $extras);
+        };
+        foreach ($texts as $text) {
+            foreach ($partsOf($text)[0] as $part) {
+                $first = trim(explode(' > ', explode(' | ', $part)[0])[0]);
+                if ($first !== '' && str_contains($part, ' > ')) {
+                    $roots[$first] = ($roots[$first] ?? 0) + 1;
+                }
+            }
+        }
+        uksort($roots, static fn(string $a, string $b): int => mb_strlen($b) <=> mb_strlen($a));
+        $cleanPath = static function (string $path): array {
+            $segments = array();
+            foreach (explode(' > ', $path) as $segment) {
+                $segment = trim((string) preg_replace('/\s*\((?:delete|)\)\s*$/i', '', trim($segment)));
+                if ($segment !== '') {
+                    $segments[] = mb_substr($segment, 0, 255);
+                }
+            }
+            return $segments;
+        };
+        $positionsOf = static function (string $raw): array {
+            $found = array();
+            foreach (explode(',', $raw) as $one) {
+                $one = strtoupper(trim($one));
+                if (preg_match('/^[A-Z]\d{1,2}$/', $one) === 1) {
+                    $found[] = $one;
+                }
+            }
+            return $found;
+        };
+        // every place of every entry: the path, the positions, what was written about it
+        $places = array();
+        $boxes = array();
+        foreach ($texts as $id => $text) {
+            [$parts, $extras] = $partsOf($text);
+            $vials = preg_match('/vials:\s*(\d+)/', $extras, $m) === 1 ? (int) $m[1] : 0;
+            foreach ($parts as $part) {
+                $pieces = preg_split('/\(Position:\s*([^)]*)\)/', $part, -1, PREG_SPLIT_DELIM_CAPTURE);
+                if (!is_array($pieces)) {
+                    continue;
+                }
+                $pathText = trim(explode(' | ', (string) $pieces[0])[0]);
+                $index = 1;
+                do {
+                    $raw = $pieces[$index] ?? '';
+                    $tail = (string) ($pieces[$index + 1] ?? '');
+                    // a second place can follow inside the same text: it starts where a known root starts
+                    $next = '';
+                    $cut = null;
+                    foreach (array_keys($roots) as $root) {
+                        $at = mb_strpos($tail, $root . ' > ');
+                        if ($at !== false && ($cut === null || $at < $cut)) {
+                            $cut = $at;
+                        }
+                    }
+                    if ($cut !== null) {
+                        $next = mb_substr($tail, $cut);
+                        $tail = mb_substr($tail, 0, $cut);
+                    }
+                    $segments = $cleanPath($pathText);
+                    if (count($segments) >= 1) {
+                        $positions = $positionsOf((string) $raw);
+                        $comment = preg_match('/Comments:\s*([^|]*)/', $tail, $c) === 1 ? trim($c[1]) : (preg_match('/Features:\s*([^|]*)/', $tail, $c) === 1 ? trim($c[1]) : '');
+                        $places[$id][] = array('segments' => $segments, 'positions' => $positions, 'comment' => $comment);
+                        $key = implode(' > ', $segments);
+                        foreach ($positions as $position) {
+                            $boxes[$key]['rows'] = max($boxes[$key]['rows'] ?? 0, ord($position[0]) - 64);
+                            $boxes[$key]['cols'] = max($boxes[$key]['cols'] ?? 0, (int) substr($position, 1));
+                        }
+                    }
+                    $pathText = trim(explode(' | ', $next)[0]);
+                    $index += 2;
+                } while ($pathText !== '' && $index < count($pieces) + 2 && $next !== '');
+                $places[$id]['vials'] = $vials;
+            }
+        }
+        // the size of a box: the smallest usual one that holds every position seen in it
+        $sizes = array(array(9, 9), array(8, 12), array(10, 10), array(12, 12), array(16, 24));
+        $sizeOf = static function (int $rows, int $cols) use ($sizes): array {
+            foreach ($sizes as $size) {
+                if ($rows <= $size[0] && $cols <= $size[1]) {
+                    return $size;
+                }
+            }
+            return array(min($rows, 26), min($cols, 99));
+        };
+        $unitIds = array();
+        $created = 0;
+        $findUnit = $pdo->prepare('SELECT id, box_rows FROM storage_units WHERE name = :name AND ((:parent IS NULL AND parent_id IS NULL) OR parent_id = :parent2) LIMIT 1');
+        $makeUnit = $pdo->prepare('INSERT INTO storage_units (name, parent_id, box_rows, box_cols) VALUES (:name, :parent, :rows, :cols)');
+        $setSize = $pdo->prepare('UPDATE storage_units SET box_rows = :rows, box_cols = :cols WHERE id = :id');
+        $unitFor = static function (array $segments) use (&$unitIds, &$created, $findUnit, $makeUnit, $setSize, $boxes, $sizeOf, $pdo): int {
+            $parent = null;
+            $path = array();
+            foreach ($segments as $depth => $name) {
+                $path[] = $name;
+                $key = implode(' > ', $path);
+                $last = $depth === count($segments) - 1;
+                $size = $last && isset($boxes[$key]) ? $sizeOf((int) $boxes[$key]['rows'], (int) $boxes[$key]['cols']) : null;
+                if (!isset($unitIds[$key])) {
+                    $findUnit->bindValue(':name', $name);
+                    $findUnit->bindValue(':parent', $parent, $parent === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+                    $findUnit->bindValue(':parent2', $parent, $parent === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+                    $pdo->execute($findUnit);
+                    $found = $findUnit->fetch();
+                    if (is_array($found)) {
+                        $unitIds[$key] = (int) $found['id'];
+                        if ($size !== null && $found['box_rows'] === null) {
+                            $setSize->bindValue(':rows', $size[0], PDO::PARAM_INT);
+                            $setSize->bindValue(':cols', $size[1], PDO::PARAM_INT);
+                            $setSize->bindValue(':id', $unitIds[$key], PDO::PARAM_INT);
+                            $pdo->execute($setSize);
+                        }
+                    } else {
+                        $makeUnit->bindValue(':name', $name);
+                        $makeUnit->bindValue(':parent', $parent, $parent === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+                        $makeUnit->bindValue(':rows', $size[0] ?? null, $size === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+                        $makeUnit->bindValue(':cols', $size[1] ?? null, $size === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+                        $pdo->execute($makeUnit);
+                        $unitIds[$key] = (int) $pdo->lastInsertId();
+                        $created++;
+                    }
+                }
+                $parent = $unitIds[$key];
+            }
+            return (int) $parent;
+        };
+        $link = $pdo->prepare('INSERT INTO containers2inventory (storage_id, item_id, qty_stored, qty_unit, position, is_primary, comment) VALUES (:storage, :item, :qty, :unit, :position, :primary, :comment)');
+        $linked = 0;
+        $rowsMade = 0;
+        foreach ($places as $id => $list) {
+            $vials = (int) ($list['vials'] ?? 0);
+            unset($list['vials']);
+            $first = true;
+            $single = count($list) === 1;
+            foreach ($list as $place) {
+                $storage = $unitFor($place['segments']);
+                $targets = $place['positions'] === array() ? array(null) : $place['positions'];
+                foreach ($targets as $position) {
+                    $link->bindValue(':storage', $storage, PDO::PARAM_INT);
+                    $link->bindValue(':item', $id, PDO::PARAM_INT);
+                    $link->bindValue(':qty', $position === null && $single && $vials > 0 ? $vials : 1, PDO::PARAM_INT);
+                    $link->bindValue(':unit', 'vial');
+                    $link->bindValue(':position', $position, $position === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+                    $link->bindValue(':primary', $first ? 1 : 0, PDO::PARAM_INT);
+                    $link->bindValue(':comment', $place['comment'] === '' ? null : mb_substr($place['comment'], 0, 255), $place['comment'] === '' ? PDO::PARAM_NULL : PDO::PARAM_STR);
+                    try {
+                        $pdo->execute($link);
+                    } catch (Throwable) {
+                        // the slot is held by another entry (LabCollector lists two entries at one position): the entry is put in the box without a slot
+                        $link->bindValue(':position', null, PDO::PARAM_NULL);
+                        $link->bindValue(':comment', mb_substr(trim('LabCollector position ' . $position . ' is also used by another entry. ' . $place['comment']), 0, 255));
+                        $pdo->execute($link);
+                    }
+                    $first = false;
+                    $rowsMade++;
+                }
+            }
+            $linked++;
+        }
+        respond(200, array('entries_with_storage' => $linked, 'places_created' => $created, 'vials_placed' => $rowsMade, 'texts' => count($texts)));
+    } catch (Throwable $e) {
+        respond(500, array('error' => 'Could not build the storage places: ' . $e->getMessage()));
+    }
 }
 
 // the entries that were ticked get another owner (admins only): each is renumbered in the list of the new owner, so My ID stays their own count

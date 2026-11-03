@@ -224,6 +224,12 @@
       destination.append(option);
     });
     // the number of the file as the lab number: an entry keeps the number it had (LabCollector, an old list)
+    // admins: the storage places of the file (LabCollector) are made in the storage browser, with the entries in their boxes
+    const storageLabel = element('label', 'd-block small mb-2');
+    const storageBox = element('input');
+    storageBox.type = 'checkbox';
+    storageLabel.append(storageBox, document.createTextNode(' Make the storage places written in the file (rooms, freezers, boxes and the positions of the entries). Admins only.'));
+    storageLabel.hidden = true;
     const keepLabel = element('label', 'd-block small mb-2');
     const keep = element('input');
     keep.type = 'checkbox';
@@ -306,7 +312,7 @@
       }
     });
     buttons.append(cancel, run);
-    box.append(mapping, element('p', 'small text-muted mb-1', 'Where the entries go'), destination, keepLabel, ownerBox, message, buttons);
+    box.append(mapping, element('p', 'small text-muted mb-1', 'Where the entries go'), destination, keepLabel, storageLabel, ownerBox, message, buttons);
     back.append(box);
     document.body.append(back);
 
@@ -324,6 +330,7 @@
         return;
       }
       zipMode = /\.zip$/i.test(file.files[0].name);
+      storageLabel.hidden = !zipMode;
       if (zipMode) {
         // a zip of an export: the columns are matched by their names and the files are attached
         mapping.append(element('p', 'small text-muted mb-1', 'A ZIP from an export of this module: the columns are matched by their names, and the files of each entry are attached to it.'));
@@ -403,6 +410,10 @@
           message.textContent = body.created + ' entries made, ' + body.files + ' files attached.' + ((body.owners_not_found || []).length ? ' No user was found for: ' + body.owners_not_found.slice(0, 6).join(', ') + '; those entries are yours.' : '') + (body.skipped.length ? ' Not made (' + body.skipped.length + '): ' + body.skipped.slice(0, 6).map(function (i) {
             return i.row + ': ' + i.reason;
           }).join(' ') : '');
+          if (storageBox.checked) {
+            const made = await post({ action: 'build_storage', category: category });
+            message.textContent += ' Storage: ' + made.entries_with_storage + ' entries placed, ' + made.places_created + ' places made.';
+          }
           cancel.textContent = 'Close and reload';
           cancel.addEventListener('click', function () {
             window.location.reload();
