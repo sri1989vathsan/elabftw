@@ -820,7 +820,9 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   selectionBar.append(actionsButton, actionsMenu);
   toolbar.append(selectionBar);
   const menuItem = (button: HTMLButtonElement): void => {
-    button.className = 'btn btn-transparent btn-sm d-block w-100 text-left';
+    // not d-block: its display would show the items that are hidden
+    button.className = 'btn btn-transparent btn-sm text-left';
+    button.style.width = '100%';
     actionsMenu.append(button);
   };
   const orderButton = el('button', 'btn btn-secondary btn-sm', 'Send selected to an order');
