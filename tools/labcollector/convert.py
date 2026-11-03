@@ -422,6 +422,7 @@ def main():
             convert_cell(record, row, notes, files)
         common(record, row, notes)
         pictures(record, folder, files)
+        row['ID'] = row.get('LabCollector ID', '')
         row['Key'] = str(index)
         seen = {}
         names = []
@@ -434,10 +435,11 @@ def main():
         row['Files'] = '|'.join(names)
         rows.append(row)
         reviews.append((index, row.get('Title', ''), '; '.join(notes)))
-    columns = ['Title', 'Owner', 'Owner e-mail']
+    # ID is the number of LabCollector: with the option to keep the numbers it becomes the lab number
+    columns = ['ID', 'Title', 'Owner', 'Owner e-mail']
     for row in rows:
         for key in row:
-            if key not in columns and key not in ('Key', 'Files'):
+            if key not in columns and key not in ('Key', 'Files', 'ID'):
                 columns.append(key)
     columns += ['Key', 'Files']
     buffer = io.StringIO()

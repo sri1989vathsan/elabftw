@@ -220,6 +220,19 @@
       }
       destination.append(option);
     });
+    // the number of the file as the lab number: an entry keeps the number it had (LabCollector, an old list)
+    const keepLabel = element('label', 'd-block small mb-2');
+    const keep = element('input');
+    keep.type = 'checkbox';
+    keepLabel.append(keep, document.createTextNode(' Keep the numbers of the file (the ID column) as the lab numbers. A number that is already used in this module is not imported.'));
+    const showKeep = function () {
+      keepLabel.hidden = destination.value !== 'both';
+      if (keepLabel.hidden) {
+        keep.checked = false;
+      }
+    };
+    destination.addEventListener('change', showKeep);
+    showKeep();
     // who owns the new entries: the user who imports, the owner written in the file, or a user chosen (the last two for admins)
     const ownerBox = element('div', 'mb-2');
     ownerBox.append(element('p', 'small text-muted mb-1 mt-2', 'Who owns the new entries'));
@@ -290,7 +303,7 @@
       }
     });
     buttons.append(cancel, run);
-    box.append(mapping, element('p', 'small text-muted mb-1', 'Where the entries go'), destination, ownerBox, message, buttons);
+    box.append(mapping, element('p', 'small text-muted mb-1', 'Where the entries go'), destination, keepLabel, ownerBox, message, buttons);
     back.append(box);
     document.body.append(back);
 
@@ -328,7 +341,7 @@
         name.style.width = '14em';
         name.textContent = heading || '(no heading)';
         const select = element('select', 'form-control form-control-sm w-auto');
-        const options = [['title', 'The title'], ['ignore', 'Leave out'], ['owner', 'The owner (e-mail or name)']].concat(module.fields.map(function (f) {
+        const options = [['title', 'The title'], ['ignore', 'Leave out'], ['number', 'The lab number (ID)'], ['owner', 'The owner (e-mail or name)']].concat(module.fields.map(function (f) {
           return ['field:' + f.name, 'Field: ' + f.name];
         }), [['extra', 'Keep as a new field']]);
         options.forEach(function (o) {
@@ -340,9 +353,11 @@
         let guess = 'ignore';
         if (key === 'title' || key === 'name') {
           guess = 'title';
+        } else if (key === 'id') {
+          guess = 'number';
         } else if (key === 'owner' || key === 'owneremail') {
           guess = 'owner';
-        } else if (['id', 'myid', 'date'].indexOf(key) === -1) {
+        } else if (['myid', 'date'].indexOf(key) === -1) {
           const found = module.fields.find(function (f) {
             return normal(f.name) === key;
           });
@@ -369,6 +384,7 @@
           const form = new FormData();
           form.append('category', String(category));
           form.append('register', destination.value);
+          form.append('keep_numbers', keep.checked ? '1' : '0');
           form.append('owner_mode', ownerFields().owner_mode);
           form.append('owner_user', String(ownerFields().owner_user));
           form.append('file', file.files[0]);
@@ -406,6 +422,8 @@
           const value = (cells[index] || '').trim();
           if (kind === 'title') {
             row.title = value;
+          } else if (kind === 'number') {
+            row.number = value;
           } else if (kind === 'owner') {
             // an e-mail address, else a name
             if (/@/.test(value)) {
@@ -433,7 +451,7 @@
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
-            body: JSON.stringify(Object.assign({ category: category, register: destination.value, offset: start, rows: rows.slice(start, start + 100) }, ownerFields())),
+            body: JSON.stringify(Object.assign({ category: category, register: destination.value, keep_numbers: keep.checked, offset: start, rows: rows.slice(start, start + 100) }, ownerFields())),
           });
           const body = await response.json();
           if (!response.ok) {

@@ -298,7 +298,7 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'assign_owner') {
 }
 
 // one row of a file becomes an entry of the module; returns the id, or the reason it was not made
-$makeEntry = static function (array $row, int $categoryId, array $definitions, string $register, ?Users $Owner = null) use ($App): array {
+$makeEntry = static function (array $row, int $categoryId, array $definitions, string $register, ?Users $Owner = null, bool $keepNumber = false) use ($App, $pdo, $teamId): array {
     $title = trim((string) ($row['title'] ?? ''));
     if ($title === '') {
         return array('id' => null, 'reason' => 'It has no title.');
@@ -328,10 +328,26 @@ $makeEntry = static function (array $row, int $categoryId, array $definitions, s
             return array('id' => null, 'reason' => 'It needs: ' . implode(', ', $missing) . '.');
         }
     }
+    // the number of the file becomes the lab number (the entry keeps the number it had before); a number that is taken is not used twice
+    $number = null;
+    if ($keepNumber && $register === 'both') {
+        $wanted = (int) preg_replace('/\D+/', '', (string) ($row['number'] ?? ''));
+        if ($wanted > 0) {
+            $taken = $pdo->prepare('SELECT COUNT(*) FROM inventory WHERE category = :category AND custom_id = :number AND team = :team');
+            $taken->bindValue(':category', $categoryId, PDO::PARAM_INT);
+            $taken->bindValue(':number', $wanted, PDO::PARAM_INT);
+            $taken->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $pdo->execute($taken);
+            if ((int) $taken->fetchColumn() > 0) {
+                return array('id' => null, 'reason' => 'The number ' . $wanted . ' is already used in this module.');
+            }
+            $number = $wanted;
+        }
+    }
     $Entry = new Inventory($Owner ?? $App->Users);
     $Entry->asUnregistered = $register !== 'both';
     $Entry->withPersonal = $register === 'both' || $register === 'personal';
-    return array('id' => $Entry->create(title: mb_substr($title, 0, 255), category: $categoryId, metadata: json_encode(array('extra_fields' => (object) $fields), JSON_UNESCAPED_UNICODE)), 'reason' => null);
+    return array('id' => $Entry->create(title: mb_substr($title, 0, 255), category: $categoryId, customId: $number, metadata: json_encode(array('extra_fields' => (object) $fields), JSON_UNESCAPED_UNICODE)), 'reason' => null);
 };
 
 try {
@@ -356,6 +372,7 @@ try {
 
     // the owner of the new entries: the user who imports, one user chosen, or the owner written in each row (matched by e-mail, then by name);
     // only admins can give entries to someone else
+    $keepNumbers = !empty($source['keep_numbers']) && $source['keep_numbers'] !== '0';
     $ownerMode = (string) ($source['owner_mode'] ?? 'me');
     $ownerChoice = (int) ($source['owner_user'] ?? 0);
     if ($ownerMode !== 'me' && !$isAdmin) {
@@ -432,7 +449,9 @@ try {
                     $row['owner'] = $value;
                 } elseif ($n === 'owneremail') {
                     $row['owner_email'] = $value;
-                } elseif (in_array($n, array('id', 'myid', 'date', ''), true)) {
+                } elseif ($n === 'id') {
+                    $row['number'] = $value;
+                } elseif (in_array($n, array('myid', 'date', ''), true)) {
                     continue;
                 } elseif (isset($byNormal[$n])) {
                     $row['fields'][$byNormal[$n]] = $value;
@@ -440,7 +459,7 @@ try {
                     $row['extra'][(string) $name] = $value;
                 }
             }
-            $made = $makeEntry($row, (int) $module['id'], $definitions, $register, $ownerFor($row));
+            $made = $makeEntry($row, (int) $module['id'], $definitions, $register, $ownerFor($row), $keepNumbers);
             if ($made['id'] === null) {
                 $skipped[] = array('row' => 'Row ' . $count . ' (' . $row['title'] . ')', 'reason' => $made['reason']);
                 continue;
@@ -474,7 +493,7 @@ try {
     }
 
     foreach (array_slice(is_array($payload['rows'] ?? null) ? $payload['rows'] : array(), 0, 200) as $index => $row) {
-        $made = $makeEntry($row, (int) $module['id'], $definitions, $register, $ownerFor($row));
+        $made = $makeEntry($row, (int) $module['id'], $definitions, $register, $ownerFor($row), $keepNumbers);
         if ($made['id'] === null) {
             $skipped[] = array('row' => 'Row ' . ((int) ($payload['offset'] ?? 0) + $index + 1) . ' (' . trim((string) ($row['title'] ?? '')) . ')', 'reason' => $made['reason']);
             continue;
