@@ -419,6 +419,28 @@
     container.prepend(bar);
   }
 
+  // the rows ticked in the list go into the lab Database: each is registered (or moved from planned) and gets its number
+  // and its folder; the ones that cannot (a plasmid needs a sequence, a module its required fields) are listed
+  window.RegistryTools = {
+    addToDatabase: async function (ids, done) {
+      if (!(await confirmDialog('Add ' + ids.length + (ids.length === 1 ? ' entry' : ' entries') + ' to the Database?', 'Each gets the next number of its module and is filed in Database items, in the folder of its module, visible to everyone with an account.', 'Add to the Database'))) {
+        return;
+      }
+      const failed = [];
+      for (const entryId of ids) {
+        try {
+          await post({ action: 'lab', id: entryId });
+        } catch (error) {
+          failed.push('#' + entryId + ': ' + error.message);
+        }
+      }
+      if (failed.length > 0) {
+        await confirmDialog('Not all could be added', (ids.length - failed.length) + ' added. ' + failed.join(' '), 'OK');
+      }
+      done();
+    },
+  };
+
   const params = new URLSearchParams(location.search);
   const id = Number(params.get('id'));
   const nav = document.querySelector('nav.category-nav');

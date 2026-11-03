@@ -92,6 +92,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $number = new Inventory($App->Users, $id)->register();
             respond(200, array('id' => $id, 'number' => $number));
         }
+        if ($action === 'lab') {
+            // an entry goes into the lab Database: a planned one is moved, one that is not registered yet is registered
+            $id = (int) ($payload['id'] ?? 0);
+            $Entry = new Inventory($App->Users, $id);
+            $number = (int) ($Entry->entityData['is_planned'] ?? 0) === 1 ? $Entry->markReady() : $Entry->register();
+            respond(200, array('id' => $id, 'number' => $number));
+        }
         if ($action === 'personal') {
             $id = (int) ($payload['id'] ?? 0);
             $number = new Inventory($App->Users, $id)->registerPersonal();

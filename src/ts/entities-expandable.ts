@@ -580,6 +580,14 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   orderButton.type = 'button';
   orderButton.hidden = true;
   toolbar.append(orderButton);
+  // in My entries the rows ticked can be added to the lab Database
+  const databaseButton = el('button', 'btn btn-primary btn-sm ml-2', 'Add selected to the Database');
+  databaseButton.type = 'button';
+  databaseButton.hidden = true;
+  toolbar.append(databaseButton);
+  type RegistryTools = { addToDatabase: (ids: number[], done: () => void) => Promise<void> };
+  const registryTools = (): RegistryTools | undefined => (window as unknown as { RegistryTools?: RegistryTools }).RegistryTools;
+  const inMyEntries = new URLSearchParams(window.location.search).get('planned') === '1';
   const container = el('div');
   rootEl.replaceChildren(toolbar, container);
   let rows: Row[] = [];
@@ -591,6 +599,8 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
       const tools = (window as unknown as { PrimerTools?: { sendToOrder: (ids: number[], done?: () => void) => void } }).PrimerTools;
       orderButton.hidden = ui.selected.size === 0 || !tools;
       orderButton.textContent = `Send selected to an order (${ui.selected.size})`;
+      databaseButton.hidden = ui.selected.size === 0 || !inMyEntries;
+      databaseButton.textContent = `Add selected to the Database (${ui.selected.size})`;
     },
   };
   orderButton.addEventListener('click', () => {
@@ -599,6 +609,13 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
       ui.selected.clear();
       ui.onSelectionChange();
       render(container, rows, tableSort, onSort, ui);
+    });
+  });
+  databaseButton.addEventListener('click', () => {
+    void registryTools()?.addToDatabase([...ui.selected], () => {
+      ui.selected.clear();
+      ui.onSelectionChange();
+      window.location.reload();
     });
   });
   const onSort = (next: SortState): void => {
