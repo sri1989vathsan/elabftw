@@ -254,7 +254,7 @@
       message.textContent = 'Saving...';
       message.className = 'tool-message';
       try {
-        const id = await tools.createPrimer(name.value.trim(), now.sequence, now.forward, null);
+        const id = await tools.createPrimer(name.value.trim(), now.sequence, now.forward, null, entryId);
         if (entryId) {
           await tools.attach(entryId, id);
           if (replace.checked) {

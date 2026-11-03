@@ -247,7 +247,7 @@
   }
 
   // a new primer in the database, with its sequence, orientation and melting temperature
-  async function createPrimer(title, sequence, forward, target) {
+  async function createPrimer(title, sequence, forward, target, plasmidId) {
     const category = await primersCategoryId();
     if (!category) {
       throw new Error('There is no module of primers in the database.');
@@ -285,6 +285,14 @@
       set(/^target/i, target);
     }
     await json('api/v2/inventory/' + id, { method: 'PATCH', headers: jsonHeaders(), body: JSON.stringify({ metadata: JSON.stringify(metadata) }) });
+    // a primer designed for a plasmid is filed in its folder, in a subfolder "Primers"
+    if (plasmidId) {
+      try {
+        await json('primers.php', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ action: 'file', primer: id, plasmid: plasmidId }) });
+      } catch (error) {
+        // the primer exists: it is just not filed
+      }
+    }
     return id;
   }
 

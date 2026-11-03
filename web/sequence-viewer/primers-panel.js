@@ -760,7 +760,7 @@
             skipped++;
             continue;
           }
-          const id = await tools.createPrimer(item.name, item.bases, item.forward, current().name);
+          const id = await tools.createPrimer(item.name, item.bases, item.forward, current().name, entryId);
           if (entryId) {
             await tools.attach(entryId, id);
           }
@@ -794,7 +794,7 @@
       }
       addButton.disabled = true;
       try {
-        const id = await tools.createPrimer(title, bases, forward, current().name);
+        const id = await tools.createPrimer(title, bases, forward, current().name, entryId);
         if (entryId) {
           await tools.attach(entryId, id);
         }

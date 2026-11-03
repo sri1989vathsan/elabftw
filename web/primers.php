@@ -15,6 +15,7 @@ namespace Elabftw\Elabftw;
 use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Storage;
 use Elabftw\Models\Changelog;
+use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\Inventory;
 use Elabftw\Params\ContentParams;
 use PDO;
@@ -142,6 +143,31 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $pdo->execute($link);
         }
         respond(200, array('ok' => true, 'linked' => count($primerIds), 'order' => array('id' => $orderId, 'title' => (string) $order['title'])));
+    }
+    if ($action === 'file') {
+        // a primer designed in the editor is filed in the folder of its plasmid, in a subfolder "Primers"
+        $primerId = (int) ($payload['primer'] ?? 0);
+        $plasmidId = (int) ($payload['plasmid'] ?? 0);
+        if ($primerId <= 0 || $plasmidId <= 0) {
+            respond(400, array('error' => 'Invalid request.'));
+        }
+        $primerEntry = new Inventory($App->Users, $primerId);
+        $primerEntry->canOrExplode(AccessType::Write);
+        $folderId = (int) (new Inventory($App->Users, $plasmidId)->entityData['folder_id'] ?? 0);
+        if ($folderId <= 0) {
+            respond(200, array('ok' => true, 'filed' => false));
+        }
+        $find = $pdo->prepare("SELECT id FROM experiments_folders WHERE team = :team AND scope = 'inventory' AND name = 'Primers' AND parent_id = :parent LIMIT 1");
+        $find->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $find->bindValue(':parent', $folderId, PDO::PARAM_INT);
+        $pdo->execute($find);
+        $Folders = new ExperimentsFolders($App->Users, null, 'inventory');
+        $subfolder = (int) $find->fetchColumn();
+        if ($subfolder <= 0) {
+            $subfolder = $Folders->create('Primers', $folderId);
+        }
+        $Folders->assignInventory($primerId, $subfolder);
+        respond(200, array('ok' => true, 'filed' => true, 'folder' => $subfolder));
     }
     $plasmid = (int) ($payload['plasmid'] ?? 0);
     $primer = (int) ($payload['primer'] ?? 0);
