@@ -311,6 +311,9 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   let includeChildren = true;
   let query = '';
   let tree: { roots: Node[]; byId: Map<number, Node> } = { roots: [], byId: new Map() };
+  // what was loaded last: a move of a tube is shown at once on it, before the server has answered and the lists are loaded again
+  let lastUnits: Unit[] = [];
+  let lastRows: Row[] = [];
   // the location asked for in the address is selected once, then the user's own choices win
   let openedFromUrl = false;
   // the tube picked to be placed in a slot of the box
@@ -416,6 +419,25 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   // BOX: the unit as a grid of slots, the tubes in their slots, and the ones not placed yet
   const patchAndReload = (endpoint: string, body: Record<string, unknown>): void => {
     hideTubeCard();
+    // a tube that moves (to a slot, out of its slot, to another place) is moved on the screen first: the answer of the server and the
+    // new lists, which take a while with thousands of entries, only confirm it
+    const tubeMove = /^inventory\/(\d+)\/containers\/(\d+)$/.exec(endpoint);
+    if (tubeMove && lastRows.length > 0) {
+      const location = lastRows.find(r => r.id === Number(tubeMove[1]))?.storage_locations?.find(l => l.container_id === Number(tubeMove[2]));
+      if (location) {
+        if ('position' in body) {
+          location.position = body.position === '' || body.position === null ? null : String(body.position);
+        }
+        if ('storage_id' in body) {
+          location.storage_id = Number(body.storage_id);
+          location.position = null;
+        }
+        pickedTube = null;
+        tree = buildTree(lastUnits, lastRows);
+        renderTree();
+        renderMain();
+      }
+    }
     void ApiC.patch(endpoint, body).then(() => {
       pickedTube = null;
       return load();
@@ -1158,6 +1180,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       if (current !== requestId) {
         return;
       }
+      lastUnits = units;
+      lastRows = rows;
       tree = buildTree(units, rows);
       const requested = Number(new URLSearchParams(document.location.search).get('storage_unit'));
       if (requested > 0 && tree.byId.has(requested) && !openedFromUrl) {
