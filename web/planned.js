@@ -411,7 +411,11 @@
             return i.row + ': ' + i.reason;
           }).join(' ') : '');
           if (storageBox.checked) {
-            const made = await post({ action: 'build_storage', category: category });
+            const madeResponse = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'build_storage', category: category }) });
+            const made = await madeResponse.json();
+            if (!madeResponse.ok) {
+              throw new Error(made.error || 'The storage places could not be made.');
+            }
             message.textContent += ' Storage: ' + made.entries_with_storage + ' entries placed, ' + made.places_created + ' places made.';
           }
           cancel.textContent = 'Close and reload';
