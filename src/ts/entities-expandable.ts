@@ -920,7 +920,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
           }
           const refused = result.refused?.length ?? 0;
           note.className = refused > 0 ? 'small mt-1 text-danger' : 'small mt-1 text-success';
-          note.textContent = `${result.moved ?? 0} moved` + (refused > 0 ? `, ${refused} not moved (you cannot edit them)` : '');
+          note.textContent = `${result.moved ?? 0} moved` + (refused > 0 ? `, ${refused} not moved (entries of the Database stay in the folder of their module, and you can only move entries you can edit)` : '');
           window.setTimeout(() => window.location.reload(), refused > 0 ? 2500 : 700);
         }).catch(error => {
           go.disabled = false;

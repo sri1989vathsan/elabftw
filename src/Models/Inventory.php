@@ -15,6 +15,7 @@ namespace Elabftw\Models;
 use DateTimeImmutable;
 use Elabftw\Elabftw\Permissions;
 use Elabftw\Elabftw\Tools;
+use Elabftw\Enums\Action;
 use Elabftw\Enums\BasePermissions;
 use Elabftw\Enums\BinaryValue;
 use Elabftw\Enums\BodyContentType;
@@ -31,6 +32,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Override;
 
 use function _;
+use function array_key_exists;
 use function array_map;
 use function is_string;
 use function is_array;
@@ -174,6 +176,26 @@ final class Inventory extends AbstractConcreteEntity
             return null;
         }
         return $this->getCurrentHighestCustomId($category) + 1;
+    }
+
+    /**
+     * An entry of the lab Database stays in the folder of its module: only the entries that are not registered (My entries) can be
+     * moved to another folder.
+     */
+    #[Override]
+    public function patch(Action $action, array $params): array
+    {
+        if ($action === Action::Update && array_key_exists('folder_id', $params) && $this->id !== null) {
+            $req = $this->Db->prepare('SELECT custom_id, is_planned, folder_id FROM inventory WHERE id = :id');
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $row = $req->fetch();
+            $wanted = (string) $params['folder_id'] === '' ? 0 : (int) $params['folder_id'];
+            if (is_array($row) && $row['custom_id'] !== null && (int) $row['is_planned'] === 0 && $wanted !== (int) ($row['folder_id'] ?? 0)) {
+                throw new ImproperActionException(_('An entry of the Database stays in the folder of its module.'));
+            }
+        }
+        return parent::patch($action, $params);
     }
 
     /**
