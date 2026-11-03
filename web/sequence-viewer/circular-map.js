@@ -500,8 +500,6 @@
         }
       }
       const laneCount = Math.max(1, laneOf(features, length));
-      const THICK = 20;
-      const LANE = 25;
       const hasPrimers = primers.length > 0;
       // the ring is as big as the panel allows, with room for the names beside it
       const longest = features.concat(primers).map(function (item) {
@@ -516,6 +514,9 @@
       // the panel than the longest name would leave it
       const sideRoom = Math.min(room, 88);
       const radius = Math.max(60, Math.min(height / 2 - 40, width / 2 - sideRoom - 8 - (hasPrimers ? 12 : 0)));
+      // the arrows are as thick as the ring allows: thin on a small ring (zoomed out), up to 20 px on a big one
+      const THICK = Math.max(7, Math.min(20, Math.round(radius * 0.085)));
+      const LANE = THICK + 5;
       const ringOut = radius + THICK / 2;
       const primerIn = ringOut + 4;
       const primerOut = primerIn + 6;
@@ -625,7 +626,7 @@
         return (b.end - b.start) - (a.end - a.start);
       }).forEach(function (item) {
         const centre = radius - LANE * (item.lane || 0);
-        draw1(item, centre - THICK / 2, centre + THICK / 2, 13, 1);
+        draw1(item, centre - THICK / 2, centre + THICK / 2, Math.round(THICK * 0.65), 1);
       });
       primers.forEach(function (item) {
         draw1(item, primerIn, primerOut, 7, 2);
