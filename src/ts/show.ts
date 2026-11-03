@@ -240,7 +240,7 @@ function unmountOtherViews(keep: string): void {
   }
 }
 
-// the dialog of a new entry of the Database: where it is added; resolves to 'both' (the lab database), 'personal' (my database) or null when cancelled
+// the dialog of a new entry of the Database: where it is added; resolves to 'both', 'lab', 'personal' or 'none' (the boxes ticked), or null when cancelled
 function askRegister(): Promise<'both' | 'lab' | 'personal' | 'none' | null> {
   return new Promise(resolve => {
     const make = (tag: string, className = '', text = ''): HTMLElement => {
@@ -254,21 +254,37 @@ function askRegister(): Promise<'both' | 'lab' | 'personal' | 'none' | null> {
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
     box.append(make('h5', '', 'Add a new entry'));
-    box.append(make('p', 'mb-2', 'Where should the new entry go?'));
-    box.append(make('p', 'text-muted small', 'My database: only you see it, it gets your My_id. Lab database: everyone sees it, it gets the ID of the lab and your My_id, and it is filed in Database items.'));
+    box.append(make('p', 'mb-2', 'Add the new entry to:'));
+    const checks: Record<string, HTMLInputElement> = {};
+    ([
+      ['personal', 'My database: it gets your My_id'],
+      ['lab', 'The lab database: everyone sees it, it gets the ID of the lab and is filed in Database items'],
+    ] as [string, string][]).forEach(([value, text]) => {
+      const label = make('label', 'd-block');
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.checked = true;
+      checks[value] = check;
+      label.append(check, document.createTextNode(` ${text}`));
+      box.append(label);
+    });
+    box.append(make('p', 'text-muted small', 'With neither ticked the entry stays private to you with no number until you register it.'));
     const buttons = make('div', 'copy-dialog-buttons');
     const cancel = make('button', 'btn btn-secondary btn-sm', 'Cancel') as HTMLButtonElement;
-    const mine = make('button', 'btn btn-outline-primary btn-sm', 'Add to my database') as HTMLButtonElement;
-    const lab = make('button', 'btn btn-primary btn-sm', 'Add to the lab database') as HTMLButtonElement;
-    cancel.type = mine.type = lab.type = 'button';
+    const create = make('button', 'btn btn-primary btn-sm', 'Create') as HTMLButtonElement;
+    cancel.type = create.type = 'button';
     const done = (value: 'both' | 'lab' | 'personal' | 'none' | null): void => {
       back.remove();
       resolve(value);
     };
     cancel.addEventListener('click', () => done(null));
-    mine.addEventListener('click', () => done('personal'));
-    lab.addEventListener('click', () => done('both'));
-    buttons.append(cancel, mine, lab);
+    // the lab database gives the ID of the lab and, when my database is ticked too, My_id as well
+    create.addEventListener('click', () => {
+      const lab = checks.lab.checked;
+      const mine = checks.personal.checked;
+      done(lab && mine ? 'both' : (lab ? 'lab' : (mine ? 'personal' : 'none')));
+    });
+    buttons.append(cancel, create);
     box.append(buttons);
     back.addEventListener('click', event => {
       if (event.target === back) done(null);
@@ -277,7 +293,7 @@ function askRegister(): Promise<'both' | 'lab' | 'personal' | 'none' | null> {
     box.append(buttons);
     back.append(box);
     document.body.append(back);
-    lab.focus();
+    create.focus();
   });
 }
 
