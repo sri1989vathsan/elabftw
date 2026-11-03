@@ -164,7 +164,9 @@ def catalog_from(url, name, code):
 
 
 def convert_antibody(record, row, notes):
-    name = text(record, 'Name')
+    # the trademark signs of the pages come out as strange characters: they are not part of the name
+    name = re.sub(r'[\u2122\u00ae\u0099\u0092]', '', text(record, 'Name'))
+    name = re.sub(r'\s{2,}', ' ', name).strip()
     url = text(record, 'Manufacturer website')
     if not url.startswith('http'):
         url = next((link for link in record['Description']['links'] if link.startswith('http')), '')
@@ -229,8 +231,12 @@ def convert_antibody(record, row, notes):
     if text(record, 'Isotype'):
         row['Isotype'] = text(record, 'Isotype')
 
-    # the dye
+    # the dye (a TotalSeq antibody carries a DNA barcode)
     dye = text(record, 'Marker')
+    barcode = re.search(r'TotalSeq-?\s*([A-Z]?\d{3,4})', name)
+    if barcode and not dye:
+        dye = 'TotalSeq-' + barcode.group(1)
+        notes.append('Conjugate from the name')
     if not dye:
         for pattern, build in DYES:
             hit = re.search(pattern, name, re.I)

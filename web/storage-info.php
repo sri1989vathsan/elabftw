@@ -65,7 +65,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $req->bindValue(':id', (int) ($_GET['id'] ?? 0), PDO::PARAM_INT);
     $pdo->execute($req);
     $row = $req->fetch();
-    $users = $pdo->prepare('SELECT u.userid AS id, CONCAT(u.firstname, " ", u.lastname) AS name FROM users AS u INNER JOIN users2teams AS t ON t.users_id = u.userid WHERE t.teams_id = :team AND t.is_archived = 0 AND u.archived = 0 ORDER BY u.firstname, u.lastname');
+    $users = $pdo->prepare('SELECT u.userid AS id, CONCAT(u.firstname, " ", u.lastname) AS name FROM users AS u INNER JOIN users2teams AS t ON t.users_id = u.userid WHERE t.teams_id = :team AND t.is_archived = 0 ORDER BY u.firstname, u.lastname');
     $users->bindValue(':team', $teamId, PDO::PARAM_INT);
     $pdo->execute($users);
     respond(200, array(

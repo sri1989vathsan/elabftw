@@ -84,7 +84,7 @@ $defaultOwnerReq->bindValue(':team', $teamId, PDO::PARAM_INT);
 $pdo->execute($defaultOwnerReq);
 $defaultOwner = (int) $defaultOwnerReq->fetchColumn();
 $teamUsers = static function () use ($pdo, $teamId): array {
-    $req = $pdo->prepare('SELECT u.userid AS id, u.email, CONCAT(u.firstname, " ", u.lastname) AS name FROM users AS u INNER JOIN users2teams AS t ON t.users_id = u.userid WHERE t.teams_id = :team AND t.is_archived = 0 AND u.archived = 0 ORDER BY u.firstname, u.lastname');
+    $req = $pdo->prepare('SELECT u.userid AS id, u.email, CONCAT(u.firstname, " ", u.lastname) AS name FROM users AS u INNER JOIN users2teams AS t ON t.users_id = u.userid WHERE t.teams_id = :team AND t.is_archived = 0 ORDER BY u.firstname, u.lastname');
     $req->bindValue(':team', $teamId, PDO::PARAM_INT);
     $pdo->execute($req);
     return $req->fetchAll();
