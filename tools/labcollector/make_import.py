@@ -11,7 +11,7 @@ With --fetch (needs internet; the pages of the makers and the Benchling sequence
 too and the entries are converted again, so one command gives the finished file. Nothing is sent to the server: only the ZIP that comes out is
 imported there.
 
-Usage: python3 -I make_import.py <output folder> [--cache <folder>] [--fetch] <page.7z | page folder> [more pages...]
+Usage: python3 -I make_import.py <output folder> [--cache <folder>] [--alignments <folder of .clustal files>] [--fetch] <page.7z | page folder> [more pages...]
 """
 import glob
 import os
@@ -52,6 +52,11 @@ def main():
     if '--cache' in args:
         i = args.index('--cache')
         cache = ['--cache', args[i + 1]]
+        del args[i:i + 2]
+    # Clustal files exported from Benchling: attached to the plasmid that has the sequence they were made on
+    if '--alignments' in args:
+        i = args.index('--alignments')
+        cache = cache + ['--alignments', args[i + 1]]
         del args[i:i + 2]
     fetch = '--fetch' in args
     if fetch:

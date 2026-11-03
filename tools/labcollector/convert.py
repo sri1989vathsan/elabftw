@@ -716,6 +716,54 @@ def selection_of(comment, genbank):
     return '', '', []
 
 
+# ---- alignments (Clustal files exported from Benchling) ---------------------------------------------------------------------------------
+
+
+def read_clustal(path):
+    """The names and the rows of a Clustal file, block after block."""
+    rows, order = {}, []
+    for number, line in enumerate(open(path, encoding='utf-8', errors='replace')):
+        if number == 0 and re.match(r'(CLUSTAL|MUSCLE|MAFFT)', line, re.I):
+            continue
+        if not line.strip() or line[0].isspace():
+            continue
+        parts = line.split()
+        if len(parts) >= 2 and re.fullmatch(r'[A-Za-z*.\-]+', parts[1]):
+            if parts[0] not in rows:
+                rows[parts[0]] = ''
+                order.append(parts[0])
+            rows[parts[0]] += parts[1]
+    return {name: rows[name].replace('-', '').upper() for name in order}
+
+
+def load_alignments(folder):
+    """The Clustal files of a folder, found again by the sequences in them: sequence -> the files that have it."""
+    index = {}
+    for path in sorted(glob.glob(os.path.join(folder, '*.clustal')) + glob.glob(os.path.join(folder, '*.aln')) + glob.glob(os.path.join(folder, '*.clw'))):
+        for sequence in set(read_clustal(path).values()):
+            if len(sequence) > 200:
+                index.setdefault(hashlib.sha1(sequence.encode()).hexdigest(), set()).add(path)
+    return index
+
+
+def genbank_sequence(content):
+    match = re.search(r'ORIGIN(.*?)//', content.decode('utf-8', 'replace'), re.S)
+    return re.sub(r'[^A-Za-z]', '', match.group(1)).upper() if match else ''
+
+
+def attach_alignments(row, files, index, notes):
+    """The Clustal files whose template is the sequence of the plasmid are attached to it."""
+    found = set()
+    for name, content in files:
+        if name.endswith('.gb'):
+            sequence = genbank_sequence(content)
+            found |= index.get(hashlib.sha1(sequence.encode()).hexdigest(), set()) if sequence else set()
+    for path in sorted(found):
+        base = re.sub(r'\s*\(.*?\)\s*', '', os.path.splitext(os.path.basename(path))[0]).strip() or 'alignment'
+        files.append(('alignment-' + re.sub(r'[^A-Za-z0-9_.-]+', '_', base) + '.clustal', open(path, 'rb').read()))
+        notes.append('Alignment ' + os.path.basename(path) + ' attached (same sequence)')
+
+
 def plasmid_details(row, files, families, notes):
     comment = row.get('Comments (LabCollector)', '')
     if not row.get('Backbone'):
@@ -752,6 +800,8 @@ def main():
         wanted = sys.argv[sys.argv.index('--as') + 1] if '--as' in sys.argv else {'primers': 'Primers', 'probes': 'Probes', 'reagents': 'Reagents', 'consumables': 'Consumables', 'samples': 'Samples'}.get(module, '')
         target_fields = default_modules().get(wanted, [])
     rows, reviews, all_files = [], [], []
+    alignments = sys.argv[sys.argv.index('--alignments') + 1] if '--alignments' in sys.argv else ''
+    alignment_index = load_alignments(alignments) if alignments and module == 'plasmids' else {}
     families = vector_families([text(r, 'Name') for r in read_page(folder)]) if module == 'plasmids' else set()
     for index, record in enumerate(read_page(folder), start=1):
         row, notes, files = {}, [], []
@@ -774,6 +824,8 @@ def main():
                 enrich_plasmid(row, str(index), files, notes, cache)
         if module == 'plasmids':
             plasmid_details(row, files, families, notes)
+            if alignment_index:
+                attach_alignments(row, files, alignment_index, notes)
         row['ID'] = row.get('LabCollector ID', '')
         row['Key'] = str(index)
         seen = {}
