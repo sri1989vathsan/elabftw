@@ -56,11 +56,14 @@
                 <option value=''>{{ 'No folder'|trans }}</option>
                 {% if experimentsFoldersCreateArr is iterable %}
                   {% for folder in experimentsFoldersCreateArr %}
+                    {# the Database: its folders are not offered, an entry gets into them only by being added to the Database #}
+                    {% if not (scriptName == 'registry.php' and (folder.full_path == 'Database items' or folder.full_path starts with 'Database items > ')) %}
                     <option
                       value='{{ folder.id }}'
                       data-folder-owner-id='{{ folder.userid }}'
                       data-folder-bookmarked='{{ folder.id in favoriteFolderIds|default([]) ? 'true' : 'false' }}'
                     >{{ folder.full_path }}</option>
+                    {% endif %}
                   {% endfor %}
                 {% endif %}
               </select>

@@ -29,8 +29,11 @@
             <label for='duplicateFolder' class='mb-1'>{{ 'Folder'|trans }}</label>
             <select id='duplicateFolder' class='form-control form-control-sm'>
               <option value=''>{{ 'No folder (Unfiled)'|trans }}</option>
+              {# the folders of the Database are not offered: a copy gets into them only by being copied to the Database #}
               {% for folder in experimentsFoldersArr %}
-                <option value='{{ folder.id }}'>{{ folder.full_path }}</option>
+                {% if not (folder.full_path == 'Database items' or folder.full_path starts with 'Database items > ') %}
+                  <option value='{{ folder.id }}'>{{ folder.full_path }}</option>
+                {% endif %}
               {% endfor %}
             </select>
           </div>
