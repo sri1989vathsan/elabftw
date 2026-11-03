@@ -78,6 +78,11 @@ $fieldsOf = static function (array $module): array {
 };
 
 $isAdmin = (bool) $App->Users->isAdmin;
+// the default owner of the team: who gets imported entries whose owner is not found
+$defaultOwnerReq = $pdo->prepare('SELECT default_owner FROM registry_settings WHERE team = :team');
+$defaultOwnerReq->bindValue(':team', $teamId, PDO::PARAM_INT);
+$pdo->execute($defaultOwnerReq);
+$defaultOwner = (int) $defaultOwnerReq->fetchColumn();
 $teamUsers = static function () use ($pdo, $teamId): array {
     $req = $pdo->prepare('SELECT u.userid AS id, u.email, CONCAT(u.firstname, " ", u.lastname) AS name FROM users AS u INNER JOIN users2teams AS t ON t.users_id = u.userid WHERE t.teams_id = :team AND t.is_archived = 0 AND u.archived = 0 ORDER BY u.firstname, u.lastname');
     $req->bindValue(':team', $teamId, PDO::PARAM_INT);
@@ -88,7 +93,7 @@ $teamUsers = static function () use ($pdo, $teamId): array {
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     // the users that can own what is imported (admins only)
     if (isset($_GET['users'])) {
-        respond(200, array('users' => $isAdmin ? $teamUsers() : array(), 'is_admin' => $isAdmin, 'me' => $userId));
+        respond(200, array('users' => $isAdmin ? $teamUsers() : array(), 'is_admin' => $isAdmin, 'me' => $userId, 'default_owner' => $defaultOwner > 0 ? $defaultOwner : null));
     }
     // selected entries: they have to be of one module
     $selected = array();
@@ -232,6 +237,23 @@ $payload = isset($_FILES['file']) ? array() : json_decode((string) file_get_cont
 if (!is_array($payload)) {
     respond(400, array('error' => 'Invalid request.'));
 }
+// an admin sets who gets imported entries whose owner is not found
+if (is_array($payload) && ($payload['action'] ?? '') === 'set_default_owner') {
+    if (!$isAdmin) {
+        respond(403, array('error' => 'Only an admin can set the default owner.'));
+    }
+    $chosen = (int) ($payload['owner'] ?? 0);
+    $members = array_map('strval', array_column($teamUsers(), 'id'));
+    if ($chosen > 0 && !in_array((string) $chosen, $members, true)) {
+        respond(400, array('error' => 'Choose a user of the team.'));
+    }
+    $req = $pdo->prepare('INSERT INTO registry_settings (team, default_owner) VALUES (:team, :owner) ON DUPLICATE KEY UPDATE default_owner = VALUES(default_owner)');
+    $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+    $req->bindValue(':owner', $chosen > 0 ? $chosen : null, $chosen > 0 ? PDO::PARAM_INT : PDO::PARAM_NULL);
+    $pdo->execute($req);
+    respond(200, array('ok' => true));
+}
+
 // the entries that were ticked get another owner (admins only): each is renumbered in the list of the new owner, so My ID stays their own count
 if (is_array($payload) && ($payload['action'] ?? '') === 'assign_owner') {
     if (!$isAdmin) {
@@ -348,7 +370,7 @@ try {
     }
     $ownerUsers = array();
     $notFound = array();
-    $ownerFor = static function (array $row) use ($ownerMode, $ownerChoice, $byEmail, $byName, $teamId, &$ownerUsers, &$notFound, $userId): ?Users {
+    $ownerFor = static function (array $row) use ($ownerMode, $ownerChoice, $defaultOwner, $byEmail, $byName, $teamId, &$ownerUsers, &$notFound, $userId): ?Users {
         $id = 0;
         if ($ownerMode === 'user') {
             $id = $ownerChoice;
@@ -361,8 +383,8 @@ try {
             }
         }
         // an owner that is not found: the user chosen for those rows, else the one who imports
-        if ($ownerMode === 'column' && $id === 0 && $ownerChoice > 0) {
-            $id = $ownerChoice;
+        if ($ownerMode === 'column' && $id === 0) {
+            $id = $ownerChoice > 0 ? $ownerChoice : $defaultOwner;
         }
         if ($id <= 0 || $id === $userId) {
             return null;

@@ -233,7 +233,11 @@
     const ownerUserLabel = element('span', 'small text-muted mr-2');
     const ownerUserRow = element('div');
     ownerUserRow.hidden = true;
-    ownerUserRow.append(ownerUserLabel, ownerUser);
+    const makeDefault = element('input');
+    makeDefault.type = 'checkbox';
+    const makeDefaultLabel = element('label', 'small ml-3 mb-0');
+    makeDefaultLabel.append(makeDefault, document.createTextNode(' make this the default owner'));
+    ownerUserRow.append(ownerUserLabel, ownerUser, makeDefaultLabel);
     ownerBox.append(ownerMode, ownerUserRow);
     const showOwnerUser = function () {
       ownerUserRow.hidden = ownerMode.value === 'me';
@@ -252,15 +256,24 @@
       body.users.forEach(function (u) {
         const option = element('option', '', u.name);
         option.value = String(u.id);
-        option.selected = Number(u.id) === Number(body.me);
+        option.selected = Number(u.id) === Number(body.default_owner || body.me);
         ownerUser.append(option);
       });
+      if (body.default_owner) {
+        ownerMode.value = 'column';
+      }
       showOwnerUser();
     }).catch(function () {
       ownerMode.value = 'me';
     });
     const ownerFields = function () {
       return { owner_mode: ownerMode.value, owner_user: Number(ownerUser.value) || 0 };
+    };
+    // the user chosen can be kept as the default owner of the team
+    const saveDefault = function () {
+      if (makeDefault.checked && ownerMode.value !== 'me' && Number(ownerUser.value) > 0) {
+        fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'set_default_owner', owner: Number(ownerUser.value) }) });
+      }
     };
     const message = element('p', 'small mb-2');
     const buttons = element('div', 'planned-dialog-buttons');
@@ -347,6 +360,7 @@
     });
 
     run.addEventListener('click', async function () {
+      saveDefault();
       if (zipMode) {
         run.disabled = true;
         message.className = 'small mb-2';
