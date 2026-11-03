@@ -574,6 +574,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
               patchAndReload(`inventory/${tube.row.id}/containers/${tube.location.container_id}`, { position: slot });
             }
           });
+          cell.dataset.slot = slot;
           if (pickedSlots.has(slot)) {
             cell.classList.add('chosen');
             cell.textContent = '✓';
@@ -621,6 +622,63 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       body.append(tr);
     }
     table.append(thead, body);
+    // choosing free slots by dragging over them with the mouse: the block between where the button went down and where it is now
+    const blockBetween = (a: string, b: string): string[] => {
+      const from = /^([A-Z])(\d+)$/.exec(a);
+      const to = /^([A-Z])(\d+)$/.exec(b);
+      const out: string[] = [];
+      if (from && to) {
+        const [r1, r2] = [from[1].charCodeAt(0), to[1].charCodeAt(0)].sort((x, y) => x - y);
+        const [c1, c2] = [Number(from[2]), Number(to[2])].sort((x, y) => x - y);
+        for (let r = r1; r <= r2; r++) {
+          for (let c = c1; c <= c2; c++) {
+            const name = `${String.fromCharCode(r)}${c}`;
+            if (!bySlot.has(name)) {
+              out.push(name);
+            }
+          }
+        }
+      }
+      return out;
+    };
+    const freeCellOf = (target: EventTarget | null): HTMLElement | null => (target as HTMLElement | null)?.closest<HTMLElement>('.box-slot[data-slot]') ?? null;
+    table.style.userSelect = 'none';
+    table.addEventListener('mousedown', event => {
+      const start = freeCellOf(event.target);
+      if (!start || pickedTube || event.button !== 0) {
+        return;
+      }
+      const startSlot = start.dataset.slot ?? '';
+      let endSlot = startSlot;
+      const additive = event.metaKey || event.ctrlKey;
+      const preview = (): void => {
+        const block = new Set(blockBetween(startSlot, endSlot));
+        table.querySelectorAll<HTMLElement>('.box-slot[data-slot]').forEach(c => c.classList.toggle('preview', block.has(c.dataset.slot ?? '')));
+      };
+      const over = (e: MouseEvent): void => {
+        const cell = freeCellOf(e.target);
+        if (cell && cell.dataset.slot !== endSlot) {
+          endSlot = cell.dataset.slot ?? endSlot;
+          preview();
+        }
+      };
+      const up = (): void => {
+        table.removeEventListener('mouseover', over);
+        document.removeEventListener('mouseup', up);
+        table.querySelectorAll('.preview').forEach(c => c.classList.remove('preview'));
+        // a drag over more than one slot chooses the block; a plain click on one slot is handled by its click
+        if (endSlot !== startSlot) {
+          if (!additive) {
+            pickedSlots = new Set<string>();
+          }
+          blockBetween(startSlot, endSlot).forEach(name => pickedSlots.add(name));
+          lastPickedSlot = endSlot;
+          renderMain();
+        }
+      };
+      table.addEventListener('mouseover', over);
+      document.addEventListener('mouseup', up);
+    });
     scroller.append(table);
     wrap.append(scroller);
 
@@ -648,7 +706,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       chosenBar.append(addMany, clear);
       wrap.append(chosenBar);
     } else {
-      wrap.append(el('p', 'color-medium small mb-2', 'To fill several free slots: Cmd/Ctrl-click them, or Shift-click the other corner of a block.'));
+      wrap.append(el('p', 'color-medium small mb-2', 'To fill several free slots: drag over them with the mouse, or Cmd/Ctrl-click them, or Shift-click the other corner of a block.'));
     }
 
     if (pickedTube) {

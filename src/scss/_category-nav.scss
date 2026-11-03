@@ -530,6 +530,12 @@
 }
 
 // a slot chosen in the add storage popup: filled with a check mark
+.box-slot.preview {
+  background: rgba(41, 92, 169, 0.35);
+  border-style: solid;
+  border-color: var(--primary, #1f5fae);
+}
+
 .box-slot.chosen {
   background: var(--primary, #1f5fae);
   border-style: solid;
