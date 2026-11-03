@@ -299,18 +299,11 @@ function askRegister(): Promise<'both' | 'lab' | 'personal' | 'none' | null> {
 const CARDS_KEY = 'persistent_resource_cards_v1';
 
 function effectiveMode(mode: string): string {
-  // the storage browser is opened from the Database menu: a saved choice of it does not make it the way the lists open
-  if (entity.type === 'inventory' && mode === 'st' && getCurrentUrlNumberParam('storage_unit') === null) {
-    return 'ex';
+  // the lists of the Database are the expandable table, the only layout offered there (the storage browser opens from a link to a location)
+  if (entity.type === 'inventory') {
+    return mode === 'st' && getCurrentUrlNumberParam('storage_unit') !== null ? 'st' : 'ex';
   }
-  if (entity.type !== 'inventory' || mode !== 'it') {
-    return mode;
-  }
-  try {
-    return localStorage.getItem(CARDS_KEY) === '1' ? 'it' : 'ex';
-  } catch {
-    return 'ex';
-  }
+  return mode;
 }
 
 function rememberCards(chosen: boolean): void {
