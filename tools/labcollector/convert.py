@@ -4,7 +4,7 @@ Turns the pages saved from LabCollector (a listing exported as an .htm file with
 one ZIP per module with entries.csv and the files of the entries. The columns of LabCollector are mapped to the fields of the module; what
 can be read from a name, a clone or a link is filled in, and each filled value is noted in a review file so it can be checked.
 
-Usage: python3 -I convert.py <folder of the saved page> <module: antibodies|plasmids|cells> <output folder>
+Usage: python3 -I convert.py <folder of the saved page> <module: antibodies|plasmids|cells> <output folder> [--cache <folder of what was found elsewhere>]
 The pages are data, not code: they are only read.
 """
 import csv
@@ -411,11 +411,101 @@ def pictures(record, folder, files):
                     break
 
 
+# ---- what was found elsewhere (pages of the makers, web searches, sequences): only fills what is empty -------------------------------------------
+
+
+def load_json(path):
+    try:
+        return json.load(open(path, encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+
+
+def from_page_title(url, page, row, notes):
+    """The title of a product page of the maker carries the clone, the host and the catalog number."""
+    title = (page or {}).get('title', '')
+    if not title:
+        return
+    filled = []
+    domain = domain_of(url)
+    clone = host = catalog = ''
+    if 'thermofisher.com' in domain:
+        hit = re.search(r'Antibody[^()|]*\(([^()]{2,24})\)\s*\|', title)
+        clone = hit.group(1) if hit else ''
+        tail = re.search(r'\(([A-Za-z0-9][A-Za-z0-9\-_.]{2,20})\)\s*$', title)
+        catalog = tail.group(1) if tail else ''
+    elif 'cellsignal.com' in domain:
+        hit = re.search(r'\(([A-Za-z0-9\-]{2,14})\)\s*(?:\|.*)?$', title)
+        clone = hit.group(1) if hit else ''
+        who = re.search(r'\b(Rabbit|Mouse|Rat|Goat|Donkey)\b[^()]*(?:mAb|Antibody|antibody)', title)
+        host = who.group(1) if who else ''
+        tail = url.rstrip('/').split('/')[-1]
+        catalog = tail if re.match(r'^\d{3,6}$', tail) else ''
+    elif 'abcam.com' in domain:
+        hit = re.search(r'\[([^\]]{2,24})\]', title)
+        clone = hit.group(1) if hit else ''
+        cat = re.search(r'\b(ab\d{4,7})\b', title + ' ' + url)
+        catalog = cat.group(1) if cat else ''
+    if clone and not row.get('Clone'):
+        row['Clone'] = clone
+        filled.append('Clone')
+    if host and not row.get('Host species'):
+        row['Host species'] = HOSTS.get(host.lower(), 'Other')
+        filled.append('Host species')
+    if catalog and not row.get('Catalog number'):
+        row['Catalog number'] = catalog
+        filled.append('Catalog number')
+    if filled:
+        notes.append(', '.join(filled) + ' from the product page')
+
+
+def from_web(found, row, notes):
+    """A result of a web search: fills the empty fields and says so; a choice between clones is marked."""
+    filled = []
+    for key, field in (('supplier', 'Supplier'), ('link', 'Link'), ('catalog', 'Catalog number'), ('clone', 'Clone'), ('isotype', 'Isotype'), ('target', 'Target')):
+        value = (found.get(key) or '').strip()
+        if value and not row.get(field):
+            row[field] = value
+            filled.append(field)
+    host = (found.get('host') or '').strip()
+    if host and not row.get('Host species'):
+        row['Host species'] = HOSTS.get(host.lower(), 'Other')
+        filled.append('Host species')
+    if filled:
+        text = ', '.join(filled) + ' from a web search (' + (found.get('confidence') or '?') + ')'
+        if found.get('alternatives'):
+            text += '; other clones: ' + ', '.join(found['alternatives'][:3])
+        if found.get('source'):
+            text += '; ' + found['source']
+        notes.append(text)
+
+
+def enrich_antibody(row, key, notes, cache):
+    pages = load_json(os.path.join(cache, 'antibody-pages.json')) or {}
+    if row.get('Link') and row['Link'] in pages:
+        from_page_title(row['Link'], pages[row['Link']], row, notes)
+    for name, bucket in (('websearch-biolegend.json', 'biolegend'), ('websearch-nolink.json', 'nolink')):
+        for group in load_json(os.path.join(cache, name)) or []:
+            if key in [str(k) for k in group.get('rows', [])]:
+                for result_file in sorted(glob.glob(os.path.join(cache, 'websearch-result-' + bucket + '-*.json'))):
+                    for found in load_json(result_file) or []:
+                        if str(found.get('key')) == str(group.get('key')):
+                            from_web(found, row, notes)
+
+
+def enrich_plasmid(row, key, files, notes, cache):
+    path = os.path.join(cache, 'sequences', key + '.gb')
+    if os.path.isfile(path) and not any(name.endswith('.gb') for name, _ in files):
+        files.append((re.sub(r'[^A-Za-z0-9_.-]+', '_', row.get('Title', 'plasmid')) + '.gb', open(path, 'rb').read()))
+        notes.append('Sequence file from the Benchling link')
+
+
 # ---- the zip ---------------------------------------------------------------------------------------------------------------------------
 
 
 def main():
     folder, module, out = sys.argv[1], sys.argv[2], sys.argv[3]
+    cache = sys.argv[sys.argv.index('--cache') + 1] if '--cache' in sys.argv else ''
     os.makedirs(out, exist_ok=True)
     rows, reviews, all_files = [], [], []
     for index, record in enumerate(read_page(folder), start=1):
@@ -428,6 +518,11 @@ def main():
             convert_cell(record, row, notes, files)
         common(record, row, notes)
         pictures(record, folder, files)
+        if cache:
+            if module == 'antibodies':
+                enrich_antibody(row, str(index), notes, cache)
+            elif module == 'plasmids':
+                enrich_plasmid(row, str(index), files, notes, cache)
         row['ID'] = row.get('LabCollector ID', '')
         row['Key'] = str(index)
         seen = {}
