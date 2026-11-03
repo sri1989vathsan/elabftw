@@ -746,6 +746,69 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     return form;
   };
 
+  // the information about a storage place: where it is, its conditions, who looks after it, notes (saved in storage-info.php)
+  const renderInfo = (node: Node): HTMLElement => {
+    const box = el('div', 'card card-body mb-3');
+    box.append(el('h5', '', 'Details'));
+    const body = el('div');
+    box.append(body);
+    type Info = { location: string; conditions: string; contact: number | null; contact_name: string; notes: string };
+    void fetch(`storage-info.php?id=${node.unit.id}`, { credentials: 'same-origin' }).then(r => r.json()).then((data: { info: Info; can_edit: boolean; users: { id: number; name: string }[] }) => {
+      const field = (label: string, input: HTMLElement): HTMLElement => {
+        const wrap = el('label', 'd-block mb-2');
+        wrap.append(el('span', 'd-block small text-muted', label), input);
+        return wrap;
+      };
+      const location = el('input', 'form-control form-control-sm');
+      location.value = data.info.location;
+      location.placeholder = 'For example Room 214, building B';
+      const conditions = el('input', 'form-control form-control-sm');
+      conditions.value = data.info.conditions;
+      conditions.placeholder = 'For example -80 °C, or 4 °C';
+      const contact = el('select', 'form-control form-control-sm w-auto');
+      const none = el('option', '', 'Nobody');
+      none.value = '0';
+      contact.append(none);
+      data.users.forEach(u => {
+        const option = el('option', '', u.name);
+        option.value = String(u.id);
+        contact.append(option);
+      });
+      contact.value = String(data.info.contact ?? 0);
+      const notes = el('textarea', 'form-control form-control-sm');
+      notes.rows = 3;
+      notes.value = data.info.notes;
+      [location, conditions, contact, notes].forEach(input => {
+        (input as HTMLInputElement).disabled = !data.can_edit;
+      });
+      body.append(field('Where it is', location), field('Temperature or conditions', conditions), field('Who looks after it', contact), field('Notes', notes));
+      if (!data.can_edit) {
+        body.append(el('p', 'small text-muted mb-0', 'You were not given the right to edit the storage places.'));
+        return;
+      }
+      const save = el('button', 'btn btn-secondary btn-sm', 'Save the details');
+      save.type = 'button';
+      const message = el('span', 'small ml-2');
+      save.addEventListener('click', () => {
+        const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+        void fetch('storage-info.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token },
+          body: JSON.stringify({ storage_id: node.unit.id, location: location.value, conditions: conditions.value, contact: Number(contact.value), notes: notes.value }),
+        }).then(async r => {
+          const answer = await r.json() as { error?: string };
+          message.textContent = r.ok ? 'Saved.' : (answer.error ?? 'Not saved.');
+          message.className = `small ml-2 ${r.ok ? 'text-success' : 'text-danger'}`;
+        });
+      });
+      body.append(save, message);
+    }).catch(() => {
+      body.append(el('p', 'small text-muted mb-0', 'The details could not be loaded.'));
+    });
+    return box;
+  };
+
   // a location is deleted when nothing is in it and it has no sub-locations (the server refuses otherwise, and only for admins)
   const renderDelete = (node: Node): HTMLElement => {
     const wrap = el('div', 'mb-2');
@@ -780,6 +843,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     }
     main.append(el('h4', '', node.unit.full_path));
     main.append(renderRename(node));
+    main.append(renderInfo(node));
     main.append(renderDelete(node));
     const opt = el('label', 'd-block mb-2');
     const box = el('input', 'mr-1');

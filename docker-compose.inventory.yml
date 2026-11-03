@@ -46,6 +46,8 @@ services:
       - ./web/registry-dashboard.js:/elabftw/web/registry-dashboard.js:ro
       - ./web/registry-dashboard.css:/elabftw/web/registry-dashboard.css:ro
       - ./src/templates/registry-dashboard.html:/elabftw/src/templates/registry-dashboard.html:ro
+      - ./web/storage-info.php:/elabftw/web/storage-info.php:ro
+      - ./web/storage-info.js:/elabftw/web/storage-info.js:ro
       - ./web/registry-modules.php:/elabftw/web/registry-modules.php:ro
       - ./web/registry-modules.js:/elabftw/web/registry-modules.js:ro
       - ./src/templates/registry-categories.html:/elabftw/src/templates/registry-categories.html:ro

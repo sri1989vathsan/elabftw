@@ -305,5 +305,9 @@
   {# the entries of the database linked to experiments and resources #}
   <script src='registry-links.js?v={{ 'now'|date('YmdHi') }}' defer></script>
 {% endif %}
+{% if Entity.entityType.value == 'inventory' %}
+  {# what is known of the storage places an entry is in #}
+  <script src='storage-info.js?v={{ 'now'|date('YmdHi') }}' defer></script>
+{% endif %}
 
 {% endblock body %}
