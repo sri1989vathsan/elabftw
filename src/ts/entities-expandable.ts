@@ -229,14 +229,15 @@ function section(title: string): HTMLElement {
 function buildDetail(row: Row): HTMLElement {
   const detail = el('div', 'expandable-detail');
 
-  const fields = row.extra_fields ?? [];
+  // the Link of the entry comes first, so it is seen as soon as the row is opened
+  const fields = [...(row.extra_fields ?? [])].sort((a, b) => Number(/^link$/i.test(b.name)) - Number(/^link$/i.test(a.name)));
   if (fields.length > 0) {
     const box = section('Details');
     const grid = el('div', 'expandable-fields');
     fields.forEach(f => {
       const cell = el('div', 'expandable-field');
       const value = el('div');
-      value.append(linkify(f.value));
+      value.append(f.value === '' && /^link$/i.test(f.name) ? document.createTextNode('–') : linkify(f.value));
       cell.append(el('div', 'expandable-field-label', f.name), value);
       grid.append(cell);
     });
