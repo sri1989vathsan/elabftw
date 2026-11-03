@@ -56,6 +56,9 @@ final class Inventory extends AbstractConcreteEntity
     /** the copy made by duplicate() goes into the Database at once (registered, with a number), not into My entries */
     public bool $duplicateRegistered = false;
 
+    /** the folder of the lab Database that has a subfolder for each module */
+    public const string LAB_FOLDER = 'Database items';
+
     /** the folder (of the database) the copy made by duplicate() goes in */
     public ?int $duplicateFolderId = null;
 
@@ -148,6 +151,10 @@ final class Inventory extends AbstractConcreteEntity
         $this->Db->execute($req);
         $newId = $this->Db->lastInsertId();
 
+        // an entry that is in the lab Database from the start is filed with the others of its module
+        if ($customId !== null && $category !== null) {
+            $this->fileInLabFolder($newId, $category);
+        }
         $this->insertTags($tags, $newId);
         $this->addCreationToChangelog($newId, $createdFromType, $createdFromId);
 
@@ -164,6 +171,23 @@ final class Inventory extends AbstractConcreteEntity
             return null;
         }
         return $this->getCurrentHighestCustomId($category) + 1;
+    }
+
+    /**
+     * An entry of the lab Database is filed in the folder "Database items", in the subfolder of its module (the folders are made
+     * when they are not there yet)
+     */
+    private function fileInLabFolder(int $entryId, int $category): void
+    {
+        $req = $this->Db->prepare('SELECT title FROM inventory_categories WHERE id = :id');
+        $req->bindValue(':id', $category, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $title = trim(str_replace(' > ', ' ', (string) $req->fetchColumn()));
+        if ($title === '') {
+            return;
+        }
+        $Folders = new ExperimentsFolders($this->Users, null, 'inventory');
+        $Folders->assignInventory($entryId, $Folders->getIdFromPath(self::LAB_FOLDER . ' > ' . $title));
     }
 
     /**
@@ -259,6 +283,7 @@ final class Inventory extends AbstractConcreteEntity
         $req->bindValue(':canwrite', BasePermissions::User->value, PDO::PARAM_INT);
         $req->bindValue(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
+        $this->fileInLabFolder($this->id, (int) $category);
         return (int) $number;
     }
 
@@ -327,6 +352,7 @@ final class Inventory extends AbstractConcreteEntity
         $req->bindValue(':canwrite', BasePermissions::User->value, PDO::PARAM_INT);
         $req->bindValue(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
+        $this->fileInLabFolder($this->id, (int) $category);
         return (int) $number;
     }
 
