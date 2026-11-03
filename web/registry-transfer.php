@@ -17,7 +17,6 @@ use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Storage;
 use Elabftw\Hash\FileHash;
 use Elabftw\Models\Inventory;
-use Elabftw\Services\CanSqlBuilder;
 use PDO;
 use Throwable;
 use ZipArchive;
@@ -82,7 +81,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     if (isset($_GET['ids']) && (string) $_GET['ids'] !== '') {
         $selected = array_values(array_unique(array_filter(array_map('intval', explode(',', (string) $_GET['ids'])), static fn(int $n): bool => $n > 0)));
         $selected = array_slice($selected, 0, 500);
-        $modules = $pdo->query('SELECT DISTINCT category FROM inventory WHERE team = ' . $teamId . ' AND id IN (' . implode(',', $selected ?: array(0)) . ')')->fetchAll(PDO::FETCH_COLUMN);
+        $modulesReq = $pdo->prepare('SELECT DISTINCT category FROM inventory WHERE team = :team AND id IN (' . implode(',', $selected ?: array(0)) . ')');
+        $modulesReq->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($modulesReq);
+        $modules = $modulesReq->fetchAll(PDO::FETCH_COLUMN);
         if (count($modules) !== 1) {
             respond(400, array('error' => 'Select entries of one module to export them.'));
         }

@@ -16,7 +16,6 @@ use Elabftw\Enums\AccessType;
 use Elabftw\Models\Experiments;
 use Elabftw\Models\Inventory;
 use Elabftw\Models\Items;
-use Elabftw\Services\CanSqlBuilder;
 use PDO;
 use Throwable;
 
