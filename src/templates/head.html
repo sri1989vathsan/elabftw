@@ -151,7 +151,7 @@
                 </div>
             </div>
             <div class='nav-item dropdown'>
-              <a id='navRegistryDropdown' href='#' class='nav-link dropdown-toggle {{ scriptName in ['registry.php', 'registry-categories.php'] ? 'active' }}' role='button' data-toggle='dropdown' data-overflow-href='registry.php' aria-haspopup='true' aria-expanded='false'>{{ 'Database'|trans }}</a>
+              <a id='navRegistryDropdown' href='#' class='nav-link dropdown-toggle {{ scriptName in ['registry.php', 'registry-categories.php', 'registry-dashboard.php'] ? 'active' }}' role='button' data-toggle='dropdown' data-overflow-href='registry.php' aria-haspopup='true' aria-expanded='false'>{{ 'Database'|trans }}</a>
               <div class='dropdown-menu'>
                 <form class='dropdown-item form-inline' action='registry.php' aria-label='{{ 'Quick search database'|trans }}'>
                   <label for='nav-search-registry' class='sr-only'>{{ 'Search database'|trans }}</label>
@@ -162,6 +162,8 @@
                     </div>
                   </div>
                 </form>
+                {% set isActive = scriptName == 'registry-dashboard.php' %}
+                <a class='dropdown-item {{ isActive ? 'active' }}' href='registry-dashboard.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-gauge-high fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Dashboard'|trans }}</a>
                 <div class='dropdown-divider'></div>
                 {# the storage browser of the database: the tree of the storage locations and what is in each #}
                 {% set isActive = scriptName == 'registry.php' and App.Request.query.has('storage_unit') %}
