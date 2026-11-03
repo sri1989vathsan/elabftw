@@ -498,17 +498,34 @@
       message.textContent = '';
       try {
         const vendor = inputs.vendor.value.trim();
+        // the description is a rich text: the link is a clickable badge with the title of its page, like a link pasted in an order
+        const esc = function (text) {
+          return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
         const lines = [];
-        ['link', 'clone', 'catalog', 'amount'].forEach(function (key) {
-          if (inputs[key] && inputs[key].value.trim()) {
-            lines.push(labels[key] + ': ' + inputs[key].value.trim());
+        for (const key of ['link', 'clone', 'catalog', 'amount']) {
+          const value = inputs[key] ? inputs[key].value.trim() : '';
+          if (value === '') {
+            continue;
           }
-        });
+          let shown = esc(value);
+          if (key === 'link' && /^https?:\/\/\S+$/i.test(value)) {
+            let label = value;
+            try {
+              const preview = await (await fetch('api/v2/link_preview?url=' + encodeURIComponent(value), { credentials: 'same-origin' })).json();
+              label = preview.title || preview.hostname || value;
+            } catch (error) {
+              label = value;
+            }
+            shown = '<a href="' + esc(value) + '" target="_blank" rel="noreferrer noopener" class="elabftw-link-preview">' + esc(label) + '</a>';
+          }
+          lines.push('<p>' + labels[key] + ': ' + shown + '</p>');
+        }
         const response = await fetch('api/v2/orders', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
-          body: JSON.stringify({ title: entry.title + (vendor ? '; ' + vendor : ''), notes: lines.join('\n') }),
+          body: JSON.stringify({ title: entry.title + (vendor ? '; ' + vendor : ''), notes: lines.join('') }),
         });
         if (!response.ok) {
           throw new Error('The order could not be made (' + response.status + ').');
