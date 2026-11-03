@@ -614,7 +614,7 @@
     box.setAttribute('aria-modal', 'true');
     // each module has its own order: what is asked, and what the description of the order says
     const isAntibody = /^antibod/i.test(entry.category || '');
-    const kind = isAntibody ? 'antibody' : 'reagent';
+    const kind = isAntibody ? 'antibody' : (/^consumable/i.test(entry.category || '') ? 'consumable' : 'reagent');
     box.append(element('h5', '', 'Order ' + kind + ' ' + entry.title));
     const form = [['vendor', 'Vendor', field(/^(supplier|vendor)/i), true]].concat(
       isAntibody ? [['clone', 'Clone', field(/^clone/i), true]] : [['catalog', 'Catalog number', field(/^catalog/i), true]],
@@ -629,7 +629,7 @@
       input.type = 'text';
       input.value = item[2];
       if (item[0] === 'amount') {
-        input.placeholder = isAntibody ? 'for example 100 µl' : 'for example 500 g, or 1 bottle';
+        input.placeholder = isAntibody ? 'for example 100 µl' : (kind === 'consumable' ? 'for example 2 boxes, or 1 case' : 'for example 500 g, or 1 bottle');
       }
       inputs[item[0]] = input;
       labels[item[0]] = item[1];

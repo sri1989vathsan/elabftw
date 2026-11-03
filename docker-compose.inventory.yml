@@ -42,6 +42,10 @@ services:
       - ./web/registry-transfer.php:/elabftw/web/registry-transfer.php:ro
       - ./web/registry-links.php:/elabftw/web/registry-links.php:ro
       - ./web/registry-links.js:/elabftw/web/registry-links.js:ro
+      - ./web/registry-dashboard.php:/elabftw/web/registry-dashboard.php:ro
+      - ./web/registry-dashboard.js:/elabftw/web/registry-dashboard.js:ro
+      - ./web/registry-dashboard.css:/elabftw/web/registry-dashboard.css:ro
+      - ./src/templates/registry-dashboard.html:/elabftw/src/templates/registry-dashboard.html:ro
       - ./web/registry-modules.php:/elabftw/web/registry-modules.php:ro
       - ./web/registry-modules.js:/elabftw/web/registry-modules.js:ro
       - ./src/templates/registry-categories.html:/elabftw/src/templates/registry-categories.html:ro

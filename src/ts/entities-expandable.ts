@@ -624,10 +624,10 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     });
     actionCell.append(edit, copy, print);
     // antibodies and reagents are bought: the button makes an order of the entry, next to the label button
-    if (/^(antibod|reagent)/i.test(row.category_title ?? '')) {
+    if (/^(antibod|reagent|consumable)/i.test(row.category_title ?? '')) {
       const order = el('button', 'btn btn-secondary btn-sm ml-1');
       order.type = 'button';
-      const kind = /^antibod/i.test(row.category_title ?? '') ? 'antibody' : 'reagent';
+      const kind = /^antibod/i.test(row.category_title ?? '') ? 'antibody' : (/^consumable/i.test(row.category_title ?? '') ? 'consumable' : 'reagent');
       order.title = `Order this ${kind}: ${row.title}`;
       order.setAttribute('aria-label', `Order this ${kind}: ${row.title}`);
       order.append(el('i', 'fas fa-cart-shopping fa-fw'));

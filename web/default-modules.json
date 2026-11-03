@@ -587,9 +587,107 @@
       }
     },
     {
+      "title": "Consumables",
+      "color": "4f9da6",
+      "ordering": 7,
+      "fields": {
+        "extra_fields": {
+          "Consumable type": {
+            "type": "select",
+            "value": "",
+            "options": [
+              "Tubes",
+              "Tips",
+              "Plates",
+              "Gloves",
+              "Filters",
+              "Syringes",
+              "Needles",
+              "Wipes",
+              "Other"
+            ],
+            "position": 1
+          },
+          "Supplier": {
+            "type": "text",
+            "value": "",
+            "position": 2
+          },
+          "Catalog number": {
+            "type": "text",
+            "value": "",
+            "position": 3
+          },
+          "Lot number": {
+            "type": "text",
+            "value": "",
+            "position": 4
+          },
+          "Pack size": {
+            "type": "text",
+            "value": "",
+            "position": 5
+          },
+          "Expiry date": {
+            "type": "date",
+            "value": "",
+            "position": 6
+          },
+          "Storage conditions": {
+            "type": "text",
+            "value": "",
+            "position": 7
+          },
+          "Link": {
+            "type": "url",
+            "value": "",
+            "position": 100
+          }
+        }
+      },
+      "settings": {
+        "columns": [
+          {
+            "key": "field:Consumable type",
+            "label": "Type"
+          },
+          {
+            "key": "field:Supplier",
+            "label": "Supplier"
+          },
+          {
+            "key": "field:Catalog",
+            "label": "Catalog no."
+          },
+          {
+            "key": "field:Lot",
+            "label": "Lot"
+          },
+          {
+            "key": "field:Pack size",
+            "label": "Pack size"
+          },
+          {
+            "key": "field:Expiry",
+            "label": "Expiry"
+          },
+          {
+            "key": "quantity",
+            "label": "Quantity"
+          },
+          {
+            "key": "owner",
+            "label": "Owner"
+          }
+        ],
+        "sequence_field": null,
+        "requires_sequence_file": false
+      }
+    },
+    {
       "title": "Samples",
       "color": "d1568a",
-      "ordering": 7,
+      "ordering": 8,
       "fields": {
         "extra_fields": {
           "Link": {

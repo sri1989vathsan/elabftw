@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block body %}
+<link rel='stylesheet' href='registry-dashboard.css?v={{ 'now'|date('YmdHi') }}'>
+<div id='registryDashboard' class='rd'></div>
+<script src='registry-dashboard.js?v={{ 'now'|date('YmdHi') }}'></script>
+{% endblock body %}

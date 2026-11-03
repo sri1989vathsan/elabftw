@@ -157,6 +157,7 @@ final class CustomMigrationRunner
         '124_registry_module_settings.sql',
         '125_registry_column_prefs.sql',
         '126_registry_entity_links.sql',
+        '127_registry_consumables_module.sql',
     );
 
     private Db $Db;
