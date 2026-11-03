@@ -199,7 +199,7 @@
           });
           row.append(link, badge, state);
           if (entry.personal_id !== null && entry.personal_id !== undefined) {
-            row.append(element('span', 'badge badge-light border ml-2', 'my id ' + entry.personal_id));
+            row.append((function () { const b = element('span', 'badge badge-light border ml-2', String(entry.personal_id)); b.title = 'My ID'; return b; })());
           } else if (!isPlanned) {
             const own = element('button', 'btn btn-outline-secondary btn-sm ml-auto', 'Register for myself');
             own.type = 'button';
@@ -208,7 +208,7 @@
               own.disabled = true;
               try {
                 const done = await post({ action: 'personal', id: entry.id });
-                own.textContent = 'My id ' + done.number;
+                own.textContent = String(done.number);
                 window.setTimeout(draw, 800);
               } catch (error) {
                 own.textContent = error.message;
@@ -378,7 +378,7 @@
           register.disabled = false;
         }
       });
-      const own = element('button', 'btn btn-outline-secondary btn-sm ml-2', entry.personal_id ? 'My id ' + entry.personal_id : 'Register for myself');
+      const own = element('button', 'btn btn-outline-secondary btn-sm ml-2', entry.personal_id ? String(entry.personal_id) : 'Register for myself');
       own.type = 'button';
       own.disabled = Boolean(entry.personal_id);
       own.title = 'It gets your next number of the module and stays private to you';
