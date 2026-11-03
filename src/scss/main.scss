@@ -1303,6 +1303,51 @@ tr:first-child td {
   }
 }
 
+/* "Back to ..." after following an internal link (back-to-link.ts) */
+.elabftw-back-button {
+  align-items: stretch;
+  bottom: 1rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  display: flex;
+  left: 3.5rem;
+  max-width: calc(100vw - 5rem);
+  position: fixed;
+  // above the page and its side panels, below modals (1040)
+  z-index: 1035;
+
+  button {
+    background: var(--mediumstrong);
+    border: 0;
+    color: var(--mainbackground);
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0.5rem 0.85rem;
+
+    &:hover {
+      background: var(--medium);
+    }
+  }
+
+  .elabftw-back-button-go {
+    border-radius: 999px 0 0 999px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .elabftw-back-button-close {
+    border-left: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 0 999px 999px 0;
+    padding: 0.5rem 0.7rem;
+  }
+}
+
+@media print {
+  .elabftw-back-button {
+    display: none;
+  }
+}
+
 .sidepanel-reminder-badge {
   font-size: 0.6rem;
   min-width: 1rem;
