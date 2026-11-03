@@ -2,7 +2,17 @@
 {% set color = Entity.entityData.category_color|default('bdbdbd') %}
 <div class='d-flex mb-2 align-items-center'>
   {# ID #}
-  <span class='mr-1'><i class='fas fa-hashtag'></i>{{ Entity.entityData.id }}</span>
+  {% if Entity.entityType.value == 'inventory' %}
+    {# an entry of the Database: its ID is the number of the lab (none until it is registered), then the number of its owner #}
+    {% if Entity.entityData.custom_id %}
+      <span class='mr-2' title='{{ 'ID'|trans }}'><i class='fas fa-hashtag'></i>{{ Entity.entityData.custom_id }}</span>
+    {% endif %}
+    {% if Entity.entityData.personal_id and Entity.entityData.userid == App.Users.userData['userid'] %}
+      <span class='mr-2 text-muted' title='{{ 'My_id'|trans }}'>My_id <i class='fas fa-hashtag'></i>{{ Entity.entityData.personal_id }}</span>
+    {% endif %}
+  {% else %}
+    <span class='mr-1'><i class='fas fa-hashtag'></i>{{ Entity.entityData.id }}</span>
+  {% endif %}
   {# CATEGORY #}
   <button data-target='category' type='button' class='mr-2 btn catstat-btn category-btn malleableCategory lh-normal' id='categoryBtn' style='--bg: #{{ color }};' data-id='{{ Entity.entityData.category }}'>{{ Entity.entityData.category_title|default('Add category'|trans) }}</button>
   {# STATUS #}

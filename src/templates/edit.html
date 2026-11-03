@@ -17,11 +17,8 @@
         {# CUSTOM ID #}
         {# TITLE #}
         <h1>
-          {% if Entity.entityData.custom_id %}
+          {% if Entity.entityData.custom_id and Entity.entityType.value != 'inventory' %}
             <span title='{{ 'Custom ID'|trans }}'>{{ Entity.entityData.custom_id }}</span>
-          {% endif %}
-          {% if Entity.entityType.value == 'inventory' and Entity.entityData.personal_id and Entity.entityData.userid == App.Users.userData['userid'] %}
-            <span class='text-muted' title='{{ 'My ID'|trans }}'>({{ Entity.entityData.personal_id }})</span>
           {% endif %}
            <!-- [html-validate-disable-block prefer-native-element: suppress error from malle] -->
           <span id='documentTitle' class='breakable malleable-title malleable rounded py-1' data-target='title' data-endpoint='{{ Entity.entityType.value }}' data-id='{{ Entity.id }}'>{{ Entity.entityData.title }}</span>
