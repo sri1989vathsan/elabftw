@@ -856,6 +856,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   folderPanel.style.minWidth = '0';
   menuItem(folderButton);
   actionsMenu.append(folderPanel);
+  let refreshMoveLabel: (() => void) | null = null;
   const csrfToken = (): string => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
   folderButton.addEventListener('click', () => {
     if (!folderPanel.hidden) {
@@ -898,8 +899,13 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
         tabs.append(tab);
       });
       fill();
-      const go = el('button', 'btn btn-primary btn-sm', `Move ${ui.selected.size} entries`);
+      const go = el('button', 'btn btn-primary btn-sm');
       go.type = 'button';
+      // the count follows the rows that are ticked
+      refreshMoveLabel = (): void => {
+        go.textContent = `Move ${ui.selected.size} ${ui.selected.size === 1 ? 'entry' : 'entries'}`;
+      };
+      refreshMoveLabel();
       const note = el('div', 'small mt-1');
       go.addEventListener('click', () => {
         go.disabled = true;
@@ -948,6 +954,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
       orderButton.textContent = 'Send to an order';
       databaseButton.textContent = 'Add to the Database';
       ownerButton.textContent = 'Assign owner';
+      refreshMoveLabel?.();
       if (ui.selected.size === 0) {
         folderPanel.hidden = true;
         actionsMenu.hidden = true;
