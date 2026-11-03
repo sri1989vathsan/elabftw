@@ -123,6 +123,262 @@
   // the list page: the switch between All entries and My entries, and in My entries the toggle In database
   function listPage(nav) {
     viewSwitch(nav);
+    transferButtons(nav);
+  }
+
+  // ---- batch import and export of the entries of the module that is open
+  // a CSV file: the delimiter is found from the first line, a value can be in quotes and have line breaks
+  function parseCsv(text) {
+    const source = text.replace(/^\uFEFF/, '');
+    const firstLine = source.split(/\r?\n/)[0] || '';
+    const delimiter = [',', ';', '\t'].map(function (d) {
+      return [d, firstLine.split(d).length];
+    }).sort(function (a, b) {
+      return b[1] - a[1];
+    })[0][0];
+    const rows = [];
+    let row = [];
+    let value = '';
+    let quoted = false;
+    for (let i = 0; i < source.length; i++) {
+      const c = source[i];
+      if (quoted) {
+        if (c === '"' && source[i + 1] === '"') {
+          value += '"';
+          i++;
+        } else if (c === '"') {
+          quoted = false;
+        } else {
+          value += c;
+        }
+      } else if (c === '"') {
+        quoted = true;
+      } else if (c === delimiter) {
+        row.push(value);
+        value = '';
+      } else if (c === '\n' || c === '\r') {
+        if (c === '\r' && source[i + 1] === '\n') {
+          i++;
+        }
+        row.push(value);
+        value = '';
+        rows.push(row);
+        row = [];
+      } else {
+        value += c;
+      }
+    }
+    if (value !== '' || row.length > 0) {
+      row.push(value);
+      rows.push(row);
+    }
+    return rows.filter(function (r) {
+      return r.some(function (v) {
+        return v.trim() !== '';
+      });
+    });
+  }
+
+  function transferButtons(nav) {
+    const params = new URLSearchParams(location.search);
+    const category = Number(params.get('category'));
+    if (!(category > 0) || String(params.get('category')).indexOf(',') !== -1) {
+      return;
+    }
+    const mine = params.get('planned') === '1';
+    const group = element('div', 'btn-group btn-group-sm ml-2 mt-2 transfer-buttons');
+    group.setAttribute('role', 'group');
+    const exportLink = element('a', 'btn btn-outline-secondary', 'Export');
+    exportLink.href = 'registry-transfer.php?export=1&category=' + category + '&scope=' + (mine ? 'mine' : 'lab');
+    exportLink.title = mine ? 'Download all your entries of this module as a CSV file' : 'Download the entries of the lab Database of this module as a CSV file';
+    const importButton = element('button', 'btn btn-outline-secondary', 'Import');
+    importButton.type = 'button';
+    importButton.title = 'Add many entries at once from a CSV file';
+    importButton.addEventListener('click', function () {
+      importDialog(category);
+    });
+    group.append(exportLink, importButton);
+    const anchor = nav.parentNode.querySelector('.id-filter') || nav.parentNode.querySelector('.view-switch');
+    if (anchor) {
+      anchor.insertAdjacentElement('afterend', group);
+    } else {
+      nav.insertAdjacentElement('beforebegin', group);
+    }
+  }
+
+  async function importDialog(category) {
+    let module;
+    try {
+      const response = await fetch('registry-modules.php', { credentials: 'same-origin' });
+      module = (await response.json()).modules.find(function (m) {
+        return m.id === category;
+      });
+    } catch (error) {
+      module = null;
+    }
+    if (!module) {
+      return;
+    }
+    const back = element('div', 'planned-backdrop');
+    const box = element('div', 'planned-dialog');
+    box.style.maxWidth = '46rem';
+    box.style.maxHeight = '88vh';
+    box.style.overflowY = 'auto';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.append(element('h5', '', 'Import into ' + module.title));
+    const help = element('p', 'small text-muted');
+    help.append(document.createTextNode('A CSV file with a heading row (Excel can save one). Every row makes an entry. '));
+    const template = element('a', '', 'Download a template');
+    template.href = 'registry-transfer.php?template=1&category=' + category;
+    help.append(template, document.createTextNode(' with the fields of this module.'));
+    box.append(help);
+    const file = element('input', 'form-control-file mb-2');
+    file.type = 'file';
+    file.accept = '.csv,.tsv,.txt,text/csv';
+    box.append(file);
+    const mapping = element('div');
+    const destination = element('select', 'form-control form-control-sm w-auto mb-2');
+    [['personal', 'My database: only me, my own numbers'], ['both', 'The lab database: everyone sees them, with the lab number'], ['none', 'No database yet: private, no numbers until registered']].forEach(function (item) {
+      const option = element('option', '', item[1]);
+      option.value = item[0];
+      if (item[0] === 'both' && module.settings && module.settings.requires_sequence_file) {
+        option.disabled = true;
+        option.textContent += ' (this module needs a sequence file for each: not for an import)';
+      }
+      destination.append(option);
+    });
+    const message = element('p', 'small mb-2');
+    const buttons = element('div', 'planned-dialog-buttons');
+    const cancel = element('button', 'btn btn-secondary btn-sm', 'Close');
+    const run = element('button', 'btn btn-primary btn-sm', 'Import');
+    cancel.type = run.type = 'button';
+    run.disabled = true;
+    cancel.addEventListener('click', function () {
+      back.remove();
+    });
+    back.addEventListener('click', function (e) {
+      if (e.target === back) {
+        back.remove();
+      }
+    });
+    buttons.append(cancel, run);
+    box.append(mapping, element('p', 'small text-muted mb-1', 'Where the entries go'), destination, message, buttons);
+    back.append(box);
+    document.body.append(back);
+
+    const normal = function (text) {
+      return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '');
+    };
+    let table = [];
+    const choices = [];
+    file.addEventListener('change', async function () {
+      mapping.textContent = '';
+      choices.length = 0;
+      run.disabled = true;
+      if (!file.files || !file.files[0]) {
+        return;
+      }
+      table = parseCsv(await file.files[0].text());
+      if (table.length < 2) {
+        message.className = 'small mb-2 text-danger';
+        message.textContent = 'The file needs a heading row and at least one row of data.';
+        return;
+      }
+      message.textContent = '';
+      mapping.append(element('p', 'small text-muted mb-1', table.length - 1 + ' rows. Say what each column of the file is:'));
+      table[0].forEach(function (heading, index) {
+        const row = element('div', 'd-flex align-items-center mb-1');
+        const name = element('span', 'mr-2 small');
+        name.style.width = '14em';
+        name.textContent = heading || '(no heading)';
+        const select = element('select', 'form-control form-control-sm w-auto');
+        const options = [['title', 'The title'], ['ignore', 'Leave out']].concat(module.fields.map(function (f) {
+          return ['field:' + f.name, 'Field: ' + f.name];
+        }), [['extra', 'Keep as a new field']]);
+        options.forEach(function (o) {
+          const option = element('option', '', o[1]);
+          option.value = o[0];
+          select.append(option);
+        });
+        const key = normal(heading);
+        let guess = 'ignore';
+        if (key === 'title' || key === 'name') {
+          guess = 'title';
+        } else if (['id', 'myid', 'owner', 'date'].indexOf(key) === -1) {
+          const found = module.fields.find(function (f) {
+            return normal(f.name) === key;
+          });
+          if (found) {
+            guess = 'field:' + found.name;
+          }
+        }
+        select.value = guess;
+        choices.push(select);
+        const sample = element('span', 'ml-2 small text-muted', table[1][index] ? '(e.g. ' + table[1][index].slice(0, 30) + ')' : '');
+        row.append(name, select, sample);
+        mapping.append(row);
+      });
+      run.disabled = false;
+    });
+
+    run.addEventListener('click', async function () {
+      const kinds = choices.map(function (c) {
+        return c.value;
+      });
+      if (kinds.indexOf('title') === -1) {
+        message.className = 'small mb-2 text-danger';
+        message.textContent = 'One column has to be the title.';
+        return;
+      }
+      const rows = table.slice(1).map(function (cells) {
+        const row = { title: '', fields: {}, extra: {} };
+        kinds.forEach(function (kind, index) {
+          const value = (cells[index] || '').trim();
+          if (kind === 'title') {
+            row.title = value;
+          } else if (kind.indexOf('field:') === 0) {
+            row.fields[kind.slice(6)] = value;
+          } else if (kind === 'extra') {
+            row.extra[table[0][index]] = value;
+          }
+        });
+        return row;
+      });
+      run.disabled = true;
+      let created = 0;
+      const skipped = [];
+      try {
+        for (let start = 0; start < rows.length; start += 100) {
+          message.className = 'small mb-2';
+          message.textContent = 'Importing... ' + start + ' of ' + rows.length;
+          const response = await fetch('registry-transfer.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
+            body: JSON.stringify({ category: category, register: destination.value, rows: rows.slice(start, start + 100) }),
+          });
+          const body = await response.json();
+          if (!response.ok) {
+            throw new Error(body.error || 'The import failed.');
+          }
+          created += body.created;
+          body.skipped.forEach(function (item) {
+            skipped.push('Row ' + (start + Number(String(item.row).replace(/\D.*$/, '').replace('Row ', '') || 0)) + ': ' + item.reason);
+          });
+        }
+        message.className = 'small mb-2 text-success';
+        message.textContent = created + ' entries made.' + (skipped.length ? ' Not made (' + skipped.length + '): ' + skipped.slice(0, 8).join(' ') + (skipped.length > 8 ? ' ...' : '') : '');
+        cancel.textContent = 'Close and reload';
+        cancel.addEventListener('click', function () {
+          window.location.reload();
+        });
+      } catch (error) {
+        message.className = 'small mb-2 text-danger';
+        message.textContent = error.message + (created ? ' (' + created + ' entries were made before it stopped.)' : '');
+        run.disabled = false;
+      }
+    });
   }
 
   // a dialog of our own: the native box of the browser can be blocked
