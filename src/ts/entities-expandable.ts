@@ -171,6 +171,30 @@ function columnsFor(rows: Row[]): Column[] {
   return columns;
 }
 
+// the columns a user hides, kept in this browser for each module (and one list for the lists that mix modules)
+const HIDDEN_COLUMNS_KEY = 'registry_hidden_columns_v1';
+const moduleKeyOf = (rows: Row[]): string => {
+  const first = rows[0]?.category ?? null;
+  return first !== null && rows.every(r => r.category === first) ? String(first) : 'mixed';
+};
+function loadHiddenColumns(moduleKey: string): Set<string> {
+  try {
+    const all = JSON.parse(localStorage.getItem(HIDDEN_COLUMNS_KEY) ?? '{}') as Record<string, string[]>;
+    return new Set(all[moduleKey] ?? []);
+  } catch {
+    return new Set();
+  }
+}
+function saveHiddenColumns(moduleKey: string, hidden: Set<string>): void {
+  try {
+    const all = JSON.parse(localStorage.getItem(HIDDEN_COLUMNS_KEY) ?? '{}') as Record<string, string[]>;
+    all[moduleKey] = [...hidden];
+    localStorage.setItem(HIDDEN_COLUMNS_KEY, JSON.stringify(all));
+  } catch {
+    // localStorage might be unavailable: the columns come back at the next visit
+  }
+}
+
 // a filter on a column: text is searched in the value, a number can be compared (">50", "<=60", "55-62")
 function matchesFilter(value: string | number, filter: string, numeric: boolean): boolean {
   const f = filter.trim();
@@ -335,7 +359,9 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     container.append(el('p', 'text-muted', 'Nothing to show.'));
     return;
   }
-  const columns = columnsFor(allRows);
+  // the ID and the title stay; the other columns can be hidden by the user (button Columns)
+  const hidden = loadHiddenColumns(moduleKeyOf(allRows));
+  const columns = columnsFor(allRows).filter(c => c.key === 'ID' || c.key === 'Title' || !hidden.has(c.key));
   const mixedModules = new Set(allRows.map(r => r.category_title ?? '')).size > 1;
   const table = el('table', 'table table-sm expandable-table');
   const head = el('tr');
@@ -586,6 +612,15 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   const collapseAll = el('button', 'btn btn-transparent btn-sm', 'Collapse all');
   expandAll.type = collapseAll.type = 'button';
   toolbar.append(expandAll, collapseAll);
+  // the columns the user sees: a button with the list of the columns to tick or untick, remembered for each module
+  toolbar.style.position = 'relative';
+  const columnsButton = el('button', 'btn btn-transparent btn-sm ml-2');
+  columnsButton.type = 'button';
+  columnsButton.append(el('i', 'fas fa-table-columns fa-fw mr-1'), document.createTextNode('Columns'));
+  columnsButton.title = 'Choose the columns of the table';
+  const columnsPanel = el('div', 'columns-panel');
+  columnsPanel.hidden = true;
+  toolbar.append(columnsButton, columnsPanel);
   // the rows ticked can be sent to an order (the sequences of primers are written in its notes)
   const orderButton = el('button', 'btn btn-secondary btn-sm ml-3', 'Send selected to an order');
   orderButton.type = 'button';
@@ -628,6 +663,41 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
       ui.onSelectionChange();
       window.location.reload();
     });
+  });
+  const fillColumnsPanel = (): void => {
+    columnsPanel.replaceChildren();
+    const moduleKey = moduleKeyOf(rows);
+    const hidden = loadHiddenColumns(moduleKey);
+    columnsFor(rows).filter(c => c.key !== 'ID' && c.key !== 'Title').forEach(c => {
+      const label = el('label', 'd-block mb-1');
+      const box = el('input');
+      box.type = 'checkbox';
+      box.checked = !hidden.has(c.key);
+      box.addEventListener('change', () => {
+        if (box.checked) hidden.delete(c.key); else hidden.add(c.key);
+        saveHiddenColumns(moduleKey, hidden);
+        render(container, rows, tableSort, onSort, ui);
+      });
+      label.append(box, document.createTextNode(` ${c.label}`));
+      columnsPanel.append(label);
+    });
+    const showAll = el('button', 'btn btn-link btn-sm p-0 mt-1', 'Show all');
+    showAll.type = 'button';
+    showAll.addEventListener('click', () => {
+      saveHiddenColumns(moduleKey, new Set());
+      render(container, rows, tableSort, onSort, ui);
+      fillColumnsPanel();
+    });
+    columnsPanel.append(showAll);
+  };
+  columnsButton.addEventListener('click', event => {
+    event.stopPropagation();
+    columnsPanel.hidden = !columnsPanel.hidden;
+    if (!columnsPanel.hidden) fillColumnsPanel();
+  });
+  // a click elsewhere closes the panel
+  document.addEventListener('click', event => {
+    if (!columnsPanel.hidden && !columnsPanel.contains(event.target as Node)) columnsPanel.hidden = true;
   });
   const onSort = (next: SortState): void => {
     tableSort = next;
