@@ -17,7 +17,9 @@
     "margin_left_mm": 1.0,
     "margin_top_mm": 1.0,
     "margin_right_mm": 1.0,
-    "margin_bottom_mm": 3.0
+    "margin_bottom_mm": 3.0,
+    "offset_x_mm": 0.0,
+    "offset_y_mm": 0.0
   },
   "modules": {}
 }
