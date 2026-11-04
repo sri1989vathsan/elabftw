@@ -288,7 +288,8 @@ final class StorageUnits extends AbstractRest
         $hasParent = array_key_exists('parent_id', $params);
         $hasBox = array_key_exists('box_rows', $params) || array_key_exists('box_cols', $params);
         $hasPosition = array_key_exists('position', $params);
-        if (!$hasName && !$hasParent && !$hasBox && !$hasPosition) {
+        $hasKind = array_key_exists('kind', $params) || array_key_exists('temperature', $params);
+        if (!$hasName && !$hasParent && !$hasBox && !$hasPosition && !$hasKind) {
             throw new ImproperActionException('No valid update target provided.');
         }
         if ($hasBox) {
@@ -296,6 +297,9 @@ final class StorageUnits extends AbstractRest
         }
         if ($hasPosition) {
             $this->setPosition($params['position']);
+        }
+        if ($hasKind) {
+            $this->setKind($params['kind'] ?? null, $params['temperature'] ?? null);
         }
         $newParentId = null;
         if ($hasParent) {
@@ -401,6 +405,8 @@ final class StorageUnits extends AbstractRest
             $reqBody['name'] ?? throw new ImproperActionException('Missing value for "name"'),
             Filter::intOrNull($reqBody['parent_id'] ?? 0),
             Filter::intOrNull($reqBody['position'] ?? 0),
+            isset($reqBody['kind']) ? (string) $reqBody['kind'] : null,
+            $reqBody['temperature'] ?? null,
         );
     }
 
@@ -414,13 +420,53 @@ final class StorageUnits extends AbstractRest
         $this->Db->execute($req);
     }
 
-    public function create(string $unitName, ?int $parentId = null, ?int $position = null): int
+    public const array KINDS = array('location', 'freezer', 'fridge', 'rack', 'box');
+
+    /** what the place is, and the temperature of a fridge or a freezer (degrees Celsius): both can be emptied */
+    public function setKind(mixed $kind, mixed $temperature): void
     {
-        $sql = 'INSERT INTO storage_units(parent_id, name, position) VALUES(:parent_id, :name, :position)';
+        $kindValue = is_string($kind) && in_array($kind, self::KINDS, true) ? $kind : null;
+        $degrees = filter_var($temperature, FILTER_VALIDATE_INT, array('options' => array('min_range' => -273, 'max_range' => 100)));
+        $req = $this->Db->prepare('UPDATE storage_units SET kind = :kind, temperature = :temperature WHERE id = :id');
+        $req->bindValue(':kind', $kindValue, $kindValue === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':temperature', $degrees === false ? null : $degrees, $degrees === false ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    /** a fridge or a freezer is in a location, and only a location is at the top: the places without a kind (older ones) are not checked */
+    private function checkKindPlace(?string $kind, ?int $parentId): void
+    {
+        if ($kind === null) {
+            return;
+        }
+        $parentKind = null;
+        if ($parentId !== null) {
+            $req = $this->Db->prepare('SELECT kind FROM storage_units WHERE id = :id');
+            $req->bindParam(':id', $parentId, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            $parentKind = $req->fetchColumn() ?: null;
+        }
+        if ($parentId === null && $kind !== 'location') {
+            throw new ImproperActionException(_('Only a location can be at the top: put a fridge, a freezer, a rack or a box in a location.'));
+        }
+        if (($kind === 'freezer' || $kind === 'fridge') && $parentKind !== null && $parentKind !== 'location') {
+            throw new ImproperActionException(_('A fridge or a freezer is in a location.'));
+        }
+    }
+
+    public function create(string $unitName, ?int $parentId = null, ?int $position = null, ?string $kind = null, mixed $temperature = null): int
+    {
+        $kind = is_string($kind) && in_array($kind, self::KINDS, true) ? $kind : null;
+        $this->checkKindPlace($kind, $parentId);
+        $degrees = filter_var($temperature, FILTER_VALIDATE_INT, array('options' => array('min_range' => -273, 'max_range' => 100)));
+        $sql = 'INSERT INTO storage_units(parent_id, name, position, kind, temperature) VALUES(:parent_id, :name, :position, :kind, :temperature)';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':parent_id', $parentId);
         $req->bindParam(':name', $unitName);
         $req->bindParam(':position', $position);
+        $req->bindValue(':kind', $kind, $kind === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $req->bindValue(':temperature', $degrees === false ? null : $degrees, $degrees === false ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $this->Db->execute($req);
         return $this->Db->lastInsertId();
     }
@@ -577,7 +623,9 @@ final class StorageUnits extends AbstractRest
                 (SELECT COUNT(*) FROM storage_units AS su WHERE su.parent_id = storage_units.id) AS children_count,
                 box_rows,
                 box_cols,
-                position
+                position,
+                kind,
+                temperature
             FROM
                 storage_units
             WHERE
@@ -595,7 +643,9 @@ final class StorageUnits extends AbstractRest
                 (SELECT COUNT(*) FROM storage_units AS su WHERE su.parent_id = child.id) AS children_count,
                 child.box_rows,
                 child.box_cols,
-                child.position
+                child.position,
+                child.kind,
+                child.temperature
             FROM
                 storage_units AS child
             INNER JOIN
@@ -615,6 +665,8 @@ final class StorageUnits extends AbstractRest
             box_rows,
             box_cols,
             position,
+            kind,
+            temperature,
             (SELECT GROUP_CONCAT(c.position) FROM containers2inventory AS c WHERE c.storage_id = storage_hierarchy.id AND c.position IS NOT NULL) AS taken_positions
         FROM
             storage_hierarchy

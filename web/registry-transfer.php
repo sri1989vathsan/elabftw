@@ -462,12 +462,41 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
         $unitIds = array();
         $created = 0;
         $findUnit = $pdo->prepare('SELECT id, box_rows, position FROM storage_units WHERE name = :name AND ((:parent IS NULL AND parent_id IS NULL) OR parent_id = :parent2) LIMIT 1');
-        $makeUnit = $pdo->prepare('INSERT INTO storage_units (name, parent_id, box_rows, box_cols, position) VALUES (:name, :parent, :rows, :cols, :position)');
+        $makeUnit = $pdo->prepare('INSERT INTO storage_units (name, parent_id, box_rows, box_cols, position, kind, temperature) VALUES (:name, :parent, :rows, :cols, :position, :kind, :temperature)');
         $setSize = $pdo->prepare('UPDATE storage_units SET box_rows = :rows, box_cols = :cols WHERE id = :id');
+        // what each place of a path is: the first is a location; a name with "freezer", "-80", "tank" ... is a freezer, with "fridge" or "4 C" a fridge
+        // (with its temperature); what comes before it is a location too, what follows is a rack, and the last one with slots is a box
+        $kindsOf = static function (array $segments, bool $leafIsBox): array {
+            $found = false;
+            $out = array();
+            foreach ($segments as $depth => $name) {
+                $kind = 'location';
+                $temperature = null;
+                if ($found) {
+                    $kind = 'rack';
+                } elseif ($depth > 0 && preg_match('/fridge|refrigerat|cold ?room|4\s*°?\s*c\b/i', $name) === 1) {
+                    $kind = 'fridge';
+                    $temperature = 4;
+                    $found = true;
+                } elseif ($depth > 0 && preg_match('/freez|ln2|tank|dewar|-\s*\d{2,3}\s*°?\s*c?\b/i', $name) === 1) {
+                    $kind = 'freezer';
+                    $temperature = preg_match('/(-\s*\d{1,3})\s*°?\s*c?\b/i', $name, $t) === 1 ? (int) str_replace(' ', '', $t[1]) : (preg_match('/ln2|tank|dewar/i', $name) === 1 ? -196 : null);
+                    $found = true;
+                }
+                $out[$depth] = array($kind, $temperature);
+            }
+            if ($leafIsBox && $segments !== array()) {
+                $out[count($segments) - 1] = array('box', null);
+            }
+            return $out;
+        };
+        $setKindIfEmpty = $pdo->prepare('UPDATE storage_units SET kind = :kind, temperature = :temperature WHERE id = :id AND kind IS NULL');
         $setOrder = $pdo->prepare('UPDATE storage_units SET position = :position WHERE id = :id AND position IS NULL');
-        $unitFor = static function (array $segments, array $order = array()) use (&$unitIds, &$created, $findUnit, $makeUnit, $setSize, $setOrder, $boxes, $sizeOf, $pdo): int {
+        $unitFor = static function (array $segments, array $order = array()) use (&$unitIds, &$created, $findUnit, $makeUnit, $setSize, $setOrder, $setKindIfEmpty, $kindsOf, $boxes, $sizeOf, $pdo): int {
             $parent = null;
             $path = array();
+            $leafKey = implode(' > ', $segments);
+            $kinds = $kindsOf($segments, isset($boxes[$leafKey]));
             foreach ($segments as $depth => $name) {
                 $path[] = $name;
                 $key = implode(' > ', $path);
@@ -481,6 +510,12 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
                     $found = $findUnit->fetch();
                     if (is_array($found)) {
                         $unitIds[$key] = (int) $found['id'];
+                        if (($kinds[$depth][0] ?? null) !== null) {
+                            $setKindIfEmpty->bindValue(':kind', $kinds[$depth][0]);
+                            $setKindIfEmpty->bindValue(':temperature', $kinds[$depth][1] ?? null, ($kinds[$depth][1] ?? null) === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+                            $setKindIfEmpty->bindValue(':id', $found['id'], PDO::PARAM_INT);
+                            $pdo->execute($setKindIfEmpty);
+                        }
                         if (($order[$depth] ?? null) !== null && $found['position'] === null) {
                             $setOrder->bindValue(':position', $order[$depth], PDO::PARAM_INT);
                             $setOrder->bindValue(':id', $unitIds[$key], PDO::PARAM_INT);
@@ -498,6 +533,8 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
                         $makeUnit->bindValue(':rows', $size[0] ?? null, $size === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
                         $makeUnit->bindValue(':cols', $size[1] ?? null, $size === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
                         $makeUnit->bindValue(':position', $order[$depth] ?? null, ($order[$depth] ?? null) === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+                        $makeUnit->bindValue(':kind', $kinds[$depth][0] ?? null, ($kinds[$depth][0] ?? null) === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+                        $makeUnit->bindValue(':temperature', $kinds[$depth][1] ?? null, ($kinds[$depth][1] ?? null) === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
                         $pdo->execute($makeUnit);
                         $unitIds[$key] = (int) $pdo->lastInsertId();
                         $created++;
