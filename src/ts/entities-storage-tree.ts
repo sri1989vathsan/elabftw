@@ -1438,7 +1438,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     }
     if (isBox) {
       contents.push(renderBox(node));
-    } else if (node.children.length > 0) {
+    } else if (node.children.length > 0 || node.unit.kind === 'freezer' || node.unit.kind === 'fridge' || node.unit.kind === 'rack') {
+      // a fridge, a freezer or a rack is drawn even when it is empty: its place to click adds the first rack or box
       contents.push(node.unit.kind === 'location' ? renderRacks(node) : renderCabinet(node));
     }
     const heading = isBox ? 'The slots of this box' : (node.children.length > 0 ? `Inside it: ${node.children.length} ${node.children.length === 1 ? 'place' : 'places'}` : 'Inside it: nothing yet');
