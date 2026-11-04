@@ -1531,7 +1531,41 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     const table = el('table', 'table table-sm table-hover');
     const head = el('tr');
     const columns = ['ID', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Owner'];
-    columns.forEach(h => head.append(el('th', h === 'ID' ? 'id-cell' : '', h)));
+    // a click on a heading sorts the table by it, a second click turns the order round (the highest ID first to start with)
+    let sortColumn = 0;
+    let sortAscending = false;
+    const headings: HTMLElement[] = [];
+    columns.forEach((h, i) => {
+      const th = el('th', h === 'ID' ? 'id-cell' : '', h);
+      th.style.cursor = 'pointer';
+      th.title = `Sort by ${h}`;
+      th.addEventListener('click', () => {
+        sortAscending = sortColumn === i ? !sortAscending : true;
+        sortColumn = i;
+        sortTable();
+      });
+      headings.push(th);
+      head.append(th);
+    });
+    const sortTable = (): void => {
+      const numeric = (text: string): number => {
+        const found = /-?\d+(\.\d+)?/.exec(text);
+        return found ? Number(found[0]) : Number.NEGATIVE_INFINITY;
+      };
+      const trs = Array.from(body.querySelectorAll<HTMLTableRowElement>('tr'));
+      trs.sort((a, b) => {
+        const av = a.children[sortColumn]?.textContent ?? '';
+        const bv = b.children[sortColumn]?.textContent ?? '';
+        const order = sortColumn === 0 || sortColumn === 6
+          ? numeric(av) - numeric(bv)
+          : av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
+        return sortAscending ? order : -order;
+      });
+      trs.forEach(tr => body.append(tr));
+      headings.forEach((th, i) => {
+        th.textContent = columns[i] + (i === sortColumn ? (sortAscending ? ' ▲' : ' ▼') : '');
+      });
+    };
     // a filter under each heading, and one search for all of them: the rows that do not match are hidden
     const filterRow = el('tr', 'expandable-filter-row');
     const wanted: string[] = columns.map(() => '');
@@ -1569,7 +1603,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     groups.forEach(({ row, locations }) => {
       const first = locations[0];
       const tr = el('tr');
-      tr.append(el('td', 'id-cell', String(row.id)));
+      // the number of the entry in its module (its lab number), not the row number of the database
+      tr.append(el('td', 'id-cell', row.custom_id === null || row.custom_id === undefined ? '' : String(row.custom_id)));
       const titleCell = el('td');
       const link = el('a', '', row.title);
       link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
@@ -1612,6 +1647,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       body.append(tr);
     });
     table.append(thead, body);
+    sortTable();
     const wrap = el('div', 'table-responsive');
     wrap.append(table);
     main.append(wrap);
