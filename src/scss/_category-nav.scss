@@ -640,6 +640,22 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.15rem 0;
+
+    .storage-row-qty {
+      flex: 0 0 6rem;
+    }
+
+    .storage-kind {
+      flex: 0 0 5.5rem;
+      text-align: center;
+    }
+
+    // the same width with or without "Make primary", so the columns keep their place
+    .storage-row-actions {
+      flex: 0 0 auto;
+      justify-content: flex-end;
+      min-width: 12rem;
+    }
   }
 }
 
@@ -769,6 +785,13 @@
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+// the day a tube was stored, a fixed width so the comments line up from row to row
+.storage-tube-date {
+  flex: 0 0 6.5rem;
+  white-space: nowrap;
+  font-style: italic;
 }
 
 // the comment of a tube on the entry page

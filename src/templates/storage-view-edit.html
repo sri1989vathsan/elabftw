@@ -60,7 +60,7 @@
                         <span class='storage-slot-chip {{ tube.is_primary ? 'is-primary' : 'is-secondary' }}' title='{{ tube.is_primary ? 'Primary'|trans : 'Secondary'|trans }}'>{{ tube.position|default('–') }}</span>
                         <span class='storage-kind storage-kind-{{ tube.is_primary ? 'primary' : 'secondary' }}'>{{ tube.is_primary ? 'Primary'|trans : 'Secondary'|trans }}</span>
                         <span class='storage-row-qty'><span class='malleableColumn hl-hover p-1 rounded' data-ma-type='float' data-endpoint='{{ Entity.entityType.value }}/{{ Entity.id }}/containers' data-id='{{ tube.id }}' data-target='qty_stored'>{{ tube.qty_stored|round(2) }}</span><span class='malleableQtyUnit hl-hover p-1 rounded' data-endpoint='{{ Entity.entityType.value }}/{{ Entity.id }}/containers' data-id='{{ tube.id }}'>{{ tube.qty_unit }}</span></span>
-                        <span class='storage-tube-comment' title='{{ 'Stored on'|trans }}'>{{ tube.created_at|slice(0, 10) }}</span>
+                        <span class='storage-tube-date' title='{{ 'Stored on'|trans }}'>{{ tube.created_at|slice(0, 10) }}</span>
                         {% if tube.comment %}<span class='storage-tube-comment' title='{{ tube.comment|e('html_attr') }}'>{{ tube.comment }}</span>{% endif %}
                         <span class='storage-row-actions ml-auto'>
                           {% if not tube.is_primary and not storageReadOnly %}
