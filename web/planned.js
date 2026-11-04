@@ -663,22 +663,28 @@
       });
       bar.append(register, own, message);
     } else if (mine) {
-      bar.append(element('span', 'text-muted mr-2', 'In the Database' + (entry.custom_id ? ' as number ' + entry.custom_id : '') + '.'));
-      const back = element('button', 'btn btn-outline-secondary btn-sm ml-auto', 'Move back to planned');
-      back.type = 'button';
-      back.addEventListener('click', async function () {
-        const yes = await confirmDialog('Move it out of the Database?', 'It becomes private to you and disappears from the lists, the searches and the pickers of everyone else, including the orders and plasmids that use it. It keeps its number ' + (entry.custom_id || '') + ': when you move it back into the Database it has the same one.', 'Move back to planned');
-        if (!yes) {
-          return;
-        }
-        try {
-          await post({ action: 'revert', id: id });
-          location.reload();
-        } catch (error) {
-          message.textContent = error.message;
-        }
-      });
-      bar.append(back, message);
+      // a registered entry has no bar: moving it back out of the Database is an item of the "More options" menu of the entry
+      const menu = document.querySelector('#entityToolbar .dropdown-menu');
+      if (menu && !menu.querySelector('[data-planned-back]')) {
+        const back = element('button', 'dropdown-item', 'Move back to planned');
+        back.type = 'button';
+        back.dataset.plannedBack = '1';
+        back.title = 'It leaves the Database and becomes private to you; it keeps its number ' + (entry.custom_id || '');
+        back.addEventListener('click', async function () {
+          const yes = await confirmDialog('Move it out of the Database?', 'It becomes private to you and disappears from the lists, the searches and the pickers of everyone else, including the orders and plasmids that use it. It keeps its number ' + (entry.custom_id || '') + ': when you move it back into the Database it has the same one.', 'Move back to planned');
+          if (!yes) {
+            return;
+          }
+          try {
+            await post({ action: 'revert', id: id });
+            location.reload();
+          } catch (error) {
+            window.alert(error.message);
+          }
+        });
+        menu.append(back);
+      }
+      return;
     } else {
       return;
     }
