@@ -28,6 +28,10 @@
               <label for='containerStoredAtInput'>{{ 'Stored on'|trans }}</label>
               <input type='date' id='containerStoredAtInput' class='form-control' value='{{ 'now'|date('Y-m-d') }}' />
             </div>
+            <div class='col-sm-4 mt-2'>
+              <label for='containerExpiresInput'>{{ 'Expires on (optional)'|trans }}</label>
+              <input type='date' id='containerExpiresInput' class='form-control' />
+            </div>
             <div class='col-12 mt-2'>
               <label>{{ 'Cap colour'|trans }}</label>
               <div id='containerCapColour'></div>

@@ -1767,6 +1767,7 @@ on('store-containers-distributed', () => {
   const qty_unit = (document.getElementById('containerQtyUnitSelect') as HTMLSelectElement).value;
   const note = (document.getElementById('containerCommentInput') as HTMLInputElement | null)?.value.trim() ?? '';
   const storedAt = (document.getElementById('containerStoredAtInput') as HTMLInputElement | null)?.value ?? '';
+  const expiresAt = (document.getElementById('containerExpiresInput') as HTMLInputElement | null)?.value ?? '';
   const postCalls = containerStepperInputs().flatMap(input => {
     const count = intFromInput(input);
     return Array.from({ length: count }, () =>
@@ -1776,6 +1777,7 @@ on('store-containers-distributed', () => {
         ...(note !== '' ? { comment: note } : {}),
         ...(storedAt !== '' ? { stored_at: storedAt } : {}),
         ...(capChoice && capChoice.get() !== '' ? { cap_colour: capChoice.get() } : {}),
+        ...(expiresAt !== '' ? { expires_at: expiresAt } : {}),
       }),
     );
   });

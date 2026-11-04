@@ -10,7 +10,7 @@ import { el, fieldLabel, filterParams, linkify, plainText, sortableHeader, sortR
 import type { SortState } from './entities-view-utils';
 
 type ExtraField = { name: string; value: string };
-type StorageLocation = { storage_id: number; is_primary?: boolean; comment?: string | null; position?: string | null; path: string; qty_stored: number; qty_unit: string };
+type StorageLocation = { storage_id: number; expires_at?: string | null; is_primary?: boolean; comment?: string | null; position?: string | null; path: string; qty_stored: number; qty_unit: string };
 type WebLink = { id: string; label: string; url: string };
 type SequenceFile = { id: number; long_name: string; real_name: string; storage: number };
 type InternalLink = { page: string; entityid: number; title: string; category_title: string | null; category_color: string | null };
@@ -25,6 +25,8 @@ type Row = {
   category_color: string | null;
   fullname: string;
   storage_locations?: StorageLocation[];
+  min_stock?: number | null;
+  min_stock_unit?: string | null;
   extra_fields?: ExtraField[];
   web_links?: WebLink[];
   sequence_files?: SequenceFile[];
@@ -379,6 +381,22 @@ function buildDetail(row: Row): HTMLElement {
     storage.append(el('p', 'text-muted mb-0', 'Not stored anywhere.'));
   } else {
     storage.append(el('p', 'mb-1', `Total stock: ${totalStock(locations)}`));
+    // the stock alerts: below the minimum the owner set, and containers that expire
+    const haveInUnit = locations.filter(l => l.qty_unit === row.min_stock_unit).reduce((sum, l) => sum + Number(l.qty_stored), 0);
+    if (row.min_stock !== null && row.min_stock !== undefined && row.min_stock_unit && haveInUnit < row.min_stock) {
+      const low = el('span', 'badge badge-danger mr-1', `Low stock: ${Math.round(haveInUnit * 100) / 100} ${row.min_stock_unit} left, minimum ${row.min_stock}`);
+      storage.append(low);
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const expired = locations.filter(l => l.expires_at && l.expires_at.slice(0, 10) < today).length;
+    const expiring = locations.filter(l => l.expires_at && l.expires_at.slice(0, 10) >= today && l.expires_at.slice(0, 10) <= soon).length;
+    if (expired > 0) {
+      storage.append(el('span', 'badge badge-danger mr-1', `${expired} expired`));
+    }
+    if (expiring > 0) {
+      storage.append(el('span', 'badge badge-warning mr-1', `${expiring} expire within 30 days`));
+    }
     // the tubes in one location are one line: the slots as chips, the quantity added up
     const byStorage = new Map<number, StorageLocation[]>();
     locations.forEach(l => byStorage.set(l.storage_id, [...(byStorage.get(l.storage_id) ?? []), l]));

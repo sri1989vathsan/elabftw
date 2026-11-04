@@ -8,7 +8,7 @@ import { askConfirm } from './confirm-dialog';
 import { capColourName, capDot } from './cap-colours';
 
 type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null; child_capacity?: number | null; comment?: string | null };
-type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string; stored_at?: string | null; cap_colour?: string | null };
+type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string; stored_at?: string | null; cap_colour?: string | null; expires_at?: string | null };
 type Row = {
   id: number;
   title: string;
@@ -72,6 +72,7 @@ function fillTubeCard(card: HTMLElement, tube: Tube, linked: boolean): void {
   line('Storage', tube.location.is_primary ? 'Primary' : 'Secondary');
   line('Quantity', `${tube.location.qty_stored} ${tube.location.qty_unit}`.trim());
   line('Stored on', (tube.location.stored_at ?? '').slice(0, 10));
+  line('Expires on', (tube.location.expires_at ?? '').slice(0, 10));
   if (tube.location.cap_colour) {
     const capRow = el('div', 'tube-card-row');
     const dot = capDot(tube.location.cap_colour);
@@ -1730,7 +1731,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     const table = el('table', 'table table-sm table-hover');
     const head = el('tr');
-    const columns = ['ID', 'Module', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Stored on', 'Cap colour', 'Owner', 'Comment'];
+    const columns = ['ID', 'Module', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Stored on', 'Expires', 'Cap colour', 'Owner', 'Comment'];
     // a click on a heading sorts the table by it, a second click turns the order round (the highest ID first to start with)
     let sortColumn = 0;
     let sortAscending = false;
@@ -1958,6 +1959,14 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       // the day it was put there (the earliest when it sits in several tubes)
       const days = locations.map(l => (l.stored_at ?? '').slice(0, 10)).filter(Boolean).sort();
       tr.append(el('td', 'text-nowrap', days[0] ?? ''));
+      // the earliest expiry date of its tubes, in red when it is past
+      const expiries = locations.map(l => (l.expires_at ?? '').slice(0, 10)).filter(Boolean).sort();
+      const expiryCell = el('td', 'text-nowrap', expiries[0] ?? '');
+      if (expiries[0] && expiries[0] < new Date().toISOString().slice(0, 10)) {
+        expiryCell.style.color = '#c62828';
+        expiryCell.style.fontWeight = '700';
+      }
+      tr.append(expiryCell);
       // the colours of the caps of its tubes
       const capCell = el('td', 'text-nowrap');
       [...new Set(locations.map(l => l.cap_colour ?? '').filter(Boolean))].forEach(colour => {

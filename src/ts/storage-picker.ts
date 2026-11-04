@@ -197,6 +197,11 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
   const storedAt = el('input', 'form-control mb-2');
   storedAt.type = 'date';
   storedAt.setAttribute('aria-label', 'Stored on');
+  // the day the content expires (optional)
+  const expiresAt = el('input', 'form-control mb-2');
+  expiresAt.type = 'date';
+  expiresAt.setAttribute('aria-label', 'Expires on');
+  expiresAt.value = editing ? (button.dataset.expiresAt ?? '') : '';
   const capPicker = capColourPicker(editing ? (button.dataset.capColour ?? '') : '');
   storedAt.value = editing ? (button.dataset.storedAt ?? '') : new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const copies = el('input', 'form-control');
@@ -256,7 +261,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     append.append(unitSelect);
     amount.append(qty, append);
     chosen.append(el('label', 'mb-1', 'Quantity per container'), amount);
-    chosen.append(el('label', 'mb-1', 'Stored on'), storedAt, el('label', 'mb-1', 'Cap colour'), capPicker.element, el('label', 'mb-1', 'Comment'), comment);
+    chosen.append(el('label', 'mb-1', 'Stored on'), storedAt, el('label', 'mb-1', 'Expires on (optional)'), expiresAt, el('label', 'mb-1', 'Cap colour'), capPicker.element, el('label', 'mb-1', 'Comment'), comment);
 
     if (!editing) {
       chosen.append(el('label', 'mb-1', 'Number of containers (aliquots)'), copies);
@@ -374,6 +379,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
           comment: comment.value,
           ...(storedAt.value !== '' ? { stored_at: storedAt.value } : {}),
           cap_colour: capPicker.get(),
+          expires_at: expiresAt.value,
           ...(moved ? { storage_id: unit.id } : {}),
           // a move leaves the old slot: the new one is set after it
           ...((moved || slot !== currentPosition) && (slot !== '' || !moved) ? { position: slot } : {}),
@@ -387,6 +393,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
             comment: comment.value,
             ...(storedAt.value !== '' ? { stored_at: storedAt.value } : {}),
             ...(capPicker.get() !== '' ? { cap_colour: capPicker.get() } : {}),
+            ...(expiresAt.value !== '' ? { expires_at: expiresAt.value } : {}),
             position: extra,
           });
         }
@@ -416,6 +423,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
           ...(comment.value.trim() !== '' ? { comment: comment.value } : {}),
           ...(storedAt.value !== '' ? { stored_at: storedAt.value } : {}),
           ...(capPicker.get() !== '' ? { cap_colour: capPicker.get() } : {}),
+          ...(expiresAt.value !== '' ? { expires_at: expiresAt.value } : {}),
           ...(slots[i] ? { position: slots[i] } : {}),
           ...(kind === 'primary' && i === 0 ? { is_primary: 1 } : {}),
         });
