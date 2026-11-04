@@ -943,12 +943,98 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       row.append(label, boxes);
       cabinet.append(row);
     });
-    // the places that are still free, as far as the capacity says
+    // the places that are still free, as far as the capacity says: a click on one opens a small form to make the rack or the box there
     const freePlaces = capacity > 0 ? Math.min(Math.max(capacity - node.children.length, 0), 12) : 0;
+    const used = new Set(node.children.map(c => c.unit.position).filter((p): p is number => typeof p === 'number'));
+    const nextFree = (skip: number): number => {
+      let n = 0;
+      let found = 0;
+      for (;;) {
+        n++;
+        if (!used.has(n)) {
+          if (found === skip) {
+            return n;
+          }
+          found++;
+        }
+      }
+    };
+    const newKind = node.unit.kind === 'rack' ? 'box' : 'rack';
     for (let i = 0; i < freePlaces; i++) {
-      const row = el('div', 'storage-shelf');
-      row.append(el('span', 'storage-shelf-label small color-medium', node.unit.kind === 'rack' ? 'free place' : 'free rack'));
-      row.append(el('div', 'storage-shelf-boxes'));
+      const row = el('div', 'storage-shelf storage-shelf-free');
+      const label = el('button', 'btn btn-transparent btn-sm storage-shelf-label small color-medium', newKind === 'box' ? 'free place' : 'free rack');
+      label.type = 'button';
+      label.title = `Click to make a ${newKind === 'box' ? 'box' : 'rack'} here`;
+      const area = el('div', 'storage-shelf-boxes');
+      const open = (): void => {
+        if (area.childElementCount > 0) {
+          area.replaceChildren();
+          return;
+        }
+        const name = el('input', 'form-control form-control-sm mr-2');
+        name.placeholder = newKind === 'box' ? 'Name of the box' : 'Name of the rack';
+        name.setAttribute('aria-label', 'Name');
+        name.style.maxWidth = '14rem';
+        const holdsHere = el('input', 'form-control form-control-sm mr-2');
+        holdsHere.type = 'number';
+        holdsHere.min = '1';
+        holdsHere.placeholder = 'holds';
+        holdsHere.title = 'How many boxes fit in it';
+        holdsHere.style.width = '5rem';
+        holdsHere.hidden = newKind === 'box';
+        const rowsHere = el('input', 'form-control form-control-sm mr-1');
+        const colsHere = el('input', 'form-control form-control-sm mr-2');
+        [rowsHere, colsHere].forEach(input => {
+          input.type = 'number';
+          input.min = '1';
+          input.style.width = '4.2rem';
+          input.hidden = newKind !== 'box';
+        });
+        rowsHere.value = '9';
+        colsHere.value = '9';
+        rowsHere.placeholder = 'rows';
+        colsHere.placeholder = 'cols';
+        const positionHere = el('input', 'form-control form-control-sm mr-2');
+        positionHere.type = 'number';
+        positionHere.min = '1';
+        positionHere.value = String(nextFree(i));
+        positionHere.title = 'Its position among its neighbours';
+        positionHere.setAttribute('aria-label', 'Position');
+        positionHere.style.width = '4.5rem';
+        const make = el('button', 'btn btn-secondary btn-sm mr-1', 'Add');
+        make.type = 'button';
+        const cancelHere = el('button', 'btn btn-transparent btn-sm', 'Cancel');
+        cancelHere.type = 'button';
+        cancelHere.addEventListener('click', () => area.replaceChildren());
+        make.addEventListener('click', () => {
+          const unitName = name.value.trim();
+          if (unitName === '') {
+            name.focus();
+            return;
+          }
+          make.disabled = true;
+          void ApiC.post2location('storage_units', {
+            name: unitName,
+            parent_id: node.unit.id,
+            kind: newKind,
+            ...(Number(positionHere.value) > 0 ? { position: Number(positionHere.value) } : {}),
+            ...(newKind === 'rack' && Number(holdsHere.value) > 0 ? { capacity: Number(holdsHere.value) } : {}),
+          }).then(async id => {
+            if (newKind === 'box') {
+              await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rowsHere.value), box_cols: Number(colsHere.value) });
+            }
+            state.selected = node.unit.id;
+            writeState(state);
+            return load();
+          }).catch(() => {
+            make.disabled = false;
+          });
+        });
+        area.append(name, positionHere, holdsHere, rowsHere, colsHere, make, cancelHere);
+        name.focus();
+      };
+      label.addEventListener('click', open);
+      row.append(label, area);
       cabinet.append(row);
     }
     if (loose.length > 0) {
