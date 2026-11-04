@@ -795,7 +795,23 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   importButton.type = 'button';
   importButton.append(el('i', 'fas fa-file-import fa-fw mr-1'), document.createTextNode('Import'));
   importButton.title = 'Add many entries at once from a CSV file or a ZIP with files';
-  transferGroup.append(exportButton, importButton);
+  // entries from an order: its lines are read into a table, the ticked ones are added
+  const fromOrderButton = el('button', 'btn btn-secondary btn-sm mr-2');
+  fromOrderButton.type = 'button';
+  fromOrderButton.append(el('i', 'fas fa-cart-shopping fa-fw mr-1'), document.createTextNode('From an order'));
+  fromOrderButton.title = 'Add entries from the lines of an order';
+  fromOrderButton.addEventListener('click', () => {
+    const tools = (window as unknown as { OrderToDatabase?: { open: (o: Record<string, unknown>) => void } }).OrderToDatabase;
+    if (tools) {
+      tools.open({});
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = `order-to-database.js?v=${Date.now()}`;
+    script.onload = () => (window as unknown as { OrderToDatabase: { open: (o: Record<string, unknown>) => void } }).OrderToDatabase.open({});
+    document.head.append(script);
+  });
+  transferGroup.append(fromOrderButton, exportButton, importButton);
   toolbar.append(transferGroup, exportMenu);
   // the rows ticked can be sent to an order (the sequences of primers are written in its notes)
   // what can be done with the ticked rows: one menu, "Actions on selected", that appears when rows are ticked

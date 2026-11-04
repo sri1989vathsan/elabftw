@@ -8,4 +8,6 @@
 <div id='ordersRoot'></div>
 {# a button on each Excel sheet of an order: its primers go to the database #}
 <script src='order-primers.js?v={{ 'now'|date('YmdHi') }}'></script>
+{# the lines of an order become entries of the database #}
+<script src='order-to-database.js?v={{ 'now'|date('YmdHi') }}'></script>
 {% endblock %}
