@@ -823,7 +823,24 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     script.onload = () => (window as unknown as { OrderToDatabase: { open: (o: Record<string, unknown>) => void } }).OrderToDatabase.open({});
     document.head.append(script);
   });
-  transferGroup.append(fromOrderButton, exportButton, importButton);
+  // many sequencing reads at once: each goes to the plasmid whose name is in the name of its file
+  const readsButton = el('button', 'btn btn-secondary btn-sm mr-2');
+  readsButton.type = 'button';
+  readsButton.append(el('i', 'fas fa-dna fa-fw mr-1'), document.createTextNode('Attach reads'));
+  readsButton.title = 'Attach many sequencing files (.ab1 and the like) to their plasmids at once';
+  readsButton.addEventListener('click', () => {
+    type Reads = { open: () => void };
+    const tools = (window as unknown as { BulkReads?: Reads }).BulkReads;
+    if (tools) {
+      tools.open();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = `bulk-reads.js?v=${Date.now()}`;
+    script.onload = () => (window as unknown as { BulkReads: Reads }).BulkReads.open();
+    document.head.append(script);
+  });
+  transferGroup.append(fromOrderButton, readsButton, exportButton, importButton);
   toolbar.append(transferGroup, exportMenu);
   // the rows ticked can be sent to an order (the sequences of primers are written in its notes)
   // what can be done with the ticked rows: one menu, "Actions on selected", that appears when rows are ticked
