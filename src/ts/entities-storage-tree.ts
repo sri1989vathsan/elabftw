@@ -927,6 +927,89 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       tile.addEventListener('click', () => select(box.unit.id));
       return tile;
     };
+    // the small form that makes a rack or a box in a free place of a fridge, a freezer or a rack
+    const nextFreeOf = (parent: Node, skip: number): number => {
+      const usedHere = new Set(parent.children.map(c => c.unit.position).filter((p): p is number => typeof p === 'number'));
+      let n = 0;
+      let found = 0;
+      for (;;) {
+        n++;
+        if (!usedHere.has(n)) {
+          if (found === skip) {
+            return n;
+          }
+          found++;
+        }
+      }
+    };
+    const makeHere = (parent: Node, newKind: string, area: HTMLElement, skip: number): void => {
+      if (area.childElementCount > 0) {
+        area.replaceChildren();
+        return;
+      }
+      const name = el('input', 'form-control form-control-sm mr-2');
+      name.placeholder = newKind === 'box' ? 'Name of the box' : 'Name of the rack';
+      name.setAttribute('aria-label', 'Name');
+      name.style.maxWidth = '14rem';
+      const holdsHere = el('input', 'form-control form-control-sm mr-2');
+      holdsHere.type = 'number';
+      holdsHere.min = '1';
+      holdsHere.placeholder = 'holds';
+      holdsHere.title = 'How many boxes fit in it';
+      holdsHere.style.width = '5rem';
+      holdsHere.hidden = newKind === 'box';
+      const rowsHere = el('input', 'form-control form-control-sm mr-1');
+      const colsHere = el('input', 'form-control form-control-sm mr-2');
+      [rowsHere, colsHere].forEach(input => {
+        input.type = 'number';
+        input.min = '1';
+        input.style.width = '4.2rem';
+        input.hidden = newKind !== 'box';
+      });
+      rowsHere.value = '9';
+      colsHere.value = '9';
+      rowsHere.placeholder = 'rows';
+      colsHere.placeholder = 'cols';
+      const positionHere = el('input', 'form-control form-control-sm mr-2');
+      positionHere.type = 'number';
+      positionHere.min = '1';
+      positionHere.value = String(nextFreeOf(parent, skip));
+      positionHere.title = 'Its position among its neighbours';
+      positionHere.setAttribute('aria-label', 'Position');
+      positionHere.style.width = '4.5rem';
+      const make = el('button', 'btn btn-secondary btn-sm mr-1', 'Add');
+      make.type = 'button';
+      const cancelHere = el('button', 'btn btn-transparent btn-sm', 'Cancel');
+      cancelHere.type = 'button';
+      cancelHere.addEventListener('click', () => area.replaceChildren());
+      make.addEventListener('click', () => {
+        const unitName = name.value.trim();
+        if (unitName === '') {
+          name.focus();
+          return;
+        }
+        make.disabled = true;
+        void ApiC.post2location('storage_units', {
+          name: unitName,
+          parent_id: parent.unit.id,
+          kind: newKind,
+          ...(Number(positionHere.value) > 0 ? { position: Number(positionHere.value) } : {}),
+          ...(newKind === 'rack' && Number(holdsHere.value) > 0 ? { capacity: Number(holdsHere.value) } : {}),
+        }).then(async id => {
+          if (newKind === 'box') {
+            await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rowsHere.value), box_cols: Number(colsHere.value) });
+          }
+          state.selected = node.unit.id;
+          writeState(state);
+          return load();
+        }).catch(() => {
+          make.disabled = false;
+        });
+      });
+      area.append(name, positionHere, holdsHere, rowsHere, colsHere, make, cancelHere);
+      name.focus();
+
+    };
     const loose = node.children.filter(c => c.unit.kind === 'box' || (c.children.length === 0 && Boolean(c.unit.box_rows)));
     const shelves = node.children.filter(c => !loose.includes(c));
     shelves.forEach(shelf => {
@@ -940,26 +1023,25 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       if (inside.length === 0) {
         boxes.append(el('span', 'small color-medium', 'no box yet'));
       }
+      // the places for boxes that are still free on this shelf, as far as its capacity says (one to click when it has none)
+      const shelfCapacity = shelf.unit.capacity ?? 0;
+      const freeBoxes = shelfCapacity > 0 ? Math.min(Math.max(shelfCapacity - shelf.children.length, 0), 8) : 1;
+      const formArea = el('div');
+      formArea.style.flexBasis = '100%';
+      for (let i = 0; i < freeBoxes; i++) {
+        const tile = el('button', 'storage-shelf-box storage-shelf-box-free', shelfCapacity > 0 ? 'free' : '+ add a box');
+        tile.type = 'button';
+        tile.title = 'Click to make a box here';
+        tile.addEventListener('click', () => makeHere(shelf, 'box', formArea, i));
+        boxes.append(tile);
+      }
+      boxes.append(formArea);
       row.append(label, boxes);
       cabinet.append(row);
     });
     // the places that are still free, as far as the capacity says: a click on one opens a small form to make the rack or the box there
     // without a capacity there is no limit: one place to click is always offered at the end, to add another
     const freePlaces = capacity > 0 ? Math.min(Math.max(capacity - node.children.length, 0), 12) : 1;
-    const used = new Set(node.children.map(c => c.unit.position).filter((p): p is number => typeof p === 'number'));
-    const nextFree = (skip: number): number => {
-      let n = 0;
-      let found = 0;
-      for (;;) {
-        n++;
-        if (!used.has(n)) {
-          if (found === skip) {
-            return n;
-          }
-          found++;
-        }
-      }
-    };
     const newKind = node.unit.kind === 'rack' ? 'box' : 'rack';
     for (let i = 0; i < freePlaces; i++) {
       const row = el('div', 'storage-shelf storage-shelf-free');
@@ -967,73 +1049,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       label.type = 'button';
       label.title = `Click to make a ${newKind === 'box' ? 'box' : 'rack'} here`;
       const area = el('div', 'storage-shelf-boxes');
-      const open = (): void => {
-        if (area.childElementCount > 0) {
-          area.replaceChildren();
-          return;
-        }
-        const name = el('input', 'form-control form-control-sm mr-2');
-        name.placeholder = newKind === 'box' ? 'Name of the box' : 'Name of the rack';
-        name.setAttribute('aria-label', 'Name');
-        name.style.maxWidth = '14rem';
-        const holdsHere = el('input', 'form-control form-control-sm mr-2');
-        holdsHere.type = 'number';
-        holdsHere.min = '1';
-        holdsHere.placeholder = 'holds';
-        holdsHere.title = 'How many boxes fit in it';
-        holdsHere.style.width = '5rem';
-        holdsHere.hidden = newKind === 'box';
-        const rowsHere = el('input', 'form-control form-control-sm mr-1');
-        const colsHere = el('input', 'form-control form-control-sm mr-2');
-        [rowsHere, colsHere].forEach(input => {
-          input.type = 'number';
-          input.min = '1';
-          input.style.width = '4.2rem';
-          input.hidden = newKind !== 'box';
-        });
-        rowsHere.value = '9';
-        colsHere.value = '9';
-        rowsHere.placeholder = 'rows';
-        colsHere.placeholder = 'cols';
-        const positionHere = el('input', 'form-control form-control-sm mr-2');
-        positionHere.type = 'number';
-        positionHere.min = '1';
-        positionHere.value = String(nextFree(i));
-        positionHere.title = 'Its position among its neighbours';
-        positionHere.setAttribute('aria-label', 'Position');
-        positionHere.style.width = '4.5rem';
-        const make = el('button', 'btn btn-secondary btn-sm mr-1', 'Add');
-        make.type = 'button';
-        const cancelHere = el('button', 'btn btn-transparent btn-sm', 'Cancel');
-        cancelHere.type = 'button';
-        cancelHere.addEventListener('click', () => area.replaceChildren());
-        make.addEventListener('click', () => {
-          const unitName = name.value.trim();
-          if (unitName === '') {
-            name.focus();
-            return;
-          }
-          make.disabled = true;
-          void ApiC.post2location('storage_units', {
-            name: unitName,
-            parent_id: node.unit.id,
-            kind: newKind,
-            ...(Number(positionHere.value) > 0 ? { position: Number(positionHere.value) } : {}),
-            ...(newKind === 'rack' && Number(holdsHere.value) > 0 ? { capacity: Number(holdsHere.value) } : {}),
-          }).then(async id => {
-            if (newKind === 'box') {
-              await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rowsHere.value), box_cols: Number(colsHere.value) });
-            }
-            state.selected = node.unit.id;
-            writeState(state);
-            return load();
-          }).catch(() => {
-            make.disabled = false;
-          });
-        });
-        area.append(name, positionHere, holdsHere, rowsHere, colsHere, make, cancelHere);
-        name.focus();
-      };
+      const open = (): void => makeHere(node, newKind, area, i);
       label.addEventListener('click', open);
       row.append(label, area);
       cabinet.append(row);

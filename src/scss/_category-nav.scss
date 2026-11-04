@@ -941,3 +941,13 @@
   font-size: 0.85rem;
   font-weight: 600;
 }
+
+// a free place for a box on a shelf: a dashed outline, to click
+.storage-shelf-box-free {
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  background: transparent;
+  color: var(--medium, #6c757d);
+  font-size: 0.85rem;
+}
