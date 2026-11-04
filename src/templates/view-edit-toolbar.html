@@ -423,7 +423,9 @@
             {{ Entity.entityData.hide_main_text ? 'Show main text'|trans : 'Hide main text'|trans }}
           </button>
 
-          {% if not App.isAnonymous() %}
+          {# in the Database only the owner of an entry and the admins can archive or delete it #}
+          {% set canRemove = Entity.entityType.value != 'inventory' or Entity.entityData.userid == App.Users.userData.userid or App.Users.isAdmin %}
+          {% if not App.isAnonymous() and canRemove %}
             {# ARCHIVE / UNARCHIVE #}
             {% if Entity.entityData.state == enum('Elabftw\\Enums\\State').Normal.value %}
               <button type='button' class='dropdown-item hover-warning' data-action='do-requestable-action' data-target='archive'>
@@ -437,7 +439,7 @@
           {% endif %}
 
           {# DELETE / RESTORE #}
-          {% if Entity.entityData.state == enum('Elabftw\\Enums\\State').Normal.value and not App.isAnonymous() %}
+          {% if Entity.entityData.state == enum('Elabftw\\Enums\\State').Normal.value and not App.isAnonymous() and canRemove %}
             <div class='dropdown-divider'></div>
             <button type='button' class='dropdown-item hover-danger' data-action='toggle-modal' data-target='deleteSelectedEntitiesModal'><i class='fas fa-trash-alt fa-fw' title='{{ 'Delete'|trans }}'></i> {{ 'Delete'|trans }}</button>
           {% elseif Entity.entityData.state == enum('Elabftw\\Enums\\State').Deleted.value %}

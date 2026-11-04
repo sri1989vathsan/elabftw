@@ -5,6 +5,7 @@
 import { ApiC } from './api';
 import { Action } from './interfaces';
 import { getEntityTypeFromPage } from './misc';
+import { askConfirm } from './confirm-dialog';
 import { el, fieldLabel, filterParams, linkify, plainText, sortableHeader, sortRows, storageUrl } from './entities-view-utils';
 import type { SortState } from './entities-view-utils';
 
@@ -857,6 +858,42 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   ownerButton.type = 'button';
   ownerButton.hidden = true;
   menuItem(ownerButton);
+  // the rows ticked are archived or deleted: the owner of an entry can do it, and an admin can do it for all of them
+  const archiveButton = el('button', 'btn btn-secondary btn-sm', 'Archive');
+  archiveButton.type = 'button';
+  archiveButton.hidden = true;
+  menuItem(archiveButton);
+  const deleteButton = el('button', 'btn btn-secondary btn-sm text-danger', 'Delete');
+  deleteButton.type = 'button';
+  deleteButton.hidden = true;
+  menuItem(deleteButton);
+  const removeSelected = async (verb: 'archive' | 'delete'): Promise<void> => {
+    const ids = [...ui.selected];
+    const many = `${ids.length} ${ids.length === 1 ? 'entry' : 'entries'}`;
+    const yes = await askConfirm(verb === 'delete' ? `Delete ${many}? They go to the trash and only the owner or an admin can bring them back.` : `Archive ${many}? Archived entries cannot be edited until they are unarchived.`, verb === 'delete' ? 'Delete' : 'Archive');
+    if (!yes) {
+      return;
+    }
+    let refused = 0;
+    for (const id of ids) {
+      try {
+        if (verb === 'delete') {
+          await ApiC.delete(`inventory/${id}`, { notifOnError: 0 });
+        } else {
+          await ApiC.patch(`inventory/${id}`, { action: Action.Archive, notifOnError: 0 });
+        }
+      } catch {
+        refused += 1;
+      }
+    }
+    if (refused > 0) {
+      window.alert(`${refused} of ${many} could not be ${verb === 'delete' ? 'deleted' : 'archived'}: only the owner of an entry or an admin can do that.`);
+    }
+    ui.selected.clear();
+    window.location.reload();
+  };
+  archiveButton.addEventListener('click', () => void removeSelected('archive'));
+  deleteButton.addEventListener('click', () => void removeSelected('delete'));
   // the rows ticked move to another folder (or to none); the entries need the right to edit them
   const folderButton = el('button', 'btn btn-secondary btn-sm', 'Move to folder');
   folderButton.type = 'button';
@@ -942,6 +979,8 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
       orderButton.hidden = ui.selected.size === 0 || !tools;
       databaseButton.hidden = ui.selected.size === 0 || !inMyEntries;
       ownerButton.hidden = ui.selected.size === 0;
+      archiveButton.hidden = ui.selected.size === 0;
+      deleteButton.hidden = ui.selected.size === 0;
       folderButton.hidden = ui.selected.size === 0;
       selectionBar.hidden = ui.selected.size === 0;
       actionsButton.textContent = `Actions on selected (${ui.selected.size}) ▾`;

@@ -34,6 +34,7 @@ use Override;
 use function _;
 use function array_key_exists;
 use function array_map;
+use function in_array;
 use function is_string;
 use function is_array;
 use function trim;
@@ -185,6 +186,9 @@ final class Inventory extends AbstractConcreteEntity
     #[Override]
     public function patch(Action $action, array $params): array
     {
+        if (in_array($action, array(Action::Archive, Action::Unarchive, Action::Destroy, Action::Restore), true) && $this->id !== null) {
+            $this->ownerOrAdminOrExplode();
+        }
         if ($action === Action::Update && array_key_exists('folder_id', $params) && $this->id !== null) {
             $req = $this->Db->prepare('SELECT custom_id, is_planned, folder_id FROM inventory WHERE id = :id');
             $req->bindParam(':id', $this->id, PDO::PARAM_INT);
@@ -200,6 +204,29 @@ final class Inventory extends AbstractConcreteEntity
             }
         }
         return parent::patch($action, $params);
+    }
+
+    /** the owner of an entry can delete, restore or archive it, and an admin can do it for every entry; the others cannot, even if they can edit it */
+    #[Override]
+    public function destroy(): bool
+    {
+        $this->ownerOrAdminOrExplode();
+        return parent::destroy();
+    }
+
+    #[Override]
+    public function restore(): bool
+    {
+        $this->ownerOrAdminOrExplode();
+        return parent::restore();
+    }
+
+    private function ownerOrAdminOrExplode(): void
+    {
+        if ($this->Users->isAdmin || (int) ($this->entityData['userid'] ?? 0) === (int) $this->Users->userData['userid']) {
+            return;
+        }
+        throw new ImproperActionException(_('Only the owner of an entry or an admin can delete or archive it.'));
     }
 
     /** whether a folder is "Database items" or one of its subfolders */
