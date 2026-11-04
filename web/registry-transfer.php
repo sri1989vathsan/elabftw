@@ -934,6 +934,15 @@ try {
             continue;
         }
         $created[] = $made['id'];
+        // the folder chosen for the entries of My entries (the Database keeps its own folders)
+        $wantedFolder = (int) ($payload['folder_id'] ?? 0);
+        if ($wantedFolder > 0 && $register !== 'both') {
+            try {
+                (new Inventory($App->Users, (int) $made['id']))->patch(Action::Update, array('folder_id' => (string) $wantedFolder));
+            } catch (Throwable $e) {
+                $skipped[] = array('row' => 'Folder of row ' . ((int) ($payload['offset'] ?? 0) + $index + 1), 'reason' => $e->getMessage());
+            }
+        }
         // a sequence file that came with the row (read from a file, pasted, or downloaded from Addgene by the user) is attached to the entry
         $file = is_array($row['sequence_file'] ?? null) ? $row['sequence_file'] : null;
         if ($file !== null) {

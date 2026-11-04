@@ -366,7 +366,28 @@
     const tableBox = element('div');
     const message = element('p', 'small mb-2');
     const buttons = element('div', 'd-flex flex-wrap justify-content-end mt-2', '', 'gap:.5rem');
-    box.append(filters, search, pick, info, tableBox, message, buttons);
+    // the folder the entries of "My entries" are filed in (the Database has its own folders)
+    const folderRow = element('div', 'd-flex align-items-center mt-2', '', 'gap:.5rem');
+    const folderChoice = element('select', 'form-control form-control-sm', '', 'width:auto;max-width:60%');
+    folderChoice.setAttribute('aria-label', 'Folder for My entries');
+    const noFolder = element('option', '', 'No folder (Unfiled)');
+    noFolder.value = '0';
+    folderChoice.append(noFolder);
+    folderRow.append(element('span', 'small text-muted', 'File My entries in the folder:'), folderChoice);
+    fetch('registry-transfer.php?folders=1', { credentials: 'same-origin' }).then(function (r) {
+      return r.json();
+    }).then(function (body) {
+      (body.folders || []).filter(function (f) {
+        return !f.database;
+      }).forEach(function (f) {
+        const option = element('option', '', f.path);
+        option.value = String(f.id);
+        folderChoice.append(option);
+      });
+    }).catch(function () {
+      // without the list the entries stay unfiled
+    });
+    box.append(filters, search, pick, info, tableBox, message, folderRow, buttons);
 
     let modules = [];
     let rows = [];
@@ -652,6 +673,7 @@
             body: JSON.stringify({
               category: group.module.id,
               register: batch.register,
+              folder_id: Number(folderChoice.value) || 0,
               rows: group.rows.map(function (r) {
                 const fields = {};
                 Object.keys(r.fields).forEach(function (k) {
