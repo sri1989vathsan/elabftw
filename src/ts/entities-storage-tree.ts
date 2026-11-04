@@ -1026,9 +1026,6 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       const boxes = el('div', 'storage-shelf-boxes');
       const inside = boxesIn(shelf);
       inside.forEach(b => boxes.append(shelfBox(b)));
-      if (inside.length === 0) {
-        boxes.append(el('span', 'small color-medium', 'no box yet'));
-      }
       // the places for boxes that are still free on this shelf, as far as its capacity says (one to click when it has none)
       const shelfCapacity = capacityOf(shelf, tree.byId);
       const freeBoxes = shelfCapacity > 0 ? Math.min(Math.max(shelfCapacity - shelf.children.length, 0), 8) : 1;
