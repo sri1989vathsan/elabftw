@@ -1011,3 +1011,53 @@
 .storage-kind-tag-other {
   background: #7a4fd1;
 }
+
+
+// the cap colour of a container: a round dot, and the choice of it in the dialogs
+.cap-dot {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-right: 0.3rem;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.storage-tube-cap {
+  flex: 0 0 1.4rem;
+  text-align: center;
+}
+
+.cap-picker {
+  gap: 0.3rem;
+
+  .cap-swatch {
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    border-radius: 50%;
+    line-height: 1;
+    background: #fff;
+    cursor: pointer;
+
+    &.is-picked {
+      box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1677ff;
+    }
+  }
+
+  .cap-none {
+    color: #777;
+    font-size: 0.9rem;
+  }
+
+  .cap-custom {
+    width: 1.8rem;
+    height: 1.8rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+}

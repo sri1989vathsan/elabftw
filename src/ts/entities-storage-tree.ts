@@ -5,9 +5,10 @@
 import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
 import { askConfirm } from './confirm-dialog';
+import { capColourName, capDot } from './cap-colours';
 
 type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null; child_capacity?: number | null; comment?: string | null };
-type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string; stored_at?: string | null };
+type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string; stored_at?: string | null; cap_colour?: string | null };
 type Row = {
   id: number;
   title: string;
@@ -71,6 +72,15 @@ function fillTubeCard(card: HTMLElement, tube: Tube, linked: boolean): void {
   line('Storage', tube.location.is_primary ? 'Primary' : 'Secondary');
   line('Quantity', `${tube.location.qty_stored} ${tube.location.qty_unit}`.trim());
   line('Stored on', (tube.location.stored_at ?? '').slice(0, 10));
+  if (tube.location.cap_colour) {
+    const capRow = el('div', 'tube-card-row');
+    const dot = capDot(tube.location.cap_colour);
+    capRow.append(el('span', 'tube-card-label', 'Cap'), el('span', '', capColourName(tube.location.cap_colour)));
+    if (dot) {
+      capRow.lastElementChild?.prepend(dot);
+    }
+    card.append(capRow);
+  }
   line('Comment', tube.location.comment ?? '');
   // the fields that identify an entry of its category, when they are filled
   const shown = CARD_FIELDS[(tube.row.category_title ?? '').toLowerCase()] ?? [];
@@ -1720,7 +1730,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     const table = el('table', 'table table-sm table-hover');
     const head = el('tr');
-    const columns = ['ID', 'Module', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Stored on', 'Owner', 'Comment'];
+    const columns = ['ID', 'Module', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Stored on', 'Cap colour', 'Owner', 'Comment'];
     // a click on a heading sorts the table by it, a second click turns the order round (the highest ID first to start with)
     let sortColumn = 0;
     let sortAscending = false;
@@ -1864,6 +1874,15 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       // the day it was put there (the earliest when it sits in several tubes)
       const days = locations.map(l => (l.stored_at ?? '').slice(0, 10)).filter(Boolean).sort();
       tr.append(el('td', 'text-nowrap', days[0] ?? ''));
+      // the colours of the caps of its tubes
+      const capCell = el('td', 'text-nowrap');
+      [...new Set(locations.map(l => l.cap_colour ?? '').filter(Boolean))].forEach(colour => {
+        const dot = capDot(colour);
+        if (dot) {
+          capCell.append(dot, document.createTextNode(`${capColourName(colour)} `));
+        }
+      });
+      tr.append(capCell);
       tr.append(el('td', '', row.fullname ?? ''));
       // the comments of the tubes, and what the place itself says (door sticks, defrosted...)
       const notes = [...locations.map(l => l.comment ?? ''), ...[parts.freezer, parts.rack, parts.box].map(place => place?.unit.comment ? `${place.unit.name}: ${place.unit.comment}` : '')].filter(Boolean);

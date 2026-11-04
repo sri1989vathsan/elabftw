@@ -4,6 +4,7 @@
  */
 import { ApiC } from './api';
 import { el } from './entities-view-utils';
+import { capColourPicker } from './cap-colours';
 
 type Entry = { id: number; title: string; category_title: string | null; storage_locations?: unknown[] };
 
@@ -76,6 +77,7 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slotOrSlots
   const storedAt = el('input', 'form-control mb-2');
   storedAt.type = 'date';
   storedAt.setAttribute('aria-label', 'Stored on');
+  const capPicker = capColourPicker('');
   storedAt.value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
   let kind: 'primary' | 'secondary' = 'primary';
@@ -109,7 +111,7 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slotOrSlots
       return;
     }
     chosen.append(el('h5', '', selected.title));
-    chosen.append(el('label', 'mb-1', 'Quantity'), amount, el('label', 'mb-1', 'Stored on'), storedAt, el('label', 'mb-1', 'Comment'), comment, kindRow);
+    chosen.append(el('label', 'mb-1', 'Quantity'), amount, el('label', 'mb-1', 'Stored on'), storedAt, el('label', 'mb-1', 'Cap colour'), capPicker.element, el('label', 'mb-1', 'Comment'), comment, kindRow);
     kindRow.querySelectorAll<HTMLInputElement>('input').forEach(radio => {
       radio.checked = radio.dataset.kind === kind;
     });
@@ -173,6 +175,7 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slotOrSlots
           position: place,
           ...(comment.value.trim() !== '' ? { comment: comment.value } : {}),
           ...(storedAt.value !== '' ? { stored_at: storedAt.value } : {}),
+          ...(capPicker.get() !== '' ? { cap_colour: capPicker.get() } : {}),
           ...(kind === 'primary' && index === 0 ? { is_primary: 1 } : {}),
         });
       }

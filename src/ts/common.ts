@@ -5,6 +5,7 @@
  * @license AGPL-3.0
  * @package elabftw
  */
+import { capColourPicker } from './cap-colours';
 import $ from 'jquery';
 import { ApiC } from './api';
 import { Malle, InputType } from '@deltablot/malle';
@@ -1749,6 +1750,13 @@ on('make-primary-container', (el: HTMLElement) => {
     .then(() => reloadElements(['storageDivContent']));
 });
 
+// the choice of the cap colour in the dialog that adds containers
+const capHost = document.getElementById('containerCapColour');
+const capChoice = capHost ? capColourPicker('') : null;
+if (capHost && capChoice) {
+  capHost.append(capChoice.element);
+}
+
 on('store-containers-distributed', () => {
   const submitBtn = document.getElementById('storeContainersBtn') as HTMLButtonElement | null;
   // guard against double submit: a disabled button means a batch is already in flight
@@ -1767,6 +1775,7 @@ on('store-containers-distributed', () => {
         qty_unit: qty_unit,
         ...(note !== '' ? { comment: note } : {}),
         ...(storedAt !== '' ? { stored_at: storedAt } : {}),
+        ...(capChoice && capChoice.get() !== '' ? { cap_colour: capChoice.get() } : {}),
       }),
     );
   });

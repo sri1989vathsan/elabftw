@@ -28,7 +28,11 @@
               <label for='containerStoredAtInput'>{{ 'Stored on'|trans }}</label>
               <input type='date' id='containerStoredAtInput' class='form-control' value='{{ 'now'|date('Y-m-d') }}' />
             </div>
-            <div class='col-sm-8'>
+            <div class='col-12 mt-2'>
+              <label>{{ 'Cap colour'|trans }}</label>
+              <div id='containerCapColour'></div>
+            </div>
+            <div class='col-12 mt-2'>
               <label for='containerCommentInput'>{{ 'Comment'|trans }}</label>
               <input type='text' id='containerCommentInput' maxlength='255' autocomplete='off' class='form-control' placeholder='{{ 'Comment (optional)'|trans }}' />
             </div>

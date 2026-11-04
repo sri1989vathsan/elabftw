@@ -66,7 +66,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
             main.storage_id,
             main.item_id,
             main.created_at,
-            main.modified_at,' . $this->positionSelect() . '
+            main.modified_at,' . $this->capSelect() . $this->positionSelect() . '
             storage_units.id AS storage_id,
             storage_units.name AS storage_name' . $this->boxSelect() . '
             FROM ' . $this->getTable() . ' AS main
@@ -151,6 +151,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
                 (int) ($reqBody['is_primary'] ?? 0) === 1,
                 isset($reqBody['comment']) ? (string) $reqBody['comment'] : null,
                 isset($reqBody['stored_at']) ? (string) $reqBody['stored_at'] : null,
+                isset($reqBody['cap_colour']) ? (string) $reqBody['cap_colour'] : null,
             ),
             Action::Duplicate => $this->import(),
             default => throw new ImproperActionException('Invalid action for links create.'),
@@ -175,6 +176,9 @@ abstract class AbstractContainersLinks extends AbstractLinks
         }
         if (array_key_exists('comment', $params)) {
             $this->setComment($params['comment']);
+        }
+        if (array_key_exists('cap_colour', $params)) {
+            $this->setCapColour((string) $params['cap_colour']);
         }
         if (isset($params['stored_at']) && $params['stored_at'] !== '') {
             $this->setStoredAt((string) $params['stored_at']);
@@ -235,7 +239,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
             main.qty_stored,
             main.qty_unit,
             main.storage_id,
-            main.item_id,' . $this->positionSelect() . '
+            main.item_id,' . $this->positionSelect() . $this->capSelect() . '
             main.created_at,
             main.modified_at
             FROM ' . $this->getTable() . ' AS main
@@ -251,7 +255,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         string $column,
         int|float|string $value,
     ): bool {
-        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id' && $column !== 'position' && $column !== 'comment' && $column !== 'created_at') {
+        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id' && $column !== 'position' && $column !== 'comment' && $column !== 'created_at' && $column !== 'cap_colour') {
             throw new ImproperActionException('Invalid update target');
         }
         $sql = sprintf(
@@ -339,6 +343,18 @@ abstract class AbstractContainersLinks extends AbstractLinks
     }
 
     /**
+     * the colour of the cap of the container, a hex colour; empty clears it
+     */
+    private function setCapColour(string $colour): void
+    {
+        $colour = strtolower(trim($colour));
+        if ($colour !== '' && preg_match('/^#[0-9a-f]{6}$/', $colour) !== 1) {
+            throw new ImproperActionException('The cap colour must be a colour such as #1677ff.');
+        }
+        $this->update('cap_colour', $colour);
+    }
+
+    /**
      * the day the entry was put in this place: a date written as YYYY-MM-DD, set by the user
      */
     private function setStoredAt(string $day): void
@@ -350,7 +366,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         $this->update('created_at', $day . ' 00:00:00');
     }
 
-    public function createWithQuantity(float $qty, string $unit, ?string $position = null, bool $primary = false, ?string $comment = null, ?string $storedAt = null): int
+    public function createWithQuantity(float $qty, string $unit, ?string $position = null, bool $primary = false, ?string $comment = null, ?string $storedAt = null, ?string $capColour = null): int
     {
         $this->canStoreOrExplode();
         $this->Entity->touch();
@@ -381,7 +397,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
                 ),
             ));
             // the slot and the primary flag act on the new container: point the id to it for these, then back to the storage
-            if (($position !== null && $position !== '') || $primary || ($comment !== null && trim($comment) !== '') || ($storedAt !== null && $storedAt !== '')) {
+            if (($position !== null && $position !== '') || $primary || ($comment !== null && trim($comment) !== '') || ($storedAt !== null && $storedAt !== '') || ($capColour !== null && $capColour !== '')) {
                 $storageId = $this->id;
                 $this->id = $containerId;
                 try {
@@ -396,6 +412,9 @@ abstract class AbstractContainersLinks extends AbstractLinks
                     }
                     if ($storedAt !== null && $storedAt !== '') {
                         $this->setStoredAt($storedAt);
+                    }
+                    if ($capColour !== null && $capColour !== '') {
+                        $this->setCapColour($capColour);
                     }
                 } finally {
                     $this->id = $storageId;
@@ -592,6 +611,14 @@ abstract class AbstractContainersLinks extends AbstractLinks
     private function boxSelect(): string
     {
         return $this->hasSlots() ? ', storage_units.box_rows, storage_units.box_cols' : '';
+    }
+
+    // the cap colour is kept for the containers of the Database entries only
+    private function capSelect(): string
+    {
+        return $this->getTable() === 'containers2inventory' ? '
+            main.cap_colour,' : '
+            NULL AS cap_colour,';
     }
 
     private function positionSelect(): string
