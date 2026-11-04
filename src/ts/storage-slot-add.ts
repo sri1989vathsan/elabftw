@@ -72,6 +72,11 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slotOrSlots
   comment.maxLength = 255;
   comment.placeholder = 'Comment (optional)';
   comment.setAttribute('aria-label', 'Comment');
+  // the day the entries were put there: today to start with
+  const storedAt = el('input', 'form-control mb-2');
+  storedAt.type = 'date';
+  storedAt.setAttribute('aria-label', 'Stored on');
+  storedAt.value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
   let kind: 'primary' | 'secondary' = 'primary';
   const kindRow = el('div', 'mb-2');
@@ -104,7 +109,7 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slotOrSlots
       return;
     }
     chosen.append(el('h5', '', selected.title));
-    chosen.append(el('label', 'mb-1', 'Quantity'), amount, el('label', 'mb-1', 'Comment'), comment, kindRow);
+    chosen.append(el('label', 'mb-1', 'Quantity'), amount, el('label', 'mb-1', 'Stored on'), storedAt, el('label', 'mb-1', 'Comment'), comment, kindRow);
     kindRow.querySelectorAll<HTMLInputElement>('input').forEach(radio => {
       radio.checked = radio.dataset.kind === kind;
     });
@@ -167,6 +172,7 @@ export function openSlotAdd(unit: { id: number; full_path: string }, slotOrSlots
           qty_unit: unitSelect.value,
           position: place,
           ...(comment.value.trim() !== '' ? { comment: comment.value } : {}),
+          ...(storedAt.value !== '' ? { stored_at: storedAt.value } : {}),
           ...(kind === 'primary' && index === 0 ? { is_primary: 1 } : {}),
         });
       }

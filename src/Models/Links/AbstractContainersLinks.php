@@ -150,6 +150,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
                 isset($reqBody['position']) ? (string) $reqBody['position'] : null,
                 (int) ($reqBody['is_primary'] ?? 0) === 1,
                 isset($reqBody['comment']) ? (string) $reqBody['comment'] : null,
+                isset($reqBody['stored_at']) ? (string) $reqBody['stored_at'] : null,
             ),
             Action::Duplicate => $this->import(),
             default => throw new ImproperActionException('Invalid action for links create.'),
@@ -174,6 +175,9 @@ abstract class AbstractContainersLinks extends AbstractLinks
         }
         if (array_key_exists('comment', $params)) {
             $this->setComment($params['comment']);
+        }
+        if (isset($params['stored_at']) && $params['stored_at'] !== '') {
+            $this->setStoredAt((string) $params['stored_at']);
         }
         $qtyGiven = array_key_exists('qty_stored', $params) && $params['qty_stored'] !== null && $params['qty_stored'] !== '';
         $unitGiven = array_key_exists('qty_unit', $params) && $params['qty_unit'] !== null && $params['qty_unit'] !== '';
@@ -247,7 +251,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         string $column,
         int|float|string $value,
     ): bool {
-        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id' && $column !== 'position' && $column !== 'comment') {
+        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id' && $column !== 'position' && $column !== 'comment' && $column !== 'created_at') {
             throw new ImproperActionException('Invalid update target');
         }
         $sql = sprintf(
@@ -334,7 +338,19 @@ abstract class AbstractContainersLinks extends AbstractLinks
             && $this->Entity->id === intval($targetId);
     }
 
-    public function createWithQuantity(float $qty, string $unit, ?string $position = null, bool $primary = false, ?string $comment = null): int
+    /**
+     * the day the entry was put in this place: a date written as YYYY-MM-DD, set by the user
+     */
+    private function setStoredAt(string $day): void
+    {
+        $day = trim($day);
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $day) !== 1 || !checkdate((int) substr($day, 5, 2), (int) substr($day, 8, 2), (int) substr($day, 0, 4))) {
+            throw new ImproperActionException('The date must be written as YYYY-MM-DD.');
+        }
+        $this->update('created_at', $day . ' 00:00:00');
+    }
+
+    public function createWithQuantity(float $qty, string $unit, ?string $position = null, bool $primary = false, ?string $comment = null, ?string $storedAt = null): int
     {
         $this->canStoreOrExplode();
         $this->Entity->touch();
@@ -365,7 +381,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
                 ),
             ));
             // the slot and the primary flag act on the new container: point the id to it for these, then back to the storage
-            if (($position !== null && $position !== '') || $primary || ($comment !== null && trim($comment) !== '')) {
+            if (($position !== null && $position !== '') || $primary || ($comment !== null && trim($comment) !== '') || ($storedAt !== null && $storedAt !== '')) {
                 $storageId = $this->id;
                 $this->id = $containerId;
                 try {
@@ -377,6 +393,9 @@ abstract class AbstractContainersLinks extends AbstractLinks
                     }
                     if ($comment !== null && trim($comment) !== '') {
                         $this->setComment($comment);
+                    }
+                    if ($storedAt !== null && $storedAt !== '') {
+                        $this->setStoredAt($storedAt);
                     }
                 } finally {
                     $this->id = $storageId;

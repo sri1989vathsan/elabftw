@@ -182,6 +182,11 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
   comment.placeholder = 'Comment (optional)';
   comment.setAttribute('aria-label', 'Comment');
   comment.value = editing ? (button.dataset.comment ?? '') : '';
+  // the day the entry was put in this place: today to start with, the user can set another
+  const storedAt = el('input', 'form-control mb-2');
+  storedAt.type = 'date';
+  storedAt.setAttribute('aria-label', 'Stored on');
+  storedAt.value = editing ? (button.dataset.storedAt ?? '') : new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const copies = el('input', 'form-control');
   copies.type = 'number';
   copies.min = '1';
@@ -239,7 +244,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     append.append(unitSelect);
     amount.append(qty, append);
     chosen.append(el('label', 'mb-1', 'Quantity per container'), amount);
-    chosen.append(el('label', 'mb-1', 'Comment'), comment);
+    chosen.append(el('label', 'mb-1', 'Stored on'), storedAt, el('label', 'mb-1', 'Comment'), comment);
 
     if (!editing) {
       chosen.append(el('label', 'mb-1', 'Number of containers (aliquots)'), copies);
@@ -355,6 +360,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
           qty_stored: qty.value,
           qty_unit: unitSelect.value,
           comment: comment.value,
+          ...(storedAt.value !== '' ? { stored_at: storedAt.value } : {}),
           ...(moved ? { storage_id: unit.id } : {}),
           // a move leaves the old slot: the new one is set after it
           ...((moved || slot !== currentPosition) && (slot !== '' || !moved) ? { position: slot } : {}),
@@ -366,6 +372,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
             qty_stored: qty.value,
             qty_unit: unitSelect.value,
             comment: comment.value,
+            ...(storedAt.value !== '' ? { stored_at: storedAt.value } : {}),
             position: extra,
           });
         }
@@ -393,6 +400,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
           qty_stored: qty.value,
           qty_unit: unitSelect.value,
           ...(comment.value.trim() !== '' ? { comment: comment.value } : {}),
+          ...(storedAt.value !== '' ? { stored_at: storedAt.value } : {}),
           ...(slots[i] ? { position: slots[i] } : {}),
           ...(kind === 'primary' && i === 0 ? { is_primary: 1 } : {}),
         });
