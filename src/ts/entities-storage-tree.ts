@@ -965,6 +965,14 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     temperature.placeholder = '°C';
     temperature.title = 'Temperature in degrees Celsius';
     temperature.setAttribute('aria-label', 'Temperature');
+    // how many racks a freezer or a fridge holds, how many boxes a rack holds
+    const holds = el('input', 'form-control form-control-sm mr-1');
+    holds.type = 'number';
+    holds.min = '1';
+    holds.style.width = '6rem';
+    holds.placeholder = 'holds';
+    holds.title = 'How many racks (in a fridge or a freezer) or boxes (in a rack) fit in it';
+    holds.setAttribute('aria-label', 'How many fit');
     const name = el('input', 'form-control form-control-sm w-auto mr-1');
     name.placeholder = 'Name';
     name.setAttribute('aria-label', 'Name');
