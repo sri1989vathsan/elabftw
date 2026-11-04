@@ -983,3 +983,8 @@
 .storage-shelf-box .rack-gauge-fill {
   background: var(--tile-colour, var(--primary, #295ca9));
 }
+
+// the tag of a kind made by an admin that behaves like a fridge or a freezer
+.storage-kind-tag-other {
+  background: #7a4fd1;
+}

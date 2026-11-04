@@ -268,13 +268,28 @@ function buildTree(units: Unit[], rows: Row[]): { roots: Node[]; byId: Map<numbe
   return { roots, byId };
 }
 
-// the tag beside the name of a place: the temperature of a fridge or a freezer, or what it is
+// the kinds of places: the five that exist from the start and the ones an admin made; each behaves like a location, a cooler (a fridge or a
+// freezer), a rack or a box
+type KindInfo = { name: string; behaves_like: string; default_temperature: number | null; built_in: boolean };
+let kindList: KindInfo[] = [
+  { name: 'location', behaves_like: 'location', default_temperature: null, built_in: true },
+  { name: 'freezer', behaves_like: 'cooler', default_temperature: -20, built_in: true },
+  { name: 'fridge', behaves_like: 'cooler', default_temperature: 4, built_in: true },
+  { name: 'rack', behaves_like: 'rack', default_temperature: null, built_in: true },
+  { name: 'box', behaves_like: 'box', default_temperature: null, built_in: true },
+];
+let isAdminUser = false;
+const behaves = (kind?: string | null): string | null => (kind ? (kindList.find(k => k.name === kind)?.behaves_like ?? null) : null);
+const kindLabel = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
+
+// the tag beside the name of a place: the temperature of a fridge, a freezer or another cooler, or what it is
 function kindTag(unit: Unit): HTMLElement | null {
-  if (unit.kind !== 'freezer' && unit.kind !== 'fridge') {
+  if (behaves(unit.kind) !== 'cooler' || !unit.kind) {
     return null;
   }
-  const tag = el('span', `storage-kind-tag ml-1 storage-kind-tag-${unit.kind}`, unit.temperature === null || unit.temperature === undefined ? unit.kind : `${unit.temperature} °C`);
-  tag.title = unit.kind === 'freezer' ? 'Freezer' : 'Fridge';
+  const tone = unit.kind === 'freezer' ? 'freezer' : (unit.kind === 'fridge' ? 'fridge' : 'other');
+  const tag = el('span', `storage-kind-tag ml-1 storage-kind-tag-${tone}`, unit.temperature === null || unit.temperature === undefined ? unit.kind : `${unit.temperature} °C`);
+  tag.title = kindLabel(unit.kind);
   return tag;
 }
 
@@ -285,7 +300,7 @@ const capacityOf = (node: Node, byId: Map<number, Node>): number => {
 };
 
 // racks and boxes are drawn inside the fridge or freezer they are in, not in the tree of locations
-const inTree = (node: Node): boolean => node.unit.kind !== 'rack' && node.unit.kind !== 'box';
+const inTree = (node: Node): boolean => behaves(node.unit.kind) !== 'rack' && behaves(node.unit.kind) !== 'box';
 
 function collect(node: Node, withChildren: boolean): { row: Row; location: StorageLocation }[] {
   const out: { row: Row; location: StorageLocation }[] = [];
@@ -362,7 +377,105 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     addTopForm.hidden = !addTopForm.hidden;
     if (!addTopForm.hidden) addTopForm.replaceChildren(renderAddForm(null));
   });
-  tools.append(search, expandAll, collapseAll, addTop, addTopForm);
+  // admins: the kinds of places, and new ones that behave like a location, a cooler (a fridge or a freezer), a rack or a box
+  const kindsButton = el('button', 'btn btn-transparent btn-sm', 'Kinds of places');
+  kindsButton.type = 'button';
+  kindsButton.hidden = true;
+  const kindsPanel = el('div', 'card card-body p-2 mb-2');
+  kindsPanel.hidden = true;
+  const csrf = (): string => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+  const kindsCall = async (body: Record<string, unknown>): Promise<void> => {
+    const response = await fetch('registry-kinds.php', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrf() },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) {
+      throw new Error(result.error ?? 'It did not work.');
+    }
+  };
+  const renderKindsPanel = (): void => {
+    kindsPanel.replaceChildren();
+    kindsPanel.append(el('div', 'small font-weight-bold mb-1', 'Kinds of places'));
+    kindList.forEach(k => {
+      const row = el('div', 'd-flex align-items-center small mb-1');
+      row.append(el('span', '', `${kindLabel(k.name)} `), el('span', 'ml-1 color-medium', `(behaves like ${k.behaves_like}${k.default_temperature !== null && !k.built_in ? `, ${k.default_temperature} °C` : ''})`));
+      if (!k.built_in) {
+        const remove = el('button', 'btn btn-transparent btn-sm ml-auto p-0', '×');
+        remove.type = 'button';
+        remove.title = 'Remove this kind';
+        remove.addEventListener('click', () => {
+          void kindsCall({ action: 'delete', name: k.name }).then(async () => {
+            await loadKinds();
+            renderKindsPanel();
+            renderMain();
+          }).catch(error => note.replaceChildren(document.createTextNode(error instanceof Error ? error.message : String(error))));
+        });
+        row.append(remove);
+      }
+      kindsPanel.append(row);
+    });
+    const form = el('div', 'd-flex flex-wrap align-items-end mt-2');
+    const newName = el('input', 'form-control form-control-sm mr-1 mb-1');
+    newName.placeholder = 'New kind, e.g. Incubator';
+    newName.maxLength = 40;
+    newName.setAttribute('aria-label', 'Name of the new kind');
+    newName.style.width = '9rem';
+    const like = el('select', 'form-control form-control-sm w-auto mr-1 mb-1');
+    like.setAttribute('aria-label', 'It behaves like');
+    [['cooler', 'Fridge or freezer'], ['location', 'Location'], ['rack', 'Rack / drawer / shelf'], ['box', 'Box']].forEach(([value, label]) => {
+      const option = el('option', '', `Behaves like: ${label}`);
+      option.value = value;
+      like.append(option);
+    });
+    const degreesNew = el('input', 'form-control form-control-sm mr-1 mb-1');
+    degreesNew.type = 'number';
+    degreesNew.placeholder = '°C';
+    degreesNew.title = 'The temperature a new place of this kind starts with';
+    degreesNew.style.width = '4.5rem';
+    degreesNew.setAttribute('aria-label', 'Temperature');
+    like.addEventListener('change', () => {
+      degreesNew.hidden = like.value !== 'cooler';
+    });
+    const add = el('button', 'btn btn-secondary btn-sm mb-1', 'Add the kind');
+    add.type = 'button';
+    const note = el('div', 'small text-danger');
+    add.addEventListener('click', () => {
+      note.textContent = '';
+      void kindsCall({ action: 'add', name: newName.value, behaves_like: like.value, ...(degreesNew.value !== '' && like.value === 'cooler' ? { default_temperature: Number(degreesNew.value) } : {}) }).then(async () => {
+        await loadKinds();
+        renderKindsPanel();
+        renderMain();
+      }).catch(error => {
+        note.textContent = error instanceof Error ? error.message : String(error);
+      });
+    });
+    form.append(newName, like, degreesNew, add);
+    kindsPanel.append(form, note);
+  };
+  kindsButton.addEventListener('click', () => {
+    kindsPanel.hidden = !kindsPanel.hidden;
+    if (!kindsPanel.hidden) {
+      renderKindsPanel();
+    }
+  });
+  let kindsLoaded = false;
+  const loadKinds = async (): Promise<void> => {
+    try {
+      const response = await fetch('registry-kinds.php', { credentials: 'same-origin' });
+      if (response.ok) {
+        const body = await response.json() as { kinds: KindInfo[]; is_admin: boolean };
+        kindList = body.kinds;
+        isAdminUser = body.is_admin;
+        kindsButton.hidden = !isAdminUser;
+      }
+    } catch {
+      // the built-in kinds stay
+    }
+  };
+  tools.append(search, expandAll, collapseAll, addTop, kindsButton, addTopForm, kindsPanel);
   const treeBox = el('div', 'storage-tree');
   side.append(tools, treeBox);
 
@@ -396,7 +509,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     const label = el('button', 'storage-tree-label btn btn-transparent btn-sm');
     label.type = 'button';
-    label.append(el('i', `fas fa-fw ${node.unit.kind === 'location' || !node.unit.parent_id ? 'fa-building' : 'fa-location-dot'} mr-1`), el('span', '', node.unit.name));
+    label.append(el('i', `fas fa-fw ${behaves(node.unit.kind) === 'location' || !node.unit.parent_id ? 'fa-building' : 'fa-location-dot'} mr-1`), el('span', '', node.unit.name));
     const tag = kindTag(node.unit);
     if (tag) {
       label.append(tag);
@@ -913,7 +1026,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     if (tag) {
       head.append(tag);
     }
-    const unitName = node.unit.kind === 'rack' ? 'boxes' : 'racks';
+    const unitName = behaves(node.unit.kind) === 'rack' ? 'boxes' : 'racks';
     const capacity = capacityOf(node, tree.byId);
     const spans = el('span', 'ml-auto small color-medium');
     if (capacity > 0) {
@@ -1039,7 +1152,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       name.focus();
 
     };
-    const loose = node.children.filter(c => c.unit.kind === 'box' || (c.children.length === 0 && Boolean(c.unit.box_rows)));
+    const loose = node.children.filter(c => behaves(c.unit.kind) === 'box' || (c.children.length === 0 && Boolean(c.unit.box_rows)));
     const shelves = node.children.filter(c => !loose.includes(c));
     shelves.forEach(shelf => {
       const row = el('div', 'storage-shelf');
@@ -1068,7 +1181,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     // the places that are still free, as far as the capacity says: a click on one opens a small form to make the rack or the box there
     // without a capacity there is no limit: one place to click is always offered at the end, to add another
     const freePlaces = capacity > 0 ? Math.min(Math.max(capacity - node.children.length, 0), 12) : 1;
-    const newKind = node.unit.kind === 'rack' ? 'box' : 'rack';
+    const newKind = behaves(node.unit.kind) === 'rack' ? 'box' : 'rack';
     for (let i = 0; i < freePlaces; i++) {
       const row = el('div', 'storage-shelf storage-shelf-free');
       const label = el('button', 'btn btn-transparent btn-sm storage-shelf-label small color-medium', capacity > 0 ? (newKind === 'box' ? 'free place' : 'free rack') : (newKind === 'box' ? '+ add a box' : '+ add a rack'));
@@ -1082,7 +1195,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     }
     if (loose.length > 0) {
       const row = el('div', 'storage-shelf');
-      row.append(el('span', 'storage-shelf-label small color-medium', 'In the ' + (node.unit.kind === 'rack' ? 'rack' : 'cabinet')));
+      row.append(el('span', 'storage-shelf-label small color-medium', 'In the ' + (behaves(node.unit.kind) === 'rack' ? 'rack' : 'cabinet')));
       const boxes = el('div', 'storage-shelf-boxes');
       loose.forEach(b => boxes.append(shelfBox(b)));
       row.append(boxes);
@@ -1097,7 +1210,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     let drawn = 0;
     const walk = (place: Node): void => {
       place.children.forEach(child => {
-        if (child.unit.kind === 'location') {
+        if (behaves(child.unit.kind) === 'location') {
           // a place inside the location (a room in a building): its name, then what is in it
           const heading = el('button', 'btn btn-transparent btn-sm p-0 mt-3 mb-2 d-block font-weight-bold', child.unit.name);
           heading.type = 'button';
@@ -1122,18 +1235,19 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     const form = el('div', 'd-flex flex-wrap align-items-end');
     const kind = el('select', 'form-control form-control-sm w-auto mr-1');
     kind.setAttribute('aria-label', 'What to add');
-    // a location at the top; in a location more locations, fridges and freezers; in a fridge, a freezer or a rack, racks and boxes
-    const parentKind = node === null ? null : (node.unit.kind ?? 'legacy');
-    const choices: [string, string][] = parentKind === null
-      ? [['location', 'Location (a room, a building)']]
-      : (parentKind === 'location'
-        ? [['freezer', 'Freezer'], ['fridge', 'Fridge'], ['location', 'Location inside']]
-        : (parentKind === 'legacy'
-          ? [['rack', 'Rack / drawer / shelf'], ['box', 'Box'], ['location', 'Location'], ['freezer', 'Freezer'], ['fridge', 'Fridge']]
-          : [['rack', 'Rack / drawer / shelf'], ['box', 'Box']]));
-    choices.forEach(([value, label]) => {
-      const option = el('option', '', label);
-      option.value = value;
+    // a location at the top; in a location more locations, fridges and freezers (and the kinds that behave like them); in a cooler or a rack, racks and boxes
+    const parentBehaves = node === null ? null : (behaves(node.unit.kind) ?? 'legacy');
+    const fits = (k: KindInfo): boolean => parentBehaves === null
+      ? k.behaves_like === 'location'
+      : (parentBehaves === 'location'
+        ? k.behaves_like === 'cooler' || k.behaves_like === 'location'
+        : (parentBehaves === 'legacy' ? true : k.behaves_like === 'rack' || k.behaves_like === 'box'));
+    const labelOf = (k: KindInfo): string => (k.built_in
+      ? ({ location: 'Location (a room, a building)', freezer: 'Freezer', fridge: 'Fridge', rack: 'Rack / drawer / shelf', box: 'Box' } as Record<string, string>)[k.name]
+      : `${kindLabel(k.name)} (${k.behaves_like})`);
+    kindList.filter(fits).forEach(k => {
+      const option = el('option', '', labelOf(k));
+      option.value = k.name;
       kind.append(option);
     });
     const temperature = el('input', 'form-control form-control-sm mr-1');
@@ -1177,11 +1291,13 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     cols.value = '9';
     rows.hidden = cols.hidden = true;
     const showFields = (): void => {
-      rows.hidden = cols.hidden = kind.value !== 'box';
-      temperature.hidden = kind.value !== 'freezer' && kind.value !== 'fridge';
-      holds.hidden = kind.value !== 'freezer' && kind.value !== 'fridge' && kind.value !== 'rack';
-      if (kind.value === 'fridge' && temperature.value === '') {
-        temperature.value = '4';
+      const how = behaves(kind.value);
+      rows.hidden = cols.hidden = how !== 'box';
+      temperature.hidden = how !== 'cooler';
+      holds.hidden = how !== 'cooler' && how !== 'rack';
+      const preset = kindList.find(k => k.name === kind.value)?.default_temperature;
+      if (how === 'cooler' && temperature.value === '' && preset !== null && preset !== undefined && kind.value !== 'freezer') {
+        temperature.value = String(preset);
       }
     };
     kind.addEventListener('change', showFields);
@@ -1195,7 +1311,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         return;
       }
       void ApiC.post2location('storage_units', { name: unitName, kind: kind.value, ...(temperature.value !== '' && !temperature.hidden ? { temperature: Number(temperature.value) } : {}), ...(Number(holds.value) > 0 && !holds.hidden ? { capacity: Number(holds.value) } : {}), ...(node === null ? {} : { parent_id: node.unit.id }), ...(Number(position.value) > 0 ? { position: Number(position.value) } : {}) }).then(async id => {
-        if (kind.value === 'box') {
+        if (behaves(kind.value) === 'box') {
           await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rows.value), box_cols: Number(cols.value) });
         }
         // show the new unit in the tree, and select it
@@ -1230,7 +1346,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     // what the place is (it can be said for the places made before), and the temperature of a fridge or a freezer
     const what = el('select', 'form-control form-control-sm w-auto mr-1');
     what.setAttribute('aria-label', 'What it is');
-    [['', 'Kind of place'], ['location', 'Location'], ['freezer', 'Freezer'], ['fridge', 'Fridge'], ['rack', 'Rack / drawer / shelf'], ['box', 'Box']].forEach(([value, label]) => {
+    [['', 'Kind of place'] as [string, string]].concat(kindList.map(k => [k.name, kindLabel(k.name)] as [string, string])).forEach(([value, label]) => {
       const option = el('option', '', label);
       option.value = value;
       what.append(option);
@@ -1262,9 +1378,9 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     eachRack.setAttribute('aria-label', 'Boxes in each rack');
     eachRack.value = node.unit.child_capacity ? String(node.unit.child_capacity) : '';
     const syncDegrees = (): void => {
-      eachRack.hidden = what.value !== 'freezer' && what.value !== 'fridge';
-      degrees.hidden = what.value !== 'freezer' && what.value !== 'fridge';
-      holdsNow.hidden = what.value !== 'freezer' && what.value !== 'fridge' && what.value !== 'rack';
+      eachRack.hidden = behaves(what.value) !== 'cooler';
+      degrees.hidden = behaves(what.value) !== 'cooler';
+      holdsNow.hidden = behaves(what.value) !== 'cooler' && behaves(what.value) !== 'rack';
     };
     what.addEventListener('change', syncDegrees);
     syncDegrees();
@@ -1293,7 +1409,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         patchAndReload(`storage_units/${node.unit.id}`, body);
       }
     });
-    const holdsLabel = node.unit.kind === 'rack' ? 'Holds (boxes)' : 'Holds (racks)';
+    const holdsLabel = behaves(node.unit.kind) === 'rack' ? 'Holds (boxes)' : 'Holds (racks)';
     form.append(labelled('Name', name), labelled('Kind of place', what), labelled('Temperature (°C)', degrees), labelled(holdsLabel, holdsNow), labelled('Boxes in each rack', eachRack), labelled('Position among its neighbours', position), el('div', 'mb-1', ''));
     form.lastElementChild?.append(save);
     return form;
@@ -1478,16 +1594,16 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     for (let n: Node | undefined = tree.byId.get(storageId); n; n = n.unit.parent_id === null ? undefined : tree.byId.get(n.unit.parent_id)) {
       chain.unshift(n);
     }
-    const isBox = (n: Node): boolean => n.unit.kind === 'box' || (n.unit.kind === undefined || n.unit.kind === null ? Boolean(n.unit.box_rows) : false);
+    const isBox = (n: Node): boolean => behaves(n.unit.kind) === 'box' || (n.unit.kind === undefined || n.unit.kind === null ? Boolean(n.unit.box_rows) : false);
     let freezer: Node | null = null;
     chain.forEach(n => {
-      if (n.unit.kind === 'freezer' || n.unit.kind === 'fridge') {
+      if (behaves(n.unit.kind) === 'cooler') {
         freezer = n;
       }
     });
     const last = chain[chain.length - 1] ?? null;
     const box = last && isBox(last) ? last : null;
-    const rack = chain.filter(n => n.unit.kind === 'rack' && n !== box).pop() ?? null;
+    const rack = chain.filter(n => behaves(n.unit.kind) === 'rack' && n !== box).pop() ?? null;
     if (freezer === null && chain.length >= 3) {
       // places without kinds: the box, the rack above it, the freezer above that
       return { freezer: chain[chain.length - 3], rack: chain[chain.length - 2], box: last };
@@ -1542,14 +1658,14 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     }
     if (isBox) {
       contents.push(renderBox(node));
-    } else if (node.children.length > 0 || node.unit.kind === 'freezer' || node.unit.kind === 'fridge' || node.unit.kind === 'rack') {
+    } else if (node.children.length > 0 || behaves(node.unit.kind) === 'cooler' || behaves(node.unit.kind) === 'rack') {
       // a fridge, a freezer or a rack is drawn even when it is empty: its place to click adds the first rack or box
-      contents.push(node.unit.kind === 'location' ? renderLocationView(node) : renderCabinet(node));
+      contents.push(behaves(node.unit.kind) === 'location' ? renderLocationView(node) : renderCabinet(node));
     }
     const heading = isBox ? 'The slots of this box' : (node.children.length > 0 ? `Inside it: ${node.children.length} ${node.children.length === 1 ? 'place' : 'places'}` : 'Inside it: nothing yet');
     main.append(section(heading, '', ...contents));
     if (!isBox) {
-      main.append(section('Add a place inside it', node.unit.kind === 'rack' ? 'Boxes go in a rack.' : 'What can be added here depends on what this place is.', renderAddForm(node)));
+      main.append(section('Add a place inside it', behaves(node.unit.kind) === 'rack' ? 'Boxes go in a rack.' : 'What can be added here depends on what this place is.', renderAddForm(node)));
     }
     main.append(renderInfo(node));
     // taking things out or deleting: kept apart at the end
@@ -1746,6 +1862,10 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
 
   const load = async (event?: Event): Promise<void> => {
     const current = ++requestId;
+    if (!kindsLoaded) {
+      kindsLoaded = true;
+      await loadKinds();
+    }
     const params = filterParams(event, order, sort);
     // the location in the address is for the tree, not a filter of the resources
     params.delete('storage_unit');
