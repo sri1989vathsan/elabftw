@@ -10,6 +10,7 @@
  */
 import i18next from './i18n';
 import { on } from './handlers';
+import { Api } from './Apiv2.class';
 
 export type FolderView = 'tree' | 'list' | 'details';
 export type FolderSortKey = 'name' | 'path' | 'experiments' | 'resources';
@@ -404,12 +405,29 @@ export function syncFolderView(): void {
 
 /** Wires the view buttons and the sortable column headers (delegated, so they survive the panel being replaced). */
 export function initFolderViews(): void {
-  on('select-folder-view', (el: HTMLElement) => {
+  const ApiC = new Api();
+  const remember = (view: FolderView): void => {
     try {
-      window.localStorage.setItem(viewKey(), parseFolderView(el.dataset.view ?? null));
+      window.localStorage.setItem(viewKey(), view);
     } catch {
       // the choice then only lasts until the panel is rebuilt
     }
+  };
+  // the choice belongs to the user, not to this browser: the saved one wins over what this browser remembers
+  void ApiC.patch('experiments_folders', { action: 'get_folder_view' })
+    .then(response => response.json())
+    .then((data: { folder_view?: string | null }) => {
+      if (!data.folder_view) return;
+      const saved = parseFolderView(data.folder_view);
+      if (saved === currentFolderView()) return;
+      remember(saved);
+      syncFolderView();
+    })
+    .catch(() => { /* the browser's own memory of the choice stays in use */ });
+  on('select-folder-view', (el: HTMLElement) => {
+    const view = parseFolderView(el.dataset.view ?? null);
+    remember(view);
+    void ApiC.patch('experiments_folders', { action: 'set_folder_view', view }).catch(() => { /* kept in this browser at least */ });
     syncFolderView();
   });
   on('toggle-folder-flat-more', (el: HTMLElement, event: Event) => {
