@@ -923,9 +923,11 @@
 
 .storage-shelf-box {
   display: flex;
-  flex: 1 1 8rem;
+  // all the boxes have the same width and height, so they line up from shelf to shelf
+  flex: 0 0 11rem;
   flex-direction: column;
-  max-width: 14rem;
+  width: 11rem;
+  min-height: 4.4rem;
   padding: 0.35rem 0.6rem;
   text-align: left;
   border: 1px solid var(--primary, #295ca9);
