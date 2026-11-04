@@ -3065,9 +3065,13 @@ function applyCellClipHeights(container: HTMLElement, manualRowHeights: Readonly
       // The wrapper fills the row, so without this its text always sat at
       // the top, whatever vertical alignment the cell asked for (middle by
       // default): rows with a set height looked top-aligned.
-      wrapper.style.justifyContent = computed.verticalAlign === 'top'
+      // "safe": text taller than the row then starts at the top and is cut off at the bottom. Plain centring cut
+      // off the top and the bottom alike, leaving only the middle of the text readable.
+      const alignment = computed.verticalAlign === 'top'
         ? 'flex-start'
         : computed.verticalAlign === 'bottom' ? 'flex-end' : 'center';
+      wrapper.style.justifyContent = alignment === 'flex-start' ? alignment : `safe ${alignment}`;
+      if (wrapper.style.justifyContent === '') wrapper.style.justifyContent = alignment;
     });
   });
 }
