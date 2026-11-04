@@ -930,6 +930,25 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       tile.type = 'button';
       const total = (box.unit.box_rows ?? 0) * (box.unit.box_cols ?? 0);
       tile.title = `${box.unit.name}: ${box.own.length} of ${total}`;
+      // coloured by the module of what is in the box (the one with most entries), the modules are in its tooltip
+      const modules = new Map<string, { title: string; color: string; n: number }>();
+      new Set(box.own).forEach(entry => {
+        const key = entry.category_title ?? '';
+        const found = modules.get(key) ?? { title: key || 'No module', color: entry.category_color ?? '', n: 0 };
+        found.n++;
+        modules.set(key, found);
+      });
+      const byCount = [...modules.values()].sort((a, b) => b.n - a.n);
+      if (byCount.length > 0) {
+        tile.title += ` · ${byCount.map(m => `${m.title} ${m.n}`).join(', ')}`;
+        const main = byCount[0];
+        if (main.color) {
+          const [red, green, blue] = [0, 2, 4].map(i => parseInt(main.color.slice(i, i + 2), 16));
+          tile.style.borderColor = `#${main.color}`;
+          tile.style.backgroundColor = `rgba(${red}, ${green}, ${blue}, 0.16)`;
+          tile.style.setProperty('--tile-colour', `#${main.color}`);
+        }
+      }
       tile.append(el('span', 'storage-shelf-box-name', box.unit.name));
       if (total > 0) {
         tile.append(el('span', 'small color-medium', `${box.own.length}/${total}`), gauge(box.own.length, total));

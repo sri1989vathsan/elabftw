@@ -978,3 +978,8 @@
 .storage-kind-tag-fridge {
   background: #1e8e5a;
 }
+
+// the gauge of a box on a shelf has the colour of its module
+.storage-shelf-box .rack-gauge-fill {
+  background: var(--tile-colour, var(--primary, #295ca9));
+}
