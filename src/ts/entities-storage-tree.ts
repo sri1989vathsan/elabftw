@@ -1780,6 +1780,26 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     };
     columns.forEach((h, i) => {
       const th = el('th', h === 'ID' ? 'id-cell' : '');
+      if (h === 'Cap colour') {
+        // the colours of the caps that are in this list
+        const choice = el('select', 'form-control form-control-sm');
+        choice.setAttribute('aria-label', 'Filter Cap colour');
+        const any = el('option', '', 'All colours');
+        any.value = '';
+        choice.append(any);
+        [...new Set([...groups.values()].flatMap(g => g.locations.map(l => l.cap_colour ?? '')).filter(Boolean))].map(colour => capColourName(colour)).sort().forEach(name => {
+          const option = el('option', '', name);
+          option.value = name.toLowerCase();
+          choice.append(option);
+        });
+        choice.addEventListener('change', () => {
+          wanted[i] = choice.value;
+          applyFilters();
+        });
+        th.append(choice);
+        filterRow.append(th);
+        return;
+      }
       if (h === 'Module') {
         // the modules that are in this list
         const choice = el('select', 'form-control form-control-sm');
@@ -1817,6 +1837,56 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     searchAll.setAttribute('aria-label', 'Search the entries');
     searchAll.addEventListener('input', applyFilters);
     main.append(searchAll);
+    // the entries ticked can be archived or deleted: the owner of an entry can do it, and an admin can do it for all of them
+    const ticked = new Set<number>();
+    const tickBar = el('div', 'd-flex align-items-center flex-wrap mb-2');
+    tickBar.hidden = true;
+    const tickCount = el('span', 'small mr-2');
+    const archiveTicked = el('button', 'btn btn-secondary btn-sm mr-1', 'Archive');
+    const deleteTicked = el('button', 'btn btn-secondary btn-sm text-danger mr-1', 'Delete');
+    const clearTicked = el('button', 'btn btn-transparent btn-sm', 'Clear');
+    [archiveTicked, deleteTicked, clearTicked].forEach(b => {
+      b.type = 'button';
+    });
+    tickBar.append(tickCount, archiveTicked, deleteTicked, clearTicked);
+    main.append(tickBar);
+    const refreshTicks = (): void => {
+      tickBar.hidden = ticked.size === 0;
+      tickCount.textContent = `${ticked.size} ${ticked.size === 1 ? 'entry' : 'entries'} ticked`;
+    };
+    clearTicked.addEventListener('click', () => {
+      ticked.clear();
+      body.querySelectorAll<HTMLInputElement>('input.tick-entry').forEach(box => {
+        box.checked = false;
+      });
+      refreshTicks();
+    });
+    const removeTicked = async (verb: 'archive' | 'delete'): Promise<void> => {
+      const ids = [...ticked];
+      const many = `${ids.length} ${ids.length === 1 ? 'entry' : 'entries'}`;
+      const yes = await askConfirm(verb === 'delete' ? `Delete ${many}? They go to the trash and only the owner or an admin can bring them back.` : `Archive ${many}? Archived entries cannot be edited until they are unarchived.`, verb === 'delete' ? 'Delete' : 'Archive');
+      if (!yes) {
+        return;
+      }
+      let refused = 0;
+      for (const id of ids) {
+        try {
+          if (verb === 'delete') {
+            await ApiC.delete(`inventory/${id}`, { notifOnError: 0 });
+          } else {
+            await ApiC.patch(`inventory/${id}`, { action: 'archive', notifOnError: 0 });
+          }
+        } catch {
+          refused += 1;
+        }
+      }
+      if (refused > 0) {
+        window.alert(`${refused} of ${many} could not be ${verb === 'delete' ? 'deleted' : 'archived'}: only the owner of an entry or an admin can do that.`);
+      }
+      window.location.reload();
+    };
+    archiveTicked.addEventListener('click', () => void removeTicked('archive'));
+    deleteTicked.addEventListener('click', () => void removeTicked('delete'));
     const thead = el('thead');
     thead.append(head, filterRow);
     const body = el('tbody');
@@ -1824,7 +1894,21 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       const first = locations[0];
       const tr = el('tr');
       // the number of the entry in its module (its lab number), not the row number of the database
-      tr.append(el('td', 'id-cell', row.custom_id === null || row.custom_id === undefined ? '' : String(row.custom_id)));
+      const idCell = el('td', 'id-cell');
+      const tick = el('input', 'tick-entry mr-1');
+      tick.type = 'checkbox';
+      tick.setAttribute('aria-label', `Tick ${row.title}`);
+      tick.checked = ticked.has(row.id);
+      tick.addEventListener('change', () => {
+        if (tick.checked) {
+          ticked.add(row.id);
+        } else {
+          ticked.delete(row.id);
+        }
+        refreshTicks();
+      });
+      idCell.append(tick, document.createTextNode(row.custom_id === null || row.custom_id === undefined ? '' : String(row.custom_id)));
+      tr.append(idCell);
       // the module of the entry (the ID counts in each module on its own), in the colour of the module
       const moduleCell = el('td', 'text-nowrap');
       if (row.category_title) {
