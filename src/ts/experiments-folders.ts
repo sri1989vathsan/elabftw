@@ -117,6 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const folderScopeKey = `experiment-folder-scope-${currentUserId}`;
   const storedFolderScope = localStorage.getItem(folderScopeKey);
   let activeFolderScope: FolderScope = storedFolderScope === 'all' ? 'all' : 'mine';
+  let scopeShownForCurrentFolder = false;
   // the folder tree itself is shared between experiments and resources, only
   // which page a folder link opens (and which entity count badge shows)
   // depends on this -- persisted per-user so it survives navigating around
@@ -272,9 +273,9 @@ document.addEventListener('DOMContentLoaded', () => {
     return type === 'items' ? option.dataset.itemsHref : option.dataset.experimentsHref;
   }
 
-  function applyFolderScope(scope: FolderScope): void {
+  function applyFolderScope(scope: FolderScope, remember = true): void {
     activeFolderScope = scope;
-    localStorage.setItem(folderScopeKey, scope);
+    if (remember) localStorage.setItem(folderScopeKey, scope);
 
     document.querySelectorAll('[data-action="select-folder-scope"]').forEach((button: HTMLButtonElement) => {
       const isActive = button.dataset.scope === scope;
@@ -419,7 +420,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeFolderIsOther = Boolean(currentNode?.closest('.other-folders-wrapper'));
     setOtherFoldersOpen(activeFolderIsOther || localStorage.getItem(OTHER_FOLDERS_KEY) === 'open');
     applyFolderEntityType(activeFolderEntityType);
-    applyFolderScope(activeFolderScope);
+    // An open entry filed in somebody else's folder: show all folders once, so its folder is there to be shown. The saved
+    // "My folders" choice stays untouched for the other pages.
+    const scopeHidesCurrentFolder = activeFolderScope === 'mine' && currentNode !== null
+      && currentNode.closest<HTMLElement>('.folder-node[data-folder-depth="0"]')?.dataset.folderOwnerId !== currentUserId;
+    if (scopeHidesCurrentFolder && !scopeShownForCurrentFolder) {
+      scopeShownForCurrentFolder = true;
+      applyFolderScope('all', false);
+    } else {
+      applyFolderScope(activeFolderScope);
+    }
     bindFolderInteractiveControls();
   }
 
