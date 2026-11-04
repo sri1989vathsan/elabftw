@@ -904,7 +904,11 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     const cabinet = el('div', 'storage-cabinet mb-3');
     const slots = slotsOf(node);
     const head = el('div', 'storage-cabinet-head d-flex align-items-center');
-    head.append(el('span', 'font-weight-bold', node.unit.name));
+    const nameLink = el('button', 'btn btn-transparent btn-sm p-0 font-weight-bold', node.unit.name);
+    nameLink.type = 'button';
+    nameLink.title = 'Open this place';
+    nameLink.addEventListener('click', () => select(node.unit.id));
+    head.append(nameLink);
     const tag = kindTag(node.unit);
     if (tag) {
       head.append(tag);
@@ -1066,6 +1070,32 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       cabinet.append(row);
     }
     return cabinet;
+  };
+
+  // a location (a room, a building): every fridge and freezer in it drawn from the front, one under the other
+  const renderLocationView = (node: Node): HTMLElement => {
+    const wrap = el('div');
+    let drawn = 0;
+    const walk = (place: Node): void => {
+      place.children.forEach(child => {
+        if (child.unit.kind === 'location') {
+          // a place inside the location (a room in a building): its name, then what is in it
+          const heading = el('button', 'btn btn-transparent btn-sm p-0 mt-3 mb-2 d-block font-weight-bold', child.unit.name);
+          heading.type = 'button';
+          heading.addEventListener('click', () => select(child.unit.id));
+          wrap.append(heading);
+          walk(child);
+        } else {
+          wrap.append(renderCabinet(child));
+          drawn++;
+        }
+      });
+    };
+    walk(node);
+    if (drawn === 0 && wrap.childElementCount === 0) {
+      wrap.append(el('p', 'text-muted', 'No fridge or freezer here yet: add one below.'));
+    }
+    return wrap;
   };
 
   // node is null for a location at the top (a freezer, a cabinet...)
@@ -1495,7 +1525,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       contents.push(renderBox(node));
     } else if (node.children.length > 0 || node.unit.kind === 'freezer' || node.unit.kind === 'fridge' || node.unit.kind === 'rack') {
       // a fridge, a freezer or a rack is drawn even when it is empty: its place to click adds the first rack or box
-      contents.push(node.unit.kind === 'location' ? renderRacks(node) : renderCabinet(node));
+      contents.push(node.unit.kind === 'location' ? renderLocationView(node) : renderCabinet(node));
     }
     const heading = isBox ? 'The slots of this box' : (node.children.length > 0 ? `Inside it: ${node.children.length} ${node.children.length === 1 ? 'place' : 'places'}` : 'Inside it: nothing yet');
     main.append(section(heading, '', ...contents));
