@@ -1796,7 +1796,8 @@ tr:first-child td {
     container-type: inline-size;
   }
 
-  $folder-actions-column: 5.6rem;
+  // four buttons of 1.5rem (star, notes, three dots, step in), always the same slots so the stars line up
+  $folder-actions-column: 6rem;
 
   .folder-column-heads,
   .folder-details-card {
@@ -1929,7 +1930,8 @@ tr:first-child td {
 
   .folder-enter-placeholder {
     display: inline-block;
-    width: 1.4rem;
+    flex: 0 0 1.5rem;
+    width: 1.5rem;
   }
 
   .folder-details-path,
