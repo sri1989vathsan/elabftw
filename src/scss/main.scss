@@ -1878,7 +1878,18 @@ tr:first-child td {
 
   // where the list and details views are in the folder structure
   .folder-level-bar {
+    // the panel is dark: the bar takes the panel's own text colour instead of the page background that makes it pale
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--chrome-fg);
     flex-wrap: wrap;
+  }
+
+  .folder-level-bar .folder-path-crumb {
+    color: inherit;
+  }
+
+  .folder-level-bar span.folder-path-crumb {
+    font-weight: 600;
   }
 
   .folder-up-button {
