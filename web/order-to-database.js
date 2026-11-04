@@ -377,8 +377,9 @@
     fetch('registry-transfer.php?folders=1', { credentials: 'same-origin' }).then(function (r) {
       return r.json();
     }).then(function (body) {
+      // your own folders only: not the folders of the Database, not the folders of the others
       (body.folders || []).filter(function (f) {
-        return !f.database;
+        return !f.database && Number(f.owner) === Number(body.me);
       }).forEach(function (f) {
         const option = element('option', '', f.path);
         option.value = String(f.id);

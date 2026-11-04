@@ -359,7 +359,11 @@
           let list = [];
           try {
             const response = await fetch('../registry-transfer.php?folders=1', { credentials: 'same-origin' });
-            list = (await response.json()).folders || [];
+            const loaded = await response.json();
+            // your own folders only: not the folders of the Database, not the folders of the others
+            list = (loaded.folders || []).filter(function (f) {
+              return !f.database && Number(f.owner) === Number(loaded.me);
+            });
           } catch (error) {
             say('The folders could not be loaded.', true);
             return;
@@ -368,9 +372,7 @@
           const none = element('option', '', 'No folder (Unfiled)');
           none.value = '0';
           choice.append(none);
-          list.filter(function (f) {
-            return !f.database;
-          }).forEach(function (f) {
+          list.forEach(function (f) {
             const option = element('option', '', f.path);
             option.value = String(f.id);
             choice.append(option);

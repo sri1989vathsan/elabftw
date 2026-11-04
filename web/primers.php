@@ -153,8 +153,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         }
         $primerEntry = new Inventory($App->Users, $primerId);
         $primerEntry->canOrExplode(AccessType::Write);
-        $folderId = (int) (new Inventory($App->Users, $plasmidId)->entityData['folder_id'] ?? 0);
-        if ($folderId <= 0) {
+        $plasmidEntry = new Inventory($App->Users, $plasmidId);
+        $folderId = (int) ($plasmidEntry->entityData['folder_id'] ?? 0);
+        // a plasmid of the Database sits in the folders of the Database: nothing is filed there, only the user's own folders get a "Primers" subfolder
+        if ($folderId <= 0 || (($plasmidEntry->entityData['custom_id'] ?? null) !== null && (int) ($plasmidEntry->entityData['is_planned'] ?? 0) === 0)) {
             respond(200, array('ok' => true, 'filed' => false));
         }
         $find = $pdo->prepare("SELECT id FROM experiments_folders WHERE team = :team AND scope = 'inventory' AND name = 'Primers' AND parent_id = :parent LIMIT 1");

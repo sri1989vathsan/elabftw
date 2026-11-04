@@ -971,7 +971,8 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
       const none = el('option', '', 'No folder (Unfiled)');
       none.value = '0';
       choice.append(none);
-      body.folders.filter(f => !f.database).forEach(f => {
+      // your own folders only: not the folders of the Database, not the folders of the others
+      body.folders.filter(f => !f.database && f.owner === body.me).forEach(f => {
         const option = el('option', '', f.path);
         option.value = String(f.id);
         choice.append(option);
