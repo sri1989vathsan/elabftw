@@ -482,10 +482,29 @@ final class StorageUnits extends AbstractRest
 
     public const array KINDS = array('location', 'freezer', 'fridge', 'rack', 'box');
 
+    /** the kinds that exist from the start, and what each behaves like (a fridge and a freezer are coolers) */
+    private const array BEHAVES = array('location' => 'location', 'freezer' => 'cooler', 'fridge' => 'cooler', 'rack' => 'rack', 'box' => 'box');
+
+    /** what a kind behaves like: location, cooler, rack or box; nothing for a kind that does not exist */
+    public function behavesLike(?string $kind): ?string
+    {
+        if ($kind === null || $kind === '') {
+            return null;
+        }
+        if (isset(self::BEHAVES[$kind])) {
+            return self::BEHAVES[$kind];
+        }
+        $req = $this->Db->prepare('SELECT behaves_like FROM storage_kinds WHERE name = :name');
+        $req->bindParam(':name', $kind);
+        $this->Db->execute($req);
+        $found = $req->fetchColumn();
+        return $found === false ? null : (string) $found;
+    }
+
     /** what the place is, and the temperature of a fridge or a freezer (degrees Celsius): both can be emptied */
     public function setKind(mixed $kind, mixed $temperature): void
     {
-        $kindValue = is_string($kind) && in_array($kind, self::KINDS, true) ? $kind : null;
+        $kindValue = is_string($kind) && $this->behavesLike($kind) !== null ? $kind : null;
         $degrees = filter_var($temperature, FILTER_VALIDATE_INT, array('options' => array('min_range' => -273, 'max_range' => 100)));
         $req = $this->Db->prepare('UPDATE storage_units SET kind = :kind, temperature = :temperature WHERE id = :id');
         $req->bindValue(':kind', $kindValue, $kindValue === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
@@ -500,24 +519,25 @@ final class StorageUnits extends AbstractRest
         if ($kind === null) {
             return;
         }
-        $parentKind = null;
+        $behaves = $this->behavesLike($kind);
+        $parentBehaves = null;
         if ($parentId !== null) {
             $req = $this->Db->prepare('SELECT kind FROM storage_units WHERE id = :id');
             $req->bindParam(':id', $parentId, PDO::PARAM_INT);
             $this->Db->execute($req);
-            $parentKind = $req->fetchColumn() ?: null;
+            $parentBehaves = $this->behavesLike($req->fetchColumn() ?: null);
         }
-        if ($parentId === null && $kind !== 'location') {
+        if ($parentId === null && $behaves !== 'location') {
             throw new ImproperActionException(_('Only a location can be at the top: put a fridge, a freezer, a rack or a box in a location.'));
         }
-        if (($kind === 'freezer' || $kind === 'fridge') && $parentKind !== null && $parentKind !== 'location') {
+        if ($behaves === 'cooler' && $parentBehaves !== null && $parentBehaves !== 'location') {
             throw new ImproperActionException(_('A fridge or a freezer is in a location.'));
         }
     }
 
     public function create(string $unitName, ?int $parentId = null, ?int $position = null, ?string $kind = null, mixed $temperature = null, mixed $capacity = null): int
     {
-        $kind = is_string($kind) && in_array($kind, self::KINDS, true) ? $kind : null;
+        $kind = is_string($kind) && $this->behavesLike($kind) !== null ? $kind : null;
         $this->checkKindPlace($kind, $parentId);
         $this->checkRoom($parentId);
         $room = filter_var($capacity, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1, 'max_range' => 65535)));
