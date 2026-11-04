@@ -123,8 +123,19 @@
       attachedPrimers = state.primers;
       const now = current();
       attachedDrawn = {};
+      // the primers that the file already draws itself (its own primers and its primer_bind features): an attached primer on the very
+      // same place is not drawn a second time
+      const fileFeatures = Array.isArray(now.data.features) ? now.data.features : Object.values(now.data.features || {});
+      const drawnByFile = new Set(Object.values(now.data.primers || {}).concat(fileFeatures.filter(function (feature) {
+        return String(feature.type || '').toLowerCase() === 'primer_bind';
+      })).map(function (primer) {
+        return primer.start + ':' + primer.end + ':' + (primer.forward !== false && primer.strand !== -1 ? 1 : -1);
+      }));
       attachedPrimers.slice(0, drawLimit).forEach(function (primer) {
         findSitesCached(now.sequence, primer.sequence, now.circular).forEach(function (site, index) {
+          if (!site.tail && drawnByFile.has(site.start + ':' + (site.end - 1) + ':' + (site.forward ? 1 : -1))) {
+            return;
+          }
           const id = 'dbprimer-' + primer.id + '-' + index;
           attachedDrawn[id] = annotation(id, primer.title, site.start, site.end - 1, site.forward, now.sequence.length, site, primer.sequence);
         });
