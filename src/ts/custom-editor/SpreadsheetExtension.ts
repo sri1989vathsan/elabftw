@@ -1446,6 +1446,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const spreadsheetInteractionOngoing = (): boolean =>
     spreadsheetInteractionActive || document.body.dataset.spreadsheetCellEditing === 'true';
 
+  const TYPING_FOLLOWS_CURSOR_MS = 2000;
+  let lastTypingInTextAt = -Infinity;
+  editor.on('keydown input', () => { lastTypingInTextAt = performance.now(); });
+
   const runPendingAutoResize = (): void => {
     if (keyupDispatchPending && !spreadsheetInteractionOngoing()) {
       keyupDispatchPending = false;
@@ -1464,6 +1468,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const pageX = window.scrollX;
     const pageY = window.scrollY;
     editor.execCommand('mceAutoResize');
+    // While typing in the text the page follows the cursor: putting it back here, a moment after the browser has
+    // scrolled to the new line, made the page shake at the end of the text.
+    if (performance.now() - lastTypingInTextAt < TYPING_FOLLOWS_CURSOR_MS) return;
     if (Math.abs(window.scrollY - pageY) > 2 || Math.abs(window.scrollX - pageX) > 2) window.scrollTo(pageX, pageY);
   };
 
