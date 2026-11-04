@@ -225,13 +225,62 @@
     search.type = 'search';
     search.placeholder = 'Search an order by number, title, vendor or status';
     search.setAttribute('aria-label', 'Search orders');
+    // my orders or everyone's, and the order of the list: the newest first or the oldest first
+    let mineOnly = true;
+    let newestFirst = true;
+    try {
+      mineOnly = window.localStorage.getItem('orderToDatabaseMine') !== '0';
+    } catch (error) {
+      mineOnly = true;
+    }
+    const filters = element('div', 'd-flex flex-wrap align-items-center mb-1', '', 'gap:.5rem');
+    const scope = element('div', 'btn-group btn-group-sm');
+    const scopeButtons = [['My orders', true], ['All orders', false]].map(function (item) {
+      const b = element('button', 'btn btn-outline-secondary', item[0]);
+      b.type = 'button';
+      b.addEventListener('click', function () {
+        mineOnly = item[1];
+        try {
+          window.localStorage.setItem('orderToDatabaseMine', mineOnly ? '1' : '0');
+        } catch (error) {
+          // not remembered
+        }
+        syncScope();
+        if (typeof refill === 'function') {
+          refill();
+        }
+      });
+      scope.append(b);
+      return b;
+    });
+    const syncScope = function () {
+      scopeButtons[0].classList.toggle('active', mineOnly);
+      scopeButtons[1].classList.toggle('active', !mineOnly);
+    };
+    syncScope();
+    const sorter = element('select', 'form-control form-control-sm w-auto');
+    sorter.setAttribute('aria-label', 'Sort the orders');
+    [['new', 'Newest first'], ['old', 'Oldest first']].forEach(function (o) {
+      const option = element('option', '', o[1]);
+      option.value = o[0];
+      sorter.append(option);
+    });
+    sorter.addEventListener('change', function () {
+      newestFirst = sorter.value === 'new';
+      if (typeof refill === 'function') {
+        refill();
+      }
+    });
+    let refill = null;
+    let myId = 0;
+    filters.append(scope, sorter);
     const pick = element('select', 'form-control form-control-sm mb-2');
     pick.setAttribute('aria-label', 'Order');
     const info = element('p', 'small text-muted mb-2', 'Loading the orders...');
     const tableBox = element('div');
     const message = element('p', 'small mb-2');
     const buttons = element('div', 'd-flex flex-wrap justify-content-end mt-2', '', 'gap:.5rem');
-    box.append(search, pick, info, tableBox, message, buttons);
+    box.append(filters, search, pick, info, tableBox, message, buttons);
 
     let modules = [];
     let rows = [];
@@ -471,7 +520,13 @@
       fetch('api/v2/orders?limit=200', { credentials: 'same-origin' }).then(function (r) {
         return r.json();
       }),
+      fetch('registry-transfer.php?users=1', { credentials: 'same-origin' }).then(function (r) {
+        return r.json();
+      }).catch(function () {
+        return {};
+      }),
     ]).then(function (loaded) {
+      myId = Number(loaded[2] && loaded[2].me) || 0;
       modules = loaded[0].modules || [];
       const orders = (Array.isArray(loaded[1]) ? loaded[1] : []).filter(function (o) {
         return !o.archived;
@@ -479,11 +534,20 @@
       // the list of orders, narrowed by what is typed above it
       const fill = function () {
         const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+        const dateOf = function (o) {
+          return String(o.order_date || o.created_at || '');
+        };
         const shown = orders.filter(function (o) {
+          if (mineOnly && myId > 0 && Number(o.userid) !== myId) {
+            return false;
+          }
           const text = ('#' + o.id + ' ' + o.title + ' ' + o.status + ' ' + (o.order_number || '')).toLowerCase();
           return words.every(function (w) {
             return text.indexOf(w) !== -1;
           });
+        });
+        shown.sort(function (a, b) {
+          return newestFirst ? dateOf(b).localeCompare(dateOf(a)) : dateOf(a).localeCompare(dateOf(b));
         });
         const current = pick.value;
         pick.replaceChildren();
@@ -491,7 +555,7 @@
         blank.value = '';
         pick.append(blank);
         shown.forEach(function (o) {
-          const option = element('option', '', '#' + o.id + ' ' + o.title + ' · ' + o.status);
+          const option = element('option', '', '#' + o.id + ' ' + o.title + ' · ' + o.status + ' · ' + dateOf(o).slice(0, 10));
           option.value = String(o.id);
           pick.append(option);
         });
@@ -502,6 +566,7 @@
         }
       };
       search.addEventListener('input', fill);
+      refill = fill;
       fill();
       info.textContent = orders.length === 0 ? 'There are no orders.' : 'Choose an order to read its lines.';
       pick.addEventListener('change', function () {
