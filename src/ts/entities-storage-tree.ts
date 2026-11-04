@@ -1423,6 +1423,29 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     return wrap;
   };
 
+  // the freezer (or fridge), the rack and the box of a place: by the kinds when they are said, else by the depth
+  const placeParts = (storageId: number): { freezer: Node | null; rack: Node | null; box: Node | null } => {
+    const chain: Node[] = [];
+    for (let n: Node | undefined = tree.byId.get(storageId); n; n = n.unit.parent_id === null ? undefined : tree.byId.get(n.unit.parent_id)) {
+      chain.unshift(n);
+    }
+    const isBox = (n: Node): boolean => n.unit.kind === 'box' || (n.unit.kind === undefined || n.unit.kind === null ? Boolean(n.unit.box_rows) : false);
+    let freezer: Node | null = null;
+    chain.forEach(n => {
+      if (n.unit.kind === 'freezer' || n.unit.kind === 'fridge') {
+        freezer = n;
+      }
+    });
+    const last = chain[chain.length - 1] ?? null;
+    const box = last && isBox(last) ? last : null;
+    const rack = chain.filter(n => n.unit.kind === 'rack' && n !== box).pop() ?? null;
+    if (freezer === null && chain.length >= 3) {
+      // places without kinds: the box, the rack above it, the freezer above that
+      return { freezer: chain[chain.length - 3], rack: chain[chain.length - 2], box: last };
+    }
+    return { freezer, rack, box };
+  };
+
   // the path of the place, each part opens its place, and what the place is
   const renderHeader = (node: Node): HTMLElement => {
     const head = el('div', 'mb-2');
@@ -1507,9 +1530,41 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     const table = el('table', 'table table-sm table-hover');
     const head = el('tr');
-    ['ID', 'Title', 'Slots', 'Quantity', 'Location', 'Owner'].forEach(h => head.append(el('th', h === 'ID' ? 'id-cell' : '', h)));
+    const columns = ['ID', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Owner'];
+    columns.forEach(h => head.append(el('th', h === 'ID' ? 'id-cell' : '', h)));
+    // a filter under each heading, and one search for all of them: the rows that do not match are hidden
+    const filterRow = el('tr', 'expandable-filter-row');
+    const wanted: string[] = columns.map(() => '');
+    const applyFilters = (): void => {
+      const all = searchAll.value.toLowerCase().split(/\s+/).filter(Boolean);
+      body.querySelectorAll<HTMLTableRowElement>('tr').forEach(tr => {
+        const cells = Array.from(tr.children).map(c => (c.textContent ?? '').toLowerCase());
+        const okColumns = wanted.every((w, i) => w === '' || (cells[i] ?? '').includes(w));
+        const text = cells.join(' ');
+        tr.hidden = !(okColumns && all.every(w => text.includes(w)));
+      });
+    };
+    columns.forEach((h, i) => {
+      const th = el('th', h === 'ID' ? 'id-cell' : '');
+      const input = el('input', 'form-control form-control-sm expandable-filter');
+      input.type = 'search';
+      input.placeholder = 'filter';
+      input.setAttribute('aria-label', `Filter ${h}`);
+      input.addEventListener('input', () => {
+        wanted[i] = input.value.toLowerCase();
+        applyFilters();
+      });
+      th.append(input);
+      filterRow.append(th);
+    });
+    const searchAll = el('input', 'form-control form-control-sm mb-2');
+    searchAll.type = 'search';
+    searchAll.placeholder = 'Search the entries stored here (title, freezer, rack, box, owner...)';
+    searchAll.setAttribute('aria-label', 'Search the entries');
+    searchAll.addEventListener('input', applyFilters);
+    main.append(searchAll);
     const thead = el('thead');
-    thead.append(head);
+    thead.append(head, filterRow);
     const body = el('tbody');
     groups.forEach(({ row, locations }) => {
       const first = locations[0];
@@ -1520,6 +1575,25 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
       titleCell.append(link);
       tr.append(titleCell);
+      // where it is: the freezer or fridge (with its temperature), the rack and the box, each a link that opens that place
+      const parts = placeParts(first.storage_id);
+      [parts.freezer, parts.rack, parts.box].forEach(place => {
+        const cell = el('td');
+        if (place) {
+          const open = el('a', '', place.unit.name);
+          open.href = `?storage_unit=${place.unit.id}`;
+          open.addEventListener('click', event => {
+            event.preventDefault();
+            select(place.unit.id);
+          });
+          cell.append(open);
+          const tag = kindTag(place.unit);
+          if (tag) {
+            cell.append(tag);
+          }
+        }
+        tr.append(cell);
+      });
       const slotsCell = el('td');
       locations.forEach(l => {
         if (l.position) {
@@ -1534,16 +1608,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       locations.forEach(l => sums.set(l.qty_unit, (sums.get(l.qty_unit) ?? 0) + Number(l.qty_stored)));
       const total = [...sums.entries()].map(([unit, qty]) => `${Math.round(qty * 100) / 100} ${unit}`.trim()).join(', ');
       tr.append(el('td', 'text-nowrap', locations.length > 1 ? `${total} (${locations.length} tubes)` : total));
-      // the location of an entry is a link that selects it in the tree
-      const whereCell = el('td');
-      const where = el('a', '', first.path);
-      where.href = `?storage_unit=${first.storage_id}`;
-      where.addEventListener('click', event => {
-        event.preventDefault();
-        select(first.storage_id);
-      });
-      whereCell.append(where);
-      tr.append(whereCell, el('td', '', row.fullname ?? ''));
+      tr.append(el('td', '', row.fullname ?? ''));
       body.append(tr);
     });
     table.append(thead, body);
