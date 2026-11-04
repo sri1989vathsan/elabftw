@@ -25,6 +25,9 @@ use Throwable;
 use ZipArchive;
 
 use function array_column;
+use function base64_decode;
+use function strlen;
+use function array_filter;
 use function str_starts_with;
 use function str_contains;
 use function explode;
@@ -786,7 +789,10 @@ try {
         respond(400, array('error' => 'Invalid request.'));
     }
     $settings = json_decode((string) $module['settings'], true);
-    if ($register === 'both' && is_array($settings) && !empty($settings['requires_sequence_file']) && !$isZip) {
+    $needsFile = is_array($settings) && !empty($settings['requires_sequence_file']);
+    // from a list of rows (not a zip) the entries of such a module go in the lab Database only when each row brings its sequence file
+    $rowsHaveFiles = !$isZip && is_array($payload['rows'] ?? null) && $payload['rows'] !== array() && count(array_filter($payload['rows'], static fn($r): bool => is_array($r) && is_array($r['sequence_file'] ?? null) && trim((string) ($r['sequence_file']['content'] ?? '')) !== '')) === count($payload['rows']);
+    if ($register === 'both' && $needsFile && !$isZip && !$rowsHaveFiles) {
         respond(400, array('error' => 'The entries of this module need a sequence file to go in the lab Database: import them into your own database, attach the files, and register them.'));
     }
     $definitions = $fieldsOf($module);
@@ -928,6 +934,30 @@ try {
             continue;
         }
         $created[] = $made['id'];
+        // a sequence file that came with the row (read from a file, pasted, or downloaded from Addgene by the user) is attached to the entry
+        $file = is_array($row['sequence_file'] ?? null) ? $row['sequence_file'] : null;
+        if ($file !== null) {
+            $content = base64_decode((string) ($file['content'] ?? ''), true);
+            $fileName = preg_replace('/[^A-Za-z0-9_.-]+/', '_', (string) ($file['name'] ?? 'sequence.fasta')) ?: 'sequence.fasta';
+            if ($content !== false && $content !== '' && strlen($content) < 5000000 && preg_match('/\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i', $fileName) === 1) {
+                try {
+                    $jsonFs ??= Storage::EXPORTS->getStorage()->getFs();
+                    $jsonTmp ??= 'registry-import-' . bin2hex(random_bytes(6));
+                    $path = $jsonTmp . '/' . bin2hex(random_bytes(4)) . '-' . $fileName;
+                    $jsonFs->write($path, $content);
+                    new Inventory($App->Users, (int) $made['id'])->Uploads->create(new CreateUploadFromFs($jsonFs, $fileName, $path, new FileHash($jsonFs, $path)));
+                } catch (Throwable $e) {
+                    $skipped[] = array('row' => 'File of row ' . ((int) ($payload['offset'] ?? 0) + $index + 1), 'reason' => $e->getMessage());
+                }
+            }
+        }
+    }
+    if (isset($jsonFs, $jsonTmp)) {
+        try {
+            $jsonFs->deleteDirectory($jsonTmp);
+        } catch (Throwable) {
+            // cleaned later with the exports
+        }
     }
     respond(200, array('created' => count($created), 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound)));
 } catch (Throwable $e) {

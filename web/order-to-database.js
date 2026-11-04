@@ -68,6 +68,25 @@
     return toolsLoading;
   }
 
+  // a file or a text as the content of a sequence file sent with the entry
+  function toBase64(text) {
+    return window.btoa(unescape(encodeURIComponent(text)));
+  }
+  function fileToBase64(file) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        resolve(String(reader.result).split(',')[1] || '');
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+  const addgeneId = function (link) {
+    const found = /addgene\.org\/(?:plasmid\/)?(\d{3,7})\b/i.exec(link || '');
+    return found ? found[1] : '';
+  };
+
   // ---- reading an order
   function linesOf(html) {
     const prepared = String(html || '').replace(/<\/(p|div|li|h\d)>|<br\s*\/?>/gi, '\n');
@@ -390,12 +409,33 @@
         label.append(input);
         card.append(label);
       });
+      // the modules that need a sequence file (plasmids): the file, or the sequence pasted, is attached to the entry, and then it can go in the Database
+      let fileInput = null;
+      let pasted = null;
+      if (module.settings && module.settings.requires_sequence_file) {
+        card.append(element('h6', 'mt-3', 'Sequence'));
+        card.append(element('p', 'small text-muted mb-1', row.sequenceFile ? 'Attached: ' + row.sequenceFile.name : 'No sequence yet: without one the entry can only go to My entries.'));
+        fileInput = element('input', 'form-control-file mb-2');
+        fileInput.type = 'file';
+        fileInput.accept = '.gb,.gbk,.gbff,.fasta,.fa,.fna,.dna';
+        pasted = element('textarea', 'form-control form-control-sm mb-2');
+        pasted.rows = 3;
+        pasted.placeholder = 'or paste the sequence (bases only, or FASTA)';
+        card.append(fileInput, pasted);
+      }
       const done = element('button', 'btn btn-primary btn-sm', 'Done');
       done.type = 'button';
-      done.addEventListener('click', function () {
+      done.addEventListener('click', async function () {
         Object.keys(inputs).forEach(function (name) {
           row.fields[name] = inputs[name].value;
         });
+        const safe = (row.name || 'sequence').replace(/[^A-Za-z0-9_.-]+/g, '_');
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+          row.sequenceFile = { name: fileInput.files[0].name, content: await fileToBase64(fileInput.files[0]) };
+        } else if (pasted && pasted.value.trim() !== '') {
+          const text = pasted.value.trim();
+          row.sequenceFile = { name: safe + '.fasta', content: toBase64(text.charAt(0) === '>' ? text : '>' + (row.name || 'sequence') + '\n' + text.replace(/\s+/g, '')) };
+        }
         layer.remove();
         draw();
       });
@@ -487,7 +527,7 @@
         more.addEventListener('click', function () {
           detail(row);
         });
-        const hint = element('div', 'small text-muted', [row.catalog ? 'cat. ' + row.catalog : '', row.link ? 'link' : 'no link'].filter(Boolean).join(' · '));
+        const hint = element('div', 'small text-muted', [row.catalog ? 'cat. ' + row.catalog : '', row.link ? 'link' : 'no link', row.sequenceFile ? 'sequence' : ''].filter(Boolean).join(' · '));
         const c4 = element('td');
         c4.append(more, hint);
         tr.append(c0, c1, c2, c3, c4);
@@ -495,6 +535,54 @@
       });
       table.append(thead, body);
       tableBox.append(table);
+      // plasmids from Addgene: their sequences come from the Addgene account of the user (the page of a plasmid shows the sequence when signed in)
+      const wantSequence = rows.filter(function (r) {
+        const mod = moduleByTitle(r.moduleTitle);
+        return r.ticked && addgeneId(r.link) !== '' && mod && mod.settings && mod.settings.requires_sequence_file && !r.sequenceFile;
+      });
+      if (wantSequence.length > 0) {
+        const helper = element('div', 'small border rounded p-2 mt-2');
+        helper.append(element('div', 'font-weight-bold', 'Sequences from Addgene (' + wantSequence.length + ')'));
+        helper.append(element('div', 'text-muted mb-1', 'Addgene shows the sequences only when you are signed in. In a tab where you are signed in to addgene.org, open the console, paste the script, and it saves one file. Choose that file here and the plasmids get their sequences.'));
+        const copy = element('button', 'btn btn-secondary btn-sm mr-2', 'Copy the script');
+        copy.type = 'button';
+        copy.addEventListener('click', async function () {
+          const pairs = wantSequence.map(function (r) {
+            return [rows.indexOf(r), addgeneId(r.link)];
+          });
+          const script = '(async()=>{const ids=' + JSON.stringify(pairs) + ';const out={};for(const [k,a] of ids){try{const h=await (await fetch("/"+a+"/sequences/",{credentials:"include"})).text();const d=new DOMParser().parseFromString(h,"text/html");const t=[...d.querySelectorAll("textarea")].map(x=>x.value||x.textContent).filter(v=>v.trim().startsWith(">"));out[k]={addgene:a,fasta:t[0]||""};}catch(e){out[k]={addgene:a,fasta:""};}await new Promise(r=>setTimeout(r,1500));}const l=document.createElement("a");l.href=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:"application/json"}));l.download="addgene-sequences.json";l.click();console.log("done",Object.values(out).filter(x=>x.fasta).length,"of",ids.length);})();';
+          try {
+            await navigator.clipboard.writeText(script);
+            copy.textContent = 'Copied';
+          } catch (error) {
+            window.prompt('Copy this script', script);
+          }
+        });
+        const load = element('input', 'form-control-file d-inline-block', '', 'width:auto');
+        load.type = 'file';
+        load.accept = '.json';
+        load.setAttribute('aria-label', 'The file the script saved');
+        load.addEventListener('change', async function () {
+          if (!load.files || !load.files[0]) {
+            return;
+          }
+          try {
+            const found = JSON.parse(await load.files[0].text());
+            Object.keys(found).forEach(function (key) {
+              const r = rows[Number(key)];
+              if (r && found[key].fasta) {
+                r.sequenceFile = { name: (r.name || 'sequence').replace(/[^A-Za-z0-9_.-]+/g, '_') + '.fasta', content: toBase64(found[key].fasta) };
+              }
+            });
+            draw();
+          } catch (error) {
+            message.className = 'small mb-2 text-danger';
+            message.textContent = 'This is not the file of the script.';
+          }
+        });
+        helper.append(copy, load);
+        tableBox.append(helper);
+      }
       const ticked = rows.filter(function (r) {
         return r.ticked && r.name.trim() !== '';
       });
@@ -531,22 +619,39 @@
       });
       let made = 0;
       const problems = [];
-      try {
-        for (const key of Object.keys(groups)) {
-          const group = groups[key];
-          // a module that needs a sequence file (plasmids) cannot take entries into the Database from here: they go to My entries, to get their file
-          const needsFile = Boolean(group.module.settings && group.module.settings.requires_sequence_file);
-          const groupRegister = register === 'both' && needsFile ? 'personal' : register;
-          if (groupRegister !== register) {
-            problems.push(group.module.title + ' were added to My entries: they need a sequence file before they can go in the Database.');
+      // a module that needs a sequence file (plasmids): the rows that have one go where you chose, the others to My entries
+      const batches = [];
+      Object.keys(groups).forEach(function (key) {
+        const group = groups[key];
+        const needsFile = Boolean(group.module.settings && group.module.settings.requires_sequence_file);
+        if (register === 'both' && needsFile) {
+          const withFile = group.rows.filter(function (r) {
+            return r.sequenceFile;
+          });
+          const without = group.rows.filter(function (r) {
+            return !r.sequenceFile;
+          });
+          if (withFile.length > 0) {
+            batches.push({ module: group.module, register: 'both', rows: withFile });
           }
+          if (without.length > 0) {
+            batches.push({ module: group.module, register: 'personal', rows: without });
+            problems.push(without.length + ' ' + group.module.title + ' without a sequence were added to My entries: they need a sequence file before they can go in the Database.');
+          }
+        } else {
+          batches.push({ module: group.module, register: register, rows: group.rows });
+        }
+      });
+      try {
+        for (const batch of batches) {
+          const group = batch;
           const response = await fetch('registry-transfer.php', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
             body: JSON.stringify({
               category: group.module.id,
-              register: groupRegister,
+              register: batch.register,
               rows: group.rows.map(function (r) {
                 const fields = {};
                 Object.keys(r.fields).forEach(function (k) {
@@ -554,7 +659,7 @@
                     fields[k] = r.fields[k];
                   }
                 });
-                return { title: r.name.trim(), fields: fields, extra: r.extra || {} };
+                return { title: r.name.trim(), fields: fields, extra: r.extra || {}, sequence_file: r.sequenceFile || undefined };
               }),
             }),
           });
@@ -564,7 +669,7 @@
           }
           made += body.created || 0;
           (body.skipped || []).forEach(function (s) {
-            problems.push(group.rows[Number(s.row) - 1] ? group.rows[Number(s.row) - 1].name + ': ' + s.reason : s.reason);
+            problems.push(group.rows[Number(s.row.replace(/\D+/g, '').slice(0, 3)) - 1] ? s.reason : s.reason);
           });
         }
         message.className = problems.length > 0 ? 'small mb-2 text-danger' : 'small mb-2 text-success';
