@@ -290,7 +290,8 @@ final class StorageUnits extends AbstractRest
         $hasPosition = array_key_exists('position', $params);
         $hasKind = array_key_exists('kind', $params) || array_key_exists('temperature', $params);
         $hasCapacity = array_key_exists('capacity', $params) || array_key_exists('child_capacity', $params);
-        if (!$hasName && !$hasParent && !$hasBox && !$hasPosition && !$hasKind && !$hasCapacity) {
+        $hasNote = array_key_exists('comment', $params);
+        if (!$hasName && !$hasParent && !$hasBox && !$hasPosition && !$hasKind && !$hasCapacity && !$hasNote) {
             throw new ImproperActionException('No valid update target provided.');
         }
         if ($hasBox) {
@@ -301,6 +302,9 @@ final class StorageUnits extends AbstractRest
         }
         if ($hasKind) {
             $this->setKind($params['kind'] ?? null, $params['temperature'] ?? null);
+        }
+        if ($hasNote) {
+            $this->setNote($params['comment']);
         }
         if ($hasCapacity) {
             if (array_key_exists('capacity', $params)) {
@@ -442,6 +446,16 @@ final class StorageUnits extends AbstractRest
         }
         $req = $this->Db->prepare('UPDATE storage_units SET capacity = :capacity WHERE id = :id');
         $req->bindValue(':capacity', $value === false ? null : $value, $value === false ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    /** what is worth knowing about the place; empty clears it */
+    public function setNote(mixed $note): void
+    {
+        $text = trim((string) $note);
+        $req = $this->Db->prepare('UPDATE storage_units SET comment = :note WHERE id = :id');
+        $req->bindValue(':note', $text === '' ? null : mb_substr($text, 0, 1000), $text === '' ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
     }
@@ -710,7 +724,8 @@ final class StorageUnits extends AbstractRest
                 kind,
                 temperature,
                 capacity,
-                child_capacity
+                child_capacity,
+                comment
             FROM
                 storage_units
             WHERE
@@ -732,7 +747,8 @@ final class StorageUnits extends AbstractRest
                 child.kind,
                 child.temperature,
                 child.capacity,
-                child.child_capacity
+                child.child_capacity,
+                child.comment
             FROM
                 storage_units AS child
             INNER JOIN
@@ -756,6 +772,7 @@ final class StorageUnits extends AbstractRest
             temperature,
             capacity,
             child_capacity,
+            comment,
             (SELECT GROUP_CONCAT(c.position) FROM containers2inventory AS c WHERE c.storage_id = storage_hierarchy.id AND c.position IS NOT NULL) AS taken_positions
         FROM
             storage_hierarchy

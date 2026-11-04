@@ -165,6 +165,7 @@ final class CustomMigrationRunner
         '132_storage_unit_capacity.sql',
         '133_storage_unit_child_capacity.sql',
         '134_storage_kinds.sql',
+        '135_storage_unit_comment.sql',
     );
 
     private Db $Db;

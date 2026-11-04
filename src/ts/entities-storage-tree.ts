@@ -6,7 +6,7 @@ import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
 import { askConfirm } from './confirm-dialog';
 
-type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null; child_capacity?: number | null };
+type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null; child_capacity?: number | null; comment?: string | null };
 type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string; stored_at?: string | null };
 type Row = {
   id: number;
@@ -1378,6 +1378,13 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     eachRack.title = 'How many boxes each rack of this fridge or freezer holds';
     eachRack.setAttribute('aria-label', 'Boxes in each rack');
     eachRack.value = node.unit.child_capacity ? String(node.unit.child_capacity) : '';
+    const note = el('input', 'form-control form-control-sm mr-1');
+    note.type = 'text';
+    note.maxLength = 1000;
+    note.style.minWidth = '18rem';
+    note.placeholder = 'e.g. door sticks, defrosted 2026-01';
+    note.setAttribute('aria-label', 'Comment');
+    note.value = node.unit.comment ?? '';
     const syncDegrees = (): void => {
       eachRack.hidden = behaves(what.value) !== 'cooler';
       degrees.hidden = behaves(what.value) !== 'cooler';
@@ -1403,6 +1410,9 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       if (!holdsNow.hidden && holdsNow.value !== (node.unit.capacity ? String(node.unit.capacity) : '')) {
         body.capacity = holdsNow.value === '' ? null : Number(holdsNow.value);
       }
+      if (note.value.trim() !== (node.unit.comment ?? '')) {
+        body.comment = note.value.trim();
+      }
       if (position.value !== (node.unit.position ? String(node.unit.position) : '')) {
         body.position = position.value === '' ? null : Number(position.value);
       }
@@ -1411,7 +1421,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       }
     });
     const holdsLabel = behaves(node.unit.kind) === 'rack' ? 'Holds (boxes)' : 'Holds (racks)';
-    form.append(labelled('Name', name), labelled('Kind of place', what), labelled('Temperature (°C)', degrees), labelled(holdsLabel, holdsNow), labelled('Boxes in each rack', eachRack), labelled('Position among its neighbours', position), el('div', 'mb-1', ''));
+    form.append(labelled('Name', name), labelled('Kind of place', what), labelled('Temperature (°C)', degrees), labelled(holdsLabel, holdsNow), labelled('Boxes in each rack', eachRack), labelled('Position among its neighbours', position), labelled('Comment', note), el('div', 'mb-1', ''));
     form.lastElementChild?.append(save);
     return form;
   };
@@ -1634,6 +1644,9 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       title.append(tag);
     }
     head.append(crumbs, title);
+    if (node.unit.comment) {
+      head.append(el('div', 'small mt-1', node.unit.comment));
+    }
     return head;
   };
 
@@ -1696,7 +1709,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     const table = el('table', 'table table-sm table-hover');
     const head = el('tr');
-    const columns = ['ID', 'Module', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Stored on', 'Owner'];
+    const columns = ['ID', 'Module', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Stored on', 'Owner', 'Comment'];
     // a click on a heading sorts the table by it, a second click turns the order round (the highest ID first to start with)
     let sortColumn = 0;
     let sortAscending = false;
@@ -1779,7 +1792,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     const searchAll = el('input', 'form-control form-control-sm mb-2');
     searchAll.type = 'search';
-    searchAll.placeholder = 'Search the entries stored here (title, freezer, rack, box, owner...)';
+    searchAll.placeholder = 'Search the entries stored here (title, freezer, rack, box, owner, comment...)';
     searchAll.setAttribute('aria-label', 'Search the entries');
     searchAll.addEventListener('input', applyFilters);
     main.append(searchAll);
@@ -1841,6 +1854,9 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       const days = locations.map(l => (l.stored_at ?? '').slice(0, 10)).filter(Boolean).sort();
       tr.append(el('td', 'text-nowrap', days[0] ?? ''));
       tr.append(el('td', '', row.fullname ?? ''));
+      // the comments of the tubes, and what the place itself says (door sticks, defrosted...)
+      const notes = [...locations.map(l => l.comment ?? ''), ...[parts.freezer, parts.rack, parts.box].map(place => place?.unit.comment ? `${place.unit.name}: ${place.unit.comment}` : '')].filter(Boolean);
+      tr.append(el('td', '', [...new Set(notes)].join(' | ')));
       body.append(tr);
     });
     table.append(thead, body);
