@@ -221,13 +221,17 @@
       }
     });
     box.append(element('h5', '', 'Add from an order'));
+    const search = element('input', 'form-control form-control-sm mb-1');
+    search.type = 'search';
+    search.placeholder = 'Search an order by number, title, vendor or status';
+    search.setAttribute('aria-label', 'Search orders');
     const pick = element('select', 'form-control form-control-sm mb-2');
     pick.setAttribute('aria-label', 'Order');
     const info = element('p', 'small text-muted mb-2', 'Loading the orders...');
     const tableBox = element('div');
     const message = element('p', 'small mb-2');
     const buttons = element('div', 'd-flex flex-wrap justify-content-end mt-2', '', 'gap:.5rem');
-    box.append(pick, info, tableBox, message, buttons);
+    box.append(search, pick, info, tableBox, message, buttons);
 
     let modules = [];
     let rows = [];
@@ -472,14 +476,33 @@
       const orders = (Array.isArray(loaded[1]) ? loaded[1] : []).filter(function (o) {
         return !o.archived;
       });
-      const blank = element('option', '', 'Choose an order');
-      blank.value = '';
-      pick.append(blank);
-      orders.forEach(function (o) {
-        const option = element('option', '', '#' + o.id + ' ' + o.title + ' · ' + o.status);
-        option.value = String(o.id);
-        pick.append(option);
-      });
+      // the list of orders, narrowed by what is typed above it
+      const fill = function () {
+        const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+        const shown = orders.filter(function (o) {
+          const text = ('#' + o.id + ' ' + o.title + ' ' + o.status + ' ' + (o.order_number || '')).toLowerCase();
+          return words.every(function (w) {
+            return text.indexOf(w) !== -1;
+          });
+        });
+        const current = pick.value;
+        pick.replaceChildren();
+        const blank = element('option', '', shown.length === 0 ? 'No order matches' : 'Choose an order (' + shown.length + ')');
+        blank.value = '';
+        pick.append(blank);
+        shown.forEach(function (o) {
+          const option = element('option', '', '#' + o.id + ' ' + o.title + ' · ' + o.status);
+          option.value = String(o.id);
+          pick.append(option);
+        });
+        if (shown.some(function (o) {
+          return String(o.id) === current;
+        })) {
+          pick.value = current;
+        }
+      };
+      search.addEventListener('input', fill);
+      fill();
       info.textContent = orders.length === 0 ? 'There are no orders.' : 'Choose an order to read its lines.';
       pick.addEventListener('change', function () {
         if (pick.value === '') {

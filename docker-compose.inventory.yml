@@ -45,6 +45,7 @@ services:
       - ./web/registry-dashboard.php:/elabftw/web/registry-dashboard.php:ro
       - ./web/registry-dashboard.js:/elabftw/web/registry-dashboard.js:ro
       - ./web/registry-dashboard.css:/elabftw/web/registry-dashboard.css:ro
+      - ./web/order-to-database.js:/elabftw/web/order-to-database.js:ro
       - ./src/templates/registry-dashboard.html:/elabftw/src/templates/registry-dashboard.html:ro
       - ./web/storage-info.php:/elabftw/web/storage-info.php:ro
       - ./web/storage-info.js:/elabftw/web/storage-info.js:ro
