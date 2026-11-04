@@ -192,7 +192,9 @@ async function spreadsheetSoak(options = {}) {
     if (finish === 'Enter') {
       await sleep(120);
       const sel = selectedCells(api.overlayElement(uid) || root);
-      if (sel.length !== 1 || sel[0][0] !== c || sel[0][1] !== r) dataLoss.push({ context, table: model.label, problem: `Enter in ${cellName(r, c)} should keep the cursor there, it is on ${JSON.stringify(sel)}` });
+      // Since 2026-10-27 Enter while editing commits and moves to the next row; in the last row the cursor stays.
+      const expectedRow = r < model.grid.length - 1 ? r + 1 : r;
+      if (sel.length !== 1 || sel[0][0] !== c || sel[0][1] !== expectedRow) dataLoss.push({ context, table: model.label, problem: `Enter in ${cellName(r, c)} should leave the cursor on row ${expectedRow + 1}, it is on ${JSON.stringify(sel)}` });
     }
     return true;
   }
@@ -1477,7 +1479,8 @@ async function spreadsheetSoak(options = {}) {
         await sleep(500);
         model().grid[r][c] = value;
         const sel = popupSelected();
-        if (sel.length !== 1 || sel[0][0] !== c || sel[0][1] !== r) dataLoss.push({ context, table: model().label, where: 'popup', problem: `Enter in ${cellName(r, c)} should keep the cursor there, it is on ${JSON.stringify(sel)}` });
+        const expectedRow = r < model().grid.length - 1 ? r + 1 : r;
+        if (sel.length !== 1 || sel[0][0] !== c || sel[0][1] !== expectedRow) dataLoss.push({ context, table: model().label, where: 'popup', problem: `Enter in ${cellName(r, c)} should leave the cursor on row ${expectedRow + 1}, it is on ${JSON.stringify(sel)}` });
         if (popupCell(c, r).textContent.trim() !== value) dataLoss.push({ context, table: model().label, where: 'popup', cell: cellName(r, c), expected: value, have: popupCell(c, r).textContent.trim() });
         note('popup-type-direct');
         return true;
