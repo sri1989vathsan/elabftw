@@ -1530,7 +1530,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     const table = el('table', 'table table-sm table-hover');
     const head = el('tr');
-    const columns = ['ID', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Owner'];
+    const columns = ['ID', 'Module', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Owner'];
     // a click on a heading sorts the table by it, a second click turns the order round (the highest ID first to start with)
     let sortColumn = 0;
     let sortAscending = false;
@@ -1556,7 +1556,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       trs.sort((a, b) => {
         const av = a.children[sortColumn]?.textContent ?? '';
         const bv = b.children[sortColumn]?.textContent ?? '';
-        const order = sortColumn === 0 || sortColumn === 6
+        const order = sortColumn === 0 || sortColumn === 7
           ? numeric(av) - numeric(bv)
           : av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
         return sortAscending ? order : -order;
@@ -1580,6 +1580,26 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     };
     columns.forEach((h, i) => {
       const th = el('th', h === 'ID' ? 'id-cell' : '');
+      if (h === 'Module') {
+        // the modules that are in this list
+        const choice = el('select', 'form-control form-control-sm');
+        choice.setAttribute('aria-label', 'Filter Module');
+        const any = el('option', '', 'All modules');
+        any.value = '';
+        choice.append(any);
+        [...new Set([...groups.values()].map(g => g.row.category_title ?? '').filter(Boolean))].sort().forEach(title => {
+          const option = el('option', '', title);
+          option.value = title.toLowerCase();
+          choice.append(option);
+        });
+        choice.addEventListener('change', () => {
+          wanted[i] = choice.value;
+          applyFilters();
+        });
+        th.append(choice);
+        filterRow.append(th);
+        return;
+      }
       const input = el('input', 'form-control form-control-sm expandable-filter');
       input.type = 'search';
       input.placeholder = 'filter';
@@ -1605,6 +1625,14 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       const tr = el('tr');
       // the number of the entry in its module (its lab number), not the row number of the database
       tr.append(el('td', 'id-cell', row.custom_id === null || row.custom_id === undefined ? '' : String(row.custom_id)));
+      // the module of the entry (the ID counts in each module on its own), in the colour of the module
+      const moduleCell = el('td', 'text-nowrap');
+      if (row.category_title) {
+        const dot = el('i', 'fas fa-circle fa-xs mr-1');
+        dot.style.color = row.category_color ? `#${row.category_color}` : '#7a7a7a';
+        moduleCell.append(dot, document.createTextNode(row.category_title));
+      }
+      tr.append(moduleCell);
       const titleCell = el('td');
       const link = el('a', '', row.title);
       link.href = `?mode=view&id=${encodeURIComponent(String(row.id))}`;
