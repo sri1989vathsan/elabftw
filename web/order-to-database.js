@@ -584,6 +584,15 @@
       if (wanted > 0 && orders.some(function (o) {
         return o.id === wanted;
       })) {
+        // an order of someone else that was opened on purpose is shown even in "My orders"
+        const target = orders.find(function (o) {
+          return o.id === wanted;
+        });
+        if (target && mineOnly && myId > 0 && Number(target.userid) !== myId) {
+          mineOnly = false;
+          syncScope();
+          refill();
+        }
         pick.value = String(wanted);
         load(wanted).catch(function () {});
       } else {
