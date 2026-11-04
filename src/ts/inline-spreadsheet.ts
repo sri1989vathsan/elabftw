@@ -3072,6 +3072,10 @@ function applyCellClipHeights(container: HTMLElement, manualRowHeights: Readonly
         : computed.verticalAlign === 'bottom' ? 'flex-end' : 'center';
       wrapper.style.justifyContent = alignment === 'flex-start' ? alignment : `safe ${alignment}`;
       if (wrapper.style.justifyContent === '') wrapper.style.justifyContent = alignment;
+      // Same trap sideways: centred or right-aligned text wider than the column is cut off on both sides (or the
+      // start), leaving only its middle visible. Start-align just those cells so the text begins at the left edge.
+      wrapper.style.textAlign = '';
+      if (wrapper.scrollWidth > wrapper.clientWidth + 1) wrapper.style.textAlign = 'left';
     });
   });
 }
