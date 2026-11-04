@@ -76,7 +76,7 @@
 
   // the catalog number a vendor puts in the address of a product
   function catalogOfLink(link) {
-    const patterns = [/abcam\.com\/.*?\b(ab\d{3,7})\b/i, /thermofisher\.com\/.*\/([A-Za-z0-9-]{4,})\/?(?:\?.*)?$/i, /sigmaaldrich\.com\/.*\/product\/[^/]+\/([A-Za-z0-9-]+)/i, /cellsignal\.com\/products\/.*?\/(\d{3,6})(?:\?|$)/i, /biolegend\.com\/.*?\/(\d{5,7})(?:\?|$)/i];
+    const patterns = [/abcam\.com\/.*?\b(ab\d{3,7})\b/i, /thermofisher\.com\/.*\/([A-Za-z0-9-]{4,})\/?(?:\?.*)?$/i, /sigmaaldrich\.com\/.*\/product\/[^/]+\/([A-Za-z0-9-]+)/i, /cellsignal\.com\/products\/.*?\/(\d{3,6})(?:\?|$)/i, /biolegend\.com\/.*?\/(\d{5,7})(?:\?|$)/i, /corning\.com\/.*\/([A-Za-z0-9-]{4,})\.html/i];
     for (const pattern of patterns) {
       const found = pattern.exec(link);
       if (found) {
@@ -84,6 +84,35 @@
       }
     }
     return '';
+  }
+
+  // a vendor typed with a slip ("Simga") is put right when the link says which vendor it is
+  function distance(a, b) {
+    const d = [];
+    for (let i = 0; i <= a.length; i++) {
+      d[i] = [i];
+    }
+    for (let j = 1; j <= b.length; j++) {
+      d[0][j] = j;
+    }
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      }
+    }
+    return d[a.length][b.length];
+  }
+
+  function fixVendor(typed, link) {
+    const known = vendorOfLink(link);
+    if (typed === '' || known === '') {
+      return typed || known;
+    }
+    const word = typed.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const near = known.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).some(function (token) {
+      return word.length >= 4 && distance(word, token) <= 2;
+    });
+    return near ? known : typed;
   }
 
   function guessModule(row) {
@@ -128,7 +157,7 @@
         const found = /https?:\/\/\S+/.exec(String(order.notes || ''));
         row.link = found ? found[0].replace(/["'<>)]+$/, '') : '';
       }
-      row.vendor = row.vendor || keyed.vendor || keyed.supplier || vendorOfLink(row.link);
+      row.vendor = fixVendor(row.vendor || keyed.vendor || keyed.supplier || '', row.link);
       row.catalog = row.catalog || keyed.catalog || catalogOfLink(row.link);
       row.clone = row.clone || keyed.clone || ((/\bclone\s+([A-Za-z0-9-]+)/i.exec(row.name) || [])[1] || '');
       const hostFound = new RegExp('(?<!anti[- ])\\b(' + HOSTS.join('|') + ')\\b(?=[^,;]*\\b(?:anti|mAb|monoclonal|polyclonal|IgG|antibody)\\b)', 'i').exec(row.name);
