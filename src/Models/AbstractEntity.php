@@ -1619,7 +1619,7 @@ abstract class AbstractEntity extends AbstractRest
         }
         $ids = array_map(static fn(array $entity): int => (int) $entity['id'], $entities);
         $sql = sprintf(
-            'SELECT id, item_id, storage_id, qty_stored, qty_unit, position, is_primary, comment, created_at, cap_colour FROM containers2inventory WHERE item_id IN (%s) ORDER BY is_primary DESC, id',
+            'SELECT id, item_id, storage_id, qty_stored, qty_unit, position, is_primary, comment, created_at, cap_colour, expires_at FROM containers2inventory WHERE item_id IN (%s) ORDER BY is_primary DESC, id',
             implode(',', $ids),
         );
         $req = $this->Db->prepare($sql);
@@ -1652,11 +1652,21 @@ abstract class AbstractEntity extends AbstractRest
                     'qty_unit' => $link['qty_unit'],
                     'stored_at' => $link['created_at'],
                     'cap_colour' => $link['cap_colour'],
+                    'expires_at' => $link['expires_at'],
                 );
             }
         }
+        // the minimum stock of each entry (a quantity and its unit), when it has one
+        $minimums = array();
+        $req = $this->Db->prepare(sprintf('SELECT id, min_stock, min_stock_unit FROM inventory WHERE min_stock IS NOT NULL AND id IN (%s)', implode(',', $ids)));
+        $this->Db->execute($req);
+        foreach ($req->fetchAll() as $minimum) {
+            $minimums[(int) $minimum['id']] = $minimum;
+        }
         foreach ($entities as &$entity) {
             $entity['storage_locations'] = $byItem[(int) $entity['id']] ?? array();
+            $entity['min_stock'] = isset($minimums[(int) $entity['id']]) ? (float) $minimums[(int) $entity['id']]['min_stock'] : null;
+            $entity['min_stock_unit'] = $minimums[(int) $entity['id']]['min_stock_unit'] ?? null;
         }
         unset($entity);
 

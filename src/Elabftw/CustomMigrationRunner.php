@@ -167,6 +167,7 @@ final class CustomMigrationRunner
         '134_storage_kinds.sql',
         '135_storage_unit_comment.sql',
         '136_container_cap_colour.sql',
+        '137_stock_alerts.sql',
     );
 
     private Db $Db;

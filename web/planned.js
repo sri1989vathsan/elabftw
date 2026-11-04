@@ -1058,4 +1058,34 @@
   } else if (id > 0 && /registry\.php$/.test(location.pathname)) {
     entryPage(id);
   }
+
+  // the minimum stock form on the page of an entry
+  document.addEventListener('click', async function (event) {
+    const save = event.target.closest ? event.target.closest('#minStockSave') : null;
+    if (!save) {
+      return;
+    }
+    const form = document.getElementById('minStockForm');
+    const message = document.getElementById('minStockMessage');
+    try {
+      const response = await fetch('registry-transfer.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
+        body: JSON.stringify({ action: 'set_min_stock', id: Number(form.dataset.entryId), min_stock: document.getElementById('minStockValue').value, unit: document.getElementById('minStockUnit').value }),
+      });
+      const done = await response.json();
+      if (!response.ok) {
+        throw new Error(done.error || 'Not saved.');
+      }
+      message.className = 'small ml-2 text-success';
+      message.textContent = 'Saved.';
+      window.setTimeout(function () {
+        location.reload();
+      }, 600);
+    } catch (error) {
+      message.className = 'small ml-2 text-danger';
+      message.textContent = error.message;
+    }
+  });
 })();

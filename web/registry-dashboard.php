@@ -129,9 +129,28 @@ try {
             break;
         }
     }
+    // the containers that have an expiry date of their own
+    foreach ($run('SELECT entity.id, entity.title, entity.category, k.expires_at, k.storage_id' . $OWNER . ' FROM containers2inventory AS k INNER JOIN inventory AS entity ON entity.id = k.item_id WHERE ' . $labWhere . ' AND k.expires_at IS NOT NULL AND k.expires_at <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) ORDER BY k.expires_at')->fetchAll() as $row) {
+        $isPast = strtotime((string) $row['expires_at']) < $today;
+        $text = ($isPast ? 'expired ' : 'expires ') . $row['expires_at'];
+        if ($isPast) {
+            $expired[] = $entryItem($row, $text);
+        } else {
+            $expiring[] = $entryItem($row, $text);
+        }
+    }
     usort($expiring, static fn(array $a, array $b): int => strcmp($a['detail'], $b['detail']));
     $risks[] = $risk('expiring', 'Expiring in 30 days', $expiring);
     $risks[] = $risk('expired', 'Expired', $expired);
+
+    // stock below the minimum the owner set: the quantities of the containers in the unit of the minimum are added up
+    $low = array();
+    foreach ($run('SELECT entity.id, entity.title, entity.category, entity.min_stock, entity.min_stock_unit, (SELECT COALESCE(SUM(k.qty_stored), 0) FROM containers2inventory AS k WHERE k.item_id = entity.id AND k.qty_unit = entity.min_stock_unit) AS have' . $OWNER . ' FROM inventory AS entity WHERE ' . $labWhere . ' AND entity.min_stock IS NOT NULL AND entity.min_stock_unit IS NOT NULL')->fetchAll() as $row) {
+        if ((float) $row['have'] < (float) $row['min_stock']) {
+            $low[] = $entryItem($row, rtrim(rtrim(number_format((float) $row['have'], 3, '.', ''), '0'), '.') . ' ' . $row['min_stock_unit'] . ' left, minimum ' . rtrim(rtrim(number_format((float) $row['min_stock'], 3, '.', ''), '0'), '.'));
+        }
+    }
+    $risks[] = $risk('low', 'Low stock', $low);
 
     // entries stored nowhere
     $unstored = $run('SELECT entity.id, entity.title, entity.category' . $OWNER . ' FROM inventory AS entity WHERE ' . $labWhere . ' AND NOT EXISTS (SELECT 1 FROM containers2inventory AS k WHERE k.item_id = entity.id) ORDER BY entity.id DESC')->fetchAll();

@@ -674,6 +674,28 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'move_to_folder') {
     }
 }
 
+// the minimum stock of an entry: below it, the dashboard and the lists warn (the owner of the entry and the admins set it)
+if (is_array($payload) && ($payload['action'] ?? '') === 'set_min_stock') {
+    try {
+        $entryId = (int) ($payload['id'] ?? 0);
+        $Entry = new Inventory($App->Users, $entryId);
+        if (!$isAdmin && (int) ($Entry->entityData['userid'] ?? 0) !== $userId) {
+            respond(403, array('error' => 'Only the owner of an entry or an admin can set its minimum stock.'));
+        }
+        $minimum = trim((string) ($payload['min_stock'] ?? ''));
+        $unit = mb_substr(trim((string) ($payload['unit'] ?? '')), 0, 20);
+        $set = $pdo->prepare('UPDATE inventory SET min_stock = :minimum, min_stock_unit = :unit WHERE id = :id AND team = :team');
+        $set->bindValue(':minimum', $minimum === '' || !is_numeric($minimum) || (float) $minimum < 0 ? null : (float) $minimum, $minimum === '' || !is_numeric($minimum) || (float) $minimum < 0 ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $set->bindValue(':unit', $minimum === '' || $unit === '' ? null : $unit, $minimum === '' || $unit === '' ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $set->bindValue(':id', $entryId, PDO::PARAM_INT);
+        $set->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($set);
+        respond(200, array('ok' => true));
+    } catch (Throwable $e) {
+        respond(400, array('error' => $e->getMessage()));
+    }
+}
+
 // the entries that were ticked get another owner (admins only): each is renumbered in the list of the new owner, so My ID stays their own count
 if (is_array($payload) && ($payload['action'] ?? '') === 'assign_owner') {
     if (!$isAdmin) {

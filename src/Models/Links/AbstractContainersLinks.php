@@ -152,6 +152,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
                 isset($reqBody['comment']) ? (string) $reqBody['comment'] : null,
                 isset($reqBody['stored_at']) ? (string) $reqBody['stored_at'] : null,
                 isset($reqBody['cap_colour']) ? (string) $reqBody['cap_colour'] : null,
+                isset($reqBody['expires_at']) ? (string) $reqBody['expires_at'] : null,
             ),
             Action::Duplicate => $this->import(),
             default => throw new ImproperActionException('Invalid action for links create.'),
@@ -179,6 +180,9 @@ abstract class AbstractContainersLinks extends AbstractLinks
         }
         if (array_key_exists('cap_colour', $params)) {
             $this->setCapColour((string) $params['cap_colour']);
+        }
+        if (array_key_exists('expires_at', $params)) {
+            $this->setExpiresAt((string) $params['expires_at']);
         }
         if (isset($params['stored_at']) && $params['stored_at'] !== '') {
             $this->setStoredAt((string) $params['stored_at']);
@@ -255,7 +259,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         string $column,
         int|float|string $value,
     ): bool {
-        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id' && $column !== 'position' && $column !== 'comment' && $column !== 'created_at' && $column !== 'cap_colour') {
+        if ($column !== 'qty_stored' && $column !== 'qty_unit' && $column !== 'storage_id' && $column !== 'position' && $column !== 'comment' && $column !== 'created_at' && $column !== 'cap_colour' && $column !== 'expires_at') {
             throw new ImproperActionException('Invalid update target');
         }
         $sql = sprintf(
@@ -343,6 +347,25 @@ abstract class AbstractContainersLinks extends AbstractLinks
     }
 
     /**
+     * the day the content of the container expires, written YYYY-MM-DD; empty clears it
+     */
+    private function setExpiresAt(string $day): void
+    {
+        $day = trim($day);
+        if ($day === '') {
+            $req = $this->Db->prepare('UPDATE ' . $this->getTable() . ' SET expires_at = NULL WHERE id = :id AND item_id = :item_id');
+            $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+            $req->bindParam(':item_id', $this->Entity->id, PDO::PARAM_INT);
+            $this->Db->execute($req);
+            return;
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $day) !== 1 || !checkdate((int) substr($day, 5, 2), (int) substr($day, 8, 2), (int) substr($day, 0, 4))) {
+            throw new ImproperActionException('The expiry date must be written as YYYY-MM-DD.');
+        }
+        $this->update('expires_at', $day);
+    }
+
+    /**
      * the colour of the cap of the container, a hex colour; empty clears it
      */
     private function setCapColour(string $colour): void
@@ -366,7 +389,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
         $this->update('created_at', $day . ' 00:00:00');
     }
 
-    public function createWithQuantity(float $qty, string $unit, ?string $position = null, bool $primary = false, ?string $comment = null, ?string $storedAt = null, ?string $capColour = null): int
+    public function createWithQuantity(float $qty, string $unit, ?string $position = null, bool $primary = false, ?string $comment = null, ?string $storedAt = null, ?string $capColour = null, ?string $expiresAt = null): int
     {
         $this->canStoreOrExplode();
         $this->Entity->touch();
@@ -397,7 +420,7 @@ abstract class AbstractContainersLinks extends AbstractLinks
                 ),
             ));
             // the slot and the primary flag act on the new container: point the id to it for these, then back to the storage
-            if (($position !== null && $position !== '') || $primary || ($comment !== null && trim($comment) !== '') || ($storedAt !== null && $storedAt !== '') || ($capColour !== null && $capColour !== '')) {
+            if (($position !== null && $position !== '') || $primary || ($comment !== null && trim($comment) !== '') || ($storedAt !== null && $storedAt !== '') || ($capColour !== null && $capColour !== '') || ($expiresAt !== null && $expiresAt !== '')) {
                 $storageId = $this->id;
                 $this->id = $containerId;
                 try {
@@ -415,6 +438,9 @@ abstract class AbstractContainersLinks extends AbstractLinks
                     }
                     if ($capColour !== null && $capColour !== '') {
                         $this->setCapColour($capColour);
+                    }
+                    if ($expiresAt !== null && $expiresAt !== '') {
+                        $this->setExpiresAt($expiresAt);
                     }
                 } finally {
                     $this->id = $storageId;
@@ -617,8 +643,10 @@ abstract class AbstractContainersLinks extends AbstractLinks
     private function capSelect(): string
     {
         return $this->getTable() === 'containers2inventory' ? '
-            main.cap_colour,' : '
-            NULL AS cap_colour,';
+            main.cap_colour,
+            main.expires_at,' : '
+            NULL AS cap_colour,
+            NULL AS expires_at,';
     }
 
     private function positionSelect(): string

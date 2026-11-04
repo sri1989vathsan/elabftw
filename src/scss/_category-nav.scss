@@ -1061,3 +1061,16 @@
     cursor: pointer;
   }
 }
+
+
+// the expiry date of a tube on the entry page: red once it is past
+.storage-tube-expiry {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--medium);
+
+  &.is-expired {
+    color: #c62828;
+    font-weight: 700;
+  }
+}
