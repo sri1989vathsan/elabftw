@@ -9,6 +9,8 @@
   // the 3' end of a primer decides where it binds: this many bases have to match exactly
   const ANCHOR = 12;
   const MAX_MISMATCHES = 3;
+  // a primer on a repeat can bind in thousands of places: the first ones are kept (a primer with more is a poor primer anyway)
+  const MAX_SITES = 20;
   // a primer with a tail (an overhang that does not bind): its 3' end binds exactly over at least this many bases
   const TAIL_ANCHOR = 15;
   const MIN_LENGTH = 12;
@@ -109,7 +111,7 @@
       let from = 0;
       for (;;) {
         const found = text.indexOf(anchorText, from);
-        if (found === -1) {
+        if (found === -1 || sites.length >= MAX_SITES) {
           break;
         }
         from = found + 1;
@@ -133,7 +135,7 @@
       let from = 0;
       for (;;) {
         const found = text.indexOf(anchorText, from);
-        if (found === -1) {
+        if (found === -1 || sites.length >= MAX_SITES * 2) {
           break;
         }
         from = found + 1;

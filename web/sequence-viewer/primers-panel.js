@@ -54,6 +54,10 @@
 
     // where a primer binds is worked out once for a sequence: the search, the preview and the candidates ask for it again and
     // again while the user types, with thousands of primers and a long sequence
+    // how many of the attached primers are drawn and listed: all of them would freeze the editor when there are thousands
+    const DRAW_STEP = 200;
+    let drawLimit = DRAW_STEP;
+    let searchRun = 0;
     let sitesFor = { sequence: null, circular: null, byPrimer: new Map() };
     const findSitesCached = function (sequence, primerSequence, circular) {
       if (sitesFor.sequence !== sequence || sitesFor.circular !== circular) {
@@ -119,7 +123,7 @@
       attachedPrimers = state.primers;
       const now = current();
       attachedDrawn = {};
-      attachedPrimers.forEach(function (primer) {
+      attachedPrimers.slice(0, drawLimit).forEach(function (primer) {
         findSitesCached(now.sequence, primer.sequence, now.circular).forEach(function (site, index) {
           const id = 'dbprimer-' + primer.id + '-' + index;
           attachedDrawn[id] = annotation(id, primer.title, site.start, site.end - 1, site.forward, now.sequence.length, site, primer.sequence);
@@ -414,7 +418,7 @@
           addTicked.hidden = fileOnly.length === 0;
           detachTicked.disabled = tickedDb.size === 0 || !entryId;
           detachTicked.hidden = attachedPrimers.length === 0;
-          everything.checked = total === attachedPrimers.length + fileOnly.length && total > 0;
+          everything.checked = total === Math.min(attachedPrimers.length, drawLimit) + fileOnly.length && total > 0;
         };
         // open or close all the rows
         const rowKeys = attachedPrimers.map(function (primer) {
@@ -452,7 +456,7 @@
           });
           allBoxes.push(box);
         };
-        attachedPrimers.forEach(function (primer) {
+        attachedPrimers.slice(0, drawLimit).forEach(function (primer) {
           const sites = findSitesCached(now.sequence, primer.sequence, now.circular);
           const holder = element('div', 'primers-pick');
           const box = element('input');
@@ -475,6 +479,16 @@
           ], 'db' + primer.id));
           sectionAttached.append(holder);
         });
+        // with thousands of primers only the first ones are drawn and listed, the others come by steps
+        if (attachedPrimers.length > drawLimit) {
+          const more = element('div', 'primers-pick');
+          more.append(element('span', 'primers-muted', 'Showing the first ' + drawLimit + ' of ' + attachedPrimers.length + ' primers. '), action('Show ' + Math.min(DRAW_STEP, attachedPrimers.length - drawLimit) + ' more', async function () {
+            drawLimit += DRAW_STEP;
+            await loadAttached();
+            await render();
+          }, 'quiet'));
+          sectionAttached.append(more);
+        }
         // the primers that are only in the file: they have a button to be added to the database
         fileOnly.forEach(function (item) {
           const holder = element('div', 'primers-pick');
@@ -613,6 +627,8 @@
         }
       };
       const showResults = function () {
+        // a search by chunks that is still running stops: what is typed now counts
+        searchRun++;
         const term = search.value.trim().toLowerCase();
         results.textContent = '';
         if (term === '' && whereFilter === 'anywhere') {
@@ -675,17 +691,13 @@
         }
         const limit = Number(tolerance.value);
         const found = [];
-        // the primers already attached are listed too (without a tick): they are on the sequence, so they match
-        (databasePrimers || []).forEach(function (primer) {
-          const sites = findSitesCached(now.sequence, primer.sequence, now.circular).filter(function (site) {
-            return site.mismatches <= limit && (scope.value === 'entire' || (scope.value === 'overlap' ? touchesSelection(site) : insideSelection(site)));
-          });
-          if (sites.length > 0) {
-            found.push({ primer: primer, best: Math.min.apply(null, sites.map(function (site) {
-              return site.mismatches;
-            })), first: sites[0].start });
-          }
-        });
+        const everyPrimer = databasePrimers || [];
+        // the search goes by chunks, so the page stays alive with thousands of primers, and says how far it is; a new search stops the old one
+        const run = ++searchRun;
+        const progress = element('p', 'primers-muted', 'Searching 0 of ' + everyPrimer.length + '...');
+        results.append(progress);
+        const scopeNow = scope.value;
+        const finish = function () {
         // the closest matches first, then along the sequence
         found.sort(function (x, y) {
           return x.best - y.best || x.first - y.first;
@@ -703,6 +715,34 @@
           preview([]);
         }
         results.prepend(count);
+        };
+        let at = 0;
+        const step = function () {
+          if (run !== searchRun) {
+            return;
+          }
+          const stop = Math.min(everyPrimer.length, at + 150);
+          for (; at < stop; at++) {
+            const primer = everyPrimer[at];
+            // the primers already attached are listed too (without a tick): they are on the sequence, so they match
+            const sites = findSitesCached(now.sequence, primer.sequence, now.circular).filter(function (site) {
+              return site.mismatches <= limit && (scopeNow === 'entire' || (scopeNow === 'overlap' ? touchesSelection(site) : insideSelection(site)));
+            });
+            if (sites.length > 0) {
+              found.push({ primer: primer, best: Math.min.apply(null, sites.map(function (site) {
+                return site.mismatches;
+              })), first: sites[0].start });
+            }
+          }
+          if (at < everyPrimer.length) {
+            progress.textContent = 'Searching ' + at + ' of ' + everyPrimer.length + '...';
+            window.setTimeout(step, 0);
+            return;
+          }
+          progress.remove();
+          finish();
+        };
+        step();
       }, 'primary');
       finder.append(scope, tolerance, candidates);
       sectionSearch.append(finder);
