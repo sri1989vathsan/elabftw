@@ -927,7 +927,8 @@
   flex: 0 0 11rem;
   flex-direction: column;
   width: 11rem;
-  min-height: 4.4rem;
+  height: 5rem;
+  overflow: hidden;
   padding: 0.35rem 0.6rem;
   text-align: left;
   border: 1px solid var(--primary, #295ca9);

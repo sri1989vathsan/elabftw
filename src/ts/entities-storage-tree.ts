@@ -477,6 +477,12 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   const labelled = (label: string, input: HTMLElement): HTMLElement => {
     const group = el('div', 'mr-2 mb-1');
     group.append(el('div', 'small color-medium', label), input);
+    // an input that is hidden (the temperature of a box, the rows of a rack) takes its label with it
+    const follow = (): void => {
+      group.hidden = (input as HTMLInputElement).hidden;
+    };
+    new MutationObserver(follow).observe(input, { attributes: true, attributeFilter: ['hidden'] });
+    follow();
     return group;
   };
 
