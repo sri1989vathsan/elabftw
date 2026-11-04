@@ -27,6 +27,8 @@ export interface FolderRow {
   description: string;
   active: boolean;
   actions: HTMLElement[];
+  /** the tree's Export / Edit / Delete buttons for this folder (hidden there until the three dots are pressed) */
+  more: HTMLElement | null;
 }
 
 // how a folder's full path joins its ancestors' names
@@ -124,6 +126,7 @@ function collectRows(tree: HTMLElement): FolderRow[] {
       description: node.querySelector(':scope > .folder-description')?.textContent?.trim() ?? '',
       active: link.classList.contains('font-weight-bold'),
       actions,
+      more: node.querySelector<HTMLElement>(':scope > .folder-more-actions'),
     });
   });
   return Array.from(rows.values());
@@ -140,6 +143,17 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', 
 function copyOfActions(row: FolderRow): HTMLElement {
   const box = element('span', 'folder-actions flex-shrink-0');
   row.actions.forEach(button => box.append(button.cloneNode(true)));
+  // the three dots: Export / Edit / Delete, as in the tree
+  if (row.more) {
+    const dots = element('button', 'folder-action-btn hl-hover-gray rounded');
+    dots.type = 'button';
+    dots.dataset.action = 'toggle-folder-flat-more';
+    dots.title = i18next.t('More');
+    dots.setAttribute('aria-label', `${i18next.t('More folder actions')}: ${row.name}`);
+    dots.setAttribute('aria-expanded', 'false');
+    dots.append(element('i', 'fas fa-ellipsis-v fa-xs'));
+    box.append(dots);
+  }
   // a folder with subfolders can be stepped into without leaving the page
   if (row.hasChildren) {
     const enter = element('button', 'folder-action-btn hl-hover-gray rounded folder-enter-button');
@@ -152,6 +166,21 @@ function copyOfActions(row: FolderRow): HTMLElement {
     box.append(enter);
   }
   return box;
+}
+
+/**
+ * A copy of the tree's Export / Edit / Delete buttons of a folder, shown under its row when the three dots are pressed.
+ * The buttons are handled by data-action like the tree's own. The copy is not marked as the tree's panel, so the tree's
+ * three-dots handling leaves it alone (the flat views have their own, see initFolderViews).
+ */
+function morePanel(row: FolderRow): HTMLElement | null {
+  if (!row.more) return null;
+  const panel = row.more.cloneNode(true) as HTMLElement;
+  panel.classList.remove('folder-more-actions');
+  panel.classList.add('folder-flat-more-actions');
+  panel.removeAttribute('data-folder-more-actions-for');
+  panel.hidden = true;
+  return panel;
 }
 
 function folderLink(row: FolderRow, withPath: boolean, entityCount: number | null): HTMLAnchorElement {
@@ -171,11 +200,15 @@ function folderLink(row: FolderRow, withPath: boolean, entityCount: number | nul
 function renderList(body: HTMLElement, rows: FolderRow[], entityType: string): void {
   const list = element('div', 'folder-flat-list');
   rows.forEach(row => {
+    const item = element('div', 'folder-flat-item');
     const line = element('div', 'd-flex align-items-center folder-flat-row');
     const linkBox = element('span', 'folder-flat-main');
     linkBox.append(folderLink(row, true, entityType === 'items' ? row.resources : row.experiments));
     line.append(linkBox, copyOfActions(row));
-    list.append(line);
+    item.append(line);
+    const more = morePanel(row);
+    if (more) item.append(more);
+    list.append(item);
   });
   body.replaceChildren(list);
 }
@@ -221,6 +254,8 @@ function renderDetails(body: HTMLElement, rows: FolderRow[]): void {
     main.append(folderLink(row, false, null));
     top.append(main, copyOfActions(row));
     card.append(top);
+    const more = morePanel(row);
+    if (more) card.append(more);
     if (row.path !== row.name) card.append(element('div', 'folder-details-path', row.path));
     if (row.description) card.append(element('div', 'folder-details-description', row.description));
     const counts = element('div', 'folder-details-counts');
@@ -358,6 +393,26 @@ export function initFolderViews(): void {
       // the choice then only lasts until the panel is rebuilt
     }
     syncFolderView();
+  });
+  on('toggle-folder-flat-more', (el: HTMLElement, event: Event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    const panel = el.closest('.folder-flat-item, .folder-details-card')?.querySelector<HTMLElement>('.folder-flat-more-actions');
+    if (!panel) return;
+    const open = panel.hidden;
+    document.querySelectorAll<HTMLElement>('.folder-flat-more-actions').forEach(other => { other.hidden = other !== panel || !open; });
+    document.querySelectorAll<HTMLElement>('[data-action="toggle-folder-flat-more"]').forEach(toggle => toggle.setAttribute('aria-expanded', 'false'));
+    el.setAttribute('aria-expanded', String(open));
+  });
+  // a click anywhere else closes an open three-dots panel
+  document.addEventListener('click', event => {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    document.querySelectorAll<HTMLElement>('.folder-flat-more-actions').forEach(panel => {
+      const container = panel.closest('.folder-flat-item, .folder-details-card');
+      if (panel.hidden || container?.contains(target) && (panel.contains(target) || (target as Element).closest?.('[data-action="toggle-folder-flat-more"]'))) return;
+      panel.hidden = true;
+    });
   });
   on('open-folder-level', (el: HTMLElement) => {
     level = el.dataset.folderId ?? '';

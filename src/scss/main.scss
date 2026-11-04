@@ -1769,6 +1769,14 @@ tr:first-child td {
     padding: 0.15rem 0;
   }
 
+  .folder-flat-more-actions {
+    margin: 0.2rem 0 0.2rem 1.5rem;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
   .folder-flat-main {
     flex: 1 1 auto;
     min-width: 0;
