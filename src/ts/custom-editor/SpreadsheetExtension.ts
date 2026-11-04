@@ -851,7 +851,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         if (uid) latestTableContent.set(uid, existingTable.outerHTML);
         markOwnWrite(existingTable);
         editor.setDirty(true);
-        editor.dispatch('keyup');
+        // not a real keyup: that pulls focus into the page editor and scrolls the page to its caret
+        dispatchKeyupForAutosave();
       }
       // Firefox runs the "Discard unsaved changes?" confirm() with its own
       // blur/focus handling around it, and the overlay has been seen missing
@@ -2343,7 +2344,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         // so nothing moved the browser's own focus into the editor body --
         // without it, Ctrl+C copies from wherever focus already was
         // (nothing selectable, most likely) rather than this selection.
+        // The editor puts the page where its own caret was (possibly far away) when it takes focus; the user
+        // clicked here, so the page stays where it is.
+        const pageX = window.scrollX;
+        const pageY = window.scrollY;
         editor.focus();
+        if (Math.abs(window.scrollY - pageY) > 2 || Math.abs(window.scrollX - pageX) > 2) window.scrollTo(pageX, pageY);
       }
     });
     // jspreadsheet-ce/jSuites position their own right-click menu with

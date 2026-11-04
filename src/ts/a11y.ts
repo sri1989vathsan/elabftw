@@ -48,9 +48,13 @@ export function captureFocus(): HTMLElement | null {
   return document.activeElement instanceof HTMLElement ? document.activeElement : null;
 }
 
-/** Return focus to `target` if it's still attached, else no-op (never throws focus into the void). */
+/**
+ * Return focus to `target` if it's still attached, else no-op (never throws focus into the void). Never scrolls:
+ * focusing an element that is somewhere else on the page (a toolbar button at the top, say) used to jump the page
+ * there when a dialog closed.
+ */
 export function restoreFocus(target: HTMLElement | null): void {
-  if (target && document.contains(target)) target.focus();
+  if (target && document.contains(target)) target.focus({ preventScroll: true });
 }
 
 export function prefersReducedMotion(): boolean {
