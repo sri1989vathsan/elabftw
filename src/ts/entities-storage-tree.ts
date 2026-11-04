@@ -462,6 +462,24 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   const sameTube = (a: { location: StorageLocation } | null, b: { location: StorageLocation }): boolean =>
     a !== null && a.location.container_id === b.location.container_id;
 
+  // a block of the page with a heading, and an input with its label above it: so it is clear what each one is for
+  const section = (title: string, hint: string, ...nodes: HTMLElement[]): HTMLElement => {
+    const card = el('div', 'card mb-3');
+    const body = el('div', 'card-body py-2');
+    body.append(el('h5', 'h6 mb-0', title));
+    if (hint !== '') {
+      body.append(el('div', 'small color-medium mb-2', hint));
+    }
+    body.append(...nodes);
+    card.append(body);
+    return card;
+  };
+  const labelled = (label: string, input: HTMLElement): HTMLElement => {
+    const group = el('div', 'mr-2 mb-1');
+    group.append(el('div', 'small color-medium', label), input);
+    return group;
+  };
+
   const renderBoxSize = (node: Node): HTMLElement => {
     const form = el('div', 'd-flex flex-wrap align-items-center mb-2');
     form.append(el('span', 'mr-2', 'Box size'));
@@ -940,7 +958,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
 
   // node is null for a location at the top (a freezer, a cabinet...)
   const renderAddForm = (node: Node | null): HTMLElement => {
-    const form = el('div', 'd-flex flex-wrap align-items-center mb-3');
+    const form = el('div', 'd-flex flex-wrap align-items-end');
     const kind = el('select', 'form-control form-control-sm w-auto mr-1');
     kind.setAttribute('aria-label', 'What to add');
     // a location at the top; in a location more locations, fridges and freezers; in a fridge, a freezer or a rack, racks and boxes
@@ -1028,12 +1046,14 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         return load();
       });
     });
-    form.append(el('span', 'mr-2', node === null ? 'Add at the top' : 'Add inside'), kind, name, temperature, holds, position, rows, cols, add);
+    const buttonCell = el('div', 'mb-1');
+    buttonCell.append(add);
+    form.append(labelled('What', kind), labelled('Name', name), labelled('Temperature (°C)', temperature), labelled('Holds', holds), labelled('Position', position), labelled('Rows', rows), labelled('Columns', cols), buttonCell);
     return form;
   };
 
   const renderRename = (node: Node): HTMLElement => {
-    const form = el('div', 'd-flex flex-wrap align-items-center mb-2');
+    const form = el('div', 'd-flex flex-wrap align-items-end');
     const name = el('input', 'form-control form-control-sm w-auto mr-1');
     name.value = node.unit.name;
     name.setAttribute('aria-label', 'Rename');
@@ -1099,16 +1119,17 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         patchAndReload(`storage_units/${node.unit.id}`, body);
       }
     });
-    form.append(name, what, degrees, holdsNow, position, save);
+    const holdsLabel = node.unit.kind === 'rack' ? 'Holds (boxes)' : 'Holds (racks)';
+    form.append(labelled('Name', name), labelled('Kind of place', what), labelled('Temperature (°C)', degrees), labelled(holdsLabel, holdsNow), labelled('Position among its neighbours', position), el('div', 'mb-1', ''));
+    form.lastElementChild?.append(save);
     return form;
   };
 
   // move the place, with everything inside it (the entries stored there go with it), to another place: a room, a freezer, a rack, or the top level
   const renderMoveTo = (node: Node): HTMLElement => {
-    const form = el('div', 'd-flex flex-wrap align-items-center mb-2');
-    form.append(el('span', 'mr-2', 'Move to'));
+    const form = el('div', 'd-flex flex-wrap align-items-end');
     const target = el('select', 'form-control form-control-sm w-auto mr-1');
-    target.setAttribute('aria-label', 'Move to');
+    target.setAttribute('aria-label', 'Move this place into');
     target.style.maxWidth = '24rem';
     const top = el('option', '', 'Top level (no parent)');
     top.value = '0';
@@ -1134,7 +1155,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         patchAndReload(`storage_units/${node.unit.id}`, { parent_id: Number(target.value) });
       }
     });
-    form.append(target, go);
+    form.append(labelled('Move this place (and everything in it) into', target), el('div', 'mb-1', ''));
+    form.lastElementChild?.append(go);
     return form;
   };
 
@@ -1309,10 +1331,30 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       return;
     }
     main.append(renderHeader(node));
-    main.append(renderRename(node));
-    main.append(renderMoveTo(node));
+    // this place: what it is
+    main.append(section('This place', 'Its name, what it is, and where it comes among the places next to it.', renderRename(node)));
+    // above it: the place it is inside
+    const parent = node.unit.parent_id === null ? null : tree.byId.get(node.unit.parent_id);
+    main.append(section('Inside', parent ? `It is inside: ${parent.unit.full_path}` : 'It is at the top level: it is not inside another place.', renderMoveTo(node)));
+    // below it: what is inside this place
+    const isBox = Boolean(node.unit.box_rows && node.unit.box_cols);
+    const contents: HTMLElement[] = [];
+    // a unit with units inside is a rack or a freezer: it is a box only when it holds none
+    if (isBox || node.children.length === 0) {
+      contents.push(renderBoxSize(node));
+    }
+    if (isBox) {
+      contents.push(renderBox(node));
+    } else if (node.children.length > 0) {
+      contents.push(node.unit.kind === 'location' ? renderRacks(node) : renderCabinet(node));
+    }
+    const heading = isBox ? 'The slots of this box' : (node.children.length > 0 ? `Inside it: ${node.children.length} ${node.children.length === 1 ? 'place' : 'places'}` : 'Inside it: nothing yet');
+    main.append(section(heading, '', ...contents));
+    if (!isBox) {
+      main.append(section('Add a place inside it', node.unit.kind === 'rack' ? 'Boxes go in a rack.' : 'What can be added here depends on what this place is.', renderAddForm(node)));
+    }
     main.append(renderInfo(node));
-    main.append(renderDelete(node));
+    // taking things out or deleting: kept apart at the end
     const opt = el('label', 'd-block mb-2');
     const box = el('input', 'mr-1');
     box.type = 'checkbox';
@@ -1321,22 +1363,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       includeChildren = box.checked;
       renderMain();
     });
-    opt.append(box, document.createTextNode('Include sub-locations'));
-    main.append(opt);
-    const isBox = Boolean(node.unit.box_rows && node.unit.box_cols);
-    // a unit with units inside is a rack or a freezer: it is a box only when it holds none
-    if (isBox || node.children.length === 0) {
-      main.append(renderBoxSize(node));
-    }
-    if (isBox) {
-      main.append(renderBox(node));
-    } else {
-      main.append(renderAddForm(node));
-    }
-
-    if (node.children.length > 0) {
-      main.append(node.unit.kind === 'location' ? renderRacks(node) : renderCabinet(node));
-    }
+    opt.append(box, document.createTextNode('Include the places inside it in the list of entries below, and in "Empty this place"'));
+    main.append(section('Empty or delete', 'These cannot be undone.', renderDelete(node), opt));
 
     const entries = collect(node, includeChildren);
     if (entries.length === 0) {
