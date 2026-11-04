@@ -110,8 +110,11 @@ function benchlingUrl(row: Row): string {
   return (row.web_links ?? []).find(l => /benchling/i.test(l.url))?.url ?? '';
 }
 
+// the moment the page last scrolled: tubes that slide under a still pointer while scrolling do not open their card
+let lastScroll = 0;
+
 function showTubeCard(tube: Tube, event: MouseEvent): void {
-  if (pinnedCard) {
+  if (pinnedCard || Date.now() - lastScroll < 300) {
     return;
   }
   if (!tubeCard) {
@@ -172,6 +175,7 @@ document.addEventListener('mousedown', event => {
 });
 // a card is fixed to the window: when the page (or a list in it) scrolls the tube moves away, so the card goes
 document.addEventListener('scroll', event => {
+  lastScroll = Date.now();
   if (pinnedCard && !pinnedCard.contains(event.target as Node)) {
     closePinnedCard();
   }
