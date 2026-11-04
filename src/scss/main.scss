@@ -1888,6 +1888,21 @@ tr:first-child td {
     color: inherit;
   }
 
+  // the parts that move to another level are buttons: without this they keep the browser's pale button fill and border
+  .folder-level-bar button.folder-path-crumb {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
+  }
+
+  .folder-level-bar button.folder-path-crumb:hover,
+  .folder-level-bar button.folder-path-crumb:focus-visible {
+    background: rgba(255, 255, 255, 0.16);
+  }
+
   .folder-level-bar span.folder-path-crumb {
     font-weight: 600;
   }
