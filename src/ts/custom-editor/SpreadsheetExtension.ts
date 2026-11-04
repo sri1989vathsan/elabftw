@@ -2146,7 +2146,15 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       }
       // The bar's buttons in the preview are stand-ins: building the grid replaces them, which used to swallow the
       // press, so the first click on Undo, Open popup and the rest only selected the table.
-      const barButton = event.target.closest<HTMLElement>('.elabftw-spreadsheet-readonly-toggle > button');
+      // The stand-in buttons let presses through to the bar (the pointerdown's target is the bar itself), so the
+      // button is found by where the pointer is.
+      const bar = event.target.closest<HTMLElement>('.elabftw-spreadsheet-readonly-toggle');
+      const barButton = bar
+        ? Array.from(bar.querySelectorAll<HTMLElement>(':scope > button')).find(button => {
+          const box = button.getBoundingClientRect();
+          return event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
+        })
+        : undefined;
       const cell = event.target.closest<HTMLElement>('td[data-x][data-y]');
       const selection = cell
         ? { col: Number(cell.dataset.x), row: Number(cell.dataset.y) }
