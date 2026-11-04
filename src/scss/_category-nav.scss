@@ -908,7 +908,15 @@
 }
 
 .storage-shelf-label {
-  flex: 0 0 7rem;
+  // every shelf has the same width for its name, so the boxes start at the same place on every shelf
+  flex: 0 0 9rem;
+  width: 9rem;
+  min-width: 9rem;
+  max-width: 9rem;
+  box-sizing: border-box;
+  align-self: center;
+  overflow-wrap: anywhere;
+  white-space: normal;
   text-align: left;
   font-weight: 600;
 }
