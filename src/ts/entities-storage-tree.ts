@@ -6,7 +6,7 @@ import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
 import { askConfirm } from './confirm-dialog';
 
-type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null };
+type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null };
 type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string };
 type Row = {
   id: number;
@@ -883,10 +883,17 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     if (tag) {
       head.append(tag);
     }
+    const unitName = node.unit.kind === 'rack' ? 'boxes' : 'racks';
+    const capacity = node.unit.capacity ?? 0;
+    const spans = el('span', 'ml-auto small color-medium');
+    if (capacity > 0) {
+      spans.textContent = `${node.children.length} / ${capacity} ${unitName}`;
+    }
     if (slots > 0) {
       const taken = takenIn(node);
-      head.append(el('span', 'ml-auto small color-medium', `${taken} / ${slots} slots`));
+      spans.textContent += `${spans.textContent === '' ? '' : ' · '}${taken} / ${slots} slots`;
     }
+    head.append(spans);
     cabinet.append(head);
     const shelfBox = (box: Node): HTMLElement => {
       const tile = el('button', 'storage-shelf-box');
@@ -916,6 +923,14 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       row.append(label, boxes);
       cabinet.append(row);
     });
+    // the places that are still free, as far as the capacity says
+    const freePlaces = capacity > 0 ? Math.min(Math.max(capacity - node.children.length, 0), 12) : 0;
+    for (let i = 0; i < freePlaces; i++) {
+      const row = el('div', 'storage-shelf');
+      row.append(el('span', 'storage-shelf-label small color-medium', node.unit.kind === 'rack' ? 'free place' : 'free rack'));
+      row.append(el('div', 'storage-shelf-boxes'));
+      cabinet.append(row);
+    }
     if (loose.length > 0) {
       const row = el('div', 'storage-shelf');
       row.append(el('span', 'storage-shelf-label small color-medium', 'In the ' + (node.unit.kind === 'rack' ? 'rack' : 'cabinet')));
@@ -981,6 +996,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     const showFields = (): void => {
       rows.hidden = cols.hidden = kind.value !== 'box';
       temperature.hidden = kind.value !== 'freezer' && kind.value !== 'fridge';
+      holds.hidden = kind.value !== 'freezer' && kind.value !== 'fridge' && kind.value !== 'rack';
       if (kind.value === 'fridge' && temperature.value === '') {
         temperature.value = '4';
       }
@@ -995,7 +1011,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         name.focus();
         return;
       }
-      void ApiC.post2location('storage_units', { name: unitName, kind: kind.value, ...(temperature.value !== '' && !temperature.hidden ? { temperature: Number(temperature.value) } : {}), ...(node === null ? {} : { parent_id: node.unit.id }), ...(Number(position.value) > 0 ? { position: Number(position.value) } : {}) }).then(async id => {
+      void ApiC.post2location('storage_units', { name: unitName, kind: kind.value, ...(temperature.value !== '' && !temperature.hidden ? { temperature: Number(temperature.value) } : {}), ...(Number(holds.value) > 0 && !holds.hidden ? { capacity: Number(holds.value) } : {}), ...(node === null ? {} : { parent_id: node.unit.id }), ...(Number(position.value) > 0 ? { position: Number(position.value) } : {}) }).then(async id => {
         if (kind.value === 'box') {
           await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rows.value), box_cols: Number(cols.value) });
         }
@@ -1008,7 +1024,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         return load();
       });
     });
-    form.append(el('span', 'mr-2', node === null ? 'Add at the top' : 'Add inside'), kind, name, temperature, position, rows, cols, add);
+    form.append(el('span', 'mr-2', node === null ? 'Add at the top' : 'Add inside'), kind, name, temperature, holds, position, rows, cols, add);
     return form;
   };
 
@@ -1043,8 +1059,17 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     degrees.placeholder = '°C';
     degrees.setAttribute('aria-label', 'Temperature');
     degrees.value = node.unit.temperature === null || node.unit.temperature === undefined ? '' : String(node.unit.temperature);
+    const holdsNow = el('input', 'form-control form-control-sm mr-1');
+    holdsNow.type = 'number';
+    holdsNow.min = '1';
+    holdsNow.style.width = '6rem';
+    holdsNow.placeholder = 'holds';
+    holdsNow.title = 'How many racks (in a fridge or a freezer) or boxes (in a rack) fit in it';
+    holdsNow.setAttribute('aria-label', 'How many fit');
+    holdsNow.value = node.unit.capacity ? String(node.unit.capacity) : '';
     const syncDegrees = (): void => {
       degrees.hidden = what.value !== 'freezer' && what.value !== 'fridge';
+      holdsNow.hidden = what.value !== 'freezer' && what.value !== 'fridge' && what.value !== 'rack';
     };
     what.addEventListener('change', syncDegrees);
     syncDegrees();
@@ -1060,6 +1085,9 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       if (unitName !== '' && unitName !== node.unit.name) {
         body.name = unitName;
       }
+      if (!holdsNow.hidden && holdsNow.value !== (node.unit.capacity ? String(node.unit.capacity) : '')) {
+        body.capacity = holdsNow.value === '' ? null : Number(holdsNow.value);
+      }
       if (position.value !== (node.unit.position ? String(node.unit.position) : '')) {
         body.position = position.value === '' ? null : Number(position.value);
       }
@@ -1067,7 +1095,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         patchAndReload(`storage_units/${node.unit.id}`, body);
       }
     });
-    form.append(name, what, degrees, position, save);
+    form.append(name, what, degrees, holdsNow, position, save);
     return form;
   };
 

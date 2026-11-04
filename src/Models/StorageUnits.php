@@ -289,7 +289,8 @@ final class StorageUnits extends AbstractRest
         $hasBox = array_key_exists('box_rows', $params) || array_key_exists('box_cols', $params);
         $hasPosition = array_key_exists('position', $params);
         $hasKind = array_key_exists('kind', $params) || array_key_exists('temperature', $params);
-        if (!$hasName && !$hasParent && !$hasBox && !$hasPosition && !$hasKind) {
+        $hasCapacity = array_key_exists('capacity', $params);
+        if (!$hasName && !$hasParent && !$hasBox && !$hasPosition && !$hasKind && !$hasCapacity) {
             throw new ImproperActionException('No valid update target provided.');
         }
         if ($hasBox) {
@@ -301,10 +302,16 @@ final class StorageUnits extends AbstractRest
         if ($hasKind) {
             $this->setKind($params['kind'] ?? null, $params['temperature'] ?? null);
         }
+        if ($hasCapacity) {
+            $this->setCapacity($params['capacity']);
+        }
         $newParentId = null;
         if ($hasParent) {
             $newParentId = $this->normalizeParentId($params['parent_id']);
             $this->validateMoveTarget($newParentId);
+            if ($newParentId !== $this->readCurrentParentId()) {
+                $this->checkRoom($newParentId);
+            }
         }
         if ($hasName) {
             $this->update(new CommentParam($params['name']));
@@ -407,6 +414,7 @@ final class StorageUnits extends AbstractRest
             Filter::intOrNull($reqBody['position'] ?? 0),
             isset($reqBody['kind']) ? (string) $reqBody['kind'] : null,
             $reqBody['temperature'] ?? null,
+            $reqBody['capacity'] ?? null,
         );
     }
 
@@ -418,6 +426,42 @@ final class StorageUnits extends AbstractRest
         $req->bindValue(':position', $value === false ? null : $value, $value === false ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
+    }
+
+    /** how many places fit in this one: a number, or nothing; it cannot be lower than the places it holds now */
+    public function setCapacity(mixed $capacity): void
+    {
+        $value = filter_var($capacity, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1, 'max_range' => 65535)));
+        if ($value !== false && $this->id !== null && $this->countChildren($this->id) > $value) {
+            throw new ImproperActionException(sprintf(_('It holds %d places already: choose a number that is not lower.'), $this->countChildren($this->id)));
+        }
+        $req = $this->Db->prepare('UPDATE storage_units SET capacity = :capacity WHERE id = :id');
+        $req->bindValue(':capacity', $value === false ? null : $value, $value === false ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
+    private function countChildren(int $parentId): int
+    {
+        $req = $this->Db->prepare('SELECT COUNT(*) FROM storage_units WHERE parent_id = :id');
+        $req->bindParam(':id', $parentId, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return (int) $req->fetchColumn();
+    }
+
+    /** a place that holds as many places as its capacity says is full */
+    private function checkRoom(?int $parentId): void
+    {
+        if ($parentId === null) {
+            return;
+        }
+        $req = $this->Db->prepare('SELECT capacity FROM storage_units WHERE id = :id');
+        $req->bindParam(':id', $parentId, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $capacity = $req->fetchColumn();
+        if ($capacity !== false && $capacity !== null && $this->countChildren($parentId) >= (int) $capacity) {
+            throw new ImproperActionException(sprintf(_('This place is full: it holds at most %d.'), (int) $capacity));
+        }
     }
 
     public const array KINDS = array('location', 'freezer', 'fridge', 'rack', 'box');
@@ -455,18 +499,21 @@ final class StorageUnits extends AbstractRest
         }
     }
 
-    public function create(string $unitName, ?int $parentId = null, ?int $position = null, ?string $kind = null, mixed $temperature = null): int
+    public function create(string $unitName, ?int $parentId = null, ?int $position = null, ?string $kind = null, mixed $temperature = null, mixed $capacity = null): int
     {
         $kind = is_string($kind) && in_array($kind, self::KINDS, true) ? $kind : null;
         $this->checkKindPlace($kind, $parentId);
+        $this->checkRoom($parentId);
+        $room = filter_var($capacity, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1, 'max_range' => 65535)));
         $degrees = filter_var($temperature, FILTER_VALIDATE_INT, array('options' => array('min_range' => -273, 'max_range' => 100)));
-        $sql = 'INSERT INTO storage_units(parent_id, name, position, kind, temperature) VALUES(:parent_id, :name, :position, :kind, :temperature)';
+        $sql = 'INSERT INTO storage_units(parent_id, name, position, kind, temperature, capacity) VALUES(:parent_id, :name, :position, :kind, :temperature, :capacity)';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':parent_id', $parentId);
         $req->bindParam(':name', $unitName);
         $req->bindParam(':position', $position);
         $req->bindValue(':kind', $kind, $kind === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
         $req->bindValue(':temperature', $degrees === false ? null : $degrees, $degrees === false ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindValue(':capacity', $room === false ? null : $room, $room === false ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $this->Db->execute($req);
         return $this->Db->lastInsertId();
     }
@@ -625,7 +672,8 @@ final class StorageUnits extends AbstractRest
                 box_cols,
                 position,
                 kind,
-                temperature
+                temperature,
+                capacity
             FROM
                 storage_units
             WHERE
@@ -645,7 +693,8 @@ final class StorageUnits extends AbstractRest
                 child.box_cols,
                 child.position,
                 child.kind,
-                child.temperature
+                child.temperature,
+                child.capacity
             FROM
                 storage_units AS child
             INNER JOIN
@@ -667,6 +716,7 @@ final class StorageUnits extends AbstractRest
             position,
             kind,
             temperature,
+            capacity,
             (SELECT GROUP_CONCAT(c.position) FROM containers2inventory AS c WHERE c.storage_id = storage_hierarchy.id AND c.position IS NOT NULL) AS taken_positions
         FROM
             storage_hierarchy

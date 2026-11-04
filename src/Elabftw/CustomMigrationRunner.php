@@ -162,6 +162,7 @@ final class CustomMigrationRunner
         '129_registry_settings.sql',
         '130_storage_unit_position.sql',
         '131_storage_unit_kind.sql',
+        '132_storage_unit_capacity.sql',
     );
 
     private Db $Db;
