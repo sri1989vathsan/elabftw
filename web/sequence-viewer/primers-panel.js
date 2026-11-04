@@ -347,7 +347,7 @@
         const folderTicked = action('', async function () {
           let list = [];
           try {
-            const response = await fetch('registry-transfer.php?folders=1', { credentials: 'same-origin' });
+            const response = await fetch('../registry-transfer.php?folders=1', { credentials: 'same-origin' });
             list = (await response.json()).folders || [];
           } catch (error) {
             say('The folders could not be loaded.', true);
@@ -369,7 +369,7 @@
             try {
               const created = await addMany(Array.from(tickedFile), [], true);
               const ids = Array.from(tickedDb).concat(created);
-              const response = await fetch('registry-transfer.php', {
+              const response = await fetch('../registry-transfer.php', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': document.body.dataset.csrf },
