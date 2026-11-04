@@ -6,7 +6,7 @@ import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
 import { askConfirm } from './confirm-dialog';
 
-type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null };
+type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null; child_capacity?: number | null };
 type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string };
 type Row = {
   id: number;
@@ -277,6 +277,12 @@ function kindTag(unit: Unit): HTMLElement | null {
   tag.title = unit.kind === 'freezer' ? 'Freezer' : 'Fridge';
   return tag;
 }
+
+// how many places fit in a place: its own number, else what its fridge or freezer says about each rack
+const capacityOf = (node: Node, byId: Map<number, Node>): number => {
+  const parent = node.unit.parent_id === null ? undefined : byId.get(node.unit.parent_id);
+  return node.unit.capacity ?? parent?.unit.child_capacity ?? 0;
+};
 
 // racks and boxes are drawn inside the fridge or freezer they are in, not in the tree of locations
 const inTree = (node: Node): boolean => node.unit.kind !== 'rack' && node.unit.kind !== 'box';
@@ -904,7 +910,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       head.append(tag);
     }
     const unitName = node.unit.kind === 'rack' ? 'boxes' : 'racks';
-    const capacity = node.unit.capacity ?? 0;
+    const capacity = capacityOf(node, tree.byId);
     const spans = el('span', 'ml-auto small color-medium');
     if (capacity > 0) {
       spans.textContent = `${node.children.length} / ${capacity} ${unitName}`;
@@ -1024,7 +1030,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         boxes.append(el('span', 'small color-medium', 'no box yet'));
       }
       // the places for boxes that are still free on this shelf, as far as its capacity says (one to click when it has none)
-      const shelfCapacity = shelf.unit.capacity ?? 0;
+      const shelfCapacity = capacityOf(shelf, tree.byId);
       const freeBoxes = shelfCapacity > 0 ? Math.min(Math.max(shelfCapacity - shelf.children.length, 0), 8) : 1;
       const formArea = el('div');
       formArea.style.flexBasis = '100%';
@@ -1200,7 +1206,17 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     holdsNow.title = 'How many racks (in a fridge or a freezer) or boxes (in a rack) fit in it';
     holdsNow.setAttribute('aria-label', 'How many fit');
     holdsNow.value = node.unit.capacity ? String(node.unit.capacity) : '';
+    // said once on the fridge or freezer: each of its racks holds this many boxes (a rack with a number of its own keeps it)
+    const eachRack = el('input', 'form-control form-control-sm mr-1');
+    eachRack.type = 'number';
+    eachRack.min = '1';
+    eachRack.style.width = '6rem';
+    eachRack.placeholder = 'boxes';
+    eachRack.title = 'How many boxes each rack of this fridge or freezer holds';
+    eachRack.setAttribute('aria-label', 'Boxes in each rack');
+    eachRack.value = node.unit.child_capacity ? String(node.unit.child_capacity) : '';
     const syncDegrees = (): void => {
+      eachRack.hidden = what.value !== 'freezer' && what.value !== 'fridge';
       degrees.hidden = what.value !== 'freezer' && what.value !== 'fridge';
       holdsNow.hidden = what.value !== 'freezer' && what.value !== 'fridge' && what.value !== 'rack';
     };
@@ -1218,6 +1234,9 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       if (unitName !== '' && unitName !== node.unit.name) {
         body.name = unitName;
       }
+      if (!eachRack.hidden && eachRack.value !== (node.unit.child_capacity ? String(node.unit.child_capacity) : '')) {
+        body.child_capacity = eachRack.value === '' ? null : Number(eachRack.value);
+      }
       if (!holdsNow.hidden && holdsNow.value !== (node.unit.capacity ? String(node.unit.capacity) : '')) {
         body.capacity = holdsNow.value === '' ? null : Number(holdsNow.value);
       }
@@ -1229,7 +1248,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       }
     });
     const holdsLabel = node.unit.kind === 'rack' ? 'Holds (boxes)' : 'Holds (racks)';
-    form.append(labelled('Name', name), labelled('Kind of place', what), labelled('Temperature (°C)', degrees), labelled(holdsLabel, holdsNow), labelled('Position among its neighbours', position), el('div', 'mb-1', ''));
+    form.append(labelled('Name', name), labelled('Kind of place', what), labelled('Temperature (°C)', degrees), labelled(holdsLabel, holdsNow), labelled('Boxes in each rack', eachRack), labelled('Position among its neighbours', position), el('div', 'mb-1', ''));
     form.lastElementChild?.append(save);
     return form;
   };

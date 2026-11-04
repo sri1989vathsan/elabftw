@@ -289,7 +289,7 @@ final class StorageUnits extends AbstractRest
         $hasBox = array_key_exists('box_rows', $params) || array_key_exists('box_cols', $params);
         $hasPosition = array_key_exists('position', $params);
         $hasKind = array_key_exists('kind', $params) || array_key_exists('temperature', $params);
-        $hasCapacity = array_key_exists('capacity', $params);
+        $hasCapacity = array_key_exists('capacity', $params) || array_key_exists('child_capacity', $params);
         if (!$hasName && !$hasParent && !$hasBox && !$hasPosition && !$hasKind && !$hasCapacity) {
             throw new ImproperActionException('No valid update target provided.');
         }
@@ -303,7 +303,12 @@ final class StorageUnits extends AbstractRest
             $this->setKind($params['kind'] ?? null, $params['temperature'] ?? null);
         }
         if ($hasCapacity) {
-            $this->setCapacity($params['capacity']);
+            if (array_key_exists('capacity', $params)) {
+                $this->setCapacity($params['capacity']);
+            }
+            if (array_key_exists('child_capacity', $params)) {
+                $this->setChildCapacity($params['child_capacity']);
+            }
         }
         $newParentId = null;
         if ($hasParent) {
@@ -441,6 +446,16 @@ final class StorageUnits extends AbstractRest
         $this->Db->execute($req);
     }
 
+    /** how many boxes each rack of this fridge or freezer holds, unless the rack says otherwise */
+    public function setChildCapacity(mixed $capacity): void
+    {
+        $value = filter_var($capacity, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1, 'max_range' => 65535)));
+        $req = $this->Db->prepare('UPDATE storage_units SET child_capacity = :capacity WHERE id = :id');
+        $req->bindValue(':capacity', $value === false ? null : $value, $value === false ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $req->bindParam(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+    }
+
     private function countChildren(int $parentId): int
     {
         $req = $this->Db->prepare('SELECT COUNT(*) FROM storage_units WHERE parent_id = :id');
@@ -455,7 +470,8 @@ final class StorageUnits extends AbstractRest
         if ($parentId === null) {
             return;
         }
-        $req = $this->Db->prepare('SELECT capacity FROM storage_units WHERE id = :id');
+        // its own capacity, else what its parent says about each of its places
+        $req = $this->Db->prepare('SELECT COALESCE(s.capacity, p.child_capacity) FROM storage_units AS s LEFT JOIN storage_units AS p ON p.id = s.parent_id WHERE s.id = :id');
         $req->bindParam(':id', $parentId, PDO::PARAM_INT);
         $this->Db->execute($req);
         $capacity = $req->fetchColumn();
@@ -673,7 +689,8 @@ final class StorageUnits extends AbstractRest
                 position,
                 kind,
                 temperature,
-                capacity
+                capacity,
+                child_capacity
             FROM
                 storage_units
             WHERE
@@ -694,7 +711,8 @@ final class StorageUnits extends AbstractRest
                 child.position,
                 child.kind,
                 child.temperature,
-                child.capacity
+                child.capacity,
+                child.child_capacity
             FROM
                 storage_units AS child
             INNER JOIN
@@ -717,6 +735,7 @@ final class StorageUnits extends AbstractRest
             kind,
             temperature,
             capacity,
+            child_capacity,
             (SELECT GROUP_CONCAT(c.position) FROM containers2inventory AS c WHERE c.storage_id = storage_hierarchy.id AND c.position IS NOT NULL) AS taken_positions
         FROM
             storage_hierarchy
