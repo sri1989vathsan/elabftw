@@ -1453,7 +1453,18 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     }
     if (!autoResizePending || spreadsheetInteractionOngoing()) return;
     autoResizePending = false;
+    // The editor's own resize takes the focus into the editor, and focusing it scrolls the page to its text
+    // cursor -- usually far from where the user is looking when a table scrolling into view has just changed
+    // height. That was the page snapping to the top while scrolling up. Only the height is needed then, and when
+    // the cursor is in the text the resize must still leave the page where it is.
+    if (!editor.hasFocus()) {
+      fitEditorHeightWithoutFocus();
+      return;
+    }
+    const pageX = window.scrollX;
+    const pageY = window.scrollY;
     editor.execCommand('mceAutoResize');
+    if (Math.abs(window.scrollY - pageY) > 2 || Math.abs(window.scrollX - pageX) > 2) window.scrollTo(pageX, pageY);
   };
 
   // Sets the editor's height to fit its content without going through mceAutoResize, which takes the keyboard
