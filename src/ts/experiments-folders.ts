@@ -492,6 +492,8 @@ document.addEventListener('DOMContentLoaded', () => {
     favoriteFolderIds = readFavoriteFolderIds(sidebar);
     freshPanel.scrollTop = panelScrollTop;
     initializeFolderTreeState();
+    // the panel was replaced: show the chosen folder view again (and the new bookmarks in it)
+    syncFolderView();
   }
 
   function refreshFoldersSidebarSafely(): void {

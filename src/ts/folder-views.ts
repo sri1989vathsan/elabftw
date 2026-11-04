@@ -26,6 +26,8 @@ export interface FolderRow {
   resources: number;
   description: string;
   active: boolean;
+  /** bookmarked with the star */
+  favorite: boolean;
   actions: HTMLElement[];
   /** the tree's Export / Edit / Delete buttons for this folder (hidden there until the three dots are pressed) */
   more: HTMLElement | null;
@@ -125,6 +127,7 @@ function collectRows(tree: HTMLElement): FolderRow[] {
       resources: Number(link.dataset.resourcesCount) || 0,
       description: node.querySelector(':scope > .folder-description')?.textContent?.trim() ?? '',
       active: link.classList.contains('font-weight-bold'),
+      favorite: node.querySelector(':scope > .folder-row .favorite-folder-star .fa-star.fas') !== null,
       actions,
       more: node.querySelector<HTMLElement>(':scope > .folder-more-actions'),
     });
@@ -197,7 +200,7 @@ function folderLink(row: FolderRow, withPath: boolean, entityCount: number | nul
   return link;
 }
 
-function renderList(body: HTMLElement, rows: FolderRow[], entityType: string): void {
+function listOf(rows: FolderRow[], entityType: string): HTMLElement {
   const list = element('div', 'folder-flat-list');
   rows.forEach(row => {
     const item = element('div', 'folder-flat-item');
@@ -210,7 +213,7 @@ function renderList(body: HTMLElement, rows: FolderRow[], entityType: string): v
     if (more) item.append(more);
     list.append(item);
   });
-  body.replaceChildren(list);
+  return list;
 }
 
 const SORT_CHIPS: Array<{ key: FolderSortKey; label: string; icon?: string; title: string }> = [
@@ -242,10 +245,14 @@ function countPill(icon: string, count: number, title: string): HTMLElement {
 }
 
 /** Each folder as a small card: name and buttons, then its path, description and how many experiments / resources it holds. */
-function renderDetails(body: HTMLElement, rows: FolderRow[]): void {
+function sortBarOf(): HTMLElement {
   const sortBar = element('div', 'folder-sort-bar');
   sortBar.append(element('span', 'folder-sort-label', i18next.t('Sort by')));
   SORT_CHIPS.forEach(chip => sortBar.append(sortChip(chip)));
+  return sortBar;
+}
+
+function cardsOf(rows: FolderRow[]): HTMLElement {
   const list = element('div', 'folder-details-list');
   rows.forEach(row => {
     const card = element('div', `folder-details-card${row.active ? ' is-active' : ''}`);
@@ -265,7 +272,16 @@ function renderDetails(body: HTMLElement, rows: FolderRow[]): void {
     card.append(counts);
     list.append(card);
   });
-  body.replaceChildren(sortBar, list);
+  return list;
+}
+
+/** The bookmarked folders as a block of their own above the folders of the current level. */
+function favoritesSection(content: HTMLElement): HTMLElement {
+  const section = element('section', 'folder-flat-favorites');
+  const label = element('div', 'folder-tree-section-label small font-weight-bold mb-1');
+  label.append(element('i', 'fas fa-star fa-fw mr-1'), document.createTextNode(i18next.t('Bookmarked')));
+  section.append(label, content);
+  return section;
 }
 
 /** One button that moves the flat views to another level. */
@@ -374,14 +390,19 @@ export function syncFolderView(): void {
   const pool = searching ? filterFolderRows(all, filterText) : rowsAtLevel(all, level);
   const rows = sortFolderRows(pool, view === 'list' ? 'path' : sortKey, view === 'list' ? 1 : sortDirection);
   flat.querySelector<HTMLElement>('.folder-level-bar-holder')?.replaceChildren(levelPathBar(all));
+  const favorites = searching ? [] : sortFolderRows(all.filter(row => row.favorite), 'path', 1);
+  const favoritesBlock = favorites.length > 0 ? [favoritesSection(view === 'list' ? listOf(favorites, entityType) : cardsOf(favorites))] : [];
   if (rows.length === 0) {
     const empty = element('div', 'small color-medium text-center border rounded p-3', i18next.t(all.length === 0 ? 'No folders to show.' : searching ? 'No folder matches.' : 'No folders in here.'));
-    body.replaceChildren(...(level !== '' && !searching ? [upRow(all), empty] : [empty]));
+    body.replaceChildren(...favoritesBlock, ...(level !== '' && !searching ? [upRow(all), empty] : [empty]));
     return;
   }
-  if (view === 'list') renderList(body, rows, entityType);
-  else renderDetails(body, rows);
-  if (level !== '' && !searching) body.prepend(upRow(all));
+  const parts: HTMLElement[] = [...favoritesBlock];
+  if (view === 'details') parts.push(sortBarOf());
+  const main = view === 'list' ? listOf(rows, entityType) : cardsOf(rows);
+  if (level !== '' && !searching) main.prepend(upRow(all));
+  parts.push(main);
+  body.replaceChildren(...parts);
 }
 
 /** Wires the view buttons and the sortable column headers (delegated, so they survive the panel being replaced). */

@@ -1895,6 +1895,13 @@ tr:first-child td {
   .folder-up-button {
     text-decoration: none;
   }
+
+  // bookmarked folders, a block of their own above the folders of the current level
+  .folder-flat-favorites {
+    border-bottom: 1px solid var(--chrome-muted);
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.6rem;
+  }
 }
 
 .folder-action-btn {
