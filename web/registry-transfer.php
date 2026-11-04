@@ -474,13 +474,13 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
                 $temperature = null;
                 if ($found) {
                     $kind = 'rack';
-                } elseif ($depth > 0 && preg_match('/fridge|refrigerat|cold ?room|4\s*°?\s*c\b/i', $name) === 1) {
+                } elseif ($depth > 0 && preg_match('/fridge|refrigerat|cold ?room|4\s*(?:°)?\s*c\b/i', $name) === 1) {
                     $kind = 'fridge';
                     $temperature = 4;
                     $found = true;
-                } elseif ($depth > 0 && preg_match('/freez|ln2|tank|dewar|-\s*\d{2,3}\s*°?\s*c?\b/i', $name) === 1) {
+                } elseif ($depth > 0 && preg_match('/freez|ln2|tank|dewar|-\s*\d{2,3}\s*(?:°)?\s*c?\b/i', $name) === 1) {
                     $kind = 'freezer';
-                    $temperature = preg_match('/(-\s*\d{1,3})\s*°?\s*c?\b/i', $name, $t) === 1 ? (int) str_replace(' ', '', $t[1]) : (preg_match('/ln2|tank|dewar/i', $name) === 1 ? -196 : null);
+                    $temperature = preg_match('/(-\s*\d{1,3})\s*(?:°)?\s*c?\b/i', $name, $t) === 1 ? (int) str_replace(' ', '', $t[1]) : (preg_match('/ln2|tank|dewar/i', $name) === 1 ? -196 : null);
                     $found = true;
                 }
                 $out[$depth] = array($kind, $temperature);
