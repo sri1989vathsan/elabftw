@@ -1789,14 +1789,51 @@ tr:first-child td {
     white-space: nowrap;
   }
 
-  // details view: a table of folders, one row each, with sortable column headings
-  $folder-count-column: 2.4rem;
+  // details view: a table of folders, one row each, with sortable column headings. Columns appear as the panel allows:
+  // name, experiments, resources, last modified and the buttons always; the path from 26rem, the description from 40rem
+  // (below that the path and description sit under the name).
+  .folder-flat-body {
+    container-type: inline-size;
+  }
+
+  $folder-actions-column: 5.8rem;
 
   .folder-column-heads,
   .folder-details-card {
     column-gap: 0.25rem;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) $folder-count-column $folder-count-column;
+    grid-template-columns: minmax(0, 1fr) 1.9rem 1.9rem 3.9rem $folder-actions-column;
+  }
+
+  .folder-col-wide,
+  .folder-col-wider {
+    display: none;
+  }
+
+  @container (min-width: 26rem) {
+    .folder-column-heads,
+    .folder-details-card {
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 2.2rem 2.2rem 3.9rem $folder-actions-column;
+    }
+
+    .folder-col-wide {
+      display: block;
+    }
+
+    .folder-col-narrow-only {
+      display: none;
+    }
+  }
+
+  @container (min-width: 40rem) {
+    .folder-column-heads,
+    .folder-details-card {
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) 2.2rem 2.2rem 3.9rem $folder-actions-column;
+    }
+
+    .folder-col-wider {
+      display: block;
+    }
   }
 
   .folder-column-heads {
@@ -1806,7 +1843,7 @@ tr:first-child td {
     padding: 0 0.35rem 0.3rem 0.5rem;
   }
 
-  .folder-column-head-first {
+  .folder-column-head-name {
     display: flex;
     gap: 0.25rem;
   }
@@ -1833,6 +1870,13 @@ tr:first-child td {
     }
   }
 
+  .folder-col-description > .folder-sort-label {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 0 0.3rem;
+    text-transform: uppercase;
+  }
+
   .folder-details-card {
     align-items: center;
     border-bottom: 1px solid var(--chrome-muted);
@@ -1846,21 +1890,45 @@ tr:first-child td {
     &.is-active {
       border-left-color: var(--mediumstrong);
     }
+
+    // the buttons sit at the far right, in a column of their own
+    > .folder-actions {
+      justify-content: flex-end;
+    }
   }
 
   .folder-details-text {
-    flex: 1 1 auto;
     font-weight: 600;
     min-width: 0;
   }
 
-  .folder-count-cell {
+  .folder-count-cell,
+  .folder-modified-cell {
     font-variant-numeric: tabular-nums;
     text-align: center;
 
     &.is-zero {
       color: var(--chrome-muted);
     }
+  }
+
+  .folder-modified-cell {
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+
+  .folder-col-path,
+  .folder-col-description {
+    color: var(--chrome-muted);
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-enter-placeholder {
+    display: inline-block;
+    width: 1.4rem;
   }
 
   .folder-details-path,

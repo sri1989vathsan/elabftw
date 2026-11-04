@@ -499,6 +499,7 @@ final class ExperimentsFolders extends AbstractRest
                 userid,
                 id AS root_id,
                 name AS full_path,
+                modified_at,
                 0 AS level_depth
             FROM
                 experiments_folders
@@ -515,6 +516,7 @@ final class ExperimentsFolders extends AbstractRest
                 child.userid,
                 parent.root_id,
                 CONCAT(parent.full_path, ' > ', child.name) AS full_path,
+                child.modified_at,
                 parent.level_depth + 1
             FROM
                 experiments_folders AS child
@@ -535,9 +537,26 @@ final class ExperimentsFolders extends AbstractRest
             COALESCE(child_counts.children_count, 0) AS children_count,
             COALESCE(experiment_counts.experiments_count, 0) AS experiments_count,
             COALESCE(resource_counts.resources_count, 0) AS resources_count,
-            (readmes.folder_id IS NOT NULL) AS has_readme
+            (readmes.folder_id IS NOT NULL) AS has_readme,
+            UNIX_TIMESTAMP(GREATEST(
+                folder_hierarchy.modified_at,
+                COALESCE(experiment_changes.last_change, folder_hierarchy.modified_at),
+                COALESCE(resource_changes.last_change, folder_hierarchy.modified_at)
+            )) AS last_modified_ts
         FROM
             folder_hierarchy
+        LEFT JOIN (
+            SELECT folder_id, MAX(modified_at) AS last_change
+            FROM experiments
+            WHERE state = 1 AND folder_id IS NOT NULL
+            GROUP BY folder_id
+        ) AS experiment_changes ON experiment_changes.folder_id = folder_hierarchy.id
+        LEFT JOIN (
+            SELECT folder_id, MAX(modified_at) AS last_change
+            FROM items
+            WHERE state = 1 AND folder_id IS NOT NULL
+            GROUP BY folder_id
+        ) AS resource_changes ON resource_changes.folder_id = folder_hierarchy.id
         LEFT JOIN (
             SELECT parent_id, COUNT(*) AS children_count
             FROM experiments_folders

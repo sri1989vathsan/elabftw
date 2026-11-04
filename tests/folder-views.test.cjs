@@ -82,3 +82,13 @@ test('the flat views start inside the folder being looked at, or beside it when 
   assert.equal(initialFolderLevel(tree, null), '');
   assert.equal(initialFolderLevel(tree, '99'), '');
 });
+
+test('sorting by last modified puts the newest first when descending and keeps unknown dates last', () => {
+  const dated = [
+    { ...row('Old', 'Old', 1), modified: 100 },
+    { ...row('Unknown', 'Unknown', 1), modified: 0 },
+    { ...row('New', 'New', 1), modified: 300 },
+  ];
+  assert.deepEqual(Array.from(sortFolderRows(dated, 'modified', -1), r => r.name), ['New', 'Old', 'Unknown']);
+  assert.deepEqual(Array.from(sortFolderRows(dated, 'modified', 1), r => r.name), ['Unknown', 'Old', 'New']);
+});

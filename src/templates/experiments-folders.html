@@ -99,6 +99,7 @@
               data-items-href='database.php?folder={{ folder.id }}'
               data-experiments-count='{{ folder.experiments_count }}'
               data-resources-count='{{ folder.resources_count }}'
+              data-modified-at='{{ folder.last_modified_ts|default(0) }}'
               title='{{ folder.full_path|e('html_attr') }}'
               class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'
             >

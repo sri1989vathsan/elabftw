@@ -13,7 +13,7 @@ import { on } from './handlers';
 import { Api } from './Apiv2.class';
 
 export type FolderView = 'tree' | 'list' | 'details';
-export type FolderSortKey = 'name' | 'path' | 'experiments' | 'resources';
+export type FolderSortKey = 'name' | 'path' | 'experiments' | 'resources' | 'modified';
 
 export interface FolderRow {
   id: string;
@@ -25,6 +25,8 @@ export interface FolderRow {
   href: string;
   experiments: number;
   resources: number;
+  /** when the folder or anything filed in it last changed, in seconds since 1970 (0 = unknown) */
+  modified: number;
   description: string;
   active: boolean;
   /** bookmarked with the star */
@@ -50,10 +52,10 @@ export function parseFolderView(value: string | null): FolderView {
 }
 
 /** Rows sorted by a column; names and paths ignore case and compare numbers inside them naturally ("Plate 2" before "Plate 10"). */
-export function sortFolderRows<T extends Pick<FolderRow, 'name' | 'path' | 'experiments' | 'resources'>>(rows: T[], key: FolderSortKey, direction: 1 | -1): T[] {
+export function sortFolderRows<T extends Pick<FolderRow, 'name' | 'path' | 'experiments' | 'resources' | 'modified'>>(rows: T[], key: FolderSortKey, direction: 1 | -1): T[] {
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
   return [...rows].sort((a, b) => {
-    const result = key === 'experiments' || key === 'resources'
+    const result = key === 'experiments' || key === 'resources' || key === 'modified'
       ? a[key] - b[key]
       : collator.compare(a[key], b[key]);
     return (result !== 0 ? result : collator.compare(a.path, b.path)) * (result !== 0 ? direction : 1);
@@ -126,6 +128,7 @@ function collectRows(tree: HTMLElement): FolderRow[] {
       href: link.getAttribute('href') ?? '#',
       experiments: Number(link.dataset.experimentsCount) || 0,
       resources: Number(link.dataset.resourcesCount) || 0,
+      modified: Number(link.dataset.modifiedAt) || 0,
       description: node.querySelector(':scope > .folder-description')?.textContent?.trim() ?? '',
       active: link.classList.contains('font-weight-bold'),
       favorite: node.querySelector(':scope > .folder-row .favorite-folder-star .fa-star.fas') !== null,
@@ -168,6 +171,9 @@ function copyOfActions(row: FolderRow): HTMLElement {
     enter.setAttribute('aria-label', `${i18next.t('Show the folders inside')}: ${row.name}`);
     enter.append(element('i', 'fas fa-chevron-right fa-xs'));
     box.append(enter);
+  } else {
+    // keeps the buttons of folders with and without subfolders in line
+    box.append(element('span', 'folder-enter-placeholder'));
   }
   return box;
 }
@@ -222,6 +228,7 @@ const SORT_CHIPS: Array<{ key: FolderSortKey; label: string; icon?: string; titl
   { key: 'path', label: 'Path', title: 'Sort by path' },
   { key: 'experiments', label: '', icon: 'fa-flask', title: 'Sort by number of experiments' },
   { key: 'resources', label: '', icon: 'fa-boxes-stacked', title: 'Sort by number of resources' },
+  { key: 'modified', label: 'Modified', title: 'Sort by last modified' },
 ];
 
 function sortChip(chip: (typeof SORT_CHIPS)[number]): HTMLButtonElement {
@@ -239,12 +246,20 @@ function sortChip(chip: (typeof SORT_CHIPS)[number]): HTMLButtonElement {
 }
 
 /** Each folder as a small card: name and buttons, then its path, description and how many experiments / resources it holds. */
-/** The column headings: pressing one sorts by it (again to reverse); the first column sorts by name or by path. */
+/** The column headings: pressing one sorts by it (again to reverse). Path and description are columns of their own only when the panel is wide enough. */
 function sortBarOf(): HTMLElement {
   const bar = element('div', 'folder-column-heads');
-  const first = element('div', 'folder-column-head-first');
-  first.append(sortChip(SORT_CHIPS[0]), sortChip(SORT_CHIPS[1]));
-  bar.append(first, sortChip(SORT_CHIPS[2]), sortChip(SORT_CHIPS[3]));
+  const name = element('div', 'folder-column-head-name');
+  name.append(sortChip(SORT_CHIPS[0]));
+  // in a narrow panel the path is not a column: sorting by it stays reachable next to the name
+  const narrowPath = sortChip(SORT_CHIPS[1]);
+  narrowPath.classList.add('folder-col-narrow-only');
+  name.append(narrowPath);
+  const widePath = element('div', 'folder-col-wide folder-col-path');
+  widePath.append(sortChip(SORT_CHIPS[1]));
+  const description = element('div', 'folder-col-wider folder-col-description');
+  description.append(element('span', 'folder-sort-label', i18next.t('Description')));
+  bar.append(name, widePath, description, sortChip(SORT_CHIPS[2]), sortChip(SORT_CHIPS[3]), sortChip(SORT_CHIPS[4]), element('span'));
   return bar;
 }
 
@@ -254,18 +269,39 @@ function countCell(count: number, title: string): HTMLElement {
   return cell;
 }
 
-/** Each folder as a row of columns: name and buttons, how many experiments and resources it holds; its path and description under the name. */
+function modifiedCell(seconds: number): HTMLElement {
+  if (seconds <= 0) return element('span', 'folder-modified-cell is-zero', '\u2013');
+  const date = new Date(seconds * 1000);
+  const cell = element('span', 'folder-modified-cell', new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: '2-digit' }).format(date));
+  cell.title = date.toLocaleString();
+  return cell;
+}
+
+/**
+ * Each folder as a row of columns: name, (path, description), experiments, resources, last modified, and the buttons at the far
+ * right. The path and description are columns only while the panel is wide enough; otherwise they sit under the name.
+ */
 function cardsOf(rows: FolderRow[]): HTMLElement {
   const list = element('div', 'folder-details-list');
   rows.forEach(row => {
     const card = element('div', `folder-details-card${row.active ? ' is-active' : ''}`);
-    const top = element('div', 'd-flex align-items-start folder-details-top');
     const main = element('div', 'folder-details-text');
     main.append(folderLink(row, false, null));
-    top.append(main, copyOfActions(row));
-    card.append(top, countCell(row.experiments, i18next.t('experiments')), countCell(row.resources, i18next.t('resources')));
-    if (row.path !== row.name) card.append(element('div', 'folder-details-path', row.path));
-    if (row.description) card.append(element('div', 'folder-details-description', row.description));
+    const pathColumn = element('div', 'folder-col-wide folder-col-path', row.path !== row.name ? row.path : '');
+    pathColumn.title = row.path;
+    const descriptionColumn = element('div', 'folder-col-wider folder-col-description', row.description);
+    descriptionColumn.title = row.description;
+    card.append(
+      main,
+      pathColumn,
+      descriptionColumn,
+      countCell(row.experiments, i18next.t('experiments')),
+      countCell(row.resources, i18next.t('resources')),
+      modifiedCell(row.modified),
+      copyOfActions(row),
+    );
+    if (row.path !== row.name) card.append(element('div', 'folder-details-path folder-col-narrow-only', row.path));
+    if (row.description) card.append(element('div', 'folder-details-description folder-col-narrow-only', row.description));
     const more = morePanel(row);
     if (more) card.append(more);
     list.append(card);
@@ -274,11 +310,11 @@ function cardsOf(rows: FolderRow[]): HTMLElement {
 }
 
 /** The bookmarked folders as a block of their own above the folders of the current level. */
-function favoritesSection(content: HTMLElement): HTMLElement {
+function favoritesSection(...content: HTMLElement[]): HTMLElement {
   const section = element('section', 'folder-flat-favorites');
   const label = element('div', 'folder-tree-section-label small font-weight-bold mb-1');
   label.append(element('i', 'fas fa-star fa-fw mr-1'), document.createTextNode(i18next.t('Bookmarked')));
-  section.append(label, content);
+  section.append(label, ...content);
   return section;
 }
 
@@ -388,8 +424,11 @@ export function syncFolderView(): void {
   const pool = searching ? filterFolderRows(all, filterText) : rowsAtLevel(all, level);
   const rows = sortFolderRows(pool, view === 'list' ? 'path' : sortKey, view === 'list' ? 1 : sortDirection);
   flat.querySelector<HTMLElement>('.folder-level-bar-holder')?.replaceChildren(levelPathBar(all));
-  const favorites = searching ? [] : sortFolderRows(all.filter(row => row.favorite), 'path', 1);
-  const favoritesBlock = favorites.length > 0 ? [favoritesSection(view === 'list' ? listOf(favorites, entityType) : cardsOf(favorites))] : [];
+  // the bookmarked folders follow the sort of the table below them and have their own column headings
+  const favorites = searching ? [] : sortFolderRows(all.filter(row => row.favorite), view === 'list' ? 'path' : sortKey, view === 'list' ? 1 : sortDirection);
+  const favoritesBlock = favorites.length > 0
+    ? [favoritesSection(...(view === 'list' ? [listOf(favorites, entityType)] : [sortBarOf(), cardsOf(favorites)]))]
+    : [];
   if (rows.length === 0) {
     const empty = element('div', 'small color-medium text-center border rounded p-3', i18next.t(all.length === 0 ? 'No folders to show.' : searching ? 'No folder matches.' : 'No folders in here.'));
     body.replaceChildren(...favoritesBlock, ...(level !== '' && !searching ? [upRow(all), empty] : [empty]));
@@ -465,7 +504,7 @@ export function initFolderViews(): void {
     else {
       sortKey = key;
       // counts are most useful biggest first
-      sortDirection = key === 'experiments' || key === 'resources' ? -1 : 1;
+      sortDirection = key === 'experiments' || key === 'resources' || key === 'modified' ? -1 : 1;
     }
     syncFolderView();
   });
