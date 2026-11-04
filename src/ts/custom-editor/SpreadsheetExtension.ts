@@ -1503,9 +1503,18 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const excess = root.scrollHeight - root.clientHeight;
     if (excess > 1) iframe.style.height = `${Math.ceil(iframe.getBoundingClientRect().height + excess)}px`;
   };
+  // Enter at the end of the text left the frame one line short for the whole delay below, so the new line sat
+  // outside it until the debounce ran. Growing is only a height write, so it also runs on the next frame.
+  let growToContentFrame = 0;
   editor.on('input keyup NodeChange SetContent Undo Redo', () => {
     if (growToContentTimer !== null) clearTimeout(growToContentTimer);
     growToContentTimer = setTimeout(growEditorToContent, 300);
+    if (growToContentFrame === 0) {
+      growToContentFrame = window.requestAnimationFrame(() => {
+        growToContentFrame = 0;
+        growEditorToContent();
+      });
+    }
   });
 
   const dispatchKeyupForAutosave = (): void => {
