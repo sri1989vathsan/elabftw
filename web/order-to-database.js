@@ -387,7 +387,31 @@
     }).catch(function () {
       // without the list the entries stay unfiled
     });
-    box.append(filters, search, pick, info, tableBox, message, folderRow, buttons);
+    // the place the things of the order are stored in (one container each); none leaves them unstored
+    const storageRow = element('div', 'd-flex align-items-center mt-2', '', 'gap:.5rem');
+    const storageChoice = element('select', 'form-control form-control-sm', '', 'width:auto;max-width:60%');
+    storageChoice.setAttribute('aria-label', 'Store them in');
+    const noStorage = element('option', '', 'Not stored yet');
+    noStorage.value = '0';
+    storageChoice.append(noStorage);
+    storageRow.append(element('span', 'small text-muted', 'Store them in:'), storageChoice);
+    fetch('api/v2/storage_units?hierarchy=1', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function (r) {
+      return r.json();
+    }).then(function (units) {
+      // the places that hold things directly: a box, a rack or any place without places inside
+      units.filter(function (u) {
+        return Number(u.children_count) === 0;
+      }).sort(function (a, b) {
+        return String(a.full_path).localeCompare(String(b.full_path), undefined, { numeric: true, sensitivity: 'base' });
+      }).forEach(function (u) {
+        const option = element('option', '', u.full_path);
+        option.value = String(u.id);
+        storageChoice.append(option);
+      });
+    }).catch(function () {
+      // without the list the entries stay unstored
+    });
+    box.append(filters, search, pick, info, tableBox, message, folderRow, storageRow, buttons);
 
     let modules = [];
     let rows = [];
@@ -674,6 +698,7 @@
               category: group.module.id,
               register: batch.register,
               folder_id: Number(folderChoice.value) || 0,
+              storage_id: Number(storageChoice.value) || 0,
               rows: group.rows.map(function (r) {
                 const fields = {};
                 Object.keys(r.fields).forEach(function (k) {

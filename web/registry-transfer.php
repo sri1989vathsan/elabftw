@@ -934,6 +934,25 @@ try {
             continue;
         }
         $created[] = $made['id'];
+        // the place chosen in the dialog "Add from an order": one container of the entry is stored there (the first of its storage)
+        $wantedStorage = (int) ($payload['storage_id'] ?? 0);
+        if ($wantedStorage > 0) {
+            try {
+                $exists = $pdo->prepare('SELECT COUNT(*) FROM storage_units WHERE id = :id');
+                $exists->bindValue(':id', $wantedStorage, PDO::PARAM_INT);
+                $pdo->execute($exists);
+                if ((int) $exists->fetchColumn() === 0) {
+                    throw new RuntimeException('This place does not exist.');
+                }
+                $store = $pdo->prepare('INSERT INTO containers2inventory (storage_id, item_id, qty_stored, qty_unit, is_primary) VALUES (:storage, :item, 1, :unit, 1)');
+                $store->bindValue(':storage', $wantedStorage, PDO::PARAM_INT);
+                $store->bindValue(':item', (int) $made['id'], PDO::PARAM_INT);
+                $store->bindValue(':unit', '•');
+                $pdo->execute($store);
+            } catch (Throwable $e) {
+                $skipped[] = array('row' => 'Storage of row ' . ((int) ($payload['offset'] ?? 0) + $index + 1), 'reason' => $e->getMessage());
+            }
+        }
         // the folder chosen for the entries of My entries (the Database keeps its own folders)
         $wantedFolder = (int) ($payload['folder_id'] ?? 0);
         if ($wantedFolder > 0 && $register !== 'both') {
