@@ -141,7 +141,6 @@ const COLUMNS: Array<{ keys: Array<{ key: FolderSortKey; label: string }>; numer
   { keys: [{ key: 'name', label: 'Name' }, { key: 'path', label: 'Path' }] },
   { keys: [{ key: 'experiments', label: 'Exp.' }], numeric: true },
   { keys: [{ key: 'resources', label: 'Res.' }], numeric: true },
-  { keys: [] },
 ];
 const SORT_TITLES: Record<FolderSortKey, string> = { name: 'Name', path: 'Path', experiments: 'Experiments', resources: 'Resources' };
 
@@ -174,17 +173,19 @@ function renderDetails(body: HTMLElement, rows: FolderRow[]): void {
   rows.forEach(row => {
     const tr = element('tr');
     const nameCell = element('td', 'folder-details-name');
-    nameCell.append(folderLink(row, false, null));
-    if (row.path !== row.name) nameCell.append(element('div', 'small color-medium folder-details-path', row.path));
-    if (row.description) nameCell.append(element('div', 'small color-medium folder-details-description', row.description));
+    // the name with its path and description under it, and the bookmark / README buttons beside it
+    const nameLine = element('div', 'd-flex align-items-start');
+    const nameText = element('div', 'folder-details-text');
+    nameText.append(folderLink(row, false, null));
+    if (row.path !== row.name) nameText.append(element('div', 'small color-medium folder-details-path', row.path));
+    if (row.description) nameText.append(element('div', 'small color-medium folder-details-description', row.description));
+    nameLine.append(nameText, copyOfActions(row));
+    nameCell.append(nameLine);
     tr.append(
       nameCell,
       element('td', 'text-right', row.experiments > 0 ? String(row.experiments) : '–'),
       element('td', 'text-right', row.resources > 0 ? String(row.resources) : '–'),
     );
-    const actionCell = element('td', 'text-right');
-    actionCell.append(copyOfActions(row));
-    tr.append(actionCell);
     tbody.append(tr);
   });
   table.append(thead, tbody);

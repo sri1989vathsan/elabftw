@@ -1786,8 +1786,22 @@ tr:first-child td {
   }
 
   .folder-details-table {
+    background: transparent;
     color: inherit;
     font-size: 0.85rem;
+
+    // the panel's own dark surface shows through: no striping or white cells
+    tbody tr,
+    th,
+    td {
+      background: transparent;
+      color: inherit;
+    }
+
+    .folder-details-text {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
 
     th,
     td {
@@ -1803,7 +1817,7 @@ tr:first-child td {
     }
 
     .folder-details-name {
-      max-width: 10rem;
+      max-width: 12rem;
     }
 
     .folder-details-path,
