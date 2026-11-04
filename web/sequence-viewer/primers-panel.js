@@ -339,6 +339,56 @@
         const addTicked = action('', function () {
           addMany(Array.from(tickedFile), [addTicked, orderTicked]);
         });
+        // the primers ticked are filed in a folder of your choice (the ones only in the file are added to My entries first)
+        const folderTicked = action('', async function () {
+          let list = [];
+          try {
+            const response = await fetch('registry-transfer.php?folders=1', { credentials: 'same-origin' });
+            list = (await response.json()).folders || [];
+          } catch (error) {
+            say('The folders could not be loaded.', true);
+            return;
+          }
+          const choice = element('select', 'primers-folder-select');
+          const none = element('option', '', 'No folder (Unfiled)');
+          none.value = '0';
+          choice.append(none);
+          list.filter(function (f) {
+            return !f.database;
+          }).forEach(function (f) {
+            const option = element('option', '', f.path);
+            option.value = String(f.id);
+            choice.append(option);
+          });
+          const go = action('File them here', async function () {
+            go.disabled = true;
+            try {
+              const created = await addMany(Array.from(tickedFile), [], true);
+              const ids = Array.from(tickedDb).concat(created);
+              const response = await fetch('registry-transfer.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': document.body.dataset.csrf },
+                body: JSON.stringify({ action: 'move_to_folder', ids: ids, folder_id: Number(choice.value) || 0 }),
+              });
+              const body = await response.json();
+              if (!response.ok) {
+                throw new Error(body.error || 'The primers could not be filed.');
+              }
+              say(body.moved + ' primer' + (body.moved === 1 ? '' : 's') + ' filed' + ((body.refused || []).length > 0 ? ', ' + body.refused.length + ' stay where they are (entries of the Database stay in the folder of their module, and you need the right to edit them)' : '') + '.');
+              folderBox.remove();
+              await render();
+            } catch (error) {
+              say(error.message || String(error), true);
+              go.disabled = false;
+            }
+          }, 'primary');
+          const folderBox = element('div', 'primers-pickbar primers-pickbar-compact');
+          folderBox.append(element('span', 'primers-muted', 'Folder:'), choice, go, action('Cancel', function () {
+            folderBox.remove();
+          }, 'quiet'));
+          bar.after(folderBox);
+        });
         const detachTicked = action('', async function () {
           detachTicked.disabled = true;
           orderTicked.disabled = true;
@@ -356,6 +406,8 @@
           const total = tickedDb.size + tickedFile.size;
           orderTicked.textContent = 'Order ' + total;
           addTicked.textContent = 'Add ' + tickedFile.size + ' to database';
+          folderTicked.textContent = 'Add ' + total + ' to a folder';
+          folderTicked.disabled = total === 0;
           detachTicked.textContent = 'Detach ' + tickedDb.size;
           orderTicked.disabled = total === 0;
           addTicked.disabled = tickedFile.size === 0;
@@ -386,7 +438,7 @@
           render();
         }, 'quiet');
         fold.title = 'Show or hide the sequence and the details of every primer';
-        bar.append(everything, element('span', 'primers-muted', 'All'), orderTicked, addTicked, detachTicked, fold);
+        bar.append(everything, element('span', 'primers-muted', 'All'), orderTicked, addTicked, folderTicked, detachTicked, fold);
         bar.classList.add('primers-pickbar-compact');
         sectionAttached.append(bar);
         const pick = function (box, set, value) {

@@ -2108,3 +2108,9 @@ body.hide-seq-orfs .veRowView .veRowViewOrfsContainer {
 body[data-map-style="dark"] .own-map-scale-out {
   stroke: #0f172a;
 }
+
+#tool-sidebar .primers-folder-select {
+  min-width: 0;
+  max-width: 14rem;
+  font-size: 0.8rem;
+}
