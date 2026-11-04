@@ -16,6 +16,9 @@ export type FolderSortKey = 'name' | 'path' | 'experiments' | 'resources';
 
 export interface FolderRow {
   id: string;
+  /** the folder this one is inside, '' for a top-level folder */
+  parentId: string;
+  hasChildren: boolean;
   name: string;
   path: string;
   href: string;
@@ -33,6 +36,9 @@ const VIEWS: readonly FolderView[] = ['tree', 'list', 'details'];
 let sortKey: FolderSortKey = 'path';
 let sortDirection: 1 | -1 = 1;
 let filterText = '';
+// the folder whose subfolders the flat views list ('' = the top level), set from the folder being looked at the first time
+let level = '';
+let levelReady = false;
 
 export function parseFolderView(value: string | null): FolderView {
   return VIEWS.find(view => view === value) ?? 'tree';
@@ -59,6 +65,31 @@ export function filterFolderRows<T extends Pick<FolderRow, 'name' | 'path' | 'de
   });
 }
 
+/** The folders directly inside `level` ('' = the top level). */
+export function rowsAtLevel<T extends Pick<FolderRow, 'parentId'>>(rows: T[], level: string): T[] {
+  return rows.filter(row => row.parentId === level);
+}
+
+/** The folders from the top level down to `id`, `id` last; empty when it is not among the rows. */
+export function ancestorChain<T extends Pick<FolderRow, 'id' | 'parentId'>>(rows: T[], id: string): T[] {
+  const chain: T[] = [];
+  let current = rows.find(row => row.id === id);
+  // the limit only guards against a broken parent chain
+  for (let step = 0; current && step < 30; step++) {
+    chain.unshift(current);
+    const parentId = current.parentId;
+    current = parentId === '' ? undefined : rows.find(row => row.id === parentId);
+  }
+  return chain;
+}
+
+/** Where the flat views start: inside the folder being looked at when it has subfolders, else beside it. */
+export function initialFolderLevel<T extends Pick<FolderRow, 'id' | 'parentId' | 'hasChildren'>>(rows: T[], activeId: string | null): string {
+  const active = activeId ? rows.find(row => row.id === activeId) : undefined;
+  if (!active) return '';
+  return active.hasChildren ? active.id : active.parentId;
+}
+
 function viewKey(): string {
   const userId = document.getElementById('experimentsFoldersSidebar')?.dataset.currentUserId ?? '';
   return `elabftw-folders-view-${userId}`;
@@ -83,6 +114,8 @@ function collectRows(tree: HTMLElement): FolderRow[] {
     const actions = Array.from(node.querySelectorAll<HTMLElement>(':scope > .folder-row .favorite-folder-star, :scope > .folder-row [data-action="open-folder-readme"]'));
     rows.set(id, {
       id,
+      parentId: node.parentElement?.closest<HTMLElement>('.folder-node')?.dataset.folderId ?? '',
+      hasChildren: node.querySelector(':scope > .folder-children > .folder-node') !== null,
       name: node.querySelector('.folder-name')?.textContent?.trim() ?? '',
       path: node.dataset.folderFullPath ?? '',
       href: link.getAttribute('href') ?? '#',
@@ -107,6 +140,17 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', 
 function copyOfActions(row: FolderRow): HTMLElement {
   const box = element('span', 'folder-actions flex-shrink-0');
   row.actions.forEach(button => box.append(button.cloneNode(true)));
+  // a folder with subfolders can be stepped into without leaving the page
+  if (row.hasChildren) {
+    const enter = element('button', 'folder-action-btn hl-hover-gray rounded folder-enter-button');
+    enter.type = 'button';
+    enter.dataset.action = 'open-folder-level';
+    enter.dataset.folderId = row.id;
+    enter.title = i18next.t('Show the folders inside');
+    enter.setAttribute('aria-label', `${i18next.t('Show the folders inside')}: ${row.name}`);
+    enter.append(element('i', 'fas fa-chevron-right fa-xs'));
+    box.append(enter);
+  }
   return box;
 }
 
@@ -136,62 +180,100 @@ function renderList(body: HTMLElement, rows: FolderRow[], entityType: string): v
   body.replaceChildren(list);
 }
 
-// The side panel is narrow: the path and the description sit under the name, and the counts are short.
-const COLUMNS: Array<{ keys: Array<{ key: FolderSortKey; label: string }>; numeric?: boolean; label?: string }> = [
-  { keys: [{ key: 'name', label: 'Name' }, { key: 'path', label: 'Path' }] },
-  { keys: [{ key: 'experiments', label: 'Exp.' }], numeric: true },
-  { keys: [{ key: 'resources', label: 'Res.' }], numeric: true },
+const SORT_CHIPS: Array<{ key: FolderSortKey; label: string; icon?: string; title: string }> = [
+  { key: 'name', label: 'Name', title: 'Sort by name' },
+  { key: 'path', label: 'Path', title: 'Sort by path' },
+  { key: 'experiments', label: '', icon: 'fa-flask', title: 'Sort by number of experiments' },
+  { key: 'resources', label: '', icon: 'fa-boxes-stacked', title: 'Sort by number of resources' },
 ];
-const SORT_TITLES: Record<FolderSortKey, string> = { name: 'Name', path: 'Path', experiments: 'Experiments', resources: 'Resources' };
 
-function sortButton(key: FolderSortKey, label: string): HTMLButtonElement {
-  const button = element('button', 'btn btn-link btn-sm p-0 mr-2 folder-sort-button');
+function sortChip(chip: (typeof SORT_CHIPS)[number]): HTMLButtonElement {
+  const active = sortKey === chip.key;
+  const button = element('button', `folder-sort-chip${active ? ' active' : ''}`);
   button.type = 'button';
   button.dataset.action = 'sort-folder-details';
-  button.dataset.sortKey = key;
-  button.title = `${i18next.t('Sort by')} ${i18next.t(SORT_TITLES[key]).toLocaleLowerCase()}`;
-  button.append(document.createTextNode(i18next.t(label)));
-  if (sortKey === key) button.append(element('i', `fas fa-caret-${sortDirection === 1 ? 'up' : 'down'} fa-fw ml-1`));
+  button.dataset.sortKey = chip.key;
+  button.title = i18next.t(chip.title);
+  button.setAttribute('aria-pressed', String(active));
+  if (chip.icon) button.append(element('i', `fas ${chip.icon} fa-fw`));
+  if (chip.label) button.append(document.createTextNode(i18next.t(chip.label)));
+  if (active) button.append(element('i', `fas fa-caret-${sortDirection === 1 ? 'up' : 'down'} fa-fw ml-1`));
   return button;
 }
 
+function countPill(icon: string, count: number, title: string): HTMLElement {
+  const pill = element('span', 'folder-count-pill');
+  pill.title = `${count} ${title}`;
+  pill.append(element('i', `fas ${icon} fa-fw`), document.createTextNode(String(count)));
+  return pill;
+}
+
+/** Each folder as a small card: name and buttons, then its path, description and how many experiments / resources it holds. */
 function renderDetails(body: HTMLElement, rows: FolderRow[]): void {
-  const table = element('table', 'table table-sm folder-details-table mb-0');
-  const head = element('tr');
-  COLUMNS.forEach(column => {
-    const cell = element('th', column.numeric ? 'text-right' : '');
-    cell.scope = 'col';
-    column.keys.forEach(({ key, label }) => {
-      cell.append(sortButton(key, label));
-      if (sortKey === key) cell.setAttribute('aria-sort', sortDirection === 1 ? 'ascending' : 'descending');
-    });
-    head.append(cell);
-  });
-  const thead = element('thead');
-  thead.append(head);
-  const tbody = element('tbody');
+  const sortBar = element('div', 'folder-sort-bar');
+  sortBar.append(element('span', 'folder-sort-label', i18next.t('Sort by')));
+  SORT_CHIPS.forEach(chip => sortBar.append(sortChip(chip)));
+  const list = element('div', 'folder-details-list');
   rows.forEach(row => {
-    const tr = element('tr');
-    const nameCell = element('td', 'folder-details-name');
-    // the name with its path and description under it, and the bookmark / README buttons beside it
-    const nameLine = element('div', 'd-flex align-items-start');
-    const nameText = element('div', 'folder-details-text');
-    nameText.append(folderLink(row, false, null));
-    if (row.path !== row.name) nameText.append(element('div', 'small color-medium folder-details-path', row.path));
-    if (row.description) nameText.append(element('div', 'small color-medium folder-details-description', row.description));
-    nameLine.append(nameText, copyOfActions(row));
-    nameCell.append(nameLine);
-    tr.append(
-      nameCell,
-      element('td', 'text-right', row.experiments > 0 ? String(row.experiments) : '–'),
-      element('td', 'text-right', row.resources > 0 ? String(row.resources) : '–'),
-    );
-    tbody.append(tr);
+    const card = element('div', `folder-details-card${row.active ? ' is-active' : ''}`);
+    const top = element('div', 'd-flex align-items-start');
+    const main = element('div', 'folder-details-text');
+    main.append(folderLink(row, false, null));
+    top.append(main, copyOfActions(row));
+    card.append(top);
+    if (row.path !== row.name) card.append(element('div', 'folder-details-path', row.path));
+    if (row.description) card.append(element('div', 'folder-details-description', row.description));
+    const counts = element('div', 'folder-details-counts');
+    if (row.experiments > 0) counts.append(countPill('fa-flask', row.experiments, i18next.t('experiments')));
+    if (row.resources > 0) counts.append(countPill('fa-boxes-stacked', row.resources, i18next.t('resources')));
+    if (!counts.hasChildNodes()) counts.append(element('span', 'folder-count-empty', i18next.t('Empty')));
+    card.append(counts);
+    list.append(card);
   });
-  table.append(thead, tbody);
-  const scroller = element('div', 'folder-details-scroll');
-  scroller.append(table);
-  body.replaceChildren(scroller);
+  body.replaceChildren(sortBar, list);
+}
+
+/** One button that moves the flat views to another level. */
+function levelButton(className: string, folderId: string, label: string, title: string): HTMLButtonElement {
+  const button = element('button', className);
+  button.type = 'button';
+  button.dataset.action = 'open-folder-level';
+  button.dataset.folderId = folderId;
+  button.title = title;
+  button.append(element('span', '', label));
+  return button;
+}
+
+/** "..": back to the folder that holds the current level (or the top). */
+function upRow(all: FolderRow[]): HTMLElement {
+  const chain = ancestorChain(all, level);
+  const parent = chain.length > 1 ? chain[chain.length - 2] : null;
+  const row = element('div', 'd-flex align-items-center folder-flat-row folder-up-row');
+  const button = levelButton('btn btn-link btn-sm p-0 folder-up-button color-medium', parent ? parent.id : '', '', i18next.t('Up one level'));
+  button.replaceChildren(element('i', 'fas fa-level-up-alt fa-fw mr-1'), document.createTextNode(`.. ${parent ? parent.name : i18next.t('All folders')}`));
+  row.append(button);
+  return row;
+}
+
+/** Where the flat views are in the folder structure, as a path; each part moves there (the last is where we are). */
+function levelPathBar(all: FolderRow[]): HTMLElement {
+  const nav = element('nav', 'folder-path-bar folder-level-bar');
+  nav.setAttribute('aria-label', i18next.t('Folder path'));
+  const crumbs: Array<{ id: string; name: string; icon: string }> = [
+    { id: '', name: i18next.t('All folders'), icon: 'fa-folder-tree' },
+    ...ancestorChain(all, level).map(folder => ({ id: folder.id, name: folder.name, icon: 'fa-folder' })),
+  ];
+  crumbs.forEach((crumb, index) => {
+    if (index > 0) nav.append(element('i', 'fas fa-chevron-right folder-path-sep'));
+    const last = index === crumbs.length - 1;
+    const part = last
+      ? element('span', 'folder-path-crumb')
+      : levelButton('folder-path-crumb', crumb.id, '', crumb.name);
+    if (last) part.setAttribute('aria-current', 'location');
+    part.replaceChildren(element('i', `fas ${crumb.icon} fa-fw`), document.createTextNode(crumb.name));
+    nav.append(part);
+  });
+  return nav;
 }
 
 function ensureFlatContainer(tree: HTMLElement): HTMLElement {
@@ -211,7 +293,8 @@ function ensureFlatContainer(tree: HTMLElement): HTMLElement {
     syncFolderView();
   });
   const body = element('div', 'folder-flat-body');
-  flat.append(filter, body);
+  const bar = element('div', 'folder-level-bar-holder mt-2');
+  flat.append(filter, body, bar);
   tree.after(flat);
   return flat;
 }
@@ -243,13 +326,27 @@ export function syncFolderView(): void {
   if (!body) return;
   const entityType = (document.getElementById('folderEntityTypeSelect') as HTMLSelectElement | null)?.value ?? 'experiments';
   const all = collectRows(tree);
-  const rows = sortFolderRows(filterFolderRows(all, filterText), view === 'list' ? 'path' : sortKey, view === 'list' ? 1 : sortDirection);
+  if (!levelReady) {
+    levelReady = true;
+    const sidebar = document.getElementById('experimentsFoldersSidebar');
+    const activeId = new URLSearchParams(window.location.search).get('folder') || sidebar?.dataset.currentFolderId || null;
+    level = initialFolderLevel(all, activeId);
+  }
+  // a level that is no longer shown (another scope, a deleted folder) goes back to the top
+  if (level !== '' && !all.some(row => row.id === level)) level = '';
+  const searching = filterText.trim() !== '';
+  // typing in the filter searches every folder; without it the folders inside the current level are listed
+  const pool = searching ? filterFolderRows(all, filterText) : rowsAtLevel(all, level);
+  const rows = sortFolderRows(pool, view === 'list' ? 'path' : sortKey, view === 'list' ? 1 : sortDirection);
+  flat.querySelector<HTMLElement>('.folder-level-bar-holder')?.replaceChildren(levelPathBar(all));
   if (rows.length === 0) {
-    body.replaceChildren(element('div', 'small color-medium text-center border rounded p-3', i18next.t(all.length === 0 ? 'No folders to show.' : 'No folder matches.')));
+    const empty = element('div', 'small color-medium text-center border rounded p-3', i18next.t(all.length === 0 ? 'No folders to show.' : searching ? 'No folder matches.' : 'No folders in here.'));
+    body.replaceChildren(...(level !== '' && !searching ? [upRow(all), empty] : [empty]));
     return;
   }
   if (view === 'list') renderList(body, rows, entityType);
   else renderDetails(body, rows);
+  if (level !== '' && !searching) body.prepend(upRow(all));
 }
 
 /** Wires the view buttons and the sortable column headers (delegated, so they survive the panel being replaced). */
@@ -260,6 +357,14 @@ export function initFolderViews(): void {
     } catch {
       // the choice then only lasts until the panel is rebuilt
     }
+    syncFolderView();
+  });
+  on('open-folder-level', (el: HTMLElement) => {
+    level = el.dataset.folderId ?? '';
+    // stepping to another level also leaves a search, which would otherwise keep listing every folder
+    filterText = '';
+    const filter = document.getElementById('folderFlatFilter') as HTMLInputElement | null;
+    if (filter) filter.value = '';
     syncFolderView();
   });
   on('sort-folder-details', (el: HTMLElement) => {

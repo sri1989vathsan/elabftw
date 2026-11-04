@@ -14,7 +14,7 @@ vm.runInNewContext(js, {
   module: mod, exports: mod.exports, Intl, Array, Number, document: {}, window: {},
   require: id => (id === './i18n' ? { default: { t: key => key } } : { on: () => {} }),
 });
-const { parseFolderView, sortFolderRows, filterFolderRows } = mod.exports;
+const { parseFolderView, sortFolderRows, filterFolderRows, rowsAtLevel, ancestorChain, initialFolderLevel } = mod.exports;
 
 const row = (name, p, experiments = 0, resources = 0, description = '') => ({ name, path: p, experiments, resources, description });
 const rows = [row('Plate 10', 'Lab/Plate 10', 3, 1), row('Plate 2', 'Lab/Plate 2', 7, 0), row('Archive', 'Archive', 0, 5, 'old stuff')];
@@ -49,4 +49,36 @@ test('the filter needs every word, in the name, path or description, in any case
   assert.deepEqual(Array.from(filterFolderRows(rows, 'old'), r => r.name), ['Archive']);
   assert.equal(filterFolderRows(rows, '   ').length, 3);
   assert.equal(filterFolderRows(rows, 'nothing').length, 0);
+});
+
+const tree = [
+  { id: '1', parentId: '', hasChildren: true, name: 'Vatsi' },
+  { id: '2', parentId: '1', hasChildren: true, name: 'EV Project' },
+  { id: '3', parentId: '2', hasChildren: false, name: 'Trogocytosis' },
+  { id: '4', parentId: '', hasChildren: false, name: 'Other' },
+];
+
+test('a level lists only the folders directly inside it', () => {
+  assert.deepEqual(Array.from(rowsAtLevel(tree, ''), r => r.name), ['Vatsi', 'Other']);
+  assert.deepEqual(Array.from(rowsAtLevel(tree, '1'), r => r.name), ['EV Project']);
+  assert.equal(rowsAtLevel(tree, '3').length, 0);
+});
+
+test('the chain runs from the top level down to the folder', () => {
+  assert.deepEqual(Array.from(ancestorChain(tree, '3'), r => r.name), ['Vatsi', 'EV Project', 'Trogocytosis']);
+  assert.deepEqual(Array.from(ancestorChain(tree, '4'), r => r.name), ['Other']);
+  assert.equal(ancestorChain(tree, '99').length, 0);
+});
+
+test('a broken parent chain cannot loop for ever', () => {
+  const loop = [{ id: 'a', parentId: 'b' }, { id: 'b', parentId: 'a' }];
+  assert.ok(ancestorChain(loop, 'a').length <= 30);
+});
+
+test('the flat views start inside the folder being looked at, or beside it when it has no subfolders', () => {
+  assert.equal(initialFolderLevel(tree, '2'), '2');
+  assert.equal(initialFolderLevel(tree, '3'), '2');
+  assert.equal(initialFolderLevel(tree, '4'), '');
+  assert.equal(initialFolderLevel(tree, null), '');
+  assert.equal(initialFolderLevel(tree, '99'), '');
 });
