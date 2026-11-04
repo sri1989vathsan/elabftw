@@ -944,7 +944,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       cabinet.append(row);
     });
     // the places that are still free, as far as the capacity says: a click on one opens a small form to make the rack or the box there
-    const freePlaces = capacity > 0 ? Math.min(Math.max(capacity - node.children.length, 0), 12) : 0;
+    // without a capacity there is no limit: one place to click is always offered at the end, to add another
+    const freePlaces = capacity > 0 ? Math.min(Math.max(capacity - node.children.length, 0), 12) : 1;
     const used = new Set(node.children.map(c => c.unit.position).filter((p): p is number => typeof p === 'number'));
     const nextFree = (skip: number): number => {
       let n = 0;
@@ -962,7 +963,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     const newKind = node.unit.kind === 'rack' ? 'box' : 'rack';
     for (let i = 0; i < freePlaces; i++) {
       const row = el('div', 'storage-shelf storage-shelf-free');
-      const label = el('button', 'btn btn-transparent btn-sm storage-shelf-label small color-medium', newKind === 'box' ? 'free place' : 'free rack');
+      const label = el('button', 'btn btn-transparent btn-sm storage-shelf-label small color-medium', capacity > 0 ? (newKind === 'box' ? 'free place' : 'free rack') : (newKind === 'box' ? '+ add a box' : '+ add a rack'));
       label.type = 'button';
       label.title = `Click to make a ${newKind === 'box' ? 'box' : 'rack'} here`;
       const area = el('div', 'storage-shelf-boxes');
