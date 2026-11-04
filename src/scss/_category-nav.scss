@@ -880,3 +880,61 @@
   border-radius: 6px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
 }
+
+// a fridge or a freezer seen from the front: the cabinet with a shelf for each rack or drawer
+.storage-cabinet {
+  border: 2px solid var(--border-strong, rgba(128, 128, 128, 0.5));
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg, #fff);
+}
+
+.storage-cabinet-head {
+  padding: 0.5rem 0.75rem;
+  background: rgba(128, 128, 128, 0.12);
+  border-bottom: 1px solid var(--border-strong, rgba(128, 128, 128, 0.5));
+}
+
+.storage-shelf {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-strong, rgba(128, 128, 128, 0.4));
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.storage-shelf-label {
+  flex: 0 0 7rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+.storage-shelf-boxes {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: stretch;
+}
+
+.storage-shelf-box {
+  display: flex;
+  flex: 1 1 8rem;
+  flex-direction: column;
+  max-width: 14rem;
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  border: 1px solid var(--primary, #295ca9);
+  border-radius: 6px;
+  background: rgba(41, 92, 169, 0.1);
+  cursor: pointer;
+}
+
+.storage-shelf-box-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}

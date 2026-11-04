@@ -6,7 +6,7 @@ import { ApiC } from './api';
 import { getEntityTypeFromPage } from './misc';
 import { askConfirm } from './confirm-dialog';
 
-type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null };
+type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null };
 type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string };
 type Row = {
   id: number;
@@ -272,6 +272,19 @@ function buildTree(units: Unit[], rows: Row[]): { roots: Node[]; byId: Map<numbe
   return { roots, byId };
 }
 
+// the tag beside the name of a place: the temperature of a fridge or a freezer, or what it is
+function kindTag(unit: Unit): HTMLElement | null {
+  if (unit.kind !== 'freezer' && unit.kind !== 'fridge') {
+    return null;
+  }
+  const tag = el('span', `badge ml-1 ${unit.kind === 'freezer' ? 'badge-primary' : 'badge-success'}`, unit.temperature === null || unit.temperature === undefined ? unit.kind : `${unit.temperature} °C`);
+  tag.title = unit.kind === 'freezer' ? 'Freezer' : 'Fridge';
+  return tag;
+}
+
+// racks and boxes are drawn inside the fridge or freezer they are in, not in the tree of locations
+const inTree = (node: Node): boolean => node.unit.kind !== 'rack' && node.unit.kind !== 'box';
+
 function collect(node: Node, withChildren: boolean): { row: Row; location: StorageLocation }[] {
   const out: { row: Row; location: StorageLocation }[] = [];
   const visit = (n: Node): void => {
@@ -365,7 +378,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     const li = el('li', 'storage-tree-node');
     const row = el('div', `storage-tree-row${state.selected === node.unit.id ? ' selected' : ''}`);
     row.style.paddingLeft = `${depth * 1}rem`;
-    const hasChildren = node.children.length > 0;
+    const kids = node.children.filter(inTree);
+    const hasChildren = kids.length > 0;
     const key = String(node.unit.id);
     const collapsed = query === '' && (state.collapsed[key] ?? false);
     const caret = el('button', 'storage-tree-caret btn btn-transparent btn-sm');
@@ -380,7 +394,12 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     const label = el('button', 'storage-tree-label btn btn-transparent btn-sm');
     label.type = 'button';
-    label.append(el('i', 'fas fa-fw fa-location-dot mr-1'), el('span', '', node.unit.name), el('span', 'grouped-section-count', String(node.total)));
+    label.append(el('i', `fas fa-fw ${node.unit.kind === 'location' || !node.unit.parent_id ? 'fa-building' : 'fa-location-dot'} mr-1`), el('span', '', node.unit.name));
+    const tag = kindTag(node.unit);
+    if (tag) {
+      label.append(tag);
+    }
+    label.append(el('span', 'grouped-section-count', String(node.total)));
     label.addEventListener('click', () => select(node.unit.id));
     // a tube dropped on a location moves there
     row.addEventListener('dragover', event => {
@@ -403,7 +422,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     li.append(row);
     if (hasChildren && !collapsed) {
       const ul = el('ul', 'storage-tree-list');
-      node.children.filter(c => query === '' || matches(c)).forEach(c => ul.append(renderNode(c, depth + 1)));
+      kids.filter(c => query === '' || matches(c)).forEach(c => ul.append(renderNode(c, depth + 1)));
       li.append(ul);
     }
     return li;
@@ -854,16 +873,87 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     return wrap;
   };
 
+  // a fridge or a freezer seen from the front: a shelf for each rack or drawer, with its boxes on it
+  const renderCabinet = (node: Node): HTMLElement => {
+    const cabinet = el('div', 'storage-cabinet mb-3');
+    const slots = slotsOf(node);
+    const head = el('div', 'storage-cabinet-head d-flex align-items-center');
+    head.append(el('span', 'font-weight-bold', node.unit.name));
+    const tag = kindTag(node.unit);
+    if (tag) {
+      head.append(tag);
+    }
+    if (slots > 0) {
+      const taken = takenIn(node);
+      head.append(el('span', 'ml-auto small color-medium', `${taken} / ${slots} slots`));
+    }
+    cabinet.append(head);
+    const shelfBox = (box: Node): HTMLElement => {
+      const tile = el('button', 'storage-shelf-box');
+      tile.type = 'button';
+      const total = (box.unit.box_rows ?? 0) * (box.unit.box_cols ?? 0);
+      tile.title = `${box.unit.name}: ${box.own.length} of ${total}`;
+      tile.append(el('span', 'storage-shelf-box-name', box.unit.name));
+      if (total > 0) {
+        tile.append(el('span', 'small color-medium', `${box.own.length}/${total}`), gauge(box.own.length, total));
+      }
+      tile.addEventListener('click', () => select(box.unit.id));
+      return tile;
+    };
+    const loose = node.children.filter(c => c.unit.kind === 'box' || (c.children.length === 0 && Boolean(c.unit.box_rows)));
+    const shelves = node.children.filter(c => !loose.includes(c));
+    shelves.forEach(shelf => {
+      const row = el('div', 'storage-shelf');
+      const label = el('button', 'btn btn-transparent btn-sm storage-shelf-label', shelf.unit.name);
+      label.type = 'button';
+      label.addEventListener('click', () => select(shelf.unit.id));
+      const boxes = el('div', 'storage-shelf-boxes');
+      const inside = boxesIn(shelf);
+      inside.forEach(b => boxes.append(shelfBox(b)));
+      if (inside.length === 0) {
+        boxes.append(el('span', 'small color-medium', 'no box yet'));
+      }
+      row.append(label, boxes);
+      cabinet.append(row);
+    });
+    if (loose.length > 0) {
+      const row = el('div', 'storage-shelf');
+      row.append(el('span', 'storage-shelf-label small color-medium', 'In the ' + (node.unit.kind === 'rack' ? 'rack' : 'cabinet')));
+      const boxes = el('div', 'storage-shelf-boxes');
+      loose.forEach(b => boxes.append(shelfBox(b)));
+      row.append(boxes);
+      cabinet.append(row);
+    }
+    return cabinet;
+  };
+
   // node is null for a location at the top (a freezer, a cabinet...)
   const renderAddForm = (node: Node | null): HTMLElement => {
     const form = el('div', 'd-flex flex-wrap align-items-center mb-3');
     const kind = el('select', 'form-control form-control-sm w-auto mr-1');
     kind.setAttribute('aria-label', 'What to add');
-    [['rack', 'Rack / drawer / shelf'], ['box', 'Box']].forEach(([value, label]) => {
+    // a location at the top; in a location more locations, fridges and freezers; in a fridge, a freezer or a rack, racks and boxes
+    const parentKind = node === null ? null : (node.unit.kind ?? 'legacy');
+    const choices: [string, string][] = parentKind === null
+      ? [['location', 'Location (a room, a building)']]
+      : (parentKind === 'location'
+        ? [['freezer', 'Freezer'], ['fridge', 'Fridge'], ['location', 'Location inside']]
+        : (parentKind === 'legacy'
+          ? [['rack', 'Rack / drawer / shelf'], ['box', 'Box'], ['location', 'Location'], ['freezer', 'Freezer'], ['fridge', 'Fridge']]
+          : [['rack', 'Rack / drawer / shelf'], ['box', 'Box']]));
+    choices.forEach(([value, label]) => {
       const option = el('option', '', label);
       option.value = value;
       kind.append(option);
     });
+    const temperature = el('input', 'form-control form-control-sm mr-1');
+    temperature.type = 'number';
+    temperature.min = '-273';
+    temperature.max = '100';
+    temperature.style.width = '5.5rem';
+    temperature.placeholder = '°C';
+    temperature.title = 'Temperature in degrees Celsius';
+    temperature.setAttribute('aria-label', 'Temperature');
     const name = el('input', 'form-control form-control-sm w-auto mr-1');
     name.placeholder = 'Name';
     name.setAttribute('aria-label', 'Name');
@@ -888,9 +978,15 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     rows.value = '9';
     cols.value = '9';
     rows.hidden = cols.hidden = true;
-    kind.addEventListener('change', () => {
+    const showFields = (): void => {
       rows.hidden = cols.hidden = kind.value !== 'box';
-    });
+      temperature.hidden = kind.value !== 'freezer' && kind.value !== 'fridge';
+      if (kind.value === 'fridge' && temperature.value === '') {
+        temperature.value = '4';
+      }
+    };
+    kind.addEventListener('change', showFields);
+    showFields();
     const add = el('button', 'btn btn-secondary btn-sm', 'Add');
     add.type = 'button';
     add.addEventListener('click', () => {
@@ -899,7 +995,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         name.focus();
         return;
       }
-      void ApiC.post2location('storage_units', { name: unitName, ...(node === null ? {} : { parent_id: node.unit.id }), ...(Number(position.value) > 0 ? { position: Number(position.value) } : {}) }).then(async id => {
+      void ApiC.post2location('storage_units', { name: unitName, kind: kind.value, ...(temperature.value !== '' && !temperature.hidden ? { temperature: Number(temperature.value) } : {}), ...(node === null ? {} : { parent_id: node.unit.id }), ...(Number(position.value) > 0 ? { position: Number(position.value) } : {}) }).then(async id => {
         if (kind.value === 'box') {
           await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rows.value), box_cols: Number(cols.value) });
         }
@@ -912,7 +1008,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         return load();
       });
     });
-    form.append(el('span', 'mr-2', node === null ? 'Add at the top' : 'Add inside'), kind, name, position, rows, cols, add);
+    form.append(el('span', 'mr-2', node === null ? 'Add at the top' : 'Add inside'), kind, name, temperature, position, rows, cols, add);
     return form;
   };
 
@@ -930,11 +1026,37 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     position.title = 'Its position among the places of its parent (1, 2, 3...): it gives the order';
     position.setAttribute('aria-label', 'Position');
     position.value = node.unit.position ? String(node.unit.position) : '';
+    // what the place is (it can be said for the places made before), and the temperature of a fridge or a freezer
+    const what = el('select', 'form-control form-control-sm w-auto mr-1');
+    what.setAttribute('aria-label', 'What it is');
+    [['', 'Kind of place'], ['location', 'Location'], ['freezer', 'Freezer'], ['fridge', 'Fridge'], ['rack', 'Rack / drawer / shelf'], ['box', 'Box']].forEach(([value, label]) => {
+      const option = el('option', '', label);
+      option.value = value;
+      what.append(option);
+    });
+    what.value = node.unit.kind ?? '';
+    const degrees = el('input', 'form-control form-control-sm mr-1');
+    degrees.type = 'number';
+    degrees.min = '-273';
+    degrees.max = '100';
+    degrees.style.width = '5.5rem';
+    degrees.placeholder = '°C';
+    degrees.setAttribute('aria-label', 'Temperature');
+    degrees.value = node.unit.temperature === null || node.unit.temperature === undefined ? '' : String(node.unit.temperature);
+    const syncDegrees = (): void => {
+      degrees.hidden = what.value !== 'freezer' && what.value !== 'fridge';
+    };
+    what.addEventListener('change', syncDegrees);
+    syncDegrees();
     const save = el('button', 'btn btn-transparent btn-sm', 'Save');
     save.type = 'button';
     save.addEventListener('click', () => {
       const unitName = name.value.trim();
       const body: Record<string, unknown> = {};
+      if (what.value !== (node.unit.kind ?? '') || degrees.value !== (node.unit.temperature === null || node.unit.temperature === undefined ? '' : String(node.unit.temperature))) {
+        body.kind = what.value === '' ? null : what.value;
+        body.temperature = degrees.hidden || degrees.value === '' ? null : Number(degrees.value);
+      }
       if (unitName !== '' && unitName !== node.unit.name) {
         body.name = unitName;
       }
@@ -945,7 +1067,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         patchAndReload(`storage_units/${node.unit.id}`, body);
       }
     });
-    form.append(name, position, save);
+    form.append(name, what, degrees, position, save);
     return form;
   };
 
@@ -1122,6 +1244,31 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     return wrap;
   };
 
+  // the path of the place, each part opens its place, and what the place is
+  const renderHeader = (node: Node): HTMLElement => {
+    const head = el('div', 'mb-2');
+    const crumbs = el('div', 'd-flex flex-wrap align-items-center small color-medium');
+    const chain: Node[] = [];
+    for (let n: Node | undefined = node; n; n = n.unit.parent_id === null ? undefined : tree.byId.get(n.unit.parent_id)) {
+      chain.unshift(n);
+    }
+    chain.slice(0, -1).forEach(ancestor => {
+      const link = el('button', 'btn btn-transparent btn-sm p-0', ancestor.unit.name);
+      link.type = 'button';
+      link.addEventListener('click', () => select(ancestor.unit.id));
+      crumbs.append(link, el('i', 'fas fa-chevron-right fa-xs mx-2'));
+    });
+    const title = el('h4', 'mb-0 d-flex align-items-center');
+    title.append(document.createTextNode(node.unit.name));
+    const tag = kindTag(node.unit);
+    if (tag) {
+      tag.classList.add('ml-2');
+      title.append(tag);
+    }
+    head.append(crumbs, title);
+    return head;
+  };
+
   const renderMain = (): void => {
     main.replaceChildren();
     const node = state.selected === null ? undefined : tree.byId.get(state.selected);
@@ -1129,7 +1276,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       main.append(el('p', 'text-muted', 'Select a storage location in the tree.'));
       return;
     }
-    main.append(el('h4', '', node.unit.full_path));
+    main.append(renderHeader(node));
     main.append(renderRename(node));
     main.append(renderMoveTo(node));
     main.append(renderInfo(node));
@@ -1156,7 +1303,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     }
 
     if (node.children.length > 0) {
-      main.append(renderRacks(node));
+      main.append(node.unit.kind === 'location' ? renderRacks(node) : renderCabinet(node));
     }
 
     const entries = collect(node, includeChildren);
