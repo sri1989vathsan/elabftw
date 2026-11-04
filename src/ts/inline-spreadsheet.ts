@@ -9444,7 +9444,7 @@ export function buildReadOnlySpreadsheetHost(
         // own filter checks this same flag as a fallback for exactly that
         // gap (see its own comment).
         document.body.classList.add('elabftw-spreadsheet-editing');
-        if (lastFocusWasInGrid) pickReclaimTarget()?.focus();
+        if (lastFocusWasInGrid) pickReclaimTarget()?.focus({ preventScroll: true });
         return;
       }
       // lastFocusWasInGrid is deliberately scoped to *this* overlay's own
@@ -9704,7 +9704,7 @@ export function buildReadOnlySpreadsheetHost(
     focusPollInterval = setInterval(() => {
       if (!lastFocusWasInGrid || document.activeElement !== document.body) return;
       document.body.classList.add('elabftw-spreadsheet-editing');
-      pickReclaimTarget()?.focus();
+      pickReclaimTarget()?.focus({ preventScroll: true });
     }, 50);
   }
   if (!editable) {
