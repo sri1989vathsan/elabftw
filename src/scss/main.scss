@@ -1756,6 +1756,63 @@ tr:first-child td {
     justify-content: flex-end;
     padding-left: 0.35rem;
   }
+
+  // flat views of the folders (folder-views.ts): list and details
+  .folder-flat-body {
+    max-height: min(46vh, 34rem);
+    min-height: 3rem;
+    overflow: auto;
+    padding-right: 0.25rem;
+  }
+
+  .folder-flat-row {
+    padding: 0.15rem 0;
+  }
+
+  .folder-flat-main {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .folder-flat-link {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-details-scroll {
+    overflow-x: auto;
+  }
+
+  .folder-details-table {
+    color: inherit;
+    font-size: 0.85rem;
+
+    th,
+    td {
+      border-color: var(--chrome-muted);
+      vertical-align: middle;
+    }
+
+    .folder-sort-button {
+      color: inherit;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .folder-details-name {
+      white-space: nowrap;
+    }
+
+    .folder-details-description {
+      max-width: 9rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
 }
 
 .folder-action-btn {

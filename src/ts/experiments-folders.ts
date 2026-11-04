@@ -13,6 +13,7 @@ import { on } from './handlers';
 import { notify } from './notify';
 import { getTinymceBaseConfig } from './tinymce';
 import { htmlToMarkdown, markdownToHtml } from './Editor.class';
+import { initFolderViews, syncFolderView } from './folder-views';
 
 type FolderScope = 'mine' | 'all';
 type FolderEntityType = 'experiments' | 'items';
@@ -103,6 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
   let sidebar = initialSidebar;
+  // tree / list / details switch of the folders panel
+  initFolderViews();
 
   const ApiC = new Api();
 
@@ -262,6 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // re-apply the mine/all entity-list scope on top, since it also rewrites href
     updateFolderEntityLinks(activeFolderScope);
+    syncFolderView();
   }
 
   function getQuickLinkHref(option: HTMLOptionElement, type: FolderEntityType): string | undefined {
@@ -310,6 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
     filterParentFolders(scope);
     updateFolderEntityLinks(scope);
     updateFolderSections();
+    syncFolderView();
   }
 
   /**
