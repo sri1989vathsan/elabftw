@@ -237,39 +237,36 @@ function sortChip(chip: (typeof SORT_CHIPS)[number]): HTMLButtonElement {
   return button;
 }
 
-function countPill(icon: string, count: number, title: string): HTMLElement {
-  const pill = element('span', 'folder-count-pill');
-  pill.title = `${count} ${title}`;
-  pill.append(element('i', `fas ${icon} fa-fw`), document.createTextNode(String(count)));
-  return pill;
-}
-
 /** Each folder as a small card: name and buttons, then its path, description and how many experiments / resources it holds. */
+/** The column headings: pressing one sorts by it (again to reverse); the first column sorts by name or by path. */
 function sortBarOf(): HTMLElement {
-  const sortBar = element('div', 'folder-sort-bar');
-  sortBar.append(element('span', 'folder-sort-label', i18next.t('Sort by')));
-  SORT_CHIPS.forEach(chip => sortBar.append(sortChip(chip)));
-  return sortBar;
+  const bar = element('div', 'folder-column-heads');
+  const first = element('div', 'folder-column-head-first');
+  first.append(sortChip(SORT_CHIPS[0]), sortChip(SORT_CHIPS[1]));
+  bar.append(first, sortChip(SORT_CHIPS[2]), sortChip(SORT_CHIPS[3]));
+  return bar;
 }
 
+function countCell(count: number, title: string): HTMLElement {
+  const cell = element('span', `folder-count-cell${count === 0 ? ' is-zero' : ''}`, count === 0 ? '\u2013' : String(count));
+  cell.title = `${count} ${title}`;
+  return cell;
+}
+
+/** Each folder as a row of columns: name and buttons, how many experiments and resources it holds; its path and description under the name. */
 function cardsOf(rows: FolderRow[]): HTMLElement {
   const list = element('div', 'folder-details-list');
   rows.forEach(row => {
     const card = element('div', `folder-details-card${row.active ? ' is-active' : ''}`);
-    const top = element('div', 'd-flex align-items-start');
+    const top = element('div', 'd-flex align-items-start folder-details-top');
     const main = element('div', 'folder-details-text');
     main.append(folderLink(row, false, null));
     top.append(main, copyOfActions(row));
-    card.append(top);
-    const more = morePanel(row);
-    if (more) card.append(more);
+    card.append(top, countCell(row.experiments, i18next.t('experiments')), countCell(row.resources, i18next.t('resources')));
     if (row.path !== row.name) card.append(element('div', 'folder-details-path', row.path));
     if (row.description) card.append(element('div', 'folder-details-description', row.description));
-    const counts = element('div', 'folder-details-counts');
-    if (row.experiments > 0) counts.append(countPill('fa-flask', row.experiments, i18next.t('experiments')));
-    if (row.resources > 0) counts.append(countPill('fa-boxes-stacked', row.resources, i18next.t('resources')));
-    if (!counts.hasChildNodes()) counts.append(element('span', 'folder-count-empty', i18next.t('Empty')));
-    card.append(counts);
+    const more = morePanel(row);
+    if (more) card.append(more);
     list.append(card);
   });
   return list;
