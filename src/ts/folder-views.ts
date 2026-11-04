@@ -26,6 +26,8 @@ export interface FolderRow {
   actions: HTMLElement[];
 }
 
+// how a folder's full path joins its ancestors' names
+const PATH_SEPARATOR = ' > ';
 const VIEWS: readonly FolderView[] = ['tree', 'list', 'details'];
 
 let sortKey: FolderSortKey = 'path';
@@ -115,7 +117,7 @@ function folderLink(row: FolderRow, withPath: boolean, entityCount: number | nul
   link.setAttribute('data-folder-flat-link', '');
   link.append(element('i', 'fas fa-folder fa-fw mr-1'), element('span', 'folder-name', row.name));
   if (withPath && row.path !== row.name) {
-    const parent = row.path.includes('/') ? row.path.slice(0, row.path.lastIndexOf('/')) : '';
+    const parent = row.path.includes(PATH_SEPARATOR) ? row.path.slice(0, row.path.lastIndexOf(PATH_SEPARATOR)) : '';
     if (parent !== '') link.append(element('small', 'color-medium ml-2 folder-flat-parent', parent));
   }
   if (entityCount !== null && entityCount > 0) link.append(element('span', 'badge badge-secondary ml-1', String(entityCount)));
@@ -134,14 +136,25 @@ function renderList(body: HTMLElement, rows: FolderRow[], entityType: string): v
   body.replaceChildren(list);
 }
 
-const COLUMNS: Array<{ key: FolderSortKey | null; label: string; numeric?: boolean }> = [
-  { key: 'name', label: 'Name' },
-  { key: 'path', label: 'Path' },
-  { key: 'experiments', label: 'Experiments', numeric: true },
-  { key: 'resources', label: 'Resources', numeric: true },
-  { key: null, label: 'Description' },
-  { key: null, label: '' },
+// The side panel is narrow: the path and the description sit under the name, and the counts are short.
+const COLUMNS: Array<{ keys: Array<{ key: FolderSortKey; label: string }>; numeric?: boolean; label?: string }> = [
+  { keys: [{ key: 'name', label: 'Name' }, { key: 'path', label: 'Path' }] },
+  { keys: [{ key: 'experiments', label: 'Exp.' }], numeric: true },
+  { keys: [{ key: 'resources', label: 'Res.' }], numeric: true },
+  { keys: [] },
 ];
+const SORT_TITLES: Record<FolderSortKey, string> = { name: 'Name', path: 'Path', experiments: 'Experiments', resources: 'Resources' };
+
+function sortButton(key: FolderSortKey, label: string): HTMLButtonElement {
+  const button = element('button', 'btn btn-link btn-sm p-0 mr-2 folder-sort-button');
+  button.type = 'button';
+  button.dataset.action = 'sort-folder-details';
+  button.dataset.sortKey = key;
+  button.title = `${i18next.t('Sort by')} ${i18next.t(SORT_TITLES[key]).toLocaleLowerCase()}`;
+  button.append(document.createTextNode(i18next.t(label)));
+  if (sortKey === key) button.append(element('i', `fas fa-caret-${sortDirection === 1 ? 'up' : 'down'} fa-fw ml-1`));
+  return button;
+}
 
 function renderDetails(body: HTMLElement, rows: FolderRow[]): void {
   const table = element('table', 'table table-sm folder-details-table mb-0');
@@ -149,20 +162,10 @@ function renderDetails(body: HTMLElement, rows: FolderRow[]): void {
   COLUMNS.forEach(column => {
     const cell = element('th', column.numeric ? 'text-right' : '');
     cell.scope = 'col';
-    if (column.key) {
-      const button = element('button', 'btn btn-link btn-sm p-0 folder-sort-button');
-      button.type = 'button';
-      button.dataset.action = 'sort-folder-details';
-      button.dataset.sortKey = column.key;
-      button.append(document.createTextNode(i18next.t(column.label)));
-      if (sortKey === column.key) {
-        button.append(element('i', `fas fa-caret-${sortDirection === 1 ? 'up' : 'down'} fa-fw ml-1`));
-        cell.setAttribute('aria-sort', sortDirection === 1 ? 'ascending' : 'descending');
-      }
-      cell.append(button);
-    } else {
-      cell.textContent = column.label ? i18next.t(column.label) : '';
-    }
+    column.keys.forEach(({ key, label }) => {
+      cell.append(sortButton(key, label));
+      if (sortKey === key) cell.setAttribute('aria-sort', sortDirection === 1 ? 'ascending' : 'descending');
+    });
     head.append(cell);
   });
   const thead = element('thead');
@@ -172,12 +175,12 @@ function renderDetails(body: HTMLElement, rows: FolderRow[]): void {
     const tr = element('tr');
     const nameCell = element('td', 'folder-details-name');
     nameCell.append(folderLink(row, false, null));
+    if (row.path !== row.name) nameCell.append(element('div', 'small color-medium folder-details-path', row.path));
+    if (row.description) nameCell.append(element('div', 'small color-medium folder-details-description', row.description));
     tr.append(
       nameCell,
-      element('td', 'small color-medium folder-details-path', row.path),
       element('td', 'text-right', row.experiments > 0 ? String(row.experiments) : '–'),
       element('td', 'text-right', row.resources > 0 ? String(row.resources) : '–'),
-      element('td', 'small color-medium folder-details-description', row.description),
     );
     const actionCell = element('td', 'text-right');
     actionCell.append(copyOfActions(row));

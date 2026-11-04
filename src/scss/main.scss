@@ -1803,11 +1803,11 @@ tr:first-child td {
     }
 
     .folder-details-name {
-      white-space: nowrap;
+      max-width: 10rem;
     }
 
+    .folder-details-path,
     .folder-details-description {
-      max-width: 9rem;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
