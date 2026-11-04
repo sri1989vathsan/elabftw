@@ -23,6 +23,16 @@
               </select>
             </div>
           </div>
+          <div class='row mb-2'>
+            <div class='col-sm-4'>
+              <label for='containerStoredAtInput'>{{ 'Stored on'|trans }}</label>
+              <input type='date' id='containerStoredAtInput' class='form-control' value='{{ 'now'|date('Y-m-d') }}' />
+            </div>
+            <div class='col-sm-8'>
+              <label for='containerCommentInput'>{{ 'Comment'|trans }}</label>
+              <input type='text' id='containerCommentInput' maxlength='255' autocomplete='off' class='form-control' placeholder='{{ 'Comment (optional)'|trans }}' />
+            </div>
+          </div>
           <h5><label for='containerMultiplierInput'>{{ 'Total number of containers to distribute'|trans }}</label></h5>
           <input type='number' value='1' min='1' step='1' id='containerMultiplierInput' autocomplete='off' class='form-control' />
           <div class='sticky-top py-2 mb-2 mt-2' style='top:0; z-index:1'>

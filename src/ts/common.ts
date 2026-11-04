@@ -1757,12 +1757,16 @@ on('store-containers-distributed', () => {
   }
   const qty_stored = (document.getElementById('containerQtyStoredInput') as HTMLInputElement).value;
   const qty_unit = (document.getElementById('containerQtyUnitSelect') as HTMLSelectElement).value;
+  const note = (document.getElementById('containerCommentInput') as HTMLInputElement | null)?.value.trim() ?? '';
+  const storedAt = (document.getElementById('containerStoredAtInput') as HTMLInputElement | null)?.value ?? '';
   const postCalls = containerStepperInputs().flatMap(input => {
     const count = intFromInput(input);
     return Array.from({ length: count }, () =>
       ApiC.post(`${entity.type}/${entity.id}/containers/${input.dataset.storageId}`, {
         qty_stored: qty_stored,
         qty_unit: qty_unit,
+        ...(note !== '' ? { comment: note } : {}),
+        ...(storedAt !== '' ? { stored_at: storedAt } : {}),
       }),
     );
   });
