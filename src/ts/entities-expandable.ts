@@ -406,6 +406,17 @@ function buildDetail(row: Row): HTMLElement {
     });
     storage.append(list);
   }
+  // more storage for the entry, from the table: the same dialog as on the page of the entry (anyone who sees the entry can store it)
+  const addStorage = el('button', 'btn btn-secondary btn-sm mt-2', 'Add storage');
+  addStorage.type = 'button';
+  addStorage.dataset.entityId = String(row.id);
+  addStorage.dataset.entityType = 'inventory';
+  addStorage.dataset.containersCount = String(locations.length);
+  addStorage.dataset.units = JSON.stringify(['•', 'μL', 'mL', 'L', 'μg', 'mg', 'g', 'kg', 'bar', 'm', 'e6 cells'].map(u => ({ value: u, label: u })));
+  addStorage.addEventListener('click', () => {
+    void import(/* webpackChunkName: 'storage-picker' */ './storage-picker').then(m => m.openStoragePicker(addStorage));
+  });
+  storage.append(addStorage);
   detail.append(storage);
 
   // external links of the resource are in the list, the internal ones are fetched with the activity

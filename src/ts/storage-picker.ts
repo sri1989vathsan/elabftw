@@ -46,6 +46,16 @@ function freeSlotsFrom(unit: Unit, start: string | null, count: number): string[
 }
 
 export async function openStoragePicker(button: HTMLElement): Promise<void> {
+  // from a table of entries the button names the entry; on the page of an entry it is the entry of the page
+  const fromList = button.dataset.entityId !== undefined;
+  const target = fromList ? { type: button.dataset.entityType ?? 'inventory', id: Number(button.dataset.entityId) } : entity;
+  const refresh = async (): Promise<void> => {
+    if (fromList) {
+      window.location.reload();
+      return;
+    }
+    await reloadElements(['storageDivContent']);
+  };
   // editing: the container to change, with what it holds now
   const editId = button.dataset.editId ? Number(button.dataset.editId) : null;
   const editing = editId !== null;
@@ -358,7 +368,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
       const extraSlots = chosenSlots.filter(x => x !== slot);
       const moved = unit.id !== currentStorageId;
       try {
-        await ApiC.patch(`${entity.type}/${entity.id}/containers/${editId}`, {
+        await ApiC.patch(`${target.type}/${target.id}/containers/${editId}`, {
           qty_stored: qty.value,
           qty_unit: unitSelect.value,
           comment: comment.value,
@@ -371,7 +381,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
         });
         // more slots chosen: one more tube in each, with the same quantity
         for (const extra of extraSlots) {
-          await ApiC.post(`${entity.type}/${entity.id}/containers/${unit.id}`, {
+          await ApiC.post(`${target.type}/${target.id}/containers/${unit.id}`, {
             qty_stored: qty.value,
             qty_unit: unitSelect.value,
             comment: comment.value,
@@ -381,7 +391,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
           });
         }
         $(modal).modal('hide');
-        await reloadElements(['storageDivContent']);
+        await refresh();
       } catch {
         add.disabled = false;
       }
@@ -400,7 +410,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     try {
       for (let i = 0; i < count; i++) {
         // the first container takes the primary flag when asked, the position is set by the server on creation
-        await ApiC.post(`${entity.type}/${entity.id}/containers/${unit.id}`, {
+        await ApiC.post(`${target.type}/${target.id}/containers/${unit.id}`, {
           qty_stored: qty.value,
           qty_unit: unitSelect.value,
           ...(comment.value.trim() !== '' ? { comment: comment.value } : {}),
@@ -411,7 +421,7 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
         });
       }
       $(modal).modal('hide');
-      await reloadElements(['storageDivContent']);
+      await refresh();
     } catch {
       // ApiC already told the user what went wrong: let them fix it and try again
       add.disabled = false;
