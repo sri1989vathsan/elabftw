@@ -170,6 +170,13 @@ document.addEventListener('mousedown', event => {
     closePinnedCard();
   }
 });
+// a card is fixed to the window: when the page (or a list in it) scrolls the tube moves away, so the card goes
+document.addEventListener('scroll', event => {
+  if (pinnedCard && !pinnedCard.contains(event.target as Node)) {
+    closePinnedCard();
+  }
+  hideTubeCard();
+}, true);
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') {
     closePinnedCard();
