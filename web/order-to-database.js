@@ -50,6 +50,24 @@
     return node;
   };
 
+  // the primer tools (the melting temperature) are loaded when they are not there
+  let toolsLoading = null;
+  function loadPrimerTools() {
+    if (window.PrimerTools) {
+      return Promise.resolve();
+    }
+    if (!toolsLoading) {
+      toolsLoading = new Promise(function (resolve) {
+        const script = document.createElement('script');
+        script.src = 'primer-tools.js?v=' + Date.now();
+        script.onload = resolve;
+        script.onerror = resolve;
+        document.head.append(script);
+      });
+    }
+    return toolsLoading;
+  }
+
   // ---- reading an order
   function linesOf(html) {
     const prepared = String(html || '').replace(/<\/(p|div|li|h\d)>|<br\s*\/?>/gi, '\n');
@@ -119,6 +137,13 @@
     if (row.sequence) {
       return 'Primers';
     }
+    // a link says what it is: a plasmid at Addgene or Benchling, an oligo at IDT or Microsynth
+    if (/addgene\.org|benchling\.com/i.test(row.link || '') || /\baddgene\b/i.test(row.name)) {
+      return 'Plasmids';
+    }
+    if (/idtdna\.com|microsynth\.com/i.test(row.link || '')) {
+      return 'Primers';
+    }
     if (/\bplasmid\b/i.test(row.name)) {
       return 'Plasmids';
     }
@@ -163,6 +188,7 @@
       const hostFound = new RegExp('(?<!anti[- ])\\b(' + HOSTS.join('|') + ')\\b(?=[^,;]*\\b(?:anti|mAb|monoclonal|polyclonal|IgG|antibody)\\b)', 'i').exec(row.name);
       row.host = row.host || keyed.host || (hostFound ? hostFound[1][0].toUpperCase() + hostFound[1].slice(1).toLowerCase() : '');
       row.moduleTitle = guessModule(row);
+      readName(row);
       row.fields = null;
       row.ticked = row.name.trim() !== '';
       rows.push(row);
@@ -180,27 +206,68 @@
   // the value that goes in each field of a module, from what the line said
   function defaultsFor(module, row) {
     const values = {};
+    const benchling = /benchling\.com/i.test(row.link || '');
     (module.fields || []).forEach(function (f) {
       let value = '';
-      if (/^(supplier|vendor)/i.test(f.name)) {
+      if (/^benchling/i.test(f.name)) {
+        value = benchling ? row.link : '';
+      } else if (/^(supplier|vendor)/i.test(f.name)) {
         value = row.vendor;
       } else if (/^(link|url|website)/i.test(f.name)) {
-        value = row.link;
+        // a Benchling link has its own column in the modules that have one
+        value = benchling && (module.fields || []).some(function (g) {
+          return /^benchling/i.test(g.name);
+        }) ? '' : row.link;
       } else if (/^catalog/i.test(f.name)) {
         value = row.catalog;
       } else if (/^clone/i.test(f.name)) {
         value = row.clone;
       } else if (/^host/i.test(f.name)) {
         value = row.host;
+      } else if (/^target( gene)?$/i.test(f.name)) {
+        value = row.target || '';
       } else if (/^sequence/i.test(f.name)) {
         value = row.sequence;
+      } else if (/^purification/i.test(f.name)) {
+        value = row.purification || '';
+      } else if (/^tm\b/i.test(f.name)) {
+        value = row.tm ? String(row.tm) : '';
+      } else if (/^orientation/i.test(f.name)) {
+        value = row.orientation || '';
+      } else if (/^concentration/i.test(f.name)) {
+        value = row.concentration || '';
+      } else if (/^pack size/i.test(f.name)) {
+        value = row.pack || '';
+      } else if (/^lot/i.test(f.name)) {
+        value = row.lot || '';
       }
-      if (f.type === 'select' && value !== '' && (f.options || []).indexOf(value) === -1) {
-        value = '';
+      if (f.type === 'select' && value !== '') {
+        const match = (f.options || []).find(function (o) {
+          return String(o).toLowerCase() === String(value).toLowerCase() || String(value).toLowerCase().indexOf(String(o).toLowerCase()) === 0;
+        });
+        value = match || '';
       }
       values[f.name] = value;
     });
     return values;
+  }
+
+  // what else the text of a line tells: the concentration, the size of a pack, the target of an antibody, the direction of a primer
+  function readName(row) {
+    const name = row.name || '';
+    const conc = /(\d+(?:[.,]\d+)?\s*(?:mg\/ml|µg\/µl|ug\/ul|µg\/ml|ng\/µl|mM|µM|uM|nM|M|%))(?![A-Za-z])/i.exec(name);
+    row.concentration = row.concentration || (conc ? conc[1].replace(/\s+/g, ' ') : '');
+    const pack = /(\d+\s*(?:x\s*\d+\s*)?(?:pcs|pieces|pack|pk|per (?:case|box|pack)|\/(?:case|box|pack)))/i.exec(name);
+    row.pack = row.pack || (pack ? pack[1] : '');
+    const target = /\banti[- ]\s*(?:mouse|rabbit|rat|goat|human)?\s*([A-Za-z0-9-]{2,})/i.exec(name) || /^([A-Za-z0-9-]{2,})\s*\(/.exec(name);
+    row.target = row.target || (target && /antibod/i.test(row.moduleTitle || '') ? target[1] : '');
+    if (!row.orientation) {
+      if (/(^|[\s_-])(fwd|forward|for|f)$|\b(fwd|forward)\b/i.test(name)) {
+        row.orientation = 'Forward';
+      } else if (/(^|[\s_-])(rev|reverse|r)$|\b(rev|reverse)\b/i.test(name)) {
+        row.orientation = 'Reverse';
+      }
+    }
   }
 
   // ---- the window
@@ -467,13 +534,19 @@
       try {
         for (const key of Object.keys(groups)) {
           const group = groups[key];
+          // a module that needs a sequence file (plasmids) cannot take entries into the Database from here: they go to My entries, to get their file
+          const needsFile = Boolean(group.module.settings && group.module.settings.requires_sequence_file);
+          const groupRegister = register === 'both' && needsFile ? 'personal' : register;
+          if (groupRegister !== register) {
+            problems.push(group.module.title + ' were added to My entries: they need a sequence file before they can go in the Database.');
+          }
           const response = await fetch('registry-transfer.php', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
             body: JSON.stringify({
               category: group.module.id,
-              register: register,
+              register: groupRegister,
               rows: group.rows.map(function (r) {
                 const fields = {};
                 Object.keys(r.fields).forEach(function (k) {
@@ -481,7 +554,7 @@
                     fields[k] = r.fields[k];
                   }
                 });
-                return { title: r.name.trim(), fields: fields };
+                return { title: r.name.trim(), fields: fields, extra: r.extra || {} };
               }),
             }),
           });
@@ -507,9 +580,124 @@
       }
     };
 
+    // what the order holds besides its text: the Excel sheets of oligos, the resources of its lines, and the pages the links lead to
+    const enrich = async function (order, found) {
+      const result = found.slice();
+      const orderRef = '#' + order.id + ' ' + order.title;
+      const when = String(order.order_date || order.created_at || '').slice(0, 10);
+      // the sheets (IDT, Microsynth...) attached to the order: one primer for each line
+      for (const upload of (order.uploads || [])) {
+        if (!/\.xlsx$/i.test(upload.real_name || '')) {
+          continue;
+        }
+        try {
+          const response = await fetch('primers.php?order_sheet=1&order=' + order.id + '&f=' + encodeURIComponent(upload.long_name), { credentials: 'same-origin' });
+          const answer = await response.json();
+          if (!response.ok) {
+            continue;
+          }
+          const vendor = /idt/i.test(upload.real_name) ? 'IDT' : (/microsynth/i.test(upload.real_name) ? 'Microsynth' : ((result[0] && result[0].vendor) || ''));
+          (answer.oligos || []).forEach(function (oligo) {
+            const row = { name: oligo.name || '', vendor: vendor, link: '', catalog: '', clone: '', host: '', sequence: String(oligo.sequence || '').toUpperCase(), purification: oligo.purification || '', moduleTitle: 'Primers', fields: null, ticked: String(oligo.name || '').trim() !== '', sheet: upload.real_name };
+            readName(row);
+            result.push(row);
+          });
+        } catch (error) {
+          // the sheet cannot be read: the other lines stay
+        }
+      }
+      // a line that is only the title of an order of oligos ("Oligos; IDT") is not an entry when the sheet gave the oligos
+      const withSheets = result.some(function (r) {
+        return r.sheet;
+      });
+      let rowsOut = result.filter(function (r) {
+        return !(withSheets && !r.sheet && !r.link && !r.sequence && /^oligos?\b/i.test(r.name));
+      });
+      // the resources that are the lines of the order: their own columns give the vendor, the catalog number and the link
+      for (const item of (order.items || [])) {
+        try {
+          const id = item.id || item.item_id || item.entity_id;
+          if (!id) {
+            continue;
+          }
+          const resource = await (await fetch('api/v2/items/' + id, { credentials: 'same-origin' })).json();
+          const extra = (resource.metadata_decoded && resource.metadata_decoded.extra_fields) || {};
+          const pick = function (pattern) {
+            const key = Object.keys(extra).find(function (k) {
+              return pattern.test(k);
+            });
+            return key ? String(extra[key].value || '') : '';
+          };
+          const row = { name: resource.title || '', vendor: pick(/^(supplier|vendor)/i), link: pick(/^(link|url|website)/i), catalog: pick(/^(catalog|cat\.?|reference)/i), clone: pick(/^clone/i), host: '', sequence: '', moduleTitle: '', fields: null, ticked: true };
+          row.moduleTitle = guessModule(row);
+          readName(row);
+          rowsOut.push(row);
+        } catch (error) {
+          // this line cannot be read
+        }
+      }
+      // the pages the links lead to: their titles often carry the vendor, the catalog number and the name
+      await Promise.all(rowsOut.filter(function (r) {
+        return /^https?:\/\//i.test(r.link || '');
+      }).map(async function (r) {
+        try {
+          const preview = await (await fetch('api/v2/link_preview?url=' + encodeURIComponent(r.link), { credentials: 'same-origin' })).json();
+          const title = String(preview.title || '');
+          if (title === '') {
+            return;
+          }
+          r.pageTitle = title;
+          if (!r.catalog) {
+            const found2 = /(?:cat(?:alog)?(?:ue)?\.?\s*(?:no\.?|number|#)?\s*[:#]?\s*|\b#\s*)([A-Za-z0-9][A-Za-z0-9-]{2,})/i.exec(title);
+            r.catalog = found2 ? found2[1] : '';
+          }
+          if (!r.clone) {
+            const clone = /\bclone\s*[:#]?\s*([A-Za-z0-9-]{2,})/i.exec(title);
+            r.clone = clone ? clone[1] : '';
+          }
+          if (!r.name.trim()) {
+            r.name = title.split(/\s[|·–-]\s/)[0].trim();
+            r.ticked = r.name !== '';
+          }
+          r.vendor = r.vendor || vendorOfLink(r.link) || (preview.hostname ? String(preview.hostname).replace(/^www\./, '') : '');
+        } catch (error) {
+          // the page cannot be read: the link stays as it is
+        }
+      }));
+      // the melting temperature of the primers, when the primer tools are there
+      if (rowsOut.some(function (r) {
+        return r.sequence;
+      })) {
+        await loadPrimerTools();
+      }
+      if (window.PrimerTools && typeof window.PrimerTools.tm === 'function') {
+        rowsOut.forEach(function (r) {
+          if (r.sequence && !r.tm) {
+            r.tm = window.PrimerTools.tm(r.sequence);
+          }
+        });
+      }
+      rowsOut.forEach(function (r) {
+        r.moduleTitle = r.moduleTitle || guessModule(r);
+        r.extra = { 'From order': orderRef };
+        if (when) {
+          r.extra['Order date'] = when;
+        }
+        if (order.order_number) {
+          r.extra['Order number'] = String(order.order_number);
+        }
+        if (r.sheet) {
+          r.extra['Order sheet'] = r.sheet;
+        }
+        r.fields = null;
+      });
+      return rowsOut;
+    };
+
     const load = async function (orderId) {
+      info.textContent = 'Reading the order...';
       const order = await (await fetch('api/v2/orders/' + orderId, { credentials: 'same-origin' })).json();
-      rows = parseOrder(order);
+      rows = await enrich(order, parseOrder(order));
       draw();
     };
 

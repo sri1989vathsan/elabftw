@@ -50,6 +50,7 @@ services:
       - ./web/storage-info.php:/elabftw/web/storage-info.php:ro
       - ./web/storage-info.js:/elabftw/web/storage-info.js:ro
       - ./web/registry-modules.php:/elabftw/web/registry-modules.php:ro
+      - ./web/registry-kinds.php:/elabftw/web/registry-kinds.php:ro
       - ./web/registry-modules.js:/elabftw/web/registry-modules.js:ro
       - ./src/templates/registry-categories.html:/elabftw/src/templates/registry-categories.html:ro
       - ./src/templates/view-edit-toolbar.html:/elabftw/src/templates/view-edit-toolbar.html:ro
