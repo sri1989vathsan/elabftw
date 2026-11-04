@@ -1796,13 +1796,13 @@ tr:first-child td {
     container-type: inline-size;
   }
 
-  $folder-actions-column: 5.8rem;
+  $folder-actions-column: 5.6rem;
 
   .folder-column-heads,
   .folder-details-card {
     column-gap: 0.25rem;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 1.9rem 1.9rem 3.9rem $folder-actions-column;
+    grid-template-columns: minmax(0, 1fr) 1.6rem 1.6rem $folder-actions-column;
   }
 
   .folder-col-wide,
@@ -1845,7 +1845,8 @@ tr:first-child td {
 
   .folder-column-head-name {
     display: flex;
-    gap: 0.25rem;
+    flex-wrap: wrap;
+    gap: 0.1rem 0.25rem;
   }
 
   .folder-sort-chip {

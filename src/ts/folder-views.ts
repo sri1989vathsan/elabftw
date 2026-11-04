@@ -254,12 +254,16 @@ function sortBarOf(): HTMLElement {
   // in a narrow panel the path is not a column: sorting by it stays reachable next to the name
   const narrowPath = sortChip(SORT_CHIPS[1]);
   narrowPath.classList.add('folder-col-narrow-only');
-  name.append(narrowPath);
+  const narrowModified = sortChip(SORT_CHIPS[4]);
+  narrowModified.classList.add('folder-col-narrow-only');
+  name.append(narrowPath, narrowModified);
   const widePath = element('div', 'folder-col-wide folder-col-path');
   widePath.append(sortChip(SORT_CHIPS[1]));
   const description = element('div', 'folder-col-wider folder-col-description');
   description.append(element('span', 'folder-sort-label', i18next.t('Description')));
-  bar.append(name, widePath, description, sortChip(SORT_CHIPS[2]), sortChip(SORT_CHIPS[3]), sortChip(SORT_CHIPS[4]), element('span'));
+  const wideModified = element('div', 'folder-col-wide folder-col-modified');
+  wideModified.append(sortChip(SORT_CHIPS[4]));
+  bar.append(name, widePath, description, sortChip(SORT_CHIPS[2]), sortChip(SORT_CHIPS[3]), wideModified, element('span'));
   return bar;
 }
 
@@ -269,11 +273,13 @@ function countCell(count: number, title: string): HTMLElement {
   return cell;
 }
 
+function modifiedText(seconds: number): string {
+  return seconds <= 0 ? '\u2013' : new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: '2-digit' }).format(new Date(seconds * 1000));
+}
+
 function modifiedCell(seconds: number): HTMLElement {
-  if (seconds <= 0) return element('span', 'folder-modified-cell is-zero', '\u2013');
-  const date = new Date(seconds * 1000);
-  const cell = element('span', 'folder-modified-cell', new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: '2-digit' }).format(date));
-  cell.title = date.toLocaleString();
+  const cell = element('span', `folder-modified-cell folder-col-wide${seconds <= 0 ? ' is-zero' : ''}`, modifiedText(seconds));
+  if (seconds > 0) cell.title = new Date(seconds * 1000).toLocaleString();
   return cell;
 }
 
@@ -301,6 +307,7 @@ function cardsOf(rows: FolderRow[]): HTMLElement {
       copyOfActions(row),
     );
     if (row.path !== row.name) card.append(element('div', 'folder-details-path folder-col-narrow-only', row.path));
+    if (row.modified > 0) card.append(element('div', 'folder-details-path folder-col-narrow-only', `${i18next.t('Modified')} ${modifiedText(row.modified)}`));
     if (row.description) card.append(element('div', 'folder-details-description folder-col-narrow-only', row.description));
     const more = morePanel(row);
     if (more) card.append(more);
