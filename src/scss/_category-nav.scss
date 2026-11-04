@@ -959,3 +959,22 @@
   color: var(--medium, #6c757d);
   font-size: 0.85rem;
 }
+
+// the tag of a fridge or a freezer: white text on a bright blue (freezer) or a green (fridge), whatever the theme does to a badge
+.storage-kind-tag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #fff !important;
+}
+
+.storage-kind-tag-freezer {
+  background: #1677ff;
+}
+
+.storage-kind-tag-fridge {
+  background: #1e8e5a;
+}

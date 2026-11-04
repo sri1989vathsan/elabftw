@@ -273,7 +273,7 @@ function kindTag(unit: Unit): HTMLElement | null {
   if (unit.kind !== 'freezer' && unit.kind !== 'fridge') {
     return null;
   }
-  const tag = el('span', `badge ml-1 ${unit.kind === 'freezer' ? 'badge-primary' : 'badge-success'}`, unit.temperature === null || unit.temperature === undefined ? unit.kind : `${unit.temperature} °C`);
+  const tag = el('span', `storage-kind-tag ml-1 storage-kind-tag-${unit.kind}`, unit.temperature === null || unit.temperature === undefined ? unit.kind : `${unit.temperature} °C`);
   tag.title = unit.kind === 'freezer' ? 'Freezer' : 'Fridge';
   return tag;
 }
