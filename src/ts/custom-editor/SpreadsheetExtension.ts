@@ -2144,12 +2144,16 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         switchPlateView(table, switchButton.textContent === 'Plate' ? 'plate' : 'sheet');
         return;
       }
+      // The bar's buttons in the preview are stand-ins: building the grid replaces them, which used to swallow the
+      // press, so the first click on Undo, Open popup and the rest only selected the table.
+      const barButton = event.target.closest<HTMLElement>('.elabftw-spreadsheet-readonly-toggle > button');
       const cell = event.target.closest<HTMLElement>('td[data-x][data-y]');
       const selection = cell
         ? { col: Number(cell.dataset.x), row: Number(cell.dataset.y) }
         : undefined;
       event.preventDefault();
       activateTable(table, selection);
+      if (barButton) pressBarButtonWhenReady(table, barButton.className);
     });
     document.body.appendChild(overlay);
     spreadsheetOverlays.set(table, {
@@ -2211,6 +2215,27 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     window.requestAnimationFrame(() => attempt(0));
   };
   const pendingInitialSelection = new WeakMap<HTMLTableElement, { col: number; row: number } | undefined>();
+  // Repeats a press on a preview bar button once the live grid, which replaced the preview, has the same button.
+  const pressBarButtonWhenReady = (table: HTMLTableElement, className: string): void => {
+    let buttonDown = true;
+    const released = (): void => { buttonDown = false; };
+    window.addEventListener('pointerup', released, { capture: true, once: true });
+    window.addEventListener('pointercancel', released, { capture: true, once: true });
+    const attempt = (frame: number): void => {
+      const entry = spreadsheetOverlays.get(table);
+      if (!entry || frame > 180) return;
+      const live = entry.isPreview
+        ? null
+        : Array.from(entry.el.querySelectorAll<HTMLButtonElement>('.elabftw-spreadsheet-readonly-toggle > button'))
+          .find(button => button.className === className);
+      if (live && !buttonDown) {
+        live.click();
+        return;
+      }
+      window.requestAnimationFrame(() => attempt(frame + 1));
+    };
+    window.requestAnimationFrame(() => attempt(0));
+  };
 
   // The Plate / Spreadsheet switch: the choice is saved with the table, so it also holds after a reload
   // and on view pages.
