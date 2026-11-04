@@ -59,15 +59,8 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
     unitOptions = [{ value: '•', label: '•' }];
   }
   const units = await ApiC.getJson<Unit[]>('storage_units?hierarchy=1', { notifOnError: 0 });
-  // in order, place by place along the path: by the number at the end of a name when both have one (box 5, 6, ... 10), else in natural order
-  const byName = (a: string, b: string): number => {
-    const an = /(\d+)\s*$/.exec(a);
-    const bn = /(\d+)\s*$/.exec(b);
-    if (an && bn && Number(an[1]) !== Number(bn[1])) {
-      return Number(an[1]) - Number(bn[1]);
-    }
-    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-  };
+  // in order, place by place along the path: alphabetically, numbers read as numbers
+  const byName = (a: string, b: string): number => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
   units.sort((a, b) => {
     const as = a.full_path.split(' > ');
     const bs = b.full_path.split(' > ');
