@@ -2225,10 +2225,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const pendingInitialSelection = new WeakMap<HTMLTableElement, { col: number; row: number } | undefined>();
   // Repeats a press on a preview bar button once the live grid, which replaced the preview, has the same button.
   const pressBarButtonWhenReady = (table: HTMLTableElement, className: string): void => {
-    let buttonDown = true;
-    const released = (): void => { buttonDown = false; };
-    window.addEventListener('pointerup', released, { capture: true, once: true });
-    window.addEventListener('pointercancel', released, { capture: true, once: true });
+    // No wait for the button's release: the press ends on the grid that replaced the preview, and the browser
+    // may not report a release for the preview element that was removed under the pointer.
     const attempt = (frame: number): void => {
       const entry = spreadsheetOverlays.get(table);
       if (!entry || frame > 180) return;
@@ -2236,8 +2234,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         ? null
         : Array.from(entry.el.querySelectorAll<HTMLButtonElement>('.elabftw-spreadsheet-readonly-toggle > button'))
           .find(button => button.className === className);
-      if (live && !buttonDown) {
-        live.click();
+      if (live) {
+        window.setTimeout(() => live.click(), 80);
         return;
       }
       window.requestAnimationFrame(() => attempt(frame + 1));
