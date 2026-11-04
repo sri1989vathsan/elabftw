@@ -7,7 +7,7 @@ import { getEntityTypeFromPage } from './misc';
 import { askConfirm } from './confirm-dialog';
 
 type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null; child_capacity?: number | null };
-type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string };
+type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string; stored_at?: string | null };
 type Row = {
   id: number;
   title: string;
@@ -70,6 +70,7 @@ function fillTubeCard(card: HTMLElement, tube: Tube, linked: boolean): void {
   line('Slot', tube.location.position ?? '');
   line('Storage', tube.location.is_primary ? 'Primary' : 'Secondary');
   line('Quantity', `${tube.location.qty_stored} ${tube.location.qty_unit}`.trim());
+  line('Stored on', (tube.location.stored_at ?? '').slice(0, 10));
   line('Comment', tube.location.comment ?? '');
   // the fields that identify an entry of its category, when they are filled
   const shown = CARD_FIELDS[(tube.row.category_title ?? '').toLowerCase()] ?? [];
@@ -1695,7 +1696,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     const table = el('table', 'table table-sm table-hover');
     const head = el('tr');
-    const columns = ['ID', 'Module', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Owner'];
+    const columns = ['ID', 'Module', 'Title', 'Freezer', 'Rack', 'Box', 'Slots', 'Quantity', 'Stored on', 'Owner'];
     // a click on a heading sorts the table by it, a second click turns the order round (the highest ID first to start with)
     let sortColumn = 0;
     let sortAscending = false;
@@ -1836,6 +1837,9 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       locations.forEach(l => sums.set(l.qty_unit, (sums.get(l.qty_unit) ?? 0) + Number(l.qty_stored)));
       const total = [...sums.entries()].map(([unit, qty]) => `${Math.round(qty * 100) / 100} ${unit}`.trim()).join(', ');
       tr.append(el('td', 'text-nowrap', locations.length > 1 ? `${total} (${locations.length} tubes)` : total));
+      // the day it was put there (the earliest when it sits in several tubes)
+      const days = locations.map(l => (l.stored_at ?? '').slice(0, 10)).filter(Boolean).sort();
+      tr.append(el('td', 'text-nowrap', days[0] ?? ''));
       tr.append(el('td', '', row.fullname ?? ''));
       body.append(tr);
     });
