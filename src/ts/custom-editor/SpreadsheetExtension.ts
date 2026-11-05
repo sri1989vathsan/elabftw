@@ -1467,7 +1467,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     }
     const pageX = window.scrollX;
     const pageY = window.scrollY;
-    editor.execCommand('mceAutoResize');
+    editor.dispatch('ResizeContent');
     // While typing in the text the page follows the cursor: putting it back here, a moment after the browser has
     // scrolled to the new line, made the page shake at the end of the text.
     if (performance.now() - lastTypingInTextAt < TYPING_FOLLOWS_CURSOR_MS) return;
@@ -1494,6 +1494,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // than the text and the text scrolls inside it. Whenever the content is taller than the frame, grow the frame by
   // exactly the excess. Grow only, so it never fights the normal resize.
   let growToContentTimer: ReturnType<typeof setTimeout> | null = null;
+  const MIN_GROW_EXCESS = 17;
   const growEditorToContent = (): void => {
     growToContentTimer = null;
     if (editor.removed) return;
@@ -1501,7 +1502,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const root = editor.getDoc()?.documentElement;
     if (!iframe || !root) return;
     const excess = root.scrollHeight - root.clientHeight;
-    if (excess > 1) iframe.style.height = `${Math.ceil(iframe.getBoundingClientRect().height + excess)}px`;
+    // Less than a line's worth is the editor's own bottom margin: it sizes the frame itself, and writing the height
+    // here as well made the two disagree by that margin, so the frame jumped back and forth with every key typed.
+    if (excess > MIN_GROW_EXCESS) iframe.style.height = `${Math.ceil(iframe.getBoundingClientRect().height + excess)}px`;
   };
   // Enter at the end of the text left the frame one line short for the whole delay below, so the new line sat
   // outside it until the debounce ran. Growing is only a height write, so it also runs on the next frame.
