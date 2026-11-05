@@ -2613,12 +2613,33 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   if (editor.initialized) attachPopupInputGuard();
   else editor.on('init', attachPopupInputGuard);
 
+  // A table only gets its real spacer once its overlay is mounted, i.e. when it first scrolls near the screen, and
+  // that spacer (toolbar + add-rows bar, about 60-70 px) made the editor, and so the page, grow under the reader
+  // on the way down. Reserve an estimate for every table up front; the first overlay sync replaces it with the
+  // measured height (the size key is deliberately left unset here).
+  const BAR_SPACE_ESTIMATE = 66;
+  const reserveBarSpace = (table: HTMLTableElement): void => {
+    const existing = spreadsheetSpacers.get(table);
+    if (existing?.isConnected) return;
+    const spacer = editor.dom.create('div', {
+      'data-mce-bogus': 'all',
+      'data-elabftw-spreadsheet-spacer': '1',
+      contenteditable: 'false',
+      'aria-hidden': 'true',
+    }) as HTMLElement;
+    spacer.style.pointerEvents = 'none';
+    spacer.style.height = `${BAR_SPACE_ESTIMATE}px`;
+    spreadsheetSpacers.set(table, spacer);
+    table.after(spacer);
+  };
+
   const enhanceAllTables = (): void => {
     removeOrphanSpacers();
     Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
       .forEach(table => {
         if (observedTables.has(table)) return;
         observedTables.add(table);
+        reserveBarSpace(table);
         tableVisibility.observe(table);
       });
   };
