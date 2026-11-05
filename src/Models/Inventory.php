@@ -24,6 +24,7 @@ use Elabftw\Enums\FilterableColumn;
 use Elabftw\Enums\AccessType;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Interfaces\QueryParamsInterface;
+use Elabftw\Params\ContentParams;
 use Elabftw\Params\DisplayParams;
 use Elabftw\Services\Filter;
 use Elabftw\Traits\InsertTagsTrait;
@@ -354,7 +355,23 @@ final class Inventory extends AbstractConcreteEntity
         $req->bindValue(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
         $this->fileInLabFolder($this->id, (int) $category);
+        $this->lockWhenRegistered();
         return (int) $number;
+    }
+
+    /**
+     * An entry that enters the Database is locked at once, in the name of the user who added it (its owner): the owner and the
+     * admins can unlock it by hand. The usual lock: a locked entry is read only, its storage stays open (see canStoreOrExplode).
+     */
+    private function lockWhenRegistered(): void
+    {
+        $req = $this->Db->prepare('UPDATE inventory SET locked = 1, lockedby = :owner, locked_at = CURRENT_TIMESTAMP WHERE id = :id AND locked = 0');
+        $req->bindValue(':owner', (int) $this->entityData['userid'], PDO::PARAM_INT);
+        $req->bindValue(':id', $this->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        if ($req->rowCount() > 0) {
+            new Changelog($this)->create(new ContentParams('locked', 'Locked'));
+        }
     }
 
     /**
@@ -423,6 +440,7 @@ final class Inventory extends AbstractConcreteEntity
         $req->bindValue(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
         $this->fileInLabFolder($this->id, (int) $category);
+        $this->lockWhenRegistered();
         return (int) $number;
     }
 
