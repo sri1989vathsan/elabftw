@@ -66,6 +66,15 @@
       <option value='items_types' {{ favoriteFilterTarget == 'items_types' ? 'selected' }}>{{ 'Resource templates'|trans }}</option>
     </select>
 
+    {# the modules of the lab Database (plasmids, antibodies...): filled when the type is Database #}
+    <details class='favorite-filter-section mb-3' id='favoriteModulesSection' open {{ favoriteFilterTarget != 'database' ? 'hidden' }}>
+      <summary class='favorite-filter-section-summary mb-0'>
+        <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>
+        {{ 'Modules'|trans }}
+      </summary>
+      <div class='favorite-filter-section-body' id='favoriteModulesDiv'></div>
+    </details>
+
     <details class='favorite-filter-section mb-3' open>
       <summary class='favorite-filter-section-summary mb-0'>
         <i class='fas fa-chevron-right fa-fw favorite-filter-section-chevron' aria-hidden='true'></i>

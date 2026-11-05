@@ -109,10 +109,12 @@ export default class FavoriteFilters extends SidePanel {
     panel?.addEventListener('change', event => {
       const target = event.target as HTMLElement;
       if (target.matches(
-        '[data-favorite-filter-category], [data-favorite-filter-tag], [data-favorite-filter-status], [data-favorite-filter-owner]',
+        '[data-favorite-filter-category], [data-favorite-filter-tag], [data-favorite-filter-status], [data-favorite-filter-owner], [data-favorite-filter-module]',
       )) {
         const input = target as HTMLInputElement;
-        const group = input.closest<HTMLElement>('[data-favorite-target-group]')?.dataset.favoriteTargetGroup;
+        const group = input.matches('[data-favorite-filter-module]')
+          ? 'database'
+          : input.closest<HTMLElement>('[data-favorite-target-group]')?.dataset.favoriteTargetGroup;
         const select = document.getElementById('favoriteFilterTarget') as HTMLSelectElement | null;
         if (group && select && select.value === 'all' && input.checked) {
           // A category/status only means something for its own type: switch to it.
@@ -228,9 +230,47 @@ export default class FavoriteFilters extends SidePanel {
         input.disabled = !isActive;
       });
     });
+    const modules = document.getElementById('favoriteModulesSection');
+    modules?.toggleAttribute('hidden', target !== 'database');
+    modules?.querySelectorAll<HTMLInputElement>('input').forEach(input => {
+      input.disabled = target !== 'database';
+    });
+    if (target === 'database') void this.loadModules();
     this.resultsLoaded = false;
     const panel = document.getElementById(this.panelId);
     if (panel && !panel.hasAttribute('hidden')) void this.loadResults();
+  }
+
+  // The modules of the lab Database as checkboxes, read once from the modules endpoint
+  private async loadModules(): Promise<void> {
+    const box = document.getElementById('favoriteModulesDiv');
+    if (!box || box.dataset.loaded) return;
+    box.dataset.loaded = '1';
+    try {
+      const response = await fetch('/registry-modules.php', { credentials: 'same-origin' });
+      const data = await response.json() as { modules?: { id: number; title: string; color: string }[] };
+      box.replaceChildren(...(data.modules ?? []).map(module => {
+        const row = document.createElement('div');
+        row.className = 'favorite-filter-option d-flex align-items-center';
+        const input = document.createElement('input');
+        input.className = 'mr-2';
+        input.type = 'checkbox';
+        input.id = `favoriteModuleFilter-${module.id}`;
+        input.value = String(module.id);
+        input.setAttribute('data-favorite-filter-module', '');
+        const label = document.createElement('label');
+        label.className = 'd-flex align-items-center flex-grow-1 mb-0';
+        label.htmlFor = input.id;
+        const dot = document.createElement('span');
+        dot.className = 'category-color-dot mr-2';
+        dot.style.setProperty('--category-color', `#${module.color}`);
+        label.append(dot, module.title);
+        row.append(input, label);
+        return row;
+      }));
+    } catch {
+      delete box.dataset.loaded;
+    }
   }
 
   apply(): void {
@@ -261,7 +301,8 @@ export default class FavoriteFilters extends SidePanel {
   private hasDetailedFilters(): boolean {
     return document.querySelector(
       '[data-favorite-filter-category]:checked:not(:disabled), [data-favorite-filter-tag]:checked, '
-      + '[data-favorite-filter-status]:checked:not(:disabled), [data-favorite-filter-owner]:checked',
+      + '[data-favorite-filter-status]:checked:not(:disabled), [data-favorite-filter-owner]:checked, '
+      + '[data-favorite-filter-module]:checked:not(:disabled)',
     ) !== null;
   }
 
@@ -269,7 +310,7 @@ export default class FavoriteFilters extends SidePanel {
     const textFilter = document.querySelector<HTMLInputElement>('[data-favorite-filter-text]');
     if (textFilter) textFilter.value = '';
     document.querySelectorAll<HTMLInputElement>(
-      '[data-favorite-filter-category], [data-favorite-filter-tag], [data-favorite-filter-status], [data-favorite-filter-owner]',
+      '[data-favorite-filter-category], [data-favorite-filter-tag], [data-favorite-filter-status], [data-favorite-filter-owner], [data-favorite-filter-module]',
     ).forEach(input => {
       input.checked = false;
     });
@@ -281,7 +322,7 @@ export default class FavoriteFilters extends SidePanel {
     const scrollTop = panel?.scrollTop ?? 0;
     const checkedInputIds = new Set(Array.from(
       document.querySelectorAll<HTMLInputElement>(
-        '[data-favorite-filter-category]:checked, [data-favorite-filter-tag]:checked, [data-favorite-filter-status]:checked, [data-favorite-filter-owner]:checked',
+        '[data-favorite-filter-category]:checked, [data-favorite-filter-tag]:checked, [data-favorite-filter-status]:checked, [data-favorite-filter-owner]:checked, [data-favorite-filter-module]:checked',
       ),
       input => input.id,
     ));
@@ -323,6 +364,15 @@ export default class FavoriteFilters extends SidePanel {
     );
     if (categories.length > 0) {
       params.set('category', categories.join(','));
+    }
+
+    // the lab Database filters on its modules (its categories)
+    const modules = Array.from(
+      document.querySelectorAll<HTMLInputElement>('[data-favorite-filter-module]:checked:not(:disabled)'),
+      input => input.value,
+    );
+    if (modules.length > 0 && this.getTarget() === 'database') {
+      params.set('category', modules.join(','));
     }
 
     const statuses = Array.from(
@@ -719,7 +769,7 @@ export default class FavoriteFilters extends SidePanel {
 
     document.querySelectorAll<HTMLInputElement>(
       '[data-favorite-filter-category]:checked, [data-favorite-filter-tag]:checked, '
-      + '[data-favorite-filter-status]:checked, [data-favorite-filter-owner]:checked',
+      + '[data-favorite-filter-status]:checked, [data-favorite-filter-owner]:checked, [data-favorite-filter-module]:checked',
     ).forEach(input => {
       if (input.disabled) return; // belongs to a hidden (inactive target) group
       const label = document.querySelector(`label[for="${input.id}"]`)?.textContent?.trim() ?? input.value;
