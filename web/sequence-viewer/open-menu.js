@@ -56,7 +56,10 @@
       return;
     }
     const save = document.querySelector('.ve-tool-container-saveTool');
-    if (!save || !save.parentNode) {
+    // each tool sits in a box of its own in the row of the toolbar: the button goes in front of the box of Save
+    const wrapper = save ? save.closest('.bp3-popover-wrapper') : null;
+    const slot = wrapper ? wrapper.parentNode : null;
+    if (!slot || !slot.parentNode) {
       return;
     }
     const outer = document.createElement('div');
@@ -73,7 +76,11 @@
       window.parent.postMessage({ type: 'elab-open-from-database', toggle: true }, window.location.origin);
     });
     outer.appendChild(button);
-    save.parentNode.insertBefore(outer, save);
+    const box = document.createElement('div');
+    box.setAttribute('data-open-database-button', '1');
+    outer.removeAttribute('data-open-database-button');
+    box.appendChild(outer);
+    slot.parentNode.insertBefore(box, slot);
   }
   new MutationObserver(function () {
     document.querySelectorAll('.bp3-menu').forEach(addItem);
