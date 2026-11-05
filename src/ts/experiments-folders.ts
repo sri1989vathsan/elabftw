@@ -13,7 +13,8 @@ import { on } from './handlers';
 import { notify } from './notify';
 import { getTinymceBaseConfig } from './tinymce';
 import { htmlToMarkdown, markdownToHtml } from './Editor.class';
-import { initFolderViews, syncFolderView } from './folder-views';
+import { currentFlatFolderLevel, initFolderViews, syncFolderView } from './folder-views';
+import i18next from './i18n';
 
 type FolderScope = 'mine' | 'all';
 type FolderEntityType = 'experiments' | 'items';
@@ -772,23 +773,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }).catch(error => notify.error(error));
   });
 
+  // The folder a new folder goes into: the one the flat views are inside, else the one being looked at, else the top level.
+  const newFolderParentId = (): string => {
+    const flatLevel = currentFlatFolderLevel();
+    if (flatLevel !== null) return flatLevel;
+    const sidebar = document.getElementById('experimentsFoldersSidebar');
+    return new URLSearchParams(window.location.search).get('folder') || sidebar?.dataset.currentFolderId || '';
+  };
+  const describeNewFolderParent = (): void => {
+    const where = document.getElementById('newFolderWhere');
+    if (!where) return;
+    const parentId = newFolderParentId();
+    const path = parentId === '' ? '' : document.querySelector<HTMLElement>(`.folder-node[data-folder-id="${parentId}"]`)?.dataset.folderFullPath ?? '';
+    where.textContent = path === '' ? i18next.t('At the top level') : `${i18next.t('Inside')}: ${path}`;
+  };
+
+  on('toggle-new-folder', (el: HTMLElement) => {
+    const form = document.getElementById('newFolderForm');
+    if (!form) return;
+    const open = form.hidden;
+    form.hidden = !open;
+    el.setAttribute('aria-expanded', String(open));
+    if (open) {
+      describeNewFolderParent();
+      document.getElementById('newFolderName')?.focus();
+    }
+  });
+
   // Create folder
   on('create-experiment-folder', () => {
     const nameInput = document.getElementById('newFolderName') as HTMLInputElement;
-    const parentSelect = document.getElementById('newFolderParent') as HTMLSelectElement;
-    const descriptionInput = document.getElementById('newFolderDescription') as HTMLTextAreaElement;
     const name = nameInput.value.trim();
     if (!name) {
       return;
     }
-    const parentId = parentSelect.value ? parseInt(parentSelect.value, 10) : null;
+    const parentId = newFolderParentId();
     ApiC.post('experiments_folders', {
       name: name,
-      parent_id: parentId,
-      description: descriptionInput.value.trim(),
+      parent_id: parentId ? parseInt(parentId, 10) : null,
     }).then(() => {
       nameInput.value = '';
-      descriptionInput.value = '';
       refreshFoldersSidebarSafely();
     });
   });

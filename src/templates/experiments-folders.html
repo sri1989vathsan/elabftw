@@ -190,34 +190,18 @@
          most visits to this panel are browsing existing folders, not
          creating one, so the create form's own fields (name, parent,
          description) don't need to take up space by default. #}
-      <details class='folder-create-section border-top mt-3 pt-3'>
-        <summary class='h6 mb-2'><i class='fas fa-folder-plus fa-fw mr-1'></i>{{ 'New folder'|trans }}</summary>
-        <div class='form-group mb-2'>
-          <label class='small mb-1' for='newFolderName'>{{ 'Folder name'|trans }}</label>
-          <input type='text' id='newFolderName' class='form-control' placeholder='{{ 'New folder name'|trans }}' aria-label='{{ 'New folder name'|trans }}' />
+      <div class='folder-create-section border-top mt-3 pt-2'>
+        <button type='button' class='btn btn-sm btn-outline-secondary folder-create-toggle' data-action='toggle-new-folder' aria-expanded='false' aria-controls='newFolderForm' title='{{ 'New folder'|trans }}' aria-label='{{ 'New folder'|trans }}'><i class='fas fa-folder-plus fa-fw'></i></button>
+        <div id='newFolderForm' class='mt-2' hidden>
+          <div class='input-group input-group-sm'>
+            <input type='text' id='newFolderName' class='form-control' placeholder='{{ 'New folder name'|trans }}' aria-label='{{ 'New folder name'|trans }}' />
+            <div class='input-group-append'>
+              <button class='btn btn-primary' type='button' data-action='create-experiment-folder' title='{{ 'Create folder'|trans }}' aria-label='{{ 'Create folder'|trans }}'><i class='fas fa-check fa-fw'></i></button>
+            </div>
+          </div>
+          <small class='form-text color-medium' id='newFolderWhere'></small>
         </div>
-        <div class='form-group mb-2'>
-          <label class='small mb-1' for='newFolderParent'>{{ 'Parent folder'|trans }}</label>
-          <select id='newFolderParent' class='form-control' aria-label='{{ 'Parent folder'|trans }}'>
-            <option value=''>{{ 'Root (no parent)'|trans }}</option>
-            {% if experimentsFoldersTreeArr is iterable %}
-              {% for parentId, folders in experimentsFoldersTreeArr %}
-                {% for folder in folders %}
-                  <option value='{{ folder.id }}' data-folder-owner-id='{{ folder.userid }}'>{{ folder.full_path }}</option>
-                {% endfor %}
-              {% endfor %}
-            {% endif %}
-          </select>
-          <small class='form-text color-medium'>{{ 'The folder tabs also filter this parent list.'|trans }}</small>
-        </div>
-        <div class='form-group mb-2'>
-          <label class='small mb-1' for='newFolderDescription'>{{ 'Short description'|trans }} <span class='color-medium'>({{ 'optional'|trans }})</span></label>
-          <textarea id='newFolderDescription' class='form-control' rows='2' maxlength='500' placeholder='{{ 'Short description (optional)'|trans }}' aria-label='{{ 'Short description'|trans }}'></textarea>
-        </div>
-        <button class='btn btn-primary btn-sm btn-block' type='button' data-action='create-experiment-folder'>
-          <i class='fas fa-plus fa-fw mr-1'></i>{{ 'Create folder'|trans }}
-        </button>
-      </details>
+      </div>
     </div>
   </div>
 </div>
