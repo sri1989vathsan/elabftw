@@ -1749,8 +1749,20 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     main.append(renderHeader(node));
     if (isPersonal(node.unit) && !isMine(node.unit)) {
       // the personal storage of someone else: to look at, nothing to change
-      const notice = el('div', 'alert alert-secondary py-1', `Personal storage of ${node.unit.owner_name ?? 'someone else'}: you can look at it, not change it.`);
-      main.append(notice);
+      // the racks and the boxes are drawn as for the owner, but nothing in them reacts (inert)
+      const seen: HTMLElement[] = [];
+      const seenBox = Boolean(node.unit.box_rows && node.unit.box_cols);
+      if (seenBox) {
+        seen.push(renderBox(node));
+      } else if (node.children.length > 0 || behaves(node.unit.kind) === 'cooler' || behaves(node.unit.kind) === 'rack') {
+        seen.push(behaves(node.unit.kind) === 'location' ? renderLocationView(node) : renderCabinet(node));
+      }
+      if (seen.length > 0) {
+        const frozen = el('div');
+        frozen.inert = true;
+        frozen.append(...seen);
+        main.append(section(seenBox ? 'The slots of this box' : `Inside it: ${node.children.length} ${node.children.length === 1 ? 'place' : 'places'}`, 'Select a place in the tree on the left to look inside it.', frozen));
+      }
       const shown = collect(node, true);
       main.append(section('What is stored here', 'Including the places inside it.', el('div', '', shown.length === 0 ? 'Nothing is stored here.' : shown.map(({ row, location }) => `#${row.id} ${row.title}${location.position ? ` (${location.position})` : ''}`).join(' · '))));
       return;
