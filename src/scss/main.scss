@@ -1777,9 +1777,52 @@ tr:first-child td {
     }
   }
 
+  .folder-flat-main,
+  .folder-details-text {
+    align-items: center;
+    display: flex;
+    min-width: 0;
+  }
+
   .folder-flat-main {
     flex: 1 1 auto;
+  }
+
+  .folder-flat-main > .folder-flat-link,
+  .folder-details-text > .folder-flat-link {
+    flex: 1 1 auto;
     min-width: 0;
+  }
+
+  // the arrow that shows the experiments and resources filed in a folder
+  .folder-entries-toggle,
+  .folder-entries-toggle-placeholder {
+    flex: 0 0 1.25rem;
+    width: 1.25rem;
+  }
+
+  // the entries under a folder's row, one per line, indented past the arrow
+  .folder-entries {
+    grid-column: 1 / -1;
+    margin: 0.2rem 0 0.2rem 1.25rem;
+    max-height: 14rem;
+    overflow-y: auto;
+  }
+
+  .folder-entry {
+    display: block;
+    overflow: hidden;
+    padding: 0.1rem 0.25rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover {
+      background: rgba(127, 127, 127, 0.12);
+    }
+  }
+
+  .folder-entry-note {
+    padding: 0.1rem 0.25rem;
   }
 
   .folder-flat-link {
