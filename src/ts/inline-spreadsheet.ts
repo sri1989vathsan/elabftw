@@ -4530,7 +4530,13 @@ export function openSpreadsheetModal(
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
       selectedRange = [col, row, col, row];
-      window.setTimeout(() => worksheet?.updateSelectionFromCoords?.(col, row, col, row), 0);
+      // focus goes into the grid too (the press on the filler does not move it), so the new columns count as in use
+      const sink = sheetContainer?.querySelector<HTMLElement>('.jss_textarea');
+      window.setTimeout(() => {
+        worksheet?.updateSelectionFromCoords?.(col, row, col, row);
+        selectedRange = [col, row, col, row];
+        sink?.focus({ preventScroll: true });
+      }, 0);
     };
     const fillerTimer = window.setInterval(() => syncGridFiller(sheetContainer, true, activateFillerCell), 400);
     popupPageListenerRemovers.push(() => window.clearInterval(fillerTimer));
