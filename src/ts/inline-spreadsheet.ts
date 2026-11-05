@@ -2763,6 +2763,18 @@ export function setGridFillerActivator(gridEl: HTMLElement, activate: (col: numb
   gridFillerActivators.set(gridEl, activate);
 }
 
+/**
+ * Takes the columns a press on the grey filler added back off again when nothing was typed in them (the mirror holds
+ * values that are not in the worksheet yet, so both are checked).
+ */
+function dropEmptyColumnsFrom(worksheet: JssInstance, baseCols: number, mirror: unknown[][]): void {
+  const data = (worksheet.getData?.() ?? []) as unknown[][];
+  const width = Math.max(0, ...data.map(row => row.length), ...mirror.map(row => row.length));
+  if (width <= baseCols) return;
+  const filled = [...data, ...mirror].some(row => row.slice(baseCols).some(value => String(value ?? '') !== ''));
+  if (!filled) worksheet.deleteColumn?.(baseCols, width - baseCols);
+}
+
 export function syncGridFiller(
   gridEl: HTMLElement | null,
   visible: boolean,
@@ -4491,6 +4503,17 @@ export function openSpreadsheetModal(
     // a popup was opened, slowing every mouse event on the page down in a long session).
     const popupPageListenerRemovers: Array<() => void> = [];
     // the empty lettered columns beside a narrow grid (see syncGridFiller)
+    let pendingFiller: { baseCols: number; timer: number } | null = null;
+    const settlePendingFiller = (): void => {
+      const pending = pendingFiller;
+      if (!pending) return;
+      if (rescueInputEl && !rescueInputEl.hidden) return;
+      const inNewColumns = !!selectedRange && Math.max(selectedRange[0], selectedRange[2]) >= pending.baseCols;
+      if (worksheet && inNewColumns && sheetContainer.contains(document.activeElement)) return;
+      window.clearInterval(pending.timer);
+      pendingFiller = null;
+      if (worksheet) dropEmptyColumnsFrom(worksheet, pending.baseCols, rawDataMirror);
+    };
     const activateFillerCell = (targetCol: number, row: number): void => {
       if (!worksheet || working.kind === 'well-plate') return;
       commitRescueInput();
@@ -4499,6 +4522,11 @@ export function openSpreadsheetModal(
       if (missing > 0) {
         flushMirrorIntoWorksheet(worksheet);
         worksheet.insertColumn?.(missing, currentCols - 1, false);
+        // kept only if something is typed in them (see the grid in the text)
+        if (!pendingFiller) {
+          pendingFiller = { baseCols: currentCols, timer: window.setInterval(settlePendingFiller, 250) };
+          popupPageListenerRemovers.push(() => window.clearInterval(pendingFiller?.timer));
+        }
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
       selectedRange = [col, row, col, row];
@@ -9613,6 +9641,19 @@ export function buildReadOnlySpreadsheetHost(
         : null;
     }));
   }
+  let pendingFiller: { baseCols: number; timer: number } | null = null;
+  const settlePendingFiller = (): void => {
+    const pending = pendingFiller;
+    if (!pending) return;
+    const mounted = getMountedWorksheet(sheetContainer);
+    if (mounted && rescueInputEl && !rescueInputEl.hidden) return;
+    const selection = lastKnownSelection;
+    const inNewColumns = !!selection && Math.max(selection[0], selection[2]) >= pending.baseCols;
+    if (mounted && inNewColumns && sheetContainer.contains(document.activeElement)) return;
+    window.clearInterval(pending.timer);
+    pendingFiller = null;
+    if (mounted) dropEmptyColumnsFrom(mounted, pending.baseCols, rawDataMirror);
+  };
   if (editable && !plateLocked) {
     // The empty lettered columns beside the grid: pressing one adds the columns up to it and selects that cell,
     // so typing there simply continues the sheet.
@@ -9627,6 +9668,11 @@ export function buildReadOnlySpreadsheetHost(
         // typed values live only in the mirror until the grid is redrawn; the insert re-reads the worksheet
         flushMirrorIntoWorksheet(mounted);
         mounted.insertColumn?.(missing, currentCols - 1, false);
+        // The columns only stay if something is typed in them: once the selection or the focus leaves them empty,
+        // they are taken off again and the grey columns are back.
+        if (!pendingFiller) {
+          pendingFiller = { baseCols: currentCols, timer: window.setInterval(settlePendingFiller, 250) };
+        }
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
       const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea');
