@@ -115,6 +115,11 @@ function viewKey(): string {
   return `elabftw-folders-view-${userId}`;
 }
 
+/** The folder the flat views are inside right now ('' = the top level), or null while the tree is shown. */
+export function currentFlatFolderLevel(): string | null {
+  return currentFolderView() === 'tree' ? null : level;
+}
+
 export function currentFolderView(): FolderView {
   try {
     return parseFolderView(window.localStorage.getItem(viewKey()));
