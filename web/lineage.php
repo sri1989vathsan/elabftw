@@ -149,7 +149,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $Child->touch();
     new Changelog($Child)->create(new ContentParams(
         'lineage',
-        sprintf($action === 'add' ? 'Parent #%d added' : 'Parent #%d removed', $parent),
+        sprintf($action === 'add' ? 'Parent #%d added' : 'Parent #%d removed', $parent)
+            . (($note = trim((string) ($payload['note'] ?? ''))) !== '' ? ' (' . mb_substr($note, 0, 100) . ')' : ''),
     ));
     respond(200, array('ok' => true));
 }
