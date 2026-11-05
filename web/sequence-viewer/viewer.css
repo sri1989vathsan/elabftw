@@ -2114,3 +2114,6 @@ body[data-map-style="dark"] .own-map-scale-out {
   max-width: 14rem;
   font-size: 0.8rem;
 }
+
+/* in a tab (tabs.js) the bar of the tabs has the way back */
+body.embedded #back { display: none; }

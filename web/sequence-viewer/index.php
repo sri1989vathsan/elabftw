@@ -47,6 +47,49 @@ try {
     exit('You cannot open this entry.');
 }
 
+// the first page is the frame of the tabs: each plasmid is opened in a frame of its own (embedded=1), File > Open adds another one
+if (!isset($_GET['embedded'])) {
+    $query = $_GET;
+    unset($query['embedded']);
+    header('Content-Type: text/html; charset=utf-8');
+    $first = json_encode(array(
+        'entry' => $entryId,
+        'query' => http_build_query($query),
+        'title' => $title,
+    ), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR);
+    ?>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sequence editor</title>
+  <link rel="stylesheet" href="tabs.css?v=<?= (int) filemtime(__DIR__ . '/tabs.css') ?>">
+</head>
+<body>
+  <div id="tab-bar">
+    <a id="tab-back" href="../registry.php?mode=view&amp;id=<?= $entryId ?>">&larr; Back to eLabFTW</a>
+    <div id="tab-list"></div>
+    <button id="tab-plus" type="button" title="Search the Database and open a plasmid in a new tab">&#128269; Search</button>
+  </div>
+  <div id="main">
+    <aside id="open-panel" hidden aria-label="Search the Database">
+      <div id="open-head">
+        <input id="open-search" type="search" placeholder="Search the Database by name or number" aria-label="Search the Database">
+        <button id="open-close" type="button" aria-label="Close the search" title="Close the search">&times;</button>
+      </div>
+      <div id="open-results"></div>
+    </aside>
+    <div id="stage"></div>
+  </div>
+  <script type="application/json" id="first-tab"><?= $first ?></script>
+  <script src="tabs.js?v=<?= (int) filemtime(__DIR__ . '/tabs.js') ?>"></script>
+</body>
+</html>
+    <?php
+    exit;
+}
+
 header('Content-Type: text/html; charset=utf-8');
 $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 ?>
@@ -56,11 +99,13 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sequence editor</title>
+  <base target="_top">
   <link rel="stylesheet" href="vendor/ove.css">
   <link rel="stylesheet" href="aa-colors.css?v=<?= (int) filemtime(__DIR__ . '/aa-colors.css') ?>">
   <link rel="stylesheet" href="viewer.css?v=<?= (int) filemtime(__DIR__ . '/viewer.css') ?>">
 </head>
 <body
+  class="embedded"
   data-library-url="features-library.js?v=<?= (int) filemtime(__DIR__ . '/features-library.js') ?>"
   data-entry="<?= $entryId ?>"
   data-upload="<?= (int) ($_GET['upload'] ?? 0) ?>"
@@ -106,6 +151,7 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   <script src="blast-tab.js?v=<?= (int) filemtime(__DIR__ . '/blast-tab.js') ?>"></script>
   <script src="tools-basic.js?v=<?= (int) filemtime(__DIR__ . '/tools-basic.js') ?>"></script>
   <script src="tools-pcr.js?v=<?= (int) filemtime(__DIR__ . '/tools-pcr.js') ?>"></script>
+  <script src="open-menu.js?v=<?= (int) filemtime(__DIR__ . '/open-menu.js') ?>"></script>
   <script src="lineage-paste.js?v=<?= (int) filemtime(__DIR__ . '/lineage-paste.js') ?>"></script>
   <script src="primers-panel.js?v=<?= (int) filemtime(__DIR__ . '/primers-panel.js') ?>"></script>
   <script src="circular-map.js?v=<?= (int) filemtime(__DIR__ . '/circular-map.js') ?>"></script>
