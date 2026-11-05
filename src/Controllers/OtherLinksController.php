@@ -18,7 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 use function _;
 
-/** Links > Others: a table of links that anybody in the team can add to. */
+/** Links > Useful links: a table of links that anybody in the team can add to. */
 final class OtherLinksController extends AbstractHtmlController
 {
     #[Override]
@@ -42,7 +42,7 @@ final class OtherLinksController extends AbstractHtmlController
     #[Override]
     protected function getPageTitle(): string
     {
-        return _('Other links');
+        return _('Useful links');
     }
 
     #[Override]
