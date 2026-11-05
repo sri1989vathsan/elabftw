@@ -501,6 +501,8 @@ export function syncFolderView(): void {
   const title = document.getElementById('folderViewTitle');
   if (title) title.textContent = i18next.t(view === 'tree' ? 'Folder tree' : view === 'list' ? 'Folder list' : 'Folder details');
   tree.hidden = view !== 'tree';
+  // the tree keeps the original New folder form, the flat views the icon
+  document.querySelectorAll<HTMLElement>('[data-folder-create]').forEach(box => { box.hidden = (box.dataset.folderCreate === 'tree') !== (view === 'tree'); });
   const existingFlat = document.getElementById('experimentsFoldersFlat');
   if (view === 'tree') {
     if (existingFlat) existingFlat.hidden = true;

@@ -371,6 +371,12 @@ document.addEventListener('DOMContentLoaded', () => {
         (document.querySelector('[data-action="create-experiment-folder"]') as HTMLElement)?.click();
       }
     });
+    document.getElementById('newFolderTreeName')?.addEventListener('keypress', (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        (document.querySelector('[data-action="create-experiment-folder-tree"]') as HTMLElement)?.click();
+      }
+    });
 
     document.getElementById('folderEntityTypeSelect')?.addEventListener('change', (event: Event) => {
       const value = (event.target as HTMLSelectElement).value;
@@ -811,6 +817,29 @@ document.addEventListener('DOMContentLoaded', () => {
     ApiC.post('experiments_folders', {
       name: name,
       parent_id: parentId ? parseInt(parentId, 10) : null,
+    }).then(() => {
+      nameInput.value = '';
+      refreshFoldersSidebarSafely();
+    });
+  });
+
+  // The tree view's New folder form: name and parent, the parent starting at the folder being looked at.
+  // (the panel is rebuilt when it refreshes, so this listens on the document; toggle does not bubble, hence capture)
+  document.addEventListener('toggle', event => {
+    const target = event.target as HTMLElement;
+    const parentSelect = document.getElementById('newFolderParent') as HTMLSelectElement | null;
+    if (!target.classList?.contains('folder-create-tree') || !(target as HTMLDetailsElement).open || !parentSelect) return;
+    const wanted = newFolderParentId();
+    if (Array.from(parentSelect.options).some(option => option.value === wanted && !option.disabled)) parentSelect.value = wanted;
+  }, true);
+  on('create-experiment-folder-tree', () => {
+    const nameInput = document.getElementById('newFolderTreeName') as HTMLInputElement;
+    const parentSelect = document.getElementById('newFolderParent') as HTMLSelectElement;
+    const name = nameInput.value.trim();
+    if (!name) return;
+    ApiC.post('experiments_folders', {
+      name: name,
+      parent_id: parentSelect.value ? parseInt(parentSelect.value, 10) : null,
     }).then(() => {
       nameInput.value = '';
       refreshFoldersSidebarSafely();

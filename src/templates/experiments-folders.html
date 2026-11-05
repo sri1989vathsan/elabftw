@@ -190,7 +190,32 @@
          most visits to this panel are browsing existing folders, not
          creating one, so the create form's own fields (name, parent,
          description) don't need to take up space by default. #}
-      <div class='folder-create-section border-top mt-3 pt-2'>
+      {# Tree view keeps the original New folder form (name and parent folder); the list and details views use the icon below. #}
+      <details class='folder-create-section folder-create-tree border-top mt-3 pt-3' data-folder-create='tree'>
+        <summary class='h6 mb-2'><i class='fas fa-folder-plus fa-fw mr-1'></i>{{ 'New folder'|trans }}</summary>
+        <div class='form-group mb-2'>
+          <label class='small mb-1' for='newFolderTreeName'>{{ 'Folder name'|trans }}</label>
+          <input type='text' id='newFolderTreeName' class='form-control' placeholder='{{ 'New folder name'|trans }}' aria-label='{{ 'New folder name'|trans }}' />
+        </div>
+        <div class='form-group mb-2'>
+          <label class='small mb-1' for='newFolderParent'>{{ 'Parent folder'|trans }}</label>
+          <select id='newFolderParent' class='form-control' aria-label='{{ 'Parent folder'|trans }}'>
+            <option value=''>{{ 'Root (no parent)'|trans }}</option>
+            {% if experimentsFoldersTreeArr is iterable %}
+              {% for parentId, folders in experimentsFoldersTreeArr %}
+                {% for folder in folders %}
+                  <option value='{{ folder.id }}' data-folder-owner-id='{{ folder.userid }}'>{{ folder.full_path }}</option>
+                {% endfor %}
+              {% endfor %}
+            {% endif %}
+          </select>
+          <small class='form-text color-medium'>{{ 'The folder tabs also filter this parent list.'|trans }}</small>
+        </div>
+        <button class='btn btn-primary btn-sm btn-block' type='button' data-action='create-experiment-folder-tree'>
+          <i class='fas fa-plus fa-fw mr-1'></i>{{ 'Create folder'|trans }}
+        </button>
+      </details>
+      <div class='folder-create-section border-top mt-3 pt-2' data-folder-create='flat' hidden>
         <button type='button' class='btn btn-sm btn-outline-secondary folder-create-toggle' data-action='toggle-new-folder' aria-expanded='false' aria-controls='newFolderForm' title='{{ 'New folder'|trans }}' aria-label='{{ 'New folder'|trans }}'><i class='fas fa-folder-plus fa-fw'></i></button>
         <div id='newFolderForm' class='mt-2' hidden>
           <div class='input-group input-group-sm'>
