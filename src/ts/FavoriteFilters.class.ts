@@ -24,7 +24,7 @@ const PM_TASK_ENTITY_TYPE: Partial<Record<FavoriteFilterTarget, string>> = {
   items_types: 'items_types',
 };
 
-type FavoriteFilterTarget = 'all' | 'experiments' | 'resources' | 'experiments_templates' | 'items_types';
+type FavoriteFilterTarget = 'all' | 'experiments' | 'resources' | 'experiments_templates' | 'items_types' | 'database';
 // Templates share the same category/status tables as their parent entity
 // type (see EntityType::toCategoryTable/toStatusTable server-side), so the
 // existing favorite categories/tags/statuses -- grouped by 'experiments' or
@@ -35,6 +35,7 @@ type FavoriteCategoryGroup = 'experiments' | 'resources';
 interface FavoriteFilterResult {
   id: number;
   title: string;
+  custom_id?: number | null;
   category_title?: string | null;
   status_title?: string | null;
   fullname?: string | null;
@@ -220,7 +221,8 @@ export default class FavoriteFilters extends SidePanel {
     // own type, see the change listener in the constructor.
     const categoryGroup = target === 'all' ? null : this.getCategoryGroup(target);
     document.querySelectorAll<HTMLElement>('[data-favorite-target-group]').forEach(group => {
-      const isActive = categoryGroup === null || group.dataset.favoriteTargetGroup === categoryGroup;
+      // The lab Database has its own modules instead of categories/statuses: nothing to filter on here
+      const isActive = target !== 'database' && (categoryGroup === null || group.dataset.favoriteTargetGroup === categoryGroup);
       group.toggleAttribute('hidden', !isActive);
       group.querySelectorAll<HTMLInputElement>('input').forEach(input => {
         input.disabled = !isActive;
@@ -296,7 +298,7 @@ export default class FavoriteFilters extends SidePanel {
   getTarget(): FavoriteFilterTarget {
     const select = document.getElementById('favoriteFilterTarget') as HTMLSelectElement | null;
     const value = select?.value;
-    if (value === 'all' || value === 'resources' || value === 'experiments_templates' || value === 'items_types') return value;
+    if (value === 'all' || value === 'database' || value === 'resources' || value === 'experiments_templates' || value === 'items_types') return value;
     return 'experiments';
   }
 
@@ -306,7 +308,7 @@ export default class FavoriteFilters extends SidePanel {
     // Default to the current user's own items (Scope::User) across
     // experiments, resources, templates and folders, rather than everyone
     // on the team.
-    params.set('scope', '1');
+    params.set('scope', this.getTarget() === 'database' ? '3' : '1');
 
     const textFilter = document.querySelector<HTMLInputElement>('[data-favorite-filter-text]')?.value.trim();
     if (textFilter) {
@@ -347,6 +349,7 @@ export default class FavoriteFilters extends SidePanel {
   private getTargetPath(target: FavoriteFilterTarget): string {
     switch (target) {
     case 'resources': return '/database.php';
+    case 'database': return '/registry.php';
     case 'experiments_templates': return '/templates.php';
     case 'items_types': return '/resources-templates.php';
     default: return '/experiments.php';
@@ -356,6 +359,7 @@ export default class FavoriteFilters extends SidePanel {
   private getTargetLabel(target: FavoriteFilterTarget): string {
     switch (target) {
     case 'resources': return 'resource';
+    case 'database': return 'database entry';
     case 'experiments_templates': return 'experiment template';
     case 'items_types': return 'resource template';
     default: return 'experiment';
@@ -365,6 +369,7 @@ export default class FavoriteFilters extends SidePanel {
   private getTargetEntityType(target: FavoriteFilterTarget): EntityType {
     switch (target) {
     case 'resources': return EntityType.Item;
+    case 'database': return EntityType.Inventory;
     case 'experiments_templates': return EntityType.Template;
     case 'items_types': return EntityType.ItemType;
     default: return EntityType.Experiment;
@@ -424,7 +429,7 @@ export default class FavoriteFilters extends SidePanel {
     const link = document.createElement('a');
     link.className = 'favorite-filter-result-link flex-grow-1';
     link.href = this.getResultUrl(target, result.id).toString();
-    link.textContent = result.title || `Untitled ${this.getTargetLabel(target)}`;
+    link.textContent = (result.custom_id ? `#${result.custom_id} ` : '') + (result.title || `Untitled ${this.getTargetLabel(target)}`);
     link.title = `Open ${this.getTargetLabel(target)}`;
     if (isEditingEntity()
       && !(target === 'experiments' && result.id === entity.id)
@@ -784,7 +789,8 @@ export default class FavoriteFilters extends SidePanel {
     // nothing", so "All" with no text still shows something per group.
     // Default to the current user's own items (Scope::User), matching
     // getFilterParams() above.
-    const params = new URLSearchParams({ limit: String(GROUPED_SEARCH_PER_GROUP_LIMIT), scope: '1' });
+    // The lab Database is shared: its entries of the whole team are searched, not only the own ones
+    const params = new URLSearchParams({ limit: String(GROUPED_SEARCH_PER_GROUP_LIMIT), scope: target === 'database' ? '3' : '1' });
     if (query) params.set('fastq', query);
     try {
       const results = await this.cachedGetJson<FavoriteFilterResult[]>(`${entityType}?${params.toString()}`, signal);
@@ -937,6 +943,7 @@ export default class FavoriteFilters extends SidePanel {
 
     const groups = await Promise.all([
       this.groupedEntityResults('experiments', 'Experiments', query, abort.signal),
+      this.groupedEntityResults('database', 'Database', query, abort.signal),
       this.groupedEntityResults('resources', 'Resources', query, abort.signal),
       this.groupedEntityResults('experiments_templates', 'Experiment templates', query, abort.signal),
       this.groupedEntityResults('items_types', 'Resource templates', query, abort.signal),
