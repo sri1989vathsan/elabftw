@@ -69,8 +69,12 @@
     button.setAttribute('role', 'button');
     button.className = 'bp3-button bp3-minimal bp3-intent-primary';
     button.tabIndex = 0;
+    // the size of the other tools of the row
+    button.style.width = '30px';
+    button.style.padding = '0';
+    button.style.justifyContent = 'center';
     button.title = 'Search the Database and open a plasmid in a new tab';
-    button.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 10l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+    button.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="8" cy="3.5" rx="5.5" ry="2"/><path d="M2.5 3.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9"/><path d="M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>';
     button.addEventListener('click', function (event) {
       event.preventDefault();
       window.parent.postMessage({ type: 'elab-open-from-database', toggle: true }, window.location.origin);
@@ -80,7 +84,16 @@
     box.setAttribute('data-open-database-button', '1');
     outer.removeAttribute('data-open-database-button');
     box.appendChild(outer);
+    box.style.cssText = 'display:flex;align-items:center;';
     slot.parentNode.insertBefore(box, slot);
+    // Save was the first tool of the row, without the space the others have in front of them
+    const gap = slot.nextElementSibling ? slot.nextElementSibling.querySelector('a, .bp3-button') : null;
+    if (gap) {
+      const lead = gap.getBoundingClientRect().left - slot.nextElementSibling.getBoundingClientRect().left;
+      if (lead > 0) {
+        slot.style.marginLeft = lead + 'px';
+      }
+    }
   }
   new MutationObserver(function () {
     document.querySelectorAll('.bp3-menu').forEach(addItem);
