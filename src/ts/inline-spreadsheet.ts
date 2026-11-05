@@ -4502,18 +4502,9 @@ export function openSpreadsheetModal(
     // Page-level listeners of this popup, taken off again when it closes (they used to stay behind each time
     // a popup was opened, slowing every mouse event on the page down in a long session).
     const popupPageListenerRemovers: Array<() => void> = [];
-    // the empty lettered columns beside a narrow grid (see syncGridFiller)
-    let pendingFiller: { baseCols: number; timer: number } | null = null;
-    const settlePendingFiller = (): void => {
-      const pending = pendingFiller;
-      if (!pending) return;
-      if (rescueInputEl && !rescueInputEl.hidden) return;
-      const inNewColumns = !!selectedRange && Math.max(selectedRange[0], selectedRange[2]) >= pending.baseCols;
-      if (worksheet && inNewColumns && sheetContainer.contains(document.activeElement)) return;
-      window.clearInterval(pending.timer);
-      pendingFiller = null;
-      if (worksheet) dropEmptyColumnsFrom(worksheet, pending.baseCols, rawDataMirror);
-    };
+    // The empty lettered columns beside a narrow grid (see syncGridFiller): pressing a grey cell adds columns up to it.
+    // They stay while the popup is open; the ones still empty at the end are left out of what Update applies.
+    let pendingFiller: { baseCols: number } | null = null;
     const activateFillerCell = (targetCol: number, row: number): void => {
       if (!worksheet || working.kind === 'well-plate') return;
       commitRescueInput();
@@ -4522,15 +4513,11 @@ export function openSpreadsheetModal(
       if (missing > 0) {
         flushMirrorIntoWorksheet(worksheet);
         worksheet.insertColumn?.(missing, currentCols - 1, false);
-        // kept only if something is typed in them (see the grid in the text)
-        if (!pendingFiller) {
-          pendingFiller = { baseCols: currentCols, timer: window.setInterval(settlePendingFiller, 250) };
-          popupPageListenerRemovers.push(() => window.clearInterval(pendingFiller?.timer));
-        }
+        pendingFiller ??= { baseCols: currentCols };
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
       selectedRange = [col, row, col, row];
-      // focus goes into the grid too (the press on the filler does not move it), so the new columns count as in use
+      // focus goes into the grid too (the press on the filler does not move it)
       const sink = sheetContainer?.querySelector<HTMLElement>('.jss_textarea');
       window.setTimeout(() => {
         worksheet?.updateSelectionFromCoords?.(col, row, col, row);
@@ -7246,10 +7233,15 @@ export function openSpreadsheetModal(
     const buildResult = (): { result: SpreadsheetData; computed: () => AOA } => {
       const rawData = readRawData();
       const rows = clampDimension(rawData.length, working.rows);
-      const cols = clampDimension(
-        rawData.reduce((max, row) => Math.max(max, row.length), 0),
-        working.cols,
-      );
+      let width = rawData.reduce((max, row) => Math.max(max, row.length), 0);
+      // grey columns that were pressed but never typed in are not part of the table
+      if (pendingFiller) {
+        const baseCols = pendingFiller.baseCols;
+        let lastFilled = baseCols;
+        rawData.forEach(row => row.forEach((value, col) => { if (col >= baseCols && String(value ?? '') !== '') lastFilled = Math.max(lastFilled, col + 1); }));
+        width = Math.min(width, lastFilled);
+      }
+      const cols = clampDimension(width, working.cols);
       const result: SpreadsheetData = {
         data: resizeData(rawData, rows, cols),
         rows,
@@ -9647,19 +9639,24 @@ export function buildReadOnlySpreadsheetHost(
         : null;
     }));
   }
-  let pendingFiller: { baseCols: number; timer: number } | null = null;
+  // The empty lettered columns beside the grid: pressing a grey cell adds the columns up to it. They stay while the table
+  // is being worked in; the ones still empty are taken off once, when the next press lands outside the table.
+  let pendingFiller: { baseCols: number } | null = null;
   const settlePendingFiller = (): void => {
     const pending = pendingFiller;
     if (!pending) return;
-    const mounted = getMountedWorksheet(sheetContainer);
-    if (mounted && rescueInputEl && !rescueInputEl.hidden) return;
-    const selection = lastKnownSelection;
-    const inNewColumns = !!selection && Math.max(selection[0], selection[2]) >= pending.baseCols;
-    if (mounted && inNewColumns && sheetContainer.contains(document.activeElement)) return;
-    window.clearInterval(pending.timer);
     pendingFiller = null;
+    commitRescueInput();
+    commitFormulaInput();
+    const mounted = getMountedWorksheet(sheetContainer);
     if (mounted) dropEmptyColumnsFrom(mounted, pending.baseCols, rawDataMirror);
   };
+  listenOnDocument('pointerdown', event => {
+    if (!pendingFiller) return;
+    const scope = sheetContainer.closest<HTMLElement>('.elabftw-spreadsheet-editor-overlay, .elabftw-spreadsheet-readonly-view') ?? sheetContainer;
+    if (event.target instanceof Node && scope.contains(event.target)) return;
+    settlePendingFiller();
+  }, true);
   if (editable && !plateLocked) {
     // The empty lettered columns beside the grid: pressing one adds the columns up to it and selects that cell,
     // so typing there simply continues the sheet.
@@ -9674,11 +9671,7 @@ export function buildReadOnlySpreadsheetHost(
         // typed values live only in the mirror until the grid is redrawn; the insert re-reads the worksheet
         flushMirrorIntoWorksheet(mounted);
         mounted.insertColumn?.(missing, currentCols - 1, false);
-        // The columns only stay if something is typed in them: once the selection or the focus leaves them empty,
-        // they are taken off again and the grey columns are back.
-        if (!pendingFiller) {
-          pendingFiller = { baseCols: currentCols, timer: window.setInterval(settlePendingFiller, 250) };
-        }
+        pendingFiller ??= { baseCols: currentCols };
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
       const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea');
