@@ -51,6 +51,8 @@ const expandedFolders = new Set<string>();
 // the switch above the list: every folder shows its entries (the arrows then collapse single folders)
 let showAllEntries = false;
 const collapsedFolders = new Set<string>();
+// folders listed twice (bookmarked and in the level below) show their entries only in the lower list
+let entriesElsewhere = new Set<string>();
 const isOpen = (id: string): boolean => (showAllEntries ? !collapsedFolders.has(id) : expandedFolders.has(id));
 
 interface FolderEntry { type: 'experiments' | 'items'; id: number; title: string }
@@ -255,7 +257,7 @@ function ensureEntries(folderId: string): void {
 
 /** The arrow in front of a folder's name that shows or hides the entries filed in it (only folders that hold some). */
 function entriesToggle(row: FolderRow): HTMLElement {
-  if (row.experiments + row.resources === 0) return element('span', 'folder-entries-toggle-placeholder');
+  if (row.experiments + row.resources === 0 || entriesElsewhere.has(row.id)) return element('span', 'folder-entries-toggle-placeholder');
   const open = isOpen(row.id);
   const button = element('button', 'folder-action-btn hl-hover-gray rounded folder-entries-toggle');
   button.type = 'button';
@@ -293,7 +295,7 @@ function listOf(rows: FolderRow[], entityType: string): HTMLElement {
     item.append(line);
     const more = morePanel(row);
     if (more) item.append(more);
-    if (row.experiments + row.resources > 0 && isOpen(row.id)) {
+    if (row.experiments + row.resources > 0 && !entriesElsewhere.has(row.id) && isOpen(row.id)) {
       ensureEntries(row.id);
       item.append(entriesBlockOf(row.id));
     }
@@ -390,7 +392,7 @@ function cardsOf(rows: FolderRow[]): HTMLElement {
     if (row.description) card.append(element('div', 'folder-details-description folder-col-narrow-only', row.description));
     const more = morePanel(row);
     if (more) card.append(more);
-    if (row.experiments + row.resources > 0 && isOpen(row.id)) {
+    if (row.experiments + row.resources > 0 && !entriesElsewhere.has(row.id) && isOpen(row.id)) {
       ensureEntries(row.id);
       card.append(entriesBlockOf(row.id));
     }
@@ -526,9 +528,11 @@ export function syncFolderView(): void {
   flat.querySelector<HTMLElement>('.folder-level-bar-holder')?.replaceChildren(levelPathBar(all));
   // the bookmarked folders follow the sort of the table below them and have their own column headings
   const favorites = searching ? [] : sortFolderRows(all.filter(row => row.favorite), view === 'list' ? 'path' : sortKey, view === 'list' ? 1 : sortDirection);
+  entriesElsewhere = new Set(rows.map(row => row.id));
   const favoritesBlock = favorites.length > 0
     ? [favoritesSection(...(view === 'list' ? [listOf(favorites, entityType)] : [sortBarOf(), cardsOf(favorites)]))]
     : [];
+  entriesElsewhere = new Set();
   if (rows.length === 0) {
     const empty = element('div', 'small color-medium text-center border rounded p-3', i18next.t(all.length === 0 ? 'No folders to show.' : searching ? 'No folder matches.' : 'No folders in here.'));
     body.replaceChildren(...favoritesBlock, ...(level !== '' && !searching ? [upRow(all), empty] : [empty]));
