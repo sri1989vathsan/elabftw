@@ -19,6 +19,10 @@ services:
       - ./web/planned.css:/elabftw/web/planned.css:ro
       - ./web/order-sheets:/elabftw/web/order-sheets:ro
       - ./src/Models/Inventory.php:/elabftw/src/Models/Inventory.php:ro
+      - ./src/Models/AbstractEntity.php:/elabftw/src/Models/AbstractEntity.php:ro
+      - ./src/templates/storage-view-edit.html:/elabftw/src/templates/storage-view-edit.html:ro
+      - ./src/Elabftw/CustomMigrationRunner.php:/elabftw/src/Elabftw/CustomMigrationRunner.php:ro
+      - ./src/sql/custom/138_module_low_stock.sql:/elabftw/src/sql/custom/138_module_low_stock.sql:ro
       - ./src/Elabftw/EntitySqlBuilder.php:/elabftw/src/Elabftw/EntitySqlBuilder.php:ro
       - ./web/order-primers.js:/elabftw/web/order-primers.js:ro
       - ./web/registry-folders.php:/elabftw/web/registry-folders.php:ro

@@ -85,12 +85,18 @@ try {
         FROM inventory_categories AS c WHERE c.team = :team AND c.state = 1 ORDER BY c.ordering, c.title')->fetchAll();
     $byModule = array();
     $needsSequence = array();
+    $stockRules = array();
     foreach ($modules as $module) {
         $byModule[] = array('id' => (int) $module['id'], 'title' => (string) $module['title'], 'color' => (string) $module['color'], 'count' => (int) $module['n'], 'mine' => (int) $module['mine']);
         $settings = json_decode((string) $module['settings'], true);
         if (is_array($settings) && !empty($settings['requires_sequence_file'])) {
             $needsSequence[] = (int) $module['id'];
         }
+        // modules that do not track stock (plasmids) are never low; the others may give their entries a default minimum
+        if (is_array($settings) && ($settings['track_low_stock'] ?? true) === false) {
+            continue;
+        }
+        $stockRules[(int) $module['id']] = array('min' => $settings['default_min_stock'] ?? null, 'unit' => $settings['default_min_unit'] ?? null);
     }
     $moduleTitles = array();
     foreach ($modules as $module) {
@@ -145,9 +151,23 @@ try {
 
     // stock below the minimum the owner set: the quantities of the containers in the unit of the minimum are added up
     $low = array();
-    foreach ($run('SELECT entity.id, entity.title, entity.category, entity.min_stock, entity.min_stock_unit, (SELECT COALESCE(SUM(k.qty_stored), 0) FROM containers2inventory AS k WHERE k.item_id = entity.id AND k.qty_unit = entity.min_stock_unit) AS have' . $OWNER . ' FROM inventory AS entity WHERE ' . $labWhere . ' AND entity.min_stock IS NOT NULL AND entity.min_stock_unit IS NOT NULL')->fetchAll() as $row) {
-        if ((float) $row['have'] < (float) $row['min_stock']) {
-            $low[] = $entryItem($row, rtrim(rtrim(number_format((float) $row['have'], 3, '.', ''), '0'), '.') . ' ' . $row['min_stock_unit'] . ' left, minimum ' . rtrim(rtrim(number_format((float) $row['min_stock'], 3, '.', ''), '0'), '.'));
+    if ($stockRules !== array()) {
+        $have = $pdo->prepare('SELECT COALESCE(SUM(qty_stored), 0) FROM containers2inventory WHERE item_id = :id AND qty_unit = :unit');
+        $format = static fn(float $n): string => rtrim(rtrim(number_format($n, 3, '.', ''), '0'), '.');
+        foreach ($run('SELECT entity.id, entity.title, entity.category, entity.min_stock, entity.min_stock_unit' . $OWNER . ' FROM inventory AS entity WHERE ' . $labWhere . ' AND entity.category IN (' . implode(',', array_keys($stockRules)) . ')')->fetchAll() as $row) {
+            $rule = $stockRules[(int) $row['category']];
+            $minimum = $row['min_stock'] !== null && $row['min_stock_unit'] !== null ? (float) $row['min_stock'] : (isset($rule['min'], $rule['unit']) ? (float) $rule['min'] : null);
+            $unit = $row['min_stock'] !== null && $row['min_stock_unit'] !== null ? $row['min_stock_unit'] : ($rule['unit'] ?? null);
+            if ($minimum === null || $unit === null) {
+                continue;
+            }
+            $have->bindValue(':id', (int) $row['id'], PDO::PARAM_INT);
+            $have->bindValue(':unit', $unit);
+            $pdo->execute($have);
+            $left = (float) $have->fetchColumn();
+            if ($left < $minimum) {
+                $low[] = $entryItem($row, $format($left) . ' ' . $unit . ' left, minimum ' . $format($minimum));
+            }
         }
     }
     $risks[] = $risk('low', 'Low stock', $low);

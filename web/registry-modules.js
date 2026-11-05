@@ -317,6 +317,38 @@
       });
       needFile.append(need, document.createTextNode(' A sequence file (GenBank, FASTA, SnapGene) is needed to register an entry in the lab Database'));
       rulesBox.append(sequenceLabel, needFile);
+
+      // low stock: a module can leave it out (plasmids) or give its entries a default minimum (an entry's own minimum wins)
+      const track = element('label', 'd-block mb-2');
+      const tracked = element('input');
+      tracked.type = 'checkbox';
+      tracked.checked = settings.track_low_stock !== false;
+      track.append(tracked, document.createTextNode(' Warn about low stock for the entries of this module'));
+      const defaults = element('div', 'form-inline mb-2');
+      defaults.append(element('span', 'small mr-2', 'Default minimum'));
+      const minimum = element('input', 'form-control form-control-sm mr-1');
+      minimum.type = 'number';
+      minimum.min = '0';
+      minimum.step = 'any';
+      minimum.style.width = '6rem';
+      minimum.value = settings.default_min_stock === null || settings.default_min_stock === undefined ? '' : settings.default_min_stock;
+      const minimumUnit = element('input', 'form-control form-control-sm mr-1');
+      minimumUnit.placeholder = 'unit, e.g. tubes';
+      minimumUnit.style.width = '9rem';
+      minimumUnit.value = settings.default_min_unit || '';
+      defaults.append(minimum, minimumUnit, element('span', 'small text-muted', 'for entries without a minimum of their own'));
+      function syncStock() {
+        settings.track_low_stock = tracked.checked;
+        settings.default_min_stock = minimum.value === '' ? null : Number(minimum.value);
+        settings.default_min_unit = minimumUnit.value.trim() || null;
+        defaults.style.display = tracked.checked ? '' : 'none';
+      }
+      [tracked, minimum, minimumUnit].forEach(function (input) {
+        input.addEventListener('input', syncStock);
+        input.addEventListener('change', syncStock);
+      });
+      syncStock();
+      rulesBox.append(track, defaults);
     }
 
     const apply = element('label', 'd-block mb-2');

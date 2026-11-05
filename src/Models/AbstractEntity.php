@@ -1610,6 +1610,25 @@ abstract class AbstractEntity extends AbstractRest
     }
 
     /**
+     * The low stock rule of a module of the database: whether it tracks stock at all (plasmids do not) and the minimum its entries get by default
+     *
+     * @return array{track: bool, min: float|null, unit: string|null}
+     */
+    public function stockRule(?int $category = null): array
+    {
+        $category ??= (int) ($this->entityData['category'] ?? 0);
+        $req = $this->Db->prepare('SELECT settings FROM inventory_categories WHERE id = :id');
+        $req->bindValue(':id', $category, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $settings = json_decode((string) $req->fetchColumn(), true);
+        $settings = is_array($settings) ? $settings : array();
+        $min = isset($settings['default_min_stock']) && is_numeric($settings['default_min_stock']) ? (float) $settings['default_min_stock'] : null;
+        $unit = isset($settings['default_min_unit']) && $settings['default_min_unit'] !== '' ? (string) $settings['default_min_unit'] : null;
+
+        return array('track' => ($settings['track_low_stock'] ?? true) !== false, 'min' => $min !== null && $unit !== null ? $min : null, 'unit' => $min !== null ? $unit : null);
+    }
+
+    /**
      * Add the storage locations (full path and quantity) of registry entries, so the table view can show them
      */
     protected function hydrateStorage(array $entities): array
@@ -1656,12 +1675,22 @@ abstract class AbstractEntity extends AbstractRest
                 );
             }
         }
-        // the minimum stock of each entry (a quantity and its unit), when it has one
+        // the minimum stock of each entry (a quantity and its unit): its own, else the default of its module; none where the module does not track stock
         $minimums = array();
-        $req = $this->Db->prepare(sprintf('SELECT id, min_stock, min_stock_unit FROM inventory WHERE min_stock IS NOT NULL AND id IN (%s)', implode(',', $ids)));
+        $req = $this->Db->prepare(sprintf('SELECT id, category, min_stock, min_stock_unit FROM inventory WHERE id IN (%s)', implode(',', $ids)));
         $this->Db->execute($req);
         foreach ($req->fetchAll() as $minimum) {
-            $minimums[(int) $minimum['id']] = $minimum;
+            $rule = $this->stockRule((int) $minimum['category']);
+            if (!$rule['track']) {
+                continue;
+            }
+            if ($minimum['min_stock'] === null && $rule['min'] !== null) {
+                $minimum['min_stock'] = $rule['min'];
+                $minimum['min_stock_unit'] = $rule['unit'];
+            }
+            if ($minimum['min_stock'] !== null) {
+                $minimums[(int) $minimum['id']] = $minimum;
+            }
         }
         foreach ($entities as &$entity) {
             $entity['storage_locations'] = $byItem[(int) $entity['id']] ?? array();

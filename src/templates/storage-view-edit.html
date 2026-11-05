@@ -19,13 +19,14 @@
         </p>
         {% if Entity.entityType.value == 'inventory' %}
           {# stock alert: below the minimum the entry is flagged on the dashboard; the owner and the admins set it #}
-          {% set minStock = Entity.entityData.min_stock %}
-          {% set minUnit = Entity.entityData.min_stock_unit %}
+          {% set rule = Entity.stockRule() %}
+          {% set minStock = Entity.entityData.min_stock is not null ? Entity.entityData.min_stock : rule.min %}
+          {% set minUnit = Entity.entityData.min_stock is not null ? Entity.entityData.min_stock_unit : rule.unit %}
           {% set haveInUnit = minUnit ? (stock[minUnit]|default(0)) : 0 %}
-          {% if minStock is not null and minUnit and haveInUnit < minStock %}
+          {% if rule.track and minStock is not null and minUnit and haveInUnit < minStock %}
             <p class='mb-2'><span class='badge badge-danger'><i class='fas fa-triangle-exclamation fa-fw'></i> {{ 'Low stock'|trans }}: {{ haveInUnit|round(2) }} {{ minUnit }} {{ 'left, minimum'|trans }} {{ minStock|round(2) }} {{ minUnit }}</span></p>
           {% endif %}
-          {% if not storageReadOnly and (App.Users.isAdmin or Entity.entityData.userid == App.Users.userData.userid) %}
+          {% if rule.track and not storageReadOnly and (App.Users.isAdmin or Entity.entityData.userid == App.Users.userData.userid) %}
             <div class='form-inline mb-2' id='minStockForm' data-entry-id='{{ Entity.id }}'>
               <label class='mr-2 small' for='minStockValue'>{{ 'Minimum stock'|trans }}</label>
               <input type='number' min='0' step='any' id='minStockValue' class='form-control form-control-sm mr-1' style='width:6rem' value='{{ minStock is not null ? minStock|round(3) : '' }}' />
