@@ -1448,9 +1448,9 @@ async function spreadsheetSoak(options = {}) {
       verticalAlignCheck(uid, 'columns added by the grey cells');
       await consistency('filler-click: inline, popup and stored HTML agree', true);
     },
-    // Columns added by pressing a grey cell stay only while that cell is in use: selecting another cell without typing
-    // takes them off again; typing in them keeps them. Inline and in the popup (the popup once dropped them at once,
-    // because the press did not move focus into the grid).
+    // Columns added by pressing a grey cell stay while the table is being worked in and go away once, when the next press
+    // lands outside the table (inline) or when Update is pressed (popup); text typed in them keeps them. Clicking back
+    // and forth between cells must not add or take away columns (it looked jittery when it did).
     async 'filler-revert'() {
       const uid = await createTable('filler revert', { rows: 4, cols: 3 });
       if (!uid) return;
@@ -1474,26 +1474,34 @@ async function spreadsheetSoak(options = {}) {
       const base = colsOf(root);
       const inline = await pressGrey(root, 1);
       if (!inline) { note('filler-no-room'); return; }
-      await sleep(1200);
+      await sleep(1000);
       root = api.overlayElement(uid) || root;
-      if (colsOf(root) !== base + inline.i + 1) dataLoss.push({ context, table: model().label, where: 'inline', problem: `a grey cell pressed and left empty should keep ${base + inline.i + 1} columns while it is selected, there are ${colsOf(root)}` });
-      await selectCell(uid, 0, 0);
-      await sleep(1200);
+      const grown = base + inline.i + 1;
+      if (colsOf(root) !== grown) dataLoss.push({ context, table: model().label, where: 'inline', problem: `a grey cell pressed in the text should leave ${grown} columns, there are ${colsOf(root)}` });
+      for (let i = 0; i < 3; i++) { await selectCell(uid, i % 2, i); await sleep(500); }
       root = api.overlayElement(uid) || root;
-      if (colsOf(root) !== base) dataLoss.push({ context, table: model().label, where: 'inline', problem: `columns added by a grey cell should go away when another cell is selected without typing (${base} expected), there are ${colsOf(root)}` });
+      if (colsOf(root) !== grown) dataLoss.push({ context, table: model().label, where: 'inline', problem: `clicking between cells should leave the ${grown} columns alone, there are ${colsOf(root)}` });
+      // a press outside the table takes the empty columns off, once
+      (document.querySelector('#experimentsFoldersSidebar') || document.body).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+      await sleep(800);
+      root = api.overlayElement(uid) || root;
+      const afterOutside = root ? colsOf(root) : base;
+      if (afterOutside !== base) dataLoss.push({ context, table: model().label, where: 'inline', problem: `empty grey columns should go away when a press lands outside the table (${base} expected), there are ${afterOutside}` });
       note('filler-revert-inline');
       // popup
       const dialog = await openPopupFor(uid);
       const popupBase = colsOf(dialog);
       const first = await pressGrey(dialog, 1);
       if (!first) { note('filler-no-room'); } else {
-        await sleep(1200);
-        if (colsOf(dialog) !== popupBase + first.i + 1) dataLoss.push({ context, table: model().label, where: 'popup', problem: `a grey cell pressed in the popup should keep ${popupBase + first.i + 1} columns while it is selected, there are ${colsOf(dialog)}` });
-        press(dialog.querySelector('.jss_worksheet td[data-x="0"][data-y="0"]'));
-        await sleep(1200);
-        if (colsOf(dialog) !== popupBase) dataLoss.push({ context, table: model().label, where: 'popup', problem: `columns added by a grey cell in the popup should go away when another cell is selected without typing (${popupBase} expected), there are ${colsOf(dialog)}` });
+        await sleep(1000);
+        const popupGrown = popupBase + first.i + 1;
+        if (colsOf(dialog) !== popupGrown) dataLoss.push({ context, table: model().label, where: 'popup', problem: `a grey cell pressed in the popup should leave ${popupGrown} columns, there are ${colsOf(dialog)}` });
+        for (let i = 0; i < 3; i++) { press(dialog.querySelector(`.jss_worksheet td[data-x="${i}"][data-y="${i % 2}"]`)); await sleep(500); }
+        if (colsOf(dialog) !== popupGrown) dataLoss.push({ context, table: model().label, where: 'popup', problem: `clicking between cells in the popup should leave the ${popupGrown} columns alone, there are ${colsOf(dialog)}` });
         note('filler-revert-popup');
-        // typing in a grey cell keeps the columns
+        // text typed in a grey column keeps it, the empty ones after it are left out by Update
+        // the grey cells now start after the columns already added, so the typed column is counted from there
+        const colsBeforeSecond = colsOf(dialog);
         const second = await pressGrey(dialog, 0);
         await sleep(500);
         (document.activeElement || dialog).dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', bubbles: true, cancelable: true }));
@@ -1502,9 +1510,8 @@ async function spreadsheetSoak(options = {}) {
         if (!box) { fail('typing over a grey cell in the popup did not open the editor', { table: model().label }); } else {
           box.value = 'zz'; box.dispatchEvent(new Event('input', { bubbles: true }));
           box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-          await sleep(1500);
-          const want = popupBase + second.i + 1;
-          if (colsOf(dialog) !== want) dataLoss.push({ context, table: model().label, where: 'popup', problem: `text typed in a grey cell should keep its column (${want} columns), there are ${colsOf(dialog)}` });
+          await sleep(1000);
+          const want = colsBeforeSecond + second.i + 1;
           model().grid.forEach(row => { while (row.length < want) row.push(''); });
           model().grid[second.r][want - 1] = 'zz';
           note('filler-keep-popup');
