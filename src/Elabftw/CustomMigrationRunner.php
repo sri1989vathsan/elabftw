@@ -141,6 +141,7 @@ final class CustomMigrationRunner
         '100_order_sheet_basket_seen.sql',
         '101_notif_order_collected.sql',
         '102_folder_view_preference.sql',
+        '103_other_links.sql',
     );
 
     private Db $Db;
