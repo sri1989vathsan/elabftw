@@ -196,9 +196,6 @@
       }
     }
   }
-  function openDialog() {
-    showPanel(true);
-  }
 
   let typing = 0;
   search.addEventListener('input', function () {
@@ -210,12 +207,10 @@
   document.getElementById('open-close').addEventListener('click', function () {
     showPanel(false);
   });
-  document.getElementById('tab-plus').addEventListener('click', function () {
-    showPanel(panel.hidden);
-  });
   window.addEventListener('message', function (event) {
     if (event.origin === window.location.origin && event.data && event.data.type === 'elab-open-from-database') {
-      openDialog();
+      // the button of the toolbar opens and closes the panel, the File menu opens it
+      showPanel(event.data.toggle ? panel.hidden : true);
     }
   });
 

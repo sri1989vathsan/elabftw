@@ -70,7 +70,6 @@ if (!isset($_GET['embedded'])) {
   <div id="tab-bar">
     <a id="tab-back" href="../registry.php?mode=view&amp;id=<?= $entryId ?>">&larr; Back to eLabFTW</a>
     <div id="tab-list"></div>
-    <button id="tab-plus" type="button" title="Search the Database and open a plasmid in a new tab">&#128269; Search</button>
   </div>
   <div id="main">
     <aside id="open-panel" hidden aria-label="Search the Database">

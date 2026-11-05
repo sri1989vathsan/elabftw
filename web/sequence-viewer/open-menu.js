@@ -50,7 +50,33 @@
     item.addEventListener('click', ask, true);
     anchor.parentNode.insertBefore(item, anchor);
   }
+  // a button of the toolbar, before Save: the search of the Database (opens or closes the panel of the tabs)
+  function addButton() {
+    if (document.querySelector('[data-open-database-button]')) {
+      return;
+    }
+    const save = document.querySelector('.ve-tool-container-saveTool');
+    if (!save || !save.parentNode) {
+      return;
+    }
+    const outer = document.createElement('div');
+    outer.className = 'veToolbarItemOuter';
+    outer.setAttribute('data-open-database-button', '1');
+    const button = document.createElement('a');
+    button.setAttribute('role', 'button');
+    button.className = 'bp3-button bp3-minimal bp3-intent-primary';
+    button.tabIndex = 0;
+    button.title = 'Search the Database and open a plasmid in a new tab';
+    button.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 10l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+    button.addEventListener('click', function (event) {
+      event.preventDefault();
+      window.parent.postMessage({ type: 'elab-open-from-database', toggle: true }, window.location.origin);
+    });
+    outer.appendChild(button);
+    save.parentNode.insertBefore(outer, save);
+  }
   new MutationObserver(function () {
     document.querySelectorAll('.bp3-menu').forEach(addItem);
+    addButton();
   }).observe(document.body, { childList: true, subtree: true });
 }());
