@@ -7,7 +7,7 @@ import { getEntityTypeFromPage } from './misc';
 import { askConfirm } from './confirm-dialog';
 import { capColourName, capDot } from './cap-colours';
 
-type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null; child_capacity?: number | null; comment?: string | null; owner_id?: number | null };
+type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null; child_capacity?: number | null; comment?: string | null; owner_id?: number | null; owner_name?: string | null; is_mine?: number | boolean | string | null };
 type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string; stored_at?: string | null; cap_colour?: string | null; expires_at?: string | null };
 type Row = {
   id: number;
@@ -390,16 +390,18 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   search.placeholder = 'Search storage';
   search.setAttribute('aria-label', 'Search storage');
   // the storage of the lab is for everyone, the personal storage only for the person who made it
-  let scope: 'lab' | 'mine' = 'lab';
+  let scope: 'lab' | 'mine' | 'others' = 'lab';
+  let otherUser = '';
   try {
-    scope = localStorage.getItem('storageScope') === 'mine' ? 'mine' : 'lab';
+    const saved = localStorage.getItem('storageScope');
+    scope = saved === 'mine' || saved === 'others' ? saved : 'lab';
   } catch {
     // no storage: the lab storage
   }
   const scopeSwitch = el('div', 'btn-group btn-group-sm w-100 mb-2');
   scopeSwitch.setAttribute('role', 'group');
   scopeSwitch.setAttribute('aria-label', 'Which storage to show');
-  const scopeButtons = ([['lab', 'Lab storage'], ['mine', 'My storage']] as const).map(([value, label]) => {
+  const scopeButtons = ([['lab', 'Lab storage'], ['mine', 'My storage'], ['others', 'Other storage']] as const).map(([value, label]) => {
     const button = el('button', 'btn btn-outline-secondary', label);
     button.type = 'button';
     button.addEventListener('click', () => {
@@ -415,9 +417,19 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     return [value, button] as const;
   });
-  const paintScope = (): void => scopeButtons.forEach(([value, button]) => button.classList.toggle('active', value === scope));
+  // the personal storage of the other people: a list of the people who have one, to look at (never to change)
+  const otherSelect = el('select', 'form-control form-control-sm mb-2');
+  otherSelect.setAttribute('aria-label', 'Whose storage');
+  otherSelect.addEventListener('change', () => {
+    otherUser = otherSelect.value;
+    renderTree();
+  });
+  const paintScope = (): void => {
+    scopeButtons.forEach(([value, button]) => button.classList.toggle('active', value === scope));
+    otherSelect.hidden = scope !== 'others';
+    addTop.hidden = scope === 'others';
+  };
   scopeSwitch.append(...scopeButtons.map(([, button]) => button));
-  paintScope();
   const expandAll = el('button', 'btn btn-transparent btn-sm', 'Expand all');
   const collapseAll = el('button', 'btn btn-transparent btn-sm', 'Collapse all');
   expandAll.type = collapseAll.type = 'button';
@@ -425,6 +437,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   addTop.type = 'button';
   const addTopForm = el('div');
   addTopForm.hidden = true;
+  paintScope();
   addTop.addEventListener('click', () => {
     addTopForm.hidden = !addTopForm.hidden;
     if (!addTopForm.hidden) addTopForm.replaceChildren(renderAddForm(null));
@@ -527,7 +540,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       // the built-in kinds stay
     }
   };
-  tools.append(scopeSwitch, search, expandAll, collapseAll, addTop, kindsButton, addTopForm, kindsPanel);
+  tools.append(scopeSwitch, otherSelect, search, expandAll, collapseAll, addTop, kindsButton, addTopForm, kindsPanel);
   const treeBox = el('div', 'storage-tree');
   side.append(tools, treeBox);
 
@@ -567,8 +580,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       label.append(tag);
     }
     if (node.unit.owner_id !== null && node.unit.owner_id !== undefined) {
-      const mine = el('span', 'badge badge-light ml-1', 'mine');
-      mine.title = 'Personal storage: only you see it';
+      const mine = el('span', 'badge badge-light ml-1', isMine(node.unit) ? 'mine' : (node.unit.owner_name ?? 'personal'));
+      mine.title = isMine(node.unit) ? 'Your personal storage' : 'Personal storage of someone else: you can look, not change';
       label.append(mine);
     }
     label.append(el('span', 'grouped-section-count', String(node.total)));
@@ -600,9 +613,28 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     return li;
   };
 
+  const isPersonal = (u: Unit): boolean => u.owner_id !== null && u.owner_id !== undefined;
+  const isMine = (u: Unit): boolean => isPersonal(u) && Number(u.is_mine) === 1;
+  const inScope = (u: Unit): boolean => scope === 'lab'
+    ? !isPersonal(u)
+    : (scope === 'mine' ? isMine(u) : isPersonal(u) && !isMine(u) && (otherUser === '' || String(u.owner_id) === otherUser));
   const renderTree = (): void => {
+    // the people who have a personal storage, in the list of the other storage
+    const owners = new Map<string, string>();
+    lastUnits.filter(u => u.parent_id === null && isPersonal(u) && !isMine(u)).forEach(u => owners.set(String(u.owner_id), u.owner_name ?? `User ${u.owner_id}`));
+    if (otherUser !== '' && !owners.has(otherUser)) {
+      otherUser = '';
+    }
+    const everyone = el('option', '', 'Everyone');
+    everyone.value = '';
+    otherSelect.replaceChildren(everyone, ...[...owners].sort((a, b) => a[1].localeCompare(b[1])).map(([id, name]) => {
+      const option = el('option', '', name);
+      option.value = id;
+      return option;
+    }));
+    otherSelect.value = otherUser;
     const ul = el('ul', 'storage-tree-list');
-    tree.roots.filter(r => (scope === 'mine') === (r.unit.owner_id !== null && r.unit.owner_id !== undefined)).filter(r => query === '' || matches(r)).forEach(r => ul.append(renderNode(r, 0)));
+    tree.roots.filter(r => inScope(r.unit)).filter(r => query === '' || matches(r)).forEach(r => ul.append(renderNode(r, 0)));
     treeBox.replaceChildren(ul);
   };
 
@@ -1715,6 +1747,14 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       return;
     }
     main.append(renderHeader(node));
+    if (isPersonal(node.unit) && !isMine(node.unit)) {
+      // the personal storage of someone else: to look at, nothing to change
+      const notice = el('div', 'alert alert-secondary py-1', `Personal storage of ${node.unit.owner_name ?? 'someone else'}: you can look at it, not change it.`);
+      main.append(notice);
+      const shown = collect(node, true);
+      main.append(section('What is stored here', 'Including the places inside it.', el('div', '', shown.length === 0 ? 'Nothing is stored here.' : shown.map(({ row, location }) => `#${row.id} ${row.title}${location.position ? ` (${location.position})` : ''}`).join(' · '))));
+      return;
+    }
     // this place: what it is
     main.append(section('This place', 'Its name, what it is, and where it comes among the places next to it.', renderRename(node)));
     // above it: the place it is inside

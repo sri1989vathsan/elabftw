@@ -614,8 +614,8 @@ final class StorageUnits extends AbstractRest
 
     public function canWriteOrExplode(): void
     {
-        // the owner of a personal place can always change it; the places of someone else are not visible at all
-        $this->assertVisible();
+        // the owner of a personal place can always change it; the personal places of someone else can be looked at, never changed
+        $this->assertNotSomeoneElses();
         if (!$this->canWrite() && !$this->ownsUnit($this->id)) {
             throw new IllegalActionException();
         }
@@ -643,12 +643,12 @@ final class StorageUnits extends AbstractRest
         return $this->ownerOf($id) === (int) $this->requester->userid;
     }
 
-    /** the personal places of someone else are not for the others: they do not exist for them */
-    private function assertVisible(): void
+    /** the personal places of someone else can be looked at by everyone, but nobody changes them, not even the managers of the locations */
+    private function assertNotSomeoneElses(): void
     {
         $owner = $this->ownerOf($this->id);
         if ($owner !== false && $owner !== null && $owner !== (int) $this->requester->userid) {
-            throw new ResourceNotFoundException();
+            throw new IllegalActionException();
         }
     }
 
@@ -658,7 +658,7 @@ final class StorageUnits extends AbstractRest
         if ($parentId !== null) {
             $owner = $this->ownerOf($parentId);
             if ($owner !== false && $owner !== null && $owner !== (int) $this->requester->userid) {
-                throw new ResourceNotFoundException();
+                throw new IllegalActionException();
             }
             return $owner === false ? null : $owner;
         }
@@ -784,12 +784,12 @@ final class StorageUnits extends AbstractRest
                 capacity,
                 child_capacity,
                 comment,
-                owner_id
+                owner_id,
+                (SELECT TRIM(CONCAT(u.firstname, ' ', u.lastname)) FROM users AS u WHERE u.userid = storage_units.owner_id) AS owner_name
             FROM
                 storage_units
             WHERE
                 parent_id IS NULL
-                AND (owner_id IS NULL OR owner_id = :me)
 
             UNION
 
@@ -809,7 +809,8 @@ final class StorageUnits extends AbstractRest
                 child.capacity,
                 child.child_capacity,
                 child.comment,
-                child.owner_id
+                child.owner_id,
+                parent.owner_name
             FROM
                 storage_units AS child
             INNER JOIN
@@ -835,6 +836,8 @@ final class StorageUnits extends AbstractRest
             child_capacity,
             comment,
             owner_id,
+            owner_name,
+            (owner_id = :me) AS is_mine,
             (SELECT GROUP_CONCAT(c.position) FROM containers2inventory AS c WHERE c.storage_id = storage_hierarchy.id AND c.position IS NOT NULL) AS taken_positions
         FROM
             storage_hierarchy

@@ -16,6 +16,7 @@ type Unit = {
   box_cols: number | null;
   taken_positions: string | null;
   owner_id?: number | null;
+  is_mine?: number | string | null;
 };
 type UnitOption = { value: string; label: string };
 
@@ -70,7 +71,8 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
   } catch {
     unitOptions = [{ value: '•', label: '•' }];
   }
-  const units = await ApiC.getJson<Unit[]>('storage_units?hierarchy=1', { notifOnError: 0 });
+  // the personal storage of someone else is not a place to store in
+  const units = (await ApiC.getJson<Unit[]>('storage_units?hierarchy=1', { notifOnError: 0 })).filter(u => u.owner_id === null || u.owner_id === undefined || Number(u.is_mine) === 1);
   // in order, place by place along the path: alphabetically, numbers read as numbers
   const byName = (a: string, b: string): number => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
   units.sort((a, b) => {
