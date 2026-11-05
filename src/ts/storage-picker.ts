@@ -15,6 +15,7 @@ type Unit = {
   box_rows: number | null;
   box_cols: number | null;
   taken_positions: string | null;
+  owner_id?: number | null;
 };
 type UnitOption = { value: string; label: string };
 
@@ -231,6 +232,9 @@ export async function openStoragePicker(button: HTMLElement): Promise<void> {
       const item = el('button', `list-group-item list-group-item-action py-1${selected?.id === u.id ? ' active' : ''}`);
       item.type = 'button';
       item.append(el('i', 'fas fa-fw fa-location-dot mr-1'), document.createTextNode(u.full_path));
+      if (u.owner_id !== null && u.owner_id !== undefined) {
+        item.append(el('span', 'badge badge-light ml-2', 'mine'));
+      }
       if (u.box_rows) {
         item.append(el('span', 'badge badge-light ml-2', `box ${u.box_rows}×${u.box_cols}`));
       }

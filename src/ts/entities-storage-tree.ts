@@ -7,7 +7,7 @@ import { getEntityTypeFromPage } from './misc';
 import { askConfirm } from './confirm-dialog';
 import { capColourName, capDot } from './cap-colours';
 
-type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null; child_capacity?: number | null; comment?: string | null };
+type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null; child_capacity?: number | null; comment?: string | null; owner_id?: number | null };
 type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string; stored_at?: string | null; cap_colour?: string | null; expires_at?: string | null };
 type Row = {
   id: number;
@@ -389,6 +389,19 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
   search.type = 'search';
   search.placeholder = 'Search storage';
   search.setAttribute('aria-label', 'Search storage');
+  // the storage of the lab is for everyone, the personal storage only for the person who made it
+  let scope: 'all' | 'lab' | 'mine' = 'all';
+  const scopeSelect = el('select', 'form-control form-control-sm mb-2');
+  scopeSelect.setAttribute('aria-label', 'Which storage to show');
+  ([['all', 'Lab and my own storage'], ['lab', 'Lab storage'], ['mine', 'My own storage']] as const).forEach(([value, label]) => {
+    const option = el('option', '', label);
+    option.value = value;
+    scopeSelect.append(option);
+  });
+  scopeSelect.addEventListener('change', () => {
+    scope = scopeSelect.value as typeof scope;
+    renderTree();
+  });
   const expandAll = el('button', 'btn btn-transparent btn-sm', 'Expand all');
   const collapseAll = el('button', 'btn btn-transparent btn-sm', 'Collapse all');
   expandAll.type = collapseAll.type = 'button';
@@ -498,7 +511,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       // the built-in kinds stay
     }
   };
-  tools.append(search, expandAll, collapseAll, addTop, kindsButton, addTopForm, kindsPanel);
+  tools.append(scopeSelect, search, expandAll, collapseAll, addTop, kindsButton, addTopForm, kindsPanel);
   const treeBox = el('div', 'storage-tree');
   side.append(tools, treeBox);
 
@@ -537,6 +550,11 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     if (tag) {
       label.append(tag);
     }
+    if (node.unit.owner_id !== null && node.unit.owner_id !== undefined) {
+      const mine = el('span', 'badge badge-light ml-1', 'mine');
+      mine.title = 'Personal storage: only you see it';
+      label.append(mine);
+    }
     label.append(el('span', 'grouped-section-count', String(node.total)));
     label.addEventListener('click', () => select(node.unit.id));
     // a tube dropped on a location moves there
@@ -568,7 +586,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
 
   const renderTree = (): void => {
     const ul = el('ul', 'storage-tree-list');
-    tree.roots.filter(r => query === '' || matches(r)).forEach(r => ul.append(renderNode(r, 0)));
+    tree.roots.filter(r => scope === 'all' || (scope === 'mine') === (r.unit.owner_id !== null && r.unit.owner_id !== undefined)).filter(r => query === '' || matches(r)).forEach(r => ul.append(renderNode(r, 0)));
     treeBox.replaceChildren(ul);
   };
 
@@ -1325,6 +1343,16 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     };
     kind.addEventListener('change', showFields);
     showFields();
+    // at the top, the new location is of the lab (everyone sees it) or personal (only the person sees it); inside a place it is like its parent
+    const where = el('select', 'form-control form-control-sm w-auto mr-1');
+    where.setAttribute('aria-label', 'Lab or personal storage');
+    ([['lab', 'Lab storage'], ['mine', 'My own storage']] as const).forEach(([value, label]) => {
+      const option = el('option', '', label);
+      option.value = value;
+      where.append(option);
+    });
+    where.value = scope === 'mine' ? 'mine' : 'lab';
+    where.hidden = node !== null;
     const add = el('button', 'btn btn-secondary btn-sm', 'Add');
     add.type = 'button';
     add.addEventListener('click', () => {
@@ -1333,7 +1361,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         name.focus();
         return;
       }
-      void ApiC.post2location('storage_units', { name: unitName, kind: kind.value, ...(temperature.value !== '' && !temperature.hidden ? { temperature: Number(temperature.value) } : {}), ...(Number(holds.value) > 0 && !holds.hidden ? { capacity: Number(holds.value) } : {}), ...(node === null ? {} : { parent_id: node.unit.id }), ...(Number(position.value) > 0 ? { position: Number(position.value) } : {}) }).then(async id => {
+      void ApiC.post2location('storage_units', { name: unitName, kind: kind.value, ...(temperature.value !== '' && !temperature.hidden ? { temperature: Number(temperature.value) } : {}), ...(Number(holds.value) > 0 && !holds.hidden ? { capacity: Number(holds.value) } : {}), ...(node === null ? (where.value === 'mine' ? { personal: true } : {}) : { parent_id: node.unit.id }), ...(Number(position.value) > 0 ? { position: Number(position.value) } : {}) }).then(async id => {
         if (behaves(kind.value) === 'box') {
           await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rows.value), box_cols: Number(cols.value) });
         }
@@ -1348,7 +1376,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     });
     const buttonCell = el('div', 'mb-1');
     buttonCell.append(add);
-    form.append(labelled('What', kind), labelled('Name', name), labelled('Temperature (°C)', temperature), labelled('Holds', holds), labelled('Position', position), labelled('Rows', rows), labelled('Columns', cols), buttonCell);
+    form.append(labelled('Where', where), labelled('What', kind), labelled('Name', name), labelled('Temperature (°C)', temperature), labelled('Holds', holds), labelled('Position', position), labelled('Rows', rows), labelled('Columns', cols), buttonCell);
     return form;
   };
 
