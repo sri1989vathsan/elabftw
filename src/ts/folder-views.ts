@@ -46,6 +46,17 @@ let filterText = '';
 // the folder whose subfolders the flat views list ('' = the top level), set from the folder being looked at the first time
 let level = '';
 let levelReady = false;
+// folders whose entries are shown under their row, and the entries fetched for them
+const expandedFolders = new Set<string>();
+// the switch above the list: every folder shows its entries (the arrows then collapse single folders)
+let showAllEntries = false;
+const collapsedFolders = new Set<string>();
+const isOpen = (id: string): boolean => (showAllEntries ? !collapsedFolders.has(id) : expandedFolders.has(id));
+
+interface FolderEntry { type: 'experiments' | 'items'; id: number; title: string }
+const entryCache = new Map<string, { at: number; entries: FolderEntry[] | null }>();
+const ENTRY_CACHE_MS = 30000;
+const ENTRY_LIMIT = 100;
 
 export function parseFolderView(value: string | null): FolderView {
   return VIEWS.find(view => view === value) ?? 'tree';
@@ -193,6 +204,70 @@ function morePanel(row: FolderRow): HTMLElement | null {
   return panel;
 }
 
+/** The experiments and resources of a folder that the API lets this user read (it applies each entry's own permissions). */
+async function loadFolderEntries(folderId: string): Promise<FolderEntry[]> {
+  const ApiC = new Api();
+  const fetchType = (type: FolderEntry['type']): Promise<FolderEntry[]> =>
+    ApiC.getJson<Array<{ id: number; title: string }>>(`${type}?folder=${encodeURIComponent(folderId)}&scope=2&limit=${ENTRY_LIMIT}&order=lastchange&sort=desc`)
+      .then(list => (Array.isArray(list) ? list : []).map(entry => ({ type, id: entry.id, title: entry.title })));
+  const [experiments, resources] = await Promise.all([fetchType('experiments'), fetchType('items')]);
+  return [...experiments, ...resources];
+}
+
+function entriesBlockOf(folderId: string): HTMLElement {
+  const block = element('div', 'folder-entries');
+  block.dataset.folderEntriesFor = folderId;
+  fillEntriesBlock(block, folderId);
+  return block;
+}
+
+function fillEntriesBlock(block: HTMLElement, folderId: string): void {
+  const cached = entryCache.get(folderId);
+  if (!cached || cached.entries === null) {
+    block.replaceChildren(element('div', 'folder-entry-note small color-medium', i18next.t('Loading...')));
+    return;
+  }
+  if (cached.entries.length === 0) {
+    block.replaceChildren(element('div', 'folder-entry-note small color-medium', i18next.t('Nothing you can see in here.')));
+    return;
+  }
+  block.replaceChildren(...cached.entries.map(entry => {
+    const isResource = entry.type === 'items';
+    const link = element('a', 'folder-entry text-decoration-none color-medium');
+    link.href = `${isResource ? 'database' : 'experiments'}.php?mode=view&id=${entry.id}`;
+    const icon = element('i', `fas ${isResource ? 'fa-boxes-stacked' : 'fa-flask'} fa-fw mr-1`);
+    icon.title = i18next.t(isResource ? 'Resource' : 'Experiment');
+    link.append(icon, element('span', 'folder-entry-title', entry.title));
+    return link;
+  }));
+}
+
+/** Fetches the entries of an expanded folder (unless fresh in the cache) and fills every block that shows them. */
+function ensureEntries(folderId: string): void {
+  const cached = entryCache.get(folderId);
+  if (cached && (cached.entries === null || Date.now() - cached.at < ENTRY_CACHE_MS)) return;
+  entryCache.set(folderId, { at: Date.now(), entries: null });
+  loadFolderEntries(folderId)
+    .then(entries => entryCache.set(folderId, { at: Date.now(), entries }))
+    .catch(() => entryCache.set(folderId, { at: Date.now(), entries: [] }))
+    .finally(() => document.querySelectorAll<HTMLElement>(`[data-folder-entries-for="${folderId}"]`).forEach(block => fillEntriesBlock(block, folderId)));
+}
+
+/** The arrow in front of a folder's name that shows or hides the entries filed in it (only folders that hold some). */
+function entriesToggle(row: FolderRow): HTMLElement {
+  if (row.experiments + row.resources === 0) return element('span', 'folder-entries-toggle-placeholder');
+  const open = isOpen(row.id);
+  const button = element('button', 'folder-action-btn hl-hover-gray rounded folder-entries-toggle');
+  button.type = 'button';
+  button.dataset.action = 'toggle-folder-entries';
+  button.dataset.folderId = row.id;
+  button.title = i18next.t('Show the experiments and resources in this folder');
+  button.setAttribute('aria-expanded', String(open));
+  button.setAttribute('aria-label', `${i18next.t('Show the experiments and resources in this folder')}: ${row.name}`);
+  button.append(element('i', `fas fa-chevron-${open ? 'down' : 'right'} fa-xs`));
+  return button;
+}
+
 function folderLink(row: FolderRow, withPath: boolean, entityCount: number | null): HTMLAnchorElement {
   const link = element('a', `text-decoration-none color-medium folder-flat-link${row.active ? ' font-weight-bold' : ''}`);
   link.href = row.href;
@@ -213,11 +288,15 @@ function listOf(rows: FolderRow[], entityType: string): HTMLElement {
     const item = element('div', 'folder-flat-item');
     const line = element('div', 'd-flex align-items-center folder-flat-row');
     const linkBox = element('span', 'folder-flat-main');
-    linkBox.append(folderLink(row, true, entityType === 'items' ? row.resources : row.experiments));
+    linkBox.append(entriesToggle(row), folderLink(row, true, entityType === 'items' ? row.resources : row.experiments));
     line.append(linkBox, copyOfActions(row));
     item.append(line);
     const more = morePanel(row);
     if (more) item.append(more);
+    if (row.experiments + row.resources > 0 && isOpen(row.id)) {
+      ensureEntries(row.id);
+      item.append(entriesBlockOf(row.id));
+    }
     list.append(item);
   });
   return list;
@@ -292,7 +371,7 @@ function cardsOf(rows: FolderRow[]): HTMLElement {
   rows.forEach(row => {
     const card = element('div', `folder-details-card${row.active ? ' is-active' : ''}`);
     const main = element('div', 'folder-details-text');
-    main.append(folderLink(row, false, null));
+    main.append(entriesToggle(row), folderLink(row, false, null));
     const pathColumn = element('div', 'folder-col-wide folder-col-path', row.path !== row.name ? row.path : '');
     pathColumn.title = row.path;
     const descriptionColumn = element('div', 'folder-col-wider folder-col-description', row.description);
@@ -311,6 +390,10 @@ function cardsOf(rows: FolderRow[]): HTMLElement {
     if (row.description) card.append(element('div', 'folder-details-description folder-col-narrow-only', row.description));
     const more = morePanel(row);
     if (more) card.append(more);
+    if (row.experiments + row.resources > 0 && isOpen(row.id)) {
+      ensureEntries(row.id);
+      card.append(entriesBlockOf(row.id));
+    }
     list.append(card);
   });
   return list;
@@ -384,9 +467,13 @@ function ensureFlatContainer(tree: HTMLElement): HTMLElement {
     filterText = filter.value;
     syncFolderView();
   });
+  const allEntries = element('button', 'btn btn-sm btn-outline-secondary mb-2 folder-all-entries-toggle');
+  allEntries.type = 'button';
+  allEntries.dataset.action = 'toggle-folder-all-entries';
+  allEntries.title = i18next.t('Show or hide the experiments and resources in every folder');
   const body = element('div', 'folder-flat-body');
   const bar = element('div', 'folder-level-bar-holder mt-2');
-  flat.append(filter, body, bar);
+  flat.append(filter, allEntries, body, bar);
   tree.after(flat);
   return flat;
 }
@@ -416,6 +503,12 @@ export function syncFolderView(): void {
   flat.hidden = false;
   const body = flat.querySelector<HTMLElement>('.folder-flat-body');
   if (!body) return;
+  const allButton = flat.querySelector<HTMLElement>('.folder-all-entries-toggle');
+  if (allButton) {
+    allButton.setAttribute('aria-pressed', String(showAllEntries));
+    allButton.classList.toggle('active', showAllEntries);
+    allButton.replaceChildren(element('i', `fas ${showAllEntries ? 'fa-eye-slash' : 'fa-eye'} fa-fw mr-1`), document.createTextNode(i18next.t(showAllEntries ? 'Hide experiments/resources' : 'Show experiments/resources')));
+  }
   const entityType = (document.getElementById('folderEntityTypeSelect') as HTMLSelectElement | null)?.value ?? 'experiments';
   const all = collectRows(tree);
   if (!levelReady) {
@@ -495,6 +588,30 @@ export function initFolderViews(): void {
       if (panel.hidden || container?.contains(target) && (panel.contains(target) || (target as Element).closest?.('[data-action="toggle-folder-flat-more"]'))) return;
       panel.hidden = true;
     });
+  });
+  on('toggle-folder-entries', (el: HTMLElement, event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const id = el.dataset.folderId ?? '';
+    if (id === '') return;
+    // a row can show up twice (bookmarked block and the level below it): both follow the same state
+    if (isOpen(id)) {
+      expandedFolders.delete(id);
+      collapsedFolders.add(id);
+    } else {
+      expandedFolders.add(id);
+      collapsedFolders.delete(id);
+      // opening always shows fresh entries
+      entryCache.delete(id);
+    }
+    syncFolderView();
+  });
+  on('toggle-folder-all-entries', () => {
+    showAllEntries = !showAllEntries;
+    expandedFolders.clear();
+    collapsedFolders.clear();
+    entryCache.clear();
+    syncFolderView();
   });
   on('open-folder-level', (el: HTMLElement) => {
     level = el.dataset.folderId ?? '';
