@@ -16,6 +16,7 @@ interface SearchEntity {
   page?: string;
   title?: string;
   category_title?: string;
+  custom_id?: number | null;
   type?: string;
 }
 
@@ -185,19 +186,22 @@ export default class CommandPalette {
     this.remoteAbort = abort;
     try {
       const encoded = encodeURIComponent(query);
-      const [experiments, resources] = await Promise.all([
+      const [experiments, resources, database] = await Promise.all([
         ApiC.getJson(`experiments?limit=8&scope=3&fastq=${encoded}`, { notifOnError: 0 }, abort.signal),
         ApiC.getJson(`items?limit=8&scope=3&fastq=${encoded}`, { notifOnError: 0 }, abort.signal),
-      ]) as [SearchEntity[], SearchEntity[]];
+        ApiC.getJson(`inventory?limit=8&scope=3&fastq=${encoded}`, { notifOnError: 0 }, abort.signal).catch(() => []),
+      ]) as [SearchEntity[], SearchEntity[], SearchEntity[]];
       if (sequence !== this.searchSequence) return [];
-      const entries = [...experiments, ...resources].map(result => ({
-        label: result.title ?? `Entry ${result.id}`,
-        description: `${result.type === 'items' ? 'Resource' : 'Experiment'}${result.category_title ? ` · ${result.category_title}` : ''}`,
-        icon: result.type === 'items' ? 'fa-box' : 'fa-flask',
+      const entries = [...experiments, ...resources, ...database].map(result => ({
+        label: (result.type === 'inventory' && result.custom_id ? `#${result.custom_id} ` : '') + (result.title ?? `Entry ${result.id}`),
+        description: `${result.type === 'inventory' ? 'Database' : (result.type === 'items' ? 'Resource' : 'Experiment')}${result.category_title ? ` · ${result.category_title}` : ''}`,
+        icon: result.type === 'inventory' ? 'fa-database' : (result.type === 'items' ? 'fa-box' : 'fa-flask'),
         keywords: '',
         action: () => {
           if (!confirmLeaveEditing()) return;
-          window.location.href = result.page ?? `${result.type === 'items' ? 'database' : 'experiments'}.php?mode=view&id=${result.id}`;
+          window.location.href = result.type === 'inventory'
+            ? `registry.php?mode=view&id=${result.id}`
+            : (result.page ?? `${result.type === 'items' ? 'database' : 'experiments'}.php?mode=view&id=${result.id}`);
         },
       }));
       this.remoteCache.set(query, { expires: Date.now() + CommandPalette.REMOTE_CACHE_TTL_MS, entries });
