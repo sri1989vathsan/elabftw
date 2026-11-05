@@ -464,7 +464,7 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'build_storage') {
         };
         $unitIds = array();
         $created = 0;
-        $findUnit = $pdo->prepare('SELECT id, box_rows, position FROM storage_units WHERE name = :name AND ((:parent IS NULL AND parent_id IS NULL) OR parent_id = :parent2) LIMIT 1');
+        $findUnit = $pdo->prepare('SELECT id, box_rows, position FROM storage_units WHERE name = :name AND owner_id IS NULL AND ((:parent IS NULL AND parent_id IS NULL) OR parent_id = :parent2) LIMIT 1');
         $makeUnit = $pdo->prepare('INSERT INTO storage_units (name, parent_id, box_rows, box_cols, position, kind, temperature) VALUES (:name, :parent, :rows, :cols, :position, :kind, :temperature)');
         $setSize = $pdo->prepare('UPDATE storage_units SET box_rows = :rows, box_cols = :cols WHERE id = :id');
         // what each place of a path is: the first is a location; a name with "freezer", "-80", "tank" ... is a freezer, with "fridge" or "4 C" a fridge

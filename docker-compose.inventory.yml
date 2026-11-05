@@ -23,6 +23,8 @@ services:
       - ./src/templates/storage-view-edit.html:/elabftw/src/templates/storage-view-edit.html:ro
       - ./src/Elabftw/CustomMigrationRunner.php:/elabftw/src/Elabftw/CustomMigrationRunner.php:ro
       - ./src/sql/custom/138_module_low_stock.sql:/elabftw/src/sql/custom/138_module_low_stock.sql:ro
+      - ./src/sql/custom/139_personal_storage.sql:/elabftw/src/sql/custom/139_personal_storage.sql:ro
+      - ./src/Models/StorageUnits.php:/elabftw/src/Models/StorageUnits.php:ro
       - ./src/Elabftw/EntitySqlBuilder.php:/elabftw/src/Elabftw/EntitySqlBuilder.php:ro
       - ./web/order-primers.js:/elabftw/web/order-primers.js:ro
       - ./web/registry-folders.php:/elabftw/web/registry-folders.php:ro

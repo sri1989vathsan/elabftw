@@ -416,7 +416,11 @@ final class StorageUnits extends AbstractRest
     #[Override]
     public function postAction(Action $action, array $reqBody): int
     {
-        $this->canWriteOrExplode();
+        $personal = !empty($reqBody['personal']);
+        // anybody can add places to their own personal storage; the lab storage needs the right to manage the locations
+        if (!$personal && !$this->ownsUnit(Filter::intOrNull($reqBody['parent_id'] ?? 0))) {
+            $this->canWriteOrExplode();
+        }
         return $this->create(
             $reqBody['name'] ?? throw new ImproperActionException('Missing value for "name"'),
             Filter::intOrNull($reqBody['parent_id'] ?? 0),
@@ -424,6 +428,7 @@ final class StorageUnits extends AbstractRest
             isset($reqBody['kind']) ? (string) $reqBody['kind'] : null,
             $reqBody['temperature'] ?? null,
             $reqBody['capacity'] ?? null,
+            $personal,
         );
     }
 
@@ -549,16 +554,18 @@ final class StorageUnits extends AbstractRest
         }
     }
 
-    public function create(string $unitName, ?int $parentId = null, ?int $position = null, ?string $kind = null, mixed $temperature = null, mixed $capacity = null): int
+    public function create(string $unitName, ?int $parentId = null, ?int $position = null, ?string $kind = null, mixed $temperature = null, mixed $capacity = null, bool $personal = false): int
     {
+        $owner = $this->ownerForNewUnit($parentId, $personal);
         $kind = is_string($kind) && $this->behavesLike($kind) !== null ? $kind : null;
         $this->checkKindPlace($kind, $parentId);
         $this->checkRoom($parentId);
         $room = filter_var($capacity, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1, 'max_range' => 65535)));
         $degrees = filter_var($temperature, FILTER_VALIDATE_INT, array('options' => array('min_range' => -273, 'max_range' => 100)));
-        $sql = 'INSERT INTO storage_units(parent_id, name, position, kind, temperature, capacity) VALUES(:parent_id, :name, :position, :kind, :temperature, :capacity)';
+        $sql = 'INSERT INTO storage_units(parent_id, name, position, kind, temperature, capacity, owner_id) VALUES(:parent_id, :name, :position, :kind, :temperature, :capacity, :owner)';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':parent_id', $parentId);
+        $req->bindValue(':owner', $owner, $owner === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $req->bindParam(':name', $unitName);
         $req->bindParam(':position', $position);
         $req->bindValue(':kind', $kind, $kind === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
@@ -583,7 +590,7 @@ final class StorageUnits extends AbstractRest
     public function destroy(): bool
     {
         // everyone can put tubes in a storage unit and take them out, but only admins delete the unit itself
-        if (!$this->requester->isAdmin) {
+        if (!$this->requester->isAdmin && !$this->ownsUnit($this->id)) {
             throw new IllegalActionException();
         }
         $this->canWriteOrExplode();
@@ -607,9 +614,55 @@ final class StorageUnits extends AbstractRest
 
     public function canWriteOrExplode(): void
     {
-        if (!$this->canWrite()) {
+        // the owner of a personal place can always change it; the places of someone else are not visible at all
+        $this->assertVisible();
+        if (!$this->canWrite() && !$this->ownsUnit($this->id)) {
             throw new IllegalActionException();
         }
+    }
+
+    /** the owner of a place: null for the storage of the lab, the id of the user for a personal place, false when the place does not exist */
+    private function ownerOf(?int $id): int|null|false
+    {
+        if ($id === null || $id <= 0) {
+            return false;
+        }
+        $req = $this->Db->prepare('SELECT owner_id FROM storage_units WHERE id = :id');
+        $req->bindValue(':id', $id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $row = $req->fetch();
+        if ($row === false) {
+            return false;
+        }
+        return $row['owner_id'] === null ? null : (int) $row['owner_id'];
+    }
+
+    /** a personal place of the user (or inside one) */
+    private function ownsUnit(?int $id): bool
+    {
+        return $this->ownerOf($id) === (int) $this->requester->userid;
+    }
+
+    /** the personal places of someone else are not for the others: they do not exist for them */
+    private function assertVisible(): void
+    {
+        $owner = $this->ownerOf($this->id);
+        if ($owner !== false && $owner !== null && $owner !== (int) $this->requester->userid) {
+            throw new ResourceNotFoundException();
+        }
+    }
+
+    /** a place made inside another has the owner of that one; at the top it is personal when asked, otherwise it is of the lab */
+    private function ownerForNewUnit(?int $parentId, bool $personal): ?int
+    {
+        if ($parentId !== null) {
+            $owner = $this->ownerOf($parentId);
+            if ($owner !== false && $owner !== null && $owner !== (int) $this->requester->userid) {
+                throw new ResourceNotFoundException();
+            }
+            return $owner === false ? null : $owner;
+        }
+        return $personal ? (int) $this->requester->userid : null;
     }
 
     private function normalizeParentId(mixed $raw): ?int
@@ -631,6 +684,11 @@ final class StorageUnits extends AbstractRest
     {
         if ($newParentId === null) {
             return;
+        }
+        // a place stays where it belongs: the lab storage in the lab storage, a personal place in the personal storage of its owner
+        $target = $this->ownerOf($newParentId);
+        if ($target !== false && $target !== $this->ownerOf($this->id)) {
+            throw new ImproperActionException(_('A place cannot be moved between the storage of the lab and a personal storage.'));
         }
         if ($newParentId <= 0) {
             throw new ImproperActionException('Invalid parent_id');
@@ -725,11 +783,13 @@ final class StorageUnits extends AbstractRest
                 temperature,
                 capacity,
                 child_capacity,
-                comment
+                comment,
+                owner_id
             FROM
                 storage_units
             WHERE
                 parent_id IS NULL
+                AND (owner_id IS NULL OR owner_id = :me)
 
             UNION
 
@@ -748,7 +808,8 @@ final class StorageUnits extends AbstractRest
                 child.temperature,
                 child.capacity,
                 child.child_capacity,
-                child.comment
+                child.comment,
+                child.owner_id
             FROM
                 storage_units AS child
             INNER JOIN
@@ -773,12 +834,14 @@ final class StorageUnits extends AbstractRest
             capacity,
             child_capacity,
             comment,
+            owner_id,
             (SELECT GROUP_CONCAT(c.position) FROM containers2inventory AS c WHERE c.storage_id = storage_hierarchy.id AND c.position IS NOT NULL) AS taken_positions
         FROM
             storage_hierarchy
         ORDER BY
             storage_hierarchy.name, parent_id";
         $req = $this->Db->prepare($sql);
+        $req->bindValue(':me', (int) $this->requester->userid, PDO::PARAM_INT);
         $this->Db->execute($req);
         return $req->fetchAll();
     }
@@ -815,7 +878,7 @@ final class StorageUnits extends AbstractRest
     private function searchStorage(string $unitName, ?int $parentId): array|false
     {
         if ($parentId === null) {
-            $sql = 'SELECT id, parent_id FROM storage_units WHERE name = :name AND parent_id IS NULL';
+            $sql = 'SELECT id, parent_id FROM storage_units WHERE name = :name AND parent_id IS NULL AND owner_id IS NULL';
         } else {
             $sql = 'SELECT id, parent_id FROM storage_units WHERE name = :name AND parent_id = :parent_id';
         }
