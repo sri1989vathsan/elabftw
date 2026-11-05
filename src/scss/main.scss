@@ -1286,7 +1286,8 @@ tr:first-child td {
 
 /* Narrow windows: the rail of sidebar buttons would sit on top of the page, so it collapses into
  * one button in the top bar, left of the logo (#sidepanelRailToggle), that shows the others on
- * demand. A button whose panel is open stays visible so the panel can always be closed. */
+ * demand. While a panel is open the whole rail stays visible (the panel leaves a gutter for it), so
+ * the other panels are one click away without reopening the rail. */
 #sidepanelRailToggle {
   color: var(--primary-fg, #fff);
   display: none;
@@ -1298,7 +1299,52 @@ tr:first-child td {
     display: block;
   }
 
-  #sidepanel-buttons:not(.rail-open) > .sidepanel-btn:not(.sidepanel-opened) {
+  #sidepanel-buttons:not(.rail-open):not(:has(> .sidepanel-opened)) > .sidepanel-btn {
+    display: none;
+  }
+}
+
+/* "Back to ..." after following an internal link (back-to-link.ts) */
+.elabftw-back-button {
+  align-items: stretch;
+  bottom: 1rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  display: flex;
+  left: 3.5rem;
+  max-width: calc(100vw - 5rem);
+  position: fixed;
+  // above the page and its side panels, below modals (1040)
+  z-index: 1035;
+
+  button {
+    background: var(--mediumstrong);
+    border: 0;
+    color: var(--mainbackground);
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0.5rem 0.85rem;
+
+    &:hover {
+      background: var(--medium);
+    }
+  }
+
+  .elabftw-back-button-go {
+    border-radius: 999px 0 0 999px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .elabftw-back-button-close {
+    border-left: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 0 999px 999px 0;
+    padding: 0.5rem 0.7rem;
+  }
+}
+
+@media print {
+  .elabftw-back-button {
     display: none;
   }
 }
@@ -1710,6 +1756,244 @@ tr:first-child td {
     gap: 0.1rem;
     justify-content: flex-end;
     padding-left: 0.35rem;
+  }
+
+  // flat views of the folders (folder-views.ts): list and details
+  .folder-flat-body {
+    max-height: min(46vh, 34rem);
+    min-height: 3rem;
+    overflow: auto;
+    padding-right: 0.25rem;
+  }
+
+  .folder-flat-row {
+    padding: 0.15rem 0;
+  }
+
+  .folder-flat-more-actions {
+    margin: 0.2rem 0 0.2rem 1.5rem;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  .folder-flat-main {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .folder-flat-link {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // details view: a table of folders, one row each, with sortable column headings. Columns appear as the panel allows:
+  // name, experiments, resources, last modified and the buttons always; the path from 26rem, the description from 40rem
+  // (below that the path and description sit under the name).
+  .folder-flat-body {
+    container-type: inline-size;
+  }
+
+  // four buttons of 1.5rem (star, notes, three dots, step in), always the same slots so the stars line up
+  $folder-actions-column: 6rem;
+
+  .folder-column-heads,
+  .folder-details-card {
+    column-gap: 0.25rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1.6rem 1.6rem $folder-actions-column;
+  }
+
+  .folder-col-wide,
+  .folder-col-wider {
+    display: none;
+  }
+
+  @container (min-width: 26rem) {
+    .folder-column-heads,
+    .folder-details-card {
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 2.2rem 2.2rem 3.9rem $folder-actions-column;
+    }
+
+    .folder-col-wide {
+      display: block;
+    }
+
+    .folder-col-narrow-only {
+      display: none;
+    }
+  }
+
+  @container (min-width: 40rem) {
+    .folder-column-heads,
+    .folder-details-card {
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) 2.2rem 2.2rem 3.9rem $folder-actions-column;
+    }
+
+    .folder-col-wider {
+      display: block;
+    }
+  }
+
+  .folder-column-heads {
+    align-items: center;
+    border-bottom: 2px solid var(--chrome-muted);
+    margin-bottom: 0.15rem;
+    padding: 0 0.35rem 0.3rem 0.5rem;
+  }
+
+  .folder-column-head-name {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1rem 0.25rem;
+  }
+
+  .folder-sort-chip {
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--chrome-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    padding: 0.15rem 0.3rem;
+    text-transform: uppercase;
+
+    &:hover {
+      background: rgba(127, 127, 127, 0.18);
+      color: var(--chrome-fg);
+    }
+
+    &.active {
+      color: var(--chrome-fg);
+    }
+  }
+
+  .folder-col-description > .folder-sort-label {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 0 0.3rem;
+    text-transform: uppercase;
+  }
+
+  .folder-details-card {
+    align-items: center;
+    border-bottom: 1px solid var(--chrome-muted);
+    border-left: 3px solid transparent;
+    padding: 0.4rem 0.35rem 0.4rem 0.15rem;
+
+    &:hover {
+      background: rgba(127, 127, 127, 0.12);
+    }
+
+    &.is-active {
+      border-left-color: var(--mediumstrong);
+    }
+
+    // the buttons sit at the far right, in a column of their own
+    > .folder-actions {
+      justify-content: flex-end;
+    }
+  }
+
+  .folder-details-text {
+    font-weight: 600;
+    min-width: 0;
+  }
+
+  .folder-count-cell,
+  .folder-modified-cell {
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+
+    &.is-zero {
+      color: var(--chrome-muted);
+    }
+  }
+
+  .folder-modified-cell {
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+
+  .folder-col-path,
+  .folder-col-description {
+    color: var(--chrome-muted);
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-enter-placeholder {
+    display: inline-block;
+    flex: 0 0 1.5rem;
+    width: 1.5rem;
+  }
+
+  .folder-details-path,
+  .folder-details-description,
+  .folder-details-card > .folder-flat-more-actions {
+    grid-column: 1 / -1;
+  }
+
+  .folder-details-path,
+  .folder-details-description {
+    color: var(--chrome-muted);
+    font-size: 0.75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-details-description {
+    font-style: italic;
+  }
+
+  // where the list and details views are in the folder structure
+  .folder-level-bar {
+    // the panel is dark: the bar takes the panel's own text colour instead of the page background that makes it pale
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--chrome-fg);
+    flex-wrap: wrap;
+  }
+
+  .folder-level-bar .folder-path-crumb {
+    color: inherit;
+  }
+
+  // the parts that move to another level are buttons: without this they keep the browser's pale button fill and border
+  .folder-level-bar button.folder-path-crumb {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
+  }
+
+  .folder-level-bar button.folder-path-crumb:hover,
+  .folder-level-bar button.folder-path-crumb:focus-visible {
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  .folder-level-bar span.folder-path-crumb {
+    font-weight: 600;
+  }
+
+  .folder-up-button {
+    text-decoration: none;
+  }
+
+  // bookmarked folders, a block of their own above the folders of the current level
+  .folder-flat-favorites {
+    border-bottom: 1px solid var(--chrome-muted);
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.6rem;
   }
 }
 

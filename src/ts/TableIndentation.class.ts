@@ -154,7 +154,10 @@ export default class TableIndentation {
       return;
     }
 
-    const bookmark = this.editor.selection.getBookmark(2, true);
+    // A spreadsheet is indented from its own grid, so the editor's caret is usually somewhere else in the
+    // text. Restoring that caret and focusing the editor would scroll the page to it ("a random place").
+    const caretInTable = tableFromSelection(this.editor) === table;
+    const bookmark = caretInTable ? this.editor.selection.getBookmark(2, true) : null;
     this.editor.undoManager.transact(() => {
       let wrapper = indentWrapper(table);
 
@@ -179,8 +182,12 @@ export default class TableIndentation {
         wrapper.style.marginLeft = `${level * INDENT_STEP_REM}rem`;
       }
     });
-    this.editor.selection.moveToBookmark(bookmark);
     this.lastSelectedTable = table;
+    if (!bookmark) {
+      this.editor.nodeChanged();
+      return;
+    }
+    this.editor.selection.moveToBookmark(bookmark);
     this.editor.nodeChanged();
     this.editor.focus();
   }

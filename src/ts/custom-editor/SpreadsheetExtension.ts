@@ -32,7 +32,7 @@ import { RICH_SELECTION_ATTRIBUTE } from '../ClipboardContent';
 import TableIndentation from '../TableIndentation.class';
 import { isSortable } from '../TableSorting.class';
 import { captureSpreadsheetPositions, restoreSpreadsheetPositions } from './SpreadsheetUndo';
-import { createSpreadsheetLayoutGate, createSpreadsheetProfiler, createSpreadsheetSnapshotCache } from './SpreadsheetPerformance';
+import { createSpreadsheetLayoutGate, createSpreadsheetProfiler, createSpreadsheetSnapshotCache, stripSpreadsheetTables } from './SpreadsheetPerformance';
 import { cellsEqual, createSyncDiagnostics, hashCells, normalizeCells } from './SpreadsheetSyncDiagnostics';
 
 interface PdfTableDialogData {
@@ -725,8 +725,40 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const modalHistory = uid ? tableCellHistories.get(uid) : undefined;
     type PopupResult = { raw: SpreadsheetData; computed: SpreadsheetData["data"]; history: SpreadsheetCellHistory };
     // A well plate has two popups that can hand over to each other, keeping the edits.
-    const spreadsheetPopup = (data: SpreadsheetData): Promise<PopupResult> => openSpreadsheetModal(data, existingTable !== null, modalHistory)
-      .then(result => (result.backToPlate ? platePopup(result.raw) : result));
+    // Autosave: while the popup is open the table behind it is kept up to date, so nothing typed is lost if the page
+    // is closed or reloaded. Cancel still discards: the table as it was when the popup opened is put back.
+    let htmlBeforePopup: string | null = null;
+    let autosavedHash: string | null = null;
+    const saveWhilePopupOpen = ({ raw, computed }: PopupResult): void => {
+      if (!existingTable || !existingTable.isConnected) return;
+      htmlBeforePopup ??= existingTable.outerHTML;
+      // Like an edit in the grid in the text (commitOverlayChange): the page's own undo history must not get a step
+      // for every autosave, or Ctrl+Z in the text would undo them one by one
+      let applied = false;
+      editor.undoManager.ignore(() => {
+        applied = applySpreadsheetHtmlToTable(existingTable, spreadsheetToHTML(raw, computed));
+        if (applied) reconcileSpreadsheetRowHeights(existingTable, raw.rowHeights);
+      });
+      if (!applied) return;
+      if (uid) latestTableContent.set(uid, existingTable.outerHTML);
+      markOwnWrite(existingTable);
+      autosavedHash = hashCells(raw.data);
+      diagnose('popup autosave', () => {
+        if (!uid) return;
+        diag.bump(uid, 'popup');
+        markSynced(existingTable);
+        lastSyncedHash.set(existingTable, autosavedHash ?? '');
+      });
+      editor.setDirty(true);
+      // the popup is outside the editor body, so the editor's own autosave timer has to be restarted from here
+      dispatchKeyupForAutosave();
+    };
+    const spreadsheetPopup = (data: SpreadsheetData): Promise<PopupResult> => openSpreadsheetModal(
+      data,
+      existingTable !== null,
+      modalHistory,
+      existingTable ? { onAutosave: saveWhilePopupOpen } : {},
+    ).then(result => (result.backToPlate ? platePopup(result.raw) : result));
     // The plate's table opens as a data table in the general spreadsheet popup (formulas, selection, insert and
     // delete rows and columns); on the way back its results become the plate's table.
     const tablePopup = (plate: SpreadsheetData): Promise<PopupResult> => openSpreadsheetModal(
@@ -756,7 +788,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           diag.log('popup-apply', uid, {
             openedRev: openedRevision, rev: diag.revision(uid), openedHash, tableHash: nowHash, popupHash: hashCells(raw.data),
           });
-          if (nowHash !== openedHash) {
+          if (nowHash !== (autosavedHash ?? openedHash)) {
             diag.saveRecovery(uid, 'the spreadsheet popup was replacing a newer version of the table', existingTable.outerHTML);
             warnSync('The spreadsheet changed while the popup was open. Your popup changes were applied; a recovery copy of the other version was saved.', uid);
           }
@@ -814,6 +846,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       // idempotent no-op on the common case where the overlay was never
       // actually removed.
       if (!existingTable) return;
+      // Cancel discards: put back what the table held when the popup opened if autosave has changed it since
+      if (htmlBeforePopup !== null && existingTable.isConnected && applySpreadsheetHtmlToTable(existingTable, htmlBeforePopup)) {
+        if (uid) latestTableContent.set(uid, existingTable.outerHTML);
+        markOwnWrite(existingTable);
+        editor.setDirty(true);
+        // not a real keyup: that pulls focus into the page editor and scrolls the page to its caret
+        dispatchKeyupForAutosave();
+      }
       // Firefox runs the "Discard unsaved changes?" confirm() with its own
       // blur/focus handling around it, and the overlay has been seen missing
       // after confirming. Rebuild now, then check again once focus and layout
@@ -1406,6 +1446,10 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   const spreadsheetInteractionOngoing = (): boolean =>
     spreadsheetInteractionActive || document.body.dataset.spreadsheetCellEditing === 'true';
 
+  const TYPING_FOLLOWS_CURSOR_MS = 2000;
+  let lastTypingInTextAt = -Infinity;
+  editor.on('keydown input', () => { lastTypingInTextAt = performance.now(); });
+
   const runPendingAutoResize = (): void => {
     if (keyupDispatchPending && !spreadsheetInteractionOngoing()) {
       keyupDispatchPending = false;
@@ -1413,7 +1457,21 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     }
     if (!autoResizePending || spreadsheetInteractionOngoing()) return;
     autoResizePending = false;
-    editor.execCommand('mceAutoResize');
+    // The editor's own resize takes the focus into the editor, and focusing it scrolls the page to its text
+    // cursor -- usually far from where the user is looking when a table scrolling into view has just changed
+    // height. That was the page snapping to the top while scrolling up. Only the height is needed then, and when
+    // the cursor is in the text the resize must still leave the page where it is.
+    if (!editor.hasFocus()) {
+      fitEditorHeightWithoutFocus();
+      return;
+    }
+    const pageX = window.scrollX;
+    const pageY = window.scrollY;
+    editor.dispatch('ResizeContent');
+    // While typing in the text the page follows the cursor: putting it back here, a moment after the browser has
+    // scrolled to the new line, made the page shake at the end of the text.
+    if (performance.now() - lastTypingInTextAt < TYPING_FOLLOWS_CURSOR_MS) return;
+    if (Math.abs(window.scrollY - pageY) > 2 || Math.abs(window.scrollX - pageX) > 2) window.scrollTo(pageX, pageY);
   };
 
   // Sets the editor's height to fit its content without going through mceAutoResize, which takes the keyboard
@@ -1436,6 +1494,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // than the text and the text scrolls inside it. Whenever the content is taller than the frame, grow the frame by
   // exactly the excess. Grow only, so it never fights the normal resize.
   let growToContentTimer: ReturnType<typeof setTimeout> | null = null;
+  const MIN_GROW_EXCESS = 17;
   const growEditorToContent = (): void => {
     growToContentTimer = null;
     if (editor.removed) return;
@@ -1443,11 +1502,22 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     const root = editor.getDoc()?.documentElement;
     if (!iframe || !root) return;
     const excess = root.scrollHeight - root.clientHeight;
-    if (excess > 1) iframe.style.height = `${Math.ceil(iframe.getBoundingClientRect().height + excess)}px`;
+    // Less than a line's worth is the editor's own bottom margin: it sizes the frame itself, and writing the height
+    // here as well made the two disagree by that margin, so the frame jumped back and forth with every key typed.
+    if (excess > MIN_GROW_EXCESS) iframe.style.height = `${Math.ceil(iframe.getBoundingClientRect().height + excess)}px`;
   };
+  // Enter at the end of the text left the frame one line short for the whole delay below, so the new line sat
+  // outside it until the debounce ran. Growing is only a height write, so it also runs on the next frame.
+  let growToContentFrame = 0;
   editor.on('input keyup NodeChange SetContent Undo Redo', () => {
     if (growToContentTimer !== null) clearTimeout(growToContentTimer);
     growToContentTimer = setTimeout(growEditorToContent, 300);
+    if (growToContentFrame === 0) {
+      growToContentFrame = window.requestAnimationFrame(() => {
+        growToContentFrame = 0;
+        growEditorToContent();
+      });
+    }
   });
 
   const dispatchKeyupForAutosave = (): void => {
@@ -2086,12 +2156,24 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         switchPlateView(table, switchButton.textContent === 'Plate' ? 'plate' : 'sheet');
         return;
       }
+      // The bar's buttons in the preview are stand-ins: building the grid replaces them, which used to swallow the
+      // press, so the first click on Undo, Open popup and the rest only selected the table.
+      // The stand-in buttons let presses through to the bar (the pointerdown's target is the bar itself), so the
+      // button is found by where the pointer is.
+      const bar = event.target.closest<HTMLElement>('.elabftw-spreadsheet-readonly-toggle');
+      const barButton = bar
+        ? Array.from(bar.querySelectorAll<HTMLElement>(':scope > button')).find(button => {
+          const box = button.getBoundingClientRect();
+          return event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
+        })
+        : undefined;
       const cell = event.target.closest<HTMLElement>('td[data-x][data-y]');
       const selection = cell
         ? { col: Number(cell.dataset.x), row: Number(cell.dataset.y) }
         : undefined;
       event.preventDefault();
       activateTable(table, selection);
+      if (barButton) pressBarButtonWhenReady(table, barButton.className);
     });
     document.body.appendChild(overlay);
     spreadsheetOverlays.set(table, {
@@ -2153,6 +2235,25 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     window.requestAnimationFrame(() => attempt(0));
   };
   const pendingInitialSelection = new WeakMap<HTMLTableElement, { col: number; row: number } | undefined>();
+  // Repeats a press on a preview bar button once the live grid, which replaced the preview, has the same button.
+  const pressBarButtonWhenReady = (table: HTMLTableElement, className: string): void => {
+    // No wait for the button's release: the press ends on the grid that replaced the preview, and the browser
+    // may not report a release for the preview element that was removed under the pointer.
+    const attempt = (frame: number): void => {
+      const entry = spreadsheetOverlays.get(table);
+      if (!entry || frame > 180) return;
+      const live = entry.isPreview
+        ? null
+        : Array.from(entry.el.querySelectorAll<HTMLButtonElement>('.elabftw-spreadsheet-readonly-toggle > button'))
+          .find(button => button.className === className);
+      if (live) {
+        window.setTimeout(() => live.click(), 80);
+        return;
+      }
+      window.requestAnimationFrame(() => attempt(frame + 1));
+    };
+    window.requestAnimationFrame(() => attempt(0));
+  };
 
   // The Plate / Spreadsheet switch: the choice is saved with the table, so it also holds after a reload
   // and on view pages.
@@ -2304,7 +2405,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         // so nothing moved the browser's own focus into the editor body --
         // without it, Ctrl+C copies from wherever focus already was
         // (nothing selectable, most likely) rather than this selection.
+        // The editor puts the page where its own caret was (possibly far away) when it takes focus; the user
+        // clicked here, so the page stays where it is.
+        const pageX = window.scrollX;
+        const pageY = window.scrollY;
         editor.focus();
+        if (Math.abs(window.scrollY - pageY) > 2 || Math.abs(window.scrollX - pageX) > 2) window.scrollTo(pageX, pageY);
       }
     });
     // jspreadsheet-ce/jSuites position their own right-click menu with
@@ -2510,12 +2616,33 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   if (editor.initialized) attachPopupInputGuard();
   else editor.on('init', attachPopupInputGuard);
 
+  // A table only gets its real spacer once its overlay is mounted, i.e. when it first scrolls near the screen, and
+  // that spacer (toolbar + add-rows bar, about 60-70 px) made the editor, and so the page, grow under the reader
+  // on the way down. Reserve an estimate for every table up front; the first overlay sync replaces it with the
+  // measured height (the size key is deliberately left unset here).
+  const BAR_SPACE_ESTIMATE = 66;
+  const reserveBarSpace = (table: HTMLTableElement): void => {
+    const existing = spreadsheetSpacers.get(table);
+    if (existing?.isConnected) return;
+    const spacer = editor.dom.create('div', {
+      'data-mce-bogus': 'all',
+      'data-elabftw-spreadsheet-spacer': '1',
+      contenteditable: 'false',
+      'aria-hidden': 'true',
+    }) as HTMLElement;
+    spacer.style.pointerEvents = 'none';
+    spacer.style.height = `${BAR_SPACE_ESTIMATE}px`;
+    spreadsheetSpacers.set(table, spacer);
+    table.after(spacer);
+  };
+
   const enhanceAllTables = (): void => {
     removeOrphanSpacers();
     Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
       .forEach(table => {
         if (observedTables.has(table)) return;
         observedTables.add(table);
+        reserveBarSpace(table);
         tableVisibility.observe(table);
       });
   };
@@ -2817,7 +2944,9 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // transient layout spacers when comparing two adjacent snapshots.
   const mainTextSnapshot = (html: string): string => {
     const fragment = editor.getDoc().createElement('div');
-    fragment.innerHTML = html;
+    // The tables are cut out of the string first so only the prose is parsed; with large spreadsheets in
+    // the text, parsing all of it for every undo level cost more than the key press itself.
+    fragment.innerHTML = stripSpreadsheetTables(html);
     fragment.querySelectorAll('table.elabftw-spreadsheet, [data-elabftw-spreadsheet-spacer]').forEach(node => node.remove());
     return fragment.innerHTML;
   };

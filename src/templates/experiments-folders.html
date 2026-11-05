@@ -76,7 +76,13 @@
 
     <div id='experimentsFoldersContent'>
       <div class='d-flex align-items-center justify-content-between mb-2'>
-        <h4 class='h6 mb-0'>{{ 'Folder tree'|trans }}</h4>
+        <h4 class='h6 mb-0' id='folderViewTitle'>{{ 'Folder tree'|trans }}</h4>
+        {# Tree (nested, as before), list (every folder with its path) or details (a sortable table); the choice is remembered. #}
+        <div class='btn-group btn-group-sm folder-view-switch' role='group' aria-label='{{ 'Folder view'|trans }}'>
+          <button type='button' class='btn btn-outline-secondary active' data-action='select-folder-view' data-view='tree' title='{{ 'Tree view'|trans }}' aria-label='{{ 'Tree view'|trans }}' aria-pressed='true'><i class='fas fa-sitemap fa-fw' aria-hidden='true'></i></button>
+          <button type='button' class='btn btn-outline-secondary' data-action='select-folder-view' data-view='list' title='{{ 'List view'|trans }}' aria-label='{{ 'List view'|trans }}' aria-pressed='false'><i class='fas fa-list fa-fw' aria-hidden='true'></i></button>
+          <button type='button' class='btn btn-outline-secondary' data-action='select-folder-view' data-view='details' title='{{ 'Details view'|trans }}' aria-label='{{ 'Details view'|trans }}' aria-pressed='false'><i class='fas fa-table-list fa-fw' aria-hidden='true'></i></button>
+        </div>
       </div>
 
       {# Render exactly one branch for each root folder. Children only exist inside their parent branch. #}
@@ -106,6 +112,7 @@
               data-experiments-count='{{ folder.experiments_count }}'
               data-resources-count='{{ folder.resources_count }}'
               data-inventory-count='{{ folder.inventory_count|default(0) }}'
+              data-modified-at='{{ folder.last_modified_ts|default(0) }}'
               title='{{ folder.full_path|e('html_attr') }}'
               class='text-decoration-none color-medium {{ currentFolderId == folder.id ? 'font-weight-bold' : '' }}'
             >

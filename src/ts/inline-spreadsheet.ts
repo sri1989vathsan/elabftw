@@ -2763,6 +2763,18 @@ export function setGridFillerActivator(gridEl: HTMLElement, activate: (col: numb
   gridFillerActivators.set(gridEl, activate);
 }
 
+/**
+ * Takes the columns a press on the grey filler added back off again when nothing was typed in them (the mirror holds
+ * values that are not in the worksheet yet, so both are checked).
+ */
+function dropEmptyColumnsFrom(worksheet: JssInstance, baseCols: number, mirror: unknown[][]): void {
+  const data = (worksheet.getData?.() ?? []) as unknown[][];
+  const width = Math.max(0, ...data.map(row => row.length), ...mirror.map(row => row.length));
+  if (width <= baseCols) return;
+  const filled = [...data, ...mirror].some(row => row.slice(baseCols).some(value => String(value ?? '') !== ''));
+  if (!filled) worksheet.deleteColumn?.(baseCols, width - baseCols);
+}
+
 export function syncGridFiller(
   gridEl: HTMLElement | null,
   visible: boolean,
@@ -3065,9 +3077,17 @@ function applyCellClipHeights(container: HTMLElement, manualRowHeights: Readonly
       // The wrapper fills the row, so without this its text always sat at
       // the top, whatever vertical alignment the cell asked for (middle by
       // default): rows with a set height looked top-aligned.
-      wrapper.style.justifyContent = computed.verticalAlign === 'top'
+      // "safe": text taller than the row then starts at the top and is cut off at the bottom. Plain centring cut
+      // off the top and the bottom alike, leaving only the middle of the text readable.
+      const alignment = computed.verticalAlign === 'top'
         ? 'flex-start'
         : computed.verticalAlign === 'bottom' ? 'flex-end' : 'center';
+      wrapper.style.justifyContent = alignment === 'flex-start' ? alignment : `safe ${alignment}`;
+      if (wrapper.style.justifyContent === '') wrapper.style.justifyContent = alignment;
+      // Same trap sideways: centred or right-aligned text wider than the column is cut off on both sides (or the
+      // start), leaving only its middle visible. Start-align just those cells so the text begins at the left edge.
+      wrapper.style.textAlign = '';
+      if (wrapper.scrollWidth > wrapper.clientWidth + 1) wrapper.style.textAlign = 'left';
     });
   });
 }
@@ -4454,8 +4474,15 @@ export function openSpreadsheetModal(
   initialData: SpreadsheetData,
   isEditing = false,
   initialHistory?: SpreadsheetCellHistory,
-  /** Show a "Back to plate view" button (the popup was reached from a plate). */
-  options: { backToPlate?: boolean } = {},
+  /**
+   * backToPlate: show a "Back to plate view" button (the popup was reached from a plate).
+   * onAutosave: called a moment after the content changed, while the popup stays open, so the table behind it
+   * is kept up to date (the popup used to hold edits only until Update).
+   */
+  options: {
+    backToPlate?: boolean;
+    onAutosave?: (result: { raw: SpreadsheetData; computed: AOA; history: SpreadsheetCellHistory }) => void;
+  } = {},
 ): Promise<{ raw: SpreadsheetData; computed: AOA; history: SpreadsheetCellHistory; backToPlate?: boolean }> {
   return new Promise((resolve, reject) => {
     let working = normalizeSpreadsheetData({
@@ -4476,6 +4503,17 @@ export function openSpreadsheetModal(
     // a popup was opened, slowing every mouse event on the page down in a long session).
     const popupPageListenerRemovers: Array<() => void> = [];
     // the empty lettered columns beside a narrow grid (see syncGridFiller)
+    let pendingFiller: { baseCols: number; timer: number } | null = null;
+    const settlePendingFiller = (): void => {
+      const pending = pendingFiller;
+      if (!pending) return;
+      if (rescueInputEl && !rescueInputEl.hidden) return;
+      const inNewColumns = !!selectedRange && Math.max(selectedRange[0], selectedRange[2]) >= pending.baseCols;
+      if (worksheet && inNewColumns && sheetContainer.contains(document.activeElement)) return;
+      window.clearInterval(pending.timer);
+      pendingFiller = null;
+      if (worksheet) dropEmptyColumnsFrom(worksheet, pending.baseCols, rawDataMirror);
+    };
     const activateFillerCell = (targetCol: number, row: number): void => {
       if (!worksheet || working.kind === 'well-plate') return;
       commitRescueInput();
@@ -4484,6 +4522,11 @@ export function openSpreadsheetModal(
       if (missing > 0) {
         flushMirrorIntoWorksheet(worksheet);
         worksheet.insertColumn?.(missing, currentCols - 1, false);
+        // kept only if something is typed in them (see the grid in the text)
+        if (!pendingFiller) {
+          pendingFiller = { baseCols: currentCols, timer: window.setInterval(settlePendingFiller, 250) };
+          popupPageListenerRemovers.push(() => window.clearInterval(pendingFiller?.timer));
+        }
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
       selectedRange = [col, row, col, row];
@@ -5645,6 +5688,11 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('mousedown', event => {
       fillDragSource = null;
       if (!(event.target instanceof Element) || !event.target.closest('.jss_corner')) return;
+      // The library fills from its own copy of the cells, which does not hold text typed in the cell editor box
+      // (see commitRescueInput): commit what is being typed and bring the grid up to date first, or the drag
+      // copies the old (empty) value.
+      commitRescueInput();
+      flushMirrorIntoWorksheet(worksheet);
       const selection = getSelectedRange();
       if (!selection || selection[0] !== selection[2] || selection[1] !== selection[3]) return;
       const value = rawDataMirror[selection[1]]?.[selection[0]];
@@ -6212,7 +6260,7 @@ export function openSpreadsheetModal(
       }
     };
 
-    const onSpreadsheetCopy = (event: ClipboardEvent): void => {
+    const onSpreadsheetCopy = (event: ClipboardEvent, fromEditorBox = false): void => {
       // Exclude our own UI's real inputs (formula bar, caption field, etc)
       // so copying out of those still behaves like a normal text field --
       // but NOT jspreadsheet's own hidden "jss_textarea": jspreadsheet
@@ -6228,7 +6276,7 @@ export function openSpreadsheetModal(
       // copy listener for the same bug, already fixed there the same way).
       const target = event.target;
       const isOwnFormField = (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
-        && target.id !== 'jss_textarea';
+        && target.id !== 'jss_textarea' && !fromEditorBox;
       if (!event.clipboardData || isOwnFormField) {
         return;
       }
@@ -6459,6 +6507,14 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('mousedown', onRowResizePointerDown, true);
     document.addEventListener('mouseup', onRowResizePointerUp, true);
     ui.sheetHost.addEventListener('copy', onSpreadsheetCopy, true);
+    // Ctrl/Cmd+C right after typing in a cell: the text box has nothing selected, so the browser would copy nothing.
+    // Finish the edit and copy the cell, as a spreadsheet does. With some text selected in the box, that text is copied.
+    listenWhilePopupOpen(document, 'copy', event => {
+      const box = rescueInputEl;
+      if (!box || box.hidden || event.target !== box || box.selectionStart !== box.selectionEnd) return;
+      commitRescueInput();
+      onSpreadsheetCopy(event as ClipboardEvent, true);
+    }, true);
     ui.sheetHost.addEventListener('paste', onSpreadsheetPaste, true);
     // Ctrl/Cmd+Shift+V pastes the clipboard transposed, with its top-left cell at the selected cell
     popupPageListenerRemovers.push(installTransposedPaste(ui.sheetHost, () => {
@@ -7180,14 +7236,8 @@ export function openSpreadsheetModal(
       }
     };
 
-    const finish = (backToPlate: boolean): void => {
-      // readRawData() below only prefers rawDataMirror's own value over
-      // worksheet.getData()'s for a formula still being composed -- a plain
-      // value sitting in an open rescue input, never having reached
-      // worksheet.setValue() yet, would otherwise be silently dropped. Not
-      // deferred: readRawData() is read synchronously right below.
-      commitRescueInput();
-      commitFormulaInput();
+    // What the popup holds right now, as it would be applied by Update (nothing is closed or committed here)
+    const buildResult = (): { result: SpreadsheetData; computed: () => AOA } => {
       const rawData = readRawData();
       const rows = clampDimension(rawData.length, working.rows);
       const cols = clampDimension(
@@ -7215,12 +7265,44 @@ export function openSpreadsheetModal(
         tableBorder: working.tableBorder,
         appearance: normalizeAppearance(working.appearance),
       };
-      const computed = sheetContainer
+      // read from the page, so only when it is needed
+      const computed = (): AOA => (sheetContainer
         ? resizeData(getComputedDataFromDOM(sheetContainer), rows, cols)
-        : result.data;
-      cleanup();
-      resolve({ raw: result, computed, history: { undo: cellUndoStack, redo: cellRedoStack }, backToPlate });
+        : result.data);
+      return { result, computed };
     };
+    const finish = (backToPlate: boolean): void => {
+      // readRawData() only prefers rawDataMirror's own value over
+      // worksheet.getData()'s for a formula still being composed -- a plain
+      // value sitting in an open rescue input, never having reached
+      // worksheet.setValue() yet, would otherwise be silently dropped. Not
+      // deferred: readRawData() is read synchronously right below.
+      commitRescueInput();
+      commitFormulaInput();
+      const { result, computed } = buildResult();
+      const computedData = computed();
+      cleanup();
+      resolve({ raw: result, computed: computedData, history: { undo: cellUndoStack, redo: cellRedoStack }, backToPlate });
+    };
+    // Autosave: when the content differs from the last time it was handed over, hand it over again. What is typed in
+    // an open cell box is already in the mirror, so nothing is committed or closed here.
+    if (options.onAutosave) {
+      const onAutosave = options.onAutosave;
+      let lastSaved: string | null = null;
+      const autosaveTimer = window.setInterval(() => {
+        if (!acceptsGridChanges) return;
+        const { result, computed } = buildResult();
+        const signature = JSON.stringify(result);
+        if (lastSaved === null) {
+          lastSaved = signature;
+          return;
+        }
+        if (signature === lastSaved) return;
+        lastSaved = signature;
+        onAutosave({ raw: result, computed: computed(), history: { undo: cellUndoStack, redo: cellRedoStack } });
+      }, 2000);
+      popupPageListenerRemovers.push(() => window.clearInterval(autosaveTimer));
+    }
     ui.insertBtn.addEventListener('click', () => finish(false));
     ui.plateBtn?.addEventListener('click', () => finish(true));
 
@@ -9398,7 +9480,7 @@ export function buildReadOnlySpreadsheetHost(
         // own filter checks this same flag as a fallback for exactly that
         // gap (see its own comment).
         document.body.classList.add('elabftw-spreadsheet-editing');
-        if (lastFocusWasInGrid) pickReclaimTarget()?.focus();
+        if (lastFocusWasInGrid) pickReclaimTarget()?.focus({ preventScroll: true });
         return;
       }
       // lastFocusWasInGrid is deliberately scoped to *this* overlay's own
@@ -9559,6 +9641,19 @@ export function buildReadOnlySpreadsheetHost(
         : null;
     }));
   }
+  let pendingFiller: { baseCols: number; timer: number } | null = null;
+  const settlePendingFiller = (): void => {
+    const pending = pendingFiller;
+    if (!pending) return;
+    const mounted = getMountedWorksheet(sheetContainer);
+    if (mounted && rescueInputEl && !rescueInputEl.hidden) return;
+    const selection = lastKnownSelection;
+    const inNewColumns = !!selection && Math.max(selection[0], selection[2]) >= pending.baseCols;
+    if (mounted && inNewColumns && sheetContainer.contains(document.activeElement)) return;
+    window.clearInterval(pending.timer);
+    pendingFiller = null;
+    if (mounted) dropEmptyColumnsFrom(mounted, pending.baseCols, rawDataMirror);
+  };
   if (editable && !plateLocked) {
     // The empty lettered columns beside the grid: pressing one adds the columns up to it and selects that cell,
     // so typing there simply continues the sheet.
@@ -9573,6 +9668,11 @@ export function buildReadOnlySpreadsheetHost(
         // typed values live only in the mirror until the grid is redrawn; the insert re-reads the worksheet
         flushMirrorIntoWorksheet(mounted);
         mounted.insertColumn?.(missing, currentCols - 1, false);
+        // The columns only stay if something is typed in them: once the selection or the focus leaves them empty,
+        // they are taken off again and the grey columns are back.
+        if (!pendingFiller) {
+          pendingFiller = { baseCols: currentCols, timer: window.setInterval(settlePendingFiller, 250) };
+        }
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
       const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea');
@@ -9658,7 +9758,7 @@ export function buildReadOnlySpreadsheetHost(
     focusPollInterval = setInterval(() => {
       if (!lastFocusWasInGrid || document.activeElement !== document.body) return;
       document.body.classList.add('elabftw-spreadsheet-editing');
-      pickReclaimTarget()?.focus();
+      pickReclaimTarget()?.focus({ preventScroll: true });
     }, 50);
   }
   if (!editable) {

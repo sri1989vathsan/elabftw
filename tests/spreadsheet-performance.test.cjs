@@ -9,7 +9,7 @@ vm.runInContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,
   '../src/ts/custom-editor/SpreadsheetPerformance.ts'), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, context);
-const { createSpreadsheetLayoutGate, createSpreadsheetSnapshotCache } = context.exports;
+const { createSpreadsheetLayoutGate, createSpreadsheetSnapshotCache, stripSpreadsheetTables } = context.exports;
 
 function repaintHarness() {
   let id = 0;
@@ -97,4 +97,54 @@ test('unchanged snapshots are normalized once; changed snapshots invalidate safe
   assert.equal(calls, 2);
   assert.equal(cached({ content: 'other' }), 'OTHER');
   assert.equal(calls, 3);
+});
+
+test('spreadsheet tables are cut out of the HTML, other tables and prose stay', () => {
+  const sheet = '<table class="elabftw-spreadsheet" data-x="1"><tbody><tr><td>a</td></tr></tbody></table>';
+  assert.equal(stripSpreadsheetTables(`<p>one</p>${sheet}<p>two</p>`), '<p>one</p><p>two</p>');
+  assert.equal(stripSpreadsheetTables(`${sheet}${sheet}<p>x</p>`), '<p>x</p>');
+  const plain = '<table class="other"><tr><td>keep</td></tr></table>';
+  assert.equal(stripSpreadsheetTables(`<p>a</p>${plain}${sheet}`), `<p>a</p>${plain}`);
+  assert.equal(stripSpreadsheetTables('<p>no tables</p>'), '<p>no tables</p>');
+});
+
+test('class matching is by whole word and works with other classes and quotes', () => {
+  const t = cls => `<table class="${cls}"><tr><td>c</td></tr></table>`;
+  assert.equal(stripSpreadsheetTables(`<p>a</p>${t('x elabftw-spreadsheet y')}<p>b</p>`), '<p>a</p><p>b</p>');
+  assert.equal(stripSpreadsheetTables(`<p>a</p>${t('elabftw-spreadsheet elabftw-well-plate')}`), '<p>a</p>');
+  assert.equal(stripSpreadsheetTables(`<p>a</p>${t('x elabftw-spreadsheet')}`), '<p>a</p>');
+  const lookalike = t('elabftw-spreadsheet-readonly') + t('my-elabftw-spreadsheet');
+  assert.equal(stripSpreadsheetTables(`<p>a</p>${lookalike}`), `<p>a</p>${lookalike}`);
+  assert.equal(stripSpreadsheetTables(`<p>a</p><table class='elabftw-spreadsheet'><tr><td>c</td></tr></table>`), '<p>a</p>');
+});
+
+test('nested tables are matched to the right closing tag', () => {
+  const nested = '<table class="elabftw-spreadsheet"><tr><td><table><tr><td>in</td></tr></table></td></tr></table>';
+  assert.equal(stripSpreadsheetTables(`<p>a</p>${nested}<p>b</p>`), '<p>a</p><p>b</p>');
+  const inOuter = '<table class="outer"><tr><td><table class="elabftw-spreadsheet"><tr><td>s</td></tr></table>keep</td></tr></table>';
+  assert.equal(stripSpreadsheetTables(inOuter), '<table class="outer"><tr><td>keep</td></tr></table>');
+});
+
+test('an unmatched or odd table is left in place, never silently dropped', () => {
+  const open = '<p>a</p><table class="elabftw-spreadsheet"><tr><td>never closed';
+  assert.equal(stripSpreadsheetTables(open), open);
+  const tableish = '<p>a</p><tablefoo class="elabftw-spreadsheet">x</tablefoo><p>b</p>';
+  assert.equal(stripSpreadsheetTables(tableish), tableish);
+});
+
+test('a change in the prose still changes the stripped text, a change in a table does not', () => {
+  const sheet = v => `<table class="elabftw-spreadsheet"><tr><td>${v}</td></tr></table>`;
+  assert.equal(stripSpreadsheetTables(`<p>a</p>${sheet(1)}`), stripSpreadsheetTables(`<p>a</p>${sheet(2)}`));
+  assert.notEqual(stripSpreadsheetTables(`<p>a</p>${sheet(1)}`), stripSpreadsheetTables(`<p>b</p>${sheet(1)}`));
+});
+
+test('stripping a 2MB entry is fast', () => {
+  const big = '<table class="elabftw-spreadsheet">' + '<tr><td>cell</td></tr>'.repeat(90000) + '</table>';
+  const html = '<p>start</p>' + big + '<p>end</p>';
+  const t = process.hrtime.bigint();
+  const out = stripSpreadsheetTables(html);
+  const ms = Number(process.hrtime.bigint() - t) / 1e6;
+  assert.equal(out, '<p>start</p><p>end</p>');
+  assert.ok(ms < 30, `strip took ${ms} ms`);
+  console.log(`strip of ${(html.length / 1e6).toFixed(1)} MB: ${ms.toFixed(1)} ms`);
 });

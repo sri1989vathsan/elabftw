@@ -584,7 +584,7 @@ export function getTinymceBaseConfig(page: string): object {
         // than its content until the next recompute -- which focus happens
         // to trigger, making it "shrink" only once clicked into. Force one
         // extra recompute once everything has actually settled.
-        window.setTimeout(() => editor.execCommand('mceAutoResize'), 100);
+        window.setTimeout(() => editor.dispatch('ResizeContent'), 100);
         // Same settling problem, but for a spreadsheet overlay's own
         // position/size sync (SpreadsheetExtension.ts): it's normally kept
         // current by a continuous requestAnimationFrame loop, but that loop
@@ -738,10 +738,13 @@ export function getTinymceBaseConfig(page: string): object {
         window.addEventListener('elabftw-sticky-offset-changed', updateStickyOffset);
         editor.on('remove', () => window.removeEventListener('elabftw-sticky-offset-changed', updateStickyOffset));
       }
+      // The command and TinyMCE's own key handler size the frame with different bottom margins (the command ignores
+      // autoresize_bottom_margin), so mixing them made it jump by that margin on every key. Everything here asks for
+      // a resize with the ResizeContent event instead, the same path the plugin takes itself.
       // Recalculate from the loaded document instead of retaining TinyMCE's
       // provisional iframe height. Without this, edit mode can initially
       // expose a long empty scrolling region until the editor receives focus.
-      window.requestAnimationFrame(() => editor.execCommand('mceAutoResize'));
+      window.requestAnimationFrame(() => editor.dispatch('ResizeContent'));
       window.requestAnimationFrame(() => window.dispatchEvent(new CustomEvent('elabftw-spreadsheet-resync')));
       // The frame above can still fire before the iframe's own fonts finish
       // loading, so the initial height is measured against fallback-font
@@ -749,15 +752,30 @@ export function getTinymceBaseConfig(page: string): object {
       // click, which fires NodeChange), which is why the editor visibly
       // shrinks the moment it's clicked. Recheck once those fonts are
       // actually ready so the correct height shows up without needing focus.
-      editor.getDoc()?.fonts?.ready.then(() => editor.execCommand('mceAutoResize'));
+      editor.getDoc()?.fonts?.ready.then(() => editor.dispatch('ResizeContent'));
       editor.getDoc()?.fonts?.ready.then(() => window.dispatchEvent(new CustomEvent('elabftw-spreadsheet-resync')));
       // The autoresize plugin only re-measures on keyup/NodeChange, so the
       // bottom edge visibly lags Enter until the key is released. Re-measure
       // as soon as the new line exists (the input event) and once more on the
       // next frame, when the layout has settled.
-      editor.on('input', () => {
-        editor.execCommand('mceAutoResize');
-        window.requestAnimationFrame(() => editor.execCommand('mceAutoResize'));
+      // Each measure lays out the whole text, which on a long entry costs more than the
+      // keystroke itself. Plain typed characters only need one measure per frame, off the
+      // key's path; anything that can change the height at once (a new line, a paste, a
+      // delete, undo) is still measured immediately, as before.
+      let resizeFramePending = false;
+      editor.on('input', (event: Event) => {
+        const inputType = (event as InputEvent).inputType ?? '';
+        if (inputType === 'insertText' || inputType === 'insertCompositionText') {
+          if (resizeFramePending) return;
+          resizeFramePending = true;
+          window.requestAnimationFrame(() => {
+            resizeFramePending = false;
+            if (!editor.removed) editor.dispatch('ResizeContent');
+          });
+          return;
+        }
+        editor.dispatch('ResizeContent');
+        window.requestAnimationFrame(() => editor.dispatch('ResizeContent'));
       });
       editor.on('ExecCommand', (e) => {
         if (e.command == 'mcePreview') {

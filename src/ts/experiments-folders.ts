@@ -13,6 +13,7 @@ import { on } from './handlers';
 import { notify } from './notify';
 import { getTinymceBaseConfig } from './tinymce';
 import { htmlToMarkdown, markdownToHtml } from './Editor.class';
+import { initFolderViews, syncFolderView } from './folder-views';
 
 type FolderScope = 'mine' | 'database' | 'all';
 type FolderEntityType = 'experiments' | 'items' | 'inventory';
@@ -103,6 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
   let sidebar = initialSidebar;
+  // tree / list / details switch of the folders panel
+  initFolderViews();
 
   const ApiC = new Api();
 
@@ -114,6 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const folderScopeKey = `experiment-folder-scope-${currentUserId}`;
   const storedFolderScope = localStorage.getItem(folderScopeKey);
   let activeFolderScope: FolderScope = storedFolderScope === 'all' || storedFolderScope === 'database' ? storedFolderScope : 'mine';
+  let scopeShownForCurrentFolder = false;
   // the folder tree itself is shared between experiments and resources, only
   // which page a folder link opens (and which entity count badge shows)
   // depends on this -- persisted per-user so it survives navigating around
@@ -263,15 +267,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // re-apply the mine/all entity-list scope on top, since it also rewrites href
     updateFolderEntityLinks(activeFolderScope);
+    syncFolderView();
   }
 
   function getQuickLinkHref(option: HTMLOptionElement, type: FolderEntityType): string | undefined {
     return type === 'items' ? option.dataset.itemsHref : (type === 'inventory' ? option.dataset.inventoryHref : option.dataset.experimentsHref);
   }
 
-  function applyFolderScope(scope: FolderScope): void {
+  function applyFolderScope(scope: FolderScope, remember = true): void {
     activeFolderScope = scope;
-    localStorage.setItem(folderScopeKey, scope);
+    if (remember) localStorage.setItem(folderScopeKey, scope);
 
     document.querySelectorAll('[data-action="select-folder-scope"]').forEach((button: HTMLButtonElement) => {
       const isActive = button.dataset.scope === scope;
@@ -326,6 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
     filterParentFolders(scope);
     updateFolderEntityLinks(scope);
     updateFolderSections();
+    syncFolderView();
   }
 
   /**
@@ -430,7 +436,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeFolderIsOther = Boolean(currentNode?.closest('.other-folders-wrapper'));
     setOtherFoldersOpen(activeFolderIsOther || localStorage.getItem(OTHER_FOLDERS_KEY) === 'open');
     applyFolderEntityType(activeFolderEntityType);
-    applyFolderScope(activeFolderScope);
+    // An open entry filed in somebody else's folder: show all folders once, so its folder is there to be shown. The saved
+    // "My folders" choice stays untouched for the other pages.
+    const scopeHidesCurrentFolder = activeFolderScope === 'mine' && currentNode !== null
+      && currentNode.closest<HTMLElement>('.folder-node[data-folder-depth="0"]')?.dataset.folderOwnerId !== currentUserId;
+    if (scopeHidesCurrentFolder && !scopeShownForCurrentFolder) {
+      scopeShownForCurrentFolder = true;
+      applyFolderScope('all', false);
+    } else {
+      applyFolderScope(activeFolderScope);
+    }
     bindFolderInteractiveControls();
   }
 
@@ -503,6 +518,8 @@ document.addEventListener('DOMContentLoaded', () => {
     favoriteFolderIds = readFavoriteFolderIds(sidebar);
     freshPanel.scrollTop = panelScrollTop;
     initializeFolderTreeState();
+    // the panel was replaced: show the chosen folder view again (and the new bookmarks in it)
+    syncFolderView();
   }
 
   function refreshFoldersSidebarSafely(): void {

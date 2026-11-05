@@ -20,5 +20,5 @@ final class FeatureFlags
 {
     public const bool ANIMAL_STUDIES = false;
 
-    public const bool HTML_TOOLS = true;
+    public const bool HTML_TOOLS = false;
 }

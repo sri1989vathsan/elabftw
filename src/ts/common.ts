@@ -89,6 +89,7 @@ import { applyTheme, isThemeVariant, updateThemeControls } from './theme';
 import { mount } from 'svelte';
 import './mention-keys';
 import { askConfirm } from './confirm-dialog';
+import { initBackToLink } from './back-to-link';
 import PrimaryColorPicker from './components/PrimaryColorPicker.svelte';
 
 // we need to extend the interface from malle to add more properties
@@ -431,6 +432,9 @@ if (navbar) {
   void document.fonts.ready.then(apply);
   document.fonts.addEventListener('loadingdone', apply);
 })();
+
+// "Back to ..." button after following an internal link (see back-to-link.ts)
+initBackToLink();
 
 // Narrow windows: one button shows or hides the rest of the sidebar button rail (see main.scss).
 (function initSidepanelRailToggle(): void {

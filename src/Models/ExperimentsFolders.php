@@ -294,6 +294,14 @@ final class ExperimentsFolders extends AbstractRest
             return array('favorite_experiment_folders' => $this->getFavoriteFolders());
         }
 
+        // The folder view (tree / list / details) the current user chose in the Folders panel
+        if (isset($params['action']) && $params['action'] === 'get_folder_view') {
+            return array('folder_view' => $this->getFolderView());
+        }
+        if (isset($params['action']) && $params['action'] === 'set_folder_view') {
+            return array('folder_view' => $this->setFolderView((string) ($params['view'] ?? '')));
+        }
+
         if (isset($params['action']) && $params['action'] === 'set_folder_permissions') {
             return $this->setFolderPermissions($params);
         }
@@ -524,6 +532,7 @@ final class ExperimentsFolders extends AbstractRest
                 userid,
                 id AS root_id,
                 name AS full_path,
+                modified_at,
                 0 AS level_depth
             FROM
                 experiments_folders
@@ -541,6 +550,7 @@ final class ExperimentsFolders extends AbstractRest
                 child.userid,
                 parent.root_id,
                 CONCAT(parent.full_path, ' > ', child.name) AS full_path,
+                child.modified_at,
                 parent.level_depth + 1
             FROM
                 experiments_folders AS child
@@ -562,9 +572,26 @@ final class ExperimentsFolders extends AbstractRest
             COALESCE(experiment_counts.experiments_count, 0) AS experiments_count,
             COALESCE(resource_counts.resources_count, 0) AS resources_count,
             COALESCE(inventory_counts.inventory_count, 0) AS inventory_count,
-            (readmes.folder_id IS NOT NULL) AS has_readme
+            (readmes.folder_id IS NOT NULL) AS has_readme,
+            UNIX_TIMESTAMP(GREATEST(
+                folder_hierarchy.modified_at,
+                COALESCE(experiment_changes.last_change, folder_hierarchy.modified_at),
+                COALESCE(resource_changes.last_change, folder_hierarchy.modified_at)
+            )) AS last_modified_ts
         FROM
             folder_hierarchy
+        LEFT JOIN (
+            SELECT folder_id, MAX(modified_at) AS last_change
+            FROM experiments
+            WHERE state = 1 AND folder_id IS NOT NULL
+            GROUP BY folder_id
+        ) AS experiment_changes ON experiment_changes.folder_id = folder_hierarchy.id
+        LEFT JOIN (
+            SELECT folder_id, MAX(modified_at) AS last_change
+            FROM items
+            WHERE state = 1 AND folder_id IS NOT NULL
+            GROUP BY folder_id
+        ) AS resource_changes ON resource_changes.folder_id = folder_hierarchy.id
         LEFT JOIN (
             SELECT parent_id, COUNT(*) AS children_count
             FROM experiments_folders
@@ -603,6 +630,32 @@ final class ExperimentsFolders extends AbstractRest
         );
         $Timer->finish(count($rows));
         return $rows;
+    }
+
+    private const FOLDER_VIEWS = array('tree', 'list', 'details');
+
+    /** The folder view the current user chose, or null when they never chose one. */
+    public function getFolderView(): ?string
+    {
+        $req = $this->Db->prepare('SELECT view FROM custom_user_folder_view WHERE users_id = :userid');
+        $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $view = $req->fetchColumn();
+        return is_string($view) && in_array($view, self::FOLDER_VIEWS, true) ? $view : null;
+    }
+
+    private function setFolderView(string $view): string
+    {
+        if (!in_array($view, self::FOLDER_VIEWS, true)) {
+            throw new ImproperActionException('Unknown folder view.');
+        }
+        $sql = 'INSERT INTO custom_user_folder_view (users_id, view) VALUES (:userid, :view)
+            ON DUPLICATE KEY UPDATE view = VALUES(view)';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
+        $req->bindValue(':view', $view);
+        $this->Db->execute($req);
+        return $view;
     }
 
     /** @return list<int> Current user's bookmarked folder ids. */
