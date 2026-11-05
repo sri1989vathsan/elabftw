@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'copy-table-format', 'default-border-apply', 'drag-select', 'formulas-and-structure', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'copy-table-format', 'default-border-apply', 'drag-select', 'formulas-and-structure', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1447,6 +1447,73 @@ async function spreadsheetSoak(options = {}) {
       }
       verticalAlignCheck(uid, 'columns added by the grey cells');
       await consistency('filler-click: inline, popup and stored HTML agree', true);
+    },
+    // Columns added by pressing a grey cell stay only while that cell is in use: selecting another cell without typing
+    // takes them off again; typing in them keeps them. Inline and in the popup (the popup once dropped them at once,
+    // because the press did not move focus into the grid).
+    async 'filler-revert'() {
+      const uid = await createTable('filler revert', { rows: 4, cols: 3 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      const colsOf = root => root.querySelectorAll('.jss_worksheet thead td[data-x]').length;
+      const waitFiller = async root => {
+        let filler = null;
+        for (let i = 0; i < 40 && !(filler = root.querySelector('.elabftw-spreadsheet-filler .fc[data-i][data-r]') ? root.querySelector('.elabftw-spreadsheet-filler') : null); i++) await sleep(100);
+        return filler;
+      };
+      const pressGrey = async (root, which) => {
+        const filler = await waitFiller(root);
+        if (!filler) return null;
+        const cells = [...filler.querySelectorAll('.fc[data-i][data-r]')];
+        const cell = cells[Math.min(which, cells.length - 1)];
+        cell.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+        return { i: Number(cell.dataset.i), r: Number(cell.dataset.r) };
+      };
+      // inline
+      let root = await selectCell(uid, 0, 0);
+      const base = colsOf(root);
+      const inline = await pressGrey(root, 1);
+      if (!inline) { note('filler-no-room'); return; }
+      await sleep(1200);
+      root = api.overlayElement(uid) || root;
+      if (colsOf(root) !== base + inline.i + 1) dataLoss.push({ context, table: model().label, where: 'inline', problem: `a grey cell pressed and left empty should keep ${base + inline.i + 1} columns while it is selected, there are ${colsOf(root)}` });
+      await selectCell(uid, 0, 0);
+      await sleep(1200);
+      root = api.overlayElement(uid) || root;
+      if (colsOf(root) !== base) dataLoss.push({ context, table: model().label, where: 'inline', problem: `columns added by a grey cell should go away when another cell is selected without typing (${base} expected), there are ${colsOf(root)}` });
+      note('filler-revert-inline');
+      // popup
+      const dialog = await openPopupFor(uid);
+      const popupBase = colsOf(dialog);
+      const first = await pressGrey(dialog, 1);
+      if (!first) { note('filler-no-room'); } else {
+        await sleep(1200);
+        if (colsOf(dialog) !== popupBase + first.i + 1) dataLoss.push({ context, table: model().label, where: 'popup', problem: `a grey cell pressed in the popup should keep ${popupBase + first.i + 1} columns while it is selected, there are ${colsOf(dialog)}` });
+        press(dialog.querySelector('.jss_worksheet td[data-x="0"][data-y="0"]'));
+        await sleep(1200);
+        if (colsOf(dialog) !== popupBase) dataLoss.push({ context, table: model().label, where: 'popup', problem: `columns added by a grey cell in the popup should go away when another cell is selected without typing (${popupBase} expected), there are ${colsOf(dialog)}` });
+        note('filler-revert-popup');
+        // typing in a grey cell keeps the columns
+        const second = await pressGrey(dialog, 0);
+        await sleep(500);
+        (document.activeElement || dialog).dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', bubbles: true, cancelable: true }));
+        let box = null;
+        for (let i = 0; i < 40 && !(box = visibleRescue()); i++) await sleep(25);
+        if (!box) { fail('typing over a grey cell in the popup did not open the editor', { table: model().label }); } else {
+          box.value = 'zz'; box.dispatchEvent(new Event('input', { bubbles: true }));
+          box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+          await sleep(1500);
+          const want = popupBase + second.i + 1;
+          if (colsOf(dialog) !== want) dataLoss.push({ context, table: model().label, where: 'popup', problem: `text typed in a grey cell should keep its column (${want} columns), there are ${colsOf(dialog)}` });
+          model().grid.forEach(row => { while (row.length < want) row.push(''); });
+          model().grid[second.r][want - 1] = 'zz';
+          note('filler-keep-popup');
+        }
+      }
+      const update = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Update');
+      if (!update) { fail('the popup has no Update button'); } else { update.click(); await waitPopupGone(); }
+      await verify('filler-revert: after Update', true);
+      await consistency('filler-revert: inline, popup and stored HTML agree', true);
     },
     // Edits made inside a grid are saved without having to leave it.
     async 'autosave-in-grid'() {
