@@ -441,6 +441,12 @@ export default class FavoriteFilters extends SidePanel {
   }
 
   private canInsertResultLink(target: FavoriteFilterTarget, resultId: number): boolean {
+    // an entry of the Database is linked to an experiment or a resource being edited (see registry-links.js)
+    if (target === 'database') {
+      return new URLSearchParams(window.location.search).get('mode') === 'edit'
+        && Number.isInteger(entity.id)
+        && (entity.type === EntityType.Experiment || entity.type === EntityType.Item);
+    }
     return (target === 'experiments' || target === 'resources')
       && isEditingEntity()
       && !(target === 'experiments' && resultId === entity.id);
@@ -639,7 +645,21 @@ export default class FavoriteFilters extends SidePanel {
   ): Promise<void> {
     button.disabled = true;
     try {
-      if (target === 'experiments_templates') {
+      if (target === 'database') {
+        const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+        const response = await fetch('registry-links.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token },
+          body: JSON.stringify({ action: 'add', entity: entity.type, id: entity.id, inventory_id: result.id }),
+        });
+        if (!response.ok) {
+          notify.error(((await response.json().catch(() => ({}))) as { error?: string }).error ?? 'Could not link this entry.');
+          return;
+        }
+        // the section "Database entries" of the page draws the list again
+        window.dispatchEvent(new CustomEvent('registry-links-changed'));
+      } else if (target === 'experiments_templates') {
         await ApiC.patch(`${entity.type}/${entity.id}`, {action: Action.LinkTemplateSource, template_id: result.id});
         await reloadElements(['associatedTemplatesContent']);
       } else {

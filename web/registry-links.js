@@ -171,5 +171,7 @@
     drawUsedIn();
   } else {
     draw();
+    // the Search of the sidebar links an entry of the Database too
+    window.addEventListener('registry-links-changed', draw);
   }
 })();
