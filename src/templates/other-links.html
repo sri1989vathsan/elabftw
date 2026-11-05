@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class='container-fluid px-0'>
+  <h1 class='mb-1'><i class='fas fa-link mr-2'></i>{{ 'Other links'|trans }}</h1>
+  <p class='text-muted'>{{ 'Useful links collected by the team. Anybody can add one.'|trans }}</p>
+
+  <table class='table table-sm' id='otherLinksTable'>
+    <thead>
+      <tr>
+        <th>{{ 'Title'|trans }}</th>
+        <th>{{ 'Description'|trans }}</th>
+        <th>{{ 'Added by'|trans }}</th>
+        <th><span class='sr-only'>{{ 'Actions'|trans }}</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for link in otherLinks %}
+        <tr>
+          <td><a href='{{ link.url }}' target='_blank' rel='noopener noreferrer'><i class='fas fa-arrow-up-right-from-square fa-fw mr-1'></i>{{ link.title }}</a></td>
+          <td>{{ link.description }}</td>
+          <td class='text-muted'>{{ link.author|default('') }}</td>
+          <td class='text-right'>
+            {% if otherLinksIsAdmin or link.userid == App.Users.userData.userid %}
+              <form method='post' action='other-links.php' class='d-inline'>
+                {{ App.Session.get('csrf')|csrf }}
+                <input type='hidden' name='action' value='delete'>
+                <input type='hidden' name='id' value='{{ link.id }}'>
+                <button type='submit' class='btn btn-link p-0 text-danger' title='{{ 'Remove'|trans }}' aria-label='{{ 'Remove'|trans }}: {{ link.title }}'><i class='fas fa-trash-alt fa-fw'></i></button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan='4' class='text-muted'>{{ 'No links yet.'|trans }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form method='post' action='other-links.php' class='card card-body mt-3'>
+    {{ App.Session.get('csrf')|csrf }}
+    <input type='hidden' name='action' value='add'>
+    <h2 class='h5'>{{ 'Add a link'|trans }}</h2>
+    <div class='form-row'>
+      <div class='form-group col-md-3'>
+        <label for='otherLinkTitle'>{{ 'Title'|trans }}</label>
+        <input id='otherLinkTitle' class='form-control' type='text' name='title' maxlength='255' required>
+      </div>
+      <div class='form-group col-md-4'>
+        <label for='otherLinkUrl'>{{ 'Web address'|trans }}</label>
+        <input id='otherLinkUrl' class='form-control' type='text' name='url' maxlength='2048' placeholder='https://' required>
+      </div>
+      <div class='form-group col-md-5'>
+        <label for='otherLinkDescription'>{{ 'Description'|trans }}</label>
+        <input id='otherLinkDescription' class='form-control' type='text' name='description' maxlength='1000'>
+      </div>
+    </div>
+    <div><button type='submit' class='btn btn-primary btn-sm'><i class='fas fa-plus fa-fw mr-1'></i>{{ 'Add link'|trans }}</button></div>
+  </form>
+</div>
+{% endblock %}

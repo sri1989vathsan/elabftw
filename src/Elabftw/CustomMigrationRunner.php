@@ -141,6 +141,7 @@ final class CustomMigrationRunner
         '100_order_sheet_basket_seen.sql',
         '101_notif_order_collected.sql',
         '102_folder_view_preference.sql',
+        '103_other_links.sql',
         '104_order_procurement_index.sql',
         '105_folder_tree_covering_indexes.sql',
         '106_order_upload_procurement_index.sql',
