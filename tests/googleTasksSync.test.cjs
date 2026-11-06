@@ -57,6 +57,12 @@ test('titles-only mode sends no notes, descriptions, experiment titles or links'
   assert.ok(d.notes.endsWith('[elabftw:todo:1]'));
 });
 
+test('the link back opens the to-do the way the deadline notifications do', () => {
+  // "/" redirects to dashboard.php and drops the query, so the link must name dashboard.php
+  const [d] = buildDesired([todo(9)], none, detailed);
+  assert.ok(d.notes.includes(`${origin}/dashboard.php?open=todolist&task=9`));
+});
+
 test('steps never reveal the experiment title unless details are on', () => {
   const unfinished = { experiments: [{ id: 7, title: 'Secret project', steps: [{ id: 3, body: 'Order antibody', deadline: null }] }], items: [] };
   const [m] = buildDesired([], unfinished, minimal);
