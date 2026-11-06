@@ -732,18 +732,23 @@
         option.value = String(u.email || '');
         list.append(option);
       });
+      // open for all the users: everyone of the team can edit them (the owner can be left empty to keep it)
+      const openLabel = element('label', 'd-block small mb-2');
+      const open = element('input');
+      open.type = 'checkbox';
+      openLabel.append(open, document.createTextNode(' Open for all the users (everyone can edit them; leave the e-mail empty to keep the owner)'));
       const go = element('button', 'btn btn-primary btn-sm', 'Assign');
       go.type = 'button';
       go.addEventListener('click', async function () {
         go.disabled = true;
         try {
-          const response = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'assign_owner', ids: ids, owner_email: select.value.trim() }) });
+          const response = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'assign_owner', ids: ids, owner_email: select.value.trim(), open: open.checked }) });
           const answer = await response.json();
           if (!response.ok) {
             throw new Error(answer.error || 'It could not be done.');
           }
           message.className = 'small mb-2 text-success';
-          message.textContent = answer.changed + ' entries changed owner.';
+          message.textContent = answer.changed + ' entries changed owner' + (answer.opened ? ', ' + answer.opened + ' opened for all the users' : '') + '.';
           cancel.textContent = 'Close and reload';
           cancel.addEventListener('click', function () {
             if (done) {
@@ -757,7 +762,7 @@
         }
       });
       buttons.prepend(go);
-      box.append(select, list, message, buttons);
+      box.append(select, list, openLabel, message, buttons);
     }
     back.append(box);
     document.body.append(back);

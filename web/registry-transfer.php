@@ -801,11 +801,21 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'assign_owner') {
                 respond(400, array('error' => 'Nobody in the team has the e-mail address ' . $ownerEmail . '.'));
             }
         }
-        if ($ids === array() || !in_array((string) $ownerId, array_map('strval', $members), true)) {
+        // "open for all the users": everyone of the team can edit the entries (with or without a new owner)
+        $open = !empty($payload['open']);
+        $noOwner = $open && $ownerId === 0 && $ownerEmail === '';
+        if ($ids === array() || (!$noOwner && !in_array((string) $ownerId, array_map('strval', $members), true))) {
             respond(400, array('error' => 'Choose entries and an owner of the team.'));
         }
-        $changed = $reassign($ids, $ownerId);
-        respond(200, array('changed' => $changed));
+        $changed = $noOwner ? 0 : $reassign($ids, $ownerId);
+        $opened = 0;
+        if ($open) {
+            $setOpen = $pdo->prepare('UPDATE inventory SET canwrite_base = 30 WHERE team = :team AND state = 1 AND canwrite_base < 30 AND id IN (' . implode(',', $ids) . ')');
+            $setOpen->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $pdo->execute($setOpen);
+            $opened = $setOpen->rowCount();
+        }
+        respond(200, array('changed' => $changed, 'opened' => $opened));
     } catch (Throwable $e) {
         respond(400, array('error' => $e->getMessage()));
     }
@@ -867,7 +877,19 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
         }
         $byLcMail = array();
         $byLcName = array();
+        // people matched to "open for all the users" (written as * in the match): their entries are opened, not given to someone
+        $openMail = array();
+        $openName = array();
         foreach ($ownerMapRows() as $pair) {
+            if ($pair['elab_name'] === '*') {
+                if ($pair['lc_email'] !== '') {
+                    $openMail[strtolower($pair['lc_email'])] = true;
+                }
+                if ($pair['lc_name'] !== '') {
+                    $openName[implode(' ', $nameTokens((string) $pair['lc_name']))] = true;
+                }
+                continue;
+            }
             $target = $memberByMail[strtolower((string) $pair['elab_email'])] ?? $memberByName[implode(' ', $nameTokens((string) $pair['elab_name']))] ?? null;
             if ($target === null) {
                 continue;
@@ -898,7 +920,7 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
                 continue;
             }
             $titles[(int) $entry['id']] = array('title' => (string) $entry['title'], 'module' => (string) $entry['module']);
-            if (strtolower($person['name']) === 'wild card') {
+            if (strtolower($person['name']) === 'wild card' || isset($openMail[$person['email']]) || isset($openName[implode(' ', $nameTokens($person['name']))])) {
                 if ((int) $entry['canwrite_base'] < 30) {
                     $wild[] = (int) $entry['id'];
                 }
@@ -938,8 +960,10 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
     }
 }
 
+// the people matched to "open for all the users" (by e-mail or by name): the entries they own in the file are opened at the import
+$openKeys = array();
 // one row of a file becomes an entry of the module; returns the id, or the reason it was not made
-$makeEntry = static function (array $row, int $categoryId, array $definitions, string $register, ?Users $Owner = null, bool $keepNumber = false) use ($App, $pdo, $teamId): array {
+$makeEntry = static function (array $row, int $categoryId, array $definitions, string $register, ?Users $Owner = null, bool $keepNumber = false) use ($App, $pdo, $teamId, &$openKeys, $nameTokens): array {
     $title = trim((string) ($row['title'] ?? ''));
     if ($title === '') {
         return array('id' => null, 'reason' => 'It has no title.');
@@ -990,7 +1014,8 @@ $makeEntry = static function (array $row, int $categoryId, array $definitions, s
     $Entry->withPersonal = $register === 'both' || $register === 'personal';
     $newId = $Entry->create(title: mb_substr($title, 0, 255), category: $categoryId, customId: $number, metadata: json_encode(array('extra_fields' => (object) $fields), JSON_UNESCAPED_UNICODE));
     // the entries of a shared account of LabCollector ("Wild Card") belong to the whole team: everyone can edit them
-    if (in_array(strtolower(trim((string) ($row['owner'] ?? ''))), array('wild card'), true)) {
+    $rowMail = strtolower(trim((string) ($row['owner_email'] ?? '')));
+    if (in_array(strtolower(trim((string) ($row['owner'] ?? ''))), array('wild card'), true) || ($rowMail !== '' && isset($openKeys[$rowMail])) || isset($openKeys[implode(' ', $nameTokens((string) ($row['owner'] ?? '')))])) {
         $open = $pdo->prepare('UPDATE inventory SET canwrite_base = 30 WHERE id = :id');
         $open->bindValue(':id', $newId, PDO::PARAM_INT);
         $pdo->execute($open);
@@ -1043,6 +1068,14 @@ try {
     $savedByName = array();
     if ($ownerMode === 'column') {
         foreach ($ownerMapRows() as $pair) {
+            if ($pair['elab_name'] === '*') {
+                foreach (array(strtolower((string) $pair['lc_email']), implode(' ', $nameTokens((string) $pair['lc_name']))) as $key) {
+                    if ($key !== '') {
+                        $openKeys[$key] = true;
+                    }
+                }
+                continue;
+            }
             $target = 0;
             if ($pair['elab_email'] !== '' && isset($byEmail[strtolower($pair['elab_email'])])) {
                 $target = $byEmail[strtolower($pair['elab_email'])];
@@ -1066,7 +1099,7 @@ try {
     }
     $ownerUsers = array();
     $notFound = array();
-    $ownerFor = static function (array $row) use ($ownerMode, $ownerChoice, $defaultOwner, $byEmail, $byName, $savedByEmail, $savedByName, $nameTokens, $teamId, &$ownerUsers, &$notFound, $userId): ?Users {
+    $ownerFor = static function (array $row) use ($ownerMode, $ownerChoice, $defaultOwner, $byEmail, $byName, $savedByEmail, $savedByName, $nameTokens, $teamId, &$ownerUsers, &$notFound, $userId, &$openKeys): ?Users {
         $id = 0;
         if ($ownerMode === 'user') {
             $id = $ownerChoice;
@@ -1075,7 +1108,7 @@ try {
             $name = strtolower(trim((string) ($row['owner'] ?? '')));
             $id = $savedByEmail[$mail] ?? ($savedByName[implode(' ', $nameTokens($name))] ?? ($byEmail[$mail] ?? ($byName[$name] ?? 0)));
             // Wild Card is a shared account, not a person who is missing
-            if ($id === 0 && ($mail !== '' || $name !== '') && $name !== 'wild card') {
+            if ($id === 0 && ($mail !== '' || $name !== '') && $name !== 'wild card' && !isset($openKeys[$mail]) && !isset($openKeys[implode(' ', $nameTokens($name))])) {
                 $notFound[($mail !== '' ? $mail : $name)] = true;
             }
         }

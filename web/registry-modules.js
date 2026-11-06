@@ -553,33 +553,30 @@
     people.forEach(function (person) {
       const row = element('tr');
       row.append(element('td', '', person.name + (person.email ? ' <' + person.email + '>' : '')));
-      if (isWildCard(person)) {
-        row.append(element('td', '', 'Open for all the users'), element('td', 'small text-muted', 'a shared account: its entries are not owned by one person'));
-        table.append(row);
-        return;
-      }
-      let found = match(person, users);
+      let found = isWildCard(person) ? { user: null, how: 'a shared account: open for all' } : match(person, users);
       const before = saved.find(function (p) {
         return (person.email !== '' && p.lc_email === person.email) || (p.lc_name !== '' && tokens(p.lc_name).join(' ') === tokens(person.name).join(' '));
       });
       if (before) {
-        const chosen = users.find(function (u) {
+        const chosen = before.elab_name === '*' ? { open: true } : users.find(function (u) {
           return (before.elab_email !== '' && u.email === before.elab_email) || tokens(u.name).join(' ') === tokens(before.elab_name).join(' ');
         });
         if (chosen) {
-          found = { user: chosen, how: 'saved' };
+          found = chosen.open ? { user: null, open: true, how: 'saved' } : { user: chosen, how: 'saved' };
         }
       }
       const select = element('select', 'form-control form-control-sm');
       const none = element('option', '', 'Not matched');
       none.value = '-1';
-      select.append(none);
+      const open = element('option', '', 'Open for all the users');
+      open.value = 'open';
+      select.append(none, open);
       users.forEach(function (u, index) {
         const option = element('option', '', u.name + (u.email ? ' <' + u.email + '>' : ''));
         option.value = String(index);
         select.append(option);
       });
-      select.value = found ? String(users.indexOf(found.user)) : '-1';
+      select.value = found ? (found.open || found.user === null ? 'open' : String(users.indexOf(found.user))) : '-1';
       const how = element('td', 'small ' + (found ? (found.how === 'e-mail' || found.how === 'name' || found.how === 'saved' ? 'text-muted' : 'text-warning') : 'text-danger'), found ? found.how : 'no match: choose a user');
       select.addEventListener('change', function () {
         how.textContent = select.value === '-1' ? 'not matched' : 'chosen';
@@ -603,6 +600,9 @@
       const pairs = rows.filter(function (r) {
         return r.select.value !== '-1';
       }).map(function (r) {
+        if (r.select.value === 'open') {
+          return { lc_name: r.person.name, lc_email: r.person.email, elab_name: '*', elab_email: '' };
+        }
         const user = users[Number(r.select.value)];
         return { lc_name: r.person.name, lc_email: r.person.email, elab_name: user.name, elab_email: user.email };
       });
@@ -641,7 +641,7 @@
           const n = boxes.filter(function (b) {
             return b.checked;
           }).length;
-          confirm.textContent = 'Change the owner of the ' + n + ' ticked entries';
+          confirm.textContent = 'Apply to the ' + n + ' ticked entries';
           confirm.disabled = n === 0;
         };
         // the entries of a line, by module: all of a module or one by one can be ticked off
@@ -693,7 +693,7 @@
           listed(move.entries + ' entries go to ' + move.user, move.items);
         });
         if (plan.would_open > 0) {
-          listed(plan.would_open + ' entries of Wild Card are opened for all the users', plan.wild_items);
+          listed(plan.would_open + ' entries are opened for all the users (Wild Card and the people set to open)', plan.wild_items);
         }
         lines.append(element('li', 'text-muted', plan.already + ' entries already belong to the matched user'));
         const missing = Object.keys(plan.unmatched);
