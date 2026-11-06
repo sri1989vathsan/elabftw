@@ -879,9 +879,10 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
                 $byLcName[implode(' ', $nameTokens((string) $pair['lc_name']))] = $target;
             }
         }
-        $read = $pdo->prepare('SELECT id, userid, canwrite_base, ' . $lcOwnerSql . ' AS owner FROM inventory WHERE team = :team AND state = 1');
+        $read = $pdo->prepare('SELECT id, title, userid, canwrite_base, ' . $lcOwnerSql . ' AS owner FROM inventory WHERE team = :team AND state = 1');
         $read->bindValue(':team', $teamId, PDO::PARAM_INT);
         $pdo->execute($read);
+        $titles = array();
         $moves = array();
         $wild = array();
         $unmatched = array();
@@ -891,6 +892,7 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
             if ($person['name'] === '' && $person['email'] === '') {
                 continue;
             }
+            $titles[(int) $entry['id']] = (string) $entry['title'];
             if (strtolower($person['name']) === 'wild card') {
                 if ((int) $entry['canwrite_base'] < 30) {
                     $wild[] = (int) $entry['id'];
@@ -911,7 +913,8 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
             $moves[$key] ??= array('user' => $target['name'], 'ids' => array());
             $moves[$key]['ids'][] = (int) $entry['id'];
         }
-        $summary = array_map(static fn(array $move): array => array('user' => $move['user'], 'entries' => count($move['ids'])), array_values($moves));
+        $summary = array_map(static fn(array $move): array => array('user' => $move['user'], 'entries' => count($move['ids']), 'items' => array_map(static fn(int $id): array => array('id' => $id, 'title' => $titles[$id] ?? ''), array_slice($move['ids'], 0, 1000))), array_values($moves));
+        $wildItems = array_map(static fn(int $id): array => array('id' => $id, 'title' => $titles[$id] ?? ''), array_slice($wild, 0, 1000));
         if (empty($payload['dry_run'])) {
             $changed = 0;
             foreach ($moves as $ownerId => $move) {
@@ -924,7 +927,7 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
             }
             respond(200, array('changed' => $changed, 'opened' => count($wild), 'already' => $already, 'unmatched' => $unmatched, 'moves' => $summary));
         }
-        respond(200, array('would_change' => array_sum(array_column($summary, 'entries')), 'would_open' => count($wild), 'already' => $already, 'unmatched' => $unmatched, 'moves' => $summary));
+        respond(200, array('would_change' => array_sum(array_column($summary, 'entries')), 'would_open' => count($wild), 'wild_items' => $wildItems, 'already' => $already, 'unmatched' => $unmatched, 'moves' => $summary));
     } catch (Throwable $e) {
         respond(400, array('error' => $e->getMessage()));
     }

@@ -634,11 +634,29 @@
         await savePairs();
         const plan = await post({ action: 'apply_owner_map', dry_run: true });
         const lines = element('ul', 'small mb-2');
+        // the entries of a line can be opened: "#id title", the first thousand
+        const listed = function (text, items, total) {
+          const line = element('li');
+          const details = element('details');
+          details.append(element('summary', '', text));
+          const names = element('div', 'small text-muted', items.map(function (item) {
+            return '#' + item.id + ' ' + item.title;
+          }).join('\n'));
+          names.style.whiteSpace = 'pre-line';
+          names.style.maxHeight = '14rem';
+          names.style.overflow = 'auto';
+          details.append(names);
+          if (total > items.length) {
+            details.append(element('div', 'small text-muted', '… and ' + (total - items.length) + ' more'));
+          }
+          line.append(details);
+          lines.append(line);
+        };
         plan.moves.forEach(function (move) {
-          lines.append(element('li', '', move.entries + ' entries go to ' + move.user));
+          listed(move.entries + ' entries go to ' + move.user, move.items, move.entries);
         });
         if (plan.would_open > 0) {
-          lines.append(element('li', '', plan.would_open + ' entries of Wild Card are opened for all the users'));
+          listed(plan.would_open + ' entries of Wild Card are opened for all the users', plan.wild_items, plan.would_open);
         }
         lines.append(element('li', 'text-muted', plan.already + ' entries already belong to the matched user'));
         const missing = Object.keys(plan.unmatched);
