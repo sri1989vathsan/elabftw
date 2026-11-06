@@ -1119,7 +1119,15 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
   // the module of the list, when the list is of one module (an entry can only be exported with others of its module)
   const openModule = (): number | null => {
     const key = moduleKeyOf(rows);
-    return key === 'mixed' ? null : Number(key);
+    if (key !== 'mixed') {
+      return Number(key);
+    }
+    // a module with no entries yet has no rows to read it from: the module that is selected (category in the address) is the one
+    if (rows.length === 0) {
+      const selected = new URLSearchParams(window.location.search).get('category') ?? '';
+      return /^\d+$/.test(selected) && Number(selected) > 0 ? Number(selected) : null;
+    }
+    return null;
   };
   const refreshExportButton = (): void => {
     exportButton.replaceChildren(el('i', 'fas fa-file-export fa-fw mr-1'), document.createTextNode(ui.selected.size > 0 ? `Export selected (${ui.selected.size})` : 'Export'));
@@ -1156,7 +1164,9 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     }
     exportMenu.hidden = !exportMenu.hidden;
   });
-  importButton.addEventListener('click', () => {
+  importButton.addEventListener('click', event => {
+    // like the export button: the click must not reach the listener that closes the menu at once
+    event.stopPropagation();
     const module = openModule();
     if (module === null) {
       exportMenu.replaceChildren(el('div', 'small text-muted', 'Open a module to import entries into it.'));
