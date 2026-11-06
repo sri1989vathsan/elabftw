@@ -35,6 +35,7 @@
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='8'>{{ 'Export by user'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='9'>{{ 'Announcements'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='10'>{{ 'Labels'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='11'>{{ 'Database'|trans }}</button></li>
 </ul>
 
 {% include 'loading-spinner.html' %}
@@ -824,5 +825,15 @@
   <script src='label-formats.js?v={{ 'now'|date('YmdHi') }}'></script>
 </div>
 {# END LABELS #}
+
+{# TAB 11 DATABASE: who owns the entries of the database (LabCollector people matched to the users) #}
+<div data-tabcontent='11' hidden>
+  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Database'|trans }}</h2>
+  <div class='pl-3'>
+    <div id='databaseOwnersApp'></div>
+  </div>
+  <script src='admin-database.js?v={{ 'now'|date('YmdHi') }}'></script>
+</div>
+{# END DATABASE #}
 
 {% endblock body %}

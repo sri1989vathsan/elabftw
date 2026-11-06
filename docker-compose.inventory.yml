@@ -60,6 +60,7 @@ services:
       - ./web/registry-modules.php:/elabftw/web/registry-modules.php:ro
       - ./web/registry-kinds.php:/elabftw/web/registry-kinds.php:ro
       - ./web/registry-modules.js:/elabftw/web/registry-modules.js:ro
+      - ./web/admin-database.js:/elabftw/web/admin-database.js:ro
       - ./src/templates/registry-categories.html:/elabftw/src/templates/registry-categories.html:ro
       - ./src/templates/view-edit-toolbar.html:/elabftw/src/templates/view-edit-toolbar.html:ro
       - ./src/templates/back-to-previous.html:/elabftw/src/templates/back-to-previous.html:ro
