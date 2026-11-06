@@ -144,7 +144,7 @@ export function buildDesired(
           lines.push(toText(extra).trim());
         }
       }
-      lines.push(`${options.origin}/?open=todolist&task=${todo.id}`);
+      lines.push(`${options.origin}/dashboard.php?open=todolist&task=${todo.id}`);
     }
     desired.push({
       key,
