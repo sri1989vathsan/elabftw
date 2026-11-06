@@ -831,8 +831,8 @@
   <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Database'|trans }}</h2>
   <div class='pl-3 mb-3' id='databaseSubtabs'>
     <button type='button' class='btn btn-sm btn-primary mr-1' data-dbsub='modules'>{{ 'Modules'|trans }}</button>
-    <button type='button' class='btn btn-sm btn-secondary mr-1' data-dbsub='owners'>{{ 'Transfer ownership'|trans }}</button>
-    <button type='button' class='btn btn-sm btn-secondary' data-dbsub='rules'>{{ 'Rules of a module'|trans }}</button>
+    <button type='button' class='btn btn-sm btn-secondary mr-1' data-dbsub='rules'>{{ 'Rules of a module'|trans }}</button>
+    <button type='button' class='btn btn-sm btn-secondary' data-dbsub='owners'>{{ 'Transfer ownership'|trans }}</button>
   </div>
   <div class='pl-3 mb-5' data-dbpane='modules'>
     {{ idx.catstatidx(
@@ -850,12 +850,12 @@
       'Reg',
       ) }}
   </div>
-  <div class='pl-3' data-dbpane='owners' hidden>
-    <div id='databaseOwnersApp'></div>
-  </div>
   <div class='pl-3' data-dbpane='rules' hidden>
     <p class='text-muted'>{{ 'Choose a module to set the custom fields its entries have, the columns its list shows, and what an entry needs to be registered in the lab Database. To make a new module, create it in the Modules tab, then set its rules here.'|trans }}</p>
     <div id='moduleRulesApp'></div>
+  </div>
+  <div class='pl-3' data-dbpane='owners' hidden>
+    <div id='databaseOwnersApp'></div>
   </div>
   <script src='registry-modules.js?v={{ 'now'|date('YmdHi') }}'></script>
   <script src='admin-database.js?v={{ 'now'|date('YmdHi') }}'></script>
