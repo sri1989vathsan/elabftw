@@ -718,18 +718,26 @@
       box.append(element('p', 'mb-2', 'Only an admin can assign the owner of entries.'), buttons);
     } else {
       box.append(element('p', 'small text-muted mb-1', 'The new owner gets them with a My ID in their own count; the lab number stays.'));
-      const select = element('select', 'form-control form-control-sm mb-2');
+      // the new owner is found by e-mail address: type it, or pick one from the list (the names are shown next to the addresses)
+      const select = element('input', 'form-control form-control-sm mb-2');
+      select.type = 'email';
+      select.setAttribute('list', 'assignOwnerUsers');
+      select.setAttribute('aria-label', 'E-mail address of the new owner');
+      select.placeholder = 'E-mail address of the new owner';
+      select.autocomplete = 'off';
+      const list = element('datalist');
+      list.id = 'assignOwnerUsers';
       body.users.forEach(function (u) {
         const option = element('option', '', u.name);
-        option.value = String(u.id);
-        select.append(option);
+        option.value = String(u.email || '');
+        list.append(option);
       });
       const go = element('button', 'btn btn-primary btn-sm', 'Assign');
       go.type = 'button';
       go.addEventListener('click', async function () {
         go.disabled = true;
         try {
-          const response = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'assign_owner', ids: ids, owner: Number(select.value) }) });
+          const response = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'assign_owner', ids: ids, owner_email: select.value.trim() }) });
           const answer = await response.json();
           if (!response.ok) {
             throw new Error(answer.error || 'It could not be done.');
@@ -749,7 +757,7 @@
         }
       });
       buttons.prepend(go);
-      box.append(select, message, buttons);
+      box.append(select, list, message, buttons);
     }
     back.append(box);
     document.body.append(back);

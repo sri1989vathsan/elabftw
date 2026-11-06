@@ -171,6 +171,7 @@ final class CustomMigrationRunner
         '137_stock_alerts.sql',
         '138_module_low_stock.sql',
         '139_personal_storage.sql',
+        '140_owner_map.sql',
     );
 
     private Db $Db;

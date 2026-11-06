@@ -113,6 +113,51 @@ $teamUsers = static function () use ($pdo, $teamId): array {
     return $req->fetchAll();
 };
 
+// a name as its words, lower case, without what is in brackets, in alphabetical order: "Jan Michler" and "Michler, Jan" are the same
+$nameTokens = static function (string $name): array {
+    $name = strtolower((string) preg_replace('/\([^)]*\)/', ' ', $name));
+    $tokens = preg_split('/[^\p{L}]+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: array();
+    sort($tokens);
+    return $tokens;
+};
+// the matching saved by an admin: LabCollector e-mail or name to the user of the team (found by the e-mail, then by the name, of the user written
+// in the match: the user can have been made after it was saved)
+$ownerMapRows = static function () use ($pdo, $teamId, $nameTokens): array {
+    $req = $pdo->prepare('SELECT lc_name, lc_email, elab_name, elab_email FROM registry_owner_map WHERE team = :team');
+    $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+    $pdo->execute($req);
+    return $req->fetchAll();
+};
+// the entries get a new owner: each is renumbered in the list of the new owner, so My ID stays their own count
+$reassign = static function (array $ids, int $ownerId) use ($pdo, $teamId): int {
+    $changed = 0;
+    $read = $pdo->prepare('SELECT id, category, userid, personal_id FROM inventory WHERE id = :id AND team = :team AND state = 1');
+    $next = $pdo->prepare('SELECT COALESCE(MAX(personal_id), 0) + 1 FROM inventory WHERE userid = :user AND category = :category');
+    $write = $pdo->prepare('UPDATE inventory SET userid = :user, personal_id = :personal WHERE id = :id');
+    foreach ($ids as $id) {
+        $read->bindValue(':id', $id, PDO::PARAM_INT);
+        $read->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($read);
+        $entry = $read->fetch();
+        if (!is_array($entry) || (int) $entry['userid'] === $ownerId) {
+            continue;
+        }
+        $personal = null;
+        if ($entry['personal_id'] !== null && $entry['category'] !== null) {
+            $next->bindValue(':user', $ownerId, PDO::PARAM_INT);
+            $next->bindValue(':category', (int) $entry['category'], PDO::PARAM_INT);
+            $pdo->execute($next);
+            $personal = (int) $next->fetchColumn();
+        }
+        $write->bindValue(':user', $ownerId, PDO::PARAM_INT);
+        $write->bindValue(':personal', $personal, $personal === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $write->bindValue(':id', $id, PDO::PARAM_INT);
+        $pdo->execute($write);
+        $changed++;
+    }
+    return $changed;
+};
+
 // the template of a module for the import: a heading row, and a row (its first cell is #) that says what each column takes; the import skips it
 $templateOf = static function (array $module) use ($fieldsOf): string {
     $definitions = $fieldsOf($module);
@@ -167,6 +212,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
             $folders[] = array('id' => (int) $folder['id'], 'path' => (string) $folder['full_path'], 'owner' => (int) ($folder['userid'] ?? 0), 'database' => (string) $folder['full_path'] === 'Database items' || str_starts_with((string) $folder['full_path'], 'Database items > '));
         }
         respond(200, array('folders' => $folders, 'me' => $userId));
+    }
+    // the matching of the people of LabCollector to the users of eLabFTW that an admin saved
+    if (isset($_GET['owner_map'])) {
+        if (!$isAdmin) {
+            respond(403, array('error' => 'Only an admin can match the owners.'));
+        }
+        $req = $pdo->prepare('SELECT lc_name, lc_email, elab_name, elab_email FROM registry_owner_map WHERE team = :team ORDER BY lc_name, lc_email');
+        $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($req);
+        respond(200, array('pairs' => $req->fetchAll(), 'users' => $teamUsers()));
     }
     if (isset($_GET['users'])) {
         respond(200, array('users' => $isAdmin ? $teamUsers() : array(), 'is_admin' => $isAdmin, 'me' => $userId, 'default_owner' => $defaultOwner > 0 ? $defaultOwner : null));
@@ -705,36 +760,63 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'assign_owner') {
         $ids = array_slice(array_values(array_unique(array_filter(array_map('intval', is_array($payload['ids'] ?? null) ? $payload['ids'] : array()), static fn(int $n): bool => $n > 0))), 0, 500);
         $ownerId = (int) ($payload['owner'] ?? 0);
         $members = array_column($teamUsers(), 'id');
+        // the new owner can be given by e-mail address: the user of the team who has it
+        $ownerEmail = strtolower(trim((string) ($payload['owner_email'] ?? '')));
+        if ($ownerEmail !== '') {
+            $ownerId = 0;
+            foreach ($teamUsers() as $member) {
+                if (strtolower(trim((string) $member['email'])) === $ownerEmail) {
+                    $ownerId = (int) $member['id'];
+                }
+            }
+            if ($ownerId === 0) {
+                respond(400, array('error' => 'Nobody in the team has the e-mail address ' . $ownerEmail . '.'));
+            }
+        }
         if ($ids === array() || !in_array((string) $ownerId, array_map('strval', $members), true)) {
             respond(400, array('error' => 'Choose entries and an owner of the team.'));
         }
-        $changed = 0;
-        $read = $pdo->prepare('SELECT id, category, userid, personal_id FROM inventory WHERE id = :id AND team = :team AND state = 1');
-        $next = $pdo->prepare('SELECT COALESCE(MAX(personal_id), 0) + 1 FROM inventory WHERE userid = :user AND category = :category');
-        $write = $pdo->prepare('UPDATE inventory SET userid = :user, personal_id = :personal WHERE id = :id');
-        foreach ($ids as $id) {
-            $read->bindValue(':id', $id, PDO::PARAM_INT);
-            $read->bindValue(':team', $teamId, PDO::PARAM_INT);
-            $pdo->execute($read);
-            $entry = $read->fetch();
-            if (!is_array($entry) || (int) $entry['userid'] === $ownerId) {
-                continue;
-            }
-            $personal = null;
-            if ($entry['personal_id'] !== null && $entry['category'] !== null) {
-                $next->bindValue(':user', $ownerId, PDO::PARAM_INT);
-                $next->bindValue(':category', (int) $entry['category'], PDO::PARAM_INT);
-                $pdo->execute($next);
-                $personal = (int) $next->fetchColumn();
-            }
-            $write->bindValue(':user', $ownerId, PDO::PARAM_INT);
-            $write->bindValue(':personal', $personal, $personal === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
-            $write->bindValue(':id', $id, PDO::PARAM_INT);
-            $pdo->execute($write);
-            $changed++;
-        }
+        $changed = $reassign($ids, $ownerId);
         respond(200, array('changed' => $changed));
     } catch (Throwable $e) {
+        respond(400, array('error' => $e->getMessage()));
+    }
+}
+
+// the matching of the people of LabCollector to the users of eLabFTW is saved (admins only): it replaces the one saved before
+if (is_array($payload) && ($payload['action'] ?? '') === 'save_owner_map') {
+    if (!$isAdmin) {
+        respond(403, array('error' => 'Only an admin can match the owners.'));
+    }
+    try {
+        $pdo->beginTransaction();
+        $drop = $pdo->prepare('DELETE FROM registry_owner_map WHERE team = :team');
+        $drop->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($drop);
+        $add = $pdo->prepare('INSERT INTO registry_owner_map (team, lc_name, lc_email, elab_name, elab_email) VALUES (:team, :lcn, :lce, :en, :ee)');
+        $saved = 0;
+        foreach (array_slice(is_array($payload['pairs'] ?? null) ? $payload['pairs'] : array(), 0, 2000) as $pair) {
+            $lcName = mb_substr(trim((string) ($pair['lc_name'] ?? '')), 0, 255);
+            $lcEmail = mb_substr(strtolower(trim((string) ($pair['lc_email'] ?? ''))), 0, 255);
+            $elabName = mb_substr(trim((string) ($pair['elab_name'] ?? '')), 0, 255);
+            $elabEmail = mb_substr(strtolower(trim((string) ($pair['elab_email'] ?? ''))), 0, 255);
+            if (($lcName === '' && $lcEmail === '') || ($elabName === '' && $elabEmail === '')) {
+                continue;
+            }
+            $add->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $add->bindValue(':lcn', $lcName);
+            $add->bindValue(':lce', $lcEmail);
+            $add->bindValue(':en', $elabName);
+            $add->bindValue(':ee', $elabEmail);
+            $pdo->execute($add);
+            $saved++;
+        }
+        $pdo->commit();
+        respond(200, array('saved' => $saved));
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         respond(400, array('error' => $e->getMessage()));
     }
 }
@@ -833,21 +915,44 @@ try {
     $users = $ownerMode === 'me' ? array() : $teamUsers();
     $byEmail = array();
     $byName = array();
-    foreach ($users as $user) {
-        $byEmail[strtolower(trim((string) $user['email']))] = (int) $user['id'];
-        $byName[strtolower(trim((string) $user['name']))] = (int) $user['id'];
+    // the people matched by an admin (a LabCollector person to a user of the team) come first
+    $savedByEmail = array();
+    $savedByName = array();
+    if ($ownerMode === 'column') {
+        foreach ($ownerMapRows() as $pair) {
+            $target = 0;
+            if ($pair['elab_email'] !== '' && isset($byEmail[strtolower($pair['elab_email'])])) {
+                $target = $byEmail[strtolower($pair['elab_email'])];
+            } elseif ($pair['elab_name'] !== '') {
+                $wanted = $nameTokens((string) $pair['elab_name']);
+                foreach ($users as $user) {
+                    if ($wanted !== array() && $nameTokens((string) $user['name']) === $wanted) {
+                        $target = (int) $user['id'];
+                    }
+                }
+            }
+            if ($target > 0) {
+                if ($pair['lc_email'] !== '') {
+                    $savedByEmail[strtolower($pair['lc_email'])] = $target;
+                }
+                if ($pair['lc_name'] !== '') {
+                    $savedByName[implode(' ', $nameTokens((string) $pair['lc_name']))] = $target;
+                }
+            }
+        }
     }
     $ownerUsers = array();
     $notFound = array();
-    $ownerFor = static function (array $row) use ($ownerMode, $ownerChoice, $defaultOwner, $byEmail, $byName, $teamId, &$ownerUsers, &$notFound, $userId): ?Users {
+    $ownerFor = static function (array $row) use ($ownerMode, $ownerChoice, $defaultOwner, $byEmail, $byName, $savedByEmail, $savedByName, $nameTokens, $teamId, &$ownerUsers, &$notFound, $userId): ?Users {
         $id = 0;
         if ($ownerMode === 'user') {
             $id = $ownerChoice;
         } elseif ($ownerMode === 'column') {
             $mail = strtolower(trim((string) ($row['owner_email'] ?? '')));
             $name = strtolower(trim((string) ($row['owner'] ?? '')));
-            $id = $byEmail[$mail] ?? ($byName[$name] ?? 0);
-            if ($id === 0 && ($mail !== '' || $name !== '')) {
+            $id = $savedByEmail[$mail] ?? ($savedByName[implode(' ', $nameTokens($name))] ?? ($byEmail[$mail] ?? ($byName[$name] ?? 0)));
+            // Wild Card is a shared account, not a person who is missing
+            if ($id === 0 && ($mail !== '' || $name !== '') && $name !== 'wild card') {
                 $notFound[($mail !== '' ? $mail : $name)] = true;
             }
         }

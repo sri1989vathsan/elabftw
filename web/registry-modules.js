@@ -376,3 +376,219 @@
 
   load(false);
 })();
+
+/**
+ * Admins, Modules page: the people of LabCollector are matched to the users of eLabFTW from two lists that are pasted (the same person can
+ * have another name or e-mail address in each tool). The match is by e-mail, then by name, and it can be corrected by hand. What is saved is used by
+ * the import (owner from the file): each entry goes to the user matched to its LabCollector owner. "Wild Card" is not a person: its entries are
+ * open for all the users. Talks to registry-transfer.php.
+ */
+(function () {
+  'use strict';
+  const anchor = document.getElementById('moduleRulesApp');
+  if (!anchor) {
+    return;
+  }
+  const token = function () {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.content : (document.body.dataset.csrf || '');
+  };
+  const element = function (tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) {
+      node.className = className;
+    }
+    if (text) {
+      node.textContent = text;
+    }
+    return node;
+  };
+  // a line of a list: a name and an e-mail address, in any order ("Name <mail>", "Name, mail", "mail<TAB>Name", or just a name)
+  const parseList = function (text) {
+    const people = [];
+    text.split(/\r?\n/).forEach(function (line) {
+      const found = /[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.exec(line);
+      const email = found ? found[0].toLowerCase() : '';
+      const name = line.replace(found ? found[0] : '', ' ').replace(/[<>"\t;,|]+/g, ' ').replace(/\s+/g, ' ').trim();
+      if (name === '' && email === '') {
+        return;
+      }
+      // a heading of a table
+      if (email === '' && /^(name|names|user|users|e-?mail)\b/i.test(name)) {
+        return;
+      }
+      people.push({ name: name, email: email });
+    });
+    return people;
+  };
+  const tokens = function (name) {
+    return name.toLowerCase().replace(/\([^)]*\)/g, ' ').split(/[^\p{L}]+/u).filter(Boolean).sort();
+  };
+  const isWildCard = function (person) {
+    return /^wild\s*card$/i.test(person.name);
+  };
+  // the user of eLabFTW for a person of LabCollector: by e-mail, then by name, then by the first and the last name
+  const match = function (person, users) {
+    if (person.email !== '') {
+      const byMail = users.find(function (u) {
+        return u.email !== '' && u.email === person.email;
+      });
+      if (byMail) {
+        return { user: byMail, how: 'e-mail' };
+      }
+    }
+    const mine = tokens(person.name);
+    if (mine.length > 0) {
+      const same = users.find(function (u) {
+        return tokens(u.name).join(' ') === mine.join(' ');
+      });
+      if (same) {
+        return { user: same, how: 'name' };
+      }
+      if (mine.length >= 2) {
+        const similar = users.find(function (u) {
+          const other = tokens(u.name);
+          return other.length >= 2 && (other.every(function (t) { return mine.indexOf(t) >= 0; }) || mine.every(function (t) { return other.indexOf(t) >= 0; }));
+        });
+        if (similar) {
+          return { user: similar, how: 'similar name: check it' };
+        }
+      }
+    }
+    return null;
+  };
+  const holder = element('section', 'mt-4 mb-4');
+  anchor.insertAdjacentElement('afterend', holder);
+  holder.append(element('h4', '', 'People of LabCollector and users of eLabFTW'));
+  holder.append(element('p', 'small text-muted', 'Paste the users of each tool, one per line (a name and an e-mail address: "Jan Michler <jan@example.org>", or a name and an address separated by a comma or a tab, or just a name). They are matched by e-mail, then by name; correct what is wrong, then save. The import with "owner from the file" gives each entry to the user matched to its LabCollector owner.'));
+  const grid = element('div', 'row');
+  const column = function (title, hint) {
+    const cell = element('div', 'col-md-6 mb-2');
+    cell.append(element('label', 'font-weight-bold', title));
+    const area = element('textarea', 'form-control form-control-sm');
+    area.rows = 8;
+    area.placeholder = hint;
+    cell.append(area);
+    grid.append(cell);
+    return area;
+  };
+  const elabArea = column('Users of eLabFTW', 'Name <e-mail>, one per line');
+  const lcArea = column('People of LabCollector', 'Name <e-mail>, one per line');
+  holder.append(grid);
+  const message = element('p', 'small mb-2');
+  const tools = element('div', 'mb-2');
+  const fill = element('button', 'btn btn-outline-secondary btn-sm mr-2', 'Fill with the users of this eLabFTW');
+  fill.type = 'button';
+  const run = element('button', 'btn btn-secondary btn-sm mr-2', 'Match the names');
+  run.type = 'button';
+  tools.append(fill, run);
+  const result = element('div', 'mt-2');
+  holder.append(tools, message, result);
+  const say = function (text, failed) {
+    message.className = 'small mb-2 ' + (failed ? 'text-danger' : 'text-success');
+    message.textContent = text;
+  };
+  const textOf = function (list) {
+    return list.map(function (p) {
+      return p.name + (p.email ? ' <' + p.email + '>' : '');
+    }).join('\n');
+  };
+
+  // what was saved before is shown at first
+  let saved = [];
+  fetch('registry-transfer.php?owner_map=1', { credentials: 'same-origin' }).then(function (response) {
+    return response.json();
+  }).then(function (body) {
+    if (!body.users) {
+      return;
+    }
+    saved = body.pairs || [];
+    if (saved.length > 0) {
+      lcArea.value = textOf(saved.map(function (p) {
+        return { name: p.lc_name, email: p.lc_email };
+      }));
+      elabArea.value = textOf(saved.map(function (p) {
+        return { name: p.elab_name, email: p.elab_email };
+      }));
+      say(saved.length + ' matches are saved. Change the lists and match again to replace them.', false);
+    }
+    fill.addEventListener('click', function () {
+      elabArea.value = textOf(body.users.map(function (u) {
+        return { name: u.name, email: String(u.email || '').toLowerCase() };
+      }));
+    });
+  }).catch(function () {
+    holder.hidden = true;
+  });
+
+  run.addEventListener('click', function () {
+    const users = parseList(elabArea.value);
+    const people = parseList(lcArea.value);
+    result.textContent = '';
+    if (users.length === 0 || people.length === 0) {
+      say('Paste both lists first.', true);
+      return;
+    }
+    message.textContent = '';
+    const table = element('table', 'table table-sm');
+    const head = element('tr');
+    ['Person of LabCollector', 'User of eLabFTW', 'Matched by'].forEach(function (title) {
+      head.append(element('th', '', title));
+    });
+    table.append(head);
+    const rows = [];
+    people.forEach(function (person) {
+      const row = element('tr');
+      row.append(element('td', '', person.name + (person.email ? ' <' + person.email + '>' : '')));
+      if (isWildCard(person)) {
+        row.append(element('td', '', 'Open for all the users'), element('td', 'small text-muted', 'a shared account: its entries are not owned by one person'));
+        table.append(row);
+        return;
+      }
+      const found = match(person, users);
+      const select = element('select', 'form-control form-control-sm');
+      const none = element('option', '', 'Not matched');
+      none.value = '-1';
+      select.append(none);
+      users.forEach(function (u, index) {
+        const option = element('option', '', u.name + (u.email ? ' <' + u.email + '>' : ''));
+        option.value = String(index);
+        select.append(option);
+      });
+      select.value = found ? String(users.indexOf(found.user)) : '-1';
+      const how = element('td', 'small ' + (found ? (found.how === 'e-mail' || found.how === 'name' ? 'text-muted' : 'text-warning') : 'text-danger'), found ? found.how : 'no match: choose a user');
+      select.addEventListener('change', function () {
+        how.textContent = select.value === '-1' ? 'not matched' : 'chosen';
+        how.className = 'small text-muted';
+      });
+      const cell = element('td');
+      cell.append(select);
+      row.append(cell, how);
+      table.append(row);
+      rows.push({ person: person, select: select });
+    });
+    const save = element('button', 'btn btn-primary btn-sm', 'Save the matches');
+    save.type = 'button';
+    save.addEventListener('click', async function () {
+      save.disabled = true;
+      try {
+        const pairs = rows.filter(function (r) {
+          return r.select.value !== '-1';
+        }).map(function (r) {
+          const user = users[Number(r.select.value)];
+          return { lc_name: r.person.name, lc_email: r.person.email, elab_name: user.name, elab_email: user.email };
+        });
+        const response = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'save_owner_map', pairs: pairs }) });
+        const answer = await response.json();
+        if (!response.ok) {
+          throw new Error(answer.error || 'It could not be saved.');
+        }
+        say(answer.saved + ' matches saved. The import with "owner from the file" uses them.', false);
+      } catch (error) {
+        say(error.message, true);
+      }
+      save.disabled = false;
+    });
+    result.append(table, save);
+  });
+})();
