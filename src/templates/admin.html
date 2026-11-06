@@ -826,12 +826,38 @@
 </div>
 {# END LABELS #}
 
-{# TAB 11 DATABASE: who owns the entries of the database (LabCollector people matched to the users) #}
+{# TAB 11 DATABASE: the modules, who owns the entries, and the rules of a module #}
 <div data-tabcontent='11' hidden>
   <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Database'|trans }}</h2>
-  <div class='pl-3'>
+  <div class='pl-3 mb-3' id='databaseSubtabs'>
+    <button type='button' class='btn btn-sm btn-primary mr-1' data-dbsub='modules'>{{ 'Modules'|trans }}</button>
+    <button type='button' class='btn btn-sm btn-secondary mr-1' data-dbsub='owners'>{{ 'Transfer ownership'|trans }}</button>
+    <button type='button' class='btn btn-sm btn-secondary' data-dbsub='rules'>{{ 'Rules of a module'|trans }}</button>
+  </div>
+  <div class='pl-3 mb-5' data-dbpane='modules'>
+    {{ idx.catstatidx(
+      'registry_categories',
+      'inventory_categories',
+      'Create and modify the modules of the database.'|trans,
+      'Modules group the entries of the database (plasmids, antibodies, cells, strains, probes, primers...). They belong to a team and have two main properties: name and color.'|trans,
+      App.registryCategoryArr|filter(c => c.is_current_team == 1),
+      'No modules have been created in this team yet.'|trans|msg('warning', false),
+      'Create new module'|trans,
+      'Module name'|trans,
+      App.Teams.teamArr.name,
+      true,
+      true,
+      'Reg',
+      ) }}
+  </div>
+  <div class='pl-3' data-dbpane='owners' hidden>
     <div id='databaseOwnersApp'></div>
   </div>
+  <div class='pl-3' data-dbpane='rules' hidden>
+    <p class='text-muted'>{{ 'Choose a module to set the custom fields its entries have, the columns its list shows, and what an entry needs to be registered in the lab Database. To make a new module, create it in the Modules tab, then set its rules here.'|trans }}</p>
+    <div id='moduleRulesApp'></div>
+  </div>
+  <script src='registry-modules.js?v={{ 'now'|date('YmdHi') }}'></script>
   <script src='admin-database.js?v={{ 'now'|date('YmdHi') }}'></script>
 </div>
 {# END DATABASE #}

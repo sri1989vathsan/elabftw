@@ -1,4 +1,42 @@
 /**
+ * Admin panel, Database tab: the three parts (modules, transfer of ownership, rules of a module) are shown one at a time; the last one shown
+ * is remembered.
+ */
+(function () {
+  'use strict';
+  const bar = document.getElementById('databaseSubtabs');
+  if (!bar) {
+    return;
+  }
+  const show = function (name) {
+    document.querySelectorAll('[data-dbpane]').forEach(function (pane) {
+      pane.hidden = pane.dataset.dbpane !== name;
+    });
+    bar.querySelectorAll('[data-dbsub]').forEach(function (button) {
+      button.className = 'btn btn-sm mr-1 ' + (button.dataset.dbsub === name ? 'btn-primary' : 'btn-secondary');
+    });
+    try {
+      localStorage.setItem('databaseSubtab', name);
+    } catch (error) {
+      // nothing to remember
+    }
+  };
+  bar.addEventListener('click', function (event) {
+    const button = event.target.closest('[data-dbsub]');
+    if (button) {
+      show(button.dataset.dbsub);
+    }
+  });
+  let last = 'modules';
+  try {
+    last = localStorage.getItem('databaseSubtab') || 'modules';
+  } catch (error) {
+    last = 'modules';
+  }
+  show(['modules', 'owners', 'rules'].indexOf(last) >= 0 ? last : 'modules');
+})();
+
+/**
  * Admins, Admin panel, Database tab: the people of LabCollector are matched to the users of eLabFTW from two lists that fill themselves (the same person can
  * have another name or e-mail address in each tool). The match is by e-mail, then by name, and it can be corrected by hand. What is saved is used by
  * the import (owner from the file): each entry goes to the user matched to its LabCollector owner. "Wild Card" is not a person: its entries are
