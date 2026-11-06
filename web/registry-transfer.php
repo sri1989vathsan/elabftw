@@ -879,9 +879,11 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
                 $byLcName[implode(' ', $nameTokens((string) $pair['lc_name']))] = $target;
             }
         }
-        $read = $pdo->prepare('SELECT id, title, userid, canwrite_base, ' . $lcOwnerSql . ' AS owner FROM inventory WHERE team = :team AND state = 1');
+        $read = $pdo->prepare('SELECT inventory.id, inventory.title, inventory.userid, inventory.canwrite_base, ' . str_replace('metadata', 'inventory.metadata', $lcOwnerSql) . ' AS owner, COALESCE(c.title, "") AS module FROM inventory LEFT JOIN inventory_categories AS c ON c.id = inventory.category WHERE inventory.team = :team AND inventory.state = 1');
         $read->bindValue(':team', $teamId, PDO::PARAM_INT);
         $pdo->execute($read);
+        // only the entries that were ticked (the others of the preview stay as they are)
+        $only = is_array($payload['ids'] ?? null) ? array_flip(array_map('intval', $payload['ids'])) : null;
         $titles = array();
         $moves = array();
         $wild = array();
@@ -892,7 +894,10 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
             if ($person['name'] === '' && $person['email'] === '') {
                 continue;
             }
-            $titles[(int) $entry['id']] = (string) $entry['title'];
+            if ($only !== null && !isset($only[(int) $entry['id']])) {
+                continue;
+            }
+            $titles[(int) $entry['id']] = array('title' => (string) $entry['title'], 'module' => (string) $entry['module']);
             if (strtolower($person['name']) === 'wild card') {
                 if ((int) $entry['canwrite_base'] < 30) {
                     $wild[] = (int) $entry['id'];
@@ -913,8 +918,8 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
             $moves[$key] ??= array('user' => $target['name'], 'ids' => array());
             $moves[$key]['ids'][] = (int) $entry['id'];
         }
-        $summary = array_map(static fn(array $move): array => array('user' => $move['user'], 'entries' => count($move['ids']), 'items' => array_map(static fn(int $id): array => array('id' => $id, 'title' => $titles[$id] ?? ''), array_slice($move['ids'], 0, 1000))), array_values($moves));
-        $wildItems = array_map(static fn(int $id): array => array('id' => $id, 'title' => $titles[$id] ?? ''), array_slice($wild, 0, 1000));
+        $summary = array_map(static fn(array $move): array => array('user' => $move['user'], 'entries' => count($move['ids']), 'items' => array_map(static fn(int $id): array => array('id' => $id, 'title' => $titles[$id]['title'] ?? '', 'module' => $titles[$id]['module'] ?? ''), $move['ids'])), array_values($moves));
+        $wildItems = array_map(static fn(int $id): array => array('id' => $id, 'title' => $titles[$id]['title'] ?? '', 'module' => $titles[$id]['module'] ?? ''), $wild);
         if (empty($payload['dry_run'])) {
             $changed = 0;
             foreach ($moves as $ownerId => $move) {

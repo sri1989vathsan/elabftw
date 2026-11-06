@@ -633,30 +633,67 @@
       try {
         await savePairs();
         const plan = await post({ action: 'apply_owner_map', dry_run: true });
-        const lines = element('ul', 'small mb-2');
-        // the entries of a line can be opened: "#id title", the first thousand
-        const listed = function (text, items, total) {
+        const lines = element('ul', 'small mb-2 list-unstyled');
+        const boxes = [];
+        const confirm = element('button', 'btn btn-danger btn-sm', '');
+        confirm.type = 'button';
+        const count = function () {
+          const n = boxes.filter(function (b) {
+            return b.checked;
+          }).length;
+          confirm.textContent = 'Change the owner of the ' + n + ' ticked entries';
+          confirm.disabled = n === 0;
+        };
+        // the entries of a line, by module: all of a module or one by one can be ticked off
+        const listed = function (text, items) {
           const line = element('li');
           const details = element('details');
           details.append(element('summary', '', text));
-          const names = element('div', 'small text-muted', items.map(function (item) {
-            return '#' + item.id + ' ' + item.title;
-          }).join('\n'));
-          names.style.whiteSpace = 'pre-line';
-          names.style.maxHeight = '14rem';
-          names.style.overflow = 'auto';
-          details.append(names);
-          if (total > items.length) {
-            details.append(element('div', 'small text-muted', '… and ' + (total - items.length) + ' more'));
-          }
+          const modules = {};
+          items.forEach(function (item) {
+            (modules[item.module || 'No module'] = modules[item.module || 'No module'] || []).push(item);
+          });
+          Object.keys(modules).forEach(function (name) {
+            const group = element('div', 'ml-3 mt-1');
+            const all = element('input');
+            all.type = 'checkbox';
+            all.checked = true;
+            const title = element('label', 'font-weight-bold mr-2 mb-0');
+            title.append(all, document.createTextNode(' ' + name + ' (' + modules[name].length + ')'));
+            group.append(title);
+            const mine = [];
+            const list = element('div', 'ml-3 text-muted');
+            list.style.maxHeight = '12rem';
+            list.style.overflow = 'auto';
+            modules[name].forEach(function (item) {
+              const box = element('input');
+              box.type = 'checkbox';
+              box.checked = true;
+              box.dataset.id = String(item.id);
+              box.addEventListener('change', count);
+              boxes.push(box);
+              mine.push(box);
+              const label = element('label', 'd-block mb-0');
+              label.append(box, document.createTextNode(' #' + item.id + ' ' + item.title));
+              list.append(label);
+            });
+            all.addEventListener('change', function () {
+              mine.forEach(function (box) {
+                box.checked = all.checked;
+              });
+              count();
+            });
+            group.append(list);
+            details.append(group);
+          });
           line.append(details);
           lines.append(line);
         };
         plan.moves.forEach(function (move) {
-          listed(move.entries + ' entries go to ' + move.user, move.items, move.entries);
+          listed(move.entries + ' entries go to ' + move.user, move.items);
         });
         if (plan.would_open > 0) {
-          listed(plan.would_open + ' entries of Wild Card are opened for all the users', plan.wild_items, plan.would_open);
+          listed(plan.would_open + ' entries of Wild Card are opened for all the users', plan.wild_items);
         }
         lines.append(element('li', 'text-muted', plan.already + ' entries already belong to the matched user'));
         const missing = Object.keys(plan.unmatched);
@@ -665,16 +702,19 @@
             return name + ' (' + plan.unmatched[name] + ')';
           }).join(', ')));
         }
-        report.append(lines);
+        report.append(element('p', 'small mb-1', 'Open a line to choose: a whole module, or single entries. Everything is ticked at first.'), lines);
         if (plan.would_change + plan.would_open === 0) {
           say('Nothing to change.', false);
         } else {
-          const confirm = element('button', 'btn btn-danger btn-sm', 'Change ' + plan.would_change + ' owners and open ' + plan.would_open + ' entries');
-          confirm.type = 'button';
           confirm.addEventListener('click', async function () {
             confirm.disabled = true;
             try {
-              const done = await post({ action: 'apply_owner_map' });
+              const ids = boxes.filter(function (b) {
+                return b.checked;
+              }).map(function (b) {
+                return Number(b.dataset.id);
+              });
+              const done = await post({ action: 'apply_owner_map', ids: ids });
               report.textContent = '';
               say(done.changed + ' entries have a new owner, ' + done.opened + ' were opened for all the users.', false);
             } catch (error) {
@@ -682,6 +722,7 @@
               confirm.disabled = false;
             }
           });
+          count();
           report.append(confirm);
         }
       } catch (error) {
