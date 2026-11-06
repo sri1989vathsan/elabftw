@@ -18,10 +18,7 @@
 
 {% if App.Users.isAdmin %}
 <hr class='my-4'>
-<h2 class='h4 mb-2'>{{ 'Rules of a module'|trans }}</h2>
-<p class='text-muted'>{{ 'Choose a module to set the custom fields its entries have, the columns its list shows, and what an entry needs to be registered in the lab Database. To make a new module, create it above, then set its rules here.'|trans }}</p>
-<div id='moduleRulesApp'></div>
-<script src='registry-modules.js?v={{ 'now'|date('YmdHi') }}'></script>
+<p class='text-muted'>{{ 'The rules of a module (custom fields, columns, what an entry needs) and the transfer of ownership are in the admin panel, tab Database.'|trans }} <a href='admin.php?tab=11'>{{ 'Open'|trans }}</a></p>
 {% endif %}
 
 {% endblock body %}
