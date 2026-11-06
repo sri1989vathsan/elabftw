@@ -71,7 +71,8 @@ async function spreadsheetSoak(options = {}) {
   const timings = {};
   const samples = [];
   const counts = {};
-  const note = name => { counts[name] = (counts[name] || 0) + 1; };
+  const opLog = [];
+  const note = name => { counts[name] = (counts[name] || 0) + 1; opLog.push(name); if (opLog.length > 60) opLog.shift(); };
   const t0 = performance.now();
   window.spreadsheetSoakLive = { dataLoss, failures, sizes, menus };
   const baselineTables = api.snapshot(false).length;
@@ -771,7 +772,9 @@ async function spreadsheetSoak(options = {}) {
     const exact = (x, y) => x.length === y.length && x.every((row, r) => row.length === y[r].length && row.every((v, c) => String(v ?? '').startsWith('=') || v === y[r][c]));
     const without = (a1, b1) => (byRow ? model.grid.filter((_, i) => i < a1 || i > b1) : model.grid.map(row => row.filter((_, i) => i < a1 || i > b1)));
     const normalizedNow = nowGrid.map(row => Array.from(row, v => v ?? ''));
-    let matched = null;
+    // The block that was selected is tried first: formula cells match anything, and on a mostly empty table
+    // an earlier block can look the same, which used to make the record keep a formula that was really deleted.
+    let matched = exact(without(first, lastIdx), normalizedNow) ? [first, lastIdx] : null;
     for (let a1 = 0; a1 < size2 && !matched; a1++) for (let b1 = a1; b1 < size2 && !matched; b1++) {
       if (exact(without(a1, b1), normalizedNow)) matched = [a1, b1];
     }
@@ -1806,7 +1809,7 @@ async function spreadsheetSoak(options = {}) {
           if (typeof value === 'string' && value.startsWith('=')) {
             const have = String(grid[r]?.[c] ?? '');
             if (have.startsWith('=')) model().grid[r][c] = have; // references were rewritten: accepted
-            else dataLoss.push({ context: label, table: model().label, cell: cellName(r, c), problem: `the formula ${value} in ${cellName(r, c)} is gone (the cell holds ${JSON.stringify(have)})` });
+            else dataLoss.push({ context: label, table: model().label, cell: cellName(r, c), problem: `the formula ${value} in ${cellName(r, c)} is gone (the cell holds ${JSON.stringify(have)})`, expectedGrid: JSON.stringify(model().grid), actualGrid: JSON.stringify(grid), recentOps: opLog.slice(-14).join(' > '), live: (() => { try { const o = api.overlayElement(uid); const w = o && o.querySelector('.jss_container')?.jspreadsheet; return w ? JSON.stringify(w.getData()) : 'no live grid'; } catch (e) { return 'err ' + e.message; } })(), stored: (() => { const t = tableEl(uid); return t ? `${t.rows.length}x${t.rows[0]?.cells.length}` : 'no table'; })() });
           }
         }));
       };
