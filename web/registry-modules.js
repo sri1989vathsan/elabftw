@@ -460,7 +460,7 @@
   const holder = element('section', 'mt-4 mb-4');
   anchor.insertAdjacentElement('afterend', holder);
   holder.append(element('h4', '', 'People of LabCollector and users of eLabFTW'));
-  holder.append(element('p', 'small text-muted', 'Paste the users of each tool, one per line (a name and an e-mail address: "Jan Michler <jan@example.org>", or a name and an address separated by a comma or a tab, or just a name). They are matched by e-mail, then by name; correct what is wrong, then save. The import with "owner from the file" gives each entry to the user matched to its LabCollector owner.'));
+  holder.append(element('p', 'small text-muted', 'Both lists fill themselves (the users of this eLabFTW, and the people found in the entries) and are matched by e-mail, then by name. Change a list or a match by hand if it is wrong, then save. "Change the owners of the entries now" saves the matches and, after you confirm, gives the existing entries to the matched users; the import with "owner from the file" uses the same matches.'));
   const grid = element('div', 'row');
   const column = function (title, hint) {
     const cell = element('div', 'col-md-6 mb-2');
@@ -477,7 +477,7 @@
   holder.append(grid);
   const message = element('p', 'small mb-2');
   const tools = element('div', 'mb-2');
-  const fill = element('button', 'btn btn-outline-secondary btn-sm mr-2', 'Fill with the users of this eLabFTW');
+  const fill = element('button', 'btn btn-outline-secondary btn-sm mr-2', 'Detect the people again');
   fill.type = 'button';
   const run = element('button', 'btn btn-secondary btn-sm mr-2', 'Match the names');
   run.type = 'button';
@@ -494,8 +494,25 @@
     }).join('\n');
   };
 
-  // what was saved before is shown at first
+  // both lists are filled by themselves: the users of this eLabFTW, and the people found in the entries (their "LabCollector owner"); the
+  // matches that were saved before are chosen again. All of it can be changed by hand
   let saved = [];
+  let detected = null;
+  const autofill = function () {
+    elabArea.value = textOf(detected.users.map(function (u) {
+      return { name: u.name, email: String(u.email || '').toLowerCase() };
+    }));
+    const known = detected.people.slice();
+    saved.forEach(function (p) {
+      const there = known.some(function (k) {
+        return (k.email !== '' && k.email === p.lc_email) || (k.email === '' && tokens(k.name).join(' ') === tokens(p.lc_name).join(' '));
+      });
+      if (!there) {
+        known.push({ name: p.lc_name, email: p.lc_email });
+      }
+    });
+    lcArea.value = textOf(known);
+  };
   fetch('registry-transfer.php?owner_map=1', { credentials: 'same-origin' }).then(function (response) {
     return response.json();
   }).then(function (body) {
@@ -503,20 +520,16 @@
       return;
     }
     saved = body.pairs || [];
-    if (saved.length > 0) {
-      lcArea.value = textOf(saved.map(function (p) {
-        return { name: p.lc_name, email: p.lc_email };
-      }));
-      elabArea.value = textOf(saved.map(function (p) {
-        return { name: p.elab_name, email: p.elab_email };
-      }));
-      say(saved.length + ' matches are saved. Change the lists and match again to replace them.', false);
-    }
+    detected = { users: body.users, people: body.people || [] };
+    autofill();
     fill.addEventListener('click', function () {
-      elabArea.value = textOf(body.users.map(function (u) {
-        return { name: u.name, email: String(u.email || '').toLowerCase() };
-      }));
+      autofill();
+      run.click();
     });
+    run.click();
+    if (saved.length > 0) {
+      say(saved.length + ' matches are saved and chosen again below.', false);
+    }
   }).catch(function () {
     holder.hidden = true;
   });
@@ -526,7 +539,7 @@
     const people = parseList(lcArea.value);
     result.textContent = '';
     if (users.length === 0 || people.length === 0) {
-      say('Paste both lists first.', true);
+      say('Both lists are empty: nothing was found. Paste them.', true);
       return;
     }
     message.textContent = '';
@@ -545,7 +558,18 @@
         table.append(row);
         return;
       }
-      const found = match(person, users);
+      let found = match(person, users);
+      const before = saved.find(function (p) {
+        return (person.email !== '' && p.lc_email === person.email) || (p.lc_name !== '' && tokens(p.lc_name).join(' ') === tokens(person.name).join(' '));
+      });
+      if (before) {
+        const chosen = users.find(function (u) {
+          return (before.elab_email !== '' && u.email === before.elab_email) || tokens(u.name).join(' ') === tokens(before.elab_name).join(' ');
+        });
+        if (chosen) {
+          found = { user: chosen, how: 'saved' };
+        }
+      }
       const select = element('select', 'form-control form-control-sm');
       const none = element('option', '', 'Not matched');
       none.value = '-1';
@@ -556,7 +580,7 @@
         select.append(option);
       });
       select.value = found ? String(users.indexOf(found.user)) : '-1';
-      const how = element('td', 'small ' + (found ? (found.how === 'e-mail' || found.how === 'name' ? 'text-muted' : 'text-warning') : 'text-danger'), found ? found.how : 'no match: choose a user');
+      const how = element('td', 'small ' + (found ? (found.how === 'e-mail' || found.how === 'name' || found.how === 'saved' ? 'text-muted' : 'text-warning') : 'text-danger'), found ? found.how : 'no match: choose a user');
       select.addEventListener('change', function () {
         how.textContent = select.value === '-1' ? 'not matched' : 'chosen';
         how.className = 'small text-muted';
@@ -567,28 +591,86 @@
       table.append(row);
       rows.push({ person: person, select: select });
     });
-    const save = element('button', 'btn btn-primary btn-sm', 'Save the matches');
+    const post = async function (body) {
+      const response = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify(body) });
+      const answer = await response.json();
+      if (!response.ok) {
+        throw new Error(answer.error || 'It did not work.');
+      }
+      return answer;
+    };
+    const savePairs = async function () {
+      const pairs = rows.filter(function (r) {
+        return r.select.value !== '-1';
+      }).map(function (r) {
+        const user = users[Number(r.select.value)];
+        return { lc_name: r.person.name, lc_email: r.person.email, elab_name: user.name, elab_email: user.email };
+      });
+      const answer = await post({ action: 'save_owner_map', pairs: pairs });
+      saved = pairs.map(function (p) {
+        return p;
+      });
+      return answer.saved;
+    };
+    const save = element('button', 'btn btn-primary btn-sm mr-2', 'Save the matches');
     save.type = 'button';
+    const apply = element('button', 'btn btn-outline-primary btn-sm', 'Change the owners of the entries now');
+    apply.type = 'button';
+    const report = element('div', 'mt-3');
     save.addEventListener('click', async function () {
       save.disabled = true;
       try {
-        const pairs = rows.filter(function (r) {
-          return r.select.value !== '-1';
-        }).map(function (r) {
-          const user = users[Number(r.select.value)];
-          return { lc_name: r.person.name, lc_email: r.person.email, elab_name: user.name, elab_email: user.email };
-        });
-        const response = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'save_owner_map', pairs: pairs }) });
-        const answer = await response.json();
-        if (!response.ok) {
-          throw new Error(answer.error || 'It could not be saved.');
-        }
-        say(answer.saved + ' matches saved. The import with "owner from the file" uses them.', false);
+        say((await savePairs()) + ' matches saved. The import with "owner from the file" uses them.', false);
       } catch (error) {
         say(error.message, true);
       }
       save.disabled = false;
     });
-    result.append(table, save);
+    // the matches are saved, then shown what would change; the owners change only when it is confirmed
+    apply.addEventListener('click', async function () {
+      apply.disabled = true;
+      report.textContent = '';
+      try {
+        await savePairs();
+        const plan = await post({ action: 'apply_owner_map', dry_run: true });
+        const lines = element('ul', 'small mb-2');
+        plan.moves.forEach(function (move) {
+          lines.append(element('li', '', move.entries + ' entries go to ' + move.user));
+        });
+        if (plan.would_open > 0) {
+          lines.append(element('li', '', plan.would_open + ' entries of Wild Card are opened for all the users'));
+        }
+        lines.append(element('li', 'text-muted', plan.already + ' entries already belong to the matched user'));
+        const missing = Object.keys(plan.unmatched);
+        if (missing.length > 0) {
+          lines.append(element('li', 'text-warning', 'Not matched, left as they are: ' + missing.map(function (name) {
+            return name + ' (' + plan.unmatched[name] + ')';
+          }).join(', ')));
+        }
+        report.append(lines);
+        if (plan.would_change + plan.would_open === 0) {
+          say('Nothing to change.', false);
+        } else {
+          const confirm = element('button', 'btn btn-danger btn-sm', 'Change ' + plan.would_change + ' owners and open ' + plan.would_open + ' entries');
+          confirm.type = 'button';
+          confirm.addEventListener('click', async function () {
+            confirm.disabled = true;
+            try {
+              const done = await post({ action: 'apply_owner_map' });
+              report.textContent = '';
+              say(done.changed + ' entries have a new owner, ' + done.opened + ' were opened for all the users.', false);
+            } catch (error) {
+              say(error.message, true);
+              confirm.disabled = false;
+            }
+          });
+          report.append(confirm);
+        }
+      } catch (error) {
+        say(error.message, true);
+      }
+      apply.disabled = false;
+    });
+    result.append(table, save, apply, report);
   });
 })();

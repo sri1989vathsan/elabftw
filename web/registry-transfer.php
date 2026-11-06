@@ -128,6 +128,15 @@ $ownerMapRows = static function () use ($pdo, $teamId, $nameTokens): array {
     $pdo->execute($req);
     return $req->fetchAll();
 };
+// the "LabCollector owner" field of an entry ("Name <e-mail>") as a name and an e-mail address
+$lcOwnerSql = 'JSON_UNQUOTE(JSON_EXTRACT(metadata, \'$.extra_fields."LabCollector owner".value\'))';
+$parseLcOwner = static function (string $value): array {
+    $value = trim($value);
+    if (preg_match('/^(.*?)\s*<([^>]*)>\s*$/u', $value, $found) === 1) {
+        return array('name' => trim($found[1]), 'email' => strtolower(trim($found[2])));
+    }
+    return array('name' => $value, 'email' => '');
+};
 // the entries get a new owner: each is renumbered in the list of the new owner, so My ID stays their own count
 $reassign = static function (array $ids, int $ownerId) use ($pdo, $teamId): int {
     $changed = 0;
@@ -221,7 +230,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         $req = $pdo->prepare('SELECT lc_name, lc_email, elab_name, elab_email FROM registry_owner_map WHERE team = :team ORDER BY lc_name, lc_email');
         $req->bindValue(':team', $teamId, PDO::PARAM_INT);
         $pdo->execute($req);
-        respond(200, array('pairs' => $req->fetchAll(), 'users' => $teamUsers()));
+        $pairs = $req->fetchAll();
+        // the people found in the entries (their "LabCollector owner" field), so the list of LabCollector does not have to be pasted
+        $seen = array();
+        $people = array();
+        $found = $pdo->prepare('SELECT DISTINCT ' . $lcOwnerSql . ' AS owner FROM inventory WHERE team = :team AND state = 1');
+        $found->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($found);
+        foreach ($found->fetchAll(PDO::FETCH_COLUMN) as $value) {
+            $person = $parseLcOwner((string) $value);
+            if ($person['name'] === '' && $person['email'] === '') {
+                continue;
+            }
+            $key = $person['email'] !== '' ? $person['email'] : implode(' ', $nameTokens($person['name']));
+            if (!isset($seen[$key])) {
+                $seen[$key] = true;
+                $people[] = $person;
+            }
+        }
+        usort($people, static fn(array $a, array $b): int => strcasecmp($a['name'], $b['name']));
+        respond(200, array('pairs' => $pairs, 'users' => $teamUsers(), 'people' => $people));
     }
     if (isset($_GET['users'])) {
         respond(200, array('users' => $isAdmin ? $teamUsers() : array(), 'is_admin' => $isAdmin, 'me' => $userId, 'default_owner' => $defaultOwner > 0 ? $defaultOwner : null));
@@ -821,6 +849,87 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'save_owner_map') {
     }
 }
 
+// the saved matching is applied to the entries that exist (admins only): each goes to the user matched to its LabCollector owner; the entries of
+// Wild Card are opened for all the users. With dry_run, only what would change is counted
+if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
+    if (!$isAdmin) {
+        respond(403, array('error' => 'Only an admin can change the owners.'));
+    }
+    try {
+        $members = $teamUsers();
+        $memberByMail = array();
+        $memberByName = array();
+        foreach ($members as $member) {
+            if (trim((string) $member['email']) !== '') {
+                $memberByMail[strtolower(trim((string) $member['email']))] = $member;
+            }
+            $memberByName[implode(' ', $nameTokens((string) $member['name']))] = $member;
+        }
+        $byLcMail = array();
+        $byLcName = array();
+        foreach ($ownerMapRows() as $pair) {
+            $target = $memberByMail[strtolower((string) $pair['elab_email'])] ?? $memberByName[implode(' ', $nameTokens((string) $pair['elab_name']))] ?? null;
+            if ($target === null) {
+                continue;
+            }
+            if ($pair['lc_email'] !== '') {
+                $byLcMail[strtolower($pair['lc_email'])] = $target;
+            }
+            if ($pair['lc_name'] !== '') {
+                $byLcName[implode(' ', $nameTokens((string) $pair['lc_name']))] = $target;
+            }
+        }
+        $read = $pdo->prepare('SELECT id, userid, canwrite_base, ' . $lcOwnerSql . ' AS owner FROM inventory WHERE team = :team AND state = 1');
+        $read->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($read);
+        $moves = array();
+        $wild = array();
+        $unmatched = array();
+        $already = 0;
+        foreach ($read->fetchAll() as $entry) {
+            $person = $parseLcOwner((string) $entry['owner']);
+            if ($person['name'] === '' && $person['email'] === '') {
+                continue;
+            }
+            if (strtolower($person['name']) === 'wild card') {
+                if ((int) $entry['canwrite_base'] < 30) {
+                    $wild[] = (int) $entry['id'];
+                }
+                continue;
+            }
+            $target = $byLcMail[$person['email']] ?? $byLcName[implode(' ', $nameTokens($person['name']))] ?? null;
+            if ($target === null) {
+                $label = $person['name'] . ($person['email'] !== '' ? ' <' . $person['email'] . '>' : '');
+                $unmatched[$label] = ($unmatched[$label] ?? 0) + 1;
+                continue;
+            }
+            if ((int) $entry['userid'] === (int) $target['id']) {
+                $already++;
+                continue;
+            }
+            $key = (int) $target['id'];
+            $moves[$key] ??= array('user' => $target['name'], 'ids' => array());
+            $moves[$key]['ids'][] = (int) $entry['id'];
+        }
+        $summary = array_map(static fn(array $move): array => array('user' => $move['user'], 'entries' => count($move['ids'])), array_values($moves));
+        if (empty($payload['dry_run'])) {
+            $changed = 0;
+            foreach ($moves as $ownerId => $move) {
+                $changed += $reassign($move['ids'], (int) $ownerId);
+            }
+            foreach (array_chunk($wild, 500) as $chunk) {
+                $open = $pdo->prepare('UPDATE inventory SET canwrite_base = 30 WHERE team = :team AND id IN (' . implode(',', $chunk) . ')');
+                $open->bindValue(':team', $teamId, PDO::PARAM_INT);
+                $pdo->execute($open);
+            }
+            respond(200, array('changed' => $changed, 'opened' => count($wild), 'already' => $already, 'unmatched' => $unmatched, 'moves' => $summary));
+        }
+        respond(200, array('would_change' => array_sum(array_column($summary, 'entries')), 'would_open' => count($wild), 'already' => $already, 'unmatched' => $unmatched, 'moves' => $summary));
+    } catch (Throwable $e) {
+        respond(400, array('error' => $e->getMessage()));
+    }
+}
+
 // one row of a file becomes an entry of the module; returns the id, or the reason it was not made
 $makeEntry = static function (array $row, int $categoryId, array $definitions, string $register, ?Users $Owner = null, bool $keepNumber = false) use ($App, $pdo, $teamId): array {
     $title = trim((string) ($row['title'] ?? ''));
@@ -915,6 +1024,12 @@ try {
     $users = $ownerMode === 'me' ? array() : $teamUsers();
     $byEmail = array();
     $byName = array();
+    foreach ($users as $user) {
+        if (trim((string) $user['email']) !== '') {
+            $byEmail[strtolower(trim((string) $user['email']))] = (int) $user['id'];
+        }
+        $byName[strtolower(trim((string) $user['name']))] = (int) $user['id'];
+    }
     // the people matched by an admin (a LabCollector person to a user of the team) come first
     $savedByEmail = array();
     $savedByName = array();
