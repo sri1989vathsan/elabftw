@@ -9,6 +9,7 @@ import Todolist from './Todolist.class';
 import { Model } from './interfaces';
 import { on } from './handlers';
 import { reloadElements } from './misc';
+import { initGoogleSync } from './googleSync';
 
 let unfinishedStepsScope = 'user';
 let scopeSwitch = document.getElementById(Model.Todolist + 'StepsShowTeam') as HTMLInputElement;
@@ -27,6 +28,7 @@ if (scopeSwitch.checked && storageScopeSwitch === '0') {
 const todolist = new Todolist();
 todolist.unfinishedStepsScope = unfinishedStepsScope;
 todolist.initialize();
+initGoogleSync();
 
 window.addEventListener('todolist-changed', () => {
   // Completed tasks and steps remove their deadline notification server-side.
