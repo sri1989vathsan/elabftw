@@ -61,6 +61,12 @@ services:
       - ./web/registry-kinds.php:/elabftw/web/registry-kinds.php:ro
       - ./web/registry-modules.js:/elabftw/web/registry-modules.js:ro
       - ./web/admin-database.js:/elabftw/web/admin-database.js:ro
+      - ./web/admin-ai-search.js:/elabftw/web/admin-ai-search.js:ro
+      - ./web/ai-search.php:/elabftw/web/ai-search.php:ro
+      - ./web/ai-search.js:/elabftw/web/ai-search.js:ro
+      - ./web/find.php:/elabftw/web/find.php:ro
+      - ./src/templates/find.html:/elabftw/src/templates/find.html:ro
+      - ./src/sql/custom/141_ai_search.sql:/elabftw/src/sql/custom/141_ai_search.sql:ro
       - ./src/templates/registry-categories.html:/elabftw/src/templates/registry-categories.html:ro
       - ./src/templates/view-edit-toolbar.html:/elabftw/src/templates/view-edit-toolbar.html:ro
       - ./src/templates/back-to-previous.html:/elabftw/src/templates/back-to-previous.html:ro
