@@ -1,5 +1,5 @@
 /**
- * Admin panel, Database tab: the three parts (modules, transfer of ownership, rules of a module) are shown one at a time; the last one shown
+ * Admin panel, Database tab: the four parts (modules, rules of a module, transfer of ownership, find by meaning) are shown one at a time; the last one shown
  * is remembered.
  */
 (function () {
@@ -33,7 +33,7 @@
   } catch (error) {
     last = 'modules';
   }
-  show(['modules', 'owners', 'rules'].indexOf(last) >= 0 ? last : 'modules');
+  show(['modules', 'owners', 'rules', 'ai'].indexOf(last) >= 0 ? last : 'modules');
 })();
 
 /**
