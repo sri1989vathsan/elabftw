@@ -64,6 +64,8 @@ services:
       - ./web/admin-ai-search.js:/elabftw/web/admin-ai-search.js:ro
       - ./web/ai-search.php:/elabftw/web/ai-search.php:ro
       - ./web/ai-search.js:/elabftw/web/ai-search.js:ro
+      - ./web/ai-chat.js:/elabftw/web/ai-chat.js:ro
+      - ./src/templates/footer.html:/elabftw/src/templates/footer.html:ro
       - ./web/find.php:/elabftw/web/find.php:ro
       - ./src/templates/find.html:/elabftw/src/templates/find.html:ro
       - ./src/sql/custom/141_ai_search.sql:/elabftw/src/sql/custom/141_ai_search.sql:ro
