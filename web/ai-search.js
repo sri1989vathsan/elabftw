@@ -36,6 +36,72 @@
   };
   const labels = { inventory: 'Database', experiments: 'Experiment', items: 'Resource' };
 
+  // the chat: asks questions about the entries and gets suggestions with the entries as sources; the conversation stays in this page only
+  const addChat = function () {
+    const params = new URLSearchParams(window.location.search);
+    const focus = ['inventory', 'experiments', 'items'].indexOf(params.get('type')) >= 0 && parseInt(params.get('id'), 10) > 0
+      ? { type: params.get('type'), id: parseInt(params.get('id'), 10) } : null;
+    const history = [];
+    const box = make('div', { class: 'mt-5' });
+    const head = make('div', { class: 'd-flex justify-content-between align-items-center' });
+    head.append(make('h3', {}, 'Chat'));
+    const reset = make('button', { type: 'button', class: 'btn btn-sm btn-secondary' }, 'New conversation');
+    head.append(reset);
+    box.append(head, make('p', { class: 'text-muted' }, (focus ? 'It knows the entry you came from. ' : '') + 'Ask for a plasmid, an antibody or an experiment, or for alternatives to an entry. It answers only from the entries of this lab that you can read, and says when nothing fits. The conversation is not saved.'));
+    const log = make('div', { class: 'mb-3' });
+    const form = make('form', { class: 'd-flex' });
+    const input = make('input', { type: 'text', class: 'form-control mr-2', placeholder: 'For example: what could I use instead of EF1 as a promoter?', 'aria-label': 'Your question' });
+    const send = make('button', { type: 'submit', class: 'btn btn-primary' }, 'Send');
+    form.append(input, send);
+    box.append(log, form);
+    root.append(box);
+    const bubble = function (who, text) {
+      const row = make('div', { class: 'mb-2 p-2 rounded ' + (who === 'user' ? 'bg-light' : 'border') });
+      row.append(make('div', { class: 'small text-muted' }, who === 'user' ? 'You' : 'Assistant'), make('div', { style: 'white-space: pre-wrap' }, text));
+      log.append(row);
+      return row;
+    };
+    reset.addEventListener('click', function () {
+      history.length = 0;
+      log.textContent = '';
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text) {
+        return;
+      }
+      input.value = '';
+      history.push({ role: 'user', content: text });
+      bubble('user', text);
+      const waiting = bubble('assistant', 'Thinking... (a local model can take 10 to 30 seconds)');
+      send.disabled = true;
+      api({ action: 'chat', messages: history, focus: focus }).then(function (data) {
+        send.disabled = false;
+        if (data.error) {
+          waiting.lastChild.textContent = data.message || data.error;
+          history.pop();
+          return;
+        }
+        waiting.lastChild.textContent = data.answer || '(no answer)';
+        history.push({ role: 'assistant', content: data.answer || '' });
+        if (data.sources && data.sources.length) {
+          const list = make('div', { class: 'small mt-2' });
+          list.append(make('span', { class: 'text-muted mr-1' }, 'Entries it looked at:'));
+          data.sources.forEach(function (hit, n) {
+            const link = make('a', { href: hit.url, class: 'mr-2' }, '[' + (n + 1) + '] ' + (hit.title || '#' + hit.id));
+            list.append(link);
+          });
+          waiting.append(list);
+        }
+      }).catch(function () {
+        send.disabled = false;
+        waiting.lastChild.textContent = 'The server did not answer.';
+        history.pop();
+      });
+    });
+  };
+
   fetch('ai-search.php?status=1', { credentials: 'same-origin' }).then(function (response) {
     return response.json();
   }).then(function (status) {
@@ -61,6 +127,9 @@
     form.append(area, boxes, button);
     const out = make('div', { id: 'findResults' });
     root.append(form, out);
+    if (status.chat) {
+      addChat();
+    }
     form.addEventListener('submit', function (event) {
       event.preventDefault();
       const types = Object.keys(picks).filter(function (key) {
