@@ -5,7 +5,8 @@ INSERT IGNORE INTO `config` (`conf_name`, `conf_value`) VALUES
   ('ai_search_url', 'http://host.docker.internal:11434'),
   ('ai_search_embed_model', 'nomic-embed-text'),
   ('ai_search_chat_model', 'qwen2.5:7b'),
-  ('ai_search_explain', '0');
+  ('ai_search_explain', '0'),
+  ('ai_chat_enabled', '0');
 
 -- one row per entry that was read by the model: the meaning of its text as numbers (float32, packed). It is a copy of the text of the entries, so it
 -- is only read by the search, which checks again that the person may read each entry it shows.

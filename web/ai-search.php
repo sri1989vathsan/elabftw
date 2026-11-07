@@ -52,7 +52,7 @@ use function usort;
 /**
  * Search by meaning, with a language model that runs on the lab's own machines (Ollama). Nothing is sent to an outside service.
  *
- * It is OFF until a sysadmin turns it on (config ai_search_enabled), or for good when the environment has AI_SEARCH_DISABLED=1: when it is off
+ * It is OFF until a sysadmin turns it on (config ai_search_enabled; the chat has its own switch, ai_chat_enabled), or for good when the environment has AI_SEARCH_DISABLED=1: when it is off
  * every call but "status" answers 403 and nothing talks to the model.
  *
  * GET  ?status=1                                   what is on, and how many entries are read by the model (settings are shown to sysadmins)
@@ -60,6 +60,7 @@ use function usort;
  * POST {action: test}                              sysadmin only: asks the model for the meaning of a word
  * POST {action: reindex}                           admins: reads the next entries that are new or changed (a batch); {done} says when nothing is left
  * POST {action: search, query, types?}             anybody: the entries that fit the words, only those the person can read
+ * POST {action: chat, messages, focus?}            anybody (when the chat is on): an answer to the last question from the entries that fit it, with those entries as sources
  */
 require_once __DIR__ . '/app/init.inc.php';
 
@@ -80,7 +81,7 @@ $isAdmin = (bool) $App->Users->isAdmin;
 $isSysadmin = (int) ($App->Users->userData['is_sysadmin'] ?? 0) === 1;
 
 $config = static function () use ($pdo): array {
-    $req = $pdo->prepare("SELECT conf_name, conf_value FROM config WHERE conf_name LIKE 'ai_search_%'");
+    $req = $pdo->prepare("SELECT conf_name, conf_value FROM config WHERE conf_name LIKE 'ai_search_%' OR conf_name = 'ai_chat_enabled'");
     $pdo->execute($req);
     $out = array();
     foreach ($req->fetchAll() as $row) {
@@ -91,6 +92,7 @@ $config = static function () use ($pdo): array {
 $settings = $config();
 $forcedOff = getenv('AI_SEARCH_DISABLED') === '1';
 $enabled = !$forcedOff && ($settings['ai_search_enabled'] ?? '0') === '1';
+$chatEnabled = $enabled && ($settings['ai_chat_enabled'] ?? '0') === '1';
 $baseUrl = rtrim(trim((string) ($settings['ai_search_url'] ?? '')), '/');
 $embedModel = (string) ($settings['ai_search_embed_model'] ?? '');
 $chatModel = (string) ($settings['ai_search_chat_model'] ?? '');
@@ -191,6 +193,41 @@ $canRead = static function (string $type, int $id) use ($App): bool {
     }
 };
 
+// the entries that fit a text best (by meaning), only those the person can read
+$retrieve = static function (string $query, array $types, int $limit, ?array $skip = null) use ($pdo, $teamId, $embed, $canRead): array {
+    $q = $embed(mb_substr($query, 0, 2000));
+    $dims = count($q);
+    $scored = array();
+    $req = $pdo->prepare('SELECT entity_type, entity_id, title, snippet, vec FROM ai_search_index WHERE team = :team AND dims = :dims');
+    $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+    $req->bindValue(':dims', $dims, PDO::PARAM_INT);
+    $pdo->execute($req);
+    while ($row = $req->fetch()) {
+        if (!in_array($row['entity_type'], $types, true) || ($skip !== null && $skip['type'] === $row['entity_type'] && $skip['id'] === (int) $row['entity_id'])) {
+            continue;
+        }
+        $v = unpack('g*', (string) $row['vec']);
+        $dot = 0.0;
+        for ($i = 0; $i < $dims; $i++) {
+            $dot += $q[$i] * $v[$i + 1];
+        }
+        $scored[] = array('type' => (string) $row['entity_type'], 'id' => (int) $row['entity_id'], 'title' => (string) $row['title'], 'snippet' => (string) $row['snippet'], 'score' => round($dot, 4));
+    }
+    usort($scored, static fn(array $a, array $b): int => $b['score'] <=> $a['score']);
+    // only what the person can read is shown: the first candidates are asked, not all of them
+    $hits = array();
+    foreach (array_slice($scored, 0, $limit * 4) as $candidate) {
+        if ($canRead($candidate['type'], $candidate['id'])) {
+            $candidate['url'] = ($candidate['type'] === 'experiments' ? 'experiments.php' : ($candidate['type'] === 'items' ? 'database.php' : 'registry.php')) . '?mode=view&id=' . $candidate['id'];
+            $hits[] = $candidate;
+        }
+        if (count($hits) >= $limit) {
+            break;
+        }
+    }
+    return array('hits' => $hits, 'searched' => count($scored));
+};
+
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     $counts = array();
     foreach (TYPES as $type) {
@@ -207,6 +244,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
         'enabled' => $enabled,
         'forced_off' => $forcedOff,
         'explain' => $enabled && ($settings['ai_search_explain'] ?? '0') === '1',
+        'chat' => $chatEnabled,
         'counts' => $counts,
         'settings' => $isSysadmin ? array(
             'enabled' => ($settings['ai_search_enabled'] ?? '0') === '1',
@@ -214,6 +252,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             'embed_model' => $embedModel,
             'chat_model' => $chatModel,
             'explain' => ($settings['ai_search_explain'] ?? '0') === '1',
+            'chat' => ($settings['ai_chat_enabled'] ?? '0') === '1',
         ) : null,
     ));
 }
@@ -241,6 +280,7 @@ if ($action === 'save_settings') {
         'ai_search_embed_model' => mb_substr(trim((string) ($payload['embed_model'] ?? '')), 0, 100),
         'ai_search_chat_model' => mb_substr(trim((string) ($payload['chat_model'] ?? '')), 0, 100),
         'ai_search_explain' => !empty($payload['explain']) ? '1' : '0',
+        'ai_chat_enabled' => !empty($payload['chat']) ? '1' : '0',
     );
     $write = $pdo->prepare('UPDATE config SET conf_value = :value WHERE conf_name = :name');
     foreach ($values as $name => $value) {
@@ -329,36 +369,8 @@ try {
             $types = TYPES;
         }
         $limit = max(1, min(30, (int) ($payload['limit'] ?? 10)));
-        $q = $embed(mb_substr($query, 0, 2000));
-        $dims = count($q);
-        $scored = array();
-        $req = $pdo->prepare('SELECT entity_type, entity_id, title, snippet, vec FROM ai_search_index WHERE team = :team AND dims = :dims');
-        $req->bindValue(':team', $teamId, PDO::PARAM_INT);
-        $req->bindValue(':dims', $dims, PDO::PARAM_INT);
-        $pdo->execute($req);
-        while ($row = $req->fetch()) {
-            if (!in_array($row['entity_type'], $types, true)) {
-                continue;
-            }
-            $v = unpack('g*', (string) $row['vec']);
-            $dot = 0.0;
-            for ($i = 0; $i < $dims; $i++) {
-                $dot += $q[$i] * $v[$i + 1];
-            }
-            $scored[] = array('type' => (string) $row['entity_type'], 'id' => (int) $row['entity_id'], 'title' => (string) $row['title'], 'snippet' => (string) $row['snippet'], 'score' => round($dot, 4));
-        }
-        usort($scored, static fn(array $a, array $b): int => $b['score'] <=> $a['score']);
-        // only what the person can read is shown: the first candidates are asked, not all of them
-        $hits = array();
-        foreach (array_slice($scored, 0, $limit * 4) as $candidate) {
-            if ($canRead($candidate['type'], $candidate['id'])) {
-                $candidate['url'] = ($candidate['type'] === 'experiments' ? 'experiments.php' : ($candidate['type'] === 'items' ? 'database.php' : 'registry.php')) . '?mode=view&id=' . $candidate['id'];
-                $hits[] = $candidate;
-            }
-            if (count($hits) >= $limit) {
-                break;
-            }
-        }
+        $found = $retrieve($query, $types, $limit);
+        $hits = $found['hits'];
         $explanation = null;
         if (($settings['ai_search_explain'] ?? '0') === '1' && $chatModel !== '' && $hits !== array()) {
             $lines = '';
@@ -375,7 +387,65 @@ try {
                 $explanation = null;
             }
         }
-        respond(200, array('hits' => $hits, 'explanation' => $explanation, 'searched' => count($scored)));
+        respond(200, array('hits' => $hits, 'explanation' => $explanation, 'searched' => $found['searched']));
+    }
+
+    if ($action === 'chat') {
+        if (!$chatEnabled) {
+            respond(403, array('error' => 'chat_disabled', 'message' => 'The chat is turned off.'));
+        }
+        if ($chatModel === '') {
+            respond(400, array('error' => 'No chat model is set.'));
+        }
+        set_time_limit(240);
+        // the conversation so far, kept by the browser only: the last turns, each cut short
+        $turns = array();
+        foreach (is_array($payload['messages'] ?? null) ? array_slice($payload['messages'], -8) : array() as $m) {
+            if (is_array($m) && in_array($m['role'] ?? '', array('user', 'assistant'), true) && trim((string) ($m['content'] ?? '')) !== '') {
+                $turns[] = array('role' => (string) $m['role'], 'content' => mb_substr(trim((string) $m['content']), 0, 2000));
+            }
+        }
+        if ($turns === array() || $turns[count($turns) - 1]['role'] !== 'user') {
+            respond(400, array('error' => 'Write a question.'));
+        }
+        // what to look for: the last question, and the one before it (a short follow-up like "and with kanamycin?" has no meaning alone)
+        $asked = array();
+        foreach (array_reverse($turns) as $t) {
+            if ($t['role'] === 'user') {
+                array_unshift($asked, $t['content']);
+            }
+            if (count($asked) >= 2) {
+                break;
+            }
+        }
+        // the entry the person is looking at, when there is one and it can be read
+        $focus = null;
+        $focusText = '';
+        if (is_array($payload['focus'] ?? null) && in_array($payload['focus']['type'] ?? '', TYPES, true) && (int) ($payload['focus']['id'] ?? 0) > 0) {
+            $f = array('type' => (string) $payload['focus']['type'], 'id' => (int) $payload['focus']['id']);
+            if ($canRead($f['type'], $f['id'])) {
+                $entry = $textOf($f['type'], $f['id']);
+                if ($entry !== null) {
+                    $focus = $f;
+                    $focusText = mb_substr($entry['text'], 0, 1500);
+                    $asked[] = $entry['title'];
+                }
+            }
+        }
+        $found = $retrieve(implode(' ', $asked), TYPES, 8, $focus);
+        $hits = $found['hits'];
+        $lines = '';
+        foreach ($hits as $n => $hit) {
+            $lines .= '[' . ($n + 1) . '] ' . $hit['title'] . ' (' . ($hit['type'] === 'experiments' ? 'experiment' : ($hit['type'] === 'items' ? 'resource' : 'database')) . ') - ' . mb_substr($hit['snippet'], 0, 450) . "\n";
+        }
+        $system = "You help a scientist of a lab find things in the lab's own eLabFTW. You only know the numbered entries below, found by a search on the last question: you know nothing else about this lab. "
+            . "Rules: suggest only entries from the list, and name each one with its number like [2] and its title. Say briefly why it fits or what differs from what was asked. "
+            . "When the question asks for alternatives, say what is the same and what is different. If no listed entry fits, say so plainly: never make up an entry, a number, a value or a source. "
+            . "You do not know the scientific literature here, so do not cite papers or claim what published work says. Keep it short. Answer in the language of the question.\n\n"
+            . ($focusText !== '' ? "The entry the person is looking at now:\n$focusText\n\n" : '')
+            . ($lines !== '' ? "Entries found:\n$lines" : "No entry was found for this question.\n");
+        $answer = $ask('/api/chat', array('model' => $chatModel, 'stream' => false, 'messages' => array_merge(array(array('role' => 'system', 'content' => $system)), $turns)), 220);
+        respond(200, array('answer' => trim((string) ($answer['message']['content'] ?? '')), 'sources' => $hits));
     }
 } catch (\RuntimeException $e) {
     respond(502, array('error' => $e->getMessage()));
