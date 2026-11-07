@@ -60,16 +60,20 @@
       enabledLabel.append(enabled, 'Turn on the search by meaning');
       const url = make('input', { type: 'text', class: 'form-control', value: settings.url });
       const embed = make('input', { type: 'text', class: 'form-control', value: settings.embed_model });
-      const chat = make('input', { type: 'text', class: 'form-control', value: settings.chat_model });
+      const chatModel = make('input', { type: 'text', class: 'form-control', value: settings.chat_model });
       const explain = make('input', { type: 'checkbox', class: 'mr-2' });
       explain.checked = settings.explain;
       const explainLabel = make('label', { class: 'd-block mb-3' });
       explainLabel.append(explain, 'Also write a short note on why each entry fits (slower; needs the chat model)');
+      const chat = make('input', { type: 'checkbox', class: 'mr-2' });
+      chat.checked = settings.chat;
+      const chatLabel = make('label', { class: 'd-block mb-3' });
+      chatLabel.append(chat, 'Turn on the chat (ask questions and get suggestions from the entries; needs the chat model)');
       const message = make('div', { class: 'mb-3' });
       const save = make('button', { type: 'button', class: 'btn btn-primary mr-2' }, 'Save');
       const test = make('button', { type: 'button', class: 'btn btn-secondary' }, 'Test the model server');
       const body = function () {
-        return { enabled: enabled.checked, url: url.value, embed_model: embed.value, chat_model: chat.value, explain: explain.checked };
+        return { enabled: enabled.checked, url: url.value, embed_model: embed.value, chat_model: chatModel.value, explain: explain.checked, chat: chat.checked };
       };
       save.addEventListener('click', function () {
         api(Object.assign({ action: 'save_settings' }, body())).then(function (data) {
@@ -99,8 +103,8 @@
       anchor.append(enabledLabel,
         row('Address of the model server', url, 'On your own computer with Docker: http://host.docker.internal:11434 (Ollama). Keep it inside the institute network: the server has no login of its own.'),
         row('Model that reads the entries', embed, 'For example nomic-embed-text. The same model must be used until the entries are read again.'),
-        row('Chat model', chat, 'For example qwen2.5:7b. Only used for the short notes.'),
-        explainLabel, message, save, test);
+        row('Chat model', chatModel, 'For example qwen2.5:7b. Used for the short notes and for the chat.'),
+        explainLabel, chatLabel, message, save, test);
     } else if (!sysadmin) {
       anchor.append(make('p', { class: 'text-muted' }, 'Only a sysadmin can change the settings.'));
     }
