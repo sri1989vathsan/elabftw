@@ -46,6 +46,12 @@ use function sqrt;
 use function str_starts_with;
 use function strip_tags;
 use function trim;
+use function strlen;
+use function strpos;
+use function substr;
+use function ob_get_level;
+use function ob_end_flush;
+use function flush;
 use function unpack;
 use function usort;
 
@@ -73,7 +79,7 @@ function respond(int $status, array $body): never
 }
 
 const TYPES = array('inventory', 'experiments', 'items');
-const BATCH = 20;
+const BATCH = 32;
 
 $pdo = Db::getConnection();
 $teamId = (int) $App->Users->userData['team'];
@@ -95,6 +101,8 @@ $enabled = !$forcedOff && ($settings['ai_search_enabled'] ?? '0') === '1';
 $chatEnabled = $enabled && ($settings['ai_chat_enabled'] ?? '0') === '1';
 $baseUrl = rtrim(trim((string) ($settings['ai_search_url'] ?? '')), '/');
 $embedModel = (string) ($settings['ai_search_embed_model'] ?? '');
+// stored with each entry: when the way the text is made changes, this changes and the entries are read again
+$indexTag = $embedModel . '|text2';
 $chatModel = (string) ($settings['ai_search_chat_model'] ?? '');
 
 /** asks the local model server; returns the decoded answer, or throws a message that can be shown */
@@ -102,18 +110,24 @@ $ask = static function (string $path, array $body, int $timeout) use ($baseUrl):
     if (!function_exists('curl_init') || !str_starts_with($baseUrl, 'http')) {
         throw new \RuntimeException('The address of the model server is not set.');
     }
-    $curl = curl_init($baseUrl . $path);
-    curl_setopt_array($curl, array(
-        CURLOPT_POST => true,
-        CURLOPT_HTTPHEADER => array('Content-Type: application/json'),
-        CURLOPT_POSTFIELDS => json_encode($body),
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CONNECTTIMEOUT => 3,
-        CURLOPT_TIMEOUT => $timeout,
-    ));
-    $raw = curl_exec($curl);
-    $code = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    curl_close($curl);
+    // a busy machine can be slow to answer: a call that got no answer at all is tried once more
+    for ($attempt = 0; $attempt < 2; $attempt++) {
+        $curl = curl_init($baseUrl . $path);
+        curl_setopt_array($curl, array(
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => array('Content-Type: application/json'),
+            CURLOPT_POSTFIELDS => json_encode($body),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => $timeout,
+        ));
+        $raw = curl_exec($curl);
+        $code = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+        if ($raw !== false && $code !== 0) {
+            break;
+        }
+    }
     if ($raw === false || $code === 0) {
         throw new \RuntimeException('The model server does not answer. Is it running at ' . $baseUrl . '?');
     }
@@ -125,8 +139,10 @@ $ask = static function (string $path, array $body, int $timeout) use ($baseUrl):
     return $decoded;
 };
 /** the meaning of a text as unit-length numbers */
-$embed = static function (string $text) use ($ask, $embedModel): array {
-    $answer = $ask('/api/embed', array('model' => $embedModel, 'input' => $text), 60);
+$embed = static function (string $text, string $role = 'document') use ($ask, $embedModel): array {
+    // nomic-embed-text wants to be told whether the text is a document or a question
+    $prefix = str_starts_with($embedModel, 'nomic') ? 'search_' . $role . ': ' : '';
+    $answer = $ask('/api/embed', array('model' => $embedModel, 'input' => $prefix . $text, 'keep_alive' => '30m'), 60);
     $vector = $answer['embeddings'][0] ?? null;
     if (!is_array($vector) || $vector === array()) {
         throw new \RuntimeException('The model did not return a meaning for the text.');
@@ -143,11 +159,82 @@ $embed = static function (string $text) use ($ask, $embedModel): array {
     return $out;
 };
 
-// the words of an entry that the model reads: title, tags, text and the filled fields
-$textOf = static function (string $type, int $id) use ($pdo): ?array {
+/** the meaning of several texts in one call (faster than one call each); the vectors come back in the same order */
+$embedMany = static function (array $texts) use ($ask, $embedModel): array {
+    $prefix = str_starts_with($embedModel, 'nomic') ? 'search_document: ' : '';
+    $answer = $ask('/api/embed', array('model' => $embedModel, 'input' => array_map(static fn(string $t): string => $prefix . $t, $texts), 'keep_alive' => '30m'), 180);
+    $all = $answer['embeddings'] ?? null;
+    if (!is_array($all) || count($all) !== count($texts)) {
+        throw new \RuntimeException('The model did not return a meaning for every text.');
+    }
+    $out = array();
+    foreach ($all as $vector) {
+        $norm = 0.0;
+        foreach ($vector as $x) {
+            $norm += (float) $x * (float) $x;
+        }
+        $norm = $norm > 0 ? sqrt($norm) : 1.0;
+        $out[] = array_map(static fn($x): float => (float) $x / $norm, $vector);
+    }
+    return $out;
+};
+
+/** the chat model's answer as it is written: $onText gets each piece; returns when the answer is complete */
+$askStream = static function (array $body, callable $onText) use ($baseUrl): void {
+    if (!function_exists('curl_init') || !str_starts_with($baseUrl, 'http')) {
+        throw new \RuntimeException('The address of the model server is not set.');
+    }
+    $body['stream'] = true;
+    $buffer = '';
+    $failed = null;
+    $curl = curl_init($baseUrl . '/api/chat');
+    curl_setopt_array($curl, array(
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => array('Content-Type: application/json'),
+        CURLOPT_POSTFIELDS => json_encode($body),
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_TIMEOUT => 220,
+        CURLOPT_WRITEFUNCTION => static function ($handle, string $chunk) use (&$buffer, &$failed, $onText): int {
+            $buffer .= $chunk;
+            while (($pos = strpos($buffer, "\n")) !== false) {
+                $line = trim(substr($buffer, 0, $pos));
+                $buffer = substr($buffer, $pos + 1);
+                $piece = $line === '' ? null : json_decode($line, true);
+                if (is_array($piece)) {
+                    if (isset($piece['error'])) {
+                        $failed = (string) $piece['error'];
+                    } elseif (($piece['message']['content'] ?? '') !== '') {
+                        $onText((string) $piece['message']['content']);
+                    }
+                }
+            }
+            return strlen($chunk);
+        },
+    ));
+    $ok = curl_exec($curl);
+    $code = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    curl_close($curl);
+    if ($ok === false || $code === 0) {
+        throw new \RuntimeException('The model server does not answer. Is it running at ' . $baseUrl . '?');
+    }
+    if ($failed !== null || $code >= 400) {
+        throw new \RuntimeException('The model server refused the request' . ($failed !== null ? ' (' . $failed . ')' : '') . '.');
+    }
+};
+
+// the words of an entry that the model reads: module, title, tags, the filled fields and the text. Links, ids, storage places and dates are left out:
+// they say nothing about what the entry is and would drown what does.
+$noiseField = '/^(link|benchling entry|labcollector (id|owner|created|updated)|storage \(labcollector\)|concentration|sequence verified|mycoplasma status)/i';
+$cleanText = static function (string $text): string {
+    $text = (string) preg_replace('#https?://\S+#u', ' ', $text);
+    return trim((string) preg_replace('/\s+/u', ' ', $text));
+};
+$textOf = static function (string $type, int $id) use ($pdo, $noiseField, $cleanText): ?array {
     $table = $type;
     $kind = $type === 'experiments' ? 'experiments' : 'items';
-    $req = $pdo->prepare("SELECT title, metadata, " . ($type === 'inventory' ? "'' AS body" : 'body') . " FROM `$table` WHERE id = :id AND state = 1");
+    $module = $type === 'inventory' ? 'c.title' : "''";
+    $join = $type === 'inventory' ? 'LEFT JOIN inventory_categories AS c ON c.id = e.category' : '';
+    $req = $pdo->prepare("SELECT e.title, e.metadata, $module AS module, " . ($type === 'inventory' ? "'' AS body" : 'e.body') . " FROM `$table` AS e $join WHERE e.id = :id AND e.state = 1");
     $req->bindValue(':id', $id, PDO::PARAM_INT);
     $pdo->execute($req);
     $row = $req->fetch();
@@ -160,6 +247,7 @@ $textOf = static function (string $type, int $id) use ($pdo): ?array {
     $pdo->execute($tags);
     $tagList = $tags->fetchAll(PDO::FETCH_COLUMN);
     $fields = array();
+    $description = '';
     $meta = json_decode((string) ($row['metadata'] ?? ''), true);
     if (is_array($meta) && is_array($meta['extra_fields'] ?? null)) {
         foreach ($meta['extra_fields'] as $name => $field) {
@@ -167,15 +255,22 @@ $textOf = static function (string $type, int $id) use ($pdo): ?array {
             if (is_array($value)) {
                 $value = implode(', ', $value);
             }
-            if (trim((string) $value) !== '') {
-                $fields[] = $name . ': ' . trim((string) $value);
+            $value = $cleanText((string) $value);
+            if ($value === '' || preg_match($noiseField, (string) $name) === 1) {
+                continue;
             }
+            if (stripos((string) $name, 'comments') === 0 || stripos((string) $name, 'description') === 0) {
+                $description .= ' ' . mb_substr($value, 0, 500);
+                continue;
+            }
+            $fields[] = $name . ': ' . $value;
         }
     }
-    $body = trim((string) preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags((string) $row['body']))));
     $title = (string) $row['title'];
-    $text = mb_substr($title . '. ' . ($tagList === array() ? '' : 'Tags: ' . implode(', ', $tagList) . '. ') . implode('. ', $fields) . '. ' . $body, 0, 2400);
-    return array('title' => $title, 'text' => $text);
+    $head = ($row['module'] !== '' ? $row['module'] . ': ' : '') . $title . '.';
+    $body = $cleanText(html_entity_decode(strip_tags((string) $row['body'])));
+    $text = $head . ($tagList === array() ? '' : ' Tags: ' . implode(', ', $tagList) . '.') . ($fields === array() ? '' : ' ' . implode('. ', $fields) . '.') . ($description !== '' ? ' ' . trim($description) : '') . ($body !== '' ? ' ' . $body : '');
+    return array('title' => $title, 'text' => mb_substr($text, 0, 1800));
 };
 
 // the model of an entry, to ask whether the person can read it (same rules as the rest of the application)
@@ -195,10 +290,19 @@ $canRead = static function (string $type, int $id) use ($App): bool {
 
 // the entries that fit a text best (by meaning), only those the person can read
 $retrieve = static function (string $query, array $types, int $limit, ?array $skip = null) use ($pdo, $teamId, $embed, $canRead): array {
-    $q = $embed(mb_substr($query, 0, 2000));
+    $q = $embed(mb_substr($query, 0, 2000), 'query');
     $dims = count($q);
+    // the words of the question that mean something: names and short codes (Tet3G, CD8, Puro) are found by the meaning only by chance, so they also count as words
+    $stop = array('the', 'and', 'for', 'with', 'what', 'which', 'have', 'has', 'does', 'any', 'our', 'that', 'this', 'from', 'can', 'could', 'need', 'want', 'use', 'used', 'would', 'about', 'there', 'some', 'into', 'instead', 'something', 'anything', 'show', 'give', 'find', 'lab', 'we', 'do', 'me', 'is', 'are', 'in', 'of', 'to', 'a', 'an', 'on', 'or', 'i');
+    $words = array();
+    foreach (preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($query), -1, PREG_SPLIT_NO_EMPTY) ?: array() as $w) {
+        if (mb_strlen($w) >= 3 && !in_array($w, $stop, true)) {
+            $words[] = mb_strlen($w) >= 7 ? mb_substr($w, 0, 5) : $w;
+        }
+    }
+    $words = array_values(array_unique($words));
     $scored = array();
-    $req = $pdo->prepare('SELECT entity_type, entity_id, title, snippet, vec FROM ai_search_index WHERE team = :team AND dims = :dims');
+    $req = $pdo->prepare('SELECT entity_type, entity_id, title, snippet, content, vec FROM ai_search_index WHERE team = :team AND dims = :dims');
     $req->bindValue(':team', $teamId, PDO::PARAM_INT);
     $req->bindValue(':dims', $dims, PDO::PARAM_INT);
     $pdo->execute($req);
@@ -211,7 +315,23 @@ $retrieve = static function (string $query, array $types, int $limit, ?array $sk
         for ($i = 0; $i < $dims; $i++) {
             $dot += $q[$i] * $v[$i + 1];
         }
-        $scored[] = array('type' => (string) $row['entity_type'], 'id' => (int) $row['entity_id'], 'title' => (string) $row['title'], 'snippet' => (string) $row['snippet'], 'score' => round($dot, 4));
+        $inTitle = 0.0;
+        $inText = 0.0;
+        if ($words !== array()) {
+            $lowTitle = mb_strtolower((string) $row['title']);
+            $lowText = mb_strtolower((string) ($row['content'] ?? $row['snippet']));
+            $total = 0.0;
+            foreach ($words as $w) {
+                // a code with a digit (CD8, Tet3G, p53) names one thing: it counts three times a plain word
+                $weight = preg_match('/\d/', $w) === 1 ? 3.0 : 1.0;
+                $total += $weight;
+                $inTitle += str_contains($lowTitle, $w) ? $weight : 0.0;
+                $inText += str_contains($lowText, $w) ? $weight : 0.0;
+            }
+            $inTitle /= $total;
+            $inText /= $total;
+        }
+        $scored[] = array('type' => (string) $row['entity_type'], 'id' => (int) $row['entity_id'], 'title' => (string) $row['title'], 'snippet' => (string) $row['snippet'], 'content' => (string) ($row['content'] ?? $row['snippet']), 'score' => round($dot + 0.15 * $inTitle + 0.05 * $inText, 4));
     }
     usort($scored, static fn(array $a, array $b): int => $b['score'] <=> $a['score']);
     // only what the person can read is shown: the first candidates are asked, not all of them
@@ -310,12 +430,19 @@ try {
         }
         $done = 0;
         $skipped = 0;
+        // entries that were deleted or put in the bin leave the index
+        foreach (TYPES as $type) {
+            $gone = $pdo->prepare("DELETE i FROM ai_search_index AS i LEFT JOIN `$type` AS e ON e.id = i.entity_id WHERE i.entity_type = :type AND (e.id IS NULL OR e.state <> 1)");
+            $gone->bindValue(':type', $type);
+            $pdo->execute($gone);
+        }
+        $todo = array();
         foreach (TYPES as $type) {
             // the entries that are not read yet come first, then the ones whose text changed (found by the hash while reading)
             $req = $pdo->prepare("SELECT e.id, i.content_hash, i.model FROM `$type` AS e LEFT JOIN ai_search_index AS i ON i.entity_type = :type AND i.entity_id = e.id
-                WHERE e.team = :team AND e.state = 1 AND (i.entity_id IS NULL OR i.model <> :model OR i.indexed_at < e.modified_at) ORDER BY i.entity_id IS NULL DESC, e.id LIMIT " . (BATCH - $done));
+                WHERE e.team = :team AND e.state = 1 AND (i.entity_id IS NULL OR i.model <> :model OR i.indexed_at < e.modified_at) ORDER BY i.entity_id IS NULL DESC, e.id LIMIT " . (BATCH - count($todo) - $skipped));
             $req->bindValue(':type', $type);
-            $req->bindValue(':model', $embedModel);
+            $req->bindValue(':model', $indexTag);
             $req->bindValue(':team', $teamId, PDO::PARAM_INT);
             $pdo->execute($req);
             foreach ($req->fetchAll() as $row) {
@@ -324,7 +451,7 @@ try {
                     continue;
                 }
                 $hash = sha1($entry['text']);
-                if ((string) $row['content_hash'] === $hash && (string) $row['model'] === $embedModel) {
+                if ((string) $row['content_hash'] === $hash && (string) $row['model'] === $indexTag) {
                     // same words, same model: only the date moves, so it is not looked at again
                     $touch = $pdo->prepare('UPDATE ai_search_index SET indexed_at = NOW() WHERE entity_type = :type AND entity_id = :id');
                     $touch->bindValue(':type', $type);
@@ -333,22 +460,28 @@ try {
                     $skipped++;
                     continue;
                 }
-                $vector = $embed($entry['text']);
-                $put = $pdo->prepare('REPLACE INTO ai_search_index (entity_type, entity_id, team, content_hash, model, title, snippet, dims, vec) VALUES (:type, :id, :team, :hash, :model, :title, :snippet, :dims, :vec)');
-                $put->bindValue(':type', $type);
-                $put->bindValue(':id', (int) $row['id'], PDO::PARAM_INT);
+                $todo[] = array('type' => $type, 'id' => (int) $row['id'], 'entry' => $entry, 'hash' => $hash);
+            }
+            if (count($todo) + $skipped >= BATCH) {
+                break;
+            }
+        }
+        if ($todo !== array()) {
+            $vectors = $embedMany(array_map(static fn(array $t): string => $t['entry']['text'], $todo));
+            $put = $pdo->prepare('REPLACE INTO ai_search_index (entity_type, entity_id, team, content_hash, model, title, snippet, content, dims, vec) VALUES (:type, :id, :team, :hash, :model, :title, :snippet, :content, :dims, :vec)');
+            foreach ($todo as $n => $t) {
+                $put->bindValue(':type', $t['type']);
+                $put->bindValue(':id', $t['id'], PDO::PARAM_INT);
                 $put->bindValue(':team', $teamId, PDO::PARAM_INT);
-                $put->bindValue(':hash', $hash);
-                $put->bindValue(':model', $embedModel);
-                $put->bindValue(':title', mb_substr($entry['title'], 0, 255));
-                $put->bindValue(':snippet', mb_substr($entry['text'], 0, 600));
-                $put->bindValue(':dims', count($vector), PDO::PARAM_INT);
-                $put->bindValue(':vec', pack('g*', ...$vector), PDO::PARAM_LOB);
+                $put->bindValue(':hash', $t['hash']);
+                $put->bindValue(':model', $indexTag);
+                $put->bindValue(':title', mb_substr($t['entry']['title'], 0, 255));
+                $put->bindValue(':snippet', mb_substr($t['entry']['text'], 0, 600));
+                $put->bindValue(':content', $t['entry']['text']);
+                $put->bindValue(':dims', count($vectors[$n]), PDO::PARAM_INT);
+                $put->bindValue(':vec', pack('g*', ...$vectors[$n]), PDO::PARAM_LOB);
                 $pdo->execute($put);
                 $done++;
-                if ($done >= BATCH) {
-                    break 2;
-                }
             }
         }
         respond(200, array('indexed' => $done, 'skipped' => $skipped, 'done' => $done === 0 && $skipped === 0));
@@ -387,7 +520,10 @@ try {
                 $explanation = null;
             }
         }
-        respond(200, array('hits' => $hits, 'explanation' => $explanation, 'searched' => $found['searched']));
+        respond(200, array('hits' => array_map(static function (array $h): array {
+            unset($h['content']);
+            return $h;
+        }, $hits), 'explanation' => $explanation, 'searched' => $found['searched']));
     }
 
     if ($action === 'chat') {
@@ -432,20 +568,72 @@ try {
                 }
             }
         }
-        $found = $retrieve(implode(' ', $asked), TYPES, 8, $focus);
+        $found = $retrieve(implode(' ', $asked), TYPES, 20, $focus);
+        // the model reads the first entries in full and the next ones as titles only (it cannot read hundreds of entries at once); the entries far
+        // below the best one are dropped: a small model is led astray by weak ones
         $hits = $found['hits'];
+        if ($hits !== array()) {
+            $best = $hits[0]['score'];
+            $hits = array_values(array_filter($hits, static fn(array $h): bool => $h['score'] >= $best - 0.12));
+        }
         $lines = '';
+        $others = '';
         foreach ($hits as $n => $hit) {
-            $lines .= '[' . ($n + 1) . '] ' . $hit['title'] . ' (' . ($hit['type'] === 'experiments' ? 'experiment' : ($hit['type'] === 'items' ? 'resource' : 'database')) . ') - ' . mb_substr($hit['snippet'], 0, 450) . "\n";
+            $kind = $hit['type'] === 'experiments' ? 'experiment' : ($hit['type'] === 'items' ? 'resource' : 'database');
+            if ($n < 6) {
+                $lines .= '[' . ($n + 1) . '] ' . $hit['title'] . ' (' . $kind . ') - ' . mb_substr($hit['content'] ?? $hit['snippet'], 0, 520) . "\n";
+            } else {
+                $others .= '[' . ($n + 1) . '] ' . $hit['title'] . ' (' . $kind . ")\n";
+            }
         }
         $system = "You help a scientist of a lab find things in the lab's own eLabFTW. You only know the numbered entries below, found by a search on the last question: you know nothing else about this lab. "
-            . "Rules: suggest only entries from the list, and name each one with its number like [2] and its title. Say briefly why it fits or what differs from what was asked. "
+            . "Rules: suggest only entries from the list, and name each one by its exact title (never by its number). Say briefly why it fits or what differs from what was asked. "
             . "When the question asks for alternatives, say what is the same and what is different. If no listed entry fits, say so plainly: never make up an entry, a number, a value or a source. "
-            . "You do not know the scientific literature here, so do not cite papers or claim what published work says. Keep it short. Answer in the language of the question.\n\n"
+            . "You do not know the scientific literature here, so do not cite papers or claim what published work says. Answer in at most six short sentences, in the language of the question.\n\n"
             . ($focusText !== '' ? "The entry the person is looking at now:\n$focusText\n\n" : '')
-            . ($lines !== '' ? "Entries found:\n$lines" : "No entry was found for this question.\n");
-        $answer = $ask('/api/chat', array('model' => $chatModel, 'stream' => false, 'messages' => array_merge(array(array('role' => 'system', 'content' => $system)), $turns)), 220);
-        respond(200, array('answer' => trim((string) ($answer['message']['content'] ?? '')), 'sources' => $hits));
+            . ($lines !== '' ? "Entries found:\n$lines" : "No entry was found for this question.\n")
+            . ($others !== '' ? "\nOther possible matches (titles only, you can name them but you do not know more about them):\n$others" : '');
+        $chatBody = array(
+            'model' => $chatModel,
+            'keep_alive' => '30m',
+            'options' => array('temperature' => 0.2, 'num_predict' => 300),
+            'messages' => array_merge(array(array('role' => 'system', 'content' => $system)), $turns),
+        );
+        // the lock of the session is let go: the page and other tabs can go on while the model writes
+        $App->Session->save();
+        if (!empty($payload['stream'])) {
+            // lines of JSON as they come: the entries found, then the pieces of the answer, then done
+            // plain text (one JSON per line): some proxies hold back whole JSON answers until they are complete
+            header('Content-Type: text/plain; charset=utf-8');
+            header('X-Accel-Buffering: no');
+            header('Cache-Control: no-cache');
+            while (ob_get_level() > 0) {
+                ob_end_flush();
+            }
+            $emit = static function (array $line): void {
+                echo json_encode($line) . "\n";
+                flush();
+            };
+            $emit(array('sources' => array_map(static function (array $h): array {
+                unset($h['content']);
+                return $h;
+            }, $hits)));
+            try {
+                $askStream($chatBody, static function (string $text) use ($emit): void {
+                    $emit(array('delta' => $text));
+                });
+                $emit(array('done' => true));
+            } catch (\RuntimeException $e) {
+                $emit(array('error' => $e->getMessage()));
+            }
+            exit;
+        }
+        $chatBody['stream'] = false;
+        $answer = $ask('/api/chat', $chatBody, 220);
+        respond(200, array('answer' => trim((string) ($answer['message']['content'] ?? '')), 'sources' => array_map(static function (array $h): array {
+            unset($h['content']);
+            return $h;
+        }, $hits)));
     }
 } catch (\RuntimeException $e) {
     respond(502, array('error' => $e->getMessage()));
