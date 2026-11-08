@@ -44,7 +44,7 @@
 
   const render = function (status) {
     anchor.textContent = '';
-    anchor.append(make('p', { class: 'text-muted' }, 'Search the entries (experiments and the Database) by describing what is needed. A language model that runs on a machine of the lab reads the entries; nothing is sent to an outside service. It is off until it is turned on here.'));
+    anchor.append(make('p', { class: 'text-muted' }, 'Find entries (experiments and the Database) by describing what is needed, from the bubble at the bottom right of every page. A language model that runs on a machine of the lab reads the entries; nothing is sent to an outside service. It is off until it is turned on here.'));
     if (status.forced_off) {
       anchor.append(make('div', { class: 'alert alert-warning' }, 'It is switched off for good on this server (AI_SEARCH_DISABLED=1 in the environment).'));
     }
@@ -119,11 +119,16 @@
         line.append(make('td', {}, names[type] || type), make('td', {}, status.counts[type].indexed + ' of ' + status.counts[type].entries));
         table.append(line);
       });
+      // plasmid parts (GFP, resistance ...) read from the attached sequence files: no model needed, done by the same button
+      const parts = make('tr');
+      parts.append(make('td', {}, 'Plasmids with parts read from sequence files'), make('td', {}, String(status.features || 0)));
+      table.append(parts);
       const progress = make('div', { class: 'mb-2 text-muted' });
       const build = make('button', { type: 'button', class: 'btn btn-secondary' }, 'Read the new and changed entries now');
       build.addEventListener('click', function () {
         build.disabled = true;
         let total = 0;
+        let sequences = 0;
         const step = function () {
           api({ action: 'reindex' }).then(function (data) {
             if (data.error) {
@@ -133,9 +138,10 @@
               return;
             }
             total += data.indexed;
-            progress.textContent = 'Read ' + total + ' entries...';
+            sequences += data.features_read || 0;
+            progress.textContent = 'Read ' + total + ' entries and ' + sequences + ' sequence files...';
             if (data.done) {
-              progress.textContent = 'Done: ' + total + ' entries read.';
+              progress.textContent = 'Done: ' + total + ' entries read, ' + sequences + ' plasmids\' parts read from sequence files.';
               build.disabled = false;
               reload();
               return;
