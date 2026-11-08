@@ -65,10 +65,11 @@ use function usort;
  * POST {action: save_settings, enabled, url, embed_model, chat_model, explain}   sysadmin only
  * POST {action: test}                              sysadmin only: asks the model for the meaning of a word
  * POST {action: reindex}                           admins: reads the next entries that are new or changed (a batch); {done} says when nothing is left
- * POST {action: search, query, types?}             anybody: the entries that fit the words, only those the person can read
+ * POST {action: search, query, types?, must?}       anybody: the entries that fit the words, only those the person can read; 'must' = parts (GFP, Puromycin resistance ...) every result has to carry
  * POST {action: chat, messages, focus?}            anybody (when the chat is on): an answer to the last question from the entries that fit it, with those entries as sources
  */
 require_once __DIR__ . '/app/init.inc.php';
+require_once __DIR__ . '/ai-features.inc.php';
 
 function respond(int $status, array $body): never
 {
@@ -288,8 +289,63 @@ $canRead = static function (string $type, int $id) use ($App): bool {
     }
 };
 
-// the entries that fit a text best (by meaning), only those the person can read
-$retrieve = static function (string $query, array $types, int $limit, ?array $skip = null) use ($pdo, $teamId, $embed, $canRead): array {
+// the parts of plasmids (GFP, puromycin resistance ...): the feature names inside the attached GenBank files are read and kept, so that "contains X" is answered from
+// the sequence. A batch at a time; an entry is read again when its files change.
+$readFeatures = static function (int $max) use ($pdo, $teamId): array {
+    $dir = rtrim((string) (getenv('ELAB_UPLOADS_DIR') ?: '/var/lib/elabftw/uploads'), '/');
+    $isSeq = "(u.real_name LIKE '%.gb' OR u.real_name LIKE '%.gbk' OR u.real_name LIKE '%.ape')";
+    $read = 0;
+    $more = false;
+    foreach (TYPES as $type) {
+        $gone = $pdo->prepare("DELETE f FROM ai_search_features AS f LEFT JOIN `$type` AS e ON e.id = f.entity_id WHERE f.entity_type = :type
+            AND (e.id IS NULL OR e.state <> 1 OR NOT EXISTS (SELECT 1 FROM uploads AS u WHERE u.item_id = f.entity_id AND u.type = :type2 AND u.state = 1 AND $isSeq))");
+        $gone->bindValue(':type', $type);
+        $gone->bindValue(':type2', $type);
+        $pdo->execute($gone);
+        $left = $max - $read;
+        if ($left <= 0) {
+            $more = true;
+            break;
+        }
+        $req = $pdo->prepare("SELECT u.item_id AS id, GROUP_CONCAT(u.long_name ORDER BY u.id SEPARATOR '|') AS files, f.sig AS sig
+            FROM uploads AS u INNER JOIN `$type` AS e ON e.id = u.item_id AND e.team = :team AND e.state = 1
+            LEFT JOIN ai_search_features AS f ON f.entity_type = :type AND f.entity_id = u.item_id
+            WHERE u.type = :type2 AND u.state = 1 AND $isSeq GROUP BY u.item_id, f.sig HAVING f.sig IS NULL OR f.sig <> SHA1(files) LIMIT " . ($left + 1));
+        $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $req->bindValue(':type', $type);
+        $req->bindValue(':type2', $type);
+        $pdo->execute($req);
+        $rows = $req->fetchAll();
+        if (count($rows) > $left) {
+            $more = true;
+            $rows = array_slice($rows, 0, $left);
+        }
+        $put = $pdo->prepare('REPLACE INTO ai_search_features (entity_type, entity_id, team, sig, labels) VALUES (:type, :id, :team, :sig, :labels)');
+        foreach ($rows as $row) {
+            $labels = array();
+            foreach (explode('|', (string) $row['files']) as $name) {
+                $path = $dir . '/' . $name;
+                if (str_contains($name, '..') || !is_file($path) || filesize($path) > 8000000) {
+                    continue;
+                }
+                $labels = array_merge($labels, aiParseGenBank((string) file_get_contents($path)));
+            }
+            $put->bindValue(':type', $type);
+            $put->bindValue(':id', (int) $row['id'], PDO::PARAM_INT);
+            $put->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $put->bindValue(':sig', sha1((string) $row['files']));
+            $put->bindValue(':labels', implode('|', array_slice(array_values(array_unique($labels)), 0, 200)));
+            $pdo->execute($put);
+            $read++;
+        }
+    }
+    return array('read' => $read, 'more' => $more);
+};
+
+// the entries that fit a text best (by meaning), only those the person can read.
+// Three things beside the meaning: words of the question found in the entry; the parts the question asks for (GFP, Puro ...) that the entry carries,
+// read from its sequence when it has one; and the kind of entry the question is about ("plasmid" puts plasmids first). $must: parts every result has to carry.
+$retrieve = static function (string $query, array $types, int $limit, ?array $skip = null, array $must = array()) use ($pdo, $teamId, $embed, $canRead): array {
     $q = $embed(mb_substr($query, 0, 2000), 'query');
     $dims = count($q);
     // the words of the question that mean something: names and short codes (Tet3G, CD8, Puro) are found by the meaning only by chance, so they also count as words
@@ -297,10 +353,24 @@ $retrieve = static function (string $query, array $types, int $limit, ?array $sk
     $words = array();
     foreach (preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($query), -1, PREG_SPLIT_NO_EMPTY) ?: array() as $w) {
         if (mb_strlen($w) >= 3 && !in_array($w, $stop, true)) {
-            $words[] = mb_strlen($w) >= 7 ? mb_substr($w, 0, 5) : $w;
+            $words[] = $w;
         }
     }
     $words = array_values(array_unique($words));
+    $vocab = array_keys(aiFeatureVocab());
+    $required = aiFeaturesIn($query, 'query');
+    $must = array_values(array_intersect($must, $vocab));
+    $need = array_values(array_unique(array_merge($required, $must)));
+    $module = aiModuleIntent($query);
+    $sequence = array();
+    if ($need !== array()) {
+        $feat = $pdo->prepare('SELECT entity_type, entity_id, labels FROM ai_search_features WHERE team = :team');
+        $feat->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($feat);
+        foreach ($feat->fetchAll() as $f) {
+            $sequence[$f['entity_type'] . ':' . $f['entity_id']] = (string) $f['labels'];
+        }
+    }
     $scored = array();
     $req = $pdo->prepare('SELECT entity_type, entity_id, title, snippet, content, vec FROM ai_search_index WHERE team = :team AND dims = :dims');
     $req->bindValue(':team', $teamId, PDO::PARAM_INT);
@@ -309,6 +379,16 @@ $retrieve = static function (string $query, array $types, int $limit, ?array $sk
     while ($row = $req->fetch()) {
         if (!in_array($row['entity_type'], $types, true) || ($skip !== null && $skip['type'] === $row['entity_type'] && $skip['id'] === (int) $row['entity_id'])) {
             continue;
+        }
+        $content = (string) ($row['content'] ?? $row['snippet']);
+        $have = array();
+        if ($need !== array()) {
+            $key = $row['entity_type'] . ':' . $row['entity_id'];
+            // an entry with a sequence file is judged by the sequence, any other by its text
+            $have = aiFeaturesIn(isset($sequence[$key]) ? $sequence[$key] : $content, isset($sequence[$key]) ? 'label' : 'text', $need);
+            if (array_diff($must, $have) !== array()) {
+                continue;
+            }
         }
         $v = unpack('g*', (string) $row['vec']);
         $dot = 0.0;
@@ -319,7 +399,7 @@ $retrieve = static function (string $query, array $types, int $limit, ?array $sk
         $inText = 0.0;
         if ($words !== array()) {
             $lowTitle = mb_strtolower((string) $row['title']);
-            $lowText = mb_strtolower((string) ($row['content'] ?? $row['snippet']));
+            $lowText = mb_strtolower($content);
             $total = 0.0;
             foreach ($words as $w) {
                 // a code with a digit (CD8, Tet3G, p53) names one thing: it counts three times a plain word
@@ -331,21 +411,46 @@ $retrieve = static function (string $query, array $types, int $limit, ?array $sk
             $inTitle /= $total;
             $inText /= $total;
         }
-        $scored[] = array('type' => (string) $row['entity_type'], 'id' => (int) $row['entity_id'], 'title' => (string) $row['title'], 'snippet' => (string) $row['snippet'], 'content' => (string) ($row['content'] ?? $row['snippet']), 'score' => round($dot + 0.15 * $inTitle + 0.05 * $inText, 4));
+        $colon = strpos($content, ':');
+        $kind = $colon !== false && $colon < 30 ? substr($content, 0, $colon) : '';
+        $scored[] = array(
+            'type' => (string) $row['entity_type'],
+            'id' => (int) $row['entity_id'],
+            'title' => (string) $row['title'],
+            'snippet' => (string) $row['snippet'],
+            'content' => $content,
+            'score' => round($dot + 0.05 * $inTitle + 0.10 * $inText, 4),
+            'has' => array_values(array_intersect($need, $have)),
+            'lacks' => array_values(array_diff($required, $have)),
+            'kind_ok' => $module !== null && $kind === $module ? 1 : 0,
+        );
     }
-    usort($scored, static fn(array $a, array $b): int => $b['score'] <=> $a['score']);
+    // the kind asked for first, then the entries that carry most of the asked parts, then the best meaning
+    usort($scored, static fn(array $a, array $b): int => array($b['kind_ok'], count($b['has']), $b['score']) <=> array($a['kind_ok'], count($a['has']), $a['score']));
     // only what the person can read is shown: the first candidates are asked, not all of them
+    // when parts are asked for, a family of near-identical plasmids (pCytscr ... IL2, IL12 ...) shows at most twice: the others wait behind the different ones
     $hits = array();
-    foreach (array_slice($scored, 0, $limit * 4) as $candidate) {
-        if ($canRead($candidate['type'], $candidate['id'])) {
-            $candidate['url'] = ($candidate['type'] === 'experiments' ? 'experiments.php' : ($candidate['type'] === 'items' ? 'database.php' : 'registry.php')) . '?mode=view&id=' . $candidate['id'];
+    $later = array();
+    $family = array();
+    foreach (array_slice($scored, 0, $limit * 6) as $candidate) {
+        if (!$canRead($candidate['type'], $candidate['id'])) {
+            continue;
+        }
+        $candidate['url'] = ($candidate['type'] === 'experiments' ? 'experiments.php' : ($candidate['type'] === 'items' ? 'database.php' : 'registry.php')) . '?mode=view&id=' . $candidate['id'];
+        unset($candidate['kind_ok']);
+        $name = mb_strtolower((string) (preg_split('/[\s_]/u', trim($candidate['title']))[0] ?? ''));
+        $family[$name] = ($family[$name] ?? 0) + 1;
+        if ($need !== array() && $name !== '' && $family[$name] > 2) {
+            $later[] = $candidate;
+        } else {
             $hits[] = $candidate;
         }
         if (count($hits) >= $limit) {
             break;
         }
     }
-    return array('hits' => $hits, 'searched' => count($scored));
+    $hits = array_slice(array_merge($hits, $later), 0, $limit);
+    return array('hits' => $hits, 'searched' => count($scored), 'understood' => $required, 'must' => $must);
 };
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
@@ -360,12 +465,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
         $pdo->execute($done);
         $counts[$type] = array('entries' => (int) $req->fetchColumn(), 'indexed' => (int) $done->fetchColumn());
     }
+    $nf = $pdo->prepare('SELECT COUNT(*) FROM ai_search_features WHERE team = :team');
+    $nf->bindValue(':team', $teamId, PDO::PARAM_INT);
+    $pdo->execute($nf);
+    $featuresCount = (int) $nf->fetchColumn();
     respond(200, array(
         'enabled' => $enabled,
         'forced_off' => $forcedOff,
         'explain' => $enabled && ($settings['ai_search_explain'] ?? '0') === '1',
         'chat' => $chatEnabled,
         'counts' => $counts,
+        'features' => $featuresCount,
+        'vocab' => array_values(array_map(static fn(array $f): array => array('name' => $f['name'], 'group' => $f['group']), aiFeatureVocab())),
         'settings' => $isSysadmin ? array(
             'enabled' => ($settings['ai_search_enabled'] ?? '0') === '1',
             'url' => $baseUrl,
@@ -484,7 +595,9 @@ try {
                 $done++;
             }
         }
-        respond(200, array('indexed' => $done, 'skipped' => $skipped, 'done' => $done === 0 && $skipped === 0));
+        // the parts of the plasmids (from the sequence files) are read on the same button; no model is needed for that
+        $features = $readFeatures(400);
+        respond(200, array('indexed' => $done, 'skipped' => $skipped, 'features_read' => $features['read'], 'done' => $done === 0 && $skipped === 0 && $features['read'] === 0 && !$features['more']));
     }
 
     if ($action === 'search') {
@@ -502,7 +615,13 @@ try {
             $types = TYPES;
         }
         $limit = max(1, min(30, (int) ($payload['limit'] ?? 10)));
-        $found = $retrieve($query, $types, $limit);
+        $must = array();
+        foreach (is_array($payload['must'] ?? null) ? $payload['must'] : array() as $name) {
+            if (is_string($name)) {
+                $must[] = $name;
+            }
+        }
+        $found = $retrieve($query, $types, $limit, null, $must);
         $hits = $found['hits'];
         $explanation = null;
         if (($settings['ai_search_explain'] ?? '0') === '1' && $chatModel !== '' && $hits !== array()) {
@@ -523,7 +642,7 @@ try {
         respond(200, array('hits' => array_map(static function (array $h): array {
             unset($h['content']);
             return $h;
-        }, $hits), 'explanation' => $explanation, 'searched' => $found['searched']));
+        }, $hits), 'explanation' => $explanation, 'searched' => $found['searched'], 'understood' => $found['understood'], 'must' => $found['must']));
     }
 
     if ($action === 'chat') {
