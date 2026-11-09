@@ -79,7 +79,7 @@ final class TeamGroups extends AbstractRest
                 ug.groupid = tg.id
             )
             LEFT JOIN users AS u ON ug.userid = u.userid
-            WHERE tg.team = :team
+            WHERE tg.team = :team AND tg.owner IS NULL
             ORDER BY
                 tg.id,
                 CASE WHEN u.userid IS NULL THEN 1 ELSE 0 END,
@@ -112,6 +112,12 @@ final class TeamGroups extends AbstractRest
         return $groups;
     }
 
+    /** a personal group (it has an owner) is only seen by its owner and its members; the groups of the team by everybody */
+    private function visibleToMe(string $alias): string
+    {
+        return '(' . $alias . '.owner IS NULL OR ' . $alias . '.owner = :me_owner OR EXISTS (SELECT 1 FROM users2team_groups AS vm WHERE vm.groupid = ' . $alias . '.id AND vm.userid = :me_member))';
+    }
+
     public function readAllUser(): array
     {
         $sql = 'SELECT tg.id, tg.name, teams.name AS team_name
@@ -128,9 +134,11 @@ final class TeamGroups extends AbstractRest
     public function readAllTeam(): array
     {
         $sql = 'SELECT team_groups.id, team_groups.name, teams.name AS team_name
-            FROM team_groups LEFT JOIN teams ON (team_groups.team = teams.id) WHERE team_groups.team = :team ORDER BY teams.name, team_groups.name ASC';
+            FROM team_groups LEFT JOIN teams ON (team_groups.team = teams.id) WHERE team_groups.team = :team AND ' . $this->visibleToMe('team_groups') . ' ORDER BY teams.name, team_groups.name ASC';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':team', $this->Users->userData['team'], PDO::PARAM_INT);
+        $req->bindValue(':me_owner', (int) $this->Users->userData['userid'], PDO::PARAM_INT);
+        $req->bindValue(':me_member', (int) $this->Users->userData['userid'], PDO::PARAM_INT);
         $this->Db->execute($req);
         return $req->fetchAll();
     }
@@ -138,8 +146,10 @@ final class TeamGroups extends AbstractRest
     public function readAllEverything(): array
     {
         $sql = 'SELECT team_groups.id, team_groups.name, teams.name AS team_name
-            FROM team_groups LEFT JOIN teams ON (team_groups.team = teams.id) ORDER BY teams.name, team_groups.name ASC';
+            FROM team_groups LEFT JOIN teams ON (team_groups.team = teams.id) WHERE ' . $this->visibleToMe('team_groups') . ' ORDER BY teams.name, team_groups.name ASC';
         $req = $this->Db->prepare($sql);
+        $req->bindValue(':me_owner', (int) $this->Users->userData['userid'], PDO::PARAM_INT);
+        $req->bindValue(':me_member', (int) $this->Users->userData['userid'], PDO::PARAM_INT);
         $this->Db->execute($req);
         return $req->fetchAll();
     }
