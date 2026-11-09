@@ -340,7 +340,8 @@ function sortBarOf(): HTMLElement {
   // in a narrow panel the path is not a column: sorting by it stays reachable next to the name
   const narrowPath = sortChip(SORT_CHIPS[1]);
   narrowPath.classList.add('folder-col-narrow-only');
-  const narrowModified = sortChip(SORT_CHIPS[4]);
+  // a clock instead of the word, so Name, Path and Modified stay on one line in a narrow panel
+  const narrowModified = sortChip({ ...SORT_CHIPS[4], label: '', icon: 'fa-clock' });
   narrowModified.classList.add('folder-col-narrow-only');
   name.append(narrowPath, narrowModified);
   const widePath = element('div', 'folder-col-wide folder-col-path');

@@ -1888,6 +1888,25 @@ tr:first-child td {
     }
   }
 
+  // a very narrow panel (under 18rem): the fixed columns would leave the name no room at all, so the name takes a line of its
+  // own and the counts and buttons sit on the line under it
+  @container (max-width: 18rem) {
+    .folder-column-heads,
+    .folder-details-card {
+      grid-template-columns: 1.6rem 1.6rem minmax(0, 1fr);
+    }
+
+    .folder-column-head-name,
+    .folder-details-text {
+      grid-column: 1 / -1;
+    }
+
+    .folder-details-card > .folder-actions,
+    .folder-column-heads > span:last-child {
+      justify-self: end;
+    }
+  }
+
   .folder-column-heads {
     align-items: center;
     border-bottom: 2px solid var(--chrome-muted);
