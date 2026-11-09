@@ -8,7 +8,6 @@
 import { Model } from './interfaces';
 import SidePanel from './SidePanel.class';
 import { mount } from 'svelte';
-import TodolistSv from './components/Todolist.svelte';
 
 export default class Todolist extends SidePanel {
 
@@ -35,10 +34,18 @@ export default class Todolist extends SidePanel {
   initialize(): void {
     const host = document.getElementById('todolist');
     if (host && !Todolist.mounted && host.childElementCount === 0) {
-      mount(TodolistSv, {
-        target: host,
-      });
+      // Flag first: the component arrives asynchronously, and a second toggle() before then must not mount it twice.
       Todolist.mounted = true;
+      // The widget code is its own chunk, so it stays out of the main bundle every page waits for.
+      void import(
+        /* webpackChunkName: 'todolist-widget' */
+        './components/Todolist.svelte'
+      ).then(({ default: TodolistSv }) => {
+        mount(TodolistSv, { target: host });
+      }).catch(() => {
+        // chunk failed to load (offline, deploy in between): allow the next toggle() to try again
+        Todolist.mounted = false;
+      });
     }
   }
 

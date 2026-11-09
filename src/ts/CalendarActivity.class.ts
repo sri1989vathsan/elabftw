@@ -5,7 +5,6 @@
  */
 import { mount } from 'svelte';
 import SidePanel from './SidePanel.class';
-import CalendarTodolistSv from './components/CalendarTodolist.svelte';
 
 const CALENDAR_ACTIVITY_MODEL = 'calendar-activity';
 const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6';
@@ -22,8 +21,18 @@ export default class CalendarActivity extends SidePanel {
   initialize(): void {
     const host = document.getElementById('calendarActivity');
     if (host && !CalendarActivity.mounted && host.childElementCount === 0) {
-      mount(CalendarTodolistSv, { target: host });
+      // Flag first: the component arrives asynchronously, and a second initialize() before then must not mount it twice.
       CalendarActivity.mounted = true;
+      // Still mounted on every page (the reminders need it), but as its own chunk, out of the main bundle.
+      void import(
+        /* webpackChunkName: 'calendar-widget' */
+        './components/CalendarTodolist.svelte'
+      ).then(({ default: CalendarTodolistSv }) => {
+        mount(CalendarTodolistSv, { target: host });
+      }).catch(() => {
+        // chunk failed to load (offline, deploy in between): allow the next initialize() to try again
+        CalendarActivity.mounted = false;
+      });
     }
   }
 

@@ -617,11 +617,11 @@ if (requestedCalendar.get('calendar') === 'activity'
   CalendarActivityC.show();
 }
 // A to-do deadline notification links here with ?open=todolist&task=ID
-// (see Transform.php/TodoDeadline.php) -- unlike CalendarActivityC, the
-// Todolist panel doesn't eagerly mount on every page load, so show()
-// alone (which only clears the hidden attribute) would reveal an empty,
-// never-initialized container. toggle() also calls initialize(), matching
-// the existing openedSidePanel-restore case just above; only call it when
+// (see Transform.php/TodoDeadline.php) -- the Todolist panel is mounted by
+// todolist.ts (loaded by page-loader.ts), not here, so show() alone (which
+// only clears the hidden attribute) could reveal an empty container if that
+// has not run yet. toggle() also calls initialize(), which mounts only once,
+// matching the existing openedSidePanel-restore case just above; only call it when
 // the panel isn't already open (open + already-initialized needs nothing
 // further here -- Todolist.svelte's own onMount reads the task param).
 if (requestedCalendar.get('open') === 'todolist') {
