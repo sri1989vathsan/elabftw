@@ -145,6 +145,7 @@ final class CustomMigrationRunner
         '104_order_procurement_index.sql',
         '105_folder_tree_covering_indexes.sql',
         '106_order_upload_procurement_index.sql',
+        '107_orders_list_index.sql',
     );
 
     private Db $Db;
