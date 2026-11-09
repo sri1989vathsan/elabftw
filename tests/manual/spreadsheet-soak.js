@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'copy-table-format', 'default-border-apply', 'drag-select', 'formulas-and-structure', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'copy-table-format', 'default-border-apply', 'colour-live', 'drag-select', 'formulas-and-structure', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1746,6 +1746,41 @@ async function spreadsheetSoak(options = {}) {
       const saved = wrong([...tableEl(uid).querySelectorAll('tbody td')], rounds[2][3]);
       if (saved.length) dataLoss.push({ context, where: 'saved table', problem: `${saved.length} saved cell edges do not have the last border (${rounds[2][3]}), e.g. ${saved.slice(0, 3).join(' | ')}` });
       await verify('default-border-apply: values unchanged', true);
+    },
+    // A colour picked in a swatch of the popup's format bar applies by itself after a short pause: no press of the button
+    // next to it. Only "input" is sent, as by a colour picker that is still open (its "change" comes when it is closed).
+    async 'colour-live'() {
+      const uid = await createTable('colour live', { rows: 4, cols: 4 });
+      if (!uid) return;
+      await typeInto(uid, 0, 0, 'x');
+      const dialog = await openPopupFor(uid);
+      openFormatBar(dialog);
+      const swatch = label => [...dialog.querySelectorAll('input[type="color"]')].find(i => i.getAttribute('aria-label') === label);
+      const cellAt = (x, y) => dialog.querySelector(`td[data-x="${x}"][data-y="${y}"]`);
+      const rounds = [
+        { label: 'Selected cell background color', hex: '#ff0000', prop: 'backgroundColor', expected: 'rgb(255, 0, 0)', cell: [1, 1] },
+        { label: 'Selected cell text color', hex: '#0000ff', prop: 'color', expected: 'rgb(0, 0, 255)', cell: [2, 1] },
+        { label: 'Selected cell background color', hex: '#00aa00', prop: 'backgroundColor', expected: 'rgb(0, 170, 0)', cell: [1, 2] },
+      ];
+      for (const round of rounds) {
+        const input = swatch(round.label);
+        const td = cellAt(...round.cell);
+        if (!input || !td) { fail('the popup is missing a colour swatch or a cell', { swatch: round.label, cell: round.cell.join(',') }); continue; }
+        press(td); await sleep(250);
+        input.value = round.hex;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await sleep(1200);
+        const got = getComputedStyle(cellAt(...round.cell))[round.prop];
+        if (got !== round.expected) dataLoss.push({ context, where: 'popup', problem: `a colour picked in "${round.label}" (${round.hex}) did not apply by itself (${got})` });
+        note('colour-live-applied');
+      }
+      [...dialog.querySelectorAll('button')].find(b => /^Update/.test(b.textContent.trim()))?.click();
+      await waitPopupGone();
+      await sleep(config.settleMs);
+      const stored = (r, c, prop) => tableEl(uid).rows[r + 1]?.cells[c + 1]?.style[prop];
+      if (!/255,\s*0,\s*0|#ff0000/i.test(stored(1, 1, 'backgroundColor') || '')) dataLoss.push({ context, where: 'stored table', problem: 'a fill colour picked live in the popup was not saved' });
+      if (!/0,\s*0,\s*255|#0000ff/i.test(stored(1, 2, 'color') || '')) dataLoss.push({ context, where: 'stored table', problem: 'a text colour picked live in the popup was not saved' });
+      await verify('colour-live: values unchanged', true);
     },
     // Dragging over cells: the selection follows, the fill handle lets go of the pointer meanwhile and comes back.
     async 'drag-select'() {
