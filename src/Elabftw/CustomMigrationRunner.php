@@ -142,6 +142,7 @@ final class CustomMigrationRunner
         '101_notif_order_collected.sql',
         '102_folder_view_preference.sql',
         '103_other_links.sql',
+        '104_order_procurement_index.sql',
     );
 
     private Db $Db;
