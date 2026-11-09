@@ -144,6 +144,7 @@ final class CustomMigrationRunner
         '104_order_procurement_index.sql',
         '105_folder_tree_covering_indexes.sql',
         '106_order_upload_procurement_index.sql',
+        '107_orders_list_index.sql',
         '110_inventory.sql',
         '111_inventory_steps.sql',
         '112_registry_storage.sql',
