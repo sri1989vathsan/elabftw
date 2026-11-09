@@ -103,10 +103,7 @@
     "currentUserid": {{ App.Users.userid|default(-1) }}
   }
 </script>
-{# the assistant bubble (bottom right): Find, and Chat when its own switch is on; only when a sysadmin turned the search by meaning on #}
-{% if App.Session.has('is_auth') and App.Config.configArr.ai_search_enabled|default('0') == '1' %}
-<script src='ai-chat.js?v={{ 'now'|date('YmdHi') }}' data-chat='{{ App.Config.configArr.ai_chat_enabled|default('0') == '1' ? '1' : '0' }}' defer></script>
-{% endif %}
+{# the assistant bubble (Find / Chat, bottom right) is switched off: to bring it back, load ai-chat.js here again for authenticated users when App.Config.configArr.ai_search_enabled is '1' #}
 {# Database: who can edit an entry or a selection of entries (the script does nothing on other pages) #}
 {% if App.Session.has('is_auth') %}
 <script src='registry-permissions.js?v={{ 'now'|date('YmdHi') }}' defer></script>
