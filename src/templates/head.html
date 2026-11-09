@@ -34,6 +34,7 @@
   {# see builder.js to see what gets inside these files #}
   {# CSS #}
   <link id='main-stylesheet' rel='stylesheet' media='all' href='/assets/main.min.css?v={{ v }}' />
+  <link rel='stylesheet' href='table-scroll.css?v={{ 'now'|date('YmdHi') }}' />
   {# the main JS bundle with all the elabftw TS code (see builder.js) #}
   <script defer src='/assets/main.bundle.js?v={{ v }}'></script>
 </head>

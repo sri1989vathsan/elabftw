@@ -11,6 +11,7 @@ services:
       - ./web/lineage.php:/elabftw/web/lineage.php:ro
       - ./web/lineage.js:/elabftw/web/lineage.js:ro
       - ./web/lineage.css:/elabftw/web/lineage.css:ro
+      - ./web/table-scroll.css:/elabftw/web/table-scroll.css:ro
       - ./web/sequence-add.js:/elabftw/web/sequence-add.js:ro
       - ./web/sequence-add.css:/elabftw/web/sequence-add.css:ro
       - ./web/primers.php:/elabftw/web/primers.php:ro

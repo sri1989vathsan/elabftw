@@ -1,0 +1,18 @@
+/* Fork-only: the horizontal scrollbar of the expandable tables is always visible (macOS hides it until you scroll). */
+.table-responsive:has(> .expandable-table) {
+  overflow-x: scroll;
+  scrollbar-width: auto;
+}
+.table-responsive:has(> .expandable-table)::-webkit-scrollbar {
+  height: 14px;
+  -webkit-appearance: none;
+}
+.table-responsive:has(> .expandable-table)::-webkit-scrollbar-track {
+  background: rgba(128, 128, 128, 0.15);
+}
+.table-responsive:has(> .expandable-table)::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.55);
+  border-radius: 7px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
