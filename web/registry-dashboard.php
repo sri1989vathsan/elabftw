@@ -28,7 +28,9 @@ use function http_response_code;
 use function is_array;
 use function json_decode;
 use function json_encode;
+use function mb_strtolower;
 use function preg_match;
+use function rtrim;
 use function strtotime;
 use function usort;
 
@@ -152,7 +154,11 @@ try {
     // stock below the minimum the owner set: the quantities of the containers in the unit of the minimum are added up
     $low = array();
     if ($stockRules !== array()) {
-        $have = $pdo->prepare('SELECT COALESCE(SUM(qty_stored), 0) FROM containers2inventory WHERE item_id = :id AND qty_unit = :unit');
+        // the quantities of all containers, added up per entry and unit in one query (not one query per entry); units compare without case or trailing spaces, as the database does
+        $totals = array();
+        foreach ($run('SELECT item_id, qty_unit, SUM(qty_stored) AS total FROM containers2inventory GROUP BY item_id, qty_unit')->fetchAll() as $sum) {
+            $totals[(int) $sum['item_id']][mb_strtolower(rtrim((string) $sum['qty_unit']))] = (float) $sum['total'];
+        }
         $format = static fn(float $n): string => rtrim(rtrim(number_format($n, 3, '.', ''), '0'), '.');
         foreach ($run('SELECT entity.id, entity.title, entity.category, entity.min_stock, entity.min_stock_unit' . $OWNER . ' FROM inventory AS entity WHERE ' . $labWhere . ' AND entity.category IN (' . implode(',', array_keys($stockRules)) . ')')->fetchAll() as $row) {
             $rule = $stockRules[(int) $row['category']];
@@ -161,10 +167,7 @@ try {
             if ($minimum === null || $unit === null) {
                 continue;
             }
-            $have->bindValue(':id', (int) $row['id'], PDO::PARAM_INT);
-            $have->bindValue(':unit', $unit);
-            $pdo->execute($have);
-            $left = (float) $have->fetchColumn();
+            $left = $totals[(int) $row['id']][mb_strtolower(rtrim((string) $unit))] ?? 0.0;
             if ($left < $minimum) {
                 $low[] = $entryItem($row, $format($left) . ' ' . $unit . ' left, minimum ' . $format($minimum));
             }
