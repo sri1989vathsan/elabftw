@@ -1679,8 +1679,10 @@ abstract class AbstractEntity extends AbstractRest
         $minimums = array();
         $req = $this->Db->prepare(sprintf('SELECT id, category, min_stock, min_stock_unit FROM inventory WHERE id IN (%s)', implode(',', $ids)));
         $this->Db->execute($req);
+        // a module's rule is read once, not once per entry (a list of thousands of entries would run thousands of queries)
+        $rules = array();
         foreach ($req->fetchAll() as $minimum) {
-            $rule = $this->stockRule((int) $minimum['category']);
+            $rule = $rules[(int) $minimum['category']] ??= $this->stockRule((int) $minimum['category']);
             if (!$rule['track']) {
                 continue;
             }
