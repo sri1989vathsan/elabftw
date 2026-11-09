@@ -250,7 +250,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         }
         usort($people, static fn(array $a, array $b): int => strcasecmp($a['name'], $b['name']));
         // the user groups of the team: a match can also name the people who may edit the entries of this person
-        $groupReq = $pdo->prepare('SELECT id, name FROM team_groups WHERE team = :team ORDER BY name');
+        $groupReq = $pdo->prepare('SELECT g.id, g.name FROM team_groups AS g WHERE g.team = :team AND (g.owner IS NULL OR g.owner = ' . (int) $userId . ' OR EXISTS (SELECT 1 FROM users2team_groups AS vm WHERE vm.groupid = g.id AND vm.userid = ' . (int) $userId . ')) ORDER BY g.name');
         $groupReq->bindValue(':team', $teamId, PDO::PARAM_INT);
         $pdo->execute($groupReq);
         respond(200, array('pairs' => $pairs, 'users' => $teamUsers(), 'people' => $people, 'groups' => $groupReq->fetchAll()));

@@ -19,6 +19,7 @@ services:
       - ./web/planned.css:/elabftw/web/planned.css:ro
       - ./web/order-sheets:/elabftw/web/order-sheets:ro
       - ./src/Models/Inventory.php:/elabftw/src/Models/Inventory.php:ro
+      - ./src/Models/TeamGroups.php:/elabftw/src/Models/TeamGroups.php:ro
       - ./src/Models/AbstractEntity.php:/elabftw/src/Models/AbstractEntity.php:ro
       - ./src/templates/storage-view-edit.html:/elabftw/src/templates/storage-view-edit.html:ro
       - ./src/Elabftw/CustomMigrationRunner.php:/elabftw/src/Elabftw/CustomMigrationRunner.php:ro
@@ -74,6 +75,7 @@ services:
       - ./src/sql/custom/141_ai_search.sql:/elabftw/src/sql/custom/141_ai_search.sql:ro
       - ./src/sql/custom/142_ai_search_features.sql:/elabftw/src/sql/custom/142_ai_search_features.sql:ro
       - ./src/sql/custom/143_owner_map_editors.sql:/elabftw/src/sql/custom/143_owner_map_editors.sql:ro
+      - ./src/sql/custom/144_personal_groups.sql:/elabftw/src/sql/custom/144_personal_groups.sql:ro
       - ./src/templates/registry-categories.html:/elabftw/src/templates/registry-categories.html:ro
       - ./src/templates/view-edit-toolbar.html:/elabftw/src/templates/view-edit-toolbar.html:ro
       - ./src/templates/back-to-previous.html:/elabftw/src/templates/back-to-previous.html:ro

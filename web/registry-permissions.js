@@ -58,6 +58,83 @@
     });
   };
 
+  // make, change or delete one of my groups (only I and its members see it)
+  const editGroup = function (overlay, group, back) {
+    const box = overlay.querySelector('#rpBox');
+    box.textContent = '';
+    box.append(make('h4', {}, group ? 'My group' : 'New group'), make('div', { class: 'text-muted mb-2' }, 'Only you and the people in it can see this group. You can give it editing rights on your entries.'));
+    const name = make('input', { type: 'text', class: 'form-control form-control-sm mb-2', placeholder: 'Name of the group', 'aria-label': 'Name of the group', maxlength: '100' });
+    name.value = group ? group.name : '';
+    const filter = make('input', { type: 'text', class: 'form-control form-control-sm mb-2', placeholder: 'Search a person', 'aria-label': 'Search a person' });
+    const list = make('div', { class: 'rp-list' });
+    const message = make('div', { class: 'rp-msg' });
+    const save = make('button', { type: 'button', class: 'btn btn-primary mr-2' }, 'Save');
+    const backButton = make('button', { type: 'button', class: 'btn btn-secondary mr-2' }, 'Back');
+    box.append(name, make('strong', {}, 'People in the group'), filter, list, save, backButton);
+    let remove = null;
+    if (group) {
+      remove = make('button', { type: 'button', class: 'btn btn-outline-danger' }, 'Delete the group');
+      box.append(remove);
+    }
+    box.append(message);
+    const members = group ? group.members.map(function (m) {
+      return m.id;
+    }) : [];
+    const boxes = [];
+    loadPeople().then(function (data) {
+      data.users.forEach(function (u) {
+        const l = make('label');
+        const cb = make('input', { type: 'checkbox', class: 'mr-2' });
+        cb.checked = members.indexOf(u.id) >= 0;
+        l.append(cb, u.name);
+        list.append(l);
+        boxes.push({ id: u.id, cb: cb, label: l, name: u.name.toLowerCase() });
+      });
+    });
+    filter.addEventListener('input', function () {
+      const q = filter.value.trim().toLowerCase();
+      boxes.forEach(function (b) {
+        b.label.hidden = q !== '' && b.name.indexOf(q) < 0;
+      });
+    });
+    backButton.addEventListener('click', back);
+    save.addEventListener('click', function () {
+      save.disabled = true;
+      call({ action: 'save_group', id: group ? group.id : 0, name: name.value, users: boxes.filter(function (b) {
+        return b.cb.checked;
+      }).map(function (b) {
+        return b.id;
+      }) }).then(function (data) {
+        save.disabled = false;
+        if (data.error) {
+          message.className = 'rp-msg text-danger';
+          message.textContent = data.error;
+          return;
+        }
+        people = null;
+        back();
+      });
+    });
+    if (remove) {
+      remove.addEventListener('click', function () {
+        if (remove.dataset.sure !== '1') {
+          remove.dataset.sure = '1';
+          remove.textContent = 'Click again to delete it for good';
+          return;
+        }
+        call({ action: 'delete_group', id: group.id }).then(function (data) {
+          if (data.error) {
+            message.className = 'rp-msg text-danger';
+            message.textContent = data.error;
+            return;
+          }
+          people = null;
+          back();
+        });
+      });
+    }
+  };
+
   // ids: the entries to change; title: what the box says it is about; current: {owner, users, teamgroups, base} for one entry
   const openBox = function (ids, title, current, done) {
     const overlay = make('div', { id: 'rpOverlay' });
@@ -85,10 +162,30 @@
     [['', 'Keep as it is'], ['owner', 'Only the owner can edit'], ['owner_admins', 'The owner and the admins can edit'], ['team', 'All the users of the team can edit']].forEach(function (o) {
       base.append(make('option', { value: o[0] }, o[1]));
     });
+    // my own groups: made here by anybody, seen only by me and by their members
+    const manage = make('div', { class: 'mb-3 small' });
+    const again = function () {
+      overlay.remove();
+      openBox(ids, title, current, done);
+    };
+    const newGroup = make('button', { type: 'button', class: 'btn btn-outline-secondary btn-sm mr-2' }, 'New group...');
+    newGroup.addEventListener('click', function () {
+      editGroup(overlay, null, again);
+    });
+    manage.append(newGroup);
+    call({ action: 'my_groups' }).then(function (data) {
+      (data.groups || []).forEach(function (g) {
+        const b = make('button', { type: 'button', class: 'btn btn-link btn-sm p-0 mr-3' }, 'Edit "' + g.name + '"');
+        b.addEventListener('click', function () {
+          editGroup(overlay, g, again);
+        });
+        manage.append(b);
+      });
+    });
     const message = make('div', { class: 'rp-msg' });
     const apply = make('button', { type: 'button', class: 'btn btn-primary mr-2' }, 'Apply to ' + ids.length + (ids.length === 1 ? ' entry' : ' entries'));
     const cancel = make('button', { type: 'button', class: 'btn btn-secondary' }, 'Close');
-    box.append(modeRow, make('strong', {}, 'User groups'), groupsBox, make('strong', {}, 'People'), filter, usersBox, make('strong', {}, 'Everyone in the team'), base, make('div', { class: 'mt-3' }), apply, cancel, message);
+    box.append(modeRow, make('strong', {}, 'User groups'), groupsBox, manage, make('strong', {}, 'People'), filter, usersBox, make('strong', {}, 'Everyone in the team'), base, make('div', { class: 'mt-3' }), apply, cancel, message);
     document.body.append(overlay);
     cancel.addEventListener('click', function () {
       overlay.remove();
@@ -103,12 +200,12 @@
       list.groups.forEach(function (g) {
         const l = make('label');
         const cb = make('input', { type: 'checkbox', class: 'mr-2' });
-        l.append(cb, g.name + ' (' + g.members + ')');
+        l.append(cb, g.name + ' (' + g.members + ')' + (g.personal ? (g.mine ? ' - my group' : ' - private group') : ''));
         groupsBox.append(l);
         checks.teamgroups.push({ id: g.id, cb: cb });
       });
       if (!list.groups.length) {
-        groupsBox.append(make('span', { class: 'text-muted' }, 'No user groups yet. An admin creates them in Admin > User groups.'));
+        groupsBox.append(make('span', { class: 'text-muted' }, 'No groups yet. Make one with "New group..." below.'));
       }
       list.users.forEach(function (u) {
         const l = make('label');

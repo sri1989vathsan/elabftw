@@ -19,6 +19,7 @@ use Throwable;
  * Reading is not touched (everybody with an account can read), but whoever may edit also gets the right to read in the entry's own list, as the permissions of eLabFTW do.
  *
  * POST {action: people}                                              the users and the user groups of the team, to choose from
+ * POST {action: my_groups | save_group {id?, name, users[]} | delete_group {id}}   personal groups: made by anybody, seen only by the person and the members
  * POST {action: current, id}                                        who owns and who can edit one entry now, and whether this person may change it
  * POST {action: set_editors, ids[], users[], teamgroups[], mode, base?}
  *      mode: add (give the listed people the right to edit) | remove (take it away) | replace (only the listed people; the owner stays)
@@ -49,6 +50,8 @@ $teamId = (int) $App->Users->userData['team'];
 $me = (int) $App->Users->userData['userid'];
 $isAdmin = (bool) $App->Users->isAdmin;
 $action = (string) ($payload['action'] ?? '');
+// the groups this person may use: the groups of the team, and the personal groups he or she made or is a member of
+$visible = '(g.owner IS NULL OR g.owner = ' . $me . ' OR EXISTS (SELECT 1 FROM users2team_groups AS vm WHERE vm.groupid = g.id AND vm.userid = ' . $me . '))';
 
 try {
     if ($action === 'people') {
@@ -56,13 +59,117 @@ try {
             WHERE t.is_archived = 0 AND u.validated = 1 ORDER BY u.firstname, u.lastname');
         $users->bindValue(':team', $teamId, PDO::PARAM_INT);
         $pdo->execute($users);
-        $groups = $pdo->prepare('SELECT g.id, g.name, (SELECT COUNT(*) FROM users2team_groups AS m WHERE m.groupid = g.id) AS members FROM team_groups AS g WHERE g.team = :team ORDER BY g.name');
+        $groups = $pdo->prepare('SELECT g.id, g.name, g.owner, (SELECT COUNT(*) FROM users2team_groups AS m WHERE m.groupid = g.id) AS members FROM team_groups AS g WHERE g.team = :team AND ' . $visible . ' ORDER BY g.owner IS NOT NULL, g.name');
         $groups->bindValue(':team', $teamId, PDO::PARAM_INT);
         $pdo->execute($groups);
         say(200, array(
             'users' => array_map(static fn(array $u): array => array('id' => (int) $u['id'], 'name' => trim($u['firstname'] . ' ' . $u['lastname'])), $users->fetchAll()),
-            'groups' => array_map(static fn(array $g): array => array('id' => (int) $g['id'], 'name' => (string) $g['name'], 'members' => (int) $g['members']), $groups->fetchAll()),
+            'groups' => array_map(static fn(array $g): array => array('id' => (int) $g['id'], 'name' => (string) $g['name'], 'members' => (int) $g['members'], 'personal' => $g['owner'] !== null, 'mine' => (int) ($g['owner'] ?? 0) === $me), $groups->fetchAll()),
         ));
+    }
+
+    if ($action === 'my_groups') {
+        $mine = $pdo->prepare('SELECT id, name FROM team_groups WHERE team = :team AND owner = :me ORDER BY name');
+        $mine->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $mine->bindValue(':me', $me, PDO::PARAM_INT);
+        $pdo->execute($mine);
+        $out = array();
+        foreach ($mine->fetchAll() as $g) {
+            $m = $pdo->prepare('SELECT u.userid AS id, CONCAT(u.firstname, " ", u.lastname) AS name FROM users2team_groups AS x INNER JOIN users AS u ON u.userid = x.userid WHERE x.groupid = :g ORDER BY u.firstname, u.lastname');
+            $m->bindValue(':g', (int) $g['id'], PDO::PARAM_INT);
+            $pdo->execute($m);
+            $out[] = array('id' => (int) $g['id'], 'name' => (string) $g['name'], 'members' => array_map(static fn(array $u): array => array('id' => (int) $u['id'], 'name' => trim((string) $u['name'])), $m->fetchAll()));
+        }
+        say(200, array('groups' => $out));
+    }
+
+    // a personal group: made by anybody, seen only by the person and by its members; the person changes or deletes it
+    if ($action === 'save_group') {
+        $name = mb_substr(trim((string) ($payload['name'] ?? '')), 0, 100);
+        if ($name === '') {
+            say(400, array('error' => 'Give the group a name.'));
+        }
+        $members = array_values(array_unique(array_filter(array_map('intval', is_array($payload['users'] ?? null) ? $payload['users'] : array()), static fn(int $i): bool => $i > 0)));
+        if ($members !== array()) {
+            $ok = $pdo->prepare('SELECT users_id FROM users2teams WHERE teams_id = :team AND users_id IN (' . implode(',', $members) . ')');
+            $ok->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $pdo->execute($ok);
+            $members = array_map('intval', $ok->fetchAll(PDO::FETCH_COLUMN));
+        }
+        $id = (int) ($payload['id'] ?? 0);
+        if ($id > 0) {
+            $own = $pdo->prepare('SELECT COUNT(*) FROM team_groups WHERE id = :id AND owner = :me AND team = :team');
+            $own->bindValue(':id', $id, PDO::PARAM_INT);
+            $own->bindValue(':me', $me, PDO::PARAM_INT);
+            $own->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $pdo->execute($own);
+            if ((int) $own->fetchColumn() !== 1) {
+                say(403, array('error' => 'Only the person who made a group can change it.'));
+            }
+            $rename = $pdo->prepare('UPDATE team_groups SET name = :name WHERE id = :id');
+            $rename->bindValue(':name', $name);
+            $rename->bindValue(':id', $id, PDO::PARAM_INT);
+            $pdo->execute($rename);
+        } else {
+            $count = $pdo->prepare('SELECT COUNT(*) FROM team_groups WHERE owner = :me');
+            $count->bindValue(':me', $me, PDO::PARAM_INT);
+            $pdo->execute($count);
+            if ((int) $count->fetchColumn() >= 50) {
+                say(400, array('error' => 'That is enough groups (50).'));
+            }
+            $new = $pdo->prepare('INSERT INTO team_groups (name, team, owner) VALUES (:name, :team, :me)');
+            $new->bindValue(':name', $name);
+            $new->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $new->bindValue(':me', $me, PDO::PARAM_INT);
+            $pdo->execute($new);
+            $id = (int) $pdo->lastInsertId();
+        }
+        $pdo->beginTransaction();
+        $clear = $pdo->prepare('DELETE FROM users2team_groups WHERE groupid = :g');
+        $clear->bindValue(':g', $id, PDO::PARAM_INT);
+        $pdo->execute($clear);
+        $add = $pdo->prepare('INSERT INTO users2team_groups (userid, groupid) VALUES (:u, :g)');
+        foreach ($members as $u) {
+            $add->bindValue(':u', $u, PDO::PARAM_INT);
+            $add->bindValue(':g', $id, PDO::PARAM_INT);
+            $pdo->execute($add);
+        }
+        $pdo->commit();
+        say(200, array('id' => $id, 'members' => count($members)));
+    }
+
+    if ($action === 'delete_group') {
+        $id = (int) ($payload['id'] ?? 0);
+        $own = $pdo->prepare('SELECT COUNT(*) FROM team_groups WHERE id = :id AND owner = :me AND team = :team');
+        $own->bindValue(':id', $id, PDO::PARAM_INT);
+        $own->bindValue(':me', $me, PDO::PARAM_INT);
+        $own->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($own);
+        if ((int) $own->fetchColumn() !== 1) {
+            say(403, array('error' => 'Only the person who made a group can delete it.'));
+        }
+        // the group leaves the lists of whoever can read or edit an entry (the entries keep their other editors)
+        $cleaned = 0;
+        foreach (array('inventory', 'items', 'experiments') as $table) {
+            foreach (array('canread', 'canwrite') as $col) {
+                $rows = $pdo->prepare("SELECT id, $col AS can FROM `$table` WHERE JSON_CONTAINS(JSON_EXTRACT($col, '$.teamgroups'), CAST(:g AS JSON))");
+                $rows->bindValue(':g', (string) $id);
+                $pdo->execute($rows);
+                $upd = $pdo->prepare("UPDATE `$table` SET $col = :can WHERE id = :id");
+                foreach ($rows->fetchAll() as $r) {
+                    $can = json_decode((string) $r['can'], true) ?: array();
+                    $can['teamgroups'] = array_values(array_diff(array_map('intval', (array) ($can['teamgroups'] ?? array())), array($id)));
+                    $upd->bindValue(':can', json_encode($can));
+                    $upd->bindValue(':id', (int) $r['id'], PDO::PARAM_INT);
+                    $pdo->execute($upd);
+                    $cleaned++;
+                }
+            }
+        }
+        $del = $pdo->prepare('DELETE FROM team_groups WHERE id = :id');
+        $del->bindValue(':id', $id, PDO::PARAM_INT);
+        $pdo->execute($del);
+        say(200, array('deleted' => true, 'cleaned' => $cleaned));
     }
 
     if ($action === 'current') {
@@ -114,7 +221,7 @@ try {
             return array_map('intval', $req->fetchAll(PDO::FETCH_COLUMN));
         };
         $users = $pick('users', 'SELECT u.userid AS id FROM users AS u INNER JOIN users2teams AS t ON t.users_id = u.userid WHERE t.teams_id = :team', 't.users_id');
-        $groups = $pick('teamgroups', 'SELECT id FROM team_groups WHERE team = :team', 'id');
+        $groups = $pick('teamgroups', 'SELECT g.id FROM team_groups AS g WHERE g.team = :team AND ' . $visible, 'g.id');
         $base = null;
         if (isset($payload['base']) && $payload['base'] !== '') {
             $base = array('owner' => 10, 'owner_admins' => 20, 'team' => 30)[(string) $payload['base']] ?? null;
