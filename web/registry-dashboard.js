@@ -240,10 +240,31 @@
     root.append(risks);
   }
 
+  // a tab in the background does not ask the server every minute (the checks read the whole Database); it catches up once when it is shown again
+  let waiting = false;
+  let wantsAuto = false;
+
+  function tick() {
+    if (document.hidden) {
+      waiting = true;
+      return;
+    }
+    load();
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && waiting && wantsAuto) {
+      waiting = false;
+      load();
+    }
+  });
+
   function schedule(on) {
     window.clearTimeout(timer);
+    wantsAuto = on;
+    waiting = false;
     if (on) {
-      timer = window.setTimeout(load, 60000);
+      timer = window.setTimeout(tick, 60000);
     }
   }
 
