@@ -118,8 +118,10 @@ final class OrderProcurements extends AbstractRest
         foreach ($rows as $row) {
             $procurementId = (string) $row['procurement_id'];
             $orders = $this->ordersOf($team, $procurementId, $mine ? $viewer : ($filterUser > 0 ? $filterUser : null));
-            $progress = $this->progressOf($team, $procurementId);
-            $detail = $this->itemsAndSheets($team, $procurementId);
+            // the confirmation's text is large: read and parse it once for both of the calls below
+            $basket = $this->basketOf($team, $procurementId);
+            $progress = $this->progressOf($team, $procurementId, count($basket));
+            $detail = $this->itemsAndSheets($team, $procurementId, $basket);
             $items[] = array(
                 'procurement_id' => $procurementId,
                 'order_numbers' => $row['order_numbers'] ?? '',
@@ -165,20 +167,14 @@ final class OrderProcurements extends AbstractRest
     }
 
     /**
-     * How many items of the procurement are collected, out of the rows of the basket in its confirmation PDF (null
-     * totals when no confirmation with a basket is attached).
+     * The rows of the basket in the latest confirmation of the procurement (empty when none is attached). The
+     * confirmation is the newest upload of the procurement's orders whose text holds "Warenkorb"; the query is the
+     * same one OrderSheets uses to read a basket.
      *
-     * @return array{collected: int, total: int|null, last_collected_at: string|null}
+     * @return list<array{key: string, label: string}>
      */
-    private function progressOf(int $team, string $procurementId): array
+    private function basketOf(int $team, string $procurementId): array
     {
-        $count = $this->Db->prepare('SELECT COUNT(DISTINCT item_index) AS collected, MAX(created_at) AS last_at FROM custom_order_sheet_items
-            WHERE team = :team AND procurement_id = :procurement_id');
-        $count->bindValue(':team', $team, PDO::PARAM_INT);
-        $count->bindValue(':procurement_id', $procurementId);
-        $this->Db->execute($count);
-        $counted = $count->fetch(PDO::FETCH_ASSOC);
-
         $confirmation = $this->Db->prepare("SELECT u.extracted_text FROM custom_order_uploads AS u
             INNER JOIN custom_orders AS o ON o.id = u.order_id
             WHERE o.team = :team AND (u.procurement_id = :procurement_id OR o.procurement_id = :procurement_id)
@@ -187,7 +183,25 @@ final class OrderProcurements extends AbstractRest
         $confirmation->bindValue(':procurement_id', $procurementId);
         $this->Db->execute($confirmation);
         $text = $confirmation->fetchColumn();
-        $total = $text === false ? 0 : count(ScanReader::basketItems((string) $text));
+        return $text === false ? array() : ScanReader::basketRows((string) $text);
+    }
+
+    /**
+     * How many items of the procurement are collected, out of the rows of the basket in its confirmation PDF (null
+     * totals when no confirmation with a basket is attached).
+     *
+     * @return array{collected: int, total: int|null, last_collected_at: string|null}
+     */
+    private function progressOf(int $team, string $procurementId, int $basketSize): array
+    {
+        $count = $this->Db->prepare('SELECT COUNT(DISTINCT item_index) AS collected, MAX(created_at) AS last_at FROM custom_order_sheet_items
+            WHERE team = :team AND procurement_id = :procurement_id');
+        $count->bindValue(':team', $team, PDO::PARAM_INT);
+        $count->bindValue(':procurement_id', $procurementId);
+        $this->Db->execute($count);
+        $counted = $count->fetch(PDO::FETCH_ASSOC);
+
+        $total = $basketSize;
         return array(
             'collected' => $total > 0 ? min((int) ($counted['collected'] ?? 0), $total) : (int) ($counted['collected'] ?? 0),
             'total' => $total > 0 ? $total : null,
@@ -199,20 +213,11 @@ final class OrderProcurements extends AbstractRest
      * Every item of the procurement's basket with the sheets it was collected on, and every signed sheet with the
      * items found on it.
      *
+     * @param list<array{key: string, label: string}> $basket the rows of the procurement's basket, from basketOf()
      * @return array{items: list<array{index: int, label: string, sheets: list<string>}>, sheets: list<array<string, mixed>>}
      */
-    private function itemsAndSheets(int $team, string $procurementId): array
+    private function itemsAndSheets(int $team, string $procurementId, array $basket): array
     {
-        $confirmation = $this->Db->prepare("SELECT u.extracted_text FROM custom_order_uploads AS u
-            INNER JOIN custom_orders AS o ON o.id = u.order_id
-            WHERE o.team = :team AND (u.procurement_id = :procurement_id OR o.procurement_id = :procurement_id)
-                AND u.extracted_text LIKE '%Warenkorb%' ORDER BY u.id DESC LIMIT 1");
-        $confirmation->bindValue(':team', $team, PDO::PARAM_INT);
-        $confirmation->bindValue(':procurement_id', $procurementId);
-        $this->Db->execute($confirmation);
-        $text = $confirmation->fetchColumn();
-        $basket = $text === false ? array() : ScanReader::basketRows((string) $text);
-
         $sheetsReq = $this->Db->prepare('SELECT s.id, s.sheet_name, s.filesize, s.created_at, s.items_found
             FROM custom_order_sheets AS s
             WHERE s.team = :team AND s.procurement_id = :procurement_id ORDER BY s.created_at, s.id');
