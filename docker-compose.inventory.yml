@@ -65,6 +65,8 @@ services:
       - ./web/ai-search.php:/elabftw/web/ai-search.php:ro
       - ./web/ai-features.inc.php:/elabftw/web/ai-features.inc.php:ro
       - ./web/ai-features.json:/elabftw/web/ai-features.json:ro
+      - ./web/plasmid-checks.php:/elabftw/web/plasmid-checks.php:ro
+      - ./web/admin-plasmid-checks.js:/elabftw/web/admin-plasmid-checks.js:ro
       - ./web/ai-chat.js:/elabftw/web/ai-chat.js:ro
       - ./src/templates/footer.html:/elabftw/src/templates/footer.html:ro
       - ./src/sql/custom/141_ai_search.sql:/elabftw/src/sql/custom/141_ai_search.sql:ro

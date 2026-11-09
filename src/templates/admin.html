@@ -860,10 +860,12 @@
   </div>
   <div class='pl-3' data-dbpane='ai' hidden>
     <div id='aiSearchApp' data-csrf='{{ App.Session.get('csrf') }}' data-sysadmin='{{ App.Users.userData.is_sysadmin == 1 ? '1' : '0' }}'></div>
+    <div id='plasmidChecksApp' data-csrf='{{ App.Session.get('csrf') }}'></div>
   </div>
   <script src='registry-modules.js?v={{ 'now'|date('YmdHi') }}'></script>
   <script src='admin-database.js?v={{ 'now'|date('YmdHi') }}'></script>
   <script src='admin-ai-search.js?v={{ 'now'|date('YmdHi') }}'></script>
+  <script src='admin-plasmid-checks.js?v={{ 'now'|date('YmdHi') }}'></script>
 </div>
 {# END DATABASE #}
 

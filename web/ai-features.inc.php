@@ -132,3 +132,15 @@ function aiModuleIntent(string $query): ?string
     }
     return null;
 }
+
+/** the bases of a GenBank file (the ORIGIN part), upper case, without numbers and spaces; '' when the file has none */
+function aiGenBankSequence(string $text): string
+{
+    $at = strpos($text, "\nORIGIN");
+    if ($at === false) {
+        return '';
+    }
+    $end = strpos($text, "\n//", $at);
+    $part = substr($text, $at + 7, $end === false ? null : $end - $at - 7);
+    return strtoupper((string) preg_replace('/[^acgtnACGTN]/', '', $part));
+}
