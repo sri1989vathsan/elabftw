@@ -20,7 +20,10 @@
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
       body: JSON.stringify(body),
     }).then(function (response) {
-      return response.json();
+      // an error page and not data usually means the session ended (signed out, or the account was removed)
+      return response.json().catch(function () {
+        return { error: 'Your session has probably ended. Reload the page and sign in again.' };
+      });
     });
   };
   const make = function (tag, attributes, text) {
