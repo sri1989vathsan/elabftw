@@ -48,12 +48,26 @@ let level = '';
 let levelReady = false;
 // folders whose entries are shown under their row, and the entries fetched for them
 const expandedFolders = new Set<string>();
-// the switch above the list: every folder shows its entries (the arrows then collapse single folders)
-let showAllEntries = false;
-const collapsedFolders = new Set<string>();
+// the switch above the list: while it is on, clicking a folder opens it in place to show its experiments and resources (like a
+// folder in Finder); while it is off nothing is shown and a click on a folder works as before. Remembered per user in this browser.
+let entriesOn = false;
+let entriesOnLoaded = false;
+const entriesOnKey = (): string => `${viewKey()}-entries`;
+function entriesMode(): boolean {
+  if (!entriesOnLoaded) {
+    entriesOnLoaded = true;
+    try {
+      entriesOn = window.localStorage.getItem(entriesOnKey()) === '1';
+    } catch {
+      entriesOn = false;
+    }
+  }
+  return entriesOn;
+}
 // folders listed twice (bookmarked and in the level below) show their entries only in the lower list
 let entriesElsewhere = new Set<string>();
-const isOpen = (id: string): boolean => (showAllEntries ? !collapsedFolders.has(id) : expandedFolders.has(id));
+// a folder is open only while the switch is on: the arrow in front of it just shows (and flips) the same state as a click on it
+const isOpen = (id: string): boolean => entriesMode() && expandedFolders.has(id);
 
 interface FolderEntry { type: 'experiments' | 'items'; id: number; title: string }
 const entryCache = new Map<string, { at: number; entries: FolderEntry[] | null }>();
@@ -262,6 +276,8 @@ function ensureEntries(folderId: string): void {
 
 /** The arrow in front of a folder's name that shows or hides the entries filed in it (only folders that hold some). */
 function entriesToggle(row: FolderRow): HTMLElement {
+  // with the switch off there is no arrow at all, so nothing can open a folder behind the switch's back
+  if (!entriesMode()) return element('span');
   if (row.experiments + row.resources === 0 || entriesElsewhere.has(row.id)) return element('span', 'folder-entries-toggle-placeholder');
   const open = isOpen(row.id);
   const button = element('button', 'folder-action-btn hl-hover-gray rounded folder-entries-toggle');
@@ -280,6 +296,11 @@ function folderLink(row: FolderRow, withPath: boolean, entityCount: number | nul
   link.href = row.href;
   link.title = row.path;
   link.setAttribute('data-folder-flat-link', '');
+  // switch on: a click on a folder that holds entries opens or closes it in place (a modified click still follows the link)
+  if (entriesMode() && row.experiments + row.resources > 0 && !entriesElsewhere.has(row.id)) {
+    link.dataset.action = 'toggle-folder-entries';
+    link.dataset.folderId = row.id;
+  }
   link.append(element('i', 'fas fa-folder fa-fw mr-1'), element('span', 'folder-name', row.name));
   if (withPath && row.path !== row.name) {
     const parent = row.path.includes(PATH_SEPARATOR) ? row.path.slice(0, row.path.lastIndexOf(PATH_SEPARATOR)) : '';
@@ -478,7 +499,7 @@ function ensureFlatContainer(tree: HTMLElement): HTMLElement {
   const allEntries = element('button', 'btn btn-sm btn-outline-secondary mb-2 folder-all-entries-toggle');
   allEntries.type = 'button';
   allEntries.dataset.action = 'toggle-folder-all-entries';
-  allEntries.title = i18next.t('Show or hide the experiments and resources in every folder');
+  allEntries.title = i18next.t('While on, click a folder to open it and see its experiments and resources');
   const body = element('div', 'folder-flat-body');
   const bar = element('div', 'folder-level-bar-holder mt-2');
   flat.append(filter, allEntries, body, bar);
@@ -515,9 +536,9 @@ export function syncFolderView(): void {
   if (!body) return;
   const allButton = flat.querySelector<HTMLElement>('.folder-all-entries-toggle');
   if (allButton) {
-    allButton.setAttribute('aria-pressed', String(showAllEntries));
-    allButton.classList.toggle('active', showAllEntries);
-    allButton.replaceChildren(element('i', `fas ${showAllEntries ? 'fa-eye-slash' : 'fa-eye'} fa-fw mr-1`), document.createTextNode(i18next.t(showAllEntries ? 'Hide experiments/resources' : 'Show experiments/resources')));
+    allButton.setAttribute('aria-pressed', String(entriesMode()));
+    allButton.classList.toggle('active', entriesMode());
+    allButton.replaceChildren(element('i', `fas ${entriesMode() ? 'fa-eye-slash' : 'fa-eye'} fa-fw mr-1`), document.createTextNode(i18next.t(entriesMode() ? 'Hide experiments/resources' : 'Show experiments/resources')));
   }
   const entityType = (document.getElementById('folderEntityTypeSelect') as HTMLSelectElement | null)?.value ?? 'experiments';
   const all = collectRows(tree);
@@ -602,6 +623,8 @@ export function initFolderViews(): void {
     });
   });
   on('toggle-folder-entries', (el: HTMLElement, event: Event) => {
+    // ctrl/cmd/shift/middle click on a folder's name keeps its normal meaning (open the folder's list, in a new tab or window)
+    if (event instanceof MouseEvent && (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)) return;
     event.preventDefault();
     event.stopPropagation();
     const id = el.dataset.folderId ?? '';
@@ -609,19 +632,22 @@ export function initFolderViews(): void {
     // a row can show up twice (bookmarked block and the level below it): both follow the same state
     if (isOpen(id)) {
       expandedFolders.delete(id);
-      collapsedFolders.add(id);
     } else {
       expandedFolders.add(id);
-      collapsedFolders.delete(id);
       // opening always shows fresh entries
       entryCache.delete(id);
     }
     syncFolderView();
   });
   on('toggle-folder-all-entries', () => {
-    showAllEntries = !showAllEntries;
+    entriesOn = !entriesMode();
+    try {
+      window.localStorage.setItem(entriesOnKey(), entriesOn ? '1' : '0');
+    } catch {
+      // the switch then only lasts until the page is reloaded
+    }
+    // every folder starts closed whenever the switch is flipped
     expandedFolders.clear();
-    collapsedFolders.clear();
     entryCache.clear();
     syncFolderView();
   });
