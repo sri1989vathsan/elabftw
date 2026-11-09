@@ -179,7 +179,7 @@
       return;
     }
     saved = body.pairs || [];
-    detected = { users: body.users, people: body.people || [] };
+    detected = { users: body.users, people: body.people || [], groups: body.groups || [] };
     autofill();
     fill.addEventListener('click', function () {
       autofill();
@@ -204,7 +204,7 @@
     message.textContent = '';
     const table = element('table', 'table table-sm');
     const head = element('tr');
-    ['Person of LabCollector', 'User of eLabFTW', 'Matched by'].forEach(function (title) {
+    ['Person of LabCollector', 'User of eLabFTW', 'Matched by', 'Others who can edit their entries'].forEach(function (title) {
       head.append(element('th', '', title));
     });
     table.append(head);
@@ -243,9 +243,60 @@
       });
       const cell = element('td');
       cell.append(select);
-      row.append(cell, how);
+      // besides the owner: user groups and users who may also edit the entries of this person
+      let wanted = { users: [], teamgroups: [] };
+      try {
+        wanted = (before && before.editors && typeof before.editors === 'object' ? before.editors : JSON.parse((before && before.editors) || '{}')) || wanted;
+      } catch (error) {
+        wanted = { users: [], teamgroups: [] };
+      }
+      const editorBoxes = [];
+      const editorCell = element('td');
+      const details = element('details');
+      const summary = element('summary', 'small', '');
+      details.append(summary);
+      const refreshSummary = function () {
+        const n = editorBoxes.filter(function (b) {
+          return b.box.checked;
+        }).length;
+        summary.textContent = n === 0 ? 'nobody else' : n + ' chosen';
+      };
+      (detected.groups || []).forEach(function (g) {
+        const label = element('label', 'd-block small mb-0 font-weight-normal');
+        const box = element('input', 'mr-1');
+        box.type = 'checkbox';
+        box.checked = (wanted.teamgroups || []).indexOf(Number(g.id)) >= 0;
+        box.addEventListener('change', refreshSummary);
+        label.append(box, 'group ' + g.name);
+        details.append(label);
+        editorBoxes.push({ kind: 'teamgroups', id: Number(g.id), box: box });
+      });
+      (detected.users || []).forEach(function (u) {
+        if (!(Number(u.id) > 0)) {
+          return;
+        }
+        const label = element('label', 'd-block small mb-0 font-weight-normal');
+        const box = element('input', 'mr-1');
+        box.type = 'checkbox';
+        box.checked = (wanted.users || []).indexOf(Number(u.id)) >= 0;
+        box.addEventListener('change', refreshSummary);
+        label.append(box, u.name);
+        details.append(label);
+        editorBoxes.push({ kind: 'users', id: Number(u.id), box: box });
+      });
+      refreshSummary();
+      editorCell.append(details);
+      row.append(cell, how, editorCell);
       table.append(row);
-      rows.push({ person: person, select: select });
+      rows.push({ person: person, select: select, editors: function () {
+        const out = { users: [], teamgroups: [] };
+        editorBoxes.forEach(function (b) {
+          if (b.box.checked) {
+            out[b.kind].push(b.id);
+          }
+        });
+        return out;
+      } });
     });
     const post = async function (body) {
       const response = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify(body) });
@@ -263,7 +314,7 @@
           return { lc_name: r.person.name, lc_email: r.person.email, elab_name: '*', elab_email: '' };
         }
         const user = users[Number(r.select.value)];
-        return { lc_name: r.person.name, lc_email: r.person.email, elab_name: user.name, elab_email: user.email };
+        return { lc_name: r.person.name, lc_email: r.person.email, elab_name: user.name, elab_email: user.email, editors: r.editors() };
       });
       const answer = await post({ action: 'save_owner_map', pairs: pairs });
       saved = pairs.map(function (p) {
@@ -375,7 +426,7 @@
               });
               const done = await post({ action: 'apply_owner_map', ids: ids });
               report.textContent = '';
-              say(done.changed + ' entries have a new owner, ' + done.opened + ' were opened for all the users.', false);
+              say(done.changed + ' entries have a new owner, ' + done.opened + ' were opened for all the users' + (done.shared ? ', ' + done.shared + ' got more people who can edit them' : '') + '.', false);
             } catch (error) {
               say(error.message, true);
               confirm.disabled = false;

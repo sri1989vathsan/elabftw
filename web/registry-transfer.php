@@ -123,7 +123,7 @@ $nameTokens = static function (string $name): array {
 // the matching saved by an admin: LabCollector e-mail or name to the user of the team (found by the e-mail, then by the name, of the user written
 // in the match: the user can have been made after it was saved)
 $ownerMapRows = static function () use ($pdo, $teamId, $nameTokens): array {
-    $req = $pdo->prepare('SELECT lc_name, lc_email, elab_name, elab_email FROM registry_owner_map WHERE team = :team');
+    $req = $pdo->prepare('SELECT lc_name, lc_email, elab_name, elab_email, editors FROM registry_owner_map WHERE team = :team');
     $req->bindValue(':team', $teamId, PDO::PARAM_INT);
     $pdo->execute($req);
     return $req->fetchAll();
@@ -227,7 +227,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         if (!$isAdmin) {
             respond(403, array('error' => 'Only an admin can match the owners.'));
         }
-        $req = $pdo->prepare('SELECT lc_name, lc_email, elab_name, elab_email FROM registry_owner_map WHERE team = :team ORDER BY lc_name, lc_email');
+        $req = $pdo->prepare('SELECT lc_name, lc_email, elab_name, elab_email, editors FROM registry_owner_map WHERE team = :team ORDER BY lc_name, lc_email');
         $req->bindValue(':team', $teamId, PDO::PARAM_INT);
         $pdo->execute($req);
         $pairs = $req->fetchAll();
@@ -249,7 +249,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
             }
         }
         usort($people, static fn(array $a, array $b): int => strcasecmp($a['name'], $b['name']));
-        respond(200, array('pairs' => $pairs, 'users' => $teamUsers(), 'people' => $people));
+        // the user groups of the team: a match can also name the people who may edit the entries of this person
+        $groupReq = $pdo->prepare('SELECT id, name FROM team_groups WHERE team = :team ORDER BY name');
+        $groupReq->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($groupReq);
+        respond(200, array('pairs' => $pairs, 'users' => $teamUsers(), 'people' => $people, 'groups' => $groupReq->fetchAll()));
     }
     if (isset($_GET['users'])) {
         respond(200, array('users' => $isAdmin ? $teamUsers() : array(), 'is_admin' => $isAdmin, 'me' => $userId, 'default_owner' => $defaultOwner > 0 ? $defaultOwner : null));
@@ -831,7 +835,7 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'save_owner_map') {
         $drop = $pdo->prepare('DELETE FROM registry_owner_map WHERE team = :team');
         $drop->bindValue(':team', $teamId, PDO::PARAM_INT);
         $pdo->execute($drop);
-        $add = $pdo->prepare('INSERT INTO registry_owner_map (team, lc_name, lc_email, elab_name, elab_email) VALUES (:team, :lcn, :lce, :en, :ee)');
+        $add = $pdo->prepare('INSERT INTO registry_owner_map (team, lc_name, lc_email, elab_name, elab_email, editors) VALUES (:team, :lcn, :lce, :en, :ee, :ed)');
         $saved = 0;
         foreach (array_slice(is_array($payload['pairs'] ?? null) ? $payload['pairs'] : array(), 0, 2000) as $pair) {
             $lcName = mb_substr(trim((string) ($pair['lc_name'] ?? '')), 0, 255);
@@ -846,6 +850,10 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'save_owner_map') {
             $add->bindValue(':lce', $lcEmail);
             $add->bindValue(':en', $elabName);
             $add->bindValue(':ee', $elabEmail);
+            // who may also edit their entries: users and user groups of this team, as JSON
+            $editorIds = static fn(mixed $list): array => array_values(array_unique(array_filter(array_map('intval', is_array($list) ? $list : array()), static fn(int $n): bool => $n > 0)));
+            $editors = is_array($pair['editors'] ?? null) ? array('users' => $editorIds($pair['editors']['users'] ?? null), 'teamgroups' => $editorIds($pair['editors']['teamgroups'] ?? null)) : null;
+            $add->bindValue(':ed', $editors !== null && ($editors['users'] !== array() || $editors['teamgroups'] !== array()) ? json_encode($editors) : null);
             $pdo->execute($add);
             $saved++;
         }
@@ -858,6 +866,48 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'save_owner_map') {
         respond(400, array('error' => $e->getMessage()));
     }
 }
+
+// the people and groups of $editors ({users: [...], teamgroups: [...]}) may also edit the entries $ids (added to the ones who can already; the owner is not touched)
+$shareWith = static function (array $ids, array $editors) use ($pdo, $teamId): int {
+    $users = array_values(array_unique(array_map('intval', (array) ($editors['users'] ?? array()))));
+    $groups = array_values(array_unique(array_map('intval', (array) ($editors['teamgroups'] ?? array()))));
+    if (($users === array() && $groups === array()) || $ids === array()) {
+        return 0;
+    }
+    $norm = static function (mixed $json): array {
+        $p = is_string($json) ? (json_decode($json, true) ?? array()) : array();
+        $out = array();
+        foreach (array('teams', 'teamgroups', 'users') as $k) {
+            $out[$k] = array_values(array_unique(array_map('intval', (array) ($p[$k] ?? array()))));
+        }
+        return $out;
+    };
+    $changed = 0;
+    foreach (array_chunk(array_values(array_unique($ids)), 500) as $chunk) {
+        $read = $pdo->prepare('SELECT id, canread, canwrite FROM inventory WHERE team = :team AND id IN (' . implode(',', array_map('intval', $chunk)) . ')');
+        $read->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($read);
+        $write = $pdo->prepare('UPDATE inventory SET canread = :cr, canwrite = :cw WHERE id = :id');
+        foreach ($read->fetchAll() as $e) {
+            $cw = $norm($e['canwrite']);
+            $cr = $norm($e['canread']);
+            $before = json_encode(array($cw, $cr));
+            $cw['users'] = array_values(array_unique(array_merge($cw['users'], $users)));
+            $cw['teamgroups'] = array_values(array_unique(array_merge($cw['teamgroups'], $groups)));
+            $cr['users'] = array_values(array_unique(array_merge($cr['users'], $cw['users'])));
+            $cr['teamgroups'] = array_values(array_unique(array_merge($cr['teamgroups'], $cw['teamgroups'])));
+            if (json_encode(array($cw, $cr)) === $before) {
+                continue;
+            }
+            $write->bindValue(':cr', json_encode($cr));
+            $write->bindValue(':cw', json_encode($cw));
+            $write->bindValue(':id', (int) $e['id'], PDO::PARAM_INT);
+            $pdo->execute($write);
+            $changed++;
+        }
+    }
+    return $changed;
+};
 
 // the saved matching is applied to the entries that exist (admins only): each goes to the user matched to its LabCollector owner; the entries of
 // Wild Card are opened for all the users. With dry_run, only what would change is counted
@@ -894,6 +944,8 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
             if ($target === null) {
                 continue;
             }
+            // the people who may also edit the entries of this person (saved with the match)
+            $target['editors'] = json_decode((string) ($pair['editors'] ?? ''), true) ?: null;
             if ($pair['lc_email'] !== '') {
                 $byLcMail[strtolower($pair['lc_email'])] = $target;
             }
@@ -911,6 +963,7 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
         $wild = array();
         $unmatched = array();
         $already = 0;
+        $share = array();
         foreach ($read->fetchAll() as $entry) {
             $person = $parseLcOwner((string) $entry['owner']);
             if ($person['name'] === '' && $person['email'] === '') {
@@ -932,6 +985,10 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
                 $unmatched[$label] = ($unmatched[$label] ?? 0) + 1;
                 continue;
             }
+            if (!empty($target['editors'])) {
+                $share[(int) $target['id']]['editors'] = $target['editors'];
+                $share[(int) $target['id']]['ids'][] = (int) $entry['id'];
+            }
             if ((int) $entry['userid'] === (int) $target['id']) {
                 $already++;
                 continue;
@@ -952,9 +1009,14 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
                 $open->bindValue(':team', $teamId, PDO::PARAM_INT);
                 $pdo->execute($open);
             }
-            respond(200, array('changed' => $changed, 'opened' => count($wild), 'already' => $already, 'unmatched' => $unmatched, 'moves' => $summary));
+            // besides the owner: the people and groups saved with the match may also edit the entries (added to the ones that can already)
+            $shared = 0;
+            foreach ($share as $group) {
+                $shared += $shareWith($group['ids'], $group['editors']);
+            }
+            respond(200, array('changed' => $changed, 'opened' => count($wild), 'shared' => $shared, 'already' => $already, 'unmatched' => $unmatched, 'moves' => $summary));
         }
-        respond(200, array('would_change' => array_sum(array_column($summary, 'entries')), 'would_open' => count($wild), 'wild_items' => $wildItems, 'already' => $already, 'unmatched' => $unmatched, 'moves' => $summary));
+        respond(200, array('would_change' => array_sum(array_column($summary, 'entries')), 'would_open' => count($wild), 'would_share' => array_sum(array_map(static fn(array $g): int => count($g['ids']), $share)), 'wild_items' => $wildItems, 'already' => $already, 'unmatched' => $unmatched, 'moves' => $summary));
     } catch (Throwable $e) {
         respond(400, array('error' => $e->getMessage()));
     }
