@@ -143,6 +143,7 @@ final class CustomMigrationRunner
         '102_folder_view_preference.sql',
         '103_other_links.sql',
         '104_order_procurement_index.sql',
+        '105_folder_tree_covering_indexes.sql',
     );
 
     private Db $Db;
