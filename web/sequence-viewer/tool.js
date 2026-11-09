@@ -36,7 +36,7 @@
         a.className = 'plasmid-result';
         a.href = link(entry, file);
         const title = document.createElement('strong');
-        title.textContent = entry.title;
+        title.textContent = (entry.custom_id ? '#' + entry.custom_id + ' ' : '') + entry.title;
         a.append(title, document.createTextNode(' ' + file.real_name));
         results.append(a);
       });
