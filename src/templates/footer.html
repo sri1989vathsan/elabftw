@@ -110,4 +110,5 @@
 {# Database: who can edit an entry or a selection of entries (the script does nothing on other pages) #}
 {% if App.Session.has('is_auth') %}
 <script src='registry-permissions.js?v={{ 'now'|date('YmdHi') }}' defer></script>
+<script src='registry-reads-button.js?v={{ 'now'|date('YmdHi') }}' defer></script>
 {% endif %}
