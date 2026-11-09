@@ -37,7 +37,7 @@ use function uasort;
  * their list, the field that holds the sequence, whether a sequence file is needed to register).
  *
  * GET gives the modules of the team with their fields and settings (everyone: the lists need the columns).
- * POST {action: save, id, fields: [{name, type, options, required, value, unit}], settings: {columns: [{key, label}], sequence_field,
+ * POST {action: save, id, fields: [{name, type, options, required, value, unit}], settings: {columns: [{key, label}], sequence_field, allows_reads,
  * requires_sequence_file, track_low_stock, default_min_stock, default_min_unit}, apply_existing} is for admins; apply_existing adds the new fields to the entries that exist.
  */
 require_once __DIR__ . '/app/init.inc.php';
@@ -179,6 +179,10 @@ try {
         'default_min_stock' => isset($incoming['default_min_stock']) && is_numeric($incoming['default_min_stock']) && (float) $incoming['default_min_stock'] >= 0 && trim((string) ($incoming['default_min_unit'] ?? '')) !== '' ? (float) $incoming['default_min_stock'] : null,
         'default_min_unit' => isset($incoming['default_min_stock']) && is_numeric($incoming['default_min_stock']) && trim((string) ($incoming['default_min_unit'] ?? '')) !== '' ? mb_substr(trim((string) $incoming['default_min_unit']), 0, 20) : null,
     );
+    // sequencing reads (.ab1 files) can be attached to the entries of this module: shows the "Attach reads" button (left out by a client that does not send it)
+    if (array_key_exists('allows_reads', $incoming)) {
+        $settings['allows_reads'] = !empty($incoming['allows_reads']);
+    }
 
     $req = $pdo->prepare('UPDATE inventory_categories SET fields = :fields, settings = :settings WHERE id = :id AND team = :team');
     $req->bindValue(':fields', json_encode(array('extra_fields' => (object) $extra)));

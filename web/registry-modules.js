@@ -316,7 +316,17 @@
         settings.requires_sequence_file = need.checked;
       });
       needFile.append(need, document.createTextNode(' A sequence file (GenBank, FASTA, SnapGene) is needed to register an entry in the lab Database'));
-      rulesBox.append(sequenceLabel, needFile);
+      // sequencing reads: the "Attach reads" button of the Database list is only shown for modules that take them (plasmids)
+      const readsLabel = element('label', 'd-block mb-2');
+      const reads = element('input');
+      reads.type = 'checkbox';
+      reads.checked = settings.allows_reads !== undefined ? Boolean(settings.allows_reads) : /^plasmids?$/i.test(String(module.title || ''));
+      settings.allows_reads = reads.checked;
+      reads.addEventListener('change', function () {
+        settings.allows_reads = reads.checked;
+      });
+      readsLabel.append(reads, document.createTextNode(' Sequencing reads (.ab1 files) can be attached to the entries of this module (shows the "Attach reads" button)'));
+      rulesBox.append(sequenceLabel, needFile, readsLabel);
 
       // low stock: a module can leave it out (plasmids) or give its entries a default minimum (an entry's own minimum wins)
       const track = element('label', 'd-block mb-2');
