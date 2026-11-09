@@ -590,4 +590,11 @@ final class Inventory extends AbstractConcreteEntity
     {
         return 'users_canwrite_resources';
     }
+
+    /** the owner of a Database entry may change who can edit it (the lock on the permissions is for everybody else) */
+    #[Override]
+    protected function ownerMayChangeLockedPermissions(): bool
+    {
+        return (int) ($this->entityData['userid'] ?? 0) === (int) ($this->Users->userData['userid'] ?? -1);
+    }
 }

@@ -835,6 +835,12 @@ abstract class AbstractEntity extends AbstractRest
         return array();
     }
 
+    /** Database entries: their owner may still change who can edit them, although the permissions are locked for everybody else (see Inventory) */
+    protected function ownerMayChangeLockedPermissions(): bool
+    {
+        return false;
+    }
+
     /**
      * One rule for who can see and who can edit, wherever the change comes from
      * (the Visibility and Can write windows, Share, the bulk bar on the lists,
@@ -1267,6 +1273,7 @@ abstract class AbstractEntity extends AbstractRest
             if (($this->entityData[$immutableKey] ?? 0) === 1
                 && !($this instanceof AbstractTemplateEntity)
                 && !($this->Users->isAdmin)
+                && !$this->ownerMayChangeLockedPermissions()
             ) {
                 throw new UnprocessableContentException(_('Cannot modify permissions on entry with immutable permissions.'));
             }
