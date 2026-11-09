@@ -117,7 +117,7 @@ final class OrderProcurements extends AbstractRest
         $rows = $req->fetchAll(PDO::FETCH_ASSOC);
 
         // Everything the rows below need is read for the whole page at once (a handful of queries), not once per row.
-        $procurementIds = array_map(static fn (array $row): string => (string) $row['procurement_id'], $rows);
+        $procurementIds = array_values(array_map(static fn(array $row): string => (string) $row['procurement_id'], $rows));
         $ordersOf = $this->ordersOf($team, $procurementIds, $mine ? $viewer : ($filterUser > 0 ? $filterUser : null));
         $baskets = $this->basketsOf($team, $procurementIds);
         $collectedOf = $this->collectedOf($team, $procurementIds);
@@ -169,14 +169,14 @@ final class OrderProcurements extends AbstractRest
         }
         $selects = array();
         $bind = array(':team' => array($team, PDO::PARAM_INT)) + $extraBind;
-        foreach (array_values($procurementIds) as $i => $procurementId) {
+        foreach ($procurementIds as $i => $procurementId) {
             $selects[] = $i === 0 ? 'SELECT :pid0 AS pid' : sprintf('SELECT :pid%d', $i);
             $bind[sprintf(':pid%d', $i)] = array($procurementId, PDO::PARAM_STR);
         }
         $req = $this->Db->prepare('WITH p AS (' . implode(' UNION ALL ', $selects) . ') ' . $body);
         $this->bindAll($req, $bind);
         $this->Db->execute($req);
-        return $req->fetchAll(PDO::FETCH_ASSOC);
+        return array_values($req->fetchAll(PDO::FETCH_ASSOC));
     }
 
     /**
@@ -240,7 +240,7 @@ final class OrderProcurements extends AbstractRest
         if ($latest === array()) {
             return array();
         }
-        $uploadIds = array_values(array_unique(array_map(static fn (array $row): int => (int) $row['upload_id'], $latest)));
+        $uploadIds = array_values(array_unique(array_map(static fn(array $row): int => (int) $row['upload_id'], $latest)));
         $req = $this->Db->prepare(sprintf(
             'SELECT id, extracted_text FROM custom_order_uploads WHERE id IN (%s)',
             implode(',', $uploadIds),
@@ -363,7 +363,7 @@ final class OrderProcurements extends AbstractRest
                         'long_name' => (string) $file['long_name'],
                         'storage' => (int) $file['storage'],
                     ),
-                    'items' => array_map(static fn (int $i): string => $basket[$i]['label'] ?? '#' . ($i + 1), $found),
+                    'items' => array_map(static fn(int $i): string => $basket[$i]['label'] ?? '#' . ($i + 1), $found),
                 );
             }
             $detail[$pid] = array('items' => $items, 'sheets' => $sheets);
