@@ -1639,9 +1639,25 @@
     // load() already keeps the list mounted during a background reload
     // (see the loading && visibleItems.length === 0 guard below), so this
     // doesn't cause any visible jump.
-    const refreshInterval = setInterval(() => { void load(); }, 60000);
+    // Not while the tab is in the background (nobody sees the result): a skipped
+    // tick is made up for once, when the tab becomes visible again.
+    let refreshSkipped = false;
+    const refreshInterval = setInterval(() => {
+      if (document.hidden) {
+        refreshSkipped = true;
+        return;
+      }
+      void load();
+    }, 60000);
+    const onTabVisible = (): void => {
+      if (document.hidden || !refreshSkipped) return;
+      refreshSkipped = false;
+      void load();
+    };
+    document.addEventListener('visibilitychange', onTabVisible);
     return () => {
       clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', onTabVisible);
       window.removeEventListener('dragenter', onPageDragEnter);
       window.removeEventListener('dragleave', onPageDragLeave);
       window.removeEventListener('drop', onPageDragEnd);
