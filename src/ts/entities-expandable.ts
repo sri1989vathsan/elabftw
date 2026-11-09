@@ -205,7 +205,7 @@ function defaultColumnsFor(rows: Row[]): Column[] {
 
 // the columns a user hides or adds, kept on the server for each user and module (a module key is the id of the module, or "mixed" for the
 // lists that have several modules); what the browser kept before is sent to the server once
-type ColumnChoice = { hidden: string[]; extra: string[] };
+type ColumnChoice = { hidden: string[]; extra: string[]; order: string[] };
 const HIDDEN_COLUMNS_KEY = 'registry_hidden_columns_v1';
 const EXTRA_COLUMNS_KEY = 'registry_extra_columns_v1';
 let columnChoices = new Map<string, ColumnChoice>();
@@ -216,12 +216,12 @@ const moduleKeyOf = (rows: Row[]): string => {
 const csrfToken = (): string => document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
 
 function saveColumnChoice(moduleKey: string): void {
-  const choice = columnChoices.get(moduleKey) ?? { hidden: [], extra: [] };
+  const choice = columnChoices.get(moduleKey) ?? { hidden: [], extra: [], order: [] };
   void fetch('registry-columns.php', {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrfToken() },
-    body: JSON.stringify({ module_key: moduleKey, hidden: choice.hidden, extra: choice.extra }),
+    body: JSON.stringify({ module_key: moduleKey, hidden: choice.hidden, extra: choice.extra, order: choice.order }),
   }).catch(() => {
     // the choice stays for this visit, it is saved with the next change
   });
@@ -242,7 +242,7 @@ async function loadColumnChoices(): Promise<void> {
     const oldExtra = JSON.parse(localStorage.getItem(EXTRA_COLUMNS_KEY) ?? '{}') as Record<string, string[]>;
     new Set([...Object.keys(oldHidden), ...Object.keys(oldExtra)]).forEach(key => {
       if (!columnChoices.has(key)) {
-        columnChoices.set(key, { hidden: oldHidden[key] ?? [], extra: oldExtra[key] ?? [] });
+        columnChoices.set(key, { hidden: oldHidden[key] ?? [], extra: oldExtra[key] ?? [], order: [] });
         saveColumnChoice(key);
       }
     });
@@ -256,11 +256,58 @@ async function loadColumnChoices(): Promise<void> {
 const loadHiddenColumns = (moduleKey: string): Set<string> => new Set(columnChoices.get(moduleKey)?.hidden ?? []);
 const loadExtraColumns = (moduleKey: string): Set<string> => new Set(columnChoices.get(moduleKey)?.extra ?? []);
 function saveHiddenColumns(moduleKey: string, hidden: Set<string>): void {
-  columnChoices.set(moduleKey, { hidden: [...hidden], extra: columnChoices.get(moduleKey)?.extra ?? [] });
+  columnChoices.set(moduleKey, { hidden: [...hidden], extra: columnChoices.get(moduleKey)?.extra ?? [], order: columnChoices.get(moduleKey)?.order ?? [] });
   saveColumnChoice(moduleKey);
 }
+const loadColumnOrder = (moduleKey: string): string[] => columnChoices.get(moduleKey)?.order ?? [];
+function saveColumnOrder(moduleKey: string, order: string[]): void {
+  const choice = columnChoices.get(moduleKey) ?? { hidden: [], extra: [], order: [] };
+  columnChoices.set(moduleKey, { ...choice, order });
+  saveColumnChoice(moduleKey);
+}
+// the columns in the order the user chose: the ID stays first, columns that are not in the chosen order (new ones) keep their place after the others
+function inChosenOrder(columns: Column[], order: string[]): Column[] {
+  const rank = (c: Column): number => {
+    const at = order.indexOf(c.key);
+    return at === -1 ? order.length : at;
+  };
+  const id = columns.filter(c => c.key === 'ID');
+  const rest = columns.filter(c => c.key !== 'ID');
+  return [...id, ...rest.map((c, i) => ({ c, i })).sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i).map(x => x.c)];
+}
+// a header that can be dragged to another place among the columns (the ID stays first); a click on it still sorts
+function makeDraggableHeader(th: HTMLElement, key: string, keys: string[], onMove: (order: string[]) => void): void {
+  th.draggable = true;
+  th.title = 'Click to sort, drag to move the column';
+  const side = (event: DragEvent): 'before' | 'after' => {
+    const box = th.getBoundingClientRect();
+    return event.clientX < box.left + box.width / 2 ? 'before' : 'after';
+  };
+  const clear = (): void => th.classList.remove('column-drop-before', 'column-drop-after');
+  th.addEventListener('dragstart', event => {
+    event.dataTransfer?.setData('text/x-column-key', key);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+  });
+  th.addEventListener('dragover', event => {
+    if (!event.dataTransfer?.types.includes('text/x-column-key')) return;
+    event.preventDefault();
+    clear();
+    th.classList.add(side(event) === 'before' ? 'column-drop-before' : 'column-drop-after');
+  });
+  th.addEventListener('dragleave', clear);
+  th.addEventListener('drop', event => {
+    const from = event.dataTransfer?.getData('text/x-column-key') ?? '';
+    clear();
+    if (from === '' || from === key || !keys.includes(from)) return;
+    event.preventDefault();
+    const order = keys.filter(k => k !== from);
+    const at = order.indexOf(key) + (side(event) === 'after' ? 1 : 0);
+    order.splice(at, 0, from);
+    onMove(order);
+  });
+}
 function saveExtraColumns(moduleKey: string, extra: Set<string>): void {
-  columnChoices.set(moduleKey, { hidden: columnChoices.get(moduleKey)?.hidden ?? [], extra: [...extra] });
+  columnChoices.set(moduleKey, { hidden: columnChoices.get(moduleKey)?.hidden ?? [], extra: [...extra], order: columnChoices.get(moduleKey)?.order ?? [] });
   saveColumnChoice(moduleKey);
 }
 
@@ -502,7 +549,7 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
   }
   // the ID stays (it opens the entry when the title is hidden); the other columns can be hidden by the user (button Columns)
   const hidden = loadHiddenColumns(moduleKeyOf(allRows));
-  const columns = columnsFor(allRows).filter(c => c.key === 'ID' || !hidden.has(c.key));
+  const columns = inChosenOrder(columnsFor(allRows).filter(c => c.key === 'ID' || !hidden.has(c.key)), loadColumnOrder(moduleKeyOf(allRows)));
   const mixedModules = new Set(allRows.map(r => r.category_title ?? '')).size > 1;
   const table = el('table', 'table table-sm expandable-table');
   const head = el('tr');
@@ -516,6 +563,12 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
   columns.forEach(c => {
     const th = el('th', c.key === 'ID' ? 'id-cell' : '');
     sortableHeader(th, c.label, c.key, sort, onSort);
+    if (c.key !== 'ID') {
+      makeDraggableHeader(th, c.key, columns.map(x => x.key).filter(k => k !== 'ID'), order => {
+        saveColumnOrder(moduleKeyOf(allRows), order);
+        render(container, allRows, sort, onSort, ui);
+      });
+    }
     head.append(th);
   });
   // the last column holds the copy button of each row
@@ -1102,6 +1155,7 @@ export function mountExpandableTable(rootElement: HTMLElement | null, order: str
     showAll.addEventListener('click', () => {
       saveHiddenColumns(moduleKey, new Set());
       saveExtraColumns(moduleKey, new Set());
+      saveColumnOrder(moduleKey, []);
       redraw();
       fillColumnsPanel();
     });

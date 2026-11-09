@@ -30,8 +30,8 @@ use function preg_match;
 /**
  * The columns a user hides or adds in the tables of the database, for each module: they follow the account.
  *
- * GET gives {prefs: {<module key>: {hidden: [keys], extra: [field names]}}} of the user.
- * POST {module_key, hidden, extra} saves the choice for one module (a module key is the id of the module, or "mixed").
+ * GET gives {prefs: {<module key>: {hidden: [keys], extra: [field names], order: [keys]}}} of the user.
+ * POST {module_key, hidden, extra, order} saves the choice for one module (a module key is the id of the module, or "mixed").
  */
 require_once __DIR__ . '/app/init.inc.php';
 
@@ -48,7 +48,7 @@ $pdo = Db::getConnection();
 $userId = (int) $App->Users->userData['userid'];
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
-    $req = $pdo->prepare('SELECT module_key, hidden, extra FROM registry_column_prefs WHERE users_id = :user');
+    $req = $pdo->prepare('SELECT module_key, hidden, extra, col_order FROM registry_column_prefs WHERE users_id = :user');
     $req->bindValue(':user', $userId, PDO::PARAM_INT);
     $pdo->execute($req);
     $prefs = array();
@@ -56,6 +56,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         $prefs[(string) $row['module_key']] = array(
             'hidden' => json_decode((string) $row['hidden'], true) ?: array(),
             'extra' => json_decode((string) $row['extra'], true) ?: array(),
+            'order' => json_decode((string) $row['col_order'], true) ?: array(),
         );
     }
     respond(200, array('prefs' => (object) $prefs));
@@ -81,11 +82,12 @@ $clean = static function (mixed $list): array {
     return $out;
 };
 try {
-    $req = $pdo->prepare('INSERT INTO registry_column_prefs (users_id, module_key, hidden, extra) VALUES (:user, :module, :hidden, :extra) ON DUPLICATE KEY UPDATE hidden = VALUES(hidden), extra = VALUES(extra)');
+    $req = $pdo->prepare('INSERT INTO registry_column_prefs (users_id, module_key, hidden, extra, col_order) VALUES (:user, :module, :hidden, :extra, :col_order) ON DUPLICATE KEY UPDATE hidden = VALUES(hidden), extra = VALUES(extra), col_order = VALUES(col_order)');
     $req->bindValue(':user', $userId, PDO::PARAM_INT);
     $req->bindValue(':module', $moduleKey);
     $req->bindValue(':hidden', json_encode($clean($payload['hidden'] ?? array())));
     $req->bindValue(':extra', json_encode($clean($payload['extra'] ?? array())));
+    $req->bindValue(':col_order', json_encode($clean($payload['order'] ?? array())));
     $pdo->execute($req);
     respond(200, array('ok' => true));
 } catch (Throwable $e) {

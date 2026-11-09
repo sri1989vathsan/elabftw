@@ -1074,3 +1074,10 @@
     font-weight: 700;
   }
 }
+
+// the header of a column that can be dragged: a bar shows where it will land
+.expandable-table th.sortable-th[draggable='true'] {
+  cursor: grab;
+  &.column-drop-before { box-shadow: inset 3px 0 0 var(--primary, #295ca9); }
+  &.column-drop-after { box-shadow: inset -3px 0 0 var(--primary, #295ca9); }
+}
