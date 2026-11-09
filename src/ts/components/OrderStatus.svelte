@@ -131,9 +131,11 @@
   onMount(() => {
     void load();
     void loadTeamMembers();
-    const refresh = setInterval(() => { void load(); }, 30000);
+    // not while the tab is in the background: nobody sees the result, and coming back to the tab reloads (below)
+    const refresh = setInterval(() => { if (!document.hidden) void load(); }, 30000);
+    // returning to the tab fires both events at once; the first starts a load, so the second finds one running
     const onVisible = (): void => {
-      if (document.visibilityState === 'visible') void load();
+      if (document.visibilityState === 'visible' && !loading) void load();
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
