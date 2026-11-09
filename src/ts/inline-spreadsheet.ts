@@ -6706,6 +6706,34 @@ export function openSpreadsheetModal(
           : undefined,
       );
     };
+    // The browser's colour picker only fires "change" once it is closed, so a colour picked in it did nothing until the
+    // button next to it was pressed. "input" fires while a colour is being picked: apply it after a short pause (the
+    // sheet is rebuilt on every apply), and let the trusted "change" that follows when the picker closes skip a colour
+    // that is already applied. The button's own change event is not trusted, so it still applies whatever is selected.
+    // Registered before the change listeners below, so that it can stop them.
+    const applyColourWhilePicking = (input: HTMLInputElement): void => {
+      let timer: number | undefined;
+      let appliedValue: string | null = null;
+      input.addEventListener('input', () => {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          input.dispatchEvent(new Event('change'));
+          appliedValue = input.value;
+        }, 400);
+      });
+      input.addEventListener('change', event => {
+        if (!event.isTrusted) {
+          appliedValue = null;
+          return;
+        }
+        window.clearTimeout(timer);
+        if (appliedValue === input.value) event.stopImmediatePropagation();
+        appliedValue = null;
+      });
+    };
+    applyColourWhilePicking(ui.cellFormatColorInput);
+    applyColourWhilePicking(ui.cellFormatTextColorInput);
+    applyColourWhilePicking(ui.cellFormatBorderColorInput);
     ui.cellFormatColorInput.addEventListener('change', () => {
       ui.cellFormatNoColorInput.checked = false;
       ui.cellFormatColorInput.disabled = false;
