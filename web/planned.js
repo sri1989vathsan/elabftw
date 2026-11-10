@@ -922,6 +922,8 @@
     // the label has the ID and the title of the entry; text typed here is added below them, one line each
     const preview = element('p', 'small text-muted mb-2');
     box.append(preview);
+    // margins (mm) dragged in the preview for this label; null = those of the format
+    let edited = null;
     const customLabel = element('label', 'd-block');
     customLabel.append(element('span', 'd-block small text-muted', 'Extra text on the label (optional, one line each)'));
     const custom = element('textarea', 'form-control form-control-sm');
@@ -949,6 +951,7 @@
       // the default format is used
     });
     format.addEventListener('change', function () {
+      edited = null;
       showPreview();
     });
     const request = function (extra) {
@@ -956,7 +959,7 @@
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
-        body: JSON.stringify(Object.assign({ id: entry.id, copies: Number(copies.value) || 1, custom: custom.value, format: format.value === '' ? -1 : Number(format.value) }, extra || {})),
+        body: JSON.stringify(Object.assign({ id: entry.id, copies: Number(copies.value) || 1, custom: custom.value, format: format.value === '' ? -1 : Number(format.value), margins: edited || undefined }, extra || {})),
       }).then(async function (response) {
         const body = await response.json();
         if (!response.ok) {
@@ -1000,21 +1003,69 @@
         group.setAttribute('transform', 'rotate(180 ' + (body.width / 2) + ' ' + (body.height / 2) + ')');
       }
       svg.append(group);
-      // the margins of the format, as the label is read
+      // the margins, as the label is read: the dashed lines can be dragged to change them
       if (body.margins) {
+        const dotsPerMm = body.width / Number(body.width_mm);
+        const m = body.margins;
         const frame = document.createElementNS(SVGNS, 'rect');
-        frame.setAttribute('x', body.margins.left);
-        frame.setAttribute('y', body.margins.top);
-        frame.setAttribute('width', Math.max(1, body.width - body.margins.left - body.margins.right));
-        frame.setAttribute('height', Math.max(1, body.height - body.margins.top - body.margins.bottom));
+        frame.setAttribute('x', m.left);
+        frame.setAttribute('y', m.top);
+        frame.setAttribute('width', Math.max(1, body.width - m.left - m.right));
+        frame.setAttribute('height', Math.max(1, body.height - m.top - m.bottom));
         frame.setAttribute('fill', 'none');
         frame.setAttribute('stroke', '#5b8def');
         frame.setAttribute('stroke-dasharray', '4 3');
         frame.setAttribute('stroke-width', '1');
+        frame.style.pointerEvents = 'none';
         svg.append(frame);
+        const handle = function (side, x1, y1, x2, y2, cursor) {
+          const line = document.createElementNS(SVGNS, 'line');
+          line.setAttribute('x1', x1);
+          line.setAttribute('y1', y1);
+          line.setAttribute('x2', x2);
+          line.setAttribute('y2', y2);
+          line.setAttribute('stroke', 'transparent');
+          line.setAttribute('stroke-width', '14');
+          line.style.cursor = cursor;
+          line.style.touchAction = 'none';
+          line.addEventListener('pointerdown', function (event) {
+            event.preventDefault();
+            line.setPointerCapture(event.pointerId);
+            const box = svg.getBoundingClientRect();
+            const scale = body.width / box.width;
+            const current = { left: m.left / dotsPerMm, top: m.top / dotsPerMm, right: m.right / dotsPerMm, bottom: m.bottom / dotsPerMm };
+            const move = function (e) {
+              const x = (e.clientX - box.left) * scale;
+              const y = (e.clientY - box.top) * scale;
+              const mm = { left: x, top: y, right: body.width - x, bottom: body.height - y }[side] / dotsPerMm;
+              current[side] = Math.round(Math.max(-10, Math.min(10, mm)) * 10) / 10;
+              edited = Object.assign({}, current);
+              const dots = function (v) { return v * dotsPerMm; };
+              const r = { left: dots(current.left), top: dots(current.top), right: dots(current.right), bottom: dots(current.bottom) };
+              frame.setAttribute('x', r.left);
+              frame.setAttribute('y', r.top);
+              frame.setAttribute('width', Math.max(1, body.width - r.left - r.right));
+              frame.setAttribute('height', Math.max(1, body.height - r.top - r.bottom));
+            };
+            const up = function () {
+              line.removeEventListener('pointermove', move);
+              line.removeEventListener('pointerup', up);
+              showPreview();
+            };
+            line.addEventListener('pointermove', move);
+            line.addEventListener('pointerup', up);
+          });
+          svg.append(line);
+        };
+        handle('left', m.left, 0, m.left, body.height, 'ew-resize');
+        handle('right', body.width - m.right, 0, body.width - m.right, body.height, 'ew-resize');
+        handle('top', 0, m.top, body.width, m.top, 'ns-resize');
+        handle('bottom', 0, body.height - m.bottom, body.width, body.height - m.bottom, 'ns-resize');
+        const mmOf = function (v) { return (Math.round(v / dotsPerMm * 10) / 10).toFixed(1); };
+        preview.dataset.margins = [m.left, m.top, m.right, m.bottom].map(mmOf).join(' / ');
       }
       svg.setAttribute('overflow', 'hidden');
-      preview.append(svg, document.createTextNode(body.width_mm + ' x ' + body.height_mm + ' mm' + ', the dashed frame is the margins' + (body.rotated ? '; shown as it is read (it prints turned by 180 degrees)' : '')));
+      preview.append(svg, document.createTextNode(body.width_mm + ' x ' + body.height_mm + ' mm' + ', the dashed lines are the margins (left / top / right / bottom: ' + preview.dataset.margins + ' mm): drag them to change' + (body.rotated ? '; shown as it is read (it prints turned by 180 degrees)' : '')));
     };
     const showPreview = function () {
       request({ dry: true }).then(draw).catch(function () {
@@ -1070,6 +1121,38 @@
       }
       test.disabled = false;
     });
+    // margins dragged in the preview: back to those of the format, or saved into the format (admins)
+    const marginButtons = element('div', 'mb-2');
+    const resetMargins = element('button', 'btn btn-outline-secondary btn-sm mr-2', 'Margins of the format');
+    resetMargins.type = 'button';
+    resetMargins.addEventListener('click', function () {
+      edited = null;
+      showPreview();
+    });
+    const saveMargins = element('button', 'btn btn-outline-secondary btn-sm', 'Save these margins in the format');
+    saveMargins.type = 'button';
+    saveMargins.addEventListener('click', async function () {
+      message.className = 'small mb-0';
+      if (!edited || Number(format.value) <= 0) {
+        message.textContent = edited ? 'This format cannot be changed here.' : 'Drag a dashed line first.';
+        return;
+      }
+      const response = await fetch('label-print.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
+        body: JSON.stringify({ action: 'save_margins', id: Number(format.value), margins: edited }),
+      });
+      const answer = await response.json().catch(function () { return { error: 'Your session has probably ended. Reload the page.' }; });
+      message.className = 'small mb-0 ' + (answer.error ? 'text-danger' : 'text-success');
+      message.textContent = answer.error ? answer.error : 'The margins are saved in the format.';
+      if (!answer.error) {
+        edited = null;
+        showPreview();
+      }
+    });
+    marginButtons.append(resetMargins, saveMargins);
+    box.append(marginButtons);
     buttons.append(test, cancel, print);
     box.append(message, buttons);
     back.append(box);

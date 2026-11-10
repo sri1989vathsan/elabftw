@@ -125,6 +125,16 @@ if ($action !== '') {
         respond(403, array('error' => 'Only an admin can change the label settings.'));
     }
     try {
+        if ($action === 'save_margins') {
+            $req = $pdo->prepare('UPDATE registry_label_formats SET margin_left_mm = :left, margin_top_mm = :top, margin_right_mm = :right, margin_bottom_mm = :bottom WHERE id = :id AND team = :team');
+            foreach (array('left', 'top', 'right', 'bottom') as $side) {
+                $req->bindValue(':' . $side, max(-10.0, min(10.0, (float) ($payload['margins'][$side] ?? 0))));
+            }
+            $req->bindValue(':id', (int) ($payload['id'] ?? 0), PDO::PARAM_INT);
+            $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $pdo->execute($req);
+            respond(200, array('ok' => true));
+        }
         if ($action === 'save_format') {
             // a margin of a side: empty means the margin of the format
             $sideValue = static fn(array $p, string $key): ?float => isset($p[$key]) && $p[$key] !== '' ? max(-10.0, min(10.0, (float) $p[$key])) : null;
@@ -188,7 +198,11 @@ try {
     $id = (int) ($payload['id'] ?? 0);
     $copies = max(1, min(100, (int) ($payload['copies'] ?? 1)));
     // whoever can read the entry can print its label
-    $data = new Inventory($App->Users, $id)->readOne();
+    // an admin can print a sample label with the settings of the format being edited (label-formats.js): no entry is needed
+    $sample = !empty($payload['sample']) && $isAdmin;
+    $data = $sample
+        ? array('custom_id' => '1374', 'personal_id' => null, 'title' => 'Title of the entry', 'category' => 0, 'metadata' => '', 'date' => '')
+        : new Inventory($App->Users, $id)->readOne();
     $req = $pdo->prepare('SELECT title FROM inventory_categories WHERE id = :id');
     $req->bindValue(':id', (int) ($data['category'] ?? 0), PDO::PARAM_INT);
     $pdo->execute($req);
@@ -224,6 +238,29 @@ try {
         }
     }
     $design = array('width_mm' => $chosen['width_mm'], 'height_mm' => $chosen['height_mm'], 'margin_mm' => $chosen['margin_mm'], 'margin_left_mm' => $chosen['margin_left_mm'], 'margin_top_mm' => $chosen['margin_top_mm'], 'margin_right_mm' => $chosen['margin_right_mm'], 'margin_bottom_mm' => $chosen['margin_bottom_mm'], 'offset_x_mm' => $chosen['offset_x_mm'], 'offset_y_mm' => $chosen['offset_y_mm'], 'rotate_180' => $chosen['rotate_180'], 'font_mm' => $chosen['font_mm'], 'qr' => (bool) $chosen['qr'], 'rotate_180' => (int) $chosen['rotate_180'], 'lines' => $chosen['lines']);
+    if ($sample && is_array($payload['design'] ?? null)) {
+        $given = $payload['design'];
+        $num = static fn(string $key, float $min, float $max, float $fallback): float => isset($given[$key]) && is_numeric($given[$key]) ? max($min, min($max, (float) $given[$key])) : $fallback;
+        $design['width_mm'] = $num('width_mm', 10, 120, (float) $design['width_mm']);
+        $design['height_mm'] = $num('height_mm', 5, 200, (float) $design['height_mm']);
+        $design['margin_mm'] = $num('margin_mm', -10, 10, 1.5);
+        foreach (array('left', 'top', 'right', 'bottom') as $side) {
+            $design['margin_' . $side . '_mm'] = isset($given['margin_' . $side . '_mm']) && is_numeric($given['margin_' . $side . '_mm']) ? $num('margin_' . $side . '_mm', -10, 10, 0) : $design['margin_mm'];
+        }
+        $design['offset_x_mm'] = $num('offset_x_mm', -40, 40, 0);
+        $design['offset_y_mm'] = $num('offset_y_mm', -40, 40, 0);
+        $design['font_mm'] = $num('font_mm', 1, 20, 3.2);
+        $design['qr'] = !empty($given['qr']);
+        $design['rotate_180'] = !empty($given['rotate_180']) ? 1 : 0;
+        $sampleLines = array_values(array_filter(array_map('trim', explode("\n", (string) ($given['lines'] ?? ''))), static fn(string $l): bool => $l !== ''));
+        $design['lines'] = $sampleLines === array() ? array('{id_line}', '{title}') : array_slice($sampleLines, 0, 8);
+    }
+    // margins dragged in the print dialog count for this label only (mm); the format keeps its own until an admin saves them
+    foreach (array('left', 'top', 'right', 'bottom') as $side) {
+        if (isset($payload['margins'][$side]) && is_numeric($payload['margins'][$side])) {
+            $design['margin_' . $side . '_mm'] = max(-10.0, min(10.0, (float) $payload['margins'][$side]));
+        }
+    }
     $lines = array();
     foreach ($design['lines'] ?? array() as $template) {
         // a line is left out when one of its fields is empty

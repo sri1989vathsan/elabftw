@@ -171,6 +171,106 @@
       const defLabel = element('label', 'd-block mb-2');
       defLabel.append(isDefault, document.createTextNode(' The format that is chosen first'));
       holder.append(field('Name', name), field('Width (mm)', width), field('Height (mm)', height), field('Margin of the label (mm), used for the sides left empty', margin), field('Left margin (mm)', left), field('Top margin (mm)', top), field('Right margin (mm)', right), field('Bottom margin (mm)', bottom), field('Move everything to the right (mm)', offsetX, 'Raise it if the print is too far left; a negative number moves it left'), field('Move everything down (mm)', offsetY, 'Raise it if the print starts above the label; a negative number moves it up'), field('Height of the text (mm)', font), qrLabel, rotateLabel, defLabel, field('Lines of text, one per line', lines, 'For example {id_line}, {title}, Lot {field:Lot number}'), save);
+      // a template of the label: the margins are the dashed lines, drag them to change the margins; the sample can be printed to check them
+      const SVGNS = 'http://www.w3.org/2000/svg';
+      const template = element('div', 'mb-3');
+      const drawing = element('div', '');
+      const templateMessage = element('p', 'small mb-1 text-muted', 'Drag the dashed lines to change the margins. They are filled in below; save the format to keep them.');
+      const sideValue = function (field) {
+        return field.value === '' ? Number(margin.value) || 0 : Number(field.value);
+      };
+      const drawTemplate = function () {
+        drawing.textContent = '';
+        const w = Number(width.value) || 1;
+        const h = Number(height.value) || 1;
+        const m = { left: sideValue(left), top: sideValue(top), right: sideValue(right), bottom: sideValue(bottom) };
+        const svg = document.createElementNS(SVGNS, 'svg');
+        svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+        svg.style.cssText = 'width:100%;max-width:440px;border:1px solid #888;background:#fff;display:block;touch-action:none';
+        const size = Number(font.value) || 3;
+        [['1374', 0], ['Title of the entry', 1]].forEach(function (row) {
+          const text = document.createElementNS(SVGNS, 'text');
+          text.setAttribute('x', m.left);
+          text.setAttribute('y', m.top + size * 0.8 + row[1] * size * 1.15);
+          text.setAttribute('font-size', String(size));
+          text.setAttribute('font-family', 'Helvetica, Arial, sans-serif');
+          text.textContent = row[0];
+          svg.append(text);
+        });
+        const frame = document.createElementNS(SVGNS, 'rect');
+        frame.setAttribute('x', m.left);
+        frame.setAttribute('y', m.top);
+        frame.setAttribute('width', Math.max(0.1, w - m.left - m.right));
+        frame.setAttribute('height', Math.max(0.1, h - m.top - m.bottom));
+        frame.setAttribute('fill', 'none');
+        frame.setAttribute('stroke', '#5b8def');
+        frame.setAttribute('stroke-dasharray', '4 3');
+        frame.setAttribute('vector-effect', 'non-scaling-stroke');
+        frame.style.pointerEvents = 'none';
+        svg.append(frame);
+        const handle = function (side, x1, y1, x2, y2, cursor, target) {
+          const line = document.createElementNS(SVGNS, 'line');
+          line.setAttribute('x1', x1);
+          line.setAttribute('y1', y1);
+          line.setAttribute('x2', x2);
+          line.setAttribute('y2', y2);
+          line.setAttribute('stroke', 'transparent');
+          line.setAttribute('stroke-width', String(Math.max(1.5, w / 25)));
+          line.style.cursor = cursor;
+          line.addEventListener('pointerdown', function (event) {
+            event.preventDefault();
+            line.setPointerCapture(event.pointerId);
+            const box = svg.getBoundingClientRect();
+            const move = function (e) {
+              const x = (e.clientX - box.left) / box.width * w;
+              const y = (e.clientY - box.top) / box.height * h;
+              const mm = { left: x, top: y, right: w - x, bottom: h - y }[side];
+              target.value = String(Math.round(Math.max(-10, Math.min(10, mm)) * 10) / 10);
+              drawTemplate();
+            };
+            const up = function () {
+              svg.removeEventListener('pointermove', move);
+              svg.removeEventListener('pointerup', up);
+            };
+            svg.addEventListener('pointermove', move);
+            svg.addEventListener('pointerup', up);
+          });
+          svg.append(line);
+        };
+        handle('left', m.left, 0, m.left, h, 'ew-resize', left);
+        handle('right', w - m.right, 0, w - m.right, h, 'ew-resize', right);
+        handle('top', 0, m.top, w, m.top, 'ns-resize', top);
+        handle('bottom', 0, h - m.bottom, w, h - m.bottom, 'ns-resize', bottom);
+        drawing.append(svg, element('p', 'small text-muted mb-1', w + ' x ' + h + ' mm; margins left / top / right / bottom: ' + [m.left, m.top, m.right, m.bottom].join(' / ') + ' mm'));
+      };
+      [width, height, margin, left, top, right, bottom, font].forEach(function (f) {
+        f.addEventListener('input', drawTemplate);
+      });
+      const printSample = element('button', 'btn btn-outline-secondary btn-sm', 'Print this template as a sample label');
+      printSample.type = 'button';
+      printSample.addEventListener('click', async function () {
+        printSample.disabled = true;
+        templateMessage.className = 'small mb-1 text-muted';
+        templateMessage.textContent = 'Sending to the printer...';
+        try {
+          const response = await fetch('label-print.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': (document.querySelector('meta[name="csrf-token"]') || {}).content || '' },
+            body: JSON.stringify({ sample: true, copies: 1, custom: '', format: -1, design: { width_mm: width.value, height_mm: height.value, margin_mm: margin.value, margin_left_mm: left.value, margin_top_mm: top.value, margin_right_mm: right.value, margin_bottom_mm: bottom.value, offset_x_mm: offsetX.value, offset_y_mm: offsetY.value, font_mm: font.value, qr: qr.checked, rotate_180: rotate.checked, lines: lines.value } }),
+          });
+          const answer = await response.json().catch(function () { return { error: 'Your session has probably ended. Reload the page.' }; });
+          templateMessage.className = 'small mb-1 ' + (answer.error ? 'text-danger' : 'text-success');
+          templateMessage.textContent = answer.error ? answer.error : 'A sample label is sent: ' + (answer.lines || []).join(' / ') + '.';
+        } catch (error) {
+          templateMessage.className = 'small mb-1 text-danger';
+          templateMessage.textContent = error.message;
+        }
+        printSample.disabled = false;
+      });
+      template.append(templateMessage, drawing, printSample);
+      holder.insertBefore(template, holder.children[1]);
+      drawTemplate();
     }
   }
   draw();
