@@ -179,11 +179,31 @@ $folders = array_map(static fn(array $f): array => array(
     'mine' => (int) $f['userid'] === $userId || $isAdmin,
 ), $req->fetchAll());
 
+// the folder "Module Folders" (with the subfolders of the personal modules) of another user is not shown
+$hidden = array();
+foreach ($folders as $f) {
+    if ($f['parent_id'] === null && $f['name'] === 'Module Folders' && $f['userid'] !== $userId) {
+        $hidden[$f['id']] = true;
+    }
+}
+do {
+    $more = false;
+    foreach ($folders as $f) {
+        if ($f['parent_id'] !== null && isset($hidden[$f['parent_id']]) && !isset($hidden[$f['id']])) {
+            $hidden[$f['id']] = true;
+            $more = true;
+        }
+    }
+} while ($more);
+$folders = array_values(array_filter($folders, static fn(array $f): bool => !isset($hidden[$f['id']])));
+
 $req = $pdo->prepare('SELECT e.entry_id, e.folder_id FROM registry_folder_entries AS e INNER JOIN registry_folders AS f ON f.id = e.folder_id AND f.team = :team INNER JOIN inventory AS i ON i.id = e.entry_id AND i.state = 1');
 $req->bindValue(':team', $teamId, PDO::PARAM_INT);
 $pdo->execute($req);
 $assignments = array();
 foreach ($req->fetchAll() as $row) {
-    $assignments[(int) $row['entry_id']] = (int) $row['folder_id'];
+    if (!isset($hidden[(int) $row['folder_id']])) {
+        $assignments[(int) $row['entry_id']] = (int) $row['folder_id'];
+    }
 }
 respond(200, array('folders' => $folders, 'assignments' => (object) $assignments, 'userid' => $userId));

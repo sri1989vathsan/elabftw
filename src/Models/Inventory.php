@@ -63,6 +63,9 @@ final class Inventory extends AbstractConcreteEntity
     /** the folder of the lab Database that has a subfolder for each module */
     public const string LAB_FOLDER = 'Database items';
 
+    /** the folder of the user that has a subfolder for each of their personal modules */
+    public const string PERSONAL_FOLDER = 'Module Folders';
+
     /** the folder (of the database) the copy made by duplicate() goes in */
     public ?int $duplicateFolderId = null;
 
@@ -71,6 +74,29 @@ final class Inventory extends AbstractConcreteEntity
 
     /** the entry that is made has the number of its owner (my id): null when it depends on being registered in the lab */
     public ?bool $withPersonal = null;
+
+    /**
+     * The owner of a personal module (a module only its owner sees and uses); null for a module of the lab or no module
+     */
+    private function personalOwnerOf(?int $category): ?int
+    {
+        if ($category === null) {
+            return null;
+        }
+        $req = $this->Db->prepare('SELECT owner FROM inventory_categories WHERE id = :id');
+        $req->bindValue(':id', $category, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $owner = $req->fetchColumn();
+        return $owner === false || $owner === null ? null : (int) $owner;
+    }
+
+    /** the entries of a personal module stay with their owner: they are never registered in the lab Database */
+    private function refuseWhenPersonal(?int $category): void
+    {
+        if ($this->personalOwnerOf($category) !== null) {
+            throw new ImproperActionException(_('This entry is in a personal module: it stays yours and cannot be added to the lab Database.'));
+        }
+    }
 
     #[Override]
     public function create(
@@ -99,11 +125,16 @@ final class Inventory extends AbstractConcreteEntity
         BinaryValue $isBookable = BinaryValue::False,
     ): int {
         $title = Filter::title($title ?? _('Untitled'));
+        // an entry of a personal module is private to its owner and never goes to the lab: it has no number of the lab, only its owner's own (individual register)
+        $personalOwner = $this->personalOwnerOf($category);
+        if ($personalOwner !== null && $personalOwner !== (int) $this->Users->userData['userid']) {
+            throw new ImproperActionException(_('This module is personal to someone else.'));
+        }
         // the entries of the database are visible to everyone with an account and editable by their owner and the admins,
         // whatever the defaults of the user: only an admin can change that
         // a planned entry, and an entry that is not registered, are private to their owner until they are marked ready or registered
-        $canreadBase = ($this->asPlanned || $this->asUnregistered) ? BasePermissions::UserOnly : BasePermissions::Organization;
-        $canwriteBase = ($this->asPlanned || $this->asUnregistered) ? BasePermissions::UserOnly : BasePermissions::User;
+        $canreadBase = ($this->asPlanned || $this->asUnregistered || $personalOwner !== null) ? BasePermissions::UserOnly : BasePermissions::Organization;
+        $canwriteBase = ($this->asPlanned || $this->asUnregistered || $personalOwner !== null) ? BasePermissions::UserOnly : BasePermissions::User;
         $canread = self::EMPTY_CAN_JSON;
         $canwrite = self::EMPTY_CAN_JSON;
         $canreadIsImmutable = true;
@@ -122,7 +153,8 @@ final class Inventory extends AbstractConcreteEntity
             $body = null;
         }
         // each type of entry (plasmids, primers, ...) counts on its own: the next number of the module; a planned entry has none
-        $customId ??= ($this->asPlanned || $this->asUnregistered) ? null : $this->nextNumber($category);
+        // (an entry of a personal module never gets a number of the lab: only its owner's own, when it is registered individually)
+        $customId ??= ($this->asPlanned || $this->asUnregistered || $personalOwner !== null) ? null : $this->nextNumber($category);
 
         $sql = 'INSERT INTO inventory(team, title, date, status, body, userid, category, elabid, canread_base, canwrite_base, canbook_base, canread, canwrite, canread_is_immutable, canwrite_is_immutable, canbook, metadata, custom_id, personal_id, content_type, rating, hide_main_text, created_from_type, created_from_id, is_bookable, is_planned)
             VALUES(:team, :title, :date, :status, :body, :userid, :category, :elabid, :canread_base, :canwrite_base, :canbook_base, :canread, :canwrite, :canread_is_immutable, :canwrite_is_immutable, :canbook, :metadata, :custom_id, :personal_id, :content_type, :rating, :hide_main_text, :created_from_type, :created_from_id, :is_bookable, :is_planned)';
@@ -189,6 +221,14 @@ final class Inventory extends AbstractConcreteEntity
     {
         if (in_array($action, array(Action::Archive, Action::Unarchive, Action::Destroy, Action::Restore), true) && $this->id !== null) {
             $this->ownerOrAdminOrExplode();
+        }
+        // an entry cannot move between a personal module and the lab modules (or to the personal module of someone else)
+        if ($action === Action::Update && array_key_exists('category', $params) && $this->id !== null) {
+            $now = isset($this->entityData['category']) ? (int) $this->entityData['category'] : null;
+            $wanted = (string) $params['category'] === '' ? null : (int) $params['category'];
+            if ($wanted !== $now && ($this->personalOwnerOf($now) !== null || $this->personalOwnerOf($wanted) !== null)) {
+                throw new ImproperActionException(_('An entry cannot move between a personal module and the modules of the lab.'));
+            }
         }
         if ($action === Action::Update && array_key_exists('folder_id', $params) && $this->id !== null) {
             $req = $this->Db->prepare('SELECT custom_id, is_planned, folder_id FROM inventory WHERE id = :id');
@@ -260,6 +300,48 @@ final class Inventory extends AbstractConcreteEntity
     }
 
     /**
+     * An entry of a personal module that is registered individually is filed in the folders of its owner (the folder tree of the
+     * Database): the folder "Module Folders", and in it the subfolder of its module. The folders are made when they are not there yet.
+     */
+    private function fileInPersonalFolder(int $entryId, int $category): void
+    {
+        $req = $this->Db->prepare('SELECT title FROM inventory_categories WHERE id = :id');
+        $req->bindValue(':id', $category, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $title = trim(str_replace(' > ', ' ', (string) $req->fetchColumn()));
+        if ($title === '') {
+            return;
+        }
+        $team = (int) $this->Users->team;
+        $owner = (int) $this->entityData['userid'];
+        $folder = function (string $name, ?int $parent) use ($team, $owner): int {
+            $find = $this->Db->prepare('SELECT id FROM registry_folders WHERE team = :team AND userid = :owner AND name = :name AND ((:parent1 IS NULL AND parent_id IS NULL) OR parent_id = :parent2) LIMIT 1');
+            $find->bindValue(':team', $team, PDO::PARAM_INT);
+            $find->bindValue(':owner', $owner, PDO::PARAM_INT);
+            $find->bindValue(':name', $name);
+            $find->bindValue(':parent1', $parent, $parent === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+            $find->bindValue(':parent2', $parent, $parent === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+            $this->Db->execute($find);
+            $found = $find->fetchColumn();
+            if ($found !== false) {
+                return (int) $found;
+            }
+            $make = $this->Db->prepare('INSERT INTO registry_folders (team, name, parent_id, userid) VALUES (:team, :name, :parent, :owner)');
+            $make->bindValue(':team', $team, PDO::PARAM_INT);
+            $make->bindValue(':name', $name);
+            $make->bindValue(':parent', $parent, $parent === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+            $make->bindValue(':owner', $owner, PDO::PARAM_INT);
+            $this->Db->execute($make);
+            return (int) $this->Db->lastInsertId();
+        };
+        $folderId = $folder($title, $folder(self::PERSONAL_FOLDER, null));
+        $put = $this->Db->prepare('INSERT INTO registry_folder_entries (entry_id, folder_id) VALUES (:entry, :folder) ON DUPLICATE KEY UPDATE folder_id = VALUES(folder_id)');
+        $put->bindValue(':entry', $entryId, PDO::PARAM_INT);
+        $put->bindValue(':folder', $folderId, PDO::PARAM_INT);
+        $this->Db->execute($put);
+    }
+
+    /**
      * The next number of an owner in a module: one more than the highest of their entries there (the first is 1). It is theirs
      * alone, whatever the number of the lab is.
      */
@@ -322,6 +404,7 @@ final class Inventory extends AbstractConcreteEntity
         if ($category === null) {
             throw new ImproperActionException(_('A module is needed to give it a number: choose one first.'));
         }
+        $this->refuseWhenPersonal((int) $category);
         $missing = array();
         $metadata = json_decode((string) ($this->entityData['metadata'] ?? ''), true);
         foreach (is_array($metadata) ? ($metadata['extra_fields'] ?? array()) : array() as $name => $field) {
@@ -394,6 +477,9 @@ final class Inventory extends AbstractConcreteEntity
         $req->bindValue(':number', $number, PDO::PARAM_INT);
         $req->bindValue(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
+        if ($this->personalOwnerOf((int) $category) !== null) {
+            $this->fileInPersonalFolder($this->id, (int) $category);
+        }
         return (int) $number;
     }
 
@@ -429,6 +515,7 @@ final class Inventory extends AbstractConcreteEntity
         if ($category === null) {
             throw new ImproperActionException(_('A module is needed to give it a number: choose one first.'));
         }
+        $this->refuseWhenPersonal((int) $category);
         // an entry that was in the Database before keeps its number: nobody else could have taken it, the numbers of the planned
         // entries count for the next number of the module
         $number = $this->entityData['custom_id'] !== null ? (int) $this->entityData['custom_id'] : $this->nextNumber((int) $category);

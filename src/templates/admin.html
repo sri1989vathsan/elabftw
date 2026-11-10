@@ -841,7 +841,7 @@
       'inventory_categories',
       'Create and modify the modules of the database.'|trans,
       'Modules group the entries of the database (plasmids, antibodies, cells, strains, probes, primers...). They belong to a team and have two main properties: name and color.'|trans,
-      App.registryCategoryArr|filter(c => c.is_current_team == 1),
+      App.registryCategoryArr|filter(c => c.is_current_team == 1 and not c.is_personal),
       'No modules have been created in this team yet.'|trans|msg('warning', false),
       'Create new module'|trans,
       'Module name'|trans,

@@ -25,6 +25,7 @@ use Throwable;
 use ZipArchive;
 
 use function array_column;
+use function array_diff;
 use function base64_decode;
 use function strlen;
 use function array_filter;
@@ -790,6 +791,11 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'assign_owner') {
     }
     try {
         $ids = array_slice(array_values(array_unique(array_filter(array_map('intval', is_array($payload['ids'] ?? null) ? $payload['ids'] : array()), static fn(int $n): bool => $n > 0))), 0, 500);
+        // the entries of a personal module stay with their owner
+        if ($ids !== array()) {
+            $personal = $pdo->query('SELECT i.id FROM inventory AS i INNER JOIN inventory_categories AS c ON c.id = i.category WHERE c.owner IS NOT NULL AND i.id IN (' . implode(',', $ids) . ')')->fetchAll(PDO::FETCH_COLUMN);
+            $ids = array_values(array_diff($ids, array_map('intval', $personal)));
+        }
         $ownerId = (int) ($payload['owner'] ?? 0);
         $members = array_column($teamUsers(), 'id');
         // the new owner can be given by e-mail address: the user of the team who has it

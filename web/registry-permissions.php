@@ -232,7 +232,7 @@ try {
         if ($users === array() && $groups === array() && $base === null && $mode !== 'replace') {
             say(400, array('error' => 'Choose who can edit.'));
         }
-        $read = $pdo->prepare('SELECT id, title, userid, canread, canwrite, canread_base, canwrite_base FROM inventory WHERE team = :team AND state = 1 AND id IN (' . implode(',', $ids) . ')');
+        $read = $pdo->prepare('SELECT i.id, i.title, i.userid, i.canread, i.canwrite, i.canread_base, i.canwrite_base, (SELECT c.owner FROM inventory_categories AS c WHERE c.id = i.category) AS module_owner FROM inventory AS i WHERE i.team = :team AND i.state = 1 AND i.id IN (' . implode(',', $ids) . ')');
         $read->bindValue(':team', $teamId, PDO::PARAM_INT);
         $pdo->execute($read);
         $found = $read->fetchAll();
@@ -249,6 +249,10 @@ try {
             return $out;
         };
         foreach ($found as $e) {
+            if ($e['module_owner'] !== null) {
+                $skipped[] = array('id' => (int) $e['id'], 'title' => (string) $e['title'], 'why' => 'It is in a personal module: it is not shared with anyone.');
+                continue;
+            }
             if ((int) $e['userid'] !== $me && !$isAdmin) {
                 $skipped[] = array('id' => (int) $e['id'], 'title' => (string) $e['title'], 'why' => 'Only the owner or an admin can change this.');
                 continue;

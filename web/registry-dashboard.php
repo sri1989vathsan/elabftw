@@ -84,7 +84,7 @@ try {
     $active = (int) $run('SELECT COUNT(DISTINCT c.users_id) FROM inventory_changelog AS c INNER JOIN inventory AS entity ON entity.id = c.entity_id WHERE entity.team = :team AND c.created_at > NOW() - INTERVAL 30 DAY')->fetchColumn();
     $mineTotal = (int) $run('SELECT COUNT(*) FROM inventory AS entity WHERE ' . $labWhere . ' AND entity.userid = :userid')->fetchColumn();
     $modules = $run('SELECT c.id, c.title, c.color, c.settings, (SELECT COUNT(*) FROM inventory AS entity WHERE entity.category = c.id AND ' . $labWhere . ') AS n, (SELECT COUNT(*) FROM inventory AS entity WHERE entity.category = c.id AND entity.userid = :userid AND ' . $labWhere . ') AS mine
-        FROM inventory_categories AS c WHERE c.team = :team AND c.state = 1 ORDER BY c.ordering, c.title')->fetchAll();
+        FROM inventory_categories AS c WHERE c.team = :team AND c.state = 1 AND (c.owner IS NULL OR c.owner = :userid) ORDER BY c.ordering, c.title')->fetchAll();
     $byModule = array();
     $needsSequence = array();
     $stockRules = array();

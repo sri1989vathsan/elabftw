@@ -108,7 +108,7 @@
                 <div class='dropdown-divider'></div>
                 {% for entity in App.experimentsCategoryArr|filter(c => c.is_current_team == 1) %}
                   {% set isActive = scriptName == 'experiments.php' and App.Request.query.get('category') == entity.id %}
-                  <a class='dropdown-item {{ isActive ? 'active' }}' href='experiments.php?category={{ entity.id }}' {{ isActive ? 'aria-current="page"' }}><span class='round-spot mr-1' style='background-color: #{{ entity.color }}'></span>{{ entity.title }}</a>
+                  <a class='dropdown-item {{ isActive ? 'active' }}' href='experiments.php?category={{ entity.id }}' {{ isActive ? 'aria-current="page"' }}><span class='round-spot mr-1' style='background-color: #{{ entity.color }}'></span>{{ entity.title }}{% if entity.is_personal %} <i class='fas fa-lock fa-xs ml-1' title='{{ 'Personal module: only you see it'|trans }}'></i>{% endif %}</a>
                 {% endfor %}
                 </div>
             </div>
@@ -176,6 +176,10 @@
                 {% else %}
                   <span class='dropdown-item-text text-muted'>{{ 'No categories yet'|trans }}</span>
                 {% endfor %}
+                {% if App.Session.has('is_auth') %}
+                <div class='dropdown-divider'></div>
+                <a class='dropdown-item' href='#' id='myModulesLink'><i class='fas fa-lock fa-fw mr-1'></i>{{ 'My modules...'|trans }}</a>
+                {% endif %}
               </div>
             </div>
             {% if not App.isAnonymous() %}

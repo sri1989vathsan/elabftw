@@ -71,6 +71,10 @@ services:
       - ./web/registry-permissions.php:/elabftw/web/registry-permissions.php:ro
       - ./web/registry-permissions.js:/elabftw/web/registry-permissions.js:ro
       - ./web/registry-reads-button.js:/elabftw/web/registry-reads-button.js:ro
+      - ./web/my-modules.js:/elabftw/web/my-modules.js:ro
+      - ./web/registry-my-modules.php:/elabftw/web/registry-my-modules.php:ro
+      - ./src/sql/custom/147_personal_modules.sql:/elabftw/src/sql/custom/147_personal_modules.sql:ro
+      - ./src/Models/InventoryCategories.php:/elabftw/src/Models/InventoryCategories.php:ro
       - ./web/admin-plasmid-checks.js:/elabftw/web/admin-plasmid-checks.js:ro
       - ./web/ai-chat.js:/elabftw/web/ai-chat.js:ro
       - ./src/templates/footer.html:/elabftw/src/templates/footer.html:ro

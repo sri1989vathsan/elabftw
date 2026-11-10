@@ -56,14 +56,16 @@ const BUILT_IN_COLUMNS = array('files', 'quantity', 'owner', 'calc:length', 'cal
 
 $pdo = Db::getConnection();
 $teamId = (int) $App->Users->userData['team'];
+$userId = (int) $App->Users->userData['userid'];
 require_once __DIR__ . '/registry-defaults.inc.php';
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && !$App->isAnonymous()) {
     seedDefaultModules($teamId);
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
-    $req = $pdo->prepare('SELECT id, title, color, fields, settings FROM inventory_categories WHERE team = :team AND state = 1 ORDER BY ordering, title');
+    $req = $pdo->prepare('SELECT id, title, color, fields, settings, owner FROM inventory_categories WHERE team = :team AND state = 1 AND (owner IS NULL OR owner = :me) ORDER BY ordering, title');
     $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+    $req->bindValue(':me', $userId, PDO::PARAM_INT);
     $pdo->execute($req);
     $modules = array();
     foreach ($req->fetchAll() as $row) {
@@ -88,6 +90,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
             'id' => (int) $row['id'],
             'title' => (string) $row['title'],
             'color' => (string) $row['color'],
+            'is_personal' => $row['owner'] !== null,
             'fields' => array_map(static fn(array $f): array => $f, array_slice(array_values($fields), 0, 60)),
             'settings' => is_array($settings) ? $settings : array('columns' => array(), 'sequence_field' => null, 'requires_sequence_file' => false),
         );
@@ -101,17 +104,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 if (!hash_equals((string) $App->Session->get('csrf'), (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''))) {
     respond(403, array('error' => 'Invalid token.'));
 }
-if (!$App->Users->isAdmin) {
-    respond(403, array('error' => 'Only an admin can change the rules of a module.'));
-}
 $payload = json_decode((string) file_get_contents('php://input'), true);
 if (!is_array($payload) || ($payload['action'] ?? '') !== 'save') {
     respond(400, array('error' => 'Invalid request.'));
 }
+// the rules of a module of the lab are for the admins; the owner of a personal module sets the rules of their own
+if (!$App->Users->isAdmin) {
+    $mine = $pdo->prepare('SELECT COUNT(*) FROM inventory_categories WHERE id = :id AND owner = :me');
+    $mine->bindValue(':id', (int) ($payload['id'] ?? 0), PDO::PARAM_INT);
+    $mine->bindValue(':me', $userId, PDO::PARAM_INT);
+    $pdo->execute($mine);
+    if ((int) $mine->fetchColumn() === 0) {
+        respond(403, array('error' => 'Only an admin can change the rules of a module of the lab.'));
+    }
+}
 
 try {
     $id = (int) ($payload['id'] ?? 0);
-    $check = $pdo->prepare('SELECT id FROM inventory_categories WHERE id = :id AND team = :team');
+    $check = $pdo->prepare('SELECT id FROM inventory_categories WHERE id = :id AND team = :team AND (owner IS NULL OR owner = ' . $userId . ')');
     $check->bindValue(':id', $id, PDO::PARAM_INT);
     $check->bindValue(':team', $teamId, PDO::PARAM_INT);
     $pdo->execute($check);
