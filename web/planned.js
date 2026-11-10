@@ -1000,7 +1000,21 @@
         group.setAttribute('transform', 'rotate(180 ' + (body.width / 2) + ' ' + (body.height / 2) + ')');
       }
       svg.append(group);
-      preview.append(svg, document.createTextNode(body.width_mm + ' x ' + body.height_mm + ' mm' + (body.rotated ? ', shown as it is read (it prints turned by 180 degrees)' : '')));
+      // the margins of the format, as the label is read
+      if (body.margins) {
+        const frame = document.createElementNS(SVGNS, 'rect');
+        frame.setAttribute('x', body.margins.left);
+        frame.setAttribute('y', body.margins.top);
+        frame.setAttribute('width', Math.max(1, body.width - body.margins.left - body.margins.right));
+        frame.setAttribute('height', Math.max(1, body.height - body.margins.top - body.margins.bottom));
+        frame.setAttribute('fill', 'none');
+        frame.setAttribute('stroke', '#5b8def');
+        frame.setAttribute('stroke-dasharray', '4 3');
+        frame.setAttribute('stroke-width', '1');
+        svg.append(frame);
+      }
+      svg.setAttribute('overflow', 'hidden');
+      preview.append(svg, document.createTextNode(body.width_mm + ' x ' + body.height_mm + ' mm' + ', the dashed frame is the margins' + (body.rotated ? '; shown as it is read (it prints turned by 180 degrees)' : '')));
     };
     const showPreview = function () {
       request({ dry: true }).then(draw).catch(function () {

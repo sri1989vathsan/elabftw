@@ -315,7 +315,8 @@ try {
             $x = max(0, $rotated ? $width - $readX : $readX);
             $y = max(0, $rotated ? $height - $readY : $readY);
             $zpl[] = sprintf('^FT%d,%d^A0%s,%d,%d^FH\^FD%s^FS', $x, $y, $rotated ? 'I' : 'N', $font, $font, $clean($part));
-            $elements[] = array('type' => 'text', 'x' => $x, 'y' => $y, 'h' => $font, 'text' => $part, 'inverted' => $rotated);
+            // the preview shows the label as it is on the stock: the offsets only make up for where the printer puts things, so it leaves them out
+            $elements[] = array('type' => 'text', 'x' => $rotated ? $width - $left : $left, 'y' => $rotated ? $height - $baseline : $baseline, 'h' => $font, 'text' => $part, 'inverted' => $rotated);
             $row++;
         }
     }
@@ -331,14 +332,15 @@ try {
         $qrX = max(0, $rotated ? $width - $readQrX - $qrSize : $readQrX);
         $qrY = max(0, $rotated ? $height - $readQrY - $qrSize : $readQrY);
         $zpl[] = sprintf('^FO%d,%d^BQN,2,%d^FDQA,%s^FS', $qrX, $qrY, $magnification, $url);
-        $elements[] = array('type' => 'qr', 'x' => $qrX, 'y' => $qrY, 'size' => $qrSize);
+        $previewQrX = $width - $right - $qrSize;
+        $elements[] = array('type' => 'qr', 'x' => $rotated ? $width - $previewQrX - $qrSize : $previewQrX, 'y' => $rotated ? $height - $top - $qrSize : $top, 'size' => $qrSize);
     }
     $zpl[] = '^PQ' . $copies;
     $zpl[] = '^XZ';
     $label = implode("\n", $zpl) . "\n";
 
     if (!empty($payload['dry'])) {
-        respond(200, array('zpl' => $label, 'elements' => $elements, 'width' => $width, 'height' => $height, 'rotated' => $rotated, 'lines' => $lines, 'width_mm' => $design['width_mm'], 'height_mm' => $design['height_mm']));
+        respond(200, array('zpl' => $label, 'elements' => $elements, 'margins' => array('left' => $left, 'top' => $top, 'right' => $right, 'bottom' => $bottom), 'width' => $width, 'height' => $height, 'rotated' => $rotated, 'lines' => $lines, 'width_mm' => $design['width_mm'], 'height_mm' => $design['height_mm']));
     }
     $host = (string) $settings['printer_host'];
     if ($host === '') {
