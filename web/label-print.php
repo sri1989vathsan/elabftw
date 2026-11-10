@@ -282,43 +282,56 @@ try {
     // each text is placed by its baseline, as the label software of the printer does; a label that is read turned by 180 degrees has
     // its texts written inverted from the opposite corner (^A0I), so the print is the same as the software makes
     $rotated = !empty($design['rotate_180']);
+    // a text is broken after a space or a hyphen; a word longer than the room is cut
     $wrap = static function (string $text, int $chars, int $rows): array {
         $out = array();
         $current = '';
-        foreach (explode(' ', $text) as $word) {
-            if ($current !== '' && mb_strlen($current . ' ' . $word) > $chars) {
-                $out[] = $current;
-                $current = $word;
+        foreach (preg_split('/(?<=[\s-])/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: array($text) as $piece) {
+            if ($current !== '' && mb_strlen(rtrim($current . $piece)) > $chars) {
+                $out[] = rtrim($current);
+                $current = $piece;
             } else {
-                $current = $current === '' ? $word : $current . ' ' . $word;
+                $current .= $piece;
             }
         }
-        $out[] = $current;
-        $out = array_slice($out, 0, $rows);
-        // a word longer than the room is cut
-        return array_map(static fn(string $row): string => mb_substr($row, 0, $chars), $out);
+        $out[] = rtrim($current);
+        return array_map(static fn(string $row): string => mb_substr($row, 0, $chars), array_slice($out, 0, $rows));
     };
-    $charsPerRow = max(1, (int) floor($textWidth / ($font * 0.56)));
-    $pitch = (int) ceil($font * 1.15);
-    $elements = array();
-    $row = 0;
-    foreach ($lines as $index => $line) {
-        // the title (the second line) can take two rows when the label has the room
-        $maxRows = ($index === 1 && $usable - $row * $pitch >= $pitch * 2) ? 2 : 1;
-        foreach ($wrap($line, $charsPerRow, $maxRows) as $part) {
-            if ($top + ($row + 1) * $pitch > $height - $bottom + (int) ($font * 0.3)) {
-                break;
-            }
-            $baseline = $top + $row * $pitch + (int) round($font * 0.8);
-            $readX = $left + $offX;
-            $readY = $baseline + $offY;
-            $x = max(0, $rotated ? $width - $readX : $readX);
-            $y = max(0, $rotated ? $height - $readY : $readY);
-            $zpl[] = sprintf('^FT%d,%d^A0%s,%d,%d^FH\^FD%s^FS', $x, $y, $rotated ? 'I' : 'N', $font, $font, $clean($part));
-            // the preview shows the label as it is on the stock: the offsets only make up for where the printer puts things, so it leaves them out
-            $elements[] = array('type' => 'text', 'x' => $rotated ? $width - $left : $left, 'y' => $rotated ? $height - $baseline : $baseline, 'h' => $font, 'text' => $part, 'inverted' => $rotated);
-            $row++;
+    $charsAt = static fn(int $size): int => max(1, (int) floor($textWidth / ($size * 0.56)));
+    // a text that does not fit in one row gets a smaller font and up to two rows, so that nothing is cut
+    $small = max(8, (int) round($font * 0.75));
+    $plan = array();
+    foreach ($lines as $line) {
+        if (mb_strlen($line) <= $charsAt($font)) {
+            $plan[] = array('size' => $font, 'text' => $line);
+            continue;
         }
+        foreach ($wrap($line, $charsAt($small), 2) as $part) {
+            $plan[] = array('size' => $small, 'text' => $part);
+        }
+    }
+    // when the rows do not fit the height of the label, every font gets smaller by the same part
+    $needed = 0;
+    foreach ($plan as $item) {
+        $needed += (int) ceil($item['size'] * 1.15);
+    }
+    $scale = $needed > $usable + (int) ($font * 0.3) ? max(0.5, $usable / $needed) : 1.0;
+    $elements = array();
+    $cursor = $top;
+    foreach ($plan as $item) {
+        $size = max(8, (int) floor($item['size'] * $scale));
+        if ($cursor + $size > $height - $bottom + (int) ($font * 0.3)) {
+            break;
+        }
+        $baseline = $cursor + (int) round($size * 0.8);
+        $cursor += (int) ceil($size * 1.15);
+        $readX = $left + $offX;
+        $readY = $baseline + $offY;
+        $x = max(0, $rotated ? $width - $readX : $readX);
+        $y = max(0, $rotated ? $height - $readY : $readY);
+        $zpl[] = sprintf('^FT%d,%d^A0%s,%d,%d^FH\^FD%s^FS', $x, $y, $rotated ? 'I' : 'N', $size, $size, $clean($item['text']));
+        // the preview shows the label as it is on the stock: the offsets only make up for where the printer puts things, so it leaves them out
+        $elements[] = array('type' => 'text', 'x' => $rotated ? $width - $left : $left, 'y' => $rotated ? $height - $baseline : $baseline, 'h' => $size, 'text' => $item['text'], 'inverted' => $rotated);
     }
     if ($qrSize > 0) {
         $base = (string) $settings['qr_base_url'];
