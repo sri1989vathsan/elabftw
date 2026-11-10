@@ -1,7 +1,10 @@
 # Google Tasks sync (optional, per user, browser-side)
 
 Copies a user's open to-dos and unfinished steps into a list called **eLabFTW**
-in that user's own Google Tasks. One way: eLabFTW -> Google.
+in that user's own Google Tasks. eLabFTW -> Google always; Google -> eLabFTW only
+if the user ticks "Also bring ticks, edits and new tasks ... back into eLabFTW".
+Google Calendar (web and phone) shows tasks that have a date, so this is also how
+to-dos appear in Google Calendar, as all-day tasks that can be ticked.
 
 Code: `src/ts/googleSync.ts` (sign-in, API calls, small panel),
 `src/ts/googleTasksSync.ts` (matching and diffing, no network),
@@ -37,11 +40,25 @@ Connect fails with a message and the rest of eLabFTW is unaffected.
 - Edited title, deadline or notes -> Google task updated.
 - Item done, archived or deleted in eLabFTW -> Google task marked completed
   (never deleted).
-- A task the user ticked in Google stays ticked, even if the item is still open
-  in eLabFTW (nothing is reopened, nothing is written back to eLabFTW).
-- Google tasks without a marker (made by hand) are never touched.
+- Two-way box OFF: a task ticked in Google stays ticked and nothing is written
+  back to eLabFTW; Google tasks without a marker are never touched.
+- Two-way box ON (judged against a snapshot of what was last written to both
+  sides, kept in this browser's localStorage):
+  - ticked in Google -> the to-do is completed in eLabFTW (steps stay one-way);
+  - title or date edited in Google -> written to the to-do (a moved date keeps
+    the to-do's time of day); if both sides changed, eLabFTW wins;
+  - a task added by hand in the Google list -> a new to-do (plain text, date
+    becomes 09:00, at most 50 per sync) and the marker is written back to Google;
+  - a task deleted in Google is not recreated; the to-do stays in eLabFTW;
+  - a to-do reopened in eLabFTW is not completed again by an old Google tick.
+  Nothing is ever deleted in eLabFTW. The only eLabFTW calls the import makes
+  are: create a to-do, change its title/deadline, complete it.
 - Syncs: when the to-do list changes (3 s after), every 5 minutes while a page
-  is open, and on "Sync now".
+  is open, when a tab becomes visible again (at most once a minute), and on
+  "Sync now". Nothing syncs while no eLabFTW tab is open.
+- Google access lasts about an hour. When it has gone the panel asks Google for
+  a new one without a window; that works when Google can answer silently and
+  may otherwise show "Connect again" (one click).
 
 ## Admin setup (once)
 
@@ -74,6 +91,10 @@ Connect fails with a message and the rest of eLabFTW is unaffected.
   Google and then sync to the user's other Google devices. Use an organization
   Google account, not a personal one, and check the data-protection rules for
   what may appear in task titles.
+- With the two-way box on, whoever controls the Google account (or a shared
+  list) can create, retitle, redate and complete that user's to-dos. Imported
+  text is plain text (the server also strips tags); nothing else in eLabFTW is
+  reachable by the import code.
 - A Google access token (Tasks scope only, about 1 hour) is kept in
   `sessionStorage` for the tab, so it survives page changes but not closing the
   tab. A script injected into an eLabFTW page could read it; that is the
@@ -92,8 +113,15 @@ Connect fails with a message and the rest of eLabFTW is unaffected.
 | G3 | Allow Google, Connect, sign in | List "eLabFTW" appears in Google Tasks with all open to-dos and steps |
 | G4 | Add / rename / set deadline on a to-do | Within ~5 s Google shows it; deadline is the right date, time is in notes |
 | G5 | Complete a to-do in eLabFTW | Google task becomes completed |
-| G6 | Tick a task in Google | Stays ticked; eLabFTW item unchanged |
+| G6 | Two-way box off: tick a task in Google | Stays ticked; eLabFTW item unchanged |
 | G7 | Tick "include notes..." | Notes, experiment name and link appear after next sync |
-| G8 | Create a Google task by hand in the same list | Never modified or completed |
+| G8 | Two-way box off: create a Google task by hand in the same list | Never modified or completed |
 | G9 | Disconnect | Token gone; eLabFTW stops calling Google; tasks already in Google stay |
-| G10 | Close tab, reopen | Shows "Connect again" (token was per tab) |
+| G10 | Close tab, reopen | Renews quietly or shows "Connect again" (token was per tab) |
+| G11 | Two-way on: tick, rename, move a date, add and delete tasks in Google | to-do completed / renamed / re-dated (time kept) / created with marker / not recreated |
+| G12 | Two-way on: complete then reopen a to-do in eLabFTW | Google task completed; reopening is not undone |
+
+`tests/manual/google-sync-check.js` runs G3-G5 and G11-G12 and the token renewal
+against `tests/manual/google-stub.js` (a fake Google that needs no account or
+internet). It does NOT prove anything about real Google: that needs G3 with a
+real OAuth client ID.
