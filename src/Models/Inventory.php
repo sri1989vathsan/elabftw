@@ -133,8 +133,9 @@ final class Inventory extends AbstractConcreteEntity
         // the entries of the database are visible to everyone with an account and editable by their owner and the admins,
         // whatever the defaults of the user: only an admin can change that
         // a planned entry, and an entry that is not registered, are private to their owner until they are marked ready or registered
-        $canreadBase = ($this->asPlanned || $this->asUnregistered || $personalOwner !== null) ? BasePermissions::UserOnly : BasePermissions::Organization;
-        $canwriteBase = ($this->asPlanned || $this->asUnregistered || $personalOwner !== null) ? BasePermissions::UserOnly : BasePermissions::User;
+        // an entry of a personal module is private to its owner and the admins (who look at the modules of a person on purpose, see registry-browse-modules.php)
+        $canreadBase = $personalOwner !== null ? BasePermissions::User : (($this->asPlanned || $this->asUnregistered) ? BasePermissions::UserOnly : BasePermissions::Organization);
+        $canwriteBase = $personalOwner !== null ? BasePermissions::User : (($this->asPlanned || $this->asUnregistered) ? BasePermissions::UserOnly : BasePermissions::User);
         $canread = self::EMPTY_CAN_JSON;
         $canwrite = self::EMPTY_CAN_JSON;
         $canreadIsImmutable = true;

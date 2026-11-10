@@ -37,7 +37,8 @@
   };
   const colors = ['5b8def', '2ea44f', 'f0a202', 'd9534f', '8e5bd9', '1abc9c', '7f8c8d', 'e67e22'];
 
-  const open = function () {
+  // the box of a dialog: gives the box and a function that closes it
+  const dialog = function () {
     const back = make('div');
     back.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
     const box = make('div');
@@ -53,6 +54,36 @@
         close();
       }
     });
+    document.body.append(back);
+    return { box: box, close: close };
+  };
+
+  // removing a module takes a second, deliberate step: its name has to be typed
+  const askToRemove = function (module, row, onDone) {
+    const ask = make('div', 'border border-danger rounded p-2 mb-2');
+    ask.append(make('div', 'small mb-1', 'Type the name of the module to remove it: ' + module.title));
+    const typed = make('input', 'form-control form-control-sm mb-2');
+    typed.setAttribute('aria-label', 'Name of the module to remove');
+    const sure = make('button', 'btn btn-danger btn-sm mr-2', 'Remove for good');
+    sure.type = 'button';
+    sure.disabled = true;
+    typed.addEventListener('input', function () {
+      sure.disabled = typed.value.trim() !== module.title.trim();
+    });
+    sure.addEventListener('click', async function () {
+      const answer = await call('registry-my-modules.php', { action: 'delete', id: module.id, confirm_title: typed.value });
+      onDone(answer.error ? answer.error : 'Removed. Reload the page to update the menu.');
+    });
+    const cancel = make('button', 'btn btn-outline-secondary btn-sm', 'Cancel');
+    cancel.type = 'button';
+    cancel.addEventListener('click', function () { ask.remove(); });
+    ask.append(typed, sure, cancel);
+    row.after(ask);
+    typed.focus();
+  };
+
+  const open = function () {
+    const { box, close } = dialog();
 
     const draw = async function (message) {
       box.textContent = '';
@@ -82,27 +113,7 @@
         const remove = make('button', 'btn btn-outline-danger btn-sm', 'Remove');
         remove.type = 'button';
         remove.addEventListener('click', function () {
-          // removing needs a second, deliberate step: the name of the module has to be typed
-          const ask = make('div', 'border border-danger rounded p-2 mb-2');
-          ask.append(make('div', 'small mb-1', 'Type the name of the module to remove it: ' + module.title));
-          const typed = make('input', 'form-control form-control-sm mb-2');
-          typed.setAttribute('aria-label', 'Name of the module to remove');
-          const sure = make('button', 'btn btn-danger btn-sm mr-2', 'Remove for good');
-          sure.type = 'button';
-          sure.disabled = true;
-          typed.addEventListener('input', function () {
-            sure.disabled = typed.value.trim() !== module.title.trim();
-          });
-          sure.addEventListener('click', async function () {
-            const answer = await call('registry-my-modules.php', { action: 'delete', id: module.id, confirm_title: typed.value });
-            draw(answer.error ? answer.error : 'Removed. Reload the page to update the menu.');
-          });
-          const cancel = make('button', 'btn btn-outline-secondary btn-sm', 'Cancel');
-          cancel.type = 'button';
-          cancel.addEventListener('click', function () { ask.remove(); });
-          ask.append(typed, sure, cancel);
-          list.insertBefore(ask, row.nextSibling);
-          typed.focus();
+          askToRemove(module, row, draw);
         });
         row.append(color, name, count, remove);
         list.append(row);
@@ -111,6 +122,11 @@
         list.append(make('p', 'text-muted', 'You have no personal module yet.'));
       }
       box.append(list);
+      if ((mine.views || []).length > 0) {
+        box.append(make('p', 'small text-muted', 'Lately looked at by: ' + mine.views.map(function (view) {
+          return view.name + ' (' + view.at + ')';
+        }).join(', ') + '.'));
+      }
 
       box.append(make('h5', 'mt-2', 'New personal module'));
       const form = make('div', 'd-flex flex-wrap align-items-center mb-2');
@@ -149,10 +165,88 @@
       box.append(done);
     };
     draw('');
-    document.body.append(back);
   };
   link.addEventListener('click', function (event) {
     event.preventDefault();
     open();
   });
+
+  // looking at the personal modules of one person at a time: read only; admins can also rename, recolour and remove them and open their entries
+  const browse = async function () {
+    const { box, close } = dialog();
+    const draw = async function (userId, message) {
+      box.textContent = '';
+      box.append(make('h4', 'mb-2', "Someone's personal modules"));
+      box.append(make('p', 'small text-muted', 'Personal modules are private by default. You look at one person at a time, and they can see that you looked.'));
+      const people = await call('registry-browse-modules.php');
+      const pick = make('select', 'form-control form-control-sm mb-3');
+      pick.append(new Option('Choose a person...', ''));
+      (people.people || []).forEach(function (person) {
+        pick.append(new Option(person.name + ' (' + person.modules + ' modules, ' + person.entries + ' entries)', String(person.userid)));
+      });
+      pick.value = userId ? String(userId) : '';
+      pick.addEventListener('change', function () {
+        draw(pick.value ? Number(pick.value) : 0, '');
+      });
+      box.append(pick);
+      if ((people.people || []).length === 0) {
+        box.append(make('p', 'text-muted', 'Nobody else has a personal module.'));
+      }
+      if (userId) {
+        const data = await call('registry-browse-modules.php?user=' + userId);
+        (data.modules || []).forEach(function (module) {
+          const row = make('div', 'd-flex align-items-center mb-1');
+          const spot = make('span', 'round-spot mr-2');
+          spot.style.backgroundColor = '#' + module.color;
+          row.append(spot, make('strong', 'mr-auto', module.title));
+          if (data.is_admin) {
+            const remove = make('button', 'btn btn-outline-danger btn-sm', 'Remove');
+            remove.type = 'button';
+            remove.addEventListener('click', function () {
+              askToRemove(module, row, function (text) {
+                draw(userId, text);
+              });
+            });
+            row.append(remove);
+          }
+          box.append(row);
+          const entries = make('ul', 'small mb-3');
+          (module.entries || []).forEach(function (entry) {
+            const item = make('li');
+            const label = (entry.personal_id ? '#' + entry.personal_id + ' ' : '') + entry.title;
+            if (data.is_admin) {
+              const open = make('a', '', label);
+              open.href = 'registry.php?mode=view&id=' + entry.id;
+              item.append(open);
+            } else {
+              item.textContent = label;
+            }
+            entries.append(item);
+          });
+          if ((module.entries || []).length === 0) {
+            entries.append(make('li', 'text-muted', 'No entries'));
+          }
+          box.append(entries);
+        });
+        if (!data.is_admin) {
+          box.append(make('p', 'small text-muted', 'You can look but not change them. Only an admin can.'));
+        }
+      }
+      if (message) {
+        box.append(make('p', 'small text-danger', message));
+      }
+      const done = make('button', 'btn btn-secondary btn-sm', 'Close');
+      done.type = 'button';
+      done.addEventListener('click', close);
+      box.append(done);
+    };
+    draw(0, '');
+  };
+  const browseLink = document.getElementById('browseModulesLink');
+  if (browseLink) {
+    browseLink.addEventListener('click', function (event) {
+      event.preventDefault();
+      browse();
+    });
+  }
 })();

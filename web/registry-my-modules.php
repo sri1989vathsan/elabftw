@@ -9,7 +9,8 @@
  * GET gives the personal modules of the user. POST (anyone with an account, CSRF token needed):
  * {action: create, title, color?, copy_from?}  makes one; copy_from is the id of a module (of the lab or of the user) whose fields and settings are copied
  * {action: update, id, title?, color?}         renames or recolours one of the user's modules
- * {action: delete, id, confirm_title}                       removes one of the user's modules that has no entries
+ * {action: delete, id, confirm_title}        removes one of the user's modules that has no entries
+ * An admin can also rename, recolour and remove the personal modules of the people of the team.
  */
 declare(strict_types=1);
 
@@ -54,7 +55,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         FROM inventory_categories AS c WHERE c.owner = :me AND c.state = 1 ORDER BY c.ordering, c.title');
     $req->bindValue(':me', $userId, PDO::PARAM_INT);
     $pdo->execute($req);
-    respond(200, array('modules' => $req->fetchAll(PDO::FETCH_ASSOC)));
+    $modules = $req->fetchAll(PDO::FETCH_ASSOC);
+    // who looked at the modules of the user lately
+    $seen = $pdo->prepare('SELECT CONCAT(u.firstname, " ", u.lastname) AS name, MAX(v.viewed_at) AS at FROM personal_module_views AS v JOIN users AS u ON u.userid = v.viewer
+        WHERE v.owner = :me GROUP BY v.viewer, u.firstname, u.lastname ORDER BY at DESC LIMIT 10');
+    $seen->bindValue(':me', $userId, PDO::PARAM_INT);
+    $pdo->execute($seen);
+    respond(200, array('modules' => $modules, 'views' => $seen->fetchAll(PDO::FETCH_ASSOC)));
 }
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     respond(405, array('error' => 'GET or POST only.'));
@@ -68,12 +75,12 @@ if (!is_array($payload)) {
 }
 
 /** a title that is free: not used by a module of the lab or by another module of the user (the folders are named after the modules) */
-$titleIsFree = static function (string $title, int $exceptId) use ($pdo, $teamId, $userId): bool {
+$titleIsFree = static function (string $title, int $exceptId, int $ownerId) use ($pdo, $teamId): bool {
     $req = $pdo->prepare('SELECT COUNT(*) FROM inventory_categories WHERE team = :team AND state = 1 AND id <> :id AND LOWER(title) = LOWER(:title) AND (owner IS NULL OR owner = :me)');
     $req->bindValue(':team', $teamId, PDO::PARAM_INT);
     $req->bindValue(':id', $exceptId, PDO::PARAM_INT);
     $req->bindValue(':title', $title);
-    $req->bindValue(':me', $userId, PDO::PARAM_INT);
+    $req->bindValue(':me', $ownerId, PDO::PARAM_INT);
     $pdo->execute($req);
     return (int) $req->fetchColumn() === 0;
 };
@@ -88,22 +95,25 @@ $cleanColor = static function (mixed $value): string {
     $color = trim((string) $value, "# \t");
     return preg_match('/^[0-9a-fA-F]{6}$/', $color) === 1 ? $color : '5b8def';
 };
-// a module of the user (not a module of the lab): the only ones they can change
-$ownOrExplode = static function (int $id) use ($pdo, $userId): void {
-    $req = $pdo->prepare('SELECT COUNT(*) FROM inventory_categories WHERE id = :id AND owner = :me');
+// a module of the user (not a module of the lab): the only ones they can change; an admin can also change the personal modules of the people of the team.
+// Gives the id of the owner of the module.
+$ownOrExplode = static function (int $id) use ($pdo, $userId, $teamId, $App): int {
+    $req = $pdo->prepare('SELECT owner FROM inventory_categories WHERE id = :id AND owner IS NOT NULL AND team = :team');
     $req->bindValue(':id', $id, PDO::PARAM_INT);
-    $req->bindValue(':me', $userId, PDO::PARAM_INT);
+    $req->bindValue(':team', $teamId, PDO::PARAM_INT);
     $pdo->execute($req);
-    if ((int) $req->fetchColumn() === 0) {
+    $owner = $req->fetchColumn();
+    if ($owner === false || ((int) $owner !== $userId && !$App->Users->isAdmin)) {
         respond(403, array('error' => 'This is not one of your personal modules.'));
     }
+    return (int) $owner;
 };
 
 try {
     $action = (string) ($payload['action'] ?? '');
     if ($action === 'create') {
         $title = $cleanTitle($payload['title'] ?? '');
-        if (!$titleIsFree($title, 0)) {
+        if (!$titleIsFree($title, 0, $userId)) {
             respond(400, array('error' => 'A module with this name exists already.'));
         }
         $fields = null;
@@ -134,24 +144,24 @@ try {
         respond(200, array('id' => (int) $pdo->lastInsertId()));
     }
     $id = (int) ($payload['id'] ?? 0);
-    $ownOrExplode($id);
+    $ownerId = $ownOrExplode($id);
     if ($action === 'update') {
         if (isset($payload['title'])) {
             $title = $cleanTitle($payload['title']);
-            if (!$titleIsFree($title, $id)) {
+            if (!$titleIsFree($title, $id, $ownerId)) {
                 respond(400, array('error' => 'A module with this name exists already.'));
             }
             $req = $pdo->prepare('UPDATE inventory_categories SET title = :title WHERE id = :id AND owner = :me');
             $req->bindValue(':title', $title);
             $req->bindValue(':id', $id, PDO::PARAM_INT);
-            $req->bindValue(':me', $userId, PDO::PARAM_INT);
+            $req->bindValue(':me', $ownerId, PDO::PARAM_INT);
             $pdo->execute($req);
         }
         if (isset($payload['color'])) {
             $req = $pdo->prepare('UPDATE inventory_categories SET color = :color WHERE id = :id AND owner = :me');
             $req->bindValue(':color', $cleanColor($payload['color']));
             $req->bindValue(':id', $id, PDO::PARAM_INT);
-            $req->bindValue(':me', $userId, PDO::PARAM_INT);
+            $req->bindValue(':me', $ownerId, PDO::PARAM_INT);
             $pdo->execute($req);
         }
         respond(200, array('ok' => true));
@@ -160,7 +170,7 @@ try {
         // the name of the module has to be sent back: a stray request cannot remove one
         $named = $pdo->prepare('SELECT title FROM inventory_categories WHERE id = :id AND owner = :me');
         $named->bindValue(':id', $id, PDO::PARAM_INT);
-        $named->bindValue(':me', $userId, PDO::PARAM_INT);
+        $named->bindValue(':me', $ownerId, PDO::PARAM_INT);
         $pdo->execute($named);
         $title = $named->fetchColumn();
         if ($title === false || trim((string) ($payload['confirm_title'] ?? '')) !== trim((string) $title)) {
@@ -174,7 +184,7 @@ try {
         }
         $req = $pdo->prepare('DELETE FROM inventory_categories WHERE id = :id AND owner = :me');
         $req->bindValue(':id', $id, PDO::PARAM_INT);
-        $req->bindValue(':me', $userId, PDO::PARAM_INT);
+        $req->bindValue(':me', $ownerId, PDO::PARAM_INT);
         $pdo->execute($req);
         respond(200, array('ok' => true));
     }
