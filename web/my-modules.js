@@ -81,9 +81,28 @@
         const count = make('span', 'small text-muted text-nowrap mr-2', module.entries + (Number(module.entries) === 1 ? ' entry' : ' entries'));
         const remove = make('button', 'btn btn-outline-danger btn-sm', 'Remove');
         remove.type = 'button';
-        remove.addEventListener('click', async function () {
-          const answer = await call('registry-my-modules.php', { action: 'delete', id: module.id });
-          draw(answer.error ? answer.error : 'Removed. Reload the page to update the menu.');
+        remove.addEventListener('click', function () {
+          // removing needs a second, deliberate step: the name of the module has to be typed
+          const ask = make('div', 'border border-danger rounded p-2 mb-2');
+          ask.append(make('div', 'small mb-1', 'Type the name of the module to remove it: ' + module.title));
+          const typed = make('input', 'form-control form-control-sm mb-2');
+          typed.setAttribute('aria-label', 'Name of the module to remove');
+          const sure = make('button', 'btn btn-danger btn-sm mr-2', 'Remove for good');
+          sure.type = 'button';
+          sure.disabled = true;
+          typed.addEventListener('input', function () {
+            sure.disabled = typed.value.trim() !== module.title.trim();
+          });
+          sure.addEventListener('click', async function () {
+            const answer = await call('registry-my-modules.php', { action: 'delete', id: module.id, confirm_title: typed.value });
+            draw(answer.error ? answer.error : 'Removed. Reload the page to update the menu.');
+          });
+          const cancel = make('button', 'btn btn-outline-secondary btn-sm', 'Cancel');
+          cancel.type = 'button';
+          cancel.addEventListener('click', function () { ask.remove(); });
+          ask.append(typed, sure, cancel);
+          list.insertBefore(ask, row.nextSibling);
+          typed.focus();
         });
         row.append(color, name, count, remove);
         list.append(row);

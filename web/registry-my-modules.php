@@ -9,7 +9,7 @@
  * GET gives the personal modules of the user. POST (anyone with an account, CSRF token needed):
  * {action: create, title, color?, copy_from?}  makes one; copy_from is the id of a module (of the lab or of the user) whose fields and settings are copied
  * {action: update, id, title?, color?}         renames or recolours one of the user's modules
- * {action: delete, id}                         removes one of the user's modules that has no entries
+ * {action: delete, id, confirm_title}                       removes one of the user's modules that has no entries
  */
 declare(strict_types=1);
 
@@ -157,6 +157,15 @@ try {
         respond(200, array('ok' => true));
     }
     if ($action === 'delete') {
+        // the name of the module has to be sent back: a stray request cannot remove one
+        $named = $pdo->prepare('SELECT title FROM inventory_categories WHERE id = :id AND owner = :me');
+        $named->bindValue(':id', $id, PDO::PARAM_INT);
+        $named->bindValue(':me', $userId, PDO::PARAM_INT);
+        $pdo->execute($named);
+        $title = $named->fetchColumn();
+        if ($title === false || trim((string) ($payload['confirm_title'] ?? '')) !== trim((string) $title)) {
+            respond(400, array('error' => 'Type the name of the module to remove it.'));
+        }
         $count = $pdo->prepare('SELECT COUNT(*) FROM inventory WHERE category = :id AND state <> 3');
         $count->bindValue(':id', $id, PDO::PARAM_INT);
         $pdo->execute($count);
