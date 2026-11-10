@@ -38,8 +38,12 @@
     return wrap;
   };
   const input = function (type, value, extra) {
-    const node = element('input', 'form-control form-control-sm');
+    // a check box stays small, next to its text (see the labels below); the other fields fill the width
+    const node = element('input', type === 'checkbox' ? 'mr-2' : 'form-control form-control-sm');
     node.type = type;
+    if (type === 'checkbox') {
+      node.style.cssText = 'flex:none;margin:0 .6rem 0 0';
+    }
     node.value = value === undefined || value === null ? '' : value;
     Object.assign(node, extra || {});
     return node;
@@ -164,11 +168,11 @@
           say(error.message, true);
         }
       });
-      const qrLabel = element('label', 'd-block mb-2');
+      const qrLabel = element('label', 'd-flex align-items-center mb-2');
       qrLabel.append(qr, document.createTextNode(' A QR code to the entry on the label'));
-      const rotateLabel = element('label', 'd-block mb-2');
+      const rotateLabel = element('label', 'd-flex align-items-center mb-2');
       rotateLabel.append(rotate, document.createTextNode(' Printed turned by 180 degrees (the label is read upside down)'));
-      const defLabel = element('label', 'd-block mb-2');
+      const defLabel = element('label', 'd-flex align-items-center mb-2');
       defLabel.append(isDefault, document.createTextNode(' The format that is chosen first'));
       holder.append(field('Name', name), field('Width (mm)', width), field('Height (mm)', height), field('Margin of the label (mm), used for the sides left empty', margin), field('Left margin (mm)', left), field('Top margin (mm)', top), field('Right margin (mm)', right), field('Bottom margin (mm)', bottom), field('Move everything to the right (mm)', offsetX, 'Raise it if the print is too far left; a negative number moves it left'), field('Move everything down (mm)', offsetY, 'Raise it if the print starts above the label; a negative number moves it up'), field('Height of the text (mm)', font), qrLabel, rotateLabel, defLabel, field('Lines of text, one per line', lines, 'For example {id_line}, {title}, Lot {field:Lot number}'), save);
       // a template of the label: the margins are the dashed lines, drag them to change the margins; the sample can be printed to check them
@@ -179,70 +183,84 @@
       const sideValue = function (field) {
         return field.value === '' ? Number(margin.value) || 0 : Number(field.value);
       };
+      // the drawing is made once and only moved afterwards, so that a line being dragged stays under the pointer
+      const svg = document.createElementNS(SVGNS, 'svg');
+      svg.style.cssText = 'width:100%;max-width:440px;border:1px solid #888;background:#fff;display:block;touch-action:none;user-select:none';
+      const texts = [['1374', 0], ['Title of the entry', 1]].map(function (row) {
+        const text = document.createElementNS(SVGNS, 'text');
+        text.setAttribute('font-family', 'Helvetica, Arial, sans-serif');
+        text.textContent = row[0];
+        svg.append(text);
+        return { node: text, row: row[1] };
+      });
+      const frame = document.createElementNS(SVGNS, 'rect');
+      frame.setAttribute('fill', 'none');
+      frame.setAttribute('stroke', '#5b8def');
+      frame.setAttribute('stroke-dasharray', '4 3');
+      frame.setAttribute('vector-effect', 'non-scaling-stroke');
+      frame.style.pointerEvents = 'none';
+      svg.append(frame);
+      const caption = element('p', 'small text-muted mb-1');
+      const handles = [];
+      const sizes = function () {
+        return { w: Number(width.value) || 1, h: Number(height.value) || 1 };
+      };
       const drawTemplate = function () {
-        drawing.textContent = '';
-        const w = Number(width.value) || 1;
-        const h = Number(height.value) || 1;
+        const { w, h } = sizes();
         const m = { left: sideValue(left), top: sideValue(top), right: sideValue(right), bottom: sideValue(bottom) };
-        const svg = document.createElementNS(SVGNS, 'svg');
         svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
-        svg.style.cssText = 'width:100%;max-width:440px;border:1px solid #888;background:#fff;display:block;touch-action:none';
         const size = Number(font.value) || 3;
-        [['1374', 0], ['Title of the entry', 1]].forEach(function (row) {
-          const text = document.createElementNS(SVGNS, 'text');
-          text.setAttribute('x', m.left);
-          text.setAttribute('y', m.top + size * 0.8 + row[1] * size * 1.15);
-          text.setAttribute('font-size', String(size));
-          text.setAttribute('font-family', 'Helvetica, Arial, sans-serif');
-          text.textContent = row[0];
-          svg.append(text);
+        texts.forEach(function (t) {
+          t.node.setAttribute('x', m.left);
+          t.node.setAttribute('y', m.top + size * 0.8 + t.row * size * 1.15);
+          t.node.setAttribute('font-size', String(size));
         });
-        const frame = document.createElementNS(SVGNS, 'rect');
         frame.setAttribute('x', m.left);
         frame.setAttribute('y', m.top);
         frame.setAttribute('width', Math.max(0.1, w - m.left - m.right));
         frame.setAttribute('height', Math.max(0.1, h - m.top - m.bottom));
-        frame.setAttribute('fill', 'none');
-        frame.setAttribute('stroke', '#5b8def');
-        frame.setAttribute('stroke-dasharray', '4 3');
-        frame.setAttribute('vector-effect', 'non-scaling-stroke');
-        frame.style.pointerEvents = 'none';
-        svg.append(frame);
-        const handle = function (side, x1, y1, x2, y2, cursor, target) {
-          const line = document.createElementNS(SVGNS, 'line');
-          line.setAttribute('x1', x1);
-          line.setAttribute('y1', y1);
-          line.setAttribute('x2', x2);
-          line.setAttribute('y2', y2);
-          line.setAttribute('stroke', 'transparent');
-          line.setAttribute('stroke-width', String(Math.max(1.5, w / 25)));
-          line.style.cursor = cursor;
-          line.addEventListener('pointerdown', function (event) {
-            event.preventDefault();
-            line.setPointerCapture(event.pointerId);
-            const box = svg.getBoundingClientRect();
-            const move = function (e) {
-              const x = (e.clientX - box.left) / box.width * w;
-              const y = (e.clientY - box.top) / box.height * h;
-              const mm = { left: x, top: y, right: w - x, bottom: h - y }[side];
-              target.value = String(Math.round(Math.max(-10, Math.min(10, mm)) * 10) / 10);
-              drawTemplate();
-            };
-            const up = function () {
-              svg.removeEventListener('pointermove', move);
-              svg.removeEventListener('pointerup', up);
-            };
-            svg.addEventListener('pointermove', move);
-            svg.addEventListener('pointerup', up);
-          });
-          svg.append(line);
-        };
-        handle('left', m.left, 0, m.left, h, 'ew-resize', left);
-        handle('right', w - m.right, 0, w - m.right, h, 'ew-resize', right);
-        handle('top', 0, m.top, w, m.top, 'ns-resize', top);
-        handle('bottom', 0, h - m.bottom, w, h - m.bottom, 'ns-resize', bottom);
-        drawing.append(svg, element('p', 'small text-muted mb-1', w + ' x ' + h + ' mm; margins left / top / right / bottom: ' + [m.left, m.top, m.right, m.bottom].join(' / ') + ' mm'));
+        handles.forEach(function (hd) {
+          const pos = { left: m.left, right: w - m.right, top: m.top, bottom: h - m.bottom }[hd.side];
+          const vertical = hd.side === 'left' || hd.side === 'right';
+          hd.node.setAttribute('x1', vertical ? pos : 0);
+          hd.node.setAttribute('x2', vertical ? pos : w);
+          hd.node.setAttribute('y1', vertical ? 0 : pos);
+          hd.node.setAttribute('y2', vertical ? h : pos);
+          hd.node.setAttribute('stroke-width', String(Math.max(2, w / 18)));
+        });
+        caption.textContent = w + ' x ' + h + ' mm; margins left / top / right / bottom: ' + [m.left, m.top, m.right, m.bottom].join(' / ') + ' mm';
       };
+      [['left', left, 'ew-resize'], ['right', right, 'ew-resize'], ['top', top, 'ns-resize'], ['bottom', bottom, 'ns-resize']].forEach(function (def) {
+        const line = document.createElementNS(SVGNS, 'line');
+        line.setAttribute('stroke', 'rgba(0,0,0,0)');
+        line.style.cursor = def[2];
+        let dragging = false;
+        line.addEventListener('pointerdown', function (event) {
+          event.preventDefault();
+          dragging = true;
+          line.setPointerCapture(event.pointerId);
+        });
+        line.addEventListener('pointermove', function (event) {
+          if (!dragging) {
+            return;
+          }
+          const { w, h } = sizes();
+          const box = svg.getBoundingClientRect();
+          const x = (event.clientX - box.left) / box.width * w;
+          const y = (event.clientY - box.top) / box.height * h;
+          const mm = { left: x, top: y, right: w - x, bottom: h - y }[def[0]];
+          def[1].value = String(Math.round(Math.max(-10, Math.min(10, mm)) * 10) / 10);
+          drawTemplate();
+        });
+        const stop = function () {
+          dragging = false;
+        };
+        line.addEventListener('pointerup', stop);
+        line.addEventListener('pointercancel', stop);
+        svg.append(line);
+        handles.push({ side: def[0], node: line });
+      });
+      drawing.append(svg, caption);
       [width, height, margin, left, top, right, bottom, font].forEach(function (f) {
         f.addEventListener('input', drawTemplate);
       });

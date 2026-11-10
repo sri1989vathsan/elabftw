@@ -1025,7 +1025,7 @@
           line.setAttribute('x2', x2);
           line.setAttribute('y2', y2);
           line.setAttribute('stroke', 'transparent');
-          line.setAttribute('stroke-width', '14');
+          line.setAttribute('stroke-width', '22');
           line.style.cursor = cursor;
           line.style.touchAction = 'none';
           line.addEventListener('pointerdown', function (event) {
