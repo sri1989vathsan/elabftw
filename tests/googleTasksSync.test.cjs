@@ -11,9 +11,9 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const mod = { exports: {} };
 vm.runInNewContext(js, {
-  module: mod, exports: mod.exports, Date, Math, Array, Map, Set, String, Object, JSON,
+  module: mod, exports: mod.exports, Date, Math, Array, Map, Set, String, Object, JSON, Number,
 });
-const { buildDesired, syncTasks, keyOf, localDate } = mod.exports;
+const { buildDesired, syncTasks, keyOf, localDate, MAX_IMPORT } = mod.exports;
 
 // a mock Google Tasks list that behaves like the real one for the calls we use
 function mockApi(initial = []) {
@@ -141,4 +141,150 @@ test('mentions are turned to plain text through the injected converter', () => {
 
 test('localDate gives the local calendar day', () => {
   assert.equal(localDate('2026-11-10T09:00:00'), '2026-11-10');
+});
+
+// ---- two-way mode ------------------------------------------------------------
+
+function mockLocal() {
+  const calls = [];
+  let next = 900;
+  return {
+    calls,
+    async createTodo(t) { calls.push(['create', t]); return next++; },
+    async updateTodo(id, patch) { calls.push(['update', id, patch]); },
+    async completeTodo(id) { calls.push(['complete', id]); },
+  };
+}
+const twoWay = (local, snapshot = {}, extra = {}) => ({ local, snapshot, ...extra });
+
+test('two-way: a to-do ticked in Google is completed in eLabFTW', async () => {
+  const api = mockApi();
+  const local = mockLocal();
+  const desired = buildDesired([todo(1)], none, minimal);
+  const first = await syncTasks(api, desired, twoWay(local));
+  api.tasks[0].status = 'completed';
+  const r = await syncTasks(api, desired, twoWay(local, first.snapshot));
+  assert.deepEqual(local.calls, [['complete', 1]]);
+  assert.equal(r.completedLocal, 1);
+});
+
+test('two-way: a to-do reopened in eLabFTW is not completed again by an old tick', async () => {
+  const api = mockApi();
+  const local = mockLocal();
+  const first = await syncTasks(api, buildDesired([todo(1)], none, minimal), twoWay(local));
+  // done in eLabFTW: Google gets completed, snapshot forgets the key
+  const second = await syncTasks(api, buildDesired([], none, minimal), twoWay(local, first.snapshot));
+  assert.equal(api.tasks[0].status, 'completed');
+  // reopened in eLabFTW
+  await syncTasks(api, buildDesired([todo(1)], none, minimal), twoWay(local, second.snapshot));
+  assert.deepEqual(local.calls, []);
+});
+
+test('two-way: a title edited in Google is written back to eLabFTW', async () => {
+  const api = mockApi();
+  const local = mockLocal();
+  const desired = buildDesired([todo(1)], none, minimal);
+  const first = await syncTasks(api, desired, twoWay(local));
+  api.tasks[0].title = 'renamed in Google';
+  const r = await syncTasks(api, desired, twoWay(local, first.snapshot));
+  assert.deepEqual(JSON.parse(JSON.stringify(local.calls)), [['update', 1, { title: 'renamed in Google' }]]);
+  assert.equal(r.pulled, 1);
+  assert.equal(r.snapshot['todo:1'].title, 'renamed in Google');
+  // eLabFTW now has the new title: the next sync is quiet
+  const again = await syncTasks(api, buildDesired([todo(1, { body: 'renamed in Google' })], none, minimal), twoWay(local, r.snapshot));
+  assert.equal(again.unchanged, 1);
+  assert.equal(local.calls.length, 1);
+});
+
+test('two-way: when both sides changed, eLabFTW wins', async () => {
+  const api = mockApi();
+  const local = mockLocal();
+  const first = await syncTasks(api, buildDesired([todo(1)], none, minimal), twoWay(local));
+  api.tasks[0].title = 'Google edit';
+  const r = await syncTasks(api, buildDesired([todo(1, { body: 'eLabFTW edit' })], none, minimal), twoWay(local, first.snapshot));
+  assert.deepEqual(local.calls, []);
+  assert.equal(api.tasks[0].title, 'eLabFTW edit');
+  assert.equal(r.updated, 1);
+});
+
+test('two-way: a date moved in Google keeps the to-do\'s time of day', async () => {
+  const api = mockApi();
+  const local = mockLocal();
+  const desired = buildDesired([todo(1, { deadline: '2026-11-10T14:30:00' })], none, minimal);
+  const first = await syncTasks(api, desired, twoWay(local));
+  api.tasks[0].due = '2026-11-12T00:00:00.000Z';
+  await syncTasks(api, desired, twoWay(local, first.snapshot));
+  const [, id, patch] = local.calls[0];
+  assert.equal(id, 1);
+  const moved = new Date(patch.deadline);
+  assert.equal(localDate(patch.deadline), '2026-11-12');
+  assert.equal(moved.getHours(), 14);
+  assert.equal(moved.getMinutes(), 30);
+});
+
+test('two-way: a task added in Google becomes a to-do and gets its marker, once', async () => {
+  const api = mockApi([{ title: 'Buy gloves', notes: 'size M', due: '2026-11-12T00:00:00.000Z' }]);
+  const local = mockLocal();
+  const r = await syncTasks(api, buildDesired([], none, minimal), twoWay(local, {}, { defaultTime: '09:00' }));
+  assert.equal(r.imported, 1);
+  assert.equal(local.calls[0][0], 'create');
+  assert.equal(local.calls[0][1].title, 'Buy gloves');
+  assert.equal(local.calls[0][1].notes, null, 'notes are only imported when details are on');
+  assert.equal(localDate(local.calls[0][1].deadline), '2026-11-12');
+  assert.equal(keyOf(api.tasks[0]), 'todo:900');
+  assert.match(api.tasks[0].notes, /^size M\n\n\[elabftw:todo:900\]$/);
+  // next round, eLabFTW lists the new to-do: nothing more is created anywhere
+  const again = await syncTasks(api,
+    buildDesired([todo(900, { body: 'Buy gloves', deadline: local.calls[0][1].deadline })], none, minimal),
+    twoWay(local, r.snapshot));
+  assert.equal(local.calls.length, 1);
+  assert.equal(again.created + again.imported, 0);
+});
+
+test('two-way: notes are imported only with details on, and completed or blank tasks never', async () => {
+  const api = mockApi([
+    { title: 'with notes', notes: 'keep me' },
+    { title: 'already done', status: 'completed' },
+    { title: '   ' },
+  ]);
+  const local = mockLocal();
+  const r = await syncTasks(api, buildDesired([], none, minimal), twoWay(local, {}, { includeDetails: true }));
+  assert.equal(r.imported, 1);
+  assert.equal(local.calls[0][1].notes, 'keep me');
+});
+
+test('two-way: at most MAX_IMPORT tasks arrive in one sync', async () => {
+  const api = mockApi(Array.from({ length: MAX_IMPORT + 7 }, (_, i) => ({ title: `t${i}` })));
+  const local = mockLocal();
+  const r = await syncTasks(api, buildDesired([], none, minimal), twoWay(local));
+  assert.equal(r.imported, MAX_IMPORT);
+  const second = await syncTasks(api, buildDesired([], none, minimal), twoWay(local));
+  assert.equal(second.imported, 7);
+});
+
+test('two-way: a task deleted in Google is not recreated, and the to-do stays', async () => {
+  const api = mockApi();
+  const local = mockLocal();
+  const desired = buildDesired([todo(1)], none, minimal);
+  const first = await syncTasks(api, desired, twoWay(local));
+  api.tasks.length = 0;
+  const second = await syncTasks(api, desired, twoWay(local, first.snapshot));
+  assert.equal(api.tasks.length, 0);
+  assert.equal(second.created, 0);
+  const third = await syncTasks(api, desired, twoWay(local, second.snapshot));
+  assert.equal(api.tasks.length, 0);
+  assert.equal(third.created, 0);
+  assert.deepEqual(local.calls, []);
+});
+
+test('two-way: a step ticked in Google is left alone (steps stay one-way for now)', async () => {
+  const api = mockApi();
+  const local = mockLocal();
+  const unfinished = { experiments: [{ id: 2, title: 'E', steps: [{ id: 5, body: 'step', deadline: null }] }], items: [] };
+  const desired = buildDesired([], unfinished, minimal);
+  const first = await syncTasks(api, desired, twoWay(local));
+  api.tasks[0].status = 'completed';
+  const r = await syncTasks(api, desired, twoWay(local, first.snapshot));
+  assert.deepEqual(local.calls, []);
+  assert.equal(r.unchanged, 1);
 });
