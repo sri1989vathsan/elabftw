@@ -41,7 +41,8 @@
       {# a category is open: offer a new entry of that category #}
       {% if currentCategories|length == 1 and currentCategories[0] matches '/^\\d+$/' %}
         {% for category in categoryArr %}
-          {% if category.id == currentCategories[0] %}
+          {# the module of a colleague that is only looked at (Browse someone's modules) takes no new entry #}
+          {% if category.id == currentCategories[0] and category.looked_category is not defined %}
             {# the plasmids start with a dialog that can take their sequence and parents, see sequence-add.js #}
             <button type='button' class='btn btn-primary btn-sm ml-auto' data-action='create-in-category' data-category='{{ category.id }}' data-category-title='{{ category.title|e('html_attr') }}'{{ category.title == 'Plasmids' ? " data-with-sequence='1'" }}>
               <i class='fas fa-fw fa-plus mr-1'></i>{{ 'New entry'|trans }}: {{ category.title }}
