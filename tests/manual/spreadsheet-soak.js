@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'copy-table-format', 'default-border-apply', 'colour-live', 'drag-select', 'formulas-and-structure', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'undo-everything', 'copy-table-format', 'default-border-apply', 'colour-live', 'drag-select', 'formulas-and-structure', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1676,6 +1676,79 @@ async function spreadsheetSoak(options = {}) {
       const pasted = await pasteExternal([['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h'], ['i', 'j', 'k', 'l'], ['m', 'n', 'o', 'p'], ['q', 'r', 's', 't']], 'pasted for undo');
       if (pasted) { await live(pasted); await run(pasted, 'pas'); }
       await consistency('undo-redo: inline, popup and stored HTML agree', true);
+    },
+    // Undo and redo in the grid must reverse every kind of change, not only typed text: typing, bold, alignment, added
+    // rows and a dragged column width. A record of the table is taken after each step; undoing walks back through the
+    // records one by one (to the table as it was inserted), redoing walks forward again.
+    async 'undo-everything'() {
+      const uid = await createTable('undo everything', { rows: 4, cols: 4 });
+      if (!uid) return;
+      const look = async () => {
+        const root = api.overlayElement(uid) || await live(uid);
+        const cells = [...root.querySelectorAll('.jss_worksheet tbody td[data-x]')].map(td => ({ key: `${td.dataset.x},${td.dataset.y}`, text: td.textContent.trim(), bold: isBold(td), align: alignOf(td) }));
+        const widths = [...root.querySelectorAll('.jss_worksheet thead td[data-x]')].map(td => Math.round(td.getBoundingClientRect().width));
+        return { rows: root.querySelectorAll('.jss_worksheet tbody tr').length, cells, widths };
+      };
+      const differences = (a, b) => {
+        const out = [];
+        if (a.rows !== b.rows) out.push(`rows ${a.rows} vs ${b.rows}`);
+        a.cells.forEach((cell, i) => {
+          const other = b.cells[i];
+          if (!other) return;
+          if (cell.text !== other.text) out.push(`${cell.key} text "${cell.text}" vs "${other.text}"`);
+          if (cell.bold !== other.bold) out.push(`${cell.key} bold ${cell.bold} vs ${other.bold}`);
+          if (cell.align !== other.align) out.push(`${cell.key} align ${cell.align} vs ${other.align}`);
+        });
+        a.widths.forEach((width, i) => { if (Math.abs(width - (b.widths[i] ?? width)) > 2) out.push(`column ${i} width ${width} vs ${b.widths[i]}`); });
+        return out;
+      };
+      const alignRight = async (r, c) => {
+        const root = await live(uid);
+        openFormatBar(root); await sleep(300);
+        press(root.querySelector(`td[data-x="${c}"][data-y="${r}"]`)); await sleep(200);
+        const button = findButton(root, ['Align right']);
+        if (!button) { fail('the Align right button was not found'); return; }
+        button.click(); await sleep(600);
+      };
+      await typeDirect(uid, 0, 0, 'base', 'Enter');
+      await sleep(600);
+      const states = [await look()];
+      const kinds = ['inserted'];
+      const steps = [
+        ['typing', async () => { await typeDirect(uid, int(0, 3), int(0, 3), `U${int(10, 99)}`, 'Enter'); }],
+        ['bold', async () => { await boldCell(uid, int(0, 3), int(0, 3)); }],
+        ['align right', async () => { await alignRight(int(0, 3), int(0, 3)); }],
+        ['add rows', async () => { await addRowsBar(uid, 1); }],
+        ['column width', async () => { await resizeColumn(uid, int(0, 3)); }],
+      ];
+      // every kind of step once (in a random order), then random ones up to the count
+      const count = config.quick ? 5 : 7;
+      const plan = [...steps].sort(() => random() - 0.5);
+      while (plan.length < count) plan.push(pick(steps));
+      for (const [kind, run] of plan) {
+        await run();
+        await sleep(500);
+        states.push(await look());
+        kinds.push(kind);
+        note(`undo-everything-step-${kind.replace(/ /g, '-')}`);
+      }
+      // back through every step, comparing with the record taken before it
+      for (let i = states.length - 1; i >= 1; i--) {
+        await undoKey(uid, false);
+        const diff = differences(await look(), states[i - 1]);
+        if (diff.length) dataLoss.push({ context, where: 'grid', problem: `undo of step ${i} (${kinds[i]}) did not restore the table: ${diff.slice(0, 4).join('; ')}` });
+        note('undo-everything-undo');
+      }
+      // and forward again
+      for (let i = 1; i < states.length; i++) {
+        await undoKey(uid, true);
+        const diff = differences(await look(), states[i]);
+        if (diff.length) dataLoss.push({ context, where: 'grid', problem: `redo of step ${i} (${kinds[i]}) did not bring the change back: ${diff.slice(0, 4).join('; ')}` });
+        note('undo-everything-redo');
+      }
+      // the record of what was typed no longer matches after undo and redo: leave this table out of later checks
+      models.delete(uid);
+      api.removeTable(uid);
     },
     // The Copy table button and a selection copy must carry the values and the formatting.
     async 'copy-table-format'() {
