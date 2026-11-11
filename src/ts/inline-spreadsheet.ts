@@ -4444,6 +4444,29 @@ function updateQuickStyleProperty(
   );
 }
 
+/**
+ * A cell's style after a paste brings the formatting of its source cell: the text formatting (bold, italic, underline,
+ * colour, font) is the source's -- also when the source has none, so a plain cell pasted over a bold one is plain, like
+ * in Excel -- and everything else the source carries (fill, borders, alignment, padding) is laid over what the cell has.
+ */
+function mergePastedCellStyle(existingStyle: string | undefined, pastedStyle: string | undefined): string | undefined {
+  const target = document.createElement('span');
+  if (existingStyle) target.setAttribute('style', existingStyle);
+  [
+    'font-weight', 'font-style', 'font-family', 'font-size', 'color',
+    'text-decoration', 'text-decoration-line', 'text-decoration-style', 'text-decoration-color',
+  ].forEach(property => target.style.removeProperty(property));
+  if (pastedStyle) {
+    const source = document.createElement('span');
+    source.setAttribute('style', pastedStyle);
+    for (let index = 0; index < source.style.length; index++) {
+      const property = source.style.item(index);
+      target.style.setProperty(property, source.style.getPropertyValue(property), source.style.getPropertyPriority(property));
+    }
+  }
+  return sanitizeStyle(target.getAttribute('style') ?? undefined, PRESERVED_STYLE_PROPERTIES);
+}
+
 function updateQuickFontStyle(
   existingStyle: string | undefined,
   format: CellFontFormat,
@@ -10188,9 +10211,54 @@ export function buildReadOnlySpreadsheetHost(
 
   installWellPlateHeaders(sheetContainer, () => extracted.kind);
   const formulaPasteShift = createFormulaPasteShift();
+  // The grid's own paste takes the clipboard's text only. The cell formatting that travels in the clipboard's HTML table
+  // (a bold cell copied from this grid, from the popup or from another page) is applied right after it, in the same
+  // undo step as the values.
+  let pasteStyleChanges: CellHistoryEntry = [];
+  let pasteHtmlTable: ClipboardTable | null = null;
+  let pasteOrigin: { x: number; y: number; values: string[][] } | null = null;
+  if (editable) {
+    sheetContainer.addEventListener('paste', event => {
+      pasteHtmlTable = null;
+      const target = event.target;
+      // text pasted into a cell that is being typed in is just text
+      if (target instanceof Element && target.closest('.jss_worksheet td.editor')) return;
+      const html = event.clipboardData?.getData('text/html') ?? '';
+      pasteHtmlTable = html ? parseClipboardHtmlTable(html) : null;
+    }, true);
+  }
+  const applyPastedStyles = (): void => {
+    const table = pasteHtmlTable;
+    const origin = pasteOrigin;
+    pasteHtmlTable = null;
+    pasteOrigin = null;
+    if (!table || !origin || !table.cellStyles) return;
+    const sourceHeight = table.data.length;
+    const sourceWidth = table.data.reduce((widest, line) => Math.max(widest, line.length), 0);
+    if (sourceHeight === 0 || sourceWidth === 0) return;
+    // only when the HTML is the same copy as the text that was pasted
+    const sameCopy = origin.values.every((line, row) => line.every((value, col) => (
+      value.trim() === String(table.data[row % sourceHeight]?.[col % sourceWidth] ?? '').trim()
+    )));
+    if (!sameCopy) return;
+    origin.values.forEach((line, row) => line.forEach((_value, col) => {
+      const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${origin.x + col}"][data-y="${origin.y + row}"]`);
+      if (!cell) return;
+      const before = cell.getAttribute('style') ?? '';
+      const pasted = table.cellStyles?.[`${colLabel(col % sourceWidth)}${(row % sourceHeight) + 1}`];
+      const after = mergePastedCellStyle(before || undefined, pasted) ?? '';
+      if (after === before) return;
+      if (after) cell.setAttribute('style', after);
+      else cell.removeAttribute('style');
+      pasteStyleChanges.push({ col: origin.x + col, row: origin.y + row, oldValue: '', newValue: '', style: true, oldStyle: before, newStyle: after });
+    }));
+  };
   const pasteUndo = createPasteUndoRecorder(
     () => (col, row) => String(rawDataMirror[row]?.[col] ?? ''),
-    changes => pushCellHistoryEntry(changes),
+    changes => {
+      pushCellHistoryEntry([...changes, ...pasteStyleChanges]);
+      pasteStyleChanges = [];
+    },
   );
   const stopTrackingJssListeners = startTrackingGlobalListeners();
   (jspreadsheet as unknown as JssFactory)(sheetContainer, {
@@ -10233,10 +10301,20 @@ export function buildReadOnlySpreadsheetHost(
         const pasteX = Number(x);
         const pasteY = Number(y);
         pasteUndo.before(data, pasteX, pasteY);
+        pasteOrigin = Array.isArray(data)
+          ? { x: pasteX, y: pasteY, values: data.map(line => line.map(cell => String(cell?.value ?? ''))) }
+          : null;
         return formulaPasteShift.onbeforepaste(changedWorksheet, data, pasteX, pasteY);
       },
       onpaste: (): void => {
+        applyPastedStyles();
         pasteUndo.after();
+        // formatting alone (the same values pasted over themselves) is a step of its own
+        if (pasteStyleChanges.length > 0) {
+          pushCellHistoryEntry(pasteStyleChanges);
+          pasteStyleChanges = [];
+        }
+        notifyFromMirror();
       },
       onbeforechange: (
         changedWorksheet: JssInstance,
