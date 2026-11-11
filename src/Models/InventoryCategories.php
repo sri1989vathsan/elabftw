@@ -62,20 +62,31 @@ final class InventoryCategories extends AbstractStatus
         foreach ($looking->fetchAll(PDO::FETCH_ASSOC) as $module) {
             $lookedAt[(int) $module['category']] = (string) $module['name'];
         }
-        $visible = array();
+        // in this order: the modules of the lab, then the personal modules of the user, then the ones of others they added to their view
+        $lab = array();
+        $mine = array();
+        $others = array();
         foreach ($rows as $row) {
             $owner = $owners[(int) $row['id']] ?? null;
             if ($owner !== null && $owner !== $me && !isset($lookedAt[(int) $row['id']])) {
                 continue;
             }
-            if ($owner !== null && $owner !== $me) {
+            $row['is_personal'] = $owner === null ? 0 : 1;
+            if ($owner === null) {
+                $lab[] = $row;
+            } elseif ($owner === $me) {
+                $mine[] = $row;
+            } else {
+                $row['sort_title'] = $row['title'];
                 $row['title'] = $row['title'] . ' (' . $lookedAt[(int) $row['id']] . ')';
                 $row['looked_category'] = (int) $row['id'];
+                $others[] = $row;
             }
-            $row['is_personal'] = $owner === null ? 0 : 1;
-            $visible[] = $row;
         }
-        return $visible;
+        // the personal modules are in their natural order (module 2 before module 10); the ones of others by their owner
+        usort($mine, static fn(array $a, array $b): int => strnatcasecmp((string) $a['title'], (string) $b['title']));
+        usort($others, fn(array $a, array $b): int => strnatcasecmp($lookedAt[(int) $a['id']] . ' ' . $a['sort_title'], $lookedAt[(int) $b['id']] . ' ' . $b['sort_title']));
+        return array_merge($lab, $mine, $others);
     }
 
     // categories are admin-only to write: everyone can view them (see

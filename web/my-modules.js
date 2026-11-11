@@ -54,13 +54,28 @@
   // the box of a dialog: gives the box and a function that closes it
   const dialog = function (onClose) {
     const back = make('div');
-    back.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+    // the look of the other dialogs of the Database (planned.css: .planned-backdrop and .planned-dialog)
+    back.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(20,30,50,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+    // a panel of the sidebar that is open covers the left of the window: the box is centred in the rest of the window
+    const centre = function () {
+      let covered = 0;
+      document.querySelectorAll('.side-panel').forEach(function (panel) {
+        const r = panel.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0 && r.left < window.innerWidth / 2 && r.right > 0) {
+          covered = Math.max(covered, r.right);
+        }
+      });
+      back.style.paddingLeft = (16 + Math.min(covered, window.innerWidth * 0.5)) + 'px';
+    };
+    window.addEventListener('resize', centre);
+    centre();
     const box = make('div');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
-    box.style.cssText = 'background:var(--white,#fff);color:inherit;border-radius:10px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px;box-shadow:0 10px 30px rgba(0,0,0,.35)';
+    box.style.cssText = 'background:var(--white,#fff);color:inherit;border-radius:8px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:1.2rem 1.4rem;box-shadow:0 10px 40px rgba(0,0,0,.3)';
     back.append(box);
     const close = function () {
+      window.removeEventListener('resize', centre);
       back.remove();
       if (onClose) {
         onClose();
@@ -183,10 +198,6 @@
     };
     draw('');
   };
-  link.addEventListener('click', function (event) {
-    event.preventDefault();
-    open();
-  });
 
   // the personal modules of the others: search them and add the ones to look at, one by one (read only; admins can also change them)
   const browse = async function () {
@@ -280,11 +291,18 @@
     };
     draw('');
   };
-  const browseLink = document.getElementById('browseModulesLink');
-  if (browseLink) {
-    browseLink.addEventListener('click', function (event) {
-      event.preventDefault();
+  // the items are also copied into the overflow menu ("...") of a narrow window (for example with the sidebar open): the copies have the same
+  // id and no handler of their own, so the clicks are caught here for all of them
+  document.addEventListener('click', function (event) {
+    const target = event.target.closest ? event.target.closest('#myModulesLink, #browseModulesLink') : null;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    if (target.id === 'myModulesLink') {
+      open();
+    } else {
       browse();
-    });
-  }
+    }
+  });
 })();

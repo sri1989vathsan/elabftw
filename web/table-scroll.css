@@ -26,3 +26,10 @@
   border: 2px solid transparent;
   background-clip: content-box;
 }
+
+/* Fork-only: the Database menu has the modules, the personal modules and the two items at its end ("My modules...", "Browse someone's modules..."):
+   when it is taller than the window it scrolls, so that the last items can still be reached. */
+#navRegistryDropdown + .dropdown-menu {
+  max-height: calc(100vh - 70px);
+  overflow-y: auto;
+}
