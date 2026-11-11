@@ -246,8 +246,10 @@
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='compounds.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-flask fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Compounds'|trans }}</a>
                 {% set isActive = scriptName == 'chem-editor.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='chem-editor.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-pen-to-square fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Chemical Structure Editor'|trans }}</a>
+                {# "OpenCloning" hidden from the Tools menu (the Sequence editor is used instead). Left in place, not deleted, so it is easy to bring back:
                 {% set isActive = scriptName == 'syc.php' %}
                 <a class='dropdown-item {{ not envAsBool('USE_OPENCLONING') ? 'disabled' }} {{ isActive ? 'active' }}' href='syc.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-dna fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'OpenCloning'|trans }}</a>
+                #}
                 {% set isActive = scriptName == 'inventory.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='inventory.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-warehouse fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Inventory'|trans }}</a>
                 {% set isActive = scriptName == 'tool.php' %}
