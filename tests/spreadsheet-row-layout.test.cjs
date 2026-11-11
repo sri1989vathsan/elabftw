@@ -24,6 +24,7 @@ function run(kind, natural, manual) {
       getBoundingClientRect: () => { events.push(`read${index}`); return { height }; },
       getAttribute: () => `height: ${value};`,
       setAttribute: (name, v) => { attributes[index] = [name, v]; },
+      removeAttribute: name => { events.push(`unset${index}`); },
     };
   });
   const context = vm.createContext({ removeOuterTableHeight: () => events.push('outer') });
@@ -34,12 +35,14 @@ function run(kind, natural, manual) {
   return { events, rows, attributes, selector };
 }
 
-test('row sizing batches resets, measurements and writes while preserving saved manual heights', () => {
+test('row sizing batches resets and writes, pinning only saved manual heights', () => {
   const h = run('spreadsheet', [24.2, 80, 31.1, 50], { 1: 12, 3: 44.6 });
+  // rows never resized (0 and 2) are left unpinned: nothing is measured for them
   assert.deepEqual(h.events, ['outer', 'clear0', 'clear1', 'clear2', 'clear3',
-    'read0', 'read2', 'write0', 'write1', 'write2', 'write3', 'outer']);
-  assert.deepEqual(h.rows.map(r => r.style.height), ['25px', '20px', '32px', '45px']);
-  assert.deepEqual(h.attributes[0], ['data-mce-style', 'height: 25px;']);
+    'unset0', 'write1', 'unset2', 'write3', 'outer']);
+  assert.deepEqual(h.rows.map(r => r.style.height), ['', '20px', '', '45px']);
+  assert.equal(h.attributes[0], undefined);
+  assert.deepEqual(h.attributes[1], ['data-mce-style', 'height: 20px;']);
   assert.equal(h.selector, 'tbody > tr');
 });
 
