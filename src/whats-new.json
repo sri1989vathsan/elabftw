@@ -213,7 +213,7 @@
       "Undo in a spreadsheet only undoes spreadsheet edits, and undo in the text leaves tables alone.",
       "Tab and Enter move between cells, and selected cells and fill-drag are clearly highlighted.",
       "Fixed cell formatting in the popup and a case where saving could blank cells.",
-      "Add rows: under a spreadsheet, type how many rows you want and press Add rows to add them at the bottom, up to 50 rows in all. The popup has the same box next to its buttons. Pressing Enter in a cell of the last row also adds a row.",
+      "Add rows: under a spreadsheet, type how many rows you want and press Add rows to add them at the bottom, up to 50 rows in all. The popup has the same box next to its buttons. Enter never adds a row: in the last row it stays in the cell.",
       "Vertical alignment: select cells and press the top, middle or bottom button next to the left, center, right and justify buttons, in the page and in the popup.",
       "Typing and then adding or deleting a row or column straight away no longer loses what you typed.",
       "Well plates keep their size: rows and columns cannot be added or deleted with Enter, the right-click menu, Add rows or the size boxes, in the page or in the popup. To change the size, pick another plate size in the popup, or choose Custom in its size list to turn the plate into an ordinary spreadsheet.",
@@ -1137,7 +1137,7 @@
     "details": [
       "fa-plus::Insert: open Insert, then Spreadsheet and drag over the squares to pick the size, or choose Custom spreadsheet for a size or options the squares cannot reach. Well plate gives a ready 6, 12, 24, 48, 96 or 384-well plate. Tables is for plain text tables.",
       "fa-hand-pointer::Click a table to work in it. Until you click, a light preview with the row and column labels is shown, so a page with many tables stays quick to scroll. The cells you select stay selected when you scroll the page.",
-      "fa-keyboard::Typing: Tab moves to the next cell. Enter commits what you typed and moves down; in the last row it stays in the cell and a further Enter adds a row below. Shift+Enter opens the Spreadsheet Editor, a larger window for the same table.",
+      "fa-keyboard::Typing: Tab moves to the next cell. Enter commits what you typed and moves down; in the last row it stays in the cell, and so does a further Enter: rows are added with Add rows under the table or the right-click menu. Shift+Enter opens the Spreadsheet Editor, a larger window for the same table.",
       "fa-table::Spreadsheet tools: this button is only on the editor toolbar while a spreadsheet is selected. It edits and formats that spreadsheet: edit it, open it in the Spreadsheet Editor, autofit column widths and row heights, change the table and cell style, indent or outdent it and make it sortable.",
       "fa-plus::Add rows: under a spreadsheet, type how many rows you want and press Add rows to add them at the bottom, up to 400 rows (and 400 columns) in all. Right-click a row number or column letter to insert a row or column, or delete the selected ones; select several first to delete them together.",
       "fa-chevron-down::Formula and formatting bars: the small arrow at the left of a spreadsheet’s title bar shows or hides the formula bar and the formatting bar. A table remembers whether you opened them, so they are as you left them when you scroll away and back, and the text below the table does not move.",
