@@ -454,7 +454,9 @@ async function spreadsheetSoak(options = {}) {
     sizes.taller = Math.max(sizes.taller, extra);
     sizes.shorter = Math.min(sizes.shorter, extra);
     if (extra > 160) problems.push(`editor is ${extra} px taller than its content`);
-    if (extra < -6) problems.push(`editor is ${-extra} px shorter than its content (cut off)`);
+    // Cut off only when the frame's own document overflows: the hidden stored table behind a plate (or any table the live grid
+    // is shorter than) pokes out of the body by a few pixels, a negative margin pulls the text up, and nothing visible is lost.
+    if (extra < -6 && html.scrollHeight - html.clientHeight > 2) problems.push(`editor is ${-extra} px shorter than its content (cut off)`);
     document.querySelectorAll('.elabftw-spreadsheet-editor-overlay').forEach(overlay => {
       const rect = overlay.getBoundingClientRect();
       if (rect.width > 0 && (rect.left < box.left - 3 || rect.right > box.right + 3)) problems.push('a spreadsheet sticks out of the editor sideways');
