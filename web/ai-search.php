@@ -97,7 +97,9 @@ $config = static function () use ($pdo): array {
     return $out;
 };
 $settings = $config();
-$forcedOff = getenv('AI_SEARCH_DISABLED') === '1';
+// the search by meaning is switched off for good (nothing talks to a model): to bring it back, use the line below it
+$forcedOff = true;
+// $forcedOff = getenv('AI_SEARCH_DISABLED') === '1';
 $enabled = !$forcedOff && ($settings['ai_search_enabled'] ?? '0') === '1';
 $chatEnabled = $enabled && ($settings['ai_chat_enabled'] ?? '0') === '1';
 $baseUrl = rtrim(trim((string) ($settings['ai_search_url'] ?? '')), '/');

@@ -833,7 +833,7 @@
     <button type='button' class='btn btn-sm btn-primary mr-1' data-dbsub='modules'>{{ 'Modules'|trans }}</button>
     <button type='button' class='btn btn-sm btn-secondary mr-1' data-dbsub='rules'>{{ 'Rules of a module'|trans }}</button>
     <button type='button' class='btn btn-sm btn-secondary mr-1' data-dbsub='owners'>{{ 'Transfer ownership'|trans }}</button>
-    <button type='button' class='btn btn-sm btn-secondary' data-dbsub='ai'>{{ 'Find by meaning'|trans }}</button>
+    <button type='button' class='btn btn-sm btn-secondary' data-dbsub='ai'>{{ 'Plasmid checks'|trans }}</button>
   </div>
   <div class='pl-3 mb-5' data-dbpane='modules'>
     {{ idx.catstatidx(
@@ -859,12 +859,11 @@
     <div id='databaseOwnersApp'></div>
   </div>
   <div class='pl-3' data-dbpane='ai' hidden>
-    <div id='aiSearchApp' data-csrf='{{ App.Session.get('csrf') }}' data-sysadmin='{{ App.Users.userData.is_sysadmin == 1 ? '1' : '0' }}'></div>
+    {# "Find by meaning" (the model settings, admin-ai-search.js) is switched off: to bring it back, put its div and script back here, and see $forcedOff in ai-search.php #}
     <div id='plasmidChecksApp' data-csrf='{{ App.Session.get('csrf') }}'></div>
   </div>
   <script src='registry-modules.js?v={{ 'now'|date('YmdHi') }}'></script>
   <script src='admin-database.js?v={{ 'now'|date('YmdHi') }}'></script>
-  <script src='admin-ai-search.js?v={{ 'now'|date('YmdHi') }}'></script>
   <script src='admin-plasmid-checks.js?v={{ 'now'|date('YmdHi') }}'></script>
 </div>
 {# END DATABASE #}
