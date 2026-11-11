@@ -65,7 +65,11 @@
 
     <div id='experimentsFoldersContent'>
       <div class='d-flex align-items-center justify-content-between mb-2'>
-        <h4 class='h6 mb-0' id='folderViewTitle'>{{ 'Folder tree'|trans }}</h4>
+        {# The title is rewritten when the view changes, so its "i" (the Folder views card) sits beside it, not inside it. #}
+        <div class='d-flex align-items-center'>
+          <h4 class='h6 mb-0' id='folderViewTitle'>{{ 'Folder tree'|trans }}</h4>
+          {{ guide.info('guide-folder-views', 'Folder views') }}
+        </div>
         {# Tree (nested, as before), list (every folder with its path) or details (a sortable table); the choice is remembered. #}
         <div class='btn-group btn-group-sm folder-view-switch' role='group' aria-label='{{ 'Folder view'|trans }}'>
           <button type='button' class='btn btn-outline-secondary active' data-action='select-folder-view' data-view='tree' title='{{ 'Tree view'|trans }}' aria-label='{{ 'Tree view'|trans }}' aria-pressed='true'><i class='fas fa-sitemap fa-fw' aria-hidden='true'></i></button>
