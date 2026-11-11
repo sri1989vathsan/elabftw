@@ -316,5 +316,21 @@
     ],
     "label": "Each version, with Restore and its edit history",
     "alt": "The template version history popup listing versions, each with a Restore button and its edit history, outlined"
+  },
+  "guide-folder-views": {
+    "crop": [
+      0.0,
+      0.0,
+      0.3667,
+      1.0
+    ],
+    "highlight": [
+      0.0433,
+      0.4285,
+      0.31,
+      0.254
+    ],
+    "label": "Switch on, then click a folder",
+    "alt": "The Folders panel in the Details view: the Show experiments/resources switch is on and the folder Cell culture is open, listing its two experiments"
   }
 }

@@ -363,6 +363,7 @@
     "summary": "A shared tree of folders for experiments and resources, each with its own README and permissions.",
     "details": [
       "fa-folder-tree::Open the Folders tab in the left sidebar. The tree shows every folder; the number next to a folder counts the items inside it.",
+      "fa-table-list::Three views: the buttons under the tabs switch the tree for a one-level List or a Details table, and a switch can open a folder in place to list its experiments and resources. See Folder views.",
       "fa-folder-plus::Press Create folder at the bottom, give it a name (and an optional short description) and choose a parent folder to nest it.",
       "A good way to use them: one folder for each project, and a subfolder inside it for each idea within that project that you want to test and verify. Each approach then has its own place, and you can compare them side by side.",
       "Click a folder to list only what is inside it. Choose the folder when you create an experiment or resource, or change it on its edit page. In the Create experiment (or resource) window, New folder has a Parent folder list, so you can create a nested folder right there.",
@@ -412,6 +413,46 @@
     ]
   },
   {
+    "id": "guide-folder-views",
+    "date": "2026-11-11",
+    "area": "Organise",
+    "title": "Folder views: tree, list and details",
+    "summary": "See your folders as a tree, as one level at a time, or as a table with counts and sorting, and open a folder in place to see the experiments and resources inside it.",
+    "details": [
+      "fa-table-list::The three buttons under the tabs of the Folders panel switch the view: Tree (every folder, nested), List (one level at a time) and Details (a table). Your choice is remembered.",
+      "fa-layer-group::List and Details show the folders of one level. The bar at the bottom of the panel shows where you are, for example All folders > Cell culture; press any part of it to go there. Press the arrow on a folder that has subfolders to step into it, and “..” to go back up. Stepping around only moves the panel: click a folder’s name to open that folder in the main list.",
+      "fa-folder-open::When you open a folder from the page (for example with the folder path bar under a list), the panel moves to that folder and highlights it.",
+      "fa-sort::Details: each row shows the folder’s name, its path, when it last changed (the clock) and how many experiments and resources it holds. Press a heading to sort by it, and press it again to reverse. The Filter folders box searches every folder at once, by name, path or description.",
+      "fa-eye::Show experiments/resources: this switch above the list turns on a mode where a click on a folder’s name opens it in place and lists the experiments and resources inside it; click again to close it, and click an entry to open it. With the switch off there are no arrows, and a click on a folder opens it in the main list. The switch is remembered.",
+      "fa-star::Folders you starred are listed in a block of their own at the top, so they stay in reach while you step through the levels.",
+      "fa-folder-plus::New folder: in the List and Details views, the button at the bottom creates the folder inside the folder you are looking at. The Tree view keeps its New folder form, with a Parent folder list.",
+      "fa-arrows-left-right::A narrow panel: each folder’s name gets a line of its own, with its counts and buttons under it, and the sort buttons in the header fit on one line. Drag the right edge of the panel to make it wider or narrower (see The left sidebar)."
+    ],
+    "imageAlt": "The Folders panel in the Details view: the Show experiments/resources switch is on and the folder Cell culture is open, listing its two experiments",
+    "featured": false,
+    "guide": true,
+    "order": 11,
+    "icon": "fa-table-list",
+    "purpose": "Find a folder quickly in a big lab, see how much is in each one, and look inside a folder without leaving the page you are on.",
+    "uses": [
+      "Switch to Details and sort by the clock to find the folder you worked in last.",
+      "Turn on Show experiments/resources and click a project folder to see what is in it without leaving your page.",
+      "Type part of a name in Filter folders to find a subfolder anywhere in the tree.",
+      "Widen the panel when folder names are long."
+    ],
+    "news": "New: List and Details views, a Show experiments/resources mode that opens a folder in place, a layout that fits a narrow panel, and a panel you can resize.",
+    "shot": "The Folders panel in the Details view with the Show experiments/resources switch on and one folder open",
+    "screenshots": [],
+    "image": "guide-folder-views.jpg",
+    "highlight": {
+      "x": 11.8,
+      "y": 42.9,
+      "w": 84.5,
+      "h": 25.4,
+      "label": "Switch on, then click a folder"
+    }
+  },
+  {
     "id": "guide-sidebar",
     "date": "2026-10-12",
     "area": "Navigate",
@@ -419,6 +460,7 @@
     "summary": "The row of buttons on the left edge of every page: folders, search, quick search, to-dos, the calendar and the table of contents, one click away.",
     "details": [
       "fa-bars::The slim row of buttons on the left edge of every page opens panels next to your page. Click a button to open its panel and click it again to close it. The row stays put while you scroll, and the last panel you opened is remembered. Each panel has its own “i” beside its title with more help.",
+      "fa-left-right::Resize: drag the right edge of an open panel (a thin line marks it) to make the panel wider or narrower, or click the line and press the Left and Right arrow keys. The width is remembered in this browser and is the same for every panel.",
       "fa-folder-tree::Folders (the folder tree icon): browse your folders and bookmarks, and manage them.",
       "fa-magnifying-glass::Search (the magnifying glass): search experiments, resources, templates and folders, with your favourite filters. While you edit, its results have buttons to attach an item or paste a link.",
       "fa-bolt::Quick search and commands (the lightning bolt): open it with this button, or press Ctrl + K (Cmd + K on a Mac) on any page, even while typing in the editor. Press Escape or click outside the window to close it.",
@@ -950,17 +992,19 @@
       "fa-keyboard::Typing: Tab moves to the next cell. Enter commits what you typed and moves down; in the last row it stays in the cell and a further Enter adds a row below. Shift+Enter opens the Spreadsheet Editor, a larger window for the same table.",
       "fa-table::Spreadsheet tools: this button is only on the editor toolbar while a spreadsheet is selected. It edits and formats that spreadsheet: edit it, open it in the Spreadsheet Editor, autofit column widths and row heights, change the table and cell style, indent or outdent it and make it sortable.",
       "fa-plus::Add rows: under a spreadsheet, type how many rows you want and press Add rows to add them at the bottom, up to 400 rows (and 400 columns) in all. Right-click a row number or column letter to insert a row or column, or delete the selected ones; select several first to delete them together.",
+      "fa-chevron-down::Formula and formatting bars: the small arrow at the left of a spreadsheet’s title bar shows or hides the formula bar and the formatting bar. A table remembers whether you opened them, so they are as you left them when you scroll away and back, and the text below the table does not move.",
+      "fa-table-columns::Grey columns: beside a narrow table, empty lettered grey columns show how far it can grow. Click or type in one to add columns up to it. Columns left empty are taken away again when you click outside the table (or press Update in the Spreadsheet Editor); columns with text in them stay.",
       "fa-grip::A well plate keeps its size. It has no Add rows bar, Enter in its last row adds nothing, and the right-click menu has no insert or delete. In the Spreadsheet Editor the row and column boxes and the Add rows and add-column buttons are greyed out. To change the size, pick another plate size in the size list, or choose Custom to turn the plate into an ordinary spreadsheet.",
       "fa-circle-dot::Plate view: a well plate in the text is drawn as round wells. Hover a well to see what it holds. Wells with the same colour form a group, listed under the plate by colour and name. The Plate and Spreadsheet buttons in the table's header switch between the plate and the grid; your choice is saved and is what gets printed. Plates up to 96 wells are as wide as the 96-well plate; the 384-well plate is smaller.",
       "fa-eye::On a page you are only reading, a well plate has the same Plate and Spreadsheet buttons, and the Colour by and Label by lists: pick a column of the plate table to recolour the wells (the legend follows) or to show that column when you hover a well. Choose Saved colours or Saved labels to go back. This is only for looking: nothing is saved, the page shows the saved version again when you reload, and a plate that has been scrolled far out of sight returns to it. Printing prints the plate as it is on screen.",
       "fa-copy::Copy plate: the copy button in a plate's header copies the whole plate. Paste it into the text (with the cursor outside a table) and you get a new, separate well plate with the same wells, colours and groups, which is a quick way to duplicate a plate. Pasted into Excel or Google Sheets it gives the grid as tab-separated text.",
       "fa-table-list::Plate table: give each well a row of information (sample, dose, …). Colour by and Label by then colour or name the wells by any column, so groups follow the table. Insert > Well plate > Insert from file… reads a CSV or XLSX file into a plate table; you are always asked for the plate size, because partly filled plates are common. A table opens as a full spreadsheet, and Back to plate view returns.",
       "fa-object-group::Plate editor: press the expand button in a plate's header. Select wells by dragging, by their row or column header, or with Shift and Ctrl/Cmd. The Selection box (contents, Set contents, Remove group) sits at the top of the side panel and only shows while wells are selected; click outside the wells and the side panel to clear the selection. The side panel scrolls on its own, so the box stays in reach on a tall plate.",
-      "fa-up-right-and-down-left-from-center::Spreadsheet Editor: the larger window has the formula bar, fill, fonts, colours, alignment (including top, middle and bottom), and the table and cell appearance. Update saves your changes and Cancel drops them.",
+      "fa-up-right-and-down-left-from-center::Spreadsheet Editor: the larger window has the formula bar, fill, fonts, colours, alignment (including top, middle and bottom), and the table and cell appearance. Update saves your changes and Cancel drops them. Pick a fill, text or border colour and it is applied after a short pause, as you choose it; the button next to a colour swatch applies the colour that is already chosen to a different selection.",
       "fa-calculator::Formulas: start a cell with = to calculate, for example =A1+B1. Dragging the fill handle copies a formula down or across, and a reference written with a dollar sign stays fixed. Copy a cell with a formula and paste it somewhere else in a spreadsheet and the references move the way they do in Excel: =B2*2 copied from C2 and pasted into C3 becomes =B3*2, and a reference with a dollar sign stays fixed.",
       "fa-paste::Paste: Ctrl/Cmd+V pastes at the selected cell. Ctrl/Cmd+Shift+V, or Paste transposed in the right-click menu, swaps rows and columns first. If the browser does not allow reading the clipboard from a menu, a small box asks you to press Ctrl/Cmd+V.",
       "fa-copy::Copy table: in the Edit menu of the menu bar. Copy complete table copies a whole table with its formatting, ready to paste into another program.",
-      "fa-rotate-left::Undo: Ctrl+Z in a spreadsheet only undoes spreadsheet edits (including formatting such as bold or a fill colour), and in the text it leaves the tables alone. Pasting, inserting and deleting rows and columns, dragging a row or column border and the two autofit buttons are undo steps too, in the text and in the Spreadsheet Editor.",
+      "fa-rotate-left::Undo: Ctrl+Z in a spreadsheet only undoes spreadsheet edits (including formatting such as bold or a fill colour), and in the text it leaves the tables alone. Pasting, inserting and deleting rows and columns, dragging a row or column border and the two autofit buttons are undo steps too, in the text and in the Spreadsheet Editor. Redo brings a row or column you added back with the look it had.",
       "fa-print::Printing: File > Print main text (or Print everything) prints every spreadsheet and plate in full, one after another and never on top of each other, also when you print from the edit page."
     ],
     "imageAlt": "The Insert menu open on Spreadsheet, with the squares for picking a size",
@@ -976,7 +1020,7 @@
       "Keep a plate's layout fixed so a well can never move to a different position by accident.",
       "Open the Spreadsheet Editor to format a results table before you copy it into a report."
     ],
-    "news": "New: spreadsheets and well plates in one place: pick a size from the Insert menu, tools that appear when a table is selected, and plates that keep their size.",
+    "news": "New: pick a colour and it applies as you choose it, the formula and formatting bars stay as you left them, and Undo and Redo cover typing, formatting, added rows and columns, and sizes.",
     "shot": "The Insert menu with the squares for picking a spreadsheet size",
     "highlight": {
       "x": 60.6,
@@ -994,6 +1038,10 @@
       {
         "image": "spreadsheet-editing-plate-13b3f11b.png",
         "caption": "A normal spreadsheet has the Add rows bar under it. A well plate keeps its size, so it has none. Both show their row and column labels"
+      },
+      {
+        "image": "guide-spreadsheet-bars.jpg",
+        "caption": "The table’s toolbar, the formatting bar (fill and text colours, font, alignment) and the formula bar, open above a spreadsheet"
       }
     ]
   },
