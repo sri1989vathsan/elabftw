@@ -5430,7 +5430,7 @@ export function openSpreadsheetModal(
       const commitRescueInputAndMove = (deltaCol: number, deltaRow: number): void => {
         if (rescueInputCol === null || rescueInputRow === null) return;
         const nextCol = Math.min(Math.max(rescueInputCol + deltaCol, 0), working.cols - 1);
-        // Enter in the last row stays there; a further Enter (second-Enter handler) adds the new row.
+        // Enter in the last row stays there, and so does a further Enter: Enter never adds a row.
         const nextRow = Math.min(Math.max(rescueInputRow + deltaRow, 0), working.rows - 1);
         commitRescueInput();
         selectedRange = [nextCol, nextRow, nextCol, nextRow];
@@ -5443,7 +5443,7 @@ export function openSpreadsheetModal(
       releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
         if (event.key === 'Enter') {
           event.preventDefault();
-          // Enter commits and moves to the next row; in the last row it stays, and a further Enter adds a row
+          // Enter commits and moves to the next row; in the last row it stays (and a further Enter does not add a row)
           commitRescueInputAndMove(0, event.shiftKey ? -1 : 1);
         } else if (event.key === 'Tab') {
           event.preventDefault();
@@ -7164,17 +7164,13 @@ export function openSpreadsheetModal(
           return;
         }
         if (event.key === 'Enter' && !event.shiftKey && hasSingleCellSelection && worksheet) {
-          // A second Enter, with the cell only selected: move down, and at the last row add a new row and move into it
+          // A second Enter, with the cell only selected: move down. In the last row it stays there: Enter never adds a row
+          // (the Add rows button, or the right-click menu, does)
           event.preventDefault();
           event.stopImmediatePropagation();
           const enterCol = selectedRange![0];
           const enterRow = selectedRange![1];
-          const addsRow = enterRow >= working.rows - 1 && working.rows < MAX_DIMENSION && working.kind !== 'well-plate';
-          if (addsRow) {
-            flushMirrorIntoWorksheet(worksheet);
-            worksheet.insertRow?.(1, working.rows - 1, 0);
-          }
-          const nextRow = addsRow ? working.rows : Math.min(enterRow + 1, working.rows - 1);
+          const nextRow = Math.min(enterRow + 1, working.rows - 1);
           selectedRange = [enterCol, nextRow, enterCol, nextRow];
           worksheet.updateSelectionFromCoords?.(enterCol, nextRow, enterCol, nextRow);
           return;
@@ -9346,7 +9342,7 @@ export function buildReadOnlySpreadsheetHost(
       const maxCol = (rawDataMirror[0]?.length ?? cols) - 1;
       const maxRow = rawDataMirror.length - 1;
       const nextCol = Math.min(Math.max(rescueInputCol + deltaCol, 0), maxCol);
-      // Enter in the last row stays there; a further Enter (second-Enter handler) adds the new row.
+      // Enter in the last row stays there, and so does a further Enter: Enter never adds a row.
       const nextRow = Math.min(Math.max(rescueInputRow + deltaRow, 0), maxRow);
       commitRescueInput();
       const mounted = getMountedWorksheet(sheetContainer);
@@ -9369,7 +9365,7 @@ export function buildReadOnlySpreadsheetHost(
     releaseRescueKeys = isolateSpreadsheetEditorKeys(el, event => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        // Enter commits and moves to the next row; in the last row it stays, and a further Enter adds a row
+        // Enter commits and moves to the next row; in the last row it stays (and a further Enter does not add a row)
         commitRescueInputAndMove(0, event.shiftKey ? -1 : 1);
       } else if (event.key === 'Tab') {
         event.preventDefault();
@@ -9653,18 +9649,13 @@ export function buildReadOnlySpreadsheetHost(
       return;
     }
     if (event.key === 'Enter' && !event.shiftKey) {
-      // A second Enter, with the cell only selected: move down, and at the last row add a new row and move into it
+      // A second Enter, with the cell only selected: move down. In the last row it stays there: Enter never adds a row
+      // (Add rows under the table, or the right-click menu, does)
       event.preventDefault();
       event.stopImmediatePropagation();
       const maxRow = rawDataMirror.length - 1;
-      const addsRow = editable && !plateLocked && row >= maxRow && rawDataMirror.length < MAX_DIMENSION;
       const mounted = getMountedWorksheet(sheetContainer);
-      if (addsRow && mounted) {
-        // typed values live only in the mirror until the grid is redrawn; the row insert re-reads the worksheet
-        flushMirrorIntoWorksheet(mounted);
-        mounted.insertRow?.(1, maxRow, 0);
-      }
-      const nextRow = addsRow ? maxRow + 1 : Math.min(row + 1, maxRow);
+      const nextRow = Math.min(row + 1, maxRow);
       mounted?.updateSelectionFromCoords?.(col, nextRow, col, nextRow);
       lastKnownSelection = [col, nextRow, col, nextRow];
       return;
