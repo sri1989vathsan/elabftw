@@ -1,10 +1,20 @@
-/* Fork-only: the horizontal scrollbar of the expandable tables is always visible (macOS hides it until you scroll). */
+/* Fork-only: the horizontal scrollbar of the expandable tables is always visible (macOS hides it until you scroll), and it stays in view:
+   the table has at most the height of the window and scrolls inside, with its header row fixed, so the scrollbar is not at the bottom of a long list. */
 .table-responsive:has(> .expandable-table) {
-  overflow-x: scroll;
+  overflow: scroll;
   scrollbar-width: auto;
+  max-height: max(260px, calc(100vh - 200px));
+}
+.table-responsive:has(> .expandable-table) > .expandable-table > thead > tr > th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: var(--white, #fff);
+  box-shadow: 0 1px 0 rgba(128, 128, 128, 0.4);
 }
 .table-responsive:has(> .expandable-table)::-webkit-scrollbar {
   height: 14px;
+  width: 14px;
   -webkit-appearance: none;
 }
 .table-responsive:has(> .expandable-table)::-webkit-scrollbar-track {

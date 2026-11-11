@@ -52,7 +52,7 @@
   const colors = ['5b8def', '2ea44f', 'f0a202', 'd9534f', '8e5bd9', '1abc9c', '7f8c8d', 'e67e22'];
 
   // the box of a dialog: gives the box and a function that closes it
-  const dialog = function () {
+  const dialog = function (onClose) {
     const back = make('div');
     back.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
     const box = make('div');
@@ -62,6 +62,9 @@
     back.append(box);
     const close = function () {
       back.remove();
+      if (onClose) {
+        onClose();
+      }
     };
     back.addEventListener('click', function (event) {
       if (event.target === back) {
@@ -187,22 +190,56 @@
 
   // looking at the personal modules of one person at a time: read only; admins can also rename, recolour and remove them and open their entries
   const browse = async function () {
-    const { box, close } = dialog();
+    // looking at a person (or stopping) changes the modules of the Database menu: the page is reloaded when the box is closed
+    let changed = false;
+    const { box, close } = dialog(function () {
+      if (changed) {
+        window.location.reload();
+      }
+    });
     const draw = async function (userId, message) {
+      if (userId || message) {
+        changed = true;
+      }
       box.textContent = '';
       box.append(make('h4', 'mb-2', "Someone's personal modules"));
       box.append(make('p', 'small text-muted', 'Personal modules are private by default. You look at one person at a time, and they can see that you looked.'));
       const people = await call('registry-browse-modules.php');
-      const pick = make('select', 'form-control form-control-sm mb-3');
-      pick.append(new Option('Choose a person...', ''));
-      (people.people || []).forEach(function (person) {
-        pick.append(new Option(person.name + ' (' + person.modules + ' modules, ' + person.entries + ' entries)', String(person.userid)));
-      });
-      pick.value = userId ? String(userId) : '';
-      pick.addEventListener('change', function () {
-        draw(pick.value ? Number(pick.value) : 0, '');
-      });
-      box.append(pick);
+      // a search box and the list of people: typing filters them by their name or by the name of a module
+      const find = make('input', 'form-control form-control-sm mb-2');
+      find.type = 'search';
+      find.placeholder = 'Search a person or a module...';
+      find.setAttribute('aria-label', 'Search a person or a module');
+      const choices = make('div', 'list-group mb-3');
+      choices.style.cssText = 'max-height:190px;overflow:auto';
+      const show = function () {
+        const words = find.value.toLowerCase().split(/\s+/).filter(Boolean);
+        choices.textContent = '';
+        let count = 0;
+        (people.people || []).forEach(function (person) {
+          const hay = (person.name + ' ' + (person.titles || '')).toLowerCase();
+          if (!words.every(function (word) { return hay.indexOf(word) !== -1; })) {
+            return;
+          }
+          count++;
+          const item = make('button', 'list-group-item list-group-item-action py-1' + (Number(person.userid) === Number(userId) ? ' active' : ''));
+          item.type = 'button';
+          item.append(make('strong', '', person.name), make('span', 'small ml-2', person.modules + (Number(person.modules) === 1 ? ' module, ' : ' modules, ') + person.entries + (Number(person.entries) === 1 ? ' entry' : ' entries')));
+          if (person.titles) {
+            item.append(make('div', 'small', person.titles));
+          }
+          item.addEventListener('click', function () {
+            draw(Number(person.userid), '');
+          });
+          choices.append(item);
+        });
+        if (count === 0 && (people.people || []).length > 0) {
+          choices.append(make('div', 'list-group-item small text-muted py-1', 'Nobody matches.'));
+        }
+      };
+      find.addEventListener('input', show);
+      show();
+      box.append(find, choices);
       if ((people.people || []).length === 0) {
         box.append(make('p', 'text-muted', 'Nobody else has a personal module.'));
       }

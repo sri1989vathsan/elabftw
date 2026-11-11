@@ -63,7 +63,7 @@ try {
     }
     $user = (int) ($_GET['user'] ?? 0);
     if ($user === 0) {
-        $req = $pdo->prepare('SELECT u.userid, CONCAT(u.firstname, " ", u.lastname) AS name, COUNT(DISTINCT c.id) AS modules,
+        $req = $pdo->prepare('SELECT u.userid, CONCAT(u.firstname, " ", u.lastname) AS name, COUNT(DISTINCT c.id) AS modules, GROUP_CONCAT(DISTINCT c.title ORDER BY c.title SEPARATOR " | ") AS titles,
                 (SELECT COUNT(*) FROM inventory AS i JOIN inventory_categories AS c2 ON c2.id = i.category WHERE c2.owner = u.userid AND i.state = 1) AS entries
             FROM inventory_categories AS c JOIN users AS u ON u.userid = c.owner
             WHERE c.team = :team AND c.state = 1 AND c.owner <> :me GROUP BY u.userid, u.firstname, u.lastname ORDER BY u.firstname, u.lastname');
