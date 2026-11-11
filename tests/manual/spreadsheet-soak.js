@@ -1065,10 +1065,22 @@ async function spreadsheetSoak(options = {}) {
 
   // A well plate keeps its labels (1, 2, 3 across; A, B, C down) and its size: no Add rows bar, and Enter in the
   // last row adds nothing.
+  const plateIsView = async uid => !!(await live(uid))?.classList.contains('elabftw-well-plate-view');
   const plateCheck = async (uid, context) => {
     const root = await live(uid);
     const model = models.get(uid);
     if (!root || !model) return;
+    // Since 26 October a plate in the text is a compact plate view, not a grid: its labels are checked in the stored table.
+    if (root.classList.contains('elabftw-well-plate-view')) {
+      const stored = tableEl(uid);
+      if (!stored) { fail(`${context}: the stored plate table is missing`); return; }
+      const storedCols = [...stored.rows[0].cells].slice(1).map(el => el.textContent.trim());
+      const storedRows = [...stored.rows].slice(1).map(row => row.cells[0].textContent.trim());
+      if (storedCols.length === 0 || storedCols.some((text, i) => text !== String(i + 1))) fail(`${context}: the stored plate's column labels are not 1, 2, 3...`, { have: storedCols.slice(0, 6).join(',') });
+      if (storedRows.length === 0 || storedRows.some((text, i) => text !== String.fromCharCode(65 + (i % 26)))) fail(`${context}: the stored plate's row labels are not A, B, C...`, { have: storedRows.slice(0, 6).join(',') });
+      note('plate-view-checked');
+      return;
+    }
     // the labels (1, 2, 3 and A, B, C) are written on an animation frame, which a hidden page does not run
     if (document.hidden) { note('plate-check-skipped-hidden'); return; }
     await frames(3);
@@ -1086,6 +1098,8 @@ async function spreadsheetSoak(options = {}) {
       if (!uid) return;
       await verify('plate-day: inserted', true); await measure('plate-day: inserted');
       await plateCheck(uid, 'plate-day: inserted');
+      // the steps below type into a grid, which a plate in the text no longer is (see plateCheck)
+      if (await plateIsView(uid)) { note('plate-view: grid steps skipped'); await save(); await verify('plate-day: saved', true); await measure('plate-day: saved'); return; }
       for (let i = 0; i < (config.quick ? 8 : 20); i++) {
         await typeInto(uid, int(0, 7), int(0, 11), `S${String(i + 1).padStart(2, '0')}`);
         if (i % 6 === 5) { await verify(`plate-day: ${i + 1} wells`, false); await measure('plate-day typing'); }
@@ -1170,6 +1184,7 @@ async function spreadsheetSoak(options = {}) {
       await measure('wide-plate: inserted');
       await verify('wide-plate: inserted', true);
       await plateCheck(uid, 'wide-plate: inserted');
+      if (await plateIsView(uid)) { note('plate-view: grid steps skipped'); await save(); await verify('wide-plate: saved', true); await measure('wide-plate: saved'); return; }
       for (const [r, c] of [[0, 0], [15, 23], [0, 23], [15, 0], [7, 11]]) await typeInto(uid, r, c, `W${r}-${c}`);
       await measure('wide-plate: typing');
       await verify('wide-plate: corners filled', true);
@@ -1566,7 +1581,8 @@ async function spreadsheetSoak(options = {}) {
       (document.activeElement || dialog).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
       await sleep(500);
       const sel = popupSelected();
-      if (sel.length !== 1 || sel[0][0] !== 1 || sel[0][1] !== 2) dataLoss.push({ context, where: 'popup', problem: `a second Enter should select B3 in the popup, selection is ${JSON.stringify(sel)}` });
+      // the first Enter (after typing in B2) already moved to B3 (since 27 October), so the second one lands on B4
+      if (sel.length !== 1 || sel[0][0] !== 1 || sel[0][1] !== 3) dataLoss.push({ context, where: 'popup', problem: `a second Enter should select B4 in the popup, selection is ${JSON.stringify(sel)}` });
       await typeInPopup(2, 0, 'pp2');
       const lastRow = dialog.querySelectorAll('.jss_worksheet tbody tr').length - 1;
       press(popupCell(0, lastRow)); await sleep(300);
