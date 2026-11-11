@@ -199,6 +199,12 @@ async function spreadsheetSoak(options = {}) {
     }
     return true;
   }
+  // Diagnostic: the row heights saved in each table right now (and what the stored rows say), kept on window for a later read.
+  const dumpSavedHeights = label => {
+    const decode = raw => { try { return JSON.parse(decodeURIComponent(escape(atob(raw)))); } catch (e) { try { return JSON.parse(atob(raw)); } catch (e2) { return null; } } };
+    window.spreadsheetSoakRowDump = window.spreadsheetSoakRowDump || [];
+    window.spreadsheetSoakRowDump.push({ label, tables: Array.from(editor.getBody().querySelectorAll('table.elabftw-spreadsheet')).map(t => ({ saved: decode(t.dataset.spreadsheet || '')?.rowHeights ?? null, trs: Array.from(t.querySelectorAll('tbody > tr')).map(tr => (tr.getAttribute('style') || '-').replace('height: ', '').replace(';', '')).join(',') })) });
+  };
   // A second Enter with the cell only selected: down one cell; at the last row it stays (Enter never adds a row).
   async function enterAgain(uid) {
     const model = models.get(uid);
@@ -706,7 +712,8 @@ async function spreadsheetSoak(options = {}) {
       const uid = table.getAttribute('data-elabftw-spreadsheet-uid');
       const overlay = uid ? api.overlayElement(uid) : null;
       const parts = overlay ? [...overlay.children].map(child => `${String(child.className).replace('elabftw-spreadsheet-', '').slice(0, 26)}:${Math.round(child.getBoundingClientRect().height)}`).join(' ') : '';
-      return { h: Math.round(table.getBoundingClientRect().height), o: overlay ? Math.round(overlay.getBoundingClientRect().height) : null, plate: !!(overlay && overlay.classList.contains('elabftw-well-plate-view')), top: Math.round(table.getBoundingClientRect().top + doc.defaultView.scrollY), parts };
+      const rowsHeights = overlay ? [...overlay.querySelectorAll('.jss_worksheet > tbody > tr')].map(tr => `${Math.round(tr.getBoundingClientRect().height)}${tr.querySelector('.jss-cell-clip') ? 'c' : ''}`).join(',') : '';
+      return { h: Math.round(table.getBoundingClientRect().height), o: overlay ? Math.round(overlay.getBoundingClientRect().height) : null, plate: !!(overlay && overlay.classList.contains('elabftw-well-plate-view')), top: Math.round(table.getBoundingClientRect().top + doc.defaultView.scrollY), parts, rowsHeights };
     });
     const stateBase = tableStates();
     const describeChanges = () => {
@@ -717,7 +724,7 @@ async function spreadsheetSoak(options = {}) {
         if (!was) { out.push(`table ${i + 1} is new`); return; }
         const parts = [];
         if (state.h !== was.h) parts.push(`height ${was.h}->${state.h}`);
-        if (state.o !== was.o) parts.push(`grid ${was.o === null ? 'not mounted' : was.o}->${state.o === null ? 'not mounted' : state.o}${was.parts || state.parts ? ` [${was.parts || '-'}] -> [${state.parts || '-'}]` : ''}`);
+        if (state.o !== was.o) parts.push(`grid ${was.o === null ? 'not mounted' : was.o}->${state.o === null ? 'not mounted' : state.o}${was.parts || state.parts ? ` [${was.parts || '-'}] -> [${state.parts || '-'}]` : ''}${was.rowsHeights || state.rowsHeights ? ` rows(${was.rowsHeights || '-'}) -> rows(${state.rowsHeights || '-'})` : ''}`);
         if (state.top !== was.top) parts.push(`top ${was.top}->${state.top}`);
         if (parts.length) out.push(`table ${i + 1}${state.plate || was.plate ? ' (plate)' : ''}: ${parts.join(', ')}`);
       });
@@ -1167,7 +1174,9 @@ async function spreadsheetSoak(options = {}) {
         await verify(`back-to-back: round ${round + 1}`, false);
         await measure('back-to-back: typing');
       }
+      dumpSavedHeights('back-to-back: after typing');
       for (const uid of made) await menuTour(uid);
+      dumpSavedHeights('back-to-back: after the menu tour');
       await scrollCheck('back-to-back');
       await popupEdit(made[1], true, 2);
       await verify('back-to-back: popup applied', true);
