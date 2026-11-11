@@ -1699,19 +1699,20 @@ async function spreadsheetSoak(options = {}) {
       for (let i = states.length - 1; i >= 1; i--) {
         await undoKey(uid, false);
         const diff = differences(await look(), states[i - 1]);
-        if (diff.length) dataLoss.push({ context, where: 'grid', problem: `undo of step ${i} (${kinds[i]}) did not restore the table: ${diff.slice(0, 4).join('; ')}` });
+        if (diff.length) dataLoss.push({ context, where: 'grid', problem: `undo of step ${i} (${kinds[i]}) did not restore the table: ${diff.slice(0, 4).join('; ')} [steps: ${kinds.join(' > ')}]` });
         note('undo-everything-undo');
       }
       // and forward again
       for (let i = 1; i < states.length; i++) {
         await undoKey(uid, true);
         const diff = differences(await look(), states[i]);
-        if (diff.length) dataLoss.push({ context, where: 'grid', problem: `redo of step ${i} (${kinds[i]}) did not bring the change back: ${diff.slice(0, 4).join('; ')}` });
+        if (diff.length) dataLoss.push({ context, where: 'grid', problem: `redo of step ${i} (${kinds[i]}) did not bring the change back: ${diff.slice(0, 4).join('; ')} [steps: ${kinds.join(' > ')}]` });
         note('undo-everything-redo');
       }
       // the record of what was typed no longer matches after undo and redo: leave this table out of later checks
       models.delete(uid);
       api.removeTable(uid);
+      await sleep(1500); // the editor takes a moment to shrink back before the next size check
     },
     // The Copy table button and a selection copy must carry the values and the formatting.
     async 'copy-table-format'() {
