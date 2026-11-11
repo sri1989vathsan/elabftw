@@ -1403,6 +1403,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // same tracked node and just repositioning it every frame is self-
   // healing regardless of what got typed around it.
   const spreadsheetSpacers = new WeakMap<HTMLTableElement, HTMLElement>();
+  // The formula and formatting bars of a table's grid are open or closed per table, not per grid: the grid is taken down
+  // when its table scrolls away or another one is clicked, and the preview that stands in for it used to be 70 px
+  // shorter and the next grid started closed, so the text below the table jumped each time.
+  const tableOptionsOpen = new WeakSet<HTMLTableElement>();
+  const tableBarsReserve = new WeakMap<HTMLTableElement, number>();
   // mceAutoResize actually resizes the iframe synchronously -- calling it
   // every single time the spacer's measured height changes by even a
   // sub-pixel (routine float jitter from one rAF frame to the next, not
@@ -1776,9 +1781,19 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           // much content: hiding the first row (scrolled area starting
           // short) and leaving the horizontal scrollbar overlapping the
           // last one (visible area ending short), at once.
+          // The formula and formatting bars exist only in the live grid. While one is open, remember its height: the
+          // preview that replaces that grid counts it in its own height, so the editor does not shrink (and the text
+          // below the table does not jump up) when the grid is taken down, and the bars come back with the next grid.
+          const isPreviewOverlay = overlay.classList.contains('elabftw-spreadsheet-preview');
+          if (!isPreviewOverlay) {
+            const barsHeight = (formulaBarEl?.offsetHeight ?? 0) + (formatBarEl?.offsetHeight ?? 0);
+            if (barsHeight > 0) tableBarsReserve.set(table, barsHeight);
+            else tableBarsReserve.delete(table);
+          }
           const overlayHeight = naturalContentHeight + scrollbarHeight
             + (toggleBarEl?.offsetHeight ?? 0) + (formulaBarEl?.offsetHeight ?? 0) + (formatBarEl?.offsetHeight ?? 0)
-            + (addRowsBarEl?.offsetHeight ?? 0);
+            + (addRowsBarEl?.offsetHeight ?? 0)
+            + (isPreviewOverlay ? tableBarsReserve.get(table) ?? 0 : 0);
           overlay.style.height = `${overlayHeight}px`;
           // The overlay lives outside the iframe, so native iframe clipping
           // does not apply. Keep its pixels and hit targets within the editor.
@@ -2124,7 +2139,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     // Built from the grid's own markup and classes so it looks identical.
     // Notebook-style tables aren't mirrored there; they get a plain cloned
     // table under a placeholder bar instead.
-    const gridPreview = buildSpreadsheetPreviewHost(table);
+    const gridPreview = buildSpreadsheetPreviewHost(table, tableBarsReserve.get(table) ?? 0);
     const overlay: HTMLElement = gridPreview ?? document.createElement('div');
     if (!gridPreview) {
       const bar = document.createElement('div');
@@ -2317,6 +2332,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       host: overlay, flush, destroy, syncActiveEditor, getData, isEditing,
     } = (extracted.kind === 'well-plate' && extracted.plateView !== 'sheet' ? buildWellPlateHost : buildReadOnlySpreadsheetHost)(extracted, {
       editable: true,
+      optionsOpen: tableOptionsOpen.has(table),
+      onOptionsToggle: open => {
+        if (open) tableOptionsOpen.add(table);
+        else { tableOptionsOpen.delete(table); tableBarsReserve.delete(table); }
+      },
       // Plate <-> spreadsheet switch in the title bar (a well plate can be shown either way in the text).
       onShowSheet: () => switchPlateView(table, 'sheet'),
       onShowPlate: extracted.kind === 'well-plate' ? () => switchPlateView(table, 'plate') : undefined,

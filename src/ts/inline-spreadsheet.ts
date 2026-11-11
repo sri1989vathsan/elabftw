@@ -7632,6 +7632,10 @@ export function extractFromTable(tableElement: HTMLTableElement): SpreadsheetDat
  * be mutated).
  */
 export interface SpreadsheetHostOptions {
+  /** Start with the formula and formatting bars open (they were open when this table's grid was last taken down). */
+  optionsOpen?: boolean;
+  /** Called whenever the formula and formatting bars are shown or hidden. */
+  onOptionsToggle?: (open: boolean) => void;
   /** Owned by the table, not its disposable visual overlay. */
   cellHistory?: SpreadsheetCellHistory;
   /** Rebuilds the table from this data (used by Undo and Redo of row and column changes). */
@@ -8482,7 +8486,7 @@ export function buildReadOnlySpreadsheetHost(
     const optionsToggleIcon = document.createElement('i');
     optionsToggleIcon.setAttribute('aria-hidden', 'true');
     optionsToggle.appendChild(optionsToggleIcon);
-    let optionsCollapsed = true;
+    let optionsCollapsed = !options.optionsOpen;
     const applyOptionsCollapsed = (): void => {
       formatBarEl.hidden = optionsCollapsed;
       formulaBarEl.hidden = optionsCollapsed;
@@ -8496,6 +8500,7 @@ export function buildReadOnlySpreadsheetHost(
       event.stopPropagation();
       optionsCollapsed = !optionsCollapsed;
       applyOptionsCollapsed();
+      options.onOptionsToggle?.(!optionsCollapsed);
     });
     toggleBar.insertBefore(optionsToggle, toggleBar.firstChild);
 
@@ -10646,7 +10651,11 @@ export function restoreCoordinateLabels(table: HTMLTableElement): void {
   });
 }
 
-export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivElement | null {
+/**
+ * @param reservedBarsHeight the height of the formula and formatting bars when this table's live grid had them open: the
+ * preview that replaces that grid keeps the space, so the text below the table does not move when the grid is taken down.
+ */
+export function buildSpreadsheetPreviewHost(table: HTMLTableElement, reservedBarsHeight = 0): HTMLDivElement | null {
   if (table.dataset.spreadsheetStyle === 'notebook') return null;
   restoreCoordinateLabels(table);
   const headRow = table.querySelector('thead > tr');
@@ -10698,6 +10707,13 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement): HTMLDivEle
     toggleBar.appendChild(button);
   });
   host.appendChild(toggleBar);
+  if (reservedBarsHeight > 0) {
+    const reserve = document.createElement('div');
+    reserve.className = 'elabftw-spreadsheet-bars-reserve';
+    reserve.setAttribute('aria-hidden', 'true');
+    reserve.style.height = `${Math.round(reservedBarsHeight)}px`;
+    host.appendChild(reserve);
+  }
 
   const grid = document.createElement('div');
   grid.className = 'elabftw-spreadsheet-readonly-grid';
