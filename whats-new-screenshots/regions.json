@@ -316,5 +316,81 @@
     ],
     "label": "Each version, with Restore and its edit history",
     "alt": "The template version history popup listing versions, each with a Restore button and its edit history, outlined"
+  },
+  "guide-database": {
+    "crop": [
+      0.0385,
+      0.085,
+      0.923,
+      0.839
+    ],
+    "mask": [
+      [
+        0.0538,
+        0.2655,
+        0.8115,
+        0.0385
+      ],
+      [
+        0.0538,
+        0.3177,
+        0.35,
+        0.0358
+      ],
+      [
+        0.5408,
+        0.3177,
+        0.1285,
+        0.0358
+      ]
+    ],
+    "highlight": [
+      0.4154,
+      0.3136,
+      0.5346,
+      0.0481
+    ],
+    "label": "Modules and New entry",
+    "alt": "The Database page with a module open: the module tabs, the New entry button and the table of entries with a filter under each heading"
+  },
+  "guide-database-storage": {
+    "highlight": [
+      0.0629,
+      0.1224,
+      0.3925,
+      0.1795
+    ],
+    "label": "Tubes in their slots",
+    "alt": "A storage box in the storage browser: a 9 by 9 grid of slots with eight tubes in blue, each named after its entry"
+  },
+  "guide-sequence-editor": {
+    "highlight": [
+      0.9657,
+      0.103,
+      0.0343,
+      0.46
+    ],
+    "label": "Tool rail",
+    "alt": "The sequence editor on a plasmid: the circular map with its features, the sequence with enzyme cut sites, and the tool rail on the right"
+  },
+  "guide-lineage": {
+    "highlight": [
+      0.408,
+      0.475,
+      0.258,
+      0.475
+    ],
+    "label": "Family tree",
+    "alt": "The Lineage section of an entry: its parents, its daughters and the family tree with the entry in the middle"
+  },
+  "guide-database-sharing": {
+    "highlight": [
+      0.0357,
+      0.5576,
+      0.9286,
+      0.2085
+    ],
+    "label": "Pick who may edit",
+    "alt": "The Who can edit window of an entry: groups, a list of people to tick and Everyone in the team"
   }
 }
