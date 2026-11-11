@@ -477,6 +477,9 @@ function reconcileSpreadsheetRowHeights(table: HTMLTableElement, manualRowHeight
   rows.forEach(row => row.style.removeProperty('height'));
   const heights = rows.map((row, index) => {
     const manualHeight = manualRowHeights?.[String(index)];
+    // A row that was never resized stays unpinned: pinning its natural height measured here (31 px in
+    // the text's table) made the saved table disagree with the live grid (29 px for the same row) and
+    // the page grew a few pixels every time a grid was swapped for its preview.
     // A row present in manualRowHeights was genuinely drag-resized (see the
     // comment above) -- that choice wins outright, including shrinking
     // below the row's own natural content height (the same trade-off
@@ -486,12 +489,18 @@ function reconcileSpreadsheetRowHeights(table: HTMLTableElement, manualRowHeight
     // natural height in the same commit -- reported as not being able to
     // drag a row shorter than some floor. Only a row with NO manual entry
     // (never resized) falls back to natural height.
-    return manualHeight === undefined
-      ? Math.ceil(row.getBoundingClientRect().height)
-      : Math.max(20, Math.round(manualHeight));
+    if (manualHeight !== undefined) return Math.max(20, Math.round(manualHeight));
+    // (a notebook table has no live grid to disagree with, so it keeps pinning what it measured)
+    return kind === 'notebook' ? Math.ceil(row.getBoundingClientRect().height) : null;
   });
   rows.forEach((row, index) => {
-    row.style.height = `${heights[index]}px`;
+    const height = heights[index];
+    if (height === null) {
+      row.removeAttribute('data-mce-style');
+      if (row.getAttribute('style') === '') row.removeAttribute('style');
+      return;
+    }
+    row.style.height = `${height}px`;
     const serializedStyle = row.getAttribute('style')?.trim();
     if (serializedStyle) row.setAttribute('data-mce-style', serializedStyle);
   });
