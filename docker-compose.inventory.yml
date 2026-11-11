@@ -5,6 +5,8 @@ services:
   web:
     image: elabftw/elabimg:inventory
     volumes:
+      # live edits of src/ in this local stack only: the base docker-compose.yml must not mount ./src (it would hide the files the image generates, e.g. src/Elabftw/BuildInfo.php, that a fresh clone does not have)
+      - ./src:/elabftw/src:ro
       - ./web/registry.php:/elabftw/web/registry.php:ro
       - ./web/registry-categories.php:/elabftw/web/registry-categories.php:ro
       - ./web/sequence-viewer:/elabftw/web/sequence-viewer:ro

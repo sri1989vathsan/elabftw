@@ -159,7 +159,6 @@ services:
       # web/assets (built JS/CSS) or src/ts, src/scss (build INPUTS) here --
       # those still need `yarn build` run inside the container, since this
       # image's rootfs is read_only and web/assets is not separately mounted.
-      - ./src:/elabftw/src:ro
       - ./web/app:/elabftw/web/app:ro
       - ./web/admin.php:/elabftw/web/admin.php:ro
       - ./web/experiments-categories.php:/elabftw/web/experiments-categories.php:ro
