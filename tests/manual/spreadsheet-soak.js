@@ -148,7 +148,7 @@ async function spreadsheetSoak(options = {}) {
     if (!box) throw new Error(`no cell editor opened for ${cellName(r, c)}`);
     box.value = value;
     box.dispatchEvent(new Event('input', { bubbles: true }));
-    // Tab by default: it moves on without changing the grid. Enter in a cell of the last row adds a row.
+    // Tab by default: it moves on without changing the grid. Enter in the last row stays there and adds nothing.
     box.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
     await frames(2);
   }
@@ -160,7 +160,7 @@ async function spreadsheetSoak(options = {}) {
     });
     const model = models.get(uid);
     model.grid[r][c] = value;
-    // Enter commits and stays in the cell; only a second Enter (see enterAgain) moves down or adds a row.
+    // Enter commits and stays in the cell; only a second Enter (see enterAgain) moves down, and in the last row it stays.
     note(key === 'Enter' ? 'type-with-enter' : 'type-in-cell');
   }
 
@@ -199,19 +199,20 @@ async function spreadsheetSoak(options = {}) {
     }
     return true;
   }
-  // A second Enter with the cell only selected: down one cell, and a new row at the last row.
+  // A second Enter with the cell only selected: down one cell; at the last row it stays (Enter never adds a row).
   async function enterAgain(uid) {
     const model = models.get(uid);
     const root = await live(uid);
     const before = selectedCells(root);
     if (before.length !== 1) { fail('enterAgain needs one selected cell', { table: model.label, selected: before }); return; }
     const [c, r] = before[0];
-    const last = r === model.grid.length - 1;
+    const rowsBefore = (api.overlayElement(uid) || root).querySelectorAll('.jss_worksheet tbody tr').length;
     (document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await sleep(500);
     const after = selectedCells(api.overlayElement(uid) || root);
-    if (last && model.grid.length < 50) model.grid.push(blankRow(model.grid[0].length));
-    const wantRow = last && model.grid.length - 1 > r ? r + 1 : Math.min(r + 1, model.grid.length - 1);
+    const rowsAfter = (api.overlayElement(uid) || root).querySelectorAll('.jss_worksheet tbody tr').length;
+    if (rowsAfter !== rowsBefore) dataLoss.push({ context, table: model.label, problem: `a second Enter in ${cellName(r, c)} changed the number of rows (${rowsBefore} to ${rowsAfter}): Enter must never add a row` });
+    const wantRow = Math.min(r + 1, model.grid.length - 1);
     if (after.length !== 1 || after[0][0] !== c || after[0][1] !== wantRow) {
       dataLoss.push({ context, table: model.label, problem: `a second Enter in ${cellName(r, c)} should select ${cellName(wantRow, c)}, selection is ${JSON.stringify(after)}` });
     }
@@ -1053,7 +1054,7 @@ async function spreadsheetSoak(options = {}) {
     await verify('click-to-type: nothing changed by starting and cancelling edits', true);
   }
 
-  // Rows added by the Add rows button, Enter in the last row or the menu must be as tall as the others
+  // Rows added by the Add rows button or the menu must be as tall as the others
   // (they were 4 px shorter once, because the row-number cell of a new row had no padding).
   async function rowHeightsUniform(uid, label) {
     const root = api.overlayElement(uid);
@@ -1235,17 +1236,19 @@ async function spreadsheetSoak(options = {}) {
       await save();
       await verify('wide-plate: saved', true); await measure('wide-plate: saved');
     },
-    // Typing with Enter in the last row adds rows; typed values must survive that, and survive a row/column
-    // insert or delete done right after typing (before the grid has been redrawn). Data was lost here once:
-    // values typed through the editor box exist only in the editor's own copy until a redraw.
+    // Enter in the last row never adds a row (the first Enter commits and stays, a second one stays too); typed values
+    // must survive that, and survive a row/column insert or delete done right after typing (before the grid has been
+    // redrawn). Data was lost here once: values typed through the editor box exist only in the editor's own copy until a redraw.
     async 'enter-last-row'() {
       const uid = await createTable('enter table', { rows: 3, cols: 3 });
       if (!uid) return;
       const model = () => models.get(uid);
+      const rowsLive = async () => (api.overlayElement(uid) || await live(uid)).querySelectorAll('.jss_worksheet tbody tr').length;
       for (let i = 0; i < 10; i++) {
         const last = model().grid.length - 1;
         await typeInto(uid, last, int(0, model().grid[0].length - 1), `E${i + 1}`, 'Enter');
-        await enterAgain(uid); // the second Enter, on the last row, adds the row
+        await enterAgain(uid); // the second Enter, on the last row, stays: no row is added
+        if (await rowsLive() !== model().grid.length) dataLoss.push({ context, table: model().label, problem: `Enter ${i + 1} in the last row changed the number of rows to ${await rowsLive()}, expected ${model().grid.length}` });
         await verify(`enter-last-row: Enter ${i + 1}, right after typing`, false);
         if (i % 3 === 2) { await typeInto(uid, int(0, model().grid.length - 1), int(0, model().grid[0].length - 1), `T${i}`); }
       }
@@ -1403,7 +1406,7 @@ async function spreadsheetSoak(options = {}) {
       await save();
       await verify('type-then-resize: saved', true);
     },
-    // Enter commits and stays; a second Enter moves down; at the last row it adds a row.
+    // Enter commits and stays; a second Enter moves down; at the last row it stays (no row is added).
     async 'enter-semantics'() {
       const uid = await createTable('enter semantics', { rows: 4, cols: 3 });
       if (!uid) return;
@@ -1412,12 +1415,12 @@ async function spreadsheetSoak(options = {}) {
       await enterAgain(uid);
       await enterAgain(uid);
       await verify('enter-semantics: moved down', true);
-      for (let i = 0; i < 4; i++) await enterAgain(uid);
-      await verify('enter-semantics: rows added by Enter', true);
-      verticalAlignCheck(uid, 'rows added by Enter');
+      for (let i = 0; i < 4; i++) await enterAgain(uid); // runs into the last row and stays there: no row is added
+      await verify('enter-semantics: no rows added by Enter', true);
+      verticalAlignCheck(uid, 'after Enter at the last row');
       await typeDirect(uid, model().grid.length - 1, 2, 'tail', 'Enter');
       await typeDirect(uid, 0, 0, 'tabbed', 'Tab');
-      await verify('enter-semantics: typed after growing', true);
+      await verify('enter-semantics: typed after Enter at the last row', true);
       await consistency('enter-semantics: inline, popup and stored HTML agree', true);
     },
     // Text that reaches the grid's hidden input without key presses (input methods, dead keys, dictation).
@@ -1592,7 +1595,7 @@ async function spreadsheetSoak(options = {}) {
       note('autosave-check');
       if (!body.includes(token)) dataLoss.push({ context, table: models.get(uid).label, problem: `"${token}", typed in the grid, was not saved within 11 s of staying in the grid` });
     },
-    // Typing straight over cells in the popup: Enter stays, a second Enter moves down / adds a row, Update keeps all.
+    // Typing straight over cells in the popup: Enter stays, a second Enter moves down (in the last row it stays, no row is added), Update keeps all.
     async 'popup-direct-typing'() {
       const uid = await createTable('popup direct', { rows: 4, cols: 3 });
       if (!uid) return;
@@ -1629,8 +1632,7 @@ async function spreadsheetSoak(options = {}) {
       (document.activeElement || dialog).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
       await sleep(900);
       const rowsNow = dialog.querySelectorAll('.jss_worksheet tbody tr').length;
-      if (rowsNow !== lastRow + 2) dataLoss.push({ context, where: 'popup', problem: `a second Enter on the last row should add a row (${lastRow + 1} to ${lastRow + 2}), there are ${rowsNow}` });
-      model().grid.push(blankRow(model().grid[0].length));
+      if (rowsNow !== lastRow + 1) dataLoss.push({ context, where: 'popup', problem: `a second Enter on the last row must not add a row (${lastRow + 1} rows), there are ${rowsNow}` });
       const update = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Update');
       if (!update) { fail('the popup has no Update button'); } else { update.click(); await waitPopupGone(); }
       await verify('popup-direct-typing: after Update', true);
