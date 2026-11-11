@@ -176,6 +176,17 @@ final class CustomMigrationRunner
         '138_module_low_stock.sql',
         '139_personal_storage.sql',
         '140_owner_map.sql',
+        '141_ai_search.sql',
+        '142_ai_search_features.sql',
+        '143_owner_map_editors.sql',
+        '144_personal_groups.sql',
+        '145_module_allows_reads.sql',
+        '146_column_order.sql',
+        '147_personal_modules.sql',
+        '148_personal_module_views.sql',
+        '149_personal_entries_admins.sql',
+        '150_personal_module_views_closed.sql',
+        '151_personal_module_views_module.sql',
     );
 
     private Db $Db;

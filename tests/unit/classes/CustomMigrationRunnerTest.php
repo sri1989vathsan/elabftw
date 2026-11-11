@@ -13,6 +13,12 @@ use Elabftw\Exceptions\ImproperActionException;
 use League\Flysystem\Filesystem as Fs;
 use League\Flysystem\InMemory\InMemoryFilesystemAdapter;
 
+use function array_diff;
+use function array_values;
+use function basename;
+use function dirname;
+use function glob;
+use function sort;
 use function sprintf;
 use function uniqid;
 
@@ -71,6 +77,22 @@ class CustomMigrationRunnerTest extends \PHPUnit\Framework\TestCase
     }
 
     /** 1. Apply a migration under filename A. */
+    /**
+     * custom:db:update only runs what is in CustomMigrationRunner::MIGRATIONS: a file added to src/sql/custom/ and not added to the list is
+     * never applied (the code then fails with "Unknown column"). Every file has to be in the list, in the order of its number.
+     */
+    public function testEveryCustomSqlFileIsInTheMigrationList(): void
+    {
+        $onDisk = array();
+        foreach (glob(dirname(__DIR__, 3) . '/src/sql/custom/*.sql') ?: array() as $file) {
+            $onDisk[] = basename($file);
+        }
+        sort($onDisk);
+        $this->assertSame(array(), array_values(array_diff($onDisk, CustomMigrationRunner::MIGRATIONS)), 'A file of src/sql/custom/ is not in CustomMigrationRunner::MIGRATIONS: custom:db:update would never run it.');
+        $this->assertSame(array(), array_values(array_diff(CustomMigrationRunner::MIGRATIONS, $onDisk)), 'CustomMigrationRunner::MIGRATIONS lists a file that is not in src/sql/custom/.');
+        $this->assertSame($onDisk, CustomMigrationRunner::MIGRATIONS, 'CustomMigrationRunner::MIGRATIONS has to be in the order of the file numbers.');
+    }
+
     public function testAppliesNewMigration(): void
     {
         $a = $this->filename('a');
