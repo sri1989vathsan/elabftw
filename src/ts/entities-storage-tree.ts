@@ -540,7 +540,15 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       // the built-in kinds stay
     }
   };
-  tools.append(scopeSwitch, otherSelect, search, expandAll, collapseAll, addTop, kindsButton, addTopForm, kindsPanel);
+  // the small "i" that opens the guide card about the storage
+  const guideInfo = el('button', 'btn btn-link guide-info-btn p-0 ml-2');
+  guideInfo.type = 'button';
+  guideInfo.dataset.action = 'open-guide-card';
+  guideInfo.dataset.card = 'guide-database-storage';
+  guideInfo.title = 'About the storage in the guide';
+  guideInfo.setAttribute('aria-label', 'About the storage in the guide');
+  guideInfo.append(el('i', 'fas fa-circle-info'));
+  tools.append(scopeSwitch, otherSelect, search, expandAll, collapseAll, addTop, guideInfo, kindsButton, addTopForm, kindsPanel);
   const treeBox = el('div', 'storage-tree');
   side.append(tools, treeBox);
 
