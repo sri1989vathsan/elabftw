@@ -1867,7 +1867,7 @@ async function spreadsheetSoak(options = {}) {
         if (opened) fail('a popup was left open at the end of the scenario');
         sessionStorage.setItem('spreadsheetSoak', JSON.stringify({
           at: Date.now(), baseline: baselineTables,
-          expected: api.snapshot(true).filter(snap => models.has(snap.uid)).map(snap => ({ label: models.get(snap.uid).label, grid: models.get(snap.uid).grid })),
+          expected: api.snapshot(true).filter(snap => models.has(snap.uid)).map(snap => ({ label: models.get(snap.uid).label, grid: models.get(snap.uid).grid, plate: !!models.get(snap.uid).plate })),
         }));
         for (const uid of [...models.keys()]) api.removeTable(uid);
         models.clear();
@@ -1887,7 +1887,7 @@ async function spreadsheetSoak(options = {}) {
       const order = api.snapshot(true);
       sessionStorage.setItem('spreadsheetSoak', JSON.stringify({
         at: Date.now(), baseline: baselineTables,
-        expected: order.filter(snap => models.has(snap.uid)).map(snap => ({ label: models.get(snap.uid).label, grid: models.get(snap.uid).grid })),
+        expected: order.filter(snap => models.has(snap.uid)).map(snap => ({ label: models.get(snap.uid).label, grid: models.get(snap.uid).grid, plate: !!models.get(snap.uid).plate })),
       }));
     }
     if (session < config.sessions) {
@@ -1960,6 +1960,8 @@ async function spreadsheetSoakAfterReload(options = {}) {
   stored.expected.forEach((expected, index) => {
     const have = mine[index]?.tableData;
     if (!have) { problems.push({ table: expected.label, problem: 'missing after reload' }); return; }
+    // a well plate is stored as a plate, not as a grid of cell text: it only has to come back
+    if (expected.plate) return;
     if (have.length !== expected.grid.length || (have[0]?.length ?? 0) !== (expected.grid[0]?.length ?? 0)) {
       problems.push({ table: expected.label, problem: `size ${have.length}x${have[0]?.length} instead of ${expected.grid.length}x${expected.grid[0]?.length}` });
       return;
