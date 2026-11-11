@@ -11,6 +11,7 @@
 import i18next from './i18n';
 import { on } from './handlers';
 import { Api } from './Apiv2.class';
+import { confirmLeaveEditing } from './misc';
 
 export type FolderView = 'tree' | 'list' | 'details';
 export type FolderSortKey = 'name' | 'path' | 'experiments' | 'resources' | 'modified';
@@ -575,6 +576,30 @@ export function syncFolderView(): void {
   body.replaceChildren(...parts);
 }
 
+/**
+ * The page's own list shows the folder the flat views just moved to ("All" for the top level), the way a click on
+ * the folder's name would. Nothing happens when the page already shows it, or when the user is editing and says no.
+ */
+function showLevelInMainPage(folderId: string): void {
+  const tree = document.getElementById('experimentsFoldersTree');
+  if (!tree) return;
+  const entityType = (document.getElementById('folderEntityTypeSelect') as HTMLSelectElement | null)?.value ?? 'experiments';
+  let href: string | undefined;
+  if (folderId === '') {
+    const all = document.querySelector<HTMLOptionElement>('#folderQuickLinkSelect option[value="all"]');
+    href = entityType === 'items' ? all?.dataset.itemsHref : all?.dataset.experimentsHref;
+  } else {
+    href = collectRows(tree).find(row => row.id === folderId)?.href;
+  }
+  if (!href) return;
+  const target = new URL(href, window.location.origin);
+  const here = new URL(window.location.href);
+  const folderOf = (url: URL): string => url.searchParams.get('folder') ?? '';
+  if (target.pathname === here.pathname && folderOf(target) === folderOf(here)) return;
+  if (!confirmLeaveEditing()) return;
+  window.location.assign(target.href);
+}
+
 /** Wires the view buttons and the sortable column headers (delegated, so they survive the panel being replaced). */
 export function initFolderViews(): void {
   const ApiC = new Api();
@@ -658,6 +683,8 @@ export function initFolderViews(): void {
     const filter = document.getElementById('folderFlatFilter') as HTMLInputElement | null;
     if (filter) filter.value = '';
     syncFolderView();
+    // the page's list follows the sidebar, as the sidebar follows a folder opened in the page
+    showLevelInMainPage(level);
   });
   on('sort-folder-details', (el: HTMLElement) => {
     const key = el.dataset.sortKey as FolderSortKey | undefined;
