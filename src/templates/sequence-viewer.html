@@ -1,3 +1,4 @@
+{% import 'guide-info.html' as guide %}
 {# SEQUENCE: the sequence files attached to an entry of the database, opened in the Open Vector Editor (read only), each in a page of its own #}
 {% set sequenceFiles = [] %}
 {% for upload in Entity.entityData.uploads %}
@@ -21,7 +22,7 @@
   {% endif %}
 {% endfor %}
 {% if sequenceFiles|length > 0 or clustalFiles|length > 0 or Entity.entityData.category_title == 'Plasmids' %}
-  <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-dna' data-scroll-btn-label='{{ 'Sequence'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='sequenceDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Sequence'|trans }} ({{ sequenceFiles|length }})</h3>
+  <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-dna' data-scroll-btn-label='{{ 'Sequence'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='sequenceDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Sequence'|trans }} ({{ sequenceFiles|length }})</h3>{{ guide.info('guide-sequence-editor', 'Sequence editor') }}
   <div class='mt-2 ml-3' id='sequenceDiv' data-save-hidden='sequenceDiv'>
     {% macro fileLink(upload, entryId, icon, accessKey, removable) %}
       <a class='btn btn-secondary btn-sm' target='_blank' rel='noopener' title='{{ 'Open in the sequence editor'|trans }}' href='sequence-viewer/index.php?entry={{ entryId }}&amp;upload={{ upload.id }}&amp;f={{ upload.long_name|e('url') }}&amp;name={{ upload.real_name|e('url') }}&amp;storage={{ upload.storage }}{% if accessKey %}&amp;access_key={{ accessKey|e('url') }}{% endif %}'><i class='fas {{ icon }} fa-fw mr-1'></i>{{ upload.real_name }} <i class='fas fa-arrow-up-right-from-square fa-fw ml-1 fa-xs' aria-hidden='true'></i></a>{% if removable %}<button type='button' class='btn btn-sm btn-danger-ghost ml-1' data-remove-upload='{{ upload.id }}' data-remove-name='{{ upload.real_name|e('html_attr') }}' data-remove-entry='{{ entryId }}' title='{{ 'Remove this file from the entry'|trans }}' aria-label='{{ 'Remove'|trans }} {{ upload.real_name|e('html_attr') }}'><i class='fas fa-xmark fa-fw'></i></button>{% endif %}
