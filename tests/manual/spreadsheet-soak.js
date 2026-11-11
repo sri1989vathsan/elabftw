@@ -680,7 +680,45 @@ async function spreadsheetSoak(options = {}) {
     const height = () => document.documentElement.scrollHeight;
     const start = window.scrollY;
     const positions = () => Array.from(doc.querySelectorAll('table.elabftw-spreadsheet')).map(t => Math.round(t.getBoundingClientRect().top + doc.defaultView.scrollY));
+    // The editor may still be settling after the last step. Watch it for a moment without scrolling, so that a change
+    // that comes by itself is not reported as caused by scrolling (the two have different causes).
+    {
+      const frameAt = () => Math.round(iframe.getBoundingClientRect().height);
+      const first = { frame: frameAt(), page: height() };
+      let lastChange = Date.now(); let seen = { ...first };
+      for (let i = 0; i < 12 && Date.now() - lastChange < 700; i++) {
+        await sleep(200);
+        const now = { frame: frameAt(), page: height() };
+        if (now.frame !== seen.frame || now.page !== seen.page) { seen = now; lastChange = Date.now(); }
+      }
+      if (Math.abs(seen.frame - first.frame) > 2 || Math.abs(seen.page - first.page) > 4) {
+        if (sizes.problems.length < 40) sizes.problems.push({ context: `${label} (settling)`, problem: `editor height changed by itself, without scrolling, from ${first.frame} to ${seen.frame} px after the last step` });
+        scrollJiggles++;
+      }
+    }
     const baseline = positions();
+    // what each table looks like (its own height, the live grid on top of it, a plate or not), to say which one changed
+    const tableStates = () => Array.from(doc.querySelectorAll('table.elabftw-spreadsheet')).map(table => {
+      const uid = table.getAttribute('data-elabftw-spreadsheet-uid');
+      const overlay = uid ? api.overlayElement(uid) : null;
+      const parts = overlay ? [...overlay.children].map(child => `${String(child.className).replace('elabftw-spreadsheet-', '').slice(0, 26)}:${Math.round(child.getBoundingClientRect().height)}`).join(' ') : '';
+      return { h: Math.round(table.getBoundingClientRect().height), o: overlay ? Math.round(overlay.getBoundingClientRect().height) : null, plate: !!(overlay && overlay.classList.contains('elabftw-well-plate-view')), top: Math.round(table.getBoundingClientRect().top + doc.defaultView.scrollY), parts };
+    });
+    const stateBase = tableStates();
+    const describeChanges = () => {
+      const now = tableStates();
+      const out = [];
+      now.forEach((state, i) => {
+        const was = stateBase[i];
+        if (!was) { out.push(`table ${i + 1} is new`); return; }
+        const parts = [];
+        if (state.h !== was.h) parts.push(`height ${was.h}->${state.h}`);
+        if (state.o !== was.o) parts.push(`grid ${was.o === null ? 'not mounted' : was.o}->${state.o === null ? 'not mounted' : state.o}${was.parts || state.parts ? ` [${was.parts || '-'}] -> [${state.parts || '-'}]` : ''}`);
+        if (state.top !== was.top) parts.push(`top ${was.top}->${state.top}`);
+        if (parts.length) out.push(`table ${i + 1}${state.plate || was.plate ? ' (plate)' : ''}: ${parts.join(', ')}`);
+      });
+      return out.slice(0, 5).join('; ') || 'no table changed';
+    };
     const frameBase = Math.round(iframe.getBoundingClientRect().height);
     const heightBase = height();
     const path = [];
@@ -705,7 +743,7 @@ async function spreadsheetSoak(options = {}) {
           if (dx > 3 || dy > 3) stops.push({ y, table: i + 1, drift: `${Math.round(dx)}px across, ${Math.round(dy)}px down` });
         });
         const frame = Math.round(iframe.getBoundingClientRect().height);
-        if (Math.abs(frame - frameBase) > 2) stops.push({ y, problem: `editor height changed from ${frameBase} to ${frame} px while scrolling` });
+        if (Math.abs(frame - frameBase) > 2) stops.push({ y, problem: `editor height changed from ${frameBase} to ${frame} px while scrolling (at ${y}; ${describeChanges()})` });
         const hNow = height();
         if (Math.abs(hNow - heightBase) > 4) stops.push({ y, problem: `page height changed from ${heightBase} to ${hNow} px while scrolling` });
       }
