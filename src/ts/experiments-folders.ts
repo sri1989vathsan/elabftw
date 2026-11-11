@@ -14,6 +14,7 @@ import { notify } from './notify';
 import { getTinymceBaseConfig } from './tinymce';
 import { htmlToMarkdown, markdownToHtml } from './Editor.class';
 import { initFolderViews, syncFolderView } from './folder-views';
+import SidePanel from './SidePanel.class';
 
 type FolderScope = 'mine' | 'database' | 'all';
 type FolderEntityType = 'experiments' | 'items' | 'inventory';
@@ -510,6 +511,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     freshPanel.hidden = panelWasHidden;
     currentPanel.replaceWith(freshPanel);
+    // the drag handle sat in the panel that was just replaced
+    SidePanel.attachResizer(freshPanel);
     const refreshedSidebar = document.getElementById('experimentsFoldersSidebar');
     if (!refreshedSidebar) {
       throw new Error('Could not initialize the refreshed folder sidebar.');

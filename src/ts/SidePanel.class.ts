@@ -103,6 +103,14 @@ export default class SidePanel {
   }
 
   private addResizer(panel: HTMLElement): void {
+    SidePanel.attachResizer(panel);
+  }
+
+  /**
+   * Puts the drag handle into a panel that has none. A panel that is rebuilt (the folders panel is loaded after the page,
+   * and again when it is refreshed) is a new element, so the handle of the one it replaced is gone: call this on the new one.
+   */
+  static attachResizer(panel: HTMLElement): void {
     if (panel.querySelector('.side-panel-resizer')) return;
 
     const resizer = document.createElement('div');

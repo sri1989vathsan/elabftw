@@ -71,6 +71,8 @@ export default class FoldersPanel extends SidePanel {
     if (!freshPanel || !currentPanel) return;
     freshPanel.removeAttribute('hidden');
     currentPanel.replaceWith(freshPanel);
+    // the drag handle sat in the panel that was just replaced
+    SidePanel.attachResizer(freshPanel);
     ['editExperimentFolderModal', 'folderExportModal', 'folderPermissionsModal'].forEach(id => {
       if (document.getElementById(id)) return;
       const modal = documentCopy.getElementById(id);
