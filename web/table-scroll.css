@@ -5,12 +5,65 @@
   scrollbar-width: auto;
   max-height: max(260px, calc(100vh - 200px));
 }
+/* the header block (both rows) is already sticky (.table thead in main.scss) but without a layer of its own: its cells were painted under the sticky
+   left columns of the body (the caret, 2, and the ID, 1). With its own layer the whole header stays above the body. */
+.table-responsive:has(> .expandable-table) > .expandable-table > thead {
+  z-index: 5;
+}
 .table-responsive:has(> .expandable-table) > .expandable-table > thead > tr > th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   background-color: var(--white, #fff);
+}
+.table-responsive:has(> .expandable-table) > .expandable-table > thead > tr:last-child > th {
   box-shadow: 0 1px 0 rgba(128, 128, 128, 0.4);
+}
+/* the header cells that are also sticky to the left stay above the other header cells when the table scrolls sideways */
+.expandable-table > thead > tr > th.expandable-caret-cell,
+.expandable-table > thead > tr > th.expandable-select-cell,
+.expandable-table > thead > tr > th.id-cell {
+  z-index: 6;
+}
+/* the three columns kept in view on the left, side by side: the arrow (2.5rem), the check box (1.8rem) and then the ID. The ID was placed after the
+   arrow only (a rule for the next cell), so with the check box in between it stuck at the very left, under the arrow, and its numbers were not seen. */
+.expandable-table .expandable-caret-cell,
+.expandable-table .expandable-select-cell {
+  box-sizing: border-box;
+}
+.expandable-table .expandable-caret-cell {
+  min-width: 2.5rem;
+  max-width: 2.5rem;
+}
+.expandable-table .expandable-select-cell {
+  position: sticky;
+  left: 2.5rem;
+  z-index: 2;
+  min-width: 1.8rem;
+  max-width: 1.8rem;
+  background-color: var(--white, #fff);
+}
+.expandable-table .expandable-caret-cell ~ .id-cell {
+  left: 4.3rem;
+}
+/* the two cells at the left of the filter row (below the arrow and the check box) stay in place as well, or a filter of another column shows through there */
+.expandable-table > thead > tr.expandable-filter-row > th:nth-child(1),
+.expandable-table > thead > tr.expandable-filter-row > th:nth-child(2) {
+  position: sticky;
+  z-index: 6;
+  box-sizing: border-box;
+  background-color: var(--white, #fff);
+}
+.expandable-table > thead > tr.expandable-filter-row > th:nth-child(1) {
+  left: 0;
+  min-width: 2.5rem;
+  max-width: 2.5rem;
+}
+.expandable-table > thead > tr.expandable-filter-row > th:nth-child(2) {
+  left: 2.5rem;
+  min-width: 1.8rem;
+  max-width: 1.8rem;
+}
+/* the filter of the ID column: after the two cells above, like the ID header and the ID numbers (the rule for them needs the arrow cell with its class) */
+.expandable-table > thead > tr.expandable-filter-row > th.id-cell {
+  left: 4.3rem;
 }
 .table-responsive:has(> .expandable-table)::-webkit-scrollbar {
   height: 14px;
