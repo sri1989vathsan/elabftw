@@ -70,6 +70,7 @@ final class InventoryCategories extends AbstractStatus
             }
             if ($owner !== null && $owner !== $me) {
                 $row['title'] = $row['title'] . ' (' . $lookedAt[$owner] . ')';
+                $row['looked_owner'] = $owner;
             }
             $row['is_personal'] = $owner === null ? 0 : 1;
             $visible[] = $row;

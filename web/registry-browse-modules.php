@@ -10,7 +10,7 @@
  * GET                 gives the people of the team who have personal modules (with their numbers of modules and entries).
  * GET ?user=ID        gives the personal modules of that person with their entries, and logs the look. For 30 minutes (or until ?stop=1)
  *                     the modules and their entries can be opened in the Database like the others, read only (admins can edit).
- * GET ?stop=1         stops looking.
+ * GET ?stop=1         stops looking (at one person with &user=ID).
  */
 declare(strict_types=1);
 
@@ -53,8 +53,11 @@ $teamId = (int) $App->Users->userData['team'];
 try {
     // stop looking: the entries of the modules of others close again for this user
     if (isset($_GET['stop'])) {
-        $stop = $pdo->prepare('UPDATE personal_module_views SET closed_at = NOW() WHERE viewer = :me AND closed_at IS NULL');
+        // of one person (user=ID) or of all
+        $stop = $pdo->prepare('UPDATE personal_module_views SET closed_at = NOW() WHERE viewer = :me AND closed_at IS NULL AND (:owner = 0 OR owner = :owner2)');
         $stop->bindValue(':me', $userId, PDO::PARAM_INT);
+        $stop->bindValue(':owner', (int) ($_GET['user'] ?? 0), PDO::PARAM_INT);
+        $stop->bindValue(':owner2', (int) ($_GET['user'] ?? 0), PDO::PARAM_INT);
         $pdo->execute($stop);
         respond(200, array('ok' => true));
     }

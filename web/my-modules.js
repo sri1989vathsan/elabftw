@@ -9,6 +9,20 @@
   if (!link) {
     return;
   }
+  // the cross next to a module of someone else: remove their modules from the view
+  const stopLooking = function (event) {
+    const cross = event.target.closest ? event.target.closest('[data-stop-looking]') : null;
+    if (!cross || (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ')) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    fetch('registry-browse-modules.php?stop=1&user=' + encodeURIComponent(cross.dataset.stopLooking), { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function () {
+      window.location.href = 'registry.php';
+    });
+  };
+  document.addEventListener('click', stopLooking, true);
+  document.addEventListener('keydown', stopLooking, true);
   const token = function () {
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.content : '';

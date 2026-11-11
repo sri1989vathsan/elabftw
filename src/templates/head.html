@@ -172,7 +172,7 @@
                 <div class='dropdown-divider'></div>
                 {% for entity in App.registryCategoryArr|filter(c => c.is_current_team == 1) %}
                   {% set isActive = scriptName == 'registry.php' and App.Request.query.get('category') == entity.id %}
-                  <a class='dropdown-item {{ isActive ? 'active' }}' href='registry.php?category={{ entity.id }}' {{ isActive ? 'aria-current="page"' }}><span class='round-spot mr-1' style='background-color: #{{ entity.color }}'></span>{{ entity.title }}</a>
+                  <a class='dropdown-item {{ isActive ? 'active' }}' href='registry.php?category={{ entity.id }}' {{ isActive ? 'aria-current="page"' }}><span class='round-spot mr-1' style='background-color: #{{ entity.color }}'></span>{{ entity.title }}{% if entity.looked_owner is defined %}<span class='stop-looking' style='margin-left:.5rem;font-weight:bold;cursor:pointer;opacity:.7' role='button' tabindex='0' data-stop-looking='{{ entity.looked_owner }}' title='{{ 'Remove from view'|trans }}' aria-label='{{ 'Remove from view'|trans }}'>&times;</span>{% endif %}</a>
                 {% else %}
                   <span class='dropdown-item-text text-muted'>{{ 'No categories yet'|trans }}</span>
                 {% endfor %}
