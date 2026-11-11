@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'undo-everything', 'copy-table-format', 'default-border-apply', 'colour-live', 'drag-select', 'formulas-and-structure', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'drag-select', 'formulas-and-structure', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1839,6 +1839,79 @@ async function spreadsheetSoak(options = {}) {
       if (!dt.getData('text/plain').includes('Reagent') || !dt.getData('text/plain').includes('121.1g')) dataLoss.push({ context, problem: `the selection copy lost values: ${JSON.stringify(dt.getData('text/plain'))}` });
       if (!/<table/i.test(dt.getData('text/html')) || !/font-weight/i.test(dt.getData('text/html'))) dataLoss.push({ context, problem: 'the selection copy has no HTML table with the bold formatting' });
       await verify('copy-table-format: values unchanged by copying', true);
+    },
+    // A range copied in one grid and pasted in another brings its formatting along (the popup always did; the grid in
+    // the text pasted the values only), and one undo takes values and formatting back together.
+    // The clipboard is a plain object with getData/setData, so it works in every browser (a synthetic ClipboardEvent
+    // keeps no data in Firefox).
+    async 'paste-range-format'() {
+      const from = await createTable('paste source', { rows: 4, cols: 3 });
+      const to = await createTable('paste target', { rows: 5, cols: 4 });
+      if (!from || !to) return;
+      const fromModel = models.get(from); const toModel = models.get(to);
+      for (const [r, c, v] of [[0, 0, 'b1'], [0, 1, 'b2'], [1, 0, 'b3'], [1, 1, 'b4']]) await typeInto(from, r, c, v);
+      const boldSource = await boldCell(from, 0, 0);
+      if (!boldSource || !isBold(boldSource)) { fail('could not make the source cell bold'); return; }
+      // the target already has a bold cell that the paste must turn plain (source cell B1 is not bold)
+      await typeInto(to, 2, 2, 'old');
+      await boldCell(to, 2, 2);
+      // copy A1:B2 of the source
+      const sourceRoot = await live(from);
+      press(sourceRoot.querySelector('td[data-x="0"][data-y="0"]')); await sleep(200);
+      press(sourceRoot.querySelector('td[data-x="1"][data-y="1"]'), { shiftKey: true }); await sleep(250);
+      const store = {};
+      const copyEvent = new ClipboardEvent('copy', { bubbles: true, cancelable: true });
+      Object.defineProperty(copyEvent, 'clipboardData', { value: { setData: (type, value) => { store[type] = value; }, getData: type => store[type] || '' } });
+      (document.activeElement && sourceRoot.contains(document.activeElement) ? document.activeElement : sourceRoot.querySelector('.jss_textarea')).dispatchEvent(copyEvent);
+      note('range-copy');
+      if (!/<table/i.test(store['text/html'] || '')) { dataLoss.push({ context, problem: 'the range copy wrote no HTML table' }); return; }
+      // paste at B2 of the target (row 1, column 1): it covers B2:C3, the old bold cell is C3
+      const targetRoot = await live(to);
+      press(targetRoot.querySelector('td[data-x="1"][data-y="1"]')); await sleep(250);
+      const pasteEvent = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(pasteEvent, 'clipboardData', { value: { getData: type => (type === 'text' || type === 'text/plain') ? (store['text/plain'] || '') : (store[type] || ''), types: Object.keys(store) } });
+      (document.activeElement && targetRoot.contains(document.activeElement) ? document.activeElement : targetRoot.querySelector('.jss_textarea')).dispatchEvent(pasteEvent);
+      await sleep(900);
+      note('range-paste');
+      [[1, 1, 'b1'], [1, 2, 'b2'], [2, 1, 'b3'], [2, 2, 'b4']].forEach(([r, c, v]) => { toModel.grid[r][c] = v; });
+      await verify('paste-range-format: pasted', true);
+      const cell = (r, c) => (api.overlayElement(to) || targetRoot).querySelector(`td[data-x="${c}"][data-y="${r}"]`);
+      if (!isBold(cell(1, 1))) dataLoss.push({ context, where: 'inline grid', problem: 'the bold of the copied cell was not pasted with it' });
+      if (isBold(cell(1, 2)) || isBold(cell(2, 1))) dataLoss.push({ context, where: 'inline grid', problem: 'a pasted cell that was not bold came out bold' });
+      if (isBold(cell(2, 2))) dataLoss.push({ context, where: 'inline grid', problem: 'a bold target cell stayed bold under a plain pasted cell' });
+      const stored = tableEl(to).rows[2]?.cells[2];
+      if (!/<(strong|b)\b/i.test(stored?.innerHTML || '') && !/font-weight\s*:\s*(bold|[6-9]00)/i.test(stored?.getAttribute('style') || '')) dataLoss.push({ context, where: 'stored table', problem: 'the pasted bold was not saved' });
+      // one undo takes the values and the formatting back
+      await undoKey(to, false);
+      toModel.grid[1][1] = ''; toModel.grid[1][2] = ''; toModel.grid[2][1] = ''; toModel.grid[2][2] = 'old';
+      await verify('paste-range-format: undone', true);
+      if (isBold(cell(1, 1))) dataLoss.push({ context, where: 'inline grid', problem: 'one undo left the pasted bold behind' });
+      if (!isBold(cell(2, 2))) dataLoss.push({ context, where: 'inline grid', problem: 'one undo did not bring back the bold of the cell the paste had turned plain' });
+      await undoKey(to, true);
+      toModel.grid[1][1] = 'b1'; toModel.grid[1][2] = 'b2'; toModel.grid[2][1] = 'b3'; toModel.grid[2][2] = 'b4';
+      await verify('paste-range-format: redone', true);
+      if (!isBold(cell(1, 1))) dataLoss.push({ context, where: 'inline grid', problem: 'redo did not bring the pasted bold back' });
+      // a copied formula moves its references with the paste (=A3+1 from B3, pasted one column and one row further on,
+      // becomes =B4+1): the paste position reaches the grid's hook as text, which once made the shift wrong
+      await typeInto(from, 2, 0, '5');
+      await typeInto(from, 2, 1, '=A3+1');
+      const fromRoot = await live(from);
+      press(fromRoot.querySelector('td[data-x="1"][data-y="2"]')); await sleep(250);
+      const formulaStore = {};
+      const formulaCopy = new ClipboardEvent('copy', { bubbles: true, cancelable: true });
+      Object.defineProperty(formulaCopy, 'clipboardData', { value: { setData: (type, value) => { formulaStore[type] = value; }, getData: type => formulaStore[type] || '' } });
+      (document.activeElement && fromRoot.contains(document.activeElement) ? document.activeElement : fromRoot.querySelector('.jss_textarea')).dispatchEvent(formulaCopy);
+      const toRoot = await live(to);
+      press(toRoot.querySelector('td[data-x="2"][data-y="3"]')); await sleep(250);
+      const formulaPaste = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(formulaPaste, 'clipboardData', { value: { getData: type => (type === 'text' || type === 'text/plain') ? (formulaStore['text/plain'] || '') : (formulaStore[type] || '') } });
+      (document.activeElement && toRoot.contains(document.activeElement) ? document.activeElement : toRoot.querySelector('.jss_textarea')).dispatchEvent(formulaPaste);
+      await sleep(900);
+      note('formula-paste');
+      toModel.grid[3][2] = '=B4+1';
+      const pastedFormula = (api.snapshot(true).find(snap => snap.uid === to)?.overlayData || [])[3]?.[2];
+      if (pastedFormula !== '=B4+1') dataLoss.push({ context, where: 'inline grid', problem: `a formula pasted one column and one row further on should read =B4+1, it reads ${JSON.stringify(pastedFormula)}` });
+      await verify('paste-range-format: formula pasted', true);
     },
     // The table-wide default border (colour, style, width) and Apply appearance: every cell whose border is still
     // the previous default must follow, each time (it used to change only the cells that had no border of their own).
