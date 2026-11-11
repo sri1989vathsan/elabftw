@@ -1220,6 +1220,8 @@ on('open-guide-card', async (el: HTMLElement) => {
     const modal = holder.querySelector<HTMLElement>('.modal');
     if (!modal) throw new Error('no popup');
     document.getElementById(modal.id)?.remove();
+    // opened from a box of the Database (Who can edit, My modules) that sits above the usual modals
+    modal.style.zIndex = '100001';
     document.body.appendChild(modal);
     $(modal).on('hidden.bs.modal', () => modal.remove());
     $(modal).modal('show');

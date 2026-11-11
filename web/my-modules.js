@@ -119,7 +119,27 @@
 
     const draw = async function (message) {
       box.textContent = '';
-      box.append(make('h4', 'mb-1', 'My modules'));
+      const myHeading = make('h4', 'mb-1', 'My modules');
+      const myInfo = make('button', 'btn btn-link guide-info-btn p-0 ml-2');
+      myInfo.type = 'button';
+      myInfo.setAttribute('data-action', 'open-guide-card');
+      myInfo.setAttribute('data-card', 'guide-database-sharing');
+      myInfo.title = 'About personal modules in the guide';
+      myInfo.setAttribute('aria-label', 'About personal modules in the guide');
+      myInfo.append(make('i', 'fas fa-circle-info'));
+      // the box sits outside #container, where the page's click handlers listen: pass the click on to the guide handler from a button inside it
+      myInfo.addEventListener('click', function () {
+        const relay = make('button');
+        relay.type = 'button';
+        relay.hidden = true;
+        relay.setAttribute('data-action', 'open-guide-card');
+        relay.setAttribute('data-card', 'guide-database-sharing');
+        document.getElementById('container').append(relay);
+        relay.click();
+        relay.remove();
+      });
+      myHeading.append(myInfo);
+      box.append(myHeading);
       box.append(make('p', 'small text-muted', 'Only you see these modules. Their entries stay private to you: they never get a number of the lab, only your own (register them individually), and they are filed in the folder "Module Folders" of your folders. You can put them in your own storage.'));
       const mine = await call('registry-my-modules.php');
       const lab = await call('registry-modules.php');

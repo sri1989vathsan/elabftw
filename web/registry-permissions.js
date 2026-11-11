@@ -138,12 +138,27 @@
     }
   };
 
+  // the small "i" that opens the guide card about who can edit
+  const guideButton = function () {
+    const b = make('button', { type: 'button', class: 'btn btn-link guide-info-btn p-0 ml-2', 'data-action': 'open-guide-card', 'data-card': 'guide-database-sharing', title: 'About who can edit in the guide', 'aria-label': 'About who can edit in the guide' });
+    b.append(make('i', { class: 'fas fa-circle-info', 'aria-hidden': 'true' }));
+    // the box sits outside #container, where the page's click handlers listen: pass the click on to the guide handler from a button inside it
+    b.addEventListener('click', function () {
+      const relay = make('button', { type: 'button', hidden: '', 'data-action': 'open-guide-card', 'data-card': 'guide-database-sharing' });
+      document.getElementById('container').append(relay);
+      relay.click();
+      relay.remove();
+    });
+    return b;
+  };
   // ids: the entries to change; title: what the box says it is about; current: {owner, users, teamgroups, base} for one entry
   const openBox = function (ids, title, current, done) {
     const overlay = make('div', { id: 'rpOverlay' });
     const box = make('div', { id: 'rpBox', role: 'dialog', 'aria-label': 'Who can edit' });
     overlay.append(box);
-    box.append(make('h4', {}, 'Who can edit'), make('div', { class: 'text-muted mb-2' }, title));
+    const heading = make('h4', {}, 'Who can edit');
+    heading.append(guideButton());
+    box.append(heading, make('div', { class: 'text-muted mb-2' }, title));
     if (current) {
       const names = current.users.map(function (u) {
         return u.name;
