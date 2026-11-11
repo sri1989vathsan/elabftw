@@ -174,6 +174,33 @@ body::before {
 /* dashboard feed: a stack of individual cards, not a plain list -- gap
  * between them (instead of list-group's hairline dividers) is what actually
  * reads as "separate items" rather than one continuous block. */
+// The three dashboard columns follow the width of the page area, not of the browser window: with a side panel open the page is
+// far narrower than the window, and three Bootstrap columns (which switch on the window width) came out too narrow for
+// their headings and ran off the right edge. Each column takes at least 19rem and the rest wrap underneath.
+.dashboard-grid.row {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  margin-left: 0;
+  margin-right: 0;
+
+  > [class*='col-'] {
+    flex: none;
+    margin-top: 0 !important;
+    max-width: none;
+    min-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    width: auto;
+  }
+}
+
+// A column's title and its Create button wrap onto two lines instead of overlapping when the column is narrow.
+.dashboard-heading {
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+}
+
 .announcement-card-list {
   display: flex;
   flex-direction: column;
