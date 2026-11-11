@@ -53,11 +53,23 @@ final class InventoryCategories extends AbstractStatus
             $owners[(int) $row['id']] = (int) $row['owner'];
         }
         $me = (int) $this->Teams->Users->userData['userid'];
+        // the people whose personal modules the user is looking at (registry-browse-modules.php): their modules are listed with their name
+        $looking = $this->Db->prepare('SELECT v.owner, CONCAT(u.firstname, " ", u.lastname) AS name FROM personal_module_views AS v JOIN users AS u ON u.userid = v.owner
+            WHERE v.viewer = :me AND v.closed_at IS NULL AND v.viewed_at > NOW() - INTERVAL 30 MINUTE GROUP BY v.owner, u.firstname, u.lastname');
+        $looking->bindValue(':me', $me, PDO::PARAM_INT);
+        $this->Db->execute($looking);
+        $lookedAt = array();
+        foreach ($looking->fetchAll(PDO::FETCH_ASSOC) as $person) {
+            $lookedAt[(int) $person['owner']] = (string) $person['name'];
+        }
         $visible = array();
         foreach ($rows as $row) {
             $owner = $owners[(int) $row['id']] ?? null;
-            if ($owner !== null && $owner !== $me) {
+            if ($owner !== null && $owner !== $me && !isset($lookedAt[$owner])) {
                 continue;
+            }
+            if ($owner !== null && $owner !== $me) {
+                $row['title'] = $row['title'] . ' (' . $lookedAt[$owner] . ')';
             }
             $row['is_personal'] = $owner === null ? 0 : 1;
             $visible[] = $row;

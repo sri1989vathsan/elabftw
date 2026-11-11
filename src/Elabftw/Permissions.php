@@ -19,6 +19,9 @@ use Elabftw\Models\TeamGroups;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\TeamsHelper;
 
+use PDO;
+
+use function array_key_exists;
 use function json_decode;
 use function array_column;
 use function in_array;
@@ -63,10 +66,27 @@ final class Permissions
     public function forEntity(): AccessPermissions
     {
         return new AccessPermissions(
-            read: $this->getCan($this->canreadBase, $this->canread),
+            read: $this->getCan($this->canreadBase, $this->canread) || $this->isLookedAtPersonalEntry(),
             write: $this->getWrite(),
             book: $this->getBook(),
         );
+    }
+
+    /**
+     * Fork: an entry of the personal module of someone is readable (not writable) by a user who is looking at that person's modules on purpose
+     * (registry-browse-modules.php; a look lasts 30 minutes or until the user stops looking).
+     */
+    private function isLookedAtPersonalEntry(): bool
+    {
+        if ($this->Users instanceof AnonymousUser || !array_key_exists('personal_id', $this->item) || empty($this->item['category'])) {
+            return false;
+        }
+        $req = Db::getConnection()->prepare('SELECT COUNT(*) FROM inventory_categories AS c JOIN personal_module_views AS v ON v.owner = c.owner
+            WHERE c.id = :category AND c.owner IS NOT NULL AND v.viewer = :me AND v.closed_at IS NULL AND v.viewed_at > NOW() - INTERVAL 30 MINUTE');
+        $req->bindValue(':category', (int) $this->item['category'], PDO::PARAM_INT);
+        $req->bindValue(':me', (int) $this->Users->userData['userid'], PDO::PARAM_INT);
+        $req->execute();
+        return (int) $req->fetchColumn() > 0;
     }
 
     public function getCan(BasePermissions $base, array $can): bool

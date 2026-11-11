@@ -573,7 +573,10 @@ final class Inventory extends AbstractConcreteEntity
                 $this->filterSql .= ' AND entity.custom_id IS NULL AND entity.personal_id IS NULL ';
             }
         } else {
-            $this->filterSql .= ' AND entity.is_planned = 0 AND (entity.custom_id IS NOT NULL OR entity.category IS NULL) ';
+            // the entries of the personal modules of a person the user is looking at (registry-browse-modules.php) are listed too, read only
+            $lookedAt = 'entity.category IN (SELECT c.id FROM inventory_categories AS c JOIN personal_module_views AS v ON v.owner = c.owner
+                WHERE c.owner IS NOT NULL AND v.viewer = ' . (int) $this->Users->userData['userid'] . ' AND v.closed_at IS NULL AND v.viewed_at > NOW() - INTERVAL 30 MINUTE)';
+            $this->filterSql .= ' AND entity.is_planned = 0 AND (entity.custom_id IS NOT NULL OR entity.category IS NULL OR ' . $lookedAt . ') ';
         }
         try {
             return parent::readShow($displayParams, $extended, $can);

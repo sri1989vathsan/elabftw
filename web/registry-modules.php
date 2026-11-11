@@ -63,7 +63,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && !$App->isAnonymous()) {
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
-    $req = $pdo->prepare('SELECT id, title, color, fields, settings, owner FROM inventory_categories WHERE team = :team AND state = 1 AND (owner IS NULL OR owner = :me) ORDER BY ordering, title');
+    $req = $pdo->prepare('SELECT id, title, color, fields, settings, owner FROM inventory_categories WHERE team = :team AND state = 1 AND (owner IS NULL OR owner = :me OR owner IN (SELECT v.owner FROM personal_module_views AS v WHERE v.viewer = :me2 AND v.closed_at IS NULL AND v.viewed_at > NOW() - INTERVAL 30 MINUTE)) ORDER BY ordering, title');
+    $req->bindValue(':me2', $userId, PDO::PARAM_INT);
     $req->bindValue(':team', $teamId, PDO::PARAM_INT);
     $req->bindValue(':me', $userId, PDO::PARAM_INT);
     $pdo->execute($req);

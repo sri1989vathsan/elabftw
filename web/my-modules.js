@@ -198,7 +198,9 @@
           const row = make('div', 'd-flex align-items-center mb-1');
           const spot = make('span', 'round-spot mr-2');
           spot.style.backgroundColor = '#' + module.color;
-          row.append(spot, make('strong', 'mr-auto', module.title));
+          const openModule = make('a', 'mr-auto font-weight-bold', module.title + '  (open in the Database)');
+          openModule.href = 'registry.php?category=' + module.id;
+          row.append(spot, openModule);
           if (data.is_admin) {
             const remove = make('button', 'btn btn-outline-danger btn-sm', 'Remove');
             remove.type = 'button';
@@ -214,13 +216,30 @@
           (module.entries || []).forEach(function (entry) {
             const item = make('li');
             const label = (entry.personal_id ? '#' + entry.personal_id + ' ' : '') + entry.title;
-            if (data.is_admin) {
-              const open = make('a', '', label);
-              open.href = 'registry.php?mode=view&id=' + entry.id;
-              item.append(open);
-            } else {
-              item.textContent = label;
+            // what is inside the entry, read only
+            const details = make('details');
+            details.append(make('summary', '', label));
+            const table = make('table', 'table table-sm small mb-1');
+            const rows = [['Date', entry.date]].concat((entry.fields || []).map(function (f) {
+              return [f.name, f.value];
+            })).filter(function (pair) {
+              return pair[1] !== null && pair[1] !== undefined && String(pair[1]) !== '';
+            });
+            rows.forEach(function (pair) {
+              const tr = make('tr');
+              tr.append(make('th', 'font-weight-normal text-muted', pair[0]), make('td', '', String(pair[1])));
+              table.append(tr);
+            });
+            if (rows.length === 0) {
+              table.append(make('caption', 'small', 'No fields filled in.'));
             }
+            details.append(table);
+            if (data.is_admin) {
+              const open = make('a', 'small', 'Open to edit');
+              open.href = 'registry.php?mode=view&id=' + entry.id;
+              details.append(open);
+            }
+            item.append(details);
             entries.append(item);
           });
           if ((module.entries || []).length === 0) {
@@ -231,6 +250,14 @@
         if (!data.is_admin) {
           box.append(make('p', 'small text-muted', 'You can look but not change them. Only an admin can.'));
         }
+        box.append(make('p', 'small text-muted', 'For 30 minutes the modules of this person are in the Database menu and open like the others. Stop looking to close them earlier.'));
+        const stop = make('button', 'btn btn-outline-secondary btn-sm mr-2 mb-2', 'Stop looking');
+        stop.type = 'button';
+        stop.addEventListener('click', async function () {
+          await call('registry-browse-modules.php?stop=1');
+          draw(0, 'Closed: the modules of this person are not in the Database menu any more.');
+        });
+        box.append(stop);
       }
       if (message) {
         box.append(make('p', 'small text-danger', message));

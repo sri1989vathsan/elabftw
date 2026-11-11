@@ -20,6 +20,7 @@ services:
       - ./web/planned.css:/elabftw/web/planned.css:ro
       - ./web/order-sheets:/elabftw/web/order-sheets:ro
       - ./src/Models/Inventory.php:/elabftw/src/Models/Inventory.php:ro
+      - ./src/Elabftw/Permissions.php:/elabftw/src/Elabftw/Permissions.php:ro
       - ./src/Models/TeamGroups.php:/elabftw/src/Models/TeamGroups.php:ro
       - ./src/Models/AbstractEntity.php:/elabftw/src/Models/AbstractEntity.php:ro
       - ./src/templates/storage-view-edit.html:/elabftw/src/templates/storage-view-edit.html:ro
@@ -77,6 +78,7 @@ services:
       - ./src/sql/custom/147_personal_modules.sql:/elabftw/src/sql/custom/147_personal_modules.sql:ro
       - ./src/sql/custom/148_personal_module_views.sql:/elabftw/src/sql/custom/148_personal_module_views.sql:ro
       - ./src/sql/custom/149_personal_entries_admins.sql:/elabftw/src/sql/custom/149_personal_entries_admins.sql:ro
+      - ./src/sql/custom/150_personal_module_views_closed.sql:/elabftw/src/sql/custom/150_personal_module_views_closed.sql:ro
       - ./src/Models/InventoryCategories.php:/elabftw/src/Models/InventoryCategories.php:ro
       - ./web/admin-plasmid-checks.js:/elabftw/web/admin-plasmid-checks.js:ro
       - ./web/ai-chat.js:/elabftw/web/ai-chat.js:ro
