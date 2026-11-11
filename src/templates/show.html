@@ -34,7 +34,7 @@
       {% for category in categoryArr %}
         {% if category.is_current_team %}
           <a class='category-nav-item{{ category.id in currentCategories ? ' active' }}' href='registry.php?category={{ category.id }}'>
-            <span class='category-nav-dot' style='background-color:#{{ category.color|default('bdbdbd') }}'></span>{{ category.title }}{% if category.looked_owner is defined %}<span class='stop-looking' style='margin-left:.5rem;font-weight:bold;cursor:pointer;opacity:.7' role='button' tabindex='0' data-stop-looking='{{ category.looked_owner }}' title='{{ 'Remove from view'|trans }}' aria-label='{{ 'Remove from view'|trans }}'>&times;</span>{% endif %}
+            <span class='category-nav-dot' style='background-color:#{{ category.color|default('bdbdbd') }}'></span>{{ category.title }}{% if category.looked_category is defined %}<span class='stop-looking' style='margin-left:.5rem;font-weight:bold;cursor:pointer;opacity:.7' role='button' tabindex='0' data-stop-looking='{{ category.looked_category }}' title='{{ 'Remove from view'|trans }}' aria-label='{{ 'Remove from view'|trans }}'>&times;</span>{% endif %}
           </a>
         {% endif %}
       {% endfor %}

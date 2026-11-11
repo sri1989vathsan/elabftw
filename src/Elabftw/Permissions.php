@@ -73,7 +73,7 @@ final class Permissions
     }
 
     /**
-     * Fork: an entry of the personal module of someone is readable (not writable) by a user who is looking at that person's modules on purpose
+     * Fork: an entry of the personal module of someone is readable (not writable) by a user who added that module to their view on purpose
      * (registry-browse-modules.php; a look lasts 30 minutes or until the user stops looking).
      */
     private function isLookedAtPersonalEntry(): bool
@@ -81,7 +81,7 @@ final class Permissions
         if ($this->Users instanceof AnonymousUser || !array_key_exists('personal_id', $this->item) || empty($this->item['category'])) {
             return false;
         }
-        $req = Db::getConnection()->prepare('SELECT COUNT(*) FROM inventory_categories AS c JOIN personal_module_views AS v ON v.owner = c.owner
+        $req = Db::getConnection()->prepare('SELECT COUNT(*) FROM inventory_categories AS c JOIN personal_module_views AS v ON v.category = c.id
             WHERE c.id = :category AND c.owner IS NOT NULL AND v.viewer = :me AND v.closed_at IS NULL AND v.viewed_at > NOW() - INTERVAL 30 MINUTE');
         $req->bindValue(':category', (int) $this->item['category'], PDO::PARAM_INT);
         $req->bindValue(':me', (int) $this->Users->userData['userid'], PDO::PARAM_INT);

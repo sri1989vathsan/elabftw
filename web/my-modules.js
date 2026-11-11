@@ -17,7 +17,7 @@
     }
     event.preventDefault();
     event.stopPropagation();
-    fetch('registry-browse-modules.php?stop=1&user=' + encodeURIComponent(cross.dataset.stopLooking), { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function () {
+    fetch('registry-browse-modules.php?stop=1&module=' + encodeURIComponent(cross.dataset.stopLooking), { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function () {
       window.location.href = 'registry.php';
     });
   };
@@ -188,128 +188,87 @@
     open();
   });
 
-  // looking at the personal modules of one person at a time: read only; admins can also rename, recolour and remove them and open their entries
+  // the personal modules of the others: search them and add the ones to look at, one by one (read only; admins can also change them)
   const browse = async function () {
-    // looking at a person (or stopping) changes the modules of the Database menu: the page is reloaded when the box is closed
+    // adding or removing a module changes the Database menu: the page is reloaded when the box is closed
     let changed = false;
     const { box, close } = dialog(function () {
       if (changed) {
         window.location.reload();
       }
     });
-    const draw = async function (userId, message) {
-      if (userId || message) {
-        changed = true;
-      }
+    let query = '';
+    const draw = async function (message) {
       box.textContent = '';
-      box.append(make('h4', 'mb-2', "Someone's personal modules"));
-      box.append(make('p', 'small text-muted', 'Personal modules are private by default. You look at one person at a time, and they can see that you looked.'));
-      const people = await call('registry-browse-modules.php');
-      // a search box and the list of people: typing filters them by their name or by the name of a module
+      box.append(make('h4', 'mb-2', "Personal modules of others"));
+      box.append(make('p', 'small text-muted', 'Personal modules are private by default. Add the ones you want to look at: each opens in the Database like the others for 30 minutes, and its owner can see that you looked.'));
+      const data = await call('registry-browse-modules.php');
       const find = make('input', 'form-control form-control-sm mb-2');
       find.type = 'search';
-      find.placeholder = 'Search a person or a module...';
-      find.setAttribute('aria-label', 'Search a person or a module');
-      const choices = make('div', 'list-group mb-3');
-      choices.style.cssText = 'max-height:190px;overflow:auto';
+      find.placeholder = 'Search a module or a person...';
+      find.setAttribute('aria-label', 'Search a module or a person');
+      find.value = query;
+      const list = make('div', 'mb-2');
+      list.style.cssText = 'max-height:340px;overflow:auto';
       const show = function () {
-        const words = find.value.toLowerCase().split(/\s+/).filter(Boolean);
-        choices.textContent = '';
+        query = find.value;
+        const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+        list.textContent = '';
         let count = 0;
-        (people.people || []).forEach(function (person) {
-          const hay = (person.name + ' ' + (person.titles || '')).toLowerCase();
+        (data.modules || []).forEach(function (module) {
+          const hay = (module.title + ' ' + module.owner_name).toLowerCase();
           if (!words.every(function (word) { return hay.indexOf(word) !== -1; })) {
             return;
           }
           count++;
-          const item = make('button', 'list-group-item list-group-item-action py-1' + (Number(person.userid) === Number(userId) ? ' active' : ''));
-          item.type = 'button';
-          item.append(make('strong', '', person.name), make('span', 'small ml-2', person.modules + (Number(person.modules) === 1 ? ' module, ' : ' modules, ') + person.entries + (Number(person.entries) === 1 ? ' entry' : ' entries')));
-          if (person.titles) {
-            item.append(make('div', 'small', person.titles));
-          }
-          item.addEventListener('click', function () {
-            draw(Number(person.userid), '');
+          const added = Number(module.added) === 1;
+          const row = make('div', 'd-flex align-items-center py-1 border-bottom');
+          const spot = make('span', 'round-spot mr-2');
+          spot.style.backgroundColor = '#' + module.color;
+          const name = make('div', 'mr-auto');
+          name.append(make('strong', '', module.title), make('span', 'small text-muted ml-2', module.owner_name + ', ' + module.entry_count + (Number(module.entry_count) === 1 ? ' entry' : ' entries')));
+          const button = make('button', 'btn btn-sm ' + (added ? 'btn-outline-secondary' : 'btn-outline-primary'), added ? 'Remove from view' : 'Add to view');
+          button.type = 'button';
+          button.addEventListener('click', async function () {
+            button.disabled = true;
+            await call('registry-browse-modules.php?' + (added ? 'stop=1&module=' : 'add=') + module.id);
+            changed = true;
+            draw('');
           });
-          choices.append(item);
+          row.append(spot, name, button);
+          list.append(row);
+          if (added) {
+            // what is inside, read only
+            const inside = make('div', 'small ml-4 mb-1');
+            const open = make('a', '', 'Open in the Database');
+            open.href = 'registry.php?category=' + module.id;
+            inside.append(open);
+            (module.entries || []).forEach(function (entry) {
+              const details = make('details');
+              details.append(make('summary', '', (entry.personal_id ? '#' + entry.personal_id + ' ' : '') + entry.title));
+              const table = make('table', 'table table-sm small mb-1');
+              [['Date', entry.date]].concat((entry.fields || []).map(function (f) {
+                return [f.name, f.value];
+              })).filter(function (pair) {
+                return pair[1] !== null && pair[1] !== undefined && String(pair[1]) !== '';
+              }).forEach(function (pair) {
+                const tr = make('tr');
+                tr.append(make('th', 'font-weight-normal text-muted', pair[0]), make('td', '', String(pair[1])));
+                table.append(tr);
+              });
+              details.append(table);
+              inside.append(details);
+            });
+            list.append(inside);
+          }
         });
-        if (count === 0 && (people.people || []).length > 0) {
-          choices.append(make('div', 'list-group-item small text-muted py-1', 'Nobody matches.'));
+        if (count === 0) {
+          list.append(make('p', 'small text-muted my-2', (data.modules || []).length === 0 ? 'Nobody else has a personal module.' : 'No module matches.'));
         }
       };
       find.addEventListener('input', show);
       show();
-      box.append(find, choices);
-      if ((people.people || []).length === 0) {
-        box.append(make('p', 'text-muted', 'Nobody else has a personal module.'));
-      }
-      if (userId) {
-        const data = await call('registry-browse-modules.php?user=' + userId);
-        (data.modules || []).forEach(function (module) {
-          const row = make('div', 'd-flex align-items-center mb-1');
-          const spot = make('span', 'round-spot mr-2');
-          spot.style.backgroundColor = '#' + module.color;
-          const openModule = make('a', 'mr-auto font-weight-bold', module.title + '  (open in the Database)');
-          openModule.href = 'registry.php?category=' + module.id;
-          row.append(spot, openModule);
-          if (data.is_admin) {
-            const remove = make('button', 'btn btn-outline-danger btn-sm', 'Remove');
-            remove.type = 'button';
-            remove.addEventListener('click', function () {
-              askToRemove(module, row, function (text) {
-                draw(userId, text);
-              });
-            });
-            row.append(remove);
-          }
-          box.append(row);
-          const entries = make('ul', 'small mb-3');
-          (module.entries || []).forEach(function (entry) {
-            const item = make('li');
-            const label = (entry.personal_id ? '#' + entry.personal_id + ' ' : '') + entry.title;
-            // what is inside the entry, read only
-            const details = make('details');
-            details.append(make('summary', '', label));
-            const table = make('table', 'table table-sm small mb-1');
-            const rows = [['Date', entry.date]].concat((entry.fields || []).map(function (f) {
-              return [f.name, f.value];
-            })).filter(function (pair) {
-              return pair[1] !== null && pair[1] !== undefined && String(pair[1]) !== '';
-            });
-            rows.forEach(function (pair) {
-              const tr = make('tr');
-              tr.append(make('th', 'font-weight-normal text-muted', pair[0]), make('td', '', String(pair[1])));
-              table.append(tr);
-            });
-            if (rows.length === 0) {
-              table.append(make('caption', 'small', 'No fields filled in.'));
-            }
-            details.append(table);
-            if (data.is_admin) {
-              const open = make('a', 'small', 'Open to edit');
-              open.href = 'registry.php?mode=view&id=' + entry.id;
-              details.append(open);
-            }
-            item.append(details);
-            entries.append(item);
-          });
-          if ((module.entries || []).length === 0) {
-            entries.append(make('li', 'text-muted', 'No entries'));
-          }
-          box.append(entries);
-        });
-        if (!data.is_admin) {
-          box.append(make('p', 'small text-muted', 'You can look but not change them. Only an admin can.'));
-        }
-        box.append(make('p', 'small text-muted', 'For 30 minutes the modules of this person are in the Database menu and open like the others. Stop looking to close them earlier.'));
-        const stop = make('button', 'btn btn-outline-secondary btn-sm mr-2 mb-2', 'Stop looking');
-        stop.type = 'button';
-        stop.addEventListener('click', async function () {
-          await call('registry-browse-modules.php?stop=1');
-          draw(0, 'Closed: the modules of this person are not in the Database menu any more.');
-        });
-        box.append(stop);
-      }
+      box.append(find, list);
       if (message) {
         box.append(make('p', 'small text-danger', message));
       }
@@ -317,8 +276,9 @@
       done.type = 'button';
       done.addEventListener('click', close);
       box.append(done);
+      find.focus();
     };
-    draw(0, '');
+    draw('');
   };
   const browseLink = document.getElementById('browseModulesLink');
   if (browseLink) {

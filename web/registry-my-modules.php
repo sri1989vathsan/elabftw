@@ -57,8 +57,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $pdo->execute($req);
     $modules = $req->fetchAll(PDO::FETCH_ASSOC);
     // who looked at the modules of the user lately
-    $seen = $pdo->prepare('SELECT CONCAT(u.firstname, " ", u.lastname) AS name, MAX(v.viewed_at) AS at FROM personal_module_views AS v JOIN users AS u ON u.userid = v.viewer
-        WHERE v.owner = :me GROUP BY v.viewer, u.firstname, u.lastname ORDER BY at DESC LIMIT 10');
+    $seen = $pdo->prepare('SELECT CONCAT(u.firstname, " ", u.lastname) AS name, c.title AS module, MAX(v.viewed_at) AS at FROM personal_module_views AS v JOIN users AS u ON u.userid = v.viewer
+        JOIN inventory_categories AS c ON c.id = v.category WHERE v.owner = :me GROUP BY v.viewer, u.firstname, u.lastname, c.title ORDER BY at DESC LIMIT 10');
     $seen->bindValue(':me', $userId, PDO::PARAM_INT);
     $pdo->execute($seen);
     respond(200, array('modules' => $modules, 'views' => $seen->fetchAll(PDO::FETCH_ASSOC)));

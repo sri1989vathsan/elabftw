@@ -53,24 +53,24 @@ final class InventoryCategories extends AbstractStatus
             $owners[(int) $row['id']] = (int) $row['owner'];
         }
         $me = (int) $this->Teams->Users->userData['userid'];
-        // the people whose personal modules the user is looking at (registry-browse-modules.php): their modules are listed with their name
-        $looking = $this->Db->prepare('SELECT v.owner, CONCAT(u.firstname, " ", u.lastname) AS name FROM personal_module_views AS v JOIN users AS u ON u.userid = v.owner
-            WHERE v.viewer = :me AND v.closed_at IS NULL AND v.viewed_at > NOW() - INTERVAL 30 MINUTE GROUP BY v.owner, u.firstname, u.lastname');
+        // the personal modules of others that the user added to their view (registry-browse-modules.php): listed with the name of their owner
+        $looking = $this->Db->prepare('SELECT v.category, CONCAT(u.firstname, " ", u.lastname) AS name FROM personal_module_views AS v JOIN inventory_categories AS c ON c.id = v.category
+            JOIN users AS u ON u.userid = c.owner WHERE v.viewer = :me AND v.closed_at IS NULL AND v.viewed_at > NOW() - INTERVAL 30 MINUTE GROUP BY v.category, u.firstname, u.lastname');
         $looking->bindValue(':me', $me, PDO::PARAM_INT);
         $this->Db->execute($looking);
         $lookedAt = array();
-        foreach ($looking->fetchAll(PDO::FETCH_ASSOC) as $person) {
-            $lookedAt[(int) $person['owner']] = (string) $person['name'];
+        foreach ($looking->fetchAll(PDO::FETCH_ASSOC) as $module) {
+            $lookedAt[(int) $module['category']] = (string) $module['name'];
         }
         $visible = array();
         foreach ($rows as $row) {
             $owner = $owners[(int) $row['id']] ?? null;
-            if ($owner !== null && $owner !== $me && !isset($lookedAt[$owner])) {
+            if ($owner !== null && $owner !== $me && !isset($lookedAt[(int) $row['id']])) {
                 continue;
             }
             if ($owner !== null && $owner !== $me) {
-                $row['title'] = $row['title'] . ' (' . $lookedAt[$owner] . ')';
-                $row['looked_owner'] = $owner;
+                $row['title'] = $row['title'] . ' (' . $lookedAt[(int) $row['id']] . ')';
+                $row['looked_category'] = (int) $row['id'];
             }
             $row['is_personal'] = $owner === null ? 0 : 1;
             $visible[] = $row;

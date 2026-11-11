@@ -228,7 +228,7 @@ final class EntitySqlBuilder implements SqlBuilderInterface
     }
 
     /**
-     * Fork: the entries of the personal modules of a person whose modules the user is looking at (see Permissions::isLookedAtPersonalEntry)
+     * Fork: the entries of the personal modules of a personal module the user added to their view (see Permissions::isLookedAtPersonalEntry)
      */
     protected function canLookedAtPersonal(string $can): string
     {
@@ -236,7 +236,7 @@ final class EntitySqlBuilder implements SqlBuilderInterface
             return '0';
         }
         return sprintf(
-            '(entity.category IN (SELECT c.id FROM inventory_categories AS c JOIN personal_module_views AS v ON v.owner = c.owner
+            '(entity.category IN (SELECT c.id FROM inventory_categories AS c JOIN personal_module_views AS v ON v.category = c.id
                 WHERE c.owner IS NOT NULL AND v.viewer = %d AND v.closed_at IS NULL AND v.viewed_at > NOW() - INTERVAL 30 MINUTE))',
             (int) $this->entity->Users->userData['userid'],
         );
