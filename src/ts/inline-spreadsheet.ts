@@ -2937,6 +2937,20 @@ function inheritRowHeaderStyle(container: HTMLElement | null | undefined, newRow
   if (neighbour && neighbour.style.cssText) header.style.cssText = neighbour.style.cssText;
 }
 
+/**
+ * The look a new row or column gets in the page (its appearance and the alignment it takes from the cell beside it) is
+ * applied to the cells a moment after the insert, so the style snapshot the undo entry took at the insert does not have
+ * it, and Redo brought the new cells back with the default look. Add it to that entry.
+ */
+function addInsertedCellStyles(change: StructureChange | null, container: HTMLElement | null | undefined, cells: Array<{ col: number; row: number }>): void {
+  if (!change || !container) return;
+  const styles = change.afterStyles ?? (change.afterStyles = {});
+  cells.forEach(({ col, row }) => {
+    const style = container.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${row}"]`)?.getAttribute('style');
+    if (style) styles[`${colLabel(col)}${row + 1}`] = style;
+  });
+}
+
 /** Show the native resize destination independently of table layout constraints. */
 function installRowResizeGuide(container: HTMLElement): void {
   container.addEventListener('mousedown', event => {
@@ -4558,6 +4572,7 @@ export function openSpreadsheetModal(
     };
     // Row and column inserts and deletes join the undo history as entries of their own (see beginStructure).
     let pendingStructure: StructureChange | null = null;
+    let lastPopupStructure: StructureChange | null = null;
     // Dragging a row or column border and the auto-fit buttons are history entries too: the sizes before and after.
     const popupSizes = (): { rowHeights: RowHeights; colWidths: ColWidths } => ({
       rowHeights: structuredClone(working.rowHeights ?? {}),
@@ -4597,6 +4612,7 @@ export function openSpreadsheetModal(
     const finishPopupStructure = (target: JssInstance): void => {
       if (!pendingStructure) return;
       const entry = finishStructure(target, pendingStructure, readPopupColWidths);
+      lastPopupStructure = pendingStructure;
       pendingStructure = null;
       pushCellHistoryEntry(entry);
     };
@@ -5899,15 +5915,18 @@ export function openSpreadsheetModal(
           const currentData = currentWorksheet?.getData?.();
           if (!Array.isArray(currentData) || currentData.length === 0) return;
           const cols = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
+          const styledCells: Array<{ col: number; row: number }> = [];
           insertedIndexes(inserted, 'row', currentData.length - 1).forEach(newRow => {
             for (let col = 0; col < cols; col++) {
               const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${newRow}"]`);
               if (!cell) continue;
               cell.style.cssText = getAppearanceCellStyle(working.appearance, col, newRow);
               inheritCellAlignment(sheetContainer, cell, col, newRow > 0 ? newRow - 1 : newRow + 1);
+              styledCells.push({ col, row: newRow });
             }
             inheritRowHeaderStyle(sheetContainer, newRow);
           });
+          addInsertedCellStyles(lastPopupStructure, sheetContainer, styledCells);
         }, 0);
       };
       const styleNewlyInsertedColumn = (changedWorksheet?: JssInstance, inserted?: unknown): void => {
@@ -5918,14 +5937,17 @@ export function openSpreadsheetModal(
           if (!Array.isArray(currentData) || currentData.length === 0) return;
           const rows = currentData.length;
           const lastCol = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0) - 1;
+          const styledCells: Array<{ col: number; row: number }> = [];
           insertedIndexes(inserted, 'column', lastCol).forEach(newCol => {
             for (let row = 0; row < rows; row++) {
               const cell = sheetContainer?.querySelector<HTMLElement>(`td[data-x="${newCol}"][data-y="${row}"]`);
               if (!cell) continue;
               cell.style.cssText = getAppearanceCellStyle(working.appearance, newCol, row);
               inheritCellAlignment(sheetContainer, cell, newCol > 0 ? newCol - 1 : newCol + 1, row);
+              styledCells.push({ col: newCol, row });
             }
           });
+          addInsertedCellStyles(lastPopupStructure, sheetContainer, styledCells);
         }, 0);
       };
       const syncMountedDimensions = (changedWorksheet?: JssInstance): void => {
@@ -7753,6 +7775,7 @@ export function buildReadOnlySpreadsheetHost(
   };
   // Row and column inserts and deletes join the undo history as entries of their own (see beginStructure).
   let pendingStructure: StructureChange | null = null;
+  let lastInlineStructure: StructureChange | null = null;
   // Dragging a row or column border and the two auto-fit buttons are history entries too: the sizes before and after.
   const sizesNow = (): { rowHeights: RowHeights; colWidths: ColWidths } => ({
     rowHeights: Object.fromEntries(manuallyResizedRows) as RowHeights,
@@ -7795,6 +7818,7 @@ export function buildReadOnlySpreadsheetHost(
   const finishInlineStructure = (target: JssInstance): void => {
     if (!pendingStructure) return;
     const entry = finishStructure(target, pendingStructure, () => readRenderedColWidths(sheetContainer));
+    lastInlineStructure = pendingStructure;
     pendingStructure = null;
     pushCellHistoryEntry(entry);
   };
@@ -10127,15 +10151,18 @@ export function buildReadOnlySpreadsheetHost(
       const currentData = changedWorksheet?.getData?.();
       if (!Array.isArray(currentData) || currentData.length === 0) return;
       const cols = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0);
+      const styledCells: Array<{ col: number; row: number }> = [];
       insertedIndexes(inserted, 'row', currentData.length - 1).forEach(newRow => {
         for (let col = 0; col < cols; col++) {
           const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${col}"][data-y="${newRow}"]`);
           if (!cell) continue;
           cell.style.cssText = getAppearanceCellStyle(appearance, col, newRow);
           inheritCellAlignment(sheetContainer, cell, col, newRow > 0 ? newRow - 1 : newRow + 1);
+          styledCells.push({ col, row: newRow });
         }
         inheritRowHeaderStyle(sheetContainer, newRow);
       });
+      addInsertedCellStyles(lastInlineStructure, sheetContainer, styledCells);
     }, 0);
   };
   const styleNewlyInsertedColumn = (changedWorksheet: JssInstance, inserted?: unknown): void => {
@@ -10144,14 +10171,17 @@ export function buildReadOnlySpreadsheetHost(
       if (!Array.isArray(currentData) || currentData.length === 0) return;
       const rows = currentData.length;
       const lastCol = currentData.reduce((max: number, row: unknown[]) => Math.max(max, row?.length ?? 0), 0) - 1;
+      const styledCells: Array<{ col: number; row: number }> = [];
       insertedIndexes(inserted, 'column', lastCol).forEach(newCol => {
         for (let row = 0; row < rows; row++) {
           const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${newCol}"][data-y="${row}"]`);
           if (!cell) continue;
           cell.style.cssText = getAppearanceCellStyle(appearance, newCol, row);
           inheritCellAlignment(sheetContainer, cell, newCol > 0 ? newCol - 1 : newCol + 1, row);
+          styledCells.push({ col: newCol, row });
         }
       });
+      addInsertedCellStyles(lastInlineStructure, sheetContainer, styledCells);
     }, 0);
   };
 
