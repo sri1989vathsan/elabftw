@@ -2170,6 +2170,8 @@ function createFormulaPasteShift(): {
       const sameText = data.every((line, row) => line.every((cell, col) => String(cell?.value ?? '') === copied.shown[row % height]?.[col % width]));
       if (!sameText) return undefined;
       let changed = false;
+      // The grid is handed cells as {value} but writes back what this returns as plain values: returning the cell
+      // objects pasted "[object Object]".
       const withFormulas = data.map((line, row) => line.map((cell, col) => {
         const sourceRow = row % height;
         const sourceCol = col % width;
@@ -2178,9 +2180,8 @@ function createFormulaPasteShift(): {
         if (raw.trimStart().startsWith('=')) {
           value = shiftFormulaReferences(raw, x + col - (copied.col + sourceCol), y + row - (copied.row + sourceRow));
         }
-        if (value === String(cell?.value ?? '')) return cell;
-        changed = true;
-        return { ...cell, value };
+        if (value !== String(cell?.value ?? '')) changed = true;
+        return value;
       }));
       return changed ? withFormulas : undefined;
     },
@@ -6131,8 +6132,11 @@ export function openSpreadsheetModal(
           syncMountedDimensions(changedWorksheet);
         },
         onbeforepaste: (changedWorksheet: JssInstance, data: Array<Array<{ value?: unknown }>>, x: number, y: number): unknown => {
-          popupPasteUndo.before(data, x, y);
-          return formulaPasteShift.onbeforepaste(changedWorksheet, data, x, y);
+          // the grid hands the position over as text ("1"): `x + col` would join it instead of adding
+          const pasteX = Number(x);
+          const pasteY = Number(y);
+          popupPasteUndo.before(data, pasteX, pasteY);
+          return formulaPasteShift.onbeforepaste(changedWorksheet, data, pasteX, pasteY);
         },
         onpaste: (changedWorksheet: JssInstance): void => {
           syncMountedDimensions(changedWorksheet);
@@ -10224,8 +10228,11 @@ export function buildReadOnlySpreadsheetHost(
     },
     ...(editable ? {
       onbeforepaste: (changedWorksheet: JssInstance, data: Array<Array<{ value?: unknown }>>, x: number, y: number): unknown => {
-        pasteUndo.before(data, x, y);
-        return formulaPasteShift.onbeforepaste(changedWorksheet, data, x, y);
+        // the grid hands the position over as text ("1"): `x + col` would join it instead of adding
+        const pasteX = Number(x);
+        const pasteY = Number(y);
+        pasteUndo.before(data, pasteX, pasteY);
+        return formulaPasteShift.onbeforepaste(changedWorksheet, data, pasteX, pasteY);
       },
       onpaste: (): void => {
         pasteUndo.after();
