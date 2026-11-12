@@ -69,10 +69,25 @@
       return b;
     };
 
-    function card(name, alignment, referenceLength) {
+    // the alignment view opens on the sequence of this editor (and its Sequence tab brings back to this file)
+    function alignmentUrl() {
+      const upload = context && typeof context.upload === 'function' ? Number(context.upload()) : 0;
+      return 'alignment.php?entry=' + entryId + (upload > 0 ? '&ref=' + upload : '');
+    }
+
+    function card(name, alignment, referenceLength, openable) {
       const box = element('div', 'tool-card');
+      box.dataset.read = name;
       const top = element('div', 'tool-card-top');
       top.append(element('strong', '', name));
+      // a read of the entry opens on its own in the alignment view
+      if (openable) {
+        const open = element('a', 'tool-chip', 'Open');
+        open.href = alignmentUrl() + '&read=' + encodeURIComponent(name);
+        open.title = 'Open this alignment in the alignment view';
+        open.style.cssText = 'margin-left:6px;text-decoration:none;cursor:pointer';
+        top.append(open);
+      }
       box.append(top);
       if (!alignment) {
         box.append(element('div', 'tool-tags').appendChild(element('span', 'tool-tag tool-tag-bad', 'not found on this sequence')).parentNode);
@@ -172,7 +187,7 @@
         const reply = await response.json();
         const answer = reply.results;
         answer.forEach(function (result, index) {
-          const box = card(reads[index].name, result.alignment, reference.length);
+          const box = card(reads[index].name, result.alignment, reference.length, !items[index].file);
           // a sequencing file is kept as a read (a fasta read as name.read.fasta)
           if (items[index].file && body.canWrite === '1' && /\.(ab1|abi|scf|fasta|fa)$/i.test(items[index].file.name)) {
             const save = element('button', 'tool-btn', 'Save in the entry');
@@ -343,7 +358,7 @@
         run(everything(), results, message);
       });
       const view = element('a', 'tool-btn', 'Open the alignment view');
-      view.href = 'alignment.php?entry=' + entryId;
+      view.href = alignmentUrl();
       view.title = 'Switch to the alignment view, with the traces (the files dropped here come along)';
       // the files dropped on the tool are only in this page: they are handed to the alignment page, which aligns them with the reads of the entry
       view.addEventListener('click', async function (event) {
@@ -394,18 +409,63 @@
       choice.append(menu);
       actions.append(align, view, choice);
       host.append(actions, message, results);
-      // the alignments attached to the entry: each opens in the alignment view
-      if (clustals.length > 0) {
-        host.append(element('p', 'tool-muted', 'Alignments attached to this entry (Clustal files):'));
-        const attached = element('div', 'tool-actions');
-        clustals.forEach(function (upload) {
-          const open = element('a', 'tool-btn', upload.real_name);
-          open.href = 'alignment.php?entry=' + entryId + '&clustal=' + upload.id;
-          open.title = 'Open this alignment';
-          attached.append(open);
+      // choose what to look at: all the reads, one read (the cards below and the alignment view show only that read), or one of the
+      // alignments saved in the entry (Clustal files; each opens in the alignment view)
+      const pick = element('label', 'tool-muted', 'View ');
+      pick.title = 'Choose the alignment to look at';
+      const pickMenu = element('select', 'tool-btn');
+      pickMenu.setAttribute('aria-label', 'Alignment to view');
+      pick.append(pickMenu);
+      pick.style.display = 'block';
+      pick.style.marginTop = '8px';
+      const showChoice = function () {
+        const value = pickMenu.value;
+        const only = value.indexOf('read:') === 0 ? value.slice(5) : null;
+        Array.from(results.children).forEach(function (box) {
+          box.hidden = only !== null && box.dataset.read !== only;
         });
-        host.append(attached);
-      }
+        view.href = alignmentUrl() + (only !== null ? '&read=' + encodeURIComponent(only) : '');
+      };
+      const fillChoices = function () {
+        const before = pickMenu.value;
+        pickMenu.textContent = '';
+        const reads = Array.from(results.children).map(function (box) {
+          return box.dataset.read;
+        });
+        pickMenu.append(new Option(reads.length > 1 ? 'All ' + reads.length + ' reads' : (reads.length === 1 ? 'The read' : 'The reads of the entry'), ''));
+        if (reads.length > 1) {
+          const group = document.createElement('optgroup');
+          group.label = 'One read';
+          reads.forEach(function (name) {
+            group.append(new Option(name, 'read:' + name));
+          });
+          pickMenu.append(group);
+        }
+        if (clustals.length > 0) {
+          const group = document.createElement('optgroup');
+          group.label = 'Saved alignments (open in the alignment view)';
+          clustals.forEach(function (upload) {
+            group.append(new Option(upload.real_name, 'aln:' + upload.id));
+          });
+          pickMenu.append(group);
+        }
+        pickMenu.value = Array.from(pickMenu.options).some(function (o) {
+          return o.value === before;
+        }) ? before : '';
+        pick.hidden = pickMenu.options.length < 2;
+        showChoice();
+      };
+      pickMenu.addEventListener('change', function () {
+        if (pickMenu.value.indexOf('aln:') === 0) {
+          window.location.href = alignmentUrl() + '&clustal=' + pickMenu.value.slice(4);
+          return;
+        }
+        showChoice();
+      });
+      host.append(pick);
+      // the choices follow the cards (they are made when the reads are aligned or the saved alignment is shown)
+      new MutationObserver(fillChoices).observe(results, { childList: true });
+      fillChoices();
       // the last alignment of the entry, saved when the reads were aligned
       if (window.AlignmentStore && entryId) {
         window.AlignmentStore.load(entryId).then(function (saved) {
@@ -413,13 +473,17 @@
             return;
           }
           saved.results.forEach(function (item) {
-            const box = card(item.name + (item.source === 'dropped' ? ' (dropped)' : ''), item.alignment);
+            const box = card(item.name + (item.source === 'dropped' ? ' (dropped)' : ''), item.alignment, undefined, item.source !== 'dropped');
             results.append(box);
           });
           const length = String(editor.getState().sequenceData.sequence || '').length;
           const when = new Date(saved.savedAt);
           message.textContent = 'Saved alignment of ' + saved.results.length + (saved.results.length === 1 ? ' read' : ' reads') + ', ' + (Number.isNaN(when.getTime()) ? '' : when.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })) + '.' + (saved.referenceLength && saved.referenceLength !== length ? ' The sequence has changed since (' + saved.referenceLength + ' bases then, ' + length + ' now): align again.' : '');
           message.className = 'tool-message' + (saved.referenceLength && saved.referenceLength !== length ? ' error' : '');
+          // the saved alignment opens in the alignment view, where the algorithm and the name can be changed
+          const openSaved = element('a', '', ' Open the alignment');
+          openSaved.href = alignmentUrl();
+          message.append(openSaved);
         });
       }
     }

@@ -195,7 +195,9 @@
       window.AnnotateTab.setup(editor);
     }
     if (window.AlignTab) {
-      window.AlignTab.setup(editor, { entryId: entryId });
+      window.AlignTab.setup(editor, { entryId: entryId, upload: function () {
+        return uploadId;
+      } });
     }
     if (window.ToolsTab) {
       window.ToolsTab.setup(editor, { entryId: entryId, name: fileName });
