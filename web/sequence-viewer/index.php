@@ -153,6 +153,7 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   <script src="open-menu.js?v=<?= (int) filemtime(__DIR__ . '/open-menu.js') ?>"></script>
   <script src="lineage-paste.js?v=<?= (int) filemtime(__DIR__ . '/lineage-paste.js') ?>"></script>
   <script src="primers-panel.js?v=<?= (int) filemtime(__DIR__ . '/primers-panel.js') ?>"></script>
+  <script src="export-image.js?v=<?= (int) filemtime(__DIR__ . '/export-image.js') ?>"></script>
   <script src="circular-map.js?v=<?= (int) filemtime(__DIR__ . '/circular-map.js') ?>"></script>
   <script src="vendor/bio-parsers.umd.js"></script>
   <script src="enzymes-library.js?v=<?= (int) filemtime(__DIR__ . '/enzymes-library.js') ?>"></script>

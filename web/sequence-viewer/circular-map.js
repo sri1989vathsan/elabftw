@@ -989,10 +989,10 @@
       return [sequence.length, sequence.slice(0, 30), features, primers, selection.start, selection.end, state.caretPosition, JSON.stringify(state.restrictionEnzymes), JSON.stringify(state.annotationVisibility && state.annotationVisibility.featureTypesToHide), !!data.circular, host ? host.clientWidth + 'x' + host.clientHeight : '', document.body.dataset.mapStyle, zoom, shown('features'), shown('primers'), shown('sites'), shown('translations'), shown('orfs'), JSON.stringify(data.translations || null)].join('|');
     }
 
-    // the map as an SVG file: the styles the map has now are written into the file, so it looks the same elsewhere
-    function exportSvg() {
+    // the map as an SVG text: the styles the map has now are written into it, so it looks the same elsewhere
+    function styledSvg() {
       if (!svg) {
-        return;
+        return null;
       }
       const copy = svg.cloneNode(true);
       const live = svg.querySelectorAll('*');
@@ -1010,16 +1010,44 @@
       background.setAttribute('fill', document.body.dataset.mapStyle === 'dark' ? '#0f172a' : '#ffffff');
       copy.insertBefore(background, copy.firstChild);
       copy.setAttribute('xmlns', NS);
-      const blob = new Blob([new XMLSerializer().serializeToString(copy)], { type: 'image/svg+xml' });
+      return { text: new XMLSerializer().serializeToString(copy), width: Number(svg.getAttribute('width')) || 800, height: Number(svg.getAttribute('height')) || 800, name: String(dataNow().name || 'plasmid').replace(/[^\w.-]+/g, '_') + '-map' };
+    }
+
+    function saveBlob(blob, name) {
+      if (window.ExportImage) {
+        window.ExportImage.download(blob, name);
+        return;
+      }
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = String(dataNow().name || 'plasmid').replace(/[^\w.-]+/g, '_') + '-map.svg';
+      link.download = name;
       document.body.append(link);
       link.click();
       link.remove();
       window.setTimeout(function () {
         URL.revokeObjectURL(link.href);
       }, 2000);
+    }
+
+    function exportSvg() {
+      const made = styledSvg();
+      if (made) {
+        saveBlob(new Blob([made.text], { type: 'image/svg+xml' }), made.name + '.svg');
+      }
+    }
+
+    // the map as a PNG (three times the size on screen) or as a PDF with that picture in it
+    async function exportRaster(format) {
+      const made = styledSvg();
+      if (!made || !window.ExportImage) {
+        return;
+      }
+      try {
+        const canvas = await window.ExportImage.svgToCanvas(made.text, made.width, made.height, 3);
+        saveBlob(format === 'pdf' ? await window.ExportImage.canvasToPdf(canvas, 3) : await window.ExportImage.toBlob(canvas), made.name + '.' + format);
+      } catch (error) {
+        window.alert(error.message || String(error));
+      }
     }
 
     // the container of the circular map of the editor is taken over: its own drawing is hidden, ours is put in its place
@@ -1057,7 +1085,11 @@
       zoomLabel.textContent = Math.round(zoom * 100) + '%';
       controls.append(zoomLabel, window.ViewToggles ? window.ViewToggles.bar('map') : document.createElement('span'), button('Fit', 'Fit the map to the panel', function () {
         setZoom(1);
-      }), button('SVG', 'Save the map as an SVG image', exportSvg));
+      }), button('SVG', 'Save the map as an SVG image (vector)', exportSvg), button('PNG', 'Save the map as a PNG picture', function () {
+        exportRaster('png');
+      }), button('PDF', 'Save the map as a PDF file', function () {
+        exportRaster('pdf');
+      }));
       wrap.append(controls);
       // the wheel zooms the map (a trackpad pinch too), around the pointer; the map is moved by dragging it
       host.addEventListener('wheel', function (event) {

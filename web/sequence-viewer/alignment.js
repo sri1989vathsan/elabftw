@@ -472,6 +472,44 @@
     status.className = 'hidden';
   }
 
+  // the alignment as a picture or a PDF, drawn from its letters (the reference first), what is shown now
+  const imageButtons = [document.getElementById('export-png'), document.getElementById('export-pdf')];
+  function sheet() {
+    if (lastAligned) {
+      return { names: [lastAligned.referenceName].concat(lastAligned.names), rows: layout(lastAligned), referenceLength: lastAligned.referenceSequence.length };
+    }
+    if (clustalText) {
+      const items = parseClustal(clustalText);
+      return { names: items.map(function (item) {
+        return item.name;
+      }), rows: items.map(function (item) {
+        return item.aligned;
+      }), referenceLength: items[0].aligned.replace(/-/g, '').length };
+    }
+    return null;
+  }
+  imageButtons.forEach(function (button) {
+    button.addEventListener('click', async function () {
+      const data = sheet();
+      if (!data || !window.ExportImage) {
+        return;
+      }
+      const format = button.id === 'export-pdf' ? 'pdf' : 'png';
+      const label = button.textContent;
+      button.disabled = true;
+      button.textContent = '...';
+      try {
+        const title = document.getElementById('entry-title').textContent.trim() + ' - alignment of ' + (data.names.length - 1) + (data.names.length === 2 ? ' read' : ' reads') + ' - ' + new Date().toISOString().slice(0, 10);
+        const blob = await window.ExportImage.alignment(format, { title: title, names: data.names, rows: data.rows, referenceLength: data.referenceLength });
+        window.ExportImage.download(blob, (document.getElementById('entry-title').textContent.trim().replace(/[^A-Za-z0-9_.-]+/g, '_') || 'alignment') + '-alignment.' + format);
+      } catch (error) {
+        fail(error.message || String(error));
+      } finally {
+        button.disabled = false;
+        button.textContent = label;
+      }
+    });
+  });
   exportButton.addEventListener('click', function () {
     if (!lastAligned && !clustalText) {
       return;
@@ -680,6 +718,9 @@
       }
       window.alignmentView = window.createAlignmentView(document.getElementById('root'), options);
     };
+    imageButtons.forEach(function (button) {
+      button.hidden = false;
+    });
     exportButton.hidden = false;
     saveButton.hidden = false;
     nameInput.hidden = false;
@@ -774,6 +815,9 @@
     document.getElementById('title').textContent = file.real_name;
     // the saved alignment can be renamed (saved under another name), exported, and made again by another algorithm
     clustalText = text;
+    imageButtons.forEach(function (button) {
+      button.hidden = false;
+    });
     exportButton.hidden = false;
     saveButton.hidden = false;
     saveButton.disabled = false;

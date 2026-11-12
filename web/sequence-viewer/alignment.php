@@ -117,6 +117,8 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
     <span class="close-alignment" style="margin:0" title="The sequencing files (ab1, FASTA reads) as a zip, one folder for each plasmid">Download reads:
       <a href="download-reads.php?entry=<?= $entryId ?>">this plasmid</a> &middot; <a href="download-reads.php?all=1">all plasmids</a>
     </span>
+    <button type="button" id="export-png" class="close-alignment" hidden title="Save the alignment as a PNG picture (letters, differences and positions; no traces)">PNG</button>
+    <button type="button" id="export-pdf" class="close-alignment" hidden title="Save the alignment as a PDF file (vector, in pages; letters, differences and positions; no traces)">PDF</button>
     <button type="button" id="export-clustal" class="close-alignment" hidden title="Download this alignment as a Clustal file">Export Clustal</button>
     <input type="text" id="alignment-name" class="close-alignment" hidden maxlength="60" placeholder="Name of this alignment" aria-label="Name of this alignment" title="A new name keeps this alignment next to the others of the entry, the name of a saved one replaces it" style="width:170px">
     <button type="button" id="save-alignment" class="close-alignment" hidden title="Keep this alignment in the files of the entry (a Clustal file, opened again from there), with the sequencing files (ab1) that were dropped on this page">Save in the entry</button>
@@ -132,6 +134,7 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
   </div>
   <div id="summary" hidden></div>
   <div id="root"></div>
+  <script src="export-image.js?v=<?= (int) filemtime(__DIR__ . '/export-image.js') ?>"></script>
   <script src="alignment-store.js?v=<?= (int) filemtime(__DIR__ . '/alignment-store.js') ?>"></script>
   <script src="vendor/bio-parsers.umd.js"></script>
   <script src="vendor/ove.umd.js"></script>
