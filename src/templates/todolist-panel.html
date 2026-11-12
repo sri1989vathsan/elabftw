@@ -18,7 +18,11 @@
         <span class='slider'></span>
       </label>
     </div>
-    <div id='googleSyncRow'></div>
+    {# Administrator switch (Sysconfig > Google Tasks sync). When off, the section is not rendered at all and
+       googleSync.ts never starts. A client ID set by the administrator replaces the per-browser one. #}
+    {% if App.Config.configArr.google_tasks_enabled|default('0') == '1' %}
+      <div id='googleSyncRow' data-client-id='{{ App.Config.configArr.google_tasks_client_id|default('')|e('html_attr') }}'></div>
+    {% endif %}
     <div data-save-hidden='todolistMainDiv'>
       <div id='todolist'></div>
     </div>

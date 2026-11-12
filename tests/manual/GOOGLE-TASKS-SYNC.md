@@ -20,8 +20,11 @@ directly, like the user copying the list by hand.
 
 ## Off by default
 
-Nothing is loaded from Google and nothing is sent until a user pastes an OAuth
-client ID and clicks Connect. Until the Content-Security-Policy is changed (below)
+A server administrator must first switch it on (Sysconfig, "Google Tasks sync").
+While the switch is off (the default, migration 108) the to-do panel does not
+render the section at all and the browser code never starts. After that,
+nothing is loaded from Google and nothing is sent until a user pastes an OAuth
+client ID (unless the administrator set one for everyone) and clicks Connect. Until the Content-Security-Policy is changed (below)
 Connect fails with a message and the rest of eLabFTW is unaffected.
 
 ## What is sent
@@ -70,8 +73,9 @@ Connect fails with a message and the rest of eLabFTW is unaffected.
    JavaScript origins* add exactly the address users open eLabFTW at
    (`https://elab.yourgroup.ethz.ch`, or `http://localhost:PORT` for a local test).
    Google rejects bare IP addresses and names like `.local`.
-4. Give users the client ID (it is not secret). Each user pastes it into the
-   Google Tasks panel in the to-do sidebar, once per browser.
+4. In Sysconfig, section "Google Tasks sync": tick *Offer Google Tasks sync in the
+   to-do panel*. Optionally enter the client ID there (it is not secret) so users
+   do not have to; otherwise each user pastes it into the panel once per browser.
 5. Allow Google in the Content-Security-Policy. In
    `containers/elabimg/nginx/common.conf`, the default policy (the
    `Content-Security-Policy` line near `Strict-Transport-Security`) needs:
@@ -108,6 +112,9 @@ Connect fails with a message and the rest of eLabFTW is unaffected.
 
 | # | Steps | Expect |
 |---|-------|--------|
+| G0 | Switch off in Sysconfig (default); open the To-do panel | No Google section; no request to Google; sync code does nothing even if a client ID and "enabled" are left in the browser |
+| G0b | Switch on, client ID empty | Section appears with the client ID box |
+| G0c | Switch on, client ID set in Sysconfig | Section appears without a client ID box; Connect uses that ID |
 | G1 | Open To-do panel with no client ID | Section is open; Connect shows "Enter a Google client ID first." |
 | G2 | Enter client ID, Connect while CSP blocks Google | Red message about the Content-Security-Policy; nothing else breaks |
 | G3 | Allow Google, Connect, sign in | List "eLabFTW" appears in Google Tasks with all open to-dos and steps |

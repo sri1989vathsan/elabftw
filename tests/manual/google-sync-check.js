@@ -7,6 +7,9 @@
  *   }
  *   await googleSyncCheck();      // returns {pass, results}
  *
+ * The administrator switch must be ON first (Sysconfig > Google Tasks sync), or the
+ * panel row does not exist and the check stops at once.
+ *
  * It creates four "GSTUB" to-dos, plays "the user in Google" (tick, rename,
  * move a date, add, delete) and checks what eLabFTW and the fake Google list
  * end up with. It deletes its to-dos and its settings afterwards.
