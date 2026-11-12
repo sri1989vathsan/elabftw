@@ -23,7 +23,7 @@
   {% endif %}
 {% endfor %}
 {% if sequenceFiles|length > 0 or clustalFiles|length > 0 or Entity.entityData.category_title == 'Plasmids' %}
-  <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-dna' data-scroll-btn-label='{{ 'Sequence'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='sequenceDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Sequence'|trans }} ({{ sequenceFiles|length }})</h3>{{ guide.info('guide-sequence-editor', 'Sequence editor') }}
+  <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-dna' data-scroll-btn-label='{{ 'Sequence'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='sequenceDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Sequence'|trans }} ({{ referenceFiles|length }})</h3>{{ guide.info('guide-sequence-editor', 'Sequence editor') }}
   <div class='mt-2 ml-3' id='sequenceDiv' data-save-hidden='sequenceDiv'>
     {% macro fileLink(upload, entryId, icon, accessKey, removable) %}
       <a class='btn btn-secondary btn-sm' target='_blank' rel='noopener' title='{{ 'Open in the sequence editor'|trans }}' href='sequence-viewer/index.php?entry={{ entryId }}&amp;upload={{ upload.id }}&amp;f={{ upload.long_name|e('url') }}&amp;name={{ upload.real_name|e('url') }}&amp;storage={{ upload.storage }}{% if accessKey %}&amp;access_key={{ accessKey|e('url') }}{% endif %}'><i class='fas {{ icon }} fa-fw mr-1'></i>{{ upload.real_name }} <i class='fas fa-arrow-up-right-from-square fa-fw ml-1 fa-xs' aria-hidden='true'></i></a>{% if removable %}<button type='button' class='btn btn-sm btn-danger-ghost ml-1' data-remove-upload='{{ upload.id }}' data-remove-name='{{ upload.real_name|e('html_attr') }}' data-remove-entry='{{ entryId }}' title='{{ 'Remove this file from the entry'|trans }}' aria-label='{{ 'Remove'|trans }} {{ upload.real_name|e('html_attr') }}'><i class='fas fa-xmark fa-fw'></i></button>{% endif %}
@@ -36,9 +36,12 @@
     {% else %}
       <ul class='list-inline mb-3'>
         {% for upload in referenceFiles %}
-          <li class='list-inline-item'>{{ _self.fileLink(upload, Entity.id, 'fa-dna', accessKey|default(''), mode == 'edit') }}</li>
+          <li class='list-inline-item mb-2'>{{ _self.fileLink(upload, Entity.id, 'fa-dna', accessKey|default(''), mode == 'edit') }}</li>
         {% endfor %}
       </ul>
+      {% if referenceFiles|length > 1 %}
+        <p class='small text-danger mb-3'><i class='fas fa-triangle-exclamation fa-fw mr-1'></i>{{ 'A plasmid has one primary sequence, and this one has'|trans }} {{ referenceFiles|length }}. {% if mode == 'edit' %}{{ 'Remove the files that are not the sequence of the plasmid (the cross next to a file). Sequencing reads belong in the alignment view.'|trans }}{% else %}{{ 'Open the entry for editing to remove the extra ones.'|trans }}{% endif %}</p>
+      {% endif %}
     {% endif %}
 
     {# on the edit page the sequence can be attached here, as a file or pasted (see sequence-add.js) #}
@@ -50,41 +53,17 @@
       <script src='sequence-add.js?v={{ 'now'|date('YmdHi') }}'></script>
     {% endif %}
 
-    {# the sequencing reads (ab1), aligned to a plasmid sequence of the entry on the server #}
-    <h4 class='h6 text-muted mb-1'>{{ 'Sequencing reads'|trans }} ({{ readFiles|length }})</h4>
-    {% if readFiles|length == 0 %}
-      <p class='text-muted mb-3'>{{ 'Attach the ab1 files of the sequencing to look at the traces and to align them to the plasmid. A FASTA read dropped on the alignment is kept here too (as name.read.fasta).'|trans }}</p>
-    {% else %}
-      <ul class='list-inline mb-2'>
-        {% for upload in readFiles %}
-          <li class='list-inline-item'>{{ _self.fileLink(upload, Entity.id, 'fa-wave-square', accessKey|default(''), mode == 'edit') }}</li>
-        {% endfor %}
-      </ul>
-      {% if referenceFiles|length > 0 %}
-        <p class='mb-2'>
-          {% for reference in referenceFiles %}
-            <a class='btn btn-primary btn-sm mr-1' target='_blank' rel='noopener' href='sequence-viewer/alignment.php?entry={{ Entity.id }}&amp;ref={{ reference.id }}'><i class='fas fa-grip-lines fa-fw mr-1'></i>{{ 'Align the reads to'|trans }} {{ reference.real_name }}</a>
-          {% endfor %}
-        </p>
-      {% else %}
-        <p class='small text-muted mb-2'>{{ 'Attach the plasmid sequence (a GenBank or FASTA file) to align the reads.'|trans }}</p>
-      {% endif %}
+    {# the sequencing reads (ab1, name.read.fasta) and the saved alignments (Clustal files) are not listed with the sequence: they are
+       looked at, added and saved in the alignment view, which opens from here #}
+    {% if referenceFiles|length > 0 %}
+      <p class='mb-3'>
+        <a class='btn btn-primary btn-sm' target='_blank' rel='noopener' href='sequence-viewer/alignment.php?entry={{ Entity.id }}&amp;ref={{ referenceFiles|first.id }}'><i class='fas fa-grip-lines fa-fw mr-1'></i>{{ 'Alignment of sequencing reads'|trans }}{% if readFiles|length > 0 or clustalFiles|length > 0 %} ({{ readFiles|length }} {{ 'reads'|trans }}, {{ clustalFiles|length }} {{ 'saved'|trans }}){% endif %}</a>
+        <span class='small text-muted ml-1'>{{ 'Drop ab1 or FASTA reads there to align them to this plasmid.'|trans }}</span>
+      </p>
+    {% elseif readFiles|length > 0 or clustalFiles|length > 0 %}
+      <p class='small text-muted mb-3'>{{ 'Attach the plasmid sequence (a GenBank or FASTA file) to align the sequencing reads.'|trans }}</p>
     {% endif %}
-    {# alignments (Clustal files, for example exported from Benchling): opened in the alignment view #}
-    <h4 class='h6 text-muted mb-1'>{{ 'Alignments'|trans }} ({{ clustalFiles|length }})</h4>
-    {% if clustalFiles|length == 0 %}
-      <p class='text-muted mb-3'>{{ 'Attach a Clustal file (.aln, .clustal) to look at an alignment of this plasmid here.'|trans }}</p>
-    {% else %}
-      <ul class='list-inline mb-3'>
-        {% for upload in clustalFiles %}
-          <li class='list-inline-item'>
-            <a class='btn btn-secondary btn-sm' target='_blank' rel='noopener' title='{{ 'Open the alignment'|trans }}' href='sequence-viewer/alignment.php?entry={{ Entity.id }}&amp;clustal={{ upload.id }}'><i class='fas fa-grip-lines fa-fw mr-1'></i>{{ upload.real_name }} <i class='fas fa-arrow-up-right-from-square fa-fw ml-1 fa-xs' aria-hidden='true'></i></a>
-            {% if mode == 'edit' %}<button type='button' class='btn btn-sm btn-danger-ghost ml-1' data-remove-upload='{{ upload.id }}' data-remove-name='{{ upload.real_name|e('html_attr') }}' data-remove-entry='{{ Entity.id }}' title='{{ 'Remove this file from the entry'|trans }}' aria-label='{{ 'Remove'|trans }} {{ upload.real_name|e('html_attr') }}'><i class='fas fa-xmark fa-fw'></i></button>{% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-    {% if sequenceFiles|length > 0 %}
+    {% if referenceFiles|length > 0 %}
       <p class='small text-muted mb-2'>{{ 'Changes made in the editor are saved as a new version of the file. The earlier versions are kept:'|trans }} <a href='?mode=view&amp;id={{ Entity.id }}&amp;state=1,2#filesDiv'>{{ 'show the versions'|trans }}</a>.</p>
     {% endif %}
   </div>
