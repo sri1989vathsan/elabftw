@@ -134,7 +134,7 @@
       try {
         const response = await fetch('../api/v2/inventory/' + entry.id + '/uploads', { credentials: 'same-origin' });
         const files = (response.ok ? await response.json() : []).filter(function (file) {
-          return Number(file.state) === 1 && SEQUENCE_FILE.test(file.real_name || '');
+          return Number(file.state) === 1 && SEQUENCE_FILE.test(file.real_name || '') && !/\.read\.(fasta|fa)$/i.test(file.real_name);
         });
         return { entry: entry, files: files };
       } catch (error) {
@@ -153,34 +153,29 @@
       return;
     }
     withFiles.forEach(function (row) {
-      // the newest file of each name
-      const newest = {};
-      row.files.forEach(function (file) {
-        if (!newest[file.real_name] || Number(file.id) > Number(newest[file.real_name].id)) {
-          newest[file.real_name] = file;
-        }
+      // one row for each entry: its primary sequence, the oldest sequence file (a later file of that kind is a copy), not the sequencing reads
+      const file = row.files.reduce(function (oldest, candidate) {
+        return Number(candidate.id) < Number(oldest.id) ? candidate : oldest;
       });
-      Object.keys(newest).forEach(function (name) {
-        const file = newest[name];
-        const item = element('button', 'open-item');
-        item.type = 'button';
-        item.append(
-          element('strong', '', (row.entry.custom_id ? '#' + row.entry.custom_id + ' ' : '') + row.entry.title),
-          element('span', 'open-file', name),
-        );
-        item.addEventListener('click', function () {
-          const query = new URLSearchParams({
-            entry: String(row.entry.id),
-            upload: String(file.id),
-            f: file.long_name,
-            name: file.real_name,
-            storage: String(file.storage || 1),
-          }).toString();
-          add(row.entry.id, query, row.entry.title);
-          item.classList.add('opened');
-        });
-        results.appendChild(item);
+      const name = file.real_name;
+      const item = element('button', 'open-item');
+      item.type = 'button';
+      item.append(
+        element('strong', '', (row.entry.custom_id ? '#' + row.entry.custom_id + ' ' : '') + row.entry.title),
+        element('span', 'open-file', name),
+      );
+      item.addEventListener('click', function () {
+        const query = new URLSearchParams({
+          entry: String(row.entry.id),
+          upload: String(file.id),
+          f: file.long_name,
+          name: file.real_name,
+          storage: String(file.storage || 1),
+        }).toString();
+        add(row.entry.id, query, row.entry.title);
+        item.classList.add('opened');
       });
+      results.appendChild(item);
     });
   }
 
