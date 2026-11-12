@@ -7,6 +7,18 @@
   'use strict';
   const body = document.body.dataset;
 
+  // the algorithm of the alignment, kept for the next time and shared with the alignment view
+  const ALGORITHMS = [['builtin', 'Built-in'], ['mafft', 'MAFFT'], ['clustalo', 'Clustal Omega']];
+  function algorithmChoice() {
+    try {
+      const saved = window.localStorage.getItem('elabftw-aligner');
+      return ALGORITHMS.some(function (a) {
+        return a[0] === saved;
+      }) ? saved : 'builtin';
+    } catch (e) {
+      return 'builtin';
+    }
+  }
   function element(tag, className, text) {
     const node = document.createElement(tag);
     if (className) {
@@ -136,12 +148,17 @@
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': body.csrf },
-          body: JSON.stringify({ entry: entryId, reference: reference, reads: reads }),
+          body: JSON.stringify({ entry: entryId, reference: reference, reads: reads, algorithm: algorithmChoice() }),
         });
         if (!response.ok) {
-          throw new Error('The alignment failed (' + response.status + ').');
+          // the answer says why, for example that a program is missing on the server
+          const failure = await response.json().catch(function () {
+            return {};
+          });
+          throw new Error(failure.error || 'The alignment failed (' + response.status + ').');
         }
-        const answer = (await response.json()).results;
+        const reply = await response.json();
+        const answer = reply.results;
         answer.forEach(function (result, index) {
           const box = card(reads[index].name, result.alignment);
           if (items[index].file && body.canWrite === '1') {
@@ -154,7 +171,7 @@
           }
           results.append(box);
         });
-        message.textContent = '';
+        message.textContent = reply.algorithm && reply.algorithm !== 'builtin' ? 'Aligned with ' + reply.label + '.' : '';
         // the result stays with the entry and is there the next time the tool is opened
         if (window.AlignmentStore && entryId) {
           window.AlignmentStore.save(entryId, body.csrf, {
@@ -290,7 +307,29 @@
       const view = element('a', 'tool-btn', 'Open the alignment view');
       view.href = 'alignment.php?entry=' + entryId;
       view.title = 'Switch to the alignment view, with the traces';
-      actions.append(align, view);
+      // the algorithm: the built-in aligner, MAFFT or Clustal Omega; a new choice aligns the reads again
+      const choice = element('label', 'tool-muted', 'Algorithm ');
+      choice.title = 'The program that aligns the reads to the sequence';
+      const menu = element('select', 'tool-btn');
+      menu.setAttribute('aria-label', 'Algorithm');
+      ALGORITHMS.forEach(function (a) {
+        const option = element('option', '', a[1]);
+        option.value = a[0];
+        menu.append(option);
+      });
+      menu.value = algorithmChoice();
+      menu.addEventListener('change', function () {
+        try {
+          window.localStorage.setItem('elabftw-aligner', menu.value);
+        } catch (e) {
+          // the choice is then only kept until the page is closed: nothing else to do
+        }
+        if (results.children.length > 0) {
+          run(everything(), results, message);
+        }
+      });
+      choice.append(menu);
+      actions.append(align, view, choice);
       host.append(actions, message, results);
       // the alignments attached to the entry: each opens in the alignment view
       if (clustals.length > 0) {

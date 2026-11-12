@@ -75,6 +75,28 @@
     return turned;
   }
 
+  // the algorithm of the alignment, chosen in the bar and shared with the Align tab of the sequence editor
+  function algorithmChoice() {
+    try {
+      const saved = window.localStorage.getItem('elabftw-aligner');
+      return saved === 'mafft' || saved === 'clustalo' ? saved : 'builtin';
+    } catch (e) {
+      return 'builtin';
+    }
+  }
+  const algorithmMenu = document.getElementById('algorithm');
+  if (algorithmMenu) {
+    algorithmMenu.value = algorithmChoice();
+    algorithmMenu.addEventListener('change', function () {
+      try {
+        window.localStorage.setItem('elabftw-aligner', algorithmMenu.value);
+      } catch (e) {
+        // only kept until the page is closed
+      }
+      window.location.reload();
+    });
+  }
+
   async function align(referenceSequence, reads) {
     const response = await fetch('align.php', {
       method: 'POST',
@@ -86,10 +108,15 @@
         reads: reads.map(function (read) {
           return { name: read.name, sequence: read.sequence };
         }),
+        algorithm: algorithmChoice(),
       }),
     });
     if (!response.ok) {
-      throw new Error('The alignment failed (' + response.status + ').');
+      // the answer says why, for example that a program is missing on the server
+      const failure = await response.json().catch(function () {
+        return {};
+      });
+      throw new Error(failure.error || 'The alignment failed (' + response.status + ').');
     }
     return (await response.json()).results;
   }
