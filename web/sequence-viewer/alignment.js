@@ -183,6 +183,12 @@
   const nameInput = document.getElementById('alignment-name');
   const savedMenu = document.getElementById('saved-alignments');
   const savedLabel = document.getElementById('saved-label');
+  const readMenu = document.getElementById('read-view');
+  const readLabel = document.getElementById('read-label');
+  // the title of the entry, as the start of the name of an alignment
+  function baseName() {
+    return document.getElementById('entry-title').textContent.trim().replace(/[^A-Za-z0-9_.()#+ -]+/g, '_').slice(0, 40);
+  }
 
   // a fasta read is kept in the entry as name.read.fasta: the entry lists it as a sequencing read and not as the sequence of the plasmid
   function readName(name) {
@@ -387,6 +393,7 @@
     })) {
       throw new Error('The sequences of the file are not all the same length.');
     }
+    readLabel.hidden = true;
     viewCount++;
     window.alignmentView = window.createAlignmentView(document.getElementById('root'), {
       id: 'clustal-alignment-' + viewCount,
@@ -416,6 +423,7 @@
   }));
   // another name (or more reads) can be saved again
   nameInput.addEventListener('input', function () {
+    nameInput.dataset.auto = '0';
     saveButton.disabled = false;
     saveButton.textContent = 'Save in the entry';
   });
@@ -572,33 +580,54 @@
         alignmentData: { sequence: alignedReference },
       };
     };
-    // the traces of the reads are shown under their bases from the start
-    viewCount++;
-    const options = { id: 'sequencing-alignment-' + viewCount, alignmentAnnotationVisibility: { chromatogram: true } };
-    // lastAligned is what the export to Clustal writes: the reference and the reads that were placed. The view shows the same columns:
-    // one alignment of everything (it opens on the reads, the base letters show when zoomed in)
-    lastAligned = { referenceName: files.reference.real_name, referenceSequence: referenceSequence, found: found, names: found.map(function (item) {
-      return item.track.sequenceData.name;
-    }) };
-    const rows = layout(lastAligned);
-    options.alignmentTracks = [referenceTrack(rows[0])].concat(found.map(function (item, index) {
-      return Object.assign({}, item.track, { alignmentData: { sequence: rows[index + 1] } });
-    }));
+    // the whole alignment (every read placed) or one read on its own, chosen in the Show menu; Export and Save take what is shown
+    const showReads = function (chosen) {
+      const shown = chosen === null ? found : [found[chosen]];
+      // the traces of the reads are shown under their bases from the start
+      viewCount++;
+      const options = { id: 'sequencing-alignment-' + viewCount, alignmentAnnotationVisibility: { chromatogram: true } };
+      // lastAligned is what the export to Clustal writes: the reference and the reads that are shown. The view shows the same columns:
+      // one alignment of everything (it opens on the reads, the base letters show when zoomed in)
+      lastAligned = { referenceName: files.reference.real_name, referenceSequence: referenceSequence, found: shown, names: shown.map(function (item) {
+        return item.track.sequenceData.name;
+      }) };
+      const rows = layout(lastAligned);
+      options.alignmentTracks = [referenceTrack(rows[0])].concat(shown.map(function (item, index) {
+        return Object.assign({}, item.track, { alignmentData: { sequence: rows[index + 1] } });
+      }));
+      // the view opens where the reads are, not at the start of the reference
+      const firstStart = Math.min.apply(null, shown.map(function (item) {
+        return item.alignment.refStart;
+      }));
+      options.scrollPercentageToJumpTo = Math.max(0, (firstStart - 20) / referenceSequence.length);
+      saveButton.disabled = false;
+      saveButton.textContent = 'Save in the entry';
+      if (chosen !== null && nameInput.dataset.auto === '1') {
+        nameInput.value = baseName() + ' ' + found[chosen].track.sequenceData.name.replace(/\.[^.]+$/, '').replace(/ \(dropped\)$/, '');
+      } else if (chosen === null && nameInput.dataset.auto === '1') {
+        nameInput.value = baseName() + ' alignment';
+      }
+      window.alignmentView = window.createAlignmentView(document.getElementById('root'), options);
+    };
     exportButton.hidden = false;
     saveButton.hidden = false;
-    saveButton.disabled = false;
-    saveButton.textContent = 'Save in the entry';
     nameInput.hidden = false;
     if (nameInput.value === '') {
-      nameInput.value = document.getElementById('entry-title').textContent.trim().replace(/[^A-Za-z0-9_.()#+ -]+/g, '_').slice(0, 40) + ' alignment';
+      nameInput.value = baseName() + ' alignment';
+      nameInput.dataset.auto = '1';
     }
-    // the view opens where the reads are, not at the start of the reference
-    const firstStart = Math.min.apply(null, found.map(function (item) {
-      return item.alignment.refStart;
-    }));
-    options.scrollPercentageToJumpTo = Math.max(0, (firstStart - 20) / referenceSequence.length);
+    // each read can be looked at on its own
+    readMenu.textContent = '';
+    readMenu.append(new Option('All ' + found.length + ' reads together', ''));
+    found.forEach(function (item, index) {
+      readMenu.append(new Option(item.track.sequenceData.name, String(index)));
+    });
+    readLabel.hidden = found.length < 2;
+    readMenu.onchange = function () {
+      showReads(readMenu.value === '' ? null : Number(readMenu.value));
+    };
     status.className = 'hidden';
-    window.alignmentView = window.createAlignmentView(document.getElementById('root'), options);
+    showReads(null);
   }
 
   if (typeof window.createAlignmentView !== 'function' || !window.bioParsers) {
