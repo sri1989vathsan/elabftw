@@ -19,6 +19,8 @@ test('the to-do panel only renders the sync row when the administrator switched 
   const guarded = /\{% if App\.Config\.configArr\.google_tasks_enabled\|default\('0'\) == '1' %\}\s*<div id='googleSyncRow'[^>]*data-client-id='[^']*'[^>]*><\/div>\s*\{% endif %\}/;
   assert.match(html, guarded);
   assert.equal(html.match(/id='googleSyncRow'/g).length, 1);
+  // under the list component, which ends with the calendar link section
+  assert.ok(html.indexOf("id='googleSyncRow'") > html.indexOf("id='todolist'"));
 });
 
 test('the admin page offers the switch and the client ID', () => {
