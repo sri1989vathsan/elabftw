@@ -23,24 +23,26 @@
   {% endif %}
 {% endfor %}
 {% if sequenceFiles|length > 0 or clustalFiles|length > 0 or Entity.entityData.category_title == 'Plasmids' %}
-  <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-dna' data-scroll-btn-label='{{ 'Sequence'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='sequenceDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Sequence'|trans }} ({{ referenceFiles|length }})</h3>{{ guide.info('guide-sequence-editor', 'Sequence editor') }}
+  <h3 title='{{ 'Toggle visibility'|trans }}' data-scroll-btn='fa-dna' data-scroll-btn-label='{{ 'Sequence'|trans }}' data-action='toggle-next' data-opened-icon='fa-caret-down' data-closed-icon='fa-caret-right' class='d-inline togglable-section-title' tabindex='0' role='button' aria-expanded='true' aria-controls='sequenceDiv'><i class='fas fa-caret-down fa-fw mr-2'></i>{{ 'Sequence'|trans }}</h3>{{ guide.info('guide-sequence-editor', 'Sequence editor') }}
   <div class='mt-2 ml-3' id='sequenceDiv' data-save-hidden='sequenceDiv'>
     {% macro fileLink(upload, entryId, icon, accessKey, removable) %}
       <a class='btn btn-secondary btn-sm' target='_blank' rel='noopener' title='{{ 'Open in the sequence editor'|trans }}' href='sequence-viewer/index.php?entry={{ entryId }}&amp;upload={{ upload.id }}&amp;f={{ upload.long_name|e('url') }}&amp;name={{ upload.real_name|e('url') }}&amp;storage={{ upload.storage }}{% if accessKey %}&amp;access_key={{ accessKey|e('url') }}{% endif %}'><i class='fas {{ icon }} fa-fw mr-1'></i>{{ upload.real_name }} <i class='fas fa-arrow-up-right-from-square fa-fw ml-1 fa-xs' aria-hidden='true'></i></a>{% if removable %}<button type='button' class='btn btn-sm btn-danger-ghost ml-1' data-remove-upload='{{ upload.id }}' data-remove-name='{{ upload.real_name|e('html_attr') }}' data-remove-entry='{{ entryId }}' title='{{ 'Remove this file from the entry'|trans }}' aria-label='{{ 'Remove'|trans }} {{ upload.real_name|e('html_attr') }}'><i class='fas fa-xmark fa-fw'></i></button>{% endif %}
     {% endmacro %}
 
-    {# the sequence of the plasmid: GenBank, FASTA, SnapGene #}
-    <h4 class='h6 text-muted mb-1'>{{ 'Plasmid sequence'|trans }} ({{ referenceFiles|length }})</h4>
-    {% if referenceFiles|length == 0 %}
+    {# the sequence of the plasmid: GenBank, FASTA, SnapGene. A plasmid has one primary sequence: the oldest sequence file of the entry (the list
+       is newest first); any later file of that kind is a copy and is not shown here #}
+    {% set primaryFiles = referenceFiles|length > 0 ? [referenceFiles|last] : [] %}
+    <h4 class='h6 text-muted mb-1'>{{ 'Plasmid sequence'|trans }}</h4>
+    {% if primaryFiles|length == 0 %}
       <p class='text-muted mb-3'>{{ 'Attach a GenBank, FASTA or SnapGene file in the local files to view the sequence of the plasmid here.'|trans }}</p>
     {% else %}
       <ul class='list-inline mb-3'>
-        {% for upload in referenceFiles %}
+        {% for upload in primaryFiles %}
           <li class='list-inline-item mb-2'>{{ _self.fileLink(upload, Entity.id, 'fa-dna', accessKey|default(''), mode == 'edit') }}</li>
         {% endfor %}
       </ul>
-      {% if referenceFiles|length > 1 %}
-        <p class='small text-danger mb-3'><i class='fas fa-triangle-exclamation fa-fw mr-1'></i>{{ 'A plasmid has one primary sequence, and this one has'|trans }} {{ referenceFiles|length }}. {% if mode == 'edit' %}{{ 'Remove the files that are not the sequence of the plasmid (the cross next to a file). Sequencing reads belong in the alignment view.'|trans }}{% else %}{{ 'Open the entry for editing to remove the extra ones.'|trans }}{% endif %}</p>
+      {% if referenceFiles|length > 1 and mode == 'edit' %}
+        <p class='small text-muted mb-3'><i class='fas fa-circle-info fa-fw mr-1'></i>{{ 'This entry has'|trans }} {{ referenceFiles|length - 1 }} {{ 'more sequence file(s) of the same kind, not shown here. A plasmid has one primary sequence: remove the copies in the files of the entry.'|trans }}</p>
       {% endif %}
     {% endif %}
 
@@ -57,7 +59,7 @@
        looked at, added and saved in the alignment view, which opens from here #}
     {% if referenceFiles|length > 0 %}
       <p class='mb-3'>
-        <a class='btn btn-primary btn-sm' target='_blank' rel='noopener' href='sequence-viewer/alignment.php?entry={{ Entity.id }}&amp;ref={{ referenceFiles|first.id }}'><i class='fas fa-grip-lines fa-fw mr-1'></i>{{ 'Alignment of sequencing reads'|trans }}{% if readFiles|length > 0 or clustalFiles|length > 0 %} ({{ readFiles|length }} {{ 'reads'|trans }}, {{ clustalFiles|length }} {{ 'saved'|trans }}){% endif %}</a>
+        <a class='btn btn-primary btn-sm' target='_blank' rel='noopener' href='sequence-viewer/alignment.php?entry={{ Entity.id }}&amp;ref={{ (referenceFiles|last).id }}'><i class='fas fa-grip-lines fa-fw mr-1'></i>{{ 'Alignment of sequencing reads'|trans }}{% if readFiles|length > 0 or clustalFiles|length > 0 %} ({{ readFiles|length }} {{ 'reads'|trans }}, {{ clustalFiles|length }} {{ 'saved'|trans }}){% endif %}</a>
         <span class='small text-muted ml-1'>{{ 'Drop ab1 or FASTA reads there to align them to this plasmid.'|trans }}</span>
       </p>
     {% elseif readFiles|length > 0 or clustalFiles|length > 0 %}
