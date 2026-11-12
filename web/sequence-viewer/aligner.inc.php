@@ -60,6 +60,18 @@ final class SequenceAligner
 
     private const int NEG = -1000000000;
 
+    // a read this long against its window (cells of the table) is aligned inside a band that follows its path, not over the whole table:
+    // a whole plasmid (12 kb) would take half a minute otherwise
+    private const int BAND_CELLS = 4000000;
+
+    // the read is cut in pieces of this length to follow its path along the reference; the band is this wide on each side of the path
+    private const int PIECE = 100;
+
+    private const int BAND = 100;
+
+    // a piece whose place is further than this from the one before it is not believed (the path then stays where it was)
+    private const int MAX_JUMP = 3000;
+
     public static function clean(string $sequence): string
     {
         return preg_replace('/[^ACGTN]/', 'N', strtoupper($sequence)) ?? '';
@@ -99,11 +111,19 @@ final class SequenceAligner
 
         // the same place in the first turn of a circular reference
         $diagonal = $circular ? $best['diagonal'] % $n : $best['diagonal'];
+        $limit = $engine === ExternalAligner::BUILTIN ? null : ExternalAligner::maxReadLength($engine);
+        if ($limit !== null && $m > $limit) {
+            throw new RuntimeException(ExternalAligner::label($engine) . ' is limited to reads of ' . $limit . ' bases on this server (this one has ' . $m . '): use MAFFT or the built-in aligner.');
+        }
         $windowStart = max(0, $diagonal - self::MARGIN);
         $windowEnd = min(strlen($unrolled), $diagonal + $m + self::MARGIN);
         $window = substr($unrolled, $windowStart, $windowEnd - $windowStart);
         // the built-in aligner, or MAFFT / Clustal Omega on the same read and the same stretch of the reference (aligner-external.inc.php)
-        $aligned = $engine === ExternalAligner::BUILTIN ? self::alignToWindow($best['read'], $window) : ExternalAligner::align($engine, $best['read'], $window);
+        $aligned = match (true) {
+            $engine !== ExternalAligner::BUILTIN => ExternalAligner::align($engine, $best['read'], $window),
+            $m * strlen($window) > self::BAND_CELLS => self::alignBanded($best['read'], $window, $diagonal - $windowStart),
+            default => self::alignToWindow($best['read'], $window),
+        };
         if ($aligned === null) {
             throw new RuntimeException(ExternalAligner::label($engine) . ' did not give an alignment.');
         }
@@ -277,6 +297,205 @@ final class SequenceAligner
                     $j--;
                 } else {
                     $state = $from === 1 ? 'E' : 'F';
+                }
+            } elseif ($state === 'E') {
+                $alignedReference .= $window[$j - 1];
+                $alignedRead .= '-';
+                $state = ($cell & 4) !== 0 ? 'E' : 'H';
+                $j--;
+            } else {
+                $alignedReference .= '-';
+                $alignedRead .= $read[$i - 1];
+                $state = ($cell & 8) !== 0 ? 'F' : 'H';
+                $i--;
+            }
+        }
+
+        return array(
+            'reference' => strrev($alignedReference),
+            'read' => strrev($alignedRead),
+            'windowStart' => $j,
+            'windowEnd' => $endJ,
+            'score' => $score,
+        );
+    }
+
+    /**
+     * The same alignment as alignToWindow (all of the read, any part of the window, affine gaps) for a long read: only the cells near the
+     * path of the read are filled. The path is found from the k-mers the read shares with the window, piece by piece, so a stretch of the
+     * read that is missing from (or added to) the reference is followed too: the band is wider where the path jumps.
+     *
+     * @return array{reference: string, read: string, windowStart: int, windowEnd: int, score: int}
+     */
+    private static function alignBanded(string $read, string $window, int $startDiagonal): array
+    {
+        $m = strlen($read);
+        $w = strlen($window);
+        // the k-mers of the window
+        $index = array();
+        for ($p = 0; $p <= $w - self::K; $p++) {
+            $kmer = substr($window, $p, self::K);
+            if (!str_contains($kmer, 'N')) {
+                $index[$kmer][] = $p;
+            }
+        }
+        // the place (diagonal of the window) of each piece of the read: the one most of its k-mers agree on, near the place of the piece before
+        $pieces = intdiv($m + self::PIECE - 1, self::PIECE);
+        $diagonals = array();
+        $previous = $startDiagonal;
+        for ($s = 0; $s < $pieces; $s++) {
+            $votes = array();
+            $to = min($m - self::K, ($s + 1) * self::PIECE - 1);
+            for ($i = $s * self::PIECE; $i <= $to; $i++) {
+                $kmer = substr($read, $i, self::K);
+                if (!isset($index[$kmer]) || count($index[$kmer]) > 4) {
+                    continue;
+                }
+                foreach ($index[$kmer] as $position) {
+                    $d = $position - $i;
+                    if (abs($d - $previous) <= self::MAX_JUMP) {
+                        $bin = intdiv($d + 100000000, 8);
+                        $votes[$bin] = ($votes[$bin] ?? 0) + 1;
+                    }
+                }
+            }
+            if ($votes !== array() && max($votes) >= 3) {
+                $bin = array_search(max($votes), $votes, true);
+                $previous = $bin * 8 - 100000000 + 4;
+            }
+            $diagonals[$s] = $previous;
+        }
+        // the band of each row: around the path (the place of the piece, between the middles of two pieces it goes from one to the other)
+        $lo = array(0 => 0);
+        $hi = array(0 => $w);
+        $offset = array();
+        $total = 0;
+        $half = intdiv(self::PIECE, 2);
+        for ($i = 1; $i <= $m; $i++) {
+            $t = ($i - $half) / self::PIECE;
+            $s0 = (int) floor($t);
+            if ($s0 < 0) {
+                $d = $diagonals[0];
+                $extra = 0;
+            } elseif ($s0 >= $pieces - 1) {
+                $d = $diagonals[$pieces - 1];
+                $extra = 0;
+            } else {
+                $frac = $t - $s0;
+                $d = $diagonals[$s0] + ($diagonals[$s0 + 1] - $diagonals[$s0]) * $frac;
+                $extra = abs($diagonals[$s0 + 1] - $diagonals[$s0]);
+            }
+            $centre = (int) round($d) + $i;
+            $from = max(1, $centre - self::BAND - $extra);
+            $to = min($w, $centre + self::BAND + $extra);
+            if ($from > $w) {
+                $from = $w;
+            }
+            if ($to < $from) {
+                $to = $from;
+            }
+            $lo[$i] = $from;
+            $hi[$i] = $to;
+            $offset[$i] = $total;
+            $total += $to - $from + 1;
+        }
+        $trace = str_repeat("\0", $total + 1);
+
+        $width = $w + 1;
+        // two rows of H and of F over the whole width, only the band of a row is written: the cells of the row before the last are put back to NEG
+        $rowsH = array(array_fill(0, $width, 0), array_fill(0, $width, self::NEG));
+        $rowsF = array(array_fill(0, $width, self::NEG), array_fill(0, $width, self::NEG));
+        $previousH = &$rowsH[0];
+        $previousF = &$rowsF[0];
+        $currentH = &$rowsH[1];
+        $currentF = &$rowsF[1];
+        $previousFrom = 0;
+        $previousTo = $w;
+        $olderFrom = 0;
+        $olderTo = -1;
+        for ($i = 1; $i <= $m; $i++) {
+            // what this buffer held (row i - 2) is put back to NEG
+            for ($j = $olderFrom; $j <= $olderTo; $j++) {
+                $currentH[$j] = self::NEG;
+                $currentF[$j] = self::NEG;
+            }
+            $from = $lo[$i];
+            $to = $hi[$i];
+            $e = self::NEG;
+            $readBase = $read[$i - 1];
+            $base = $offset[$i] - $from;
+            for ($j = $from; $j <= $to; $j++) {
+                $refBase = $window[$j - 1];
+                if ($readBase === 'N' || $refBase === 'N') {
+                    $pair = 0;
+                } else {
+                    $pair = $readBase === $refBase ? self::MATCH : self::MISMATCH;
+                }
+                $openE = ($j > $from ? $currentH[$j - 1] : self::NEG) + self::GAP_OPEN + self::GAP_EXTEND;
+                $extendE = $e + self::GAP_EXTEND;
+                $eExtends = $extendE > $openE;
+                $e = $eExtends ? $extendE : $openE;
+                $openF = $previousH[$j] + self::GAP_OPEN + self::GAP_EXTEND;
+                $extendF = $previousF[$j] + self::GAP_EXTEND;
+                $fExtends = $extendF > $openF;
+                $f = $fExtends ? $extendF : $openF;
+                $currentF[$j] = $f;
+
+                $h = $previousH[$j - 1] + $pair;
+                $from_ = 0;
+                if ($e > $h) {
+                    $h = $e;
+                    $from_ = 1;
+                }
+                if ($f > $h) {
+                    $h = $f;
+                    $from_ = 2;
+                }
+                $currentH[$j] = $h;
+                $trace[$base + $j] = chr($from_ | ($eExtends ? 4 : 0) | ($fExtends ? 8 : 0));
+            }
+            // the row written becomes the previous one
+            $olderFrom = $previousFrom;
+            $olderTo = $previousTo;
+            $previousFrom = $from;
+            $previousTo = $to;
+            [$rowsH[0], $rowsH[1]] = [$rowsH[1], $rowsH[0]];
+            [$rowsF[0], $rowsF[1]] = [$rowsF[1], $rowsF[0]];
+        }
+        // after the last swap the last row is in rowsH[0]
+        $lastH = $rowsH[0];
+        $endJ = $lo[$m];
+        $score = self::NEG;
+        for ($j = $lo[$m]; $j <= $hi[$m]; $j++) {
+            if ($lastH[$j] > $score) {
+                $score = $lastH[$j];
+                $endJ = $j;
+            }
+        }
+
+        $alignedReference = '';
+        $alignedRead = '';
+        $i = $m;
+        $j = $endJ;
+        $state = 'H';
+        while ($i > 0) {
+            if ($j < $lo[$i] || $j > $hi[$i]) {
+                // out of the band: what is left of the read hangs before the window
+                $alignedReference .= '-';
+                $alignedRead .= $read[$i - 1];
+                $i--;
+                continue;
+            }
+            $cell = ord($trace[$offset[$i] - $lo[$i] + $j]);
+            if ($state === 'H') {
+                $from_ = $cell & 3;
+                if ($from_ === 0) {
+                    $alignedReference .= $window[$j - 1];
+                    $alignedRead .= $read[$i - 1];
+                    $i--;
+                    $j--;
+                } else {
+                    $state = $from_ === 1 ? 'E' : 'F';
                 }
             } elseif ($state === 'E') {
                 $alignedReference .= $window[$j - 1];

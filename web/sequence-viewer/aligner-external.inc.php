@@ -58,6 +58,14 @@ final class ExternalAligner
         'clustalo' => array('path' => '/usr/local/bin/clustalo', 'label' => 'Clustal Omega', 'args' => array('--force', '--seqtype=DNA', '--outfmt=fa', '--threads=1')),
     );
 
+    /** the longest read an algorithm takes here: Clustal Omega needs memory by the square of the length (the container has 2 GB, a read of 12 kb ends in its being killed) */
+    private const array MAX_READ = array('clustalo' => 5000);
+
+    public static function maxReadLength(string $engine): ?int
+    {
+        return self::MAX_READ[$engine] ?? null;
+    }
+
     /** the name of an algorithm that can be asked for: the built-in one or a program of the image; null for anything else */
     public static function normalize(mixed $engine): ?string
     {
