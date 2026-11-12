@@ -210,6 +210,17 @@
   </div>
   {% endif %}
 
+  <h2 class='mb-3 p-2 pl-3 section-title' id='googleTasksIntegration'>{{ 'Google Tasks sync'|trans }}</h2>
+  <div class='pl-3 mb-5' id='googleTasksSettings'>
+    <p class='smallgray'>{{ 'Lets each user copy their own to-dos and steps to their own Google Tasks from their browser. Nothing is sent from the server. It stays off until you enable it here, and Google must also be allowed in the Content-Security-Policy. Titles and dates (and details, if the user ticks it) leave this installation for Google, so check your organization rules first.'|trans }}</p>
+    {% include 'binary-setting.html' with {'label': 'Offer Google Tasks sync in the to-do panel'|trans, 'slug': 'google_tasks_enabled'} %}
+    <div class='d-flex justify-content-between'>
+      <label for='google_tasks_client_id' class='col-form-label'>{{ 'Google OAuth client ID (optional, used for all users)'|trans }}</label>
+      <input class='form-control col-md-5' data-trigger='blur' data-model='config' data-target='google_tasks_client_id' type='text' autocomplete='off' value='{{ App.Config.configArr.google_tasks_client_id|default('') }}' id='google_tasks_client_id' placeholder='1234567890-abc.apps.googleusercontent.com'>
+    </div>
+    <p class='smallgray'>{{ 'If empty, users enter their own client ID in their browser.'|trans }}</p>
+  </div>
+
 
   <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Revisions system configuration'|trans }}</h2>
   <div class='pl-3'>

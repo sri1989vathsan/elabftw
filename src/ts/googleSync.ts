@@ -102,6 +102,16 @@ function currentToken(): Token | null {
   }
 }
 
+// A client ID set by the administrator (Sysconfig > Google Tasks sync) is delivered on the row
+// itself and wins over the one a user typed into this browser.
+function adminClientId(): string {
+  return document.getElementById('googleSyncRow')?.dataset.clientId?.trim() ?? '';
+}
+
+function clientIdValue(): string | null {
+  return adminClientId() || read(KEY_CLIENT);
+}
+
 function loadGoogleScript(): Promise<GoogleGlobal> {
   const existing = (window as unknown as { google?: GoogleGlobal }).google;
   if (existing?.accounts?.oauth2) {
@@ -291,7 +301,7 @@ function setStatus(text: string, isError = false): void {
 }
 
 async function runSync(): Promise<void> {
-  const clientId = read(KEY_CLIENT);
+  const clientId = clientIdValue();
   if (!clientId || read(KEY_ENABLED) !== '1') {
     return;
   }
@@ -362,7 +372,7 @@ function scheduleSync(): void {
 }
 
 async function connect(): Promise<void> {
-  const clientId = read(KEY_CLIENT);
+  const clientId = clientIdValue();
   if (!clientId) {
     setStatus('Enter a Google client ID first.', true);
     return;
@@ -414,7 +424,7 @@ function render(): void {
   }
   host.replaceChildren();
 
-  const clientId = read(KEY_CLIENT) ?? '';
+  const clientId = clientIdValue() ?? '';
   const enabled = read(KEY_ENABLED) === '1';
   const connected = enabled && currentToken() !== null;
 
@@ -449,7 +459,9 @@ function render(): void {
     write(KEY_CLIENT, input.value.trim() || null);
     render();
   });
-  body.appendChild(input);
+  if (adminClientId() === '') {
+    body.appendChild(input);
+  }
 
   const label = document.createElement('label');
   label.className = 'small d-block mb-2';
