@@ -30,6 +30,8 @@ $title = '';
 $reference = null;
 $reads = array();
 $clustal = null;
+// every alignment kept in the entry (Clustal files), to be opened from the menu of the page
+$saved = array();
 try {
     $Entity = new Inventory($App->Users, $entryId > 0 ? $entryId : null);
     $Entity->readOne();
@@ -43,6 +45,7 @@ try {
             'storage' => (int) $upload['storage'],
         );
         if (preg_match('/\.(aln|clustal|clw)$/i', $file['real_name']) === 1) {
+            $saved[] = array('id' => $file['id'], 'name' => $file['real_name']);
             // an alignment of the entry that is opened as it is (?clustal=<upload id>)
             if ((int) ($_GET['clustal'] ?? 0) === $file['id']) {
                 $clustal = $file;
@@ -64,7 +67,7 @@ try {
 header('Content-Type: text/html; charset=utf-8');
 $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $sequenceUrl = $reference === null ? '' : 'index.php?' . http_build_query(array('entry' => $entryId, 'upload' => $reference['id'], 'f' => $reference['long_name'], 'name' => $reference['real_name'], 'storage' => $reference['storage']));
-$files = json_encode(array('reference' => $reference, 'reads' => array_values($reads), 'clustal' => $clustal), JSON_THROW_ON_ERROR);
+$files = json_encode(array('reference' => $reference, 'reads' => array_values($reads), 'clustal' => $clustal, 'saved' => $saved), JSON_THROW_ON_ERROR);
 ?>
 <!doctype html>
 <html lang="en">
@@ -94,7 +97,11 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
       <select id="algorithm" aria-label="Algorithm"><option value="builtin">Built-in</option><option value="mafft">MAFFT</option><option value="clustalo">Clustal Omega</option></select>
     </label>
     <button type="button" id="export-clustal" class="close-alignment" hidden title="Download this alignment as a Clustal file">Export Clustal</button>
+    <input type="text" id="alignment-name" class="close-alignment" hidden maxlength="60" placeholder="Name of this alignment" aria-label="Name of this alignment" title="A new name keeps this alignment next to the others of the entry, the name of a saved one replaces it" style="width:170px">
     <button type="button" id="save-alignment" class="close-alignment" hidden title="Keep this alignment in the files of the entry (a Clustal file, opened again from there), with the reads that were dropped on this page">Save in the entry</button>
+    <label class="close-alignment" id="saved-label" title="The alignments kept in this entry: each opens on its own" style="margin:0" hidden>Saved
+      <select id="saved-alignments" aria-label="Saved alignments"></select>
+    </label>
     <label class="close-alignment" title="Show an alignment from a Clustal file" style="cursor:pointer;margin:0">Open Clustal<input type="file" id="import-clustal" accept=".aln,.clustal,.clw,.txt" hidden></label>
     <span id="status" role="status">Loading the sequences...</span>
   </div>

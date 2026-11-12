@@ -180,6 +180,54 @@
   let lastAligned = null;
   const exportButton = document.getElementById('export-clustal');
   const saveButton = document.getElementById('save-alignment');
+  const nameInput = document.getElementById('alignment-name');
+  const savedMenu = document.getElementById('saved-alignments');
+  const savedLabel = document.getElementById('saved-label');
+
+  // ---- the alignments kept in the entry: each opens on its own (alignment.php?clustal=<id>), the reads of the entry are aligned afresh from the first choice
+  function fillSaved(list) {
+    savedMenu.textContent = '';
+    const head = document.createElement('option');
+    head.value = '';
+    head.textContent = list.length === 0 ? 'none yet' : 'Open one (' + list.length + ')';
+    savedMenu.append(head);
+    list.forEach(function (item) {
+      const option = document.createElement('option');
+      option.value = String(item.id);
+      option.textContent = item.name.replace(/\.(aln|clustal|clw)$/i, '');
+      option.selected = files.clustal && files.clustal.id === item.id;
+      savedMenu.append(option);
+    });
+    if (files.clustal) {
+      const reads = document.createElement('option');
+      reads.value = 'reads';
+      reads.textContent = 'The reads of the entry';
+      savedMenu.append(reads);
+    }
+    savedLabel.hidden = list.length === 0 && !files.clustal;
+  }
+  fillSaved(files.saved || []);
+  savedMenu.addEventListener('change', function () {
+    if (savedMenu.value === '') {
+      return;
+    }
+    window.location.href = 'alignment.php?entry=' + entryId + (savedMenu.value === 'reads' ? '' : '&clustal=' + savedMenu.value);
+  });
+  async function refreshSaved() {
+    try {
+      const response = await fetch('../api/v2/inventory/' + entryId + '/uploads', { credentials: 'same-origin' });
+      if (response.ok) {
+        const list = (await response.json()).filter(function (upload) {
+          return /\.(aln|clustal|clw)$/i.test(upload.real_name);
+        }).map(function (upload) {
+          return { id: Number(upload.id), name: upload.real_name };
+        });
+        fillSaved(list);
+      }
+    } catch (error) {
+      // the menu stays as it was
+    }
+  }
   const importInput = document.getElementById('import-clustal');
 
   // ---- Clustal: the reference and the reads in the columns of the reference (the bases a read has more than the reference make columns of their own)
@@ -357,19 +405,26 @@
   });
   // the alignment goes into the files of the entry as a Clustal file (it is opened from there as it is), and the reads that were dropped
   // on the page go with it, so that the alignment can be made again
+  // the reads of the entry and the dropped ones that are in its files already: saving again under another name does not add them twice
+  const keptReads = new Set((files.reads || []).map(function (read) {
+    return read.real_name;
+  }));
+  // another name (or more reads) can be saved again
+  nameInput.addEventListener('input', function () {
+    saveButton.disabled = false;
+    saveButton.textContent = 'Save in the entry';
+  });
   saveButton.addEventListener('click', async function () {
     if (!lastAligned || !entryId || !window.AlignmentStore) {
       return;
     }
     saveButton.disabled = true;
     saveButton.textContent = 'Saving...';
-    const title = document.getElementById('entry-title').textContent.trim().replace(/[^A-Za-z0-9_.-]+/g, '_') || 'alignment';
-    let saved = await window.AlignmentStore.saveText(entryId, body.csrf, title + '_alignment.aln', buildClustal(lastAligned));
-    const known = new Set((files.reads || []).map(function (read) {
-      return read.real_name;
-    }));
+    // a new name keeps the alignment next to the others of the entry, the name of a saved one replaces it
+    const name = (nameInput.value.trim().replace(/\.(aln|clustal|clw)$/i, '').replace(/[^A-Za-z0-9_.()#+ -]+/g, '_').slice(0, 60) || 'alignment') + '.aln';
+    let saved = await window.AlignmentStore.saveText(entryId, body.csrf, name, buildClustal(lastAligned));
     for (const file of dropped) {
-      if (!saved || known.has(file.name)) {
+      if (!saved || keptReads.has(file.name)) {
         continue;
       }
       const form = new FormData();
@@ -377,12 +432,18 @@
       try {
         const response = await fetch('../api/v2/inventory/' + entryId + '/uploads', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': body.csrf }, body: form });
         saved = response.ok;
+        if (saved) {
+          keptReads.add(file.name);
+        }
       } catch (error) {
         saved = false;
       }
     }
     saveButton.textContent = saved ? 'Saved in the entry' : 'Could not save (no right to edit the entry?)';
     saveButton.disabled = saved;
+    if (saved) {
+      await refreshSaved();
+    }
   });
   importInput.addEventListener('change', async function () {
     const file = importInput.files && importInput.files[0];
@@ -519,6 +580,10 @@
     saveButton.hidden = false;
     saveButton.disabled = false;
     saveButton.textContent = 'Save in the entry';
+    nameInput.hidden = false;
+    if (nameInput.value === '') {
+      nameInput.value = document.getElementById('entry-title').textContent.trim().replace(/[^A-Za-z0-9_.()#+ -]+/g, '_').slice(0, 40) + ' alignment';
+    }
     // the view opens where the reads are, not at the start of the reference
     const firstStart = Math.min.apply(null, found.map(function (item) {
       return item.alignment.refStart;
