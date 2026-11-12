@@ -299,7 +299,27 @@
           nameBox.append(element('span', 'tool-chip', upload.real_name));
         });
         dropped.forEach(function (file) {
-          nameBox.append(element('span', 'tool-chip', file.name + ' (dropped)'));
+          const chip = element('span', 'tool-chip', file.name + ' (dropped) ');
+          // a file dropped by mistake is taken out again, and the rest is aligned again
+          const remove = element('button', '', '\u00d7');
+          remove.type = 'button';
+          remove.title = 'Remove ' + file.name + ' from the alignment';
+          remove.setAttribute('aria-label', 'Remove ' + file.name);
+          remove.style.cssText = 'border:0;background:none;cursor:pointer;font:inherit;padding:0 0 0 2px;color:inherit';
+          remove.addEventListener('click', function () {
+            dropped.splice(dropped.indexOf(file), 1);
+            names();
+            const items = everything();
+            if (items.length > 0) {
+              run(items, results, message);
+            } else {
+              results.textContent = '';
+              message.textContent = '';
+              message.className = 'tool-message';
+            }
+          });
+          chip.append(remove);
+          nameBox.append(chip);
         });
       };
       names();

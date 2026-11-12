@@ -122,7 +122,22 @@
     return (await response.json()).results;
   }
 
-  function describe(name, alignment, referenceLength) {
+  // a file dropped by mistake is taken out again with this button
+  function removeButton(line, name, onRemove) {
+    if (!onRemove) {
+      return;
+    }
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '\u00d7';
+    remove.setAttribute('aria-label', 'Remove ' + name);
+    remove.title = 'Remove ' + name + ' from the alignment';
+    remove.style.cssText = 'margin-left:8px;border:0;background:none;cursor:pointer;font:inherit;font-size:16px;line-height:1;padding:0 4px;color:#888';
+    remove.addEventListener('click', onRemove);
+    line.append(remove);
+  }
+
+  function describe(name, alignment, referenceLength, onRemove) {
     const line = document.createElement('p');
     const label = document.createElement('span');
     label.className = 'read-name';
@@ -133,6 +148,7 @@
       none.className = 'bad';
       none.textContent = 'not found on the reference';
       line.append(none);
+      removeButton(line, name, onRemove);
       return line;
     }
     const parts = [
@@ -156,6 +172,7 @@
     text.className = differences.length > 0 ? 'bad' : 'good';
     text.textContent = parts.join(' | ');
     line.append(text);
+    removeButton(line, name, onRemove);
     return line;
   }
 
@@ -402,9 +419,19 @@
       const parsed = await readFile(file);
       reads.push({ name: file.real_name, sequence: String(parsed.sequence).toUpperCase(), parsed: parsed });
     }
-    for (const file of dropped) {
-      const parsed = await readLocal(file);
-      reads.push({ name: file.name + ' (dropped)', sequence: String(parsed.sequence).toUpperCase(), parsed: parsed });
+    const unreadable = [];
+    for (const file of Array.from(dropped)) {
+      try {
+        const parsed = await readLocal(file);
+        reads.push({ name: file.name + ' (dropped)', sequence: String(parsed.sequence).toUpperCase(), parsed: parsed });
+      } catch (error) {
+        // a file that is not a sequence is left out (and forgotten), the others are aligned
+        dropped.splice(dropped.indexOf(file), 1);
+        unreadable.push(file.name);
+      }
+    }
+    if (reads.length === 0) {
+      throw new Error(unreadable.length > 0 ? unreadable.join(', ') + ' could not be read as a sequence.' : 'Drop the sequencing reads (ab1 files) on this page to align them to the sequence.');
     }
     status.textContent = 'Aligning...';
     const results = await align(referenceSequence, reads, reference.circular === true);
@@ -421,7 +448,15 @@
     const tracks = [];
     const found = [];
     results.forEach(function (result, index) {
-      summary.append(describe(reads[index].name, result.alignment, referenceSequence.length));
+      const droppedIndex = index - (files.reads || []).length;
+      summary.append(describe(reads[index].name, result.alignment, referenceSequence.length, droppedIndex < 0 ? null : function () {
+        dropped.splice(droppedIndex, 1);
+        if ((files.reads || []).length + dropped.length === 0) {
+          window.location.reload();
+          return;
+        }
+        start();
+      }));
       if (!result.alignment) {
         return;
       }
@@ -435,6 +470,12 @@
           chromatogramData: chromatogram,
         },
       });
+    });
+    unreadable.forEach(function (name) {
+      const note = document.createElement('p');
+      note.className = 'bad';
+      note.textContent = name + ' could not be read as a sequence and was left out.';
+      summary.append(note);
     });
     summary.hidden = false;
     document.body.classList.add('has-summary');
