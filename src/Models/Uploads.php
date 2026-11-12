@@ -58,6 +58,8 @@ use function str_replace;
 use function stream_copy_to_stream;
 use function stream_get_meta_data;
 use function str_contains;
+use function preg_match;
+use function stripos;
 
 /**
  * All about the file uploads
@@ -322,6 +324,35 @@ final class Uploads extends AbstractRest
         return $this->readOne();
     }
 
+    /**
+     * Fork-only. A plasmid of the database has one primary sequence: a GenBank, FASTA or SnapGene file that is not a sequencing read
+     * (name.read.fasta is a read) is refused when the plasmid has one already. The sequence is changed in the sequence editor (a new
+     * version of the same file), or the file is removed first.
+     */
+    private function assertSinglePrimarySequence(string $realName): void
+    {
+        $isSequence = static fn(string $name): bool => preg_match('/\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i', $name) === 1
+            && preg_match('/\.read\.(fasta|fa)$/i', $name) !== 1;
+        if (!($this->Entity instanceof Inventory) || $this->Entity->id === null || !$isSequence($realName)) {
+            return;
+        }
+        $req = $this->Db->prepare('SELECT c.title FROM inventory AS i JOIN inventory_categories AS c ON c.id = i.category WHERE i.id = :id');
+        $req->bindValue(':id', $this->Entity->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        if (stripos((string) $req->fetchColumn(), 'plasmid') === false) {
+            return;
+        }
+        $req = $this->Db->prepare('SELECT real_name FROM uploads WHERE item_id = :id AND type = :type AND state = 1');
+        $req->bindValue(':id', $this->Entity->id, PDO::PARAM_INT);
+        $req->bindValue(':type', $this->Entity->entityType->value);
+        $this->Db->execute($req);
+        foreach ($req->fetchAll(PDO::FETCH_COLUMN) as $existing) {
+            if ($isSequence((string) $existing)) {
+                throw new ImproperActionException(sprintf('This plasmid has its sequence already (%s): a plasmid has one primary sequence. Remove that file first, or change the sequence in the sequence editor.', $existing));
+            }
+        }
+    }
+
     #[Override]
     public function postAction(Action $action, array $reqBody): int
     {
@@ -330,6 +361,9 @@ final class Uploads extends AbstractRest
             ? Guard::getNonEmptyStringValueOfRequiredParam('real_name', $reqBody)
             : ($this->uploadData['real_name']
                 ?? Guard::getNonEmptyStringValueOfRequiredParam('real_name', $reqBody));
+        if ($action === Action::Create || $action === Action::CreateFromString) {
+            $this->assertSinglePrimarySequence($realName);
+        }
         return match ($action) {
             Action::Create => $this->create(
                 new CreateUploadFromUploadedFile(new UploadedFile($reqBody['filePath'], $realName), $reqBody['comment'])

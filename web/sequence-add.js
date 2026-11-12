@@ -68,7 +68,11 @@
       body: form,
     });
     if (!response.ok) {
-      throw new Error('The sequence could not be attached (' + response.status + ').');
+      // a plasmid has one primary sequence: the server says so when there is one already
+      const said = await response.json().catch(function () {
+        return null;
+      });
+      throw new Error(said && said.message ? said.message : 'The sequence could not be attached (' + response.status + ').');
     }
   }
 
