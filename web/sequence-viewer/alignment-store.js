@@ -7,13 +7,14 @@
   'use strict';
   const NAME = 'alignments.json';
 
-  async function listing(entryId) {
+  async function listing(entryId, name) {
+    const wanted = name || NAME;
     const response = await fetch('../api/v2/inventory/' + entryId + '/uploads', { credentials: 'same-origin' });
     if (!response.ok) {
       return [];
     }
     return (await response.json()).filter(function (upload) {
-      return upload.real_name === NAME;
+      return upload.real_name === wanted;
     }).sort(function (a, b) {
       return Number(b.id) - Number(a.id);
     });
@@ -58,6 +59,28 @@
     }
   }
 
+  /**
+   * Keeps a text file (the alignment as a Clustal file, say) in the files of the entry: one of that name is replaced (the earlier one
+   * stays in the history of the entry), else it is added.
+   * @returns {Promise<boolean>}
+   */
+  async function saveText(entryId, csrf, name, text) {
+    try {
+      const existing = await listing(entryId, name);
+      const form = new FormData();
+      form.append('file', new File([text], name, { type: 'text/plain' }));
+      let url = '../api/v2/inventory/' + entryId + '/uploads';
+      if (existing.length > 0) {
+        url += '/' + existing[0].id;
+        form.append('action', 'replace');
+      }
+      const response = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf }, body: form });
+      return response.ok;
+    } catch (error) {
+      return false;
+    }
+  }
+
   /** @returns {Promise<{savedAt: string, referenceLength: number, results: Array}|null>} */
   async function load(entryId) {
     try {
@@ -78,5 +101,5 @@
     }
   }
 
-  window.AlignmentStore = { save: save, load: load };
+  window.AlignmentStore = { save: save, load: load, saveText: saveText };
 })();

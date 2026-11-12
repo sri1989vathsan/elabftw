@@ -93,7 +93,8 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
     <label class="close-alignment" title="The program that aligns the reads to the sequence" style="margin:0">Algorithm
       <select id="algorithm" aria-label="Algorithm"><option value="builtin">Built-in</option><option value="mafft">MAFFT</option><option value="clustalo">Clustal Omega</option></select>
     </label>
-    <button type="button" id="export-clustal" class="close-alignment" hidden title="Save this alignment as a Clustal file">Export Clustal</button>
+    <button type="button" id="export-clustal" class="close-alignment" hidden title="Download this alignment as a Clustal file">Export Clustal</button>
+    <button type="button" id="save-alignment" class="close-alignment" hidden title="Keep this alignment in the files of the entry (a Clustal file, opened again from there), with the reads that were dropped on this page">Save in the entry</button>
     <label class="close-alignment" title="Show an alignment from a Clustal file" style="cursor:pointer;margin:0">Open Clustal<input type="file" id="import-clustal" accept=".aln,.clustal,.clw,.txt" hidden></label>
     <span id="status" role="status">Loading the sequences...</span>
   </div>
