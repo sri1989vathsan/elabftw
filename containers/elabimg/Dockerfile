@@ -197,6 +197,49 @@ RUN git init \
 RUN make -C src CC="gcc -std=gnu17" -j"$(getconf _NPROCESSORS_ONLN)" primer3_core \
     && strip -s src/primer3_core
 
+#####################
+# ALIGNERS BUILDER  #
+#####################
+# MAFFT and Clustal Omega, the two multiple alignment programs of the sequence editor (web/sequence-viewer/aligner-external.inc.php).
+# Alpine does not package them: they are built from the sources, which are checked against their sha256.
+FROM alpine:3.23 AS aligners-builder
+
+# https://mafft.cbrc.jp/alignment/software/source.html
+ARG MAFFT_VERSION=7.525
+ARG MAFFT_SHA256=edb34ae9b26d6b55328c18fa060ed741bca8cd599c2f4f8fad0e0871c8082265
+# Clustal Omega 1.2.4 needs argtable2; both tarballs come from the Debian pool, as clustal.org refuses automated downloads
+ARG CLUSTALO_SHA256=8683d2286d663a46412c12a0c789e755e7fd77088fb3bc0342bb71667f05a3ee
+ARG ARGTABLE2_SHA256=8f77e8a7ced5301af6e22f47302fdbc3b1ff41f2b83c43c77ae5ca041771ddbf
+
+RUN apk add --no-cache build-base automake curl
+
+WORKDIR /build
+
+RUN curl -fsSL -o mafft.tgz "https://mafft.cbrc.jp/alignment/software/mafft-${MAFFT_VERSION}-without-extensions-src.tgz" \
+    && curl -fsSL -o clustalo.tgz https://deb.debian.org/debian/pool/main/c/clustalo/clustalo_1.2.4.orig.tar.gz \
+    && curl -fsSL -o argtable2.tgz https://deb.debian.org/debian/pool/main/a/argtable2/argtable2_13.orig.tar.gz \
+    && echo "${MAFFT_SHA256}  mafft.tgz" | sha256sum -c - \
+    && echo "${CLUSTALO_SHA256}  clustalo.tgz" | sha256sum -c - \
+    && echo "${ARGTABLE2_SHA256}  argtable2.tgz" | sha256sum -c - \
+    && tar xzf mafft.tgz && tar xzf clustalo.tgz && tar xzf argtable2.tgz
+
+# the sources use old style declarations that the C23 default of the compiler refuses
+RUN make -C mafft-*/core PREFIX=/opt/mafft CC="gcc -std=gnu17" -j"$(getconf _NPROCESSORS_ONLN)" \
+    && make -C mafft-*/core PREFIX=/opt/mafft install
+
+# the configure scripts of 2012 do not know this platform: the current config.guess and config.sub replace theirs
+RUN for dir in argtable2-13 clustal-omega-1.2.4; do \
+        for f in $(find "$dir" -name config.sub -o -name config.guess); do cp /usr/share/automake-*/"$(basename "$f")" "$f"; done; \
+    done \
+    && build="$(gcc -dumpmachine)" \
+    && cd argtable2-13 \
+    && ./configure --build="$build" --prefix=/opt/argtable --disable-shared CC="gcc -std=gnu17 -include ctype.h -include stdlib.h -include string.h" \
+    && make -j"$(getconf _NPROCESSORS_ONLN)" && make install \
+    && cd ../clustal-omega-1.2.4 \
+    && ./configure --build="$build" --prefix=/opt/clustalo CC="gcc -std=gnu17" CXX="g++ -std=gnu++17" CPPFLAGS=-I/opt/argtable/include LDFLAGS=-L/opt/argtable/lib \
+    && make -j"$(getconf _NPROCESSORS_ONLN)" && make install \
+    && strip -s /opt/clustalo/bin/clustalo
+
 #############################
 # ELABFTW + NGINX + PHP-FPM #
 #############################
@@ -225,6 +268,11 @@ RUN mkdir /var/cache/nginx
 
 # OpenBabel
 COPY --from=openbabel-builder /build/openbabel/build/bin/obabel /usr/local/bin/obabel
+
+# MAFFT and Clustal Omega (the alignment programs of the sequence editor)
+COPY --from=aligners-builder /opt/mafft /opt/mafft
+COPY --from=aligners-builder /opt/clustalo/bin/clustalo /usr/local/bin/clustalo
+RUN ln -s /opt/mafft/bin/mafft /usr/local/bin/mafft
 
 # Primer3 (primer design on the server, GPL-2.0)
 COPY --from=primer3-builder /build/primer3/src/primer3_core /usr/local/bin/primer3_core
