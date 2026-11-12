@@ -28,8 +28,12 @@ require_once dirname(__DIR__) . '/app/init.inc.php';
 $entryId = (int) ($_GET['entry'] ?? 0);
 $title = '';
 $reference = null;
+$referenceFixed = false;
 $reads = array();
 $clustal = null;
+// ?clustal=3 opens one saved alignment, ?clustal=3,5 several of them together
+$wantedClustals = array_values(array_unique(array_filter(array_map('intval', explode(',', (string) ($_GET['clustal'] ?? ''))))));
+$clustals = array();
 // every alignment kept in the entry (Clustal files), to be opened from the menu of the page
 $saved = array();
 try {
@@ -46,15 +50,19 @@ try {
         );
         if (preg_match('/\.(aln|clustal|clw)$/i', $file['real_name']) === 1) {
             $saved[] = array('id' => $file['id'], 'name' => $file['real_name']);
-            // an alignment of the entry that is opened as it is (?clustal=<upload id>)
-            if ((int) ($_GET['clustal'] ?? 0) === $file['id']) {
-                $clustal = $file;
+            // the alignments of the entry that are opened (?clustal=<upload id>[,<upload id>])
+            if (in_array($file['id'], $wantedClustals, true)) {
+                $clustals[$file['id']] = $file;
             }
         } elseif (preg_match('/\.(ab1|read\.fasta|read\.fa)$/i', $file['real_name']) === 1) {
             $reads[] = $file;
         } elseif (preg_match('/\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i', $file['real_name']) === 1) {
-            // the reference is the one asked for, else the first sequence file of the entry
-            if ($reference === null || ($wanted > 0 && $file['id'] === $wanted)) {
+            // the reference is the one asked for, else the oldest sequence file of the entry (the list is newest first: a later file of the
+            // same kind is a copy, not the plasmid, and the Sequence tab brings back to the reference)
+            if ($wanted > 0 && $file['id'] === $wanted) {
+                $reference = $file;
+                $referenceFixed = true;
+            } elseif (!$referenceFixed) {
                 $reference = $file;
             }
         }
@@ -64,10 +72,17 @@ try {
     exit('You cannot open this entry.');
 }
 
+$openClustals = array();
+foreach ($wantedClustals as $id) {
+    if (isset($clustals[$id])) {
+        $openClustals[] = $clustals[$id];
+    }
+}
+$clustal = $openClustals[0] ?? null;
 header('Content-Type: text/html; charset=utf-8');
 $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 $sequenceUrl = $reference === null ? '' : 'index.php?' . http_build_query(array('entry' => $entryId, 'upload' => $reference['id'], 'f' => $reference['long_name'], 'name' => $reference['real_name'], 'storage' => $reference['storage']));
-$files = json_encode(array('reference' => $reference, 'reads' => array_values($reads), 'clustal' => $clustal, 'saved' => $saved), JSON_THROW_ON_ERROR);
+$files = json_encode(array('reference' => $reference, 'reads' => array_values($reads), 'clustal' => $clustal, 'clustals' => $openClustals, 'saved' => $saved), JSON_THROW_ON_ERROR);
 ?>
 <!doctype html>
 <html lang="en">
@@ -105,6 +120,10 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
     <label class="close-alignment" id="saved-label" title="The alignments kept in this entry: each opens on its own" style="margin:0" hidden>Saved
       <select id="saved-alignments" aria-label="Saved alignments"></select>
     </label>
+    <span class="close-alignment" id="together" hidden style="position:relative">
+      <button type="button" id="together-button" title="Look at several saved alignments in one view" aria-expanded="false">View together&hellip;</button>
+      <div id="together-panel" hidden style="position:absolute;top:100%;left:0;z-index:30;min-width:240px;max-height:320px;overflow:auto;padding:8px 10px;background:#fff;color:#222;border:1px solid #bbb;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.2)"></div>
+    </span>
     <label class="close-alignment" title="Show an alignment from a Clustal file" style="cursor:pointer;margin:0">Open Clustal<input type="file" id="import-clustal" accept=".aln,.clustal,.clw,.txt" hidden></label>
     <span id="status" role="status">Loading the sequences...</span>
   </div>

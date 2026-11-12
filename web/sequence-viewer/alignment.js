@@ -93,6 +93,12 @@
       } catch (e) {
         // only kept until the page is closed
       }
+      if (savedReads) {
+        // a saved alignment is made again, with the reads it has, by the algorithm that was chosen
+        realign = true;
+        start();
+        return;
+      }
       window.location.reload();
     });
   }
@@ -178,11 +184,20 @@
 
   const dropped = [];
   let lastAligned = null;
+  // a saved alignment that is open: its text (shown as it is, kept or renamed from there) and its reads (aligned again with another
+  // algorithm); realign is set when the algorithm was changed
+  let clustalText = null;
+  let savedReads = null;
+  let realign = false;
   const exportButton = document.getElementById('export-clustal');
   const saveButton = document.getElementById('save-alignment');
   const nameInput = document.getElementById('alignment-name');
   const savedMenu = document.getElementById('saved-alignments');
   const savedLabel = document.getElementById('saved-label');
+  // the other pages of the entry keep the sequence this page is about
+  function refParam() {
+    return files.reference ? '&ref=' + files.reference.id : '';
+  }
   const readMenu = document.getElementById('read-view');
   const readLabel = document.getElementById('read-label');
   // the title of the entry, as the start of the name of an alignment
@@ -216,13 +231,62 @@
       savedMenu.append(reads);
     }
     savedLabel.hidden = list.length === 0 && !files.clustal;
+    fillTogether(list);
   }
+  // several saved alignments in one view: their reads are put together and aligned to the reference
+  const together = document.getElementById('together');
+  const togetherButton = document.getElementById('together-button');
+  const togetherPanel = document.getElementById('together-panel');
+  function fillTogether(list) {
+    togetherPanel.textContent = '';
+    together.hidden = list.length < 2;
+    const open = new Set((files.clustals || []).map(function (file) {
+      return file.id;
+    }));
+    const boxes = list.map(function (item) {
+      const label = document.createElement('label');
+      label.style.cssText = 'display:block;margin:2px 0;cursor:pointer';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = String(item.id);
+      box.checked = open.has(item.id) && open.size > 1;
+      label.append(box, ' ' + item.name.replace(/\.(aln|clustal|clw)$/i, ''));
+      togetherPanel.append(label);
+      return box;
+    });
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.style.marginTop = '6px';
+    go.textContent = 'View the checked ones together';
+    const refresh = function () {
+      go.disabled = boxes.filter(function (box) {
+        return box.checked;
+      }).length < 2;
+    };
+    boxes.forEach(function (box) {
+      box.addEventListener('change', refresh);
+    });
+    refresh();
+    go.addEventListener('click', function () {
+      const ids = boxes.filter(function (box) {
+        return box.checked;
+      }).map(function (box) {
+        return box.value;
+      });
+      window.location.href = 'alignment.php?entry=' + entryId + refParam() + '&clustal=' + ids.join(',');
+    });
+    togetherPanel.append(go);
+  }
+  togetherButton.addEventListener('click', function () {
+    togetherPanel.hidden = !togetherPanel.hidden;
+    togetherButton.setAttribute('aria-expanded', String(!togetherPanel.hidden));
+  });
   fillSaved(files.saved || []);
   savedMenu.addEventListener('change', function () {
     if (savedMenu.value === '') {
       return;
     }
-    window.location.href = 'alignment.php?entry=' + entryId + (savedMenu.value === 'reads' ? '' : '&clustal=' + savedMenu.value);
+    window.location.href = 'alignment.php?entry=' + entryId + refParam() + (savedMenu.value === 'reads' ? '' : '&clustal=' + savedMenu.value);
   });
   async function refreshSaved() {
     try {
@@ -394,6 +458,8 @@
       throw new Error('The sequences of the file are not all the same length.');
     }
     readLabel.hidden = true;
+    lastAligned = null;
+    clustalText = null;
     viewCount++;
     window.alignmentView = window.createAlignmentView(document.getElementById('root'), {
       id: 'clustal-alignment-' + viewCount,
@@ -407,11 +473,11 @@
   }
 
   exportButton.addEventListener('click', function () {
-    if (!lastAligned) {
+    if (!lastAligned && !clustalText) {
       return;
     }
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([buildClustal(lastAligned)], { type: 'text/plain' }));
+    link.href = URL.createObjectURL(new Blob([lastAligned ? buildClustal(lastAligned) : clustalText], { type: 'text/plain' }));
     link.download = (document.getElementById('entry-title').textContent.trim().replace(/[^A-Za-z0-9_.-]+/g, '_') || 'alignment') + '.aln';
     link.click();
   });
@@ -428,14 +494,14 @@
     saveButton.textContent = 'Save in the entry';
   });
   saveButton.addEventListener('click', async function () {
-    if (!lastAligned || !entryId || !window.AlignmentStore) {
+    if ((!lastAligned && !clustalText) || !entryId || !window.AlignmentStore) {
       return;
     }
     saveButton.disabled = true;
     saveButton.textContent = 'Saving...';
     // a new name keeps the alignment next to the others of the entry, the name of a saved one replaces it
     const name = (nameInput.value.trim().replace(/\.(aln|clustal|clw)$/i, '').replace(/[^A-Za-z0-9_.()#+ -]+/g, '_').slice(0, 60) || 'alignment') + '.aln';
-    let saved = await window.AlignmentStore.saveText(entryId, body.csrf, name, buildClustal(lastAligned));
+    let saved = await window.AlignmentStore.saveText(entryId, body.csrf, name, lastAligned ? buildClustal(lastAligned) : clustalText);
     for (const file of dropped) {
       // sequencing files are kept as reads, a fasta read as name.read.fasta (a plain fasta file in the entry would be taken for the sequence
       // of the plasmid); a GenBank file is not kept (the alignment itself is in the Clustal file)
@@ -481,7 +547,7 @@
     if (!files.reference) {
       throw new Error('This entry has no reference sequence: attach a GenBank or FASTA file.');
     }
-    const total = (files.reads || []).length + dropped.length;
+    const total = savedReads ? savedReads.length : (files.reads || []).length + dropped.length;
     if (total === 0) {
       throw new Error('Drop the sequencing reads (ab1 files) on this page to align them to the sequence.');
     }
@@ -492,12 +558,16 @@
     const referenceSequence = String(reference.sequence).toUpperCase();
     status.textContent = 'Reading ' + total + ' read(s)...';
     const reads = [];
-    for (const file of files.reads || []) {
+    for (const file of savedReads ? [] : files.reads || []) {
       const parsed = await readFile(file);
       reads.push({ name: file.real_name, sequence: String(parsed.sequence).toUpperCase(), parsed: parsed });
     }
+    // the reads of a saved alignment (bases only: the file keeps no traces)
+    (savedReads || []).forEach(function (read) {
+      reads.push({ name: read.name, sequence: read.sequence, parsed: { sequence: read.sequence } });
+    });
     const unreadable = [];
-    for (const file of Array.from(dropped)) {
+    for (const file of savedReads ? [] : Array.from(dropped)) {
       try {
         const parsed = await readLocal(file);
         reads.push({ name: file.name + ' (dropped)', sequence: String(parsed.sequence).toUpperCase(), parsed: parsed });
@@ -513,7 +583,7 @@
     status.textContent = 'Aligning...';
     const results = await align(referenceSequence, reads, reference.circular === true);
     // the result stays with the entry; the Align tool of the editor shows it
-    if (window.AlignmentStore && entryId) {
+    if (window.AlignmentStore && entryId && !savedReads) {
       window.AlignmentStore.save(entryId, body.csrf, {
         referenceLength: referenceSequence.length,
         results: results.map(function (result, index) {
@@ -525,7 +595,7 @@
     const tracks = [];
     const found = [];
     results.forEach(function (result, index) {
-      const droppedIndex = index - (files.reads || []).length;
+      const droppedIndex = savedReads ? -1 : index - (files.reads || []).length;
       summary.append(describe(reads[index].name, result.alignment, referenceSequence.length, droppedIndex < 0 ? null : function () {
         dropped.splice(droppedIndex, 1);
         if ((files.reads || []).length + dropped.length === 0) {
@@ -538,7 +608,8 @@
         return;
       }
       const alignment = result.alignment;
-      const chromatogram = alignment.strand === '-' ? reverseTraces(reads[index].parsed.chromatogramData) : reads[index].parsed.chromatogramData;
+      const traces = reads[index].parsed.chromatogramData;
+      const chromatogram = traces && alignment.strand === '-' ? reverseTraces(traces) : traces;
       found.push({
         alignment: alignment,
         track: {
@@ -627,7 +698,17 @@
       showReads(readMenu.value === '' ? null : Number(readMenu.value));
     };
     status.className = 'hidden';
-    showReads(null);
+    // ?read=<name>: the alignment view opens on that read alone (chosen in the Align tab of the editor)
+    const wanted = new URLSearchParams(window.location.search).get('read');
+    const wantedIndex = wanted === null ? -1 : found.findIndex(function (item) {
+      return item.track.sequenceData.name === wanted;
+    });
+    if (wantedIndex >= 0 && found.length > 1) {
+      readMenu.value = String(wantedIndex);
+      showReads(wantedIndex);
+    } else {
+      showReads(null);
+    }
   }
 
   if (typeof window.createAlignmentView !== 'function' || !window.bioParsers) {
@@ -643,16 +724,68 @@
   });
 
   // an alignment attached to the entry as a Clustal file is shown as it is
-  async function openAttachedClustal() {
-    const file = files.clustal;
+  async function downloadText(file) {
     const params = new URLSearchParams({ f: file.long_name, name: file.real_name, storage: String(file.storage) });
     const response = await fetch('../app/download.php?' + params.toString(), { credentials: 'same-origin' });
     if (!response.ok) {
       throw new Error(file.real_name + ' could not be downloaded (' + response.status + ').');
     }
+    return response.text();
+  }
+
+  // several saved alignments in one view: the reads of all of them are aligned to the reference together (by the algorithm of the bar)
+  async function openTogether() {
+    const reads = [];
+    const seen = new Set();
+    const names = new Set();
+    for (const file of files.clustals) {
+      status.textContent = 'Reading ' + file.real_name + '...';
+      const label = file.real_name.replace(/\.(aln|clustal|clw)$/i, '');
+      parseClustal(await downloadText(file)).slice(1).forEach(function (item) {
+        const sequence = item.aligned.replace(/-/g, '').toUpperCase();
+        if (seen.has(item.name + '|' + sequence)) {
+          return;
+        }
+        seen.add(item.name + '|' + sequence);
+        // two reads of the same name from different alignments are told apart by the alignment
+        const name = names.has(item.name) ? item.name + ' (' + label + ')' : item.name;
+        names.add(item.name);
+        reads.push({ name: name, sequence: sequence });
+      });
+    }
+    if (reads.length === 0) {
+      throw new Error('The saved alignments have no reads.');
+    }
+    savedReads = reads;
+    document.getElementById('title').textContent = files.clustals.length + ' saved alignments together';
+    nameInput.value = files.clustals.map(function (file) {
+      return file.real_name.replace(/\.(aln|clustal|clw)$/i, '');
+    }).join(' + ').slice(0, 60);
+    nameInput.dataset.auto = '0';
+    await run();
+  }
+
+  async function openAttachedClustal() {
+    const file = files.clustal;
     status.textContent = 'Reading ' + file.real_name + '...';
-    showClustal(parseClustal(await response.text()));
+    const text = await downloadText(file);
+    const items = parseClustal(text);
+    showClustal(items);
     document.getElementById('title').textContent = file.real_name;
+    // the saved alignment can be renamed (saved under another name), exported, and made again by another algorithm
+    clustalText = text;
+    exportButton.hidden = false;
+    saveButton.hidden = false;
+    saveButton.disabled = false;
+    saveButton.textContent = 'Save in the entry';
+    nameInput.hidden = false;
+    nameInput.value = file.real_name.replace(/\.(aln|clustal|clw)$/i, '');
+    nameInput.dataset.auto = '0';
+    if (files.reference) {
+      savedReads = items.slice(1).map(function (item) {
+        return { name: item.name, sequence: item.aligned.replace(/-/g, '').toUpperCase() };
+      });
+    }
   }
 
   // the files dropped on the Align tool of the editor come along (they were only in that page), once and only when just handed over
@@ -675,8 +808,8 @@
   }
 
   const start = function () {
-    if (files.clustal && dropped.length === 0) {
-      openAttachedClustal().catch(function (error) {
+    if (files.clustal && dropped.length === 0 && !realign) {
+      (files.clustals.length > 1 ? openTogether() : openAttachedClustal()).catch(function (error) {
         fail(error.message || String(error));
       });
       return;
