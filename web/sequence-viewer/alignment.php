@@ -98,7 +98,7 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
     </label>
     <button type="button" id="export-clustal" class="close-alignment" hidden title="Download this alignment as a Clustal file">Export Clustal</button>
     <input type="text" id="alignment-name" class="close-alignment" hidden maxlength="60" placeholder="Name of this alignment" aria-label="Name of this alignment" title="A new name keeps this alignment next to the others of the entry, the name of a saved one replaces it" style="width:170px">
-    <button type="button" id="save-alignment" class="close-alignment" hidden title="Keep this alignment in the files of the entry (a Clustal file, opened again from there), with the reads that were dropped on this page">Save in the entry</button>
+    <button type="button" id="save-alignment" class="close-alignment" hidden title="Keep this alignment in the files of the entry (a Clustal file, opened again from there), with the sequencing files (ab1) that were dropped on this page">Save in the entry</button>
     <label class="close-alignment" id="saved-label" title="The alignments kept in this entry: each opens on its own" style="margin:0" hidden>Saved
       <select id="saved-alignments" aria-label="Saved alignments"></select>
     </label>

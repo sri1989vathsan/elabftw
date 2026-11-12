@@ -168,7 +168,8 @@
         const answer = reply.results;
         answer.forEach(function (result, index) {
           const box = card(reads[index].name, result.alignment, reference.length);
-          if (items[index].file && body.canWrite === '1') {
+          // only a sequencing file is kept as a read: a fasta file in the entry would be taken for a sequence of the plasmid
+          if (items[index].file && body.canWrite === '1' && /\.(ab1|abi|scf)$/i.test(items[index].file.name)) {
             const save = element('button', 'tool-btn', 'Save in the entry');
             save.type = 'button';
             save.addEventListener('click', function () {

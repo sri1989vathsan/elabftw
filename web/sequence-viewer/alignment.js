@@ -424,7 +424,9 @@
     const name = (nameInput.value.trim().replace(/\.(aln|clustal|clw)$/i, '').replace(/[^A-Za-z0-9_.()#+ -]+/g, '_').slice(0, 60) || 'alignment') + '.aln';
     let saved = await window.AlignmentStore.saveText(entryId, body.csrf, name, buildClustal(lastAligned));
     for (const file of dropped) {
-      if (!saved || keptReads.has(file.name)) {
+      // only sequencing files are kept as reads: a fasta or GenBank file in the entry would be taken for a sequence of the plasmid
+      // (the alignment itself is in the Clustal file)
+      if (!saved || keptReads.has(file.name) || !/\.(ab1|abi|scf)$/i.test(file.name)) {
         continue;
       }
       const form = new FormData();
