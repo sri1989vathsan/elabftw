@@ -220,7 +220,7 @@
     }
 
     async function show(host) {
-      host.append(element('p', 'tool-muted', 'Aligns sequencing reads (ab1 files) to the sequence in the editor.'));
+      host.append(element('p', 'tool-muted', 'Aligns the sequencing reads of this plasmid to its main sequence (the one open in the editor).'));
       const message = element('p', 'tool-message');
       const results = element('div', 'tool-results');
       const dropped = [];
@@ -236,6 +236,19 @@
         clustals = uploads.filter(function (u) {
           return /\.(aln|clustal|clw)$/i.test(u.real_name);
         });
+        // the main sequence of the plasmid is its oldest sequence file; the reads are aligned to the sequence that is open here
+        const sequences = uploads.filter(function (u) {
+          return Number(u.state) === 1 && /\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i.test(u.real_name) && !/\.read\.(fasta|fa)$/i.test(u.real_name);
+        });
+        if (sequences.length > 1 && typeof context.upload === 'function') {
+          const main = sequences.reduce(function (oldest, u) {
+            return Number(u.id) < Number(oldest.id) ? u : oldest;
+          });
+          if (Number(context.upload()) !== Number(main.id)) {
+            const warning = element('p', 'tool-message error', 'This file is not the main sequence of the plasmid (' + main.real_name + '). The reads are aligned to the sequence open here: open ' + main.real_name + ' to align to the main one.');
+            host.append(warning);
+          }
+        }
       } catch (error) {
         message.textContent = 'The files of the entry could not be listed.';
         message.className = 'tool-message error';
@@ -253,7 +266,7 @@
       };
 
       // drop the files here, or click to choose them
-      const zone = element('div', 'tool-drop', 'Drop ab1 files here, or click to choose them');
+      const zone = element('div', 'tool-drop', 'Drop ab1 or FASTA files here, or click to choose them');
       zone.tabIndex = 0;
       const chooser = element('input');
       chooser.type = 'file';
@@ -265,7 +278,7 @@
           return /\.(ab1|abi|scf|fasta|fa)$/i.test(file.name);
         });
         if (accepted.length === 0) {
-          message.textContent = 'Only sequencing files (ab1) can be used.';
+          message.textContent = 'Only sequencing reads (ab1 or FASTA files) can be used.';
           message.className = 'tool-message error';
           return;
         }
@@ -322,7 +335,9 @@
       const names = function () {
         nameBox.textContent = '';
         list.forEach(function (upload) {
-          nameBox.append(element('span', 'tool-chip', upload.real_name));
+          const chip = element('span', 'tool-chip', upload.real_name);
+          chip.title = /\.ab1$/i.test(upload.real_name) ? 'A trace file from the sequencer (the peaks and the bases)' : 'A read as text only (the bases, no peaks)';
+          nameBox.append(chip);
         });
         dropped.forEach(function (file) {
           const chip = element('span', 'tool-chip', file.name + ' (dropped) ');
@@ -349,15 +364,26 @@
         });
       };
       names();
-      host.append(zone, chooser, nameBox);
+      const have = list.length > 0 ? element('p', 'tool-muted', 'Reads kept in this entry (ab1: trace from the sequencer, FASTA: bases only):') : null;
+      host.append(zone, chooser);
+      if (have) {
+        host.append(have);
+      }
+      host.append(nameBox);
+      if (list.length > 0) {
+        const zip = element('a', 'tool-muted', 'Download the reads (zip)');
+        zip.href = 'download-reads.php?entry=' + entryId;
+        zip.title = 'All the sequencing files of this plasmid in one zip file';
+        host.append(zip);
+      }
       const actions = element('div', 'tool-actions');
-      const align = element('button', 'tool-btn tool-btn-primary', 'Align the reads of the entry');
+      const align = element('button', 'tool-btn tool-btn-primary', 'Align the reads');
       align.type = 'button';
       align.disabled = list.length === 0;
       align.addEventListener('click', function () {
         run(everything(), results, message);
       });
-      const view = element('a', 'tool-btn', 'Open the alignment view');
+      const view = element('a', 'tool-btn', 'Open in the alignment view');
       view.href = alignmentUrl();
       view.title = 'Switch to the alignment view, with the traces (the files dropped here come along)';
       // the files dropped on the tool are only in this page: they are handed to the alignment page, which aligns them with the reads of the entry

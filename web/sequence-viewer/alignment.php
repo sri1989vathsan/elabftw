@@ -114,6 +114,9 @@ $files = json_encode(array('reference' => $reference, 'reads' => array_values($r
     <label class="close-alignment" id="read-label" title="Look at all the reads in one alignment, or at each read on its own (Save and Export take what is shown)" style="margin:0" hidden>Show
       <select id="read-view" aria-label="Reads shown"></select>
     </label>
+    <span class="close-alignment" style="margin:0" title="The sequencing files (ab1, FASTA reads) as a zip, one folder for each plasmid">Download reads:
+      <a href="download-reads.php?entry=<?= $entryId ?>">this plasmid</a> &middot; <a href="download-reads.php?all=1">all plasmids</a>
+    </span>
     <button type="button" id="export-clustal" class="close-alignment" hidden title="Download this alignment as a Clustal file">Export Clustal</button>
     <input type="text" id="alignment-name" class="close-alignment" hidden maxlength="60" placeholder="Name of this alignment" aria-label="Name of this alignment" title="A new name keeps this alignment next to the others of the entry, the name of a saved one replaces it" style="width:170px">
     <button type="button" id="save-alignment" class="close-alignment" hidden title="Keep this alignment in the files of the entry (a Clustal file, opened again from there), with the sequencing files (ab1) that were dropped on this page">Save in the entry</button>
