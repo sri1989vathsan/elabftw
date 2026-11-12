@@ -1,5 +1,20 @@
 [
   {
+    "id": "database-guide",
+    "date": "2026-11-12",
+    "area": "Database",
+    "featured": true,
+    "title": "The Database in the guide, with an \"i\" where you need it",
+    "summary": "Five new guide cards explain the Database, its storage, the sequence editor, the family tree and who can edit. A small i opens each one from the place it is about.",
+    "details": [
+      "The guide has a new Database area: modules and entries, storage with boxes and tubes, the sequence editor, the family tree of an entry, and who can edit, folders and personal modules.",
+      "Click the small i beside the Database title, beside the Sequence, Lineage and Storage headings of an entry, in the storage browser, or in the Who can edit and My modules boxes to open the matching card.",
+      "On the personal module of a colleague that you only look at, the New entry button is no longer shown, since you cannot add to it."
+    ],
+    "image": "guide-database.jpg",
+    "imageAlt": "The Database list with its module tabs and the New entry button, outlined"
+  },
+  {
     "id": "folder-path-bar",
     "date": "2026-10-29",
     "area": "Organise",
