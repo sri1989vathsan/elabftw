@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Elabftw\Elabftw;
 
 use Elabftw\Models\Inventory;
+use RuntimeException;
 use Throwable;
 
 use function count;
@@ -32,6 +33,7 @@ use function strlen;
  */
 require_once dirname(__DIR__) . '/app/init.inc.php';
 require_once __DIR__ . '/aligner.inc.php';
+require_once __DIR__ . '/aligner-external.inc.php';
 
 const MAX_READS = 40;
 const MAX_REFERENCE = 500000;
@@ -69,6 +71,15 @@ if (!is_string($reference) || strlen($reference) > MAX_REFERENCE || !is_array($r
     respond(400, array('error' => 'Invalid reference or reads.'));
 }
 
+// the algorithm of the alignment: the built-in one (default), MAFFT or Clustal Omega
+$engine = ExternalAligner::normalize($payload['algorithm'] ?? null);
+if ($engine === null) {
+    respond(400, array('error' => 'Unknown algorithm.'));
+}
+if (!ExternalAligner::isAvailable($engine)) {
+    respond(503, array('error' => ExternalAligner::label($engine) . ' is not installed on this server.'));
+}
+
 $results = array();
 foreach ($reads as $read) {
     $sequence = is_array($read) ? ($read['sequence'] ?? null) : null;
@@ -76,7 +87,11 @@ foreach ($reads as $read) {
     if (!is_string($sequence) || strlen($sequence) > MAX_READ) {
         respond(400, array('error' => 'Invalid read.'));
     }
-    $alignment = SequenceAligner::align($reference, $sequence);
+    try {
+        $alignment = SequenceAligner::align($reference, $sequence, $engine);
+    } catch (RuntimeException $e) {
+        respond(500, array('error' => $e->getMessage()));
+    }
     $results[] = array('name' => $name, 'found' => $alignment !== null, 'alignment' => $alignment);
 }
-respond(200, array('results' => $results));
+respond(200, array('algorithm' => $engine, 'label' => ExternalAligner::label($engine), 'results' => $results));

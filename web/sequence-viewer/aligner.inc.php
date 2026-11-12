@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Elabftw\Elabftw;
 
+use RuntimeException;
+
 use function abs;
 use function array_fill;
 use function chr;
@@ -69,7 +71,7 @@ final class SequenceAligner
     /**
      * @return array{strand: string, refStart: int, refEnd: int, alignedReference: string, alignedRead: string, read: string, matches: int, mismatches: array<int, array{position: int, reference: string, read: string}>, unknown: array<int, int>, insertions: array<int, int>, deletions: array<int, int>, identity: float}|null null when the read is not found on the reference
      */
-    public static function align(string $reference, string $read): ?array
+    public static function align(string $reference, string $read, string $engine = ExternalAligner::BUILTIN): ?array
     {
         $reference = self::clean($reference);
         $read = self::clean($read);
@@ -94,7 +96,11 @@ final class SequenceAligner
         $windowStart = max(0, $best['diagonal'] - self::MARGIN);
         $windowEnd = min($n, $best['diagonal'] + $m + self::MARGIN);
         $window = substr($reference, $windowStart, $windowEnd - $windowStart);
-        $aligned = self::alignToWindow($best['read'], $window);
+        // the built-in aligner, or MAFFT / Clustal Omega on the same read and the same stretch of the reference (aligner-external.inc.php)
+        $aligned = $engine === ExternalAligner::BUILTIN ? self::alignToWindow($best['read'], $window) : ExternalAligner::align($engine, $best['read'], $window);
+        if ($aligned === null) {
+            throw new RuntimeException(ExternalAligner::label($engine) . ' did not give an alignment.');
+        }
 
         $refStart = $windowStart + $aligned['windowStart'];
         $refEnd = $windowStart + $aligned['windowEnd'];
