@@ -281,6 +281,16 @@
   // until the "+" is pressed, which reveals notes/project/date/time/reminder
   let showFullCreateForm = false;
   let panelView: 'list' | 'calendar' = 'list';
+
+  // The optional Google Tasks sync section (rendered by the page, see todolist-panel.html and
+  // googleSync.ts) belongs under the private calendar link, so it only shows in the Calendar view.
+  function syncGoogleRowVisibility(view: 'list' | 'calendar'): void {
+    const row = document.getElementById('googleSyncRow');
+    if (row) {
+      row.hidden = view !== 'calendar';
+    }
+  }
+  $: syncGoogleRowVisibility(panelView);
   let calendarMonthCursor = new Date(initialDeadline.getFullYear(), initialDeadline.getMonth(), 1);
   let selectedCalendarDate = initialDeadlineDate;
   type CompletedStep = {

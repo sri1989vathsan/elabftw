@@ -23,6 +23,13 @@ test('the to-do panel only renders the sync row when the administrator switched 
   assert.ok(html.indexOf("id='googleSyncRow'") > html.indexOf("id='todolist'"));
 });
 
+test('the sync row starts hidden and the Calendar view of the to-do list shows it', () => {
+  assert.match(read('src/templates/todolist-panel.html'), /id='googleSyncRow'[^>]*\shidden\s/);
+  const svelte = read('src/ts/components/Todolist.svelte');
+  assert.match(svelte, /row\.hidden = view !== 'calendar';/);
+  assert.match(svelte, /\$: syncGoogleRowVisibility\(panelView\);/);
+});
+
 test('the admin page offers the switch and the client ID', () => {
   const html = read('src/templates/sysconfig.html');
   assert.match(html, /'slug': 'google_tasks_enabled'/);

@@ -21,10 +21,10 @@
     <div data-save-hidden='todolistMainDiv'>
       <div id='todolist'></div>
     </div>
-    {# Administrator switch (Sysconfig > Google Tasks sync). Sits under the calendar link section, which the list component draws last. When off, the section is not rendered at all and
+    {# Administrator switch (Sysconfig > Google Tasks sync). Shown only in the panel's Calendar view, under the private calendar link (Todolist.svelte toggles `hidden`). When off, the section is not rendered at all and
        googleSync.ts never starts. A client ID set by the administrator replaces the per-browser one. #}
     {% if App.Config.configArr.google_tasks_enabled|default('0') == '1' %}
-      <div id='googleSyncRow' class='mt-3' data-client-id='{{ App.Config.configArr.google_tasks_client_id|default('')|e('html_attr') }}'></div>
+      <div id='googleSyncRow' class='mt-3' hidden data-client-id='{{ App.Config.configArr.google_tasks_client_id|default('')|e('html_attr') }}'></div>
     {% endif %}
   </div>
 </div>
