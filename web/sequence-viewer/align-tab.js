@@ -64,7 +64,7 @@
       return b;
     };
 
-    function card(name, alignment) {
+    function card(name, alignment, referenceLength) {
       const box = element('div', 'tool-card');
       const top = element('div', 'tool-card-top');
       top.append(element('strong', '', name));
@@ -79,7 +79,14 @@
       });
       top.append(chips);
       const where = element('div', 'tool-tags');
-      where.append(tag((alignment.refStart + 1) + '..' + alignment.refEnd, 'site', alignment.refStart, alignment.refEnd - 1));
+      if (alignment.wraps) {
+        // a read over the origin of a circular plasmid: the end of the plasmid and then its start
+        const beyond = alignment.refEnd - referenceLength;
+        where.append(tag((alignment.refStart + 1) + '..' + referenceLength + ' + 1..' + beyond, 'site', alignment.refStart, beyond - 1));
+        where.append(element('span', 'tool-chip', 'over the origin'));
+      } else {
+        where.append(tag((alignment.refStart + 1) + '..' + alignment.refEnd, 'site', alignment.refStart, alignment.refEnd - 1));
+      }
       box.append(where);
       const differences = element('div', 'tool-tags');
       alignment.mismatches.forEach(function (m) {
@@ -148,7 +155,7 @@
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': body.csrf },
-          body: JSON.stringify({ entry: entryId, reference: reference, reads: reads, algorithm: algorithmChoice() }),
+          body: JSON.stringify({ entry: entryId, reference: reference, reads: reads, algorithm: algorithmChoice(), circular: editor.getState().sequenceData.circular === true }),
         });
         if (!response.ok) {
           // the answer says why, for example that a program is missing on the server
@@ -160,7 +167,7 @@
         const reply = await response.json();
         const answer = reply.results;
         answer.forEach(function (result, index) {
-          const box = card(reads[index].name, result.alignment);
+          const box = card(reads[index].name, result.alignment, reference.length);
           if (items[index].file && body.canWrite === '1') {
             const save = element('button', 'tool-btn', 'Save in the entry');
             save.type = 'button';

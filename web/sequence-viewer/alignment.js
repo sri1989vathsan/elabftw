@@ -97,7 +97,7 @@
     });
   }
 
-  async function align(referenceSequence, reads) {
+  async function align(referenceSequence, reads, circular) {
     const response = await fetch('align.php', {
       method: 'POST',
       credentials: 'same-origin',
@@ -109,6 +109,7 @@
           return { name: read.name, sequence: read.sequence };
         }),
         algorithm: algorithmChoice(),
+        circular: circular === true,
       }),
     });
     if (!response.ok) {
@@ -121,7 +122,7 @@
     return (await response.json()).results;
   }
 
-  function describe(name, alignment) {
+  function describe(name, alignment, referenceLength) {
     const line = document.createElement('p');
     const label = document.createElement('span');
     label.className = 'read-name';
@@ -135,7 +136,7 @@
       return line;
     }
     const parts = [
-      (alignment.strand === '-' ? 'reverse strand, ' : '') + 'reference ' + (alignment.refStart + 1) + '..' + alignment.refEnd,
+      (alignment.strand === '-' ? 'reverse strand, ' : '') + 'reference ' + (alignment.refStart + 1) + '..' + (alignment.wraps ? referenceLength + ' + 1..' + (alignment.refEnd - referenceLength) + ' (over the origin)' : alignment.refEnd),
       'identity ' + (alignment.identity * 100).toFixed(1) + '%',
     ];
     const differences = alignment.mismatches.map(function (m) {
@@ -161,6 +162,7 @@
   const dropped = [];
   let lastAligned = null;
   const exportButton = document.getElementById('export-clustal');
+  const saveButton = document.getElementById('save-alignment');
   const importInput = document.getElementById('import-clustal');
 
   // ---- Clustal: the reference and the reads in the columns of the reference (the bases a read has more than the reference make columns of their own)
@@ -173,7 +175,12 @@
     });
   }
 
-  function buildClustal(aligned) {
+  /**
+   * The reference and the reads in common columns: for each of them a row of letters, gaps where it has none. The bases a read has more
+   * than the reference make columns of their own (gaps in the others). A circular reference is read over its origin, so the row of
+   * the reference goes on past its end by what a read over the origin needs, with the start of the plasmid again.
+   */
+  function layout(aligned) {
     const reference = aligned.referenceSequence;
     const length = reference.length;
     // for each read: the base opposite each base of the reference, and what it has more before a base
@@ -181,7 +188,8 @@
       const a = item.alignment;
       const cells = {};
       const extra = {};
-      let position = a.refStart;
+      // the columns are over the whole reference, and past its end for a read over the origin
+      let position = 0;
       for (let c = 0; c < a.alignedReference.length; c++) {
         if (a.alignedReference[c] === '-') {
           extra[position] = (extra[position] || '') + a.alignedRead[c];
@@ -193,7 +201,9 @@
       return { start: a.refStart, end: position, cells: cells, extra: extra };
     });
     const slots = {};
+    let total = length;
     reads.forEach(function (read) {
+      total = Math.max(total, read.end);
       Object.keys(read.extra).forEach(function (key) {
         slots[key] = Math.max(slots[key] || 0, read.extra[key].length);
       });
@@ -201,7 +211,7 @@
     const rows = [[], ...reads.map(function () {
       return [];
     })];
-    for (let position = 0; position <= length; position++) {
+    for (let position = 0; position <= total; position++) {
       const width = slots[position] || 0;
       if (width > 0) {
         rows[0].push('-'.repeat(width));
@@ -210,16 +220,20 @@
           rows[index + 1].push(inside ? (read.extra[position] || '').padEnd(width, '-') : '-'.repeat(width));
         });
       }
-      if (position < length) {
-        rows[0].push(reference[position]);
+      if (position < total) {
+        rows[0].push(reference[position % length]);
         reads.forEach(function (read, index) {
           rows[index + 1].push(position >= read.start && position < read.end ? (read.cells[position] || '-') : '-');
         });
       }
     }
-    const sequences = rows.map(function (parts) {
+    return rows.map(function (parts) {
       return parts.join('');
     });
+  }
+
+  function buildClustal(aligned) {
+    const sequences = layout(aligned);
     // only the columns where a read is
     let first = Infinity;
     let last = -1;
@@ -324,6 +338,35 @@
     link.download = (document.getElementById('entry-title').textContent.trim().replace(/[^A-Za-z0-9_.-]+/g, '_') || 'alignment') + '.aln';
     link.click();
   });
+  // the alignment goes into the files of the entry as a Clustal file (it is opened from there as it is), and the reads that were dropped
+  // on the page go with it, so that the alignment can be made again
+  saveButton.addEventListener('click', async function () {
+    if (!lastAligned || !entryId || !window.AlignmentStore) {
+      return;
+    }
+    saveButton.disabled = true;
+    saveButton.textContent = 'Saving...';
+    const title = document.getElementById('entry-title').textContent.trim().replace(/[^A-Za-z0-9_.-]+/g, '_') || 'alignment';
+    let saved = await window.AlignmentStore.saveText(entryId, body.csrf, title + '_alignment.aln', buildClustal(lastAligned));
+    const known = new Set((files.reads || []).map(function (read) {
+      return read.real_name;
+    }));
+    for (const file of dropped) {
+      if (!saved || known.has(file.name)) {
+        continue;
+      }
+      const form = new FormData();
+      form.append('file', file);
+      try {
+        const response = await fetch('../api/v2/inventory/' + entryId + '/uploads', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': body.csrf }, body: form });
+        saved = response.ok;
+      } catch (error) {
+        saved = false;
+      }
+    }
+    saveButton.textContent = saved ? 'Saved in the entry' : 'Could not save (no right to edit the entry?)';
+    saveButton.disabled = saved;
+  });
   importInput.addEventListener('change', async function () {
     const file = importInput.files && importInput.files[0];
     importInput.value = '';
@@ -364,7 +407,7 @@
       reads.push({ name: file.name + ' (dropped)', sequence: String(parsed.sequence).toUpperCase(), parsed: parsed });
     }
     status.textContent = 'Aligning...';
-    const results = await align(referenceSequence, reads);
+    const results = await align(referenceSequence, reads, reference.circular === true);
     // the result stays with the entry; the Align tool of the editor shows it
     if (window.AlignmentStore && entryId) {
       window.AlignmentStore.save(entryId, body.csrf, {
@@ -378,7 +421,7 @@
     const tracks = [];
     const found = [];
     results.forEach(function (result, index) {
-      summary.append(describe(reads[index].name, result.alignment));
+      summary.append(describe(reads[index].name, result.alignment, referenceSequence.length));
       if (!result.alignment) {
         return;
       }
@@ -400,33 +443,41 @@
       throw new Error('None of the reads could be placed on the reference.');
     }
 
+    // a read over the origin of a circular plasmid has the start of the plasmid again after its end: that track shows the reference
+    // a little longer than it is, with the features of that start repeated
     const referenceTrack = function (alignedReference) {
+      const sequence = alignedReference.replace(/-/g, '');
+      let features = reference.features;
+      if (sequence.length > referenceSequence.length) {
+        const beyond = sequence.length - referenceSequence.length;
+        const list = Array.isArray(features) ? features : Object.values(features || {});
+        features = list.concat(list.filter(function (feature) {
+          return feature.start < beyond;
+        }).map(function (feature) {
+          return Object.assign({}, feature, { id: String(feature.id || feature.name) + '-again', start: feature.start + referenceSequence.length, end: Math.min(sequence.length - 1, feature.end + referenceSequence.length) });
+        }));
+      }
       return {
-        sequenceData: { name: files.reference.real_name, sequence: referenceSequence, features: reference.features, circular: false },
+        sequenceData: { name: files.reference.real_name, sequence: sequence, features: features, circular: false },
         alignmentData: { sequence: alignedReference },
       };
     };
     // the traces of the reads are shown under their bases from the start
     viewCount++;
     const options = { id: 'sequencing-alignment-' + viewCount, alignmentAnnotationVisibility: { chromatogram: true } };
-    // without insertions in any read the reference is the same for all of them: one alignment of everything
-    const plain = found.every(function (item) {
-      return item.alignment.alignedReference === referenceSequence;
-    });
-    if (plain) {
-      options.alignmentTracks = [referenceTrack(referenceSequence)].concat(found.map(function (item) {
-        return item.track;
-      }));
-    } else {
-      options.pairwiseAlignments = found.map(function (item) {
-        return [referenceTrack(item.alignment.alignedReference), item.track];
-      });
-    }
-    // what the export to Clustal writes: the reference and the reads that were placed
+    // lastAligned is what the export to Clustal writes: the reference and the reads that were placed. The view shows the same columns:
+    // one alignment of everything (it opens on the reads, the base letters show when zoomed in)
     lastAligned = { referenceName: files.reference.real_name, referenceSequence: referenceSequence, found: found, names: found.map(function (item) {
       return item.track.sequenceData.name;
     }) };
+    const rows = layout(lastAligned);
+    options.alignmentTracks = [referenceTrack(rows[0])].concat(found.map(function (item, index) {
+      return Object.assign({}, item.track, { alignmentData: { sequence: rows[index + 1] } });
+    }));
     exportButton.hidden = false;
+    saveButton.hidden = false;
+    saveButton.disabled = false;
+    saveButton.textContent = 'Save in the entry';
     // the view opens where the reads are, not at the start of the reference
     const firstStart = Math.min.apply(null, found.map(function (item) {
       return item.alignment.refStart;
