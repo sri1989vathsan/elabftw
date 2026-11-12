@@ -50,7 +50,7 @@ try {
             if ((int) ($_GET['clustal'] ?? 0) === $file['id']) {
                 $clustal = $file;
             }
-        } elseif (preg_match('/\.ab1$/i', $file['real_name']) === 1) {
+        } elseif (preg_match('/\.(ab1|read\.fasta|read\.fa)$/i', $file['real_name']) === 1) {
             $reads[] = $file;
         } elseif (preg_match('/\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i', $file['real_name']) === 1) {
             // the reference is the one asked for, else the first sequence file of the entry

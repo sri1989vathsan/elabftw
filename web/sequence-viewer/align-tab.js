@@ -30,6 +30,11 @@
     return node;
   }
 
+  // a fasta read is kept in the entry as name.read.fasta: the entry lists it as a sequencing read and not as the sequence of the plasmid
+  function readName(name) {
+    return /\.(fasta|fa)$/i.test(name) && !/\.read\.(fasta|fa)$/i.test(name) ? name.replace(/\.(fasta|fa)$/i, '.read.$1') : name;
+  }
+
   async function readSequence(upload) {
     const params = new URLSearchParams({ f: upload.long_name, name: upload.real_name, storage: String(upload.storage) });
     const response = await fetch('../app/download.php?' + params.toString(), { credentials: 'same-origin' });
@@ -122,7 +127,7 @@
       button.disabled = true;
       button.textContent = 'Saving...';
       const form = new FormData();
-      form.append('file', file);
+      form.append('file', new File([file], readName(file.name), { type: file.type }));
       try {
         const response = await fetch('../api/v2/inventory/' + entryId + '/uploads', {
           method: 'POST',
@@ -168,8 +173,8 @@
         const answer = reply.results;
         answer.forEach(function (result, index) {
           const box = card(reads[index].name, result.alignment, reference.length);
-          // only a sequencing file is kept as a read: a fasta file in the entry would be taken for a sequence of the plasmid
-          if (items[index].file && body.canWrite === '1' && /\.(ab1|abi|scf)$/i.test(items[index].file.name)) {
+          // a sequencing file is kept as a read (a fasta read as name.read.fasta)
+          if (items[index].file && body.canWrite === '1' && /\.(ab1|abi|scf|fasta|fa)$/i.test(items[index].file.name)) {
             const save = element('button', 'tool-btn', 'Save in the entry');
             save.type = 'button';
             save.addEventListener('click', function () {
@@ -210,7 +215,7 @@
         const response = await fetch('../api/v2/inventory/' + entryId + '/uploads', { credentials: 'same-origin' });
         const uploads = response.ok ? await response.json() : [];
         list = uploads.filter(function (u) {
-          return /\.ab1$/i.test(u.real_name);
+          return /\.(ab1|read\.fasta|read\.fa)$/i.test(u.real_name);
         });
         // the alignments attached to the entry (Clustal files, for example from Benchling)
         clustals = uploads.filter(function (u) {
@@ -271,6 +276,7 @@
       ['dragenter', 'dragover'].forEach(function (name) {
         zone.addEventListener(name, function (event) {
           event.preventDefault();
+          event.stopPropagation();
           zone.classList.add('over');
         });
       });
@@ -279,16 +285,20 @@
       });
       zone.addEventListener('drop', function (event) {
         event.preventDefault();
+        // the editor opens a file dropped on it as its own sequence: this drop belongs to the tool
+        event.stopPropagation();
         zone.classList.remove('over');
         take(event.dataTransfer.files);
       });
       // a drop anywhere on the sidebar works too
       host.addEventListener('dragover', function (event) {
         event.preventDefault();
+        event.stopPropagation();
       });
       host.addEventListener('drop', function (event) {
         if (event.target !== zone && !zone.contains(event.target)) {
           event.preventDefault();
+          event.stopPropagation();
           take(event.dataTransfer.files);
         }
       });
@@ -334,7 +344,32 @@
       });
       const view = element('a', 'tool-btn', 'Open the alignment view');
       view.href = 'alignment.php?entry=' + entryId;
-      view.title = 'Switch to the alignment view, with the traces';
+      view.title = 'Switch to the alignment view, with the traces (the files dropped here come along)';
+      // the files dropped on the tool are only in this page: they are handed to the alignment page, which aligns them with the reads of the entry
+      view.addEventListener('click', async function (event) {
+        if (dropped.length === 0) {
+          return;
+        }
+        event.preventDefault();
+        try {
+          const files = [];
+          for (const file of dropped) {
+            const data = await new Promise(function (resolve, reject) {
+              const reader = new FileReader();
+              reader.onload = function () {
+                resolve(String(reader.result).split(',')[1] || '');
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+            files.push({ name: file.name, type: file.type, data: data });
+          }
+          window.localStorage.setItem('elabftw-aligner-handoff', JSON.stringify({ entry: entryId, at: Date.now(), files: files }));
+        } catch (error) {
+          // too big for the browser's storage: the alignment page opens with the reads of the entry only
+        }
+        window.location.href = view.href;
+      });
       // the algorithm: the built-in aligner, MAFFT or Clustal Omega; a new choice aligns the reads again
       const choice = element('label', 'tool-muted', 'Algorithm ');
       choice.title = 'The program that aligns the reads to the sequence';

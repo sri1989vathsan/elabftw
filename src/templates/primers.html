@@ -4,7 +4,7 @@
 {% if primerMode or plasmidMode %}
   {% set plasmidFiles = [] %}
   {% for upload in Entity.entityData.uploads %}
-    {% if upload.real_name matches '/\\.(gb|gbk|gbff|genbank|fasta|fa|fna)$/i' %}
+    {% if upload.real_name matches '/(?<!\\.read)\\.(gb|gbk|gbff|genbank|fasta|fa|fna)$/i' %}
       {% set plasmidFiles = plasmidFiles|merge([{'real_name': upload.real_name, 'long_name': upload.long_name, 'storage': upload.storage}]) %}
     {% endif %}
   {% endfor %}

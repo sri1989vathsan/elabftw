@@ -15,7 +15,8 @@
 {% set readFiles = [] %}
 {% set referenceFiles = [] %}
 {% for upload in sequenceFiles %}
-  {% if upload.real_name matches '/\\.ab1$/i' %}
+  {# a fasta file named *.read.fasta is a sequencing read (kept by the alignment tools), not the sequence of the plasmid #}
+  {% if upload.real_name matches '/\\.(ab1|read\\.fasta|read\\.fa)$/i' %}
     {% set readFiles = readFiles|merge([upload]) %}
   {% elseif upload.real_name matches '/\\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i' %}
     {% set referenceFiles = referenceFiles|merge([upload]) %}
@@ -52,7 +53,7 @@
     {# the sequencing reads (ab1), aligned to a plasmid sequence of the entry on the server #}
     <h4 class='h6 text-muted mb-1'>{{ 'Sequencing reads'|trans }} ({{ readFiles|length }})</h4>
     {% if readFiles|length == 0 %}
-      <p class='text-muted mb-3'>{{ 'Attach the ab1 files of the sequencing to look at the traces and to align them to the plasmid.'|trans }}</p>
+      <p class='text-muted mb-3'>{{ 'Attach the ab1 files of the sequencing to look at the traces and to align them to the plasmid. A FASTA read dropped on the alignment is kept here too (as name.read.fasta).'|trans }}</p>
     {% else %}
       <ul class='list-inline mb-2'>
         {% for upload in readFiles %}

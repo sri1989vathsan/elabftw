@@ -51,7 +51,7 @@
   // the sequence of the plasmid: its first GenBank or FASTA file
   async function plasmidSequence() {
     const file = files.find(function (f) {
-      return /\.(gb|gbk|gbff|genbank|fasta|fa|fna)$/i.test(f.real_name);
+      return /(?<!\.read)\.(gb|gbk|gbff|genbank|fasta|fa|fna)$/i.test(f.real_name);
     });
     if (!file) {
       return null;

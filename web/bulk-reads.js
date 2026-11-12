@@ -191,7 +191,8 @@
             continue;
           }
           const form = new FormData();
-          form.append('file', row.file);
+          // a fasta read is named *.read.fasta: the entry then lists it as a sequencing read and not as the sequence of the plasmid
+          form.append('file', /\.(fasta|fa)$/i.test(row.file.name) && !/\.read\.(fasta|fa)$/i.test(row.file.name) ? new File([row.file], row.file.name.replace(/\.(fasta|fa)$/i, '.read.$1'), { type: row.file.type }) : row.file);
           try {
             const response = await fetch('api/v2/inventory/' + row.plasmid.id + '/uploads', {
               method: 'POST',

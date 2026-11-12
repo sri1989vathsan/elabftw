@@ -184,6 +184,11 @@
   const savedMenu = document.getElementById('saved-alignments');
   const savedLabel = document.getElementById('saved-label');
 
+  // a fasta read is kept in the entry as name.read.fasta: the entry lists it as a sequencing read and not as the sequence of the plasmid
+  function readName(name) {
+    return /\.(fasta|fa)$/i.test(name) && !/\.read\.(fasta|fa)$/i.test(name) ? name.replace(/\.(fasta|fa)$/i, '.read.$1') : name;
+  }
+
   // ---- the alignments kept in the entry: each opens on its own (alignment.php?clustal=<id>), the reads of the entry are aligned afresh from the first choice
   function fillSaved(list) {
     savedMenu.textContent = '';
@@ -424,18 +429,19 @@
     const name = (nameInput.value.trim().replace(/\.(aln|clustal|clw)$/i, '').replace(/[^A-Za-z0-9_.()#+ -]+/g, '_').slice(0, 60) || 'alignment') + '.aln';
     let saved = await window.AlignmentStore.saveText(entryId, body.csrf, name, buildClustal(lastAligned));
     for (const file of dropped) {
-      // only sequencing files are kept as reads: a fasta or GenBank file in the entry would be taken for a sequence of the plasmid
-      // (the alignment itself is in the Clustal file)
-      if (!saved || keptReads.has(file.name) || !/\.(ab1|abi|scf)$/i.test(file.name)) {
+      // sequencing files are kept as reads, a fasta read as name.read.fasta (a plain fasta file in the entry would be taken for the sequence
+      // of the plasmid); a GenBank file is not kept (the alignment itself is in the Clustal file)
+      const kept = readName(file.name);
+      if (!saved || keptReads.has(kept) || !/\.(ab1|abi|scf|fasta|fa)$/i.test(file.name)) {
         continue;
       }
       const form = new FormData();
-      form.append('file', file);
+      form.append('file', new File([file], kept, { type: file.type }));
       try {
         const response = await fetch('../api/v2/inventory/' + entryId + '/uploads', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': body.csrf }, body: form });
         saved = response.ok;
         if (saved) {
-          keptReads.add(file.name);
+          keptReads.add(kept);
         }
       } catch (error) {
         saved = false;
@@ -620,6 +626,25 @@
     document.getElementById('title').textContent = file.real_name;
   }
 
+  // the files dropped on the Align tool of the editor come along (they were only in that page), once and only when just handed over
+  try {
+    const raw = window.localStorage.getItem('elabftw-aligner-handoff');
+    if (raw) {
+      window.localStorage.removeItem('elabftw-aligner-handoff');
+      const handoff = JSON.parse(raw);
+      if (handoff && handoff.entry === entryId && Date.now() - handoff.at < 300000) {
+        handoff.files.forEach(function (item) {
+          const bytes = Uint8Array.from(atob(item.data), function (c) {
+            return c.charCodeAt(0);
+          });
+          dropped.push(new File([bytes], item.name, { type: item.type || '' }));
+        });
+      }
+    }
+  } catch (error) {
+    // nothing came along
+  }
+
   const start = function () {
     if (files.clustal && dropped.length === 0) {
       openAttachedClustal().catch(function (error) {
@@ -659,12 +684,14 @@
     if (hasFiles(event)) {
       event.preventDefault();
     }
-  });
+  }, true);
   document.addEventListener('drop', function (event) {
     if (!hasFiles(event)) {
       return;
     }
     event.preventDefault();
+    // the viewer under the page must not take the file for a sequence of its own
+    event.stopPropagation();
     depth = 0;
     hint.hidden = true;
     const accepted = Array.from(event.dataTransfer.files).filter(function (file) {
@@ -678,5 +705,5 @@
       dropped.push(file);
     });
     start();
-  });
+  }, true);
 })();
